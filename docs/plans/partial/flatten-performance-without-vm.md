@@ -1,12 +1,16 @@
 # Flatten Performance Without a Control-Flow VM
 
-## Status — PARTIAL (2026-07-11)
+## Status — PARTIAL (reassessed 2026-07-17)
 
 Phases 0–2 landed on `main`: the representative benchmarks, direct evaluator
 paths, slider transaction split, and compiled-expression cache. Phase 3's
-dependency-aware in-place rebake was deliberately deferred after its measured
-gain did not justify the extra complexity; it remains preserved on
-`origin/codex/improve-flatten-phase3` for a future performance review.
+dependency-aware in-place rebake was initially deferred because a
+single-refresh benchmark showed only a modest gain. Subsequent Accum Blur
+testing changed that conclusion: time blur refreshes at every accumulation
+sample, making Phase 3 the practical enabler for most examples—especially in
+the Emscripten build. It remains preserved on
+`origin/codex/improve-flatten-phase3` pending a landing decision informed by
+full accumulated-frame cost rather than one-refresh timing.
 
 ## Summary
 
@@ -21,7 +25,7 @@ model or introducing a control-flow VM. The work has two complementary parts:
    only its values in place.
 
 The executor, replay PC model, provenance, flat-command queries, autonormal,
-guides, PLY export, and the `MAX_COMMANDS` flat buffer remain unchanged. A full
+guides, PLY export, and the `MAX_FLAT_COMMANDS` flat buffer remain unchanged. A full
 flatten remains the correctness fallback for edits, cache misses/overflow, and
 changes that can affect topology. “Topology” includes flat-stream cardinality:
 a `t`-dependent condition inside an unrolled loop can add or remove commands on
@@ -31,15 +35,16 @@ This plan supersedes **Phase A and Phase A.5** of
 `docs/plans/not-started/rethinking-flattening-behaviour.md`. Its VM phase remains
 separate future work and is explicitly out of scope here.
 
-## Branch status (2026-07-11)
+## Branch status (reassessed 2026-07-17)
 
-This document's Phase 3 implementation and measurements live on the optional
-`codex/improve-flatten-phase3` branch. That branch is based directly on the
-Phase 0–2 landing branch, `codex/improve-flatten-rewrite`, whose tip retains
-the simpler always-full-flatten frame model. The Phase 3 branch is preserved
-for future workloads; it is not the current recommendation for `main` because
-eligible examples save only about 0.2 ms and structurally dynamic examples
-cannot rebake.
+This document's Phase 3 implementation and measurements live on
+`codex/improve-flatten-phase3`, based directly on `main`. The earlier landing
+recommendation considered the roughly 0.2 ms saving for one eligible refresh
+and undervalued the optimization. Accum Blur performs 2/4/8/12/16 refreshes per
+displayed frame, so that saving compounds with the sample count; Emscripten
+makes the avoided full-flatten work more significant again. Structurally
+dynamic examples still require the full path, but for most stable-topology
+examples Phase 3 is now considered necessary to make time blur practical.
 
 ## Implementation task list (2026-07-10)
 
@@ -134,11 +139,13 @@ version of this plan described Orrery's function-call arguments but overlooked
 that later branch. Whale likewise remains full-flatten because droplet
 conditions change command count.
 
-The main conclusion is now sharper: Phase 1C and Phase 2 deliver most of the
-win while preserving always-flatten semantics. Phase 3 is a smaller,
-scene-dependent optimization (and is especially useful for value-only slider
-changes); it cannot remove full flattening from scenes whose source topology
-actually changes.
+Phase 1C and Phase 2 still deliver most of the improvement to one full flatten.
+Phase 3 is scene-dependent and cannot remove full flattening when source
+topology changes, but describing it as a small ordinary-frame optimization is
+misleading. Its saving is incurred once per time-blur sample, so it is a
+practical requirement for multi-sample Accum Blur on most eligible examples
+and has outsized value in the Emscripten build. It also remains useful for
+value-only slider changes.
 
 ### Final verification
 
