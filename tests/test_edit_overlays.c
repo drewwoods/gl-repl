@@ -599,6 +599,93 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
                trace_count_line(&log, "glVertex3f 2 0 0"), 1);
 }
 
+/* Geometry drawn under a color mask that writes no color (the depth-only
+ * seed idiom) is invisible, so the plain outline and vertex-point passes skip
+ * it. The cursor highlight is exempt: it locates the line you are editing. */
+static void test_overlays_honor_color_mask(void) {
+    printf("--- edit_overlays color-mask gate ---\n");
+
+    /* Two blocks: the first masked off, the second visible. The cursor is on
+     * the masked block's vertex, so it is also the highlight target. */
+    GLCmd cmds[12];
+    mk_cmd(&cmds[0], CMD_COLOR_MASK, 0, 0, 0);
+    cmds[0].args[3] = 0;
+    cmds[0].num_args = 4;
+    mk_cmd(&cmds[1], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0); cmds[2].src_cmd_idx = 9;
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 2, 0, 0); cmds[3].src_cmd_idx = 9;
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 3, 0, 0); cmds[4].src_cmd_idx = 9;
+    mk_cmd(&cmds[5], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[6], CMD_COLOR_MASK, 1, 1, 1);
+    cmds[6].args[3] = 1;
+    cmds[6].num_args = 4;
+    mk_cmd(&cmds[7], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[8], CMD_VERTEX3F, 7, 0, 0);
+    mk_cmd(&cmds[9], CMD_VERTEX3F, 8, 0, 0);
+    mk_cmd(&cmds[10], CMD_VERTEX3F, 9, 0, 0);
+    mk_cmd(&cmds[11], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 12;
+    ctx.cursor.edit_line_idx = -1;   /* no highlight target yet */
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("outlines skip a color-masked block",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("outlines still draw the visible block",
+               trace_count_line(&log, "glVertex3f 7 0 0"), 1);
+
+    /* Vertex points: same gate. */
+    ctx.show_vertex_points = 1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("vertex points skip a color-masked block",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("vertex points still draw the visible block",
+               trace_count_line(&log, "glVertex3f 7 0 0"), 1);
+    ctx.show_vertex_points = 0;
+
+    /* The highlight ignores the mask: park the cursor on the masked block. */
+    ctx.cursor.edit_line_idx = 9;
+    ctx.highlight_current_poly = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("the highlight draws a color-masked block anyway",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("...at the active-highlight width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+
+    /* An RGB-masked draw is invisible whatever alpha does, so alpha alone
+     * does not resurrect the outline. */
+    ctx.cursor.edit_line_idx = -1;
+    ctx.highlight_current_poly = 0;
+    cmds[0].args[3] = 1;   /* glColorMask(FALSE, FALSE, FALSE, TRUE) */
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("an alpha-only mask still counts as invisible",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+
+    /* One live channel is enough to be visible. */
+    cmds[0].args[0] = 1;   /* glColorMask(TRUE, FALSE, FALSE, TRUE) */
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("a single live color channel draws the outline",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+}
+
 /* SINGLE_POLYGON scope: only the cursor's primitive within the matched
  * block gets the active highlight; the rest of the block is either bare
  * (show_vertex_outlines off) or a plain edge outline (on). */
@@ -2243,6 +2330,7 @@ int main(void) {
     test_render_outlines_glbegin();
     test_current_poly_highlight_respects_overlay_scope();
     test_highlight_clip_planes();
+    test_overlays_honor_color_mask();
     test_single_polygon_highlight();
     test_single_polygon_highlight_fan_anchor();
     test_single_polygon_highlight_bold_style();

@@ -340,6 +340,27 @@ static void outline_clip_resume(const OverlayWalkCtx *ctx, unsigned enabled_mask
     }
 }
 
+/* --- color-mask-aware overlays ---
+ *
+ * glColorMask(GL_FALSE, ...) marks geometry the frame never shows — the
+ * classic depth-only seed pass. Outlining or dotting it would advertise a
+ * shape that isn't on screen, so the plain outline and vertex-point passes
+ * track the program's mask as they walk and skip whatever is drawn while no
+ * color channel is writable. Alpha is deliberately not part of the test: an
+ * RGB-masked draw writes nothing you can see whether or not alpha lands.
+ *
+ * Unlike the clip planes this is a gate, not a replay. Mirroring the mask into
+ * GL would mask the *overlay's own* pixels, so a partial mask (say red-only)
+ * would tint the outline instead of reporting the geometry, and an all-off
+ * mask would still pay for a draw that writes nothing.
+ *
+ * The cursor highlight ignores the mask entirely: finding the line you are
+ * editing matters even when its geometry is a depth seed you cannot see.
+ */
+static int color_mask_writes_color(const GLCmd *cmd) {
+    return cmd->args[0] != 0.0f || cmd->args[1] != 0.0f || cmd->args[2] != 0.0f;
+}
+
 static int outline_begin_mode_has_overlay(GLenum mode) {
     switch (mode) {
     case GL_POINTS:
@@ -470,6 +491,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     int selected_block_instances = 0;
     unsigned clip_mask = 0;
     int block_clip_suspended = 0;
+    int color_writes = 1;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -478,6 +500,10 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         if (repl_cmd_is_transform(cmds[i].type)) {
             if (!in_begin)
                 apply_tracked_transform(&cmds[i], &matrix_depth);
+            continue;
+        }
+        if (cmds[i].type == CMD_COLOR_MASK) {
+            color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
         /* Clip state lands between blocks; inside one it would be an
@@ -517,7 +543,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 block_clip_suspended = 1;
                 glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
                 render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-            } else if (ctx->show_vertex_outlines && draw_outline) {
+            } else if (ctx->show_vertex_outlines && draw_outline && color_writes) {
                 glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
                 vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
             } else {
@@ -574,6 +600,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int selected_poly_instances = 0;
     unsigned clip_mask = 0;
     int contour_clip_suspended = 0;
+    int color_writes = 1;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -582,6 +609,10 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
         if (repl_cmd_is_transform(cmds[i].type)) {
             if (!tess_in_contour)
                 apply_tracked_transform(&cmds[i], &matrix_depth);
+            continue;
+        }
+        if (cmds[i].type == CMD_COLOR_MASK) {
+            color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
         if (!tess_in_contour && outline_clip_apply_cmd(&cmds[i], &clip_mask))
@@ -611,7 +642,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 outline_clip_resume(ctx, clip_mask);
                 contour_clip_suspended = 0;
             }
-            if (ctx->show_vertex_outlines || tess_poly_is_current) {
+            if ((ctx->show_vertex_outlines && color_writes) || tess_poly_is_current) {
                 if (tess_poly_is_current) {
                     outline_clip_suspend(ctx, clip_mask);
                     contour_clip_suspended = 1;
@@ -674,6 +705,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int selected_shape_instances = 0;
     unsigned clip_mask = 0;
+    int color_writes = 1;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -681,6 +713,10 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
 
         if (repl_cmd_is_transform(cmds[i].type)) {
             apply_tracked_transform(&cmds[i], &matrix_depth);
+            continue;
+        }
+        if (cmds[i].type == CMD_COLOR_MASK) {
+            color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
         if (outline_clip_apply_cmd(&cmds[i], &clip_mask))
@@ -698,7 +734,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
             outline_clip_suspend(ctx, clip_mask);
             glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
             render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-        } else if (ctx->show_vertex_outlines) {
+        } else if (ctx->show_vertex_outlines && color_writes) {
             glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
             vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
         } else {
@@ -725,6 +761,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int has_glut_solid = 0;
     unsigned clip_mask = 0;
+    int color_writes = 1;
 
     if (!ctx->show_vertex_points)
         return;
@@ -747,9 +784,14 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
             apply_tracked_transform(&cmds[i], &matrix_depth);
             continue;
         }
+        if (cmds[i].type == CMD_COLOR_MASK) {
+            color_writes = color_mask_writes_color(&cmds[i]);
+            continue;
+        }
         if (outline_clip_apply_cmd(&cmds[i], &clip_mask))
             continue;
         if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
+        if (!color_writes) continue;
 
         repl_executor_draw_glut_solid(&cmds[i]);
     }
@@ -817,11 +859,14 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         int matrix_depth = 0;
         GLenum primitive_mode = 0;
         unsigned clip_mask = 0;
+        int color_writes = 1;
 
         for (int i = 0; i < flat_cmd_count; i++) {
             if (!flat_cmds[i].valid) continue;
             if (repl_cmd_is_transform(flat_cmds[i].type)) {
                 apply_tracked_transform(&flat_cmds[i], &matrix_depth);
+            } else if (flat_cmds[i].type == CMD_COLOR_MASK) {
+                color_writes = color_mask_writes_color(&flat_cmds[i]);
             } else if (outline_clip_apply_cmd(&flat_cmds[i], &clip_mask)) {
                 /* keep the program's planes: a point on a clipped-away face
                  * is not on the shape you can see */
@@ -831,6 +876,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                 primitive_mode = 0;
             } else if (repl_cmd_emits_vertex(flat_cmds[i].type)) {
                 if (replay_only && i != anchor_idx)
+                    continue;
+                if (!color_writes)
                     continue;
                 int is_line = (primitive_mode == GL_LINES ||
                                primitive_mode == GL_LINE_STRIP ||
