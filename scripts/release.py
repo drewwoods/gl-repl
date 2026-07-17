@@ -283,6 +283,18 @@ def build_macos(cfg, dist: Path, tag, mdir, target):
         old.unlink()
     stage_music(res, mdir)
 
+    # Editing Resources/ invalidated make app's ad-hoc signature, so re-sign as
+    # the last step. A valid ad-hoc signature turns the "damaged" Gatekeeper
+    # block a downloader would otherwise hit into the ordinary "unidentified
+    # developer" prompt (right-click -> Open). Needs a mac to run codesign.
+    if sys.platform == "darwin":
+        say("ad-hoc re-signing gl-repl.app (music pack changed the bundle)")
+        run(["codesign", "--force", "--deep", "--sign", "-", str(appdir)])
+    else:
+        warn("not on macOS — can't re-sign gl-repl.app after the music swap, so "
+             "its signature is invalid. Package on a mac, or downloaders must "
+             "run: xattr -dr com.apple.quarantine gl-repl.app")
+
     dist.mkdir(parents=True, exist_ok=True)
     zip_path = dist / f"gl-repl-{tag}-macos.zip"
     if zip_path.exists():

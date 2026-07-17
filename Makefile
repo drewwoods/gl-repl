@@ -1162,6 +1162,14 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 	# drop more into ~/Library/Application Support/gl-repl/Music.
 	mkdir -p $(APP_BUNDLE)/Contents/Resources/assets
 	cp assets/sample.mp3 $(APP_BUNDLE)/Contents/Resources/assets/
+	# Ad-hoc sign so a downloaded copy gets the ordinary "unidentified
+	# developer" Gatekeeper prompt (right-click -> Open) instead of the
+	# "damaged" hard block macOS shows for a fully unsigned, quarantined app.
+	# No Apple account needed. (The release flow re-signs after it swaps in the
+	# full music pack, since editing Resources/ invalidates this signature.)
+	@codesign --force --deep --sign - $(APP_BUNDLE) 2>/dev/null \
+		&& echo "ad-hoc signed $(APP_BUNDLE)" \
+		|| echo "warning: codesign unavailable — $(APP_BUNDLE) left unsigned"
 	touch $(APP_BUNDLE)
 	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
 
