@@ -99,7 +99,8 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float th, dd, blink, ink; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color
+  static float th, dd, blink, ink, ph, slit; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
+  static float cycle_length = 60; // seconds per dome shutter cycle (open ~2/3 of it)
 
   // concrete pad a building stands on
   pad(rad) {
@@ -124,36 +125,6 @@ void display(void) {
     glEnd();
   }
 
-  // dome with an observation slit; the gap is centered on local -z
-  dome(rad, stacks, slices) {
-    for(i, 0, stacks) {
-      glBegin(GL_QUAD_STRIP);
-        for(j, 0, slices + 1) {
-          th = -PI/2 + 0.31 + j*(TAU - 0.62)/slices;
-          glNormal3f(cos(1.48*i/stacks)*cos(th), sin(1.48*i/stacks), cos(1.48*i/stacks)*sin(th));
-          glVertex3f(rad*cos(1.48*i/stacks)*cos(th), rad*sin(1.48*i/stacks), rad*cos(1.48*i/stacks)*sin(th));
-          glNormal3f(cos(1.48*(i + 1)/stacks)*cos(th), sin(1.48*(i + 1)/stacks), cos(1.48*(i + 1)/stacks)*sin(th));
-          glVertex3f(rad*cos(1.48*(i + 1)/stacks)*cos(th), rad*sin(1.48*(i + 1)/stacks), rad*cos(1.48*(i + 1)/stacks)*sin(th));
-        }
-      glEnd();
-    }
-  }
-
-  // parabolic reflector opening along local +y
-  dish(rad, rings, spokes, depth) {
-    for(i, 0, rings) {
-      glBegin(GL_QUAD_STRIP);
-        for(j, 0, spokes + 1) {
-          th = j*TAU/spokes;
-          glNormal3f(-2*depth*(i/rings)*cos(th), 1, -2*depth*(i/rings)*sin(th));
-          glVertex3f(rad*(i/rings)*cos(th), depth*(i/rings)*(i/rings), rad*(i/rings)*sin(th));
-          glNormal3f(-2*depth*((i + 1)/rings)*cos(th), 1, -2*depth*((i + 1)/rings)*sin(th));
-          glVertex3f(rad*((i + 1)/rings)*cos(th), depth*((i + 1)/rings)*((i + 1)/rings), rad*((i + 1)/rings)*sin(th));
-        }
-      glEnd();
-    }
-  }
-
   // snow drift: a squashed mound
   drift(x, z, s) {
     glPushMatrix();
@@ -170,9 +141,10 @@ void display(void) {
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
   // ===== Aurora observatory: a lonely dish tracking the sky =====
-  // NOTE: budget -- dome costs stacks*(slices+1)*5 flat commands and the
-  // dish rings*(spokes+1)*5; at 10/24 and 6/28 the whole station stays
-  // near a third of the 8192 flat cap.
+  // NOTE: the dome and dish are clip-plane carvings of glutSolidSphere --
+  // a sphere is ONE flat command however finely tessellated, so the whole
+  // station renders in a few hundred flat commands. TWO_SIDE lighting
+  // (below) keeps the exposed sphere interiors lit, not black.
   glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
@@ -211,7 +183,40 @@ void display(void) {
     glRotatef(-135, 0, 1, 0);
     ink = 8;
     glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
-    dome(1.05, 10, 24);
+    // dome = the top of a sphere: GL_CLIP_PLANE1 keeps y >= 0, and the
+    // observation slit is the gap between two clipped copies of the same
+    // sphere -- each draw keeps one side of a vertical plane turned `slit`
+    // rad off the slit center (local -z). Clip planes only intersect
+    // half-spaces, which is why cutting a slit OUT takes two draws.
+    // GL_CLIP_PLANE2 keeps y <= 1.02, opening a round vent at the zenith.
+    // The spheres draw rotated 90 deg so a pole sits at the zenith, where
+    // the quadric's slices converge -- the vent cuts the densest mesh.
+    // The planes are captured in the dome frame BEFORE that rotation, so
+    // the cuts stay upright.
+    // Shutter cycle: closed at t = 0, `slit` swings open over 2 s, stays
+    // open (0.31 rad) until 2/3 of `cycle_length`, swings shut, and rests
+    // closed for the last third. The plane equations reference `slit`, so
+    // they re-evaluate every frame.
+    ph = fmod(t, cycle_length);
+    slit = 0.31*max(min(min(ph/2, 1), (2*cycle_length/3 + 2 - ph)/2), 0);
+    glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
+    glEnable(GL_CLIP_PLANE1);
+    glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});
+    glEnable(GL_CLIP_PLANE2);
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){cos(slit), 0, sin(slit), 0});
+    glEnable(GL_CLIP_PLANE0);
+    glPushMatrix();
+      glRotatef(-90, 1, 0, 0);
+      glutSolidSphere(1.05, 24, 20);
+    glPopMatrix();
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-cos(slit), 0, sin(slit), 0});
+    glPushMatrix();
+      glRotatef(-90, 1, 0, 0);
+      glutSolidSphere(1.05, 24, 20);
+    glPopMatrix();
+    glDisable(GL_CLIP_PLANE0);
+    glDisable(GL_CLIP_PLANE1);
+    glDisable(GL_CLIP_PLANE2);
   glPopMatrix();
 
   // radio dish: pylon, yoke, articulated bowl slowly sweeping the sky
@@ -231,7 +236,18 @@ void display(void) {
     glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
     // faint self-glow keeps the bowl's shaded side steel-blue, not black
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.06, 0.09, 0.13, 1});
-    dish(1.25, 6, 28, 0.38);
+    // dish = a shallow cap sliced off a big sphere: a rim of radius 1.25
+    // at depth 0.38 needs R = (1.25^2 + 0.38^2)/(2*0.38) ~= 2.246. The
+    // plane is captured in the dish frame (before the translate), keeping
+    // y <= 0.38, so only the bowl survives -- and it tilts and sweeps with
+    // the frame because the equation is re-captured every frame.
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, -1, 0, 0.38});
+    glEnable(GL_CLIP_PLANE0);
+    glPushMatrix();
+      glTranslatef(0, 2.246, 0);
+      glutSolidSphere(2.246, 28, 32);
+    glPopMatrix();
+    glDisable(GL_CLIP_PLANE0);
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
   glPopMatrix();
 
@@ -241,15 +257,15 @@ void display(void) {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glDepthMask(GL_FALSE);
 
-  // warm light spilling from the dome slit
+  // warm light spilling from the dome slit; fades as the shutter closes
   glPushMatrix();
     glTranslatef(1.8, 1, 0.5);
     glRotatef(-135, 0, 1, 0);
     glBegin(GL_QUADS);
-      glColor4f(1, 0.85, 0.15, 0.65);
+      glColor4f(1.0, 0.85, 0.15, 0.65*slit/0.31);
       glVertex3f(-0.24, 0.02, -0.42);
       glVertex3f(0.24, 0.02, -0.42);
-      glColor4f(1, 0.85, 0.15, 0.2);
+      glColor4f(1.0, 0.85, 0.15, 0.20*slit/0.31);
       glVertex3f(0.15, 0.92, -0.28);
       glVertex3f(-0.15, 0.92, -0.28);
     glEnd();
