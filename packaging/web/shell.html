@@ -112,6 +112,17 @@
         outline: none;
       }
 
+      /* The Safari pill is advice about the browser rather than the
+         build, so it takes the error red (#overlay.error #status) to read
+         as distinct from the amber "this is a port" statement. */
+      .badge.warn { border-color: #7a3f3a; color: #e06c60; }
+
+      .badge.warn:hover,
+      .badge.warn:focus-visible {
+        background: #2c1a18;
+        border-color: #e06c60;
+      }
+
       /* Own tooltip rather than a title= attribute: the native one is
          held back by a browser-owned delay of ~1s that no API exposes,
          and this reads in the app's own chrome colors. */
@@ -320,6 +331,16 @@
 
       #overlay .note a { color: var(--accent); }
 
+      /* Menu paths read as UI chrome, not emphasis - the mono face has no
+         real italic and slants poorly. */
+      #overlay .note em { color: var(--text); font-style: normal; }
+
+      /* Match the topbar's red "slow in safari" pill, so the overlay note
+         and the badge that outlives it read as one message. Qualified by
+         #overlay to outrank the amber "#overlay .note strong" above. */
+      #overlay #engineNote { border-color: #7a3f3a; }
+      #overlay #engineNote strong { color: #e06c60; }
+
       #status {
         color: var(--muted);
         font-size: 13px;
@@ -369,6 +390,9 @@
       <span class="badge" tabindex="0"
             aria-label="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience."
             data-tip="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience.">experimental</span>
+      <span class="badge warn" id="safariBadge" tabindex="0" hidden
+            aria-label="Safari renders this build at roughly half the frame rate of Chrome or Firefox. Either one will feel noticeably smoother for the same scene. To watch the frame rate yourself, set Config &rarr; Interface &rarr; Compute profile to FPS."
+            data-tip="Safari renders this build at roughly half the frame rate of Chrome or Firefox. Either one will feel noticeably smoother for the same scene. To watch the frame rate yourself, set Config &rarr; Interface &rarr; Compute profile to FPS.">slow in safari</span>
       <div class="spacer"></div>
       <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
       <button type="button" class="keycap" id="newSceneButton" disabled>new</button>
@@ -400,6 +424,12 @@
           <a href="https://github.com/drewwoods/gl-repl" target="_blank"
              rel="noopener">build the native app</a>.
         </p>
+        <p class="note" id="engineNote" hidden>
+          <strong>Safari renders this about half as fast.</strong>
+          Chrome or Firefox will give you a noticeably smoother frame rate
+          for the same scene. To watch the frame rate yourself, set
+          <em>Config &rarr; Interface &rarr; Compute profile</em> to FPS.
+        </p>
         <div id="status">Downloading...</div>
         <progress value="0" max="100" id="progress" hidden></progress>
       </div>
@@ -423,6 +453,31 @@
       var fullscreenButton = document.getElementById('fullscreenButton');
       var lastSceneFilename = 'gl-repl-scene.c';
       if (outputElement) outputElement.value = '';
+
+      // Safari runs this build at roughly half the frame rate Chrome and
+      // Firefox manage: say so in the loading overlay, and reveal the
+      // topbar pill that carries the caveat once the overlay is gone.
+      (function () {
+        var ua = navigator.userAgent;
+        // Chrome and Edge on macOS also carry "Safari" in the UA string, so
+        // the token only means Safari once every other engine's marker is
+        // ruled out.
+        var isSafari = /Safari/.test(ua) &&
+                       !/Chrome|Chromium|Edg\/|OPR\/|Firefox/.test(ua);
+        // On iOS every browser is WebKit underneath - "Chrome" there
+        // (CriOS) is the same engine in a different skin - so the advice
+        // would be useless. Desktop Safari only.
+        var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                    (navigator.platform === 'MacIntel' &&
+                     navigator.maxTouchPoints > 1);
+        if (!isSafari || isIOS) return;
+
+        var note = document.getElementById('engineNote');
+        if (note) note.hidden = false;
+
+        var badge = document.getElementById('safariBadge');
+        if (badge) badge.hidden = false;
+      })();
 
       // Loading-overlay splash: the rotating open-cube mark (lit-cube.glr's
       // 4-faced cube, both X faces open), same software projection as the
