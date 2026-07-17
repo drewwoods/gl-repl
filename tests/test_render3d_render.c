@@ -11,12 +11,14 @@
 #include "render3d/guides/geometry_guides.h"
 #include "render3d/render.h"
 #include "render3d/render_types.h"
+#include "render3d/depth_viz.h"
 #include "render3d/postprocess_filter.h"
 #include "render3d/postprocess_surface.h"
 
 
 #include "support/test_harness.h"
 #include "support/cpuprof.h"
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -537,6 +539,42 @@ static void test_render3d_winding_and_gizmo(void) {
     int res = render3d_draw_scene(&state, &cfg);
     ASSERT_INT("winding view draw ok", res, 0);
     ASSERT_TRUE("winding view and glow calls glBegin/glEnd", gl_stub_counts[GL_STUB_glBegin] > 0);
+#endif
+}
+
+/* Depth-buffer visualization: every mode renders cleanly through both
+ * the single-pass and accumulation branches (the stub glReadPixels
+ * fills 1.0, so this is the empty-scene/structural path — the math
+ * coverage lives in test_depth_viz), and an out-of-range mode is
+ * rejected by validate_render_config before any GL work. */
+static void test_depth_viz_render_modes(void) {
+    printf("--- depth-viz render modes ---\n");
+
+#ifdef GL_STUBS
+    Render3dRenderConfig cfg = make_test_config();
+    Render3dState state;
+    render3d_state_init(&state);
+
+    for (int mode = RENDER3D_DEPTH_VIZ_OFF;
+         mode < RENDER3D_DEPTH_VIZ_COUNT; mode++) {
+        cfg.depth_viz = mode;
+        cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+        ASSERT_INT("depth-viz single-pass render ok",
+                   render3d_draw_scene(&state, &cfg), 0);
+        cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
+        cfg.accum_passes = 16;
+        ASSERT_INT("depth-viz accum render ok",
+                   render3d_draw_scene(&state, &cfg), 0);
+    }
+
+    cfg.depth_viz = RENDER3D_DEPTH_VIZ_COUNT;
+    errno = 0;
+    ASSERT_INT("depth-viz out-of-range rejected",
+               render3d_draw_scene(&state, &cfg), -1);
+    ASSERT_INT("depth-viz reject sets EINVAL", errno, EINVAL);
+    cfg.depth_viz = -1;
+    ASSERT_INT("depth-viz negative rejected",
+               render3d_draw_scene(&state, &cfg), -1);
 #endif
 }
 
@@ -1398,6 +1436,7 @@ int main(int argc, char **argv) {
     test_scene_axes_render();
     test_scene_backdrop_render();
     test_render3d_winding_and_gizmo();
+    test_depth_viz_render_modes();
     test_scene_lights();
     test_scene_overlays();
     test_anim_time_propagation();

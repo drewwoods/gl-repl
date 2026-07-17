@@ -33,6 +33,7 @@ extern "C" {
     X(glGenTextures)                   \
     X(glDeleteTextures)                \
     X(glTexImage2D)                    \
+    X(glTexSubImage2D)                 \
     X(glCopyTexSubImage2D)             \
     X(glTexParameteri)                 \
     X(glBlendFunc)                     \

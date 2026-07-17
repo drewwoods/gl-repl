@@ -669,7 +669,7 @@ explaining why the extra background is useful.
 | [`src/support/gpuprof.h`](src/support/gpuprof.h) | GPU profiler API (`gpu_prof_init/frame_begin/begin/end`, `gpu_prof_section_avg_us/_has_data`, `gpu_prof_uses_timestamps`) + the injected [`GpuProfGlFns`](src/support/gpuprof.h#L57) table (`query_counter` optional → timestamp mode) |
 | [`src/app/glr_prof.c`](src/app/glr_prof.c) | gl-repl's [`prof_section_info()`](src/support/cpuprof.h#L50) table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). Also the GPU-bracketing policy: `k_gpu_sections[]` (which sections get timer queries — GL-emitting ones only; per-fade-batch subsections excluded for query-budget reasons), the cpuprof hook pair that routes them into gpuprof, and the per-frame capture mode (Off/FPS → no queries, Sections/Histogram → full subset; set by the controller at frame top, since query boundaries cost real GPU time on GL-on-Metal). The demos implement their own `prof_section_info` |
 | [`src/app/glr_prof.h`](src/app/glr_prof.h) | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
-| [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L58) / [`Render3dRenderConfig`](src/render3d/render_types.h#L135) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L305) types for scene helpers |
+| [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L58) / [`Render3dRenderConfig`](src/render3d/render_types.h#L135) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L312) types for scene helpers |
 | [`src/render3d/guides/guides_shared.h`](src/render3d/guides/guides_shared.h) | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
 | [`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L44) |
 | [`src/render3d/guides/geometry_guides.h`](src/render3d/guides/geometry_guides.h) | Geometry guides render entrypoint |
@@ -682,6 +682,8 @@ explaining why the extra background is useful.
 | [`src/render3d/axes.c`](src/render3d/axes.c) | Axes theme rendering |
 | [`src/render3d/axes.h`](src/render3d/axes.h) | Axes render entrypoint |
 | [`src/render3d/render3d_transition.c`](src/render3d/render3d_transition.c) | Pure grid/axes show↔hide fade state machine (`render3d_xn_init/set/show/tick`); no GL, one instance per overlay |
+| [`src/render3d/depth_viz.c`](src/render3d/depth_viz.c) | Depth-buffer visualization: pure depth→luminance conversion core (`render3d_depth_viz_map` — linearize via the active projection, LINEAR/SCENE normalization with EMA-smoothed range, clamped, near=bright/background=black) plus the GL shell (fill-end `glReadPixels` capture excluding grid/backdrop, POT `GL_LUMINANCE` texture quad via the shared `render3d_post_2d_begin/_end` bracket, pixel-aligned SPLIT crop). Config row "Depth view" (Ctrl+N); controller forces Off when the context can't read depth (web) |
+| [`src/render3d/depth_viz.h`](src/render3d/depth_viz.h) | [`Render3dDepthVizMode`](src/render3d/depth_viz.h) / `Render3dDepthVizRange` + reset/capture/render/map API |
 | [`src/render3d/render3d_transition.h`](src/render3d/render3d_transition.h) | Transition machine API: [`Render3dXnState`](src/render3d/render3d_transition.h#L55), [`Render3dXnPhase`](src/render3d/render3d_transition.h#L34), entry points |
 | [`src/render3d/render.h`](src/render3d/render.h) | Declares `render3d_draw_scene(Render3dState *, const Render3dRenderConfig *)`, `render3d_state_init(...)`, `render3d_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the render3d module owns no camera type or apply helper |
 | [`src/render3d/backdrop.c`](src/render3d/backdrop.c) | Backdrop mode dispatch and deterministic cityscape renderer |
@@ -1255,7 +1257,7 @@ Declarative toggle system in [`src/app/glr_actions.c`](src/app/glr_actions.c):
   `glr_config_row_kind`); it counts only real `### ` headers — the
   `All` row is owned in the menu layer (`config_all_parent_row`), never
   double-counted. The `All` flyout spans the whole table 1:1 with
-  `### `/`---` rows rendered as inert chrome ([`GlrConfigRowKind`](src/app/glr_config.h#L213)).
+  `### `/`---` rows rendered as inert chrome ([`GlrConfigRowKind`](src/app/glr_config.h#L214)).
 - **Scrolling long flyouts.** A flyout taller than the viewport (for example,
   the synthetic **All** flyout in a short window) is
   clamped to fit by `submenu_rect`, and the mouse wheel pages through the
@@ -1359,6 +1361,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
 | Ctrl+Shift+T | Reset time `t` to 0 |
 | Ctrl+Shift+B | Toggle winding view |
 | Ctrl+G | Toggle wireframe |
+| Ctrl+N | Cycle Depth view (Off / Linear / Scene / Split) — grayscale depth-buffer visualization; Scene normalizes to the user geometry's depth range (grid/backdrop excluded), Split overlays the right half of the scene |
 | Ctrl+O | Focus origin — ease the orbit target to (0,0,0) |
 | Ctrl+Shift+N | Toggle normal vectors |
 | Ctrl+Shift+E | Toggle Projection (Perspective / Ortho) |

@@ -46,6 +46,10 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D_OVERLAY_NORMALS]          = { "normals",         2, 0 },
     [PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
     [PROF_RENDER3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
+    /* Depth-viz cost is dominated by the synchronous glReadPixels stall
+     * plus the CPU convert — a CPU-side number by nature, so the row is
+     * deliberately NOT in k_gpu_sections below. */
+    [PROF_RENDER3D_DEPTH_VIZ]                = { "depth viz",       1, 0 },
     [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
     [PROF_CODE_PANEL_ROWS]                   = { "build rows",      1, 0 },
     [PROF_CODE_PANEL_TEXT]                   = { "draw text",       1, 0 },

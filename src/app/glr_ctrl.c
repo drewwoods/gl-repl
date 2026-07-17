@@ -994,6 +994,14 @@ static Render3dState g_scene_renderer;
  * opt into radial fog. 0 until detection runs — the safe default. */
 static int g_nv_fog_distance_supported = 0;
 
+/* Runtime depth-readback capability (glReadPixels GL_DEPTH_COMPONENT from
+ * the default framebuffer), probed once in glr_ctrl_init_gl. WebGL forbids
+ * it, so the web build hard-disables. When unsupported the Depth view cfg
+ * row stays settable (so @cfg round-trips, point-parameter philosophy) but
+ * build_scene_config forces the render-config copy to Off. Defaults to 1:
+ * tests that never run init-GL keep the feature exercisable. */
+static int g_depth_readback_supported = 1;
+
 /* The 2D/3D view-mode transition state machine lives in
  * src/app/glr_ctrl_view_transition.c (carved out of this file). The frame
  * loop ticks it via glr_ctrl_tick_view_transition; the scene-config builder
@@ -1145,6 +1153,8 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
     config->winding_view = presentation.winding_view;
+    config->depth_viz = g_depth_readback_supported ? presentation.depth_viz
+                                                   : 0;
     /* Single source of truth: the executor's capability flag + loaded
      * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
      * attenuation through the same callable entry point the executor
@@ -2864,6 +2874,24 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_ACCUM_RED_BITS, &accum_bits);
     (void)glGetError(); /* clear the GL_INVALID_ENUM a GLES context raises */
     glr_state_render_mut()->accum_bits = (int)accum_bits;
+
+    /* Probe depth readback once (same probe-and-mask pattern as the
+     * accum-bits check above): read one depth pixel and see whether the
+     * context objects. WebGL cannot read GL_DEPTH_COMPONENT from the
+     * default framebuffer at all — and gl4es may silently no-op instead
+     * of raising an error — so the web build is hard-disabled too. */
+    {
+        GLfloat probe_depth = 0.0f;
+        (void)glGetError();
+        glReadPixels(0, 0, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &probe_depth);
+        g_depth_readback_supported = (glGetError() == GL_NO_ERROR);
+    }
+#if defined(__EMSCRIPTEN__)
+    g_depth_readback_supported = 0;
+#endif
+    if (!g_depth_readback_supported)
+        fprintf(stderr, "gl-repl: GL context cannot read the depth buffer; "
+                        "Depth view is disabled\n");
 
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /

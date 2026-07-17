@@ -64,6 +64,7 @@
 #define CFG_DEFAULT_CODE_FOCUS        1   /* focus view by default */
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
+#define CFG_DEFAULT_DEPTH_VIZ        0   /* RENDER3D_DEPTH_VIZ_OFF */
 
 /* Backdrop/grid pairing defaults. These rows declare which backdrops own a
  * companion grid; glr_config.c owns the enforcement policy (force the grid

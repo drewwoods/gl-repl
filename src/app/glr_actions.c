@@ -338,6 +338,11 @@ static const char *overlay_scope_names[OVERLAY_SCOPE_COUNT] = {
  * glr_config.c (accum_passes_*_cycle); these labels and that int table
  * both expand from GLR_ACCUM_PASS_LADDER (glr_config.h). */
 static const char *accum_effect_names[] = { "Off", "AA", "Blur", "Blur Cam" };
+/* Depth view states mirror Render3dDepthVizMode (depth_viz.h): Linear
+ * maps eye depth across the full near/far range, Scene normalizes to
+ * the user geometry's own depth extent, Split overlays the right half
+ * of the scene with the scene-normalized image. */
+static const char *depth_viz_names[] = { "Off", "Linear", "Scene", "Split" };
 static const char *accum_passes_names[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_NAME_ENTRY) };
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
@@ -452,6 +457,9 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
     { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2,
       .key_code = KM_KEY(GLR_WINDING_VIEW), .modifiers = KM_MODS(GLR_WINDING_VIEW) },
+    { .label = "Depth view", .key = GLR_CONFIG_DEPTH_VIZ,
+      .state_count = ARRAY_LEN(depth_viz_names), .state_names = depth_viz_names,
+      .key_code = KM_KEY(GLR_DEPTH_VIZ), .modifiers = KM_MODS(GLR_DEPTH_VIZ) },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 

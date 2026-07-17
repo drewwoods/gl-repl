@@ -5,6 +5,7 @@
  */
 #include "axes.h"
 #include "backdrop.h"
+#include "depth_viz.h"
 #include "grid.h"
 #include "lights.h"
 #include "overlays.h"   /* render3d_draw_bitmap_text for the orbit-gizmo coord readout */
@@ -68,6 +69,7 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
 void render3d_init_gl(void) {
     render3d_lights_init_global_ambient();
     render3d_postprocess_filter_reset();
+    render3d_depth_viz_reset();
 }
 
 void render3d_state_init(Render3dState *state) {
@@ -129,6 +131,8 @@ static int validate_render_config(const Render3dRenderConfig *config) {
         if (n != 1 && n != 2 && n != 4 && n != 8 && n != 12 && n != 16)
             goto bad;
     }
+    if (config->depth_viz < 0 ||
+        config->depth_viz >= RENDER3D_DEPTH_VIZ_COUNT)     goto bad;
     return 0;
 
 bad:
@@ -816,12 +820,25 @@ static void render3d_pass_overlays(const Render3dFrameRenderContext *frame_ctx) 
 static void render_3d_scene_pass(const Render3dState *state,
                                  const Render3dRenderConfig *config,
                                  float accum_jitter_x,
-                                 float accum_jitter_y) {
+                                 float accum_jitter_y,
+                                 int capture_depth) {
     Render3dFrameRenderContext frame_ctx;
     render3d_prepare_frame_context(&frame_ctx, config);
 
     render3d_pass_setup(state, &frame_ctx, accum_jitter_x, accum_jitter_y);
     render3d_pass_fill(config);
+    /* Depth-viz capture sits between fill and helpers on purpose: user
+     * geometry (and the replay-fade post_fill hook) has written its
+     * depths, but the backdrop/grid — which also write depth — have
+     * not, so the visualization shows geometry only. Under
+     * accumulation the caller sets capture_depth on the last pass
+     * only (per-pass clears wipe earlier depths anyway). */
+    if (capture_depth) {
+        prof_begin(PROF_RENDER3D_DEPTH_VIZ);
+        render3d_depth_viz_capture(config->render3d_x, config->render3d_y,
+                                   config->render3d_w, config->render3d_h);
+        prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
+    }
     render3d_pass_helpers(&frame_ctx);
     render3d_pass_overlays(&frame_ctx);
 }
@@ -833,6 +850,7 @@ int render3d_draw_scene(Render3dState *state,
     if (!state) { errno = EINVAL; return -1; }
 
     int accum_passes = config->accum_passes;
+    int dv_on = config->depth_viz != RENDER3D_DEPTH_VIZ_OFF;
     glViewport(config->render3d_x, config->render3d_y,
                config->render3d_w, config->render3d_h);
     render3d_apply_clear_color(config->clear_color);
@@ -890,12 +908,14 @@ int render3d_draw_scene(Render3dState *state,
                                           pass_idx, accum_passes, &pass_cfg);
                 render3d_compute_active_projection(state, &pass_cfg);
                 prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
-                render_3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f);
+                render_3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f,
+                                     dv_on && pass_idx == accum_passes - 1);
             } else {
                 prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
                 render_3d_scene_pass(state, config,
                                      g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][0],
-                                     g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][1]);
+                                     g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][1],
+                                     dv_on && pass_idx == accum_passes - 1);
             }
             prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
             glAccum(GL_ACCUM, weight);
@@ -908,7 +928,7 @@ int render3d_draw_scene(Render3dState *state,
         prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        render_3d_scene_pass(state, config, 0.0f, 0.0f);
+        render_3d_scene_pass(state, config, 0.0f, 0.0f, dv_on);
     }
 
     /* Screen-anchored annotation (bitmap-text labels) draws once per
@@ -925,6 +945,19 @@ int render3d_draw_scene(Render3dState *state,
         glMatrixMode(GL_MODELVIEW);
         config->post_resolve_overlays_fn(config->post_resolve_overlays_user_data);
         prof_accum_end(PROF_RENDER3D_OVERLAYS);
+    }
+
+    /* Depth-buffer visualization draws on the resolved image BEFORE the
+     * post filter, so Post FX (grain/scanlines/CRT warp) applies
+     * uniformly across both halves of a Split view — no seam at the
+     * divider. */
+    if (dv_on) {
+        prof_begin(PROF_RENDER3D_DEPTH_VIZ);
+        render3d_depth_viz_render((Render3dDepthVizMode)config->depth_viz,
+                                  &state->active_projection,
+                                  config->render3d_x, config->render3d_y,
+                                  config->render3d_w, config->render3d_h);
+        prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
     }
 
     /* Once per frame, on the fully resolved scene image (covers both

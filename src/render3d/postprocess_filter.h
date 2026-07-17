@@ -14,6 +14,8 @@
 #ifndef RENDER3D_POSTPROCESS_FILTER_H
 #define RENDER3D_POSTPROCESS_FILTER_H
 
+#include "gl_includes.h"   /* GLint for the 2D-bracket matrix-mode snapshot */
+
 typedef enum Render3dPostFilterMode {
     RENDER3D_POST_FILTER_OFF = 0,
     RENDER3D_POST_FILTER_CHROMATIC_ABERRATION,
@@ -64,5 +66,16 @@ void render3d_postprocess_filter_reset(void);
  * glViewport). No-op for RENDER3D_POST_FILTER_OFF or invalid rects. */
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode,
                                      int sx, int sy, int sw, int sh);
+
+/* Scene-layer screen-space 2D bracket shared by the post filters and the
+ * depth-viz quad (src/render3d/ must not depend on ui/gl_2d.h). begin
+ * pushes GL_ALL_ATTRIB_BITS + all three matrix stacks, sets a pixel
+ * ortho over the rect with texturing on (GL_REPLACE) and depth/light/
+ * blend off; end pops it all back. The matrix mode is snapshot/restored
+ * through the out-param (it is not covered by glPushAttrib), so the
+ * pair isn't coupled by a file-static. */
+void render3d_post_2d_begin(int sx, int sy, int sw, int sh,
+                            GLint *saved_matrix_mode_out);
+void render3d_post_2d_end(GLint saved_matrix_mode);
 
 #endif /* RENDER3D_POSTPROCESS_FILTER_H */

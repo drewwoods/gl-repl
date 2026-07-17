@@ -4182,12 +4182,15 @@ static void test_post_filter_key_cycling(void) {
     ASSERT_INT("post_filter_mode remains off with frame scope", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode becomes film grain", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
 
-    /* Ctrl+N was removed as a post-filter shortcut; it must now be a
-     * complete no-op on this state (falls through to the editor, which has
-     * no binding on plain Ctrl+N either). */
+    /* Ctrl+N was removed as a post-filter shortcut and now cycles the
+     * Depth view config row instead — it must still leave the post-FX
+     * state untouched. */
+    glr_state_presentation_mut()->depth_viz = 0;
     glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
     ASSERT_INT("Ctrl+N no longer touches post_filter_mode", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("Ctrl+N no longer touches compositor_filter_mode", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
+    ASSERT_INT("Ctrl+N cycles Depth view", p->depth_viz, 1);
+    glr_state_presentation_mut()->depth_viz = 0;
 
     g_simulated_mods = GLUT_ACTIVE_SHIFT;
     glr_ctrl_special(GLUT_KEY_F10, 0, 0);

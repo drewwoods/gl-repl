@@ -255,6 +255,12 @@ make web                       # if emsdk on PATH: compiles; depth view degrades
 ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && git pull --ff-only origin main && make check-c99 && make test-stubs'
 ```
 
+**Measured (2026-07-17, implementation landed):** native Cocoa, 1200×800
+window (retina 2× framebuffer), torus example, Depth view = Scene:
+Render 3D CPU 5.27 ms vs 1.23 ms baseline → **~4.0 ms attributable**,
+FPS holds ~57–60, frame total 7.5 ms. Within budget; no downsampling
+lever needed. OSMesa headless: functional (all four modes captured).
+
 **Performance acceptance (on-mode cost is real: at 2400×1600 each frame
 synchronously reads ~15 MB of depth, scans ~3.8M pixels, and uploads ~3.8 MB
 — a pipeline stall plus ~1 GB/s of transfers at 60 FPS):**
