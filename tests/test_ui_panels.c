@@ -287,6 +287,15 @@ static void test_front_overlay_hit_surfaces(void) {
     ASSERT_INT_EQ("histogram panel is front overlay chrome",
                   hit.kind, UI_HIT_OVERLAY_CHROME);
 
+    /* The header-right "[reset]" control stays actionable through the same
+     * front-layer pass. */
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + ui_histogram_panel_width() - 4,
+        snap.viewport.window_h -
+            (py + ui_histogram_panel_height() - 6), 0);
+    ASSERT_INT_EQ("histogram header control hits reset",
+                  hit.kind, UI_HIT_HISTOGRAM_RESET);
+
     prepare_overlay_hit_snap(&snap);
     snap.profile_panel.mode = PROFILE_PANEL_FPS;
     layout_in = ui_overlay_layout_inputs(

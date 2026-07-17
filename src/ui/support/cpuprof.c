@@ -719,6 +719,12 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
 #define HIST_BOTTOM_PAD     8
 #define HIST_MARGIN        12
 
+/* The header's clear-samples control (the histograms are cumulative, unlike
+ * the section listing's decaying EMAs, so they need an explicit reset). Text
+ * and hit region share this label the same way the profile panel's
+ * "[+/-] all" control does. */
+#define HIST_RESET_LABEL   "[reset]"
+
 /* The x axis spans the occupied bins, with a floor so a single-bin
  * distribution still gets a drawable span. There is no percentile trim: the
  * bins are log-spaced (see support/cpuprof.h), so the axis is linear in bin
@@ -810,6 +816,30 @@ int ui_histogram_panel_height(void) {
          + legend_rows * HIST_LEGEND_ROW_H
          + HIST_BOTTOM_PAD
          + HIST_MARGIN;
+}
+
+int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
+                                int mx, int my) {
+    int panel_h;
+    int gl_y;
+    int control_w;
+
+    if (view == NULL || !view->visible ||
+        view->window_w <= 0 || view->window_h <= 0)
+        return 0;
+
+    panel_h = ui_histogram_panel_height();
+    gl_y = view->window_h - my;
+
+    /* The right side of the title row owns the reset control — same band the
+     * profile panel gives its collapse/expand-all control. */
+    control_w = FONT_SMALL_W * (int)strlen(HIST_RESET_LABEL) + 2;
+    if (mx >= view->panel_x + HIST_PANEL_W - control_w &&
+        mx < view->panel_x + HIST_PANEL_W &&
+        gl_y >= view->panel_y + panel_h - HIST_HEADER_H &&
+        gl_y < view->panel_y + panel_h)
+        return 1;
+    return 0;
 }
 
 int ui_histogram_axis_range(int *lo_bin, int *hi_bin) {
@@ -910,16 +940,20 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     int tx = panel_x + 8;
     int ty = panel_y + panel_h - HIST_HEADER_H + 2;
 
-    /* Title + peak / off-scale readout. */
+    /* Title + peak readout + reset control. */
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "Section Histograms", FONT_SMALL);
     {
         char meta[40];
-        snprintf(meta, sizeof(meta), "peak %lu", peak);
-        int mw = (int)strlen(meta) * FONT_SMALL_W + 2;
+        int reset_w = FONT_SMALL_W * (int)strlen(HIST_RESET_LABEL) + 2;
         ui_clr(UI_TOK_TEXT_MUTED);
-        gl2d_draw_string((float)(panel_x + HIST_PANEL_W - 8 - mw), (float)ty,
-                         meta, FONT_SMALL);
+        gl2d_draw_string((float)(panel_x + HIST_PANEL_W - reset_w), (float)ty,
+                         HIST_RESET_LABEL, FONT_SMALL);
+        snprintf(meta, sizeof(meta), "peak %lu", peak);
+        int mw = (int)strlen(meta) * FONT_SMALL_W;
+        gl2d_draw_string(
+            (float)(panel_x + HIST_PANEL_W - reset_w - 8 - mw), (float)ty,
+            meta, FONT_SMALL);
     }
 
     /* Plot rect: legend rows sit under the x-axis labels. */

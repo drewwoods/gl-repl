@@ -134,6 +134,13 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view);
 int  ui_histogram_panel_width(void);
 int  ui_histogram_panel_height(void);
 
+/* Hit-test the header's "[reset]" control. Returns 1 when mx/my (GLUT window
+ * coordinates, y down) land on it, else 0. Pure classification — the
+ * controller routes the hit to prof_histogram_reset(), which clears the
+ * cumulative sample histograms (the section listing's EMAs are unaffected). */
+int  ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
+                                 int mx, int my);
+
 /* The panel's x-axis policy, exposed for tests.
  *
  * Writes the inclusive bin range the plot draws: the occupied bins across

@@ -760,6 +760,20 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
                 return hit;
             }
         }
+        if (id == UI_OVERLAY_PANEL_HISTOGRAM) {
+            UiHistogramPanelView hist_view;
+            hist_view.window_w = win_w;
+            hist_view.window_h = win_h;
+            hist_view.visible = panel->visible;
+            hist_view.panel_x = px;
+            hist_view.panel_y = py;
+            if (ui_histogram_panel_hit_test(&hist_view, mx, my)) {
+                hit.kind = UI_HIT_HISTOGRAM_RESET;
+                hit.local_x = (float)(mx - px);
+                hit.local_y = (float)(win_h - my - py);
+                return hit;
+            }
+        }
         if (point_in_gl_rect(mx, my, win_h, px, py, panel->w, panel->h))
             return overlay_chrome_hit(mx, my, win_h, px, py);
     }
