@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>gl-repl &mdash; OpenGL immediate-mode REPL</title>
+    <title>gl-repl &mdash; OpenGL REPL, immediate mode, immediately</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpolygon points='8,2.2 12.8,5 8,7.8 3.2,5' fill='%23c9cce0'/%3E%3Cpolygon points='12.8,5 12.8,11 8,13.8 8,7.8' fill='%23d2d5db'/%3E%3Cpolygon points='3.2,5 8,7.8 3.2,11' fill='%233da8f5'/%3E%3Cpolygon points='8,7.8 8,13.8 3.2,11' fill='%23f841e0'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23ffffff' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
       :root {
@@ -83,6 +83,28 @@
         font-size: 12px;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      /* "experimental" pill: amber like the brand mark (this is a
+         statement about the build, not a control), quiet until hovered. */
+      .brand .badge {
+        align-self: center;
+        border: 1px solid #6b4f28;
+        border-radius: 999px;
+        color: var(--amber);
+        cursor: help;
+        flex: 0 0 auto;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        text-transform: uppercase;
+      }
+
+      .brand .badge:hover,
+      .brand .badge:focus-visible {
+        background: #2a1f12;
+        border-color: var(--amber);
+        outline: none;
       }
 
       .topbar .spacer { flex: 1 1 auto; }
@@ -246,6 +268,24 @@
         margin-top: -10px;
       }
 
+      /* Experimental-build caveat: sits between the subtitle and the
+         status line, so it is read before the app takes over. */
+      #overlay .note {
+        border: 1px solid #6b4f28;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        margin: -4px 0 0;
+        max-width: min(440px, 88vw);
+        padding: 10px 14px;
+        text-align: center;
+      }
+
+      #overlay .note strong { color: var(--amber); font-weight: bold; }
+
+      #overlay .note a { color: var(--accent); }
+
       #status {
         color: var(--muted);
         font-size: 13px;
@@ -290,7 +330,9 @@
       <div class="brand">
         <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark-color"/></svg>
         <span class="name">gl-repl</span>
-        <span class="tagline">OpenGL immediate-mode REPL &mdash; render as you type.</span>
+        <span class="tagline">OpenGL REPL &mdash; immediate mode, immediately.</span>
+        <span class="badge" tabindex="0"
+              title="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience.">experimental</span>
       </div>
       <div class="spacer"></div>
       <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
@@ -315,7 +357,14 @@
       <div id="overlay">
         <canvas class="mark" id="splashCube" width="192" height="196" aria-hidden="true"></canvas>
         <div class="title">gl-repl</div>
-        <div class="subtitle">OpenGL immediate-mode REPL &middot; WebAssembly build</div>
+        <div class="subtitle">OpenGL REPL &mdash; immediate mode, immediately.</div>
+        <p class="note">
+          <strong>Experimental WebAssembly build.</strong>
+          GL runs through gl4es on WebGL2, so some features are missing or
+          behave differently than the real thing. For the full experience,
+          <a href="https://github.com/drewwoods/gl-repl" target="_blank"
+             rel="noopener">build the native app</a>.
+        </p>
         <div id="status">Downloading...</div>
         <progress value="0" max="100" id="progress" hidden></progress>
       </div>
