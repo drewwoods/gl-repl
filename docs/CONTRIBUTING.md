@@ -9,7 +9,7 @@ the one-page map of the source tree and who owns what — and skim
 ```bash
 make gl-repl          # main binary (macOS needs cmake for the vendored freeglut;
                       #  Linux: apt install freeglut3-dev)
-make test             # build and run all tests (debug: ASan + UBSan)
+make test             # run the portable headless test gate (checks + GL stubs)
 make test-msan        # run stubbed tests with MemorySanitizer, if supported
 make debug-msan       # build everything with MemorySanitizer, if supported
 make test-stubs       # the suite against bundled no-op GL headers — no GL
@@ -18,15 +18,19 @@ make check-c99        # the C99 ratchet (gcc -std=c99 syntax check)
 make check-state-ownership   # the full ownership / contract guard suite
 ```
 
-Test targets default to `BUILD=debug`, which compiles with
-AddressSanitizer + UndefinedBehaviorSanitizer (UB aborts). `make
+Test binaries default to `BUILD=debug`; when enabled, its sanitizer mode is
+AddressSanitizer + UndefinedBehaviorSanitizer (UB aborts). The broad
+`make test` / `make test-stubs` suite defaults to `NO_SAN=1` to stay quick.
+`make test NO_SAN=0` enables ASan + UBSan for that stub suite. `make
 debug-msan` builds the full target set with MemorySanitizer and origin
 tracking when the compiler/runtime support it; `make test-msan` runs the
 stubbed suite the same way, and is included by `make test-full`. The MSan
 targets default to `MSAN_CC=clang`; override that if your LLVM compiler
 has a versioned name. `test-msan` also sets `GLR_AUDIO_NO_DEVICE=1` so
 the audio tests exercise the engine without opening host audio backends.
-`make test BUILD=release` is the fast unsanitized run.
+`make test BUILD=release` is the fast release-mode run. `make gl-repl` is the
+production OpenGL compile/link smoke check, while `make gl-tests` runs the
+small set of tests that require an actual GL context.
 
 `make web` (or `scripts/build-web.sh` for a cold start with no emsdk
 sourced yet) builds the Emscripten/wasm browser target; see the

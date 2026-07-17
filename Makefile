@@ -197,12 +197,14 @@ COVERAGE_CFLAGS = \
 	-O0 \
 	--coverage -fprofile-arcs -ftest-coverage
 
-# Test targets build & run under the debug sanitizer build
+# Test runners build & run under the debug sanitizer build
 # (AddressSanitizer + UBSan by default, or MemorySanitizer with SAN=memory);
-# gl-repl, bench and the demos
-# stay release. An explicit `BUILD=...` on the command line or in the
-# environment always wins, so `make coverage` (BUILD=coverage) and
-# `make test BUILD=release` (fast unsanitized run) keep working.
+# gl-repl, bench and the demos stay release. The public `test` target enters
+# `test-stubs`, whose default NO_SAN=1 keeps the broad headless suite quick;
+# use `make test NO_SAN=0` or `make test-asan-ubsan` for its sanitized form.
+# An explicit `BUILD=...` on the command line or in the environment always
+# wins, so `make coverage` (BUILD=coverage) and `make test BUILD=release`
+# keep working.
 ifeq ($(origin BUILD),command line)
 # explicit BUILD — honor it
 else ifeq ($(origin BUILD),environment)
@@ -1734,18 +1736,35 @@ check: ## Run all checks.
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
-test: $(TEST_BINS) ## Run the full automated test suite.
+# `make test` is deliberately the portable, headless test contract. The
+# no-op GL stubs exercise all ordinary tests without a display or GL dev
+# packages; the production GL compile/link smoke is `make gl-repl`, and the
+# small real-context regression set remains opt-in as `make gl-tests`.
+#
+# Keep the USE_GL_STUBS=1 branch as the runner used by test-stubs, coverage,
+# and sanitizer targets. Calling `make test` without it delegates to
+# test-stubs (including its static checks) rather than maintaining a separate
+# real-GL, context-free test suite.
+ifeq ($(USE_GL_STUBS),1)
+test: $(TEST_BINS) ## Run the stubbed automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example export/compile logging.
+test-detailed: $(TEST_BINS) ## Run the stubbed test suite with verbose example export/compile logging.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	REPL_EXPORT_VERBOSE=1 \
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
+else
+test: ## Run the full headless test gate (checks plus GL stubs).
+	$(MAKE) --no-print-directory test-stubs
+
+test-detailed: ## Run stubbed tests with verbose example export/compile logging.
+	$(MAKE) --no-print-directory test-detailed USE_GL_STUBS=1
+endif
 
 rebuild-golden: test_repl_core_examples ## Rebuild all the golden examples from test_repl_core_examples.
 	@$(BINDIR)/test_repl_core_examples --update-golden
@@ -2121,7 +2140,7 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 help: ## Show the common targets (run make help-details for the full list).
 	@printf "Immediate-mode REPL — common Make targets\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
-		END {split("gl-repl clean test-stubs test-full fetch-music help help-details",o," "); \
+		END {split("gl-repl clean test test-full fetch-music help help-details",o," "); \
 		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
 	@printf "\nRun 'make help-details' for all targets, build modes, and runtime/env notes.\n"
 
@@ -2132,7 +2151,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
-	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
+	@printf "GL stubs:        make test (or test-stubs); add USE_GL_STUBS=1 to an individual target.\n"
 	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
 	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
 	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
@@ -2168,7 +2187,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 -pthread); set =0 to force the thread on. The toggle is contained\n"
 	@printf "                 entirely in src/app/glr_audio.c.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
-	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
+	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
