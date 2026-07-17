@@ -78,10 +78,23 @@ persistence):
   building. Non-interactively (no tty, `--no-menu`, or `--yes`/`ASSUME_YES=1`)
   it uses the persisted/env plan and skips the menu.
 - **Persistence.** The plan (modes, ssh hosts/paths, repo, remote branch, music
-  source) is saved to `.release.ini` (repo root, gitignored) on save/build, so
-  customizations survive between runs. Config precedence is
+  source, pin ref) is saved to `.release.ini` (repo root, gitignored) on
+  save/build, so customizations survive between runs. Config precedence is
   **CLI/env override > `.release.ini` > built-in default**; `tag` is not
-  persisted (derived per-release from `git describe` unless overridden).
+  persisted (derived per-release from `git describe` of the pinned commit).
+- **SHA pinning + verification (every host builds the identical commit).** The
+  whole release is pinned to one commit SHA, resolved once up front from the
+  `pin` ref (default: local `HEAD` when any platform builds locally, else
+  `origin/<branch>`). The menu surfaces the resolved target
+  (`target: <sha> <describe> (ref …)`) so you see what all hosts will build
+  before proceeding — press `r` to `git fetch` and refresh it. Each **remote**
+  host fetches the branch, `git checkout --detach`es to that exact SHA, and is
+  re-`rev-parse`d to confirm it landed there (aborting if the commit isn't
+  pushed). Each **local** platform is verified with `HEAD == target` and a clean
+  tree (else it aborts — a dirty/ahead local build wouldn't match the pin;
+  `ALLOW_DIRTY=1` downgrades the clean check to a warning). So a two-host build
+  can't silently mix SHAs, and the artifact tag names that one commit. Override
+  the pin with the menu's *Pin ref* field or `PIN=<ref>`.
 - **macOS** (`MACOS_MODE`) is built via `make app` (locally, or on
   `MACOS_HOST:MACOS_PATH` for remote — the `.app` is copied back). The release
   step then swaps the full music pack into
@@ -105,8 +118,8 @@ persistence):
   staged artifacts. The GitHub release is created as a **draft**; publish with
   `gh release edit <tag> --repo <repo> --draft=false`.
 - **Knobs.** Set them in the menu (persisted), or override per-run via env /
-  make-vars — the Makefile forwards `TAG`, `REPO`, `REMOTE_BRANCH`, the plan
-  knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
+  make-vars — the Makefile forwards `TAG`, `REPO`, `PIN`, `REMOTE_BRANCH`, the
+  plan knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
   `LINUX_MODE`/`LINUX_HOST`/`LINUX_PATH`, plus `ASSUME_YES` / `ALLOW_DIRTY` when
   set (e.g. `make release LINUX_MODE=local TAG=v1.0.0`). `MUSIC_SRC_DIR`,
   `REMOTE_HOST`/`REMOTE_PATH`, and the back-compat `SKIP_MACOS=1` / `SKIP_LINUX=1`
