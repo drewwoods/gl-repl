@@ -374,7 +374,7 @@ def do_build(cfg, tag, target):
         print(f"  {a.name}  ({mb:.0f} MB)", file=sys.stderr)
 
 
-def do_upload(cfg, tag):
+def do_upload(cfg, tag, target):
     if not shutil.which("gh"):
         die("gh CLI not found — install it or upload dist/ manually.")
     dist = ROOT / "dist" / tag
@@ -386,13 +386,20 @@ def do_upload(cfg, tag):
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL).returncode == 0
     if exists:
+        # Existing tag wins — its commit is fixed, so --target would be ignored.
         say(f"release {tag} exists on {repo} — uploading (clobber)")
     else:
-        say(f"creating draft release {tag} on {repo}")
-        run(["gh", "release", "create", tag, "--repo", repo, "--title", tag,
-             "--notes",
-             f"gl-repl {tag} — macOS .app and Linux binary, music pack bundled.",
-             "--draft"])
+        # New tag: pin it to the exact commit the artifacts were built from, so
+        # publishing the draft creates the tag there (not at default-branch HEAD).
+        say(f"creating draft release {tag} on {repo} @ {target[:12]}")
+        try:
+            run(["gh", "release", "create", tag, "--repo", repo, "--title", tag,
+                 "--target", target, "--notes",
+                 f"gl-repl {tag} — macOS .app and Linux binary, music pack bundled.",
+                 "--draft"])
+        except subprocess.CalledProcessError:
+            die(f"could not create release at {target[:12]} — is that commit "
+                f"pushed to {repo}? (GitHub can only tag a commit it has.)")
     run(["gh", "release", "upload", tag, "--repo", repo, "--clobber",
          *[str(a) for a in artifacts]])
     say(f"uploaded {len(artifacts)} artifact(s) to {repo} release {tag} (draft).")
@@ -592,7 +599,7 @@ def main():
 
     if args.command == "upload":
         target = resolve_target(cfg, fetch=False)
-        do_upload(cfg, tag_for(cfg, target))
+        do_upload(cfg, tag_for(cfg, target), target)
         return
 
     # build / all
@@ -607,7 +614,7 @@ def main():
     say(f"pinning release to {target[:12]} ({desc}) via ref {target_ref(cfg)}")
     do_build(cfg, tag, target)
     if args.command == "all" and confirm_upload(cfg, tag):
-        do_upload(cfg, tag)
+        do_upload(cfg, tag, target)
 
 
 if __name__ == "__main__":
