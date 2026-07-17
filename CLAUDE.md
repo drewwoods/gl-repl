@@ -239,7 +239,8 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | **src/repl/** | Language pipeline — see `src/repl/ARCHITECTURE.md` |
 | `command.h` | `CmdType` enum + `GLCmd` (pure parse result, no `source[]`) + set predicates |
 | `parser.{c,h}` | Source-line parser; canonical text via `ReplParsedLine.text` |
-| `command_spec.{c,h}` | Command metadata; `k_enum_command_specs[]`/`k_std_command_specs[]` (alphabetical by GL name) |
+| `command_spec.{c,h}` | Command metadata; `k_enum_command_specs[]`/`k_std_command_specs[]` (alphabetical by GL name); owns `k_attrib_bits[]` (the glPushAttrib `GL_*_BIT` groups, canonical order) + `repl_attrib_bit_entries()` |
+| `attrib_bits.{c,h}` | Pure (no-GL) glPushAttrib/glPopAttrib mapping: command → bit mask, per-cell state writes (flow-sensitive color-material), masked-LIFO-fold collectors for the editor per-bit highlighting; also consumed by `gl_state_inspector.c` so the two can't drift |
 | `command_store.{c,h}` | Low-level `GLCmd` array mechanics |
 | `compile.{c,h}` / `apply.{c,h}` | Pure validators → `ReplCompiledChange` descriptors; apply mutates runtime arrays |
 | `normalize.c` / `reformat.c` / `format.{c,h}` / `source_scope.{c,h}` | Parse-and-normalize, reformatter, indentation, block-depth cache |
@@ -532,6 +533,7 @@ glColor3f(r,g,b), glColor4f(r,g,b,a)
 glClearColor(r,g,b,a)          (channels clamped >= 0.15)
 glClear(mask)                  (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
+glPushAttrib(mask), glPopAttrib()  (attribute-stack save/restore; GL_*_BIT tokens)
 glEnable(CAP), glDisable(CAP)  (depth/lighting/blend/cull/fog/lights 0-3,
                                 GL_CLIP_PLANE0..5, line/point smooth, ...)
 glFogi/glFogf/glFogfv          (fog mode/scalar/color)
@@ -567,6 +569,18 @@ Agent-relevant policies:
   `glClipPlane` accept flat args (`face, pname, r, g, b, a`) and are
   rewritten to the compound-literal form. `glDepthMask`/`glColorMask`
   accept 0/1, canonicalized to `GL_TRUE`/`GL_FALSE`.
+- **`glPushAttrib`/`glPopAttrib`**: mask is `|`-joined `GL_*_BIT` tokens
+  (same bitfield policy as glClear); 9 supported bits — GL_CURRENT/POINT/
+  LINE/POLYGON/LIGHTING/DEPTH_BUFFER/TRANSFORM/ENABLE/COLOR_BUFFER_BIT.
+  GL_ALL_ATTRIB_BITS is deliberately unsupported (not a single bit;
+  0xFFFFFFFF doesn't round-trip the GLCmd float-arg storage). The executor
+  keeps a real GL stack only REPL_ATTRIB_STACK_CAP (8) deep — virtual push
+  depth is unbounded, an orphan glPopAttrib is a silent no-op, and unmatched
+  pushes unwind at frame end, so only balanced pairs reach GL. Cursor on the
+  push line highlights the prior setter lines it saves (per-token colours);
+  cursor on the pop highlights what its restore reverts. Unbalanced pairs
+  get the red gutter warning. Opens no indentation scope (unlike
+  glPushMatrix).
 - **`glPointParameterfv`** is runtime-gated (`GLR_NO_POINT_PARAMETER` or a
   context without the entry point → silent no-op with `glPointSize`
   fallback); user-typed lines are still exported verbatim.
