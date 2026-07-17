@@ -50,6 +50,8 @@ When both a command-line flag and an env var exist, the flag wins.
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
 | `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
+| `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay — the video-capture hook behind `scripts/record-video.sh`. Grammar in `src/app/glr_pointer_script.h`. |
+| `GLR_NO_SPLASH` | Any non-empty value. | Skips the startup splash banner (captures that should not open on the splash band). |
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
 | `GLR_DETAILED_PROF` | Any non-empty value; same as `--detailed-prof`. | Enables the finer init-trace phases and first-two-frame timing triples. |
@@ -68,6 +70,7 @@ implements them.
 |---|---|---|
 | `FREEGLUT_CAPTURE_FILE` | Filename prefix; default `freeglut`. | Prefix for `SIGUSR1` screenshots and record-mode PPM frames. |
 | `FREEGLUT_CAPTURE_FRAMES` | Positive frame count. | Record mode: capture N rendered frames as numbered PPMs, then exit. |
+| `FREEGLUT_CAPTURE_STREAM` | Path or `-` (stdout). | Redirects captured frames into one concatenated PPM stream instead of numbered files. Point it at a fifo and an encoder (`ffmpeg -f image2pipe -vcodec ppm`) consumes frames as they render — no on-disk framebuffer dumps. |
 | `DISPLAY` | X display string. | X11 display selection for Linux/X11 freeglut. |
 | `GLUT_FPS` | Millisecond interval. | Enables freeglut FPS statistics printing at the requested interval. |
 | `FREEGLUT_NO_XRANDR` | Any non-empty value. | Disables XRandR use in X11 game-mode display changes. |
@@ -184,6 +187,39 @@ open a real window, write N real-GPU frames, and exit.
 the menu bar. It toggles view mode as the fixed capture clock crosses each
 listed second and implicitly enables `GLR_TICK_PER_FRAME`, so UI transition
 clips are deterministic.
+
+### Recording videos with scripted interaction
+
+`scripts/record-video.sh` records a session to an MP4 (H.264 + AAC music),
+optionally driven by a **pointer script** (`GLR_POINTER_SCRIPT`) — timed
+synthetic mouse and keyboard events on the rendered-frame clock, with a
+visible cursor overlay, click ripples, and highlight rings. That is how the
+User Guide's menu-tour video is made:
+
+```bash
+scripts/record-video.sh --script scripts/video/menu-tour.pointer \
+    --example "gl-repl logo" --duration 36 --out menu-tour     # -> menu-tour.mp4
+```
+
+- **No intermediate frame dumps.** Frames stream from the app straight into
+  `ffmpeg` through a fifo (`FREEGLUT_CAPTURE_STREAM`), so encoding starts on
+  frame 1 and nothing raw lands on disk. Recorded videos stay out of the
+  repo (gitignored under `docs/images/`).
+- **Native backend by default** (same rationale as `docs-assets.sh`): real
+  GPU colors and MSAA; a window opens for the duration of the recording.
+  Point `--bin` at an OSMesa build for fully headless capture.
+- **Music** is muxed at encode time (`--music`, `--music-seek` to scrub into
+  the track, fade-out over the last 1.5 s; default `assets/sample.mp3`). A
+  pointer script can pin its own soundtrack with `# music:` / `# music-seek:`
+  header comments.
+- **Scripted input** covers the whole input surface: `move`/`glide` pointer
+  motion (hover opens menu flyouts exactly as a real mouse), `click` /
+  `rightclick` / `down` / `up`, `wheel`, `ring` (pulsing highlight around a
+  UI element), `key` (typed text, incl. `\cX` control bytes like Ctrl+T) and
+  `skey` (F-keys, arrows) — so whole typed demos are re-recordable from a
+  script. Grammar and examples: `src/app/glr_pointer_script.h`.
+- A malformed script line fails the run with a file:line message rather than
+  silently recording the wrong interaction.
 
 ### Documentation media
 

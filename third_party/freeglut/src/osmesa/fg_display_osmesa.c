@@ -29,8 +29,35 @@
 #include "fg_internal.h"
 
 /*
- * Write the current OSMesa colour buffer to a numbered PPM (P6). Called from
- * the swap path (below) at a safe point once a SIGUSR1 has set
+ * FREEGLUT_CAPTURE_STREAM=<path|-> redirects captured frames from numbered
+ * per-frame PPM files to one concatenated PPM stream written to <path>
+ * ("-" = stdout). Point it at a fifo and an encoder (e.g. ffmpeg -f
+ * image2pipe -vcodec ppm) consumes frames as they render -- no on-disk
+ * framebuffer dumps. Opened lazily on the first captured frame; read once.
+ */
+static FILE *fghOSMesaCaptureStream( void )
+{
+    static FILE *fp = NULL;
+    static int   checked = 0;
+    if( !checked )
+    {
+        const char *path = getenv( "FREEGLUT_CAPTURE_STREAM" );
+        checked = 1;
+        if( path && *path )
+        {
+            fp = ( path[ 0 ] == '-' && !path[ 1 ] ) ? stdout
+                                                    : fopen( path, "wb" );
+            if( !fp )
+                fgWarning( "OSMesa capture: cannot open stream %s", path );
+        }
+    }
+    return fp;
+}
+
+/*
+ * Write the current OSMesa colour buffer to a numbered PPM (P6) -- or, in
+ * FREEGLUT_CAPTURE_STREAM mode, append it to the single PPM stream. Called
+ * from the swap path (below) at a safe point once a SIGUSR1 has set
  * fghOSMesaCaptureRequested. Reads the framebuffer directly via
  * OSMesaGetColorBuffer -- no glReadPixels round-trip. OSMesa's default origin
  * is bottom-up, so rows are emitted top-to-bottom (h-1 .. 0) to orient the PPM.
@@ -56,23 +83,36 @@ void fghOSMesaCaptureFrame( void )
         w <= 0 || h <= 0 )
         return;
 
-    prefix = getenv( "FREEGLUT_CAPTURE_FILE" );
-    if( !prefix || !*prefix )
-        prefix = "freeglut";
-    snprintf( path, sizeof( path ), "%s-%04d.ppm", prefix, seq++ );
-
-    fp = fopen( path, "wb" );
-    if( !fp )
+    fp = fghOSMesaCaptureStream();
+    if( fp )
     {
-        fgWarning( "OSMesa capture: cannot open %s", path );
-        return;
+        /* Stream mode: frames concatenate into one pipe/file. Log the first
+         * frame only -- a per-frame line would swamp stderr on long records. */
+        if( seq++ == 0 )
+            fgWarning( "OSMesa capture: streaming %dx%d frames", w, h );
+        path[ 0 ] = '\0';
+    }
+    else
+    {
+        prefix = getenv( "FREEGLUT_CAPTURE_FILE" );
+        if( !prefix || !*prefix )
+            prefix = "freeglut";
+        snprintf( path, sizeof( path ), "%s-%04d.ppm", prefix, seq++ );
+
+        fp = fopen( path, "wb" );
+        if( !fp )
+        {
+            fgWarning( "OSMesa capture: cannot open %s", path );
+            return;
+        }
     }
 
     /* Pack each RGBA row down to RGB into a scratch line, then write it. */
     row = (unsigned char *)malloc( (size_t)w * 3 );
     if( !row )
     {
-        fclose( fp );
+        if( path[ 0 ] )
+            fclose( fp );
         return;
     }
 
@@ -91,8 +131,15 @@ void fghOSMesaCaptureFrame( void )
     }
 
     free( row );
-    fclose( fp );
-    fgWarning( "OSMesa capture: wrote %s (%dx%d)", path, w, h );
+    if( path[ 0 ] )
+    {
+        fclose( fp );
+        fgWarning( "OSMesa capture: wrote %s (%dx%d)", path, w, h );
+    }
+    else
+        /* Keep the stream hot so a pipe consumer sees each frame as soon as
+         * it is rendered rather than in stdio-buffer-sized bursts. */
+        fflush( fp );
 }
 
 void fgPlatformGlutSwapBuffers( SFG_PlatformDisplay *pDisplayPtr,

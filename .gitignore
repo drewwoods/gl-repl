@@ -54,3 +54,7 @@ recovery.c
 /dist/
 # Per-user release build plan (hosts/modes) — edit via `make release-config`.
 /.release.ini
+
+# Recorded videos (regenerate via scripts/record-video.sh) — large files
+# stay out of the repo.
+/docs/images/*.mp4
