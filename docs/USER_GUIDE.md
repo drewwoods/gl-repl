@@ -230,36 +230,37 @@ numeric argument everywhere is a full math expression.
 
 ### Supported GL commands
 
-```
-glBegin(MODE), glEnd()
-glVertex3f(x,y,z), glVertex2f(x,y)
-glNormal3f(x,y,z)
-glColor3f(r,g,b), glColor4f(r,g,b,a)
-glClearColor(r,g,b,a)        background clear color; channels clamp to >= 0.15
-                             (prevents a fully black background from hiding geometry)
-glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
-glPushMatrix(), glPopMatrix(), glLoadIdentity()
-glEnable(CAP), glDisable(CAP)
-  CAP: GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL, GL_NORMALIZE,
-       GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE,
-       GL_LIGHT0..GL_LIGHT3, GL_CLIP_PLANE0..GL_CLIP_PLANE5
-glShadeModel(MODE)
-glPointSize(size), glLineWidth(width)
-glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA | GL_ONE)
-glColorMaterial(face, mode)
-glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
-glLightModeli(pname, param), glFrontFace(mode)
-glDepthFunc(func), glDepthMask(GL_TRUE|GL_FALSE)
-glColorMask(r, g, b, a)      each channel GL_TRUE/GL_FALSE or 0/1
-glEdgeFlag(GL_TRUE|GL_FALSE) scalar boundary-edge flag; 0/1 accepted
-glClipPlane(plane, (GLdouble[]){a, b, c, d})   user clip plane (see Clip planes)
-glRasterPos3f(x, y, z)       position for bitmap text (see label below)
-```
+- [`glBegin(MODE)`](https://docs.gl/gl2/glBegin), [`glEnd()`](https://docs.gl/gl2/glEnd)
+- [`glVertex3f(x,y,z)`](https://docs.gl/gl2/glVertex), [`glVertex2f(x,y)`](https://docs.gl/gl2/glVertex)
+- [`glNormal3f(x,y,z)`](https://docs.gl/gl2/glNormal)
+- [`glColor3f(r,g,b)`](https://docs.gl/gl2/glColor), [`glColor4f(r,g,b,a)`](https://docs.gl/gl2/glColor)
+- [`glClearColor(r,g,b,a)`](https://docs.gl/gl2/glClearColor) — background clear color; channels
+  clamp to >= 0.15 (prevents a fully black background from hiding geometry)
+- [`glTranslatef(x,y,z)`](https://docs.gl/gl2/glTranslate), [`glScalef(sx,sy,sz)`](https://docs.gl/gl2/glScale),
+  [`glRotatef(deg,x,y,z)`](https://docs.gl/gl2/glRotate)
+- [`glPushMatrix()`](https://docs.gl/gl2/glPushMatrix), [`glPopMatrix()`](https://docs.gl/gl2/glPushMatrix),
+  [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
+- [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
+  - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
+    `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`,
+    `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
+- [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
+- [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
+- [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
+- [`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA | GL_ONE)`](https://docs.gl/gl2/glBlendFunc)
+- [`glColorMaterial(face, mode)`](https://docs.gl/gl2/glColorMaterial)
+- [`glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glMaterial)
+- [`glLightModeli(pname, param)`](https://docs.gl/gl2/glLightModel), [`glFrontFace(mode)`](https://docs.gl/gl2/glFrontFace)
+- [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
+- [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) — each channel GL_TRUE/GL_FALSE or 0/1
+- [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
+- [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
+  plane (see Clip planes)
+- [`glRasterPos3f(x, y, z)`](https://docs.gl/gl2/glRasterPos) — position for bitmap text (see label below)
 
-`glMaterialfv` also accepts the flat shorthand
+[`glMaterialfv`](https://docs.gl/gl2/glMaterial) also accepts the flat shorthand
 `glMaterialfv(face, pname, r, g, b, a)` — the parser rewrites it to the
-compound-literal form. `glClipPlane` accepts the same flat shorthand
+compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) accepts the same flat shorthand
 (`glClipPlane(plane, a, b, c, d)`).
 
 ### GLUT solid shapes
