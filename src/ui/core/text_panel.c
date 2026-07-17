@@ -395,12 +395,42 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
     if (!ui_text_panel_right_action_rect(snap, line_y, &sx, &sy, &sw))
         return;
 
+    /* Opaque checkerboard base under the fill (same 4px grays as the floating
+     * picker's preview strip). The panel is dark, so without a base a near-
+     * black or low-alpha fill composites into the background and the chip
+     * disappears; against the checker it always reads, and a translucent
+     * color still reads as translucent. */
+    {
+        int ck = 4;
+        int ix, iy;
+        for (iy = 0; iy < sw; iy += ck) {
+            for (ix = 0; ix < sw; ix += ck) {
+                float gv = ((ix / ck + iy / ck) % 2) ? 0.35f : 0.55f;
+                int tw = (ix + ck < sw) ? ck : sw - ix;
+                int th = (iy + ck < sw) ? ck : sw - iy;
+                glColor3f(gv, gv, gv);
+                glRectf((float)(sx + ix), (float)(sy + iy),
+                        (float)(sx + ix + tw), (float)(sy + iy + th));
+            }
+        }
+    }
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     text_panel_set_color(&row->right_action.color);
     glRectf((float)sx, (float)sy,
             (float)(sx + sw), (float)(sy + sw));
-    glColor4fv(k_action_chip_outline);
+
+    /* Outline contrast follows the composited fill, so a dark chip gets a
+     * bright edge rather than the mid-gray default that vanishes next to it. */
+    {
+        const UiTextPanelColor *c = &row->right_action.color;
+        float a = c->has_alpha ? c->a : 1.0f;
+        float lum = (0.299f * c->r + 0.587f * c->g + 0.114f * c->b) * a
+                    + 0.45f * (1.0f - a);   /* checkerboard mean */
+        if (lum > 0.55f) glColor4fv(k_action_chip_outline);
+        else             ui_clr_a(UI_TOK_TEXT_ON_HILITE, 0.85f);
+    }
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)sx,        (float)sy);
     glVertex2f((float)(sx + sw), (float)sy);
