@@ -397,10 +397,13 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
     case CMD_CLEAR:
-        /* args[0] is the resolved GL_*_BUFFER_BIT mask. The renderer
-         * scissors user-geometry execution to the 3D viewport, so a
-         * colour clear here repaints the scene rect only — the window
-         * chrome outside it keeps the frame's own clear. */
+        /* args[0] is the resolved GL_*_BUFFER_BIT mask. This IS the
+         * frame's clear for the scene rect — nothing clears it on the
+         * program's behalf, so a scene without a glClear line smears
+         * (colour) and, with no depth clear, fails the depth test
+         * outright. The host scissors this walk to the scene rect, so a
+         * colour clear repaints the scene only and leaves the chrome
+         * around it (which the host cleared) alone. */
         glClear((GLbitfield)cmd->args[0]);
         return 1;
     default:

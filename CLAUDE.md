@@ -805,9 +805,17 @@ explaining why the extra background is useful.
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build [`Render3dRenderConfig`](src/render3d/render_types.h#L135) from REPL state. Load the camera via
+2. Build [`Render3dRenderConfig`](src/render3d/render_types.h#L135) from REPL state. Clear the
+   chrome (`glr_ctrl_clear_chrome` — the window minus the scene rect;
+   the scene rect belongs to the program's `glClear`), load the camera via
    `glr_camera_load_modelview(&pose)` (from [`src/app/glr_camera.h`](src/app/glr_camera.h)),
-   then call `render3d_draw_scene(&g_scene_renderer, &cfg)` once. The
+   scissor to the scene rect, then call
+   `render3d_draw_scene(&g_scene_renderer, &cfg)` once. Window-region
+   policy is the controller's, same as the camera: [`src/render3d/render.c`](src/render3d/render.c)
+   sets no scissor and clears no color/depth (only its own accum buffer),
+   so it needs no notion of window chrome — which is what lets
+   `render3d_demo`, whose scene rect is the whole window, clear all of it
+   from its own geometry callback. The
    accumulation loop (when `accum_effect` is AA or Blur with
    `accum_passes > 1`) lives inside that call. The camera modelview
    transform is the controller's responsibility — [`src/render3d/render.c`](src/render3d/render.c)
@@ -818,7 +826,7 @@ is no shim layer.
    (`glr_ctrl_resolve_blur_subframe`) that the scene calls before each
    accumulation pass to interpolate the camera pose or advance an
    animation-time sub-step; see *Accumulation Motion Blur* below.
-3. `render3d_draw_scene(&cfg)` in [`src/render3d/render.c`](src/render3d/render.c): viewport/clear setup
+3. `render3d_draw_scene(&cfg)` in [`src/render3d/render.c`](src/render3d/render.c): viewport setup
    → projection → execute user geometry via `Render3dExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
@@ -1419,11 +1427,18 @@ glClear(mask)
   mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with `|`.
   The one ENUM_BITFIELD slot: `|`-joined tokens from the slot's table,
   numeric/expression input rejected, emitted in table order with dupes
-  dropped (so a given mask has one canonical text). The frame's own
-  clear already ran, so this is a mid-scene re-clear; the renderer
-  scissors user-geometry execution to the 3D viewport, so a color clear
-  can't repaint the window chrome. Stencil/accum bits are deliberately
-  absent (nothing writes stencil; accum belongs to the accum effects).
+  dropped (so a given mask has one canonical text). This **is** the
+  frame's clear for the scene rect — nothing clears it on the program's
+  behalf, so the line is load-bearing, not decorative: delete it and the
+  color buffer smears and (with no depth clear) the depth test rejects
+  everything, rendering a black frame. That is deliberate — it keeps the
+  live view honest and identical to the exported C, where display() has
+  no clear of its own. The seeded baseline and every built-in example
+  therefore carry an explicit glClear line. The controller scissors the
+  scene render to the 3D viewport, so a color clear repaints the scene
+  only and leaves the chrome around it alone. Stencil/accum bits are
+  deliberately absent (nothing writes stencil; accum belongs to the accum
+  effects).
 glShadeModel(MODE)
 glPointSize(size)
 glLineWidth(width)
