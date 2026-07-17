@@ -267,6 +267,8 @@ static void run_tests(void) {
     ASSERT_FLOAT("max(3,5)", 5.0f);
     ASSERT_FLOAT("floor(2.7)", 2.0f);
     ASSERT_FLOAT("ceil(2.3)", 3.0f);
+    ASSERT_FLOAT("round(2.3)", 2.0f);
+    ASSERT_FLOAT("round(2.7)", 3.0f);
     ASSERT_FLOAT("fmod(7,3)", 1.0f);
     ASSERT_FLOAT("rem(7,3)", remainderf(7.0f, 3.0f));   /* IEEE round-to-nearest */
     ASSERT_FLOAT("rem(8,3)", remainderf(8.0f, 3.0f));   /* -1, not 2 */
@@ -845,6 +847,10 @@ static void run_tests(void) {
     ASSERT_FLOAT("abs(-3.5)", 3.5f);
     ASSERT_FLOAT("ceil(-2.3)", -2.0f);
     ASSERT_FLOAT("floor(-2.3)", -3.0f);
+    ASSERT_FLOAT("round(-2.3)", -2.0f);
+    ASSERT_FLOAT("round(-2.7)", -3.0f);
+    ASSERT_FLOAT("round(0.5)", 1.0f);
+    ASSERT_FLOAT("round(-0.5)", -1.0f);
     ASSERT_FLOAT("min(5,3)", 3.0f);                    /* reversed arg order */
     ASSERT_FLOAT("max(5,3)", 5.0f);
     ASSERT_FLOAT("pow(2,0)", 1.0f);
@@ -1062,6 +1068,7 @@ static void run_tests(void) {
     ASSERT_TO_C("max(x,y)", "fmaxf(x,y)");
     ASSERT_TO_C("floor(x/2)", "floorf(x/2)");
     ASSERT_TO_C("ceil(x+1)", "ceilf(x+1)");
+    ASSERT_TO_C("round(x+1)", "roundf(x+1)");
     ASSERT_TO_C("PI", "M_PI");
     ASSERT_TO_C("", "");
     ASSERT_TO_C("x + y", "x + y");                    /* passthrough, no substitution */
@@ -1076,6 +1083,7 @@ static void run_tests(void) {
     ASSERT_TO_REPL("fmaxf(x,y)", "max(x,y)");
     ASSERT_TO_REPL("floorf(x/2)", "floor(x/2)");
     ASSERT_TO_REPL("ceilf(x+1)", "ceil(x+1)");
+    ASSERT_TO_REPL("roundf(x+1)", "round(x+1)");
     ASSERT_TO_REPL("M_PI", "PI");
     ASSERT_TO_REPL("M_E", "e");
     ASSERT_TO_REPL("log10f(x)", "log(x)");

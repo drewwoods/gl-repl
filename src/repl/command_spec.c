@@ -421,6 +421,8 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Largest integer <= x", REPL_HELP_GROUP_MATH },
     { "ceil(",               "ceil(x)",                                                  1, { "x" },
         "Smallest integer >= x", REPL_HELP_GROUP_MATH },
+    { "round(",              "round(x)",                                                 1, { "x" },
+        "Nearest integer to x (halfway rounds away from zero)", REPL_HELP_GROUP_MATH },
     { "fmod(",               "fmod(x, y)",                                               2, { "x", "y" },
         "Remainder of x/y (truncated toward zero; sign follows x). "
         "Same as the `%` operator.",

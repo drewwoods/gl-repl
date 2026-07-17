@@ -382,7 +382,7 @@ Every numeric argument is a full expression, evaluated when the line runs:
 - **Operators:** `+ - * / %` and parentheses; comparisons
   `> < >= <= == !=`; logical `&& || !`.
 - **Functions:** `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `log` (base 10),
-  `ln` (base e), `min`, `max`, `floor`, `ceil`, `fmod`, `rem`,
+  `ln` (base e), `min`, `max`, `floor`, `ceil`, `round`, `fmod`, `rem`,
   `rand(seed[, iter])`, `rand2(seed[, iter])`. `fmod` is the C `fmodf`
   (result takes the sign of the dividend); `rem` is the IEEE remainder via
   `remainderf` (rounds the quotient to nearest, so the result can differ in
