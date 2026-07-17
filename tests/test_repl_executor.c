@@ -1160,6 +1160,177 @@ static void test_orrery_phase_alignment(void) {
     }
 }
 
+/* glPushAttrib / glPopAttrib cursor semantics: pairing, orphan-pop safety,
+ * end-of-cursor unwind, the REPL_ATTRIB_STACK_CAP real-GL cap while virtual
+ * depth is unbounded, and the render-state bookkeeping restore (light-enable
+ * mask under GL_ENABLE_BIT, clear color under GL_COLOR_BUFFER_BIT) — with and
+ * without suppress_attrib_gl. */
+static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = n;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = n;
+    opts.suppress_attrib_gl = suppress;
+    ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+    while (!repl_exec_cursor_done(&cursor))
+        if (!repl_exec_cursor_step(&cursor))
+            break;
+    repl_exec_cursor_end(&cursor);
+}
+
+static void test_attrib_stack(void) {
+    repl_executor_init_resources();
+
+    /* Pairing: one push + one pop reach GL once each; depth back to 0. */
+    {
+        GLCmd cmds[2];
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_PUSH_ATTRIB; cmds[0].valid = 1;
+        cmds[0].num_args = 1; cmds[0].args[0] = GL_CURRENT_BIT;
+        cmds[1].type = CMD_POP_ATTRIB;  cmds[1].valid = 1;
+
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = 2; opts.program.cmds = cmds; opts.program.cmd_count = 2;
+        gl_stub_counts_reset();
+        ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+        repl_exec_cursor_step(&cursor);
+        ASSERT_TRUE("attrib push increments depth", cursor.attrib_depth == 1);
+        ASSERT_TRUE("attrib push reaches GL", gl_stub_counts[GL_STUB_glPushAttrib] == 1);
+        repl_exec_cursor_step(&cursor);
+        ASSERT_TRUE("attrib pop decrements depth", cursor.attrib_depth == 0);
+        ASSERT_TRUE("attrib pop reaches GL", gl_stub_counts[GL_STUB_glPopAttrib] == 1);
+        repl_exec_cursor_end(&cursor);
+        ASSERT_TRUE("balanced pair: no extra pop at cursor end",
+                    gl_stub_counts[GL_STUB_glPopAttrib] == 1);
+    }
+
+    /* Orphan pop: depth stays 0, no glPopAttrib reaches GL (protects the
+     * controller's outer bracket from an unbalanced user program). */
+    {
+        GLCmd cmds[1];
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_POP_ATTRIB; cmds[0].valid = 1;
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = 1; opts.program.cmds = cmds; opts.program.cmd_count = 1;
+        gl_stub_counts_reset();
+        ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+        repl_exec_cursor_step(&cursor);
+        ASSERT_TRUE("orphan pop leaves depth 0", cursor.attrib_depth == 0);
+        ASSERT_TRUE("orphan pop reaches no GL", gl_stub_counts[GL_STUB_glPopAttrib] == 0);
+        repl_exec_cursor_end(&cursor);
+        ASSERT_TRUE("orphan pop: still no glPopAttrib at end",
+                    gl_stub_counts[GL_STUB_glPopAttrib] == 0);
+    }
+
+    /* Unmatched push is unwound (real pop) at cursor end. */
+    {
+        GLCmd cmds[1];
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_PUSH_ATTRIB; cmds[0].valid = 1;
+        cmds[0].num_args = 1; cmds[0].args[0] = GL_CURRENT_BIT;
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = 1; opts.program.cmds = cmds; opts.program.cmd_count = 1;
+        gl_stub_counts_reset();
+        ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+        repl_exec_cursor_step(&cursor);
+        ASSERT_TRUE("unmatched push: depth 1 mid-cursor", cursor.attrib_depth == 1);
+        repl_exec_cursor_end(&cursor);
+        ASSERT_TRUE("unmatched push unwound at cursor end",
+                    gl_stub_counts[GL_STUB_glPopAttrib] == 1);
+        ASSERT_TRUE("unmatched push: depth back to 0", cursor.attrib_depth == 0);
+    }
+
+    /* Virtual depth past the cap: 12 pushes then 12 pops. Only
+     * REPL_ATTRIB_STACK_CAP frames drive the real GL stack, and they pair
+     * down cleanly (equal push/pop GL counts, final depth 0). */
+    {
+        GLCmd cmds[24];
+        memset(cmds, 0, sizeof(cmds));
+        for (int i = 0; i < 12; i++) {
+            cmds[i].type = CMD_PUSH_ATTRIB; cmds[i].valid = 1;
+            cmds[i].num_args = 1; cmds[i].args[0] = GL_CURRENT_BIT;
+        }
+        for (int i = 12; i < 24; i++) {
+            cmds[i].type = CMD_POP_ATTRIB; cmds[i].valid = 1;
+        }
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = 24; opts.program.cmds = cmds; opts.program.cmd_count = 24;
+        gl_stub_counts_reset();
+        ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+        while (!repl_exec_cursor_done(&cursor))
+            repl_exec_cursor_step(&cursor);
+        ASSERT_TRUE("past-cap: virtual depth pairs down to 0", cursor.attrib_depth == 0);
+        ASSERT_TRUE("past-cap: only CAP real pushes reach GL",
+                    gl_stub_counts[GL_STUB_glPushAttrib] == REPL_ATTRIB_STACK_CAP);
+        ASSERT_TRUE("past-cap: real push/pop counts match",
+                    gl_stub_counts[GL_STUB_glPopAttrib] ==
+                        gl_stub_counts[GL_STUB_glPushAttrib]);
+        repl_exec_cursor_end(&cursor);
+        ASSERT_TRUE("past-cap: nothing left to unwind",
+                    gl_stub_counts[GL_STUB_glPopAttrib] == REPL_ATTRIB_STACK_CAP);
+    }
+
+    /* Clear-color bookkeeping under GL_COLOR_BUFFER_BIT: pop restores V1. */
+    {
+        float v1[4] = {0.2f, 0.3f, 0.4f, 1.0f};
+        GLCmd cmds[4];
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = v1[0]; cmds[0].args[1] = v1[1];
+        cmds[0].args[2] = v1[2]; cmds[0].args[3] = v1[3];
+        cmds[1].type = CMD_PUSH_ATTRIB; cmds[1].valid = 1;
+        cmds[1].num_args = 1; cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
+        cmds[2].args[0] = 0.9f; cmds[2].args[1] = 0.8f;
+        cmds[2].args[2] = 0.7f; cmds[2].args[3] = 1.0f;
+        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
+
+        gl_stub_counts_reset();
+        run_attrib_cursor(cmds, 4, 0);
+        ReplRenderState r = repl_state_render();
+        ASSERT_TRUE("clear-color pop restores V1",
+                    r.clear_color[0] == v1[0] && r.clear_color[1] == v1[1] &&
+                    r.clear_color[2] == v1[2] && r.clear_color[3] == v1[3]);
+
+        /* suppress_attrib_gl restores the same mirror with zero GL push/pop. */
+        gl_stub_counts_reset();
+        cmds[2].args[0] = 0.9f; /* re-dirty in the scope */
+        run_attrib_cursor(cmds, 4, 1);
+        r = repl_state_render();
+        ASSERT_TRUE("suppress: clear-color still restored to V1",
+                    r.clear_color[0] == v1[0] && r.clear_color[3] == v1[3]);
+        ASSERT_TRUE("suppress: no glPushAttrib GL call",
+                    gl_stub_counts[GL_STUB_glPushAttrib] == 0);
+        ASSERT_TRUE("suppress: no glPopAttrib GL call",
+                    gl_stub_counts[GL_STUB_glPopAttrib] == 0);
+    }
+
+    /* Light-enable mask under GL_ENABLE_BIT: a light enabled inside the scope
+     * is disabled again by the pop. */
+    {
+        repl_state_render_clear_light_enabled_mask();
+        GLCmd cmds[4];
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_ENABLE; cmds[0].valid = 1;
+        cmds[0].num_args = 1; cmds[0].args[0] = GL_LIGHT0;
+        cmds[1].type = CMD_PUSH_ATTRIB; cmds[1].valid = 1;
+        cmds[1].num_args = 1; cmds[1].args[0] = GL_ENABLE_BIT;
+        cmds[2].type = CMD_ENABLE; cmds[2].valid = 1;
+        cmds[2].num_args = 1; cmds[2].args[0] = GL_LIGHT1;
+        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
+
+        run_attrib_cursor(cmds, 4, 0);
+        ReplRenderState r = repl_state_render();
+        ASSERT_TRUE("light-enable pop keeps pre-push LIGHT0",
+                    repl_light_enabled(r.light_enabled_mask, 0) == 1);
+        ASSERT_TRUE("light-enable pop reverts scoped LIGHT1",
+                    repl_light_enabled(r.light_enabled_mask, 1) == 0);
+        repl_state_render_clear_light_enabled_mask();
+    }
+
+    repl_executor_destroy_resources();
+}
+
 int main(void) {
     repl_executor_install_point_parameter_proc((ReplExecutorPointParameterProc)glPointParameterfv);
     test_tess_callbacks();
@@ -1176,6 +1347,7 @@ int main(void) {
     test_execute_edge_cases();
     test_exec_cursor_step_tracks_state();
     test_exec_cursor_advance_skips_without_state();
+    test_attrib_stack();
     test_execute_all_commands();
     test_glut_bitmap_string();
     test_executor_camera_distance_source();
