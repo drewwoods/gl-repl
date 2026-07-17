@@ -1028,6 +1028,41 @@ static void test_cfg_cycle_stops_replay(void) {
                replay_active(), 0);
 }
 
+/* On a context that can't read the depth buffer back (WebGL; a failed
+ * init-GL probe), the interactive Depth view cycle must refuse with a
+ * status message instead of silently cycling a row whose render-config
+ * copy is forced Off every frame. Only glr_cfg_cycle_row is gated —
+ * @cfg header loads still write the stored value so files round-trip. */
+static void test_depth_viz_cycle_refuses_without_readback(void) {
+    glr_ctrl_reset_all();
+
+    int depth_viz_row = -1;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_DEPTH_VIZ)
+            depth_viz_row = i;
+    }
+    ASSERT_TRUE("found depth view row", depth_viz_row >= 0);
+    ASSERT_TRUE("supported context reports no refusal reason",
+                glr_ctrl_depth_readback_unsupported_reason() == NULL);
+
+    glr_ctrl_set_depth_readback_supported_for_test(0);
+    ASSERT_TRUE("unsupported context reports a refusal reason",
+                glr_ctrl_depth_readback_unsupported_reason() != NULL);
+    glr_cfg_cycle_row(depth_viz_row, 1);
+    ASSERT_INT("depth view stays Off on refused cycle",
+               glr_config_get(GLR_CONFIG_DEPTH_VIZ), 0);
+    ASSERT_TRUE("status names the missing capability",
+                strstr(ui_state_status().text,
+                       "can't read the depth buffer") != NULL);
+
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_cfg_cycle_row(depth_viz_row, 1);
+    ASSERT_INT("depth view cycles once readback is supported",
+               glr_config_get(GLR_CONFIG_DEPTH_VIZ), 1);
+    glr_state_presentation_mut()->depth_viz = 0;
+}
+
 static void test_replay_config_set_uses_lifecycle(void) {
     glr_ctrl_reset_all();
 
@@ -1995,6 +2030,7 @@ int main(void) {
     test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
+    test_depth_viz_cycle_refuses_without_readback();
     test_replay_config_set_uses_lifecycle();
     test_status_set_drops_empty_message();
     test_cfg_cycle_focus_origin_eases_to_origin();

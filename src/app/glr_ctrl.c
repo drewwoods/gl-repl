@@ -1046,11 +1046,28 @@ static int g_nv_fog_distance_supported = 0;
 
 /* Runtime depth-readback capability (glReadPixels GL_DEPTH_COMPONENT from
  * the default framebuffer), probed once in glr_ctrl_init_gl. WebGL forbids
- * it, so the web build hard-disables. When unsupported the Depth view cfg
- * row stays settable (so @cfg round-trips, point-parameter philosophy) but
- * build_scene_config forces the render-config copy to Off. Defaults to 1:
- * tests that never run init-GL keep the feature exercisable. */
+ * it, so the web build hard-disables. When unsupported the interactive
+ * Depth view cycle (Ctrl+N / Config row) refuses with a status message
+ * (glr_cfg_cycle_row), while @cfg header loads still write the stored
+ * value (round-trip, point-parameter philosophy) and build_scene_config
+ * forces the render-config copy to Off. Defaults to 1: tests that never
+ * run init-GL keep the feature exercisable. */
 static int g_depth_readback_supported = 1;
+
+void glr_ctrl_set_depth_readback_supported_for_test(int supported) {
+    g_depth_readback_supported = supported ? 1 : 0;
+}
+
+const char *glr_ctrl_depth_readback_unsupported_reason(void) {
+    if (g_depth_readback_supported)
+        return NULL;
+#if defined(__EMSCRIPTEN__)
+    return "Depth view unavailable: WebGL context can't read the depth "
+           "buffer (works in the native build)";
+#else
+    return "Depth view unavailable: GL context can't read the depth buffer";
+#endif
+}
 
 /* The 2D/3D view-mode transition state machine lives in
  * src/app/glr_ctrl_view_transition.c (carved out of this file). The frame

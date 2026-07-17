@@ -119,6 +119,13 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
     int *out_visible_lines);
 void glr_ctrl_set_accum(int enabled);
 
+/* NULL when the GL context can read the depth buffer back (Depth view
+ * works); otherwise a short status-bar reason why it can't — WebGL-specific
+ * wording on the web build. Probed once in glr_ctrl_init_gl; tests flip the
+ * flag through the _for_test seam (they never run the probe). */
+const char *glr_ctrl_depth_readback_unsupported_reason(void);
+void glr_ctrl_set_depth_readback_supported_for_test(int supported);
+
 /* Request a deferred save-and-quit. Async-signal-safe (sets a sig_atomic_t
  * flag only), so it is used by SIGINT and by UI actions that should share
  * the same recovery-save exit path. The recovery save + exit happen on the

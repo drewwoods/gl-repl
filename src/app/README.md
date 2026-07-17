@@ -64,7 +64,7 @@ type.
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L133):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L140):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
