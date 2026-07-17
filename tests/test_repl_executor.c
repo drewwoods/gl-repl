@@ -261,6 +261,7 @@ static void test_enum_arg_end_to_end_trace(void) {
     editor_feed_line("glEdgeFlag(1);");
     editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
     editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
+    editor_feed_line("glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);");
     repl_flatten_commands(editor_state_edit_line());
     repl_execute_commands();
 
@@ -302,6 +303,13 @@ static void test_enum_arg_end_to_end_trace(void) {
     snprintf(want, sizeof(want), "glLightModeli %u %d\n",
              (unsigned)GL_LIGHT_MODEL_TWO_SIDE, (int)GL_TRUE);
     ASSERT_TRUE("e2e glLightModeli(pname, param) order preserved",
+                strstr(buf, want) != NULL);
+
+    /* The bitfield slot: both tokens must reach GL as one OR'd mask,
+     * not as the last-wins single bit. */
+    snprintf(want, sizeof(want), "glClear %u\n",
+             (unsigned)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+    ASSERT_TRUE("e2e glClear(A | B) reaches GL as the OR'd mask",
                 strstr(buf, want) != NULL);
 }
 

@@ -62,11 +62,21 @@ typedef struct {
  *  - ENUM_OR_EXPR: token first, else a full expression (vars
  *    permitted); the typed source token is emitted verbatim. Only
  *    glLightModeli slot 1 uses this, reproducing its historic
- *    bool-token-or-int/expr param. */
+ *    bool-token-or-int/expr param.
+ *  - ENUM_BITFIELD: one or more tokens from this slot's table OR'd
+ *    together with `|`. Numeric and expression input are rejected, as
+ *    with ENUM_ONLY; the resolved mask is emitted in table order with
+ *    duplicates dropped, so `GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT`
+ *    canonicalizes to `GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`. Only
+ *    glClear's mask slot uses this. A table wired to this kind must
+ *    carry non-zero, single-bit values: emission tests each entry with
+ *    `mask & value`, which a zero-valued entry (GL_FALSE, say) could
+ *    never satisfy and a multi-bit entry would over-match. */
 typedef enum {
     REPL_ENUM_SLOT_ENUM_ONLY = 0,       /* token only; reject numeric + expr */
     REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE, /* token, else const value reverse-mapped */
-    REPL_ENUM_SLOT_ENUM_OR_EXPR         /* token first, else full expression */
+    REPL_ENUM_SLOT_ENUM_OR_EXPR,        /* token first, else full expression */
+    REPL_ENUM_SLOT_ENUM_BITFIELD        /* one or more tokens OR'd with `|` */
 } ReplEnumSlotKind;
 
 /* One positional enum-argument spec: the source-of-truth enum token

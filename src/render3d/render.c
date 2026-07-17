@@ -489,12 +489,25 @@ static void render3d_prepare_frame_context(Render3dFrameRenderContext *ctx,
 
 static void render3d_execute_user_geometry(const Render3dRenderConfig *config,
                                         Render3dExecutePurpose purpose) {
+    /* Scissor the program to the scene rect for the duration of the walk.
+     * Rasterization is already viewport-clipped to the same rect, so this
+     * changes nothing a draw call would have produced — it exists for the
+     * one command the viewport does not bound: a user glClear(), which
+     * would otherwise repaint the whole window (chrome included, since the
+     * regions outside the scene rect live on the frame's own clear).
+     * GL_SCISSOR_BIT rather than an explicit restore: the accum path may
+     * already have a scissor of its own installed around this call. */
+    glPushAttrib(GL_SCISSOR_BIT);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(config->render3d_x, config->render3d_y,
+              config->render3d_w, config->render3d_h);
     glPushMatrix();
     if (config->execute_fn) {
         Render3dExecuteContext ctx = { .purpose = purpose };
         config->execute_fn(&ctx, config->execute_user_data);
     }
     glPopMatrix();
+    glPopAttrib();
 }
 
 /* ========================================================================= */

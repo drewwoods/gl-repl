@@ -396,6 +396,13 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         /* Render-state clear color recorded by repl_apply_state_bookkeeping. */
         glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
+    case CMD_CLEAR:
+        /* args[0] is the resolved GL_*_BUFFER_BIT mask. The renderer
+         * scissors user-geometry execution to the 3D viewport, so a
+         * colour clear here repaints the scene rect only — the window
+         * chrome outside it keeps the frame's own clear. */
+        glClear((GLbitfield)cmd->args[0]);
+        return 1;
     default:
         return 0;
     }
@@ -868,6 +875,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:
     case CMD_CLIP_PLANE:
+    case CMD_CLEAR:
         /* General state filter: a render pass that owns its own material/
          * lighting/cull state (the winding view) suppresses the program's
          * conflicting state commands here. Bookkeeping (light mask / clear

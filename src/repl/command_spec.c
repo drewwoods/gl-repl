@@ -118,6 +118,18 @@ static const ReplEnumEntry k_clip_planes[] = {
     { NULL, 0 }
 };
 
+/* The buffers glClear() can clear. The REPL renders into a single
+ * colour + depth window and owns the frame's own clear, so the accum
+ * and stencil bits are deliberately absent: glClear(GL_ACCUM_BUFFER_BIT)
+ * would fight the accumulation effects in render.c, and no REPL command
+ * writes stencil. Table order is the canonical emission order for the
+ * ENUM_BITFIELD slot. */
+static const ReplEnumEntry k_clear_bits[] = {
+    { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
+    { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    { NULL, 0 }
+};
+
 static const ReplEnumEntry k_bool_vals[] = {
     { "GL_TRUE",  GL_TRUE  },
     { "GL_FALSE", GL_FALSE },
@@ -284,6 +296,11 @@ static const ReplFuncCompletion k_func_completions[] = {
         "GL_TRUE, GL_FALSE (depth-buffer writes)", REPL_HELP_GROUP_DEPTH_MASK },
     { "glColorMask(",        "glColorMask(red, green, blue, alpha)",                     4, { "red", "green", "blue", "alpha" },
         "Per-channel color write enable: GL_TRUE / GL_FALSE", REPL_HELP_GROUP_DEPTH_MASK },
+    { "glClear(",            "glClear(mask)",                                            1, { "mask" },
+        "Clear buffers mid-scene, from the cursor line down\n"
+        "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with |\n"
+        "Colour clears to glClearColor and is confined to the 3D viewport",
+        REPL_HELP_GROUP_DEPTH_MASK },
     /* --- Lighting & materials --- */
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" },
         "face: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK\n"
@@ -412,12 +429,19 @@ static const ReplFuncCompletion k_func_completions[] = {
  * glDepthMask and glColorMask. */
 #define ENUM_SLOT_BOOL(usage_) ENUM_SLOT(k_bool_vals, (usage_), REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE)
 
+/* Bitfield mask slot — one or more of the slot's tokens joined by `|`.
+ * The glClear mask policy. */
+#define ENUM_SLOT_BITS(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_BITFIELD)
+
 static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glBegin",         CMD_BEGIN,          1, "%sglBegin(%s);",            1,
         .args = { ENUM_SLOT_TOK(k_begin_modes, "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...") } },
     { "glBlendFunc",     CMD_BLEND_FUNC,     2, "%sglBlendFunc(%s, %s);",    0,
         .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
                   ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
+    { "glClear",         CMD_CLEAR,          1, "%sglClear(%s);",            0,
+        .args = { ENUM_SLOT_BITS(k_clear_bits,
+                                 "mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with |") } },
     /* glClipPlane is parsed by a custom branch (num_args -1). args[] is
      * kept only so slot-indexed autocomplete offers the plane tokens;
      * the (GLdouble[]){a, b, c, d} equation is handled by the custom
@@ -581,6 +605,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_ELSE_IF,                    1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC(CMD_ELSE,                       1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLIP_PLANE,         "glClipPlane",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR,              "glClear",             1, CMD_CAT_STATE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {

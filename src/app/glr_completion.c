@@ -472,6 +472,12 @@ static void update_autocomplete(void) {
             for (const char *q = after; q < end; q++) {
                 char ch = *q;
                 if (depth == 0 && ch == ',') { slot++; seg = q + 1; continue; }
+                /* A `|` starts a new term inside the *same* slot: the
+                 * bitfield slot (glClear) is the only place it can
+                 * appear, and completion there should offer the mask
+                 * tokens again rather than treat `A | GL_D` as one
+                 * unmatchable prefix. */
+                if (depth == 0 && ch == '|') { seg = q + 1; continue; }
                 if (ch == '(' || ch == '{' || ch == '[')      depth++;
                 else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
             }
