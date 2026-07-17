@@ -79,6 +79,11 @@ void replay_toggle_play_pause(void);
 int  replay_exec_limit(void);           /* Current PC (what executor renders to) */
 int  replay_has_active_fades(void);     /* Any fades currently visible? */
 int  replay_fill_base_limit(FlatProgramView flat_program);      /* Highest PC reached so far */
+/* Pc just past the program's leading glClear (0 if it doesn't open with
+ * one): the floor below which the replay clamps never cut a frame, so
+ * the scene rect's clear still runs while the PC / oldest fade batch
+ * sits at 0. */
+int  replay_frame_setup_limit(FlatProgramView flat_program);
 
 /* Compute skip limits for performance: render3d_render.c can skip rendering
  * commands in ranges where no fade is active (optimization). */
