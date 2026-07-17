@@ -99,7 +99,7 @@ GIF_ASSETS=(
 
 PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
-    winding-view light-theme-studio grid-themes backdrops axes-compass
+    winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
@@ -737,6 +737,43 @@ glEnd();
 EOF
 }
 
+# Depth view: three lit solids spread across the depth range so the
+# grayscale gradient has something to show. $1 = depth_view mode
+# (2 = Scene full-rect, 3 = Split right-half overlay). The grid stays on:
+# in Split it renders on the normal (left) half but is absent from the
+# depth (right) half — the "scene depth only, helpers excluded" contract
+# in one image.
+stage_depth_view() {  # $1 = depth_view mode
+    stage "depth-view-$1" <<EOF
+/* @cfg depth_view = $1 */
+/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg code_panel = 3 */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_COLOR_MATERIAL);
+glColor3f(1, 0.35, 0.2);
+glutSolidTeapot(0.8);
+glPushMatrix();
+glTranslatef(-1.7, 0.4, -2.2);
+glColor3f(0.15, 0.55, 1);
+glutSolidCube(0.9);
+glPopMatrix();
+glPushMatrix();
+glTranslatef(1.5, -0.2, 1.4);
+glColor3f(0.1, 0.95, 0.85);
+glutSolidSphere(0.5, 32, 24);
+glPopMatrix();
+// Snippet end
+EOF
+}
+
 # Winding view: one CCW triangle (front-facing, renders green) beside one
 # CW triangle (back-facing, renders red) — the diagnostic's whole point.
 stage_winding() { stage winding <<'EOF'
@@ -925,6 +962,17 @@ fi
 
 if want winding-view; then
     still "$OUT/winding-view.png" 16 "$(stage_winding)"
+fi
+
+# Depth view montage: Scene mode (full-rect scene-normalized grayscale)
+# beside Split (right half depth over the normal render). Same staged
+# solids, only the depth_view mode differs.
+if want depth-view; then
+    still "$WORK/depth-scene.png" 16 "$(stage_depth_view 2)"
+    still "$WORK/depth-split.png" 16 "$(stage_depth_view 3)"
+    montage1x2 "$WORK/depth-m.png" "$WORK/depth-scene.png" "$WORK/depth-split.png"
+    write_png "$WORK/depth-m.png" "$OUT/depth-view.png" -resize "$W"
+    echo "docs-assets: wrote $OUT/depth-view.png"
 fi
 
 # WARM=200: past the ~186-frame splash fade, so the wordmark doesn't
