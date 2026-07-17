@@ -1179,6 +1179,7 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 RELEASE_ENV = \
 	$(if $(TAG),TAG='$(TAG)') \
 	$(if $(REPO),REPO='$(REPO)') \
+	$(if $(PIN),PIN='$(PIN)') \
 	$(if $(REMOTE_BRANCH),REMOTE_BRANCH='$(REMOTE_BRANCH)') \
 	$(if $(MACOS_MODE),MACOS_MODE='$(MACOS_MODE)') \
 	$(if $(MACOS_HOST),MACOS_HOST='$(MACOS_HOST)') \

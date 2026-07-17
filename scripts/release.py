@@ -36,7 +36,7 @@ MODES = ["skip", "local", "remote"]
 # Persisted config sections + their built-in defaults. `tag` stays blank in the
 # ini (it is derived per-release); the rest persist.
 DEFAULTS = {
-    "release": {"repo": "drewwoods/gl-repl", "tag": "",
+    "release": {"repo": "drewwoods/gl-repl", "tag": "", "pin": "",
                 "music_src_dir": "", "remote_branch": "main"},
     "macos":   {"mode": "local", "host": "", "path": ""},
     "linux":   {"mode": "remote", "host": "gracemont",
@@ -75,6 +75,7 @@ def _env(name):
 def _apply_env(cfg):
     m = {
         "TAG": ("release", "tag"), "REPO": ("release", "repo"),
+        "PIN": ("release", "pin"),
         "MUSIC_SRC_DIR": ("release", "music_src_dir"),
         "REMOTE_BRANCH": ("release", "remote_branch"),
         "MACOS_MODE": ("macos", "mode"), "MACOS_HOST": ("macos", "host"),
@@ -113,12 +114,48 @@ def git(*args):
         return ""
 
 
-def effective_tag(cfg):
+def plan_flags(cfg):
+    """(any_local, any_remote) across the two platform modes."""
+    modes = (cfg["macos"]["mode"], cfg["linux"]["mode"])
+    return ("local" in modes, "remote" in modes)
+
+
+def target_ref(cfg):
+    """The git ref every host is pinned to. Explicit `pin` wins; otherwise the
+    local HEAD when any platform builds locally (release what you're on), else
+    origin/<branch> (the remotes' shared upstream)."""
+    pin = cfg["release"]["pin"].strip()
+    if pin:
+        return pin
+    any_local, any_remote = plan_flags(cfg)
+    if any_remote and not any_local:
+        return f"origin/{cfg['release']['remote_branch']}"
+    return "HEAD"
+
+
+def resolve_sha(ref):
+    """Full 40-char SHA for `ref` from local refs (no network), or ''."""
+    sha = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    return sha if len(sha) == 40 else ""
+
+
+def target_desc(cfg):
+    """One-line human description of the pinned target, from local refs."""
+    ref = target_ref(cfg)
+    sha = resolve_sha(ref)
+    if not sha:
+        return f"(unresolved ref {ref} — fetch or check the pin)"
+    desc = git("describe", "--tags", "--always", sha) or sha[:12]
+    return f"{sha[:12]}  {desc}  (ref {ref})"
+
+
+def tag_for(cfg, target_sha):
+    """Release tag: explicit tag wins, else `git describe` of the pinned SHA."""
     t = cfg["release"]["tag"].strip()
     if t:
         return t
-    t = git("describe", "--tags", "--always", "--dirty")
-    return t or f"dev-{git('rev-parse', '--short', 'HEAD') or 'unknown'}"
+    t = git("describe", "--tags", "--always", target_sha)
+    return t or f"dev-{target_sha[:12]}"
 
 
 def music_dir(cfg):
@@ -157,24 +194,65 @@ def stage_music(dest: Path, src_rel: str):
         warn(f"no .mp3 tracks in {src_rel} (run 'make fetch-music' first?)")
 
 
-def warn_if_dirty(cfg):
-    if os.environ.get("ALLOW_DIRTY") == "1":
-        return
+def ssh_capture(host, cmd):
+    return subprocess.check_output(["ssh", host, cmd]).decode().strip()
+
+
+def resolve_target(cfg, fetch):
+    """Pin the whole release to one commit SHA. With fetch=True, refresh origin
+    first so origin/<branch> and remote objects are current. Dies if the ref
+    can't be resolved to a commit."""
+    ref = target_ref(cfg)
+    branch = cfg["release"]["remote_branch"]
+    _, any_remote = plan_flags(cfg)
+    if fetch and (any_remote or ref.startswith("origin/")):
+        try:
+            run(["git", "fetch", "--quiet", "origin", branch])
+        except subprocess.CalledProcessError:
+            warn("git fetch failed — resolving the target from local refs.")
+    sha = resolve_sha(ref)
+    if not sha:
+        die(f"could not resolve target ref '{ref}' to a commit "
+            f"(fetch origin/{branch}, push HEAD, or fix the pin ref).")
+    return sha
+
+
+def verify_local_head(target, allow_dirty):
+    """A local build compiles the working tree, so it only matches the pinned
+    commit when HEAD == target and the tree is clean."""
+    head = git("rev-parse", "HEAD")
+    if head != target:
+        die(f"local HEAD {head[:12]} != target {target[:12]} — a local build "
+            f"would not match the pinned commit.\n"
+            f"       Check out the target, set the pin ref, or make that "
+            f"platform remote.")
     if git("status", "--porcelain"):
-        br = cfg["release"]["remote_branch"]
-        warn("working tree is dirty — a local build reflects local changes, but")
-        warn(f"a remote build compiles origin/{br} on its host.")
-        warn("Commit + push for a matched release (or ALLOW_DIRTY=1 to silence).")
+        msg = (f"working tree is dirty — the local artifact would not match "
+               f"commit {target[:12]}")
+        if allow_dirty:
+            warn(msg + " (ALLOW_DIRTY set — building anyway).")
+        else:
+            die(msg + ".\n       Commit/stash the changes, or set ALLOW_DIRTY=1.")
 
 
-def remote_sync(host, path, branch):
-    run(["ssh", host,
-         f"cd {path} && git fetch --quiet origin {branch} && "
-         f"git checkout --quiet {branch} && git pull --ff-only origin {branch}"])
+def remote_checkout(host, path, branch, target):
+    """Fetch the branch, detach the remote checkout to the exact pinned SHA, and
+    verify it landed there — so every host builds the identical commit."""
+    try:
+        run(["ssh", host,
+             f"cd {path} && git fetch --quiet origin {branch} && "
+             f"git checkout --quiet --detach {target}"])
+    except subprocess.CalledProcessError:
+        die(f"{host}: could not check out {target[:12]} — is that commit pushed "
+            f"to origin/{branch}?")
+    got = ssh_capture(host, f"cd {path} && git rev-parse HEAD")
+    if got != target:
+        die(f"{host}: HEAD is {got[:12]} after checkout, expected {target[:12]}.")
+    say(f"{host}: pinned to {target[:12]}")
 
 
 # --- platform builds ---------------------------------------------------------
-def build_macos(cfg, dist: Path, tag, mdir):
+def build_macos(cfg, dist: Path, tag, mdir, target):
     m = cfg["macos"]
     if m["mode"] == "skip":
         return
@@ -183,14 +261,14 @@ def build_macos(cfg, dist: Path, tag, mdir):
         if sys.platform != "darwin":
             warn("macOS mode is local but not on macOS — skipping macOS.")
             return
-        say("building macOS app bundle locally (make app)")
+        say(f"building macOS app bundle locally (make app) @ {target[:12]}")
         run(["make", "-C", str(ROOT), "app"])
         appdir = ROOT / "gl-repl.app"
     else:  # remote
         if not m["host"]:
             die("macOS mode is remote but no host set (edit via make release-config).")
         say(f"building macOS app bundle on {m['host']}:{m['path']}")
-        remote_sync(m["host"], m["path"], cfg["release"]["remote_branch"])
+        remote_checkout(m["host"], m["path"], cfg["release"]["remote_branch"], target)
         run(["ssh", m["host"], f"cd {m['path']} && make app"])
         shutil.rmtree(stage, ignore_errors=True)
         stage.mkdir(parents=True)
@@ -230,13 +308,13 @@ Requires system OpenGL + GLUT/freeglut runtime libraries
 """
 
 
-def build_linux(cfg, dist: Path, tag, mdir):
+def build_linux(cfg, dist: Path, tag, mdir, target):
     m = cfg["linux"]
     if m["mode"] == "skip":
         return
     if m["mode"] == "local":
         if sys.platform.startswith("linux"):
-            say("building Linux binary locally (make gl-repl)")
+            say(f"building Linux binary locally (make gl-repl) @ {target[:12]}")
             run(["make", "-C", str(ROOT), "gl-repl"])
             arch = os.uname().machine
             bin_src = ("copy", ROOT / "build" / "release" / "gl-repl")
@@ -248,7 +326,7 @@ def build_linux(cfg, dist: Path, tag, mdir):
             die("Linux mode is remote but no host set (edit via make release-config).")
         say(f"building Linux binary on {m['host']}:{m['path']} "
             f"(branch {cfg['release']['remote_branch']})")
-        remote_sync(m["host"], m["path"], cfg["release"]["remote_branch"])
+        remote_checkout(m["host"], m["path"], cfg["release"]["remote_branch"], target)
         run(["ssh", m["host"], f"cd {m['path']} && make gl-repl"])
         arch = subprocess.check_output(
             ["ssh", m["host"], "uname -m"]).decode().strip() or "x86_64"
@@ -281,14 +359,16 @@ def staged_artifacts(dist: Path):
     return sorted(list(dist.glob("*.zip")) + list(dist.glob("*.tar.gz")))
 
 
-def do_build(cfg, tag):
-    warn_if_dirty(cfg)
+def do_build(cfg, tag, target):
+    any_local, _ = plan_flags(cfg)
+    if any_local:
+        verify_local_head(target, os.environ.get("ALLOW_DIRTY") == "1")
     dist = ROOT / "dist" / tag
     dist.mkdir(parents=True, exist_ok=True)
     mdir = music_dir(cfg)
-    build_macos(cfg, dist, tag, mdir)
-    build_linux(cfg, dist, tag, mdir)
-    say(f"staged artifacts in dist/{tag}/:")
+    build_macos(cfg, dist, tag, mdir, target)
+    build_linux(cfg, dist, tag, mdir, target)
+    say(f"staged artifacts in dist/{tag}/ (all built from {target[:12]}):")
     for a in staged_artifacts(dist):
         mb = a.stat().st_size / (1024 * 1024)
         print(f"  {a.name}  ({mb:.0f} MB)", file=sys.stderr)
@@ -362,6 +442,8 @@ def run_menu(cfg, allow_build=True):
         {"t": "sep"},
         {"t": "text", "sec": "release", "key": "tag", "label": "Release tag",
          "hint": "blank = git describe"},
+        {"t": "text", "sec": "release", "key": "pin", "label": "Pin ref",
+         "hint": "blank = auto (HEAD / origin/branch)"},
         {"t": "text", "sec": "release", "key": "repo", "label": "GitHub repo"},
         {"t": "text", "sec": "release", "key": "music_src_dir",
          "label": "Music source", "hint": "blank = auto (favorite/assets)"},
@@ -387,9 +469,14 @@ def run_menu(cfg, allow_build=True):
             stdscr.erase()
             h, w = stdscr.getmaxyx()
             stdscr.addstr(0, 2, "gl-repl release — build plan", curses.A_BOLD)
-            stdscr.addstr(1, 2, "(saved to .release.ini)", curses.A_DIM)
+            # Resolved target commit every host will build (local refs; press r
+            # to fetch + refresh). This is what SHA-pinning locks all hosts to.
+            stdscr.addstr(1, 2, ("target: " + target_desc(cfg))[:w - 4],
+                          curses.A_BOLD)
+            stdscr.addstr(2, 2, "(saved to .release.ini · override > ini > default)",
+                          curses.A_DIM)
             for r_i, r in enumerate(rows):
-                y = 3 + r_i
+                y = 4 + r_i
                 if y >= h - 3:
                     break
                 if r["t"] == "sep":
@@ -413,8 +500,8 @@ def run_menu(cfg, allow_build=True):
                 stdscr.addstr(y, 2, (marker + line)[:w - 4], attr)
             if flash:
                 stdscr.addstr(h - 2, 2, flash[:w - 4], curses.A_DIM)
-            footer = ("↑/↓ move  ◄/► change  "
-                      "Enter edit/select  s save  " +
+            footer = ("↑/↓ move  ◄/► change  Enter edit/select  "
+                      "r refresh target  s save  " +
                       ("b build  " if allow_build else "") + "q quit")
             stdscr.addstr(h - 1, 2, footer[:w - 4], curses.A_DIM)
             stdscr.refresh()
@@ -447,6 +534,15 @@ def run_menu(cfg, allow_build=True):
             elif ch == ord("s"):
                 save_cfg(cfg)
                 flash = "saved to .release.ini"
+            elif ch == ord("r"):
+                # Refresh origin so the displayed target reflects upstream.
+                # Quiet (DEVNULL) so it can't corrupt the curses screen.
+                branch = cfg["release"]["remote_branch"]
+                rc = subprocess.run(["git", "fetch", "--quiet", "origin", branch],
+                                    cwd=ROOT, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL).returncode
+                flash = ("fetched origin/" + branch if rc == 0
+                         else "git fetch failed (offline?)")
             elif ch == ord("b") and allow_build:
                 return "build"
             elif ch in (ord("q"), 27):
@@ -495,7 +591,8 @@ def main():
         return
 
     if args.command == "upload":
-        do_upload(cfg, effective_tag(cfg))
+        target = resolve_target(cfg, fetch=False)
+        do_upload(cfg, tag_for(cfg, target))
         return
 
     # build / all
@@ -504,8 +601,11 @@ def main():
             say("build cancelled at the plan menu.")
             return
     save_cfg(cfg)  # persist whatever plan we're about to build
-    tag = effective_tag(cfg)
-    do_build(cfg, tag)
+    target = resolve_target(cfg, fetch=True)
+    tag = tag_for(cfg, target)
+    desc = git("describe", "--tags", "--always", target) or target[:12]
+    say(f"pinning release to {target[:12]} ({desc}) via ref {target_ref(cfg)}")
+    do_build(cfg, tag, target)
     if args.command == "all" and confirm_upload(cfg, tag):
         do_upload(cfg, tag)
 
