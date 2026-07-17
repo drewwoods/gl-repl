@@ -37,6 +37,23 @@ typedef enum OverlayScope {
     OVERLAY_SCOPE_COUNT
 } OverlayScope;
 
+/* Clipped mode re-issues the program's own glClipPlane / clip-cap enables
+ * during the outline walk, so the highlight is cut exactly where the user's
+ * clip planes cut the shape (see render_outlines_* in edit_overlays.c). */
+#define POLY_HIGHLIGHT_LIST(X) \
+    X(OFF, "Off")              \
+    X(ON, "On")                \
+    X(CLIPPED, "Clipped")
+
+#define POLY_HIGHLIGHT_NAME_ENTRY(name, str) [POLY_HIGHLIGHT_##name] = str,
+
+typedef enum PolyHighlightMode {
+#define POLY_HIGHLIGHT_ENUM_ENTRY(name, str) POLY_HIGHLIGHT_##name,
+    POLY_HIGHLIGHT_LIST(POLY_HIGHLIGHT_ENUM_ENTRY)
+#undef POLY_HIGHLIGHT_ENUM_ENTRY
+    POLY_HIGHLIGHT_COUNT
+} PolyHighlightMode;
+
 #define VERTEX_OUTLINE_STYLE_LIST(X) \
     X(DEFAULT, "Default")            \
     X(BOLD, "Bold")                  \
@@ -65,6 +82,10 @@ typedef struct OverlayWalkCtx {
     int              show_vertex_outlines;
     int              vertex_outline_style;
     int              highlight_current_poly;
+    /* POLY_HIGHLIGHT_CLIPPED: replay the program's clip planes over the
+     * outline passes so highlighted (and plain) edges stop where the shape
+     * does. Independent of highlight_current_poly's on/off. */
+    int              highlight_clip_planes;
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;

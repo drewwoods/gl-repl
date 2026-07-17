@@ -597,7 +597,10 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->walk.show_vertex_outlines = presentation.show_vertex_outlines &&
                                       presentation.wireframe == WIREFRAME_OFF;
     pack->walk.vertex_outline_style = presentation.vertex_outline_style;
-    pack->walk.highlight_current_poly = presentation.highlight_current_poly && !replaying;
+    pack->walk.highlight_current_poly =
+        presentation.highlight_current_poly != POLY_HIGHLIGHT_OFF && !replaying;
+    pack->walk.highlight_clip_planes =
+        presentation.highlight_current_poly == POLY_HIGHLIGHT_CLIPPED && !replaying;
     pack->walk.replay_tess_preview = replay_mode_vertex;
     pack->walk.show_vertex_points = presentation.show_vertex_points;
     pack->walk.replay_vertex_points = replay_mode_vertex;

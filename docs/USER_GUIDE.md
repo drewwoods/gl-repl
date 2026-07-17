@@ -682,6 +682,11 @@ The overlay toggles annotate geometry scene-wide:
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
+  Cycles Off / On / **Clipped**. On draws the shape as authored; Clipped replays
+  the program's own `glClipPlane` calls over the highlight, so a shape your
+  clip planes cut open is outlined where you actually see it instead of as the
+  whole uncut solid. Clipped costs a little more per frame and cuts the plain
+  vertex outlines the same way — the overlay follows the visible geometry.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 
@@ -1510,7 +1515,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+O | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
-| Ctrl+P | Polygon highlight |
+| Ctrl+P | Polygon highlight (Off / On / Clipped) |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
 | F2–F10 | Config cycles (Shift steps backward) — see [The Config menu](#the-config-menu) |
