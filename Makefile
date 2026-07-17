@@ -361,6 +361,7 @@ endif
 	release \
 	release-build \
 	release-upload \
+	release-config \
 	fetch-music \
 	icon-regen \
 	icon-cube \
@@ -1165,38 +1166,40 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
 
 # ---- Release packaging -------------------------------------------------------
-# `make release` builds the macOS .app here and the Linux binary on REMOTE_HOST
-# (default gracemont), bundles the MUSIC_SRC_DIR music pack into each, stages
-# them under dist/<tag>/, then asks for confirmation before uploading to the
-# GitHub release. `release-build` stops after staging; `release-upload` pushes
-# the already-staged artifacts. All knobs are overridable on the command line.
-# See scripts/release.sh.
-RELEASE_TAG  ?= $(shell git describe --tags --always --dirty 2>/dev/null)
-RELEASE_REPO ?= drewwoods/gl-repl
-REMOTE_HOST  ?= gracemont
-REMOTE_PATH  ?= ~/code/openGL/samples/gen-ai/gl-repl
-
-# Per-platform build modes (skip|local|remote) and remote hosts are forwarded
-# only when set, so `make release MACOS_MODE=remote MACOS_HOST=mymac` works and
-# unset knobs fall through to scripts/release.sh's defaults / plan menu.
-RELEASE_ENV = TAG='$(RELEASE_TAG)' REPO='$(RELEASE_REPO)' \
-	MUSIC_SRC_DIR='$(MUSIC_SRC_DIR)' \
-	REMOTE_HOST='$(REMOTE_HOST)' REMOTE_PATH='$(REMOTE_PATH)' \
+# `make release` opens an arrow-key plan menu (per-platform skip/local/remote,
+# ssh hosts, repo, music source — persisted to .release.ini), builds the macOS
+# .app and the Linux binary accordingly, bundles the music pack into each,
+# stages them under dist/<tag>/, then asks for confirmation before uploading to
+# the GitHub release. `release-build` stops after staging; `release-upload`
+# pushes the already-staged artifacts; `release-config` just edits/saves the
+# plan. scripts/release.py owns config precedence (CLI/env > .release.ini >
+# defaults); knobs below are forwarded only when set on the command line, so
+# `make release LINUX_MODE=local TAG=v1.0.0` works and unset knobs fall through
+# to the ini / defaults. See scripts/release.py.
+RELEASE_ENV = \
+	$(if $(TAG),TAG='$(TAG)') \
+	$(if $(REPO),REPO='$(REPO)') \
+	$(if $(REMOTE_BRANCH),REMOTE_BRANCH='$(REMOTE_BRANCH)') \
 	$(if $(MACOS_MODE),MACOS_MODE='$(MACOS_MODE)') \
 	$(if $(MACOS_HOST),MACOS_HOST='$(MACOS_HOST)') \
 	$(if $(MACOS_PATH),MACOS_PATH='$(MACOS_PATH)') \
 	$(if $(LINUX_MODE),LINUX_MODE='$(LINUX_MODE)') \
 	$(if $(LINUX_HOST),LINUX_HOST='$(LINUX_HOST)') \
-	$(if $(LINUX_PATH),LINUX_PATH='$(LINUX_PATH)')
+	$(if $(LINUX_PATH),LINUX_PATH='$(LINUX_PATH)') \
+	$(if $(ASSUME_YES),ASSUME_YES='$(ASSUME_YES)') \
+	$(if $(ALLOW_DIRTY),ALLOW_DIRTY='$(ALLOW_DIRTY)')
 
-release: ## Build macOS + Linux release artifacts, then confirm before uploading to GitHub.
-	@$(RELEASE_ENV) bash scripts/release.sh all
+release: ## Build macOS + Linux release artifacts (plan menu), then confirm before uploading to GitHub.
+	@$(RELEASE_ENV) python3 scripts/release.py all
 
 release-build: ## Build + stage release artifacts under dist/<tag>/ without uploading.
-	@$(RELEASE_ENV) bash scripts/release.sh build
+	@$(RELEASE_ENV) python3 scripts/release.py build
 
 release-upload: ## Upload the already-staged dist/<tag>/ artifacts to the GitHub release.
-	@$(RELEASE_ENV) bash scripts/release.sh upload
+	@$(RELEASE_ENV) python3 scripts/release.py upload
+
+release-config: ## Edit + save the release build plan (.release.ini) via the arrow-key menu.
+	@$(RELEASE_ENV) python3 scripts/release.py config
 
 # Download the music pack from the GitHub release into the local assets folder
 # (MUSIC_DEST, default assets/). Pull from a specific release with MUSIC_TAG=...

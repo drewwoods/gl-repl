@@ -63,30 +63,38 @@ make clean           # Remove binaries
 
 `make release` builds both platform artifacts and, **after an explicit
 confirmation prompt**, uploads them to a GitHub release. Orchestrated by
-[`scripts/release.sh`](scripts/release.sh):
+[`scripts/release.py`](scripts/release.py) (Python — `curses` menu + `configparser`
+persistence):
 
 - **Build plan (skip / local / remote per platform).** Each platform builds in
   one of three modes: `skip`, `local` (this machine — macOS needs Darwin, Linux
   needs Linux), or `remote` (over ssh on a host, artifact copied back). Defaults
   are macOS `local` + Linux `remote`, but any combination works: Linux-only on a
   local Linux box, both on remote hosts, etc. When run on a terminal, `make
-  release` opens an interactive **plan menu** — press `1`/`2` to cycle a
-  platform through skip→local→remote (a remote choice prompts for host/path if
-  unset), Enter to proceed, `q` to abort. Non-interactively (no tty, or
-  `ASSUME_YES=1`) it uses the env-configured plan and skips the menu.
+  release` opens an **arrow-key plan menu**: ↑/↓ move between fields, ◄/► cycle a
+  platform through skip→local→remote, Enter edits a text field (ssh host, path,
+  tag, repo, music source) or activates an action, `s` saves, `b` builds, `q`
+  quits. `make release-config` opens the same menu to just edit + save without
+  building. Non-interactively (no tty, `--no-menu`, or `--yes`/`ASSUME_YES=1`)
+  it uses the persisted/env plan and skips the menu.
+- **Persistence.** The plan (modes, ssh hosts/paths, repo, remote branch, music
+  source) is saved to `.release.ini` (repo root, gitignored) on save/build, so
+  customizations survive between runs. Config precedence is
+  **CLI/env override > `.release.ini` > built-in default**; `tag` is not
+  persisted (derived per-release from `git describe` unless overridden).
 - **macOS** (`MACOS_MODE`) is built via `make app` (locally, or on
   `MACOS_HOST:MACOS_PATH` for remote — the `.app` is copied back). The release
   step then swaps the full music pack into
   `gl-repl.app/Contents/Resources/assets/` (replacing the single `sample.mp3`
   `make app` seeds) and zips the bundle.
 - **Linux** (`LINUX_MODE`, host `LINUX_HOST`/`LINUX_PATH`, defaulting to
-  `REMOTE_HOST`=`gracemont` / `REMOTE_PATH=~/code/openGL/samples/gen-ai/gl-repl`):
-  a remote build fast-forwards that checkout to `origin/main` and runs
-  `make gl-repl`; a local build just runs `make gl-repl` here. Either way the
-  binary is tarred with the music pack in `./assets` plus a `README.txt`/run note.
-- **Music source** is `MUSIC_SRC_DIR` — `assets/favorite` when it holds any
-  `*.mp3`, else flat `assets/` (same favorite/fallback idiom the web build
-  uses; both now share the one variable). All packaging happens locally, so the
+  `gracemont` / `~/code/openGL/samples/gen-ai/gl-repl`; `REMOTE_HOST`/`REMOTE_PATH`
+  seed those): a remote build fast-forwards that checkout to `origin/main` and
+  runs `make gl-repl`; a local build just runs `make gl-repl` here. Either way
+  the binary is tarred with the music pack in `./assets` plus a `README.txt`.
+- **Music source** is `music_src_dir` (env `MUSIC_SRC_DIR`) — `assets/favorite`
+  when it holds any `*.mp3`, else flat `assets/` (same favorite/fallback idiom
+  the web build's `MUSIC_SRC_DIR` uses). All packaging happens locally, so the
   gitignored/symlinked tracks are staged from this checkout for both platforms.
   The "known location" in each package matches the binary's playlist search:
   `Contents/Resources/assets` (mac) and `./assets` (linux).
@@ -96,12 +104,13 @@ confirmation prompt**, uploads them to a GitHub release. Orchestrated by
   `make release-build` stops after staging; `make release-upload` pushes the
   staged artifacts. The GitHub release is created as a **draft**; publish with
   `gh release edit <tag> --repo <repo> --draft=false`.
-- **Knobs** (override on the command line): `RELEASE_TAG` (default
-  `git describe`), `RELEASE_REPO` (default `drewwoods/gl-repl`), `MUSIC_SRC_DIR`,
-  the plan knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
-  `LINUX_MODE`/`LINUX_HOST`/`LINUX_PATH` (`REMOTE_HOST`/`REMOTE_PATH` seed the
-  Linux remote defaults), plus `ASSUME_YES=1` / `ALLOW_DIRTY=1` (and the
-  back-compat `SKIP_MACOS=1` / `SKIP_LINUX=1` = mode `skip`) as script env vars.
+- **Knobs.** Set them in the menu (persisted), or override per-run via env /
+  make-vars — the Makefile forwards `TAG`, `REPO`, `REMOTE_BRANCH`, the plan
+  knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
+  `LINUX_MODE`/`LINUX_HOST`/`LINUX_PATH`, plus `ASSUME_YES` / `ALLOW_DIRTY` when
+  set (e.g. `make release LINUX_MODE=local TAG=v1.0.0`). `MUSIC_SRC_DIR`,
+  `REMOTE_HOST`/`REMOTE_PATH`, and the back-compat `SKIP_MACOS=1` / `SKIP_LINUX=1`
+  (= mode `skip`) are read from the environment.
 
 `make fetch-music` is the inverse: it downloads the music pack from the GitHub
 release (via [`scripts/fetch-music.sh`](scripts/fetch-music.sh)) into the **local** assets folder
