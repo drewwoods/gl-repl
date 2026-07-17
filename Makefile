@@ -585,6 +585,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/subsystems/replay/replay_state.c \
                      src/subsystems/tutorial/tutorial_state.c \
 					 src/repl/apply.c \
+                     src/repl/attrib_bits.c \
                      src/repl/autonormal.c \
                      src/repl/bootstrap.c \
                      src/repl/cfg_baseline.c \
