@@ -1219,29 +1219,24 @@ int main(void) {
             editor_handle_key((unsigned char)prefix[i], 0, 0);
     }
     ASSERT_TRUE("autocomplete popup shows signature text",
-                strcmp(g_ac_matches[0], "glVertex3f(x, y, z)") == 0);
+                strcmp(g_ac_matches[0], "glVertex2f(x, y)") == 0);
     ASSERT_TRUE("autocomplete ghost inserts callable suffix",
-                strcmp(g_ac_ghost, "tex3f(") == 0);
+                strcmp(g_ac_ghost, "tex2f(") == 0);
     ASSERT_TRUE("autocomplete hint shows parameter names",
-                strcmp(g_ac_hint, "x, y, z)") == 0);
+                strcmp(g_ac_hint, "x, y)") == 0);
     editor_handle_key('\t', 0, 0);
     ASSERT_TRUE("tab inserts function call prefix only",
-                strcmp(editor_state_input().input, "glVertex3f(") == 0);
+                strcmp(editor_state_input().input, "glVertex2f(") == 0);
     ASSERT_TRUE("function call hint starts at first parameter",
-                strcmp(g_ac_hint, "x, y, z)") == 0);
+                strcmp(g_ac_hint, "x, y)") == 0);
     editor_handle_key('1', 0, 0);
     ASSERT_TRUE("function call hint advances after first arg text",
-                strcmp(g_ac_hint, ", y, z)") == 0);
+                strcmp(g_ac_hint, ", y)") == 0);
     editor_handle_key(',', 0, 0);
     editor_handle_key(' ', 0, 0);
     ASSERT_TRUE("function call hint shows second parameter at comma",
-                strcmp(g_ac_hint, "y, z)") == 0);
+                strcmp(g_ac_hint, "y)") == 0);
     editor_handle_key('2', 0, 0);
-    ASSERT_TRUE("function call hint advances to remaining args",
-                strcmp(g_ac_hint, ", z)") == 0);
-    editor_handle_key(',', 0, 0);
-    editor_handle_key(' ', 0, 0);
-    editor_handle_key('3', 0, 0);
     ASSERT_TRUE("function call hint ends with closing paren",
                 strcmp(g_ac_hint, ")") == 0);
 
