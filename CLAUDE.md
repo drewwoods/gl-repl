@@ -1422,9 +1422,13 @@ glClipPlane(plane, (GLdouble[]){a, b, c, d})
   translucent gridded disc in the plane (in its modelview frame), a
   stippled ghost rim through occluders, and a normal arrow into the
   kept half-space — dimmed with an "(off)" readout when the program
-  never enables that plane's cap. The Polygon highlight config's
-  Clipped state (Ctrl+P) makes the outline passes replay these calls
-  so a highlighted shape is cut where the planes cut it.
+  never enables that plane's cap. Every overlay pass replays these
+  calls as it walks (`outline_clip_apply_cmd` in
+  [`edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c)),
+  so vertex points and outlines trace the geometry the frame shows.
+  The Polygon highlight config's On state (Ctrl+P) is the one opt-out:
+  it suspends the planes across the cursor highlight's draw so it
+  outlines the shape as authored; Clipped drops the opt-out.
 glClear(mask)
   mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with `|`.
   The one ENUM_BITFIELD slot: `|`-joined tokens from the slot's table,

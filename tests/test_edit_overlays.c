@@ -88,6 +88,25 @@ static int trace_count_line_width_near(const TraceLog *log, float expected) {
     return c;
 }
 
+/* Replay GL_CLIP_PLANE0's enable/disable state through the trace and report
+ * it as of `before` (the first line matching it verbatim) — i.e. "was the
+ * plane live at the moment this vertex was emitted?", which is the only thing
+ * that decides whether the pixel gets clipped. Ordering is what matters here,
+ * not call counts: a suspend/resume pair around a highlight draw and a plain
+ * cut outline issue the same calls in different order. `before == NULL`
+ * reports the state at the end of the trace (nothing left enabled). Returns
+ * -1 if the cap is never touched, or `before` never appears. */
+static int trace_clip_cap_state_at(const TraceLog *log, const char *before) {
+    int state = -1;
+    for (int i = 0; i < log->n; i++) {
+        if (before && strcmp(log->lines[i], before) == 0)
+            return state;
+        if (strcmp(log->lines[i], "glEnable 12288") == 0) state = 1;
+        else if (strcmp(log->lines[i], "glDisable 12288") == 0) state = 0;
+    }
+    return before ? -1 : state;
+}
+
 /* Count trace lines whose symbol is `sym` (args ignored). */
 static int trace_count_sym(const TraceLog *log, const char *sym) {
     size_t sl = strlen(sym);
@@ -643,12 +662,14 @@ static void test_single_polygon_highlight(void) {
                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
 }
 
-/* POLY_HIGHLIGHT_CLIPPED (highlight_clip_planes): the outline passes replay
- * the program's own glClipPlane / clip-cap enables so the highlight is cut
- * where the geometry is, and drop them again before returning. Plain On mode
- * touches no clip state at all. */
+/* Every overlay pass replays the program's own glClipPlane / clip-cap enables
+ * so it traces the geometry the frame actually shows, and drops them again
+ * before returning. POLY_HIGHLIGHT_ON is the one opt-out: the cursor's
+ * highlight draw is bracketed by a suspend/resume pair so it shows the shape
+ * as authored, while the plain outlines around it stay cut.
+ * POLY_HIGHLIGHT_CLIPPED (highlight_clipped) drops the opt-out. */
 static void test_highlight_clip_planes(void) {
-    printf("--- edit_overlays clip-aware highlight ---\n");
+    printf("--- edit_overlays clip-aware overlays ---\n");
 
     GLCmd cmds[7];
     mk_cmd(&cmds[0], CMD_CLIP_PLANE, (float)GL_CLIP_PLANE0, 1, 0);
@@ -673,37 +694,66 @@ static void test_highlight_clip_planes(void) {
     ctx.highlight_current_poly = 1;
     ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
 
-    /* POLY_HIGHLIGHT_ON: the program's clip state is not replayed. */
+    /* POLY_HIGHLIGHT_ON: the plane is still replayed, but suspended across
+     * the highlight draw, so the cursor's shape outlines as authored. */
     TraceLog log;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("On mode issues no glClipPlane",
-               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 0);
-    ASSERT_INT("On mode does not enable the clip cap",
-               trace_count_line(&log, "glEnable 12288"), 0);
+    ASSERT_INT("the plane equation is replayed once per outline pass",
+               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 3);
+    ASSERT_INT("On mode draws the highlight with the plane suspended",
+               trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 0);
     ASSERT_INT("On mode still highlights the cursor's block",
                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("no clip cap is left enabled when the passes return",
+               trace_clip_cap_state_at(&log, NULL), 0);
 
-    /* POLY_HIGHLIGHT_CLIPPED: each of the three outline passes (glBegin,
-     * tess, glut) walks the program independently and so replays the plane
-     * at its own walk position, under that pass's tracked modelview. */
-    ctx.highlight_clip_planes = 1;
+    /* POLY_HIGHLIGHT_CLIPPED: no suspend — the highlight is cut too. */
+    ctx.highlight_clipped = 1;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("Clipped mode replays the plane equation once per outline pass",
-               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 3);
-    ASSERT_INT("Clipped mode enables the clip cap once per outline pass",
-               trace_count_line(&log, "glEnable 12288"), 3);
-    ASSERT_INT("Clipped mode drops the cap again so later passes are unclipped",
-               trace_count_line(&log, "glDisable 12288"), 3);
+    ASSERT_INT("Clipped mode draws the highlight with the plane live",
+               trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 1);
     ASSERT_INT("Clipped mode still highlights the cursor's block",
                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("no clip cap is left enabled when the passes return",
+               trace_clip_cap_state_at(&log, NULL), 0);
     ASSERT_INT("clip commands are not mistaken for geometry",
                trace_count_line(&log, "glVertex3f 1 0 0"), 1);
 
-    /* A plane the program disables again leaves no cap enabled to reset. */
+    /* Plain outlines are clipped in BOTH modes: no cursor highlight, just
+     * the outline pass over the same block. */
+    ctx.highlight_current_poly = 0;
+    ctx.show_vertex_outlines = 1;
+    for (int clipped = 0; clipped <= 1; clipped++) {
+        ctx.highlight_clipped = clipped;
+        trace_begin();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        trace_end(&log);
+        ASSERT_INT("plain outlines are drawn with the plane live",
+                   trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 1);
+    }
+
+    /* Vertex points honor the planes too, in both modes. */
+    ctx.show_vertex_points = 1;
+    for (int clipped = 0; clipped <= 1; clipped++) {
+        ctx.highlight_clipped = clipped;
+        trace_begin();
+        edit_overlays_render_vertex_points(&ctx);
+        trace_end(&log);
+        ASSERT_INT("vertex points are drawn with the plane live",
+                   trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 1);
+        ASSERT_INT("vertex points replay the plane equation",
+                   trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 1);
+        ASSERT_INT("vertex points leave no clip cap enabled",
+                   trace_clip_cap_state_at(&log, NULL), 0);
+    }
+
+    /* A plane the program disables again is mirrored as a disable, and the
+     * pass-end reset has nothing left to drop. */
+    ctx.show_vertex_points = 0;
     mk_cmd(&cmds[1], CMD_DISABLE, (float)GL_CLIP_PLANE0, 0, 0);
     cmds[1].num_args = 1;
     trace_begin();
@@ -711,10 +761,8 @@ static void test_highlight_clip_planes(void) {
     trace_end(&log);
     ASSERT_INT("a disabled plane is mirrored, not enabled",
                trace_count_line(&log, "glEnable 12288"), 0);
-    /* One glDisable per pass: the mirrored CMD_DISABLE itself. The reset
-     * adds none, because the mask tracks the cap as already off. */
-    ASSERT_INT("reset skips caps the pass never enabled",
-               trace_count_line(&log, "glDisable 12288"), 3);
+    ASSERT_INT("outlines under a disabled plane draw unclipped",
+               trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 0);
 }
 
 /* SINGLE_POLYGON scope with GL_TRIANGLE_FAN: the shared center vertex
