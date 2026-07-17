@@ -377,6 +377,51 @@ int repl_find_matching_pop_matrix(int line_idx) {
     return -1;
 }
 
+/* Attribute-stack bracket matching, the exact source-order LIFO mirror of the
+ * matrix pair above (same block-unaware heuristic — see the collect_unbalanced
+ * LIMITATION note). Cursor on a CMD_POP_ATTRIB walks back to the nearest
+ * earlier CMD_PUSH_ATTRIB at the same nesting level; cursor on a
+ * CMD_PUSH_ATTRIB walks forward to the matching CMD_POP_ATTRIB. Returns -1 when
+ * the cursor is not on the right bracket or no partner exists. */
+int repl_find_matching_push_attrib(int line_idx) {
+    if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
+    const GLCmd *cmds = repl_state_document_cmds();
+    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_POP_ATTRIB) return -1;
+
+    int depth = 1;
+    for (int i = line_idx - 1; i >= 0; i--) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_POP_ATTRIB) {
+            depth++;
+        } else if (t == CMD_PUSH_ATTRIB) {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return -1;
+}
+
+int repl_find_matching_pop_attrib(int line_idx) {
+    int n = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= n) return -1;
+    const GLCmd *cmds = repl_state_document_cmds();
+    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_PUSH_ATTRIB) return -1;
+
+    int depth = 1;
+    for (int i = line_idx + 1; i < n; i++) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_PUSH_ATTRIB) {
+            depth++;
+        } else if (t == CMD_POP_ATTRIB) {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return -1;
+}
+
 /* Walk backwards from line_idx past a CMD_FUNC_END to its matching
  * CMD_FUNC_DEF. Returns the source index of the matching CMD_FUNC_DEF
  * (or -1 if unbalanced). The caller passes the index of the FUNC_END

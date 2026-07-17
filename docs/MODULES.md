@@ -321,8 +321,8 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 > ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
-  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L94), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
-  [`TessVertex`](../src/repl/executor.h#L55), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
+  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L95), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
+  [`TessVertex`](../src/repl/executor.h#L75), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L150), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
 - **Root neutral helpers**: [`src/ui/core/gl_2d.h`](../src/ui/core/gl_2d.h) `gl2d_*`, [`src/repl/transform_utils.h`](../src/repl/transform_utils.h)
@@ -449,7 +449,7 @@ commands.
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
 | `repl_compile` | Pure validation layer. Converts proposed source text + context into parsed command changes or diagnostics. Never mutates state. Reads existing source through the read-only `source_document` view |
 | `repl_load` | Non-editor apply orchestration: compile → predef apply → source-document apply → command-store apply, mirroring the REPL halves of `editor_commit_apply_plan` without editor effects (cursor, insert mode, input buffer). Callers: save-file importer, example loader, tutorial comment injector, tests. Keeps `repl_compile` a pure validator |
-| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L94) array mechanics only: insert, replace, delete, load. No text-buffer writes |
+| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L95) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
 | `repl_gl_state_inspector` | Purely folds every state write in the generated `init()`/`display()` setup (including lights, camera/modelview, render toggles, and attribute-stack depth) plus the flat user stream to a source checkpoint, reporting explicitly touched state, its latest source, and OpenGL 2.1 initial values; light positions are folded through the active modelview exactly as fixed-function OpenGL stores them, and the inspector issues no GL calls |
@@ -457,7 +457,7 @@ commands.
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
 
-[`GLCmd`](../src/repl/command.h#L94) is a parse-result record: type, args, flags, provenance. It does
+[`GLCmd`](../src/repl/command.h#L95) is a parse-result record: type, args, flags, provenance. It does
 not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L175).
 
 ### 2. Editor — text, cursor, navigation, commit, undo

@@ -107,6 +107,10 @@ void                   repl_state_render_reset_defaults(void);
 void                   repl_state_render_set_clear_color(const float rgba[4]);
 void                   repl_state_render_set_light_enabled(int light_idx, int enabled);
 void                   repl_state_render_clear_light_enabled_mask(void);
+/* Restore the whole light-enable bitmask at once. Used by glPopAttrib to
+ * put back the mask a matching glPushAttrib(GL_ENABLE_BIT/GL_LIGHTING_BIT)
+ * saved, without a read-modify-write through the _mut() accessor. */
+void                   repl_state_render_set_light_enabled_mask(unsigned mask);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);

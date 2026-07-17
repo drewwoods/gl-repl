@@ -19,6 +19,13 @@ int repl_find_matching_push_matrix(int line_idx);
  * Returns -1 if the cursor isn't on a push or no matching pop exists. */
 int repl_find_matching_pop_matrix(int line_idx);
 
+/* Attribute-stack (glPushAttrib/glPopAttrib) analogues of the matrix bracket
+ * matchers above, using the same source-order LIFO heuristic. push→pop when
+ * the cursor is on a CMD_POP_ATTRIB; pop→push when on a CMD_PUSH_ATTRIB.
+ * Returns -1 for the wrong cursor line or no partner. */
+int repl_find_matching_push_attrib(int line_idx);
+int repl_find_matching_pop_attrib(int line_idx);
+
 /* When the cursor sits on a color-consuming line (immediate vertex,
  * gluVertex, or glutSolid*), fills out_line_idx[] with up to out_cap
  * source-line indices of the modelview-affecting transforms in scope

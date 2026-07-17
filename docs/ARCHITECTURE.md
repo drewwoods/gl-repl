@@ -183,7 +183,7 @@ data.
 
 > [!NOTE]
 > This section is the app-level summary. For the full treatment of the
-> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L94) record and provenance, the
+> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L95) record and provenance, the
 > compile→apply edit flow, the flatten→execute frame flow, the [`ReplRuntimeState`](../src/repl/state.h#L18)
 > ownership slices, and the host-effects bridge — see the module-local deep
 > dive [`src/repl/ARCHITECTURE.md`](../src/repl/ARCHITECTURE.md) (with a worked
@@ -213,7 +213,7 @@ derived from it instead of poking raw global arrays.
 
 [`repl_flatten_commands()`](../src/repl/pipeline.h#L21) is the expensive interpreter boundary. It expands
 loops/functions/conditionals, evaluates expressions and variable/scratch
-assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L94) records
+assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L95) records
 in the flat program. For example:
 
 ```c
@@ -258,12 +258,12 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 
 ### Editor-Owned Text
 
-[`GLCmd`](../src/repl/command.h#L94) is a pure parse-result struct: `type`, `args[]`, validity / vars
+[`GLCmd`](../src/repl/command.h#L95) is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
 `EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L175)**
 ([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model — *not* in
-[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L94) and the canonical
+[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L95) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
 code passes both to text-aware command-store APIs
 (`repl_command_store_*_with_line[s]`) so the text buffer moves in lockstep
@@ -636,10 +636,10 @@ vertices** — the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L197) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L231) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L197) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L198) in [`src/repl/command.h`](../src/repl/command.h)
 — the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L37) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)
@@ -1165,7 +1165,7 @@ values through these seams:
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L131) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -1212,7 +1212,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L253)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L287)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -1847,7 +1847,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L131) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
@@ -2165,7 +2165,7 @@ checklist above (its steps 1–2), a structured command touches:
    conditionals select arms here. The executor should only learn about a new
    command when it can actually appear in the flat program.
 6. **Round-trip: export / import / reformat.** Export can often emit canonical
-   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L94) through
+   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L95) through
    [`repl_load_apply_line()`](../src/repl/load.h#L78), and reformat must preserve canonical text plus
    indentation. (A GL command that needs a standalone export helper is the
    checklist's step 7 instead.)

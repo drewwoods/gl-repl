@@ -132,6 +132,28 @@ static const ReplEnumEntry k_clear_bits[] = {
     { NULL, 0 }
 };
 
+/* The attribute-group bits glPushAttrib()/glPopAttrib() can save/restore,
+ * restricted to groups whose state a REPL command can actually set. Table
+ * order is the canonical emission order for the ENUM_BITFIELD slot AND the
+ * canonical bit-index order shared with the editor's per-bit highlighting.
+ * Every value is a single bit < 2^24 so it round-trips through the
+ * GLCmd.args[] float storage (see command.h). GL_ALL_ATTRIB_BITS
+ * (0xFFFFFFFF, all bits) is deliberately absent: the ENUM_BITFIELD parser
+ * requires non-zero single-bit table values, and the mask would not
+ * round-trip through a float arg. */
+static const ReplEnumEntry k_attrib_bits[] = {
+    { "GL_CURRENT_BIT",      GL_CURRENT_BIT },
+    { "GL_POINT_BIT",        GL_POINT_BIT },
+    { "GL_LINE_BIT",         GL_LINE_BIT },
+    { "GL_POLYGON_BIT",      GL_POLYGON_BIT },
+    { "GL_LIGHTING_BIT",     GL_LIGHTING_BIT },
+    { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    { "GL_TRANSFORM_BIT",    GL_TRANSFORM_BIT },
+    { "GL_ENABLE_BIT",       GL_ENABLE_BIT },
+    { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
+    { NULL, 0 }
+};
+
 static const ReplEnumEntry k_bool_vals[] = {
     { "GL_TRUE",  GL_TRUE  },
     { "GL_FALSE", GL_FALSE },
@@ -289,6 +311,14 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Set the fog color distant geometry fades toward (usually the clear color).\n"
         "Flat shorthand accepted: glFogfv(GL_FOG_COLOR, r, g, b, a).",
         REPL_HELP_GROUP_STATE },
+    { "glPushAttrib(",       "glPushAttrib(mask)",                                       1, { "mask" },
+        "Save a group of state onto the attribute stack; restore with glPopAttrib.\n"
+        "mask: GL_CURRENT_BIT, GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_LIGHTING_BIT,\n"
+        "GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
+        "or several OR'd with | (GL_ALL_ATTRIB_BITS is not supported).",
+        REPL_HELP_GROUP_STATE },
+    { "glPopAttrib()",       "glPopAttrib()",                                            0, { NULL },
+        "Restore the state saved by the matching glPushAttrib", REPL_HELP_GROUP_STATE },
     /* --- Raster position & bitmap text --- */
     { "glRasterPos3f(",      "glRasterPos3f(x, y, z)",                                   3, { "x", "y", "z" },
         "Set the current raster position (transformed through modelview/projection).\n"
@@ -546,6 +576,11 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glMaterialfv",    CMD_MATERIALFV,    -2, NULL,                        0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
+    { "glPushAttrib",    CMD_PUSH_ATTRIB,    1, "%sglPushAttrib(%s);",       0,
+        .args = { ENUM_SLOT_BITS(k_attrib_bits,
+                                 "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
+                                 "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, "
+                                 "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, or several OR'd with |") } },
     { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
         .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
     { .name = NULL }
@@ -666,6 +701,8 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_I,              "glFogi",              1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_F,              "glFogf",              1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_FV,             "glFogfv",             1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_PUSH_ATTRIB,        "glPushAttrib",        1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POP_ATTRIB,         "glPopAttrib",         1, CMD_CAT_STATE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -765,6 +802,10 @@ const ReplEnumEntry *repl_fog_mode_entries(void) {
 
 const ReplEnumEntry *repl_clip_plane_entries(void) {
     return k_clip_planes;
+}
+
+const ReplEnumEntry *repl_attrib_bit_entries(void) {
+    return k_attrib_bits;
 }
 
 const char *repl_begin_mode_name(GLenum mode) {

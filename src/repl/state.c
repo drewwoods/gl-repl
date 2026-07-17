@@ -449,6 +449,7 @@ void repl_state_render_set_light_enabled(int light_idx, int enabled) {
     else         g_repl_state.render.light_enabled_mask &= ~(1u << light_idx);
 }
 void repl_state_render_clear_light_enabled_mask(void) { g_repl_state.render.light_enabled_mask = 0; }
+void repl_state_render_set_light_enabled_mask(unsigned mask) { g_repl_state.render.light_enabled_mask = mask; }
 
 void repl_state_render_reset_defaults(void) {
     g_repl_state.render = repl_state_defaults()->render;

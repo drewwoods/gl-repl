@@ -173,12 +173,13 @@ int repl_source_scope_matrix_scope_depth_at(int pos) {
  * arrays above and keeps this O(n) single-pass helper allocation-free. */
 static int g_unbal_matrix_stack[MAX_EDITOR_COMMANDS];
 static int g_unbal_begin_stack[MAX_EDITOR_COMMANDS];
+static int g_unbal_attrib_stack[MAX_EDITOR_COMMANDS];
 
 int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
                                               int *out_lines, int max) {
     const GLCmd *cmds = view ? view->cmds : NULL;
     int count = view ? view->count : 0;
-    int msp = 0, bsp = 0, n = 0;
+    int msp = 0, bsp = 0, asp = 0, n = 0;
 
     if (!cmds || !out_lines || max <= 0)
         return 0;
@@ -201,6 +202,13 @@ int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
             if (bsp > 0)            bsp--;                       /* matched */
             else if (n < max)       out_lines[n++] = i;          /* orphan end */
             break;
+        case CMD_PUSH_ATTRIB:
+            if (asp < MAX_EDITOR_COMMANDS) g_unbal_attrib_stack[asp++] = i;
+            break;
+        case CMD_POP_ATTRIB:
+            if (asp > 0)            asp--;                       /* matched */
+            else if (n < max)       out_lines[n++] = i;          /* orphan pop */
+            break;
         default:
             break;
         }
@@ -209,6 +217,7 @@ int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
     /* Whatever is left on each stack never closed. */
     for (int k = 0; k < msp && n < max; k++) out_lines[n++] = g_unbal_matrix_stack[k];
     for (int k = 0; k < bsp && n < max; k++) out_lines[n++] = g_unbal_begin_stack[k];
+    for (int k = 0; k < asp && n < max; k++) out_lines[n++] = g_unbal_attrib_stack[k];
     return n;
 }
 

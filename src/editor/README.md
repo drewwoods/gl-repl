@@ -81,7 +81,7 @@ Inside the full app this is **layer 2** of the ownership map. The contract:
 - Read-only documents are also editor sessions: [`help_session.c`](help_session.c) backs the
   F1 overlay with the same scroll/search/cursor model and no commit path.
 
-The editor owns the **canonical per-line text**; [`GLCmd`](../repl/command.h#L94) in `src/repl`
+The editor owns the **canonical per-line text**; [`GLCmd`](../repl/command.h#L95) in `src/repl`
 carries none. That single-writer rule is why the REPL pipeline can be driven
 without the editor at all (see `repl_demo`).
 
