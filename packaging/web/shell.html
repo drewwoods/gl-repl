@@ -53,6 +53,9 @@
         gap: 8px;
         min-height: 44px;
         padding: 6px 14px;
+        /* Above #stage so the badge tooltip overhangs the canvas. */
+        position: relative;
+        z-index: 20;
       }
 
       .brand {
@@ -86,8 +89,9 @@
       }
 
       /* "experimental" pill: amber like the brand mark (this is a
-         statement about the build, not a control), quiet until hovered. */
-      .brand .badge {
+         statement about the build, not a control), quiet until hovered.
+         Lives outside .brand so its tooltip escapes that overflow clip. */
+      .badge {
         align-self: center;
         border: 1px solid #6b4f28;
         border-radius: 999px;
@@ -97,15 +101,45 @@
         font-size: 10px;
         letter-spacing: 0.08em;
         padding: 2px 7px;
+        position: relative;
         text-transform: uppercase;
       }
 
-      .brand .badge:hover,
-      .brand .badge:focus-visible {
+      .badge:hover,
+      .badge:focus-visible {
         background: #2a1f12;
         border-color: var(--amber);
         outline: none;
       }
+
+      /* Own tooltip rather than a title= attribute: the native one is
+         held back by a browser-owned delay of ~1s that no API exposes,
+         and this reads in the app's own chrome colors. */
+      .badge::after {
+        background: var(--sunken);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        content: attr(data-tip);
+        font-size: 11px;
+        left: 0;
+        letter-spacing: normal;
+        line-height: 1.5;
+        max-width: min(340px, 80vw);
+        opacity: 0;
+        padding: 8px 10px;
+        pointer-events: none;
+        position: absolute;
+        text-transform: none;
+        top: calc(100% + 8px);
+        transition: opacity 0.09s ease;
+        white-space: normal;
+        width: max-content;
+        z-index: 30;
+      }
+
+      .badge:hover::after,
+      .badge:focus-visible::after { opacity: 1; }
 
       .topbar .spacer { flex: 1 1 auto; }
 
@@ -331,9 +365,10 @@
         <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark-color"/></svg>
         <span class="name">gl-repl</span>
         <span class="tagline">OpenGL REPL &mdash; immediate mode, immediately.</span>
-        <span class="badge" tabindex="0"
-              title="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience.">experimental</span>
       </div>
+      <span class="badge" tabindex="0"
+            aria-label="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience."
+            data-tip="Experimental WebAssembly build: it runs on gl4es over WebGL2, so some features are missing or behave differently than the native app. Build the native binary for the full experience.">experimental</span>
       <div class="spacer"></div>
       <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
       <button type="button" class="keycap" id="newSceneButton" disabled>new</button>
