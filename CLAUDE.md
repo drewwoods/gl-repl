@@ -1496,12 +1496,13 @@ glClipPlane(plane, (GLdouble[]){a, b, c, d})
   stippled ghost rim through occluders, and a normal arrow into the
   kept half-space — dimmed with an "(off)" readout when the program
   never enables that plane's cap. Every overlay pass replays these
-  calls as it walks (`outline_clip_apply_cmd` in
-  [`edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c)),
-  so vertex points and outlines trace the geometry the frame shows.
-  The Polygon highlight config's On state (Ctrl+P) is the one opt-out:
-  it suspends the planes across the cursor highlight's draw so it
-  outlines the shape as authored; Clipped drops the opt-out.
+  calls as it walks (`overlay_gl_apply_cmd` in
+  [`edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c),
+  which mirrors cull state too), so vertex points and outlines trace
+  the geometry the frame shows. The Polygon highlight config's On state
+  (Ctrl+P) is the one opt-out: it suspends the planes (and culling)
+  across the cursor highlight's draw so it outlines the shape as
+  authored; `Clipped & culled` drops the opt-out.
 glClear(mask)
   mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with `|`.
   The one ENUM_BITFIELD slot: `|`-joined tokens from the slot's table,
@@ -1548,7 +1549,11 @@ glColorMaterial(face, mode), glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
 glLightModeli(pname, param), glFrontFace(mode)
 glCullFace(mode)
   mode: GL_BACK, GL_FRONT, GL_FRONT_AND_BACK. Which faces
-  glEnable(GL_CULL_FACE) discards.
+  glEnable(GL_CULL_FACE) discards. The overlay passes replay the cull
+  cap + glCullFace + glFrontFace as they walk, and GL culls polygons in
+  glPolygonMode(GL_LINE)/(GL_POINT) as it does when filling, so outlines
+  (and glutSolid* vertex points) cull for free. GL_POINTS primitives are
+  never culled, so authored vertex points ignore it by design.
 glDepthFunc(func)
   func: GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER,
         GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS

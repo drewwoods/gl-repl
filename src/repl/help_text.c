@@ -467,7 +467,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_POINTS), KM_MODS(GLR_VERTEX_POINTS), 0, "",
                           "Toggle vertex points");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_POLY_HIGHLIGHT), KM_MODS(GLR_POLY_HIGHLIGHT), 0, "",
-                          "Cycle polygon highlight (Off / On / Clipped)");
+                          "Cycle polygon highlight (Off / On / Clipped & culled)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0, "",
                           "Toggle winding view");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",

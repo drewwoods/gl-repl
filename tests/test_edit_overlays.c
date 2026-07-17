@@ -88,23 +88,29 @@ static int trace_count_line_width_near(const TraceLog *log, float expected) {
     return c;
 }
 
-/* Replay GL_CLIP_PLANE0's enable/disable state through the trace and report
- * it as of `before` (the first line matching it verbatim) — i.e. "was the
- * plane live at the moment this vertex was emitted?", which is the only thing
- * that decides whether the pixel gets clipped. Ordering is what matters here,
- * not call counts: a suspend/resume pair around a highlight draw and a plain
- * cut outline issue the same calls in different order. `before == NULL`
- * reports the state at the end of the trace (nothing left enabled). Returns
- * -1 if the cap is never touched, or `before` never appears. */
-static int trace_clip_cap_state_at(const TraceLog *log, const char *before) {
+/* Replay a GL cap's enable/disable state through the trace and report it as of
+ * `before` (the first line matching it verbatim) — i.e. "was this cap live at
+ * the moment that vertex was emitted?", which is the only thing that decides
+ * whether the pixel survives. Ordering is what matters here, not call counts:
+ * a suspend/resume pair around a highlight draw and a plainly clipped outline
+ * issue the same calls in a different order. `before == NULL` reports the
+ * state at the end of the trace (nothing left enabled). Returns -1 if the cap
+ * is never touched, or `before` never appears. */
+static int trace_cap_state_at(const TraceLog *log, const char *enable_line,
+                              const char *disable_line, const char *before) {
     int state = -1;
     for (int i = 0; i < log->n; i++) {
         if (before && strcmp(log->lines[i], before) == 0)
             return state;
-        if (strcmp(log->lines[i], "glEnable 12288") == 0) state = 1;
-        else if (strcmp(log->lines[i], "glDisable 12288") == 0) state = 0;
+        if (strcmp(log->lines[i], enable_line) == 0) state = 1;
+        else if (strcmp(log->lines[i], disable_line) == 0) state = 0;
     }
     return before ? -1 : state;
+}
+
+/* GL_CLIP_PLANE0 = 12288. */
+static int trace_clip_cap_state_at(const TraceLog *log, const char *before) {
+    return trace_cap_state_at(log, "glEnable 12288", "glDisable 12288", before);
 }
 
 /* Count trace lines whose symbol is `sym` (args ignored). */
@@ -599,6 +605,147 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
                trace_count_line(&log, "glVertex3f 2 0 0"), 1);
 }
 
+/* Culling is plain GL state, and GL culls polygons in glPolygonMode(GL_LINE)
+ * just as it does when filling — so the overlay passes only have to replay the
+ * program's cull state and let GL apply the program's own facing rule. Same
+ * split as the clip planes: outlines always, the highlight only under
+ * POLY_HIGHLIGHT_CLIPPED_CULLED. */
+static void test_overlays_honor_culling(void) {
+    printf("--- edit_overlays cull replay ---\n");
+
+    GLCmd cmds[8];
+    mk_cmd(&cmds[0], CMD_FRONT_FACE, (float)GL_CW, 0, 0);
+    cmds[0].num_args = 1;
+    mk_cmd(&cmds[1], CMD_CULL_FACE, (float)GL_FRONT, 0, 0);
+    cmds[1].num_args = 1;
+    mk_cmd(&cmds[2], CMD_ENABLE, (float)GL_CULL_FACE, 0, 0);
+    cmds[2].num_args = 1;
+    mk_cmd(&cmds[3], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 1, 0, 0); cmds[4].src_cmd_idx = 5;
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 3, 0, 0);
+    mk_cmd(&cmds[7], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 8;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    /* GL_CULL_FACE = 2884, GL_FRONT = 1028, GL_CW = 2304, GL_CCW = 2305. */
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("outlines replay the cull cap once per pass",
+               trace_count_line(&log, "glEnable 2884"), 3);
+    ASSERT_INT("outlines replay the culled face",
+               trace_count_line(&log, "glCullFace 1028"), 3);
+    ASSERT_INT("outlines replay the winding rule",
+               trace_count_line(&log, "glFrontFace 2304"), 3);
+    ASSERT_INT("outlines are drawn with culling live",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("the pass leaves culling off for later overlays",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", NULL), 0);
+
+    /* Vertex points track the state but keep drawing: GL never culls
+     * GL_POINTS, and the walk does not second-guess it. */
+    ctx.show_vertex_points = 1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("authored vertex points still draw under culling",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ctx.show_vertex_points = 0;
+
+    /* The highlight opts out under On and draws unculled... */
+    ctx.cursor.edit_line_idx = 5;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 0;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("On mode draws the highlight with culling suspended",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 1 0 0"), 0);
+
+    /* ...and follows the program under Clipped & culled. */
+    ctx.highlight_clipped_culled = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("Clipped & culled draws the highlight with culling live",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 1 0 0"), 1);
+}
+
+/* GL reverses the winding of odd-numbered GL_TRIANGLE_STRIP triangles. A
+ * single-polygon highlight re-issues the cursor's triangle as a fresh strip,
+ * which loses that flip, so with culling live it would be culled exactly when
+ * the real face is visible. The draw swaps glFrontFace to compensate. */
+static void test_single_polygon_highlight_strip_winding(void) {
+    printf("--- edit_overlays single-polygon strip winding ---\n");
+
+    GLCmd cmds[8];
+    mk_cmd(&cmds[0], CMD_ENABLE, (float)GL_CULL_FACE, 0, 0);
+    cmds[0].num_args = 1;
+    mk_cmd(&cmds[1], CMD_BEGIN, (float)GL_TRIANGLE_STRIP, 0, 0);
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 0, 0, 0);
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 3, 0, 0); cmds[5].src_cmd_idx = 9;
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 4, 0, 0);
+    mk_cmd(&cmds[7], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 8;
+    ctx.cursor.edit_line_idx = 9;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.highlight_clipped_culled = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    ctx.cursor_poly_valid = 1;
+
+    /* Odd strip triangle (index 1: ordinals 1..3) — winding compensated. */
+    ctx.cursor_poly_first = 1;
+    ctx.cursor_poly_last = 3;
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("an odd strip triangle flips the winding for the highlight",
+               trace_count_line(&log, "glFrontFace 2304"), 1);   /* GL_CW */
+    ASSERT_INT("...and restores the program's winding after",
+               trace_count_line(&log, "glFrontFace 2305"), 1);   /* GL_CCW */
+
+    /* Even strip triangle (index 2: ordinals 2..4) — no compensation. */
+    ctx.cursor_poly_first = 2;
+    ctx.cursor_poly_last = 4;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("an even strip triangle needs no winding flip",
+               trace_count_sym(&log, "glFrontFace"), 0);
+
+    /* On mode suspends culling, so there is no facing to compensate for. */
+    ctx.highlight_clipped_culled = 0;
+    ctx.cursor_poly_first = 1;
+    ctx.cursor_poly_last = 3;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("On mode leaves the winding alone (culling is suspended)",
+               trace_count_sym(&log, "glFrontFace"), 0);
+}
+
 /* Geometry drawn under a color mask that writes no color (the depth-only
  * seed idiom) is invisible, so the plain outline and vertex-point passes skip
  * it. The cursor highlight is exempt: it locates the line you are editing. */
@@ -754,7 +901,8 @@ static void test_single_polygon_highlight(void) {
  * before returning. POLY_HIGHLIGHT_ON is the one opt-out: the cursor's
  * highlight draw is bracketed by a suspend/resume pair so it shows the shape
  * as authored, while the plain outlines around it stay cut.
- * POLY_HIGHLIGHT_CLIPPED (highlight_clipped) drops the opt-out. */
+ * POLY_HIGHLIGHT_CLIPPED_CULLED (highlight_clipped_culled) drops the
+ * opt-out. */
 static void test_highlight_clip_planes(void) {
     printf("--- edit_overlays clip-aware overlays ---\n");
 
@@ -796,8 +944,8 @@ static void test_highlight_clip_planes(void) {
     ASSERT_INT("no clip cap is left enabled when the passes return",
                trace_clip_cap_state_at(&log, NULL), 0);
 
-    /* POLY_HIGHLIGHT_CLIPPED: no suspend — the highlight is cut too. */
-    ctx.highlight_clipped = 1;
+    /* POLY_HIGHLIGHT_CLIPPED_CULLED: no suspend — the highlight is cut too. */
+    ctx.highlight_clipped_culled = 1;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
@@ -815,7 +963,7 @@ static void test_highlight_clip_planes(void) {
     ctx.highlight_current_poly = 0;
     ctx.show_vertex_outlines = 1;
     for (int clipped = 0; clipped <= 1; clipped++) {
-        ctx.highlight_clipped = clipped;
+        ctx.highlight_clipped_culled = clipped;
         trace_begin();
         edit_overlays_render_outlines(&ctx, 0, 0);
         trace_end(&log);
@@ -826,7 +974,7 @@ static void test_highlight_clip_planes(void) {
     /* Vertex points honor the planes too, in both modes. */
     ctx.show_vertex_points = 1;
     for (int clipped = 0; clipped <= 1; clipped++) {
-        ctx.highlight_clipped = clipped;
+        ctx.highlight_clipped_culled = clipped;
         trace_begin();
         edit_overlays_render_vertex_points(&ctx);
         trace_end(&log);
@@ -2330,6 +2478,8 @@ int main(void) {
     test_render_outlines_glbegin();
     test_current_poly_highlight_respects_overlay_scope();
     test_highlight_clip_planes();
+    test_overlays_honor_culling();
+    test_single_polygon_highlight_strip_winding();
     test_overlays_honor_color_mask();
     test_single_polygon_highlight();
     test_single_polygon_highlight_fan_anchor();

@@ -37,13 +37,13 @@ typedef enum OverlayScope {
     OVERLAY_SCOPE_COUNT
 } OverlayScope;
 
-/* Clipped mode re-issues the program's own glClipPlane / clip-cap enables
- * during the outline walk, so the highlight is cut exactly where the user's
- * clip planes cut the shape (see render_outlines_* in edit_overlays.c). */
-#define POLY_HIGHLIGHT_LIST(X) \
-    X(OFF, "Off")              \
-    X(ON, "On")                \
-    X(CLIPPED, "Clipped")
+/* Clipped & culled draws the cursor highlight through the program's own clip
+ * planes and cull state, like every other overlay; On draws the shape as
+ * authored instead (see the overlay_gl_* helpers in edit_overlays.c). */
+#define POLY_HIGHLIGHT_LIST(X)     \
+    X(OFF, "Off")                  \
+    X(ON, "On")                    \
+    X(CLIPPED_CULLED, "Clipped & culled")
 
 #define POLY_HIGHLIGHT_NAME_ENTRY(name, str) [POLY_HIGHLIGHT_##name] = str,
 
@@ -82,11 +82,11 @@ typedef struct OverlayWalkCtx {
     int              show_vertex_outlines;
     int              vertex_outline_style;
     int              highlight_current_poly;
-    /* POLY_HIGHLIGHT_CLIPPED: cut the cursor highlight with the program's own
-     * clip planes, like every other overlay. Off (POLY_HIGHLIGHT_ON) draws the
-     * highlighted shape as authored — the one overlay that may show geometry
-     * the frame doesn't. */
-    int              highlight_clipped;
+    /* POLY_HIGHLIGHT_CLIPPED_CULLED: draw the cursor highlight through the
+     * program's own clip planes and cull state, like every other overlay. Off
+     * (POLY_HIGHLIGHT_ON) draws the highlighted shape as authored — the one
+     * overlay that may show geometry the frame doesn't. */
+    int              highlight_clipped_culled;
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;
