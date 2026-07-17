@@ -1368,6 +1368,90 @@ int main(void) {
         ASSERT_TRUE("glDepthMask(var) rejected", ok == 0);
     }
 
+    /* glClear - the ENUM_BITFIELD mask slot */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glClear(GL_COLOR_BUFFER_BIT)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClear(one bit) parse ok", ok == 1);
+        ASSERT_TRUE("glClear type", cmd.type == CMD_CLEAR);
+        ASSERT_TRUE("glClear num_args", cmd.num_args == 1);
+        ASSERT_TRUE("glClear single-bit mask",
+                    (GLbitfield)cmd.args[0] == GL_COLOR_BUFFER_BIT);
+        ASSERT_TRUE("glClear single-bit canonicalized",
+                    strstr(cmd_text, "glClear(GL_COLOR_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClear(both bits) parse ok", ok == 1);
+        ASSERT_TRUE("glClear both-bit mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        ASSERT_TRUE("glClear both-bit canonicalized",
+                    strstr(cmd_text,
+                           "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);") != NULL);
+    }
+    {
+        /* Emission is table order with duplicates dropped, so any
+         * spelling of a mask has exactly one canonical text. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClear(reversed, unspaced) parse ok", ok == 1);
+        ASSERT_TRUE("glClear reversed mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        ASSERT_TRUE("glClear reversed emits in table order",
+                    strstr(cmd_text,
+                           "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glClear(GL_COLOR_BUFFER_BIT | GL_COLOR_BUFFER_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClear(repeated bit) parse ok", ok == 1);
+        ASSERT_TRUE("glClear repeated bit deduped",
+                    strstr(cmd_text, "glClear(GL_COLOR_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        /* A mask is not a quantity: numeric literals (even the right
+         * value), unlisted bits, expressions and empty terms all
+         * reject rather than resolve. */
+        static const char *k_bad[] = {
+            "glClear(16640)",
+            "glClear(GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)",
+            "glClear(GL_STENCIL_BUFFER_BIT)",
+            "glClear(GL_ACCUM_BUFFER_BIT)",
+            "glClear(GL_LIGHTING)",
+            "glClear(x)",
+            "glClear()",
+            "glClear(GL_COLOR_BUFFER_BIT | )",
+            "glClear(| GL_COLOR_BUFFER_BIT)",
+            "glClear(GL_COLOR_BUFFER_BIT || GL_DEPTH_BUFFER_BIT)",
+        };
+        for (int i = 0; i < (int)(sizeof(k_bad) / sizeof(k_bad[0])); i++) {
+            memset(&cmd, 0, sizeof(cmd));
+            ASSERT_TRUE(k_bad[i], parse_for_test(k_bad[i], &cmd) == 0);
+        }
+    }
+
     /* glEdgeFlag - bool-enum state command */
     {
         glr_ctrl_reset_all();

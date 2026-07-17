@@ -253,6 +253,9 @@ numeric argument everywhere is a full math expression.
 - [`glLightModeli(pname, param)`](https://docs.gl/gl2/glLightModel), [`glFrontFace(mode)`](https://docs.gl/gl2/glFrontFace)
 - [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
 - [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) — each channel GL_TRUE/GL_FALSE or 0/1
+- [`glClear(mask)`](https://docs.gl/gl2/glClear) — clear again part-way down a scene (see Clearing
+  mid-scene). `mask` is `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, or both
+  OR'd with `|`
 - [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
 - [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
   plane (see Clip planes)
@@ -326,6 +329,44 @@ export targets C89) and reload converts it back.
 The *Clip planes carve solids (glClipPlane)* example walks the three core
 moves — one plane (a sphere becomes a dome), two planes meeting at an angle
 (a 120° wedge), and an animated `d` (a cutaway sweeping through a torus).
+
+### Clearing mid-scene
+
+```c
+glClear(GL_DEPTH_BUFFER_BIT);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+```
+
+The REPL already clears colour and depth before it runs your first line, so
+`glClear` is not the frame setup it is in a normal GL program — it is a line
+you put *in the middle* of a scene to clear again from there down.
+
+The useful one is `GL_DEPTH_BUFFER_BIT`. It throws away the depth of
+everything drawn so far, so geometry below the line draws over what came
+before it no matter how far away it is — the classic way to sit a HUD, a
+gizmo, or an inset object on top of a scene without moving it:
+
+```c
+glutSolidTeapot(0.6);
+glClear(GL_DEPTH_BUFFER_BIT);   // everything below wins the depth test
+glColor3f(0.98, 0.45, 0.4);
+glutSolidCube(0.3);             // ...so the cube is never hidden by the teapot
+```
+
+`GL_COLOR_BUFFER_BIT` repaints the scene with the current
+[`glClearColor`](https://docs.gl/gl2/glClearColor), erasing geometry drawn
+above the line. It is confined to the 3D viewport, so it cannot touch the
+code panel or the menu bar — the rest of the window keeps the background the
+frame started with.
+
+`mask` is one bit, or both OR'd with `|`. Unlike every other numeric
+argument, it is not an expression: only these two tokens are accepted, and
+the line is stored in a fixed order regardless of how you spell it
+(`GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT` commits as
+`GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`). The stencil and accumulation
+bits are not offered: nothing in the REPL writes stencil, and clearing the
+accumulation buffer would fight the accum effects under [Rendering
+quality](#rendering-quality).
 
 ### Math expressions
 

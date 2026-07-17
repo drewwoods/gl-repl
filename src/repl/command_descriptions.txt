@@ -180,6 +180,10 @@ Draws formatted bitmap text at the current raster position. Set that position wi
 title = glClipPlane
 Defines one user clip plane from equation coefficients (a, b, c, d). Enable the matching GL_CLIP_PLANE slot to discard geometry on the plane's negative side.
 
+[command CMD_CLEAR]
+title = glClear
+Clears the buffers named in the mask: GL_COLOR_BUFFER_BIT resets the 3D viewport to the current glClearColor, GL_DEPTH_BUFFER_BIT resets the depth buffer. OR the two together with | to clear both. The REPL already clears both at the start of every frame, so this is for clearing again part-way down a scene: a depth clear makes everything below the line draw over what came before it, ignoring depth.
+
 [capability GL_BLEND]
 title = GL_BLEND
 Controls color blending between new fragments and the existing color buffer. glBlendFunc selects the source and destination factors used while this capability is enabled.

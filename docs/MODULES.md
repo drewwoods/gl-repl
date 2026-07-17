@@ -320,9 +320,9 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 > ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
-  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L90), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
+  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L91), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
   [`TessVertex`](../src/repl/executor.h#L55), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
-  [`CmdSyntaxCategory`](../src/repl/command_spec.h#L140), and the `cmd_type_name` thin alias.
+  [`CmdSyntaxCategory`](../src/repl/command_spec.h#L150), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
 - **Root neutral helpers**: [`src/ui/core/gl_2d.h`](../src/ui/core/gl_2d.h) `gl2d_*`, [`src/repl/transform_utils.h`](../src/repl/transform_utils.h)
   `apply_tracked_transform` / `unwind_transform_stack`, and
@@ -445,7 +445,7 @@ commands.
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
 | `repl_compile` | Pure validation layer. Converts proposed source text + context into parsed command changes or diagnostics. Never mutates state. Reads existing source through the read-only `source_document` view |
 | `repl_load` | Non-editor apply orchestration: compile → predef apply → source-document apply → command-store apply, mirroring the REPL halves of `editor_commit_apply_plan` without editor effects (cursor, insert mode, input buffer). Callers: save-file importer, example loader, tutorial comment injector, tests. Keeps `repl_compile` a pure validator |
-| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L90) array mechanics only: insert, replace, delete, load. No text-buffer writes |
+| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L91) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
 | `repl_gl_state_inspector` | Purely folds every state write in the generated `init()`/`display()` setup (including lights, camera/modelview, render toggles, and attribute-stack depth) plus the flat user stream to a source checkpoint, reporting explicitly touched state, its latest source, and OpenGL 2.1 initial values; light positions are folded through the active modelview exactly as fixed-function OpenGL stores them, and the inspector issues no GL calls |
@@ -453,7 +453,7 @@ commands.
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
 
-[`GLCmd`](../src/repl/command.h#L90) is a parse-result record: type, args, flags, provenance. It does
+[`GLCmd`](../src/repl/command.h#L91) is a parse-result record: type, args, flags, provenance. It does
 not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L175).
 
 ### 2. Editor — text, cursor, navigation, commit, undo
@@ -503,7 +503,7 @@ controllers; UI may render them; their input routes to them through
 | `tutorial` | Runner behind `tutorial_state`. `tutorial_start` / `_stop` orchestrate the transient-scene boundary via `repl_scenes_enter_transient_scene` + `repl_scenes_reset_for_transient`. Five step kinds (COMMAND / NOTE / SET / REQUIRE / REQUIRE_VAR) are walked by a shared iterative `tutorial_enter_step` + advance loop: COMMAND uses the "type the expected GL call" flow and may omit `comment` (no locked instruction row; the ghost/status hint teach the command, and the committed row is locked afterward); NOTE reveals a comment-only instruction and advances when `tutorial_handle_ack_key` consumes Enter / Tab / Space; SET applies `cfg_slug = cfg_value` on entry (via `repl_cfg_set_int`) and advances on the same ack keys; REQUIRE advances when `tutorial_notify_state_changed` (hooked into `glr_config_set`) observes the watched slug reach its target; REQUIRE_VAR advances when the watched predef variable reaches its target through a typed commit or variable-panel drag. `tutorial_handle_commit_attempt` + the editor-precheck shim (`tutorial_reject_noncommand_commit_with_hint`) gate commits; `tutorial_guard_source_change` freezes NOTE / SET / REQUIRE steps while allowing COMMAND and REQUIRE_VAR through the locked-line and expected-line guards. Restore-on-stop cfg lifecycle: a `fill_scene_subset`+tutorial-slugs baseline is captured BEFORE `presentation_reset` and written back by `tutorial_teardown` — which replaces the direct `tutorial_state_reset` calls at every active-tutorial teardown site (stop, completion, workspace / scene / example load, `glr_ctrl_reset_all`) so a workspace-load stash never enshrines tutorial-mutated cfg as the new baseline. Per-character reveal runs at a fixed `TUTORIAL_FADE_CHARS_PER_SEC` rate, not a fixed total duration |
 | `edit_overlays` | Peer subsystem ([`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), extracted from [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)): owns the cursor edit-guide snapshot (`cursor_guide_snapshot_with_flat_args`) and the flat-program walk (`edit_overlays_render_cursor_guides`) that drives the 3D overlay primitives (`render3d_draw_vertex_label_text` / `render3d_draw_normal_vector_arrow`) at each visited vertex/normal |
 | `hidden_lines` | Peer subsystem ([`src/subsystems/hidden_lines/hidden_lines.c`](../src/subsystems/hidden_lines/hidden_lines.c)): hidden-line wireframe execution; drives the REPL execution cursor through the render3d renderer's hidden/depth/visible wireframe passes while skipping pass-local state commands |
-| `repl_help_text` | REPL-side producer of neutral F1 help text. Walks `k_func_completions[]`, groups by [`ReplHelpGroup`](../src/repl/command_spec.h#L91), emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27); renderer ([`src/ui/core/tabbed_overlay.c`](../src/ui/core/tabbed_overlay.c)) is feature-agnostic |
+| `repl_help_text` | REPL-side producer of neutral F1 help text. Walks `k_func_completions[]`, groups by [`ReplHelpGroup`](../src/repl/command_spec.h#L101), emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27); renderer ([`src/ui/core/tabbed_overlay.c`](../src/ui/core/tabbed_overlay.c)) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not

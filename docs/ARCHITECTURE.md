@@ -183,7 +183,7 @@ data.
 
 > [!NOTE]
 > This section is the app-level summary. For the full treatment of the
-> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L90) record and provenance, the
+> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L91) record and provenance, the
 > compile→apply edit flow, the flatten→execute frame flow, the [`ReplRuntimeState`](../src/repl/state.h#L18)
 > ownership slices, and the host-effects bridge — see the module-local deep
 > dive [`src/repl/ARCHITECTURE.md`](../src/repl/ARCHITECTURE.md) (with a worked
@@ -213,7 +213,7 @@ derived from it instead of poking raw global arrays.
 
 [`repl_flatten_commands()`](../src/repl/pipeline.h#L21) is the expensive interpreter boundary. It expands
 loops/functions/conditionals, evaluates expressions and variable/scratch
-assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L90) records
+assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L91) records
 in the flat program. For example:
 
 ```c
@@ -258,12 +258,12 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 
 ### Editor-Owned Text
 
-[`GLCmd`](../src/repl/command.h#L90) is a pure parse-result struct: `type`, `args[]`, validity / vars
+[`GLCmd`](../src/repl/command.h#L91) is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
 `EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L175)**
 ([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model — *not* in
-[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L90) and the canonical
+[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L91) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
 code passes both to text-aware command-store APIs
 (`repl_command_store_*_with_line[s]`) so the text buffer moves in lockstep
@@ -639,7 +639,7 @@ GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L197) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L193) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L194) in [`src/repl/command.h`](../src/repl/command.h)
 — the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L37) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)
@@ -2021,7 +2021,7 @@ header, your `help_group` is wrong.
 
 A new help group (beyond `TOP` / `LIGHTING` / `GLUT_SHAPES` / `GLU_TESS`
 / `MATH` / `NONE`) requires:
-- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L91) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
+- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L101) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
 - a `help_group_header` case in [`src/repl/help_text.c`](../src/repl/help_text.c)
 
 The hand-written language-level sections in [`src/repl/help_text.c`](../src/repl/help_text.c)
@@ -2162,7 +2162,7 @@ checklist above (its steps 1–2), a structured command touches:
    conditionals select arms here. The executor should only learn about a new
    command when it can actually appear in the flat program.
 6. **Round-trip: export / import / reformat.** Export can often emit canonical
-   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L90) through
+   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L91) through
    [`repl_load_apply_line()`](../src/repl/load.h#L78), and reformat must preserve canonical text plus
    indentation. (A GL command that needs a standalone export helper is the
    checklist's step 7 instead.)

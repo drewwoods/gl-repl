@@ -77,7 +77,7 @@ The most common contributions, recipe-style:
 3. Execute it in [`repl_execute_program()`](../src/repl/executor.h#L173) ([`src/repl/executor.c`](../src/repl/executor.c)) and
    handle it in `flatten_range()` ([`src/repl/flatten.c`](../src/repl/flatten.c)).
 4. Add a `g_command_type_specs[]` entry in [`src/repl/command_spec.c`](../src/repl/command_spec.c) with
-   the right [`CmdSyntaxCategory`](../src/repl/command_spec.h#L140) for syntax highlighting.
+   the right [`CmdSyntaxCategory`](../src/repl/command_spec.h#L150) for syntax highlighting.
 5. If it's a new GL/GLU/GLUT symbol, extend the matching stub header
    under `tests/gl-stubs/include/` and verify both `make test-stubs` and
    `make gl-repl`.

@@ -333,6 +333,71 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
         return 0;
     }
 
+    case REPL_ENUM_SLOT_ENUM_BITFIELD: {
+        /* `A | B | ...` — every term must be a token from this slot's
+         * table (the exact-match above already handled the single-token
+         * case, so a `|` is present by the time we get here). Numeric
+         * and expression input stay rejected: a mask is not a quantity
+         * the REPL can animate, and accepting one would let a typo'd
+         * literal enable a bit the table deliberately omits.
+         *
+         * Emission is table order with duplicates dropped, so the
+         * canonical text of a given mask is unique regardless of how
+         * the user spelled it. */
+        unsigned mask = 0;
+        const char *p = raw;
+        /* Unconditional first iteration, and one more after every `|`:
+         * an empty term ("A |", "| A", "A || B") must reach the len <= 0
+         * rejection rather than be skipped by a loop guard. */
+        for (;;) {
+            const char *bar = strchr(p, '|');
+            const char *term_end = bar ? bar : p + strlen(p);
+            char term[REPL_ENUM_ARG_MAX];
+            int len;
+
+            while (p < term_end && isspace((unsigned char)*p)) p++;
+            len = (int)(term_end - p);
+            while (len > 0 && isspace((unsigned char)p[len - 1])) len--;
+            if (len <= 0 || len >= (int)sizeof(term)) {
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+            memcpy(term, p, (size_t)len);
+            term[len] = '\0';
+
+            int found = 0;
+            for (int i = 0; as->enums && as->enums[i].name; i++) {
+                if (strcmp(term, as->enums[i].name) == 0) {
+                    mask |= (unsigned)as->enums[i].value;
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+            if (!bar)
+                break;
+            p = bar + 1;
+        }
+
+        int off = 0;
+        emit[0] = '\0';
+        for (int i = 0; as->enums && as->enums[i].name; i++) {
+            if (!(mask & (unsigned)as->enums[i].value))
+                continue;
+            off += snprintf(emit + off, (size_t)(emit_sz - off), "%s%s",
+                            off ? " | " : "", as->enums[i].name);
+            if (off >= emit_sz) {
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+        }
+        *out_val = (float)mask;
+        return 1;
+    }
+
     case REPL_ENUM_SLOT_ENUM_OR_EXPR: {
         if (!parser_validate_expression_idents(raw, vars, num_vars, ctx))
             return 0;

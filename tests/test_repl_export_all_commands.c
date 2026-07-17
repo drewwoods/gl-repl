@@ -103,6 +103,7 @@ static const CmdType expected_commands[] = {
     CMD_RASTER_POS3F,
     CMD_LABEL,
     CMD_CLIP_PLANE,
+    CMD_CLEAR,
 };
 
 static int verify_all_commands_present(void) {
@@ -377,6 +378,7 @@ int main(void) {
     /* Blend/depth commands */
     editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
     editor_feed_line("glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0.5});");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
     editor_feed_line("glClearColor(0.2, 0.2, 0.2, 1);");
     editor_feed_line("glDepthMask(GL_TRUE);");
     editor_feed_line("glEdgeFlag(GL_TRUE);");
