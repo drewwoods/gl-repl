@@ -1074,6 +1074,19 @@ void glr_cfg_cycle_row(int row, int delta) {
         }
     }
 
+    /* Depth view needs depth readback (glReadPixels GL_DEPTH_COMPONENT);
+     * WebGL forbids it and some contexts fail the init-GL probe. Refuse the
+     * interactive cycle with the reason instead of silently cycling a row
+     * whose render-config copy is forced Off every frame. @cfg header loads
+     * bypass this (they write via glr_config_set), so files round-trip. */
+    if (item->key == GLR_CONFIG_DEPTH_VIZ) {
+        const char *reason = glr_ctrl_depth_readback_unsupported_reason();
+        if (reason) {
+            repl_set_status(reason);
+            return;
+        }
+    }
+
     if (item->key == GLR_CONFIG_AUTO_NORMALS || item->key == GLR_CONFIG_POINT_ATTENUATION) {
         if (replay_active())
             replay_stop();

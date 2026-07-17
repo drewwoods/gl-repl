@@ -683,7 +683,7 @@ explaining why the extra background is useful.
 | [`src/render3d/axes.h`](src/render3d/axes.h) | Axes render entrypoint |
 | [`src/render3d/render3d_transition.c`](src/render3d/render3d_transition.c) | Pure grid/axes show↔hide fade state machine (`render3d_xn_init/set/show/tick`); no GL, one instance per overlay |
 | [`src/render3d/depth_viz.c`](src/render3d/depth_viz.c) | Depth-buffer visualization: pure depth→luminance conversion core (`render3d_depth_viz_map` — linearize via the active projection, LINEAR/SCENE normalization with EMA-smoothed range, clamped, near=bright/background=black) plus the GL shell (fill-end `glReadPixels` capture excluding grid/backdrop, POT `GL_LUMINANCE` texture quad via the shared `render3d_post_2d_begin/_end` bracket, pixel-aligned SPLIT crop). Config row "Depth view" (Ctrl+N); controller forces Off when the context can't read depth (web) |
-| [`src/render3d/depth_viz.h`](src/render3d/depth_viz.h) | [`Render3dDepthVizMode`](src/render3d/depth_viz.h) / `Render3dDepthVizRange` + reset/capture/render/map API |
+| [`src/render3d/depth_viz.h`](src/render3d/depth_viz.h) | [`Render3dDepthVizMode`](src/render3d/depth_viz.h) / [`Render3dDepthVizRange`](src/render3d/depth_viz.h#L49) + reset/capture/render/map API |
 | [`src/render3d/render3d_transition.h`](src/render3d/render3d_transition.h) | Transition machine API: [`Render3dXnState`](src/render3d/render3d_transition.h#L55), [`Render3dXnPhase`](src/render3d/render3d_transition.h#L34), entry points |
 | [`src/render3d/render.h`](src/render3d/render.h) | Declares `render3d_draw_scene(Render3dState *, const Render3dRenderConfig *)`, `render3d_state_init(...)`, `render3d_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the render3d module owns no camera type or apply helper |
 | [`src/render3d/backdrop.c`](src/render3d/backdrop.c) | Backdrop mode dispatch and deterministic cityscape renderer |
@@ -800,7 +800,7 @@ explaining why the extra background is useful.
 
 ### Rendering Pipeline
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L133) in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) drives each frame.
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L140) in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) drives each frame.
 [`gl_repl.c`](gl_repl.c) registers the GLUT display callback and forwards directly — there
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
