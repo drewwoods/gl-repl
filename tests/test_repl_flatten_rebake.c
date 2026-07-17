@@ -31,8 +31,10 @@
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
 #include "repl/state.h"
+#include "repl/state_notify.h"
 #include "repl/state_owners.h"
 #include "source_document.h"
+#include "support/cpuprof.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -418,6 +420,77 @@ static void test_real_scene_time_routes(void) {
                                  REPL_FLAT_REFRESH_FULL);
 }
 
+static int profile_histogram_samples(ProfSection section) {
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    int total = 0;
+
+    prof_section_histogram(section, bins, PROF_HISTOGRAM_BIN_COUNT);
+    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++)
+        total += (int)bins[i];
+    return total;
+}
+
+/* The display-frame scope must turn an initial refresh plus N motion-blur
+ * refreshes into one profiler sample. Outside that scope the same public
+ * boundary remains one-sample-per-call for exports/debug/replay/bench. This
+ * checks histogram publication counts rather than wall-clock magnitudes so
+ * the contract is deterministic under sanitizers and slow CI hosts. */
+static void test_refresh_profile_frame_aggregation(void) {
+    static const char *const scene[] = {
+        "glVertex3f(t, 0, 0);",
+        NULL
+    };
+
+    printf("--- refresh: displayed-frame profile aggregation ---\n");
+    load_scene(scene);
+
+    prof_test_reset();
+    repl_state_time_set(1.0f);
+    ASSERT_INT("standalone rebake refresh 1",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_REBAKE);
+    repl_state_time_set(2.0f);
+    ASSERT_INT("standalone rebake refresh 2",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_REBAKE);
+    ASSERT_INT("standalone rebakes publish per-call parent samples",
+               profile_histogram_samples(PROF_REBAKE), 2);
+    ASSERT_INT("standalone rebakes publish per-call eval samples",
+               profile_histogram_samples(PROF_REBAKE_EVAL), 2);
+
+    prof_test_reset();
+    repl_flat_refresh_profile_frame_begin();
+    repl_state_time_set(3.0f);
+    ASSERT_INT("frame rebake refresh 1",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_REBAKE);
+    repl_state_time_set(4.0f);
+    ASSERT_INT("frame rebake refresh 2",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_REBAKE);
+    repl_flat_refresh_profile_frame_end();
+    ASSERT_INT("frame rebakes commit one parent total",
+               profile_histogram_samples(PROF_REBAKE), 1);
+    ASSERT_INT("frame rebakes commit one eval-walk total",
+               profile_histogram_samples(PROF_REBAKE_EVAL), 1);
+    ASSERT_TRUE("rebake parent contains eval-walk child",
+                prof_section_last_us(PROF_REBAKE) >=
+                    prof_section_last_us(PROF_REBAKE_EVAL));
+
+    prof_test_reset();
+    repl_flat_refresh_profile_frame_begin();
+    repl_state_mark_flat_dirty();
+    ASSERT_INT("frame full refresh 1",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_FULL);
+    repl_state_mark_flat_dirty();
+    ASSERT_INT("frame full refresh 2",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_FULL);
+    repl_flat_refresh_profile_frame_end();
+    ASSERT_INT("frame full refreshes commit one parent total",
+               profile_histogram_samples(PROF_FLATTEN), 1);
+    ASSERT_INT("frame full refreshes commit one reparse-child total",
+               profile_histogram_samples(PROF_FLATTEN_REPARSE), 1);
+    ASSERT_TRUE("flatten parent contains reparse child",
+                prof_section_last_us(PROF_FLATTEN) >=
+                    prof_section_last_us(PROF_FLATTEN_REPARSE));
+}
+
 /* Exercise every predefined root which each built-in's dependency analysis
  * classifies as value-only. This is the corpus-scale contract Phase 3 relies
  * on: rebake and a warm full flatten must agree from the same pre-refresh
@@ -490,6 +563,7 @@ int main(void) {
     test_midwalk_failure_rolls_back_before_full();
     test_negative_flat_count_is_invalid();
     test_real_scene_time_routes();
+    test_refresh_profile_frame_aggregation();
     test_corpus_value_only_rebakes();
     return test_harness_report(&g_harness, "test_repl_flatten_rebake");
 }

@@ -80,6 +80,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_FLATTEN_VAR_ASSIGN]                = { "var assign",      1, 0 },
     [PROF_FLATTEN_SCRATCH_ASSIGN]            = { "scratch assign",  1, 0 },
     [PROF_REBAKE]                            = { "Rebake",          0, 0 },
+    [PROF_REBAKE_EVAL]                       = { "eval walk",        1, 0 },
     [PROF_REFORMAT]                          = { "Reformat",        0, 0 },
     [PROF_AUTONORMAL]                        = { "Autonormal",      0, 0 },
     [PROF_REPLAY_HUD]                        = { "Replay HUD",      0, 0 },

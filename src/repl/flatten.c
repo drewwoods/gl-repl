@@ -32,6 +32,60 @@
  * index must be < this to be representable as `1u << slot` in the mask. */
 #define FUNC_SCOPE_MASK_BITS 32
 
+/* The display controller can issue one refresh at frame top and another for
+ * every accumulation-time-blur sample. Keep that frame aggregation behind
+ * the live refresh boundary: export/debug/replay callers still publish their
+ * one refresh immediately, while the frame commits one total after its last
+ * subframe. The flags also keep the existing full-flatten child rows aligned
+ * with their now-accumulated parent. */
+typedef struct {
+    int active;
+    int flatten_sampled;
+    int rebake_sampled;
+} FlatRefreshProfileFrame;
+
+static FlatRefreshProfileFrame g_flat_refresh_profile_frame;
+
+static void flat_refresh_profile_end(ProfSection section) {
+    if (g_flat_refresh_profile_frame.active)
+        prof_accum_end(section);
+    else
+        prof_end(section);
+}
+
+void repl_flat_refresh_profile_frame_begin(void) {
+    g_flat_refresh_profile_frame.active = 1;
+    g_flat_refresh_profile_frame.flatten_sampled = 0;
+    g_flat_refresh_profile_frame.rebake_sampled = 0;
+
+    prof_accum_reset(PROF_FLATTEN);
+    prof_accum_reset(PROF_FLATTEN_REPARSE);
+    prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
+    prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
+    prof_accum_reset(PROF_REBAKE);
+    prof_accum_reset(PROF_REBAKE_EVAL);
+}
+
+void repl_flat_refresh_profile_frame_end(void) {
+    if (!g_flat_refresh_profile_frame.active)
+        return;
+
+    /* Optional refresh sections preserve their last sample and naturally
+     * become stale on frames where they do not run. Do not publish an empty
+     * zero merely because the display frame opened an accumulation scope. */
+    if (g_flat_refresh_profile_frame.flatten_sampled) {
+        prof_accum_commit(PROF_FLATTEN);
+        prof_accum_commit(PROF_FLATTEN_REPARSE);
+        prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
+        prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
+    }
+    if (g_flat_refresh_profile_frame.rebake_sampled) {
+        prof_accum_commit(PROF_REBAKE);
+        prof_accum_commit(PROF_REBAKE_EVAL);
+    }
+    g_flat_refresh_profile_frame.active = 0;
+}
+
 /* Read the source text for command index `i` through the editor
  * buffer view threaded into the flatten context, falling back to ""
  * if unset. The view is supplied by `ReplFlattenOptions.text`. */
@@ -1146,13 +1200,17 @@ int repl_flatten_program(const ReplFlattenOptions *options,
      * commit once so the profile panel shows per-flatten totals under the
      * PROF_FLATTEN parent. The structural remainder (loop/if/call iteration)
      * is the unattributed difference, as elsewhere in the panel. */
-    prof_accum_reset(PROF_FLATTEN_REPARSE);
-    prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
-    prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
+    if (!g_flat_refresh_profile_frame.active) {
+        prof_accum_reset(PROF_FLATTEN_REPARSE);
+        prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
+        prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
+    }
     flatten_range(&ctx, 0, ctx.source_count, NULL, NULL, 0, -1, -1, 0);
-    prof_accum_commit(PROF_FLATTEN_REPARSE);
-    prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
-    prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
+    if (!g_flat_refresh_profile_frame.active) {
+        prof_accum_commit(PROF_FLATTEN_REPARSE);
+        prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
+        prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
+    }
     if (ctx.abort) {
         ctx.flat_count = 0;
     } else if (ctx.capacity_exceeded) {
@@ -1349,7 +1407,12 @@ static int flatten_rebake_live(void) {
         .flat_count = flat_program->cmd_count,
         .expr_cache = flatten_live_expr_cache(),
     };
+    /* One bracket around the complete compiled-expression walk keeps this
+     * diagnostic useful without adding a clock read around every argument.
+     * The parent also includes baseline copies, rollback, and dirty routing. */
+    prof_begin(PROF_REBAKE_EVAL);
     rv = repl_flatten_rebake_program(&options, &result);
+    flat_refresh_profile_end(PROF_REBAKE_EVAL);
 
     if (!rv) {
         repl_restore_predef_values(base_predef, MAX_PREDEF_VARS);
@@ -1405,7 +1468,9 @@ static ReplFlatRefreshKind flatten_refresh_live(int edit_line_idx,
         int rebaked;
         prof_begin(PROF_REBAKE);
         rebaked = flatten_rebake_live();
-        prof_end(PROF_REBAKE);
+        flat_refresh_profile_end(PROF_REBAKE);
+        if (g_flat_refresh_profile_frame.active)
+            g_flat_refresh_profile_frame.rebake_sampled = 1;
         if (rebaked)
             return REPL_FLAT_REFRESH_REBAKE;
     }
@@ -1416,7 +1481,9 @@ static ReplFlatRefreshKind flatten_refresh_live(int edit_line_idx,
     prof_begin(PROF_FLATTEN);
     repl_flatten_commands(edit_line_idx);
     repl_state_flat_program_clear_dirty();
-    prof_end(PROF_FLATTEN);
+    flat_refresh_profile_end(PROF_FLATTEN);
+    if (g_flat_refresh_profile_frame.active)
+        g_flat_refresh_profile_frame.flatten_sampled = 1;
     return REPL_FLAT_REFRESH_FULL;
 }
 

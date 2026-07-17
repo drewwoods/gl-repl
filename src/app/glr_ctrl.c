@@ -1913,6 +1913,10 @@ void glr_ctrl_display_frame(void) {
     }
     gpu_prof_frame_begin();
     prof_begin(PROF_FRAME_TOTAL);
+    /* The first refresh below and any time-blur refreshes inside Render 3D
+     * are one displayed-frame cost. The REPL boundary retains direct timing
+     * for export/debug/replay callers outside this scope. */
+    repl_flat_refresh_profile_frame_begin();
 
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
@@ -2058,6 +2062,11 @@ void glr_ctrl_display_frame(void) {
      * the rare sub-step whose count differs, before HUD/snapshot readers run. */
     if (repl_state_flat_program_count() != saved_flat_count)
         repl_state_flat_program_set_count(saved_flat_count);
+
+    /* All accumulation subframes have completed, so publish one frame-total
+     * Flatten/Rebake sample (and their diagnostic children) before the
+     * profile panel reads them below. */
+    repl_flat_refresh_profile_frame_end();
 
     int frame_replaying = replay_active();
     if (frame_replaying) {

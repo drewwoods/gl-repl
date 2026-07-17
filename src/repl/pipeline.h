@@ -25,6 +25,12 @@ ReplFlatRefreshKind repl_refresh_flat_program(int edit_line_idx);
  * same structural-vs-value decision as the pending refresh above. */
 ReplFlatRefreshKind repl_refresh_flat_program_for_deps(
     int edit_line_idx, ReplExprDepMask changed_deps);
+/* Fold the frame's initial refresh and any accumulation-blur subframe
+ * refreshes into one published PROF_FLATTEN / PROF_REBAKE sample. Standalone
+ * refresh callers need no scope: they continue to publish one sample per
+ * call. The display controller must close every scope it opens. */
+void repl_flat_refresh_profile_frame_begin(void);
+void repl_flat_refresh_profile_frame_end(void);
 void repl_recompute_autonormals(int autonormal_enabled,
                                 int *edit_line_inout);
 void repl_refresh_camera_lines(void);

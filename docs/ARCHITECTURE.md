@@ -1227,7 +1227,7 @@ line to stderr that distinguishes the two causes:
   (GL_VERSION ...)"` (and points at the env var for forced testing).
 
 > [!WARNING]
-> Detection MUST run before [`repl_apply_init_bootstrap()`](../src/repl/pipeline.h#L33) in the same
+> Detection MUST run before [`repl_apply_init_bootstrap()`](../src/repl/pipeline.h#L39) in the same
 > function: on unsupported hardware the injected `point_attenuation` bootstrap
 > entry has to be skipped entirely rather than invoking the missing entry
 > point.
