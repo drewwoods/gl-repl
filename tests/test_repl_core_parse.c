@@ -1581,6 +1581,118 @@ int main(void) {
         }
     }
 
+    /* glPushAttrib - the second ENUM_BITFIELD mask slot (shares glClear's
+     * parser branch: |-parse, canonical table order, dupe-drop, expression
+     * rejection). glPopAttrib is the zero-arg partner. */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPushAttrib(GL_CURRENT_BIT)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(one bit) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib type", cmd.type == CMD_PUSH_ATTRIB);
+        ASSERT_TRUE("glPushAttrib num_args", cmd.num_args == 1);
+        ASSERT_TRUE("glPushAttrib single-bit mask",
+                    (GLbitfield)cmd.args[0] == GL_CURRENT_BIT);
+        ASSERT_TRUE("glPushAttrib single-bit canonicalized",
+                    strstr(cmd_text, "glPushAttrib(GL_CURRENT_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(two bits) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib two-bit mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_CURRENT_BIT | GL_LINE_BIT));
+        ASSERT_TRUE("glPushAttrib two-bit canonicalized",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT);") != NULL);
+    }
+    {
+        /* Reversed, unspaced input emits in canonical table order (ascending
+         * GL value), so a mask has exactly one canonical spelling. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPushAttrib(GL_ENABLE_BIT|GL_LIGHTING_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(reversed, unspaced) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib reversed mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_LIGHTING_BIT | GL_ENABLE_BIT));
+        ASSERT_TRUE("glPushAttrib reversed emits in table order",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_LIGHTING_BIT | GL_ENABLE_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPushAttrib(GL_ENABLE_BIT | GL_ENABLE_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(repeated bit) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib repeated bit deduped",
+                    strstr(cmd_text, "glPushAttrib(GL_ENABLE_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        /* Same mask policy as glClear: numeric literals, unsupported bits
+         * (incl. GL_ALL_ATTRIB_BITS, deliberately excluded), expressions,
+         * variables and empty terms all reject rather than resolve. */
+        static const char *k_bad[] = {
+            "glPushAttrib(1)",
+            "glPushAttrib(GL_CURRENT_BIT + GL_LINE_BIT)",
+            "glPushAttrib(GL_STENCIL_BUFFER_BIT)",
+            "glPushAttrib(GL_ALL_ATTRIB_BITS)",
+            "glPushAttrib(x)",
+            "glPushAttrib()",
+            "glPushAttrib(GL_CURRENT_BIT | )",
+            "glPushAttrib(GL_CURRENT_BIT || GL_LINE_BIT)",
+        };
+        for (int i = 0; i < (int)(sizeof(k_bad) / sizeof(k_bad[0])); i++) {
+            memset(&cmd, 0, sizeof(cmd));
+            ASSERT_TRUE(k_bad[i], parse_for_test(k_bad[i], &cmd) == 0);
+        }
+    }
+    {
+        /* glPopAttrib: zero-arg partner (mirrors glEnd / glPopMatrix). */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPopAttrib()", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPopAttrib() parse ok", ok == 1);
+        ASSERT_TRUE("glPopAttrib type", cmd.type == CMD_POP_ATTRIB);
+        ASSERT_TRUE("glPopAttrib canonicalized",
+                    strstr(cmd_text, "glPopAttrib();") != NULL);
+    }
+    {
+        /* Like glPopMatrix/glEnd, glPopAttrib ignores a stray payload rather
+         * than rejecting it: it parses as CMD_POP_ATTRIB and the canonical
+         * text drops the argument. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPopAttrib(GL_CURRENT_BIT)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPopAttrib(stray arg) parses as pop", ok == 1);
+        ASSERT_TRUE("glPopAttrib(stray arg) type", cmd.type == CMD_POP_ATTRIB);
+        ASSERT_TRUE("glPopAttrib(stray arg) drops payload",
+                    strstr(cmd_text, "glPopAttrib();") != NULL);
+    }
+
     /* glEdgeFlag - bool-enum state command */
     {
         glr_ctrl_reset_all();
