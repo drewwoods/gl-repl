@@ -26,6 +26,9 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Opening of glMaterialfv's canonical value literal. */
+#define CP_MATERIAL_VALUE_MARKER "(GLfloat[]){"
+
 static const GLCmd *cp_cmd_at(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return NULL;
@@ -37,6 +40,20 @@ static int glr_cp_read_color(int cmd_idx, float *r, float *g, float *b, float *a
     const GLCmd *cmd = cp_cmd_at(cmd_idx);
     if (!cmd || !cmd->valid || cmd->has_vars)
         return 0;
+    if (cmd->type == CMD_MATERIALFV) {
+        /* face/pname occupy args[0..1]; the RGBA values land at args[2..5].
+         * A GL_SHININESS material carries one value (num_args == 3) and has
+         * no color to pick. */
+        if (cmd->num_args != 6)
+            return 0;
+        if (r) *r = cmd->args[2];
+        if (g) *g = cmd->args[3];
+        if (b) *b = cmd->args[4];
+        if (a) *a = cmd->args[5];
+        if (has_alpha) *has_alpha = 1;
+        if (value_max) *value_max = 1.0f;
+        return 1;
+    }
     if (cmd->type != CMD_COLOR3F && cmd->type != CMD_COLOR4F &&
         cmd->type != CMD_TESS_COLOR && cmd->type != CMD_CLEAR_COLOR)
         return 0;
@@ -75,6 +92,20 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
     } else if (cmd->type == CMD_TESS_COLOR) {
         written = snprintf(new_line, sizeof(new_line),
                            "gluColor(%g, %g, %g, %g);", r, g, b, a);
+    } else if (cmd->type == CMD_MATERIALFV) {
+        /* face/pname are baked as GLenum values in args[0..1] with no
+         * reverse name map, so rewrite only the compound literal and keep
+         * the source's own tokens. The parser canonicalizes every accepted
+         * form (incl. the flat shorthand) to `(GLfloat[]){...}`, so the
+         * marker is always present in committed text. */
+        const char *line = editor_buffer_view_line(editor_buffer_view(), cmd_idx);
+        const char *lit  = line ? strstr(line, CP_MATERIAL_VALUE_MARKER) : NULL;
+        if (!lit)
+            return 0;
+        int prefix_len = (int)(lit - line) + (int)strlen(CP_MATERIAL_VALUE_MARKER);
+        written = snprintf(new_line, sizeof(new_line),
+                           "%.*s%g, %g, %g, %g});",
+                           prefix_len, line, r, g, b, a);
     } else {
         return 0;
     }

@@ -768,24 +768,20 @@ static void glr_ctrl_push_color_transformers(void) {
     editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
     for (int i = 0; i < doc_count; i++) {
-        if (!color_picker_can_edit_cmd(i))
+        float r, g, b, a;
+        int has_alpha;
+        if (!color_picker_read_cmd_color(i, &r, &g, &b, &a, &has_alpha))
             continue;
-        const GLCmd *cmd = repl_state_document_cmd_at(i);
-        if (!cmd)
-            continue;
-        int has_alpha = (cmd->type == CMD_COLOR4F ||
-                         cmd->type == CMD_TESS_COLOR ||
-                         cmd->type == CMD_CLEAR_COLOR);
         UiTransformer t = {
             .line_idx = i,
             .char_start = -1,
             .char_end = -1,
             .kind = TRANSFORMER_COLOR_PICKER,
             .state.color = {
-                .r = cmd->args[0],
-                .g = cmd->args[1],
-                .b = cmd->args[2],
-                .a = has_alpha ? cmd->args[3] : 1.0f,
+                .r = r,
+                .g = g,
+                .b = b,
+                .a = a,
                 .has_alpha = has_alpha,
             },
         };

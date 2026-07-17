@@ -140,7 +140,7 @@ void color_picker_hsv_to_rgb(float h, float s, float v,
 
 /* Open the picker on a specific source command. cmd_idx must satisfy
  * color_picker_can_edit_cmd (CMD_COLOR3F / CMD_COLOR4F / CMD_TESS_COLOR /
- * CMD_CLEAR_COLOR with constant args). my is the GLUT screen y where the
+ * CMD_CLEAR_COLOR / RGBA CMD_MATERIALFV with constant args). my is the GLUT screen y where the
  * picker was triggered (used for vertical anchoring). No-op if the
  * command is not editable. */
 void color_picker_start(int cmd_idx, int my);
@@ -153,9 +153,16 @@ void color_picker_state_reset(void);
 /* Source-cmd index of the open picker, or -1 when closed. */
 int  color_picker_active_line(void);
 
-/* Returns 1 if cmd_idx is a glColor3f/glColor4f/gluColor/glClearColor
- * with constant arguments; 0 otherwise. */
+/* Returns 1 if cmd_idx is a glColor3f/glColor4f/gluColor/glClearColor, or
+ * an RGBA glMaterialfv, with constant arguments; 0 otherwise. */
 int  color_picker_can_edit_cmd(int cmd_idx);
+
+/* Same test as color_picker_can_edit_cmd, but also reports the command's
+ * current color. Lets the code panel's inline swatch read the color through
+ * the same host path the picker edits, instead of reaching into per-type
+ * argument layouts of its own. Any out param may be NULL. */
+int  color_picker_read_cmd_color(int cmd_idx, float *r, float *g, float *b,
+                                 float *a, int *has_alpha);
 
 /* Snapshot of picker state for the current frame. Cheap to call (returns
  * a value); UI code should call this once per frame and pass the result
