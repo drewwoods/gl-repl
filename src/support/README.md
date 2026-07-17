@@ -1,4 +1,4 @@
-# `src/support/` — Neutral shared utilities
+# `src/support/` — Neutral shared utilities (Draft)
 
 Home for small, dependency-light helpers that don't belong to any of the
 layered modules (`repl`, `editor`, `render3d`, `ui`, `app`, `subsystems`).

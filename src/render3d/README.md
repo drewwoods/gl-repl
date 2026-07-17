@@ -1,4 +1,4 @@
-# `src/render3d` — the 3D renderer
+# `src/render3d` — the 3D renderer (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative

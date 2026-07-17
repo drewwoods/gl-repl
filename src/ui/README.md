@@ -1,4 +1,4 @@
-# `src/ui` — the 2D view + hit-test layer
+# `src/ui` — the 2D view + hit-test layer (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative

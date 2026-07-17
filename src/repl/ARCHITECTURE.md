@@ -1,4 +1,4 @@
-# `src/repl` — Architecture
+# `src/repl` — Architecture (Draft)
 
 > The deep companion to [`README.md`](README.md). The README is the
 > one-screen orientation ("what a REPL pipeline is, what files exist");

@@ -1,4 +1,4 @@
-# Third-Party Licenses
+# Third-Party Licenses (Draft)
 
 This project bundles the following third-party components. Their licenses are
 reproduced (or pointed to) below; all are permissive.
