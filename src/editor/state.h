@@ -403,6 +403,12 @@ const UiHighlightList   *editor_state_highlights(void);
 void                         editor_state_highlights_clear(void);
 int                          editor_state_highlights_append(int line_idx, int char_start,
                                                             int char_end, UiHighlightKind kind);
+/* Same, but carries the kind-specific `aux` payload (bit-index mask for
+ * HIGHLIGHT_ATTRIB_STATE, single bit index for HIGHLIGHT_ATTRIB_BIT_TOKEN).
+ * The plain _append above forwards here with aux=0. */
+int                          editor_state_highlights_append_aux(int line_idx, int char_start,
+                                                                int char_end, UiHighlightKind kind,
+                                                                int aux);
 
 const UiVirtualLineList *editor_state_virtual_lines(void);
 void                         editor_state_virtual_lines_clear(void);

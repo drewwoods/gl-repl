@@ -633,8 +633,9 @@ void editor_state_highlights_clear(void) {
     g_editor_state.highlights.count = 0;
 }
 
-int editor_state_highlights_append(int line_idx, int char_start,
-                                   int char_end, UiHighlightKind kind) {
+int editor_state_highlights_append_aux(int line_idx, int char_start,
+                                       int char_end, UiHighlightKind kind,
+                                       int aux) {
     UiHighlightList *list = &g_editor_state.highlights;
     if (list->count >= MAX_HIGHLIGHTS)
         return 0;
@@ -643,8 +644,15 @@ int editor_state_highlights_append(int line_idx, int char_start,
         .char_start = char_start,
         .char_end = char_end,
         .kind = kind,
+        .aux = aux,
     };
     return 1;
+}
+
+int editor_state_highlights_append(int line_idx, int char_start,
+                                   int char_end, UiHighlightKind kind) {
+    return editor_state_highlights_append_aux(line_idx, char_start, char_end,
+                                              kind, 0);
 }
 
 const UiVirtualLineList *editor_state_virtual_lines(void) {
