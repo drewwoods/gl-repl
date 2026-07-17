@@ -235,13 +235,26 @@ flatten from the dependency/dirty state and owns the matching profiler
 section. A failed rebake restores its value-table baseline and full-flattens
 before returning. While animation is playing, advancing `t` is routed by its
 dependency bit: stable value-only scenes rebake, while `t`-dependent loops or
-conditions full-flatten. Accumulation AA, replay overlay passes, and vertex
+conditions full-flatten. Ordinary jitter AA, replay overlay passes, and vertex
 outlines reuse the same frame-level
 [`FlatProgramView`](../src/repl/flatten.h#L46)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
 side-effect brackets restore predefined variables and scratch arrays so
 self-referential assignments do not compound across AA samples.
+
+**Dependency-aware rebaking is load-bearing for accumulation time blur.** Time
+blur is the exception to the frame-level reuse above: each of its 2/4/8/12/16
+samples sets a different transient `t` and calls
+[`repl_refresh_flat_program_for_deps()`](../src/repl/pipeline.h#L26) before rendering. Phase 3 routes each
+sample through the existing flat topology when `t` changes values only; scenes
+whose loops, selected branches, or call snapshots depend on `t` still take the
+full-flatten fallback. A saving that looks modest in a one-refresh benchmark is
+therefore paid back once per sample—up to sixteen times in one displayed
+frame. In practice this is what makes **Accum Blur** feasible for most
+stable-topology examples, especially in the Emscripten build where repeated
+full flattening is substantially more expensive. Evaluate this optimization
+with accumulated *frame* cost, not only the steady-state cost of one refresh.
 
 ### Editor-Owned Text
 

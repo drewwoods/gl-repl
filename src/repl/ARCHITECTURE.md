@@ -339,6 +339,16 @@ nothing. A full flatten always clears `args_dirty_mask` — it subsumes any
 pending value dirt. The source-uses-time cache is still refreshed lazily on the
 next time query, for the blur-axis use.
 
+This routing has a larger effect on **Accum Blur** than its single-refresh
+timings suggest. Time blur samples 2/4/8/12/16 transient `t` values per
+displayed frame and calls
+[`repl_refresh_flat_program_for_deps()`](pipeline.h#L26) for every sample. For a stable-topology
+scene, Phase 3 turns all of those refreshes into in-place rebakes; only a
+structural `t` dependency requires full flattening. The avoided work therefore
+scales with the accumulation-pass count. Testing shows this is the practical
+enabler for time blur on most examples, particularly under Emscripten, rather
+than merely a roughly 0.2 ms refinement to an ordinary one-sample frame.
+
 ---
 
 ## 4. The edit flow (compile → apply)
@@ -1163,10 +1173,10 @@ next `t` tick scans real source text with `repl_eval_source_uses_ident(...,
 "t")`. If no real `t` token appears, the tick leaves the flat program clean and
 the profile panel's flattening section drops to zero for static examples such as
 the parametric torus. Full time-motion blur uses the same query before doing
-sub-frame re-flattens.
+sub-frame refreshes.
 
-The remaining improvement is a stricter structure-stability check **paired
-with an in-place arg re-bake pass**. (Skipping the re-flatten outright would
+Phase 3 adds a stricter structure-stability check **paired with an in-place arg
+re-bake pass**. (Skipping the re-flatten outright would
 freeze the animation: the executor consumes baked args and evaluates nothing —
 §13.4 — so something must still re-bake `has_vars` args each frame.)
 
@@ -1180,9 +1190,12 @@ freeze the animation: the executor consumes baked args and evaluates nothing —
   so every flat-array consumer keeps working by construction. If it can,
   re-flatten as today.
 
-This removes the ~8 ms for the typical "`t` only drives vertices / colors /
-transforms" program with no executor rewrite. The hard part is the
-classifier: it must be conservative (assignment chains, scratch arrays, and
+Against the original parser-heavy path this removes most of a multi-millisecond
+full flatten for the typical "`t` only drives vertices / colors / transforms"
+program with no executor rewrite. After Phase 2 made one warm full flatten much
+cheaper, Phase 3 can look like only a small additional win in isolation; Accum
+Blur makes that win material by repeating it for every sample. The hard part is
+the classifier: it must be conservative (assignment chains, scratch arrays, and
 `funcN` params can launder `t` into a bound), and getting it wrong silently
 freezes an animation. A safe cut is a whole-program property computed once
 per edit (not per frame): re-flatten unless every `for` header, `if` /
