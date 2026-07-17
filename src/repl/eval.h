@@ -3,7 +3,7 @@
  *
  * Recursive-descent expression evaluator for the REPL math layer. Supports
  * binary operators (+, -, *, /, %), unary minus, parentheses, function
- * calls (sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil, fmod, rem,
+ * calls (sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil, round, fmod, rem,
  * rand, rand2), and constants (PI, TAU, e, NAN, INFINITY). All values are floats.
  *
  * Predefined variables (float x, y, z, t, etc.) are declared via

@@ -353,6 +353,7 @@ static float builtin_min(const float *args)   { return args[0] < args[1] ? args[
 static float builtin_max(const float *args)   { return args[0] > args[1] ? args[0] : args[1]; }
 static float builtin_floor(const float *args) { return floorf(args[0]); }
 static float builtin_ceil(const float *args)  { return ceilf(args[0]); }
+static float builtin_round(const float *args) { return roundf(args[0]); }
 static float builtin_fmod(const float *args)  { return fmodf(args[0], args[1]); }
 static float builtin_rem(const float *args)   { return remainderf(args[0], args[1]); }
 static float builtin_log(const float *args)   { return log10f(args[0]); }
@@ -373,6 +374,7 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "max",   "fmaxf",      2, 2, builtin_max   },
     { "floor", "floorf",     1, 1, builtin_floor },
     { "ceil",  "ceilf",      1, 1, builtin_ceil  },
+    { "round", "roundf",     1, 1, builtin_round },
     { "fmod",  "fmodf",      2, 2, builtin_fmod  },
     { "rem",   "remainderf", 2, 2, builtin_rem   },
     { "rand",  "repl_randf", 1, 2, builtin_rand  },
