@@ -237,6 +237,26 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
   an inner pop.
 - `tests/test_repl_core_extra.c` (~:1845): collect_unbalanced with orphan push/pop-attrib
   and mixed matrix/attrib nesting.
+- **Real-GL oracle: `tests/test_attrib_bits_gl.c` (register in `GL_TEST_BINS`, run via
+  `make gl-tests` / `make gl-tests FREEGLUT_OSMESA=1`).** The `attrib_bits.c` cell→bit
+  coverage (`cell_cover` / `repl_attrib_bits_for_cmd`) is a *claim about real GL semantics*
+  — "clear color rides `GL_COLOR_BUFFER_BIT`", "color-material face/mode ride
+  `GL_LIGHTING_BIT`", "depth func rides `GL_DEPTH_BUFFER_BIT`", etc. This test uses a live
+  GL context (GLUT, same setup as `test_ui_gl_state.c`) as the oracle: for each supported
+  bit and each representative state cell the table maps to it, run
+  `set(V1) → glPushAttrib(bit) → set(V2) → glPopAttrib() → glGet == V1` to prove the bit
+  **covers** the cell, and a negative pass `glPushAttrib(other_bit) → set(V2) → glPopAttrib()
+  → glGet == V2` with a bit the table says does *not* cover it, to prove the mapping isn't
+  **over-broad**. Drives the same GL calls the executor emits (`glColor*`, `glEnable`,
+  `glColorMaterial`, `glDepthFunc`, `glClearColor`, `glLineWidth`, `glClipPlane`, …) and reads
+  back with `glGetFloatv` / `glGetMaterialfv` / `glIsEnabled` / `glGetClipPlane` — reusing
+  the `assert_*_state` helpers already in `test_ui_gl_state.c`. It queries GL state only (no
+  pixels), so the OSMesa colour-render caveat doesn't apply and it runs headless. This is a
+  direct table-vs-driver check (no REPL document needed) and is the load-bearing guard that
+  the bit membership the whole feature rests on matches the GL the executor actually drives;
+  the stub-based `_cmd_writes` / collector tests above cover the *derivation* logic layered
+  on top of it. Keep it out of `TEST_BINS` (needs a real context), like the other
+  `GL_TEST_BINS`.
 - `tests/test_repl_executor.c`: orphan pop leaves depth 0; pairing; unwind at cursor_end;
   virtual depth past the cap (e.g. 12 pushes) pairs down cleanly; bookkeeping restore
   (clear color under COLOR_BUFFER_BIT, light enable under ENABLE_BIT), plus
