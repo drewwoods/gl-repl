@@ -1,16 +1,15 @@
 # Flatten Performance Without a Control-Flow VM
 
-## Status — PARTIAL (reassessed 2026-07-17)
+## Status — DONE (2026-07-17)
 
-Phases 0–2 landed on `main`: the representative benchmarks, direct evaluator
-paths, slider transaction split, and compiled-expression cache. Phase 3's
-dependency-aware in-place rebake was initially deferred because a
+Phases 0–3 landed on `main`: representative benchmarks, direct evaluation,
+the slider transaction split, compiled-expression programs, dependency-aware
+dirty routing, and in-place rebaking. Phase 3 was initially deferred because a
 single-refresh benchmark showed only a modest gain. Subsequent Accum Blur
 testing changed that conclusion: time blur refreshes at every accumulation
-sample, making Phase 3 the practical enabler for most examples—especially in
-the Emscripten build. It remains preserved on
-`origin/codex/improve-flatten-phase3` pending a landing decision informed by
-full accumulated-frame cost rather than one-refresh timing.
+sample, making rebaking the practical enabler for most examples—especially in
+the Emscripten build. The completed implementation keeps full flattening as
+the correctness fallback for structurally dynamic programs.
 
 ## Summary
 
@@ -25,26 +24,26 @@ model or introducing a control-flow VM. The work has two complementary parts:
    only its values in place.
 
 The executor, replay PC model, provenance, flat-command queries, autonormal,
-guides, PLY export, and the `MAX_FLAT_COMMANDS` flat buffer remain unchanged. A full
-flatten remains the correctness fallback for edits, cache misses/overflow, and
-changes that can affect topology. “Topology” includes flat-stream cardinality:
-a `t`-dependent condition inside an unrolled loop can add or remove commands on
-every frame.
+guides, PLY export, and the `MAX_FLAT_COMMANDS` flat buffer remain unchanged. A
+full flatten remains the correctness fallback for edits, cache misses/overflow,
+and changes that can affect topology. “Topology” includes flat-stream
+cardinality: a `t`-dependent condition inside an unrolled loop can add or remove
+commands on every frame.
 
 This plan supersedes **Phase A and Phase A.5** of
 `docs/plans/not-started/rethinking-flattening-behaviour.md`. Its VM phase remains
 separate future work and is explicitly out of scope here.
 
-## Branch status (reassessed 2026-07-17)
+## Landing status (2026-07-17)
 
-This document's Phase 3 implementation and measurements live on
-`codex/improve-flatten-phase3`, based directly on `main`. The earlier landing
-recommendation considered the roughly 0.2 ms saving for one eligible refresh
-and undervalued the optimization. Accum Blur performs 2/4/8/12/16 refreshes per
-displayed frame, so that saving compounds with the sample count; Emscripten
-makes the avoided full-flatten work more significant again. Structurally
-dynamic examples still require the full path, but for most stable-topology
-examples Phase 3 is now considered necessary to make time blur practical.
+Phase 3 was developed and verified on `codex/improve-flatten-phase3`, then
+landed on `main`. The earlier recommendation considered the roughly 0.2 ms
+saving for one eligible refresh and undervalued the optimization. Accum Blur
+performs 2/4/8/12/16 refreshes per displayed frame, so that saving compounds
+with the sample count; Emscripten makes the avoided full-flatten work more
+significant again. Structurally dynamic examples still require the full path,
+but for most stable-topology examples Phase 3 is necessary to make time blur
+practical.
 
 ## Implementation task list (2026-07-10)
 
@@ -68,6 +67,8 @@ examples Phase 3 is now considered necessary to make time blur practical.
   same-machine benchmark numbers.
 - [x] Split Phase 3 runtime, benchmarks, tests, and documentation onto a
   branch based on the cleaned Phase 2 landing history.
+- [x] Reassess Phase 3 against full Accum Blur frame cost and land it on
+  `main`.
 
 ## Measured baseline and conclusions
 
@@ -149,7 +150,20 @@ value-only slider changes.
 
 ### Final verification
 
-The pre-split implementation tree preserved by this branch was checked at
+The rebased landing tip passed:
+
+- `make check-c99`;
+- the full stub suite: 61/61 binaries and 19,146/19,146 assertions;
+- Phase 3 dependency, rebake, and optimized-versus-forced-full differential
+  suites;
+- documentation link/example and pre-push boundary checks.
+
+Manual native and Emscripten testing established the load-bearing performance
+result that the single-refresh benchmark missed: Accum Blur repeats the
+refresh cost for every sample, and rebaking makes the effect practical for
+most stable-topology examples.
+
+The pre-split implementation tree was also checked at
 `1918dc1e`:
 
 - macOS stub pre-push suite: 61/61 binaries and 17,784/17,784 assertions;

@@ -105,6 +105,7 @@ historical context and are not in the table below.
 | `rename-scene-to-render3d.md` | 2026-06-24 | Renamed the 3D scene-renderer module `src/scene/` → `src/render3d/` (`scene_*`/`Scene*`/`SCENE_*` → `render3d_*`/`Render3d*`/`RENDER3D_*`, `render3d_draw_scene`, `Render3dState`, `render3d_demo`, renamed guards/tests, `PROF_RENDER3D_*`) to end the collision with the user-scene concept. Behavior-neutral; user-scene tokens untouched. Includes review. |
 | `audio-menu.md` | 2026-07-06 | Add a top-level Audio menu grouping discovered tracks by source, highlighting the playing track, displaying track duration, and integrating Play/Pause, Next/Previous controls, and loop modes. |
 | `tutorial-setup-scaffold.md` | 2026-07-08 | Locked `TutorialEntry.setup` scaffolds with example-header support, setup-label anchors, catalog validation, and Color Interpolation as the composition example. |
+| `flatten-performance-without-vm.md` | 2026-07-17 | Direct and compiled expression evaluation plus dependency-aware in-place rebaking; preserves full flattening for structural changes and makes multi-sample Accum Blur practical, especially in Emscripten. |
 
 Plans not in this directory are active, partial, not-started, not-landed, or
 external; see the sibling subdirectories.
