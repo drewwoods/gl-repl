@@ -62,6 +62,14 @@ typedef struct {
      * workspace @cfg headers, but intentionally outside the per-example scene
      * snapshot/default-reset subset so F12 example switches do not change it. */
     int winding_view;
+    /* Depth-buffer visualization (Render3dDepthVizMode: Off / Linear /
+     * Scene / Split). Config-backed (GLR_CONFIG_DEPTH_VIZ): like
+     * winding_view it is saved in full workspace @cfg headers but
+     * intentionally outside the per-example scene subset/default-reset,
+     * so F12 example switches keep a debugging view active. The
+     * controller forces the render-config copy to Off when the GL
+     * context cannot read depth (web). */
+    int depth_viz;
     Render3dViewMode ortho_mode;
     /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view:
      * PROJ_PERSPECTIVE = perspective, PROJ_ORTHO = orthographic.

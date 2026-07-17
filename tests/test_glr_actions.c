@@ -920,6 +920,35 @@ static void test_msaa_display_label_override(void) {
     ASSERT_STR("MSAA display label resets", glr_config_item_display_label(item), "MSAA");
 }
 
+/* Depth view row: a 4-state cycle (Off / Linear / Scene / Split) bound
+ * to plain Ctrl+N, with the @cfg slug auto-derived from the label. */
+static void test_depth_viz_row_metadata(void) {
+    const GlrConfigItem *item = NULL;
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *candidate = glr_config_item_at(i);
+        if (candidate && candidate->key == GLR_CONFIG_DEPTH_VIZ) {
+            item = candidate;
+            break;
+        }
+    }
+    ASSERT_TRUE("found Depth view row", item != NULL);
+    if (!item)
+        return;
+
+    ASSERT_STR("Depth view label", item->label, "Depth view");
+    ASSERT_STR("Depth view slug", glr_config_item_slug(item), "depth_view");
+    ASSERT_INT("Depth view has 4 states",
+               glr_config_state_count(GLR_CONFIG_DEPTH_VIZ), 4);
+    ASSERT_STR("state 0", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 0), "Off");
+    ASSERT_STR("state 1", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 1), "Linear");
+    ASSERT_STR("state 2", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 2), "Scene");
+    ASSERT_STR("state 3", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 3), "Split");
+    ASSERT_INT("Depth view binds plain Ctrl+N", item->key_code, KM_KEY(GLR_DEPTH_VIZ));
+    ASSERT_INT("Depth view has no extra modifiers", item->modifiers, 0);
+    ASSERT_INT("Depth view is a normal-key binding", item->is_special, 0);
+}
+
 /* Audit #18: GLR_CONFIG_NONE must return 0/NULL state count and name,
  * and must not match the first rendering row (which carries GLR_CONFIG_NONE). */
 static void test_config_none_handling(void) {
@@ -964,23 +993,35 @@ static void test_cfg_cycle_stops_replay(void) {
     ASSERT_INT("replay active after start", replay_active(), 1);
 
     int wireframe_row = -1;
+    int depth_viz_row = -1;
     int autonormals_row = -1;
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (item) {
             if (item->key == GLR_CONFIG_WIREFRAME) {
                 wireframe_row = i;
+            } else if (item->key == GLR_CONFIG_DEPTH_VIZ) {
+                depth_viz_row = i;
             } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
                 autonormals_row = i;
             }
         }
     }
     ASSERT_TRUE("found wireframe row", wireframe_row >= 0);
+    ASSERT_TRUE("found depth view row", depth_viz_row >= 0);
     ASSERT_TRUE("found autonormals row", autonormals_row >= 0);
 
     glr_cfg_cycle_row(wireframe_row, 1);
     ASSERT_INT("replay active after non-invalidating cfg cycle",
                replay_active(), 1);
+
+    /* Depth view is a presentation toggle: cycling it mid-replay must
+     * keep the replay running (the "works during replay" requirement). */
+    glr_cfg_cycle_row(depth_viz_row, 1);
+    ASSERT_INT("replay active after depth-view cycle", replay_active(), 1);
+    ASSERT_INT("depth view cycled to Linear",
+               glr_config_get(GLR_CONFIG_DEPTH_VIZ), 1);
+    glr_state_presentation_mut()->depth_viz = 0;
 
     glr_cfg_cycle_row(autonormals_row, 1);
     ASSERT_INT("replay stopped after invalidating cfg cycle",
@@ -1623,10 +1664,17 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+Shift+E toggles projection",
                glr_state_presentation().projection_mode, PROJ_ORTHO);
 
-    /* Without Shift, the cfg layer must NOT claim Ctrl+N/E/L (they fall
-     * through to the post-filter router / editor cursor-end / clear-all). */
+    /* Plain Ctrl+N is the Depth view cycle (Off -> Linear); its
+     * Ctrl+Shift twin above must not alias it. Without Shift the cfg
+     * layer must still NOT claim Ctrl+E/L (they fall through to editor
+     * cursor-end / clear-all). */
     g_test_mods = 0;
-    ASSERT_INT("plain Ctrl+N not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 0);
+    glr_state_presentation_mut()->depth_viz = 0;
+    ASSERT_INT("plain Ctrl+N claimed by cfg (Depth view)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
+    ASSERT_INT("plain Ctrl+N cycles depth view",
+               glr_state_presentation().depth_viz, 1);
+    glr_state_presentation_mut()->depth_viz = 0;
     ASSERT_INT("plain Ctrl+E not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 0);
     ASSERT_INT("plain Ctrl+L not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 0);
 
@@ -1943,6 +1991,7 @@ int main(void) {
     test_audio_menu_actions();
     test_scene_menu_cycle_actions();
     test_msaa_display_label_override();
+    test_depth_viz_row_metadata();
     test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();

@@ -266,6 +266,13 @@ typedef struct Render3dRenderConfig {
      * filter that suppresses the program's own material/lighting/cull
      * commands (see ReplExecutionOptions.state_filter). 0 = off. */
     int winding_view;
+    /* Depth-buffer visualization (Render3dDepthVizMode as a plain int:
+     * 0 = off, 1 = linear near..far, 2 = scene-normalized, 3 = split
+     * screen; kept untyped here because depth_viz.h includes render.h,
+     * which includes this header). The controller forces 0 when the GL
+     * context cannot read GL_DEPTH_COMPONENT (web). memset-zero = off,
+     * so non-REPL callers (render3d_demo) are unaffected. */
+    int depth_viz;
 
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)

@@ -785,6 +785,7 @@ TEST_BINS = \
 	test_repl_var_drag \
 	test_render3d_guides \
 	test_render3d_render \
+	test_depth_viz \
 	test_glr_ctrl \
 	test_repl_editor \
 	test_repl_core_extra \
@@ -822,7 +823,7 @@ TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -922,6 +923,18 @@ test_render3d_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_render.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_render3d_render_LDLIBS = $(GL_LDFLAGS)
 test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
+
+# Synthetic depth-map tests for the pure conversion core
+# (render3d_depth_viz_map). depth_viz.o carries GL calls for its
+# capture/render shell, hence GL_LDFLAGS on real-GL builds (no-op inline
+# stubs under USE_GL_STUBS=1, like test_render3d_guides).
+test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
+	$(OBJDIR)/src/render3d/depth_viz.o \
+	$(OBJDIR)/src/render3d/postprocess_filter.o \
+	$(OBJDIR)/src/render3d/postprocess_surface.o \
+	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+test_depth_viz_LDLIBS = $(GL_LDFLAGS)
+test_depth_viz_RUN ?= $(BINDIR)/test_depth_viz
 
 test_scene_file_menu_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_file_menu.o $(CORE_TEST_OBJS)
 test_scene_file_menu_LDLIBS = $(GL_LDFLAGS)

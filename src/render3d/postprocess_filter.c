@@ -98,13 +98,15 @@ static int next_pow2(int v) {
     return p;
 }
 
-/* Private 2D bracket. src/scene/ must not depend on ui/gl_2d.h, so the
- * minimal screen-space textured-quad state is set up here. begin_2d
- * snapshots the matrix-mode (not covered by glPushAttrib); end_2d
- * accepts it back as a parameter, so the pair isn't coupled by a
- * file-static and an unbalanced second caller can't desync. */
-static void postprocess_filter_begin_2d(int sx, int sy, int sw, int sh,
-                                        GLint *saved_matrix_mode_out) {
+/* Scene-layer 2D bracket. src/render3d/ must not depend on ui/gl_2d.h, so
+ * the minimal screen-space textured-quad state is set up here. begin
+ * snapshots the matrix-mode (not covered by glPushAttrib); end accepts
+ * it back as a parameter, so the pair isn't coupled by a file-static
+ * and an unbalanced second caller can't desync. Exported (declared in
+ * postprocess_filter.h) so sibling scene-post passes — the depth-viz
+ * quad — reuse the same bracket instead of duplicating it. */
+void render3d_post_2d_begin(int sx, int sy, int sw, int sh,
+                            GLint *saved_matrix_mode_out) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glGetIntegerv(GL_MATRIX_MODE, saved_matrix_mode_out);
 
@@ -138,7 +140,7 @@ static void postprocess_filter_begin_2d(int sx, int sy, int sw, int sh,
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 }
 
-static void postprocess_filter_end_2d(GLint saved_matrix_mode) {
+void render3d_post_2d_end(GLint saved_matrix_mode) {
     glMatrixMode(GL_TEXTURE);
     glPopMatrix();
     glMatrixMode(GL_PROJECTION);
@@ -218,11 +220,11 @@ static int postprocess_filter_capture_scene(int sx, int sy, int sw, int sh,
 static void postprocess_filter_render_chromatic(int sx, int sy,
                                                 int sw, int sh) {
     GLint saved_matrix_mode = 0;
-    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+    render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
 
     float umax = 0.0f, vmax = 0.0f;
     if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
-        postprocess_filter_end_2d(saved_matrix_mode);
+        render3d_post_2d_end(saved_matrix_mode);
         return; /* texture would exceed the GL limit — skip this frame */
     }
 
@@ -240,7 +242,7 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
     postprocess_filter_draw_quad(sw, sh, umax, vmax, -dx);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    postprocess_filter_end_2d(saved_matrix_mode);
+    render3d_post_2d_end(saved_matrix_mode);
 }
 
 /* Vignette: a blended elliptical annulus over the rect — transparent at
@@ -252,7 +254,7 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
 static void postprocess_filter_render_vignette(int sx, int sy,
                                                int sw, int sh) {
     GLint saved_matrix_mode = 0;
-    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+    render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
 
     /* begin_2d enables GL_TEXTURE_2D + REPLACE for the chromatic path;
      * the vignette is a flat-shaded color overlay, so drop texturing and
@@ -285,7 +287,7 @@ static void postprocess_filter_render_vignette(int sx, int sy,
     }
     glEnd();
 
-    postprocess_filter_end_2d(saved_matrix_mode);
+    render3d_post_2d_end(saved_matrix_mode);
 }
 
 /* Scanlines / CRT mask, on a tessellated barrel surface. The resolved
@@ -306,11 +308,11 @@ static void postprocess_filter_render_vignette(int sx, int sy,
 static void postprocess_filter_render_scanlines(int sx, int sy,
                                                 int sw, int sh) {
     GLint saved_matrix_mode = 0;
-    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+    render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
 
     float umax = 0.0f, vmax = 0.0f;
     if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
-        postprocess_filter_end_2d(saved_matrix_mode);
+        render3d_post_2d_end(saved_matrix_mode);
         return; /* texture would exceed the GL limit — skip this frame */
     }
 
@@ -347,7 +349,7 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
     render3d_post_surface_draw_scanlines(&surf, POST_SURFACE_GRID_COLS,
                                          SCANLINE_SPACING);
 
-    postprocess_filter_end_2d(saved_matrix_mode);
+    render3d_post_2d_end(saved_matrix_mode);
 }
 
 /* Film grain: tile a small luminance noise texture over the rect at one
@@ -360,7 +362,7 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
 static void postprocess_filter_render_grain(int sx, int sy,
                                             int sw, int sh) {
     GLint saved_matrix_mode = 0;
-    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+    render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
 
     if (g_grain_tex == 0) {
         GLubyte noise[GRAIN_TEX_SIZE * GRAIN_TEX_SIZE];
@@ -402,7 +404,7 @@ static void postprocess_filter_render_grain(int sx, int sy,
         glTexCoord2f(ju,         jv + vspan); glVertex2f(0.0f, h);
     glEnd();
 
-    postprocess_filter_end_2d(saved_matrix_mode);
+    render3d_post_2d_end(saved_matrix_mode);
 }
 
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,

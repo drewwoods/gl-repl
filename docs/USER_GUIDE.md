@@ -1468,6 +1468,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+B | Winding |
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
 | Ctrl+G | Wireframe |
+| Ctrl+N | Depth view (Off / Linear / Scene / Split) |
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |

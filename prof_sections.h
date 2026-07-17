@@ -48,7 +48,8 @@ typedef enum {
     PROF_RENDER3D_OVERLAY_NORMALS,        /* normal vector labels */
     PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
     PROF_RENDER3D_POST_PROCESS,   /* render3d_postprocess_filter_render() */
-    PROF_RENDER3D_LAST = PROF_RENDER3D_POST_PROCESS,
+    PROF_RENDER3D_DEPTH_VIZ,      /* depth-viz readback + convert + quad */
+    PROF_RENDER3D_LAST = PROF_RENDER3D_DEPTH_VIZ,
     PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
     PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
     PROF_CODE_PANEL_TEXT,     /* generic ui_text_panel_render() */

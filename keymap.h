@@ -111,7 +111,8 @@
 #define GLR_WIREFRAME        KEY_CTRL_G, 0
 #define GLR_GRID_MAJOR       KEY_CTRL_G, GLUT_ACTIVE_SHIFT
 #define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
-#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N is unbound */
+#define GLR_DEPTH_VIZ        KEY_CTRL_N, 0  /* cycle Depth view; pairs w/ Normal vectors */
+#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Depth view */
 #define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
 #define GLR_VERTEX_OUTLINES  KEY_CTRL_O, GLUT_ACTIVE_SHIFT
 #define GLR_POLY_HIGHLIGHT   KEY_CTRL_P, 0
