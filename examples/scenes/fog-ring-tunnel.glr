@@ -19,8 +19,15 @@ glTranslatef(0.0f, 0.0f, 0.0f);
 // Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
 // the background, which is what hides each ring's respawn at the far
 // end of this endless tunnel. Drag `density` to thicken or clear it.
+// The tunnel snakes: each ring's center sits on a fixed curve
+// (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
+// face along the curve's tangent, so rings sweep around the bends as
+// they approach. Drag `twist` to straighten or sharpen the curve.
 static float density = 0.055; // @tune
+static float twist = 1.2; // @tune
 static float ringZ; // eye-space distance of the current ring
+static float bendX; // tunnel centerline x at this depth
+static float bendY; // tunnel centerline y at this depth
 
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glClearColor(0.05, 0.06, 0.08, 1);
@@ -36,8 +43,12 @@ glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
 for (i, 0, 12) {
   ringZ = 37 - fmod(3 * t + 3 * i, 36);
+  bendX = twist * sin(0.24 * ringZ);
+  bendY = 0.7 * twist * (cos(0.31 * ringZ) - 1);
   glPushMatrix();
-  glTranslatef(0, 0, 0 - ringZ);
+  glTranslatef(bendX, bendY, 0 - ringZ);
+  glRotatef(0 - 14 * twist * cos(0.24 * ringZ), 0, 1, 0);
+  glRotatef(0 - 12 * twist * sin(0.31 * ringZ), 1, 0, 0);
   glRotatef(8 * ringZ, 0, 0, 1);
   if (fmod(i, 3) < 1) {
     glColor3f(0.1, 0.95, 0.85);
