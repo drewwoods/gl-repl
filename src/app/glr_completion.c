@@ -104,6 +104,44 @@ static void reset_ac_statics(void) {
     }
 }
 
+/* Case-insensitive strcmp with a case-sensitive tiebreak, so the sort
+ * order is stable across equal-fold names. Local helper keeps the
+ * -std=c99 build free of <strings.h> (like ac_prefix_match_ci). */
+static int ac_name_cmp(const char *a, const char *b) {
+    for (; *a && *b; a++, b++) {
+        int ca = tolower((unsigned char)*a);
+        int cb = tolower((unsigned char)*b);
+        if (ca != cb)
+            return ca - cb;
+    }
+    if (*a != *b)
+        return (unsigned char)*a - (unsigned char)*b;
+    return strcmp(a, b);
+}
+
+/* Sort the three parallel match arrays (display text, insert text, and
+ * func-completion pointer) alphabetically by display text so the popup
+ * reads in order regardless of each source table's native ordering.
+ * Insertion sort over the small (<= MAX_AC_MATCHES) match set; called
+ * with selected_idx at its post-clear 0, before the preview builds. */
+static void sort_autocomplete_matches(EditorAutocompleteState *ac) {
+    for (int i = 1; i < ac->match_count; i++) {
+        const char *disp = ac->matches[i];
+        const char *ins = ac->insert_matches[i];
+        const ReplFuncCompletion *fn = g_ac_func_matches[i];
+        int j = i - 1;
+        while (j >= 0 && ac_name_cmp(ac->matches[j], disp) > 0) {
+            ac->matches[j + 1] = ac->matches[j];
+            ac->insert_matches[j + 1] = ac->insert_matches[j];
+            g_ac_func_matches[j + 1] = g_ac_func_matches[j];
+            j--;
+        }
+        ac->matches[j + 1] = disp;
+        ac->insert_matches[j + 1] = ins;
+        g_ac_func_matches[j + 1] = fn;
+    }
+}
+
 static void hint_append(char *out, int out_sz, const char *text) {
     int len = (int)strlen(out);
     if (len >= out_sz - 1)
@@ -422,6 +460,7 @@ static void update_autocomplete(void) {
                 g_ac_token_start = (int)(after - raw_input);
                 snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
                          interior ? "" : ", ");
+                sort_autocomplete_matches(ac);
                 update_selected_autocomplete_preview();
                 return;
             }
@@ -528,6 +567,7 @@ static void update_autocomplete(void) {
                 snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
                          (slot + 1 == nargs && !more_args_after) ? ")" : ", ");
             }
+            sort_autocomplete_matches(ac);
             update_selected_autocomplete_preview();
         }
         return;
@@ -552,6 +592,7 @@ static void update_autocomplete(void) {
     }
     if (ac->match_count > 0) {
         g_ac_mode = AC_MODE_FUNC_PREFIX;
+        sort_autocomplete_matches(ac);
         update_selected_autocomplete_preview();
         return;
     }
