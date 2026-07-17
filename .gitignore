@@ -1,5 +1,6 @@
 *.o
 *.dSYM
+__pycache__/
 audio_state.ini
 # ...but the repl_live_demo ships a default config (not runtime state).
 !tools/repl_live_demo/repl_live_demo.ini
@@ -51,3 +52,5 @@ recovery.c
 
 # Release staging artifacts (regenerate via `make release`)
 /dist/
+# Per-user release build plan (hosts/modes) — edit via `make release-config`.
+/.release.ini
