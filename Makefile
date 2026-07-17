@@ -1176,9 +1176,18 @@ RELEASE_REPO ?= drewwoods/gl-repl
 REMOTE_HOST  ?= gracemont
 REMOTE_PATH  ?= ~/code/openGL/samples/gen-ai/gl-repl
 
+# Per-platform build modes (skip|local|remote) and remote hosts are forwarded
+# only when set, so `make release MACOS_MODE=remote MACOS_HOST=mymac` works and
+# unset knobs fall through to scripts/release.sh's defaults / plan menu.
 RELEASE_ENV = TAG='$(RELEASE_TAG)' REPO='$(RELEASE_REPO)' \
 	MUSIC_SRC_DIR='$(MUSIC_SRC_DIR)' \
-	REMOTE_HOST='$(REMOTE_HOST)' REMOTE_PATH='$(REMOTE_PATH)'
+	REMOTE_HOST='$(REMOTE_HOST)' REMOTE_PATH='$(REMOTE_PATH)' \
+	$(if $(MACOS_MODE),MACOS_MODE='$(MACOS_MODE)') \
+	$(if $(MACOS_HOST),MACOS_HOST='$(MACOS_HOST)') \
+	$(if $(MACOS_PATH),MACOS_PATH='$(MACOS_PATH)') \
+	$(if $(LINUX_MODE),LINUX_MODE='$(LINUX_MODE)') \
+	$(if $(LINUX_HOST),LINUX_HOST='$(LINUX_HOST)') \
+	$(if $(LINUX_PATH),LINUX_PATH='$(LINUX_PATH)')
 
 release: ## Build macOS + Linux release artifacts, then confirm before uploading to GitHub.
 	@$(RELEASE_ENV) bash scripts/release.sh all
