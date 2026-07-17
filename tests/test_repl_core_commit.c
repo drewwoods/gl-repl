@@ -10,6 +10,7 @@
 #include "repl/flatten.h"
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
+#include "repl/attrib_bits.h"
 #include "editor/clipboard.h"
 #include "editor/commit.h"
 #include "repl/state_views.h"
@@ -1802,6 +1803,229 @@ int main(void) {
     editor_feed_line("glPushMatrix();");
     ASSERT_TRUE("orphan push → -1", repl_find_matching_pop_matrix(0) == -1);
 
+    /* repl_find_matching_push_attrib / _pop_attrib: the glPushAttrib/
+     * glPopAttrib bracket matchers (LIFO mirror of the matrix pair). */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glPushAttrib(GL_LINE_BIT);");
+    editor_feed_line("glLineWidth(2);");
+    editor_feed_line("glPopAttrib();");
+    editor_feed_line("glColor3f(0, 0, 1);");
+    editor_feed_line("glPopAttrib();");
+    ASSERT_TRUE("inner attrib pop matches inner push", repl_find_matching_push_attrib(4) == 2);
+    ASSERT_TRUE("outer attrib pop matches outer push", repl_find_matching_push_attrib(6) == 0);
+    ASSERT_TRUE("non-pop attrib line → -1",            repl_find_matching_push_attrib(1) == -1);
+    ASSERT_TRUE("attrib push line → -1",               repl_find_matching_push_attrib(0) == -1);
+    ASSERT_TRUE("oob matching push attrib → -1",       repl_find_matching_push_attrib(-1) == -1);
+    ASSERT_TRUE("outer attrib push matches outer pop", repl_find_matching_pop_attrib(0) == 6);
+    ASSERT_TRUE("inner attrib push matches inner pop", repl_find_matching_pop_attrib(2) == 4);
+    ASSERT_TRUE("non-push attrib line → -1",           repl_find_matching_pop_attrib(1) == -1);
+    ASSERT_TRUE("attrib pop line → -1",                repl_find_matching_pop_attrib(4) == -1);
+    ASSERT_TRUE("oob matching pop attrib → -1",        repl_find_matching_pop_attrib(99) == -1);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPopAttrib();");
+    ASSERT_TRUE("orphan attrib pop → -1", repl_find_matching_push_attrib(0) == -1);
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT);");
+    ASSERT_TRUE("orphan attrib push → -1", repl_find_matching_pop_attrib(0) == -1);
+
+    /* repl_attrib_bits_for_cmd: context-free coarse GL_*_BIT mask. Multi-bit
+     * membership (an enable rides GL_ENABLE_BIT *and* its group) falls out
+     * naturally; a non-setter maps to 0. glColor's flow-dependent LIGHTING
+     * membership deliberately does NOT show here (that lives in _cmd_writes). */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glEdgeFlag(GL_TRUE);");
+        editor_feed_line("glEnable(GL_BLEND);");
+        editor_feed_line("glEnable(GL_DEPTH_TEST);");
+        editor_feed_line("glLineWidth(2);");
+        editor_feed_line("glDepthFunc(GL_LEQUAL);");
+        editor_feed_line("glClearColor(0, 0, 0, 1);");
+        editor_feed_line("glClipPlane(GL_CLIP_PLANE0, 1, 0, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        const GLCmd *cmds = repl_state_document_cmds();
+        ASSERT_TRUE("bits_for_cmd glColor3f = CURRENT",
+                    repl_attrib_bits_for_cmd(&cmds[0]) == GL_CURRENT_BIT);
+        ASSERT_TRUE("bits_for_cmd glEdgeFlag = CURRENT",
+                    repl_attrib_bits_for_cmd(&cmds[1]) == GL_CURRENT_BIT);
+        ASSERT_TRUE("bits_for_cmd glEnable(GL_BLEND) = ENABLE|COLOR_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[2]) ==
+                        (GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
+        ASSERT_TRUE("bits_for_cmd glEnable(GL_DEPTH_TEST) = ENABLE|DEPTH_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[3]) ==
+                        (GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT));
+        ASSERT_TRUE("bits_for_cmd glLineWidth = LINE",
+                    repl_attrib_bits_for_cmd(&cmds[4]) == GL_LINE_BIT);
+        ASSERT_TRUE("bits_for_cmd glDepthFunc = DEPTH_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[5]) == GL_DEPTH_BUFFER_BIT);
+        ASSERT_TRUE("bits_for_cmd glClearColor = COLOR_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[6]) == GL_COLOR_BUFFER_BIT);
+        ASSERT_TRUE("bits_for_cmd glClipPlane = TRANSFORM",
+                    repl_attrib_bits_for_cmd(&cmds[7]) == GL_TRANSFORM_BIT);
+        ASSERT_TRUE("bits_for_cmd glVertex3f = 0 (not a setter)",
+                    repl_attrib_bits_for_cmd(&cmds[8]) == 0);
+        ASSERT_TRUE("bit_index round-trips CURRENT",
+                    repl_attrib_bit_index(GL_CURRENT_BIT) == 0);
+        ASSERT_TRUE("bit_index rejects a non-bit", repl_attrib_bit_index(0x1234) == -1);
+    }
+
+    /* repl_attrib_cmd_writes: atomic state-cell expansion, flow-sensitive.
+     * glColor with color material OFF writes one CURRENT cell; enabling color
+     * material makes the same line also (re)write the four selected material
+     * cells (GL_FRONT_AND_BACK x GL_AMBIENT_AND_DIFFUSE), all under LIGHTING. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_COLOR_MATERIAL);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, 1, 0, 0, 1);");
+        editor_feed_line("glColorMaterial(GL_FRONT, GL_DIFFUSE);");
+        const GLCmd *cmds = repl_state_document_cmds();
+        ReplAttribCellWrite w[REPL_ATTRIB_MAX_ITEMS_PER_CMD];
+        ReplAttribFlowState flow;
+
+        /* Color material disabled: glColor writes only its CURRENT cell. */
+        repl_attrib_flow_init(&flow);
+        int n = repl_attrib_cmd_writes(&cmds[1], &flow, w);
+        ASSERT_TRUE("cmd_writes glColor (cm off) = 1 cell", n == 1);
+        ASSERT_TRUE("cmd_writes glColor (cm off) is CURRENT",
+                    w[0].attrib_bits == GL_CURRENT_BIT);
+
+        /* Walk the document threading flow: the enable flips color material on
+         * and (re)writes the four material cells it now drives. */
+        repl_attrib_flow_init(&flow);
+        n = repl_attrib_cmd_writes(&cmds[0], &flow, w);   /* glEnable(COLOR_MATERIAL) */
+        ASSERT_TRUE("cmd_writes enable(COLOR_MATERIAL) = 1 cap + 4 material", n == 5);
+        ASSERT_TRUE("cmd_writes enable cap rides ENABLE|LIGHTING",
+                    w[0].attrib_bits == (GL_ENABLE_BIT | GL_LIGHTING_BIT));
+        ASSERT_TRUE("cmd_writes enable material cells ride LIGHTING",
+                    w[1].attrib_bits == GL_LIGHTING_BIT &&
+                    w[4].attrib_bits == GL_LIGHTING_BIT);
+
+        /* glColor now also writes the four material cells: 1 CURRENT + 4. */
+        n = repl_attrib_cmd_writes(&cmds[1], &flow, w);
+        ASSERT_TRUE("cmd_writes glColor (cm on) = 1 CURRENT + 4 material", n == 5);
+        ASSERT_TRUE("cmd_writes glColor (cm on) first cell CURRENT",
+                    w[0].attrib_bits == GL_CURRENT_BIT);
+        {
+            int lighting = 0;
+            for (int i = 0; i < n; i++)
+                if (w[i].attrib_bits == GL_LIGHTING_BIT) lighting++;
+            ASSERT_TRUE("cmd_writes glColor (cm on) has 4 LIGHTING cells",
+                        lighting == 4);
+        }
+
+        /* glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE): two faces x one prop =
+         * two distinct material cells, all under LIGHTING. */
+        n = repl_attrib_cmd_writes(&cmds[2], &flow, w);
+        ASSERT_TRUE("cmd_writes glMaterialfv(F_AND_B, DIFFUSE) = 2 cells", n == 2);
+        ASSERT_TRUE("cmd_writes glMaterialfv cells distinct",
+                    w[0].item_id != w[1].item_id);
+        ASSERT_TRUE("cmd_writes glMaterialfv cells LIGHTING",
+                    w[0].attrib_bits == GL_LIGHTING_BIT &&
+                    w[1].attrib_bits == GL_LIGHTING_BIT);
+    }
+
+    /* Four-cell supersession: GL_FRONT_AND_BACK x GL_AMBIENT_AND_DIFFUSE is
+     * four distinct atomic material cells. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, 1, 0, 0, 1);");
+        const GLCmd *cmds = repl_state_document_cmds();
+        ReplAttribCellWrite w[REPL_ATTRIB_MAX_ITEMS_PER_CMD];
+        int n = repl_attrib_cmd_writes(&cmds[0], NULL, w);
+        ASSERT_TRUE("cmd_writes F_AND_B x AMBIENT_AND_DIFFUSE = 4 cells", n == 4);
+        int distinct = 1;
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++)
+                if (w[i].item_id == w[j].item_id) distinct = 0;
+        ASSERT_TRUE("cmd_writes 4 material cells all distinct", distinct);
+    }
+
+    /* Collectors: repl_attrib_collect_push_saved ("what's saved" — prior
+     * setters) and _pop_reverted ("what's reverted" — scoped setters). Fold
+     * the source with real nested LIFO semantics. */
+    {
+        ReplAttribHighlightLine hl[REPL_ATTRIB_HL_MAX];
+        int cur_idx = repl_attrib_bit_index(GL_CURRENT_BIT);
+        int enable_idx = repl_attrib_bit_index(GL_ENABLE_BIT);
+        int color_buf_idx = repl_attrib_bit_index(GL_COLOR_BUFFER_BIT);
+
+        /* Last-setter-wins + mask filtering: only the most-recent CURRENT
+         * setter, and the out-of-mask LINE setter is excluded. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glColor3f(1, 0, 0);");     /* 0: overwritten */
+        editor_feed_line("glColor3f(0, 0, 1);");     /* 1: last CURRENT setter */
+        editor_feed_line("glLineWidth(2);");          /* 2: LINE, out of mask */
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 3: cursor */
+        int n = repl_attrib_collect_push_saved(3, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("push_saved last-setter-wins: 1 line", n == 1);
+        ASSERT_TRUE("push_saved highlights last color setter", hl[0].line_idx == 1);
+        ASSERT_TRUE("push_saved bit mask = CURRENT",
+                    hl[0].bit_idx_mask == (1u << cur_idx));
+
+        /* Multi-bit union: one setter under two saved bits gets both colors. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_BLEND);");                             /* 0 */
+        editor_feed_line("glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);"); /* 1 */
+        n = repl_attrib_collect_push_saved(1, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("push_saved multi-bit: 1 line", n == 1);
+        ASSERT_TRUE("push_saved multi-bit line", hl[0].line_idx == 0);
+        ASSERT_TRUE("push_saved multi-bit unions ENABLE+COLOR_BUFFER indices",
+                    hl[0].bit_idx_mask ==
+                        ((1u << enable_idx) | (1u << color_buf_idx)));
+
+        /* Completed inner pair does not leak into a later push. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 0 */
+        editor_feed_line("glColor3f(1, 0, 0);");           /* 1: reverted at 2 */
+        editor_feed_line("glPopAttrib();");                /* 2 */
+        editor_feed_line("glColor3f(0, 0, 1);");           /* 3: live setter */
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 4: cursor */
+        n = repl_attrib_collect_push_saved(4, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("push_saved no leak from completed inner pair: 1 line", n == 1);
+        ASSERT_TRUE("push_saved sees only the live setter", hl[0].line_idx == 3);
+
+        /* Basic pop_reverted: the body setter whose effect the pop reverts. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glColor3f(1, 0, 0);");           /* 0: baseline (saved) */
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 1 */
+        editor_feed_line("glColor3f(0, 0, 1);");           /* 2: body setter */
+        editor_feed_line("glPopAttrib();");                /* 3: cursor */
+        n = repl_attrib_collect_pop_reverted(3, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("pop_reverted: 1 body line", n == 1);
+        ASSERT_TRUE("pop_reverted highlights the body setter", hl[0].line_idx == 2);
+        ASSERT_TRUE("pop_reverted bit mask = CURRENT",
+                    hl[0].bit_idx_mask == (1u << cur_idx));
+        /* ...and its push counterpart highlights the prior (saved) setter. */
+        n = repl_attrib_collect_push_saved(1, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("push_saved (same doc): 1 prior line", n == 1);
+        ASSERT_TRUE("push_saved (same doc) highlights baseline", hl[0].line_idx == 0);
+
+        /* Outer pop does not highlight a setter already reverted by an inner
+         * pop: at the outer pop the live CURRENT writer is line 1 (inner pop
+         * already rolled line 3 back), so only line 1 is reverted. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 0: outer push */
+        editor_feed_line("glColor3f(1, 0, 0);");           /* 1: outer-scope setter */
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 2: inner push */
+        editor_feed_line("glColor3f(0, 0, 1);");           /* 3: inner-scope setter */
+        editor_feed_line("glPopAttrib();");                /* 4: inner pop reverts 3→1 */
+        editor_feed_line("glPopAttrib();");                /* 5: cursor (outer pop) */
+        n = repl_attrib_collect_pop_reverted(5, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("pop_reverted skips inner-pop-reverted setter: 1 line", n == 1);
+        ASSERT_TRUE("pop_reverted highlights the outer-scope setter", hl[0].line_idx == 1);
+
+        /* Orphan pop reports nothing. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glPopAttrib();");
+        n = repl_attrib_collect_pop_reverted(1, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("orphan pop_reverted reports nothing", n == 0);
+    }
+
     /* repl_find_affecting_transforms: linear scope, push/pop scope,
      * load_identity reset, glut-solid cursor, non-consumer cursor. */
     {
@@ -2264,6 +2488,8 @@ int main(void) {
             { "glutSolidCone(1, 1, 8, 8);",                                  "glutSolidCone" },
             { "glRasterPos3f(0, 0, 0);",                                     "glRasterPos3f" },
             { "label(\"hi\");",                                              "label" },
+            { "glPushAttrib(GL_CURRENT_BIT);",                               "glPushAttrib" },
+            { "glPopAttrib();",                                              "glPopAttrib" },
             { "gluBegin(GLU_POLYGON);",                                      "gluTessBeginPolygon" },
         };
         int case_count = (int)(sizeof(not_in_begin_cases) / sizeof(not_in_begin_cases[0]));

@@ -1883,6 +1883,50 @@ static void test_unbalanced_brackets(void) {
     editor_feed_line("glPopMatrix();");    /* 3 */
     ASSERT_INT("nested balanced -> none flagged",
                repl_source_scope_collect_unbalanced(lines, 64), 0);
+
+    /* Unclosed glPushAttrib: its own (third) stack flags the opener line. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 0 */
+    editor_feed_line("glColor3f(1,0,0);");             /* 1 */
+    ASSERT_INT("unclosed push-attrib -> one flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 1);
+    ASSERT_INT("unclosed push-attrib -> opener line", lines[0], 0);
+
+    /* Orphan glPopAttrib (no matching push) is flagged in document order. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glColor3f(1,0,0);"); /* 0 */
+    editor_feed_line("glPopAttrib();");    /* 1 orphan */
+    ASSERT_INT("orphan pop-attrib -> one flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 1);
+    ASSERT_INT("orphan pop-attrib line", lines[0], 1);
+
+    /* Nested balanced attrib pairs do not false-positive. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 0 */
+    editor_feed_line("glPushAttrib(GL_LINE_BIT);");    /* 1 */
+    editor_feed_line("glPopAttrib();");                /* 2 */
+    editor_feed_line("glPopAttrib();");                /* 3 */
+    ASSERT_INT("nested balanced attrib -> none flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 0);
+
+    /* Mixed matrix/attrib: leftover openers drain matrix-then-attrib, so a
+     * dangling glPushMatrix sorts before a dangling glPushAttrib. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");               /* 0 */
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 1 */
+    ASSERT_INT("mixed dangling openers -> two flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 2);
+    ASSERT_INT("mixed dangling: matrix opener first", lines[0], 0);
+    ASSERT_INT("mixed dangling: attrib opener second", lines[1], 1);
+
+    /* Mixed orphan closers are flagged inline, in document order. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPopAttrib();"); /* 0 orphan */
+    editor_feed_line("glPopMatrix();"); /* 1 orphan */
+    ASSERT_INT("mixed orphan closers -> two flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 2);
+    ASSERT_INT("mixed orphan closers: doc order [0]", lines[0], 0);
+    ASSERT_INT("mixed orphan closers: doc order [1]", lines[1], 1);
 }
 
 int main(int argc, char **argv) {
