@@ -117,6 +117,12 @@ persistence):
   `make release-build` stops after staging; `make release-upload` pushes the
   staged artifacts. The GitHub release is created as a **draft**; publish with
   `gh release edit <tag> --repo <repo> --draft=false`.
+- **Tag pins to the build commit.** When the release tag does not already exist,
+  `gh release create` is passed `--target <pinned-sha>`, so publishing the draft
+  creates the git tag on the exact commit the artifacts were built from (not the
+  default branch's then-current HEAD). If the tag already exists, GitHub uses its
+  commit and `--target` is moot. Creating a release fails cleanly if that commit
+  isn't pushed to GitHub yet (it can only tag a commit it has).
 - **Knobs.** Set them in the menu (persisted), or override per-run via env /
   make-vars — the Makefile forwards `TAG`, `REPO`, `PIN`, `REMOTE_BRANCH`, the
   plan knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
