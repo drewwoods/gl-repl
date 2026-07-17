@@ -96,6 +96,7 @@ void format_cmd_source_as_c(char *out, size_t out_sz,
 int write_materialfv_as_c89(FILE *f, const char *source_text);
 int write_point_parameterfv_as_c89(FILE *f, const char *source_text);
 int write_clip_plane_as_c89(FILE *f, const char *source_text);
+int write_fog_fv_as_c89(FILE *f, const char *source_text);
 int find_export_block_end(int begin_idx);
 int export_uses_tess_commands(void);
 void write_render_body_range_as_c(FILE *f, int start, int end_idx,

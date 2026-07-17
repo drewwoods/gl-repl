@@ -1121,6 +1121,87 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     }
 }
 
+static void test_gl_state_report_tracks_fog(void) {
+    GLCmd cmds[5];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state OpenGL fog report ---\n");
+
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_FOG;
+    cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_FOG_I, 1);
+    cmds[1].args[0] = (float)GL_FOG_MODE;
+    cmds[1].args[1] = (float)GL_EXP2;
+    cmds[1].num_args = 2;
+    cmds[2] = gl_state_test_cmd(CMD_FOG_F, 2);
+    cmds[2].args[0] = (float)GL_FOG_DENSITY;
+    cmds[2].args[1] = 0.25f;
+    cmds[2].num_args = 2;
+    cmds[3] = gl_state_test_cmd(CMD_FOG_FV, 3);
+    cmds[3].args[0] = (float)GL_FOG_COLOR;
+    cmds[3].args[1] = 0.05f;
+    cmds[3].args[2] = 0.06f;
+    cmds[3].args[3] = 0.08f;
+    cmds[3].args[4] = 1.0f;
+    cmds[3].num_args = 5;
+    cmds[4] = gl_state_test_cmd(CMD_FOG_F, 4);
+    cmds[4].args[0] = (float)GL_FOG_END;
+    cmds[4].args[1] = 1.0f;
+    cmds[4].num_args = 2;
+
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 5;
+
+    repl_gl_state_report_at_line(program, 5, &report);
+    row = gl_state_test_find_row(&report, "GL_FOG");
+    ASSERT_TRUE("fog cap reported", row != NULL);
+    if (row) {
+        ASSERT_STR("fog cap current", row->current, "GL_TRUE");
+        ASSERT_STR("fog cap default", row->default_value, "GL_FALSE");
+        ASSERT_INT("fog cap differs", row->differs_from_default, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_FOG_MODE");
+    ASSERT_TRUE("fog mode reported", row != NULL);
+    if (row) {
+        ASSERT_STR("fog mode current", row->current, "GL_EXP2");
+        ASSERT_STR("fog mode default", row->default_value, "GL_EXP");
+        ASSERT_INT("fog mode differs", row->differs_from_default, 1);
+        ASSERT_INT("fog mode source line", row->source.source_line_idx, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
+    ASSERT_TRUE("fog density reported", row != NULL);
+    if (row) {
+        ASSERT_STR("fog density current", row->current, "0.25");
+        ASSERT_STR("fog density default", row->default_value, "1");
+        ASSERT_INT("fog density differs", row->differs_from_default, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_FOG_COLOR");
+    ASSERT_TRUE("fog color reported", row != NULL);
+    if (row) {
+        ASSERT_STR("fog color current", row->current, "(0.05, 0.06, 0.08, 1)");
+        ASSERT_INT("fog color differs", row->differs_from_default, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_FOG_END");
+    ASSERT_TRUE("fog end reported", row != NULL);
+    if (row) {
+        ASSERT_INT("explicit-default fog end marked equal",
+                   row->differs_from_default, 0);
+    }
+    row = gl_state_test_find_row(&report, "GL_FOG_START");
+    ASSERT_TRUE("untouched fog start absent", row == NULL);
+
+    /* Before any fog write, no fog rows appear. */
+    repl_gl_state_report_at_line(program, 0, &report);
+    ASSERT_TRUE("no fog cap row before writes",
+                gl_state_test_find_row(&report, "GL_FOG") == NULL);
+    ASSERT_TRUE("no fog mode row before writes",
+                gl_state_test_find_row(&report, "GL_FOG_MODE") == NULL);
+}
+
 static void test_gl_state_report_uses_flat_call_provenance(void) {
     GLCmd cmd = gl_state_test_cmd(CMD_CLEAR_COLOR, 20);
     FlatProgramView program;
@@ -1332,6 +1413,7 @@ int main(void) {
     test_camera_target_decay_override_resets_on_new_ease();
     test_time_dirty_gate_routes_by_dep_masks();
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
+    test_gl_state_report_tracks_fog();
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();
     test_gl_state_report_converts_eye_light_position_to_world();

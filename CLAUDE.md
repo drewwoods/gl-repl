@@ -612,7 +612,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch: keyboard / special / mouse / motion / wheel entry points (thin shims — reset effects, run a `*_dispatch` body, flush once via `glr_ctrl_apply_input_effects`), the `glr_ctrl_router_*` handlers, the left/right-press [`UiHit`](src/ui/core/hit.h#L51) switches, the shared `route_wheel`, and the SIGINT-quit lifecycle |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
-| [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L91) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
+| [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L94) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | [`src/repl/compile.c`](src/repl/compile.c) | Pure source-text validators that produce [`ReplCompiledChange`](src/repl/compile.h#L130) descriptors; never mutates state |
 | [`src/repl/compile.h`](src/repl/compile.h) | [`ReplCompiledChange`](src/repl/compile.h#L130), [`ReplCompileResult`](src/repl/compile.h#L189), [`ReplCompileContext`](src/repl/compile.h#L178), compile entry points |
 | [`src/repl/apply.c`](src/repl/apply.c) | Applies a [`ReplCompiledChange`](src/repl/compile.h#L130) to REPL runtime command arrays |
@@ -620,13 +620,13 @@ explaining why the extra background is useful.
 | [`src/repl/normalize.c`](src/repl/normalize.c) | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
 | [`src/repl/reformat.c`](src/repl/reformat.c) | Source reformatter (`repl_reformat_program`) |
 | [`src/repl/bootstrap.c`](src/repl/bootstrap.c) | Startup loading helpers (`repl_load_initial_commands`) |
-| [`src/repl/parser.c`](src/repl/parser.c) | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer, not on [`GLCmd`](src/repl/command.h#L91)) |
+| [`src/repl/parser.c`](src/repl/parser.c) | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer, not on [`GLCmd`](src/repl/command.h#L94)) |
 | [`src/repl/parser.h`](src/repl/parser.h) | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), [`ReplParseContext`](src/repl/parser.h#L44), [`ReplParsedLine`](src/repl/parser.h#L80) |
 | [`src/repl/source_scope.c`](src/repl/source_scope.c) | Source prefix-depth cache, indentation helpers, block lookup |
 | [`src/repl/source_scope.h`](src/repl/source_scope.h) | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
 | [`src/repl/command_spec.c`](src/repl/command_spec.c) | Command type metadata and specifications (parsing, formatting, completion requirements) |
 | [`src/repl/command_spec.h`](src/repl/command_spec.h) | Command spec query API |
-| [`src/repl/command_store.c`](src/repl/command_store.c) | Low-level [`GLCmd`](src/repl/command.h#L91) array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
+| [`src/repl/command_store.c`](src/repl/command_store.c) | Low-level [`GLCmd`](src/repl/command.h#L94) array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | [`src/repl/command_store.h`](src/repl/command_store.h) | Command-store public API (`repl_command_store_insert_one`, etc.) |
 | [`src/repl/state.c`](src/repl/state.c) | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | [`src/repl/state.h`](src/repl/state.h) | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -991,9 +991,9 @@ exactly `t_end`, so the flat program is left at the true frame time.
 The core data flow is **source commands → flat commands → GL calls**:
 
 - **Source array** (`repl_state_document_cmds()`, count via
-  `repl_state_document_count()`) — each [`GLCmd`](src/repl/command.h#L91) holds parsed type/args
+  `repl_state_document_count()`) — each [`GLCmd`](src/repl/command.h#L94) holds parsed type/args
   and flags (`has_vars`, `valid`, `is_auto`). Per-line canonical text is
-  *not* on [`GLCmd`](src/repl/command.h#L91); it lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer (accessed via
+  *not* on [`GLCmd`](src/repl/command.h#L94); it lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer (accessed via
   [`editor_buffer_view_line()`](src/editor/state.h#L276)) and is the editor's writable model.
 - **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
@@ -1034,7 +1034,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 3. **Parse** — `parse_command()` in [`src/repl/parser.c`](src/repl/parser.c) matches the line to a
    [`CmdType`](src/repl/command.h#L37), evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]`. Per-line canonical text lives in
-   [`EditorState`](src/editor/state.h#L175)'s editor buffer (not on [`GLCmd`](src/repl/command.h#L91)); the parser returns it as
+   [`EditorState`](src/editor/state.h#L175)'s editor buffer (not on [`GLCmd`](src/repl/command.h#L94)); the parser returns it as
    `ReplParsedLine.text` for the commit path to write into the editor
    buffer. Internal call sites pass `ReplParseContext.source_line_idx`
    instead of temporarily changing the edit-line cursor.
@@ -1099,7 +1099,7 @@ Key details:
 - `CMD_VAR_DECLARE` is a no-op in [`repl_execute_program()`](src/repl/executor.h#L173) and
   `flatten_range()` — registration into the predefined-variable table happens at
   commit time via [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309)
-- [`GLCmd`](src/repl/command.h#L91) fields (tagged-union payload, keyed on `type`):
+- [`GLCmd`](src/repl/command.h#L94) fields (tagged-union payload, keyed on `type`):
   `payload.decl.names[MAX_NAMES_PER_DECL][16]`, `payload.decl.count`
   (active for `CMD_VAR_DECLARE`); `payload.label.fmt[GLUT_BITMAP_FMT_MAX]`
   (active for `CMD_LABEL`). Other types must not read the payload.
@@ -1500,9 +1500,22 @@ glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
 glPushMatrix(), glPopMatrix(), glLoadIdentity()
 glEnable(CAP), glDisable(CAP)
   CAP: GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL, GL_NORMALIZE,
-       GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE,
+       GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE, GL_FOG,
        GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3,
        GL_CLIP_PLANE0 .. GL_CLIP_PLANE5
+glFogi(GL_FOG_MODE, mode), glFogf(pname, value), glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})
+  Distance fog; enable with glEnable(GL_FOG). glFogi selects the
+  equation: GL_LINEAR (ramps between the GL_FOG_START / GL_FOG_END
+  distances), GL_EXP, or GL_EXP2 (exponential falloff steered by
+  GL_FOG_DENSITY). glFogf sets one scalar pname (GL_FOG_DENSITY,
+  GL_FOG_START, GL_FOG_END); the value is a full expression, so an
+  animated or slider-driven density works. glFogfv sets the fog color
+  distant geometry fades toward (match it to glClearColor for a
+  seamless horizon); accepts the flat shorthand "GL_FOG_COLOR, r, g,
+  b, a" (canonicalized to the compound literal, same policy as
+  glMaterialfv). Exported C89 routes the color through the
+  repl_glfloat4 helper; import converts back. See the built-in
+  example "Fog ring tunnel (glFog)".
 glClipPlane(plane, (GLdouble[]){a, b, c, d})
   plane: GL_CLIP_PLANE0 .. GL_CLIP_PLANE5. Sets the plane equation
   a*x + b*y + c*z + d >= 0 (kept half-space) in the coordinate frame

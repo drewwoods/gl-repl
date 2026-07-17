@@ -1,0 +1,51 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg axes = AXES_THEME_OFF
+// @cfg backdrop = RENDER3D_BACKDROP_OFF
+// @cfg vertex_labels = 0
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg variable_panel = 1
+
+// camera
+glTranslatef(0.0f, 0.0f, -1.0f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+// Fog fades geometry toward the fog color with eye-space distance.
+// glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
+// exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
+// glFogf(GL_FOG_START, ...) and glFogf(GL_FOG_END, ...) distances.
+// Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
+// the background, which is what hides each ring's respawn at the far
+// end of this endless tunnel. Drag `density` to thicken or clear it.
+static float density = 0.055; // @tune
+static float ringZ; // eye-space distance of the current ring
+
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glClearColor(0.05, 0.06, 0.08, 1);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_FOG);
+glFogi(GL_FOG_MODE, GL_EXP2);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
+glFogf(GL_FOG_DENSITY, density);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+for (i, 0, 12) {
+  ringZ = 37 - fmod(3 * t + 3 * i, 36);
+  glPushMatrix();
+  glTranslatef(0, 0, 0 - ringZ);
+  glRotatef(8 * ringZ, 0, 0, 1);
+  if (fmod(i, 3) < 1) {
+    glColor3f(0.1, 0.95, 0.85);
+  } else if (fmod(i, 3) < 2) {
+    glColor3f(0.15, 0.55, 1);
+  } else {
+    glColor3f(0.95, 0.25, 1);
+  }
+  glutSolidTorus(0.09, 1.7, 10, 28);
+  glPopMatrix();
+}

@@ -406,6 +406,20 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
          * around it (which the host cleared) alone. */
         glClear((GLbitfield)cmd->args[0]);
         return 1;
+    case CMD_FOG_I:
+        glFogi((GLenum)cmd->args[0], (GLint)cmd->args[1]);
+        return 1;
+    case CMD_FOG_F:
+        glFogf((GLenum)cmd->args[0], cmd->args[1]);
+        return 1;
+    case CMD_FOG_FV: {
+        /* args[0]=pname (GL_FOG_COLOR), args[1..4]=rgba. */
+        GLfloat fog[4] = {
+            cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4]
+        };
+        glFogfv((GLenum)cmd->args[0], fog);
+        return 1;
+    }
     default:
         return 0;
     }
@@ -879,6 +893,9 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_CLEAR_COLOR:
     case CMD_CLIP_PLANE:
     case CMD_CLEAR:
+    case CMD_FOG_I:
+    case CMD_FOG_F:
+    case CMD_FOG_FV:
         /* Fade-batch replays composite translucent geometry over the
          * frame the fill pass already rendered, and their pre-skip
          * prefix executes state commands — so without this gate every

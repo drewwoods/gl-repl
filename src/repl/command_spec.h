@@ -278,6 +278,9 @@ const ReplEnumEntry *repl_face_type_entries(void);
 const ReplEnumEntry *repl_material_param_entries(void);
 const ReplEnumEntry *repl_point_param_pname_entries(void);
 const ReplEnumEntry *repl_clip_plane_entries(void);
+const ReplEnumEntry *repl_fog_f_pname_entries(void);
+const ReplEnumEntry *repl_fog_color_pname_entries(void);
+const ReplEnumEntry *repl_fog_mode_entries(void);
 
 /* Convert a GL_TRIANGLES, GL_QUADS, etc. constant to its string name (e.g.,
  * GL_TRIANGLES → "GL_TRIANGLES"). Used for display and diagnostic output. */

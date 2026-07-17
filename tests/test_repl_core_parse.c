@@ -1198,6 +1198,135 @@ int main(void) {
         ASSERT_TRUE("glClipPlane trailing junk rejected", ok == 0);
     }
 
+    /* glFogi - table-driven pname/mode enums */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glFogi(GL_FOG_MODE, GL_EXP2)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glFogi parse ok", ok == 1);
+        ASSERT_TRUE("glFogi type", cmd.type == CMD_FOG_I);
+        ASSERT_TRUE("glFogi pname", (GLenum)cmd.args[0] == GL_FOG_MODE);
+        ASSERT_TRUE("glFogi mode", (GLenum)cmd.args[1] == GL_EXP2);
+        ASSERT_TRUE("glFogi source",
+                    strstr(cmd_text, "glFogi(GL_FOG_MODE, GL_EXP2);") != NULL);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogi(GL_FOG_MODE, GL_LINEAR)", &cmd);
+        ASSERT_TRUE("glFogi GL_LINEAR ok", ok == 1);
+        ASSERT_TRUE("glFogi GL_LINEAR mode", (GLenum)cmd.args[1] == GL_LINEAR);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogi(GL_FOG_MODE, GL_EXP)", &cmd);
+        ASSERT_TRUE("glFogi GL_EXP ok", ok == 1);
+        ASSERT_TRUE("glFogi GL_EXP mode", (GLenum)cmd.args[1] == GL_EXP);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogi(GL_FOG_MODE, GL_LESS)", &cmd);
+        ASSERT_TRUE("glFogi bad mode rejected", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogi(GL_FOG_DENSITY, GL_EXP)", &cmd);
+        ASSERT_TRUE("glFogi bad pname rejected", ok == 0);
+    }
+
+    /* glFogf - enum pname + expression value */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        ExprVar vars[1] = { { "density", 0.25f } };
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glFogf(GL_FOG_DENSITY, 0.12)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glFogf parse ok", ok == 1);
+        ASSERT_TRUE("glFogf type", cmd.type == CMD_FOG_F);
+        ASSERT_TRUE("glFogf num_args", cmd.num_args == 2);
+        ASSERT_TRUE("glFogf pname", (GLenum)cmd.args[0] == GL_FOG_DENSITY);
+        ASSERT_TRUE("glFogf value baked", cmd.args[1] == 0.12f);
+        ASSERT_TRUE("glFogf source",
+                    strstr(cmd_text, "glFogf(GL_FOG_DENSITY, 0.12);") != NULL);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogf(GL_FOG_START, 2)", &cmd);
+        ASSERT_TRUE("glFogf GL_FOG_START ok", ok == 1);
+        ASSERT_TRUE("glFogf GL_FOG_START pname",
+                    (GLenum)cmd.args[0] == GL_FOG_START);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogf(GL_FOG_END, 30)", &cmd);
+        ASSERT_TRUE("glFogf GL_FOG_END ok", ok == 1);
+        ASSERT_TRUE("glFogf GL_FOG_END pname",
+                    (GLenum)cmd.args[0] == GL_FOG_END);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test_with_vars("glFogf(GL_FOG_DENSITY, density)",
+                                      &cmd, vars, 1);
+        ASSERT_TRUE("glFogf var parse ok", ok == 1);
+        ASSERT_TRUE("glFogf var has_vars", cmd.has_vars == 1);
+        ASSERT_TRUE("glFogf var value baked", cmd.args[1] == 0.25f);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogf(GL_FOG_MODE, 1)", &cmd);
+        ASSERT_TRUE("glFogf rejects GL_FOG_MODE (glFogi owns it)", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogf(GL_FOG_DENSITY, 1, 2)", &cmd);
+        ASSERT_TRUE("glFogf extra arg rejected", ok == 0);
+    }
+
+    /* glFogfv - compound-literal and flat shorthand forms */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        GLCmd cmd2;
+        char cmd_text[MAX_LINE_LEN] = "";
+        char cmd_text2[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        memset(&cmd2, 0, sizeof(cmd2));
+        int ok = parse_cmd_with_text(
+            "glFogfv(GL_FOG_COLOR, (GLfloat[]){0.1, 0.2, 0.3, 1})",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glFogfv parse ok", ok == 1);
+        ASSERT_TRUE("glFogfv type", cmd.type == CMD_FOG_FV);
+        ASSERT_TRUE("glFogfv num_args", cmd.num_args == 5);
+        ASSERT_TRUE("glFogfv pname", (GLenum)cmd.args[0] == GL_FOG_COLOR);
+        ASSERT_TRUE("glFogfv color baked",
+                    cmd.args[1] == 0.1f && cmd.args[2] == 0.2f &&
+                    cmd.args[3] == 0.3f && cmd.args[4] == 1.0f);
+
+        /* Flat shorthand canonicalizes to the compound literal and the
+         * canonical text is stable across a re-parse. */
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_cmd_with_text("glFogfv(GL_FOG_COLOR, 0.1, 0.2, 0.3, 1)",
+                                 &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glFogfv flat parse ok", ok == 1);
+        ASSERT_TRUE("glFogfv flat canonical emits compound literal",
+                    strstr(cmd_text,
+                           "glFogfv(GL_FOG_COLOR, (GLfloat[]){0.1, 0.2, 0.3, 1})")
+                        != NULL);
+        ok = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glFogfv canonical re-parses", ok == 1);
+        ASSERT_TRUE("glFogfv canonical text stable",
+                    strcmp(cmd_text, cmd_text2) == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogfv(GL_FOG_DENSITY, 0.1, 0.2, 0.3, 1)", &cmd);
+        ASSERT_TRUE("glFogfv bad pname rejected", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glFogfv(GL_FOG_COLOR, 0.1, 0.2, 0.3)", &cmd);
+        ASSERT_TRUE("glFogfv wrong channel count rejected", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test(
+            "glFogfv(GL_FOG_COLOR, (GLfloat[]){0.1, 0.2, 0.3, 1} junk)",
+            &cmd);
+        ASSERT_TRUE("glFogfv trailing junk rejected", ok == 0);
+    }
+
     /* Incomplete commands should not be reported as unknown commands. */
     {
         glr_ctrl_reset_all();

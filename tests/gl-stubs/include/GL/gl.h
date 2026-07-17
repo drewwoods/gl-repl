@@ -195,6 +195,7 @@ typedef double GLclampd;
 #define GL_FOG_END 0x0B64
 #define GL_FOG_COLOR 0x0B66
 #define GL_LINEAR 0x2601
+#define GL_EXP 0x0800
 #define GL_EXP2 0x0801
 
 #define GL_SRC_COLOR 0x0300
@@ -312,7 +313,7 @@ static inline void glCallList(GLuint list) { GL_STUB_TRACE_LINE("glCallList %u\n
 static inline void glDeleteLists(GLuint list, GLsizei range) { GL_STUB_TRACE_LINE("glDeleteLists %u %d\n", (unsigned)list, (int)range); gl_stub_tick(GL_STUB_glDeleteLists); }
 static inline void glFinish(void) { GL_STUB_TRACE_LINE("glFinish\n"); gl_stub_tick(GL_STUB_glFinish); }
 static inline void glFogf(GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glFogf %u %g\n", (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glFogf); }
-static inline void glFogfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glFogfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glFogfv); (void)params; }
+static inline void glFogfv(GLenum pname, const GLfloat *params) { if (pname == GL_FOG_COLOR) { GL_STUB_TRACE_LINE("glFogfv %u %g %g %g %g\n", (unsigned)pname, (double)params[0], (double)params[1], (double)params[2], (double)params[3]); } else { GL_STUB_TRACE_LINE("glFogfv %u %g\n", (unsigned)pname, (double)params[0]); } gl_stub_tick(GL_STUB_glFogfv); }
 static inline void glFogi(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glFogi %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glFogi); }
 static inline void glFrontFace(GLenum mode) { GL_STUB_TRACE_LINE("glFrontFace %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glFrontFace); }
 static inline void glFrustum(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble z_near, GLdouble z_far) { GL_STUB_TRACE_LINE("glFrustum %g %g %g %g %g %g\n", (double)left, (double)right, (double)bottom, (double)top, (double)z_near, (double)z_far); gl_stub_tick(GL_STUB_glFrustum); }

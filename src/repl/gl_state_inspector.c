@@ -160,6 +160,22 @@ typedef struct {
     float clip_plane[REPL_GL_STATE_CLIP_PLANES][4];
     int clip_plane_touched[REPL_GL_STATE_CLIP_PLANES];
     ReplGlStateChangeSource clip_plane_source[REPL_GL_STATE_CLIP_PLANES];
+
+    GLenum fog_mode;
+    float fog_density;
+    float fog_start;
+    float fog_end;
+    float fog_color[4];
+    int fog_mode_touched;
+    int fog_density_touched;
+    int fog_start_touched;
+    int fog_end_touched;
+    int fog_color_touched;
+    ReplGlStateChangeSource fog_mode_source;
+    ReplGlStateChangeSource fog_density_source;
+    ReplGlStateChangeSource fog_start_source;
+    ReplGlStateChangeSource fog_end_source;
+    ReplGlStateChangeSource fog_color_source;
 } ReplGlTrackedState;
 
 static const float gl_state_light_position_default[4] = { 0, 0, 1, 0 };
@@ -444,6 +460,10 @@ static void gl_state_init(ReplGlTrackedState *s) {
     s->color_mask[2] = s->color_mask[3] = 1;
     s->edge_flag = 1;
     s->raster_pos[3] = 1.0f;
+    s->fog_mode = GL_EXP;
+    s->fog_density = 1.0f;
+    s->fog_start = 0.0f;
+    s->fog_end = 1.0f;
 }
 
 static ReplGlTrackedCap *gl_state_find_cap(ReplGlTrackedState *s, GLenum cap) {
@@ -725,6 +745,35 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         }
         break;
     }
+    case CMD_FOG_I:
+        if ((GLenum)cmd->args[0] == GL_FOG_MODE) {
+            s->fog_mode = (GLenum)cmd->args[1];
+            s->fog_mode_touched = 1;
+            s->fog_mode_source = source;
+        }
+        break;
+    case CMD_FOG_F:
+        if ((GLenum)cmd->args[0] == GL_FOG_DENSITY) {
+            s->fog_density = cmd->args[1];
+            s->fog_density_touched = 1;
+            s->fog_density_source = source;
+        } else if ((GLenum)cmd->args[0] == GL_FOG_START) {
+            s->fog_start = cmd->args[1];
+            s->fog_start_touched = 1;
+            s->fog_start_source = source;
+        } else if ((GLenum)cmd->args[0] == GL_FOG_END) {
+            s->fog_end = cmd->args[1];
+            s->fog_end_touched = 1;
+            s->fog_end_source = source;
+        }
+        break;
+    case CMD_FOG_FV:
+        if ((GLenum)cmd->args[0] == GL_FOG_COLOR) {
+            memcpy(s->fog_color, &cmd->args[1], 4 * sizeof(float));
+            s->fog_color_touched = 1;
+            s->fog_color_source = source;
+        }
+        break;
     default:
         break;
     }
@@ -957,6 +1006,7 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     static const float clear_default[4] = { 0, 0, 0, 0 };
     static const float raster_default[4] = { 0, 0, 0, 1 };
     static const float clip_default[4] = { 0, 0, 0, 0 };
+    static const float fog_color_default[4] = { 0, 0, 0, 0 };
     static const float light_model_ambient_default[4] = {
         0.2f, 0.2f, 0.2f, 1.0f
     };
@@ -1192,6 +1242,28 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
             gl_state_report_vec(out, name, s->clip_plane[i], clip_default, 4);
             gl_state_report_set_last_source(out, s->clip_plane_source[i]);
         }
+    }
+    if (s->fog_mode_touched) {
+        gl_state_report_enum(out, "GL_FOG_MODE", CMD_FOG_I, 1,
+                             s->fog_mode, GL_EXP);
+        gl_state_report_set_last_source(out, s->fog_mode_source);
+    }
+    if (s->fog_density_touched) {
+        gl_state_report_float(out, "GL_FOG_DENSITY", s->fog_density, 1.0f);
+        gl_state_report_set_last_source(out, s->fog_density_source);
+    }
+    if (s->fog_start_touched) {
+        gl_state_report_float(out, "GL_FOG_START", s->fog_start, 0.0f);
+        gl_state_report_set_last_source(out, s->fog_start_source);
+    }
+    if (s->fog_end_touched) {
+        gl_state_report_float(out, "GL_FOG_END", s->fog_end, 1.0f);
+        gl_state_report_set_last_source(out, s->fog_end_source);
+    }
+    if (s->fog_color_touched) {
+        gl_state_report_vec(out, "GL_FOG_COLOR", s->fog_color,
+                            fog_color_default, 4);
+        gl_state_report_set_last_source(out, s->fog_color_source);
     }
 }
 

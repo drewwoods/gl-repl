@@ -1185,6 +1185,146 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     return 1;
 }
 
+/* glFogf(pname, value) — enum pname + one scalar expression, the
+ * glMaterialf shape without the face arg. GL_FOG_MODE lives on glFogi
+ * (it takes an enum, not a float) and GL_FOG_COLOR on glFogfv. */
+static int parse_fogf(const char *args, GLCmd *cmd,
+                      char *text_out, int text_sz,
+                      const char *indent,
+                      const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char pname_str[REPL_ENUM_ARG_MAX] = "";
+    char val_arg[MAX_LINE_LEN] = "";
+
+    if (!split_two_args(args, pname_str, sizeof(pname_str), val_arg, sizeof(val_arg))) {
+        parser_emit_error_static(ctx, "Usage: glFogf(pname, value)");
+        return 0;
+    }
+
+    GLenum pname = 0;
+    int found = 0;
+    const ReplEnumEntry *pnames = repl_fog_f_pname_entries();
+    for (int i = 0; pnames[i].name; i++) {
+        if (strcmp(pname_str, pnames[i].name) == 0) {
+            pname = pnames[i].value;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        parser_emit_error_static(ctx,
+            "pname: GL_FOG_DENSITY, GL_FOG_START, GL_FOG_END");
+        return 0;
+    }
+
+    float parsed_args[2];
+    int num_parsed = parse_canonical_float_list(val_arg, parsed_args, 2, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+    /* Value lands at args[1]; the pname stays baked. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             1, val_arg);
+
+    if (num_parsed != 1) {
+        parser_emit_error_static(ctx, "Expected 1 float value");
+        return 0;
+    }
+
+    cmd->type = CMD_FOG_F;
+    cmd->valid = 1;
+    cmd->args[0] = (float)pname;
+    cmd->args[1] = parsed_args[0];
+    cmd->num_args = 2;
+    cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
+
+    if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX];
+        snprintf(text_out, (size_t)text_sz, "%sglFogf(%s, %s);",
+                 indent, pname_str,
+                 fmt_source_float(b0, parsed_args[0]));
+    }
+    return 1;
+}
+
+/* glFogfv(GL_FOG_COLOR, ...) — same aggregate-value shape as
+ * glPointParameterfv. Accepts the canonical `(GLfloat[]){r, g, b, a}`
+ * compound literal or the flat shorthand `GL_FOG_COLOR, r, g, b, a`,
+ * rewritten to the compound-literal form in the canonical text. */
+static int parse_fogfv(const char *args, GLCmd *cmd,
+                       char *text_out, int text_sz,
+                       const char *indent,
+                       const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char pname_str[REPL_ENUM_ARG_MAX] = "";
+    char rest[MAX_LINE_LEN] = "";
+
+    if (!split_two_args(args, pname_str, sizeof(pname_str), rest, sizeof(rest))) {
+        parser_emit_error_static(ctx,
+            "Usage: glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})");
+        return 0;
+    }
+
+    GLenum pname = 0;
+    int found = 0;
+    const ReplEnumEntry *pnames = repl_fog_color_pname_entries();
+    for (int i = 0; pnames[i].name; i++) {
+        if (strcmp(pname_str, pnames[i].name) == 0) {
+            pname = pnames[i].value;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        parser_emit_error_static(ctx, "pname: GL_FOG_COLOR");
+        return 0;
+    }
+
+    const char *to_parse = rest;
+    char interior_buf[MAX_LINE_LEN];
+    if (!parse_compound_literal_arg(rest, "(GLfloat[]){",
+                                    "Unclosed (GLfloat[]){...} literal",
+                                    "Trailing content after (GLfloat[]){...} compound literal",
+                                    interior_buf,
+                                    (int)sizeof(interior_buf),
+                                    &to_parse, ctx))
+        return 0;
+
+    float parsed_args[5];
+    int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 5, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+    /* Color lands at args[1..4]; the pname stays baked. Same capture
+     * contract as glMaterialfv / glClipPlane so warm flatten
+     * re-evaluates variable-backed channels. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             1, to_parse);
+
+    if (num_parsed != 4) {
+        parser_emit_error_static(ctx, "Expected 4 floats: r, g, b, a");
+        return 0;
+    }
+
+    cmd->type = CMD_FOG_FV;
+    cmd->valid = 1;
+    cmd->args[0] = (float)pname;
+    for (int k = 0; k < 4; k++) cmd->args[k + 1] = parsed_args[k];
+    cmd->num_args = 5;
+    cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
+
+    if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX], b1[REPL_SOURCE_FLOAT_TEXT_MAX];
+        char b2[REPL_SOURCE_FLOAT_TEXT_MAX], b3[REPL_SOURCE_FLOAT_TEXT_MAX];
+        snprintf(text_out, (size_t)text_sz,
+                 "%sglFogfv(%s, (GLfloat[]){%s, %s, %s, %s});",
+                 indent, pname_str,
+                 fmt_source_float(b0, parsed_args[0]),
+                 fmt_source_float(b1, parsed_args[1]),
+                 fmt_source_float(b2, parsed_args[2]),
+                 fmt_source_float(b3, parsed_args[3]));
+    }
+    return 1;
+}
+
 /* Dispatcher for the custom-branch commands that escape both spec
  * tables. Returns -1 when `func` matches none of them (the caller
  * falls through to the remaining parsers); otherwise the handler's
@@ -1213,6 +1353,10 @@ static int try_parse_custom_arg_command(const char *func, const char *args,
         return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glClipPlane") == 0)
         return parse_clip_plane(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glFogf") == 0)
+        return parse_fogf(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glFogfv") == 0)
+        return parse_fogfv(args, cmd, text_out, text_sz, indent, ctx);
     return -1;
 }
 

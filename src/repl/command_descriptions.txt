@@ -184,6 +184,18 @@ Defines one user clip plane from equation coefficients (a, b, c, d). Enable the 
 title = glClear
 Clears the buffers named in the mask: GL_COLOR_BUFFER_BIT resets the 3D viewport to the current glClearColor, GL_DEPTH_BUFFER_BIT resets the depth buffer. OR the two together with | to clear both. The REPL already clears both at the start of every frame, so this is for clearing again part-way down a scene: a depth clear makes everything below the line draw over what came before it, ignoring depth.
 
+[command CMD_FOG_I]
+title = glFogi
+Selects the fog equation while GL_FOG is enabled: GL_LINEAR ramps between glFogf's GL_FOG_START and GL_FOG_END distances, while GL_EXP and GL_EXP2 fall off exponentially with GL_FOG_DENSITY (GL_EXP2 more steeply).
+
+[command CMD_FOG_F]
+title = glFogf
+Sets one scalar fog parameter: GL_FOG_DENSITY steepens the GL_EXP / GL_EXP2 falloff, and GL_FOG_START / GL_FOG_END bound the GL_LINEAR ramp in eye-space distance.
+
+[command CMD_FOG_FV]
+title = glFogfv
+Sets the fog color that distant geometry fades toward. Matching it to the glClearColor background makes geometry dissolve seamlessly into the distance.
+
 [capability GL_BLEND]
 title = GL_BLEND
 Controls color blending between new fragments and the existing color buffer. glBlendFunc selects the source and destination factors used while this capability is enabled.
@@ -223,6 +235,10 @@ Removes selected front-facing or back-facing polygons before rasterization. glCu
 [capability GL_DEPTH_TEST]
 title = GL_DEPTH_TEST
 Compares each fragment's depth with the depth buffer before it can update the framebuffer. glDepthFunc chooses the comparison and glDepthMask controls depth writes.
+
+[capability GL_FOG]
+title = GL_FOG
+Blends each fragment toward the fog color with eye-space distance. glFogi selects the GL_LINEAR / GL_EXP / GL_EXP2 equation, glFogf sets its density or start/end range, and glFogfv sets the fog color.
 
 [capability GL_LIGHT0]
 title = GL_LIGHT0
