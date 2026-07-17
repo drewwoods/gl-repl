@@ -345,6 +345,11 @@ numeric argument everywhere is a full math expression.
   [`glRotatef(deg,x,y,z)`](https://docs.gl/gl2/glRotate)
 - [`glPushMatrix()`](https://docs.gl/gl2/glPushMatrix), [`glPopMatrix()`](https://docs.gl/gl2/glPushMatrix),
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
+- [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
+  save/restore a group of GL state (see Scoping state below). `mask` is one or
+  more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
+  `GL_LIGHTING_BIT`, `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT`, `GL_ENABLE_BIT`,
+  `GL_COLOR_BUFFER_BIT`, OR'd with `|` (`GL_ALL_ATTRIB_BITS` is not supported)
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
@@ -479,6 +484,38 @@ the line is stored in a fixed order regardless of how you spell it
 bits are not offered: nothing in the REPL writes stencil, and clearing the
 accumulation buffer would fight the accum effects under [Rendering
 quality](#rendering-quality).
+
+### Scoping state with glPushAttrib
+
+`glPushAttrib(mask)` saves a group of GL state; the matching `glPopAttrib()`
+puts it back. Use them to make a local change without it leaking into the
+rest of the scene:
+
+```c
+glColor3f(0.2, 0.6, 1);
+glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT);
+  glColor3f(1, 0.3, 0.3);   // red, and…
+  glLineWidth(4);           // …fat lines, but only until the pop
+  glBegin(GL_LINE_LOOP); glVertex3f(-1, 0, 0); glVertex3f(1, 0, 0); glEnd();
+glPopAttrib();              // colour and line width snap back to blue / 1
+```
+
+`mask` names which *groups* of state to save, one or more of `GL_CURRENT_BIT`
+(colour, normal, raster position, edge flag), `GL_POINT_BIT`, `GL_LINE_BIT`,
+`GL_POLYGON_BIT` (cull + winding), `GL_LIGHTING_BIT` (materials, shade model,
+lights), `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
+(every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear
+colour, colour mask). Join several with `|` — like `glClear`'s mask it is a
+fixed set of tokens (no expressions), canonicalised to a stable order.
+`GL_ALL_ATTRIB_BITS` is intentionally not offered.
+
+Two editor affordances make the scope visible. Park the cursor on a
+`glPushAttrib` line and each mask token lights up in its own colour, and every
+earlier line whose value the push *saves* gets a matching gutter marker
+("what's about to be protected"). Park it on the `glPopAttrib` and the lines
+whose changes the pop *reverts* light up instead ("what snaps back here"). A
+push or pop with no partner gets the same red gutter warning as an unmatched
+`glPushMatrix`.
 
 ### Math expressions
 
