@@ -687,11 +687,18 @@ The overlay toggles annotate geometry scene-wide:
   see the whole solid a plane is cutting into. Clipped cuts the highlight at
   the planes, like every other overlay.
 
-Vertex outlines and vertex points always honor your clip planes: they report
-the geometry the frame actually shows, so an outline stops where the shape
-does and no point is drawn on a clipped-away face. Polygon highlight = On is
-the sole exception, and a deliberate one — with it you get a cut outline and a
-whole-shape highlight over it at the same time.
+Vertex outlines and vertex points always report the geometry the frame
+actually shows. They honor your clip planes, so an outline stops where the
+shape does and no point is drawn on a clipped-away face; and they skip
+geometry drawn under a `glColorMask` with no live color channel — a depth-only
+seed pass gets no outline and no dots, since there is nothing on screen to
+outline.
+
+The cursor highlight is exempt from both, deliberately: it draws through a
+color mask (finding the line you're editing matters even when its geometry is
+an invisible depth seed), and Polygon highlight = On draws the shape as
+authored through clip planes, so you can get a cut outline with a whole-shape
+highlight over it.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 

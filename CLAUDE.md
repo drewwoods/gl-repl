@@ -1483,6 +1483,11 @@ glDepthMask(GL_TRUE|GL_FALSE)
 glColorMask(red, green, blue, alpha)
   Each channel is GL_TRUE/GL_FALSE (or 0/1, canonicalized to the
   symbolic token). glDepthMask accepts 0/1 the same way.
+  Geometry drawn while no color channel is writable (alpha ignored —
+  `color_mask_writes_color` in edit_overlays.c) is invisible, so the
+  vertex-outline and vertex-point passes skip it; the cursor highlight
+  draws through it. The mask is a gate on those walks, not replayed
+  into GL — mirroring it would mask the overlay's own pixels.
 GLUT Solid Shapes:
   glutSolidTorus(inner, outer, nsides, rings)
   glutSolidCube(size)
