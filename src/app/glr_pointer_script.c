@@ -235,13 +235,13 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
                  : (verb[0] == 'd') ? PS_DOWN : PS_UP;
         /* Point is optional (press/release at the current pointer), but a
          * present-yet-malformed one is an error, not a bare click: only
-         * blank args may fall through. */
+         * blank args or a trailing `#` comment may fall through. */
         if (!ps_scan_point(args, ev)) {
             const char *rest = args;
             while (*rest == ' ' || *rest == '\t' ||
                    *rest == '\n' || *rest == '\r')
                 rest++;
-            if (*rest != '\0')
+            if (*rest != '\0' && *rest != '#')
                 return -1;
         }
         return 1;

@@ -1,0 +1,40 @@
+# Editing Basics - File > New Scene, then type a spinning triangle ringed
+# by a torus, committing each line with `;` - the same keystrokes a user
+# would make.
+#
+# Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
+
+0.2   move scene:0.55,0.30
+0.3   echo scene:0.25,0.76 18 3.0 Let's build a scene from scratch.
+3.4   glide menu:file 0.8          # the File menu
+4.4   click
+5.0   glide item:new_scene 0.5     # New Scene row
+5.8   click
+6.6   echo scene:0.25,0.76 18 3.4 A new scene seeds the GL boilerplate.
+10.2  echo scene:0.25,0.76 18 3.4 Type a command; the ; key commits it.
+10.6  key glRotatef(t * 40, 0, 1, 0)
+12.2  key ;
+12.6  echo scene:0.25,0.76 18 3.0 t is the animation clock (Ctrl+T).
+13.4  key glBegin(GL_TRIANGLES)
+14.6  key ;
+15.2  key glColor3f(1, 0.42, 0.3)
+16.4  key ;
+16.8  key glVertex3f(-1, -0.7, 0)
+18.0  key ;
+18.4  key glColor3f(0.35, 0.85, 0.55)
+19.6  key ;
+20.0  key glVertex3f(1, -0.7, 0)
+21.2  key ;
+21.6  key glColor3f(0.45, 0.6, 1)
+22.8  key ;
+23.2  key glVertex3f(0, 1.1, 0)
+24.4  key ;
+24.8  key glEnd()
+25.6  key ;
+26.4  echo scene:0.25,0.76 18 3.6 The gray ghost is autocomplete (Tab).
+# pause here so the ghost shows
+26.8  key glutSolidT
+29.0  key orus(0.25, 1.4, 16, 32)
+30.4  key ;
+31.4  echo scene:0.25,0.76 18 4.0 Lines re-run every frame. Undo: Ctrl+Z.
+35.6  echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!
