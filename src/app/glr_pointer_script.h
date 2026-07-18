@@ -29,6 +29,9 @@
  *   6.0  key \cT              # e.g. Ctrl+T toggles animation
  *   7.0  skey f12             # special key: f1..f12, up/down/left/right,
  *                             # home, end, pageup, pagedown
+ *   8.0  echo 40 60 28 2 Ctrl+K   # caption text at (40,60), 28px cap
+ *                             # height, shown 2s — labels how the next
+ *                             # action was triggered (GLUT stroke text)
  *
  * Events fire in file order once their time is reached; keep them sorted.
  * `key` + `skey` let a script type a whole demo (commit lines with `key ;`,
