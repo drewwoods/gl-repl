@@ -268,8 +268,14 @@ any `--window` size); recorded `.mp4`s are gitignored under `docs/images/`
 — large files stay out of the repo.
 
 **In-app guided tours (Tours menu).** The same pointer-script engine also
-powers the **Tours** menu: [`src/app/glr_tours.c`](src/app/glr_tours.c) holds a
-catalog of named, compiled-in scripts (same grammar), started mid-session via
+powers the **Tours** menu. Tour content is file-backed like the example
+scenes: `.pointer` files under `tours/` are named by `tours/catalog.ini`
+(section order = menu row order) and compiled in by `scripts/gen_tours.py`
+(→ `build/generated/glr_tours_data.inc`, consumed by
+[`src/app/glr_tours.c`](src/app/glr_tours.c); `make check-tours-catalog`
+validates the catalog, and the files also load directly via
+`GLR_POINTER_SCRIPT=` / `record-video.sh --script` for previewing).
+A menu activation starts the script mid-session via
 `glr_pointer_script_start_lines`. Unlike the env-driven capture mode a tour
 runs on the live wall-clock frame loop (no `GLR_TICK_PER_FRAME`), auto-stops
 after its last event and overlay effect expire, and is canceled by any real
@@ -706,7 +712,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_camera.h`](src/app/glr_camera.h) | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | [`src/app/glr_actions.c`](src/app/glr_actions.c) | Config descriptor table, config shortcuts, menu actions |
 | [`src/app/glr_actions.h`](src/app/glr_actions.h) | Actions public API (`glr_action_menu_item_activate`, etc.) |
-| [`src/app/glr_tours.c`](src/app/glr_tours.c) | Built-in guided-tour catalog (Tours menu): named, compiled-in pointer scripts (same grammar as the `.pointer` capture files) played via `glr_pointer_script_start_lines`; coordinates authored against the default 1200x800 layout (anchor math in the file header) |
+| [`src/app/glr_tours.c`](src/app/glr_tours.c) | Built-in guided-tour catalog (Tours menu), file-backed like the example scenes: `tours/*.pointer` scripts named by `tours/catalog.ini`, compiled in by `scripts/gen_tours.py` (`make check-tours-catalog` validates), played via `glr_pointer_script_start_lines`; authored entirely with symbolic targets |
 | [`src/app/glr_tours.h`](src/app/glr_tours.h) | Tour catalog queries + `glr_tours_start` |
 | [`config.h`](config.h) | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`). Also `#include`s [`keymap.h`](keymap.h) so the key bindings reach every TU |
 | [`keymap.h`](keymap.h) | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like [`config.h`](config.h)'s `FONT_*`); consumed by `g_cfg_items[]` (via `KM_KEY`/`KM_MODS` designated initializers), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |

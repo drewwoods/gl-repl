@@ -393,6 +393,7 @@ endif
 	check-editor-ownership-budget \
 	check-editor-repl-surface \
 	check-examples-catalog \
+	check-tours-catalog \
 	check-formatted \
 	check-gl-boundaries \
 	check-glr-ctrl-not-editor-mirror \
@@ -534,6 +535,9 @@ EXAMPLES_CATALOG = examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
+TOURS_CATALOG = tours/catalog.ini
+TOUR_SCRIPT_SRCS = $(wildcard tours/*.pointer)
+GENERATED_TOURS_INC = build/generated/glr_tours_data.inc
 COMMAND_DESCRIPTIONS_SOURCE = src/repl/command_descriptions.txt
 GENERATED_COMMAND_DESCRIPTIONS_INC = build/generated/repl_command_descriptions_data.inc
 
@@ -1027,6 +1031,12 @@ $(GENERATED_EXAMPLES_INC): FORCE scripts/gen_examples.py $(EXAMPLES_CATALOG) $(E
 	python3 scripts/gen_examples.py --catalog $(EXAMPLES_CATALOG) --out $@
 
 $(OBJDIR)/src/repl/examples.o: $(GENERATED_EXAMPLES_INC)
+
+$(GENERATED_TOURS_INC): FORCE scripts/gen_tours.py $(TOURS_CATALOG) $(TOUR_SCRIPT_SRCS)
+	@mkdir -p $(dir $@)
+	python3 scripts/gen_tours.py --catalog $(TOURS_CATALOG) --out $@
+
+$(OBJDIR)/src/app/glr_tours.o: $(GENERATED_TOURS_INC)
 
 $(GENERATED_COMMAND_DESCRIPTIONS_INC): FORCE scripts/gen_command_descriptions.py \
 		$(COMMAND_DESCRIPTIONS_SOURCE) src/repl/command.h src/repl/command_spec.c
@@ -1678,6 +1688,9 @@ palette-list: ## Print the active accent palette anchors (floats + hex) and the 
 check-examples-catalog: ## Validate the file-backed built-in example catalog.
 	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG)
 
+check-tours-catalog: ## Validate the file-backed guided-tour catalog.
+	@python3 scripts/gen_tours.py --check --catalog $(TOURS_CATALOG)
+
 check-command-descriptions: ## Validate complete GL command/capability popup descriptions.
 	@python3 scripts/gen_command_descriptions.py --check \
 		--catalog $(COMMAND_DESCRIPTIONS_SOURCE)
@@ -1689,7 +1702,7 @@ check-formatted: ## Verify that example scenes under examples/scenes are formatt
 		exit 1; \
 	)
 
-check-c99: $(GENERATED_EXAMPLES_INC) $(GENERATED_COMMAND_DESCRIPTIONS_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
+check-c99: $(GENERATED_EXAMPLES_INC) $(GENERATED_COMMAND_DESCRIPTIONS_INC) $(GENERATED_TOURS_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check/check-c99.sh
 
 check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range must not grow past their baselines.
@@ -1719,6 +1732,7 @@ CHECK_TARGETS = \
 	check-user-guide-keymap \
 	check-user-guide-examples \
 	check-examples-catalog \
+	check-tours-catalog \
 	check-command-descriptions \
 	check-formatted \
 	check-gl-boundaries \
@@ -1779,6 +1793,7 @@ TEST_STUBS_PRECHECKS = \
 	check-user-guide-examples \
 	check-trailing-whitespace \
 	check-examples-catalog \
+	check-tours-catalog \
 	check-formatted \
 	check-gl-boundaries \
 	check-layer-coupling \
