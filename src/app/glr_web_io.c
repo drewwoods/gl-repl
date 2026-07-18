@@ -16,6 +16,8 @@
 #include "repl/export.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
+#include "repl/state_notify.h"
+#include "repl/state_views.h"
 #include "source_document.h"
 
 #include <emscripten/emscripten.h>
@@ -82,6 +84,82 @@ int glr_web_export_scene(const char *path) {
 
     repl_set_status("Prepared scene download");
     return 1;
+}
+
+/*
+ * URL-share bridge. The shell encodes shareable state into location.hash
+ * (deflate + base64url, all on the JS side — see shell.html): a full-scene
+ * payload reuses glr_web_export_scene / glr_web_load_scene_text unchanged,
+ * while these two exports supply and apply the lighter config-only payload
+ * (the same `@cfg slug = value` directive vocabulary the workspace header
+ * round-trips through files).
+ */
+
+/* Newline-joined `// @cfg slug = value` lines for the current presentation
+ * state — the config-only share payload. Rebuilt on every call; the returned
+ * pointer stays valid until the next call (ccall copies it out synchronously). */
+EMSCRIPTEN_KEEPALIVE
+const char *glr_web_cfg_share_text(void) {
+    static char buf[MAX_WORKSPACE_HEADER_LINES * WORKSPACE_HEADER_LINE_LEN];
+
+    repl_state_refresh_workspace_header_lines();
+    ReplImportExportView ie = repl_state_import_export();
+
+    size_t off = 0;
+    for (int i = 0; i < ie.workspace_header_line_count; i++) {
+        /* Header lines are emitted as C89 block comments wrapping
+         * "@cfg k = v"; keep only the @cfg ones, re-emitted in the `//`
+         * form the public single-line parser accepts. */
+        const char *at = strstr(ie.workspace_header_lines[i], "@cfg ");
+        if (!at)
+            continue;
+        const char *end = strstr(at, "*/");
+        size_t len = end ? (size_t)(end - at) : strlen(at);
+        while (len > 0 && (at[len - 1] == ' ' || at[len - 1] == '\t'))
+            len--;
+        if (off + len + 4 >= sizeof(buf))
+            break;
+        off += (size_t)snprintf(buf + off, sizeof(buf) - off, "// %.*s\n",
+                                (int)len, at);
+    }
+    buf[off] = '\0';
+    return buf;
+}
+
+/* Apply a decoded config-only payload to the current scene. Only @cfg
+ * directives are honored — @scene-name / @workspace-dir / @func would stage
+ * pending import state nothing on this path consumes. Returns the number of
+ * directives accepted. */
+EMSCRIPTEN_KEEPALIVE
+int glr_web_apply_cfg_text(const char *text) {
+    if (!text || !text[0])
+        return 0;
+
+    int matched = 0;
+    char line[WORKSPACE_HEADER_LINE_LEN];
+    const char *p = text;
+    while (*p) {
+        const char *eol = strchr(p, '\n');
+        size_t len = eol ? (size_t)(eol - p) : strlen(p);
+        if (len > 0 && p[len - 1] == '\r')
+            len--;
+        if (len >= sizeof(line))
+            len = sizeof(line) - 1;
+        memcpy(line, p, len);
+        line[len] = '\0';
+        if (strstr(line, "@cfg ") &&
+            repl_state_parse_workspace_header_line(line))
+            matched++;
+        if (!eol)
+            break;
+        p = eol + 1;
+    }
+
+    if (matched) {
+        repl_export_apply_pending_cfg();
+        repl_set_status("Applied shared settings from URL");
+    }
+    return matched;
 }
 
 /*
