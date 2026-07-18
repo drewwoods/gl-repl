@@ -363,11 +363,109 @@ static void fghDrawGeometryWire11(GLfloat *vertices, GLfloat *normals,
 }
 
 
+#ifdef __EMSCRIPTEN__
+/* Emscripten/WebGL: draw indexed solids de-indexed, via glDrawArrays.
+ *
+ * On the web the GL 1.x calls below reach WebGL2 through a translation
+ * stack (gl4es -> GLES2 -> browser), and glDrawElements sourcing a
+ * client-side index array becomes "upload these indices into an element
+ * buffer, then draw from it" on every single call.  An indexed draw whose
+ * element buffer was just rewritten is a pathologically slow path in
+ * browser GL backends: measured on Chrome's ANGLE-on-Metal it costs
+ * ~0.2 ms of GPU-process time per draw -- WebGL2's always-on
+ * primitive-restart handling forces the freshly written indices to be
+ * re-scanned/converted, and the render pass is broken around the buffer
+ * write.  The stall lands in the browser's GPU process, so it is
+ * invisible to in-page profiling (the wasm main loop measures a few ms
+ * per frame while requestAnimationFrame is throttled to <10 fps).  A
+ * scene with a few hundred glutSolid* calls per frame (each one a
+ * glDrawElements of a 36-index cube) collapses; the same geometry
+ * submitted with glDrawArrays and *identical* per-draw buffer-upload
+ * traffic runs vsync-limited, ~10x cheaper per draw (400 solid cubes:
+ * 8.9 fps indexed vs 51.9 fps de-indexed; lighting, matrix churn, and
+ * draw count were ruled out by A/B scenes -- Apple M4, Chrome 150,
+ * 2026-07).
+ *
+ * So on this platform we dereference the indices once on the CPU into a
+ * flat vertex/normal/texcoord scratch array and issue the same
+ * primitives with glDrawArrays.  The copy is trivial next to the cost it
+ * avoids (a cube is 36 vertices; the biggest GLUT solids are a few
+ * thousand).  The scratch buffer grows monotonically and is reused
+ * across calls; the Emscripten main loop is single-threaded, so a
+ * static is safe.  Wireframe solids (glutWire*) keep the indexed path --
+ * they draw far fewer elements and are rare in per-frame hot loops.
+ */
+static void fghDrawGeometrySolid11Deindexed(GLfloat *vertices, GLfloat *normals, GLfloat *textcs,
+                                            GLushort *vertIdxs, GLsizei numParts, GLsizei numVertIdxsPerPart)
+{
+    static GLfloat *scratch = NULL;
+    static GLsizei scratchFloats = 0;
+
+    GLsizei numDrawnVerts = numParts * numVertIdxsPerPart;
+    GLsizei floatsNeeded = numDrawnVerts * (3 + 3 + (textcs ? 2 : 0));
+    GLfloat *v, *n, *tc = NULL;
+    int i;
+
+    if (floatsNeeded > scratchFloats)
+    {
+        GLfloat *grown = realloc(scratch, floatsNeeded * sizeof(GLfloat));
+        if (!grown)
+            fgError("Failed to allocate memory in fghDrawGeometrySolid11Deindexed");
+        scratch = grown;
+        scratchFloats = floatsNeeded;
+    }
+    v = scratch;
+    n = v + numDrawnVerts * 3;
+    if (textcs)
+        tc = n + numDrawnVerts * 3;
+
+    for (i = 0; i < numDrawnVerts; i++)
+    {
+        int idx = vertIdxs[i];
+        memcpy(v + i * 3, vertices + idx * 3, 3 * sizeof(GLfloat));
+        memcpy(n + i * 3, normals + idx * 3, 3 * sizeof(GLfloat));
+        if (textcs)
+            memcpy(tc + i * 2, textcs + idx * 2, 2 * sizeof(GLfloat));
+    }
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_NORMAL_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, v);
+    glNormalPointer(GL_FLOAT, 0, n);
+    if (textcs)
+    {
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, 0, tc);
+    }
+
+    if (numParts > 1)
+        for (i = 0; i < numParts; i++)
+            glDrawArrays(GL_TRIANGLE_STRIP, i * numVertIdxsPerPart, numVertIdxsPerPart);
+    else
+        glDrawArrays(GL_TRIANGLES, 0, numDrawnVerts);
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    if (textcs)
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+}
+#endif /* __EMSCRIPTEN__ */
+
 static void fghDrawGeometrySolid11(GLfloat *vertices, GLfloat *normals, GLfloat *textcs, GLsizei numVertices,
                                    GLushort *vertIdxs, GLsizei numParts, GLsizei numVertIdxsPerPart)
 {
 #if defined(GL_VERSION_1_1) || defined(GL_VERSION_ES_CM_1_0)
     int i;
+
+#ifdef __EMSCRIPTEN__
+    if (vertIdxs)
+    {
+        /* Client-indexed glDrawElements is a per-draw slow path on
+         * browser GL backends -- see the rationale above. */
+        fghDrawGeometrySolid11Deindexed(vertices, normals, textcs, vertIdxs, numParts, numVertIdxsPerPart);
+        return;
+    }
+#endif
 
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_NORMAL_ARRAY);

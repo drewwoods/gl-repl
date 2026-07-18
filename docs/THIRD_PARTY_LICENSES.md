@@ -16,7 +16,7 @@ reproduced (or pointed to) below; all are permissive.
   `make ... FREEGLUT_OSMESA=1`, or the Emscripten backend under
   `make ... WEB=1`). See `third_party/freeglut/VENDORED.txt` for the
   exact pinned source + commit; at time of writing it is
-  `09a6835f40682c9751da4d5b6d1a13229e3dfce3`.
+  `ac127d78d1f04d47cabc816773e4ab5f4349bb95`.
 - **License:** X-Consortium / MIT-style (the freeglut license).
 
 The full contributor list lives in `third_party/freeglut/AUTHORS` (current
