@@ -50,7 +50,7 @@ When both a command-line flag and an env var exist, the flag wins.
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
 | `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
-| `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay — the video-capture hook behind `scripts/record-video.sh`. Grammar in `src/app/glr_pointer_script.h`. |
+| `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay — the video-capture hook behind `scripts/record-video.sh`. Grammar in [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h). |
 | `GLR_NO_SPLASH` | Any non-empty value. | Skips the startup splash banner (captures that should not open on the splash band). |
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
@@ -226,7 +226,7 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   `rightclick` / `down` / `up`, `wheel`, `ring` (pulsing highlight around a
   UI element), `key` (typed text, incl. `\cX` control bytes like Ctrl+T) and
   `skey` (F-keys, arrows) — so whole typed demos are re-recordable from a
-  script. Grammar and examples: `src/app/glr_pointer_script.h`.
+  script. Grammar and examples: [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
 - A malformed script line fails the run with a file:line message rather than
   silently recording the wrong interaction.
 

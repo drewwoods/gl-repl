@@ -27,6 +27,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "app/glr_config.h"
+#include "app/glr_tours.h"           /* Tours menu catalog + start */
 #include "render3d/postprocess_filter.h"
 #include "editor/input.h"
 #include "editor/commit.h"
@@ -1420,6 +1421,14 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         /* Returns 1 (consumed) for out-of-range or separators, matching test expectations. */
         return 1;
     }
+
+    case GLR_MENU_TOURS:
+        /* Tour rows start the guided tour and close the menu — the script
+         * needs the dropdown out of the way before its first glide. Out of
+         * range falls through to the same consumed-return as File/Scene. */
+        if (item_idx >= 0 && item_idx < glr_tours_count())
+            glr_tours_start(item_idx);
+        return 1;
 
     case GLR_MENU_CONFIG:
         /* Config top-level rows are section / "All" PARENT rows: they

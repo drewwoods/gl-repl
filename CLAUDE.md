@@ -259,6 +259,21 @@ banner. The USER_GUIDE menu-tour script lives at
 `.mp4`s are gitignored under `docs/images/` — large files stay out of the
 repo.
 
+**In-app guided tours (Tours menu).** The same pointer-script engine also
+powers the **Tours** menu: [`src/app/glr_tours.c`](src/app/glr_tours.c) holds a
+catalog of named, compiled-in scripts (same grammar), started mid-session via
+`glr_pointer_script_start_lines`. Unlike the env-driven capture mode a tour
+runs on the live wall-clock frame loop (no `GLR_TICK_PER_FRAME`), auto-stops
+after its last event and overlay effect expire, and is canceled by any real
+key/click/wheel event (intercepted in [`gl_repl.c`](gl_repl.c)'s GLUT callbacks —
+scripted events bypass those, so a tour can't cancel itself; the canceling
+event and its paired mouse release are swallowed). While a scripted button is
+held, `move`/`glide` route through `glr_ctrl_motion` (not passive motion), so
+scripted camera-orbit and slider drags track like a real pointer — this
+applies to capture scripts too. Tour coordinates assume the default 1200x800
+layout; the Tours menu is hidden on the web build (the hidden File menu
+shifts the menu-bar layout the coordinates were authored against).
+
 ### Web build (Emscripten)
 
 `make web` (needs `emcc` on `PATH`) or `scripts/build-web.sh` (cold start —
@@ -681,6 +696,8 @@ explaining why the extra background is useful.
 | [`src/app/glr_camera.h`](src/app/glr_camera.h) | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | [`src/app/glr_actions.c`](src/app/glr_actions.c) | Config descriptor table, config shortcuts, menu actions |
 | [`src/app/glr_actions.h`](src/app/glr_actions.h) | Actions public API (`glr_action_menu_item_activate`, etc.) |
+| [`src/app/glr_tours.c`](src/app/glr_tours.c) | Built-in guided-tour catalog (Tours menu): named, compiled-in pointer scripts (same grammar as the `.pointer` capture files) played via `glr_pointer_script_start_lines`; coordinates authored against the default 1200x800 layout (anchor math in the file header) |
+| [`src/app/glr_tours.h`](src/app/glr_tours.h) | Tour catalog queries + `glr_tours_start` |
 | [`config.h`](config.h) | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`). Also `#include`s [`keymap.h`](keymap.h) so the key bindings reach every TU |
 | [`keymap.h`](keymap.h) | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like [`config.h`](config.h)'s `FONT_*`); consumed by `g_cfg_items[]` (via `KM_KEY`/`KM_MODS` designated initializers), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |
 | [`accent_palette.h`](accent_palette.h) | Shared accent palette (the examples' color family from `examples/README.md` § Example Color Language — currently "Neon"; the earlier Dusk sets stay in the header for an easy flip back): per-palette anchor X-macro lists, the `PALETTE_ACTIVE_*` select, and the semantic role map (`PAL_ROLE_WARM_KEY` → `PAL_CORAL`, ...) that C consumers bind to — the XZ Ruler axes ([`src/render3d/grid.c`](src/render3d/grid.c)) and the color-picker swatch row (scene anchors only: `PAL_SCENE_ANCHOR_COUNT`). Also carries the separate `PALETTE_MARK_ANCHORS` brand-mark list (the open-cube logo's vocabulary: glr-logo.glr's `_MAT` materials plus the rendered chips / gradient stops) consumed by the startup splash ([`src/app/splash.c`](src/app/splash.c)). Scene files keep literal anchor triples, held in sync by `make check-palette` (in the `check-state-ownership` gate; remove-only ratchet baseline `scripts/baselines/palette-coverage.txt`; the logo scene `examples/scenes/glr-logo.glr` and its vector twin `docs/images/logo.svg` are checked against the mark vocabulary); `make palette-list` prints anchors as floats + hex. Root header like [`keymap.h`](keymap.h), zero includes; deliberately named to avoid the quoted-include shadow with [`src/render3d/palette.h`](src/render3d/palette.h) (the separate overlay/guide token table) |
@@ -1464,7 +1481,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
-  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L253) vtable, shared with the Scene example flyout
+  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L257) vtable, shared with the Scene example flyout
   ([`examples/catalog.ini`](examples/catalog.ini) carries the example `group` values
   that generate `ReplExampleEntry.subheading` — see `test_example_subheading_metadata`).
 

@@ -61,7 +61,7 @@ static const char *const k_tab_overview[] = {
     "  3D viewport        \tYour geometry, lit and rendered every frame",
     "  Code panel         \tThe live, editable list of GL commands",
     "  Status bar         \tMessages, AA / profile info, clickable keycaps",
-    "  Menu bar (top)     \tFile / Scene / Tutorials / Config / Audio dropdowns",
+    "  Menu bar (top)     \tFile / Scene / Tutorials / Tours / Config / Audio dropdowns",
     "  Scene tabs         \tSwitch between your saved scenes",
     "",
     "The menu bar:",

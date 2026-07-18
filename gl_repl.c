@@ -7,6 +7,7 @@
 #include "app/glr_pointer_script.h"
 #include "app/splash.h"
 #include "repl/examples.h"
+#include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
 
 #include <ctype.h>
 #include <dirent.h>
@@ -496,16 +497,43 @@ static void reshape_func(int w, int h) {
     glr_ctrl_reshape(w, h);
 }
 
+/* Real user input during a menu-started guided tour hands control back:
+ * the canceling event is swallowed (an accidental click shouldn't also
+ * click through whatever the tour left under the pointer). Only genuine
+ * input can trip this — scripted events dispatch straight into the
+ * glr_ctrl_* entry points and never pass through these GLUT callbacks.
+ * Pointer motion deliberately does NOT cancel (a nudged mouse shouldn't
+ * kill the tour), and env-driven capture runs are never canceled. */
+static int g_tour_swallow_release = 0;
+
+static int tour_cancel_intercept(void) {
+    if (!glr_pointer_script_tour_active())
+        return 0;
+    glr_pointer_script_stop();
+    repl_set_status("Tour stopped");
+    return 1;
+}
+
 static void keyboard_func(unsigned char key, int x, int y) {
     splash_skip(); /* any keypress dismisses the startup banner */
+    if (tour_cancel_intercept()) return;
     glr_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
+    if (tour_cancel_intercept()) return;
     glr_ctrl_special(key, x, y);
 }
 
 static void mouse_func(int button, int state, int x, int y) {
+    if (state == GLUT_DOWN && tour_cancel_intercept()) {
+        g_tour_swallow_release = 1; /* eat the paired release too */
+        return;
+    }
+    if (state == GLUT_UP && g_tour_swallow_release) {
+        g_tour_swallow_release = 0;
+        return;
+    }
     glr_ctrl_mouse(button, state, x, y);
 }
 
@@ -519,6 +547,7 @@ static void passive_motion_func(int x, int y) {
 
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
+    if (tour_cancel_intercept()) return;
     glr_ctrl_mousewheel(wheel, direction, x, y);
 }
 #endif

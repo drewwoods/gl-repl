@@ -22,11 +22,13 @@
 #include "app/glr_paths.h"
 
 /* Top-level menu identifiers. Matches the menu bar structure (File / Scene /
- * Tutorials / Config) used by ui_menu_bar and by this module's dispatch. */
+ * Tutorials / Tours / Config / Audio) used by ui_menu_bar and by this
+ * module's dispatch. */
 typedef enum {
     GLR_MENU_FILE = 0,
     GLR_MENU_SCENE,
     GLR_MENU_TUTORIALS,
+    GLR_MENU_TOURS,
     GLR_MENU_CONFIG,
     GLR_MENU_AUDIO,
     GLR_MENU_COUNT

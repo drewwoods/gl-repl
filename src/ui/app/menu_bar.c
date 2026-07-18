@@ -10,6 +10,7 @@
 #include "repl/tutorials.h"
 #include "app/glr_audio.h"
 #include "app/glr_config.h"
+#include "app/glr_tours.h"
 #include "keymap.h"
 #include "keys.h"
 #include "repl/state_views.h"
@@ -26,7 +27,7 @@
 #include "ui/core/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
- * Left: top-level menus (File, Scene, Tutorials, Config).
+ * Left: top-level menus (File, Scene, Tutorials, Tours, Config, Audio).
  * Right: pinned buttons (Search, Replay) - retained in flat form until the
  * right-side redesign lands. */
 
@@ -34,20 +35,23 @@ enum {
     MENU_FILE = GLR_MENU_FILE,
     MENU_SCENE = GLR_MENU_SCENE,
     MENU_TUTORIALS = GLR_MENU_TUTORIALS,
+    MENU_TOURS = GLR_MENU_TOURS,
     MENU_CONFIG = GLR_MENU_CONFIG,
     MENU_AUDIO = GLR_MENU_AUDIO,
     NUM_MENUS = GLR_MENU_COUNT
 };
 
 static const char *g_menu_labels[NUM_MENUS] = {
-    "File", "Scene", "Tutorials", "Config", "Audio"
+    "File", "Scene", "Tutorials", "Tours", "Config", "Audio"
 };
 
 /* The browser shell owns file I/O in Emscripten: New/Open/Download are
- * DOM controls wired to web-safe import/export bridges, not path prompts. */
+ * DOM controls wired to web-safe import/export bridges, not path prompts.
+ * Tours are hidden there too — their scripted coordinates are authored
+ * against the native menu layout, which the hidden File menu shifts. */
 static int menu_visible(int menu_id) {
 #if defined(__EMSCRIPTEN__)
-    if (menu_id == MENU_FILE)
+    if (menu_id == MENU_FILE || menu_id == MENU_TOURS)
         return 0;
 #endif
     return menu_id >= 0 && menu_id < NUM_MENUS;
@@ -380,6 +384,8 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * Restart/Exit actions — mirroring Scene's tag-row pattern. */
         return tag_count + (active ? GLR_TUTORIAL_FIXED_COUNT : 0);
     }
+    case MENU_TOURS:
+        return glr_tours_count();
     case MENU_CONFIG:
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
@@ -463,6 +469,8 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == tag_count + GLR_TUTORIAL_OFF_EXIT)    return "Exit Tutorial";
         return NULL;
     }
+    if (menu_id == MENU_TOURS)
+        return glr_tours_name(i);
     if (menu_id == MENU_CONFIG) {
         if (i == config_all_parent_row())
             return "All";
