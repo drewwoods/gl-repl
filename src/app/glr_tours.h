@@ -12,9 +12,10 @@
  * user can trigger the cancel), and a tour that runs to completion stops
  * itself.
  *
- * Coordinates are authored against the default 1200x800 window layout
- * (same convention as scripts/video/menu-tour.pointer); a heavily resized
- * window may put a hover or click beside its intended target.
+ * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: — grammar
+ * in glr_pointer_script.h) resolved against the live layout when each
+ * event fires, so tours work at any window size and follow catalog/label
+ * reordering.
  */
 #ifndef GLR_TOURS_H
 #define GLR_TOURS_H

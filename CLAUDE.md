@@ -243,9 +243,17 @@ pointer/keyboard events on the rendered-frame clock (implies
 points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
 `rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed
 text incl. `\cX` control bytes) and `skey` (F-keys/arrows) — plus a rendered
-cursor arrow + click-ripple overlay so the video shows the pointer. Enter a
-hover-opened flyout **horizontally at its parent row's y** (a diagonal glide
-crosses sibling parent rows and swaps the flyout). Music is muxed at encode
+cursor arrow + click-ripple overlay so the video shows the pointer. A point
+is literal window pixels **or a symbolic target** (`menu:scene`,
+`item:new_scene`, `subenter:overlays`, `sub:overlays:vertex_points`,
+`pin:replay`, `scene:0.55,0.30` — a scene-viewport fraction) resolved
+against the **live layout at fire time** via the `ui_menu_bar_target_*`
+queries, so symbolic scripts are window-size- and catalog-order-independent;
+labels match by normalized prefix (case-insensitive, `_` = space), and an
+unresolvable target aborts a capture run / stops a tour. Enter a
+hover-opened flyout **horizontally at its parent row's y** (the `subenter:`
+target — a diagonal glide crosses sibling parent rows and swaps the
+flyout). Music is muxed at encode
 time (`--music`/`--music-seek`, or `# music:`/`# music-seek:` header comments
 in the pointer script). Color is declared at encode time too — frames are
 display-referred RGB: `--colorspace srgb` (default) or `p3` (Display P3 =
@@ -255,9 +263,9 @@ frames via `setparams` (ffmpeg ≥ 7 ignores the `-color_*` encoder flags in
 favor of frame properties). Uses the **native** backend by default (docs-quality
 colors; a window opens during recording); `GLR_NO_SPLASH=1` skips the startup
 banner. The USER_GUIDE menu-tour script lives at
-`scripts/video/menu-tour.pointer` (coordinates assume 1200x800); recorded
-`.mp4`s are gitignored under `docs/images/` — large files stay out of the
-repo.
+`scripts/video/menu-tour.pointer` (symbolic targets — records correctly at
+any `--window` size); recorded `.mp4`s are gitignored under `docs/images/`
+— large files stay out of the repo.
 
 **In-app guided tours (Tours menu).** The same pointer-script engine also
 powers the **Tours** menu: [`src/app/glr_tours.c`](src/app/glr_tours.c) holds a
@@ -270,9 +278,11 @@ scripted events bypass those, so a tour can't cancel itself; the canceling
 event and its paired mouse release are swallowed). While a scripted button is
 held, `move`/`glide` route through `glr_ctrl_motion` (not passive motion), so
 scripted camera-orbit and slider drags track like a real pointer — this
-applies to capture scripts too. Tour coordinates assume the default 1200x800
-layout; the Tours menu is hidden on the web build (the hidden File menu
-shifts the menu-bar layout the coordinates were authored against).
+applies to capture scripts too. Tours use only symbolic targets, so they play
+correctly at any window size; a target that fails to resolve mid-tour stops
+the tour with a status message instead of clicking blind. The Tours menu is
+hidden on the web build (the catalog leans on the File menu, which the
+browser shell owns).
 
 ### Web build (Emscripten)
 
@@ -1481,7 +1491,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
-  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L257) vtable, shared with the Scene example flyout
+  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L260) vtable, shared with the Scene example flyout
   ([`examples/catalog.ini`](examples/catalog.ini) carries the example `group` values
   that generate `ReplExampleEntry.subheading` — see `test_example_subheading_metadata`).
 

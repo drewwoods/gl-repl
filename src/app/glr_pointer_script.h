@@ -12,25 +12,46 @@
  *
  * Script format: one event per line, `#` comments. Times are seconds on the
  * rendered-frame clock (frame N <-> t = N/60 — the hook implies
- * GLR_TICK_PER_FRAME), coordinates are window pixels, origin top-left (the
- * GLUT callback convention).
+ * GLR_TICK_PER_FRAME). A *point* is either literal window pixels
+ * "<x> <y>" (origin top-left, the GLUT callback convention) or a symbolic
+ * target token resolved against the LIVE layout when the event fires — so
+ * symbolic scripts are window-size- and catalog-order-independent:
  *
- *   0.5  move 100 50          # jump the pointer
- *   1.0  glide 300 200 0.8    # ease the pointer to (300,200) over 0.8s
+ *   menu:scene            top-level menu-bar button, by label
+ *   item:new_scene        row of the currently open dropdown, by label
+ *   subenter:overlays     horizontal entry point into a parent row's flyout
+ *                         (enter at the parent's y — a diagonal glide would
+ *                         cross sibling rows and swap the flyout)
+ *   sub:overlays:vertex_points   flyout row: parent label + row label
+ *   pin:replay            pinned button: replay / search / view (2D-3D)
+ *   scene:0.55,0.30       fraction of the scene viewport rect (x,y from
+ *                         its top-left)
+ *
+ * Labels match by normalized prefix: case-insensitive, '_' matches ' '
+ * ("torus_knot" matches "Torus knot (animated)"); chrome rows (dividers,
+ * headers, flyout subheadings) never match. Row targets need their menu
+ * open — click it open first, exactly as a user would. An unresolvable
+ * target aborts a capture run (exit 1) and stops a tour with a status
+ * message; a silently mis-aimed script is worse than a failed one.
+ *
+ *   0.5  move 100 50          # jump the pointer (literal pixels)
+ *   0.8  move scene:0.5,0.4   # jump to the scene-viewport center-ish
+ *   1.0  glide menu:scene 0.8 # ease the pointer onto the Scene button
  *   2.0  click                # left press at the pointer (+ release ~0.1s on)
- *   2.2  click 310 44         # optional coords: move, then click there
+ *   2.2  click item:all       # optional point: move, then click there
  *   2.6  rightclick           # right press + release
- *   3.0  down / 3.4 up        # explicit press / release (drags)
+ *   3.0  down / 3.4 up        # explicit press / release (drags; while held,
+ *                             # moves route through glr_ctrl_motion)
  *   3.8  wheel -1             # mouse wheel, +1/-1
- *   4.0  ring 300 200 1.5     # pulsing highlight ring for 1.5s
+ *   4.0  ring sub:3d:torus_knot 1.5   # pulsing highlight ring for 1.5s
  *   5.0  key glColor3f(       # feed text through the keyboard dispatch
  *                             # (escapes: \n = Enter, \e = Esc, \t = Tab,
  *                             #  \cX = Ctrl+X control byte, \\ = backslash)
  *   6.0  key \cT              # e.g. Ctrl+T toggles animation
  *   7.0  skey f12             # special key: f1..f12, up/down/left/right,
  *                             # home, end, pageup, pagedown
- *   8.0  echo 40 60 28 2 Ctrl+K   # caption text at (40,60), 28px cap
- *                             # height, shown 2s — labels how the next
+ *   8.0  echo scene:0.25,0.76 18 2 Ctrl+K   # caption text (point, cap
+ *                             # height px, seconds) — labels how the next
  *                             # action was triggered (GLUT stroke text)
  *
  * Events fire in file order once their time is reached; keep them sorted.
@@ -67,6 +88,13 @@ void glr_pointer_script_stop(void);
 /* Nonzero while a runtime-started (tour) script is playing — as opposed to
  * the env-driven capture mode, which is never canceled by user input. */
 int glr_pointer_script_tour_active(void);
+
+/* Resolve one symbolic target token (e.g. "item:new_scene", "scene:0.5,0.5")
+ * against the live layout, filling (*mx, *my) in mouse space. Returns 1 on
+ * success, 0 when the target is unknown or currently unresolvable. The same
+ * resolver every scripted point goes through — exposed so tests can pin the
+ * target vocabulary to the real hit-test geometry. */
+int glr_pointer_script_resolve_target(const char *target, int *mx, int *my);
 
 /* Advance the script one frame: fire due events through the glr_ctrl_*
  * input entry points and step any active glide. Call once per display

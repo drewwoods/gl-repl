@@ -5,6 +5,7 @@
 #include "app/glr_audio.h"
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
+#include "app/glr_pointer_script.h"
 #include "repl/scenes.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
@@ -1258,6 +1259,99 @@ static void test_config_short_flyout_consumes_but_no_scroll(void) {
                   after.line_idx, before.line_idx);
 }
 
+/* Symbolic pointer-script targets (menu:/item:/subenter:/sub:/pin:/scene:)
+ * must resolve to points the real hit-test classifies as the named element
+ * — and must keep doing so at a different window size, since resolution
+ * against the live layout is the whole point. */
+static void test_symbolic_targets_resolve_to_hits(void) {
+    static const int sizes[][2] = { { 1200, 800 }, { 1600, 1000 } };
+
+    for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++) {
+        int mx = -1, my = -1;
+        UiHit hit;
+
+        reset_menu_bar_fixture(sizes[s][0], sizes[s][1]);
+        /* The fixture parks panel_frac at 1.0 (no scene rect); scene:
+         * targets need a real viewport slice like the running app has. */
+        ui_state_code_panel_mut()->panel_frac = 0.42f;
+
+        /* Menu button + pin resolve with no menu open. */
+        ASSERT_TRUE("menu:scene resolves",
+                    glr_pointer_script_resolve_target("menu:scene", &mx, &my));
+        hit = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("menu:scene lands on the Scene button",
+                      hit.kind == UI_HIT_MENU_BUTTON ? hit.cmd_idx : -1,
+                      GLR_MENU_SCENE);
+
+        ASSERT_TRUE("pin:replay resolves",
+                    glr_pointer_script_resolve_target("pin:replay", &mx, &my));
+        hit = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("pin:replay lands on the Replay pin",
+                      hit.kind == UI_HIT_PIN_BUTTON ? hit.item_idx : -1,
+                      UI_MENU_BAR_PIN_REPLAY);
+
+        /* Row targets need their menu open. */
+        ASSERT_TRUE("item: fails with no menu open",
+                    !glr_pointer_script_resolve_target("item:new_scene",
+                                                       &mx, &my));
+        ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
+        ASSERT_TRUE("item:new_scene resolves in the open File menu",
+                    glr_pointer_script_resolve_target("item:new_scene",
+                                                      &mx, &my));
+        hit = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("item:new_scene lands on the New Scene row",
+                      hit.kind == UI_HIT_MENU_ITEM ? hit.item_idx : -1,
+                      GLR_FILE_ITEM_NEW_SCENE);
+
+        /* Flyout targets: parent row hover opens the flyout for real,
+         * then the sub: point must classify as that flyout row. */
+        ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+        ASSERT_TRUE("item:overlays resolves in the open Config menu",
+                    glr_pointer_script_resolve_target("item:overlays",
+                                                      &mx, &my));
+        ui_menu_bar_update_pointer_hover(mx, my, 0.0f);
+        ASSERT_TRUE("subenter:overlays resolves",
+                    glr_pointer_script_resolve_target("subenter:overlays",
+                                                      &mx, &my));
+        ASSERT_TRUE("sub:overlays:vertex_points resolves",
+                    glr_pointer_script_resolve_target(
+                        "sub:overlays:vertex_points", &mx, &my));
+        hit = ui_menu_bar_hit_test(mx, my);
+        ASSERT_TRUE("sub:overlays:vertex_points is a flyout-row hit",
+                    hit.kind == UI_HIT_SUBMENU_ITEM &&
+                    hit.cmd_idx == GLR_MENU_CONFIG);
+        if (hit.kind == UI_HIT_SUBMENU_ITEM) {
+            const GlrConfigItem *item = glr_config_item_at(hit.item_idx);
+            ASSERT_STR_EQ("flyout row is the Vertex points item",
+                          item && item->label ? item->label : "(none)",
+                          "Vertex points");
+        }
+        ui_menu_bar_close();
+
+        /* Scene-fraction target sits inside the scene rect. */
+        ASSERT_TRUE("scene:0.5,0.5 resolves",
+                    glr_pointer_script_resolve_target("scene:0.5,0.5",
+                                                      &mx, &my));
+        {
+            int sx, sy, sw, sh;
+            int gl_y;
+            ui_layout_scene_rect(&sx, &sy, &sw, &sh);
+            gl_y = ui_state_viewport().window_h - my;
+            ASSERT_TRUE("scene point inside the scene rect",
+                        mx >= sx && mx < sx + sw &&
+                        gl_y >= sy && gl_y < sy + sh);
+        }
+
+        /* Unknown names fail rather than aim somewhere. */
+        ASSERT_TRUE("unknown menu label fails",
+                    !glr_pointer_script_resolve_target("menu:bogus",
+                                                       &mx, &my));
+        ASSERT_TRUE("unknown flyout row fails",
+                    !glr_pointer_script_resolve_target("sub:overlays:bogus",
+                                                       &mx, &my));
+    }
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
@@ -1270,6 +1364,7 @@ int main(void) {
     test_config_section_labels();
     test_config_all_flyout_scroll();
     test_config_short_flyout_consumes_but_no_scroll();
+    test_symbolic_targets_resolve_to_hits();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();
