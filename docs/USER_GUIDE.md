@@ -196,8 +196,8 @@ hands control back by itself).
   plus a torus, line by line, showing commits and the autocomplete ghost.
 - *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
 
-Tours are authored against the default 1200x800 window layout; in a heavily
-resized window a click can land beside its intended target.
+Tours aim at named UI elements (menus, rows, buttons) resolved against the
+live layout as they play, so they work at any window size.
 
 ---
 

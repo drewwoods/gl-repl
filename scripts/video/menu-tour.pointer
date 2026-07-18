@@ -1,56 +1,55 @@
 # menu-tour.pointer - a guided tour of the gl-repl menus for the USER_GUIDE
-# intro video. Coordinates assume the default 1200x800 window and the default
-# example catalog; record with:
+# intro video. Points are symbolic targets (menu:/item:/subenter:/sub:/pin:/
+# scene: - grammar in src/app/glr_pointer_script.h) resolved against the
+# live layout at fire time, so the script is window-size- and catalog-
+# order-independent. Record with:
 #
 #   scripts/record-video.sh --script scripts/video/menu-tour.pointer \
 #       --example "gl-repl logo" --duration 36 --out docs/images/menu-tour
 #
-# Grammar: src/app/glr_pointer_script.h. Times are seconds on the
-# rendered-frame clock; coordinates are window pixels, origin top-left.
+# Times are seconds on the rendered-frame clock.
 #
 # Soundtrack (record-video.sh reads these; CLI --music/--music-seek win).
 # "music-seek" scrubs into the track so the video starts where you want:
 # music: assets/sample.mp3
 # music-seek: 0
 #
-# Path rule: enter a hover-opened flyout HORIZONTALLY at its parent row's y,
-# then move vertically inside it - a diagonal glide would cross the sibling
-# parent rows and swap the flyout contents mid-flight.
+# Path rule: enter a hover-opened flyout HORIZONTALLY at its parent row's y
+# (the subenter: target) - a diagonal glide would cross the sibling parent
+# rows and swap the flyout contents mid-flight.
 
 # -- Scene menu: browse the built-in examples ---------------------------
-0.4   move 700 470
-1.2   glide 88 14 0.9        # up to the Scene menu
+0.4   move scene:0.55,0.30
+1.2   glide menu:scene 0.9   # up to the Scene menu
 2.4   click                  # open it
-3.0   glide 100 57 0.7       # hover All (every example, grouped)
-4.0   glide 100 92 0.6       # hover 3D -> examples flyout opens
-5.0   glide 330 92 0.5       # straight right into the flyout
-5.8   glide 350 150 0.5      # Animated ring (hover highlight follows)
-6.6   glide 355 258 0.7      # walk down to Torus knot
-7.4   ring 350 258 1.2       # spotlight it
-8.8   glide 380 528 1.1      # continue down to the Whale showcase
+3.0   glide item:all 0.7     # hover All (every example, grouped)
+4.0   glide item:3d 0.6      # hover 3D -> examples flyout opens
+5.0   glide subenter:3d 0.5  # straight right into the flyout
+5.8   glide sub:3d:animated_ring 0.5   # hover highlight follows
+6.6   glide sub:3d:torus_knot 0.7      # walk down to Torus knot
+7.4   ring sub:3d:torus_knot 1.2       # spotlight it
+8.8   glide sub:3d:whale 1.1           # continue down to the Whale showcase
 10.2  click                  # load it; camera eases in
 
 # -- Tutorials menu: tag flyouts with difficulty subheadings ------------
-14.0  glide 162 14 1.0
+14.0  glide menu:tutorials 1.0
 15.2  click
-15.8  glide 170 56 0.7       # hover Geometry -> tutorial flyout
-16.8  glide 330 56 0.4       # straight right into the flyout
-17.4  glide 345 78 0.5       # First Triangle
-18.0  ring 385 78 1.6        # spotlight it
+15.8  glide item:geometry 0.7          # hover Geometry -> tutorial flyout
+16.8  glide subenter:geometry 0.4      # straight right into the flyout
+17.4  glide sub:geometry:first_triangle 0.5
+18.0  ring sub:geometry:first_triangle 1.6   # spotlight it
 
 # -- Config menu: section flyouts, live toggles -------------------------
-# (x's here track the menu-bar layout: the Tours button before Config
-#  pushed these 58px right of the original recording's coordinates)
-20.2  glide 299 14 0.8
+20.2  glide menu:config 0.8
 21.2  click
-21.8  glide 308 38 0.6       # hover Rendering
-22.8  glide 308 128 0.7      # walk down to Overlays (flyouts preview by)
-23.8  glide 438 128 0.4      # straight right into the Overlays flyout
-24.4  glide 488 168 0.5      # Vertex points row
-25.2  ring 498 168 1.2
+21.8  glide item:rendering 0.6         # hover Rendering
+22.8  glide item:overlays 0.7          # walk down to Overlays
+23.8  glide subenter:overlays 0.4      # straight right into the flyout
+24.4  glide sub:overlays:vertex_points 0.5
+25.2  ring sub:overlays:vertex_points 1.2
 26.6  click                  # toggle Vertex points ON (whale shows points)
 
 # -- Finale: replay the scene step by step ------------------------------
-28.0  glide 1128 14 1.2      # the Replay button
+28.0  glide pin:replay 1.2   # the Replay button
 29.4  click                  # start replay
-30.2  glide 850 500 1.0      # park the cursor; watch the replay build
+30.2  glide scene:0.70,0.40 1.0   # park the cursor; watch the replay build

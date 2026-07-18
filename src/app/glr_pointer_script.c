@@ -9,6 +9,10 @@
  */
 #include "app/glr_pointer_script.h"
 #include "app/glr_ctrl.h"
+#include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
+#include "ui/app/layout.h"       /* ui_layout_scene_rect (scene: targets) */
+#include "ui/app/menu_bar.h"     /* ui_menu_bar_target_* (menu/item/sub/pin) */
+#include "ui/app/state.h"        /* ui_state_viewport (GL->mouse y flip) */
 
 #include <ctype.h>
 #include <math.h>
@@ -24,6 +28,7 @@
 
 #define PS_MAX_EVENTS   256
 #define PS_MAX_KEY_TEXT 128
+#define PS_MAX_TARGET   64
 /* Rendered-frame clock rate: script seconds -> frames (GLR_FRAME_DT_SECS). */
 #define PS_FPS          60.0f
 /* Frames between a click's press and its synthesized release (~0.1s). */
@@ -48,8 +53,11 @@ typedef enum {
 typedef struct {
     int    frame;                  /* fire frame (time * 60, rounded)   */
     PsVerb verb;
-    int    has_xy;                 /* click/down/up took optional coords */
-    int    x, y;                   /* target (move/glide/ring/click...)  */
+    int    has_xy;                 /* event carries a point (literal or  */
+                                   /* symbolic)                          */
+    int    x, y;                   /* literal point (move/glide/ring...) */
+    char   target[PS_MAX_TARGET];  /* symbolic point token ("" = use     */
+                                   /* x/y); resolved at fire time        */
     int    dur_frames;             /* glide/ring/echo duration           */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    special;                /* skey: GLUT_KEY_* code              */
@@ -150,6 +158,44 @@ static int ps_special_from_name(const char *name) {
     return -1;
 }
 
+/* Scan a point from the front of `args`: either literal "<x> <y>" pixels
+ * or one symbolic target token (see the header's grammar). Fills the
+ * event's x/y or target[] and sets has_xy. Returns a pointer just past the
+ * point (for trailing args like a glide's duration), or NULL when `args`
+ * does not start with a point. Symbolic tokens are prefix-validated here
+ * (and `scene:` fractions fully parsed) so a typo fails at load, not
+ * mid-run; label existence can only be checked at fire time. */
+static const char *ps_scan_point(const char *args, PsEvent *ev) {
+    static const char *const k_prefixes[] = {
+        "menu:", "item:", "subenter:", "sub:", "pin:", "scene:"
+    };
+    int n = 0;
+
+    while (*args == ' ' || *args == '\t') args++;
+    if (sscanf(args, "%d %d%n", &ev->x, &ev->y, &n) == 2) {
+        ev->has_xy = 1;
+        return args + n;
+    }
+
+    char word[PS_MAX_TARGET];
+    if (sscanf(args, "%63s%n", word, &n) != 1)
+        return NULL;
+    for (size_t i = 0; i < sizeof(k_prefixes) / sizeof(k_prefixes[0]); i++) {
+        size_t plen = strlen(k_prefixes[i]);
+        if (strncmp(word, k_prefixes[i], plen) != 0 || word[plen] == '\0')
+            continue;
+        if (strcmp(k_prefixes[i], "scene:") == 0) {
+            float fx, fy;
+            if (sscanf(word + plen, "%f,%f", &fx, &fy) != 2)
+                return NULL;
+        }
+        snprintf(ev->target, sizeof(ev->target), "%s", word);
+        ev->has_xy = 1;
+        return args + n;
+    }
+    return NULL;
+}
+
 /* Parse one script line into *ev. Returns 1 on an event, 0 on a blank or
  * comment line, -1 on a malformed line. */
 static int ps_parse_line(const char *line, PsEvent *ev) {
@@ -170,12 +216,13 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
 
     if (strcmp(verb, "move") == 0) {
         ev->verb = PS_MOVE;
-        return (sscanf(args, "%d %d", &ev->x, &ev->y) == 2) ? 1 : -1;
+        return ps_scan_point(args, ev) ? 1 : -1;
     }
     if (strcmp(verb, "glide") == 0) {
         float dur = 0.0f;
         ev->verb = PS_GLIDE;
-        if (sscanf(args, "%d %d %f", &ev->x, &ev->y, &dur) != 3 || dur <= 0.0f)
+        args = ps_scan_point(args, ev);
+        if (!args || sscanf(args, "%f", &dur) != 1 || dur <= 0.0f)
             return -1;
         ev->dur_frames = (int)(dur * PS_FPS + 0.5f);
         if (ev->dur_frames < 1) ev->dur_frames = 1;
@@ -186,7 +233,17 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
         ev->verb = (verb[0] == 'c') ? PS_CLICK
                  : (verb[0] == 'r') ? PS_RIGHTCLICK
                  : (verb[0] == 'd') ? PS_DOWN : PS_UP;
-        ev->has_xy = (sscanf(args, "%d %d", &ev->x, &ev->y) == 2);
+        /* Point is optional (press/release at the current pointer), but a
+         * present-yet-malformed one is an error, not a bare click: only
+         * blank args may fall through. */
+        if (!ps_scan_point(args, ev)) {
+            const char *rest = args;
+            while (*rest == ' ' || *rest == '\t' ||
+                   *rest == '\n' || *rest == '\r')
+                rest++;
+            if (*rest != '\0')
+                return -1;
+        }
         return 1;
     }
     if (strcmp(verb, "wheel") == 0) {
@@ -219,7 +276,8 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
     if (strcmp(verb, "ring") == 0) {
         float dur = 0.0f;
         ev->verb = PS_RING;
-        if (sscanf(args, "%d %d %f", &ev->x, &ev->y, &dur) != 3 || dur <= 0.0f)
+        args = ps_scan_point(args, ev);
+        if (!args || sscanf(args, "%f", &dur) != 1 || dur <= 0.0f)
             return -1;
         ev->dur_frames = (int)(dur * PS_FPS + 0.5f);
         return 1;
@@ -228,10 +286,11 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
         float size = 0.0f, dur = 0.0f;
         int nread = 0;
         ev->verb = PS_ECHO;
-        /* echo <x> <y> <size> <dur> <text...> — position + cap height +
+        /* echo <point> <size> <dur> <text...> — position + cap height +
          * on-screen lifetime, then the rest of the line is the caption. */
-        if (sscanf(args, "%d %d %f %f %n",
-                   &ev->x, &ev->y, &size, &dur, &nread) < 4 ||
+        args = ps_scan_point(args, ev);
+        if (!args ||
+            sscanf(args, "%f %f %n", &size, &dur, &nread) < 2 ||
             size <= 0.0f || dur <= 0.0f)
             return -1;
         ev->size = size;
@@ -379,42 +438,121 @@ void glr_pointer_script_stop(void) {
     ps_reset_runtime();
 }
 
+int glr_pointer_script_resolve_target(const char *target, int *mx, int *my) {
+    if (!target || !*target)
+        return 0;
+    if (strncmp(target, "menu:", 5) == 0)
+        return ui_menu_bar_target_menu(target + 5, mx, my);
+    if (strncmp(target, "pin:", 4) == 0)
+        return ui_menu_bar_target_pin(target + 4, mx, my);
+    if (strncmp(target, "item:", 5) == 0)
+        return ui_menu_bar_target_open_row(target + 5, mx, my);
+    if (strncmp(target, "subenter:", 9) == 0)
+        return ui_menu_bar_target_flyout_entry(target + 9, mx, my);
+    if (strncmp(target, "sub:", 4) == 0) {
+        char parent[PS_MAX_TARGET];
+        const char *rest = target + 4;
+        const char *colon = strchr(rest, ':');
+        size_t len;
+        if (!colon || colon == rest || colon[1] == '\0')
+            return 0;
+        len = (size_t)(colon - rest);
+        if (len >= sizeof(parent))
+            return 0;
+        memcpy(parent, rest, len);
+        parent[len] = '\0';
+        return ui_menu_bar_target_flyout_row(parent, colon + 1, mx, my);
+    }
+    if (strncmp(target, "scene:", 6) == 0) {
+        float fx = 0.0f, fy = 0.0f;
+        int sx, sy, sw, sh;
+        if (sscanf(target + 6, "%f,%f", &fx, &fy) != 2)
+            return 0;
+        ui_layout_scene_rect(&sx, &sy, &sw, &sh);
+        if (sw <= 0 || sh <= 0)
+            return 0;
+        /* Scene rect is GL space (y up from the bottom); the fraction is
+         * measured from the rect's top-left like every mouse coordinate. */
+        if (mx) *mx = sx + (int)(fx * (float)sw + 0.5f);
+        if (my) *my = ui_state_viewport().window_h - (sy + sh) +
+                      (int)(fy * (float)sh + 0.5f);
+        return 1;
+    }
+    return 0;
+}
+
+/* Resolve an event's point for firing (a literal point passes through).
+ * On a failed symbolic resolve, a capture run exits nonzero — recording
+ * the wrong interaction is worse than failing — while a tour stops with a
+ * status message. Returns 0 when the event must be dropped. */
+static int ps_fire_point(const PsEvent *ev, float *x, float *y) {
+    int mx, my;
+    if (!ev->target[0]) {
+        *x = (float)ev->x;
+        *y = (float)ev->y;
+        return 1;
+    }
+    if (glr_pointer_script_resolve_target(ev->target, &mx, &my)) {
+        *x = (float)mx;
+        *y = (float)my;
+        return 1;
+    }
+    fprintf(stderr, "gl-repl: pointer script: cannot resolve target '%s'\n",
+            ev->target);
+    if (!g_tour)
+        exit(1);
+    glr_pointer_script_stop();
+    repl_set_status_error("Tour stopped (target not found)");
+    return 0;
+}
+
 static void ps_fire(const PsEvent *ev) {
+    float x = 0.0f, y = 0.0f;
     switch (ev->verb) {
     case PS_MOVE:
+        if (!ps_fire_point(ev, &x, &y)) break;
         g_glide_active = 0;
-        ps_dispatch_move((float)ev->x, (float)ev->y);
+        ps_dispatch_move(x, y);
         break;
     case PS_GLIDE:
+        if (!ps_fire_point(ev, &x, &y)) break;
         g_glide_active = 1;
         g_glide_start = g_frame;
         g_glide_dur = ev->dur_frames;
         g_glide_from_x = g_px;
         g_glide_from_y = g_py;
-        g_glide_to_x = (float)ev->x;
-        g_glide_to_y = (float)ev->y;
+        g_glide_to_x = x;
+        g_glide_to_y = y;
         break;
     case PS_CLICK:
     case PS_RIGHTCLICK: {
         int button = (ev->verb == PS_CLICK) ? GLUT_LEFT_BUTTON
                                             : GLUT_RIGHT_BUTTON;
-        if (ev->has_xy)
-            ps_dispatch_move((float)ev->x, (float)ev->y);
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
         ps_press(button);
         g_release_frame = g_frame + PS_CLICK_RELEASE_FRAMES;
         g_release_button = button;
         break;
     }
     case PS_DOWN:
-        if (ev->has_xy)
-            ps_dispatch_move((float)ev->x, (float)ev->y);
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
         ps_press(GLUT_LEFT_BUTTON);
         break;
     case PS_UP:
         /* Drag release: the button is still held, so a coordinate move
-         * routes through motion and drag handlers see the final position. */
-        if (ev->has_xy)
-            ps_dispatch_move((float)ev->x, (float)ev->y);
+         * routes through motion and drag handlers see the final position.
+         * (A failed resolve in tour mode stops the script, which releases
+         * the held button itself — no explicit release needed then.) */
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
         ps_release(GLUT_LEFT_BUTTON);
         break;
     case PS_WHEEL:
@@ -431,16 +569,18 @@ static void ps_fire(const PsEvent *ev) {
                          (int)(g_px + 0.5f), (int)(g_py + 0.5f));
         break;
     case PS_RING:
+        if (!ps_fire_point(ev, &x, &y)) break;
         g_ring_start = g_frame;
         g_ring_dur = ev->dur_frames;
-        g_ring_x = (float)ev->x;
-        g_ring_y = (float)ev->y;
+        g_ring_x = x;
+        g_ring_y = y;
         break;
     case PS_ECHO:
+        if (!ps_fire_point(ev, &x, &y)) break;
         g_echo_start = g_frame;
         g_echo_dur = ev->dur_frames;
-        g_echo_x = (float)ev->x;
-        g_echo_y = (float)ev->y;
+        g_echo_x = x;
+        g_echo_y = y;
         g_echo_size = ev->size;
         snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
         break;
@@ -457,9 +597,12 @@ void glr_pointer_script_frame(void) {
         ps_release(g_release_button);
     }
 
-    while (g_next_event < g_event_count &&
+    /* g_active can drop mid-loop: a tour whose symbolic target fails to
+     * resolve stops itself from inside ps_fire. */
+    while (g_active && g_next_event < g_event_count &&
            g_events[g_next_event].frame <= g_frame)
         ps_fire(&g_events[g_next_event++]);
+    if (!g_active) return;
 
     /* Step the active glide AFTER event fire so the glide's own start
      * frame emits its first (near-source) sample this same frame. */

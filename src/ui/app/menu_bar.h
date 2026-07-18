@@ -131,6 +131,40 @@ UiHit ui_menu_bar_hit_test(int mx, int my);
  * camera behind the menu. Returns 0 otherwise. */
 int  ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta);
 
+/* --- Symbolic-target geometry queries (pointer-script resolution) ---
+ *
+ * Resolve a named menu-bar element to a point in MOUSE space (window px,
+ * origin top-left — the GLUT event convention) against the live layout.
+ * Labels match by normalized prefix: case-insensitive, with '_' in the
+ * needle matching ' ' in the label; chrome rows ("---", "### " headers,
+ * flyout subheadings) never match. Each returns 1 and fills (*mx, *my)
+ * with the element's center, or 0 when the element does not exist, is
+ * hidden on this platform, or (for row queries) its menu is not open.
+ * Used by src/app/glr_pointer_script.c to resolve `menu:` / `item:` /
+ * `sub:` / `subenter:` / `pin:` script targets at event-fire time, so
+ * scripts stay window-size- and catalog-order-independent. */
+
+/* Top-level menu button by label ("file", "scene", ...). */
+int  ui_menu_bar_target_menu(const char *name, int *mx, int *my);
+
+/* Pinned right-side button: "search", "view" (the 2D/3D swatch), "replay". */
+int  ui_menu_bar_target_pin(const char *name, int *mx, int *my);
+
+/* Row of the currently open dropdown by label ("new_scene", "3d", ...). */
+int  ui_menu_bar_target_open_row(const char *name, int *mx, int *my);
+
+/* Horizontal entry point into `parent`'s flyout: just inside the flyout
+ * edge adjacent to the dropdown, at the parent row's y — the safe path
+ * into a hover-opened flyout (a diagonal glide would cross sibling parent
+ * rows and swap the flyout). Requires the parent's menu to be open. */
+int  ui_menu_bar_target_flyout_entry(const char *parent, int *mx, int *my);
+
+/* Row of `parent`'s flyout by label. Requires the parent's menu to be
+ * open (the flyout itself need not be — geometry is derivable); fails if
+ * the row is scrolled out of the flyout's visible window. */
+int  ui_menu_bar_target_flyout_row(const char *parent, const char *name,
+                                   int *mx, int *my);
+
 /* --- State queries --- */
 
 /* Query whether a top-level menu dropdown is currently open (File, Scene, or

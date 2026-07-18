@@ -2,6 +2,7 @@
  * menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
 #include "app/glr_actions.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -47,8 +48,10 @@ static const char *g_menu_labels[NUM_MENUS] = {
 
 /* The browser shell owns file I/O in Emscripten: New/Open/Download are
  * DOM controls wired to web-safe import/export bridges, not path prompts.
- * Tours are hidden there too — their scripted coordinates are authored
- * against the native menu layout, which the hidden File menu shifts. */
+ * Tours are hidden there too — the catalog leans on the File menu (Editing
+ * Basics opens File > New Scene), and a tour dying mid-flight on a hidden
+ * target is worse than the menu being absent. Symbolic targets otherwise
+ * resolve fine on web; revisit if a web-safe tour set lands. */
 static int menu_visible(int menu_id) {
 #if defined(__EMSCRIPTEN__)
     if (menu_id == MENU_FILE || menu_id == MENU_TOURS)
@@ -1266,6 +1269,150 @@ static UiHit submenu_hit_test(int mx, int my) {
     submenu_fill_hit(&h, g_submenu_menu_id, g_submenu_parent_row,
                      ordinal, mx, my, sx, sy);
     return h;
+}
+
+/* ---- Symbolic-target geometry queries (see menu_bar.h) ------------------ */
+
+/* Normalized prefix match for pointer-script target labels: needle chars
+ * compare case-insensitively against the label's start, with '_' in the
+ * needle standing in for ' ' (targets are single tokens in the script
+ * grammar, so spaces can't appear literally). */
+static int target_label_matches(const char *label, const char *needle) {
+    if (!label || !needle || !*needle)
+        return 0;
+    while (*needle) {
+        char n = (char)tolower((unsigned char)*needle);
+        char l = (char)tolower((unsigned char)*label);
+        if (n == '_') n = ' ';
+        if (n != l)
+            return 0;
+        needle++;
+        label++;
+    }
+    return 1;
+}
+
+/* Mouse-space y for a GL-space y (the inverse of every hit path's
+ * `window_h - my`). */
+static int target_mouse_y(int gl_y) {
+    return ui_state_viewport().window_h - gl_y;
+}
+
+int ui_menu_bar_target_menu(const char *name, int *mx, int *my) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    for (int i = 0; i < NUM_MENUS; i++) {
+        if (!menu_visible(i)) continue;
+        if (!target_label_matches(g_menu_labels[i], name)) continue;
+        if (mx) *mx = menu_x[i] + menu_w[i] / 2;
+        if (my) *my = target_mouse_y(by + bh / 2);
+        return 1;
+    }
+    return 0;
+}
+
+int ui_menu_bar_target_pin(const char *name, int *mx, int *my) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int pin = -1;
+    if (target_label_matches("search", name))      pin = PIN_SEARCH;
+    else if (target_label_matches("view", name))   pin = PIN_VIEW_MODE;
+    else if (target_label_matches("replay", name)) pin = PIN_REPLAY;
+    if (pin < 0)
+        return 0;
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    if (mx) *mx = pin_x[pin] + pin_w[pin] / 2;
+    if (my) *my = target_mouse_y(by + bh / 2);
+    return 1;
+}
+
+/* Row index of the open dropdown whose label matches `name`, or -1.
+ * Chrome rows ("---", "### " headers) are skipped so a needle like
+ * "examples" can't land on the inert "### EXAMPLES" header. */
+static int target_open_row_by_label(const char *name) {
+    if (g_open_menu < 0)
+        return -1;
+    int n = menu_item_count(g_open_menu, NULL);
+    for (int i = 0; i < n; i++) {
+        const char *lbl = menu_item_label(g_open_menu, i);
+        if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM)
+            continue;
+        if (target_label_matches(lbl, name))
+            return i;
+    }
+    return -1;
+}
+
+/* GL-space center y of open-dropdown row `row` (inverse of
+ * dropdown_row_for_gl_y). */
+static int dropdown_row_center_gl_y(int top, int h, int row) {
+    return top + h - DROPDOWN_PAD_Y - row * LINE_H - LINE_H / 2;
+}
+
+int ui_menu_bar_target_open_row(const char *name, int *mx, int *my) {
+    int dx, dy, dw, dh;
+    int row = target_open_row_by_label(name);
+    if (row < 0 || !menu_dropdown_rect(&dx, &dy, &dw, &dh))
+        return 0;
+    if (mx) *mx = dx + dw / 2;
+    if (my) *my = target_mouse_y(dropdown_row_center_gl_y(dy, dh, row));
+    return 1;
+}
+
+int ui_menu_bar_target_flyout_entry(const char *parent, int *mx, int *my) {
+    int dx, dy, dw, dh, sx, sy, sw, sh;
+    int parent_row = target_open_row_by_label(parent);
+    if (parent_row < 0 ||
+        !menu_dropdown_rect(&dx, &dy, &dw, &dh) ||
+        !submenu_rect(g_open_menu, parent_row, &sx, &sy, &sw, &sh))
+        return 0;
+    /* Enter just inside the flyout edge that faces the dropdown (the
+     * flyout flips to the dropdown's left when it would run off-screen),
+     * at the parent row's y clamped into the flyout's row band. */
+    {
+        int gl_y = dropdown_row_center_gl_y(dy, dh, parent_row);
+        int lo = sy + DROPDOWN_PAD_Y + LINE_H / 2;
+        int hi = sy + sh - DROPDOWN_PAD_Y - LINE_H / 2;
+        if (gl_y < lo) gl_y = lo;
+        if (gl_y > hi) gl_y = hi;
+        if (mx) *mx = (sx > dx) ? sx + 16 : sx + sw - 16;
+        if (my) *my = target_mouse_y(gl_y);
+    }
+    return 1;
+}
+
+int ui_menu_bar_target_flyout_row(const char *parent, const char *name,
+                                  int *mx, int *my) {
+    int sx, sy, sw, sh;
+    int parent_row = target_open_row_by_label(parent);
+    if (parent_row < 0 ||
+        !submenu_rect(g_open_menu, parent_row, &sx, &sy, &sw, &sh))
+        return 0;
+    {
+        int count = submenu_row_count(g_open_menu, parent_row);
+        int scroll = submenu_effective_scroll(sh, count);
+        for (int o = 0; o < count; o++) {
+            const char *lbl;
+            int gl_y;
+            if (submenu_row_kind(g_open_menu, parent_row, o) !=
+                GLR_CFG_ROW_ITEM)
+                continue;
+            lbl = submenu_row_label(g_open_menu, parent_row, o);
+            if (!lbl || !target_label_matches(lbl, name))
+                continue;
+            gl_y = dropdown_row_center_gl_y(sy, sh, o - scroll);
+            /* Scrolled out of the clamped flyout window -> unreachable. */
+            if (gl_y < sy || gl_y >= sy + sh)
+                return 0;
+            if (mx) *mx = sx + sw / 2;
+            if (my) *my = target_mouse_y(gl_y);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static UiHit inert_chrome_hit(int mx, int gl_y) {
