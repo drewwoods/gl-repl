@@ -22,6 +22,8 @@
 #include "repl/tutorials.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
+#include "app/glr_tours.h"
+#include "app/glr_pointer_script.h"
 #include "source_document.h"
 #include "keymap.h"
 #include "keys.h"
@@ -752,6 +754,59 @@ static void test_tutorial_menu_dispatch(void) {
                tutorial_active(), 0);
 }
 
+/* Tours menu: every catalog entry has a name, activating a row starts the
+ * pointer-script tour (validating each built-in script parses and is
+ * time-sorted — glr_pointer_script_start_lines rejects both authoring
+ * errors) and closes the menu, and out-of-range rows are consumed. */
+static void test_tours_menu_dispatch(void) {
+    glr_ctrl_reset_all();
+
+    int n = glr_tours_count();
+    ASSERT_TRUE("tour catalog is non-empty", n > 0);
+    ASSERT_TRUE("name query rejects out-of-range", glr_tours_name(n) == NULL);
+
+    for (int i = 0; i < n; i++) {
+        ASSERT_TRUE("tour has a name", glr_tours_name(i) != NULL);
+        ASSERT_INT("tour row activation starts tour and closes menu",
+                   glr_action_menu_item_activate(GLR_MENU_TOURS, i), 1);
+        ASSERT_INT("tour script loaded and playing",
+                   glr_pointer_script_tour_active(), 1);
+        glr_pointer_script_stop();
+        ASSERT_INT("stop deactivates the tour",
+                   glr_pointer_script_tour_active(), 0);
+        ASSERT_INT("stop deactivates the overlay too",
+                   glr_pointer_script_active(), 0);
+    }
+
+    ASSERT_INT("TOURS out-of-range consumed",
+               glr_action_menu_item_activate(GLR_MENU_TOURS, n), 1);
+    ASSERT_INT("out-of-range did not start a tour",
+               glr_pointer_script_tour_active(), 0);
+}
+
+/* A runtime-started tour auto-stops once its last event and overlay effect
+ * have run out (env-driven capture scripts never auto-stop — the recorded
+ * clip should keep its cursor to the end, so that mode isn't covered here). */
+static void test_tour_auto_stop(void) {
+    static const char *const tiny[] = { "0.0 move 10 10" };
+    glr_ctrl_reset_all();
+
+    ASSERT_INT("tiny tour script loads",
+               glr_pointer_script_start_lines(tiny, 1), 1);
+    ASSERT_INT("tour playing after start",
+               glr_pointer_script_tour_active(), 1);
+
+    /* Frame 1 fires the move; with nothing left in flight the same frame's
+     * completion check stops the tour. A couple extra frames guard against
+     * off-by-one drift without weakening the assertion below. */
+    for (int i = 0; i < 3 && glr_pointer_script_tour_active(); i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("tour auto-stopped after last event",
+               glr_pointer_script_tour_active(), 0);
+    ASSERT_INT("overlay inactive after auto-stop",
+               glr_pointer_script_active(), 0);
+}
+
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
  * the audio module's cfg_mode setter, not a raw pointer write. */
 static void test_audio_config_direct_set(void) {
@@ -972,6 +1027,8 @@ static void test_menu_out_of_range_indices(void) {
                glr_action_menu_item_activate(GLR_MENU_SCENE, -1), 1);
     ASSERT_INT("TUTORIALS out-of-range consumed",
                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 999), 1);
+    ASSERT_INT("TOURS out-of-range consumed",
+               glr_action_menu_item_activate(GLR_MENU_TOURS, 999), 1);
     ASSERT_INT("CONFIG out-of-range returns 0 (menu stays open)",
                glr_action_menu_item_activate(GLR_MENU_CONFIG, 999), 0);
 
@@ -2021,6 +2078,8 @@ int main(void) {
     test_ascii_shortcut_modifiers();
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
+    test_tours_menu_dispatch();
+    test_tour_auto_stop();
     test_compute_profile_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();

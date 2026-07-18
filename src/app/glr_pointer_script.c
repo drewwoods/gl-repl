@@ -61,11 +61,17 @@ typedef struct {
 static PsEvent g_events[PS_MAX_EVENTS];
 static int     g_event_count = 0;
 static int     g_active = 0;
+static int     g_tour = 0;     /* runtime-started (auto-stop, cancelable) */
 
 static int g_frame = 0;        /* rendered-frame clock, first frame = 0  */
 static int g_next_event = 0;   /* events fire in file order              */
 
 static float g_px = 0.0f, g_py = 0.0f;   /* current pointer (window px) */
+
+/* Scripted button currently held (a `down` awaiting its `up`, or a click's
+ * synthesized-release window), so moves route through glr_ctrl_motion and
+ * drags — camera orbit, slider drags — track the pointer like a real one. */
+static int g_button_held = -1;           /* GLUT_*_BUTTON, or -1 = none  */
 
 /* Active glide: ease g_px/g_py toward (to_x, to_y) with smoothstep. */
 static int   g_glide_active = 0;
@@ -285,14 +291,69 @@ int glr_pointer_script_active(void) {
     return g_active;
 }
 
+int glr_pointer_script_tour_active(void) {
+    return g_active && g_tour;
+}
+
+/* Reset the per-run state (clocks, glide, held button, overlays) without
+ * touching the loaded event list. The env loader runs once at startup so it
+ * never needed this; runtime tour starts reuse the statics mid-session. */
+static void ps_reset_runtime(void) {
+    g_frame = 0;
+    g_next_event = 0;
+    g_glide_active = 0;
+    g_release_frame = -1;
+    g_button_held = -1;
+    g_ripple_frame = -1;
+    g_ring_start = -1;
+    g_echo_start = -1;
+    g_echo_text[0] = '\0';
+}
+
+int glr_pointer_script_start_lines(const char *const *lines, int count) {
+    glr_pointer_script_stop();
+    g_event_count = 0;
+    int last_frame = 0;
+    for (int i = 0; i < count; i++) {
+        PsEvent ev;
+        int r = ps_parse_line(lines[i], &ev);
+        if (r < 0 || (r > 0 && ev.frame < last_frame)) {
+            fprintf(stderr, "gl-repl: tour script line %d: %s: %s\n", i + 1,
+                    r < 0 ? "bad line" : "out of order", lines[i]);
+            g_event_count = 0;
+            return 0;
+        }
+        if (r == 0) continue;
+        if (g_event_count >= PS_MAX_EVENTS) {
+            fprintf(stderr, "gl-repl: tour script: too many events (max %d)\n",
+                    PS_MAX_EVENTS);
+            g_event_count = 0;
+            return 0;
+        }
+        last_frame = ev.frame;
+        g_events[g_event_count++] = ev;
+    }
+    if (g_event_count == 0) return 0;
+    ps_reset_runtime();
+    g_active = 1;
+    g_tour = 1;
+    return 1;
+}
+
 static void ps_dispatch_move(float x, float y) {
     g_px = x;
     g_py = y;
-    glr_ctrl_passive_motion((int)(x + 0.5f), (int)(y + 0.5f));
+    /* While a scripted button is held this is a drag: route through the
+     * motion callback (orbit/slider handlers), not passive motion. */
+    if (g_button_held >= 0)
+        glr_ctrl_motion((int)(x + 0.5f), (int)(y + 0.5f));
+    else
+        glr_ctrl_passive_motion((int)(x + 0.5f), (int)(y + 0.5f));
 }
 
 static void ps_press(int button) {
     glr_ctrl_mouse(button, GLUT_DOWN, (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+    g_button_held = button;
     g_ripple_frame = g_frame;
     g_ripple_x = g_px;
     g_ripple_y = g_py;
@@ -300,6 +361,22 @@ static void ps_press(int button) {
 
 static void ps_release(int button) {
     glr_ctrl_mouse(button, GLUT_UP, (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+    g_button_held = -1;
+}
+
+void glr_pointer_script_stop(void) {
+    if (!g_active) return;
+    /* Never leave the app mid-drag: complete a pending synthesized click
+     * release, then any explicitly held button. */
+    if (g_release_frame >= 0) {
+        g_release_frame = -1;
+        ps_release(g_release_button);
+    }
+    if (g_button_held >= 0)
+        ps_release(g_button_held);
+    g_active = 0;
+    g_tour = 0;
+    ps_reset_runtime();
 }
 
 static void ps_fire(const PsEvent *ev) {
@@ -334,13 +411,10 @@ static void ps_fire(const PsEvent *ev) {
         ps_press(GLUT_LEFT_BUTTON);
         break;
     case PS_UP:
-        if (ev->has_xy) {
-            /* Drag release: route through motion (button held), not
-             * passive motion, so drag handlers see the final position. */
-            g_px = (float)ev->x;
-            g_py = (float)ev->y;
-            glr_ctrl_motion(ev->x, ev->y);
-        }
+        /* Drag release: the button is still held, so a coordinate move
+         * routes through motion and drag handlers see the final position. */
+        if (ev->has_xy)
+            ps_dispatch_move((float)ev->x, (float)ev->y);
         ps_release(GLUT_LEFT_BUTTON);
         break;
     case PS_WHEEL:
@@ -399,6 +473,17 @@ void glr_pointer_script_frame(void) {
     }
 
     g_frame++;
+
+    /* Tour auto-stop: once every event has fired and every in-flight effect
+     * (glide, pending release, ring/echo/ripple) has run out, hand the app
+     * back. Env-driven capture runs keep the overlay up until the recorder
+     * exits instead — the clip should never end cursor-less. */
+    if (g_tour && g_next_event >= g_event_count &&
+        g_release_frame < 0 && !g_glide_active && g_button_held < 0 &&
+        (g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur) &&
+        (g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur) &&
+        (g_ripple_frame < 0 || g_frame - g_ripple_frame >= PS_RIPPLE_FRAMES))
+        glr_pointer_script_stop();
 }
 
 /* --- overlay rendering -------------------------------------------------- */

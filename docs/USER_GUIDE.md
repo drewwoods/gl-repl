@@ -25,6 +25,7 @@ rendering, recording, and every environment variable, see
 - [Getting Started](#getting-started)
 - [Built-in Examples](#built-in-examples)
 - [Tutorials](#tutorials)
+- [Guided Tours](#guided-tours)
 - [Writing Code](#writing-code)
 - [The REPL Language](#the-repl-language)
 - [Making It Move](#making-it-move)
@@ -57,9 +58,9 @@ Run a fresh session, or reload earlier work:
 
 Top to bottom:
 
-- **Menu bar** — *File*, *Scene*, *Tutorials*, *Config*, *Audio* dropdowns, a
-  *search...* slot (same as Ctrl+F), and the *Replay* button at the far
-  right.
+- **Menu bar** — *File*, *Scene*, *Tutorials*, *Tours*, *Config*, *Audio*
+  dropdowns, a *search...* slot (same as Ctrl+F), and the *Replay* button at
+  the far right.
 - **Scene tabs** — one tab per open scene (here *First Triangle* and *Ring
   Sketch*). Click to switch.
 - **Code panel** — the live, editable list of GL commands. By default it sits
@@ -177,6 +178,26 @@ variable slider to a target.
 - The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
   *Variable Slider*, *First Animation*, *Depth Test Triangle*, *Lighting
   Basics*, and *Color Interpolation*.
+
+---
+
+## Guided Tours
+
+Where a tutorial asks *you* to type, the **Tours** menu drives the app for
+you: pick an entry and a synthetic pointer takes over — gliding through
+menus, hovering flyouts, clicking, and typing, with an on-screen cursor,
+click ripples, spotlight rings, and captions narrating each step. Press any
+key or click anywhere to stop a tour and take back control (a finished tour
+hands control back by itself).
+
+- *Menus & Examples* — browses the Scene example flyouts, loads a showcase
+  scene, peeks at Tutorials, toggles a Config overlay, and runs a replay.
+- *Editing Basics* — creates a fresh scene and types a spinning triangle
+  plus a torus, line by line, showing commits and the autocomplete ghost.
+- *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
+
+Tours are authored against the default 1200x800 window layout; in a heavily
+resized window a click can land beside its intended target.
 
 ---
 

@@ -47,6 +47,27 @@ int glr_pointer_script_load_env(void);
 /* Nonzero once a script has loaded. */
 int glr_pointer_script_active(void);
 
+/* Start a script from an in-memory array of grammar lines (the guided-tour
+ * path — the Tours menu plays a built-in catalog entry through the same
+ * engine the capture hook uses). Unlike the env loader this runs mid-session:
+ * the frame clock, glide, and overlay state reset, events fire on subsequent
+ * glr_pointer_script_frame() calls, and the script auto-stops after its last
+ * event and overlay effect finish. Events must be time-sorted. Returns 1 on
+ * success; a malformed or out-of-order line logs to stderr and returns 0
+ * without activating (built-in tours are validated by tests, so this is an
+ * authoring backstop, not a user-facing error path). */
+int glr_pointer_script_start_lines(const char *const *lines, int count);
+
+/* Stop a running script now: release any scripted-held mouse button so the
+ * app never sees a stuck drag, clear the overlay, and deactivate. Used by
+ * the tour cancel path (real user input hands control back) and by the
+ * auto-stop; safe to call when inactive. */
+void glr_pointer_script_stop(void);
+
+/* Nonzero while a runtime-started (tour) script is playing — as opposed to
+ * the env-driven capture mode, which is never canceled by user input. */
+int glr_pointer_script_tour_active(void);
+
 /* Advance the script one frame: fire due events through the glr_ctrl_*
  * input entry points and step any active glide. Call once per display
  * callback, before glr_ctrl_display_frame(), so the frame reflects the
