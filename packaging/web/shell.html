@@ -398,6 +398,8 @@
       <button type="button" class="keycap" id="newSceneButton" disabled>new</button>
       <button type="button" class="keycap" id="openSceneButton" disabled>open</button>
       <button type="button" class="keycap" id="downloadSceneButton" disabled>download</button>
+      <button type="button" class="keycap" id="shareSceneButton" disabled
+              title="Copy a link that reproduces this scene (shift-click: settings only)">share</button>
       <span class="sep" aria-hidden="true"></span>
       <button type="button" class="keycap" id="consoleToggle" aria-pressed="false">console</button>
       <button type="button" class="keycap" id="fullscreenButton" aria-pressed="false">fullscreen</button>
@@ -450,6 +452,7 @@
       var newSceneButton = document.getElementById('newSceneButton');
       var openSceneButton = document.getElementById('openSceneButton');
       var downloadSceneButton = document.getElementById('downloadSceneButton');
+      var shareSceneButton = document.getElementById('shareSceneButton');
       var fullscreenButton = document.getElementById('fullscreenButton');
       var lastSceneFilename = 'gl-repl-scene.c';
       if (outputElement) outputElement.value = '';
@@ -557,6 +560,7 @@
         newSceneButton.disabled = !ready;
         openSceneButton.disabled = !ready;
         downloadSceneButton.disabled = !ready;
+        shareSceneButton.disabled = !ready;
       };
 
       var fallbackSceneName = (name) => {
@@ -584,14 +588,21 @@
         });
       };
 
-      var downloadActiveScene = () => {
-        if (!sceneControlsReady) return;
+      // Export the active scene through the C exporter and hand back the
+      // text (the same bytes the download button saves). Null on failure.
+      var exportSceneText = () => {
         var path = '/tmp/gl-repl-browser-export.c';
         var ok = Module.ccall('glr_web_export_scene', 'number', ['string'], [path]);
-        if (!ok) return;
-
+        if (!ok) return null;
         var text = Module.FS.readFile(path, { encoding: 'utf8' });
         try { Module.FS.unlink(path); } catch (err) {}
+        return text;
+      };
+
+      var downloadActiveScene = () => {
+        if (!sceneControlsReady) return;
+        var text = exportSceneText();
+        if (text === null) return;
 
         var blob = new Blob([text], { type: 'text/x-csrc;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -620,6 +631,122 @@
       sceneFileInput.addEventListener('change', (e) => {
         readSceneFile(e.target.files && e.target.files[0]);
         e.target.value = '';
+      });
+
+      // ── URL sharing ─────────────────────────────────────
+      // The whole payload rides in location.hash, so it never reaches the
+      // server and survives static hosting. Two payload kinds, keyed by a
+      // one-letter kind + one-digit codec version:
+      //   #s1=<b64url(deflate-raw(scene text))>  full scene — the same text
+      //       the download button saves, so @cfg settings, camera, variables
+      //       and code all ride along; loaded as a new scene slot on boot.
+      //   #c1=<b64url(deflate-raw(@cfg lines))>  settings only; applied to
+      //       the current scene on boot without replacing it.
+      // The *0 variants are uncompressed base64url fallbacks for browsers
+      // without CompressionStream (and links stay decodable everywhere).
+
+      var glrBytesToB64url = (bytes) => {
+        var bin = '';
+        for (var i = 0; i < bytes.length; i += 0x8000)
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      };
+
+      var glrB64urlToBytes = (str) => {
+        var b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        var bin = atob(b64);
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+      };
+
+      var glrStreamBytes = (bytes, transform) =>
+        new Response(new Blob([bytes]).stream().pipeThrough(transform))
+          .arrayBuffer().then((ab) => new Uint8Array(ab));
+
+      var glrHasCompression = typeof CompressionStream !== 'undefined' &&
+                              typeof DecompressionStream !== 'undefined';
+
+      var glrEncodeSharePayload = (text) => {
+        var bytes = new TextEncoder().encode(text);
+        if (!glrHasCompression)
+          return Promise.resolve({ v: '0', data: glrBytesToB64url(bytes) });
+        return glrStreamBytes(bytes, new CompressionStream('deflate-raw'))
+          .then((out) => ({ v: '1', data: glrBytesToB64url(out) }));
+      };
+
+      var glrDecodeSharePayload = (version, data) => {
+        var bytes = glrB64urlToBytes(data);
+        if (version === '0')
+          return Promise.resolve(new TextDecoder().decode(bytes));
+        if (!glrHasCompression)
+          return Promise.reject(new Error(
+            'this link needs DecompressionStream support'));
+        return glrStreamBytes(bytes, new DecompressionStream('deflate-raw'))
+          .then((out) => new TextDecoder().decode(out));
+      };
+
+      var glrShareResetTimer = 0;
+      var glrShareFeedback = (label) => {
+        shareSceneButton.textContent = label;
+        clearTimeout(glrShareResetTimer);
+        glrShareResetTimer = setTimeout(() => {
+          shareSceneButton.textContent = 'share';
+        }, 1600);
+      };
+
+      shareSceneButton.addEventListener('click', (e) => {
+        if (!sceneControlsReady) return;
+        var cfgOnly = e.shiftKey;
+        var text = cfgOnly
+          ? Module.ccall('glr_web_cfg_share_text', 'string', [], [])
+          : exportSceneText();
+        if (!text) { glrShareFeedback('failed'); return; }
+        glrEncodeSharePayload(text).then((enc) => {
+          var hash = '#' + (cfgOnly ? 'c' : 's') + enc.v + '=' + enc.data;
+          history.replaceState(null, '', hash);
+          // The hash is in the URL bar either way; the clipboard write is
+          // best-effort (it can be denied outside a secure context).
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(location.href).then(
+              () => glrShareFeedback('copied'),
+              () => glrShareFeedback('in URL bar'));
+          } else {
+            glrShareFeedback('in URL bar');
+          }
+          canvasElement.focus();
+        }).catch((err) => {
+          console.error('Share encoding failed:', err);
+          glrShareFeedback('failed');
+        });
+      });
+
+      // Decode and apply a shared payload from the current URL. Runs once
+      // after the runtime is up (postRun), and again if a new hash is pasted
+      // into an already-open tab (the share button's replaceState does not
+      // fire hashchange, so it never re-applies its own link).
+      var glrApplySharedHash = () => {
+        var m = location.hash.match(/^#([sc])([01])=(.+)$/);
+        if (!m) return;
+        glrDecodeSharePayload(m[2], m[3]).then((text) => {
+          if (m[1] === 's') {
+            var ok = Module.ccall('glr_web_load_scene_text', 'number',
+                                  ['string', 'string'],
+                                  [text, 'Shared Scene']);
+            if (ok) lastSceneFilename = 'shared-scene.c';
+          } else {
+            Module.ccall('glr_web_apply_cfg_text', 'number',
+                         ['string'], [text]);
+          }
+          canvasElement.focus();
+        }).catch((err) => {
+          console.error('Failed to decode shared URL payload:', err);
+        });
+      };
+
+      window.addEventListener('hashchange', () => {
+        if (sceneControlsReady) glrApplySharedHash();
       });
 
       // OS clipboard bridge for Ctrl/Cmd+C/X/V: the browser/OS clipboard is
@@ -883,7 +1010,10 @@
         },
         canvas: canvasElement,
         setStatus: setStatus,
-        postRun: [() => setSceneControlsReady(true)],
+        postRun: [() => {
+          setSceneControlsReady(true);
+          glrApplySharedHash();
+        }],
         totalDependencies: 0,
         monitorRunDependencies(left) {
           this.totalDependencies = Math.max(this.totalDependencies, left);

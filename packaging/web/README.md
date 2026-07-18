@@ -67,6 +67,23 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   [`src/app/glr_web_io.c`](../../src/app/glr_web_io.c)'s `EMSCRIPTEN_KEEPALIVE` exports
   (`glr_web_new_scene`, `glr_web_load_scene_text`, `glr_web_export_scene`) —
   see `-sEXPORTED_FUNCTIONS` in the Makefile's `WEB=1` block.
+- **URL sharing**: the *share* button encodes the whole scene into
+  `location.hash` so a copy-pasted link reproduces it — no server involved,
+  works on static hosting. Payload format is
+  `#s1=<base64url(deflate-raw(scene text))>` where the text is exactly what
+  the download button saves (so `@cfg` presentation settings, the camera
+  block, variables, and code all ride along); shift-click shares a
+  settings-only `#c1=<base64url(deflate-raw("// @cfg slug = value" lines))>`
+  link that applies to the receiver's current scene instead of replacing it.
+  The `s0`/`c0` variants are uncompressed fallbacks for browsers without
+  `CompressionStream`. On boot (postRun) the shell decodes the hash and
+  routes it through `glr_web_load_scene_text` (scene) or the
+  `glr_web_apply_cfg_text` export (settings; its counterpart
+  `glr_web_cfg_share_text` generates the payload from the live config).
+  Pasting a share hash into an already-open tab applies it via
+  `hashchange`; the share button itself uses `history.replaceState`, which
+  doesn't fire that event, so it never re-applies its own link. A default
+  example encodes to a ~4.8k-char URL (from ~10 KB of scene text).
 
 ## Building
 
