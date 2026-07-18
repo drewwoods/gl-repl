@@ -141,6 +141,15 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
     }
 }
 
+unsigned repl_attrib_bits_for_type(CmdType type, unsigned enum_arg0) {
+    GLCmd probe;
+    memset(&probe, 0, sizeof(probe));
+    probe.type = type;
+    probe.num_args = 1;
+    probe.args[0] = (float)enum_arg0;
+    return repl_attrib_bits_for_cmd(&probe);
+}
+
 int repl_attrib_bit_index(unsigned single_bit) {
     const ReplEnumEntry *bits = repl_attrib_bit_entries();
     for (int i = 0; bits[i].name; i++)

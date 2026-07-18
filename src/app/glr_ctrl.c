@@ -665,17 +665,30 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
 
 /* Scan a glPushAttrib line's canonical text for each GL_*_BIT token in its
  * mask and push one HIGHLIGHT_ATTRIB_BIT_TOKEN char-range highlight per token
- * (aux = canonical bit index). Canonical text guarantees the exact spelling
- * and a single appearance per token (bitfield dupe-drop), so a plain substring
- * scan suffices and every token found is genuinely in the mask. */
+ * (aux = canonical bit index). The scan is confined to the (...) argument
+ * range and each token is gated on the parsed mask, so a token mentioned in a
+ * trailing comment is never coloured. Within the argument range canonical
+ * bitfield text guarantees exact spelling and a single appearance per token
+ * (dupe-drop), so a substring scan suffices. */
 static void glr_ctrl_push_attrib_bit_tokens(int push_line) {
+    const GLCmd *cmd = repl_state_document_cmd_at(push_line);
     const char *text = editor_buffer_view_line(editor_buffer_view(), push_line);
-    if (!text)
+    const char *open, *close;
+    unsigned mask;
+    if (!cmd || cmd->type != CMD_PUSH_ATTRIB || !text)
+        return;
+    mask = (unsigned)cmd->args[0];
+    open = strchr(text, '(');
+    close = open ? strchr(open, ')') : NULL;
+    if (!open || !close)
         return;
     const ReplEnumEntry *bits = repl_attrib_bit_entries();
     for (int i = 0; bits[i].name; i++) {
-        const char *hit = strstr(text, bits[i].name);
-        if (!hit)
+        const char *hit;
+        if (!(mask & (unsigned)bits[i].value))
+            continue;
+        hit = strstr(open + 1, bits[i].name);
+        if (!hit || hit >= close)
             continue;
         int start = (int)(hit - text);
         int end = start + (int)strlen(bits[i].name);

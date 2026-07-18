@@ -572,11 +572,19 @@ typedef struct {
     ReplGlTrackedState snap;
 } GlStateAttribFrame;
 
-/* Restore the tracked state a matching glPushAttrib saved, but only the groups
+/* Does `mask` cover the state a command of `type` sets? All bit membership is
+ * routed through attrib_bits (the single cell->bit source) so the inspector's
+ * restore cannot drift from the analyzer / executor / overlays. */
+static int gl_state_mask_covers(unsigned mask, CmdType type) {
+    return (mask & repl_attrib_bits_for_type(type, 0)) != 0;
+}
+
+/* Restore the tracked state a matching glPushAttrib saved, but only the fields
  * whose covering bit is in `mask`, stamping each restored row's latest change
- * source to the pop line (the policy CMD_POP_MATRIX uses). Capability enables
- * reuse attrib_bits' cap->bit membership via a probe glEnable, so bit ownership
- * lives in exactly one place. */
+ * source to the pop line (the policy CMD_POP_MATRIX uses). Each field's bit
+ * membership comes from attrib_bits via its setter command type; the only
+ * fields with no REPL setter command (the per-light parameters, set solely by
+ * generated writes) use the literal GL_LIGHTING_BIT the GL spec assigns them. */
 static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
                                            const ReplGlTrackedState *snap,
                                            unsigned mask,
@@ -586,70 +594,81 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
     /* Enable/disable state of every tracked cap (GL_ENABLE_BIT plus the cap's
      * own group bit). */
     for (i = 0; i < s->cap_count; i++) {
-        GLCmd probe;
-        memset(&probe, 0, sizeof(probe));
-        probe.type = CMD_ENABLE;
-        probe.num_args = 1;
-        probe.args[0] = (float)s->caps[i].cap;
-        if (mask & repl_attrib_bits_for_cmd(&probe)) {
+        if (mask & repl_attrib_bits_for_type(CMD_ENABLE, s->caps[i].cap)) {
             s->caps[i].current = snap->caps[i].current;
             s->caps[i].touched = 1;
             s->caps[i].source = source;
         }
     }
 
-    if (mask & GL_CURRENT_BIT) {
+    if (gl_state_mask_covers(mask, CMD_COLOR3F)) {
         memcpy(s->current_color, snap->current_color, sizeof(s->current_color));
         s->current_color_touched = 1;
         s->current_color_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_NORMAL3F)) {
         memcpy(s->current_normal, snap->current_normal, sizeof(s->current_normal));
         s->current_normal_touched = 1;
         s->current_normal_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_EDGE_FLAG)) {
         s->edge_flag = snap->edge_flag;
         s->edge_flag_touched = 1;
         s->edge_flag_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_RASTER_POS3F)) {
         memcpy(s->raster_pos, snap->raster_pos, sizeof(s->raster_pos));
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;
     }
 
-    if (mask & GL_POINT_BIT) {
+    if (gl_state_mask_covers(mask, CMD_POINT_SIZE)) {
         s->point_size = snap->point_size;
         s->point_size_touched = 1;
         s->point_size_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_POINT_PARAMETER_FV)) {
         memcpy(s->point_attenuation, snap->point_attenuation,
                sizeof(s->point_attenuation));
         s->point_attenuation_touched = 1;
         s->point_attenuation_source = source;
     }
 
-    if (mask & GL_LINE_BIT) {
+    if (gl_state_mask_covers(mask, CMD_LINE_WIDTH)) {
         s->line_width = snap->line_width;
         s->line_width_touched = 1;
         s->line_width_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_LINE_STIPPLE)) {
         s->line_stipple_repeat = snap->line_stipple_repeat;
         s->line_stipple_pattern = snap->line_stipple_pattern;
         s->line_stipple_touched = 1;
         s->line_stipple_source = source;
     }
 
-    if (mask & GL_POLYGON_BIT) {
+    if (gl_state_mask_covers(mask, CMD_FRONT_FACE)) {
         s->front_face = snap->front_face;
         s->front_face_touched = 1;
         s->front_face_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_CULL_FACE)) {
         s->cull_face = snap->cull_face;
         s->cull_face_touched = 1;
         s->cull_face_source = source;
     }
 
-    if (mask & GL_LIGHTING_BIT) {
+    if (gl_state_mask_covers(mask, CMD_SHADE_MODEL)) {
         s->shade_model = snap->shade_model;
         s->shade_model_touched = 1;
         s->shade_model_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_COLOR_MATERIAL)) {
         s->color_material_face = snap->color_material_face;
         s->color_material_mode = snap->color_material_mode;
         s->color_material_touched = 1;
         s->color_material_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_LIGHT_MODEL_I)) {
         s->light_model_local_viewer = snap->light_model_local_viewer;
         s->light_model_local_viewer_touched = 1;
         s->light_model_local_viewer_source = source;
@@ -660,6 +679,8 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
                sizeof(s->light_model_ambient));
         s->light_model_ambient_touched = 1;
         s->light_model_ambient_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_MATERIALFV)) {
         for (i = 0; i < REPL_GL_STATE_MATERIAL_FACES; i++) {
             for (j = 0; j < REPL_GL_STATE_MATERIAL_PROPS; j++) {
                 memcpy(s->materials[i][j].value, snap->materials[i][j].value,
@@ -668,6 +689,10 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
                 s->materials[i][j].source = source;
             }
         }
+    }
+    if (mask & GL_LIGHTING_BIT) {
+        /* Per-light parameters have no REPL setter command to key on; the GL
+         * spec puts glLight* state under GL_LIGHTING_BIT. */
         for (i = 0; i < REPL_LIGHT_SLOT_COUNT; i++) {
             ReplGlTrackedLight *ld = &s->lights[i];
             const ReplGlTrackedLight *ls = &snap->lights[i];
@@ -682,16 +707,18 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         }
     }
 
-    if (mask & GL_DEPTH_BUFFER_BIT) {
+    if (gl_state_mask_covers(mask, CMD_DEPTH_FUNC)) {
         s->depth_func = snap->depth_func;
         s->depth_func_touched = 1;
         s->depth_func_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_DEPTH_MASK)) {
         s->depth_mask = snap->depth_mask;
         s->depth_mask_touched = 1;
         s->depth_mask_source = source;
     }
 
-    if (mask & GL_TRANSFORM_BIT) {
+    if (gl_state_mask_covers(mask, CMD_CLIP_PLANE)) {
         for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
             memcpy(s->clip_plane[i], snap->clip_plane[i],
                    sizeof(s->clip_plane[i]));
@@ -700,14 +727,18 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         }
     }
 
-    if (mask & GL_COLOR_BUFFER_BIT) {
+    if (gl_state_mask_covers(mask, CMD_CLEAR_COLOR)) {
         memcpy(s->clear_color, snap->clear_color, sizeof(s->clear_color));
         s->clear_color_touched = 1;
         s->clear_color_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_BLEND_FUNC)) {
         s->blend_src = snap->blend_src;
         s->blend_dst = snap->blend_dst;
         s->blend_func_touched = 1;
         s->blend_func_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_COLOR_MASK)) {
         memcpy(s->color_mask, snap->color_mask, sizeof(s->color_mask));
         s->color_mask_touched = 1;
         s->color_mask_source = source;
@@ -1472,6 +1503,9 @@ void repl_gl_state_report_at_line(FlatProgramView program,
      * call) avoids a multi-KB stack snapshot array; not reentrant. */
     static GlStateAttribFrame attrib_frames[GL_STATE_ATTRIB_STACK_CAP];
     int user_attrib_depth = 0;
+    ReplGlStateChangeSource user_attrib_source;
+    user_attrib_source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+    user_attrib_source.source_line_idx = -1;
     for (i = 0; i < program.cmd_count; i++) {
         const GLCmd *cmd = &program.cmds[i];
         if (!gl_state_command_precedes(cmd, source_line_idx))
@@ -1485,11 +1519,13 @@ void repl_gl_state_report_at_line(FlatProgramView program,
                 attrib_frames[user_attrib_depth].snap = state;
             }
             user_attrib_depth++;
+            user_attrib_source = source;
             continue;
         }
         if (cmd->type == CMD_POP_ATTRIB) {
             if (user_attrib_depth > 0) {
                 user_attrib_depth--;
+                user_attrib_source = source;
                 if (user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP)
                     gl_state_restore_attrib_groups(
                         &state, &attrib_frames[user_attrib_depth].snap,
@@ -1501,12 +1537,15 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     }
 
     /* Reported GL_ATTRIB_STACK_DEPTH = generated bracket depth + the real user
-     * push depth (min(virtual, CAP)) still open at the cursor. */
+     * push depth (min(virtual, CAP)) still open at the cursor. While user
+     * pushes are open, the row's latest-change source is the last user
+     * push/pop that moved the depth, not the generated display bracket. */
     if (user_attrib_depth > 0) {
         int eff = user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP
                       ? user_attrib_depth : GL_STATE_ATTRIB_STACK_CAP;
         state.attrib_stack_depth += eff;
         state.attrib_stack_depth_touched = 1;
+        state.attrib_stack_depth_source = user_attrib_source;
     }
 
     gl_state_append_report(&state, out);

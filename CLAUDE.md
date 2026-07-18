@@ -589,7 +589,7 @@ Agent-relevant policies:
   emits a self-contained `label()` helper. Distinct from goto-label
   `:name` (CMD_GOTO_LABEL).
 - **Overlay passes** replay clip/cull/`glFrontFace` state as they walk
-  (`overlay_gl_apply_cmd` in edit_overlays.c) so outlines/points match the
+  (`overlay_gl_track_cmd` in edit_overlays.c) so outlines/points match the
   frame; color-mask gates those walks instead of being replayed. The
   Polygon-highlight On state suspends clip planes + culling for the cursor
   highlight only.

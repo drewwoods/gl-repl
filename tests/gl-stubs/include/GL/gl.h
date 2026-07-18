@@ -301,6 +301,7 @@ static inline void glColorMaterial(GLenum face, GLenum mode) { GL_STUB_TRACE_LIN
 static inline void glCullFace(GLenum mode) { GL_STUB_TRACE_LINE("glCullFace %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glCullFace); }
 static inline void glDepthFunc(GLenum func) { GL_STUB_TRACE_LINE("glDepthFunc %u\n", (unsigned)func); gl_stub_tick(GL_STUB_glDepthFunc); }
 static inline void glClipPlane(GLenum plane, const GLdouble *equation) { GL_STUB_TRACE_LINE("glClipPlane %u %g %g %g %g\n", (unsigned)plane, equation[0], equation[1], equation[2], equation[3]); gl_stub_tick(GL_STUB_glClipPlane); }
+static inline void glGetClipPlane(GLenum plane, GLdouble *equation) { GL_STUB_TRACE_LINE("glGetClipPlane %u\n", (unsigned)plane); gl_stub_tick(GL_STUB_glGetClipPlane); if (equation) { equation[0] = equation[1] = equation[2] = equation[3] = 0.0; } }
 static inline void glDepthMask(GLboolean flag) { GL_STUB_TRACE_LINE("glDepthMask %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glDepthMask); }
 static inline void glDisable(GLenum cap) { GL_STUB_TRACE_LINE("glDisable %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glDisable); }
 static inline void glEdgeFlag(GLboolean flag) { GL_STUB_TRACE_LINE("glEdgeFlag %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glEdgeFlag); }

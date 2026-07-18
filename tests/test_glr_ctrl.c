@@ -2928,6 +2928,59 @@ static void test_display_frame_follows_replay_line_after_tick(void) {
                 follow_doc_line < editor_scroll() + visible_lines);
 }
 
+/* Cursor on a glPushAttrib line colours exactly the parsed mask's GL_*_BIT
+ * tokens, confined to the (...) argument range — a bit token mentioned in a
+ * trailing comment is never coloured — and the saved-setter line and matching
+ * pop bracket get their highlights. */
+static void test_push_attrib_bit_token_highlights(void) {
+    printf("--- imrepl_ctrl glPushAttrib bit-token highlights ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glPushAttrib(GL_CURRENT_BIT); // GL_LIGHTING_BIT note");
+    editor_feed_line("glColor3f(0, 1, 0);");
+    editor_feed_line("glPopAttrib();");
+
+    glr_ctrl_set_edit_line(1);
+    editor_insert_mode_set(0);
+    glr_ctrl_push_highlights();
+
+    const UiHighlightList *list = editor_state_highlights();
+    const char *text = editor_buffer_view_line(editor_buffer_view(), 1);
+    const char *cmt = text ? strstr(text, "//") : NULL;
+    int comment_start = cmt ? (int)(cmt - text) : -1;
+    int token_count = 0;
+    int tokens_in_comment = 0;
+    for (int i = 0; list && i < list->count; i++) {
+        const UiHighlight *h = &list->items[i];
+        if (h->kind != HIGHLIGHT_ATTRIB_BIT_TOKEN)
+            continue;
+        token_count++;
+        if (comment_start >= 0 && h->char_start >= comment_start)
+            tokens_in_comment++;
+    }
+    ASSERT_TRUE("push line has canonical text", text != NULL);
+    ASSERT_TRUE("trailing comment kept in canonical text", cmt != NULL);
+    ASSERT_INT("exactly one bit token coloured (the parsed mask)",
+               token_count, 1);
+    ASSERT_INT("no token coloured inside the trailing comment",
+               tokens_in_comment, 0);
+    ASSERT_INT("saved setter line gets the attrib-state marker",
+               count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 0), 1);
+    ASSERT_INT("matching pop is bracket-highlighted",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 3), 1);
+
+    /* Cursor on the pop: scoped setter marked, push's tokens still confined
+     * to the push line's argument range. */
+    glr_ctrl_set_edit_line(3);
+    editor_insert_mode_set(0);
+    glr_ctrl_push_highlights();
+    ASSERT_INT("pop cursor marks the scoped setter it reverts",
+               count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 2), 1);
+    ASSERT_INT("pop cursor bracket-highlights the push",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 1), 1);
+}
+
 static void test_replay_call_site_highlights_are_pushed(void) {
     printf("--- imrepl_ctrl replay call-site highlights ---\n");
 
@@ -4348,6 +4401,7 @@ int main(void) {
     test_display_frame_scene_config_is_stable_across_frames();
     test_display_frame_no_replay_means_no_fade_plumbing();
     test_display_frame_follows_replay_line_after_tick();
+    test_push_attrib_bit_token_highlights();
     test_replay_call_site_highlights_are_pushed();
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();

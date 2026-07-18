@@ -310,3 +310,37 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
   even though flattening may execute them at different multiplicities. The masked LIFO fold
   is exact for the chosen source-order model; flat-program/block-aware analysis remains a
   possible follow-up shared with matrix-scope highlighting.
+
+## Review follow-up (2026-07-18)
+
+A source-level review of phases 1–5 found three defects plus a duplication
+concern; all addressed on the branch:
+
+- **Overlay scoping was glBegin-pass-only (P1).** The push/pop snapshot stack
+  lived inline in `render_outlines_glbegin_pass`; the tess, glut-solid, and
+  both vertex-point walkers ignored the commands entirely, and snapshots missed
+  the clip-plane *equations* (GL_TRANSFORM_BIT) and the separately tracked
+  `color_writes` gate (GL_COLOR_BUFFER_BIT). Factored one `OverlayGlTracker`
+  (`overlay_gl_track_cmd` / `overlay_gl_restore_frame`) stepped by every
+  walker; a TRANSFORM-covering push captures the live eye-space equations via
+  `glGetClipPlane` and the pop re-issues them under an identity modelview.
+- **Bit-token highlighting could colour comment text (P2).** The push-line
+  token scan now confines itself to the `(...)` argument range and gates each
+  token on the parsed mask (`glr_ctrl_push_attrib_bit_tokens`).
+- **Attrib-stack depth provenance (P2).** User pushes/pops adjusted the
+  reported `GL_ATTRIB_STACK_DEPTH` but left its latest-change source pointing
+  at the generated display bracket; the fold now stamps the last user push/pop
+  line while user depth is open.
+- **Membership dedup.** New `repl_attrib_bits_for_type(CmdType, enum_arg0)` in
+  attrib_bits is now the single gate for cell→bit membership everywhere it is
+  re-interpreted: the inspector's per-field group restore (per-field probes,
+  only the command-less per-light params keep a literal GL_LIGHTING_BIT), the
+  executor's bookkeeping restore, and the overlay tracker's restore gating.
+  The four state models remain (executor GL semantics, inspector report,
+  analyzer writer-lines, overlay mirror — each consumes a different state
+  shape) but which-bit-covers-what now lives only in attrib_bits.c.
+
+Regression tests: `test_edit_overlays.c` (per-walker pop scoping, scoped
+colour-mask revert, equation capture/restore), `test_glr_ctrl.c` (token
+confined to arg range/mask, comment token not coloured), `test_repl_state.c`
+(depth row source = latest user push/pop, bracket-inclusive depth values).

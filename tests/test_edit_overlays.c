@@ -714,6 +714,141 @@ static void test_overlays_honor_culling(void) {
                                   "glVertex3f 1 0 0"), 1);
 }
 
+/* glPushAttrib/glPopAttrib scope the state the overlay walks replay: a scoped
+ * glDisable(GL_CULL_FACE) reverts at the pop, so geometry after the pop culls
+ * like the real render — in EVERY walker (glBegin outline, glut-solid outline,
+ * vertex points), not just the glBegin pass. A scoped glColorMask reverts too,
+ * and a GL_TRANSFORM_BIT push captures the live plane equations for restore. */
+static void test_overlays_scope_push_pop_attrib(void) {
+    printf("--- edit_overlays glPushAttrib/glPopAttrib scoping ---\n");
+
+    /* Cull on; a GL_ENABLE_BIT scope turns it off; triangle after the pop.
+     * GL_CULL_FACE = 2884. */
+    GLCmd cmds[9];
+    mk_cmd(&cmds[0], CMD_ENABLE, (float)GL_CULL_FACE, 0, 0);
+    cmds[0].num_args = 1;
+    mk_cmd(&cmds[1], CMD_PUSH_ATTRIB, (float)GL_ENABLE_BIT, 0, 0);
+    cmds[1].num_args = 1;
+    mk_cmd(&cmds[2], CMD_DISABLE, (float)GL_CULL_FACE, 0, 0);
+    cmds[2].num_args = 1;
+    mk_cmd(&cmds[3], CMD_POP_ATTRIB, 0, 0, 0);
+    cmds[3].num_args = 0;
+    mk_cmd(&cmds[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 3, 0, 0);
+    mk_cmd(&cmds[8], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 9;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("outline pass: cull re-enabled by the pop before the draw",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 1 0 0"), 1);
+
+    /* Same scope followed by a glutSolid shape: the glut outline pass is its
+     * own walker and must honor the pop too. */
+    GLCmd glut_cmds[5];
+    glut_cmds[0] = cmds[0];
+    glut_cmds[1] = cmds[1];
+    glut_cmds[2] = cmds[2];
+    glut_cmds[3] = cmds[3];
+    mk_cmd(&glut_cmds[4], CMD_GLUT_SPHERE, 0.5f, 8.0f, 6.0f);
+    ctx.program.cmds = glut_cmds;
+    ctx.program.cmd_count = 5;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("glut outline pass: cull re-enabled by the pop before the shape",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glutSolidSphere 0.5 8 6"), 1);
+
+    /* A scoped glColorMask(0,0,0,...) reverts at the pop: the vertex-point
+     * walk draws dots after the pop instead of inheriting the dead mask. */
+    GLCmd mask_cmds[6];
+    mk_cmd(&mask_cmds[0], CMD_PUSH_ATTRIB, (float)GL_COLOR_BUFFER_BIT, 0, 0);
+    mask_cmds[0].num_args = 1;
+    mk_cmd(&mask_cmds[1], CMD_COLOR_MASK, 0, 0, 0);
+    mask_cmds[1].num_args = 4;
+    mk_cmd(&mask_cmds[2], CMD_POP_ATTRIB, 0, 0, 0);
+    mask_cmds[2].num_args = 0;
+    mk_cmd(&mask_cmds[3], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&mask_cmds[4], CMD_VERTEX3F, 7, 0, 0);
+    mk_cmd(&mask_cmds[5], CMD_END, 0, 0, 0);
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = mask_cmds;
+    ctx.program.cmd_count = 6;
+    ctx.show_vertex_points = 1;
+    TraceLog mlog;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&mlog);
+    ASSERT_INT("vertex points: scoped color mask reverts at the pop",
+               trace_count_line(&mlog, "glVertex3f 7 0 0"), 1);
+
+    /* Control: an unscoped dead mask still gates the dots off. */
+    GLCmd mask2[4];
+    mk_cmd(&mask2[0], CMD_COLOR_MASK, 0, 0, 0);
+    mask2[0].num_args = 4;
+    mk_cmd(&mask2[1], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&mask2[2], CMD_VERTEX3F, 7, 0, 0);
+    mk_cmd(&mask2[3], CMD_END, 0, 0, 0);
+    ctx.program.cmds = mask2;
+    ctx.program.cmd_count = 4;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&mlog);
+    ASSERT_INT("vertex points: unscoped dead color mask still gates dots off",
+               trace_count_line(&mlog, "glVertex3f 7 0 0"), 0);
+
+    /* A GL_TRANSFORM_BIT push captures the live eye-space plane equations
+     * (glGetClipPlane per plane) and the pop restores them under an identity
+     * modelview (the stub reports all-zero equations). GL_CLIP_PLANE0 =
+     * 12288. */
+    GLCmd clip_cmds[8];
+    mk_cmd(&clip_cmds[0], CMD_ENABLE, (float)GL_CLIP_PLANE0, 0, 0);
+    clip_cmds[0].num_args = 1;
+    mk_cmd(&clip_cmds[1], CMD_PUSH_ATTRIB, (float)GL_TRANSFORM_BIT, 0, 0);
+    clip_cmds[1].num_args = 1;
+    mk_cmd(&clip_cmds[2], CMD_CLIP_PLANE, (float)GL_CLIP_PLANE0, 0, 1);
+    clip_cmds[2].args[3] = 0; clip_cmds[2].args[4] = 0;
+    clip_cmds[2].num_args = 5;
+    mk_cmd(&clip_cmds[3], CMD_POP_ATTRIB, 0, 0, 0);
+    clip_cmds[3].num_args = 0;
+    mk_cmd(&clip_cmds[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&clip_cmds[5], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&clip_cmds[6], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&clip_cmds[7], CMD_END, 0, 0, 0);
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = clip_cmds;
+    ctx.program.cmd_count = 8;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_TRUE("transform push captures the live plane equations",
+                trace_count_sym(&log, "glGetClipPlane") >= 6);
+    ASSERT_TRUE("pop restores captured equations under identity modelview",
+                trace_count_sym(&log, "glLoadIdentity") >= 1);
+    ASSERT_TRUE("pop re-issues the captured (stub-zero) plane equation",
+                trace_count_line(&log, "glClipPlane 12288 0 0 0 0") >= 1);
+}
+
 /* GL reverses the winding of odd-numbered GL_TRIANGLE_STRIP triangles. A
  * single-polygon highlight re-issues the cursor's triangle as a fresh strip,
  * which loses that flip, so with culling live it would be culled exactly when
@@ -2509,6 +2644,7 @@ int main(void) {
     test_current_poly_highlight_respects_overlay_scope();
     test_highlight_clip_planes();
     test_overlays_honor_culling();
+    test_overlays_scope_push_pop_attrib();
     test_single_polygon_highlight_strip_winding();
     test_overlays_honor_color_mask();
     test_single_polygon_highlight();
