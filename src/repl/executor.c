@@ -7,6 +7,7 @@
 #include <math.h>
 #include "repl/flatten.h"
 #include "source_document.h"
+#include "repl/attrib_bits.h"   /* repl_attrib_bits_for_type (restore gating) */
 #include "repl/executor.h"
 #include "repl/control_flow.h"
 #include "repl/state_owners.h"
@@ -302,16 +303,17 @@ void repl_apply_state_bookkeeping(const GLCmd *cmd) {
 }
 
 /* Restore the REPL render-state bookkeeping mirror a matching glPushAttrib
- * saved, gated on that push's mask. The light-enable mask is GL_ENABLE_BIT
- * state (glEnable/Disable of GL_LIGHTn) and also travels with GL_LIGHTING_BIT;
- * the clear color is GL_COLOR_BUFFER_BIT state. Groups the mask did not save
- * are left exactly as the program set them, matching glPopAttrib. */
+ * saved, gated on that push's mask. Bit membership comes from attrib_bits
+ * (the light-enable mask is glEnable(GL_LIGHTn) state -> ENABLE|LIGHTING; the
+ * clear color is glClearColor state -> COLOR_BUFFER), so the executor cannot
+ * drift from the analyzer/inspector. Groups the mask did not save are left
+ * exactly as the program set them, matching glPopAttrib. */
 static void repl_exec_restore_attrib_bookkeeping(const ReplAttribSave *save) {
     if (!save)
         return;
-    if (save->mask & (GL_ENABLE_BIT | GL_LIGHTING_BIT))
+    if (save->mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_LIGHT0))
         repl_state_render_set_light_enabled_mask(save->render.light_enabled_mask);
-    if (save->mask & GL_COLOR_BUFFER_BIT)
+    if (save->mask & repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0))
         repl_state_render_set_clear_color(save->render.clear_color);
 }
 

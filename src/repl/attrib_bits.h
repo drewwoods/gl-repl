@@ -71,6 +71,14 @@ typedef struct {
  * context-sensitive and belongs only in repl_attrib_cmd_writes). */
 unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd);
 
+/* Same mask keyed by command type alone, for consumers gating a restore on
+ * membership without a real command in hand (the inspector's group restore,
+ * the executor's bookkeeping restore, the overlay walkers). `enum_arg0` is the
+ * cap enum for CMD_ENABLE/CMD_DISABLE (whose membership depends on it); every
+ * other type ignores it (pass 0). Routing these checks through here keeps
+ * cell->bit membership in exactly one place. */
+unsigned repl_attrib_bits_for_type(CmdType type, unsigned enum_arg0);
+
 /* Canonical index 0..REPL_ATTRIB_BIT_COUNT-1 of a single GL_*_BIT value, or -1
  * if it is not one of the supported bits. */
 int repl_attrib_bit_index(unsigned single_bit);

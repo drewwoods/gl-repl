@@ -1354,6 +1354,142 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     repl_export_install_camera_bridge(saved_camera_bridge);
 }
 
+static void test_gl_state_report_attrib_stack_fold(void) {
+    GLCmd cmds[4];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state glPushAttrib/glPopAttrib checkpoint fold ---\n");
+
+    /* Depth func scoped by glPushAttrib(GL_DEPTH_BUFFER_BIT): the pop restores
+     * the pre-push value and stamps its latest-change source to the pop line
+     * (the same policy CMD_POP_MATRIX uses). */
+    cmds[0] = gl_state_test_cmd(CMD_DEPTH_FUNC, 0);
+    cmds[0].args[0] = (float)GL_GREATER; cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 1);
+    cmds[1].args[0] = (float)GL_DEPTH_BUFFER_BIT; cmds[1].num_args = 1;
+    cmds[2] = gl_state_test_cmd(CMD_DEPTH_FUNC, 2);
+    cmds[2].args[0] = (float)GL_LEQUAL; cmds[2].num_args = 1;
+    cmds[3] = gl_state_test_cmd(CMD_POP_ATTRIB, 3);
+
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 4;
+
+    /* Inside the scope (before the pop): the scoped value; reported depth is
+     * the generated GL_ALL_ATTRIB_BITS display bracket (1) + the open user
+     * push (1), and the row's latest-change source is the user push line, not
+     * the generated bracket. */
+    repl_gl_state_report_at_line(program, 3, &report);
+    row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
+    ASSERT_TRUE("scoped depth func reported", row != NULL);
+    if (row)
+        ASSERT_STR("scoped depth func current", row->current, "GL_LEQUAL");
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("attrib depth reported inside user push", row != NULL);
+    if (row) {
+        ASSERT_STR("attrib depth = bracket + user push inside scope",
+                   row->current, "2");
+        ASSERT_INT("attrib depth source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("attrib depth source is the user push line",
+                   row->source.source_line_idx, 1);
+    }
+
+    /* After the pop: restored to the pre-push value, source is the pop line;
+     * the depth row is back to the generated bracket alone (generated source,
+     * no user line). */
+    repl_gl_state_report_at_line(program, 4, &report);
+    row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
+    ASSERT_TRUE("restored depth func reported", row != NULL);
+    if (row) {
+        ASSERT_STR("depth func restored to pre-push value",
+                   row->current, "GL_GREATER");
+        ASSERT_INT("restored depth func source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("restored depth func source is the pop line",
+                   row->source.source_line_idx, 3);
+    }
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("balanced pair: depth row back to the bracket", row != NULL);
+    if (row) {
+        ASSERT_STR("balanced pair: depth = generated bracket only",
+                   row->current, "1");
+        ASSERT_INT("balanced pair: source is the generated bracket",
+                   row->source.source_line_idx, -1);
+    }
+
+    /* Nested pairs: bracket + both open pushes between the two pushes, source
+     * tracking the innermost push. */
+    cmds[0] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 0);
+    cmds[0].args[0] = (float)GL_CURRENT_BIT; cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 1);
+    cmds[1].args[0] = (float)GL_LINE_BIT; cmds[1].num_args = 1;
+    cmds[2] = gl_state_test_cmd(CMD_POP_ATTRIB, 2);
+    cmds[3] = gl_state_test_cmd(CMD_POP_ATTRIB, 3);
+    program.cmd_count = 4;
+    repl_gl_state_report_at_line(program, 2, &report);  /* both pushes applied */
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("nested attrib depth reported", row != NULL);
+    if (row) {
+        ASSERT_STR("nested attrib depth = bracket + 2", row->current, "3");
+        ASSERT_INT("nested attrib depth source is the inner push line",
+                   row->source.source_line_idx, 1);
+    }
+    /* Between the inner pop and the outer pop the depth drops to bracket + 1
+     * and the latest change is the inner pop line. */
+    repl_gl_state_report_at_line(program, 3, &report);
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("after inner pop: depth row reported", row != NULL);
+    if (row) {
+        ASSERT_STR("after inner pop: depth = bracket + 1", row->current, "2");
+        ASSERT_INT("after inner pop: source is the inner pop line",
+                   row->source.source_line_idx, 2);
+    }
+
+    /* Orphan pop does not underflow: the generated display bracket survives
+     * (depth stays 1, generated source) and later setters still report. */
+    cmds[0] = gl_state_test_cmd(CMD_POP_ATTRIB, 0);
+    cmds[1] = gl_state_test_cmd(CMD_DEPTH_FUNC, 1);
+    cmds[1].args[0] = (float)GL_LEQUAL; cmds[1].num_args = 1;
+    program.cmd_count = 2;
+    repl_gl_state_report_at_line(program, 2, &report);
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("orphan pop: bracket depth row survives", row != NULL);
+    if (row) {
+        ASSERT_STR("orphan pop: depth = generated bracket only",
+                   row->current, "1");
+        ASSERT_INT("orphan pop: source is the generated bracket",
+                   row->source.source_line_idx, -1);
+    }
+    row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
+    ASSERT_TRUE("setter after orphan pop still reported", row != NULL);
+    if (row)
+        ASSERT_STR("setter after orphan pop current", row->current, "GL_LEQUAL");
+
+    /* Executor cap boundary: 12 user pushes clamp the user contribution to
+     * CAP (8), on top of the generated bracket. */
+    {
+        GLCmd many[12];
+        int i;
+        for (i = 0; i < 12; i++) {
+            many[i] = gl_state_test_cmd(CMD_PUSH_ATTRIB, i);
+            many[i].args[0] = (float)GL_CURRENT_BIT;
+            many[i].num_args = 1;
+        }
+        memset(&program, 0, sizeof(program));
+        program.cmds = many;
+        program.cmd_count = 12;
+        repl_gl_state_report_at_line(program, 12, &report);
+        row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+        ASSERT_TRUE("past-cap attrib depth reported", row != NULL);
+        if (row)
+            ASSERT_STR("past-cap attrib depth = bracket + CAP (8)",
+                       row->current, "9");
+    }
+}
+
 static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     static const ReplExportLightBridge light_bridge = {
         gl_state_test_fill_eye_light
@@ -1416,6 +1552,7 @@ int main(void) {
     test_gl_state_report_tracks_fog();
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();
+    test_gl_state_report_attrib_stack_fold();
     test_gl_state_report_converts_eye_light_position_to_world();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
