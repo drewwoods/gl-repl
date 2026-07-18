@@ -41,7 +41,8 @@ typedef enum {
     PS_WHEEL,
     PS_KEY,
     PS_SKEY,
-    PS_RING
+    PS_RING,
+    PS_ECHO
 } PsVerb;
 
 typedef struct {
@@ -49,10 +50,12 @@ typedef struct {
     PsVerb verb;
     int    has_xy;                 /* click/down/up took optional coords */
     int    x, y;                   /* target (move/glide/ring/click...)  */
-    int    dur_frames;             /* glide/ring duration                */
+    int    dur_frames;             /* glide/ring/echo duration           */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    special;                /* skey: GLUT_KEY_* code              */
-    char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed       */
+    float  size;                   /* echo: stroke cap height (px)       */
+    char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed;      */
+                                   /* echo: caption text to draw         */
 } PsEvent;
 
 static PsEvent g_events[PS_MAX_EVENTS];
@@ -79,6 +82,11 @@ static int g_ripple_frame = -1;
 static float g_ripple_x = 0.0f, g_ripple_y = 0.0f;
 static int   g_ring_start = -1, g_ring_dur = 0;
 static float g_ring_x = 0.0f, g_ring_y = 0.0f;
+
+/* Active echo caption: stroke text shown at a fixed screen spot. */
+static int   g_echo_start = -1, g_echo_dur = 0;
+static float g_echo_x = 0.0f, g_echo_y = 0.0f, g_echo_size = 0.0f;
+static char  g_echo_text[PS_MAX_KEY_TEXT] = "";
 
 static float ps_smoothstep(float t) {
     if (t < 0.0f) t = 0.0f;
@@ -210,6 +218,29 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
         ev->dur_frames = (int)(dur * PS_FPS + 0.5f);
         return 1;
     }
+    if (strcmp(verb, "echo") == 0) {
+        float size = 0.0f, dur = 0.0f;
+        int nread = 0;
+        ev->verb = PS_ECHO;
+        /* echo <x> <y> <size> <dur> <text...> — position + cap height +
+         * on-screen lifetime, then the rest of the line is the caption. */
+        if (sscanf(args, "%d %d %f %f %n",
+                   &ev->x, &ev->y, &size, &dur, &nread) < 4 ||
+            size <= 0.0f || dur <= 0.0f)
+            return -1;
+        ev->size = size;
+        ev->dur_frames = (int)(dur * PS_FPS + 0.5f);
+        if (ev->dur_frames < 1) ev->dur_frames = 1;
+        /* Caption is the remainder verbatim (newline stripped) so a label
+         * like `Ctrl+K` keeps its punctuation and spacing. */
+        const char *txt = args + nread;
+        size_t n = strlen(txt);
+        while (n > 0 && (txt[n - 1] == '\n' || txt[n - 1] == '\r')) n--;
+        if (n == 0 || n >= sizeof(ev->text)) return -1;
+        memcpy(ev->text, txt, n);
+        ev->text[n] = '\0';
+        return 1;
+    }
     return -1;
 }
 
@@ -331,6 +362,14 @@ static void ps_fire(const PsEvent *ev) {
         g_ring_x = (float)ev->x;
         g_ring_y = (float)ev->y;
         break;
+    case PS_ECHO:
+        g_echo_start = g_frame;
+        g_echo_dur = ev->dur_frames;
+        g_echo_x = (float)ev->x;
+        g_echo_y = (float)ev->y;
+        g_echo_size = ev->size;
+        snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
+        break;
     }
 }
 
@@ -373,6 +412,15 @@ static void ps_circle(float cx, float cy, float radius, int filled) {
         glVertex2f(cx + cosf(a) * radius, cy + sinf(a) * radius);
     }
     glEnd();
+}
+
+/* GLUT stroke-roman glyphs are ~119 units cap height; scaling by
+ * size/PS_STROKE_CAP maps the requested cap height to window pixels. */
+#define PS_STROKE_CAP 119.05f
+
+static void ps_stroke_text(const char *s) {
+    for (; *s; s++)
+        glutStrokeCharacter(GLUT_STROKE_MONO_ROMAN, (int)(unsigned char)*s);
 }
 
 /* Classic pointer arrow at the current position. Local coords are y-down
@@ -439,6 +487,37 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         glColor4f(0.55f, 0.78f, 1.0f, 0.8f * (1.0f - t));
         ps_circle(g_ripple_x, (float)win_h - g_ripple_y,
                   4.0f + 18.0f * t, 0);
+    }
+
+    /* Echo caption: stroke text (e.g. "Ctrl+K") pinned at a screen spot to
+     * label how the next action was triggered. Drawn twice — a dark halo,
+     * then bright glyphs — so it reads over any scene, then eased in/out. */
+    if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
+        g_echo_text[0]) {
+        float age = (float)(g_frame - g_echo_start);
+        float alpha = 1.0f;
+        if (age < 9.0f) alpha *= age / 9.0f;          /* ease in ~0.15s   */
+        float left = (float)g_echo_dur - age;
+        if (left < 30.0f) alpha *= left / 30.0f;       /* ease out ~0.5s   */
+        float s = g_echo_size / PS_STROKE_CAP;
+        float cy = (float)win_h - g_echo_y;
+        float halo = g_echo_size * 0.09f + 2.0f;
+        float body = g_echo_size * 0.05f + 1.0f;
+        int pass;
+        for (pass = 0; pass < 2; pass++) {
+            if (pass == 0) {
+                glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.85f);
+                glLineWidth(halo);
+            } else {
+                glColor4f(0.98f, 0.98f, 0.99f, alpha);
+                glLineWidth(body);
+            }
+            glPushMatrix();
+            glTranslatef(g_echo_x, cy, 0.0f);
+            glScalef(s, s, 1.0f);
+            ps_stroke_text(g_echo_text);
+            glPopMatrix();
+        }
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);
