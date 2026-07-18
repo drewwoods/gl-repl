@@ -111,18 +111,18 @@ static NSCursor *fghCornerCursor( int cursorID )
 static NSCursor *fghCursorForID( int cursorID )
 {
     switch ( cursorID ) {
-    case GLUT_CURSOR_RIGHT_ARROW: /* macOS has no mirrored arrow */
+    case GLUT_CURSOR_RIGHT_ARROW: /* TODO: macOS has no mirrored arrow */
     case GLUT_CURSOR_LEFT_ARROW:
         return [NSCursor arrowCursor];
     case GLUT_CURSOR_INFO:
         return [NSCursor pointingHandCursor];
     case GLUT_CURSOR_DESTROY:
         return [NSCursor operationNotAllowedCursor];
-    case GLUT_CURSOR_HELP: /* no public help/cycle/wait cursors; the system */
-    case GLUT_CURSOR_CYCLE: /* shows its own busy indicator when appropriate */
+    case GLUT_CURSOR_HELP:  /* TODO: no public help/cycle/wait cursors; the system */
+    case GLUT_CURSOR_CYCLE: /* TODO: shows its own busy indicator when appropriate */
     case GLUT_CURSOR_WAIT:
         return [NSCursor arrowCursor];
-    case GLUT_CURSOR_SPRAY:
+    case GLUT_CURSOR_SPRAY: /* TODO */
     case GLUT_CURSOR_CROSSHAIR:
     case GLUT_CURSOR_FULL_CROSSHAIR: /* FULL_CROSSHAIR demotes to CROSSHAIR, as on X11 */
         return [NSCursor crosshairCursor];

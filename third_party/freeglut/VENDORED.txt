@@ -1,11 +1,11 @@
 freeglut vendored into this tree.
 
-upstream: https://github.com/drewwoods/freeglut
+upstream: /Users/drew/src/freeglut-fork
 ref:      emscripten-backend
-sha:      fcf841f9ea5de6a98a2e4578fcdb057be044bd82
+sha:      ac127d78d1f04d47cabc816773e4ab5f4349bb95
 
 Produced by:
-  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh emscripten-backend
+  FREEGLUT_REPO=/Users/drew/src/freeglut-fork scripts/vendor-freeglut.sh emscripten-backend
 
 Do NOT edit the vendored tree by hand; re-run the command above (with a
 different <ref>, or FREEGLUT_REPO, to update) instead. The Makefile's
