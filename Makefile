@@ -1695,6 +1695,9 @@ check-command-descriptions: ## Validate complete GL command/capability popup des
 	@python3 scripts/gen_command_descriptions.py --check \
 		--catalog $(COMMAND_DESCRIPTIONS_SOURCE)
 
+check-stroke-fonts: ## Validate and reproduce the vendored high-resolution stroke fonts.
+	@python3 scripts/check/check-stroke-fonts.py
+
 check-formatted: ## Verify that example scenes under examples/scenes are formatted correctly.
 	@python3 scripts/format_scenes.py --check || ( \
 		echo "$(RED)ERROR: Some example scenes are not formatted correctly.$(NC)"; \
@@ -1794,6 +1797,7 @@ TEST_STUBS_PRECHECKS = \
 	check-trailing-whitespace \
 	check-examples-catalog \
 	check-tours-catalog \
+	check-stroke-fonts \
 	check-formatted \
 	check-gl-boundaries \
 	check-layer-coupling \

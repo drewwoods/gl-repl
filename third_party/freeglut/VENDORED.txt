@@ -2,7 +2,7 @@ freeglut vendored into this tree.
 
 upstream: https://github.com/drewwoods/freeglut
 ref:      emscripten-backend
-sha:      e3de7f25697abdce544f45484a2067be7f4b766b
+sha:      a76da52bc7abf21bc10eb8ceebba4ac7f359ab9c
 
 Produced by:
   FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh emscripten-backend

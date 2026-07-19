@@ -22,10 +22,12 @@ import re
 import sys
 
 # ---- tunables -------------------------------------------------------------
-STRAIGHT_DEG = 10.0   # |turn| <= this => essentially straight (spline through)
-REVERSAL_DEG = 150.0  # |turn| >= this => cusp/fold-back, always a hard corner
-SUBDIV       = 6      # samples per segment inside a smooth run (>=1; 1 == no-op)
-CLOSE_EPS    = 1e-3   # first/last vertex closer than this => closed loop
+STRAIGHT_DEG   = 10.0   # |turn| <= this => essentially straight (spline through)
+CORNER_DEG     = 80.0   # |turn| >= this => hard, except recognized round marks
+REVERSAL_DEG   = 150.0  # |turn| >= this => cusp/fold-back, always a hard corner
+LONG_END_RATIO = 3.0    # keep a long terminal stem straight vs its next edge
+SUBDIV         = 6      # samples per segment inside a smooth run (>=1; 1 == no-op)
+CLOSE_EPS      = 1e-3   # first/last vertex closer than this => closed loop
 
 
 def camel_snake(s):
@@ -143,16 +145,57 @@ def catmull_rom(p0, p1, p2, p3, tsteps):
     return out
 
 
+def round_mark(pts):
+    """Return an analytic high-resolution circle for a coarse 4-point mark.
+
+    The source font draws dots as four equal-radius cardinal anchors plus the
+    repeated first point. Catmull-Rom through those anchors pinches each
+    quadrant inward, so it produces a rounded diamond rather than a circle.
+    Recognize only a near-square, near-circular four-anchor loop; this excludes
+    rectangular outlines such as underscore while preserving every source
+    anchor at a SUBDIV boundary.
+    """
+    core = pts[:-1]
+    if len(core) != 4:
+        return None
+    cx = sum(p[0] for p in core) / 4.0
+    cy = sum(p[1] for p in core) / 4.0
+    width = max(p[0] for p in core) - min(p[0] for p in core)
+    height = max(p[1] for p in core) - min(p[1] for p in core)
+    if width < CLOSE_EPS or height < CLOSE_EPS:
+        return None
+    if not 0.8 <= width / height <= 1.25:
+        return None
+    radii = [math.hypot(p[0] - cx, p[1] - cy) for p in core]
+    radius = sum(radii) / 4.0
+    if radius < CLOSE_EPS or max(abs(r - radius) for r in radii) > radius * 0.02:
+        return None
+
+    angles = [math.atan2(p[1] - cy, p[0] - cx) for p in core]
+    direction = 1.0 if signed_turn(core[-1], core[0], core[1]) > 0 else -1.0
+    out = []
+    for i, p in enumerate(core):
+        a0 = angles[i]
+        a1 = angles[(i + 1) % 4]
+        while direction * (a1 - a0) <= 0.0:
+            a1 += direction * 2.0 * math.pi
+        out.append(p)
+        for step in range(1, SUBDIV):
+            a = a0 + (a1 - a0) * (step / SUBDIV)
+            out.append((cx + radius * math.cos(a), cy + radius * math.sin(a)))
+    out.append(out[0])
+    return out
+
+
 def corner_flags(turns, closed):
     """Classify each vertex as a hard corner from its SIGNED turn and context.
 
-    A vertex is part of a CURVE when it continues a turn in the same rotational
-    direction as a neighbour -- circles, dots and letter bowls are runs of
-    same-sign turns, however coarse (a 4-point punctuation dot is a 90deg-step
-    circle). It is a CORNER when the bend is isolated (both neighbours straight,
-    e.g. the arm/stem junction of Y/K/k) or reverses direction relative to its
-    neighbours (a zigzag: Z/N/M/W). `turns[i]` is the signed turn at vertex i
-    (0 for open-path endpoints)."""
+    A moderate vertex is part of a CURVE when it continues a turn in the same
+    rotational direction as a neighbour. It is a CORNER when the bend is sharp,
+    isolated (both neighbours straight, e.g. the arm/stem junction of Y/K/k),
+    or reverses direction relative to its neighbours (a zigzag: Z/N/M/W).
+    Four-anchor round marks are recognized before this generic classifier.
+    `turns[i]` is the signed turn at vertex i (0 for open-path endpoints)."""
     n = len(turns)
 
     def turning(j):
@@ -165,6 +208,9 @@ def corner_flags(turns, closed):
             continue                       # straight -> spline through it
         if abs(t) >= REVERSAL_DEG:
             hard[i] = True                 # cusp / fold-back
+            continue
+        if abs(t) >= CORNER_DEG:
+            hard[i] = True                 # a real corner, not a coarse curve
             continue
         if closed:
             nbrs = ((i - 1) % n, (i + 1) % n)
@@ -189,6 +235,9 @@ def smooth_strip(pts):
         m = len(core)
         if m < 3:
             return pts
+        rounded = round_mark(pts)
+        if rounded is not None:
+            return rounded
         turns = [signed_turn(core[(i - 1) % m], core[i], core[(i + 1) % m])
                  for i in range(m)]
         hard = corner_flags(turns, closed=True)
@@ -205,7 +254,16 @@ def smooth_strip(pts):
         out.append(out[0])  # re-close
         return out
 
-    # open polyline. The two free terminals are smooth anchors, NOT corners:
+    # A comma/semicolon joins its four-anchor dot loop and tail in one strip.
+    # Round that leading mark independently so the tail cannot distort it.
+    for end in range(3, n - 1):
+        if math.hypot(pts[0][0] - pts[end][0], pts[0][1] - pts[end][1]) < CLOSE_EPS:
+            rounded = round_mark(pts[:end + 1])
+            if rounded is not None:
+                tail = smooth_strip(pts[end:])
+                return rounded + tail[1:]
+
+    # Open polyline. The two free terminals are smooth anchors, NOT corners:
     # a stroke end has no turn to measure, and forcing it hard would leave the
     # first/last segment straight (visible flat tips on c, s, e, ...). Only
     # interior corners break the spline; terminal segments curve into the tip
@@ -218,7 +276,17 @@ def smooth_strip(pts):
     for i in range(n - 1):
         p1, p2 = pts[i], pts[i + 1]
         out.append(p1)
-        if not hard[i] and not hard[i + 1]:
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+        edge_len = math.hypot(dx, dy)
+        axis_aligned = abs(dx) < CLOSE_EPS or abs(dy) < CLOSE_EPS
+        long_terminal = False
+        if axis_aligned and i == 0 and n > 2:
+            next_len = math.hypot(pts[2][0] - p2[0], pts[2][1] - p2[1])
+            long_terminal = edge_len > LONG_END_RATIO * next_len
+        elif axis_aligned and i == n - 2 and n > 2:
+            prev_len = math.hypot(p1[0] - pts[i - 1][0], p1[1] - pts[i - 1][1])
+            long_terminal = edge_len > LONG_END_RATIO * prev_len
+        if not hard[i] and not hard[i + 1] and not long_terminal:
             # Phantom controls past a free terminal follow the arc (preserve
             # curvature into the tip), not a straight reflection.
             p0 = pts[i - 1] if i - 1 >= 0 else arc_extrapolate(pts[2], pts[1], pts[0])
@@ -288,6 +356,10 @@ def main():
     out = [HEADER.format(name=name, src=os.path.basename(src), glut=glut)]
     codes = sorted(chars)
     base_v = sum(len(s) for _, ss in chars.values() for s in ss)
+    base_segments = sum(max(0, len(s) - 1) for _, ss in chars.values() for s in ss)
+    strip_count = sum(len(ss) for _, ss in chars.values())
+    hi_v = 0
+    hi_segments = 0
     for code in codes:
         right, strips = chars[code]
         out.append('\n/* char: 0x%02x */\n' % code)
@@ -296,6 +368,8 @@ def main():
             if not pts:                       # NULL strips (space) carry no verts
                 continue
             hp = smooth_strip(pts)
+            hi_v += len(hp)
+            hi_segments += max(0, len(hp) - 1)
             nm = 'Stroke%s_ch%dst%d' % (hibase, code, k)
             strip_names.append((nm, len(hp)))
             out.append('static const SFG_StrokeVertex %s[] =\n{\n' % nm)
@@ -329,13 +403,10 @@ def main():
     with open(dst, 'w') as f:
         f.write(''.join(out))
 
-    # stats
-    with open(dst) as f:
-        hi_v = f.read()
-    hi_count = hi_v.count('{', hi_v.index('char: 0x'))
-    sys.stderr.write('genstroke_hi: %d glyphs, ~%d base vertices -> resampled '
-                     '(SUBDIV=%d, straight<=%.0fdeg)\n'
-                     % (len(codes), base_v, SUBDIV, STRAIGHT_DEG))
+    sys.stderr.write('genstroke_hi: %d glyphs, %d strips; %d -> %d vertices, '
+                     '%d -> %d line segments (%.2fx; SUBDIV=%d)\n'
+                     % (len(codes), strip_count, base_v, hi_v, base_segments,
+                        hi_segments, hi_segments / base_segments, SUBDIV))
 
 
 if __name__ == '__main__':
