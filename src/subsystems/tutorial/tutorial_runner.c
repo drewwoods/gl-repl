@@ -144,6 +144,15 @@ static int tutorial_append_locked_line(int line_idx) {
 
     if (line_idx < 0)
         return 0;
+    /* Dedup: block steps can nominate a row that is already locked
+     * (e.g. a comment-less `}` step's auto-record targets the auto-end
+     * row the matching open step locked). A duplicate entry would be
+     * harmless for lookups but would double-shift nothing and waste
+     * capacity, so skip it. */
+    for (int i = 0; i < state->locked_line_count; i++) {
+        if (state->locked_lines[i] == line_idx)
+            return 1;
+    }
     if (state->locked_line_count >= TUTORIAL_LOCKED_LINE_MAX)
         return 0;
 
@@ -369,7 +378,26 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
     TutorialStepPlacementKind placement =
         repl_tutorial_step_placement(tutorial_idx, step);
     if (placement == TUTORIAL_STEP_APPEND) {
-        *out_line = repl_state_document_count();
+        /* Inside an open block the append point is not document_count
+         * (that would fall BELOW the auto-inserted `}` row) — it is the
+         * live cursor row, which the editor's block machinery keeps
+         * parked on the auto-`}` row: the open commit lands the cursor
+         * there in insert mode, every body insert advances it back onto
+         * the shifted `}`, and the matched close moves it past. Clamp
+         * defensively; the validator guarantees block steps only occur
+         * in sequences where the cursor tracks the block. */
+        TutorialRuntimeState state = tutorial_state_view();
+        if (state.block_depth > 0) {
+            int line = repl_dispatch_edit_line_get();
+            int doc = repl_state_document_count();
+            if (line < 0)
+                line = 0;
+            if (line > doc)
+                line = doc;
+            *out_line = line;
+        } else {
+            *out_line = repl_state_document_count();
+        }
         return 1;
     }
     if (placement != TUTORIAL_STEP_LABEL) {
@@ -1319,6 +1347,32 @@ int tutorial_note_expected_commit_applied(void) {
         state->instruction_line_for_step[state->pending.step_idx] =
             state->pending.commit_line;
         tutorial_append_locked_line(state->pending.commit_line);
+    }
+
+    /* Block-shape bookkeeping (indices are final: the delta shift above
+     * already ran). An OPEN commit inserted TWO rows — the header at
+     * commit_line and the auto `}` at commit_line + 1; lock both so the
+     * block's frame is read-only while its body is typed (the guard's
+     * pending-commit exception still lets matched body inserts through
+     * at the `}` row). A BRANCH commit inserted its separator row at
+     * commit_line (the old `}` shifted below it); lock it. A CLOSE
+     * commit changed nothing (the editor's matched-existing branch just
+     * moves the cursor past the already-locked `}`), so only the depth
+     * changes. */
+    {
+        TutorialExpectedShape shape = repl_tutorial_expected_shape(
+            repl_tutorial_step_expected(state->tutorial_idx,
+                                        state->pending.step_idx));
+        if (shape == TUTORIAL_EXPECTED_BLOCK_OPEN) {
+            state->block_depth++;
+            tutorial_append_locked_line(state->pending.commit_line);
+            tutorial_append_locked_line(state->pending.commit_line + 1);
+        } else if (shape == TUTORIAL_EXPECTED_BLOCK_BRANCH) {
+            tutorial_append_locked_line(state->pending.commit_line);
+        } else if (shape == TUTORIAL_EXPECTED_BLOCK_CLOSE) {
+            if (state->block_depth > 0)
+                state->block_depth--;
+        }
     }
 
     tutorial_pending_reset(state);

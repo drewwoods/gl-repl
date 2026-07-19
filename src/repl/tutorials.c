@@ -616,6 +616,101 @@ static int label_is_empty(const char *s) {
     return !s || s[0] == '\0';
 }
 
+static int shape_token_boundary(char ch) {
+    return !(isalnum((unsigned char)ch) || ch == '_');
+}
+
+/* Syntactic shape classifier for COMMAND-step `expected` text. Mirrors
+ * (loosely) what the editor's block commit kernels accept:
+ *   CLOSE   trimmed text exactly "}" (repl_compile_close_brace_kernel's
+ *           matched-existing branch when the cursor sits on the auto
+ *           end row).
+ *   BRANCH  "}" then an `else` token (compile_parse_if_branch_header;
+ *           the kernel allows the trailing "{" to be omitted, so the
+ *           classifier keys on the leading "} else" alone).
+ *   OPEN    "ident(...) {": exactly one "{" as the last character, no
+ *           "}", the char before the "{" (mod whitespace) is ")", and
+ *           the text starts with an identifier followed by "(".
+ * Anything else is ORDINARY. The classifier is deliberately permissive
+ * about the interior (the runtime kernels do the real parsing); its
+ * job is to make the validator's depth walk and the runner's
+ * locked-line bookkeeping agree on which commits change block depth. */
+TutorialExpectedShape repl_tutorial_expected_shape(const char *expected) {
+    const char *p = expected;
+    const char *end;
+
+    if (!p)
+        return TUTORIAL_EXPECTED_ORDINARY;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    end = p + strlen(p);
+    while (end > p && isspace((unsigned char)end[-1]))
+        end--;
+    if (end == p)
+        return TUTORIAL_EXPECTED_ORDINARY;
+
+    if (*p == '}') {
+        const char *q = p + 1;
+        if (q == end)
+            return TUTORIAL_EXPECTED_BLOCK_CLOSE;
+        while (q < end && isspace((unsigned char)*q))
+            q++;
+        if (end - q >= 4 && strncmp(q, "else", 4) == 0 &&
+            (q + 4 == end || shape_token_boundary(q[4])))
+            return TUTORIAL_EXPECTED_BLOCK_BRANCH;
+        return TUTORIAL_EXPECTED_ORDINARY;
+    }
+
+    if (end[-1] == '{') {
+        int opens = 0, closes = 0;
+        const char *q;
+        for (q = p; q < end; q++) {
+            if (*q == '{') opens++;
+            if (*q == '}') closes++;
+        }
+        if (opens != 1 || closes != 0)
+            return TUTORIAL_EXPECTED_ORDINARY;
+        if (!(isalpha((unsigned char)*p) || *p == '_'))
+            return TUTORIAL_EXPECTED_ORDINARY;
+        /* ")" must immediately precede the "{" (mod whitespace). */
+        q = end - 1;
+        while (q > p && isspace((unsigned char)q[-1]))
+            q--;
+        if (q == p || q[-1] != ')')
+            return TUTORIAL_EXPECTED_ORDINARY;
+        /* Leading identifier followed by "(". */
+        q = p;
+        while (q < end && !shape_token_boundary(*q))
+            q++;
+        while (q < end && isspace((unsigned char)*q))
+            q++;
+        if (q >= end || *q != '(')
+            return TUTORIAL_EXPECTED_ORDINARY;
+        return TUTORIAL_EXPECTED_BLOCK_OPEN;
+    }
+    return TUTORIAL_EXPECTED_ORDINARY;
+}
+
+/* Does `expected` start with the given keyword token (after leading
+ * whitespace)? Token-boundary aware so "form(" doesn't read as "for". */
+static int expected_starts_with_keyword(const char *expected,
+                                        const char *keyword) {
+    const char *p = expected;
+    size_t n = strlen(keyword);
+    if (!p)
+        return 0;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return strncmp(p, keyword, n) == 0 && shape_token_boundary(p[n]);
+}
+
+int repl_tutorial_expected_is_func_open(const char *expected) {
+    if (repl_tutorial_expected_shape(expected) != TUTORIAL_EXPECTED_BLOCK_OPEN)
+        return 0;
+    return !expected_starts_with_keyword(expected, "for") &&
+           !expected_starts_with_keyword(expected, "if");
+}
+
 /* Syntactic mirror of the parser's goto-label rule (src/repl/parser.c):
  * a setup line whose trimmed text is `:name` or `name:` (optionally
  * followed by a `;`) defines the goto label `name`. Used to validate
@@ -673,7 +768,7 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
 }
 
 /* v1 catalog rule: each `expected` must parse to exactly one
- * source command AND land at the runner's chosen
+ * source-document change AND land at the runner's chosen
  * expected_commit_line on commit. The full guarantee would require
  * driving the live parser/compile seam against a temp document
  * snapshot, which the catalog validator can't easily do without
@@ -684,7 +779,14 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  *   - empty / whitespace-only text;
  *   - embedded newlines (`\n`, `\r`);
  *   - statement separators (`;`) — would commit two source rows;
- *   - block punctuation (`{`/`}`) — opens a structured block;
+ *   - block punctuation (`{`/`}`) outside the block shapes the
+ *     classifier recognises (see repl_tutorial_expected_shape) —
+ *     the runner's bookkeeping only understands the open / branch /
+ *     close commit deltas;
+ *   - ORDINARY text with a `for(` / `if(` header prefix — the block
+ *     kernels claim those regardless of a trailing `{`, so the
+ *     commit would still insert header + auto `}` (two rows) while
+ *     the runner expected one;
  *   - any `float ` declaration (single- or multi-name) — the
  *     CMD_VAR_DECLARE placement rule relocates the new decl to the
  *     top of non-decl code regardless of edit_line, so
@@ -698,6 +800,7 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  * Catalog authors notice immediately. Promoting this to a real
  * parser-driven check is tracked as future work. */
 static int expected_is_single_command(const char *expected,
+                                      TutorialExpectedShape shape,
                                       char *err, int err_size) {
     if (!expected) {
         if (err_size > 0)
@@ -721,7 +824,8 @@ static int expected_is_single_command(const char *expected,
                          expected);
             return 0;
         }
-        if (ch == '{' || ch == '}') {
+        if ((ch == '{' || ch == '}') &&
+            shape == TUTORIAL_EXPECTED_ORDINARY) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "expected has block punctuation: %s", expected);
@@ -736,6 +840,20 @@ static int expected_is_single_command(const char *expected,
         return 0;
     }
 
+    /* A `for(...)` / `if(...)` header without the trailing `{` still
+     * commits as a two-row block (the kernels key on the prefix, not
+     * the brace), so an ORDINARY-shaped header is a bookkeeping trap:
+     * the runner would expect a one-row commit and desync. Authors
+     * must spell block heads with the `{` so they classify as OPEN. */
+    if (shape == TUTORIAL_EXPECTED_ORDINARY &&
+        (expected_starts_with_keyword(expected, "for") ||
+         expected_starts_with_keyword(expected, "if"))) {
+        if (err_size > 0)
+            snprintf(err, (size_t)err_size,
+                     "expected block header must end in '{': %s", expected);
+        return 0;
+    }
+
     /* Reject every `float ` declaration. Single-name decls like
      * `float x` parse fine but the commit path relocates them to
      * the top of non-decl code (CLAUDE.md: "new CMD_VAR_DECLARE
@@ -745,11 +863,7 @@ static int expected_is_single_command(const char *expected,
      * and any later label-targeted step that targets this decl
      * would resolve to the wrong source line. Multi-name decls
      * additionally expand into one CMD_VAR_DECLARE per name. */
-    const char *s = expected;
-    while (*s && isspace((unsigned char)*s))
-        s++;
-    if (strncmp(s, "float", 5) == 0 &&
-        (s[5] == '\0' || isspace((unsigned char)s[5]))) {
+    if (expected_starts_with_keyword(expected, "float")) {
         if (err_size > 0)
             snprintf(err, (size_t)err_size,
                      "expected `float` declarations are not allowed in "
@@ -790,8 +904,25 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
      * rejected naturally because target_label can only match a label
      * we have already seen. Sentinel is comment AND expected both NULL
      * — SET/REQUIRE/NOTE steps legitimately leave `expected` NULL, and
-     * comment-less COMMAND steps legitimately leave `comment` NULL. */
+     * comment-less COMMAND steps legitimately leave `comment` NULL.
+     *
+     * Block-shape COMMAND steps are tracked with a depth counter (and
+     * a per-level is-it-an-if flag so BRANCH steps can be pinned to an
+     * enclosing if-open). The walk mirrors what the editor's block
+     * commits do to the live document, so the runner's block_depth /
+     * locked-line bookkeeping is guaranteed to see only sequences it
+     * understands. */
     int step_count = 0;
+    int depth = 0;
+    int open_count = 0;
+    /* Set once any non-func content exists at the top level (an
+     * ORDINARY command, or a for/if block). Func defs relocate to the
+     * top of non-decl code on commit; while only comments / decls /
+     * completed funcs precede, that relocation is an identity and the
+     * runner's pending.commit_line stays truthful — afterwards it is
+     * not, so later func-opens are rejected. */
+    int saw_topline_nonfunc = 0;
+    unsigned char open_is_if[TUTORIAL_MAX_STEPS];
     for (int i = 0;; i++) {
         const TutorialStep *step = &entry->steps[i];
         if (repl_tutorial_step_is_sentinel(step)) {
@@ -804,6 +935,30 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                          entry->name ? entry->name : "?",
                          TUTORIAL_MAX_STEPS);
             return 0;
+        }
+        /* Inside an open block, the cursor lives on the auto-inserted
+         * `}` row: label placement (which splices elsewhere) and
+         * REQUIRE_VAR steps (whose satisfying decl/assign commits at a
+         * free line of the user's choosing) would both fight the
+         * in-block insertion point, so they are rejected until the
+         * block closes. */
+        if (depth > 0) {
+            if (step->placement == TUTORIAL_STEP_LABEL) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d label placement not "
+                             "allowed inside an open block",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (step->kind == TUTORIAL_STEP_KIND_REQUIRE_VAR) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d REQUIRE_VAR not "
+                             "allowed inside an open block",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
         }
         /* Kind-aware shape check. Slug *validity* (is the bridge aware
          * of this slug?) is a runtime check at tutorial_start because
@@ -818,8 +973,92 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                              entry->name ? entry->name : "?", i);
                 return 0;
             }
-            if (!expected_is_single_command(step->expected, err, err_size))
+            TutorialExpectedShape shape =
+                repl_tutorial_expected_shape(step->expected);
+            if (!expected_is_single_command(step->expected, shape,
+                                            err, err_size))
                 return 0;
+            if (shape == TUTORIAL_EXPECTED_BLOCK_OPEN) {
+                if (step->placement != TUTORIAL_STEP_APPEND) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d block-open step "
+                                 "must use append placement",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+                if (repl_tutorial_expected_is_func_open(step->expected)) {
+                    if (depth > 0) {
+                        if (err_size > 0)
+                            snprintf(err, (size_t)err_size,
+                                     "tutorial '%s' step %d func def cannot "
+                                     "nest inside a block",
+                                     entry->name ? entry->name : "?", i);
+                        return 0;
+                    }
+                    if (entry->setup) {
+                        if (err_size > 0)
+                            snprintf(err, (size_t)err_size,
+                                     "tutorial '%s' step %d func-open steps "
+                                     "cannot combine with a setup scaffold "
+                                     "(func relocation would desync rows)",
+                                     entry->name ? entry->name : "?", i);
+                        return 0;
+                    }
+                    if (saw_topline_nonfunc) {
+                        if (err_size > 0)
+                            snprintf(err, (size_t)err_size,
+                                     "tutorial '%s' step %d func def must "
+                                     "precede other top-level commands "
+                                     "(relocation would desync rows)",
+                                     entry->name ? entry->name : "?", i);
+                        return 0;
+                    }
+                } else if (depth == 0) {
+                    saw_topline_nonfunc = 1;
+                }
+                open_is_if[depth] = (unsigned char)
+                    expected_starts_with_keyword(step->expected, "if");
+                depth++;
+                open_count++;
+            } else if (shape == TUTORIAL_EXPECTED_BLOCK_BRANCH) {
+                if (step->placement != TUTORIAL_STEP_APPEND) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d block-branch step "
+                                 "must use append placement",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+                if (depth < 1 || !open_is_if[depth - 1]) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d else branch outside "
+                                 "an open if block",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+            } else if (shape == TUTORIAL_EXPECTED_BLOCK_CLOSE) {
+                if (step->placement != TUTORIAL_STEP_APPEND) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d close-brace step "
+                                 "must use append placement",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+                if (depth < 1) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d unmatched close "
+                                 "brace",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+                depth--;
+            } else if (depth == 0) {
+                saw_topline_nonfunc = 1;
+            }
         } else if (step->kind == TUTORIAL_STEP_KIND_NOTE) {
             if (step->expected) {
                 if (err_size > 0)
@@ -988,21 +1227,36 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
         step_count++;
     }
 
+    /* Every block that opens must close before the tutorial ends —
+     * otherwise teardown leaves the learner inside a half-typed block
+     * and the trailing auto-`}` never gets its matching step. */
+    if (depth != 0) {
+        if (err_size > 0)
+            snprintf(err, (size_t)err_size,
+                     "tutorial '%s' ends inside an open block "
+                     "(missing '}' step)",
+                     entry->name ? entry->name : "?");
+        return 0;
+    }
+
     /* Every preloaded setup row is locked, plus up to one lock per
-     * step (instruction comment or comment-less committed row), so
-     * both together must fit the runtime lock table. Counting every
+     * step (instruction comment or comment-less committed row) and one
+     * extra per block-open (the auto-inserted `}` row is locked too),
+     * so all together must fit the runtime lock table. Counting every
      * setup line (headers included) slightly overcounts — safely. */
     if (entry->setup) {
         int setup_count = 0;
         while (entry->setup[setup_count])
             setup_count++;
-        if (setup_count + step_count > TUTORIAL_LOCKED_LINE_MAX) {
+        if (setup_count + step_count + open_count >
+            TUTORIAL_LOCKED_LINE_MAX) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "tutorial '%s' setup lines (%d) + steps (%d) "
-                         "exceed the locked-line capacity (%d)",
+                         "+ block opens (%d) exceed the locked-line "
+                         "capacity (%d)",
                          entry->name ? entry->name : "?",
-                         setup_count, step_count,
+                         setup_count, step_count, open_count,
                          TUTORIAL_LOCKED_LINE_MAX);
             return 0;
         }
