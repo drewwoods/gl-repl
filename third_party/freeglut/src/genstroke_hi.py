@@ -22,10 +22,10 @@ import re
 import sys
 
 # ---- tunables -------------------------------------------------------------
-CORNER_DEG   = 60.0  # turn sharper than this at a vertex => always a hard corner
-STRAIGHT_DEG = 10.0  # turn gentler than this => essentially straight
-SUBDIV       = 6     # samples per segment inside a smooth run (>=1; 1 == no-op)
-CLOSE_EPS    = 1e-3  # first/last vertex closer than this => closed loop
+STRAIGHT_DEG = 10.0   # |turn| <= this => essentially straight (spline through)
+REVERSAL_DEG = 150.0  # |turn| >= this => cusp/fold-back, always a hard corner
+SUBDIV       = 6      # samples per segment inside a smooth run (>=1; 1 == no-op)
+CLOSE_EPS    = 1e-3   # first/last vertex closer than this => closed loop
 
 
 def camel_snake(s):
@@ -79,16 +79,24 @@ def parse_roman(text):
 
 
 def turn_angle(a, b, c):
-    """Direction change (degrees) of the path a->b->c at b. 0 == straight."""
-    v1 = (b[0] - a[0], b[1] - a[1])
-    v2 = (c[0] - b[0], c[1] - b[1])
-    n1 = math.hypot(*v1)
-    n2 = math.hypot(*v2)
+    """Unsigned direction change (degrees) of the path a->b->c at b."""
+    return abs(signed_turn(a, b, c))
+
+
+def signed_turn(a, b, c):
+    """Signed direction change (degrees) at b: + turns left, - turns right,
+    0 straight. The sign lets a coarse circle (all same-direction turns, e.g. a
+    punctuation dot) be told apart from a zigzag (alternating turns, e.g. Z)."""
+    v1x, v1y = b[0] - a[0], b[1] - a[1]
+    v2x, v2y = c[0] - b[0], c[1] - b[1]
+    n1 = math.hypot(v1x, v1y)
+    n2 = math.hypot(v2x, v2y)
     if n1 < 1e-9 or n2 < 1e-9:
         return 0.0
-    dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)
+    dot = (v1x * v2x + v1y * v2y) / (n1 * n2)
     dot = max(-1.0, min(1.0, dot))
-    return math.degrees(math.acos(dot))
+    ang = math.degrees(math.acos(dot))
+    return ang if (v1x * v2y - v1y * v2x) >= 0 else -ang
 
 
 def arc_extrapolate(a, b, c):
@@ -136,27 +144,35 @@ def catmull_rom(p0, p1, p2, p3, tsteps):
 
 
 def corner_flags(turns, closed):
-    """Classify each vertex as a hard corner from its turn angle and context.
+    """Classify each vertex as a hard corner from its SIGNED turn and context.
 
-    A turn sharper than CORNER_DEG is always a corner. A *moderate* turn
-    (STRAIGHT_DEG..CORNER_DEG) is a corner only when it is ISOLATED -- both
-    neighbours are essentially straight -- i.e. a single bend between two
-    straight runs (the arm/stem junction of Y, K, k, v...). A curve is a run
-    of similar turns, so its points have a turning neighbour and stay smooth.
-    `turns[i]` is the turn at vertex i (0 for open-path endpoints)."""
+    A vertex is part of a CURVE when it continues a turn in the same rotational
+    direction as a neighbour -- circles, dots and letter bowls are runs of
+    same-sign turns, however coarse (a 4-point punctuation dot is a 90deg-step
+    circle). It is a CORNER when the bend is isolated (both neighbours straight,
+    e.g. the arm/stem junction of Y/K/k) or reverses direction relative to its
+    neighbours (a zigzag: Z/N/M/W). `turns[i]` is the signed turn at vertex i
+    (0 for open-path endpoints)."""
     n = len(turns)
+
+    def turning(j):
+        return abs(turns[j]) > STRAIGHT_DEG
+
     hard = [False] * n
     for i in range(n):
         t = turns[i]
-        if t > CORNER_DEG:
-            hard[i] = True
-        elif t > STRAIGHT_DEG:
-            if closed:
-                tp, tn = turns[(i - 1) % n], turns[(i + 1) % n]
-            else:
-                tp = turns[i - 1] if i - 1 >= 0 else 0.0
-                tn = turns[i + 1] if i + 1 < n else 0.0
-            hard[i] = tp <= STRAIGHT_DEG and tn <= STRAIGHT_DEG
+        if abs(t) <= STRAIGHT_DEG:
+            continue                       # straight -> spline through it
+        if abs(t) >= REVERSAL_DEG:
+            hard[i] = True                 # cusp / fold-back
+            continue
+        if closed:
+            nbrs = ((i - 1) % n, (i + 1) % n)
+        else:
+            nbrs = tuple(j for j in (i - 1, i + 1) if 0 <= j < n)
+        # a curve point continues a same-direction turn on at least one side
+        same_dir = any(turning(j) and (turns[j] > 0) == (t > 0) for j in nbrs)
+        hard[i] = not same_dir
     return hard
 
 
@@ -173,7 +189,7 @@ def smooth_strip(pts):
         m = len(core)
         if m < 3:
             return pts
-        turns = [turn_angle(core[(i - 1) % m], core[i], core[(i + 1) % m])
+        turns = [signed_turn(core[(i - 1) % m], core[i], core[(i + 1) % m])
                  for i in range(m)]
         hard = corner_flags(turns, closed=True)
         out = []
@@ -196,7 +212,7 @@ def smooth_strip(pts):
     # via an arc-continued phantom control point below.
     turns = [0.0] * n
     for i in range(1, n - 1):
-        turns[i] = turn_angle(pts[i - 1], pts[i], pts[i + 1])
+        turns[i] = signed_turn(pts[i - 1], pts[i], pts[i + 1])
     hard = corner_flags(turns, closed=False)
     out = []
     for i in range(n - 1):
@@ -318,8 +334,8 @@ def main():
         hi_v = f.read()
     hi_count = hi_v.count('{', hi_v.index('char: 0x'))
     sys.stderr.write('genstroke_hi: %d glyphs, ~%d base vertices -> resampled '
-                     '(SUBDIV=%d, CORNER=%.0fdeg)\n'
-                     % (len(codes), base_v, SUBDIV, CORNER_DEG))
+                     '(SUBDIV=%d, straight<=%.0fdeg)\n'
+                     % (len(codes), base_v, SUBDIV, STRAIGHT_DEG))
 
 
 if __name__ == '__main__':
