@@ -75,10 +75,16 @@ Replace the blanket `{`/`}` rejection with shape-aware rules, tracking a `depth`
 
 ### A4. New tests
 
-Classifier/validator coverage landed with Phase A. Phase C now supplies the
-real block catalog entries, and `test_phase_c_catalog_full_walk` starts and
-completes all 15 additions through the controller/editor routes. The remaining
-adversarial editing cases below can be tightened in the post-Phase-C test pass.
+Classifier/validator coverage landed with Phase A. Phase C supplies the real
+block catalog entries, and `test_phase_c_catalog_full_walk` starts and
+completes all 15 additions through the controller/editor routes. The
+post-Phase-C pass added the adversarial runtime tests (the
+`test_block_*` group in `tests/test_tutorial_runner.c`), driving "First
+Loop" / "Functions" through `editor_handle_key`: locked open/close frame,
+in-block parking, close-row shifting, mismatch rejection with input
+preserved, paste blocked at the locked close row, close-commit depth/insert
+bookkeeping, post-block trailing re-park, and Esc-then-navigate-back
+insert-mode recovery.
 
 - `tests/test_tutorial_match.c`: `for(i, 0, 8) {` vs `for(i,0,8){` matches; `}` vs ` } ; ` matches; `for(i, 0, 9) {` mismatches.
 - `tests/test_tutorial_runner.c` (follow `test_enter_route_advances_after_match` patterns):

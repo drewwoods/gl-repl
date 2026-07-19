@@ -2074,6 +2074,241 @@ static void test_phase_c_catalog_full_walk(void) {
     }
 }
 
+/* Block-step adversarial runtime coverage (the post-Phase-C test pass the
+ * plan defers from A4). The full walk above proves every Phase C step is
+ * committable; these pin the block machinery's edges: the locked open/close
+ * frame, in-block parking, close-row shifting, mismatch rejection, paste
+ * guarding, close-commit bookkeeping, and Esc-recovery. */
+
+static int block_step_of_shape(int idx, TutorialExpectedShape shape) {
+    int total = repl_tutorial_step_count(idx);
+    for (int s = 0; s < total; s++) {
+        const char *expected = repl_tutorial_step_expected(idx, s);
+        if (expected && repl_tutorial_expected_shape(expected) == shape)
+            return s;
+    }
+    return -1;
+}
+
+/* Start `name` fresh and walk it to `target_step` through the real routes
+ * (NOTE/SET ack via the controller keyboard path, COMMAND commits via the
+ * ';' key). Returns the tutorial idx, or -1 when a step fails to advance. */
+static int walk_block_tutorial_to_step(const char *name, int target_step) {
+    int idx = find_tutorial_idx(name);
+    if (idx < 0)
+        return -1;
+    reset_fixture();
+    tutorial_start(idx);
+    while (tutorial_active() && tutorial_state_view().step < target_step) {
+        int step = tutorial_state_view().step;
+        if (repl_tutorial_step_kind(idx, step) == TUTORIAL_STEP_KIND_COMMAND) {
+            set_input_text(repl_tutorial_step_expected(idx, step));
+            (void)editor_handle_key(';', 0, 0);
+        } else {
+            glr_ctrl_keyboard('\r', 0, 0);
+        }
+        if (tutorial_state_view().step <= step)
+            return -1;
+    }
+    return idx;
+}
+
+static void test_block_open_commit_locks_header_and_parks_in_block(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int open_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_OPEN) : -1;
+    ASSERT_TRUE("First Loop ships a block-open step", open_step >= 0);
+    if (open_step < 0)
+        return;
+    ASSERT_TRUE("walk reaches the open step",
+                walk_block_tutorial_to_step("First Loop", open_step) == idx);
+
+    int before = repl_state_document_count();
+    int open_row = tutorial_state_view().expected_commit_line;
+    /* The whitespace-free variant must match the canonical expected. */
+    set_input_text("for(i,0,8){");
+    (void)editor_handle_key(';', 0, 0);
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("open commit advances to the first body step",
+               st.step, open_step + 1);
+    /* +2 from the block frame (header + auto `}`) and +1 from the next
+     * body step's instruction comment, emitted on entry at the block row. */
+    ASSERT_INT("open commit inserts header, auto close, body instruction",
+               repl_state_document_count(), before + 3);
+    ASSERT_INT("block depth is one inside the loop", st.block_depth, 1);
+    ASSERT_INT("innermost tracked close sits below the body instruction",
+               st.block_end_lines[0], open_row + 2);
+    ASSERT_INT("body step's commit row is the tracked close row",
+               st.expected_commit_line, st.block_end_lines[0]);
+    ASSERT_TRUE("in-block body step parks in insert mode",
+                editor_insert_mode() != 0);
+
+    SourceTextView doc = source_document_view();
+    ASSERT_TRUE("header row holds the canonical for header",
+                strstr(source_text_line(doc, open_row), "for(i, 0, 8)") != NULL);
+    ASSERT_TRUE("tracked close row holds the auto brace",
+                trim_leading_ws(source_text_line(doc, st.block_end_lines[0]))[0]
+                    == '}');
+    ASSERT_TRUE("header row locked", tutorial_line_is_locked(open_row));
+    ASSERT_TRUE("auto close row locked",
+                tutorial_line_is_locked(st.block_end_lines[0]));
+}
+
+static void test_block_body_commit_shifts_locked_close(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int open_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_OPEN) : -1;
+    ASSERT_TRUE("walk reaches the first body step",
+                open_step >= 0 &&
+                walk_block_tutorial_to_step("First Loop", open_step + 1) == idx);
+    if (open_step < 0)
+        return;
+
+    int close_row = tutorial_state_view().block_end_lines[0];
+    ASSERT_TRUE("tracked close row valid before the body commit",
+                close_row >= 0);
+    set_input_text(repl_tutorial_step_expected(idx, open_step + 1));
+    (void)editor_handle_key(';', 0, 0);
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("body commit advances", st.step, open_step + 2);
+    /* The next step is comment-less, so the close shifts by exactly the
+     * one committed body row. */
+    ASSERT_INT("close row shifted by the body insert",
+               st.block_end_lines[0], close_row + 1);
+    ASSERT_TRUE("shifted close row still locked",
+                tutorial_line_is_locked(st.block_end_lines[0]));
+    ASSERT_TRUE("shifted close row still holds the brace",
+                trim_leading_ws(source_text_line(source_document_view(),
+                                                 st.block_end_lines[0]))[0]
+                    == '}');
+}
+
+static void test_block_wrong_body_input_rejected_and_preserved(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int open_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_OPEN) : -1;
+    ASSERT_TRUE("walk reaches a comment-less body step",
+                open_step >= 0 &&
+                walk_block_tutorial_to_step("First Loop", open_step + 2) == idx);
+    if (open_step < 0)
+        return;
+
+    int before_doc = repl_state_document_count();
+    int before_step = tutorial_state_view().step;
+    set_input_text("glScalef(2, 2, 2)");
+    (void)editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("mismatched body input does not advance",
+               tutorial_state_view().step, before_step);
+    ASSERT_INT("mismatched body input does not mutate the document",
+               repl_state_document_count(), before_doc);
+    ASSERT_STR("mismatched input preserved for editing",
+               editor_state_input().input, "glScalef(2, 2, 2)");
+}
+
+static void test_block_paste_at_close_row_blocked(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int open_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_OPEN) : -1;
+    ASSERT_TRUE("walk reaches a step with a committed body row",
+                open_step >= 0 &&
+                walk_block_tutorial_to_step("First Loop", open_step + 2) == idx);
+    if (open_step < 0)
+        return;
+
+    int close_row = tutorial_state_view().block_end_lines[0];
+    int body_row = close_row - 1;   /* the just-committed (unlocked) body row */
+    ASSERT_TRUE("body row above the close holds the committed command",
+                strstr(source_text_line(source_document_view(), body_row),
+                       "glPushMatrix") != NULL);
+
+    int before_doc = repl_state_document_count();
+    /* Copy is a no-op in insert mode; Esc out first (the stranding
+     * scenario), then copy from the body row — the block-extent
+     * expansion makes this a whole-block copy, which is fine: the
+     * point is the paste attempt at the locked close row. */
+    (void)editor_handle_key(KEY_ESC, 0, 0);
+    editor_state_edit_line_set(body_row);
+    editor_clipboard_copy_current();
+    editor_state_edit_line_set(close_row);
+    editor_clipboard_paste_current();
+    ASSERT_STR("paste at the locked close row rejected",
+               status_text(), "Tutorial line is read-only");
+    ASSERT_INT("document unchanged after blocked paste",
+               repl_state_document_count(), before_doc);
+}
+
+static void test_block_close_commit_returns_to_depth_zero(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int close_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_CLOSE) : -1;
+    ASSERT_TRUE("walk reaches the close step",
+                close_step >= 0 &&
+                walk_block_tutorial_to_step("First Loop", close_step) == idx);
+    if (close_step < 0)
+        return;
+    ASSERT_INT("depth one arriving at the close step",
+               tutorial_state_view().block_depth, 1);
+
+    int before_doc = repl_state_document_count();
+    set_input_text("}");
+    (void)editor_handle_key(';', 0, 0);
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("close commit advances", st.step, close_step + 1);
+    /* The close matched the existing auto brace (no new block rows); the
+     * only insert is the next NOTE step's comment, appended at trailing. */
+    ASSERT_INT("close commit adds no block rows",
+               repl_state_document_count(), before_doc + 1);
+    ASSERT_INT("block depth returns to zero", st.block_depth, 0);
+    ASSERT_TRUE("insert mode off after leaving the block",
+                !editor_insert_mode());
+}
+
+static void test_post_block_append_returns_to_trailing_row(void) {
+    int idx = find_tutorial_idx("Functions");
+    int close_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_CLOSE) : -1;
+    ASSERT_TRUE("walk reaches the post-block append step",
+                close_step >= 0 &&
+                walk_block_tutorial_to_step("Functions", close_step + 1) == idx);
+    if (close_step < 0)
+        return;
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("block depth cleared after the func close", st.block_depth, 0);
+    ASSERT_INT("post-block append parks at the trailing row",
+               st.expected_commit_line, repl_state_document_count());
+}
+
+static void test_block_esc_then_navigate_back_reenters_insert_mode(void) {
+    int idx = find_tutorial_idx("First Loop");
+    int open_step = idx >= 0
+        ? block_step_of_shape(idx, TUTORIAL_EXPECTED_BLOCK_OPEN) : -1;
+    ASSERT_TRUE("walk parks on an in-block body step",
+                open_step >= 0 &&
+                walk_block_tutorial_to_step("First Loop", open_step + 2) == idx);
+    if (open_step < 0)
+        return;
+
+    int expected_line = tutorial_state_view().expected_commit_line;
+    ASSERT_TRUE("body step starts in insert mode", editor_insert_mode() != 0);
+    (void)editor_handle_key(KEY_ESC, 0, 0);
+    ASSERT_TRUE("Esc leaves insert mode", !editor_insert_mode());
+
+    editor_navigate_to_line(0);
+    editor_navigate_to_line(expected_line);
+    ASSERT_TRUE("navigating back to the commit row re-enters insert mode",
+                editor_insert_mode() != 0);
+    ASSERT_INT("re-park clears the loaded locked-row text",
+               editor_state_input().input_len, 0);
+    ASSERT_TRUE("shadow ghost re-teaches the expected command",
+                strstr(editor_state_autocomplete()->ghost, "glRotatef")
+                    != NULL);
+}
+
 /* Walk the Feature Tour through its leading NOTE + COMMAND steps so the
  * runner lands on the REQUIRE vertex_outlines step. NOTE steps are acked
  * through the controller keyboard route; COMMAND steps (comment-full or
@@ -3834,6 +4069,13 @@ int main(void) {
     test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();
     test_phase_c_catalog_full_walk();
+    test_block_open_commit_locks_header_and_parks_in_block();
+    test_block_body_commit_shifts_locked_close();
+    test_block_wrong_body_input_rejected_and_preserved();
+    test_block_paste_at_close_row_blocked();
+    test_block_close_commit_returns_to_depth_zero();
+    test_post_block_append_returns_to_trailing_row();
+    test_block_esc_then_navigate_back_reenters_insert_mode();
     test_catalog_rejects_out_of_range_index();
     test_validate_rejects_duplicate_label();
     test_validate_rejects_missing_target_label();
