@@ -248,6 +248,7 @@
 #   define  GLUT_BITMAP_HELVETICA_12        ((void *)0x0007)
 #   define  GLUT_BITMAP_HELVETICA_18        ((void *)0x0008)
 #   define  GLUT_STROKE_ROMAN_HI            ((void *)0x0009)
+#   define  GLUT_STROKE_MONO_ROMAN_HI       ((void *)0x000A)
 #else
     /*
      * I don't really know if it's a good idea... But here it goes:
@@ -255,6 +256,7 @@
     extern void* glutStrokeRoman;
     extern void* glutStrokeMonoRoman;
     extern void* glutStrokeRomanHi;
+    extern void* glutStrokeMonoRomanHi;
     extern void* glutBitmap9By15;
     extern void* glutBitmap8By13;
     extern void* glutBitmapTimesRoman10;
@@ -269,6 +271,7 @@
 #   define  GLUT_STROKE_ROMAN               ((void *) &glutStrokeRoman)
 #   define  GLUT_STROKE_MONO_ROMAN          ((void *) &glutStrokeMonoRoman)
 #   define  GLUT_STROKE_ROMAN_HI            ((void *) &glutStrokeRomanHi)
+#   define  GLUT_STROKE_MONO_ROMAN_HI       ((void *) &glutStrokeMonoRomanHi)
 #   define  GLUT_BITMAP_9_BY_15             ((void *) &glutBitmap9By15)
 #   define  GLUT_BITMAP_8_BY_13             ((void *) &glutBitmap8By13)
 #   define  GLUT_BITMAP_TIMES_ROMAN_10      ((void *) &glutBitmapTimesRoman10)

@@ -48,6 +48,7 @@
 #define glutStrokeRoman glutStrokeRomanIGNOREME
 #define glutStrokeRomanHi glutStrokeRomanHiIGNOREME
 #define glutStrokeMonoRoman glutStrokeMonoRomanIGNOREME
+#define glutStrokeMonoRomanHi glutStrokeMonoRomanHiIGNOREME
 #define glutBitmap9By15 glutBitmap9By15IGNOREME
 #define glutBitmap8By13 glutBitmap8By13IGNOREME
 #define glutBitmapTimesRoman10 glutBitmapTimesRoman10IGNOREME
@@ -61,6 +62,7 @@
 #undef glutStrokeRoman
 #undef glutStrokeRomanHi
 #undef glutStrokeMonoRoman
+#undef glutStrokeMonoRomanHi
 #undef glutBitmap9By15
 #undef glutBitmap8By13
 #undef glutBitmapTimesRoman10
@@ -96,6 +98,7 @@ struct freeglutBitmapFont
 static struct freeglutStrokeFont glutStrokeRoman_ ;
 static struct freeglutStrokeFont glutStrokeRomanHi_ ;
 static struct freeglutStrokeFont glutStrokeMonoRoman_ ;
+static struct freeglutStrokeFont glutStrokeMonoRomanHi_ ;
 
 static struct freeglutBitmapFont glutBitmap9By15_ ;
 static struct freeglutBitmapFont glutBitmap8By13_ ;
@@ -109,6 +112,7 @@ static struct freeglutBitmapFont glutBitmapHelvetica18_ ;
 void *glutStrokeRoman = &glutStrokeRoman_ ;
 void *glutStrokeRomanHi = &glutStrokeRomanHi_ ;
 void *glutStrokeMonoRoman = &glutStrokeMonoRoman_ ;
+void *glutStrokeMonoRomanHi = &glutStrokeMonoRomanHi_ ;
 
 void *glutBitmap9By15 = &glutBitmap9By15_ ;
 void *glutBitmap8By13 = &glutBitmap8By13_ ;

@@ -154,6 +154,7 @@ SET(FREEGLUT_SRCS
     src/fg_spaceball.c
     src/fg_state.c
     src/fg_stroke_mono_roman.c
+    src/fg_stroke_mono_roman_hi.c
     src/fg_stroke_roman.c
     src/fg_stroke_roman_hi.c
     src/fg_structure.c
