@@ -461,14 +461,29 @@ static void navigate_to_line_raw_resolved(int target) {
 
     editor_state_edit_line_set(target);
     editor_insert_mode_set(0);
-    editor_load_line_to_input(target);
     /* Land back on the tutorial's expected commit line → re-show the
      * shadow ghost. Anywhere else, navigation clears so stale
      * completions from the previous row don't linger. */
-    if (tutorial_active() && target == tutorial_expected_commit_line())
+    if (tutorial_active() && target == tutorial_expected_commit_line()) {
+        if (target < repl_state_document_count() &&
+            tutorial_current_step_kind() == TUTORIAL_STEP_KIND_COMMAND) {
+            /* Mid-document commit rows (block bodies, label splices)
+             * only accept pure inserts, and the row that currently
+             * sits there is tutorial-locked (the shifted `}` / the
+             * anchored command) — loading it would both error and
+             * strand the user out of insert mode (e.g. after Esc).
+             * Re-park exactly as step entry did: insert mode on, a
+             * fresh empty input row. */
+            editor_insert_mode_set(1);
+            editor_input_clear();
+        } else {
+            editor_load_line_to_input(target);
+        }
         editor_completion_update();
-    else
+    } else {
+        editor_load_line_to_input(target);
         editor_completion_clear();
+    }
 }
 
 /* Rewrite the canonical source text for g_input with proper indentation.

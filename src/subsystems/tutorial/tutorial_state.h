@@ -52,10 +52,18 @@ typedef struct {
     float                 fade_duration;
     /* expected_commit_line is the source row the next user commit
      * should land on. -1 when no step is waiting. For append steps
-     * this is document_count; for label-targeted steps this is the
-     * row immediately below the newly-inserted instruction
-     * comment. */
+     * this is document_count (or the in-block cursor row while
+     * block_depth > 0); for label-targeted steps this is the row
+     * immediately below the newly-inserted instruction comment. */
     int                   expected_commit_line;
+    /* Number of tutorial-committed blocks currently open (a BLOCK_OPEN
+     * step's `for(...) {` / `if(...) {` / `name(...) {` commit
+     * increments it; the matching BLOCK_CLOSE `}` step decrements).
+     * While > 0 the cursor lives on the auto-inserted `}` row, so
+     * append-step instruction lines resolve to the live edit line
+     * instead of document_count. See tutorial_note_expected_commit_
+     * applied / tutorial_step_instruction_line. */
+    int                   block_depth;
     /* Single in-flight commit-attempt record. Populated by the
      * precheck immediately after the matcher passes; consumed by the
      * success or rejection paths. */

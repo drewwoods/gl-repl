@@ -14,6 +14,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
      * length and TUTORIAL_FADE_CHARS_PER_SEC. */
     s->fade_duration = 0.0f;
     s->expected_commit_line = -1;
+    s->block_depth = 0;
     s->pending.step_idx = -1;
     s->pending.commit_line = -1;
     s->pending.doc_count_before = -1;

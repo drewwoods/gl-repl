@@ -20,7 +20,11 @@
  *                expected command with no locked instruction row above
  *                it — the autocomplete ghost and status hint still
  *                teach the command, so runs of related commands don't
- *                need a narration comment each.
+ *                need a narration comment each. The expected text may
+ *                also be a block header (`for(i, 0, 8) {`), an if
+ *                branch (`} else {`), or a close brace (`}`) — see
+ *                TutorialExpectedShape below; block bodies are typed
+ *                as ordinary COMMAND steps between the open and close.
  *   NOTE         a comment-only step: reveal the instruction comment,
  *                wait for an ack key (Enter/Tab/Space), advance. The
  *                showcase flow of SET without a cfg write. `expected`
@@ -311,6 +315,37 @@ static inline unsigned int repl_tutorial_tag_bit(int tag_idx) {
  * the contiguous-runs convention noted there. */
 const char               *repl_tutorial_subheading(int tutorial_idx);
 
+/* Shape of a COMMAND step's `expected` text. ORDINARY is the classic
+ * single-row command. The three block shapes teach the REPL's
+ * structured blocks (`for` / `funcN` / named-func defs / `if`):
+ *   BLOCK_OPEN    "for(i, 0, 8) {" / "if(expr) {" / "name(args) {" —
+ *                 commits TWO rows (header + auto-inserted `}`) and
+ *                 leaves the cursor between them in insert mode.
+ *   BLOCK_BRANCH  "} else {" / "} else if(expr) {" — commits one
+ *                 branch-separator row inside an open if-block.
+ *   BLOCK_CLOSE   "}" — matches the auto-inserted end row (no document
+ *                 change; cursor advances past it, insert mode off).
+ * Classified syntactically by repl_tutorial_expected_shape(); the
+ * validator uses the shape to track block depth across a tutorial's
+ * steps, and the runner uses it to keep locked-line / block-depth
+ * bookkeeping in step with what the editor's block commits actually
+ * do to the document. */
+typedef enum {
+    TUTORIAL_EXPECTED_ORDINARY = 0,
+    TUTORIAL_EXPECTED_BLOCK_OPEN,
+    TUTORIAL_EXPECTED_BLOCK_BRANCH,
+    TUTORIAL_EXPECTED_BLOCK_CLOSE,
+} TutorialExpectedShape;
+
+TutorialExpectedShape repl_tutorial_expected_shape(const char *expected);
+
+/* True iff `expected` is a BLOCK_OPEN whose header is a function
+ * definition (`name(args) {` where name is neither `for` nor `if`).
+ * Func defs relocate to the top of non-decl code on commit, so the
+ * validator only allows them while nothing but comments / decls /
+ * completed func blocks precede (relocation is then an identity). */
+int repl_tutorial_expected_is_func_open(const char *expected);
+
 /* Validate a tutorial catalog entry. Returns 1 on success. On failure
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).
  *
@@ -321,9 +356,21 @@ const char               *repl_tutorial_subheading(int tutorial_idx);
  *   - COMMAND steps require non-null expected (comment is optional),
  *     and each expected parses to a single source command and lands at
  *     the runner's chosen row (v1 catalog rule, syntactic best-effort:
- *     no `;`, no `\n`, no block-open `{`/`}`, no `float` declarations
- *     of any shape — single-name float decls are relocated to the top
- *     of non-decl code on commit, which breaks pending.commit_line).
+ *     no `;`, no `\n`, no `float` declarations of any shape —
+ *     single-name float decls are relocated to the top of non-decl
+ *     code on commit, which breaks pending.commit_line). Braces are
+ *     allowed only in the block shapes classified by
+ *     repl_tutorial_expected_shape(); the validator walks the steps
+ *     with a depth counter: opens/branches/closes must balance
+ *     (depth 0 at the sentinel), a branch needs an enclosing if-open,
+ *     ORDINARY `for(`/`if(`-prefixed text without a trailing `{` is
+ *     rejected (it would still commit as a two-row block), func-shaped
+ *     opens are rejected at nesting depth > 0, after any non-func
+ *     top-level content, or when the entry has a setup scaffold
+ *     (relocation would break row bookkeeping), and while a block is
+ *     open both label placement and REQUIRE_VAR steps are rejected
+ *     (decl relocation / free-line commits don't mix with an open
+ *     block).
  *   - NOTE steps require a non-empty comment and expected == NULL.
  *   - SET / REQUIRE steps require non-empty comment and cfg_slug,
  *     and expected == NULL. Slug *validity* is checked at runtime in
