@@ -21,8 +21,10 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     /* Defensive initialization: step instruction comment line numbers are
      * only meaningful when the tutorial is active. The array is fully
      * re-initialized in tutorial_start() before any step is evaluated or read. */
-    for (int i = 0; i < TUTORIAL_MAX_STEPS; i++)
+    for (int i = 0; i < TUTORIAL_MAX_STEPS; i++) {
         s->instruction_line_for_step[i] = -1;
+        s->block_end_lines[i] = -1;
+    }
     repl_config_bag_clear(&s->baseline_bag);
     s->baseline_valid = 0;
 }

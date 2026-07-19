@@ -388,6 +388,8 @@ static const TutorialStep g_tutorial_color_interp_steps[] = {
 #define TUTORIAL_TAG_COLOR_TRANSFORMS TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_COLOR_TRANSFORMS)
 #define TUTORIAL_TAG_DEPTH_LIGHTING   TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_DEPTH_LIGHTING)
 #define TUTORIAL_TAG_ANIMATION        TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_ANIMATION)
+#define TUTORIAL_TAG_REPL_LANGUAGE    TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_REPL_LANGUAGE)
+#define TUTORIAL_TAG_EFFECTS          TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_EFFECTS)
 
 static const char *const g_tutorial_tag_labels[] = {
     "All",
@@ -395,6 +397,8 @@ static const char *const g_tutorial_tag_labels[] = {
     "Color & Transforms",
     "Depth & Lighting",
     "Animation",
+    "REPL Language",
+    "Effects",
 };
 /* Must stay 1:1 with the REPL_TUTORIAL_TAG_* enum: repl_tutorial_tag_count()
  * returns REPL_TUTORIAL_TAG_COUNT but repl_tutorial_tag_label() indexes this
@@ -915,6 +919,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
     int step_count = 0;
     int depth = 0;
     int open_count = 0;
+    int branch_count = 0;
     /* Set once any non-func content exists at the top level (an
      * ORDINARY command, or a for/if block). Func defs relocate to the
      * top of non-decl code on commit; while only comments / decls /
@@ -1038,6 +1043,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                                  entry->name ? entry->name : "?", i);
                     return 0;
                 }
+                branch_count++;
             } else if (shape == TUTORIAL_EXPECTED_BLOCK_CLOSE) {
                 if (step->placement != TUTORIAL_STEP_APPEND) {
                     if (err_size > 0)
@@ -1239,24 +1245,31 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
         return 0;
     }
 
-    /* Every preloaded setup row is locked, plus up to one lock per
-     * step (instruction comment or comment-less committed row) and one
-     * extra per block-open (the auto-inserted `}` row is locked too),
-     * so all together must fit the runtime lock table. Counting every
-     * setup line (headers included) slightly overcounts — safely. */
-    if (entry->setup) {
+    /* Every preloaded setup row is locked, plus up to one baseline lock
+     * per step. A commented block-open needs TWO additional locks for
+     * its committed header + auto-`}` (the baseline step lock is its
+     * instruction comment); a comment-less open needs only one extra,
+     * but budgeting two for every open is a safe upper bound. A branch
+     * similarly needs one extra lock for its committed separator row.
+     * Counting every setup line (metadata headers included) also
+     * overcounts — safely. Check even without setup so the relationship
+     * remains sound if either capacity constant changes. */
+    {
         int setup_count = 0;
-        while (entry->setup[setup_count])
-            setup_count++;
-        if (setup_count + step_count + open_count >
+        if (entry->setup) {
+            while (entry->setup[setup_count])
+                setup_count++;
+        }
+        if (setup_count + step_count + 2 * open_count + branch_count >
             TUTORIAL_LOCKED_LINE_MAX) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "tutorial '%s' setup lines (%d) + steps (%d) "
-                         "+ block opens (%d) exceed the locked-line "
+                         "+ block-shape extra locks (%d) exceed the locked-line "
                          "capacity (%d)",
                          entry->name ? entry->name : "?",
-                         setup_count, step_count, open_count,
+                         setup_count, step_count,
+                         2 * open_count + branch_count,
                          TUTORIAL_LOCKED_LINE_MAX);
             return 0;
         }

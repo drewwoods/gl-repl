@@ -163,15 +163,17 @@ static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
  * tag-default bridge) can name tags symbolically. The bit-shifted
  * TUTORIAL_TAG_* macros used inside g_tutorials[] stay private to
  * tutorials.c. Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS /
- * DEPTH_LIGHTING covers the shipped catalog; reserved ANIMATION is
- * filtered out by repl_tutorial_visible_tag_count() until something
- * carries it. */
+ * DEPTH_LIGHTING / ANIMATION cover the shipped catalog; REPL_LANGUAGE
+ * and EFFECTS stay filtered out by repl_tutorial_visible_tag_count()
+ * until Phase C adds their first carriers. */
 enum {
     REPL_TUTORIAL_TAG_ALL = 0,
     REPL_TUTORIAL_TAG_GEOMETRY,
     REPL_TUTORIAL_TAG_COLOR_TRANSFORMS,
     REPL_TUTORIAL_TAG_DEPTH_LIGHTING,
     REPL_TUTORIAL_TAG_ANIMATION,
+    REPL_TUTORIAL_TAG_REPL_LANGUAGE,
+    REPL_TUTORIAL_TAG_EFFECTS,
     REPL_TUTORIAL_TAG_COUNT
 };
 
