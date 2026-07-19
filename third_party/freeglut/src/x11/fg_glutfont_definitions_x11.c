@@ -46,6 +46,7 @@
  */
 
 #define glutStrokeRoman glutStrokeRomanIGNOREME
+#define glutStrokeRomanHi glutStrokeRomanHiIGNOREME
 #define glutStrokeMonoRoman glutStrokeMonoRomanIGNOREME
 #define glutBitmap9By15 glutBitmap9By15IGNOREME
 #define glutBitmap8By13 glutBitmap8By13IGNOREME
@@ -58,6 +59,7 @@
 #include <GL/freeglut_std.h>
 
 #undef glutStrokeRoman
+#undef glutStrokeRomanHi
 #undef glutStrokeMonoRoman
 #undef glutBitmap9By15
 #undef glutBitmap8By13
@@ -92,6 +94,7 @@ struct freeglutBitmapFont
 
 
 static struct freeglutStrokeFont glutStrokeRoman_ ;
+static struct freeglutStrokeFont glutStrokeRomanHi_ ;
 static struct freeglutStrokeFont glutStrokeMonoRoman_ ;
 
 static struct freeglutBitmapFont glutBitmap9By15_ ;
@@ -104,6 +107,7 @@ static struct freeglutBitmapFont glutBitmapHelvetica18_ ;
 
 
 void *glutStrokeRoman = &glutStrokeRoman_ ;
+void *glutStrokeRomanHi = &glutStrokeRomanHi_ ;
 void *glutStrokeMonoRoman = &glutStrokeMonoRoman_ ;
 
 void *glutBitmap9By15 = &glutBitmap9By15_ ;

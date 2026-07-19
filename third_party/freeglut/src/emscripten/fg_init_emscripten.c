@@ -46,6 +46,7 @@ void fgPlatformDestroyContext( SFG_PlatformDisplay pDisplay,
 
 /* Font pointers */
 int glutStrokeRoman_impl;
+int glutStrokeRomanHi_impl;
 int glutStrokeMonoRoman_impl;
 int glutBitmap9By15_impl;
 int glutBitmap8By13_impl;
@@ -56,6 +57,7 @@ int glutBitmapHelvetica12_impl;
 int glutBitmapHelvetica18_impl;
 
 void *glutStrokeRoman     = &glutStrokeRoman_impl;
+void *glutStrokeRomanHi   = &glutStrokeRomanHi_impl;
 void *glutStrokeMonoRoman = &glutStrokeMonoRoman_impl;
 void *glutBitmap9By15        = &glutBitmap9By15_impl;
 void *glutBitmap8By13        = &glutBitmap8By13_impl;

@@ -38,6 +38,7 @@ extern SFG_Font fgFontHelvetica18;
 extern SFG_Font fgFontTimesRoman10;
 extern SFG_Font fgFontTimesRoman24;
 extern SFG_StrokeFont fgStrokeRoman;
+extern SFG_StrokeFont fgStrokeRomanHi;
 extern SFG_StrokeFont fgStrokeMonoRoman;
 
 
@@ -73,6 +74,8 @@ static SFG_StrokeFont* fghStrokeByID( void* font )
 {
     if( font == GLUT_STROKE_ROMAN      )
         return &fgStrokeRoman;
+    if( font == GLUT_STROKE_ROMAN_HI   )
+        return &fgStrokeRomanHi;
     if( font == GLUT_STROKE_MONO_ROMAN )
         return &fgStrokeMonoRoman;
 
