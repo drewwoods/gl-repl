@@ -1311,8 +1311,11 @@ static void test_validate_rejects_multi_row_expected(void) {
     ASSERT_TRUE("expected with ';' rejected",
                 !repl_tutorial_validate_entry(&entry_semi, err, sizeof(err)));
 
-    /* Block-opening braces ({ }) would commit a CMD_BLOCK and shift
-     * the document by more than one row. */
+    /* Block opens are now a legal shape (TUTORIAL_EXPECTED_BLOCK_OPEN),
+     * but only in balanced sequences: an open with no matching close
+     * step still rejects (tutorial would end inside the block). Braces
+     * in ORDINARY-shaped text stay rejected outright — see
+     * test_validate_block_step_rules for the full block matrix. */
     static const TutorialStep brace_steps[] = {
         { NULL, "// opens a block",
                 "for(i, 0, 3) {",
@@ -1321,8 +1324,10 @@ static void test_validate_rejects_multi_row_expected(void) {
     };
     TutorialEntry entry_brace = { .name = "block_open", .steps = brace_steps };
     err[0] = '\0';
-    ASSERT_TRUE("expected with '{' rejected",
+    ASSERT_TRUE("unclosed block open rejected",
                 !repl_tutorial_validate_entry(&entry_brace, err, sizeof(err)));
+    ASSERT_TRUE("unclosed block diagnostic mentions the open block",
+                strstr(err, "open block") != NULL);
 
     /* Multi-name float decls expand into one CMD_VAR_DECLARE per
      * name, which is several source rows. */
@@ -2238,6 +2243,261 @@ static void test_validate_note_step_shapes(void) {
                 !repl_tutorial_validate_entry(&empty, err, sizeof(err)));
     ASSERT_TRUE("error mentions comment",
                 err[0] != '\0' && strstr(err, "comment") != NULL);
+}
+
+/* Block-structure steps: the expected-shape classifier. */
+static void test_expected_shape_classifier(void) {
+    ASSERT_INT("for header is OPEN",
+               (int)repl_tutorial_expected_shape("for(i, 0, 8) {"),
+               (int)TUTORIAL_EXPECTED_BLOCK_OPEN);
+    ASSERT_INT("if header is OPEN",
+               (int)repl_tutorial_expected_shape("if(sin(t) > 0) {"),
+               (int)TUTORIAL_EXPECTED_BLOCK_OPEN);
+    ASSERT_INT("named func header is OPEN",
+               (int)repl_tutorial_expected_shape("spoke(a) {"),
+               (int)TUTORIAL_EXPECTED_BLOCK_OPEN);
+    ASSERT_INT("close brace is CLOSE",
+               (int)repl_tutorial_expected_shape("  }  "),
+               (int)TUTORIAL_EXPECTED_BLOCK_CLOSE);
+    ASSERT_INT("else branch is BRANCH",
+               (int)repl_tutorial_expected_shape("} else {"),
+               (int)TUTORIAL_EXPECTED_BLOCK_BRANCH);
+    ASSERT_INT("else-if branch is BRANCH",
+               (int)repl_tutorial_expected_shape("} else if(t > 1) {"),
+               (int)TUTORIAL_EXPECTED_BLOCK_BRANCH);
+    ASSERT_INT("plain command is ORDINARY",
+               (int)repl_tutorial_expected_shape("glVertex3f(0, 0.8, 0)"),
+               (int)TUTORIAL_EXPECTED_ORDINARY);
+    ASSERT_INT("header without paren close is ORDINARY",
+               (int)repl_tutorial_expected_shape("for i {"),
+               (int)TUTORIAL_EXPECTED_ORDINARY);
+    ASSERT_INT("brace-less header is ORDINARY",
+               (int)repl_tutorial_expected_shape("for(i, 0, 8)"),
+               (int)TUTORIAL_EXPECTED_ORDINARY);
+    ASSERT_INT("NULL is ORDINARY",
+               (int)repl_tutorial_expected_shape(NULL),
+               (int)TUTORIAL_EXPECTED_ORDINARY);
+
+    ASSERT_TRUE("named func open is func-shaped",
+                repl_tutorial_expected_is_func_open("spoke(a) {"));
+    ASSERT_TRUE("funcN open is func-shaped",
+                repl_tutorial_expected_is_func_open("func0() {"));
+    ASSERT_TRUE("for open is not func-shaped",
+                !repl_tutorial_expected_is_func_open("for(i, 0, 8) {"));
+    ASSERT_TRUE("if open is not func-shaped",
+                !repl_tutorial_expected_is_func_open("if(t > 0) {"));
+    ASSERT_TRUE("ordinary call is not func-shaped",
+                !repl_tutorial_expected_is_func_open("spoke(0)"));
+}
+
+/* Block-structure steps: balanced sequences validate — a simple for
+ * body, a nested block, an if with an else branch, and a func def
+ * followed by ordinary calls. */
+static void test_validate_accepts_balanced_block_steps(void) {
+    static const TutorialStep loop_steps[] = {
+        { NULL, "// repeat eight times", "for(i, 0, 8) {",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glRotatef(i * 45, 0, 0, 1)",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glutSolidCube(0.15)",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, "// after the loop", "glColor3f(1, 1, 1)",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry loop = { .name = "block_loop", .steps = loop_steps };
+    char err[160] = "";
+    ASSERT_TRUE("balanced for block validates",
+                repl_tutorial_validate_entry(&loop, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+
+    static const TutorialStep nested_steps[] = {
+        { NULL, NULL, "for(i, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "for(j, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glVertex3f(i, j, 0)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry nested = { .name = "block_nested", .steps = nested_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("nested for blocks validate",
+                repl_tutorial_validate_entry(&nested, err, sizeof(err)));
+
+    static const TutorialStep branch_steps[] = {
+        { NULL, NULL, "if(sin(t) > 0) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glColor3f(0.2, 1, 0.4)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "} else {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glColor3f(1, 0.3, 0.2)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry branch = { .name = "block_branch", .steps = branch_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("if/else block validates",
+                repl_tutorial_validate_entry(&branch, err, sizeof(err)));
+
+    static const TutorialStep func_steps[] = {
+        { NULL, "// define a helper", "spoke(a) {",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "glRotatef(a, 0, 0, 1)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "spoke(0)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "spoke(120)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry func = { .name = "block_func", .steps = func_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("func def then calls validates",
+                repl_tutorial_validate_entry(&func, err, sizeof(err)));
+}
+
+/* Block-structure steps: the rejection matrix. */
+static void test_validate_block_step_rules(void) {
+    char err[160];
+
+    /* Close without any open. */
+    static const TutorialStep close_only[] = {
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e1 = { .name = "close_only", .steps = close_only };
+    err[0] = '\0';
+    ASSERT_TRUE("close without open rejected",
+                !repl_tutorial_validate_entry(&e1, err, sizeof(err)));
+    ASSERT_TRUE("unmatched close diagnostic",
+                strstr(err, "unmatched") != NULL);
+
+    /* Branch at depth 0. */
+    static const TutorialStep branch_depth0[] = {
+        { NULL, NULL, "} else {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e2 = { .name = "branch_depth0", .steps = branch_depth0 };
+    err[0] = '\0';
+    ASSERT_TRUE("else at depth 0 rejected",
+                !repl_tutorial_validate_entry(&e2, err, sizeof(err)));
+
+    /* Branch inside a for block (needs an enclosing IF open). */
+    static const TutorialStep branch_in_for[] = {
+        { NULL, NULL, "for(i, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "} else {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e3 = { .name = "branch_in_for", .steps = branch_in_for };
+    err[0] = '\0';
+    ASSERT_TRUE("else inside for rejected",
+                !repl_tutorial_validate_entry(&e3, err, sizeof(err)));
+    ASSERT_TRUE("else-in-for diagnostic mentions if",
+                strstr(err, "if") != NULL);
+
+    /* Label placement inside an open block. */
+    static const TutorialStep label_in_block[] = {
+        { "anchor", "// anchored", "glPointSize(1)",
+          TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "for(i, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, "// splice above the anchor", "glPointSize(2)",
+          TUTORIAL_STEP_LABEL, "anchor" },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e4 = { .name = "label_in_block", .steps = label_in_block };
+    err[0] = '\0';
+    ASSERT_TRUE("label placement inside block rejected",
+                !repl_tutorial_validate_entry(&e4, err, sizeof(err)));
+    ASSERT_TRUE("label-in-block diagnostic mentions block",
+                strstr(err, "block") != NULL);
+
+    /* REQUIRE_VAR inside an open block. */
+    static const TutorialStep require_var_in_block[] = {
+        { NULL, NULL, "for(i, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, "// set n", NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, "n", 5.0f },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e5 = { .name = "require_var_in_block",
+                         .steps = require_var_in_block };
+    err[0] = '\0';
+    ASSERT_TRUE("REQUIRE_VAR inside block rejected",
+                !repl_tutorial_validate_entry(&e5, err, sizeof(err)));
+
+    /* ORDINARY-shaped for header (no trailing '{') — the block kernels
+     * would still claim it and commit two rows. */
+    static const TutorialStep braceless_for[] = {
+        { NULL, NULL, "for(i, 0, 3)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e6 = { .name = "braceless_for", .steps = braceless_for };
+    err[0] = '\0';
+    ASSERT_TRUE("brace-less for header rejected",
+                !repl_tutorial_validate_entry(&e6, err, sizeof(err)));
+    ASSERT_TRUE("brace-less header diagnostic mentions '{'",
+                strstr(err, "{") != NULL);
+
+    /* Func-open after non-func top-level content (relocation hazard). */
+    static const TutorialStep func_after_cmd[] = {
+        { NULL, NULL, "glPointSize(1)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "spoke(a) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e7 = { .name = "func_after_cmd", .steps = func_after_cmd };
+    err[0] = '\0';
+    ASSERT_TRUE("func open after top-level command rejected",
+                !repl_tutorial_validate_entry(&e7, err, sizeof(err)));
+    ASSERT_TRUE("func-relocation diagnostic mentions precede",
+                strstr(err, "precede") != NULL);
+
+    /* Func-open with a setup scaffold (same relocation hazard). */
+    static const char *const scaffold[] = {
+        "glPointSize(1)",
+        NULL,
+    };
+    static const TutorialStep func_with_setup[] = {
+        { NULL, NULL, "spoke(a) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e8 = { .name = "func_with_setup",
+                         .steps = func_with_setup, .setup = scaffold };
+    err[0] = '\0';
+    ASSERT_TRUE("func open with setup scaffold rejected",
+                !repl_tutorial_validate_entry(&e8, err, sizeof(err)));
+    ASSERT_TRUE("func-scaffold diagnostic mentions scaffold",
+                strstr(err, "scaffold") != NULL);
+
+    /* Func-open nested inside another block. */
+    static const TutorialStep func_nested[] = {
+        { NULL, NULL, "for(i, 0, 3) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "spoke(a) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e9 = { .name = "func_nested", .steps = func_nested };
+    err[0] = '\0';
+    ASSERT_TRUE("func open nested in a block rejected",
+                !repl_tutorial_validate_entry(&e9, err, sizeof(err)));
+    ASSERT_TRUE("nested-func diagnostic mentions nest",
+                strstr(err, "nest") != NULL);
+
+    /* A second func def AFTER the first closed is fine (completed funcs
+     * are relocation-safe prefixes), but an ordinary command between
+     * them poisons the third. */
+    static const TutorialStep two_funcs[] = {
+        { NULL, NULL, "spoke(a) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "rim(b) {", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, "}", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry e10 = { .name = "two_funcs", .steps = two_funcs };
+    err[0] = '\0';
+    ASSERT_TRUE("second func def after first closes validates",
+                repl_tutorial_validate_entry(&e10, err, sizeof(err)));
 }
 
 /* Feature Tour is the catalog's showcase for the relaxed shapes: it must
@@ -3519,5 +3779,9 @@ int main(void) {
     test_require_var_pauses_on_next_step_after_match();
     test_require_var_epsilon_boundary();
     test_require_var_shadow_suffix_synthesizes_assignment();
+    /* Block-structure steps (shape classifier + validator depth walk). */
+    test_expected_shape_classifier();
+    test_validate_accepts_balanced_block_steps();
+    test_validate_block_step_rules();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
