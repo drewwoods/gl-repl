@@ -22,9 +22,10 @@ import re
 import sys
 
 # ---- tunables -------------------------------------------------------------
-CORNER_DEG = 60.0   # turn sharper than this at a vertex => hard corner (break)
-SUBDIV     = 6      # samples per segment inside a smooth run (>=1; 1 == no-op)
-CLOSE_EPS  = 1e-3   # first/last vertex closer than this => closed loop
+CORNER_DEG   = 60.0  # turn sharper than this at a vertex => always a hard corner
+STRAIGHT_DEG = 10.0  # turn gentler than this => essentially straight
+SUBDIV       = 6     # samples per segment inside a smooth run (>=1; 1 == no-op)
+CLOSE_EPS    = 1e-3  # first/last vertex closer than this => closed loop
 
 
 def camel_snake(s):
@@ -134,6 +135,31 @@ def catmull_rom(p0, p1, p2, p3, tsteps):
     return out
 
 
+def corner_flags(turns, closed):
+    """Classify each vertex as a hard corner from its turn angle and context.
+
+    A turn sharper than CORNER_DEG is always a corner. A *moderate* turn
+    (STRAIGHT_DEG..CORNER_DEG) is a corner only when it is ISOLATED -- both
+    neighbours are essentially straight -- i.e. a single bend between two
+    straight runs (the arm/stem junction of Y, K, k, v...). A curve is a run
+    of similar turns, so its points have a turning neighbour and stay smooth.
+    `turns[i]` is the turn at vertex i (0 for open-path endpoints)."""
+    n = len(turns)
+    hard = [False] * n
+    for i in range(n):
+        t = turns[i]
+        if t > CORNER_DEG:
+            hard[i] = True
+        elif t > STRAIGHT_DEG:
+            if closed:
+                tp, tn = turns[(i - 1) % n], turns[(i + 1) % n]
+            else:
+                tp = turns[i - 1] if i - 1 >= 0 else 0.0
+                tn = turns[i + 1] if i + 1 < n else 0.0
+            hard[i] = tp <= STRAIGHT_DEG and tn <= STRAIGHT_DEG
+    return hard
+
+
 def smooth_strip(pts):
     """Resample one stroke polyline, preserving anchors and corners."""
     n = len(pts)
@@ -147,8 +173,9 @@ def smooth_strip(pts):
         m = len(core)
         if m < 3:
             return pts
-        hard = [turn_angle(core[(i - 1) % m], core[i], core[(i + 1) % m]) > CORNER_DEG
-                for i in range(m)]
+        turns = [turn_angle(core[(i - 1) % m], core[i], core[(i + 1) % m])
+                 for i in range(m)]
+        hard = corner_flags(turns, closed=True)
         out = []
         for i in range(m):
             p1 = core[i]
@@ -165,11 +192,12 @@ def smooth_strip(pts):
     # open polyline. The two free terminals are smooth anchors, NOT corners:
     # a stroke end has no turn to measure, and forcing it hard would leave the
     # first/last segment straight (visible flat tips on c, s, e, ...). Only
-    # genuine interior sharp turns break the spline; terminal segments curve
-    # into the tip via a reflected phantom control point below.
-    hard = [False] * n
+    # interior corners break the spline; terminal segments curve into the tip
+    # via an arc-continued phantom control point below.
+    turns = [0.0] * n
     for i in range(1, n - 1):
-        hard[i] = turn_angle(pts[i - 1], pts[i], pts[i + 1]) > CORNER_DEG
+        turns[i] = turn_angle(pts[i - 1], pts[i], pts[i + 1])
+    hard = corner_flags(turns, closed=False)
     out = []
     for i in range(n - 1):
         p1, p2 = pts[i], pts[i + 1]
