@@ -38,7 +38,31 @@ static void test_match_shapes(void) {
     ASSERT_INT("shape mismatch kind", result.kind, TUT_MISMATCH_SHAPE);
 }
 
+/* Block-shaped expected text (for/if headers, close braces) matches
+ * through the same whitespace-stripped compare as ordinary commands —
+ * the matcher needs no block awareness. */
+static void test_match_block_shapes(void) {
+    TutorialMatchResult result;
+
+    result = tutorial_match("for(i, 0, 8) {", "for(i,0,8){");
+    ASSERT_INT("block open whitespace tolerant", result.kind, TUT_MATCH_OK);
+
+    result = tutorial_match("}", "  } ; ");
+    ASSERT_INT("close brace + trailing semicolon", result.kind, TUT_MATCH_OK);
+
+    result = tutorial_match("} else {", "}else{");
+    ASSERT_INT("else branch whitespace tolerant", result.kind, TUT_MATCH_OK);
+
+    result = tutorial_match("for(i, 0, 8) {", "for(i, 0, 9) {");
+    ASSERT_INT("block open arg mismatch", result.kind, TUT_MISMATCH_SHAPE);
+
+    result = tutorial_match("for(i, 0, 8) {", "for(i, 0, 8)");
+    ASSERT_INT("missing open brace mismatch", result.kind,
+               TUT_MISMATCH_SHAPE);
+}
+
 int main(void) {
     test_match_shapes();
+    test_match_block_shapes();
     return test_harness_report(&g_harness, "test_tutorial_match");
 }
