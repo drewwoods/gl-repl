@@ -46,16 +46,28 @@ Replace the blanket `{`/`}` rejection with shape-aware rules, tracking a `depth`
 - While `depth > 0`: reject `TUTORIAL_STEP_LABEL` placement and REQUIRE_VAR steps. NOTE/SET/REQUIRE stay legal.
 - At sentinel: require `depth == 0`.
 - Func-open ordering (relocation hazard): reject a func-shaped OPEN if the entry has a `setup` scaffold or if any earlier depth-0 COMMAND step was not itself a func-open — guarantees relocation is an identity.
-- Capacity check: count each OPEN step as **2** locked lines (header + auto-`}`).
+- Capacity check: budget the normal per-step lock plus **2 extra** locks for
+  every OPEN (header + auto-`}`) and **1 extra** for every BRANCH separator;
+  this safely covers commented block steps, whose instruction and committed
+  structure rows are distinct locks.
 
 ### A3. Runner changes — `src/subsystems/tutorial/tutorial_runner.c`, `tutorial_state.h`
 
-1. `TutorialRuntimeState`: add `int block_depth;` (reset in `tutorial_state_reset*`).
-2. `tutorial_step_instruction_line()`: for APPEND placement with `block_depth > 0`, resolve to the live edit line (cursor sits on the auto-`}` row — the correct in-block insertion point) instead of `document_count`, clamped to `[0, document_count]`. The existing "expected_commit_line < document_count → insert mode ON" park logic already handles mid-document rows.
+1. `TutorialRuntimeState`: add `int block_depth;` plus a per-depth
+   `block_end_lines[]` stack (reset in `tutorial_state_reset*`). The stack keeps
+   the insertion row stable even if the user navigates during an in-block
+   NOTE/SET/REQUIRE step.
+2. `tutorial_step_instruction_line()`: for APPEND placement with
+   `block_depth > 0`, resolve to the tracked innermost auto-`}` row instead of
+   `document_count`. The existing "expected_commit_line < document_count →
+   insert mode ON" park logic handles the mid-document row.
 3. `tutorial_note_expected_commit_applied()`: after the existing delta shift, classify the pending step's expected:
-   - OPEN → `block_depth++`; lock `pending.commit_line` (header) **and** `pending.commit_line + 1` (auto `}`), after the shift so indices are final.
+   - OPEN → push `pending.commit_line + 1` as the innermost block-end row,
+     `block_depth++`, and lock `pending.commit_line` (header) **and**
+     `pending.commit_line + 1` (auto `}`), after the shift so indices are final.
    - BRANCH → lock `pending.commit_line`.
-   - CLOSE → `block_depth--` (delta 0, no rows change).
+   - CLOSE → pop the innermost block-end row and `block_depth--` (delta 0,
+     no rows change).
 4. `tutorial_append_locked_line()`: dedup (contains-check before append) so the `}` row isn't double-recorded by the comment-less auto-lock path.
 5. `tutorial_match.c`: **no changes needed** (whitespace-stripped strcmp already covers block text; `tutorial_shadow_suffix` is shape-agnostic).
 6. Esc-recovery hook in `src/editor/input.c` (~line 445, the navigate-to-line path): when navigation lands on `tutorial_expected_commit_line()` mid-document, re-enable insert mode — otherwise a user who pressed Esc during a block body is stranded ("must insert at the fading line" forever).
@@ -63,12 +75,19 @@ Replace the blanket `{`/`}` rejection with shape-aware rules, tracking a `depth`
 
 ### A4. New tests
 
+Classifier/validator coverage landed with Phase A. Per the follow-up decision,
+the end-to-end runtime walks below are deferred until Phase C provides the real
+"First Loop", "Functions", and "If & Conditionals" catalog entries to drive.
+
 - `tests/test_tutorial_match.c`: `for(i, 0, 8) {` vs `for(i,0,8){` matches; `}` vs ` } ; ` matches; `for(i, 0, 9) {` mismatches.
 - `tests/test_tutorial_runner.c` (follow `test_enter_route_advances_after_match` patterns):
-  - Validator: accepts balanced open/body/close; rejects unbalanced-at-sentinel, close-without-open, branch at depth 0, LABEL placement inside a block, REQUIRE_VAR inside a block, `for(...)` without `{`, func-open after an ordinary top-level COMMAND, func-open with a setup scaffold; capacity counts opens as 2.
+  - Validator: accepts balanced open/body/close; rejects unbalanced-at-sentinel, close-without-open, branch at depth 0, LABEL placement inside a block, REQUIRE_VAR inside a block, `for(...)` without `{`, func-open after an ordinary top-level COMMAND, func-open with a setup scaffold; capacity budgets 2 extra rows per open and 1 per branch.
   - Runtime (drive "First Loop" / "Functions" via `editor_handle_key`): open commit grows doc by 2 with header+`}` locked; next body step's commit line is in-block; body commit shifts the locked `}`; wrong body input rejected, input preserved; paste inside block blocked; `}` step advances with doc count unchanged, insert mode off; post-block append step returns to `document_count`; Esc-then-navigate-back restores insert mode; full walks reach "Tutorial complete".
 
 ## Phase B — New tags
+
+Implemented: the two enum values, private bit macros, and labels are present;
+they remain hidden until Phase C adds catalog carriers.
 
 - `src/repl/tutorials.h`: add `REPL_TUTORIAL_TAG_REPL_LANGUAGE`, `REPL_TUTORIAL_TAG_EFFECTS` before `REPL_TUTORIAL_TAG_COUNT`.
 - `src/repl/tutorials.c`: add the two `TUTORIAL_TAG_*` bit macros; append `"REPL Language"`, `"Effects"` to `g_tutorial_tag_labels[]` (STATIC_ASSERT enforces 1:1). No test edits — `test_catalog_tag_metadata` is generic over tag count; unused tags stay hidden until Phase C lands carriers.
@@ -105,7 +124,7 @@ Implementation-time verifications (runtime tests cover each): the alias-call com
 
 ## Verification
 
-- `make test-stubs` — primary gate (runs `test_tutorial_runner` + `test_tutorial_match` under GL stubs, ASan+UBSan). Then `make test` and `make check-state-ownership` (C99 ratchet, keymap, boundary guards).
+- `make test-stubs` — primary broad gate (runs `test_tutorial_runner` + `test_tutorial_match` under GL stubs; unsanitized by default for speed). Run `make test-asan-ubsan` for the explicit ASan+UBSan gate. Then `make test` and `make check-state-ownership` (C99 ratchet, keymap, boundary guards).
 - Focused loop during development: `make test_tutorial_runner` equivalent via the stubbed test target.
 - Manual in-app (`make gl-repl`, Tours untouched — Tutorials menu): run "First Loop", "Functions", "If & Conditionals" end-to-end — ghost text for `for(i, 0, 8) {`, both `;` and Enter advance, wrong body input rejected with input preserved, Esc-then-click-back recovery, block rows locked, teardown restores cfg (grid/backdrop/auto_time). Spot-check Fog/Culling SET/REQUIRE showcases and menu grouping: Effects + REPL Language flyouts appear, Beginner→Intermediate→Advanced headers render once each, All flyout ordered correctly.
 

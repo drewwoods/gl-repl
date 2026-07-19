@@ -234,6 +234,16 @@ static void tutorial_shift_tracked_lines_from(int pos, int delta) {
             state->instruction_line_for_step[i] >= pos)
             state->instruction_line_for_step[i] += delta;
     }
+    /* Each active slot names the auto-`}` row for one nested tutorial
+     * block. Inserts at the body insertion point shift that end row just
+     * like locked_lines; tracking it here keeps the next in-block append
+     * independent of wherever the user has moved the editor cursor. */
+    for (int i = 0;
+         i < state->block_depth && i < TUTORIAL_MAX_STEPS;
+         i++) {
+        if (state->block_end_lines[i] >= pos)
+            state->block_end_lines[i] += delta;
+    }
 }
 
 static int tutorial_emit_instruction_comment(const char *comment,
@@ -379,19 +389,24 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         repl_tutorial_step_placement(tutorial_idx, step);
     if (placement == TUTORIAL_STEP_APPEND) {
         /* Inside an open block the append point is not document_count
-         * (that would fall BELOW the auto-inserted `}` row) — it is the
-         * live cursor row, which the editor's block machinery keeps
-         * parked on the auto-`}` row: the open commit lands the cursor
-         * there in insert mode, every body insert advances it back onto
-         * the shifted `}`, and the matched close moves it past. Clamp
-         * defensively; the validator guarantees block steps only occur
-         * in sequences where the cursor tracks the block. */
+         * (that would fall BELOW the auto-inserted `}` row). Use the
+         * tutorial-owned row of the innermost auto-`}`; the tracked-line
+         * shift path keeps it current as comments, bodies, nested blocks,
+         * and branches are inserted. Do not derive this from the editor
+         * cursor: NOTE / SET / REQUIRE steps permit navigation, and an
+         * already-satisfied REQUIRE auto-advances without a cursor park. */
         TutorialRuntimeState state = tutorial_state_view();
         if (state.block_depth > 0) {
-            int line = repl_dispatch_edit_line_get();
+            int level = state.block_depth - 1;
+            int line;
             int doc = repl_state_document_count();
-            if (line < 0)
-                line = 0;
+
+            if (level < 0 || level >= TUTORIAL_MAX_STEPS ||
+                state.block_end_lines[level] < 0) {
+                repl_set_status("Tutorial block insertion row unavailable");
+                return 0;
+            }
+            line = state.block_end_lines[level];
             if (line > doc)
                 line = doc;
             *out_line = line;
@@ -1364,14 +1379,27 @@ int tutorial_note_expected_commit_applied(void) {
             repl_tutorial_step_expected(state->tutorial_idx,
                                         state->pending.step_idx));
         if (shape == TUTORIAL_EXPECTED_BLOCK_OPEN) {
+            /* Existing outer end rows were shifted above. Record the new
+             * innermost auto-end in the next stack slot before increasing
+             * depth, so later insertions shift every active level. */
+            if (state->block_depth < 0 ||
+                state->block_depth >= TUTORIAL_MAX_STEPS) {
+                repl_set_status("Tutorial block nesting exceeds runtime capacity");
+                tutorial_pending_reset(state);
+                return 0;
+            }
+            state->block_end_lines[state->block_depth] =
+                state->pending.commit_line + 1;
             state->block_depth++;
             tutorial_append_locked_line(state->pending.commit_line);
             tutorial_append_locked_line(state->pending.commit_line + 1);
         } else if (shape == TUTORIAL_EXPECTED_BLOCK_BRANCH) {
             tutorial_append_locked_line(state->pending.commit_line);
         } else if (shape == TUTORIAL_EXPECTED_BLOCK_CLOSE) {
-            if (state->block_depth > 0)
+            if (state->block_depth > 0) {
                 state->block_depth--;
+                state->block_end_lines[state->block_depth] = -1;
+            }
         }
     }
 
