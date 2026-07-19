@@ -841,9 +841,12 @@ tutorial routes through the controller to `tutorial_start(index)` and dismisses
 the menu.
 
 Catalog subheadings are free-form strings on tutorial/example entries, not a
-fixed enum. The shared catalog flyout walker emits a `### subheading` chrome row
-for each contiguous run with the same subheading, so entries sharing a
-subheading must be contiguous within each tag view. The metadata tests
+fixed enum. The tutorial catalog currently uses contiguous Beginner,
+Intermediate, and Advanced runs across Geometry, Color & Transforms, Depth &
+Lighting, Animation, REPL Language, and Effects tags. The shared catalog flyout
+walker emits a `### subheading` chrome row for each contiguous run with the same
+subheading, so entries sharing a subheading must be contiguous within each tag
+view. The metadata tests
 (`test_catalog_tag_metadata`, `test_catalog_subheading_metadata`, and the
 example equivalent) enforce non-zero tags, known bits only, and no interleaved
 subheading runs.
