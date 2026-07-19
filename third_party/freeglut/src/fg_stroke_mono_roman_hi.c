@@ -668,17 +668,7 @@ static const SFG_StrokeChar StrokeMonoRomanHi_ch39 = {104.762f,1,StrokeMonoRoman
 static const SFG_StrokeVertex StrokeMonoRomanHi_ch40st0[] =
 {
  {69.0476f,119.048f},
- {67.3511f,117.6135f},
- {65.7105f,116.1342f},
- {64.1166f,114.598f},
- {62.5603f,112.9924f},
- {61.0324f,111.3052f},
  {59.5238f,109.524f},
- {57.8504f,107.3907f},
- {56.2186f,105.1383f},
- {54.6229f,102.7818f},
- {53.0582f,100.3363f},
- {51.519f,97.8167f},
  {50.0f,95.2381f},
  {48.29f,92.2912f},
  {46.5595f,89.2502f},
@@ -710,23 +700,13 @@ static const SFG_StrokeVertex StrokeMonoRomanHi_ch40st0[] =
  {46.5595f,-3.5359f},
  {48.29f,-6.5769f},
  {50.0f,-9.5238f},
- {51.519f,-12.1024f},
- {53.0582f,-14.6219f},
- {54.6229f,-17.0674f},
- {56.2186f,-19.4239f},
- {57.8504f,-21.6762f},
  {59.5238f,-23.8095f},
- {61.0324f,-25.5907f},
- {62.5603f,-27.2779f},
- {64.1166f,-28.8834f},
- {65.7105f,-30.4196f},
- {67.3511f,-31.8988f},
  {69.0476f,-33.3333f},
 };
 
 static const SFG_StrokeStrip StrokeMonoRomanHi_ch40st[] =
 {
- {55,StrokeMonoRomanHi_ch40st0},
+ {35,StrokeMonoRomanHi_ch40st0},
 };
 
 static const SFG_StrokeChar StrokeMonoRomanHi_ch40 = {104.762f,1,StrokeMonoRomanHi_ch40st};
@@ -735,17 +715,7 @@ static const SFG_StrokeChar StrokeMonoRomanHi_ch40 = {104.762f,1,StrokeMonoRoman
 static const SFG_StrokeVertex StrokeMonoRomanHi_ch41st0[] =
 {
  {35.7143f,119.048f},
- {37.4108f,117.6135f},
- {39.0514f,116.1342f},
- {40.6453f,114.598f},
- {42.2016f,112.9924f},
- {43.7295f,111.3052f},
  {45.2381f,109.524f},
- {46.9115f,107.3907f},
- {48.5433f,105.1383f},
- {50.139f,102.7818f},
- {51.7037f,100.3363f},
- {53.2429f,97.8167f},
  {54.7619f,95.2381f},
  {56.4719f,92.2912f},
  {58.2024f,89.2502f},
@@ -777,23 +747,13 @@ static const SFG_StrokeVertex StrokeMonoRomanHi_ch41st0[] =
  {58.2024f,-3.5359f},
  {56.4719f,-6.5769f},
  {54.7619f,-9.5238f},
- {53.2429f,-12.1024f},
- {51.7037f,-14.6219f},
- {50.139f,-17.0674f},
- {48.5433f,-19.4239f},
- {46.9115f,-21.6762f},
  {45.2381f,-23.8095f},
- {43.7295f,-25.5907f},
- {42.2016f,-27.2779f},
- {40.6453f,-28.8834f},
- {39.0514f,-30.4196f},
- {37.4108f,-31.8988f},
  {35.7143f,-33.3333f},
 };
 
 static const SFG_StrokeStrip StrokeMonoRomanHi_ch41st[] =
 {
- {55,StrokeMonoRomanHi_ch41st0},
+ {35,StrokeMonoRomanHi_ch41st0},
 };
 
 static const SFG_StrokeChar StrokeMonoRomanHi_ch41 = {104.762f,1,StrokeMonoRomanHi_ch41st};
@@ -3674,17 +3634,7 @@ static const SFG_StrokeChar StrokeMonoRomanHi_ch88 = {104.762f,2,StrokeMonoRoman
 static const SFG_StrokeVertex StrokeMonoRomanHi_ch89st0[] =
 {
  {14.2857f,100.0f},
- {22.331f,94.1515f},
- {30.0338f,87.0049f},
- {37.1422f,78.9074f},
- {43.4041f,70.2061f},
- {48.5677f,61.2483f},
  {52.3809f,52.381f},
- {54.7252f,43.9771f},
- {56.1088f,35.0833f},
- {56.5489f,25.969f},
- {56.0627f,16.904f},
- {54.6677f,8.1577f},
  {52.3809f,0.0f},
 };
 
@@ -3696,7 +3646,7 @@ static const SFG_StrokeVertex StrokeMonoRomanHi_ch89st1[] =
 
 static const SFG_StrokeStrip StrokeMonoRomanHi_ch89st[] =
 {
- {13,StrokeMonoRomanHi_ch89st0},
+ {3,StrokeMonoRomanHi_ch89st0},
  {2,StrokeMonoRomanHi_ch89st1},
 };
 
