@@ -75,9 +75,10 @@ Replace the blanket `{`/`}` rejection with shape-aware rules, tracking a `depth`
 
 ### A4. New tests
 
-Classifier/validator coverage landed with Phase A. Per the follow-up decision,
-the end-to-end runtime walks below are deferred until Phase C provides the real
-"First Loop", "Functions", and "If & Conditionals" catalog entries to drive.
+Classifier/validator coverage landed with Phase A. Phase C now supplies the
+real block catalog entries, and `test_phase_c_catalog_full_walk` starts and
+completes all 15 additions through the controller/editor routes. The remaining
+adversarial editing cases below can be tightened in the post-Phase-C test pass.
 
 - `tests/test_tutorial_match.c`: `for(i, 0, 8) {` vs `for(i,0,8){` matches; `}` vs ` } ; ` matches; `for(i, 0, 9) {` mismatches.
 - `tests/test_tutorial_runner.c` (follow `test_enter_route_advances_after_match` patterns):
@@ -93,6 +94,10 @@ they remain hidden until Phase C adds catalog carriers.
 - `src/repl/tutorials.c`: add the two `TUTORIAL_TAG_*` bit macros; append `"REPL Language"`, `"Effects"` to `g_tutorial_tag_labels[]` (STATIC_ASSERT enforces 1:1). No test edits — `test_catalog_tag_metadata` is generic over tag count; unused tags stay hidden until Phase C lands carriers.
 
 ## Phase C — 15 new catalog tutorials
+
+Implemented: all 15 entries, their cfg/setup scaffolds, tags, and difficulty
+metadata are in the catalog. The focused full-walk regression verifies command
+commitability (including named calls, arrays, and `} else {`) and completion.
 
 Order constraint (enforced by `test_catalog_subheading_metadata`): each subheading is one contiguous global run — final order = existing Beginner run (0–4) + new Beginner (3), existing Intermediate (Depth Test Triangle, Lighting Basics, Color Interpolation) + new Intermediate (9), then a new **Advanced** run (3). Multi-tag entries keep one subheading everywhere.
 
@@ -131,7 +136,6 @@ Implementation-time verifications (runtime tests cover each): the alias-call com
 ## Risks
 
 - **Func relocation** is the sharpest edge; the conservative validator rule (func-opens only above any other top-level content, no scaffold) sidesteps it but constrains future func tutorials.
-- **`} else {`** committability is unverified — tutorial #14 has a designed fallback (two `if` blocks).
 - **Esc-stranding** inside blocks depends on the small input.c navigation hook; fallback is a per-frame re-park in the controller tick.
 - Blocks must sit at document end during their tutorial (curriculum rule, backed by the LABEL-in-block validator rejection) — a close-brace commit with rows below the block would load a locked row into the input.
 

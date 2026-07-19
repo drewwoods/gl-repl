@@ -175,9 +175,14 @@ variable slider to a target.
   **Exit Tutorial** entries.
 - Instruction lines are locked — the tutorial guards them against edits
   until you finish or exit.
-- The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
-  *Variable Slider*, *First Animation*, *Depth Test Triangle*, *Lighting
-  Basics*, and *Color Interpolation*.
+- **Beginner:** *First Triangle*, *Color & Transform*, *Feature Tour*,
+  *Variable Slider*, *First Animation*, *Points & Lines*, *GLUT Solids Tour*,
+  and *First Loop*.
+- **Intermediate:** *Depth Test Triangle*, *Lighting Basics*, *Color
+  Interpolation*, *Line Stipple*, *Blending & Transparency*, *Depth Mask &
+  Draw Order*, *Fog*, *Clip Planes*, *Materials & Shininess*, *Normals & Shade
+  Model*, *Culling & Winding*, and *Bitmap Text*.
+- **Advanced:** *Functions*, *If & Conditionals*, and *Scratch Arrays*.
 
 ---
 

@@ -375,6 +375,434 @@ static const TutorialStep g_tutorial_color_interp_steps[] = {
     STEP_SENTINEL,
 };
 
+/* Phase C catalog expansion -------------------------------------------------
+ * These tutorials deliberately mix narrated STEP_APPEND rows with compact
+ * STEP_CMD runs. The former explain a new idea; the latter let the ghost text
+ * carry repetitive geometry so the resulting source stays readable. */
+
+static const char *const g_tutorial_points_lines_cfg[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_points_lines_steps[] = {
+    STEP_APPEND(NULL,
+        "// Make individual points large enough to read clearly.",
+        "glPointSize(8)"),
+    STEP_APPEND(NULL,
+        "// Open a GL_POINTS batch; every vertex becomes one dot.",
+        "glBegin(GL_POINTS)"),
+    STEP_APPEND(NULL,
+        "// Place the first point on the left.",
+        "glVertex3f(-0.7, -0.3, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0, 0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.7, -0.3, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the point batch.",
+        "glEnd()"),
+    STEP_APPEND(NULL,
+        "// Give the line that follows a bold, visible stroke.",
+        "glLineWidth(3)"),
+    STEP_APPEND(NULL,
+        "// GL_LINE_STRIP connects each new vertex to the previous one.",
+        "glBegin(GL_LINE_STRIP)"),
+    STEP_CMD(NULL, "glVertex3f(-0.7, -0.3, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0, 0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.7, -0.3, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the strip to reveal the connected path.",
+        "glEnd()"),
+    STEP_NOTE(
+        "// GL_LINES draws separate vertex pairs; GL_LINE_STRIP keeps one connected path."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_glut_solids_setup[] = {
+    "// Lighting scaffold shared by every solid in this tour.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.8, 0.7, 0.3)",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_glut_solids_steps[] = {
+    STEP_APPEND(NULL,
+        "// Move left, then place a cube at the new local origin.",
+        "glTranslatef(-2, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(0.5)"),
+    STEP_APPEND(NULL,
+        "// Step right and compare the cube with a smooth sphere.",
+        "glTranslatef(1, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidSphere(0.35, 32, 24)"),
+    STEP_APPEND(NULL,
+        "// Move again; a torus uses inner and outer radii plus two resolutions.",
+        "glTranslatef(1, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidTorus(0.12, 0.3, 16, 24)"),
+    STEP_APPEND(NULL,
+        "// Add freeglut's classic teapot beside the torus.",
+        "glTranslatef(1, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidTeapot(0.3)"),
+    STEP_APPEND(NULL,
+        "// Finish the lineup with a cone.",
+        "glTranslatef(1, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidCone(0.3, 0.6, 24, 8)"),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_first_loop_steps[] = {
+    STEP_NOTE(
+        "// A for block repeats its body while i walks through a numeric range."),
+    STEP_APPEND(NULL,
+        "// Repeat the body eight times with i taking values 0 through 7.",
+        "for(i, 0, 8) {"),
+    STEP_APPEND(NULL,
+        "// Give each iteration its own transform stack.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glRotatef(i * 45, 0, 0, 1)"),
+    STEP_CMD(NULL, "glTranslatef(0.6, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(0.15)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Close the loop; the body now produces a ring of eight cubes.",
+        "}"),
+    STEP_NOTE(
+        "// Loop expressions can also use sin(i), cos(i), and the other math built-ins."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_line_stipple_cfg[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_line_stipple_steps[] = {
+    STEP_APPEND(NULL,
+        "// Enable patterned line rasterization.",
+        "glEnable(GL_LINE_STIPPLE)"),
+    STEP_APPEND(NULL,
+        "// Thicken the line so the pattern is easy to see.",
+        "glLineWidth(2)"),
+    STEP_APPEND(NULL,
+        "// Repeat each pattern bit once; 255 supplies the 16-bit mask.",
+        "glLineStipple(1, 255)"),
+    STEP_APPEND(NULL,
+        "// Draw a closed outline whose edges all use the stipple mask.",
+        "glBegin(GL_LINE_LOOP)"),
+    STEP_CMD(NULL, "glVertex3f(-0.7, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.7, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.7, 0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.7, 0.6, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the loop and inspect the repeated dash pattern.",
+        "glEnd()"),
+    STEP_NOTE(
+        "// The mask is 16 bits: 255 reads as dashes, while 43690 produces dots."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_blending_cfg[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_blending_steps[] = {
+    STEP_APPEND(NULL,
+        "// Enable blending so alpha can mix new fragments with the image behind.",
+        "glEnable(GL_BLEND)"),
+    STEP_APPEND(NULL,
+        "// Use the standard source-alpha transparency equation.",
+        "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)"),
+    STEP_APPEND(NULL,
+        "// Choose a half-transparent warm red for the first quad.",
+        "glColor4f(1, 0.3, 0.2, 0.5)"),
+    STEP_APPEND(NULL,
+        "// Draw the first translucent square.",
+        "glBegin(GL_QUADS)"),
+    STEP_CMD(NULL, "glVertex3f(-0.8, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.3, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.3, 0.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.8, 0.5, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_APPEND(NULL,
+        "// Switch to half-transparent blue for an overlapping quad.",
+        "glColor4f(0.2, 0.4, 1, 0.5)"),
+    STEP_CMD(NULL, "glBegin(GL_QUADS)"),
+    STEP_CMD(NULL, "glVertex3f(-0.3, -0.4, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.8, -0.4, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.8, 0.7, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.3, 0.7, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the second quad and inspect the mixed overlap.",
+        "glEnd()"),
+    STEP_NOTE(
+        "// glBlendFunc chooses how source and destination colors contribute to each pixel."),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_depth_mask_steps[] = {
+    STEP_NOTE(
+        "// Draw opaque geometry first, then translucent geometry after it."),
+    STEP_APPEND(NULL,
+        "// Keep ordinary depth testing active for both objects.",
+        "glEnable(GL_DEPTH_TEST)"),
+    STEP_APPEND(NULL,
+        "// Draw the opaque cube first so it establishes solid depth.",
+        "glutSolidCube(0.5)"),
+    STEP_CMD(NULL, "glEnable(GL_BLEND)"),
+    STEP_CMD(NULL, "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)"),
+    STEP_APPEND(NULL,
+        "// Stop translucent fragments from writing new depth values.",
+        "glDepthMask(GL_FALSE)"),
+    STEP_CMD(NULL, "glColor4f(0.4, 0.8, 1, 0.4)"),
+    STEP_APPEND(NULL,
+        "// Draw a larger translucent sphere around the opaque cube.",
+        "glutSolidSphere(0.7, 32, 24)"),
+    STEP_APPEND(NULL,
+        "// Restore depth writes for whatever is drawn next.",
+        "glDepthMask(GL_TRUE)"),
+    STEP_NOTE(
+        "// Translucent objects usually render last, with depth testing on and depth writes off."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_fog_cfg[] = {
+    "// @cfg backdrop = RENDER3D_BACKDROP_STARS",
+    NULL,
+};
+
+static const char *const g_tutorial_fog_setup[] = {
+    "// A locked row of toruses receding away from the camera.",
+    ":draw",
+    "for(i, 0, 8) {",
+    "  glPushMatrix()",
+    "  glTranslatef(0, 0, -i * 0.8)",
+    "  glutSolidTorus(0.12, 0.35, 16, 24)",
+    "  glPopMatrix()",
+    "}",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_fog_steps[] = {
+    STEP_AT(NULL,
+        "// Enable fixed-function fog before the drawing scaffold.",
+        "glEnable(GL_FOG)", "draw"),
+    STEP_AT(NULL,
+        "// EXP2 fog grows smoothly with the square of eye-space distance.",
+        "glFogi(GL_FOG_MODE, GL_EXP2)", "draw"),
+    STEP_AT(NULL,
+        "// Set how quickly distant geometry disappears into the fog.",
+        "glFogf(GL_FOG_DENSITY, 0.4)", "draw"),
+    STEP_AT(NULL,
+        "// Match the fog color to the dark star-field backdrop.",
+        "glFogfv(GL_FOG_COLOR, 0.05, 0.08, 0.12, 1)", "draw"),
+    STEP_NOTE(
+        "// The nearest torus stays clear while each deeper torus fades farther into the scene."),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_clip_planes_steps[] = {
+    STEP_APPEND(NULL,
+        "// Define plane 0 as y + 0.1 = 0; its positive half-space is kept.",
+        "glClipPlane(GL_CLIP_PLANE0, 0, 1, 0, 0.1)"),
+    STEP_APPEND(NULL,
+        "// Enable that plane so it clips every later primitive.",
+        "glEnable(GL_CLIP_PLANE0)"),
+    STEP_APPEND(NULL,
+        "// Draw a sphere and watch the plane slice away its lower half.",
+        "glutSolidSphere(0.8, 48, 32)"),
+    STEP_NOTE(
+        "// The kept side satisfies ax + by + cz + d >= 0; editing the plane shows its guide disc."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_materials_setup[] = {
+    "// Minimal lighting scaffold for explicit material properties.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_materials_steps[] = {
+    STEP_APPEND(NULL,
+        "// Set the front face's diffuse response to a warm red.",
+        "glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1)"),
+    STEP_APPEND(NULL,
+        "// Give highlights a bright white specular color.",
+        "glMaterialfv(GL_FRONT, GL_SPECULAR, 1, 1, 1, 1)"),
+    STEP_APPEND(NULL,
+        "// A higher shininess exponent makes the highlight tighter.",
+        "glMaterialf(GL_FRONT, GL_SHININESS, 40)"),
+    STEP_APPEND(NULL,
+        "// Draw a dense sphere so its specular highlight reads smoothly.",
+        "glutSolidSphere(0.7, 48, 32)"),
+    STEP_NOTE(
+        "// glColorMaterial is convenient; glMaterial gives diffuse and specular independent control."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_normals_setup[] = {
+    "// Lighting scaffold for the normal and shade-model demonstration.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_normals_steps[] = {
+    STEP_APPEND(NULL,
+        "// Flat shading uses one provoking-vertex result across each polygon.",
+        "glShadeModel(GL_FLAT)"),
+    STEP_APPEND(NULL,
+        "// Open a quad batch for one lit surface.",
+        "glBegin(GL_QUADS)"),
+    STEP_APPEND(NULL,
+        "// Point the surface normal toward +Z so lighting can orient the face.",
+        "glNormal3f(0, 0, 1)"),
+    STEP_CMD(NULL, "glVertex3f(-0.8, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.8, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.8, 0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.8, 0.6, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_SET(NULL,
+        "// Normal-vector overlays reveal the direction supplied by glNormal3f.",
+        "normal_vectors", 1),
+    STEP_NOTE(
+        "// GL_SMOOTH interpolates vertex lighting; Auto-normals can synthesize missing face normals."),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_culling_steps[] = {
+    STEP_APPEND(NULL,
+        "// Enable face culling so back-facing polygons are discarded.",
+        "glEnable(GL_CULL_FACE)"),
+    STEP_CMD(NULL, "glCullFace(GL_BACK)"),
+    STEP_APPEND(NULL,
+        "// Declare counter-clockwise vertices to be the front-facing order.",
+        "glFrontFace(GL_CCW)"),
+    STEP_APPEND(NULL,
+        "// Draw a counter-clockwise triangle on the left.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_CMD(NULL, "glVertex3f(-0.9, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.1, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.5, 0.5, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_APPEND(NULL,
+        "// Draw the right triangle clockwise; back-face culling hides it.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_CMD(NULL, "glVertex3f(0.1, -0.6, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.5, 0.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.9, -0.6, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_SET_SYM(NULL,
+        "// Plain wireframe makes the submitted triangle edges easier to compare.",
+        "wireframe", "WIREFRAME_PLAIN"),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to show the winding-direction overlay.",
+        "winding", 1,
+        KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
+    STEP_NOTE(
+        "// Reverse the vertex order or glFrontFace mode to decide which side survives culling."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_bitmap_text_cfg[] = {
+    "// @cfg auto_time = 1",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_bitmap_text_steps[] = {
+    STEP_APPEND(NULL,
+        "// Draw a cube to give the label a visible scene reference.",
+        "glutSolidCube(0.6)"),
+    STEP_APPEND(NULL,
+        "// Set the 3D raster anchor just above the cube.",
+        "glRasterPos3f(0, 0.8, 0)"),
+    STEP_APPEND(NULL,
+        "// Format the live t clock into bitmap text at that raster position.",
+        "label(\"t %f\", t)"),
+    STEP_NOTE(
+        "// label formats numbers with %f; its format text cannot contain parentheses, commas, or backslashes."),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_functions_steps[] = {
+    STEP_NOTE(
+        "// A named function packages reusable drawing commands and receives numeric arguments."),
+    STEP_APPEND(NULL,
+        "// Define spoke with one argument named a; function definitions come before scene calls.",
+        "spoke(a) {"),
+    STEP_APPEND(NULL,
+        "// Isolate every spoke's local transforms.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glRotatef(a, 0, 0, 1)"),
+    STEP_CMD(NULL, "glTranslatef(0.6, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidSphere(0.15, 24, 16)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Close the function body.",
+        "}"),
+    STEP_APPEND(NULL,
+        "// Call spoke at zero degrees.",
+        "spoke(0)"),
+    STEP_CMD(NULL, "spoke(120)"),
+    STEP_CMD(NULL, "spoke(240)"),
+    STEP_NOTE(
+        "// Named calls compile to the REPL's funcN slots while the source keeps the readable name."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_conditionals_cfg[] = {
+    "// @cfg auto_time = 1",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_conditionals_steps[] = {
+    STEP_NOTE(
+        "// An if block can select drawing state from a live expression such as sin(t)."),
+    STEP_APPEND(NULL,
+        "// Use green while the sine wave is positive.",
+        "if(sin(t) > 0) {"),
+    STEP_CMD(NULL, "glColor3f(0.2, 1, 0.4)"),
+    STEP_APPEND(NULL,
+        "// Otherwise switch to a warm red until the condition becomes true again.",
+        "} else {"),
+    STEP_CMD(NULL, "glColor3f(1, 0.3, 0.2)"),
+    STEP_APPEND(NULL,
+        "// Close the conditional; its selected color remains current.",
+        "}"),
+    STEP_APPEND(NULL,
+        "// Draw one cube whose color changes as sin(t) crosses zero.",
+        "glutSolidCube(0.7)"),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
+    STEP_NOTE(
+        "// Scratch arrays A, B, and C provide temporary numeric storage without declarations."),
+    STEP_APPEND(NULL,
+        "// Store three heights in the first slots of A.",
+        "A[0] = 0.2"),
+    STEP_CMD(NULL, "A[1] = 0.7"),
+    STEP_CMD(NULL, "A[2] = 0.4"),
+    STEP_APPEND(NULL,
+        "// Loop over the three stored heights.",
+        "for(i, 0, 3) {"),
+    STEP_CMD(NULL, "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef(i - 1, A[i], 0)"),
+    STEP_CMD(NULL, "glutSolidSphere(0.2, 24, 16)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Close the loop to reveal one sphere for each array element.",
+        "}"),
+    STEP_NOTE(
+        "// Arrays pair naturally with loops; rand(i) can generate a repeatable value for each index."),
+    STEP_SENTINEL,
+};
+
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
  * It is not listed in any g_tutorials[] mask literal; instead
  * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
@@ -409,16 +837,16 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
 
 /* Subheading labels here are catalog-author choices, not a fixed
  * vocabulary — the menu just emits `### subheading` chrome rows when
- * the subheading changes. "Beginner" / "Intermediate" suit the current
- * catalog; future catalogs (e.g. a REPL-vs-OpenGL split)
- * can use any labels that group sensibly within each tag flyout.
+ * the subheading changes. The current catalog uses Beginner,
+ * Intermediate, and Advanced; future catalogs can use any labels that
+ * group sensibly within each tag flyout.
  *
  * Catalog order matters: entries sharing a subheading should be
  * contiguous within every tag they share, so the per-tag flyout walker
  * emits each header exactly once. test_catalog_subheading_metadata
- * enforces this. The Beginner run is placed before the Intermediate
- * entry so all three tag flyouts (Geometry, Color & Transforms, All)
- * see the Beginner group first. */
+ * enforces this. Global order is one Beginner run, one Intermediate run,
+ * then one Advanced run, which also keeps every filtered tag view free of
+ * duplicate section headers. */
 
 static const TutorialEntry g_tutorials[] = {
     {
@@ -464,6 +892,26 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
+        .name       = "Points & Lines",
+        .steps      = g_tutorial_points_lines_steps,
+        .cfg        = g_tutorial_points_lines_cfg,
+        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Beginner",
+    },
+    {
+        .name       = "GLUT Solids Tour",
+        .steps      = g_tutorial_glut_solids_steps,
+        .setup      = g_tutorial_glut_solids_setup,
+        .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
+        .subheading = "Beginner",
+    },
+    {
+        .name       = "First Loop",
+        .steps      = g_tutorial_first_loop_steps,
+        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .subheading = "Beginner",
+    },
+    {
         .name       = "Depth Test Triangle",
         .steps      = g_tutorial_depth_triangle_steps,
         .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
@@ -485,15 +933,93 @@ static const TutorialEntry g_tutorials[] = {
     {
         /* Builds on First Triangle via a preloaded setup scaffold —
          * the learner colors the corners without re-drawing the
-         * triangle. Trails the catalog so the Intermediate run stays
-         * contiguous in the ALL flyout and in the COLOR_TRANSFORMS
-         * flyout (Color & Transform, Variable Slider = Beginner run,
-         * then this). */
+         * triangle. It closes the original Intermediate trio while the
+         * global catalog continues with Phase C's Intermediate entries. */
         .name       = "Color Interpolation",
         .steps      = g_tutorial_color_interp_steps,
         .setup      = g_tutorial_color_interp_setup,
         .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
         .subheading = "Intermediate",
+    },
+    {
+        .name       = "Line Stipple",
+        .steps      = g_tutorial_line_stipple_steps,
+        .cfg        = g_tutorial_line_stipple_cfg,
+        .tags       = TUTORIAL_TAG_EFFECTS,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Blending & Transparency",
+        .steps      = g_tutorial_blending_steps,
+        .cfg        = g_tutorial_blending_cfg,
+        .tags       = TUTORIAL_TAG_EFFECTS,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Depth Mask & Draw Order",
+        .steps      = g_tutorial_depth_mask_steps,
+        .tags       = TUTORIAL_TAG_EFFECTS | TUTORIAL_TAG_DEPTH_LIGHTING,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Fog",
+        .steps      = g_tutorial_fog_steps,
+        .cfg        = g_tutorial_fog_cfg,
+        .setup      = g_tutorial_fog_setup,
+        .tags       = TUTORIAL_TAG_EFFECTS,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Clip Planes",
+        .steps      = g_tutorial_clip_planes_steps,
+        .tags       = TUTORIAL_TAG_EFFECTS,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Materials & Shininess",
+        .steps      = g_tutorial_materials_steps,
+        .setup      = g_tutorial_materials_setup,
+        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING | TUTORIAL_TAG_EFFECTS,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Normals & Shade Model",
+        .steps      = g_tutorial_normals_steps,
+        .setup      = g_tutorial_normals_setup,
+        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Culling & Winding",
+        .steps      = g_tutorial_culling_steps,
+        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Bitmap Text",
+        .steps      = g_tutorial_bitmap_text_steps,
+        .cfg        = g_tutorial_bitmap_text_cfg,
+        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Functions",
+        .steps      = g_tutorial_functions_steps,
+        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .subheading = "Advanced",
+    },
+    {
+        .name       = "If & Conditionals",
+        .steps      = g_tutorial_conditionals_steps,
+        .cfg        = g_tutorial_conditionals_cfg,
+        .tags       = TUTORIAL_TAG_REPL_LANGUAGE | TUTORIAL_TAG_ANIMATION,
+        .subheading = "Advanced",
+    },
+    {
+        .name       = "Scratch Arrays",
+        .steps      = g_tutorial_scratch_arrays_steps,
+        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .subheading = "Advanced",
     },
 };
 

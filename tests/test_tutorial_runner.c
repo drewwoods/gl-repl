@@ -11,6 +11,7 @@
 #include "keys.h"
 #include <stdio.h>
 #include "repl/example_loader.h"
+#include "repl/cfg_baseline.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
 #include "repl/eval.h"            /* REQUIRE_VAR tests: predef-var declare/lookup */
@@ -954,8 +955,9 @@ static void test_catalog_starter_steps_are_append(void) {
 static void test_catalog_cfg_lines(void) {
     /* First Triangle ships a leading `@cfg view_mode = RENDER3D_VIEW_2D` so the
      * flat triangle renders in true 2D. First Animation pauses auto_time so
-     * Ctrl+T visibly starts its cube. All other shipped tutorials omit cfg
-     * (NULL = no presentation overrides). Out-of-range idx → NULL. */
+     * Ctrl+T visibly starts its cube. Phase C adds cfg carriers for its 2D,
+     * backdrop, and auto-time demonstrations. All other shipped tutorials
+     * omit cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
     int first = -1, first_animation = -1;
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
@@ -1001,7 +1003,13 @@ static void test_catalog_cfg_lines(void) {
         const char *name = repl_tutorial_name(i);
         if (name && (strcmp(name, "First Triangle") == 0 ||
                      strcmp(name, "Feature Tour") == 0 ||
-                     strcmp(name, "First Animation") == 0))
+                     strcmp(name, "First Animation") == 0 ||
+                     strcmp(name, "Points & Lines") == 0 ||
+                     strcmp(name, "Line Stipple") == 0 ||
+                     strcmp(name, "Blending & Transparency") == 0 ||
+                     strcmp(name, "Fog") == 0 ||
+                     strcmp(name, "Bitmap Text") == 0 ||
+                     strcmp(name, "If & Conditionals") == 0))
             continue;
         ASSERT_TRUE("tutorials without an entry-level @cfg have NULL cfg",
                     repl_tutorial_cfg_lines(i) == NULL);
@@ -1962,6 +1970,108 @@ static int commit_command_step(int idx, int step) {
     set_input_text(expected);
     editor_handle_key(';', 0, 0);
     return tutorial_state_view().step > step;
+}
+
+/* Phase C ships 15 catalog entries spanning ordinary commands, setup
+ * scaffolds, label-targeted inserts, block opens/branches/closes, SET and
+ * REQUIRE steps, named function calls, and scratch-array assignments. Walk
+ * every one through the real controller/editor routes so authoring mistakes
+ * cannot leave a visible tutorial that validates structurally but fails when
+ * the learner types the advertised command. */
+static int phase_c_complete_current_step(void) {
+    TutorialRuntimeState before = tutorial_state_view();
+    const TutorialStep *step = repl_tutorial_step_get(before.tutorial_idx,
+                                                      before.step);
+    char input[128];
+
+    if (!step)
+        return 0;
+    if (step->kind == TUTORIAL_STEP_KIND_COMMAND) {
+        set_input_text(step->expected);
+        editor_handle_key(';', 0, 0);
+    } else if (step->kind == TUTORIAL_STEP_KIND_NOTE ||
+               step->kind == TUTORIAL_STEP_KIND_SET) {
+        glr_ctrl_keyboard('\r', 0, 0);
+    } else if (step->kind == TUTORIAL_STEP_KIND_REQUIRE) {
+        int target = step->cfg_value;
+        if (step->cfg_value_name &&
+            !repl_cfg_resolve_text(step->cfg_slug, step->cfg_value_name,
+                                   &target))
+            return 0;
+        repl_cfg_set_int(step->cfg_slug, target);
+        tutorial_notify_state_changed();
+    } else if (step->kind == TUTORIAL_STEP_KIND_REQUIRE_VAR) {
+        if (repl_eval_find_predef_var_idx(step->var_name) < 0) {
+            snprintf(input, sizeof(input), "float %s = %g",
+                     step->var_name, (double)step->var_target);
+        } else {
+            snprintf(input, sizeof(input), "%s = %g",
+                     step->var_name, (double)step->var_target);
+        }
+        set_input_text(input);
+        editor_handle_key(';', 0, 0);
+    } else {
+        return 0;
+    }
+
+    return !tutorial_active() ||
+           tutorial_state_view().step != before.step;
+}
+
+static void test_phase_c_catalog_full_walk(void) {
+    static const char *const names[] = {
+        "Points & Lines",
+        "GLUT Solids Tour",
+        "First Loop",
+        "Line Stipple",
+        "Blending & Transparency",
+        "Depth Mask & Draw Order",
+        "Fog",
+        "Clip Planes",
+        "Materials & Shininess",
+        "Normals & Shade Model",
+        "Culling & Winding",
+        "Bitmap Text",
+        "Functions",
+        "If & Conditionals",
+        "Scratch Arrays",
+    };
+
+    ASSERT_INT("Phase C expands the catalog from 8 to 23 tutorials",
+               repl_tutorial_count(), 23);
+
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        char label[160];
+        int idx = find_tutorial_idx(names[i]);
+        snprintf(label, sizeof(label), "Phase C tutorial exists: %s", names[i]);
+        ASSERT_TRUE(label, idx >= 0);
+        if (idx < 0)
+            continue;
+
+        reset_fixture();
+        tutorial_start(idx);
+        snprintf(label, sizeof(label), "Phase C tutorial starts: %s", names[i]);
+        ASSERT_TRUE(label, tutorial_active());
+        if (!tutorial_active())
+            continue;
+
+        int guard = 0;
+        int limit = repl_tutorial_step_count(idx) + 4;
+        while (tutorial_active() && guard++ < limit) {
+            int before_step = tutorial_state_view().step;
+            int advanced = phase_c_complete_current_step();
+            snprintf(label, sizeof(label), "%s step %d advances",
+                     names[i], before_step);
+            ASSERT_TRUE(label, advanced);
+            if (!advanced)
+                break;
+        }
+
+        snprintf(label, sizeof(label), "Phase C tutorial completes: %s", names[i]);
+        ASSERT_TRUE(label, !tutorial_active());
+        if (tutorial_active())
+            tutorial_stop();
+    }
 }
 
 /* Walk the Feature Tour through its leading NOTE + COMMAND steps so the
@@ -3723,6 +3833,7 @@ int main(void) {
     test_catalog_tag_metadata();
     test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();
+    test_phase_c_catalog_full_walk();
     test_catalog_rejects_out_of_range_index();
     test_validate_rejects_duplicate_label();
     test_validate_rejects_missing_target_label();

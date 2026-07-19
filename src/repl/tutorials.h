@@ -72,11 +72,11 @@
  * can hold "locked" against edits at once.
  *
  * The two used to be one constant. The lock table is now larger than
- * the step ceiling because preloaded `setup` scaffold rows are locked
- * too (every setup row + up to one lock per step must fit); the
- * catalog validator enforces `setup lines + steps <=
- * TUTORIAL_LOCKED_LINE_MAX` per entry. The static-assert below pins
- * the >= relationship without fusing the constants. */
+ * the step ceiling because preloaded `setup` scaffold rows and block
+ * structure rows are locked too. The catalog validator budgets setup
+ * rows + one baseline lock per step + two extra locks per block OPEN +
+ * one extra per BRANCH. The static-assert below pins the >= relationship
+ * without fusing the constants. */
 #define TUTORIAL_MAX_STEPS         64
 #define TUTORIAL_LOCKED_LINE_MAX   128
 STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
@@ -163,9 +163,9 @@ static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
  * tag-default bridge) can name tags symbolically. The bit-shifted
  * TUTORIAL_TAG_* macros used inside g_tutorials[] stay private to
  * tutorials.c. Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS /
- * DEPTH_LIGHTING / ANIMATION cover the shipped catalog; REPL_LANGUAGE
- * and EFFECTS stay filtered out by repl_tutorial_visible_tag_count()
- * until Phase C adds their first carriers. */
+ * DEPTH_LIGHTING / ANIMATION / REPL_LANGUAGE / EFFECTS. Unused future
+ * tags stay filtered out by repl_tutorial_visible_tag_count() until a
+ * catalog entry carries them. */
 enum {
     REPL_TUTORIAL_TAG_ALL = 0,
     REPL_TUTORIAL_TAG_GEOMETRY,
