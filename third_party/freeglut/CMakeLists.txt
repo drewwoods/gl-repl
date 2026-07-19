@@ -155,6 +155,7 @@ SET(FREEGLUT_SRCS
     src/fg_state.c
     src/fg_stroke_mono_roman.c
     src/fg_stroke_roman.c
+    src/fg_stroke_roman_hi.c
     src/fg_structure.c
     src/fg_teapot.c
     src/fg_teapot_data.h
