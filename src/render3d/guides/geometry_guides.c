@@ -16,6 +16,15 @@
  * alive while t is paused. */
 #define GEOMETRY_GUIDE_VERTEX_MARK_BREATH_RATE 3.0f
 
+/* WebGL cannot reliably reproduce the large, point-smoothed marker through
+ * gl4es's legacy GL_POINTS emulation. These world-space sphere radii match
+ * the native marker's camera-distance falloff: both the app's attenuated
+ * point and a perspective-projected sphere shrink as the camera recedes. */
+#define GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_HALO_RADIUS 0.020f
+#define GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_CORE_RADIUS 0.021f
+#define GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_SLICES 10
+#define GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_STACKS 8
+
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -188,12 +197,13 @@ static int input_is_vertex_kind(const Render3dGuideSnapshot *snapshot,
     return 0;
 }
 
-/* Solid point marker at (x,y,z) for a fully-determined vertex (0 DOF),
- * breathing on the free-running anim clock so it reads as "this is the
- * live vertex" at a glance: a soft round halo swells and fades around a
- * gently pulsing core. Depth test is temporarily disabled so the mark
- * stays visible through scene geometry. Caller sets up blend state
- * (additive, so the halo glows over the scene). */
+/* Solid marker at (x,y,z) for a fully-determined vertex (0 DOF), breathing
+ * on the free-running anim clock so it reads as "this is the live vertex"
+ * at a glance: a soft round halo swells and fades around a gently pulsing
+ * core. Depth test is temporarily disabled so the mark stays visible through
+ * scene geometry. Caller sets up blend state (additive, so the halo glows
+ * over the scene). Native GL uses the original point form; Emscripten uses
+ * low-poly GLUT spheres, avoiding its unreliable large smoothed-point path. */
 static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
                                      float x, float y, float z) {
     float as = snapshot->alpha_scale;
@@ -201,6 +211,36 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
         sinf(snapshot->anim_time * GEOMETRY_GUIDE_VERTEX_MARK_BREATH_RATE);
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
+#if defined(__EMSCRIPTEN__)
+    /* A sphere projects with the same useful 1/d camera-distance behavior as
+     * the app's point-parameter attenuation, but stays triangle geometry all
+     * the way through the WebGL backend. It must ignore the caller's lighting
+     * and culling state just as the native GL_POINTS form does. */
+    glDisable(GL_LIGHTING);
+    glDisable(GL_CULL_FACE);
+    glDepthMask(GL_FALSE);
+
+    /* Halo: large, faint, swelling with the breath. */
+    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK,
+                   fminf((0.15f + 0.25f * breath) * as, 1.0f));
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glutSolidSphere(GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_HALO_RADIUS *
+                        (1.7f + 1.1f * breath),
+                    GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_SLICES,
+                    GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_STACKS);
+    glPopMatrix();
+
+    /* Core: bright, with a subtler swell so it never shrinks away. */
+    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK, fminf(0.9f * as, 1.0f));
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glutSolidSphere(GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_CORE_RADIUS *
+                        (1.0f + 0.35f * breath),
+                    GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_SLICES,
+                    GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_STACKS);
+    glPopMatrix();
+#else
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
@@ -221,6 +261,7 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
 
     glPointSize(1.0f);
     glDisable(GL_POINT_SMOOTH);
+#endif
     if (depth) glEnable(GL_DEPTH_TEST);
 }
 
