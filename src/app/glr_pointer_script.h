@@ -47,6 +47,12 @@
  *   5.0  key glColor3f(       # feed text through the keyboard dispatch
  *                             # (escapes: \n = Enter, \e = Esc, \t = Tab,
  *                             #  \cX = Ctrl+X control byte, \\ = backslash)
+ *   5.5  key@18 glEnd()       # same, paced at N chars/sec on the frame
+ *                             # clock so the text types out like a person
+ *                             # (bare `key` lands the whole payload on one
+ *                             # frame; a following key/skey event flushes
+ *                             # any unfinished paced text first, so a tight
+ *                             # schedule never drops or interleaves it)
  *   6.0  key \cT              # e.g. Ctrl+T toggles animation
  *   7.0  skey f12             # special key: f1..f12, up/down/left/right,
  *                             # home, end, pageup, pagedown

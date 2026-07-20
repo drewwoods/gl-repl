@@ -242,7 +242,9 @@ pointer/keyboard events on the rendered-frame clock (implies
 `GLR_TICK_PER_FRAME`), dispatched through the normal `glr_ctrl_*` GLUT entry
 points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
 `rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed
-text incl. `\cX` control bytes) and `skey` (F-keys/arrows) — plus a rendered
+text incl. `\cX` control bytes; `key@<cps>` paces the payload at N chars/sec
+on the frame clock so text types out like a person) and `skey`
+(F-keys/arrows) — plus a rendered
 cursor arrow + click-ripple overlay so the video shows the pointer. A point
 is literal window pixels **or a symbolic target** (`menu:scene`,
 `item:new_scene`, `subenter:overlays`, `sub:overlays:vertex_points`,
