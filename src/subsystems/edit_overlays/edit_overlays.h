@@ -77,10 +77,10 @@ typedef enum VertexOutlineStyle {
 /* Vertex-point overlay styling. Native GL uses the pixel point sizes; the web
  * fallback uses paired world-space octahedron radii so perspective supplies
  * the same useful camera-distance scaling without GL_POINTS emulation. */
-#define EDIT_OVERLAY_VERTEX_POINT_SIZE 5.0f
-#define EDIT_OVERLAY_VERTEX_LINE_POINT_SIZE 2.0f
-#define EDIT_OVERLAY_VERTEX_POINT_OCTAHEDRON_RADIUS 0.014f
-#define EDIT_OVERLAY_VERTEX_LINE_POINT_OCTAHEDRON_RADIUS 0.006f
+#define EDIT_OVERLAY_VERTEX_POINT_SIZE 6.0f
+#define EDIT_OVERLAY_VERTEX_LINE_POINT_SIZE 3.0f
+#define EDIT_OVERLAY_VERTEX_POINT_OCTAHEDRON_RADIUS 0.020f
+#define EDIT_OVERLAY_VERTEX_LINE_POINT_OCTAHEDRON_RADIUS 0.008f
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
