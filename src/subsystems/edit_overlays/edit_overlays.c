@@ -861,18 +861,30 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
 
 /* Draw one authored vertex-point overlay. WebGL's gl4es compatibility path
  * cannot reliably render the point-smooth GL_POINTS form at these sizes, so
- * Emscripten uses a deliberately small, low-poly GLUT sphere instead. Its
- * perspective projection supplies the same distance behavior as the native
- * point-attenuation setup. */
+ * Emscripten uses a direct eight-triangle octahedron instead. Its perspective
+ * projection supplies the same distance behavior as native point attenuation,
+ * without making a GLUT call for every authored vertex. */
 static void draw_vertex_point_overlay(float x, float y, float z, int is_line) {
 #if defined(__EMSCRIPTEN__)
+    float radius = is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_OCTAHEDRON_RADIUS
+                           : EDIT_OVERLAY_VERTEX_POINT_OCTAHEDRON_RADIUS;
+
     glDisable(GL_CULL_FACE);  /* vertex points are never cullable */
     glPushMatrix();
     glTranslatef(x, y, z);
-    glutSolidSphere(is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_SPHERE_RADIUS
-                            : EDIT_OVERLAY_VERTEX_POINT_SPHERE_RADIUS,
-                    EDIT_OVERLAY_VERTEX_POINT_SPHERE_SLICES,
-                    EDIT_OVERLAY_VERTEX_POINT_SPHERE_STACKS);
+    glScalef(radius, radius, radius);
+    glBegin(GL_TRIANGLES);
+    /* +Y cap, around the XZ ring (+X, -Z, -X, +Z). */
+    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f);
+    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f); glVertex3f(-1.0f, 0.0f,  0.0f);
+    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f(-1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f);
+    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f); glVertex3f( 1.0f, 0.0f,  0.0f);
+    /* -Y cap, with the opposite winding. */
+    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f); glVertex3f( 1.0f, 0.0f,  0.0f);
+    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f(-1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f);
+    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f); glVertex3f(-1.0f, 0.0f,  0.0f);
+    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f);
+    glEnd();
     glPopMatrix();
 #else
     glPointSize(is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_SIZE
@@ -926,7 +938,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 #if defined(__EMSCRIPTEN__)
-    /* The sphere markers should respect scene depth testing but must not add
+    /* The octahedron markers respect scene depth testing but must not add
      * their own translucent surface to it. GL_ALL_ATTRIB_BITS restores this. */
     glDepthMask(GL_FALSE);
 #else

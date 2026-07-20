@@ -280,7 +280,7 @@ static void test_build_vertex_walk_context(void) {
 }
 
 /* edit_overlays_render_vertex_points: walks the flat program and emits one
- * GL_POINTS marker per vertex on native GL, or an Emscripten GLUT-sphere
+ * GL_POINTS marker per vertex on native GL, or an Emscripten direct octahedron
  * marker. Native point sizes are keyed on whether the enclosing primitive is
  * a line mode. Validate the exact coordinates and marker form via the call
  * trace. */
@@ -300,15 +300,22 @@ static void test_render_vertex_points(void) {
     ctx.show_vertex_points = 1;
 
     TraceLog log;
+#if defined(__EMSCRIPTEN__)
+    char begin_triangles[64];
+    snprintf(begin_triangles, sizeof(begin_triangles), "glBegin %u",
+             (unsigned)GL_TRIANGLES);
+#endif
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
 
 #if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web triangle vertices draw one sphere each",
-               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 2);
-    ASSERT_INT("web triangle vertices avoid GL_POINTS",
-               (int)gl_stub_counts[GL_STUB_glVertex3f], 0);
+    ASSERT_INT("web triangle vertices draw one octahedron each",
+               trace_count_line(&log, begin_triangles), 2);
+    ASSERT_INT("web triangle octahedra emit eight faces each",
+               (int)gl_stub_counts[GL_STUB_glVertex3f], 48);
+    ASSERT_INT("web triangle markers avoid GLUT",
+               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
 #else
     ASSERT_INT("emits glVertex3f for the 3f vertex",
                trace_count_line(&log, "glVertex3f 1 2 3"), 1);
@@ -345,8 +352,8 @@ static void test_render_vertex_points(void) {
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
 #if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web line-mode vertex uses a sphere",
-               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 1);
+    ASSERT_INT("web line-mode vertex uses an octahedron",
+               trace_count_line(&log, begin_triangles), 1);
 #else
     ASSERT_INT("line-mode vertex uses the small point size",
                trace_count_line(&log, "glPointSize 2"), 1);
@@ -388,8 +395,8 @@ static void test_render_vertex_points(void) {
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
 #if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web replay-only draws one anchor sphere",
-               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 1);
+    ASSERT_INT("web replay-only draws one anchor octahedron",
+               trace_count_line(&log, begin_triangles), 1);
 #else
     ASSERT_INT("replay-only draws exactly one vertex",
                trace_count_sym(&log, "glVertex3f"), 1);
@@ -407,8 +414,8 @@ static void test_render_vertex_points(void) {
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
 #if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web replay-only with no anchor emits no spheres",
-               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
+    ASSERT_INT("web replay-only with no anchor emits no octahedra",
+               trace_count_line(&log, begin_triangles), 0);
 #else
     ASSERT_INT("replay-only with no anchor emits no vertices",
                trace_count_sym(&log, "glVertex3f"), 0);
