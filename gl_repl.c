@@ -204,7 +204,7 @@ static void print_usage(const char *prog) {
             "\n"
             "Options:\n"
             "  -h, --help   Show this help text and exit\n"
-            "  --noaccum    Disable accumulation buffer antialiasing\n"
+            "  --no-accum   Disable accumulation buffer antialiasing\n"
             "  --no-audio   Start without audio (disables music entirely)\n"
             "  --assets <dir>  Music directory to scan for *.mp3 instead of\n"
             "               ./assets (also via GLR_ASSETS_DIR env var)\n"
@@ -598,7 +598,7 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
-        } else if (strcmp(argv[i], "--noaccum") == 0)
+        } else if (strcmp(argv[i], "--no-accum") == 0)
             use_accum = 0;
         else if (strcmp(argv[i], "--no-audio") == 0)
             no_audio = 1;
