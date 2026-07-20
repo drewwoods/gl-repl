@@ -832,7 +832,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
         return;
 
     glPushMatrix();
-    glPointSize(4.0f);
+    glPointSize(EDIT_OVERLAY_VERTEX_POINT_SIZE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
     for (int i = 0; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
@@ -857,6 +857,30 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
     overlay_gl_reset(&gl_st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
+}
+
+/* Draw one authored vertex-point overlay. WebGL's gl4es compatibility path
+ * cannot reliably render the point-smooth GL_POINTS form at these sizes, so
+ * Emscripten uses a deliberately small, low-poly GLUT sphere instead. Its
+ * perspective projection supplies the same distance behavior as the native
+ * point-attenuation setup. */
+static void draw_vertex_point_overlay(float x, float y, float z, int is_line) {
+#if defined(__EMSCRIPTEN__)
+    glDisable(GL_CULL_FACE);  /* vertex points are never cullable */
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glutSolidSphere(is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_SPHERE_RADIUS
+                            : EDIT_OVERLAY_VERTEX_POINT_SPHERE_RADIUS,
+                    EDIT_OVERLAY_VERTEX_POINT_SPHERE_SLICES,
+                    EDIT_OVERLAY_VERTEX_POINT_SPHERE_STACKS);
+    glPopMatrix();
+#else
+    glPointSize(is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_SIZE
+                        : EDIT_OVERLAY_VERTEX_POINT_SIZE);
+    glBegin(GL_POINTS);
+    glVertex3f(x, y, z);
+    glEnd();
+#endif
 }
 
 void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
@@ -901,8 +925,14 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+#if defined(__EMSCRIPTEN__)
+    /* The sphere markers should respect scene depth testing but must not add
+     * their own translucent surface to it. GL_ALL_ATTRIB_BITS restores this. */
+    glDepthMask(GL_FALSE);
+#else
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+#endif
 
     if (ctx->replay_vertex_points)
         render3d_clr_a(RENDER3D_CLR_VERTEX_POINT_REPLAY, 0.75f);
@@ -939,14 +969,14 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                 int is_line = (primitive_mode == GL_LINES ||
                                primitive_mode == GL_LINE_STRIP ||
                                primitive_mode == GL_LINE_LOOP);
-                glPointSize(is_line ? 2.0f : 4.0f);
-                glBegin(GL_POINTS);
-                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
-                           flat_cmds[i].args[2]);
-                glEnd();
+                draw_vertex_point_overlay(flat_cmds[i].args[0],
+                                          flat_cmds[i].args[1],
+                                          flat_cmds[i].args[2], is_line);
             }
         }
+#if !defined(__EMSCRIPTEN__)
         glPointSize(1.0f);
+#endif
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
