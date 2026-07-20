@@ -1,0 +1,97 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg axes = AXES_THEME_OFF
+// @cfg backdrop = RENDER3D_BACKDROP_OFF
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg vertex_labels = 0
+// @cfg light_indicators = 0
+// @cfg poly_highlight = 0
+// @cfg variable_panel = 0
+// @cfg msaa = 1
+// @cfg line_smooth = 1
+
+// camera
+glTranslatef(0.0f, 0.0f, -8.0f);
+glRotatef(22.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(18.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+// Ember reference grid, authored entirely in the REPL language.
+// The colors and timing mirror GRID_THEME_EMBER in src/render3d/grid.c.
+static float extent = 60;          // grid half-extent @tune
+static float major = 1;            // major-line interval @tune
+static float subdivisions = 5;     // minor lines per major cell @tune
+static float rippleRate = 2.5;     // radial wave speed @tune
+static float rippleFreq = 12;      // radial wave frequency @tune
+static float edgeBand = 0.35;      // radial fade width, as extent fraction @tune
+static float step, v, dist, ripple, fade, isMajor, base, alpha;
+static float fadeStart, aStart, aEnd, originRipple;
+
+// A radial fade needs three spans on each line: fade-in, solid center,
+// fade-out.  Each span is emitted independently because GL_LINES does not
+// join neighboring vertices.  The same profile is drawn along X and Z.
+linePair(offset, inner, outer, red, green, blue, opacity) {
+  glColor4f(red, green, blue, 0);
+  glVertex3f(offset, 0, -outer);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(offset, 0, -inner);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(offset, 0, -inner);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(offset, 0, inner);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(offset, 0, inner);
+  glColor4f(red, green, blue, 0);
+  glVertex3f(offset, 0, outer);
+
+  glColor4f(red, green, blue, 0);
+  glVertex3f(-outer, 0, offset);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(-inner, 0, offset);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(-inner, 0, offset);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(inner, 0, offset);
+  glColor4f(red, green, blue, opacity);
+  glVertex3f(inner, 0, offset);
+  glColor4f(red, green, blue, 0);
+  glVertex3f(outer, 0, offset);
+}
+
+glClearColor(0.012, 0.008, 0.006, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glDisable(GL_LIGHTING);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glEnable(GL_LINE_SMOOTH);
+glDepthMask(GL_FALSE);
+
+step = major/subdivisions;
+fadeStart = extent*(1 - edgeBand);
+glBegin(GL_LINES);
+  for(i, -extent/step, extent/step + 1) {
+    v = i*step;
+    if(abs(v) > 0.01 && abs(v) < extent) {
+      dist = abs(v)/extent;
+      ripple = sin(dist*rippleFreq - t*rippleRate)*0.5 + 0.5;
+      fade = max(0, 1 - dist);
+      isMajor = abs(fmod(abs(v) + step*0.25, major)) < step*0.5;
+      base = 0.10 + 0.20*isMajor;
+      alpha = base*fade*(0.6 + ripple*0.4);
+
+      // Intersections of this offset line with the two radial fade circles.
+      aEnd = sqrt(max(0, extent*extent - v*v));
+      aStart = sqrt(max(0, fadeStart*fadeStart - v*v));
+      linePair(v, aStart, aEnd, 0.95, 0.35 + ripple*0.25, 0.05, alpha);
+    }
+  }
+
+  // The origin axes use the same wave evaluated at distance zero, but are
+  // intentionally brighter than the rest of the grid.
+  originRipple = -sin(t*rippleRate)*0.5 + 0.5;
+  linePair(0, fadeStart, extent, 0.95, 0.35 + originRipple*0.25, 0.05, 0.7*(0.6 + originRipple*0.4));
+glEnd();
+
+glDepthMask(GL_TRUE);
+glDisable(GL_BLEND);
