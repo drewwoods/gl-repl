@@ -18,7 +18,9 @@
  * AA sample if the scene's list were rebuilt each pass instead of compiled once
  * and reused. "reuse > call" vs "recompile > compile + call" makes the trade
  * legible. 'd' collapses to the three method totals / expands the call+compile
- * breakdown; 'q' quits.
+ * breakdown; clicking the histogram header's [reset] control clears the
+ * accumulated distribution, and clicking a histogram legend swatch toggles
+ * that series in and out of the plot; 'q' quits.
  *
  * Sections: this demo declares its OWN catalog (the CP_* enum below) — it does
  * NOT borrow gl-repl's section names. cpuprof_demo and gl-repl share the
@@ -67,6 +69,11 @@ static int   g_window_w = 940;
 static int   g_window_h = 680;
 static float g_spin     = 0.0f;
 static UiProfilePanelMode g_mode = PROFILE_PANEL_HISTOGRAM;
+
+/* Last-rendered histogram-panel layout, so the mouse callback can hit-test the
+ * header's [reset] control against exactly where it was drawn (the controller
+ * pattern: view built in display_func, consumed by the input path). */
+static UiHistogramPanelView g_hist_view;
 
 /* Display lists: one compiled once and reused across frames, one rebuilt every
  * frame. Created lazily on the first display callback (needs a live context). */
@@ -195,13 +202,12 @@ static void display_func(void) {
     view.panel_y  = g_window_h - ui_profile_panel_height(g_mode) - 16;
     ui_profile_panel_render(&view);
 
-    UiHistogramPanelView hist;
-    hist.window_w = g_window_w;
-    hist.window_h = g_window_h;
-    hist.visible  = (g_mode == PROFILE_PANEL_HISTOGRAM);
-    hist.panel_x  = g_window_w - ui_histogram_panel_width() - 16;
-    hist.panel_y  = view.panel_y - ui_histogram_panel_height() - 8;
-    ui_histogram_panel_render(&hist);
+    g_hist_view.window_w = g_window_w;
+    g_hist_view.window_h = g_window_h;
+    g_hist_view.visible  = (g_mode == PROFILE_PANEL_HISTOGRAM);
+    g_hist_view.panel_x  = g_window_w - ui_histogram_panel_width() - 16;
+    g_hist_view.panel_y  = view.panel_y - ui_histogram_panel_height() - 8;
+    ui_histogram_panel_render(&g_hist_view);
     prof_end(CP_PANEL);
 
     prof_end(CP_FRAME_TOTAL);
@@ -223,6 +229,22 @@ static void idle_func(void) {
     g_spin += 0.4f;
     if (g_spin >= 360.0f) g_spin -= 360.0f;
     glutPostRedisplay();
+}
+
+static void mouse_func(int button, int state, int x, int y) {
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN) return;
+    /* Route a click on the histogram header's [reset] control to the sampler,
+     * clearing the cumulative distribution (the section EMAs are unaffected);
+     * a click on a legend swatch toggles that series in and out of the plot. */
+    int hit = ui_histogram_panel_hit_test(&g_hist_view, x, y);
+    if (hit == UI_HISTOGRAM_PANEL_HIT_RESET) {
+        prof_histogram_reset();
+        glutPostRedisplay();
+    } else if (hit >= 0) {
+        g_hist_view.hidden_series =
+            ui_histogram_panel_toggle_series(g_hist_view.hidden_series, hit);
+        glutPostRedisplay();
+    }
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
@@ -247,10 +269,12 @@ int main(int argc, char **argv) {
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
     glutKeyboardFunc(keyboard_func);
+    glutMouseFunc(mouse_func);
     glutIdleFunc(idle_func);
 
     printf("cpuprof_demo: immediate vs display-list reuse vs recompile/frame\n");
-    printf("  d=toggle sections/histogram   q=quit\n");
+    printf("  d=toggle sections/histogram   r=reset histogram"
+           "   click legend=toggle series   q=quit\n");
     glutMainLoop();
     return 0;
 }

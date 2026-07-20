@@ -33,6 +33,7 @@ typedef enum {
     UI_HIT_SEARCH_NAV,       /* find-bar match stepper: item_idx = +1 next / -1 prev */
     UI_HIT_PROFILE_SECTION_TOGGLE, /* item_idx = ProfSection or TOGGLE_ALL */
     UI_HIT_HISTOGRAM_RESET,  /* histogram panel header "[reset]" control */
+    UI_HIT_HISTOGRAM_SERIES_TOGGLE, /* item_idx = ProfSection; legend swatch click */
     UI_HIT_OVERLAY_CHROME,   /* visible floating/status panel surface; inert */
     UI_HIT_SCENE
 } UiAppHitKind;

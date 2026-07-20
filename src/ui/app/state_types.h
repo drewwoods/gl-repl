@@ -82,6 +82,10 @@ typedef struct {
 typedef struct {
     int mode;
     unsigned long long collapsed_sections;
+    /* Session-only mask (one bit per ProfSection) of histogram series the user
+     * toggled off by clicking their legend swatch. Presentation-only, like
+     * collapsed_sections; profiling itself is unaffected. */
+    unsigned long long hidden_histogram_series;
 } UiProfilePanelState;
 
 typedef struct {

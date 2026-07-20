@@ -823,23 +823,62 @@ int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
     int panel_h;
     int gl_y;
     int control_w;
+    int legend_col_w;
+    int legend_rows;
+    int tx;
+    int ordinal;
+    int section_idx;
 
     if (view == NULL || !view->visible ||
         view->window_w <= 0 || view->window_h <= 0)
-        return 0;
+        return UI_HISTOGRAM_PANEL_HIT_NONE;
 
     panel_h = ui_histogram_panel_height();
     gl_y = view->window_h - my;
+    if (mx < view->panel_x || mx >= view->panel_x + HIST_PANEL_W ||
+        gl_y < view->panel_y || gl_y >= view->panel_y + panel_h)
+        return UI_HISTOGRAM_PANEL_HIT_NONE;
 
     /* The right side of the title row owns the reset control — same band the
      * profile panel gives its collapse/expand-all control. */
     control_w = FONT_SMALL_W * (int)strlen(HIST_RESET_LABEL) + 2;
     if (mx >= view->panel_x + HIST_PANEL_W - control_w &&
-        mx < view->panel_x + HIST_PANEL_W &&
-        gl_y >= view->panel_y + panel_h - HIST_HEADER_H &&
-        gl_y < view->panel_y + panel_h)
-        return 1;
-    return 0;
+        gl_y >= view->panel_y + panel_h - HIST_HEADER_H)
+        return UI_HISTOGRAM_PANEL_HIT_RESET;
+
+    /* Legend rows along the panel bottom: a click on a series' swatch or label
+     * toggles that series in and out of the plot. This mirrors the legend
+     * block in ui_histogram_panel_render() row-for-row, and the layout is
+     * hidden-independent, so a series' clickable cell never moves. */
+    legend_col_w = (HIST_PANEL_W - 16) / HIST_LEGEND_COLS;
+    legend_rows  = (hist_series_count() + HIST_LEGEND_COLS - 1)
+                 / HIST_LEGEND_COLS;
+    tx = view->panel_x + 8;
+    ordinal = 0;
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        int row, col, lx, ly;
+        if (!hist_series_visible(s)) continue;
+        row = ordinal / HIST_LEGEND_COLS;
+        col = ordinal % HIST_LEGEND_COLS;
+        ordinal++;
+        lx = tx + col * legend_col_w;
+        ly = view->panel_y + HIST_BOTTOM_PAD
+           + (legend_rows - 1 - row) * HIST_LEGEND_ROW_H;
+        if (mx >= lx && mx < lx + legend_col_w &&
+            gl_y >= ly && gl_y < ly + HIST_LEGEND_ROW_H)
+            return section_idx;
+    }
+    return UI_HISTOGRAM_PANEL_HIT_NONE;
+}
+
+unsigned long long ui_histogram_panel_toggle_series(
+        unsigned long long hidden_series, int section_idx) {
+    if (section_idx < 0 || section_idx >= PROF_SECTION_COUNT ||
+        !hist_series_visible((ProfSection)section_idx))
+        return hidden_series;
+    return hidden_series ^
+           (unsigned long long)section_bit((ProfSection)section_idx);
 }
 
 int ui_histogram_axis_range(int *lo_bin, int *hi_bin) {
@@ -919,11 +958,16 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     if (have_data) {
         for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
             ProfSection s = (ProfSection)section_idx;
+            int hidden;
             if (!hist_series_visible(s)) continue;
+            hidden = (view->hidden_series & section_bit(s)) != 0;
             prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
             for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+                /* series_samples feeds the legend's has-data styling for every
+                 * series; the y ceiling excludes hidden ones, so hiding a
+                 * dominant distribution lets the rest grow off the baseline. */
                 series_samples[section_idx] += bins[bin_idx];
-                if (bins[bin_idx] > peak) peak = bins[bin_idx];
+                if (!hidden && bins[bin_idx] > peak) peak = bins[bin_idx];
             }
         }
     }
@@ -1029,7 +1073,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         if (!hist_series_visible(s)) continue;
 
         float col[3];
-        hist_series_color(ordinal++, col);
+        hist_series_color(ordinal++, col);   /* advance for stable colors */
+        if ((view->hidden_series & section_bit(s)) != 0) continue;
         hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
         glColor4f(col[0], col[1], col[2], 0.30f);
@@ -1058,7 +1103,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         if (!hist_series_visible(s)) continue;
 
         float col[3];
-        hist_series_color(ordinal++, col);
+        hist_series_color(ordinal++, col);   /* advance for stable colors */
+        if ((view->hidden_series & section_bit(s)) != 0) continue;
         hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
         /* Staircase with equal-height runs collapsed. A per-column strip would
@@ -1145,17 +1191,31 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
             hist_series_color(ordinal++, rgb);
 
             unsigned long samples = series_samples[section_idx];
-            if (samples > 0)
+            if ((view->hidden_series & section_bit(s)) != 0) {
+                /* Toggled off: a hollow outline in the series color keeps the
+                 * swatch's identity while reading as "not plotted", and the
+                 * label recedes to muted. */
                 glColor3fv(rgb);
-            else
-                glColor3fv(k_prof_dim);
-            glRectf((float)lx, (float)ly + 2.0f,
-                    (float)lx + 7.0f, (float)ly + 9.0f);
+                glBegin(GL_LINE_LOOP);
+                glVertex2f((float)lx,        (float)ly + 2.0f);
+                glVertex2f((float)lx + 7.0f, (float)ly + 2.0f);
+                glVertex2f((float)lx + 7.0f, (float)ly + 9.0f);
+                glVertex2f((float)lx,        (float)ly + 9.0f);
+                glEnd();
+                ui_clr(UI_TOK_TEXT_MUTED);
+            } else {
+                if (samples > 0)
+                    glColor3fv(rgb);
+                else
+                    glColor3fv(k_prof_dim);
+                glRectf((float)lx, (float)ly + 2.0f,
+                        (float)lx + 7.0f, (float)ly + 9.0f);
 
-            if (samples > 0)
-                ui_clr(UI_TOK_TEXT_PRIMARY);
-            else
-                glColor3fv(k_prof_stale);
+                if (samples > 0)
+                    ui_clr(UI_TOK_TEXT_PRIMARY);
+                else
+                    glColor3fv(k_prof_stale);
+            }
             gl2d_draw_string((float)(lx + 12), (float)ly,
                              prof_section_info(s).label, FONT_SMALL);
         }

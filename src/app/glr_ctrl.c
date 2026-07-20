@@ -1796,6 +1796,7 @@ static UiHistogramPanelView glr_ctrl_build_histogram_panel_view(
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.visible  = (snap->profile_panel.mode == PROFILE_PANEL_HISTOGRAM);
+    v.hidden_series = snap->profile_panel.hidden_histogram_series;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_HISTOGRAM,
                                 &v.panel_x, &v.panel_y);
