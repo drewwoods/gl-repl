@@ -276,6 +276,16 @@ const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
 void        glr_ctrl_set_program_name(const char *argv0);
 const char *glr_ctrl_program_name(void);
 
+/* Elapsed-seconds source for the controller's `[init +N.NNNs] ...` trace
+ * lines, so the one-shot GL-capability probes in glr_ctrl_init_gl (the
+ * glPointParameterfv detection) share gl_repl.c's boot-trace clock and
+ * format. main() installs init_elapsed_seconds; unset (tests/demos) falls
+ * back to the plain `[gl-repl]` tag. Same shape as glr_audio's hitch-log
+ * elapsed fn, but this one runs on the main thread, so its output reaches
+ * the browser console on the web build. */
+typedef double (*GlrCtrlElapsedSecondsFn)(void);
+void glr_ctrl_set_init_log_elapsed_fn(GlrCtrlElapsedSecondsFn fn);
+
 /* Report that an external caller (e.g. an example's `// camera` block
  * applied via the camera bridge) has set the camera to a new 3D pose.
  * While the user is dwelling in 2D, the saved-3D snapshot used to

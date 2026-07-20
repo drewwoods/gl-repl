@@ -582,6 +582,7 @@ int main(int argc, char **argv) {
 
     init_trace("start");
     glr_audio_set_hitch_log_elapsed_fn(init_elapsed_seconds);
+    glr_ctrl_set_init_log_elapsed_fn(init_elapsed_seconds);
     glr_ctrl_set_program_name(argv[0]);
 
     /* GLR_DETAILED_PROF (any non-empty value) is the env-var twin of
