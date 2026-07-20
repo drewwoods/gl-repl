@@ -237,9 +237,11 @@ to MP4 (H.264 + AAC music) with **no intermediate frame dumps**:
 into one concatenated PPM stream — the script points it at a fifo that ffmpeg
 consumes live (`-f image2pipe -vcodec ppm`), so encoding starts on frame 1.
 Interaction comes from `GLR_POINTER_SCRIPT=<file>`
-([`src/app/glr_pointer_script.c`](src/app/glr_pointer_script.c)): timed synthetic
-pointer/keyboard events on the rendered-frame clock (implies
-`GLR_TICK_PER_FRAME`), dispatched through the normal `glr_ctrl_*` GLUT entry
+([`src/app/glr_pointer_script.c`](src/app/glr_pointer_script.c)): synthetic
+pointer/keyboard events, either absolute-timed on the rendered-frame clock or
+completion-driven when timestamps are omitted (with `pause <seconds>` for
+intentional dwell time). Capture mode implies `GLR_TICK_PER_FRAME`; events are
+dispatched through the normal `glr_ctrl_*` GLUT entry
 points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
 `rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed
 text incl. `\cX` control bytes; `key@<cps>` paces the payload at N chars/sec

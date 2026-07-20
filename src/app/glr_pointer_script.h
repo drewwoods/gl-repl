@@ -10,9 +10,19 @@
  * cursor + click ripple + highlight ring make the pointer visible in the
  * captured video.
  *
- * Script format: one event per line, `#` comments. Times are seconds on the
- * rendered-frame clock (frame N <-> t = N/60 — the hook implies
- * GLR_TICK_PER_FRAME). A *point* is either literal window pixels
+ * Script format: one event per line, `#` comments. There are two forms:
+ *
+ * - Untimed lines (`verb ...`) run sequentially. The next step starts after
+ *   the previous glide, click release, paced key, ring, echo, or pause has
+ *   completed. Immediate steps advance on the next rendered frame. This is
+ *   the preferred form for live guided tours because stalls and frame-rate
+ *   variation cannot make later steps overtake unfinished work.
+ * - Timestamped lines (`seconds verb ...`) retain the absolute rendered-frame
+ *   clock used by offline capture (frame N <-> t = N/60). Keep timestamps
+ *   sorted. Do not mix timed and untimed lines in one script.
+ *
+ * `pause <seconds>` delays the next event by the requested duration in either
+ * form. A *point* is either literal window pixels
  * "<x> <y>" (origin top-left, the GLUT callback convention) or a symbolic
  * target token resolved against the LIVE layout when the event fires — so
  * symbolic scripts are window-size- and catalog-order-independent:
@@ -61,7 +71,13 @@
  *                             # action was triggered. The px size picks the
  *                             # nearest fixed GLUT bitmap font (10/12/18/24)
  *
- * Events fire in file order once their time is reached; keep them sorted.
+ * The same actions can be completion-driven by omitting timestamps:
+ *
+ *   glide menu:scene 0.8
+ *   click
+ *   pause 0.5
+ *   glide item:all 0.7
+ *
  * `key` + `skey` let a script type a whole demo (commit lines with `key ;`,
  * navigate with `skey up`), so demos can be re-recorded from scripts.
  */
@@ -80,8 +96,9 @@ int glr_pointer_script_active(void);
  * engine the capture hook uses). Unlike the env loader this runs mid-session:
  * the frame clock, glide, and overlay state reset, events fire on subsequent
  * glr_pointer_script_frame() calls, and the script auto-stops after its last
- * event and overlay effect finish. Events must be time-sorted. Returns 1 on
- * success; a malformed or out-of-order line logs to stderr and returns 0
+ * event and overlay effect finish. Untimed events are completion-driven;
+ * timestamped events must be time-sorted. Returns 1 on success; a malformed,
+ * mixed-mode, or out-of-order line logs to stderr and returns 0
  * without activating (built-in tours are validated by tests, so this is an
  * authoring backstop, not a user-facing error path). */
 int glr_pointer_script_start_lines(const char *const *lines, int count);
@@ -103,8 +120,9 @@ int glr_pointer_script_tour_active(void);
  * target vocabulary to the real hit-test geometry. */
 int glr_pointer_script_resolve_target(const char *target, int *mx, int *my);
 
-/* Advance the script one frame: fire due events through the glr_ctrl_*
- * input entry points and step any active glide. Call once per display
+/* Advance the script one frame: fire a due timed event or the next completed-
+ * sequence step through the glr_ctrl_* input entry points, and step any
+ * active glide. Call once per display
  * callback, before glr_ctrl_display_frame(), so the frame reflects the
  * new pointer state. No-op when inactive. */
 void glr_pointer_script_frame(void);

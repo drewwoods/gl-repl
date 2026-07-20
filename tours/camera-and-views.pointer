@@ -3,24 +3,35 @@
 #
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
 
-0.2   move scene:0.58,0.30
-0.3   echo scene:0.25,0.76 18 3.2 Drag anywhere in the scene to orbit.
-3.6   down scene:0.58,0.30
-3.8   glide scene:0.80,0.12 1.6
-5.6   up
-6.2   down
-6.4   glide scene:0.50,0.42 1.2
-7.8   up
-8.4   echo scene:0.25,0.76 18 2.8 The mouse wheel zooms.
-8.8   wheel 1
-9.2   wheel 1
-9.6   wheel 1
-10.0  wheel 1
-11.0  wheel -1
-11.4  wheel -1
-11.8  wheel -1
-12.2  wheel -1
-13.0  echo scene:0.25,0.76 18 3.4 Ctrl+O focuses the origin.
-13.6  key \co
-16.6  echo scene:0.25,0.76 18 3.6 Ctrl+Shift+C resets the camera.
-20.4  echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!
+move scene:0.58,0.30
+echo scene:0.25,0.76 18 3.2 Drag anywhere in the scene to orbit.
+down scene:0.58,0.30
+glide scene:0.80,0.12 1.6
+up
+pause 0.5
+down
+glide scene:0.50,0.42 1.2
+up
+pause 0.5
+echo scene:0.25,0.76 18 2.8 The mouse wheel zooms.
+wheel 1
+pause 0.4
+wheel 1
+pause 0.4
+wheel 1
+pause 0.4
+wheel 1
+pause 0.9
+wheel -1
+pause 0.4
+wheel -1
+pause 0.4
+wheel -1
+pause 0.4
+wheel -1
+pause 0.7
+echo scene:0.25,0.76 18 3.4 Ctrl+O focuses the origin.
+key \co
+pause 2.8
+echo scene:0.25,0.76 18 3.6 Ctrl+Shift+C resets the camera.
+echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!

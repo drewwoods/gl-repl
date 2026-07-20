@@ -47,7 +47,8 @@ typedef enum {
     PS_KEY,
     PS_SKEY,
     PS_RING,
-    PS_ECHO
+    PS_ECHO,
+    PS_PAUSE
 } PsVerb;
 
 typedef struct {
@@ -75,6 +76,24 @@ static int     g_tour = 0;     /* runtime-started (auto-stop, cancelable) */
 
 static int g_frame = 0;        /* rendered-frame clock, first frame = 0  */
 static int g_next_event = 0;   /* events fire in file order              */
+static int g_sequential = 0;   /* untimed grammar: wait for each step    */
+
+/* An explicit pause blocks event dispatch in either grammar. */
+static int g_pause_until = -1;
+
+/* Untimed scripts wait for the current step's intrinsic work to finish
+ * before starting the next one. Immediate verbs complete on their fire
+ * frame; dispatch still advances by at most one step per frame. */
+typedef enum {
+    PS_WAIT_NONE,
+    PS_WAIT_GLIDE,
+    PS_WAIT_CLICK,
+    PS_WAIT_TYPE,
+    PS_WAIT_RING,
+    PS_WAIT_ECHO,
+    PS_WAIT_PAUSE
+} PsWait;
+static PsWait g_step_wait = PS_WAIT_NONE;
 
 static float g_px = 0.0f, g_py = 0.0f;   /* current pointer (window px) */
 
@@ -209,17 +228,33 @@ static const char *ps_scan_point(const char *args, PsEvent *ev) {
 
 /* Parse one script line into *ev. Returns 1 on an event, 0 on a blank or
  * comment line, -1 on a malformed line. */
-static int ps_parse_line(const char *line, PsEvent *ev) {
+static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
     char verb[24];
-    float secs;
+    float secs = 0.0f;
     int consumed = 0;
+    int verb_consumed = 0;
+    char *time_end;
 
     /* Skip leading whitespace; blank and #-comment lines are no-ops. */
     while (*line == ' ' || *line == '\t') line++;
     if (*line == '\0' || *line == '\n' || *line == '#') return 0;
 
-    if (sscanf(line, "%f %23s %n", &secs, verb, &consumed) < 2 || secs < 0.0f)
-        return -1;
+    /* A leading timestamp selects the legacy absolute-time grammar. With
+     * no timestamp, the first token is the verb and the script runs as a
+     * completion-driven sequence. Loaders reject mixing the two forms. */
+    secs = strtof(line, &time_end);
+    if (time_end != line) {
+        if (secs < 0.0f || (*time_end != ' ' && *time_end != '\t'))
+            return -1;
+        if (sscanf(time_end, " %23s %n", verb, &verb_consumed) < 1)
+            return -1;
+        consumed = (int)(time_end - line) + verb_consumed;
+        *timed = 1;
+    } else {
+        if (sscanf(line, "%23s %n", verb, &consumed) < 1)
+            return -1;
+        *timed = 0;
+    }
 
     memset(ev, 0, sizeof(*ev));
     ev->frame = (int)(secs * PS_FPS + 0.5f);
@@ -326,6 +361,22 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
         ev->text[n] = '\0';
         return 1;
     }
+    if (strcmp(verb, "pause") == 0) {
+        float dur = 0.0f;
+        int nread = 0;
+        const char *rest;
+        ev->verb = PS_PAUSE;
+        if (sscanf(args, "%f%n", &dur, &nread) != 1 || dur <= 0.0f)
+            return -1;
+        rest = args + nread;
+        while (*rest == ' ' || *rest == '\t' ||
+               *rest == '\n' || *rest == '\r')
+            rest++;
+        if (*rest != '\0' && *rest != '#') return -1;
+        ev->dur_frames = (int)(dur * PS_FPS + 0.5f);
+        if (ev->dur_frames < 1) ev->dur_frames = 1;
+        return 1;
+    }
     return -1;
 }
 
@@ -341,16 +392,20 @@ int glr_pointer_script_load_env(void) {
 
     char line[512];
     int lineno = 0;
+    int mode = -1;
+    g_event_count = 0;
     while (fgets(line, sizeof(line), fp)) {
         lineno++;
         PsEvent ev;
-        int r = ps_parse_line(line, &ev);
-        if (r < 0) {
+        int timed = 0;
+        int r = ps_parse_line(line, &ev, &timed);
+        if (r < 0 || (r > 0 && mode >= 0 && timed != mode)) {
             fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s:%d: bad line: %s",
                     path, lineno, line);
             exit(1);
         }
         if (r == 0) continue;
+        if (mode < 0) mode = timed;
         if (g_event_count >= PS_MAX_EVENTS) {
             fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s: too many events "
                     "(max %d)\n", path, PS_MAX_EVENTS);
@@ -360,6 +415,7 @@ int glr_pointer_script_load_env(void) {
     }
     fclose(fp);
 
+    g_sequential = (mode == 0);
     g_active = 1;
     fprintf(stderr, "gl-repl: pointer script: %d event(s) from %s\n",
             g_event_count, path);
@@ -380,6 +436,8 @@ int glr_pointer_script_tour_active(void) {
 static void ps_reset_runtime(void) {
     g_frame = 0;
     g_next_event = 0;
+    g_pause_until = -1;
+    g_step_wait = PS_WAIT_NONE;
     g_glide_active = 0;
     g_release_frame = -1;
     g_button_held = -1;
@@ -397,26 +455,34 @@ int glr_pointer_script_start_lines(const char *const *lines, int count) {
     glr_pointer_script_stop();
     g_event_count = 0;
     int last_frame = 0;
+    int mode = -1;
     for (int i = 0; i < count; i++) {
         PsEvent ev;
-        int r = ps_parse_line(lines[i], &ev);
-        if (r < 0 || (r > 0 && ev.frame < last_frame)) {
+        int timed = 0;
+        int r = ps_parse_line(lines[i], &ev, &timed);
+        if (r < 0 ||
+            (r > 0 && mode >= 0 && timed != mode) ||
+            (r > 0 && timed && ev.frame < last_frame)) {
             fprintf(stderr, "gl-repl: tour script line %d: %s: %s\n", i + 1,
-                    r < 0 ? "bad line" : "out of order", lines[i]);
+                    (r < 0 || (mode >= 0 && timed != mode))
+                        ? "bad line" : "out of order",
+                    lines[i]);
             g_event_count = 0;
             return 0;
         }
         if (r == 0) continue;
+        if (mode < 0) mode = timed;
         if (g_event_count >= PS_MAX_EVENTS) {
             fprintf(stderr, "gl-repl: tour script: too many events (max %d)\n",
                     PS_MAX_EVENTS);
             g_event_count = 0;
             return 0;
         }
-        last_frame = ev.frame;
+        if (timed) last_frame = ev.frame;
         g_events[g_event_count++] = ev;
     }
     if (g_event_count == 0) return 0;
+    g_sequential = (mode == 0);
     ps_reset_runtime();
     g_active = 1;
     g_tour = 1;
@@ -638,7 +704,43 @@ static void ps_fire(const PsEvent *ev) {
         g_echo_size = ev->size;
         snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
         break;
+    case PS_PAUSE:
+        g_pause_until = g_frame + ev->dur_frames;
+        break;
     }
+}
+
+/* Select the completion condition for one untimed step. Overlays count as
+ * the work of ring/echo steps; a click completes at synthesized release,
+ * while its decorative ripple may overlap the following step. */
+static void ps_wait_for_event(const PsEvent *ev) {
+    switch (ev->verb) {
+    case PS_GLIDE:      g_step_wait = PS_WAIT_GLIDE; break;
+    case PS_CLICK:
+    case PS_RIGHTCLICK: g_step_wait = PS_WAIT_CLICK; break;
+    case PS_KEY:
+        g_step_wait = ev->cps > 0.0f ? PS_WAIT_TYPE : PS_WAIT_NONE;
+        break;
+    case PS_RING:       g_step_wait = PS_WAIT_RING; break;
+    case PS_ECHO:       g_step_wait = PS_WAIT_ECHO; break;
+    case PS_PAUSE:      g_step_wait = PS_WAIT_PAUSE; break;
+    default:            g_step_wait = PS_WAIT_NONE; break;
+    }
+}
+
+static int ps_step_complete(void) {
+    switch (g_step_wait) {
+    case PS_WAIT_NONE:  return 1;
+    case PS_WAIT_GLIDE: return !g_glide_active;
+    case PS_WAIT_CLICK: return g_release_frame < 0;
+    case PS_WAIT_TYPE:  return !g_type_active;
+    case PS_WAIT_RING:
+        return g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur;
+    case PS_WAIT_ECHO:
+        return g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur;
+    case PS_WAIT_PAUSE: return g_pause_until < 0;
+    }
+    return 1;
 }
 
 void glr_pointer_script_frame(void) {
@@ -651,11 +753,30 @@ void glr_pointer_script_frame(void) {
         ps_release(g_release_button);
     }
 
-    /* g_active can drop mid-loop: a tour whose symbolic target fails to
-     * resolve stops itself from inside ps_fire. */
-    while (g_active && g_next_event < g_event_count &&
-           g_events[g_next_event].frame <= g_frame)
-        ps_fire(&g_events[g_next_event++]);
+    if (g_pause_until >= 0 && g_frame >= g_pause_until)
+        g_pause_until = -1;
+
+    /* Untimed scripts are completion-driven and start at most one new step
+     * per rendered frame. Timestamped scripts retain their absolute-time
+     * behavior; an explicit pause temporarily gates dispatch. g_active can
+     * drop inside ps_fire when a tour target fails to resolve. */
+    if (g_sequential) {
+        if (ps_step_complete()) {
+            g_step_wait = PS_WAIT_NONE;
+            if (g_next_event < g_event_count) {
+                const PsEvent *ev = &g_events[g_next_event++];
+                ps_fire(ev);
+                if (g_active) ps_wait_for_event(ev);
+            }
+        }
+    } else if (g_pause_until < 0) {
+        while (g_active && g_next_event < g_event_count &&
+               g_events[g_next_event].frame <= g_frame) {
+            const PsEvent *ev = &g_events[g_next_event++];
+            ps_fire(ev);
+            if (g_pause_until >= 0) break;
+        }
+    }
     if (!g_active) return;
 
     /* Step paced typing: characters due by now = elapsed * cps, plus one
@@ -682,7 +803,8 @@ void glr_pointer_script_frame(void) {
      * back. Env-driven capture runs keep the overlay up until the recorder
      * exits instead — the clip should never end cursor-less. */
     if (g_tour && g_next_event >= g_event_count &&
-        g_release_frame < 0 && !g_glide_active && !g_type_active &&
+        g_release_frame < 0 && g_pause_until < 0 &&
+        !g_glide_active && !g_type_active &&
         g_button_held < 0 &&
         (g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur) &&
         (g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur) &&

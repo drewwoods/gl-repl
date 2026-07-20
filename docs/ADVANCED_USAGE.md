@@ -191,9 +191,11 @@ clips are deterministic.
 ### Recording videos with scripted interaction
 
 `scripts/record-video.sh` records a session to an MP4 (H.264 + AAC music),
-optionally driven by a **pointer script** (`GLR_POINTER_SCRIPT`) — timed
-synthetic mouse and keyboard events on the rendered-frame clock, with a
-visible cursor overlay, click ripples, and highlight rings. That is how the
+optionally driven by a **pointer script** (`GLR_POINTER_SCRIPT`) — synthetic
+mouse and keyboard events with a visible cursor overlay, click ripples, and
+highlight rings. Scripts can use absolute rendered-frame timestamps for a
+fixed recording schedule, or omit timestamps to start each step when the
+previous one completes. That is how the
 User Guide's menu-tour video is made:
 
 ```bash
@@ -228,7 +230,9 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   `key@<cps>` paces the text at N characters per second so it types out like
   a person instead of appearing at once) and
   `skey` (F-keys, arrows) — so whole typed demos are re-recordable from a
-  script. Grammar and examples: [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
+  script. Untimed scripts are completion-driven; `pause <seconds>` adds an
+  intentional delay before the next step. Grammar and examples:
+  [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
 - A malformed script line fails the run with a file:line message rather than
   silently recording the wrong interaction.
 

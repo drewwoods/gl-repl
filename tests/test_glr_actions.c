@@ -845,6 +845,68 @@ static void test_tour_paced_key(void) {
                glr_pointer_script_tour_active(), 0);
 }
 
+/* Untimed scripts advance from completion rather than an absolute schedule,
+ * and `pause` supplies an intentional delay between otherwise immediate
+ * steps. Timed and untimed forms may not be mixed. */
+static void test_tour_sequential_steps_and_pause(void) {
+    static const char *const paced[] = {
+        "key@30 abc",
+        "key d"
+    };
+    static const char *const paused[] = {
+        "key x",
+        "pause 0.05",
+        "key y"
+    };
+    static const char *const bad_zero[] = { "pause 0" };
+    static const char *const bad_tail[] = { "pause 1 later" };
+    static const char *const mixed[] = {
+        "0.0 key x",
+        "pause 1"
+    };
+    int len0;
+
+    glr_ctrl_reset_all();
+    len0 = editor_state_input().input_len;
+    ASSERT_INT("untimed paced sequence loads",
+               glr_pointer_script_start_lines(paced, 2), 1);
+
+    glr_pointer_script_frame();
+    ASSERT_INT("sequential typing starts with one character",
+               editor_state_input().input_len, len0 + 1);
+    for (int i = 0; i < 4; i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("next step waits for paced typing completion",
+               editor_state_input().input_len, len0 + 3);
+    glr_pointer_script_frame();
+    ASSERT_INT("next step starts after paced typing completion",
+               editor_state_input().input_len, len0 + 4);
+
+    glr_pointer_script_stop();
+    glr_ctrl_reset_all();
+    len0 = editor_state_input().input_len;
+    ASSERT_INT("pause sequence loads",
+               glr_pointer_script_start_lines(paused, 3), 1);
+    glr_pointer_script_frame(); /* key x */
+    glr_pointer_script_frame(); /* pause starts */
+    ASSERT_INT("pause leaves following step pending",
+               editor_state_input().input_len, len0 + 1);
+    glr_pointer_script_frame();
+    glr_pointer_script_frame();
+    ASSERT_INT("pause holds for its specified duration",
+               editor_state_input().input_len, len0 + 1);
+    glr_pointer_script_frame();
+    ASSERT_INT("step after pause fires when the pause completes",
+               editor_state_input().input_len, len0 + 2);
+
+    ASSERT_INT("zero-duration pause rejected",
+               glr_pointer_script_start_lines(bad_zero, 1), 0);
+    ASSERT_INT("pause trailing junk rejected",
+               glr_pointer_script_start_lines(bad_tail, 1), 0);
+    ASSERT_INT("timed and untimed lines cannot mix",
+               glr_pointer_script_start_lines(mixed, 2), 0);
+}
+
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
  * the audio module's cfg_mode setter, not a raw pointer write. */
 static void test_audio_config_direct_set(void) {
@@ -2119,6 +2181,7 @@ int main(void) {
     test_tours_menu_dispatch();
     test_tour_auto_stop();
     test_tour_paced_key();
+    test_tour_sequential_steps_and_pause();
     test_compute_profile_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();
