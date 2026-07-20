@@ -123,23 +123,49 @@ int  ui_fps_panel_height(void);
  * five decades at once, and a linear time axis would pile every cheap one into
  * a single indistinguishable bar at the origin. Counts (y) because a section
  * that spends nearly every frame in one bin would otherwise flatten every
- * spread-out neighbour to the baseline. */
+ * spread-out neighbour to the baseline.
+ *
+ * hidden_series is a session-only mask (one bit per ProfSection, same shape as
+ * the profile panel's collapsed_sections) of series the user has toggled off
+ * by clicking their legend swatch. A hidden series is dropped from the plot
+ * and from the y-scale (so hiding a dominant distribution lets the rest grow),
+ * but keeps its legend slot — rendered as a hollow swatch — so the layout, and
+ * therefore the legend hit-test, never shifts as series come and go. */
 typedef struct {
     int window_w, window_h;
     int visible;            /* profile mode is PROFILE_PANEL_HISTOGRAM */
     int panel_x, panel_y;   /* resolved position, controller-baked */
+    unsigned long long hidden_series;  /* bit per ProfSection: omit from the plot */
 } UiHistogramPanelView;
 
 void ui_histogram_panel_render(const UiHistogramPanelView *view);
 int  ui_histogram_panel_width(void);
 int  ui_histogram_panel_height(void);
 
-/* Hit-test the header's "[reset]" control. Returns 1 when mx/my (GLUT window
- * coordinates, y down) land on it, else 0. Pure classification — the
- * controller routes the hit to prof_histogram_reset(), which clears the
- * cumulative sample histograms (the section listing's EMAs are unaffected). */
+/* Classify a click in GLUT window coordinates (y down). Returns:
+ *   - UI_HISTOGRAM_PANEL_HIT_RESET  for the header's "[reset]" control (the
+ *     controller routes it to prof_histogram_reset(), clearing the cumulative
+ *     sample histograms; the section listing's EMAs are unaffected);
+ *   - a non-negative ProfSection index when a legend swatch/label was clicked,
+ *     so the controller toggles that series in the hidden-series mask via
+ *     ui_histogram_panel_toggle_series();
+ *   - UI_HISTOGRAM_PANEL_HIT_NONE otherwise.
+ * Pure classification; the legend layout is hidden-independent, so the result
+ * does not depend on view->hidden_series. */
+enum {
+    UI_HISTOGRAM_PANEL_HIT_NONE  = -1,
+    UI_HISTOGRAM_PANEL_HIT_RESET = -2
+};
 int  ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
                                  int mx, int my);
+
+/* Pure session-state transition: flip section_idx's bit in the hidden-series
+ * mask. The controller applies this to
+ * UiProfilePanelState.hidden_histogram_series for a non-negative
+ * ui_histogram_panel_hit_test() result. Out-of-range or non-plotted section
+ * indices leave the mask unchanged. */
+unsigned long long ui_histogram_panel_toggle_series(
+    unsigned long long hidden_series, int section_idx);
 
 /* The panel's x-axis policy, exposed for tests.
  *

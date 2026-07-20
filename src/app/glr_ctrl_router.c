@@ -1492,6 +1492,18 @@ static int route_histogram_reset_hit(void) {
     return 1;
 }
 
+/* UI_HIT_HISTOGRAM_SERIES_TOGGLE: a click on a legend swatch/label toggles
+ * that series in and out of the overlaid histogram plot. Presentation-only
+ * (like the section-tree collapse); the profiler keeps sampling the hidden
+ * series so re-showing it reveals the full distribution. */
+static int route_histogram_series_toggle_hit(const UiHit *hit) {
+    UiProfilePanelState *panel = ui_state_profile_panel_mut();
+    panel->hidden_histogram_series = ui_histogram_panel_toggle_series(
+        panel->hidden_histogram_series, hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
 /* Derive a code-panel target line from a hit, mirroring the legacy
  * code_panel_drag_target. Insert-line drags use edit_line (the line
  * the cursor is parked on), only falling back to the last committed
@@ -1569,6 +1581,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_profile_section_toggle_hit(&hit); break;
     case UI_HIT_HISTOGRAM_RESET:
         consumed = route_histogram_reset_hit(); break;
+    case UI_HIT_HISTOGRAM_SERIES_TOGGLE:
+        consumed = route_histogram_series_toggle_hit(&hit); break;
     case UI_HIT_OVERLAY_CHROME:
         consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:

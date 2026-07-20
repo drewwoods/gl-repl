@@ -539,26 +539,114 @@ static void test_histogram_reset_hit_test(void) {
 
     ASSERT_INT_EQ("header-right control hits reset",
                   ui_histogram_panel_hit_test(&view, control_mx, header_my),
-                  1);
+                  UI_HISTOGRAM_PANEL_HIT_RESET);
     ASSERT_INT_EQ("header title side misses reset",
                   ui_histogram_panel_hit_test(&view, view.panel_x + 12,
                                               header_my),
-                  0);
+                  UI_HISTOGRAM_PANEL_HIT_NONE);
     ASSERT_INT_EQ("plot body below the header misses reset",
                   ui_histogram_panel_hit_test(
                       &view, control_mx,
                       view.window_h - (view.panel_y + panel_h / 2)),
-                  0);
+                  UI_HISTOGRAM_PANEL_HIT_NONE);
     ASSERT_INT_EQ("right of the panel misses reset",
                   ui_histogram_panel_hit_test(&view,
                                               view.panel_x + panel_w + 4,
                                               header_my),
-                  0);
+                  UI_HISTOGRAM_PANEL_HIT_NONE);
 
     view.visible = 0;
     ASSERT_INT_EQ("hidden panel has no reset target",
                   ui_histogram_panel_hit_test(&view, control_mx, header_my),
-                  0);
+                  UI_HISTOGRAM_PANEL_HIT_NONE);
+}
+
+/* A click on a legend swatch returns that series' ProfSection index, and the
+ * pure toggle transition flips exactly that bit. The legend lives at the panel
+ * bottom; its layout is hidden-independent, so the hit maps to the same series
+ * whether or not it is currently plotted. */
+static void test_histogram_legend_toggle(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10
+    };
+    int legend_rows;
+    int tx = view.panel_x + 8;
+    int series_before = 0;
+    int hit_section;
+    unsigned long long mask;
+
+    /* Count plotted (depth-0) series to size the legend, matching the panel. */
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        if (prof_section_info((ProfSection)s).depth == 0 &&
+            prof_section_info((ProfSection)s).label &&
+            prof_section_info((ProfSection)s).label[0])
+            series_before++;
+    legend_rows = (series_before + 2 - 1) / 2;
+    ASSERT_TRUE("catalog has legend series to toggle", series_before > 0);
+
+    /* The first legend cell (ordinal 0 -> row 0, col 0) sits at the bottom
+     * row's top. Aim at the swatch center. */
+    {
+        int ly = view.panel_y + 8 /* HIST_BOTTOM_PAD */
+               + (legend_rows - 1) * 12 /* HIST_LEGEND_ROW_H */;
+        int mx = tx + 3;                    /* over the swatch */
+        int my = view.window_h - (ly + 6);  /* GLUT y-down */
+        hit_section = ui_histogram_panel_hit_test(&view, mx, my);
+    }
+    ASSERT_TRUE("legend click returns a plotted series index",
+                hit_section >= 0 && hit_section < PROF_SECTION_COUNT);
+    ASSERT_INT_EQ("legend series is depth-0",
+                  prof_section_info((ProfSection)hit_section).depth, 0);
+
+    /* Pure transition: flip on, flip off, and reject junk indices. */
+    mask = ui_histogram_panel_toggle_series(0ULL, hit_section);
+    ASSERT_TRUE("toggle sets the series bit", mask != 0ULL);
+    ASSERT_INT_EQ("double toggle clears the bit",
+                  (int)ui_histogram_panel_toggle_series(mask, hit_section), 0);
+    ASSERT_INT_EQ("out-of-range index leaves the mask untouched",
+                  (int)ui_histogram_panel_toggle_series(0ULL, -1), 0);
+    ASSERT_INT_EQ("non-plotted section leaves the mask untouched",
+                  (int)ui_histogram_panel_toggle_series(0ULL,
+                       PROF_SECTION_COUNT + 5), 0);
+}
+
+/* Hiding a populated series must remove its bars from the plot: with one of two
+ * fed series masked off, the plot passes emit fewer vertices than with both
+ * shown. */
+static void test_histogram_hidden_series_drops_bars(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10
+    };
+    prof_test_reset();
+    for (int i = 0; i < 30; i++) {
+        prof_test_set_now_us((double)i * 100000.0);
+        prof_begin(PROF_FRAME_TOTAL);
+        prof_test_set_now_us((double)i * 100000.0 + 16000.0);
+        prof_end(PROF_FRAME_TOTAL);
+
+        prof_begin(PROF_FLATTEN);
+        prof_test_set_now_us((double)i * 100000.0 + 20000.0);
+        prof_end(PROF_FLATTEN);
+    }
+
+    view.hidden_series = 0;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    unsigned long long shown_verts = gl_stub_counts[GL_STUB_glVertex2f];
+
+    view.hidden_series =
+        ui_histogram_panel_toggle_series(0ULL, (int)PROF_FRAME_TOTAL);
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    unsigned long long hidden_verts = gl_stub_counts[GL_STUB_glVertex2f];
+
+    ASSERT_TRUE("hiding a series drops its plotted vertices",
+                hidden_verts < shown_verts);
+    ASSERT_TRUE("panel still draws the remaining series",
+                hidden_verts > 0);
+    prof_test_reset();
 }
 
 static void test_histogram_render_hidden(void) {
@@ -707,6 +795,8 @@ int main(void) {
     test_histogram_silhouette_collapses_flat_runs();
     test_histogram_panel_metrics();
     test_histogram_reset_hit_test();
+    test_histogram_legend_toggle();
+    test_histogram_hidden_series_drops_bars();
     test_histogram_render_hidden();
     test_histogram_render_empty();
     test_histogram_render_with_samples();

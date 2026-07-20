@@ -762,13 +762,24 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
         }
         if (id == UI_OVERLAY_PANEL_HISTOGRAM) {
             UiHistogramPanelView hist_view;
+            int hist_hit;
             hist_view.window_w = win_w;
             hist_view.window_h = win_h;
             hist_view.visible = panel->visible;
             hist_view.panel_x = px;
             hist_view.panel_y = py;
-            if (ui_histogram_panel_hit_test(&hist_view, mx, my)) {
+            hist_view.hidden_series =
+                snap->profile_panel.hidden_histogram_series;
+            hist_hit = ui_histogram_panel_hit_test(&hist_view, mx, my);
+            if (hist_hit == UI_HISTOGRAM_PANEL_HIT_RESET) {
                 hit.kind = UI_HIT_HISTOGRAM_RESET;
+                hit.local_x = (float)(mx - px);
+                hit.local_y = (float)(win_h - my - py);
+                return hit;
+            }
+            if (hist_hit >= 0) {
+                hit.kind = UI_HIT_HISTOGRAM_SERIES_TOGGLE;
+                hit.item_idx = hist_hit;
                 hit.local_x = (float)(mx - px);
                 hit.local_y = (float)(win_h - my - py);
                 return hit;
