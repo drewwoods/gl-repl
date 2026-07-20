@@ -2,10 +2,11 @@
  * glr_tours.h - built-in guided tours, played through the pointer-script
  * engine (src/app/glr_pointer_script.h).
  *
- * A tour is a named pointer script: timed synthetic pointer glides,
- * clicks, keystrokes, and stroke-text captions that walk the user through
- * a slice of the app (menus, editing, camera) using the exact same
- * dispatch path as live input. Tour content is file-backed like the
+ * A tour is a named, completion-driven pointer script: each synthetic
+ * glide, click, paced keystroke, or caption completes before the next step
+ * starts, with explicit `pause` steps for intentional dwell time. The events
+ * walk the user through a slice of the app (menus, editing, camera) using the
+ * exact same dispatch path as live input. Tour content is file-backed like the
  * example scenes — .pointer files under tours/ listed by tours/catalog.ini
  * and compiled in by scripts/gen_tours.py. The Tours menu lists the
  * catalog; activating an entry hands the script to

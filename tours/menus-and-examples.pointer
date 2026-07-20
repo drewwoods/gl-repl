@@ -9,46 +9,48 @@
 # status bar, and (at <= 40 caption chars) clear of the variable panel's
 # right-hand column.
 
-0.2   move scene:0.55,0.30
-0.3   echo scene:0.25,0.76 18 3.2 Welcome! This tour drives gl-repl.
-3.6   echo scene:0.25,0.76 18 2.8 Press any key or click to stop it.
-6.6   echo scene:0.25,0.76 18 3.6 The Scene menu holds the examples.
-6.7   glide menu:scene 0.9         # up to the Scene menu
-7.9   click
-8.5   glide item:all 0.7           # hover All (every example, grouped)
-9.5   glide item:3d 0.6            # hover 3D -> examples flyout opens
-10.5  glide subenter:3d 0.5        # straight right into the flyout
-10.6  echo scene:0.25,0.76 18 3.2 Hover a tag; slide into its flyout.
-11.2  glide sub:3d:animated_ring 0.5   # hover highlight follows
-12.0  glide sub:3d:torus_knot 0.7
-12.8  ring sub:3d:torus_knot 1.2       # spotlight it
-14.2  glide sub:3d:whale 1.1           # down to the showcase
-15.4  echo scene:0.25,0.76 18 2.6 Click loads the example.
-15.6  click                        # load it; camera eases in
-19.6  echo scene:0.25,0.76 18 3.4 Tutorials teach step by step.
-19.8  glide menu:tutorials 1.0
-21.0  click
-21.6  glide item:geometry 0.7      # hover Geometry -> tutorial flyout
-22.6  glide subenter:geometry 0.4
-23.2  glide sub:geometry:first_triangle 0.5
-23.8  ring sub:geometry:first_triangle 1.6   # spotlight, don't start it
-25.8  echo scene:0.25,0.76 18 3.6 Config: grids, themes, overlays.
-26.0  glide menu:config 0.8
-27.0  click
-27.6  glide item:rendering 0.6     # hover Rendering
-28.6  glide item:overlays 0.7      # walk down to Overlays
-29.6  glide subenter:overlays 0.4
-30.2  glide sub:overlays:vertex_points 0.5
-31.0  ring sub:overlays:vertex_points 1.2
-32.4  click                        # Vertex points ON (whale lights up)
-32.6  echo scene:0.25,0.76 18 2.8 Toggles apply live.
-35.4  click                        # ...and back OFF
-36.2  click scene:0.55,0.30        # dismiss the menu
-37.2  echo scene:0.25,0.76 18 3.2 Replay rebuilds the scene call by call.
-37.4  glide pin:replay 1.2
-38.8  click                        # start replay
-39.6  glide scene:0.70,0.40 1.0    # park; watch it build
+move scene:0.55,0.30
+echo scene:0.25,0.76 18 3.2 Welcome! This tour drives gl-repl.
+echo scene:0.25,0.76 18 2.8 Press any key or click to stop it.
+echo scene:0.25,0.76 18 3.6 The Scene menu holds the examples.
+glide menu:scene 0.9         # up to the Scene menu
+click
+glide item:all 0.7           # hover All (every example, grouped)
+glide item:3d 0.6            # hover 3D -> examples flyout opens
+glide subenter:3d 0.5        # straight right into the flyout
+echo scene:0.25,0.76 18 3.2 Hover a tag; slide into its flyout.
+glide sub:3d:animated_ring 0.5   # hover highlight follows
+glide sub:3d:torus_knot 0.7
+ring sub:3d:torus_knot 1.2       # spotlight it
+glide sub:3d:whale 1.1           # down to the showcase
+echo scene:0.25,0.76 18 2.6 Click loads the example.
+click                        # load it; camera eases in
+pause 3.5
+echo scene:0.25,0.76 18 3.4 Tutorials teach step by step.
+glide menu:tutorials 1.0
+click
+glide item:geometry 0.7      # hover Geometry -> tutorial flyout
+glide subenter:geometry 0.4
+glide sub:geometry:first_triangle 0.5
+ring sub:geometry:first_triangle 1.6   # spotlight, don't start it
+echo scene:0.25,0.76 18 3.6 Config: grids, themes, overlays.
+glide menu:config 0.8
+click
+glide item:rendering 0.6     # hover Rendering
+glide item:overlays 0.7      # walk down to Overlays
+glide subenter:overlays 0.4
+glide sub:overlays:vertex_points 0.5
+ring sub:overlays:vertex_points 1.2
+click                        # Vertex points ON (whale lights up)
+echo scene:0.25,0.76 18 2.8 Toggles apply live.
+click                        # ...and back OFF
+click scene:0.55,0.30        # dismiss the menu
+echo scene:0.25,0.76 18 3.2 Replay rebuilds the scene call by call.
+glide pin:replay 1.2
+click                        # start replay
+glide scene:0.70,0.40 1.0    # park; watch it build
+pause 5.0                    # let replay build the scene
 # Ctrl+R exits the replay (the pin click would only pause it)
-46.0  key \cr
-47.0  glide scene:0.55,0.30 0.8
-47.8  echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!
+key \cr
+glide scene:0.55,0.30 0.8
+echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!

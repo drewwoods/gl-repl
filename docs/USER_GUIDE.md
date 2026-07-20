@@ -197,7 +197,9 @@ hands control back by itself).
 - *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
 
 Tours aim at named UI elements (menus, rows, buttons) resolved against the
-live layout as they play, so they work at any window size.
+live layout as they play, so they work at any window size. Each tour step
+starts when the previous glide, click, typed text, caption, or intentional
+pause has completed, rather than relying on absolute timestamps.
 
 ---
 
