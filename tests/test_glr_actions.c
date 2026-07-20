@@ -858,6 +858,10 @@ static void test_tour_sequential_steps_and_pause(void) {
         "pause 0.05",
         "key y"
     };
+    static const char *const caption_then_key[] = {
+        "echo 10 10 18 1 Caption remains visible",
+        "key z"
+    };
     static const char *const bad_zero[] = { "pause 0" };
     static const char *const bad_tail[] = { "pause 1 later" };
     static const char *const mixed[] = {
@@ -901,6 +905,24 @@ static void test_tour_sequential_steps_and_pause(void) {
     glr_pointer_script_frame();
     ASSERT_INT("step after pause fires when the pause completes",
                editor_state_input().input_len, len0 + 2);
+
+    glr_pointer_script_stop();
+    glr_ctrl_reset_all();
+    len0 = editor_state_input().input_len;
+    ASSERT_INT("caption sequence loads",
+               glr_pointer_script_start_lines(caption_then_key, 2), 1);
+    glr_pointer_script_frame(); /* echo starts */
+    ASSERT_INT("caption event does not type the following key immediately",
+               editor_state_input().input_len, len0);
+    glr_pointer_script_frame(); /* key z */
+    ASSERT_INT("caption duration does not block the following step",
+               editor_state_input().input_len, len0 + 1);
+    ASSERT_INT("tour remains active for the caption's on-screen duration",
+               glr_pointer_script_tour_active(), 1);
+    for (int i = 0; i < 70 && glr_pointer_script_tour_active(); i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("tour stops after the non-blocking caption expires",
+               glr_pointer_script_tour_active(), 0);
 
     ASSERT_INT("zero-duration pause rejected",
                glr_pointer_script_start_lines(bad_zero, 1), 0);

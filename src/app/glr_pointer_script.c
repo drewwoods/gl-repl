@@ -129,7 +129,6 @@ typedef enum {
     PS_WAIT_CLICK,
     PS_WAIT_TYPE,
     PS_WAIT_RING,
-    PS_WAIT_ECHO,
     PS_WAIT_PAUSE
 } PsWait;
 static PsWait g_step_wait = PS_WAIT_NONE;
@@ -782,9 +781,10 @@ static void ps_fire(const PsEvent *ev) {
     }
 }
 
-/* Select the completion condition for one untimed step. Overlays count as
- * the work of ring/echo steps; a click completes at synthesized release,
- * while its decorative ripple may overlap the following step. */
+/* Select the completion condition for one untimed step. A ring is itself an
+ * action and completes with its overlay; an echo is a non-blocking caption
+ * whose on-screen lifetime may overlap later actions. A click completes at
+ * synthesized release, while its decorative ripple may overlap too. */
 static void ps_wait_for_event(const PsEvent *ev) {
     switch (ev->verb) {
     case PS_GLIDE:      g_step_wait = PS_WAIT_GLIDE; break;
@@ -794,7 +794,7 @@ static void ps_wait_for_event(const PsEvent *ev) {
         g_step_wait = ev->cps > 0.0f ? PS_WAIT_TYPE : PS_WAIT_NONE;
         break;
     case PS_RING:       g_step_wait = PS_WAIT_RING; break;
-    case PS_ECHO:       g_step_wait = PS_WAIT_ECHO; break;
+    case PS_ECHO:       g_step_wait = PS_WAIT_NONE; break;
     case PS_PAUSE:      g_step_wait = PS_WAIT_PAUSE; break;
     default:            g_step_wait = PS_WAIT_NONE; break;
     }
@@ -808,8 +808,6 @@ static int ps_step_complete(void) {
     case PS_WAIT_TYPE:  return !g_type_active;
     case PS_WAIT_RING:
         return g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur;
-    case PS_WAIT_ECHO:
-        return g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur;
     case PS_WAIT_PAUSE: return g_pause_until < 0;
     }
     return 1;

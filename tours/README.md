@@ -56,9 +56,11 @@ There are two mutually exclusive timing styles:
   nondecreasing. Events can overlap unless a `pause` blocks dispatch.
 
 Do not mix the two forms in a file. `pause` works in both forms. In an untimed
-script, glides, clicks, paced typing, rings, captions, and pauses each finish
-before the next step starts; immediate actions advance on the next rendered
-frame.
+script, glides, clicks, paced typing, rings, and pauses each finish before the
+next step starts; immediate actions advance on the next rendered frame. An
+`echo` is deliberately non-blocking: its seconds parameter is its on-screen
+lifetime, and following events run while the caption remains visible. Put a
+`pause` after it when the caption needs an exclusive reading beat.
 
 ```text
 # Completion-driven tour
@@ -66,6 +68,8 @@ glide menu:file 0.6
 click
 glide item:new_scene 0.4
 click
+echo scene:0.25,0.76 18 2.5 A caption can label the next action.
+glide scene:0.55,0.30 0.8
 pause 0.5
 
 # Absolute-time recording script -- use this style for every event in its file
@@ -143,8 +147,16 @@ an unintended interaction.
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
 | Spotlight | `ring <point> <seconds>` | Shows a pulsing highlight ring for a positive duration. |
-| Caption | `echo <point> <height-px> <seconds> <text>` | Shows text at a point for a positive duration. The requested height chooses the nearest fixed bitmap font. |
+| Caption | `echo <point> <height-px> <seconds> <text>` | Shows text for the positive on-screen duration without delaying the next event. A later caption replaces it. The requested height chooses the nearest fixed bitmap font. |
 | Wait | `pause <seconds>` | Delays later events for a positive duration. |
+
+To show a caption without concurrent actions, follow it with a matching (or
+longer) pause:
+
+```text
+echo scene:0.25,0.76 18 2.5 Take a moment to notice the grid.
+pause 2.5
+```
 
 `click`, `rightclick`, `down`, and `up` use the current pointer when their
 point is omitted. A synthetic click releases roughly 0.1 seconds after its

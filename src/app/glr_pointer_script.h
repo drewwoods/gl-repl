@@ -13,7 +13,7 @@
  * Script format: one event per line, `#` comments. There are two forms:
  *
  * - Untimed lines (`verb ...`) run sequentially. The next step starts after
- *   the previous glide, click release, paced key, ring, echo, or pause has
+ *   the previous glide, click release, paced key, ring, or pause has
  *   completed. Immediate steps advance on the next rendered frame. This is
  *   the preferred form for live guided tours because stalls and frame-rate
  *   variation cannot make later steps overtake unfinished work.
@@ -68,9 +68,11 @@
  *   7.0  skey f12             # special key: f1..f12, up/down/left/right,
  *                             # home, end, pageup, pagedown
  *   8.0  echo scene:0.25,0.76 18 2 Ctrl+K   # caption text (point, cap
- *                             # height px, seconds) — labels how the next
- *                             # action was triggered. The px size picks the
- *                             # nearest fixed GLUT bitmap font (10/12/18/24)
+ *                             # height px, on-screen seconds). Echo does not
+ *                             # delay the next event; use `pause` when a
+ *                             # caption needs an exclusive reading beat.
+ *                             # The px size picks the nearest fixed GLUT
+ *                             # bitmap font (10/12/18/24)
  *
  * The same actions can be completion-driven by omitting timestamps:
  *
