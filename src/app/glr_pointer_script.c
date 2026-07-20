@@ -61,7 +61,8 @@ typedef struct {
     int    dur_frames;             /* glide/ring/echo duration           */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    special;                /* skey: GLUT_KEY_* code              */
-    float  size;                   /* echo: stroke cap height (px)       */
+    float  size;                   /* echo: requested cap height (px);   */
+                                   /* picks the nearest GLUT bitmap font */
     float  cps;                    /* key@N: chars/sec (0 = all at once) */
     char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed;      */
                                    /* echo: caption text to draw         */
@@ -107,7 +108,7 @@ static float g_ripple_x = 0.0f, g_ripple_y = 0.0f;
 static int   g_ring_start = -1, g_ring_dur = 0;
 static float g_ring_x = 0.0f, g_ring_y = 0.0f;
 
-/* Active echo caption: stroke text shown at a fixed screen spot. */
+/* Active echo caption: bitmap text shown at a fixed screen spot. */
 static int   g_echo_start = -1, g_echo_dur = 0;
 static float g_echo_x = 0.0f, g_echo_y = 0.0f, g_echo_size = 0.0f;
 static char  g_echo_text[PS_MAX_KEY_TEXT] = "";
@@ -702,13 +703,31 @@ static void ps_circle(float cx, float cy, float radius, int filled) {
     glEnd();
 }
 
-/* GLUT stroke-roman glyphs are ~119 units cap height; scaling by
- * size/PS_STROKE_CAP maps the requested cap height to window pixels. */
-#define PS_STROKE_CAP 119.05f
+/* Echo captions render in a fixed-size GLUT bitmap font (bitmap glyphs
+ * don't scale, so the script's requested cap height only selects the
+ * nearest font from this ladder). */
+static void *ps_echo_font(float cap_px) {
+    static const struct { float px; void *font; } k_fonts[] = {
+        { 10.0f, GLUT_BITMAP_HELVETICA_10 },
+        { 12.0f, GLUT_BITMAP_HELVETICA_12 },
+        { 18.0f, GLUT_BITMAP_HELVETICA_18 },
+        { 24.0f, GLUT_BITMAP_TIMES_ROMAN_24 },
+    };
+    size_t best = 0;
+    float best_d = -1.0f;
+    for (size_t i = 0; i < sizeof(k_fonts) / sizeof(k_fonts[0]); i++) {
+        float d = fabsf(cap_px - k_fonts[i].px);
+        if (best_d < 0.0f || d < best_d) { best_d = d; best = i; }
+    }
+    return k_fonts[best].font;
+}
 
-static void ps_stroke_text(const char *s) {
+/* Draw a NUL-terminated string with its baseline left edge at (x, y) in
+ * window pixels (2D ortho is already active). */
+static void ps_bitmap_text(float x, float y, void *font, const char *s) {
+    glRasterPos2f(x, y);
     for (; *s; s++)
-        glutStrokeCharacter(GLUT_STROKE_MONO_ROMAN, (int)(unsigned char)*s);
+        glutBitmapCharacter(font, (unsigned char)*s);
 }
 
 /* Classic pointer arrow at the current position. Local coords are y-down
@@ -777,9 +796,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                   4.0f + 18.0f * t, 0);
     }
 
-    /* Echo caption: stroke text (e.g. "Ctrl+K") pinned at a screen spot to
-     * label how the next action was triggered. Drawn twice — a dark halo,
-     * then bright glyphs — so it reads over any scene, then eased in/out. */
+    /* Echo caption: bitmap text (e.g. "Ctrl+K") pinned at a screen spot to
+     * label how the next action was triggered. A 1px dark outline (eight
+     * offset passes) is laid down first, then the bright glyphs on top, so
+     * it reads over any scene; the whole caption eases in/out. */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
         float age = (float)(g_frame - g_echo_start);
@@ -787,25 +807,19 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         if (age < 9.0f) alpha *= age / 9.0f;          /* ease in ~0.15s   */
         float left = (float)g_echo_dur - age;
         if (left < 30.0f) alpha *= left / 30.0f;       /* ease out ~0.5s   */
-        float s = g_echo_size / PS_STROKE_CAP;
+        void *font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
-        float halo = g_echo_size * 0.09f + 2.0f;
-        float body = g_echo_size * 0.05f + 1.0f;
-        int pass;
-        for (pass = 0; pass < 2; pass++) {
-            if (pass == 0) {
-                glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.85f);
-                glLineWidth(halo);
-            } else {
-                glColor4f(0.98f, 0.98f, 0.99f, alpha);
-                glLineWidth(body);
-            }
-            glPushMatrix();
-            glTranslatef(g_echo_x, cy, 0.0f);
-            glScalef(s, s, 1.0f);
-            ps_stroke_text(g_echo_text);
-            glPopMatrix();
-        }
+        static const float k_halo[][2] = {
+            { -1, -1 }, { 0, -1 }, { 1, -1 }, { -1, 0 },
+            {  1,  0 }, { -1, 1 }, { 0,  1 }, {  1, 1 },
+        };
+        int i;
+        glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.85f);
+        for (i = 0; i < (int)(sizeof(k_halo) / sizeof(k_halo[0])); i++)
+            ps_bitmap_text(g_echo_x + k_halo[i][0], cy + k_halo[i][1],
+                           font, g_echo_text);
+        glColor4f(0.98f, 0.98f, 0.99f, alpha);
+        ps_bitmap_text(g_echo_x, cy, font, g_echo_text);
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);

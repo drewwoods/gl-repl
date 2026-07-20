@@ -58,7 +58,8 @@
  *                             # home, end, pageup, pagedown
  *   8.0  echo scene:0.25,0.76 18 2 Ctrl+K   # caption text (point, cap
  *                             # height px, seconds) — labels how the next
- *                             # action was triggered (GLUT stroke text)
+ *                             # action was triggered. The px size picks the
+ *                             # nearest fixed GLUT bitmap font (10/12/18/24)
  *
  * Events fire in file order once their time is reached; keep them sorted.
  * `key` + `skey` let a script type a whole demo (commit lines with `key ;`,
