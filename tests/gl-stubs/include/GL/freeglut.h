@@ -95,10 +95,14 @@ static const char glut_bitmap_8_by_13_stub = 0;
 static const char glut_bitmap_9_by_15_stub = 0;
 static const char glut_bitmap_helvetica_10_stub = 0;
 static const char glut_bitmap_helvetica_12_stub = 0;
+static const char glut_bitmap_helvetica_18_stub = 0;
+static const char glut_bitmap_times_roman_24_stub = 0;
 #define GLUT_BITMAP_8_BY_13 ((void *)(uintptr_t)&glut_bitmap_8_by_13_stub)
 #define GLUT_BITMAP_9_BY_15 ((void *)(uintptr_t)&glut_bitmap_9_by_15_stub)
 #define GLUT_BITMAP_HELVETICA_10 ((void *)(uintptr_t)&glut_bitmap_helvetica_10_stub)
 #define GLUT_BITMAP_HELVETICA_12 ((void *)(uintptr_t)&glut_bitmap_helvetica_12_stub)
+#define GLUT_BITMAP_HELVETICA_18 ((void *)(uintptr_t)&glut_bitmap_helvetica_18_stub)
+#define GLUT_BITMAP_TIMES_ROMAN_24 ((void *)(uintptr_t)&glut_bitmap_times_roman_24_stub)
 
 static const char glut_stroke_roman_stub = 0;
 static const char glut_stroke_mono_roman_stub = 0;
