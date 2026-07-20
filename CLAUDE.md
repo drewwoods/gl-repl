@@ -240,7 +240,9 @@ Interaction comes from `GLR_POINTER_SCRIPT=<file>`
 ([`src/app/glr_pointer_script.c`](src/app/glr_pointer_script.c)): synthetic
 pointer/keyboard events, either absolute-timed on the rendered-frame clock or
 completion-driven when timestamps are omitted (with `pause <seconds>` for
-intentional dwell time). Capture mode implies `GLR_TICK_PER_FRAME`; events are
+intentional dwell time; `echo` durations control only how long captions remain
+on screen and do not block following events). Capture mode implies
+`GLR_TICK_PER_FRAME`; events are
 dispatched through the normal `glr_ctrl_*` GLUT entry
 points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
 `rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed

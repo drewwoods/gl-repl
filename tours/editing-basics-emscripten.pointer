@@ -10,6 +10,7 @@ glide shell:new 0.8             # browser shell's New button
 click shell:new
 glide scene:0.55,0.30 0.6       # bring the tour cursor back into the canvas
 echo scene:0.25,0.76 18 3.4 A new scene seeds the GL boilerplate.
+pause 3.4
 echo scene:0.25,0.76 18 3.4 Type a command; the ; key commits it.
 key@20 glRotatef(t * 40, 0, 1, 0)
 key ;
@@ -36,4 +37,5 @@ pause 1.6                       # let the autocomplete ghost linger
 key@20 orus(0.25, 1.4, 16, 32)
 key ;
 echo scene:0.25,0.76 18 4.0 Lines re-run every frame. Undo: Ctrl+Z.
+pause 4.0
 echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!

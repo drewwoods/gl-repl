@@ -197,11 +197,13 @@ hands control back by itself).
 - *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
 
 Tours aim at named UI elements (menus, rows, buttons) resolved against the
-live layout as they play, so they work at any window size. Each tour step
-starts when the previous glide, click, typed text, caption, or intentional
-pause has completed, rather than relying on absolute timestamps. The web
-build ships a browser-safe tour catalog; Editing Basics uses the shell's
-top **new** button because the native File menu is replaced by web controls.
+live layout as they play, so they work at any window size. Each action starts
+when the previous glide, click, typed text, or intentional pause has completed,
+rather than relying on absolute timestamps. Captions remain on screen for their
+declared duration while the actions they describe continue; a tour uses an
+explicit pause when text needs an exclusive reading beat. The web build ships a
+browser-safe tour catalog; Editing Basics uses the shell's top **new** button
+because the native File menu is replaced by web controls.
 
 ---
 

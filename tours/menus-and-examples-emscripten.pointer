@@ -4,7 +4,9 @@
 
 move scene:0.55,0.30
 echo scene:0.25,0.76 18 3.2 Welcome! This tour drives gl-repl.
+pause 3.2
 echo scene:0.25,0.76 18 2.8 Press any key or click to stop it.
+pause 2.8
 echo scene:0.25,0.76 18 3.6 The Scene menu holds the examples.
 glide menu:scene 0.9
 click
