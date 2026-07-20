@@ -62,6 +62,7 @@ typedef struct {
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    special;                /* skey: GLUT_KEY_* code              */
     float  size;                   /* echo: stroke cap height (px)       */
+    float  cps;                    /* key@N: chars/sec (0 = all at once) */
     char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed;      */
                                    /* echo: caption text to draw         */
 } PsEvent;
@@ -90,6 +91,15 @@ static float g_glide_to_x = 0.0f, g_glide_to_y = 0.0f;
 /* Pending synthesized release for click/rightclick. */
 static int g_release_frame = -1;
 static int g_release_button = 0;
+
+/* Active paced typing (`key@N`): remaining text feeds through the keyboard
+ * dispatch one character at a time on the frame clock, like the tutorial
+ * comment reveal — instead of the whole payload landing on one frame. */
+static int   g_type_active = 0;
+static int   g_type_start = 0;               /* frame of the first char   */
+static int   g_type_sent = 0;
+static float g_type_cps = 0.0f;
+static char  g_type_text[PS_MAX_KEY_TEXT] = "";
 
 /* Overlay bookkeeping: last press (ripple) and active highlight ring. */
 static int g_ripple_frame = -1;
@@ -251,8 +261,17 @@ static int ps_parse_line(const char *line, PsEvent *ev) {
         return (sscanf(args, "%d", &ev->wheel_dir) == 1 &&
                 ev->wheel_dir != 0) ? 1 : -1;
     }
-    if (strcmp(verb, "key") == 0) {
+    if (strncmp(verb, "key", 3) == 0 &&
+        (verb[3] == '\0' || verb[3] == '@')) {
         ev->verb = PS_KEY;
+        /* `key@<cps>` paces the payload at chars/sec on the frame clock
+         * (bare `key` feeds every byte on the fire frame, as before). */
+        if (verb[3] == '@') {
+            int n = 0;
+            if (sscanf(verb + 4, "%f%n", &ev->cps, &n) != 1 ||
+                verb[4 + n] != '\0' || ev->cps <= 0.0f)
+                return -1;
+        }
         /* Payload is the rest of the line, newline stripped, escapes
          * resolved — so `key glColor3f(` keeps its punctuation. */
         char raw[PS_MAX_KEY_TEXT];
@@ -367,6 +386,10 @@ static void ps_reset_runtime(void) {
     g_ring_start = -1;
     g_echo_start = -1;
     g_echo_text[0] = '\0';
+    /* A canceled tour drops unsent paced-typing text — the user took over;
+     * more synthetic keystrokes would fight their input. */
+    g_type_active = 0;
+    g_type_text[0] = '\0';
 }
 
 int glr_pointer_script_start_lines(const char *const *lines, int count) {
@@ -421,6 +444,24 @@ static void ps_press(int button) {
 static void ps_release(int button) {
     glr_ctrl_mouse(button, GLUT_UP, (int)(g_px + 0.5f), (int)(g_py + 0.5f));
     g_button_held = -1;
+}
+
+/* Feed paced-typing characters up to index `upto` (exclusive). */
+static void ps_type_send(int upto) {
+    while (g_type_text[g_type_sent] && g_type_sent < upto) {
+        glr_ctrl_keyboard((unsigned char)g_type_text[g_type_sent++],
+                          (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+    }
+    if (!g_type_text[g_type_sent])
+        g_type_active = 0;
+}
+
+/* Complete any in-flight paced typing immediately. Called before another
+ * key/skey event dispatches so a too-tight schedule never interleaves or
+ * drops payload text — the remainder snaps in, then the new event fires. */
+static void ps_type_flush(void) {
+    if (g_type_active)
+        ps_type_send((int)sizeof(g_type_text));
 }
 
 void glr_pointer_script_stop(void) {
@@ -560,11 +601,23 @@ static void ps_fire(const PsEvent *ev) {
                             (int)(g_px + 0.5f), (int)(g_py + 0.5f));
         break;
     case PS_KEY:
-        for (const char *c = ev->text; *c; c++)
-            glr_ctrl_keyboard((unsigned char)*c,
-                              (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        ps_type_flush();
+        if (ev->cps > 0.0f) {
+            /* Paced: stash the payload; the per-frame step below the event
+             * loop sends the first character this same frame. */
+            g_type_active = 1;
+            g_type_start = g_frame;
+            g_type_sent = 0;
+            g_type_cps = ev->cps;
+            snprintf(g_type_text, sizeof(g_type_text), "%s", ev->text);
+        } else {
+            for (const char *c = ev->text; *c; c++)
+                glr_ctrl_keyboard((unsigned char)*c,
+                                  (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        }
         break;
     case PS_SKEY:
+        ps_type_flush();
         glr_ctrl_special(ev->special,
                          (int)(g_px + 0.5f), (int)(g_py + 0.5f));
         break;
@@ -604,6 +657,12 @@ void glr_pointer_script_frame(void) {
         ps_fire(&g_events[g_next_event++]);
     if (!g_active) return;
 
+    /* Step paced typing: characters due by now = elapsed * cps, plus one
+     * so the first character lands on the event's own fire frame. */
+    if (g_type_active)
+        ps_type_send((int)((float)(g_frame - g_type_start) *
+                           g_type_cps / PS_FPS) + 1);
+
     /* Step the active glide AFTER event fire so the glide's own start
      * frame emits its first (near-source) sample this same frame. */
     if (g_glide_active) {
@@ -622,7 +681,8 @@ void glr_pointer_script_frame(void) {
      * back. Env-driven capture runs keep the overlay up until the recorder
      * exits instead — the clip should never end cursor-less. */
     if (g_tour && g_next_event >= g_event_count &&
-        g_release_frame < 0 && !g_glide_active && g_button_held < 0 &&
+        g_release_frame < 0 && !g_glide_active && !g_type_active &&
+        g_button_held < 0 &&
         (g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur) &&
         (g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur) &&
         (g_ripple_frame < 0 || g_frame - g_ripple_frame >= PS_RIPPLE_FRAMES))

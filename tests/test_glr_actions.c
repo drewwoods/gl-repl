@@ -807,6 +807,44 @@ static void test_tour_auto_stop(void) {
                glr_pointer_script_active(), 0);
 }
 
+/* `key@<cps>` paces the payload at chars/sec on the frame clock instead of
+ * landing it all on the fire frame; malformed rates are authoring errors. */
+static void test_tour_paced_key(void) {
+    static const char *const bad_zero[] = { "0.0 key@0 x" };
+    static const char *const bad_rate[] = { "0.0 key@ x" };
+    static const char *const bad_tail[] = { "0.0 key@12x y" };
+    /* 30 cps = one char every 2 frames; "abc" spans ~5 frames. */
+    static const char *const paced[] = { "0.0 key@30 abc" };
+
+    glr_ctrl_reset_all();
+
+    ASSERT_INT("key@0 rejected",
+               glr_pointer_script_start_lines(bad_zero, 1), 0);
+    ASSERT_INT("key@ with no rate rejected",
+               glr_pointer_script_start_lines(bad_rate, 1), 0);
+    ASSERT_INT("key@12x trailing junk rejected",
+               glr_pointer_script_start_lines(bad_tail, 1), 0);
+
+    int len0 = editor_state_input().input_len;
+    ASSERT_INT("paced key script loads",
+               glr_pointer_script_start_lines(paced, 1), 1);
+
+    /* Frame 0 fires the event and delivers exactly the first character. */
+    glr_pointer_script_frame();
+    ASSERT_INT("first char lands on the fire frame",
+               editor_state_input().input_len, len0 + 1);
+    ASSERT_INT("tour still active while typing is in flight",
+               glr_pointer_script_tour_active(), 1);
+
+    /* Remaining chars arrive at 30 cps; the tour auto-stops once done. */
+    for (int i = 0; i < 8 && glr_pointer_script_tour_active(); i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("full payload delivered",
+               editor_state_input().input_len, len0 + 3);
+    ASSERT_INT("tour auto-stopped after paced typing finished",
+               glr_pointer_script_tour_active(), 0);
+}
+
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
  * the audio module's cfg_mode setter, not a raw pointer write. */
 static void test_audio_config_direct_set(void) {
@@ -2080,6 +2118,7 @@ int main(void) {
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
     test_tour_auto_stop();
+    test_tour_paced_key();
     test_compute_profile_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();

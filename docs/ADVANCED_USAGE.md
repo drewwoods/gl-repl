@@ -224,7 +224,9 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
 - **Scripted input** covers the whole input surface: `move`/`glide` pointer
   motion (hover opens menu flyouts exactly as a real mouse), `click` /
   `rightclick` / `down` / `up`, `wheel`, `ring` (pulsing highlight around a
-  UI element), `key` (typed text, incl. `\cX` control bytes like Ctrl+T) and
+  UI element), `key` (typed text, incl. `\cX` control bytes like Ctrl+T;
+  `key@<cps>` paces the text at N characters per second so it types out like
+  a person instead of appearing at once) and
   `skey` (F-keys, arrows) — so whole typed demos are re-recordable from a
   script. Grammar and examples: [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
 - A malformed script line fails the run with a file:line message rather than
