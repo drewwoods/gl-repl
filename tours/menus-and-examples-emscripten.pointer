@@ -1,0 +1,48 @@
+# Menus & Examples (web) - browser-safe variant of the native menu walk.
+# The trimmed web example catalog omits Whale, so this tour selects the
+# Ringed planet showcase instead. Every point is resolved from live layout.
+
+move scene:0.55,0.30
+echo scene:0.25,0.76 18 3.2 Welcome! This tour drives gl-repl.
+echo scene:0.25,0.76 18 2.8 Press any key or click to stop it.
+echo scene:0.25,0.76 18 3.6 The Scene menu holds the examples.
+glide menu:scene 0.9
+click
+glide item:all 0.7
+glide item:3d 0.6
+glide subenter:3d 0.5
+echo scene:0.25,0.76 18 3.2 Hover a tag; slide into its flyout.
+glide sub:3d:animated_ring 0.5
+glide sub:3d:torus_knot 0.7
+ring sub:3d:torus_knot 1.2
+glide sub:3d:ringed_planet 1.1
+echo scene:0.25,0.76 18 2.6 Click loads the example.
+click
+pause 3.5
+echo scene:0.25,0.76 18 3.4 Tutorials teach step by step.
+glide menu:tutorials 1.0
+click
+glide item:geometry 0.7
+glide subenter:geometry 0.4
+glide sub:geometry:first_triangle 0.5
+ring sub:geometry:first_triangle 1.6
+echo scene:0.25,0.76 18 3.6 Config: grids, themes, overlays.
+glide menu:config 0.8
+click
+glide item:rendering 0.6
+glide item:overlays 0.7
+glide subenter:overlays 0.4
+glide sub:overlays:vertex_points 0.5
+ring sub:overlays:vertex_points 1.2
+click
+echo scene:0.25,0.76 18 2.8 Toggles apply live.
+click
+click scene:0.55,0.30
+echo scene:0.25,0.76 18 3.2 Replay rebuilds the scene call by call.
+glide pin:replay 1.2
+click
+glide scene:0.70,0.40 1.0
+pause 5.0
+key \cr
+glide scene:0.55,0.30 0.8
+echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!

@@ -48,13 +48,11 @@ static const char *g_menu_labels[NUM_MENUS] = {
 
 /* The browser shell owns file I/O in Emscripten: New/Open/Download are
  * DOM controls wired to web-safe import/export bridges, not path prompts.
- * Tours are hidden there too — the catalog leans on the File menu (Editing
- * Basics opens File > New Scene), and a tour dying mid-flight on a hidden
- * target is worse than the menu being absent. Symbolic targets otherwise
- * resolve fine on web; revisit if a web-safe tour set lands. */
+ * Tours use a web-specific catalog there; its Editing Basics script targets
+ * the shell's New button instead of the hidden native File menu. */
 static int menu_visible(int menu_id) {
 #if defined(__EMSCRIPTEN__)
-    if (menu_id == MENU_FILE || menu_id == MENU_TOURS)
+    if (menu_id == MENU_FILE)
         return 0;
 #endif
     return menu_id >= 0 && menu_id < NUM_MENUS;

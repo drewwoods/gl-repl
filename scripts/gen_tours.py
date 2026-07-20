@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the compiled-in guided-tour catalog from tours/catalog.ini.
+"""Generate a compiled-in guided-tour catalog from tours/catalog*.ini.
 
 Mirrors scripts/gen_examples.py: the catalog names each tour and points at
 its pointer-script file (grammar: src/app/glr_pointer_script.h); this script

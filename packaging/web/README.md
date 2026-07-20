@@ -67,6 +67,11 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   [`src/app/glr_web_io.c`](../../src/app/glr_web_io.c)'s `EMSCRIPTEN_KEEPALIVE` exports
   (`glr_web_new_scene`, `glr_web_load_scene_text`, `glr_web_export_scene`) —
   see `-sEXPORTED_FUNCTIONS` in the Makefile's `WEB=1` block.
+- **Guided tours**: the in-canvas Tours menu uses
+  [`tours/catalog-emscripten.ini`](../../tours/catalog-emscripten.ini). Its
+  Editing Basics variant targets `shell:new`; the pointer-script bridge
+  resolves that symbolic target against the real DOM New button and queues
+  its existing click handler instead of relying on the hidden native File menu.
 - **URL sharing**: the *share* button encodes the whole scene into
   `location.hash` so a copy-pasted link reproduces it — no server involved,
   works on static hosting. Payload format is

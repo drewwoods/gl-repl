@@ -535,7 +535,11 @@ EXAMPLES_CATALOG = examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
+ifeq ($(WEB),1)
+TOURS_CATALOG = tours/catalog-emscripten.ini
+else
 TOURS_CATALOG = tours/catalog.ini
+endif
 TOUR_SCRIPT_SRCS = $(wildcard tours/*.pointer)
 GENERATED_TOURS_INC = build/generated/glr_tours_data.inc
 COMMAND_DESCRIPTIONS_SOURCE = src/repl/command_descriptions.txt

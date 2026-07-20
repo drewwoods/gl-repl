@@ -34,6 +34,7 @@
  *                         cross sibling rows and swap the flyout)
  *   sub:overlays:vertex_points   flyout row: parent label + row label
  *   pin:replay            pinned button: replay / search / view (2D-3D)
+ *   shell:new             Emscripten shell's DOM New button (web only)
  *   scene:0.55,0.30       fraction of the scene viewport rect (x,y from
  *                         its top-left)
  *
@@ -113,7 +114,8 @@ void glr_pointer_script_stop(void);
  * the env-driven capture mode, which is never canceled by user input. */
 int glr_pointer_script_tour_active(void);
 
-/* Resolve one symbolic target token (e.g. "item:new_scene", "scene:0.5,0.5")
+/* Resolve one symbolic target token (e.g. "item:new_scene", "scene:0.5,0.5",
+ * or the Emscripten-only "shell:new")
  * against the live layout, filling (*mx, *my) in mouse space. Returns 1 on
  * success, 0 when the target is unknown or currently unresolvable. The same
  * resolver every scripted point goes through — exposed so tests can pin the
