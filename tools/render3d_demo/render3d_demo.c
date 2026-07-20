@@ -32,6 +32,190 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* --- Hot reload (opt-in, RENDER3D_HOT_RELOAD=1 via `make render3d-hot`) --
+ *
+ * When enabled, the src/render3d subtree is not linked into this binary; it
+ * lives in a shared library the host dlopen()s. The host watches the render3d
+ * sources and, on a save, rebuilds that library and re-dlopen()s a fresh copy,
+ * so the module can be tweaked live. Every render3d_* call site below routes
+ * through a function pointer resolved from the library (the macros further
+ * down), while all demo state (camera/view/grid/lights/backdrop) stays in this
+ * TU and survives the reload untouched. See the render3d-hot Makefile block. */
+#if RENDER3D_HOT_RELOAD
+#include <dlfcn.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <time.h>
+
+/* Entry points resolved out of the reloadable library. */
+static void (*g_hot_init_gl)(void);
+static void (*g_hot_state_init)(Render3dState *);
+static int  (*g_hot_draw_scene)(Render3dState *, const Render3dRenderConfig *);
+static void (*g_hot_get_active_projection)(const Render3dState *,
+                                           Render3dProjectionDesc *);
+
+/* Route the render3d_* call sites through the pointers. Defined AFTER
+ * render3d/render.h is included, so the header's prototypes are untouched —
+ * these function-like macros only rewrite the call expressions in this file. */
+#define render3d_init_gl()                   g_hot_init_gl()
+#define render3d_state_init(s)               g_hot_state_init(s)
+#define render3d_draw_scene(s, c)            g_hot_draw_scene((s), (c))
+#define render3d_get_active_projection(s, o) g_hot_get_active_projection((s), (o))
+
+static void  *g_hot_handle       = NULL;  /* currently dlopen'd image */
+static char   g_hot_active_path[1024];    /* its unique on-disk copy */
+static int    g_hot_seq          = 0;     /* unique-copy counter */
+static int    g_hot_reload_count = 0;     /* successful reloads (HUD) */
+static int    g_hot_last_ok      = 1;     /* last build+reload succeeded */
+static time_t g_hot_src_mtime    = 0;     /* newest render3d source seen */
+
+/* Rebuild is a two-step handshake with the frame loop so the on-screen
+ * "rebuilding" banner is actually visible: a detected change only ARMS the
+ * rebuild (HOT_BUILD_PENDING); display_func renders + swaps the banner frame,
+ * then runs the blocking build (HOT_BUILDING), then returns to HOT_IDLE. */
+enum { HOT_IDLE = 0, HOT_BUILD_PENDING, HOT_BUILDING };
+static int    g_hot_state = HOT_IDLE;
+
+/* Newest mtime of any .c/.h under `dir` (recursive). Skips dotfiles, which
+ * also drops editor swap files (.grid.c.swp) that would otherwise thrash. */
+static time_t hot_newest_mtime(const char *dir) {
+    DIR *d = opendir(dir);
+    if (!d) return 0;
+    time_t newest = 0;
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.') continue;
+        char path[1024];
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            time_t sub = hot_newest_mtime(path);
+            if (sub > newest) newest = sub;
+        } else {
+            const char *dot = strrchr(e->d_name, '.');
+            if (dot && (strcmp(dot, ".c") == 0 || strcmp(dot, ".h") == 0)
+                && st.st_mtime > newest)
+                newest = st.st_mtime;
+        }
+    }
+    closedir(d);
+    return newest;
+}
+
+static int hot_copy_file(const char *src, const char *dst) {
+    FILE *in = fopen(src, "rb");
+    if (!in) return 0;
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return 0; }
+    char buf[1 << 16];
+    size_t n;
+    int ok = 1;
+    while ((n = fread(buf, 1, sizeof buf, in)) > 0)
+        if (fwrite(buf, 1, n, out) != n) { ok = 0; break; }
+    if (ferror(in)) ok = 0;
+    fclose(in);
+    if (fclose(out) != 0) ok = 0;
+    return ok;
+}
+
+/* dlopen a *fresh copy* of the freshly-built library and swap its symbols in.
+ * The copy-to-unique-path dance is deliberate: macOS dyld caches images by
+ * path and keeps them mapped past dlclose, so re-dlopen()ing the canonical
+ * path would hand back the stale code. Resolving into locals first means a
+ * broken library can't clobber the working pointers. Returns 1 on success. */
+static int hot_load(void) {
+    char newpath[1024];
+    snprintf(newpath, sizeof newpath, "%s.reload.%d",
+             RENDER3D_HOT_LIB_PATH, g_hot_seq++);
+
+    if (!hot_copy_file(RENDER3D_HOT_LIB_PATH, newpath)) {
+        fprintf(stderr, "[hot] copy of %s failed\n", RENDER3D_HOT_LIB_PATH);
+        return 0;
+    }
+
+    void *h = dlopen(newpath, RTLD_NOW | RTLD_LOCAL);
+    if (!h) {
+        fprintf(stderr, "[hot] dlopen failed: %s\n", dlerror());
+        remove(newpath);
+        return 0;
+    }
+
+    void *a = dlsym(h, "render3d_init_gl");
+    void *b = dlsym(h, "render3d_state_init");
+    void *c = dlsym(h, "render3d_draw_scene");
+    void *e = dlsym(h, "render3d_get_active_projection");
+    if (!a || !b || !c || !e) {
+        fprintf(stderr, "[hot] dlsym failed: %s\n", dlerror());
+        dlclose(h);
+        remove(newpath);
+        return 0;
+    }
+
+    if (g_hot_handle) dlclose(g_hot_handle);
+    if (g_hot_active_path[0]) remove(g_hot_active_path);
+    g_hot_handle = h;
+    snprintf(g_hot_active_path, sizeof g_hot_active_path, "%s", newpath);
+
+    g_hot_init_gl               = (void (*)(void))a;
+    g_hot_state_init            = (void (*)(Render3dState *))b;
+    g_hot_draw_scene            = (int (*)(Render3dState *,
+                                           const Render3dRenderConfig *))c;
+    g_hot_get_active_projection = (void (*)(const Render3dState *,
+                                            Render3dProjectionDesc *))e;
+    return 1;
+}
+
+/* Polled from idle: if a render3d source changed, ARM a rebuild for the next
+ * frame. Throttled so the directory walk stays cheap. Deliberately does not
+ * build here — the build runs post-swap in display_func so the banner frame
+ * reaches the screen first. */
+static void hot_poll_sources(void) {
+    if (g_hot_state != HOT_IDLE) return;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double now = (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
+    static double last_check = 0.0;
+    if (now - last_check < 0.25) return;
+    last_check = now;
+
+    time_t newest = hot_newest_mtime(RENDER3D_HOT_SRC_DIR);
+    if (newest <= g_hot_src_mtime) return;
+    g_hot_src_mtime = newest;
+
+    g_hot_state = HOT_BUILD_PENDING;
+    glutPostRedisplay();
+}
+
+/* The blocking rebuild + reload. MUST be called after display_func has already
+ * rendered and swapped a frame showing the "rebuilding" banner, so it is on
+ * screen while this (frozen) compile runs. The window pauses for the compile —
+ * fine for a dev tool. */
+static void hot_run_build(void) {
+    fprintf(stderr, "[hot] change detected — rebuilding src/render3d ...\n");
+    int rc = system(RENDER3D_HOT_BUILD_CMD);
+    if (rc != 0) {
+        fprintf(stderr, "[hot] build failed (status %d) — keeping module #%d\n",
+                rc, g_hot_reload_count);
+        g_hot_last_ok = 0;
+        return;
+    }
+    if (hot_load()) {
+        g_hot_reload_count++;
+        g_hot_last_ok = 1;
+        /* Re-run one-time GL init so the fresh code re-establishes any GL-side
+         * global state it owns (ambient term, post-process caches). Demo state
+         * lives in this TU and is deliberately not reset. */
+        render3d_init_gl();
+        fprintf(stderr, "[hot] reloaded module #%d\n", g_hot_reload_count);
+    } else {
+        g_hot_last_ok = 0;
+    }
+}
+#endif /* RENDER3D_HOT_RELOAD */
+
 /* --- Window + animation state ------------------------------------------ */
 
 static int   g_window_w = 960;
@@ -281,7 +465,12 @@ static void render_hud(void) {
     int y = g_window_h - 20;
 
     /* Status panel (always on while HUD is on). */
-    int panel_h = line_h * 6 + 10;
+#if RENDER3D_HOT_RELOAD
+    int panel_lines = 7;
+#else
+    int panel_lines = 6;
+#endif
+    int panel_h = line_h * panel_lines + 10;
     draw_panel_bg(8, y - panel_h + line_h, 360, panel_h);
 
     glColor4f(0.95f, 0.95f, 1.00f, 1.0f);
@@ -315,7 +504,19 @@ static void render_hud(void) {
     snprintf(buf, sizeof buf,
              "Themes  grid=%d  axes=%d  backdrop=%d",
              g_grid_theme, g_axes_theme, g_backdrop_mode);
-    draw_text(14, y, buf); y -= line_h + 6;
+    draw_text(14, y, buf); y -= line_h;
+#if RENDER3D_HOT_RELOAD
+    const char *hot_status = (g_hot_state != HOT_IDLE) ? "building..."
+                           : (g_hot_last_ok ? "ok" : "FAILED");
+    snprintf(buf, sizeof buf,
+             "Hot     reloads=%d  status=%s",
+             g_hot_reload_count, hot_status);
+    if (g_hot_state != HOT_IDLE)   glColor4f(1.00f, 0.80f, 0.35f, 1.0f);
+    else if (!g_hot_last_ok)       glColor4f(1.00f, 0.55f, 0.45f, 1.0f);
+    draw_text(14, y, buf); y -= line_h;
+    glColor4f(0.95f, 0.95f, 1.00f, 1.0f);
+#endif
+    y -= 6;
 
     if (g_show_help) {
         static const char *help[] = {
@@ -352,6 +553,66 @@ static void render_hud(void) {
     glPopAttrib();
 }
 
+#if RENDER3D_HOT_RELOAD
+/* A prominent centered banner shown while a rebuild is armed / running, so the
+ * "rebuilding" state is visible even with the HUD hidden. Drawn every frame
+ * whose g_hot_state != HOT_IDLE; the frame carrying it is swapped to screen
+ * before hot_run_build() blocks (see display_func). */
+static void render_hot_banner(void) {
+    if (g_hot_state == HOT_IDLE) return;
+
+    glPushAttrib(GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT
+                 | GL_LINE_BIT | GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, g_window_w, 0, g_window_h);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const char *msg = "* Rebuilding & reloading src/render3d ...";
+    int text_w = (int)strlen(msg) * 8;   /* GLUT_BITMAP_8_BY_13 is 8px wide */
+    int pad    = 16;
+    int bw     = text_w + pad * 2;
+    int bh     = 34;
+    int bx     = (g_window_w - bw) / 2;
+    if (bx < 8) bx = 8;
+    int by     = g_window_h - 78;
+
+    glColor4f(0.14f, 0.11f, 0.03f, 0.90f);
+    glBegin(GL_QUADS);
+    glVertex2i(bx,      by);
+    glVertex2i(bx + bw, by);
+    glVertex2i(bx + bw, by + bh);
+    glVertex2i(bx,      by + bh);
+    glEnd();
+
+    glColor4f(1.00f, 0.75f, 0.25f, 1.0f);
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2i(bx,      by);
+    glVertex2i(bx + bw, by);
+    glVertex2i(bx + bw, by + bh);
+    glVertex2i(bx,      by + bh);
+    glEnd();
+
+    glColor4f(1.00f, 0.92f, 0.55f, 1.0f);
+    draw_text(bx + pad, by + bh / 2 - 5, msg);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopAttrib();
+}
+#endif /* RENDER3D_HOT_RELOAD */
+
 /* --- GLUT callbacks ---------------------------------------------------- */
 
 /* Populate GL_MODELVIEW with the orbit-camera transform. The scene
@@ -383,7 +644,23 @@ static void display_func(void) {
 
     if (g_show_hud) render_hud();
 
+#if RENDER3D_HOT_RELOAD
+    render_hot_banner();
+#endif
+
     glutSwapBuffers();
+
+#if RENDER3D_HOT_RELOAD
+    /* The banner frame is now on screen. Only NOW run the blocking rebuild +
+     * reload, so the "rebuilding" state is visible for the whole compile
+     * (the window is frozen showing this swapped frame until it returns). */
+    if (g_hot_state == HOT_BUILD_PENDING) {
+        g_hot_state = HOT_BUILDING;
+        hot_run_build();
+        g_hot_state = HOT_IDLE;
+        glutPostRedisplay();
+    }
+#endif
 }
 
 static void reshape_func(int w, int h) {
@@ -393,6 +670,9 @@ static void reshape_func(int w, int h) {
 }
 
 static void idle_func(void) {
+#if RENDER3D_HOT_RELOAD
+    hot_poll_sources();
+#endif
     g_anim_t += 0.016f;
     step_projection_mix(0.016f);
     glutPostRedisplay();
@@ -515,6 +795,21 @@ int main(int argc, char **argv) {
     glutCreateWindow("scene-module teapot demo");
 
     glEnable(GL_DEPTH_TEST);
+
+#if RENDER3D_HOT_RELOAD
+    /* Load the reloadable src/render3d library before its first use, then
+     * arm the watcher against the current source state so we only rebuild on
+     * an actual edit. */
+    if (!hot_load()) {
+        fprintf(stderr, "[hot] initial load of %s failed — run `make render3d-hot` first\n",
+                RENDER3D_HOT_LIB_PATH);
+        return 1;
+    }
+    g_hot_src_mtime = hot_newest_mtime(RENDER3D_HOT_SRC_DIR);
+    fprintf(stderr, "[hot] watching %s — edit any .c/.h and save to reload live\n",
+            RENDER3D_HOT_SRC_DIR);
+#endif
+
     render3d_init_gl();
     render3d_state_init(&g_scene_renderer);
 

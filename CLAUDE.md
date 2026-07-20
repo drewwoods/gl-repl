@@ -997,6 +997,23 @@ exercises the scene contract with a non-REPL geometry callback — it builds
 without dragging in the REPL editor / controller, which is the load-bearing
 proof that `src/render3d/` has no hard dependency on REPL code.
 
+`make render3d-hot` builds a hot-reloadable variant (`render3d_hot_demo`) from
+the same `render3d_demo.c` (`-DRENDER3D_HOT_RELOAD=1`): the `src/render3d`
+subtree is compiled into a shared library the host `dlopen()`s instead of
+static-linking. The running host watches the source tree and, on a save,
+rebuilds just that library (`make render3d-hot-lib`) and re-`dlopen()`s a fresh
+**uniquely-named copy** (macOS dyld caches images by path, so reusing the
+canonical path returns stale code), so `src/render3d/*.c` bodies can be tweaked
+live without relaunching. All demo state (camera, view, grid, lighting) lives
+in the never-reloaded host TU so it survives; only `.c` bodies reload — a
+`Render3dState` **layout** change (a `render.h` edit) still needs a relaunch.
+The library carries no freeglut/GL of its own and resolves `glut*`/`gl*` from
+the host at load (macOS `-undefined dynamic_lookup` + host `-force_load` of
+freeglut; Linux binds against the shared `libglut`/`libGL`) — a second freeglut
+copy would abort with an uninitialised `fgState`. The plain static
+`render3d_demo` target (and its `USE_GL_STUBS` / `test-full` link-proof role) is
+untouched. See [`src/render3d/README.md`](src/render3d/README.md).
+
 ### Accumulation Motion Blur
 
 The accumulation buffer drives several effects, selected by the **Accum

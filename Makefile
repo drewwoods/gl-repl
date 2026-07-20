@@ -847,9 +847,9 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
+ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
 
-.PHONY: sample $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
+.PHONY: sample $(ROOT_BIN_LINKS) render3d-hot render3d-hot-lib $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
 ifeq ($(WEB),1)
@@ -1240,6 +1240,83 @@ $(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS)
 
 render3d_demo: FORCE $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
 	ln -sfn $(RENDER3D_DEMO_BIN) $@
+
+# --- Hot-reloadable render3d demo ------------------------------------------
+# `make render3d-hot` builds the same teapot harness, but the reloadable
+# src/render3d subtree lives in a shared library that the host dlopen()s
+# instead of static-linking. The running host watches src/render3d; on a save
+# it rebuilds just that library (make render3d-hot-lib) and re-dlopen()s a
+# fresh copy, so grid.c / backdrop.c / lights.c / render.c can be tweaked and
+# seen live without relaunching.
+#
+# State survives the reload because every piece of demo state (camera, view,
+# grid theme, lighting, backdrop, projection blend) lives in the host TU
+# (render3d_demo.c), which is never reloaded — only the src/render3d .c bodies
+# are. The one struct that crosses the boundary, Render3dState, is owned by the
+# host too; its layout is fixed by render.h at host-compile time, so changing
+# that layout (a header edit) is the one case that needs a relaunch.
+#
+# The library is deliberately linked WITHOUT freeglut/GL of its own: it
+# resolves glut*/gl*/glu* from the host process at load time (macOS: two-level
+# `-undefined dynamic_lookup`; Linux: normal shared-object lazy binding against
+# the already-loaded libglut/libGL). Linking a second freeglut copy into the
+# library would give it an uninitialised fgState and glutSolidSphere() would
+# abort "called before glutInit". So the host must carry — and export — every
+# freeglut symbol src/render3d might call. On macOS the vendored static
+# freeglut is -force_load'ed into the host so ALL of it is present regardless
+# of what the host TU itself references (a normal archive pull would only bring
+# in the objects the host directly needs, silently breaking a live edit that
+# calls a new glut primitive). The plain $(FREEGLUT_LIB) still on GL_LDFLAGS is
+# then a no-op. On Linux -lglut is a shared object, so every symbol is already
+# available to a dlopen'd module at load — no force-load needed.
+hot_comma := ,
+ifeq ($(UNAME_S),Darwin)
+  HOT_SHARED_LDFLAGS = -dynamiclib -Wl,-undefined,dynamic_lookup
+  # Escaped commas: bare commas would be parsed as $(if) argument separators.
+  HOT_HOST_LDFLAGS   = $(if $(FREEGLUT_LIB),-Wl$(hot_comma)-force_load$(hot_comma)$(FREEGLUT_LIB))
+else
+  HOT_SHARED_LDFLAGS = -shared
+  # -rdynamic exports the host's symbols so a dlopen'd module can bind to them;
+  # -ldl for dlopen/dlsym/dlclose.
+  HOT_HOST_LDFLAGS   = -rdynamic -ldl
+endif
+
+RENDER3D_HOT_LIB      = $(OBJDIR)/librender3dhot.so
+RENDER3D_HOT_DEMO_BIN = $(BINDIR)/render3d_hot_demo
+HOT_OBJDIR            = $(OBJDIR)/hot
+# Position-independent objects for the reloadable subtree, kept in their own
+# dir so the static render3d_demo's objects (same sources, no -fPIC) coexist.
+RENDER3D_HOT_OBJS = $(addprefix $(HOT_OBJDIR)/,$(RENDER3D_DEMO_DEP_SRCS:.c=.o))
+
+$(HOT_OBJDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -fPIC $(DEPFLAGS) -c -o $@ $<
+
+$(RENDER3D_HOT_LIB): $(RENDER3D_HOT_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(HOT_SHARED_LDFLAGS) -fPIC -o $@ $(RENDER3D_HOT_OBJS) -lm
+
+render3d-hot-lib: $(RENDER3D_HOT_LIB) ## Rebuild just the reloadable render3d shared library (invoked by the running hot host).
+
+# The host: render3d_demo.c compiled with -DRENDER3D_HOT_RELOAD=1 so its
+# render3d_* call sites route through dlsym'd pointers. Absolute paths + an
+# explicit rebuild command are baked in so the watcher/rebuild work regardless
+# of the cwd the binary is launched from.
+RENDER3D_HOT_DEMO_CFLAGS = -DRENDER3D_HOT_RELOAD=1 \
+	-DRENDER3D_HOT_LIB_PATH='"$(CURDIR)/$(RENDER3D_HOT_LIB)"' \
+	-DRENDER3D_HOT_SRC_DIR='"$(CURDIR)/src/render3d"' \
+	-DRENDER3D_HOT_BUILD_CMD='"cd $(CURDIR) && $(MAKE) --no-print-directory render3d-hot-lib BUILD=$(BUILD)"'
+
+$(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) \
+		-o $@ $< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS)
+
+render3d-hot: FORCE $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
+	ln -sfn $(RENDER3D_HOT_DEMO_BIN) render3d_hot_demo
+
+HOT_DEPS = $(RENDER3D_HOT_OBJS:.o=.d) $(RENDER3D_HOT_DEMO_BIN).d
+-include $(HOT_DEPS)
 
 # Standalone REPL pipeline demo. Inverse of render3d_demo: proves the
 # REPL pipeline links without editor input dispatch / controller / UI.
@@ -2045,7 +2122,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM render3d_hot_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

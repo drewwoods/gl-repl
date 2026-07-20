@@ -63,6 +63,41 @@ contract by example — `build_config()` shows exactly which [`Render3dRenderCon
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
 never terminates).
 
+### Hot reload: `make render3d-hot`
+
+```bash
+make render3d-hot      # builds render3d_hot_demo + the reloadable library
+./render3d_hot_demo    # then edit any src/render3d/*.c and save — it reloads live
+```
+
+Same teapot harness, but the `src/render3d` subtree is compiled into a shared
+library the host `dlopen()`s instead of static-linking. The running host polls
+the source tree; on a save it rebuilds just that library (`make
+render3d-hot-lib`) and re-`dlopen()`s a fresh copy, so `grid.c` / `backdrop.c`
+/ `lights.c` / `render.c` can be tweaked and seen **without relaunching**. The
+HUD shows a `Hot  reloads=N  last build=ok/FAILED` line; a build error keeps the
+last good module loaded.
+
+**State survives the reload** because every piece of demo state — camera pose,
+2D/3D + projection blend, grid/axes themes, lighting, backdrop — lives in the
+host TU (`render3d_demo.c`), which is never reloaded; only the render3d `.c`
+bodies are. `Render3dState` crosses the boundary but is host-owned, and its
+layout is fixed by `render.h` at host-compile time — so editing `.c` bodies is
+free, while changing that struct's **layout** (a header edit) is the one case
+that needs a relaunch.
+
+Implementation: the reloadable library carries no freeglut/GL of its own and
+resolves `glut*`/`gl*`/`glu*` from the host at load (macOS `-undefined
+dynamic_lookup` + the host `-force_load`ing freeglut so every symbol is present
+and exported; Linux binds against the already-loaded shared `libglut`/`libGL`).
+A second freeglut copy in the library would have an uninitialised `fgState` and
+`glutSolidSphere()` would abort "called before glutInit". Each reload
+`dlopen()`s a uniquely-named on-disk copy of the rebuilt library — macOS dyld
+caches images by path and keeps them mapped past `dlclose`, so reusing the
+canonical path would hand back stale code. The plain static `render3d_demo`
+target is untouched (it stays the link-proof `make test-full` and
+`USE_GL_STUBS` builds rely on).
+
 ## In the REPL app
 
 Inside the full app this is **layer 4** of the ownership map. The controller
