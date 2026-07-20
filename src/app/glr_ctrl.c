@@ -11,6 +11,7 @@
 #include <errno.h>
 #include "gl_includes.h"
 #include "config.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>    /* clock_gettime(CLOCK_MONOTONIC) for frame pacing */
@@ -149,12 +150,49 @@ static GlrSubframeCtx g_subframe_ctx;
 static GlrCameraPose  g_prev_frame_pose;
 static int            g_prev_frame_pose_valid = 0;
 static GlrCameraPose  g_cur_frame_pose;
+
+/* Elapsed-seconds source for the controller's init-trace lines; installed
+ * by main() (init_elapsed_seconds), NULL in tests/demos. */
+static GlrCtrlElapsedSecondsFn g_init_log_elapsed_fn = NULL;
+
+void glr_ctrl_set_init_log_elapsed_fn(GlrCtrlElapsedSecondsFn fn) {
+    g_init_log_elapsed_fn = fn;
+}
+
+/* Emit one init-trace line for the one-shot GL-capability probes in
+ * glr_ctrl_init_gl. Prefixed with the shared `[init +N.NNNs]` stamp
+ * (matching gl_repl.c's boot trace) when an elapsed source is installed,
+ * else the plain `[gl-repl]` tag. Runs on the main thread, so the
+ * fprintf(stderr) reaches the browser console on the web build. `fmt`
+ * must not carry a trailing newline. */
+static void glr_ctrl_init_log(const char *fmt, ...) {
+    va_list ap;
+    if (g_init_log_elapsed_fn)
+        fprintf(stderr, "[init +%6.3fs] ", g_init_log_elapsed_fn());
+    else
+        fprintf(stderr, "[gl-repl] ");
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+}
+
 typedef ReplExecutorPointParameterProc
 (*GlrCtrlPointParameterProcLoaderFn)(const char *proc_name);
 
 static ReplExecutorPointParameterProc
 glr_ctrl_default_point_parameter_loader(const char *proc_name) {
-#if defined(__APPLE__) && defined(USE_GLUT)
+#if (defined(__APPLE__) && defined(USE_GLUT)) || defined(__EMSCRIPTEN__)
+    /* Two runtimes advertise glPointParameterfv but can't resolve it by
+     * name, so take the statically-linked symbol directly:
+     *   - Apple system GLUT has no glutGetProcAddress at all.
+     *   - Emscripten: gl4es exports glPointParameterfv and its FPE shader
+     *     implements GL_POINT_DISTANCE_ATTENUATION, but glutGetProcAddress
+     *     falls through to eglGetProcAddress, whose table only knows
+     *     WebGL/GLES2 entry points and returns NULL for this desktop-GL
+     *     symbol. Binding it directly lights up the gl4es attenuation path
+     *     so point size tracks camera distance (authored points and the
+     *     glPolygonMode(GL_POINT) GLUT-solid overlays alike). */
     (void)proc_name;
     return &glPointParameterfv;
 #else
@@ -2875,9 +2913,15 @@ void glr_ctrl_init_gl(void) {
     const char *no_pp = getenv("GLR_NO_POINT_PARAMETER");
     int forced_off = (no_pp && no_pp[0]) ? 1 : 0;
     int point_param_ok = (point_param_proc != NULL) && !forced_off;
-    /* Tell the user on the terminal when point attenuation is off, and
-     * which of the two reasons applies — a deliberate env override vs.
-     * a GL context that genuinely lacks the entry point. */
+    /* Always log the outcome (both branches) through glr_ctrl_init_log, so
+     * the active point-sizing path shows up as an `[init +N.NNNs]` line in
+     * the boot trace without a repro. On the unsupported branch it names
+     * which of the reasons applies — a deliberate env override vs. a GL
+     * context that genuinely lacks the entry point (the gl4es/WebGL case:
+     * the extension is advertised but glutGetProcAddress -> eglGetProcAddress
+     * yields no callable glPointParameterfv, so the software glPointSize
+     * distance approximation is used and GL_POINTS/polygon-mode-point
+     * overlays are not distance-attenuated). */
     if (!point_param_ok) {
         if (forced_off) {
             const char *forced_detail =
@@ -2886,29 +2930,33 @@ void glr_ctrl_init_gl(void) {
                     : point_param_advertised
                         ? " (this GL context advertises it, but no callable entry point was found)"
                         : " (this GL context does not support it either)";
-            fprintf(stderr,
-                "[gl-repl] glPointParameterfv disabled via "
-                "GLR_NO_POINT_PARAMETER=%s; using the glPointSize "
-                "distance approximation%s.\n",
+            glr_ctrl_init_log(
+                "glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=%s; "
+                "using the glPointSize distance approximation%s.",
                 no_pp,
                 forced_detail);
         } else if (!point_param_advertised) {
-            fprintf(stderr,
-                "[gl-repl] glPointParameterfv unsupported by this GL "
-                "context (GL_VERSION \"%s\", no GL_ARB/EXT_point_parameters); "
+            glr_ctrl_init_log(
+                "glPointParameterfv unsupported by this GL context "
+                "(GL_VERSION \"%s\", no GL_ARB/EXT_point_parameters); "
                 "using the glPointSize distance approximation. Set "
                 "GLR_NO_POINT_PARAMETER=1 to force this path on capable "
-                "hardware.\n",
+                "hardware.",
                 gl_ver ? gl_ver : "unknown");
         } else {
-            fprintf(stderr,
-                "[gl-repl] GL point-parameter support is advertised by "
-                "this GL context (GL_VERSION \"%s\"), but no "
-                "glPointParameterfv/glPointParameterfvARB/"
-                "glPointParameterfvEXT entry point could be loaded; "
-                "using the glPointSize distance approximation.\n",
+            glr_ctrl_init_log(
+                "GL point-parameter support is advertised by this GL context "
+                "(GL_VERSION \"%s\"), but no glPointParameterfv/"
+                "glPointParameterfvARB/glPointParameterfvEXT entry point "
+                "could be loaded; using the glPointSize distance "
+                "approximation.",
                 gl_ver ? gl_ver : "unknown");
         }
+    } else {
+        glr_ctrl_init_log(
+            "glPointParameterfv supported (GL_VERSION \"%s\"); "
+            "points use hardware GL_POINT_DISTANCE_ATTENUATION.",
+            gl_ver ? gl_ver : "unknown");
     }
     repl_executor_set_point_parameter_supported(point_param_ok);
 
