@@ -274,7 +274,8 @@ any `--window` size); recorded `.mp4`s are gitignored under `docs/images/`
 **In-app guided tours (Tours menu).** The same pointer-script engine also
 powers the **Tours** menu. Tour content is file-backed like the example
 scenes: `.pointer` files under `tours/` are named by `tours/catalog.ini`
-(section order = menu row order) and compiled in by `scripts/gen_tours.py`
+(or the web-safe `tours/catalog-emscripten.ini`; section order = menu row
+order) and compiled in by `scripts/gen_tours.py`
 (→ `build/generated/glr_tours_data.inc`, consumed by
 [`src/app/glr_tours.c`](src/app/glr_tours.c); `make check-tours-catalog`
 validates the catalog, and the files also load directly via
@@ -291,8 +292,9 @@ scripted camera-orbit and slider drags track like a real pointer — this
 applies to capture scripts too. Tours use only symbolic targets, so they play
 correctly at any window size; a target that fails to resolve mid-tour stops
 the tour with a status message instead of clicking blind. The Tours menu is
-hidden on the web build (the catalog leans on the File menu, which the
-browser shell owns).
+available on the web build through its Emscripten catalog. Web-only `shell:`
+targets resolve DOM chrome outside the canvas; Editing Basics uses `shell:new`
+to activate the browser header's New button instead of the hidden File menu.
 
 ### Web build (Emscripten)
 
@@ -716,7 +718,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_camera.h`](src/app/glr_camera.h) | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | [`src/app/glr_actions.c`](src/app/glr_actions.c) | Config descriptor table, config shortcuts, menu actions |
 | [`src/app/glr_actions.h`](src/app/glr_actions.h) | Actions public API (`glr_action_menu_item_activate`, etc.) |
-| [`src/app/glr_tours.c`](src/app/glr_tours.c) | Built-in guided-tour catalog (Tours menu), file-backed like the example scenes: `tours/*.pointer` scripts named by `tours/catalog.ini`, compiled in by `scripts/gen_tours.py` (`make check-tours-catalog` validates), played via `glr_pointer_script_start_lines`; authored entirely with symbolic targets |
+| [`src/app/glr_tours.c`](src/app/glr_tours.c) | Built-in guided-tour catalog (Tours menu), file-backed like the example scenes: `tours/*.pointer` scripts named by native `tours/catalog.ini` or web `tours/catalog-emscripten.ini`, compiled in by `scripts/gen_tours.py` (`make check-tours-catalog` validates), played via `glr_pointer_script_start_lines`; authored entirely with symbolic targets |
 | [`src/app/glr_tours.h`](src/app/glr_tours.h) | Tour catalog queries + `glr_tours_start` |
 | [`config.h`](config.h) | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`). Also `#include`s [`keymap.h`](keymap.h) so the key bindings reach every TU |
 | [`keymap.h`](keymap.h) | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like [`config.h`](config.h)'s `FONT_*`); consumed by `g_cfg_items[]` (via `KM_KEY`/`KM_MODS` designated initializers), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |
@@ -1518,7 +1520,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
-  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L260) vtable, shared with the Scene example flyout
+  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L263) vtable, shared with the Scene example flyout
   ([`examples/catalog.ini`](examples/catalog.ini) carries the example `group` values
   that generate `ReplExampleEntry.subheading` — see `test_example_subheading_metadata`).
 

@@ -20,6 +20,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#endif
+
 #include "ui/core/gl_2d.h"   /* gl2d_begin/_end; pulls gl_includes.h */
 
 #ifndef M_PI
@@ -35,6 +39,41 @@
 #define PS_CLICK_RELEASE_FRAMES 6
 /* Click ripple lifetime in frames. */
 #define PS_RIPPLE_FRAMES 24
+
+#if defined(__EMSCRIPTEN__)
+/* Resolve browser-shell chrome into the canvas's framebuffer coordinate
+ * space. The New button sits above the canvas, so y is normally negative;
+ * the scripted cursor glides toward the canvas edge while activation is
+ * forwarded to the real DOM control below. */
+EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
+    var name = UTF8ToString(name_ptr);
+    if (name !== 'new' && name !== 'new_scene') return 0;
+    var button = document.getElementById('newSceneButton');
+    var canvas = Module['canvas'] || document.getElementById('canvas');
+    if (!button || !canvas || button.disabled) return 0;
+    var br = button.getBoundingClientRect();
+    var cr = canvas.getBoundingClientRect();
+    if (!cr.width || !cr.height) return 0;
+    var x = Math.round((br.left + br.width * 0.5 - cr.left) *
+                       canvas.width / cr.width);
+    var y = Math.round((br.top + br.height * 0.5 - cr.top) *
+                       canvas.height / cr.height);
+    if (mx) HEAP32[mx >> 2] = x;
+    if (my) HEAP32[my >> 2] = y;
+    return 1;
+});
+
+/* Queue the real DOM click after the current Wasm frame returns. The shell's
+ * existing listener owns the New-scene bridge and restores canvas focus. */
+EM_JS(int, ps_web_shell_click, (const char *name_ptr), {
+    var name = UTF8ToString(name_ptr);
+    if (name !== 'new' && name !== 'new_scene') return 0;
+    var button = document.getElementById('newSceneButton');
+    if (!button || button.disabled) return 0;
+    setTimeout(function() { button.click(); }, 0);
+    return 1;
+});
+#endif
 
 typedef enum {
     PS_MOVE,
@@ -197,7 +236,8 @@ static int ps_special_from_name(const char *name) {
  * mid-run; label existence can only be checked at fire time. */
 static const char *ps_scan_point(const char *args, PsEvent *ev) {
     static const char *const k_prefixes[] = {
-        "menu:", "item:", "subenter:", "sub:", "pin:", "scene:"
+        "menu:", "item:", "subenter:", "sub:", "pin:", "shell:",
+        "scene:"
     };
     int n = 0;
 
@@ -553,6 +593,13 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my) {
         return ui_menu_bar_target_menu(target + 5, mx, my);
     if (strncmp(target, "pin:", 4) == 0)
         return ui_menu_bar_target_pin(target + 4, mx, my);
+    if (strncmp(target, "shell:", 6) == 0) {
+#if defined(__EMSCRIPTEN__)
+        return ps_web_shell_target(target + 6, mx, my);
+#else
+        return 0;
+#endif
+    }
     if (strncmp(target, "item:", 5) == 0)
         return ui_menu_bar_target_open_row(target + 5, mx, my);
     if (strncmp(target, "subenter:", 9) == 0)
@@ -614,6 +661,20 @@ static int ps_fire_point(const PsEvent *ev, float *x, float *y) {
     return 0;
 }
 
+static int ps_fire_shell_click(const PsEvent *ev) {
+#if defined(__EMSCRIPTEN__)
+    if (ps_web_shell_click(ev->target + 6))
+        return 1;
+#endif
+    fprintf(stderr, "gl-repl: pointer script: cannot activate target '%s'\n",
+            ev->target);
+    if (!g_tour)
+        exit(1);
+    glr_pointer_script_stop();
+    repl_set_status_error("Tour stopped (target unavailable)");
+    return 0;
+}
+
 static void ps_fire(const PsEvent *ev) {
     float x = 0.0f, y = 0.0f;
     switch (ev->verb) {
@@ -639,6 +700,17 @@ static void ps_fire(const PsEvent *ev) {
         if (ev->has_xy) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
+        }
+        /* Browser-shell controls live outside GLUT's canvas. Resolve them
+         * for pointer motion as normal, then activate the real DOM button
+         * instead of sending an impossible negative-y canvas click. */
+        if (ev->verb == PS_CLICK &&
+            strncmp(ev->target, "shell:", 6) == 0) {
+            if (!ps_fire_shell_click(ev)) break;
+            g_ripple_frame = g_frame;
+            g_ripple_x = g_px;
+            g_ripple_y = g_py;
+            break;
         }
         ps_press(button);
         g_release_frame = g_frame + PS_CLICK_RELEASE_FRAMES;

@@ -864,6 +864,9 @@ static void test_tour_sequential_steps_and_pause(void) {
         "0.0 key x",
         "pause 1"
     };
+    static const char *const shell_target[] = {
+        "move shell:new"
+    };
     int len0;
 
     glr_ctrl_reset_all();
@@ -905,6 +908,9 @@ static void test_tour_sequential_steps_and_pause(void) {
                glr_pointer_script_start_lines(bad_tail, 1), 0);
     ASSERT_INT("timed and untimed lines cannot mix",
                glr_pointer_script_start_lines(mixed, 2), 0);
+    ASSERT_INT("web shell target is part of the pointer grammar",
+               glr_pointer_script_start_lines(shell_target, 1), 1);
+    glr_pointer_script_stop();
 }
 
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through

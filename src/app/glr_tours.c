@@ -3,10 +3,10 @@
  *
  * Tour content is file-backed like the example scenes: each tour is a
  * pointer-script file under tours/ (grammar: src/app/glr_pointer_script.h)
- * named by tours/catalog.ini, compiled in by scripts/gen_tours.py as the
- * generated include below. Catalog section order is the Tours menu row
+ * named by tours/catalog.ini (catalog-emscripten.ini for web builds), compiled
+ * in by scripts/gen_tours.py as the generated include below. Catalog section order is the Tours menu row
  * order. Author points as SYMBOLIC targets (menu:/item:/subenter:/sub:/
- * pin:/scene:) resolved against the live layout when each event fires, so
+ * pin:/scene:, plus web-only shell:) resolved against the live layout when each event fires, so
  * tours play at any window size and follow catalog/label reordering; the
  * .pointer files also load directly via GLR_POINTER_SCRIPT= /
  * record-video.sh --script for previewing a tour before shipping it.
