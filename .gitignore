@@ -23,6 +23,7 @@ third_party/web/
 workspace/
 bench_repl
 /render3d_demo
+/render3d_hot_demo
 /repl_demo
 /repl_live_demo
 /editor_demo
