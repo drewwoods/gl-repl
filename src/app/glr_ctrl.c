@@ -59,6 +59,7 @@
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
 #include "repl/command_descriptions.h"
+#include "repl/command_spec.h"
 #include "repl/gl_state_inspector.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
@@ -2565,7 +2566,11 @@ glr_ctrl_build_command_description_panel_view(void) {
                  description.title);
         view.title = g_command_description_title;
     } else {
-        view.title = description.title;
+        /* Prefer the parameter signature (e.g. "glVertex3f(x, y, z)") over
+         * the bare command name, falling back to the catalog title for any
+         * command without a completion-table entry. */
+        const char *signature = repl_func_signature_for_name(description.title);
+        view.title = signature ? signature : description.title;
     }
     view.visible = 1;
     view.anchor_px = state.anchor_px;

@@ -270,6 +270,14 @@ const ReplStdCommandSpec *repl_std_command_specs(void);
  * autocomplete system to populate function name completions (sin, cos, sqrt, etc.). */
 const ReplFuncCompletion *repl_func_completions(void);
 
+/* Resolve the parameter signature (the completion table's display_text, e.g.
+ * "glVertex3f(x, y, z)") for a bare command name (e.g. "glVertex3f"). Matches
+ * either an exact display_text or a display_text of the form `<name>(...)`, so
+ * "glClear" resolves to "glClear(mask)" but not "glClearColor(...)". Returns a
+ * static string with process lifetime, or NULL when no entry names the command.
+ * Used by the right-click command-help popup to show parameters in its title. */
+const char *repl_func_signature_for_name(const char *name);
+
 /* Query enumeration tables for GL constants used in command arguments. Provides
  * suggestions for glColorMaterial face parameter, glMaterialfv parameter names,
  * and glPointParameterfv pname values. Used by autocomplete to populate

@@ -1217,7 +1217,8 @@ static void test_right_click_gl_command_description_popup(void) {
 
     view = glr_ctrl_build_command_description_panel_view();
     ASSERT_INT("command description view is visible", view.visible, 1);
-    ASSERT_STR("command description title", view.title, "glVertex3f");
+    ASSERT_STR("command description title carries parameters", view.title,
+               "glVertex3f(x, y, z)");
     ASSERT_TRUE("command description body is command-specific",
                 view.body && strstr(view.body, "3D vertex") != NULL);
 
