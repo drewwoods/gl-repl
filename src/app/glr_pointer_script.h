@@ -67,6 +67,12 @@
  *   6.0  key \cT              # e.g. Ctrl+T toggles animation
  *   7.0  skey f12             # special key: f1..f12, up/down/left/right,
  *                             # home, end, pageup, pagedown
+ *   7.5  chord ctrl+shift c   # one modified key press: <mods> is a
+ *                             # `+`-joined subset of ctrl/shift/alt, <key> is
+ *                             # a skey name (chord shift f12) or a single
+ *                             # printable char (ctrl folds to its control
+ *                             # byte). Reaches Shift shortcuts `key`/`skey`
+ *                             # can't (a bare byte carries no Shift bit).
  *   8.0  echo scene:0.25,0.76 18 2 Ctrl+K   # caption text (point, cap
  *                             # height px, on-screen seconds). Echo does not
  *                             # delay the next event; use `pause` when a
@@ -82,7 +88,8 @@
  *   glide item:all 0.7
  *
  * `key` + `skey` let a script type a whole demo (commit lines with `key ;`,
- * navigate with `skey up`), so demos can be re-recorded from scripts.
+ * navigate with `skey up`), so demos can be re-recorded from scripts; `chord`
+ * reaches the modified shortcuts (Ctrl+Shift+*, Shift+F*) neither can express.
  */
 
 /* Read GLR_POINTER_SCRIPT and parse the script it names. Returns nonzero

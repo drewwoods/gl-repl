@@ -247,8 +247,10 @@ dispatched through the normal `glr_ctrl_*` GLUT entry
 points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
 `rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed
 text incl. `\cX` control bytes; `key@<cps>` paces the payload at N chars/sec
-on the frame clock so text types out like a person) and `skey`
-(F-keys/arrows) — plus a rendered
+on the frame clock so text types out like a person), `skey`
+(F-keys/arrows), and `chord <mods> <key>` (one key press with a
+`ctrl`/`shift`/`alt` mask held — reaches Shift/Ctrl+Shift shortcuts a bare key
+byte can't carry, e.g. `chord ctrl+shift c`) — plus a rendered
 cursor arrow + click-ripple overlay so the video shows the pointer. A point
 is literal window pixels **or a symbolic target** (`menu:scene`,
 `item:new_scene`, `subenter:overlays`, `sub:overlays:vertex_points`,
@@ -1101,7 +1103,7 @@ The core data flow is **source commands → flat commands → GL calls**:
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
-   - **[`editor_feed_line()`](src/editor/input.h#L179)** ([`src/editor/input.c`](src/editor/input.c)): copies the full line
+   - **[`editor_feed_line()`](src/editor/input.h#L188)** ([`src/editor/input.c`](src/editor/input.c)): copies the full line
      (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
    - **Enter key** (insert mode): input may or may not have `;`
@@ -1153,7 +1155,7 @@ Dispatch sites then call these helpers instead of open-coding the chain:
 3. **Enter key, overwrite mode** — uses
    `editor_try_commit_var_statements_then_insert()` plus
    `editor_try_commit_block_structs()`
-4. **[`editor_feed_line()`](src/editor/input.h#L179)** — the programmatic entry point calls
+4. **[`editor_feed_line()`](src/editor/input.h#L188)** — the programmatic entry point calls
    `editor_try_commit_any()`
 
 When adding a new handler, add it to the right helper rather than all
@@ -1163,7 +1165,7 @@ call sites. Ordering inside each helper is load-bearing:
 
 ### Editing Existing Lines
 
-When the user navigates to an existing line, [`editor_load_line_to_input()`](src/editor/input.h#L173) reads
+When the user navigates to an existing line, [`editor_load_line_to_input()`](src/editor/input.h#L182) reads
 the line text from the editor buffer view, strips the trailing `;` and
 whitespace, and loads it into the input buffer. This means re-committing
 the line goes through the no-semicolon path. Commit handlers that check
@@ -1324,7 +1326,7 @@ behavior.
   active user scene index.
 - **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state
   and workspace directives, detects function definitions (converts C
-  syntax back to REPL), and feeds geometry lines through [`editor_feed_line()`](src/editor/input.h#L179).
+  syntax back to REPL), and feeds geometry lines through [`editor_feed_line()`](src/editor/input.h#L188).
   Pending scene-name and workspace-dir directives are read by the caller
   after `repl_export_load_from_file` returns so the importer can name the new slot
   and remember the workspace dir.

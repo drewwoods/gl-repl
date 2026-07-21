@@ -107,8 +107,26 @@ typedef enum {
 static EditorModifierProvider g_modifier_provider_for_test = NULL;
 static EditorInputDispatchEffects g_pending_input_effects = {0};
 
+/* Script-side modifier override. The controller pushes the scripted chord's
+ * modifier mask around a single synchronous keyboard/special dispatch (see
+ * glr_ctrl_keyboard_with_modifiers) so downstream shortcut matching sees the
+ * declared Shift/Ctrl/Alt even though no physical key is held. Authoritative
+ * over both the test provider and glutGetModifiers while active. */
+static int g_scripted_mods = 0;
+static int g_scripted_mods_active = 0;
+
 void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider) {
     g_modifier_provider_for_test = provider;
+}
+
+void editor_input_push_scripted_modifiers(int mods) {
+    g_scripted_mods = mods;
+    g_scripted_mods_active = 1;
+}
+
+void editor_input_pop_scripted_modifiers(void) {
+    g_scripted_mods_active = 0;
+    g_scripted_mods = 0;
 }
 
 void editor_reset_input_effects(void) {
@@ -181,7 +199,9 @@ unsigned char editor_input_normalize_super_to_ctrl(unsigned char key) {
 
 int editor_input_active_modifiers(void) {
     int mods;
-    if (g_modifier_provider_for_test)
+    if (g_scripted_mods_active)
+        mods = g_scripted_mods;
+    else if (g_modifier_provider_for_test)
         mods = g_modifier_provider_for_test();
     else if (g_glut_modifier_reads_enabled)
         mods = glutGetModifiers();

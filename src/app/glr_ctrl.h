@@ -141,6 +141,11 @@ void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
 void glr_ctrl_keyboard(unsigned char key, int x, int y);
 void glr_ctrl_special(int key, int x, int y);
+/* Scripted-chord variants: dispatch one key/special press with a declared
+ * modifier mask (GLUT_ACTIVE_*) authoritative for the duration, so the pointer
+ * script can fire Shift/Ctrl+Shift shortcuts. See glr_pointer_script's `chord`. */
+void glr_ctrl_keyboard_with_modifiers(unsigned char key, int x, int y, int mods);
+void glr_ctrl_special_with_modifiers(int key, int x, int y, int mods);
 void glr_ctrl_mouse(int button, int state, int x, int y);
 void glr_ctrl_motion(int x, int y);
 void glr_ctrl_passive_motion(int x, int y);

@@ -4,6 +4,7 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_defaults.h"
+#include "app/glr_pointer_script.h"
 #include "config.h"      /* QUIT_RECOVERY_FILE */
 #include <stdio.h>
 #include <stdlib.h>
@@ -4031,6 +4032,75 @@ static void test_special_key_shortcuts(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+/* Drive one untimed pointer-script line and fire its single event. The
+ * scripted `chord` verb is the only production path that synthesizes a Shift
+ * modifier, so these tests install NO modifier provider — the scripted override
+ * pushed by glr_ctrl_*_with_modifiers is the sole modifier source, exactly as
+ * in a real capture/tour run. */
+static void run_pointer_script_line(const char *line) {
+    const char *lines[1];
+    lines[0] = line;
+    ASSERT_INT("pointer script line accepted",
+               glr_pointer_script_start_lines(lines, 1), 1);
+    /* First frame fires the untimed event (a chord completes immediately,
+     * PS_WAIT_NONE); a second frame lets the tour auto-stop. */
+    glr_pointer_script_frame();
+    glr_pointer_script_frame();
+    glr_pointer_script_stop();
+}
+
+static void test_scripted_chord_reaches_shift_shortcuts(void) {
+    printf("--- imrepl_ctrl scripted chord modifiers ---\n");
+    prepare_display_fixture();
+    editor_input_set_modifier_provider_for_test(NULL);
+
+    /* Parse acceptance / rejection through the public load path. */
+    const char *ok1[1]  = { "chord ctrl+shift c" };
+    const char *ok2[1]  = { "chord shift f12" };
+    const char *bad1[1] = { "chord shift a" };           /* shift-only printable */
+    const char *bad2[1] = { "chord bogus c" };           /* unknown modifier     */
+    const char *bad3[1] = { "chord ctrl++shift c" };     /* empty component      */
+    const char *bad4[1] = { "chord ctrl+ctrl c" };       /* duplicate modifier   */
+    const char *bad5[1] = { "chord ctrl+shift c junk" }; /* trailing garbage     */
+    ASSERT_INT("chord ctrl+shift c parses",
+               glr_pointer_script_start_lines(ok1, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("chord shift f12 parses",
+               glr_pointer_script_start_lines(ok2, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("shift-only printable rejected",
+               glr_pointer_script_start_lines(bad1, 1), 0);
+    ASSERT_INT("unknown modifier rejected",
+               glr_pointer_script_start_lines(bad2, 1), 0);
+    ASSERT_INT("empty modifier component rejected",
+               glr_pointer_script_start_lines(bad3, 1), 0);
+    ASSERT_INT("duplicate modifier rejected",
+               glr_pointer_script_start_lines(bad4, 1), 0);
+    ASSERT_INT("trailing garbage rejected",
+               glr_pointer_script_start_lines(bad5, 1), 0);
+
+    /* Dispatch: the fixture camera sits at a non-default pose, so Ctrl+Shift+C
+     * (GLR_RESET_CAMERA) begins an eased return to default. */
+    glr_camera_controls_reset();
+    ASSERT_INT("no camera ease before chord", glr_camera_target_active(), 0);
+    run_pointer_script_line("chord ctrl+shift c");
+    ASSERT_TRUE("chord ctrl+shift c triggered camera reset ease",
+                glr_camera_target_active() != 0);
+
+    /* The override must not linger past the dispatch: with no provider and glut
+     * reads disabled, modifiers read back as none once the chord returns. */
+    ASSERT_INT("scripted modifier override popped after chord",
+               editor_input_active_modifiers(), 0);
+
+    /* Shift must not leak: plain `key \cC` (byte 3, no override) is Copy, not
+     * Ctrl+Shift+C, so it must NOT start a camera reset. */
+    glr_camera_controls_reset();
+    ASSERT_INT("camera ease cleared before Copy", glr_camera_target_active(), 0);
+    run_pointer_script_line("key \\cC");
+    ASSERT_INT("plain Ctrl+C did not reset camera (Shift did not leak)",
+               glr_camera_target_active(), 0);
+}
+
 static void test_app_lifecycle_bootstrap_shutdown(void) {
     printf("--- imrepl_ctrl app lifecycle ---\n");
     prepare_display_fixture();
@@ -4288,6 +4358,7 @@ int main(void) {
     test_mouse_routing_and_hit_testing();
     test_color_picker_materialfv();
     test_special_key_shortcuts();
+    test_scripted_chord_reaches_shift_shortcuts();
     test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();
     test_init_gl_requires_loaded_point_parameter_proc();
