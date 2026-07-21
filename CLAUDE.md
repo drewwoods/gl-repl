@@ -570,8 +570,10 @@ Agent-relevant policies:
   rewritten to the compound-literal form. `glDepthMask`/`glColorMask`
   accept 0/1, canonicalized to `GL_TRUE`/`GL_FALSE`.
 - **`glPushAttrib`/`glPopAttrib`**: mask is `|`-joined `GL_*_BIT` tokens
-  (same bitfield policy as glClear); 9 supported bits — GL_CURRENT/POINT/
-  LINE/POLYGON/LIGHTING/DEPTH_BUFFER/TRANSFORM/ENABLE/COLOR_BUFFER_BIT.
+  (same bitfield policy as glClear); 10 supported bits — GL_CURRENT/POINT/
+  LINE/POLYGON/LIGHTING/FOG/DEPTH_BUFFER/TRANSFORM/ENABLE/COLOR_BUFFER_BIT.
+  GL_FOG_BIT scopes the glFog* parameters; the GL_FOG enable flag rides both
+  GL_FOG_BIT and GL_ENABLE_BIT, matching real GL.
   GL_ALL_ATTRIB_BITS is deliberately unsupported (not a single bit;
   0xFFFFFFFF doesn't round-trip the GLCmd float-arg storage). The executor
   keeps a real GL stack only REPL_ATTRIB_STACK_CAP (8) deep — virtual push

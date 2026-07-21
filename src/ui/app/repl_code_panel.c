@@ -75,21 +75,24 @@ static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
 };
 
 /* Per-attribute-bit colours for the glPushAttrib/glPopAttrib highlighting,
- * indexed by canonical bit index (repl_attrib_bit_entries order). Nine
+ * indexed by canonical bit index (repl_attrib_bit_entries order). Ten
  * visually distinct hues used for both the mask-token spans on the push line
  * and the segmented left-edge gutter marker on each saved/reverted setter line.
- * Kept clear of the reserved marker colours: warning-red (0.95,0.35,0.30),
- * replay-green (~0.20,0.90,0.30), and the violet bracket match (0.80,0.70,0.95). */
+ * GL_FOG_BIT is the one desaturated ("haze") entry, keeping it distinct from
+ * the nine saturated hues around it. Kept clear of the reserved marker colours:
+ * warning-red (0.95,0.35,0.30), replay-green (~0.20,0.90,0.30), and the violet
+ * bracket match (0.80,0.70,0.95). */
 static const struct { float r, g, b; } k_attrib_bit_colors[REPL_ATTRIB_BIT_COUNT] = {
-    { 0.95f, 0.75f, 0.20f },  /* 0 GL_CURRENT_BIT      - gold   */
-    { 0.55f, 0.80f, 0.30f },  /* 1 GL_POINT_BIT        - lime   */
-    { 0.30f, 0.75f, 0.90f },  /* 2 GL_LINE_BIT         - sky    */
-    { 0.90f, 0.55f, 0.30f },  /* 3 GL_POLYGON_BIT      - orange */
-    { 0.95f, 0.90f, 0.45f },  /* 4 GL_LIGHTING_BIT     - yellow */
-    { 0.45f, 0.60f, 0.95f },  /* 5 GL_DEPTH_BUFFER_BIT - blue   */
-    { 0.60f, 0.45f, 0.90f },  /* 6 GL_TRANSFORM_BIT    - indigo */
-    { 0.40f, 0.85f, 0.70f },  /* 7 GL_ENABLE_BIT       - teal   */
-    { 0.90f, 0.55f, 0.65f },  /* 8 GL_COLOR_BUFFER_BIT - rose   */
+    { 0.95f, 0.75f, 0.20f },  /* 0 GL_CURRENT_BIT      - gold      */
+    { 0.55f, 0.80f, 0.30f },  /* 1 GL_POINT_BIT        - lime      */
+    { 0.30f, 0.75f, 0.90f },  /* 2 GL_LINE_BIT         - sky       */
+    { 0.90f, 0.55f, 0.30f },  /* 3 GL_POLYGON_BIT      - orange    */
+    { 0.95f, 0.90f, 0.45f },  /* 4 GL_LIGHTING_BIT     - yellow    */
+    { 0.72f, 0.75f, 0.78f },  /* 5 GL_FOG_BIT          - haze grey */
+    { 0.45f, 0.60f, 0.95f },  /* 6 GL_DEPTH_BUFFER_BIT - blue      */
+    { 0.60f, 0.45f, 0.90f },  /* 7 GL_TRANSFORM_BIT    - indigo    */
+    { 0.40f, 0.85f, 0.70f },  /* 8 GL_ENABLE_BIT       - teal      */
+    { 0.90f, 0.55f, 0.65f },  /* 9 GL_COLOR_BUFFER_BIT - rose      */
 };
 
 typedef struct {

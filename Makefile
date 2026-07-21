@@ -1453,9 +1453,18 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 # no-op stub harness cannot model and headless CI cannot provide. These
 # are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
 # never build or run them. Run locally with a display via `make gl-tests`.
-GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl
+GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+# Real-GL oracle: proves the attrib_bits.c cell->bit table matches what the
+# driver's glPushAttrib/glPopAttrib actually save/restore. Links the pure
+# mapping module (attrib_bits) + its spec-table dependency (command_spec); the
+# two collector-only state accessors are stubbed inside the test.
+$(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
+	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 

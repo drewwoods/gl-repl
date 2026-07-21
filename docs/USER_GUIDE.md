@@ -348,8 +348,10 @@ numeric argument everywhere is a full math expression.
 - [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
-  `GL_LIGHTING_BIT`, `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT`, `GL_ENABLE_BIT`,
-  `GL_COLOR_BUFFER_BIT`, OR'd with `|` (`GL_ALL_ATTRIB_BITS` is not supported)
+  `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT`,
+  `GL_ENABLE_BIT`, `GL_COLOR_BUFFER_BIT`, OR'd with `|` (`GL_ALL_ATTRIB_BITS` is
+  not supported). `GL_FOG_BIT` scopes the `glFog*` parameters; the `GL_FOG`
+  enable flag rides both `GL_FOG_BIT` and `GL_ENABLE_BIT`
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
@@ -503,11 +505,13 @@ glPopAttrib();              // colour and line width snap back to blue / 1
 `mask` names which *groups* of state to save, one or more of `GL_CURRENT_BIT`
 (colour, normal, raster position, edge flag), `GL_POINT_BIT`, `GL_LINE_BIT`,
 `GL_POLYGON_BIT` (cull + winding), `GL_LIGHTING_BIT` (materials, shade model,
-lights), `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
+lights), `GL_FOG_BIT` (fog mode / density / start / end / colour),
+`GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
 (every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear
-colour, colour mask). Join several with `|` — like `glClear`'s mask it is a
-fixed set of tokens (no expressions), canonicalised to a stable order.
-`GL_ALL_ATTRIB_BITS` is intentionally not offered.
+colour, colour mask). The `GL_FOG` enable flag is saved by both `GL_FOG_BIT`
+and `GL_ENABLE_BIT`, matching real GL. Join several with `|` — like `glClear`'s
+mask it is a fixed set of tokens (no expressions), canonicalised to a stable
+order. `GL_ALL_ATTRIB_BITS` is intentionally not offered.
 
 Two editor affordances make the scope visible. Park the cursor on a
 `glPushAttrib` line and each mask token lights up in its own colour, and every

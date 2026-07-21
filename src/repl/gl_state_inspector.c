@@ -718,6 +718,27 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->depth_mask_source = source;
     }
 
+    /* Fog parameters (mode/density/start/end/color) all ride GL_FOG_BIT; the
+     * GL_FOG enable flag rides GL_ENABLE_BIT|GL_FOG_BIT and is restored above
+     * with the other caps. */
+    if (gl_state_mask_covers(mask, CMD_FOG_I)) {
+        s->fog_mode = snap->fog_mode;
+        s->fog_mode_touched = 1;
+        s->fog_mode_source = source;
+        s->fog_density = snap->fog_density;
+        s->fog_density_touched = 1;
+        s->fog_density_source = source;
+        s->fog_start = snap->fog_start;
+        s->fog_start_touched = 1;
+        s->fog_start_source = source;
+        s->fog_end = snap->fog_end;
+        s->fog_end_touched = 1;
+        s->fog_end_source = source;
+        memcpy(s->fog_color, snap->fog_color, sizeof(s->fog_color));
+        s->fog_color_touched = 1;
+        s->fog_color_source = source;
+    }
+
     if (gl_state_mask_covers(mask, CMD_CLIP_PLANE)) {
         for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
             memcpy(s->clip_plane[i], snap->clip_plane[i],
