@@ -17,7 +17,7 @@
  *      attribute-stack semantics and report which prior/scoped setter lines a
  *      push saves / a pop reverts, for the editor highlight.
  *
- * The 9 supported bits and their canonical order are owned by
+ * The 10 supported bits and their canonical order are owned by
  * command_spec.c's k_attrib_bits[] (repl_attrib_bit_entries()); this module
  * derives everything from that single table so it cannot drift.
  */
@@ -27,7 +27,7 @@
 #include "repl/command.h"
 
 /* Number of supported GL_*_BIT groups (mirrors k_attrib_bits[]). */
-#define REPL_ATTRIB_BIT_COUNT 9
+#define REPL_ATTRIB_BIT_COUNT 10
 
 /* A comfortable cap for a collector result: at most one line per distinct
  * atomic state cell (~55), coalesced, so 64 can never truncate a real

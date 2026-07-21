@@ -2026,6 +2026,64 @@ int main(void) {
         ASSERT_TRUE("orphan pop_reverted reports nothing", n == 0);
     }
 
+    /* Fog: glFogi/glFogf/glFogfv ride GL_FOG_BIT (each parameter its own cell),
+     * and glEnable(GL_FOG) rides GL_ENABLE_BIT|GL_FOG_BIT — matching real GL,
+     * where the fog enable flag lives in both bits. */
+    {
+        ReplAttribHighlightLine hl[REPL_ATTRIB_HL_MAX];
+        ReplAttribCellWrite w[REPL_ATTRIB_MAX_ITEMS_PER_CMD];
+        int fog_idx = repl_attrib_bit_index(GL_FOG_BIT);
+        int n, nw;
+
+        ASSERT_TRUE("bit_index round-trips FOG (>= 0)", fog_idx >= 0);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glFogi(GL_FOG_MODE, GL_EXP2);");                    /* 0 */
+        editor_feed_line("glFogf(GL_FOG_DENSITY, 0.5);");                     /* 1 */
+        editor_feed_line("glFogfv(GL_FOG_COLOR, (GLfloat[]){0, 0, 0, 1});");  /* 2 */
+        editor_feed_line("glEnable(GL_FOG);");                                 /* 3 */
+        const GLCmd *cmds = repl_state_document_cmds();
+        ASSERT_TRUE("bits_for_cmd glFogi = FOG",
+                    repl_attrib_bits_for_cmd(&cmds[0]) == (unsigned)GL_FOG_BIT);
+        ASSERT_TRUE("bits_for_cmd glFogf = FOG",
+                    repl_attrib_bits_for_cmd(&cmds[1]) == (unsigned)GL_FOG_BIT);
+        ASSERT_TRUE("bits_for_cmd glFogfv = FOG",
+                    repl_attrib_bits_for_cmd(&cmds[2]) == (unsigned)GL_FOG_BIT);
+        ASSERT_TRUE("bits_for_cmd glEnable(GL_FOG) = ENABLE|FOG",
+                    repl_attrib_bits_for_cmd(&cmds[3]) ==
+                        (unsigned)(GL_ENABLE_BIT | GL_FOG_BIT));
+
+        /* Distinct fog parameters occupy distinct cells (density does not
+         * supersede mode), all under GL_FOG_BIT. */
+        nw = repl_attrib_cmd_writes(&cmds[0], NULL, w);
+        unsigned mode_cell = w[0].item_id;
+        ASSERT_TRUE("cmd_writes glFogi = 1 FOG cell",
+                    nw == 1 && w[0].attrib_bits == (unsigned)GL_FOG_BIT);
+        nw = repl_attrib_cmd_writes(&cmds[1], NULL, w);
+        ASSERT_TRUE("cmd_writes glFogf = 1 FOG cell distinct from mode",
+                    nw == 1 && w[0].attrib_bits == (unsigned)GL_FOG_BIT &&
+                    w[0].item_id != mode_cell);
+
+        /* push_saved(GL_FOG_BIT): three distinct fog-parameter setters plus the
+         * enable line, whose cap cell rides GL_FOG_BIT too. */
+        editor_feed_line("glPushAttrib(GL_FOG_BIT);");                        /* 4 */
+        n = repl_attrib_collect_push_saved(4, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("push_saved(FOG): 3 params + enable = 4 lines", n == 4);
+
+        /* pop_reverted(GL_FOG_BIT): only the body setter the pop rolls back. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glFogf(GL_FOG_DENSITY, 0.2);");   /* 0: baseline (saved) */
+        editor_feed_line("glPushAttrib(GL_FOG_BIT);");       /* 1 */
+        editor_feed_line("glFogf(GL_FOG_DENSITY, 0.9);");   /* 2: body setter */
+        editor_feed_line("glPopAttrib();");                  /* 3: cursor */
+        n = repl_attrib_collect_pop_reverted(3, hl, REPL_ATTRIB_HL_MAX);
+        ASSERT_TRUE("pop_reverted(FOG): 1 body line", n == 1);
+        ASSERT_TRUE("pop_reverted(FOG) highlights the body density setter",
+                    hl[0].line_idx == 2);
+        ASSERT_TRUE("pop_reverted(FOG) bit mask = FOG",
+                    hl[0].bit_idx_mask == (1u << fog_idx));
+    }
+
     /* repl_find_affecting_transforms: linear scope, push/pop scope,
      * load_identity reset, glut-solid cursor, non-consumer cursor. */
     {

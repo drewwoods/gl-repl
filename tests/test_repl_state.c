@@ -1200,6 +1200,48 @@ static void test_gl_state_report_tracks_fog(void) {
                 gl_state_test_find_row(&report, "GL_FOG") == NULL);
     ASSERT_TRUE("no fog mode row before writes",
                 gl_state_test_find_row(&report, "GL_FOG_MODE") == NULL);
+
+    /* glPushAttrib(GL_FOG_BIT) scopes fog parameters: the pop restores the
+     * pre-push fog density and stamps its source to the pop line (the same
+     * policy the GL_DEPTH_BUFFER_BIT fold test asserts for depth func). */
+    {
+        GLCmd fcmds[4];
+
+        fcmds[0] = gl_state_test_cmd(CMD_FOG_F, 0);
+        fcmds[0].args[0] = (float)GL_FOG_DENSITY;
+        fcmds[0].args[1] = 0.25f;
+        fcmds[0].num_args = 2;
+        fcmds[1] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 1);
+        fcmds[1].args[0] = (float)GL_FOG_BIT;
+        fcmds[1].num_args = 1;
+        fcmds[2] = gl_state_test_cmd(CMD_FOG_F, 2);
+        fcmds[2].args[0] = (float)GL_FOG_DENSITY;
+        fcmds[2].args[1] = 0.5f;
+        fcmds[2].num_args = 2;
+        fcmds[3] = gl_state_test_cmd(CMD_POP_ATTRIB, 3);
+
+        memset(&program, 0, sizeof(program));
+        program.cmds = fcmds;
+        program.cmd_count = 4;
+
+        /* Inside the scope (before the pop): the scoped density. */
+        repl_gl_state_report_at_line(program, 3, &report);
+        row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
+        ASSERT_TRUE("scoped fog density reported", row != NULL);
+        if (row)
+            ASSERT_STR("scoped fog density current", row->current, "0.5");
+
+        /* After the pop: restored to the pre-push density, source is the pop. */
+        repl_gl_state_report_at_line(program, 4, &report);
+        row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
+        ASSERT_TRUE("restored fog density reported", row != NULL);
+        if (row) {
+            ASSERT_STR("fog density restored to pre-push value",
+                       row->current, "0.25");
+            ASSERT_INT("restored fog density source is the pop line",
+                       row->source.source_line_idx, 3);
+        }
+    }
 }
 
 static void test_gl_state_report_uses_flat_call_provenance(void) {

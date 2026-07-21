@@ -21,11 +21,13 @@ glPushMatrix/glPopMatrix today).
 
 ## Key design decisions
 
-- **9 supported bits** (canonical order = ascending GL value, all < 2^24 so the
+- **10 supported bits** (canonical order = ascending GL value, all < 2^24 so the
   `GLCmd.args[]` float storage invariant at `command.h:96-98` holds):
   `GL_CURRENT_BIT(0x1)`, `GL_POINT_BIT(0x2)`, `GL_LINE_BIT(0x4)`, `GL_POLYGON_BIT(0x8)`,
-  `GL_LIGHTING_BIT(0x40)`, `GL_DEPTH_BUFFER_BIT(0x100)`, `GL_TRANSFORM_BIT(0x1000)`,
-  `GL_ENABLE_BIT(0x2000)`, `GL_COLOR_BUFFER_BIT(0x4000)`.
+  `GL_LIGHTING_BIT(0x40)`, `GL_FOG_BIT(0x80)`, `GL_DEPTH_BUFFER_BIT(0x100)`,
+  `GL_TRANSFORM_BIT(0x1000)`, `GL_ENABLE_BIT(0x2000)`, `GL_COLOR_BUFFER_BIT(0x4000)`.
+  (`GL_FOG_BIT` was added after the initial 9-bit landing — see the fog follow-up
+  at the end of this doc.)
   **`GL_ALL_ATTRIB_BITS` excluded**: ENUM_BITFIELD tables require non-zero single-bit
   values (`command_spec.h:70-79`) and 0xFFFFFFFF doesn't round-trip through float args.
 - **New mapping module** `src/repl/attrib_bits.c/.h` (CmdType → bit mask + normalized
@@ -59,7 +61,7 @@ glPushMatrix/glPopMatrix today).
 - `src/repl/command.h:87`: append `CMD_PUSH_ATTRIB, CMD_POP_ATTRIB` before `CMD_TYPE_COUNT`.
   (`-Wswitch` flags the exhaustive switches that must learn them.)
 - `src/repl/command_spec.c`:
-  - `k_attrib_bits[]` table (9 entries, NULL-terminated) + accessor
+  - `k_attrib_bits[]` table (10 entries, NULL-terminated) + accessor
     `repl_attrib_bit_entries()` so attrib_bits.c and the UI share canonical order.
   - `k_enum_command_specs[]` row (glClear at ~:442 is the exact template):
     `{ "glPushAttrib", CMD_PUSH_ATTRIB, 1, "%sglPushAttrib(%s);", 0, .args = { ENUM_SLOT_BITS(k_attrib_bits, "mask: ...") } }`
@@ -67,7 +69,7 @@ glPushMatrix/glPopMatrix today).
     canonical ordering, dupe-drop, expression rejection for free.
   - `g_command_type_specs[]`: `CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(...)` for both
     (real GL forbids them inside glBegin), `CMD_CAT_STATE`.
-  - `k_func_completions[]`: `glPushAttrib(` (1 arg, help lists the 9 bits) and
+  - `k_func_completions[]`: `glPushAttrib(` (1 arg, help lists the 10 bits) and
     `glPopAttrib()` (zero-arg; glPushMatrix entry at :281 is the template),
     `REPL_HELP_GROUP_STATE`.
 - `src/repl/parser.c`: glPushAttrib is auto-handled by the table-driven path. Add a
@@ -114,7 +116,7 @@ glPushMatrix/glPopMatrix today).
 ## Phase 3 — Mapping module `src/repl/attrib_bits.c/.h`
 
 ```c
-#define REPL_ATTRIB_BIT_COUNT 9
+#define REPL_ATTRIB_BIT_COUNT 10
 #define REPL_ATTRIB_MAX_ITEMS_PER_CMD 5
 typedef struct {
     int color_material_enabled;
@@ -123,7 +125,7 @@ typedef struct {
 } ReplAttribFlowState;
 typedef struct { unsigned item_id; unsigned attrib_bits; } ReplAttribCellWrite;
 unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd);  /* GL_*_BIT mask; 0 = not a setter */
-int      repl_attrib_bit_index(unsigned single_bit);  /* canonical index 0..8, -1 */
+int      repl_attrib_bit_index(unsigned single_bit);  /* canonical index 0..9, -1 */
 int      repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
                                 ReplAttribCellWrite out[REPL_ATTRIB_MAX_ITEMS_PER_CMD]);
 typedef struct { int line_idx; unsigned bit_idx_mask; } ReplAttribHighlightLine;
@@ -188,8 +190,8 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
     ATTRIB_STATE entries (pattern: `_line_is_unbalanced` :571).
   - Marker ladder (:770-890): `MARKER_PRIORITY_ATTRIB_STATE` between AFFECTING_TRANSFORM
     and UNBALANCED; block fills `left_marker_band_colors[]` (≤4, canonical order).
-  - Per-bit palette: `static const k_attrib_bit_colors[9]` local to the panel (same
-    ownership as the other marker rgba constants). 9 distinguishable colors, staying clear
+  - Per-bit palette: `static const k_attrib_bit_colors[10]` local to the panel (same
+    ownership as the other marker rgba constants). 10 distinguishable colors, staying clear
     of warning-red (0.95,0.35,0.30), replay-green, and the violet bracket match.
   - Token segments: append one `color_segments[]` entry per ATTRIB_BIT_TOKEN **after**
     `repl_code_panel_apply_syntax_segments_for_category` (it resets segment count at :1379)
@@ -275,7 +277,7 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
 
 ## Phase 7 — Docs
 
-- `CLAUDE.md` Supported Commands: add entry after the matrix-stack line — 9 bits, `|`
+- `CLAUDE.md` Supported Commands: add entry after the matrix-stack line — 10 bits, `|`
   policy (same as glClear), depth guard/cap, cursor highlighting, `GL_ALL_ATTRIB_BITS`
   intentionally unsupported. Add `attrib_bits.c/.h` rows to the File Layout table and
   `docs/MODULES.md`. Add mandatory `[command CMD_PUSH_ATTRIB]` and
@@ -344,3 +346,40 @@ Regression tests: `test_edit_overlays.c` (per-walker pop scoping, scoped
 colour-mask revert, equation capture/restore), `test_glr_ctrl.c` (token
 confined to arg range/mask, comment token not coloured), `test_repl_state.c`
 (depth row source = latest user push/pop, bracket-inclusive depth values).
+
+## Fog follow-up (2026-07-21)
+
+`GL_FOG_BIT` was added as a **10th** supported bit, after the fog commands
+(`glFogi`/`glFogf`/`glFogfv`, `CMD_FOG_*`) merged in from `main`. Without it, the
+fog *parameters* fell in `repl_attrib_bits_for_cmd`'s `default: 0` branch, so no
+`glPushAttrib` mask could scope them. Changes (10 bits, canonical indices 0..9):
+
+- **`command_spec.c`** `k_attrib_bits[]`: `GL_FOG_BIT` inserted in canonical
+  ascending-GL-value position (between `GL_LIGHTING_BIT` 0x40 and
+  `GL_DEPTH_BUFFER_BIT` 0x100) → bit-index **5**; the four later bits shift to
+  6..9. `glPushAttrib` help text lists it.
+- **`attrib_bits.{c,h}`**: `REPL_ATTRIB_BIT_COUNT` 9 → 10; `CMD_FOG_I/F/FV →
+  GL_FOG_BIT`; new `ITEM_KIND_FOG` cell keyed by pname (mode / density / start /
+  end / colour are distinct cells) covered by `GL_FOG_BIT`; `cap_group_bit(GL_FOG)
+  → GL_FOG_BIT`, so `glEnable(GL_FOG)` rides `GL_ENABLE_BIT | GL_FOG_BIT`,
+  matching real GL.
+- **`gl_state_inspector.c`**: `gl_state_restore_attrib_groups` restores the fog
+  params when the pop's mask covers `GL_FOG_BIT`.
+- **`repl_code_panel.c`** `k_attrib_bit_colors[]`: a 10th, unique **haze-grey**
+  `(0.72, 0.75, 0.78)` entry at index 5 — the sole desaturated hue, distinct from
+  the nine saturated ones and clear of the reserved marker colours.
+- **Executor**: no change — it already passes the literal mask to real
+  `glPushAttrib`, and fog params live in real GL, not the REPL render tail.
+
+Regression tests: `test_repl_core_commit.c` (fog `bits_for_cmd`, enable
+dual-membership, distinct-cell `cmd_writes`, push-saved / pop-reverted
+collectors), `test_repl_state.c` (`glPushAttrib(GL_FOG_BIT)` scope restores fog
+density on pop).
+
+**Real-GL oracle now created** (closes the Phase 6 gap): `tests/test_attrib_bits_gl.c`,
+registered in `GL_TEST_BINS`, run via `make gl-tests` / `make gl-tests
+FREEGLUT_OSMESA=1`. Drives the same GL calls the executor emits and, for every
+supported bit, checks `set(V1) → glPushAttrib(bit) → set(V2) → glPopAttrib() →
+glGet == V1` (bit *covers* the cell) plus a negative pass with a non-covering bit
+(mapping is not over-broad) — a direct `repl_attrib_bits_for_type`-vs-driver
+check, including the fog params and the `GL_FOG` enable dual-membership.

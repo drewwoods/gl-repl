@@ -147,6 +147,7 @@ static const ReplEnumEntry k_attrib_bits[] = {
     { "GL_LINE_BIT",         GL_LINE_BIT },
     { "GL_POLYGON_BIT",      GL_POLYGON_BIT },
     { "GL_LIGHTING_BIT",     GL_LIGHTING_BIT },
+    { "GL_FOG_BIT",          GL_FOG_BIT },
     { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
     { "GL_TRANSFORM_BIT",    GL_TRANSFORM_BIT },
     { "GL_ENABLE_BIT",       GL_ENABLE_BIT },
@@ -314,7 +315,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glPushAttrib(",       "glPushAttrib(mask)",                                       1, { "mask" },
         "Save a group of state onto the attribute stack; restore with glPopAttrib.\n"
         "mask: GL_CURRENT_BIT, GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_LIGHTING_BIT,\n"
-        "GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
+        "GL_FOG_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
         "or several OR'd with | (GL_ALL_ATTRIB_BITS is not supported).",
         REPL_HELP_GROUP_STATE },
     { "glPopAttrib()",       "glPopAttrib()",                                            0, { NULL },

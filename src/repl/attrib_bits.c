@@ -40,7 +40,8 @@ enum {
     ITEM_KIND_BLEND_FUNC,  /* (COLOR_BUFFER) */
     ITEM_KIND_COLOR_MASK,  /* (COLOR_BUFFER) */
     ITEM_KIND_CLEAR_COLOR, /* (COLOR_BUFFER) */
-    ITEM_KIND_CLIP_PLANE   /* key = plane idx; equation  (TRANSFORM) */
+    ITEM_KIND_CLIP_PLANE,  /* key = plane idx; equation  (TRANSFORM) */
+    ITEM_KIND_FOG          /* key = pname (mode/density/start/end/color)  (FOG) */
 };
 
 #define ITEM_ID(kind_, key_) (((unsigned)(kind_) << 16) | ((unsigned)(key_) & 0xFFFFu))
@@ -62,6 +63,8 @@ static unsigned cap_group_bit(GLenum cap) {
         return GL_POLYGON_BIT;
     case GL_DEPTH_TEST:
         return GL_DEPTH_BUFFER_BIT;
+    case GL_FOG:
+        return GL_FOG_BIT;
     case GL_BLEND:
         return GL_COLOR_BUFFER_BIT;
     case GL_CLIP_PLANE0: case GL_CLIP_PLANE1: case GL_CLIP_PLANE2:
@@ -99,6 +102,8 @@ static unsigned cell_cover(unsigned item_id) {
         return GL_COLOR_BUFFER_BIT;
     case ITEM_KIND_CLIP_PLANE:
         return GL_TRANSFORM_BIT;
+    case ITEM_KIND_FOG:
+        return GL_FOG_BIT;
     default:
         return 0;
     }
@@ -136,6 +141,8 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
         return GL_COLOR_BUFFER_BIT;
     case CMD_CLIP_PLANE:
         return GL_TRANSFORM_BIT;
+    case CMD_FOG_I: case CMD_FOG_F: case CMD_FOG_FV:
+        return GL_FOG_BIT;
     default:
         return 0;
     }
@@ -330,6 +337,15 @@ int repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
         n = emit_one(out, n, MAX,
                      ITEM_ID(ITEM_KIND_CLIP_PLANE, clip_plane_idx((GLenum)cmd->args[0])),
                      GL_TRANSFORM_BIT);
+        break;
+    case CMD_FOG_I:
+    case CMD_FOG_F:
+    case CMD_FOG_FV:
+        /* Each fog parameter is its own cell, keyed by pname (GL_FOG_MODE /
+         * GL_FOG_DENSITY / GL_FOG_START / GL_FOG_END / GL_FOG_COLOR), so
+         * setting one does not supersede another. All ride GL_FOG_BIT. */
+        n = emit_one(out, n, MAX,
+                     ITEM_ID(ITEM_KIND_FOG, (GLenum)cmd->args[0]), GL_FOG_BIT);
         break;
     default:
         break;
