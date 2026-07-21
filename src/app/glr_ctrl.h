@@ -150,13 +150,13 @@ void glr_ctrl_mouse(int button, int state, int x, int y);
 void glr_ctrl_motion(int x, int y);
 void glr_ctrl_passive_motion(int x, int y);
 void glr_ctrl_mousewheel(int wheel, int direction, int x, int y);
-void glr_ctrl_timer(int value);
+void glr_ctrl_on_frame_timer(void);
 
-/* Optional offline/capture scheduling mode. Normally glr_ctrl_timer owns the
- * fixed-dt simulation tick. When enabled, the timer only paces redraws and
- * glr_ctrl_frame_presented supplies exactly one tick after each rendered
- * frame. This keeps captured animation states at t0 + frame/60 regardless of
- * rendering throughput. */
+/* Optional offline/capture scheduling mode. Normally the host frame timer
+ * calls glr_ctrl_on_frame_timer(), which owns the fixed-dt simulation tick.
+ * When enabled, the host still paces redraws while glr_ctrl_frame_presented
+ * supplies exactly one tick after each rendered frame. This keeps captured
+ * animation states at t0 + frame/60 regardless of rendering throughput. */
 void glr_ctrl_set_tick_per_frame(int enabled);
 void glr_ctrl_frame_presented(void);
 
@@ -174,10 +174,9 @@ void glr_ctrl_tick(void);
  * helpers below are exposed so test fixtures can drive a single
  * routing concern in isolation without applying GLUT effects (they
  * fill the editor_input EditorInputDispatchEffects struct via
- * editor_request_redraw etc., but glutPostRedisplay /
- * glutSetCursor / glutTimerFunc fire only inside
- * glr_ctrl_apply_input_effects, which the router-helper paths
- * deliberately bypass).
+ * editor_request_redraw etc. but deliberately bypass
+ * glr_ctrl_apply_input_effects). GLUT redisplay and frame-timer scheduling
+ * belong to the host in gl_repl.c.
  *
  * Each returns 1 if the event was consumed.
  */

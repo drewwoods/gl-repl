@@ -215,7 +215,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 
 | Path | Responsibility |
 |------|----------------|
-| [`gl_repl.c`](gl_repl.c)/`.h` | `main()`, GLUT callback registration, window setup, playlist sources, init trace; forwards to `glr_ctrl_*` |
+| [`gl_repl.c`](gl_repl.c)/`.h` | `main()`, GLUT callback registration, window/timer scheduling, playlist sources, init trace; forwards to `glr_ctrl_*` |
 | [`config.h`](config.h) | Compile-time constants, force-included into every TU; includes [`keymap.h`](keymap.h) |
 | [`keymap.h`](keymap.h) | Action→key bindings: one `#define GLR_<ACTION> <key>, <mods>` per action; matched via `keymap_event_is`; `KM_KEY`/`KM_MODS` split for case labels/initializers |
 | [`accent_palette.h`](accent_palette.h) | Shared accent palette anchors + semantic roles + brand-mark list; `make check-palette` ratchet, `make palette-list` |
@@ -223,6 +223,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `include/` | Project-agnostic headers: [`keys.h`](include/keys.h) (physical key bytes), [`c_compat.h`](include/c_compat.h), [`gl_includes.h`](include/gl_includes.h) |
 | **src/app/** | |
 | `glr_ctrl.{c,h}` | App-frame controller: display/reshape/init-GL, builds `Render3dRenderConfig`, UI snapshot, chrome clear, camera load |
+| `glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
 | `glr_ctrl_router.c` | GLUT input dispatch shims, `UiHit` routing, wheel, SIGINT-quit |
 | `glr_config.{c,h}` | Config-key impl + section model; `glr_config_set` tail notifies the tutorial runner |
 | `glr_actions.{c,h}` | `g_cfg_items[]` descriptor table, config shortcuts, menu actions |
