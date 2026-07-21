@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "repl/command_spec.h"
 #include "c_compat.h"  /* STATIC_ASSERT */
 
@@ -716,6 +717,26 @@ const ReplStdCommandSpec *repl_std_command_specs(void) {
 
 const ReplFuncCompletion *repl_func_completions(void) {
     return k_func_completions;
+}
+
+const char *repl_func_signature_for_name(const char *name) {
+    size_t name_len;
+    int i;
+
+    if (!name || !*name)
+        return NULL;
+    name_len = strlen(name);
+    for (i = 0; k_func_completions[i].display_text; i++) {
+        const char *disp = k_func_completions[i].display_text;
+        /* Exact match (e.g. "gluBegin(GLU_POLYGON)" or a bare constant),
+         * or a `<name>(...)` signature — require the '(' immediately after
+         * the name so "glClear" does not match "glClearColor(...)". */
+        if (strcmp(disp, name) == 0)
+            return disp;
+        if (strncmp(disp, name, name_len) == 0 && disp[name_len] == '(')
+            return disp;
+    }
+    return NULL;
 }
 
 const ReplEnumEntry *repl_face_type_entries(void) {
