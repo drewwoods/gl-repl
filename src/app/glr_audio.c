@@ -1368,7 +1368,6 @@ static int worker_load(int idx, float seek_secs) {
     old       = g_active;
     target    = (g_active < 0) ? 0 : (1 - g_active);
     loop_song = (g_loop_mode == GLR_AUDIO_LOOP_SONG);
-    paused    = g_paused;
     g_loading = 1;
     g_load_cancelled = 0;
     /* g_load_seek is reset at dequeue time (audio_dequeue_and_run), not
@@ -1450,11 +1449,6 @@ static int worker_load(int idx, float seek_secs) {
                 &g_slot[target], (ma_uint64)(seek_secs * (float)sr));
     }
 
-    /* Honour the paused state: stop without moving the cursor so a
-     * later resume continues from here. */
-    if (paused)
-        ma_sound_stop(&g_slot[target]);
-
     float mid_load_seek;
     audio_lock();
     if (g_load_cancelled) {
@@ -1470,6 +1464,19 @@ static int worker_load(int idx, float seek_secs) {
     g_playlist_pos        = idx;
     g_playlist_duration_secs[idx] = duration_secs;
     g_track_generation++;
+    /* Honour the paused state: stop without moving the cursor so a later
+     * resume continues from here. Re-read g_paused under the SAME lock that
+     * publishes g_active, rather than the value sampled before the slow
+     * ma_sound_init_from_file above: a glr_audio_set_paused() racing with
+     * this load (e.g. glr_actions_apply_defaults() applying a cfg_mode=pause
+     * right after play_playlist() posts the start) sets g_paused while
+     * g_active is still -1, so it can't stop the not-yet-published slot
+     * itself. Reading the flag here, atomically with the publish, closes
+     * that window — otherwise the track plays and only the *next* load
+     * observes the pause ("plays one track, then stops"). */
+    paused = g_paused;
+    if (paused)
+        ma_sound_stop(&g_slot[target]);
     /* A seek that arrived while g_loading was set recorded itself in
      * g_load_seek rather than touching the not-yet-published slot. Clear
      * g_loading atomically with capturing it so a seek racing right here
