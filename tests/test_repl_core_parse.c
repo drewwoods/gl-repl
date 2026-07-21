@@ -1615,6 +1615,51 @@ int main(void) {
                            "glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT);") != NULL);
     }
     {
+        /* Regression: one enum argument used to have a 63-character text
+         * ceiling, so four long, valid bit names failed before resolution. */
+        static const char *k_four_long =
+            "glPushAttrib(GL_CURRENT_BIT | GL_LIGHTING_BIT | "
+            "GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)";
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(k_four_long, &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(four long bits) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib four-long-bit mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_CURRENT_BIT | GL_LIGHTING_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT));
+    }
+    {
+        static const char *k_all_ten =
+            "glPushAttrib(GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT | "
+            "GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT | "
+            "GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
+            "GL_COLOR_BUFFER_BIT)";
+        static const char *k_all_ten_canonical =
+            "glPushAttrib(GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT | "
+            "GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT | "
+            "GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
+            "GL_COLOR_BUFFER_BIT);";
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(k_all_ten, &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(all ten bits) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib all-ten-bit mask",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
+                         GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
+        ASSERT_TRUE("glPushAttrib all ten bits canonicalized",
+                    strstr(cmd_text, k_all_ten_canonical) != NULL);
+    }
+    {
         /* Reversed, unspaced input emits in canonical table order (ascending
          * GL value), so a mask has exactly one canonical spelling. */
         glr_ctrl_reset_all();

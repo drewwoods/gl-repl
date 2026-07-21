@@ -287,9 +287,11 @@
 #define REPL_MAX_BLOCK_NEST_DEPTH 64
 #endif
 
-/* Maximum number of enum arguments. */
+/* Maximum characters in one parsed enum argument, including the trailing
+ * NUL. Bitfield slots may contain many `GL_* | GL_*` terms, so they need the
+ * same capacity as a canonical source line rather than a single-token cap. */
 #ifndef REPL_ENUM_ARG_MAX
-#define REPL_ENUM_ARG_MAX 64
+#define REPL_ENUM_ARG_MAX MAX_LINE_LEN
 #endif
 
 #endif /* CONFIG_H */
