@@ -33,8 +33,7 @@ production OpenGL compile/link smoke check, while `make gl-tests` runs the
 small set of tests that require an actual GL context.
 
 `make web` (or `scripts/build-web.sh` for a cold start with no emsdk
-sourced yet) builds the Emscripten/wasm browser target; see the
-"Web build (Emscripten)" section of `CLAUDE.md` and
+sourced yet) builds the Emscripten/wasm browser target; see
 [`packaging/web/README.md`](../packaging/web/README.md).
 
 ## The guard suite

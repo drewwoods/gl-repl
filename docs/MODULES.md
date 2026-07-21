@@ -195,7 +195,8 @@ with no ownership of REPL/editor/render3d/UI/app state.
 
 Project-owned files for the Emscripten/wasm web build live under
 [`packaging/web/`](../packaging/web/README.md) (the themed shell + gl4es
-bootstrap TU); see the `Web build (Emscripten)` section of `CLAUDE.md`.
+bootstrap TU); see [`packaging/web/README.md`](../packaging/web/README.md)
+for the build/shim details.
 
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
