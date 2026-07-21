@@ -881,10 +881,20 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_bracket_cells(snap, hl, row_idx, wrap_x,
                                           wrap_start, wrap_len, *io_line_y);
 
-            glColor3fv(k_clr_input_text);
-            text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
-                                    wrap_start, wrap_len, FONT_MONO,
-                                    snap->comment_rule_ligature);
+            /* When the adapter supplies per-token colours for the active
+             * edit line (syntax spans / glPushAttrib per-bit hues, already
+             * brightened so the row reads as "live"), draw them instead of
+             * the flat near-white wash so the current line keeps its
+             * highlighting. Rows with no segments keep the wash. */
+            if (row->color_segment_count > 0) {
+                text_panel_draw_colored_text(snap, row, input, wrap_start,
+                                             wrap_len, wrap_x, *io_line_y);
+            } else {
+                glColor3fv(k_clr_input_text);
+                text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
+                                        wrap_start, wrap_len, FONT_MONO,
+                                        snap->comment_rule_ligature);
+            }
 
             if (wrap_row == cursor_row) {
                 int cursor_x = snap->cp_x + wrap_x + cursor_col * FONT_W;

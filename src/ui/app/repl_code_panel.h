@@ -13,6 +13,7 @@
 #include "repl/command_spec.h"
 #include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
+#include "ui/core/text_panel.h"   /* UiTextPanelColorSegment (test accessor) */
 
 struct UiCodePanelOutput;
 
@@ -126,5 +127,14 @@ int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
 int ui_repl_code_panel_generated_row_style_for_test(
         const UiRenderSnapshot *snap, const char *needle,
         float out_rgb[3], int *out_segment_count);
+
+/* Test-only: build rows without GL rendering and copy the per-character color
+ * segments of the committed (TEXT) or active edit (INPUT) row for
+ * `source_line_idx` into `out` (up to `max_out`). Returns the row's total
+ * segment count (may exceed `max_out`), or -1 if no such row exists. Lets the
+ * glPushAttrib mask-token colouring be asserted against the row's drawn text. */
+int ui_repl_code_panel_row_color_segments_for_test(
+        const UiRenderSnapshot *snap, int source_line_idx,
+        UiTextPanelColorSegment *out, int max_out);
 
 #endif /* UI_REPL_CODE_PANEL_H */
