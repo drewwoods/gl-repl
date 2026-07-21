@@ -14,7 +14,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>    /* clock_gettime(CLOCK_MONOTONIC) for frame pacing */
 
 #include "app/glr_audio.h"
 #include "subsystems/color_picker/color_picker_state.h"
@@ -882,14 +881,10 @@ void glr_ctrl_reset_transients(void) {
 void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
     if (effects.set_cursor)
         glutSetCursor(effects.cursor);
-    if (effects.request_redraw) {
-        /* No need for glutPostRedisplay() here: the controller's main display
-         * loop already redraws every frame, adding this causes inconsistent
-         * frame rate on higher refresh-rate displays (e.g. 120Hz) because the
-         * extra glutPostRedisplay() triggers a second display.
-         */
-        // glutPostRedisplay();
-    }
+    /* The GLUT host continuously requests frames at 60 Hz, so the semantic
+     * redraw request is already satisfied. Issuing an extra host redraw here
+     * would make input events perturb that cadence on high-refresh displays. */
+    (void)effects.request_redraw;
     if (effects.restore_hidden_code_panel)
         glr_ctrl_restore_hidden_code_panel();
     if (effects.close_help_overlay)
@@ -2631,14 +2626,9 @@ static void glr_ctrl_seed_overlay_xn(void) {
 /* Fixed frame timestep (~60 Hz). Every per-frame advance (time var, replay
  * fade, camera momentum, grid/axes fade, view transition) uses the fixed
  * GLR_FRAME_DT_SECS, so the sim is deterministic and headless capture is
- * unaffected. GLR_FRAME_DT_MS_EXACT is the matching wall-clock period the
- * animation timer paces to (see glr_ctrl_timer): a true 60 Hz frame is
- * 16.667 ms, but glutTimerFunc takes only integer ms, so a constant
- * glutTimerFunc(16,...) runs slightly fast and beats against the vblank
- * cadence on high-refresh displays (the odd 1-vblank-early present shows as
- * micro-stutter). GLR_CURSOR_BLINK_TICKS is the cursor blink half-period
+ * unaffected. The GLUT host owns matching wall-clock pacing via
+ * glr_frame_pacer. GLR_CURSOR_BLINK_TICKS is the cursor blink half-period
  * counted in those ticks (~0.5 s). */
-#define GLR_FRAME_DT_MS_EXACT (1000.0 / 60.0)
 #define GLR_CURSOR_BLINK_TICKS 30
 
 /* Per-frame diff + advance, called from glr_ctrl_tick (the animation
@@ -3212,10 +3202,10 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  * Helpers are exported (declared in glr_ctrl.h) so test fixtures
  * can drive a single routing concern without applying GLUT effects.
  * Helpers fill the editor_input EditorInputDispatchEffects via
- * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
- * glutTimerFunc fire only from glr_ctrl_apply_input_effects, which
- * the dispatch entry points call after the helpers. Test fixtures
- * bypass apply_input_effects entirely.
+ * editor_request_redraw etc.; glr_ctrl_apply_input_effects actualizes the
+ * controller-owned effects after routing. The GLUT host independently owns
+ * continuous redisplay and timer scheduling. Test fixtures bypass
+ * apply_input_effects entirely.
  * ===========================================================================
  */
 
@@ -3224,10 +3214,8 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  * status, advance time variable, advance replay state, decay camera
  * momentum, blink the cursor, decay the status TTL.
  *
- * The work is split from the GLUT scheduling so test fixtures (which
- * don't initialize GLUT) can drive a single tick by calling
- * glr_ctrl_tick directly. The public timer entry adds
- * glutPostRedisplay + glutTimerFunc reschedule on top. */
+ * The work is split from GLUT scheduling so test fixtures (which don't
+ * initialize GLUT) can drive a single tick by calling glr_ctrl_tick directly. */
 void glr_ctrl_tick(void) {
     /* SIGINT (Ctrl+C) requested quit: the handler only set a flag; the
      * router owns the flag + the recovery save + exit (so no stdio/file
@@ -3339,12 +3327,6 @@ void glr_ctrl_tick(void) {
     }
 }
 
-static double glr_timer_now_ms(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
-}
-
 void glr_ctrl_set_tick_per_frame(int enabled) {
     g_tick_per_frame = enabled ? 1 : 0;
 }
@@ -3354,46 +3336,12 @@ void glr_ctrl_frame_presented(void) {
         glr_ctrl_tick();
 }
 
-/* Pace against an absolute monotonic deadline rather than a constant integer
- * delay. Each tick the next deadline advances by the exact 16.667 ms period
- * and we schedule the rounded remaining time, so the per-frame delays form
- * 17,17,16,... whose AVERAGE is exactly 16.667 ms. This self-corrects for
- * time spent in the callback and for accumulated rounding, keeping the
- * presentation cadence phase-aligned with the vblank cadence (fewer
- * micro-stutter slips on high-refresh displays). The sim still advances a
- * fixed GLR_FRAME_DT_SECS per tick — only the wall-clock pacing changes.
- * GLR_TICK_PER_FRAME mode transfers tick ownership to frame presentation;
- * this callback still provides the same redraw cadence but must not advance
- * simulation too, or a captured frame could receive two ticks. */
-void glr_ctrl_timer(int value) {
-    (void)value;
-    static double next_deadline_ms = 0.0; /* monotonic ms; 0 = uninitialized */
-
-    /* A window-manager close clears freeglut's current window before the
-     * destroy callback and before glutMainLoop() returns. A timer that was
-     * already queued can still run in that interval; do not post another
-     * redisplay (or reschedule itself) once there is no window to draw. */
-    if (glutGetWindow() == 0)
-        return;
-
+/* Application-side response to the host's frame timer. Capture mode
+ * transfers fixed-dt advancement to glr_ctrl_frame_presented(), so the host
+ * can keep requesting frames without advancing simulation twice. */
+void glr_ctrl_on_frame_timer(void) {
     if (!g_tick_per_frame)
         glr_ctrl_tick();
-    glutPostRedisplay();
-
-    double now = glr_timer_now_ms();
-    if (next_deadline_ms == 0.0)
-        next_deadline_ms = now;
-    next_deadline_ms += GLR_FRAME_DT_MS_EXACT;
-
-    /* Fell more than a frame behind (stall / debugger pause): drop the
-     * backlog and resync rather than bursting zero-delay catch-up frames. */
-    if (next_deadline_ms < now)
-        next_deadline_ms = now;
-
-    int delay = (int)lround(next_deadline_ms - now);
-    if (delay < 1)
-        delay = 1;
-    glutTimerFunc((unsigned int)delay, glr_ctrl_timer, 0);
 }
 
 void glr_shutdown(void) {

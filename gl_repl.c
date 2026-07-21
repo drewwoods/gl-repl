@@ -2,6 +2,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_debug.h"
 #include "app/glr_audio.h"
+#include "app/glr_frame_pacer.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
 #include "app/glr_pointer_script.h"
@@ -16,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -561,8 +563,33 @@ static void window_close_func(void) {
 }
 #endif
 
+static GlrFramePacer g_frame_pacer = GLR_FRAME_PACER_INIT;
+
+static double frame_timer_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
+}
+
+/* The GLUT host owns window validity, redisplay, and timer registration.
+ * Pace against an absolute 60 Hz deadline: the rounded delays average to
+ * 16.667 ms without accumulating integer-millisecond drift. */
 static void timer_func(int value) {
-    glr_ctrl_timer(value);
+    int delay;
+    (void)value;
+
+    /* A title-bar close clears freeglut's current window before the destroy
+     * callback and before glutMainLoop() returns. An already-queued timer can
+     * still run in that interval. */
+    if (glutGetWindow() == 0)
+        return;
+
+    glr_ctrl_on_frame_timer();
+    glutPostRedisplay();
+
+    delay = glr_frame_pacer_next_delay_ms(&g_frame_pacer,
+                                          frame_timer_now_ms());
+    glutTimerFunc((unsigned int)delay, timer_func, 0);
 }
 
 /* Ctrl+C / terminal SIGINT: route to the same save-and-quit safeguard
