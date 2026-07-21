@@ -324,7 +324,7 @@ static void test_render_vertex_points(void) {
     ASSERT_INT("two point batches drawn",
                trace_count_sym(&log, "glVertex3f"), 2);
     ASSERT_INT("triangle vertices use the large point size",
-               trace_count_line(&log, "glPointSize 5"), 2);
+               trace_count_line(&log, "glPointSize 6"), 2);
     ASSERT_INT("counter agrees with trace",
                (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
 #endif
@@ -356,7 +356,7 @@ static void test_render_vertex_points(void) {
                trace_count_line(&log, begin_triangles), 1);
 #else
     ASSERT_INT("line-mode vertex uses the small point size",
-               trace_count_line(&log, "glPointSize 2"), 1);
+               trace_count_line(&log, "glPointSize 3"), 1);
     ASSERT_INT("line-mode vertex coords emitted",
                trace_count_line(&log, "glVertex3f 4 5 6"), 1);
 #endif
@@ -457,7 +457,7 @@ static void test_render_vertex_points_glut(void) {
     ASSERT_INT("glut vertex points restore polygon mode to GL_FILL",
                trace_count_line(&log, polygon_fill), 1);
     ASSERT_INT("glut vertex points use the large point size",
-               trace_count_line(&log, "glPointSize 5") >= 1, 1);
+               trace_count_line(&log, "glPointSize 6") >= 1, 1);
     ASSERT_INT("glut vertex points track the modelview transform",
                trace_count_line(&log, "glTranslatef 2 0 0") >= 1, 1);
 
