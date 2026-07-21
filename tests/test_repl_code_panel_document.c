@@ -2,7 +2,9 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "ui/core/gl_2d.h"
+#include "ui/core/text_panel.h"
 #include "editor/input.h"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -62,6 +64,134 @@ static void seed_color_transformer(int line, float r, float g, float b) {
     };
     editor_state_transformers_clear();
     editor_state_transformers_append(&t);
+}
+
+/* Winning (last-drawn) color at char position `pos` among a row's color
+ * segments. `has` is 0 when no segment covers the position (the renderer
+ * would fall back to the row base color there). Segments are drawn in array
+ * order, so the last one covering `pos` is what the user actually sees. */
+typedef struct { float r, g, b; int has; } SegColor;
+
+static SegColor winning_seg_color(const UiTextPanelColorSegment *segs, int n,
+                                  int pos) {
+    SegColor c = { 0.0f, 0.0f, 0.0f, 0 };
+    for (int i = 0; i < n; i++) {
+        if (pos >= segs[i].char_start &&
+            pos < segs[i].char_start + segs[i].char_count) {
+            c.r = segs[i].color.r;
+            c.g = segs[i].color.g;
+            c.b = segs[i].color.b;
+            c.has = 1;
+        }
+    }
+    return c;
+}
+
+static int seg_color_eq(SegColor a, SegColor b) {
+    return a.has && b.has &&
+           fabsf(a.r - b.r) < 1e-4f &&
+           fabsf(a.g - b.g) < 1e-4f &&
+           fabsf(a.b - b.b) < 1e-4f;
+}
+
+/* Assert a GL_*_BIT mask token is coloured UNIFORMLY across its whole span
+ * (its per-bit hue covers the leading "GL_" too, not starting a few chars in)
+ * and hand back that colour. `text` is the row's drawn text (input buffer for
+ * the active edit row; buffer line for a committed row). */
+static SegColor check_attrib_token_uniform(TestHarness *h, const char *label,
+                                           const UiTextPanelColorSegment *segs,
+                                           int n, const char *text,
+                                           const char *token) {
+    const char *hit = text ? strstr(text, token) : NULL;
+    int start = hit ? (int)(hit - text) : -1;
+    int len = (int)strlen(token);
+    SegColor c0, c1;
+    char name[160];
+
+    snprintf(name, sizeof name, "%s: token '%s' present", label, token);
+    TEST_ASSERT_TRUE(h, name, start >= 0);
+    if (start < 0)
+        return (SegColor){ 0.0f, 0.0f, 0.0f, 0 };
+
+    c0 = winning_seg_color(segs, n, start);
+    c1 = winning_seg_color(segs, n, start + len - 1);
+    snprintf(name, sizeof name,
+             "%s: '%s' is one uniform colour (per-bit hue covers GL_ prefix)",
+             label, token);
+    TEST_ASSERT_TRUE(h, name, seg_color_eq(c0, c1));
+    return c0;
+}
+
+/* Regression: on the active edit line the input buffer has the committed
+ * line's leading indent stripped, but the glPushAttrib mask-token highlight
+ * ranges are computed against the indented buffer line. Without shifting them
+ * back into input-buffer space the per-bit colour landed one indent-width to
+ * the right, so each token's "GL_" prefix kept the plain syntax colour (bug
+ * report: "the colours flip too late"). Assert the per-bit colour now covers
+ * each whole token, and that the committed-row path (cursor on glPopAttrib)
+ * agrees. */
+static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiTextPanelColorSegment segs[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    const char *buffer_line;
+    SegColor enable_c, color_c;
+    int n;
+
+    reset_doc_fixture();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("glPopAttrib();");
+    editor_feed_line("glPopMatrix();");
+
+    /* --- Cursor ON the push line (active edit row, indent stripped). --- */
+    editor_navigate_to_line(1);
+    glr_ctrl_display_frame();          /* computes editor_state_highlights */
+    glr_ctrl_build_ui_snapshot(&snap); /* snap->editor_highlights = live list */
+
+    /* The push line is indented inside the glPushMatrix block, so its buffer
+     * line carries leading whitespace the input buffer does not — the exact
+     * condition that used to misalign the colours. */
+    buffer_line = editor_buffer_view_line(editor_buffer_view(), 1);
+    TEST_ASSERT_TRUE(h, "push line is indented in the buffer",
+                     buffer_line && (buffer_line[0] == ' ' ||
+                                     buffer_line[0] == '\t'));
+    TEST_ASSERT_TRUE(h, "edit-line input buffer has indent stripped",
+                     snap.editor_input.input &&
+                     snap.editor_input.input[0] == 'g');
+
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 1, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    TEST_ASSERT_TRUE(h, "edit-line push row exists", n >= 0);
+
+    enable_c = check_attrib_token_uniform(h, "edit line", segs, n,
+                                          snap.editor_input.input,
+                                          "GL_ENABLE_BIT");
+    color_c = check_attrib_token_uniform(h, "edit line", segs, n,
+                                         snap.editor_input.input,
+                                         "GL_COLOR_BUFFER_BIT");
+    TEST_ASSERT_TRUE(h,
+                     "edit line: the two mask tokens carry distinct per-bit hues",
+                     !seg_color_eq(enable_c, color_c));
+
+    /* --- Cursor on glPopAttrib: the push line is now a committed row whose
+     * display text still carries the indent (offset 0). It already worked;
+     * pin it so the two paths cannot drift. --- */
+    editor_navigate_to_line(2);
+    glr_ctrl_display_frame();
+    glr_ctrl_build_ui_snapshot(&snap);
+
+    buffer_line = editor_buffer_view_line(editor_buffer_view(), 1);
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 1, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    TEST_ASSERT_TRUE(h, "committed push row exists", n >= 0);
+
+    enable_c = check_attrib_token_uniform(h, "committed row", segs, n,
+                                          buffer_line, "GL_ENABLE_BIT");
+    color_c = check_attrib_token_uniform(h, "committed row", segs, n,
+                                         buffer_line, "GL_COLOR_BUFFER_BIT");
+    TEST_ASSERT_TRUE(h,
+                     "committed row: the two mask tokens carry distinct per-bit hues",
+                     !seg_color_eq(enable_c, color_c));
 }
 
 int main(void) {
@@ -375,6 +505,8 @@ int main(void) {
             ASSERT_TRUE(lbl, line == 1);
         }
     }
+
+    test_attrib_bit_tokens_align_on_edit_line(&g_harness);
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
 }
