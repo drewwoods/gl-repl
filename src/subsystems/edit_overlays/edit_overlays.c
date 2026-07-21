@@ -294,11 +294,6 @@ typedef struct OverlayGlState {
     int      color_writes;       /* program's glColorMask writes RGB */
 } OverlayGlState;
 
-/* Depth of the overlay walk's glPushAttrib/glPopAttrib snapshot stack, matching
- * the executor's real-GL attribute-stack cap (REPL_ATTRIB_STACK_CAP). Virtual
- * depth is tracked unbounded so pops past the cap still balance. */
-#define OVERLAY_ATTRIB_STACK_CAP 8
-
 /* One saved attribute frame: the push mask, the mirror snapshot, and the live
  * eye-space clip-plane equations at push time (captured from GL, since the
  * mirror never knows them — glClipPlane bakes the walk's modelview in). */
@@ -313,7 +308,7 @@ typedef struct OverlayAttribFrame {
  * same way. */
 typedef struct OverlayGlTracker {
     OverlayGlState     st;
-    OverlayAttribFrame frames[OVERLAY_ATTRIB_STACK_CAP];
+    OverlayAttribFrame frames[REPL_ATTRIB_STACK_CAP];
     int                depth;    /* virtual (unbounded) push depth */
 } OverlayGlTracker;
 
@@ -451,7 +446,7 @@ static void overlay_gl_restore_frame(const OverlayAttribFrame *fr,
 static int overlay_gl_track_cmd(const GLCmd *cmd, OverlayGlTracker *trk) {
     switch (cmd->type) {
     case CMD_PUSH_ATTRIB:
-        if (trk->depth < OVERLAY_ATTRIB_STACK_CAP) {
+        if (trk->depth < REPL_ATTRIB_STACK_CAP) {
             OverlayAttribFrame *fr = &trk->frames[trk->depth];
             fr->mask = (unsigned)cmd->args[0];
             fr->snap = trk->st;
@@ -466,7 +461,7 @@ static int overlay_gl_track_cmd(const GLCmd *cmd, OverlayGlTracker *trk) {
     case CMD_POP_ATTRIB:
         if (trk->depth > 0) {
             trk->depth--;
-            if (trk->depth < OVERLAY_ATTRIB_STACK_CAP)
+            if (trk->depth < REPL_ATTRIB_STACK_CAP)
                 overlay_gl_restore_frame(&trk->frames[trk->depth], &trk->st);
         }
         return 1;

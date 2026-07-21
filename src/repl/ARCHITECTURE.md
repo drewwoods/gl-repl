@@ -606,7 +606,7 @@ the live arrays.
 
 ### 5.3 Execute — flat program to GL
 
-[`repl_execute_program()`](executor.h#L207) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L199) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Baked args only.** Every command renders from its flatten-baked

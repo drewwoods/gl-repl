@@ -32,6 +32,7 @@
 #define REPL_EXECUTOR_H
 
 #include "repl/flatten.h"
+#include "repl/attrib_bits.h"  /* REPL_ATTRIB_STACK_CAP */
 #include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 #ifndef APIENTRY
@@ -39,15 +40,6 @@
 #endif
 
 #define TESS_VERT_BUF_SIZE 256
-
-/* Depth of the real glPushAttrib/glPopAttrib GL stack the executor drives.
- * Virtual (user-source) push depth is unbounded; the real GL stack is only
- * pushed while the virtual level is within this cap, so the level being
- * popped is real iff virtual <= CAP (LIFO). GL guarantees an attribute stack
- * at least 16 deep, and the app already brackets the whole user program in
- * glPushAttrib(GL_ALL_ATTRIB_BITS); the worst live nesting under this cap
- * stays comfortably below 16. See add-push-attrib.md. */
-#define REPL_ATTRIB_STACK_CAP 8
 
 #include "repl/state_views.h"  /* ReplRenderState (attrib bookkeeping snapshot) */
 

@@ -338,43 +338,45 @@ int repl_find_feeding_color_cmd(int line_idx) {
     return find_feeding_state_cmd(line_idx, 0);
 }
 
-int repl_find_matching_push_matrix(int line_idx) {
-    if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
+/* Source-order LIFO partner lookup shared by the matrix and attribute stack
+ * bracket helpers. `open_type` pairs with `close_type`; direction -1 finds an
+ * open partner for a close, and +1 finds a close partner for an open. Like the
+ * callers it deliberately ignores block scope. */
+static int repl_find_matching_bracket(int line_idx, CmdType open_type,
+                                      CmdType close_type, int direction) {
     const GLCmd *cmds = repl_state_document_cmds();
-    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_POP_MATRIX) return -1;
-
+    int n = repl_state_document_count();
+    CmdType start_type = direction < 0 ? close_type : open_type;
+    CmdType partner_type = direction < 0 ? open_type : close_type;
     int depth = 1;
-    for (int i = line_idx - 1; i >= 0; i--) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_POP_MATRIX) {
+
+    if (line_idx < 0 || line_idx >= n || direction == 0 ||
+        !cmds[line_idx].valid || cmds[line_idx].type != start_type)
+        return -1;
+    for (int i = line_idx + direction; i >= 0 && i < n; i += direction) {
+        CmdType type;
+        if (!cmds[i].valid)
+            continue;
+        type = cmds[i].type;
+        if (type == start_type) {
             depth++;
-        } else if (t == CMD_PUSH_MATRIX) {
+        } else if (type == partner_type) {
             depth--;
-            if (depth == 0) return i;
+            if (depth == 0)
+                return i;
         }
     }
     return -1;
 }
 
-int repl_find_matching_pop_matrix(int line_idx) {
-    int n = repl_state_document_count();
-    if (line_idx < 0 || line_idx >= n) return -1;
-    const GLCmd *cmds = repl_state_document_cmds();
-    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_PUSH_MATRIX) return -1;
+int repl_find_matching_push_matrix(int line_idx) {
+    return repl_find_matching_bracket(line_idx, CMD_PUSH_MATRIX, CMD_POP_MATRIX,
+                                      -1);
+}
 
-    int depth = 1;
-    for (int i = line_idx + 1; i < n; i++) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_PUSH_MATRIX) {
-            depth++;
-        } else if (t == CMD_POP_MATRIX) {
-            depth--;
-            if (depth == 0) return i;
-        }
-    }
-    return -1;
+int repl_find_matching_pop_matrix(int line_idx) {
+    return repl_find_matching_bracket(line_idx, CMD_PUSH_MATRIX, CMD_POP_MATRIX,
+                                      1);
 }
 
 /* Attribute-stack bracket matching, the exact source-order LIFO mirror of the
@@ -384,42 +386,13 @@ int repl_find_matching_pop_matrix(int line_idx) {
  * CMD_PUSH_ATTRIB walks forward to the matching CMD_POP_ATTRIB. Returns -1 when
  * the cursor is not on the right bracket or no partner exists. */
 int repl_find_matching_push_attrib(int line_idx) {
-    if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
-    const GLCmd *cmds = repl_state_document_cmds();
-    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_POP_ATTRIB) return -1;
-
-    int depth = 1;
-    for (int i = line_idx - 1; i >= 0; i--) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_POP_ATTRIB) {
-            depth++;
-        } else if (t == CMD_PUSH_ATTRIB) {
-            depth--;
-            if (depth == 0) return i;
-        }
-    }
-    return -1;
+    return repl_find_matching_bracket(line_idx, CMD_PUSH_ATTRIB, CMD_POP_ATTRIB,
+                                      -1);
 }
 
 int repl_find_matching_pop_attrib(int line_idx) {
-    int n = repl_state_document_count();
-    if (line_idx < 0 || line_idx >= n) return -1;
-    const GLCmd *cmds = repl_state_document_cmds();
-    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_PUSH_ATTRIB) return -1;
-
-    int depth = 1;
-    for (int i = line_idx + 1; i < n; i++) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_PUSH_ATTRIB) {
-            depth++;
-        } else if (t == CMD_POP_ATTRIB) {
-            depth--;
-            if (depth == 0) return i;
-        }
-    }
-    return -1;
+    return repl_find_matching_bracket(line_idx, CMD_PUSH_ATTRIB, CMD_POP_ATTRIB,
+                                      1);
 }
 
 /* Walk backwards from line_idx past a CMD_FUNC_END to its matching

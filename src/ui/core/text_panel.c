@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static const GLfloat k_clr_input_text[3]     = { 0.95f, 0.95f, 0.90f };
 static const GLfloat k_clr_active_row_bg[4]  = { 0.15f, 0.18f, 0.28f, 0.70f };
 static const GLfloat k_clr_selection_band[4] = { 0.35f, 0.55f, 0.95f, 0.75f };
 static const GLfloat k_clr_search_match[4]   = { 0.25f, 0.45f, 0.85f, 0.30f };
@@ -881,16 +880,16 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_bracket_cells(snap, hl, row_idx, wrap_x,
                                           wrap_start, wrap_len, *io_line_y);
 
-            /* When the adapter supplies per-token colours for the active
-             * edit line (syntax spans / glPushAttrib per-bit hues, already
-             * brightened so the row reads as "live"), draw them instead of
-             * the flat near-white wash so the current line keeps its
-             * highlighting. Rows with no segments keep the wash. */
+            /* A sparse adapter-supplied segment list (currently the live
+             * glPushAttrib bit tokens) keeps those tokens colored. Its gaps
+             * use the row's legacy near-white input color; rows with no
+             * segments take the original flat-wash path below. */
             if (row->color_segment_count > 0) {
                 text_panel_draw_colored_text(snap, row, input, wrap_start,
                                              wrap_len, wrap_x, *io_line_y);
             } else {
-                glColor3fv(k_clr_input_text);
+                UiTextPanelColor input_color = ui_text_panel_input_text_color();
+                text_panel_set_color(&input_color);
                 text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
                                         wrap_start, wrap_len, FONT_MONO,
                                         snap->comment_rule_ligature);

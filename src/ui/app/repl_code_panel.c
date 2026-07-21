@@ -917,9 +917,6 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     if (attrib_bits) {
         if (MARKER_PRIORITY_ATTRIB_STATE > priority) {
             priority = MARKER_PRIORITY_ATTRIB_STATE;
-            /* `color` is unused when this priority wins (the banded fill in
-             * the tail replaces it), but keep it defined for the ladder. */
-            color = repl_code_panel_rgba(0.80f, 0.80f, 0.80f, 0.90f);
         }
     }
 
@@ -1505,63 +1502,90 @@ static void repl_code_panel_apply_trailing_comment_segment(const char *text,
         };
 }
 
-/* On a glPushAttrib line under the cursor, colour each GL_*_BIT mask token
- * with its per-bit hue. Appended AFTER the syntax spans and the trailing-
- * comment span (both of which reset/extend color_segment_count), and the
- * renderer draws segments in order so these opaque spans win over the syntax
- * colour underneath them. Char ranges come from the HIGHLIGHT_ATTRIB_BIT_TOKEN
- * entries, which are computed against the committed buffer line (leading
- * indent included). `char_offset` shifts them into the coordinate space of
- * `text`: 0 for a committed row (its display text IS the buffer line), and the
- * buffer line's leading-indent width for the active edit row (whose input
- * buffer has that indent stripped — otherwise the per-bit colour would land
- * one indent-width too far right, leaving each token's `GL_` prefix in the
- * syntax colour). Each shifted span is verified to actually cover its bit's
- * token text before it is emitted, so a stale/mid-edit input buffer degrades
- * to no per-bit colour rather than a misplaced one. */
-static void repl_code_panel_apply_attrib_bit_token_segments(
-    const UiRenderSnapshot *snap, int line_idx, const char *text,
-    int char_offset, UiTextPanelRow *row) {
-    const ReplEnumEntry *bits = repl_attrib_bit_entries();
-    int text_len;
+static void repl_code_panel_append_attrib_bit_token_segment(
+    UiTextPanelRow *row, const ReplAttribTokenSpan *span) {
+    int idx;
 
-    if (!snap || !snap->editor_highlights || !row || !text)
+    if (!row || !span || row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
         return;
-    text_len = (int)strlen(text);
+    idx = span->bit_idx;
+    if (idx < 0 || idx >= REPL_ATTRIB_BIT_COUNT)
+        return;
+    row->color_segments[row->color_segment_count++] =
+        (UiTextPanelColorSegment){
+            .char_start = span->char_start,
+            .char_count = span->char_end - span->char_start,
+            .color = repl_code_panel_rgb(k_attrib_bit_colors[idx].r,
+                                         k_attrib_bit_colors[idx].g,
+                                         k_attrib_bit_colors[idx].b),
+            .shadow = 0,
+        };
+}
+
+static int repl_code_panel_has_attrib_bit_token_highlight(
+    const UiRenderSnapshot *snap, int line_idx, int bit_idx) {
+    if (!snap || !snap->editor_highlights)
+        return 0;
     for (int i = 0; i < snap->editor_highlights->count; i++) {
         const UiHighlight *h = &snap->editor_highlights->items[i];
-        int idx = h->aux;
-        int start = h->char_start - char_offset;
-        int end = h->char_end - char_offset;
-        const char *name;
-        int name_len;
-
-        if (h->kind != HIGHLIGHT_ATTRIB_BIT_TOKEN || h->line_idx != line_idx)
-            continue;
-        if (idx < 0 || idx >= REPL_ATTRIB_BIT_COUNT)
-            continue;
-        if (start < 0 || end <= start || end > text_len)
-            continue;
-        /* Verify the shifted span lands exactly on this bit's token; if the
-         * input buffer has diverged from the committed line the offset guess
-         * no longer holds, so skip rather than colour the wrong characters. */
-        name = bits[idx].name;
-        name_len = (int)strlen(name);
-        if (end - start != name_len ||
-            strncmp(text + start, name, (size_t)name_len) != 0)
-            continue;
-        if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
-            break;
-        row->color_segments[row->color_segment_count++] =
-            (UiTextPanelColorSegment){
-                .char_start = start,
-                .char_count = name_len,
-                .color = repl_code_panel_rgb(k_attrib_bit_colors[idx].r,
-                                             k_attrib_bit_colors[idx].g,
-                                             k_attrib_bit_colors[idx].b),
-                .shadow = 0,
-            };
+        if (h->kind == HIGHLIGHT_ATTRIB_BIT_TOKEN &&
+            h->line_idx == line_idx && h->aux == bit_idx)
+            return 1;
     }
+    return 0;
+}
+
+/* On a highlighted committed glPushAttrib row, scan the exact display text
+ * for token spans and retain the controller's parsed-mask gate. The scan is
+ * deliberately against `text`, rather than trusting stored char ranges, so a
+ * display-text substitution cannot move a token's per-bit color. */
+static void repl_code_panel_apply_attrib_bit_token_segments(
+    const UiRenderSnapshot *snap, int line_idx, const char *text,
+    UiTextPanelRow *row) {
+    ReplAttribTokenSpan spans[REPL_ATTRIB_BIT_COUNT];
+    int n;
+
+    if (!snap || !row || !text)
+        return;
+    n = repl_attrib_bit_token_spans(text, spans, REPL_ATTRIB_BIT_COUNT);
+    for (int i = 0; i < n; i++) {
+        if (repl_code_panel_has_attrib_bit_token_highlight(
+                snap, line_idx, spans[i].bit_idx))
+            repl_code_panel_append_attrib_bit_token_segment(row, &spans[i]);
+    }
+}
+
+/* The active input row is intentionally narrower than committed-row syntax:
+ * only a live glPushAttrib(...) call gets per-bit color, and every supported
+ * token currently typed inside its first (...) is shown. The spans come
+ * straight from the live input text, so mid-edit changes need no indentation
+ * offset or committed-buffer coordinate translation. */
+static void repl_code_panel_apply_input_attrib_bit_token_segments(
+    const char *text, UiTextPanelRow *row) {
+    ReplAttribTokenSpan spans[REPL_ATTRIB_BIT_COUNT];
+    int n;
+
+    if (!text || !row)
+        return;
+    n = repl_attrib_bit_token_spans(text, spans, REPL_ATTRIB_BIT_COUNT);
+    for (int i = 0; i < n; i++)
+        repl_code_panel_append_attrib_bit_token_segment(row, &spans[i]);
+}
+
+static int repl_code_panel_input_is_push_attrib(const char *text) {
+    const char *name = "glPushAttrib";
+    int name_len = (int)strlen(name);
+
+    if (!text)
+        return 0;
+    while (isspace((unsigned char)*text))
+        text++;
+    if (strncmp(text, name, (size_t)name_len) != 0)
+        return 0;
+    text += name_len;
+    while (isspace((unsigned char)*text))
+        text++;
+    return *text == '(';
 }
 
 /* Generated C is informative but not editable. Preserve the normal syntax
@@ -1591,73 +1615,6 @@ static void repl_code_panel_mute_generated_row(UiTextPanelRow *row) {
          * user's "On + Shadow" syntax mode. */
         row->color_segments[i].shadow = 0;
     }
-}
-
-/* Lift a colour toward white so the active edit line reads as brighter than
- * the committed rows around it, WITHOUT flattening it to a single wash. Each
- * channel moves a fixed fraction of the remaining distance to 1.0, so hue is
- * preserved (a dim colour brightens more in absolute terms than a bright one,
- * but relative channel order is kept) — the glPushAttrib per-bit hues stay
- * distinguishable. Replaces the old flat near-white input-text colour. */
-static UiTextPanelColor repl_code_panel_active_line_color(UiTextPanelColor c) {
-    const float lift = 0.35f;
-    c.r = repl_clamp01(c.r + (1.0f - c.r) * lift);
-    c.g = repl_clamp01(c.g + (1.0f - c.g) * lift);
-    c.b = repl_clamp01(c.b + (1.0f - c.b) * lift);
-    return c;
-}
-
-/* Give the active edit line the SAME per-token colours a committed row gets
- * (syntax spans, trailing-comment span, glPushAttrib per-bit token spans),
- * classified against the live input buffer (the text actually drawn on this
- * row), then brighten the whole row. When this leaves color_segment_count > 0
- * the generic renderer draws the input row with these colours instead of the
- * flat near-white wash; otherwise it falls back to that wash unchanged. */
-static void repl_code_panel_apply_edit_line_syntax(ReplCodePanelBuilder *builder,
-                                                   int line_idx,
-                                                   UiTextPanelRow *row) {
-    const UiRenderSnapshot *snap = builder->snap;
-    const char *text = snap->editor_input.input ? snap->editor_input.input : "";
-    const char *buffer_line;
-    int indent_offset = 0;
-    CmdType type;
-
-    if (!text[0] || line_idx < 0 || line_idx >= snap->document_count)
-        return;
-    /* Fading rows are locked instruction comments — never the edit line;
-     * leave them to the flat path so their char ranges aren't reinterpreted
-     * against the input buffer. */
-    if (repl_code_panel_line_is_fading(snap, line_idx))
-        return;
-
-    /* The input buffer is the committed line with its leading indentation
-     * stripped (editor_load_line_to_input), but the attrib-bit highlight
-     * ranges were computed against the indented buffer line. Measure that
-     * indent so the ranges can be shifted back into input-buffer space. */
-    buffer_line = editor_buffer_view_line(snap->editor_buffer, line_idx);
-    if (buffer_line) {
-        while (buffer_line[indent_offset] &&
-               isspace((unsigned char)buffer_line[indent_offset]))
-            indent_offset++;
-    }
-
-    type = snap->document_cmds[line_idx].type;
-    repl_code_panel_apply_syntax_segments(snap, text, type,
-                                          snap->code_panel.syntax_highlight, row);
-    repl_code_panel_apply_trailing_comment_segment(text, row);
-    repl_code_panel_apply_attrib_bit_token_segments(snap, line_idx, text,
-                                                    indent_offset, row);
-
-    if (row->color_segment_count == 0)
-        return;  /* nothing to colour — keep the flat active-row wash */
-
-    /* Gaps (whitespace, punctuation between coloured tokens) fall back to
-     * row->color, so give it the brightened category colour too. */
-    row->color = repl_code_panel_active_line_color(
-        repl_code_panel_category_color(type));
-    for (int i = 0; i < row->color_segment_count; i++)
-        row->color_segments[i].color =
-            repl_code_panel_active_line_color(row->color_segments[i].color);
 }
 
 static void repl_code_panel_add_static_row(ReplCodePanelBuilder *builder,
@@ -1710,7 +1667,11 @@ static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
     if (source_line_idx >= 0) {
         repl_code_panel_apply_command_overlays(builder, source_line_idx, row);
         repl_code_panel_set_right_action(row, builder->snap, source_line_idx);
-        repl_code_panel_apply_edit_line_syntax(builder, source_line_idx, row);
+    }
+    if (repl_code_panel_input_is_push_attrib(builder->snap->editor_input.input)) {
+        row->color = ui_text_panel_input_text_color();
+        repl_code_panel_apply_input_attrib_bit_token_segments(
+            builder->snap->editor_input.input, row);
     }
 }
 
@@ -1772,11 +1733,9 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
          * whole-line instruction comments, so it is left untouched.) */
         repl_code_panel_apply_trailing_comment_segment(display_text, row);
         /* Cursor-on-push/pop: colour the glPushAttrib line's mask tokens.
-         * Last so the opaque per-bit spans win over the syntax colour. A
-         * committed row's display text is the buffer line itself, so the
-         * highlight ranges apply verbatim (offset 0). */
+         * Last so the opaque per-bit spans win over the syntax colour. */
         repl_code_panel_apply_attrib_bit_token_segments(builder->snap, line_idx,
-                                                        display_text, 0, row);
+                                                        display_text, row);
     }
 }
 

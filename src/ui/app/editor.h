@@ -74,11 +74,11 @@ typedef enum {
     HIGHLIGHT_UNBALANCED,
     /* glPushAttrib/glPopAttrib per-bit highlighting (cursor-gated).
      * ATTRIB_STATE marks a whole setter line the cursor's push saves / pop
-     * reverts; `aux` carries the mask of canonical bit *indices* (0..8)
+     * reverts; `aux` carries the mask of canonical bit *indices* (0..9)
      * whose colors mark it (so the gutter marker can band multiple bits).
-     * ATTRIB_BIT_TOKEN marks one GL_*_BIT token's char range on the push
-     * line itself; `aux` is a single bit index. The first real user of the
-     * char_start/char_end fields. */
+     * ATTRIB_BIT_TOKEN records one GL_*_BIT token's source char range on the
+     * push line; `aux` is a single bit index. Renderers use the line/index
+     * membership to rescan their exact display text. */
     HIGHLIGHT_ATTRIB_STATE,
     HIGHLIGHT_ATTRIB_BIT_TOKEN
 } UiHighlightKind;

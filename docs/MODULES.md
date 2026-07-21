@@ -322,7 +322,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
   deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L95), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
-  [`TessVertex`](../src/repl/executor.h#L75), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
+  [`TessVertex`](../src/repl/executor.h#L67), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L150), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
 - **Root neutral helpers**: [`src/ui/core/gl_2d.h`](../src/ui/core/gl_2d.h) `gl2d_*`, [`src/repl/transform_utils.h`](../src/repl/transform_utils.h)
@@ -589,7 +589,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L51), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L51); `glr_ctrl` dispatches on it |
 | `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L51) |
-| `ui_text_panel` | Generic text-panel renderer and hit-tester over [`UiTextPanelSnapshot`](../src/ui/core/text_panel.h#L257); owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
+| `ui_text_panel` | Generic text-panel renderer and hit-tester over [`UiTextPanelSnapshot`](../src/ui/core/text_panel.h#L265); owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`). REPL/editor-free; used by `editor_search` |
 | `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure 3D viewport / code-panel rectangle geometry |

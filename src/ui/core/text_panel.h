@@ -30,6 +30,14 @@ typedef struct {
     int   has_alpha;
 } UiTextPanelColor;
 
+/* Base colour of the live input row. Adapters that add a sparse color segment
+ * list to an INPUT row use this for the gaps so its ordinary text retains the
+ * legacy near-white wash. */
+static inline UiTextPanelColor ui_text_panel_input_text_color(void) {
+    UiTextPanelColor color = { 0.95f, 0.95f, 0.90f, 1.0f, 0 };
+    return color;
+}
+
 /* -------------------------------------------------------------------------
  * Row kinds
  * ---------------------------------------------------------------------- */
