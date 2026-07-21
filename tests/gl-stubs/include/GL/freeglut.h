@@ -91,6 +91,9 @@ extern "C" {
 #define GLUT_WINDOW_WIDTH 102
 #define GLUT_WINDOW_HEIGHT 103
 
+#define GLUT_ACTION_ON_WINDOW_CLOSE 0x01F9
+#define GLUT_ACTION_CONTINUE_EXECUTION 2
+
 static const char glut_bitmap_8_by_13_stub = 0;
 static const char glut_bitmap_9_by_15_stub = 0;
 static const char glut_bitmap_helvetica_10_stub = 0;
@@ -119,6 +122,7 @@ typedef void (*GLUTpassiveCB)(int x, int y);
 typedef void (*GLUTtimerCB)(int value);
 typedef void (*GLUTidleCB)(void);
 typedef void (*GLUTmouseWheelCB)(int wheel, int direction, int x, int y);
+typedef void (*GLUTcloseCB)(void);
 typedef void (*GLUTproc)(void);
 
 static inline void glutInit(int *argc, char **argv) { (void)argc; (void)argv; }
@@ -133,12 +137,15 @@ static inline void glutMouseFunc(GLUTmouseCB callback) { (void)callback; }
 static inline void glutMotionFunc(GLUTmotionCB callback) { (void)callback; }
 static inline void glutPassiveMotionFunc(GLUTpassiveCB callback) { (void)callback; }
 static inline void glutMouseWheelFunc(GLUTmouseWheelCB callback) { (void)callback; }
+static inline void glutCloseFunc(GLUTcloseCB callback) { (void)callback; }
 static inline void glutTimerFunc(unsigned int millis, GLUTtimerCB callback, int value) { (void)millis; (void)callback; (void)value; }
 static inline void glutIdleFunc(GLUTidleCB callback) { (void)callback; }
+static inline void glutSetOption(GLenum option_flag, int value) { (void)option_flag; (void)value; }
 static inline void glutMainLoop(void) {}
 static inline void glutPostRedisplay(void) {}
 static inline void glutSwapBuffers(void) {}
 static inline int glutGet(GLenum type) { static int elapsed; (void)type; elapsed += 16; return elapsed; }
+static inline int glutGetWindow(void) { return 1; }
 static inline int glutGetModifiers(void) { return 0; }
 /* Returns 1 so the stub-built controller's runtime point-parameter
  * detection defaults to "supported" == today's default build. */
