@@ -42,7 +42,7 @@ glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
 for (i, 0, 12) {
-  ringZ = 37 - fmod(3 * t + 3 * i, 36);
+  ringZ = 37 - fmod(3 * t + 3 * i, 37);
   bendX = twist * sin(0.24 * ringZ);
   bendY = 0.7 * twist * (cos(0.31 * ringZ) - 1);
   glPushMatrix();
