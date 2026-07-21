@@ -24,8 +24,9 @@
 
 /* Per-slot text buffer width used by the table-driven enum-command path.
  * Sizes the scratch arrays that hold one positional argument's raw source
- * text and its canonicalized emit text. Wide enough for the longest GL
- * enum token (~30 chars) plus inline expressions. */
+ * text and its canonicalized emit text. Bitfield slots can contain every
+ * supported token joined by `|`, so this is line-sized rather than sized for
+ * one enum token. */
 #define ENUM_SLOT_TEXT_MAX REPL_ENUM_ARG_MAX
 
 /* The parser writes diagnostics to ctx->err_buf when available, and
