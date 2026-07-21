@@ -34,5 +34,6 @@ echo scene:0.25,0.76 18 3.4 Ctrl+O focuses the origin.
 key \co
 pause 2.8
 echo scene:0.25,0.76 18 3.6 Ctrl+Shift+C resets the camera.
+chord ctrl+shift c
 pause 3.6
 echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!

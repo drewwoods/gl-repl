@@ -79,6 +79,15 @@ int                      editor_input_active_modifiers(void);
 /* Test seam: drive editor input with a mocked modifier source. */
 void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider);
 
+/* Script-side modifier override. The controller brackets a single scripted
+ * keyboard/special dispatch with these (see glr_ctrl_keyboard_with_modifiers)
+ * so a scripted chord's declared Shift/Ctrl/Alt is visible to shortcut
+ * matching even though no physical modifier key is held. Push sets the mask
+ * and marks it active (authoritative over the test provider and
+ * glutGetModifiers); pop clears it. Not nestable — one dispatch at a time. */
+void editor_input_push_scripted_modifiers(int mods);
+void editor_input_pop_scripted_modifiers(void);
+
 /* Production hook: the controller installs this from glr_ctrl_init_gl
  * so editor_input_code_panel_layout() can read the live layout
  * without including src/app/glr_state.h. Tests that need a non-

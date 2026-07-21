@@ -85,6 +85,7 @@ typedef enum {
     PS_WHEEL,
     PS_KEY,
     PS_SKEY,
+    PS_CHORD,
     PS_RING,
     PS_ECHO,
     PS_PAUSE
@@ -100,7 +101,10 @@ typedef struct {
                                    /* x/y); resolved at fire time        */
     int    dur_frames;             /* glide/ring/echo duration           */
     int    wheel_dir;              /* wheel: +1 / -1                     */
-    int    special;                /* skey: GLUT_KEY_* code              */
+    int    special;                /* skey/chord: GLUT_KEY_* code, or    */
+                                   /* -1 for a chord's printable path    */
+    int    mods;                   /* chord: GLUT_ACTIVE_* override mask  */
+    unsigned char key_byte;        /* chord: control byte (special < 0)  */
     float  size;                   /* echo: requested cap height (px);   */
                                    /* picks the nearest GLUT bitmap font */
     float  cps;                    /* key@N: chars/sec (0 = all at once) */
@@ -224,6 +228,36 @@ static int ps_special_from_name(const char *name) {
         if (strcmp(name, k_map[i].name) == 0)
             return k_map[i].key;
     return -1;
+}
+
+/* Parse a `+`-joined modifier token ("ctrl", "shift", "alt", combos like
+ * "ctrl+shift", order-free, case-insensitive) into a GLUT_ACTIVE_* mask for
+ * the `chord` verb. Returns -1 on any empty component (leading/trailing/doubled
+ * `+`), a repeated modifier, or an unknown name — so a typo fails at load. */
+static int ps_parse_mods(const char *tok) {
+    int mask = 0;
+    const char *p = tok;
+    if (!*p) return -1;
+    while (*p) {
+        char name[16];
+        size_t n = 0;
+        while (*p && *p != '+' && n + 1 < sizeof(name))
+            name[n++] = (char)tolower((unsigned char)*p++);
+        name[n] = '\0';
+        if (n == 0) return -1;                 /* empty component: "a++b", "+a" */
+        int bit;
+        if      (strcmp(name, "ctrl") == 0)  bit = GLUT_ACTIVE_CTRL;
+        else if (strcmp(name, "shift") == 0) bit = GLUT_ACTIVE_SHIFT;
+        else if (strcmp(name, "alt") == 0)   bit = GLUT_ACTIVE_ALT;
+        else return -1;                        /* unknown modifier name        */
+        if (mask & bit) return -1;             /* duplicate: "ctrl+ctrl"        */
+        mask |= bit;
+        if (*p == '+') {
+            p++;
+            if (*p == '\0') return -1;         /* trailing '+'                  */
+        }
+    }
+    return mask;
 }
 
 /* Scan a point from the front of `args`: either literal "<x> <y>" pixels
@@ -366,6 +400,42 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         for (char *p = name; *p; p++) *p = (char)tolower((unsigned char)*p);
         ev->special = ps_special_from_name(name);
         return (ev->special >= 0) ? 1 : -1;
+    }
+    if (strcmp(verb, "chord") == 0) {
+        /* chord <mods> <key> — one modified key press. <key> is a special-key
+         * name (skey vocabulary) or a single printable char; ctrl on a
+         * printable folds to its control byte (like \cX). A shift/alt-only
+         * printable has no keymap meaning and is rejected (type it via `key`). */
+        char modtok[32], keytok[16];
+        int nread = 0;
+        ev->verb = PS_CHORD;
+        ev->special = -1;               /* printable path unless a name matches */
+        if (sscanf(args, "%31s %15s%n", modtok, keytok, &nread) != 2)
+            return -1;
+        /* Only whitespace or a trailing comment may follow the key token. */
+        const char *rest = args + nread;
+        while (*rest == ' ' || *rest == '\t' || *rest == '\n' || *rest == '\r')
+            rest++;
+        if (*rest != '\0' && *rest != '#')
+            return -1;
+        ev->mods = ps_parse_mods(modtok);
+        if (ev->mods < 0)
+            return -1;
+        char lowered[16];
+        size_t i = 0;
+        for (; keytok[i] && i + 1 < sizeof(lowered); i++)
+            lowered[i] = (char)tolower((unsigned char)keytok[i]);
+        lowered[i] = '\0';
+        int sp = ps_special_from_name(lowered);
+        if (sp >= 0) {
+            ev->special = sp;
+            return 1;
+        }
+        /* Not a special-key name: require exactly one printable char + ctrl. */
+        if (keytok[1] != '\0' || !(ev->mods & GLUT_ACTIVE_CTRL))
+            return -1;
+        ev->key_byte = (unsigned char)(toupper((unsigned char)keytok[0]) & 0x1F);
+        return 1;
     }
     if (strcmp(verb, "ring") == 0) {
         float dur = 0.0f;
@@ -758,6 +828,17 @@ static void ps_fire(const PsEvent *ev) {
         ps_type_flush();
         glr_ctrl_special(ev->special,
                          (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        break;
+    case PS_CHORD:
+        ps_type_flush();
+        if (ev->special >= 0)
+            glr_ctrl_special_with_modifiers(ev->special,
+                                            (int)(g_px + 0.5f),
+                                            (int)(g_py + 0.5f), ev->mods);
+        else
+            glr_ctrl_keyboard_with_modifiers(ev->key_byte,
+                                             (int)(g_px + 0.5f),
+                                             (int)(g_py + 0.5f), ev->mods);
         break;
     case PS_RING:
         if (!ps_fire_point(ev, &x, &y)) break;

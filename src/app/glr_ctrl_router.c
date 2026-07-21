@@ -1907,6 +1907,23 @@ void glr_ctrl_special(int key, int x, int y) {
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 }
 
+/* Scripted-chord entry points: dispatch a single key/special press while a
+ * caller-declared modifier mask is authoritative, so a pointer script can
+ * fire Shift/Ctrl+Shift shortcuts the physical-modifier path can't synthesize.
+ * The editor override is pushed and popped here — the controller stays the
+ * sole input-event mutation gate; the pointer script only calls these. */
+void glr_ctrl_keyboard_with_modifiers(unsigned char key, int x, int y, int mods) {
+    editor_input_push_scripted_modifiers(mods);
+    glr_ctrl_keyboard(key, x, y);
+    editor_input_pop_scripted_modifiers();
+}
+
+void glr_ctrl_special_with_modifiers(int key, int x, int y, int mods) {
+    editor_input_push_scripted_modifiers(mods);
+    glr_ctrl_special(key, x, y);
+    editor_input_pop_scripted_modifiers();
+}
+
 /* Mouse routing: hit-test to decide owner before dispatching.
  *
  * UP cleanup: the editor first releases its own UP-side state

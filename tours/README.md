@@ -146,6 +146,7 @@ an unintended interaction.
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
+| Modified key | `chord <mods> <key>` | Sends one key press with a declared modifier mask, reaching shortcuts `key`/`skey` cannot (Shift is not carried in a plain key byte). See the rules below. |
 | Spotlight | `ring <point> <seconds>` | Shows a pulsing highlight ring for a positive duration. |
 | Caption | `echo <point> <height-px> <seconds> <text>` | Shows text for the positive on-screen duration without delaying the next event. A later caption replaces it. The requested height chooses the nearest fixed bitmap font. |
 | Wait | `pause <seconds>` | Delays later events for a positive duration. |
@@ -165,6 +166,31 @@ motion, so camera and slider drags behave like real ones.
 
 `skey` accepts `f1` through `f12`, `up`, `down`, `left`, `right`, `home`,
 `end`, `pageup`, and `pagedown` (case-insensitive).
+
+### Modified key chords
+
+`chord <mods> <key>` presses a single key with modifiers held, so a tour can
+trigger shortcuts that key off Shift — which `key`/`skey` cannot reach, because
+a plain key byte carries no Shift bit.
+
+- `<mods>` is a `+`-joined subset of `ctrl`, `shift`, and `alt` — order-free and
+  case-insensitive (`ctrl+shift`, `shift`, `alt+ctrl`).
+- `<key>` is either a special-key name from the `skey` list above, or a single
+  printable character. For a printable character, `ctrl` folds it to its control
+  byte exactly as `\cX` does, so `chord ctrl+shift c` sends the same byte as
+  Ctrl+C plus a held Shift — i.e. Ctrl+Shift+C.
+
+```text
+chord ctrl+shift c    # Ctrl+Shift+C  (reset camera)
+chord shift f12       # Shift+F12      (previous example)
+chord shift left      # Shift+Left     (extend selection)
+```
+
+A line is rejected at load (failing a recording, stopping a tour) when: the
+`<key>` is a single printable char but no `ctrl` is present (a shift-only glyph
+has no shortcut meaning — type it with `key`); a modifier name is unknown,
+empty, or repeated (`ctrl++shift`, `ctrl+ctrl`); or extra tokens follow the key
+(only a trailing `#` comment is allowed).
 
 ### Keyboard text and escapes
 
