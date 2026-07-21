@@ -550,6 +550,15 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
     if (tour_cancel_intercept()) return;
     glr_ctrl_mousewheel(wheel, direction, x, y);
 }
+
+/* freeglut clears the current window before it runs the close callback.
+ * Remember that this was a real window-manager close so main() can write
+ * the same recovery copy as the explicit quit paths after the loop returns. */
+static int g_window_closed = 0;
+
+static void window_close_func(void) {
+    g_window_closed = 1;
+}
 #endif
 
 static void timer_func(int value) {
@@ -860,10 +869,19 @@ int main(int argc, char **argv) {
     glutPassiveMotionFunc(passive_motion_func);
 #ifndef USE_GLUT
     glutMouseWheelFunc(mousewheel_func);
+    glutCloseFunc(window_close_func);
+    glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
 #endif
     glutTimerFunc(16, timer_func, 0);
     signal(SIGINT, on_sigint);   /* Ctrl+C -> save-and-quit safeguard */
 
     glutMainLoop();
+#ifndef USE_GLUT
+    if (g_window_closed && glr_ctrl_save_recovery_file()) {
+        printf("Saved recovery copy to %s (reload: ./%s %s)\n",
+               QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
+               QUIT_RECOVERY_FILE);
+    }
+#endif
     return 0;
 }

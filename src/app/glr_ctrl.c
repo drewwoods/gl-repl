@@ -3369,6 +3369,13 @@ void glr_ctrl_timer(int value) {
     (void)value;
     static double next_deadline_ms = 0.0; /* monotonic ms; 0 = uninitialized */
 
+    /* A window-manager close clears freeglut's current window before the
+     * destroy callback and before glutMainLoop() returns. A timer that was
+     * already queued can still run in that interval; do not post another
+     * redisplay (or reschedule itself) once there is no window to draw. */
+    if (glutGetWindow() == 0)
+        return;
+
     if (!g_tick_per_frame)
         glr_ctrl_tick();
     glutPostRedisplay();

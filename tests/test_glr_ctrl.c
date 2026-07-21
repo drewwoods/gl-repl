@@ -57,6 +57,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_memory_panel_render             test_ui_memory_panel_render
 #define glutPostRedisplay                  test_glutPostRedisplay
 #define glutTimerFunc                      test_glutTimerFunc
+#define glutGetWindow                      test_glutGetWindow
 #define glutSetCursor                      test_glutSetCursor
 #define glr_export_mesh_ply                test_glr_export_mesh_ply
 
@@ -73,6 +74,7 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
 void test_ui_variable_panel_render(const UiVariablePanelView *view);
 void test_glutPostRedisplay(void);
 void test_glutTimerFunc(unsigned int millis, void (*callback)(int), int value);
+int test_glutGetWindow(void);
 void test_glutSetCursor(int cursor);
 int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 
@@ -98,6 +100,7 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 #undef ui_memory_panel_render
 #undef glutPostRedisplay
 #undef glutTimerFunc
+#undef glutGetWindow
 #undef glutSetCursor
 #undef glr_export_mesh_ply
 
@@ -197,10 +200,18 @@ void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)sn
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiProfilePanelView *view) { (void)view; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
-void test_glutPostRedisplay(void) {}
+static int g_test_glut_window = 1;
+static int g_test_glut_post_redisplay_calls = 0;
+static int g_test_glut_timer_calls = 0;
+
+void test_glutPostRedisplay(void) {
+    g_test_glut_post_redisplay_calls++;
+}
 void test_glutTimerFunc(unsigned int millis, void (*callback)(int), int value) {
     (void)millis; (void)callback; (void)value;
+    g_test_glut_timer_calls++;
 }
+int test_glutGetWindow(void) { return g_test_glut_window; }
 void test_glutSetCursor(int cursor) { (void)cursor; }
 int test_glr_export_mesh_ply(const char *path, int srgb_decode) {
     (void)path; (void)srgb_decode;
@@ -2155,6 +2166,23 @@ static void test_tick_per_frame_scheduling(void) {
     glr_ctrl_frame_presented();
     ASSERT_FLOAT("frame mode: second frame advances once",
                  repl_state_variables().anim_time, 2.0f * GLR_FRAME_DT_SECS);
+
+    /* freeglut can run an already-queued timer after a title-bar close has
+     * cleared the current window. It must become a no-op: in particular,
+     * glutPostRedisplay with no current window is a fatal freeglut error. */
+    repl_set_time(0.0f);
+    glr_ctrl_set_tick_per_frame(0);
+    g_test_glut_window = 0;
+    g_test_glut_post_redisplay_calls = 0;
+    g_test_glut_timer_calls = 0;
+    glr_ctrl_timer(0);
+    ASSERT_FLOAT("closed window: queued timer does not tick",
+                 repl_state_variables().anim_time, 0.0f);
+    ASSERT_INT("closed window: queued timer does not post redisplay",
+               g_test_glut_post_redisplay_calls, 0);
+    ASSERT_INT("closed window: queued timer does not reschedule",
+               g_test_glut_timer_calls, 0);
+    g_test_glut_window = 1;
 
     /* This controller process serves the rest of the test suite too. */
     glr_ctrl_set_tick_per_frame(0);
