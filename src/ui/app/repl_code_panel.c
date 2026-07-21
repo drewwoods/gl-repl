@@ -1983,13 +1983,16 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     tx += L.cmds_w;
     tx += STATUSBAR_SEP_W;
 
+    int edit_col = snap->editor_input.cursor_pos + 1;
     if (snap->editor_input.insert_mode)
-        snprintf(L.line, sizeof L.line, "Ln %d [INSERT]", edit_line + 1);
+        snprintf(L.line, sizeof L.line, "Ln %d:%d [INSERT]",
+                 edit_line + 1, edit_col);
     else if (snap->in_begin_block)
-        snprintf(L.line, sizeof L.line, "Ln %d  %s",
-                 edit_line + 1, repl_mode_name(snap->current_begin_mode));
+        snprintf(L.line, sizeof L.line, "Ln %d:%d  %s",
+                 edit_line + 1, edit_col,
+                 repl_mode_name(snap->current_begin_mode));
     else
-        snprintf(L.line, sizeof L.line, "Ln %d", edit_line + 1);
+        snprintf(L.line, sizeof L.line, "Ln %d:%d", edit_line + 1, edit_col);
     L.line_w = (int)strlen(L.line) * FONT_SMALL_W;
     tx += L.line_w;
 
