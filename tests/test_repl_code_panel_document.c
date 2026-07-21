@@ -122,14 +122,10 @@ static SegColor check_attrib_token_uniform(TestHarness *h, const char *label,
     return c0;
 }
 
-/* Regression: on the active edit line the input buffer has the committed
- * line's leading indent stripped, but the glPushAttrib mask-token highlight
- * ranges are computed against the indented buffer line. Without shifting them
- * back into input-buffer space the per-bit colour landed one indent-width to
- * the right, so each token's "GL_" prefix kept the plain syntax colour (bug
- * report: "the colours flip too late"). Assert the per-bit colour now covers
- * each whole token, and that the committed-row path (cursor on glPopAttrib)
- * agrees. */
+/* Regression: active glPushAttrib input derives its token spans from the live
+ * input buffer, rather than translating committed-row coordinates across the
+ * stripped indentation. It colors every supported bit token currently typed;
+ * the committed-row path remains gated by the parsed mask. */
 static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
     UiRenderSnapshot snap;
     UiTextPanelColorSegment segs[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
@@ -148,9 +144,8 @@ static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
     glr_ctrl_display_frame();          /* computes editor_state_highlights */
     glr_ctrl_build_ui_snapshot(&snap); /* snap->editor_highlights = live list */
 
-    /* The push line is indented inside the glPushMatrix block, so its buffer
-     * line carries leading whitespace the input buffer does not — the exact
-     * condition that used to misalign the colours. */
+    /* The push line is indented inside the glPushMatrix block while the input
+     * buffer has no indent. This distinction no longer needs an offset. */
     buffer_line = editor_buffer_view_line(editor_buffer_view(), 1);
     TEST_ASSERT_TRUE(h, "push line is indented in the buffer",
                      buffer_line && (buffer_line[0] == ' ' ||
@@ -172,10 +167,11 @@ static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
     TEST_ASSERT_TRUE(h,
                      "edit line: the two mask tokens carry distinct per-bit hues",
                      !seg_color_eq(enable_c, color_c));
+    TEST_ASSERT_INT(h, "edit row has only its two per-bit color segments", n, 2);
 
     /* --- Cursor on glPopAttrib: the push line is now a committed row whose
-     * display text still carries the indent (offset 0). It already worked;
-     * pin it so the two paths cannot drift. --- */
+     * display text still carries the indent. Its parsed-mask gate excludes
+     * comment text and any bits not in the committed command. --- */
     editor_navigate_to_line(2);
     glr_ctrl_display_frame();
     glr_ctrl_build_ui_snapshot(&snap);
@@ -192,6 +188,53 @@ static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
     TEST_ASSERT_TRUE(h,
                      "committed row: the two mask tokens carry distinct per-bit hues",
                      !seg_color_eq(enable_c, color_c));
+
+    /* Do not commit this edit: GL_FOG_BIT was not in the parsed source mask.
+     * It should still be colored because the active row reads the live text
+     * it draws, proving there is no stale committed-range coupling. */
+    editor_navigate_to_line(1);
+    glr_ctrl_display_frame();
+    editor_input_set_text("glPushAttrib(GL_ENABLE_BIT | GL_FOG_BIT);");
+    glr_ctrl_build_ui_snapshot(&snap);
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 1, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    enable_c = check_attrib_token_uniform(h, "edited input", segs, n,
+                                          snap.editor_input.input,
+                                          "GL_ENABLE_BIT");
+    color_c = check_attrib_token_uniform(h, "edited input", segs, n,
+                                         snap.editor_input.input,
+                                         "GL_FOG_BIT");
+    TEST_ASSERT_TRUE(h,
+                     "edited input: textual tokens carry distinct per-bit hues",
+                     !seg_color_eq(enable_c, color_c));
+    TEST_ASSERT_INT(h, "edited input has only its two per-bit color segments", n, 2);
+
+    /* The narrow renderer path must not reintroduce syntax segments on every
+     * active edit row: a matrix command keeps the legacy flat input wash. */
+    editor_navigate_to_line(0);
+    glr_ctrl_display_frame();
+    glr_ctrl_build_ui_snapshot(&snap);
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 0, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    TEST_ASSERT_INT(h, "non-push edit row has no color segments", n, 0);
+
+    /* A newly inserted line has no committed command to gate on. It still
+     * gets live per-bit feedback when its typed text is glPushAttrib(...). */
+    editor_insert_mode_set(1);
+    editor_input_set_text("glPushAttrib(GL_POINT_BIT | GL_FOG_BIT);");
+    glr_ctrl_build_ui_snapshot(&snap);
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, -1, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    enable_c = check_attrib_token_uniform(h, "new input", segs, n,
+                                          snap.editor_input.input,
+                                          "GL_POINT_BIT");
+    color_c = check_attrib_token_uniform(h, "new input", segs, n,
+                                         snap.editor_input.input,
+                                         "GL_FOG_BIT");
+    TEST_ASSERT_TRUE(h,
+                     "new input: textual tokens carry distinct per-bit hues",
+                     !seg_color_eq(enable_c, color_c));
+    TEST_ASSERT_INT(h, "new input has only its two per-bit color segments", n, 2);
 }
 
 int main(void) {

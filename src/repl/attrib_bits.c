@@ -165,6 +165,33 @@ int repl_attrib_bit_index(unsigned single_bit) {
     return -1;
 }
 
+int repl_attrib_bit_token_spans(const char *text, ReplAttribTokenSpan *out,
+                                int max) {
+    const ReplEnumEntry *bits = repl_attrib_bit_entries();
+    const char *open;
+    const char *close;
+    int n = 0;
+
+    if (!text || !out || max <= 0)
+        return 0;
+    open = strchr(text, '(');
+    close = open ? strchr(open, ')') : NULL;
+    if (!open || !close)
+        return 0;
+
+    for (int i = 0; bits[i].name && n < max; i++) {
+        const char *hit = strstr(open + 1, bits[i].name);
+        if (!hit || hit >= close)
+            continue;
+        out[n++] = (ReplAttribTokenSpan){
+            .char_start = (int)(hit - text),
+            .char_end = (int)(hit - text) + (int)strlen(bits[i].name),
+            .bit_idx = i,
+        };
+    }
+    return n;
+}
+
 /* --- Public: per-command cell writes (flow-sensitive) ---------------------- */
 
 void repl_attrib_flow_init(ReplAttribFlowState *flow) {

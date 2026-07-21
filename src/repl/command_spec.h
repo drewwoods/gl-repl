@@ -290,7 +290,7 @@ const ReplEnumEntry *repl_fog_f_pname_entries(void);
 const ReplEnumEntry *repl_fog_color_pname_entries(void);
 const ReplEnumEntry *repl_fog_mode_entries(void);
 
-/* The 9 GL_*_BIT attribute groups glPushAttrib()/glPopAttrib() support, in
+/* The 10 GL_*_BIT attribute groups glPushAttrib()/glPopAttrib() support, in
  * canonical order (ascending GL value). Shared source of truth for the
  * ENUM_BITFIELD parse/emit, the mapping module (attrib_bits.c), and the
  * editor's per-bit cursor highlighting so they can't drift on which bit is

@@ -673,27 +673,20 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
 static void glr_ctrl_push_attrib_bit_tokens(int push_line) {
     const GLCmd *cmd = repl_state_document_cmd_at(push_line);
     const char *text = editor_buffer_view_line(editor_buffer_view(), push_line);
-    const char *open, *close;
+    ReplAttribTokenSpan spans[REPL_ATTRIB_BIT_COUNT];
     unsigned mask;
+    int n;
     if (!cmd || cmd->type != CMD_PUSH_ATTRIB || !text)
         return;
     mask = (unsigned)cmd->args[0];
-    open = strchr(text, '(');
-    close = open ? strchr(open, ')') : NULL;
-    if (!open || !close)
-        return;
-    const ReplEnumEntry *bits = repl_attrib_bit_entries();
-    for (int i = 0; bits[i].name; i++) {
-        const char *hit;
-        if (!(mask & (unsigned)bits[i].value))
+    n = repl_attrib_bit_token_spans(text, spans, REPL_ATTRIB_BIT_COUNT);
+    for (int i = 0; i < n; i++) {
+        if (!(mask & (unsigned)repl_attrib_bit_entries()[spans[i].bit_idx].value))
             continue;
-        hit = strstr(open + 1, bits[i].name);
-        if (!hit || hit >= close)
-            continue;
-        int start = (int)(hit - text);
-        int end = start + (int)strlen(bits[i].name);
-        editor_state_highlights_append_aux(push_line, start, end,
-                                           HIGHLIGHT_ATTRIB_BIT_TOKEN, i);
+        editor_state_highlights_append_aux(push_line, spans[i].char_start,
+                                           spans[i].char_end,
+                                           HIGHLIGHT_ATTRIB_BIT_TOKEN,
+                                           spans[i].bit_idx);
     }
 }
 

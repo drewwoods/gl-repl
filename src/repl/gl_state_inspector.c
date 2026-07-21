@@ -560,11 +560,6 @@ static int gl_state_command_precedes(const GLCmd *cmd, int source_line_idx) {
     return anchor >= 0 && anchor < source_line_idx;
 }
 
-/* Real-GL attribute-stack cap the inspector mirrors — matches the executor's
- * REPL_ATTRIB_STACK_CAP. Snapshots live only within it; deeper virtual pushes
- * just track depth. */
-#define GL_STATE_ATTRIB_STACK_CAP 8
-
 /* One saved user-attribute frame: the push mask plus a full state snapshot.
  * Restore reads back only the groups the mask covers. */
 typedef struct {
@@ -1522,7 +1517,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
      * bracket (attrib_stack_depth) so an orphan user pop can't consume it.
      * Function-static frame storage (reset via user_attrib_depth = 0 each
      * call) avoids a multi-KB stack snapshot array; not reentrant. */
-    static GlStateAttribFrame attrib_frames[GL_STATE_ATTRIB_STACK_CAP];
+    static GlStateAttribFrame attrib_frames[REPL_ATTRIB_STACK_CAP];
     int user_attrib_depth = 0;
     ReplGlStateChangeSource user_attrib_source;
     user_attrib_source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
@@ -1535,7 +1530,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         source.source_line_idx = cmd->src_cmd_idx >= 0
             ? cmd->src_cmd_idx : gl_state_execution_anchor(cmd);
         if (cmd->type == CMD_PUSH_ATTRIB) {
-            if (user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP) {
+            if (user_attrib_depth < REPL_ATTRIB_STACK_CAP) {
                 attrib_frames[user_attrib_depth].mask = (unsigned)cmd->args[0];
                 attrib_frames[user_attrib_depth].snap = state;
             }
@@ -1547,7 +1542,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
             if (user_attrib_depth > 0) {
                 user_attrib_depth--;
                 user_attrib_source = source;
-                if (user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP)
+                if (user_attrib_depth < REPL_ATTRIB_STACK_CAP)
                     gl_state_restore_attrib_groups(
                         &state, &attrib_frames[user_attrib_depth].snap,
                         attrib_frames[user_attrib_depth].mask, source);
@@ -1562,8 +1557,8 @@ void repl_gl_state_report_at_line(FlatProgramView program,
      * pushes are open, the row's latest-change source is the last user
      * push/pop that moved the depth, not the generated display bracket. */
     if (user_attrib_depth > 0) {
-        int eff = user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP
-                      ? user_attrib_depth : GL_STATE_ATTRIB_STACK_CAP;
+        int eff = user_attrib_depth < REPL_ATTRIB_STACK_CAP
+                      ? user_attrib_depth : REPL_ATTRIB_STACK_CAP;
         state.attrib_stack_depth += eff;
         state.attrib_stack_depth_touched = 1;
         state.attrib_stack_depth_source = user_attrib_source;

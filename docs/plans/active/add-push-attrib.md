@@ -48,7 +48,8 @@ glPushMatrix/glPopMatrix today).
   >4 bits shows the first 4 in canonical order.
 - **No indent scope** for glPushAttrib (unlike glPushMatrix) — not requested, avoids
   touching format/source_scope depth caches.
-- **Executor cap** `REPL_ATTRIB_STACK_CAP = 8` real GL pushes; virtual depth unbounded.
+- **Shared real-GL cap** `REPL_ATTRIB_STACK_CAP = 8`; virtual depth is unbounded.
+  The executor, inspector, and overlay mirrors all consume this one definition.
   Real depth is always `min(virtual, CAP)` — LIFO means the level being popped is real iff
   `virtual <= CAP`, so no per-level flag; the controller's bracket can never be over-popped.
   The worst current live nesting is 8 user levels + the render3d outer bracket + a
@@ -110,8 +111,8 @@ glPushMatrix/glPopMatrix today).
   leftover-drain loop. Orphans then get `HIGHLIGHT_UNBALANCED` automatically via the
   always-on block in `glr_ctrl_push_highlights` (`glr_ctrl.c:684-690`).
 - `repl_find_matching_push_attrib(int)` / `repl_find_matching_pop_attrib(int)` mirroring
-  the matrix pair in `src/repl/autonormal.c:341-378` (optionally factor a shared
-  `find_matching_bracket(line, open, close, dir)`).
+  the matrix pair through the shared source-order LIFO
+  `repl_find_matching_bracket(line, open, close, dir)` helper.
 
 ## Phase 3 — Mapping module `src/repl/attrib_bits.c/.h`
 

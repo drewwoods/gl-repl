@@ -29,6 +29,12 @@
 /* Number of supported GL_*_BIT groups (mirrors k_attrib_bits[]). */
 #define REPL_ATTRIB_BIT_COUNT 10
 
+/* Depth of the real glPushAttrib/glPopAttrib stack all REPL mirrors keep.
+ * Virtual user-source depth is unbounded; only the first frames at this depth
+ * drive or snapshot real GL state. OpenGL guarantees at least 16 attribute
+ * stack entries, while the app also uses one outer frame. */
+#define REPL_ATTRIB_STACK_CAP 8
+
 /* A comfortable cap for a collector result: at most one line per distinct
  * atomic state cell (~55), coalesced, so 64 can never truncate a real
  * document. Callers size their ReplAttribHighlightLine[] buffers with this. */
@@ -59,11 +65,20 @@ typedef struct {
 } ReplAttribCellWrite;
 
 /* One editor highlight line: a source line index plus the union of canonical
- * bit *indices* (0..8, as a bitmask) whose colors should mark it. */
+ * bit *indices* (0..9, as a bitmask) whose colors should mark it. */
 typedef struct {
     int      line_idx;
     unsigned bit_idx_mask;
 } ReplAttribHighlightLine;
+
+/* One supported GL_*_BIT token found in source text. Char offsets address the
+ * exact string passed to repl_attrib_bit_token_spans(), so renderers can color
+ * a live edit buffer without translating coordinates from a committed row. */
+typedef struct {
+    int char_start;
+    int char_end;
+    int bit_idx;
+} ReplAttribTokenSpan;
 
 /* Context-free coarse mask of GL_*_BIT groups a command's state falls under.
  * 0 when the command is not an attribute-scoped state setter. Does NOT fold in
@@ -82,6 +97,12 @@ unsigned repl_attrib_bits_for_type(CmdType type, unsigned enum_arg0);
 /* Canonical index 0..REPL_ATTRIB_BIT_COUNT-1 of a single GL_*_BIT value, or -1
  * if it is not one of the supported bits. */
 int repl_attrib_bit_index(unsigned single_bit);
+
+/* Scan `text` for supported GL_*_BIT names inside its first (...) range.
+ * Fills up to `max` spans and returns the number written. The scan is purely
+ * textual: callers decide whether a matched bit is active in a parsed mask. */
+int repl_attrib_bit_token_spans(const char *text, ReplAttribTokenSpan *out,
+                                int max);
 
 /* Initialize a flow context to the GL defaults. */
 void repl_attrib_flow_init(ReplAttribFlowState *flow);
