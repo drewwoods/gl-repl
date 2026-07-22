@@ -281,8 +281,6 @@ static void glr_action_load_scene_from_clipboard(void) {
  *   1 = On   - playing, preserving the current loop mode
  * Old 4-state ini values (1/2/3) are all remapped to On in
  * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
-#define AUDIO_CFG_PAUSE 0
-#define AUDIO_CFG_ALL   1
 static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *projection_names[] = { "Perspective", "Ortho" };
@@ -970,6 +968,10 @@ void glr_actions_set_msaa_label(int samples) {
     g_msaa_display_label = msaa_label;
 }
 
+const char *glr_actions_audio_mode_status_string(int mode) {
+    return mode == AUDIO_CFG_PAUSE ? "Audio: off" : "Audio: on";
+}
+
 void glr_actions_apply_audio_cfg_mode(int mode) {
     if (mode == AUDIO_CFG_PAUSE) {
         glr_audio_set_paused(1);
@@ -982,8 +984,7 @@ void glr_action_toggle_audio_play_pause(void) {
     int next = glr_config_get(GLR_CONFIG_AUDIO_MODE) ? AUDIO_CFG_PAUSE
                                                      : AUDIO_CFG_ALL;
     glr_config_set(GLR_CONFIG_AUDIO_MODE, next);
-    repl_set_status(next == AUDIO_CFG_PAUSE ? "Audio: off"
-                                            : "Audio: on");
+    repl_set_status(glr_actions_audio_mode_status_string(next));
 }
 
 int glr_scene_menu_slot_for_dense_index(int scene_idx) {
@@ -1506,6 +1507,8 @@ void glr_actions_apply_defaults(void) {
     int saved_mode = glr_audio_get_cfg_mode();
     if (saved_mode < AUDIO_CFG_PAUSE || saved_mode > AUDIO_CFG_ALL)
         saved_mode = AUDIO_CFG_ALL;
-    glr_actions_apply_audio_cfg_mode(saved_mode);
-    glr_audio_set_cfg_mode(saved_mode);
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, saved_mode);
+    if (saved_mode == AUDIO_CFG_PAUSE) {
+        repl_set_status(glr_actions_audio_mode_status_string(saved_mode));
+    }
 }

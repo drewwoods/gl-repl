@@ -3301,7 +3301,7 @@ void glr_ctrl_tick(void) {
      * or manual next/prev), surface the song name in the status bar.
      * Tracking by generation avoids needing a callback hook into
      * the audio module. */
-    {
+    if (!glr_audio_is_paused()) {
         static unsigned int last_track_gen = 0;
         unsigned int gen = glr_audio_track_generation();
         if (gen != last_track_gen) {

@@ -107,6 +107,10 @@ enum {
 /* Apply initial presentation configuration defaults at startup. Initializes the
  * presentation config toggles and cycles to their default values. Called during
  * REPL init; examples can override via @cfg metadata headers. */
+#define AUDIO_CFG_PAUSE 0
+#define AUDIO_CFG_ALL   1
+
+const char *glr_actions_audio_mode_status_string(int mode);
 void glr_actions_apply_defaults(void);
 
 /* Install the export-config bridge that lets src/repl/export.c emit/parse

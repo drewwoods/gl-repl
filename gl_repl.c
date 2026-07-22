@@ -884,6 +884,8 @@ int main(int argc, char **argv) {
          * value back onto the audio engine before the first frame. */
         glr_actions_apply_defaults();
         init_trace("audio playlist started");
+    } else {
+        repl_set_status(glr_actions_audio_mode_status_string(AUDIO_CFG_PAUSE));
     }
 
     init_trace("entering main loop");
