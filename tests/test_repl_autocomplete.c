@@ -178,6 +178,29 @@ int main() {
         ASSERT_STR("input after accept", editor_state_input().input, "glBegin(GL_TRIANGLE_FAN)");
     }
 
+    /* 2b. Bitfield all-alias completion is slot metadata: glPushAttrib
+     * offers it for the first term and after `|`; glClear does not. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glPushAttrib(GL_ALL");
+        editor_completion_update();
+        ASSERT_TRUE("push attrib offers all alias",
+                    has_insert_match("GL_ALL_ATTRIB_BITS"));
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("push attrib accepts all alias",
+                   editor_state_input().input,
+                   "glPushAttrib(GL_ALL_ATTRIB_BITS)");
+
+        set_input_text("glPushAttrib(GL_CURRENT_BIT | GL_ALL");
+        editor_completion_update();
+        ASSERT_TRUE("push attrib offers all alias after bar",
+                    has_insert_match("GL_ALL_ATTRIB_BITS"));
+
+        set_input_text("glClear(GL_ALL");
+        editor_completion_update();
+        ASSERT_INT("glClear does not offer attrib all alias", g_ac_count, 0);
+    }
+
     /* 3. Multi-argument enum completion - glColorMaterial */
     {
         glr_ctrl_reset_all(); declare_test_vars();

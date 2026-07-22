@@ -2979,6 +2979,30 @@ static void test_push_attrib_bit_token_highlights(void) {
                count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 2), 1);
     ASSERT_INT("pop cursor bracket-highlights the push",
                count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 1), 1);
+
+    /* The compact all-bits alias has no single per-bit token hue, but its
+     * resolved union still drives every saved-setter marker. */
+    glr_ctrl_reset_all();
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glLineWidth(2);");
+    editor_feed_line("glPushAttrib(GL_ALL_ATTRIB_BITS);");
+    editor_feed_line("glPopAttrib();");
+    glr_ctrl_set_edit_line(2);
+    editor_insert_mode_set(0);
+    glr_ctrl_push_highlights();
+
+    list = editor_state_highlights();
+    token_count = 0;
+    for (int i = 0; list && i < list->count; i++) {
+        if (list->items[i].kind == HIGHLIGHT_ATTRIB_BIT_TOKEN)
+            token_count++;
+    }
+    ASSERT_INT("all alias has no ambiguous per-bit token colour",
+               token_count, 0);
+    ASSERT_INT("all alias marks CURRENT setter",
+               count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 0), 1);
+    ASSERT_INT("all alias marks LINE setter",
+               count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 1), 1);
 }
 
 static void test_replay_call_site_highlights_are_pushed(void) {

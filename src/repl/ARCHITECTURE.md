@@ -241,7 +241,7 @@ entries. [`command.h`](command.h) also exposes the *control-flow taxonomy* as in
 predicates (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`,
 `repl_cmd_is_block_head/_end`, `repl_cmd_is_glut_solid`,
 `repl_cmd_starts_geometry_emit`, `repl_cmd_consumes_current_color`).
-These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L150) in [`command_spec.h`](command_spec.h),
+These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L153) in [`command_spec.h`](command_spec.h),
 which is the *visual* (syntax-highlight) taxonomy — don't fold one
 through the other.
 

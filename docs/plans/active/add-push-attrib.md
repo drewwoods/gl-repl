@@ -28,8 +28,10 @@ glPushMatrix/glPopMatrix today).
   `GL_TRANSFORM_BIT(0x1000)`, `GL_ENABLE_BIT(0x2000)`, `GL_COLOR_BUFFER_BIT(0x4000)`.
   (`GL_FOG_BIT` was added after the initial 9-bit landing — see the fog follow-up
   at the end of this doc.)
-  **`GL_ALL_ATTRIB_BITS` excluded**: ENUM_BITFIELD tables require non-zero single-bit
-  values (`command_spec.h:70-79`) and 0xFFFFFFFF doesn't round-trip through float args.
+  **`GL_ALL_ATTRIB_BITS` alias**: instead of storing the platform's broader GL
+  value (0xFFFFFFFF in the stub headers), the token resolves to the union of the
+  10 supported single-bit entries (currently 0x71CF), which round-trips through
+  float args. Canonical text retains the compact alias rather than expanding it.
 - **New mapping module** `src/repl/attrib_bits.c/.h` (CmdType → bit mask + normalized
   state-cell identity + the two highlight collectors). Pure, no GL calls. The normalized
   cell model is also consumed by `gl_state_inspector.c`, so the editor affordance and the
@@ -229,7 +231,7 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
 ## Phase 6 — Tests
 
 - `tests/test_repl_core_parse.c`: single/multi-bit parse, `|` canonicalization to table
-  order, dupe-drop, reject numeric/expr/unknown/`GL_ALL_ATTRIB_BITS`, zero-arg
+  order, dupe-drop, `GL_ALL_ATTRIB_BITS` union alias, reject numeric/expr/unknown, zero-arg
   `glPopAttrib()`, reject both inside glBegin.
 - `tests/test_repl_core_commit.c`: bracket-match helpers (mirror the matrix block
   ~:1779-1808); `repl_attrib_bits_for_cmd` / `_cmd_writes` / collector tests (last-setter
@@ -279,9 +281,10 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
 ## Phase 7 — Docs
 
 - `CLAUDE.md` Supported Commands: add entry after the matrix-stack line — 10 bits, `|`
-  policy (same as glClear), depth guard/cap, cursor highlighting, `GL_ALL_ATTRIB_BITS`
-  intentionally unsupported. Add `attrib_bits.c/.h` rows to the File Layout table and
-  `docs/MODULES.md`. Add mandatory `[command CMD_PUSH_ATTRIB]` and
+  policy (same as glClear), depth guard/cap, cursor highlighting, and the
+  `GL_ALL_ATTRIB_BITS` supported-union alias. Add `attrib_bits.c/.h` rows to the
+  File Layout table and `docs/MODULES.md`. Add mandatory
+  `[command CMD_PUSH_ATTRIB]` and
   `[command CMD_POP_ATTRIB]` entries to `src/repl/command_descriptions.txt`; the generator
   requires one entry for every GL/GLU/GLUT CmdType and fails the build if either is absent.
 
@@ -384,3 +387,31 @@ supported bit, checks `set(V1) → glPushAttrib(bit) → set(V2) → glPopAttrib
 glGet == V1` (bit *covers* the cell) plus a negative pass with a non-covering bit
 (mapping is not over-broad) — a direct `repl_attrib_bits_for_type`-vs-driver
 check, including the fog params and the `GL_FOG` enable dual-membership.
+
+## GL_ALL_ATTRIB_BITS follow-up (2026-07-22)
+
+The initial plan incorrectly treated the broad OpenGL constant (0xFFFFFFFF in
+the project's stub headers; platform headers may use a narrower all-groups
+value) as requiring rejection of the token itself. The REPL now accepts
+`GL_ALL_ATTRIB_BITS` as an alias for the union of all groups in `k_attrib_bits[]`
+(currently 0x71CF). That union is exactly representable in `GLCmd.args[]` and
+means “everything a REPL command can observably change.”
+
+- `ReplEnumArgSpec.bitfield_all_alias` makes the exception explicit and local to
+  the `glPushAttrib` mask slot; `glClear(GL_ALL_ATTRIB_BITS)` remains invalid.
+- The parser accepts the alias as any `|` term. Alias-plus-bit and an explicit
+  spelling of all ten bits both canonicalize to `GL_ALL_ATTRIB_BITS`, avoiding a
+  roughly 180-character expansion.
+- The executor is unchanged and pushes the supported union. Export retains the
+  canonical alias token, so generated C uses real OpenGL's `GL_ALL_ATTRIB_BITS`
+  and may save groups beyond the REPL model; this can only provide additional
+  isolation around the exported user program.
+- The alias token itself receives no per-bit token colour because one text span
+  cannot represent ten hues. Saved/reverted setter lines still receive their
+  normal per-bit gutter markers because collectors consume the resolved union.
+- Autocomplete and command help offer the alias alongside the ten atomic bits.
+
+The alias is intentionally version-relative: if support for another attribute
+group is added later, existing scenes using `GL_ALL_ATTRIB_BITS` begin saving that
+group too. This matches the token's “everything the REPL can set” semantics and
+the behavior of the controller's own all-attributes bracket.
