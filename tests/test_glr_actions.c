@@ -2184,6 +2184,28 @@ static void test_help_commands_tab_lists_if_branches(void) {
 }
 
 int main(void) {
+    /* Before audio init, the actions layer must treat audio as disabled
+     * (the --no-audio case): defaults application and the play/pause
+     * toggle are status-only no-ops. */
+    glr_ctrl_reset_all();
+    glr_actions_apply_defaults();
+    ASSERT_STR("apply_defaults reports disabled audio",
+               g_last_status, "Audio: disabled");
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
+    glr_action_toggle_audio_play_pause();
+    ASSERT_INT("audio toggle no-op while disabled",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    ASSERT_STR("audio toggle reports disabled audio",
+               g_last_status, "Audio: disabled");
+
+    /* The rest of the suite exercises the audio-enabled paths; run the
+     * engine deviceless so it works on headless CI machines. */
+    setenv("GLR_AUDIO_NO_DEVICE", "1", 1);
+    if (glr_audio_init() != 0) {
+        fprintf(stderr, "test_repl_actions: glr_audio_init failed\n");
+        return 1;
+    }
+
     test_apply_defaults();
     test_no_duplicate_config_bindings();
     test_keymap_event_is_strict();
@@ -2231,5 +2253,6 @@ int main(void) {
     test_cfg_bridge_resolves_symbolic_names();
     test_cfg_bridge_enforces_backdrop_grid_pair_order();
 
+    glr_audio_shutdown();
     return test_harness_report(&g_harness, "test_repl_actions");
 }

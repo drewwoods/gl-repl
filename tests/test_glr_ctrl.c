@@ -4068,6 +4068,17 @@ static void test_special_key_shortcuts(void) {
                glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
 
     g_simulated_mods = GLUT_ACTIVE_SHIFT;
+    /* Audio was never initialized here (the --no-audio case): the route
+     * still consumes the key, but the toggle is a status-only no-op. */
+    ASSERT_INT("Ctrl+Shift+A consumed while audio disabled",
+               glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 1);
+    ASSERT_INT("Ctrl+Shift+A no-op while audio disabled",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    ASSERT_STR("Ctrl+Shift+A reports disabled audio",
+               ui_state_status_mut()->text, "Audio: disabled");
+
+    setenv("GLR_AUDIO_NO_DEVICE", "1", 1);
+    ASSERT_INT("audio toggle init no-device", glr_audio_init(), 0);
     ASSERT_INT("Ctrl+Shift+A audio route handled",
                glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 1);
     ASSERT_INT("Ctrl+Shift+A pauses audio",
@@ -4077,6 +4088,8 @@ static void test_special_key_shortcuts(void) {
                glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 1);
     ASSERT_INT("Ctrl+Shift+A resumes audio",
                glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    glr_audio_shutdown();
+    unsetenv("GLR_AUDIO_NO_DEVICE");
     g_simulated_mods = 0;
 
     /* 4. Help overlay actions */
