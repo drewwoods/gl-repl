@@ -1771,10 +1771,12 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
         return 0;
     }
 
-    /* Every preloaded setup row is locked, plus up to one baseline lock
-     * per step. A commented block-open needs TWO additional locks for
-     * its committed header + auto-`}` (the baseline step lock is its
-     * instruction comment); a comment-less open needs only one extra,
+    /* Every preloaded prelude row is locked: the injected scene-clear
+     * rows (TUTORIAL_SCENE_PRELUDE_ROWS — the comment + glClear the runner
+     * loads ahead of every tutorial) plus every setup line, plus up to one
+     * baseline lock per step. A commented block-open needs TWO additional
+     * locks for its committed header + auto-`}` (the baseline step lock is
+     * its instruction comment); a comment-less open needs only one extra,
      * but budgeting two for every open is a safe upper bound. A branch
      * similarly needs one extra lock for its committed separator row.
      * Counting every setup line (metadata headers included) also
@@ -1786,11 +1788,11 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             while (entry->setup[setup_count])
                 setup_count++;
         }
-        if (setup_count + step_count + 2 * open_count + branch_count >
-            TUTORIAL_LOCKED_LINE_MAX) {
+        if (TUTORIAL_SCENE_PRELUDE_ROWS + setup_count + step_count +
+            2 * open_count + branch_count > TUTORIAL_LOCKED_LINE_MAX) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
-                         "tutorial '%s' setup lines (%d) + steps (%d) "
+                         "tutorial '%s' prelude + setup lines (%d) + steps (%d) "
                          "+ block-shape extra locks (%d) exceed the locked-line "
                          "capacity (%d)",
                          entry->name ? entry->name : "?",

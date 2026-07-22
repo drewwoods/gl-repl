@@ -832,9 +832,9 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 
 **Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
-[`ReplTutorialTagMask`](../src/repl/tutorials.h#L180); the synthetic `ALL` tag is folded into every entry's
+[`ReplTutorialTagMask`](../src/repl/tutorials.h#L188); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L307)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L315)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -2181,7 +2181,7 @@ checklist above (its steps 1–2), a structured command touches:
 
 ### Adding A New Tutorial Step Kind
 
-Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L90) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
+Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L98) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
 contract between a catalog entry and the runtime: what extra fields the
 step carries, what UI it shows, what user action advances it, and which
 guard rails apply. Current kinds are:
@@ -2216,8 +2216,8 @@ land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
 
-- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L90).
-- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L110). **Place new fields AFTER all
+- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L98).
+- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L118). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
   to the new defaults — adding fields mid-struct silently shifts other

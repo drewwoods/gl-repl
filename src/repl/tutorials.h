@@ -82,6 +82,14 @@
 STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
               "Locked-line capacity must hold every possible per-step lock");
 
+/* The tutorial runner injects a fixed scene prelude ahead of every
+ * tutorial's steps and setup scaffold: a one-line explanatory comment and
+ * the glClear it describes (g_tutorial_scene_prelude in
+ * tutorial_runner.c). Both rows are locked, so the locked-line budget in
+ * repl_tutorial_validate() reserves them. Kept here so the runner (which
+ * loads the rows) and the validator (which budgets for them) can't drift. */
+#define TUTORIAL_SCENE_PRELUDE_ROWS 2
+
 typedef enum {
     TUTORIAL_STEP_APPEND = 0,
     TUTORIAL_STEP_LABEL,

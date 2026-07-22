@@ -512,9 +512,15 @@ static int compile_function_decl_insert_pos_after_delete(
         /* Skip the whole declaration prologue: var decls plus any blank
          * lines / comments interspersed among them. A blank line between
          * two float groups must not terminate the walk, or the new func
-         * lands between the groups instead of after all decls. */
+         * lands between the groups instead of after all decls. A leading
+         * glClear counts as prologue too: it is the scene-open boilerplate
+         * every example (and every tutorial, which injects it as a locked
+         * prelude row) authors first, so a newly-typed func def should
+         * hoist to just BELOW it rather than above it — keeping glClear at
+         * the document top the way exported scenes read. */
         if (cmds[pos].type == CMD_VAR_DECLARE ||
-            cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY) {
+            cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY ||
+            cmds[pos].type == CMD_CLEAR) {
             pos++;
             continue;
         }
