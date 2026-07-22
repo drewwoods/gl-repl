@@ -121,7 +121,7 @@ Conventions for genuinely-old-GCC portability:
 
 Anything in this tree uses quoted `""`; system/vendored headers use `<>`.
 Enforced by `make check-include-style` (tracks the ambiguous bare names
-`c_compat.h`, `gl_includes.h`, `keys.h`, `gl_2d.h`).
+[`c_compat.h`](include/c_compat.h), `gl_includes.h`, [`keys.h`](include/keys.h), [`gl_2d.h`](src/ui/core/gl_2d.h)).
 
 ```c
 #include <stdio.h>           // system — angle
@@ -179,7 +179,7 @@ default 50).
   `<exe>/../Resources/assets` (the `.app` case), and the per-user folder
   (`~/Library/Application Support/gl-repl/Music` on macOS,
   `$XDG_DATA_HOME/gl-repl/music` elsewhere; created on first run). Zero
-  mp3s → fallback `assets/song.mp3`. All in `src/app/glr_audio.c` statics; the
+  mp3s → fallback `assets/song.mp3`. All in [`src/app/glr_audio.c`](src/app/glr_audio.c) statics; the
   `#ifdef` platform branches must stay C99/portable and localized.
 - **Startup diagnostics**: always-on `[init +N.NNNs] <phase>` stderr trace in
   `main()`; `--no-audio` isolates `ma_engine_init()` stalls;
@@ -219,50 +219,50 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | [`config.h`](config.h) | Compile-time constants, force-included into every TU; includes [`keymap.h`](keymap.h) |
 | [`keymap.h`](keymap.h) | Action→key bindings: one `#define GLR_<ACTION> <key>, <mods>` per action; matched via `keymap_event_is`; `KM_KEY`/`KM_MODS` split for case labels/initializers |
 | [`accent_palette.h`](accent_palette.h) | Shared accent palette anchors + semantic roles + brand-mark list; `make check-palette` ratchet, `make palette-list` |
-| [`prof_sections.h`](prof_sections.h) | `ProfSection` enum catalog, force-included (labels live in `glr_prof.c`) |
+| [`prof_sections.h`](prof_sections.h) | `ProfSection` enum catalog, force-included (labels live in [`glr_prof.c`](src/app/glr_prof.c)) |
 | `include/` | Project-agnostic headers: [`keys.h`](include/keys.h) (physical key bytes), [`c_compat.h`](include/c_compat.h), [`gl_includes.h`](include/gl_includes.h) |
 | **src/app/** | |
-| `glr_ctrl.{c,h}` | App-frame controller: display/reshape/init-GL, builds `Render3dRenderConfig`, UI snapshot, chrome clear, camera load |
+| `glr_ctrl.{c,h}` | App-frame controller: display/reshape/init-GL, builds [`Render3dRenderConfig`](src/render3d/render_types.h#L135), UI snapshot, chrome clear, camera load |
 | `glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
-| `glr_ctrl_router.c` | GLUT input dispatch shims, `UiHit` routing, wheel, SIGINT-quit |
+| [`glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch shims, [`UiHit`](src/ui/core/hit.h#L51) routing, wheel, SIGINT-quit |
 | `glr_config.{c,h}` | Config-key impl + section model; `glr_config_set` tail notifies the tutorial runner |
 | `glr_actions.{c,h}` | `g_cfg_items[]` descriptor table, config shortcuts, menu actions |
 | `glr_camera.{c,h}` | Camera state, orbit/pan/zoom drags, momentum |
-| `glr_completion.c` | Autocomplete provider (specs/predefs/`CMD_FUNC_DEF`; ghost + hints) |
+| [`glr_completion.c`](src/app/glr_completion.c) | Autocomplete provider (specs/predefs/`CMD_FUNC_DEF`; ghost + hints) |
 | `glr_tours.{c,h}` | Tours-menu catalog (file-backed `tours/*.pointer`) |
 | `glr_audio.{c,h}` | Playlist engine + persisted audio config (worker thread) |
 | `glr_mesh_export.{c,h}` | PLY export via one `GL_FEEDBACK` capture of the live flat program |
 | `glr_debug.{c,h}` | Diagnostic dumps for CLI flags/tests |
 | `glr_prof.{c,h}` | `prof_section_info` table + GPU-bracketing policy |
-| `glr_defaults.h` | `CFG_DEFAULT_*` scene/presentation defaults (single source of truth) |
-| `glr_pointer_script.c` | Synthetic pointer/keyboard script engine (captures + tours) |
+| [`glr_defaults.h`](src/app/glr_defaults.h) | `CFG_DEFAULT_*` scene/presentation defaults (single source of truth) |
+| [`glr_pointer_script.c`](src/app/glr_pointer_script.c) | Synthetic pointer/keyboard script engine (captures + tours) |
 | **src/repl/** | Language pipeline — see `src/repl/ARCHITECTURE.md` |
-| `command.h` | `CmdType` enum + `GLCmd` (pure parse result, no `source[]`) + set predicates |
+| [`command.h`](src/repl/command.h) | [`CmdType`](src/repl/command.h#L37) enum + [`GLCmd`](src/repl/command.h#L95) (pure parse result, no `source[]`) + set predicates |
 | `parser.{c,h}` | Source-line parser; canonical text via `ReplParsedLine.text` |
 | `command_spec.{c,h}` | Command metadata; `k_enum_command_specs[]`/`k_std_command_specs[]` (alphabetical by GL name); owns `k_attrib_bits[]` (the glPushAttrib `GL_*_BIT` groups, canonical order) + `repl_attrib_bit_entries()` |
-| `attrib_bits.{c,h}` | Pure (no-GL) glPushAttrib/glPopAttrib mapping: command → bit mask, per-cell state writes (flow-sensitive color-material), masked-LIFO-fold collectors for the editor per-bit highlighting; also consumed by `gl_state_inspector.c` so the two can't drift |
-| `command_store.{c,h}` | Low-level `GLCmd` array mechanics |
-| `compile.{c,h}` / `apply.{c,h}` | Pure validators → `ReplCompiledChange` descriptors; apply mutates runtime arrays |
-| `normalize.c` / `reformat.c` / `format.{c,h}` / `source_scope.{c,h}` | Parse-and-normalize, reformatter, indentation, block-depth cache |
+| `attrib_bits.{c,h}` | Pure (no-GL) glPushAttrib/glPopAttrib mapping: command → bit mask, per-cell state writes (flow-sensitive color-material), masked-LIFO-fold collectors for the editor per-bit highlighting; also consumed by [`gl_state_inspector.c`](src/repl/gl_state_inspector.c) so the two can't drift |
+| `command_store.{c,h}` | Low-level [`GLCmd`](src/repl/command.h#L95) array mechanics |
+| `compile.{c,h}` / `apply.{c,h}` | Pure validators → [`ReplCompiledChange`](src/repl/compile.h#L130) descriptors; apply mutates runtime arrays |
+| [`normalize.c`](src/repl/normalize.c) / `reformat.c` / `format.{c,h}` / `source_scope.{c,h}` | Parse-and-normalize, reformatter, indentation, block-depth cache |
 | `flatten.{c,h}` / `flatten_expr.{c,h}` / `flatten_query.{c,h}` / `expr_program.{c,h}` | Source→flat expansion, dep masks + value-only rebake, compiled-expression cache, cursor/cost queries |
 | `executor.{c,h}` | Flat-array walk emitting GL calls |
-| `eval.{c,h}` | Expression evaluator, translators, `ExprVar`/`ExprCtx`, predef-var management |
-| `state.{c,h}` + `state_views.h` / `state_owners.h` | `g_repl_state` owner; read-only views (safe for render3d/ui) vs `_mut()` accessors (owners/controller only) |
-| `cfg_baseline.h` / `pipeline.h` | Config bag + typed live-cfg helpers; frame-orchestration surface |
-| `autonormal.c` | Auto `glNormal3f` maintenance |
-| `scenes.c` / `scene_snapshot.c` / `workspace_io.c` | User-scene slots + LRU + workspace orchestration; snapshot copy/apply; pure filesystem/naming mechanics |
-| `example_loader.c` / `examples.{c,h}` | Example loading + built-in example data |
+| `eval.{c,h}` | Expression evaluator, translators, [`ExprVar`](src/repl/eval.h#L135)/[`ExprCtx`](src/repl/eval.h#L142), predef-var management |
+| `state.{c,h}` + [`state_views.h`](src/repl/state_views.h) / [`state_owners.h`](src/repl/state_owners.h) | `g_repl_state` owner; read-only views (safe for render3d/ui) vs `_mut()` accessors (owners/controller only) |
+| [`cfg_baseline.h`](src/repl/cfg_baseline.h) / [`pipeline.h`](src/repl/pipeline.h) | Config bag + typed live-cfg helpers; frame-orchestration surface |
+| [`autonormal.c`](src/repl/autonormal.c) | Auto `glNormal3f` maintenance |
+| [`scenes.c`](src/repl/scenes.c) / [`scene_snapshot.c`](src/repl/scene_snapshot.c) / [`workspace_io.c`](src/repl/workspace_io.c) | User-scene slots + LRU + workspace orchestration; snapshot copy/apply; pure filesystem/naming mechanics |
+| [`example_loader.c`](src/repl/example_loader.c) / `examples.{c,h}` | Example loading + built-in example data |
 | `tutorials.{c,h}` | Tutorial catalog (steps, tags, `@cfg`, setup scaffolds, subheadings): 23 lessons in contiguous Beginner/Intermediate/Advanced runs across six tag groups; Phase C adds block-language lessons plus effects, materials, culling, and bitmap-text coverage |
-| `export.{c,h}` / `import.c` / `export_state.h` | C export writer / import reader (workspace headers, `@declare`, C↔REPL translators) |
+| `export.{c,h}` / [`import.c`](src/repl/import.c) / [`export_state.h`](src/repl/export_state.h) | C export writer / import reader (workspace headers, `@declare`, C↔REPL translators) |
 | `help_text.{c,h}` | F1 help content tables |
-| `time.{c,h}` / `transform_utils.h` / `program_query.c` | `repl_set_time`; header-only matrix helpers; decl-tag collectors |
+| `time.{c,h}` / [`transform_utils.h`](src/repl/transform_utils.h) / [`program_query.c`](src/repl/program_query.c) | `repl_set_time`; header-only matrix helpers; decl-tag collectors |
 | **src/editor/** | |
-| `input.{c,h}` | REPL key dispatcher (`;` commit, Tab, Ctrl+R, tutorial guards); generic twin in `tools/editor_demo/input.c` |
+| `input.{c,h}` | REPL key dispatcher (`;` commit, Tab, Ctrl+R, tutorial guards); generic twin in [`tools/editor_demo/input.c`](tools/editor_demo/input.c) |
 | `edit_ops.{c,h}` | Generic text-edit primitives, REPL-free (`check-edit-ops-pure`) |
 | `commit.{c,h}` | Commit transaction boundary: compile → undo snapshot → buffer write → apply |
-| `state.{c,h}` | `EditorState`: buffer, cursor, selection, search, autocomplete, scroll, undo rings |
+| `state.{c,h}` | [`EditorState`](src/editor/state.h#L175): buffer, cursor, selection, search, autocomplete, scroll, undo rings |
 | `clipboard.{c,h}` / `undo.{c,h}` / `search.{c,h}` | Selection+clipboard; snapshot rings (+example auto-promote hook); Ctrl+F search |
-| `inline_rename.{c,h}` / `completion.{c,h}` / `help_session.{c,h}` / `limits.h` | Scene rename, provider registry, help-overlay session, capacity constants |
+| `inline_rename.{c,h}` / `completion.{c,h}` / `help_session.{c,h}` / [`limits.h`](src/editor/limits.h) | Scene rename, provider registry, help-overlay session, capacity constants |
 | **src/subsystems/** | Peer subsystems (editor/UI-independent) |
 | `replay/` | Replay state machine, fade-batch ring, input routing, GL fade pass, annotations (`replay_*.c`) |
 | `tutorial/` | Runner / state / match / fade-animation split (`tutorial_*.c`) |
@@ -270,12 +270,12 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `edit_overlays/` | Cursor guide snapshot + flat-walk overlay orchestration (replays clip/cull state as it walks) |
 | **src/render3d/** | 3D scene renderer — no REPL dependency (proof: `render3d_demo`) |
 | `render.{c,h}` | Frame orchestration + accum loop; camera transform is the **caller's** job |
-| `grid.c` / `axes.c` / `backdrop.c` / `lights.c` / `overlays.c` / `depth_viz.{c,h}` / `render3d_transition.{c,h}` | Grid/axes themes, backdrop, lights, per-vertex overlay primitives, depth visualization, fade state machine |
-| `guides/` | Geometry + transform guide passes (`Render3dGuideSnapshot`) |
-| `render_types.h` / `palette.h` | Shared config/context types; overlay/guide color tokens |
+| [`grid.c`](src/render3d/grid.c) / [`axes.c`](src/render3d/axes.c) / [`backdrop.c`](src/render3d/backdrop.c) / [`lights.c`](src/render3d/lights.c) / [`overlays.c`](src/render3d/overlays.c) / `depth_viz.{c,h}` / `render3d_transition.{c,h}` | Grid/axes themes, backdrop, lights, per-vertex overlay primitives, depth visualization, fade state machine |
+| `guides/` | Geometry + transform guide passes ([`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L44)) |
+| [`render_types.h`](src/render3d/render_types.h) / [`palette.h`](src/render3d/palette.h) | Shared config/context types; overlay/guide color tokens |
 | **src/ui/** | 2D view rendering + hit-test (pure over snapshots) |
-| `core/` | `gl_2d.h`, `text_layout.{c,h}`, `hit.h` (`UiHit`), `tabbed_overlay.{c,h}`, `layout_utils.h` |
-| `app/` | `state.c` (UiState + status history ring), `panels.{c,h}` (code panel + hit-test), `menu_bar.{c,h}` (dropdowns + shared flyout engine), `scene_tabs.{c,h}`, `layout.{c,h}`, `overlay_layout.{c,h}` (floating-panel stacking solve), `repl_code_panel.{c,h}`, `autocomplete_panel.{c,h}`, `gl_state_panel.{c,h}`, `snapshot.h` (`UiRenderSnapshot`), `editor.h` |
+| `core/` | [`gl_2d.h`](src/ui/core/gl_2d.h), `text_layout.{c,h}`, `hit.h` ([`UiHit`](src/ui/core/hit.h#L51)), `tabbed_overlay.{c,h}`, [`layout_utils.h`](src/ui/core/layout_utils.h) |
+| `app/` | `state.c` (UiState + status history ring), `panels.{c,h}` (code panel + hit-test), `menu_bar.{c,h}` (dropdowns + shared flyout engine), `scene_tabs.{c,h}`, `layout.{c,h}`, `overlay_layout.{c,h}` (floating-panel stacking solve), `repl_code_panel.{c,h}`, `autocomplete_panel.{c,h}`, `gl_state_panel.{c,h}`, [`snapshot.h`](src/ui/app/snapshot.h) ([`UiRenderSnapshot`](src/ui/app/snapshot.h#L70)), [`editor.h`](src/ui/app/editor.h) |
 | `subsystems/` | `replay_hud`, `color_picker`, `variable_panel` renderers |
 | `support/` | `cpuprof.{c,h}` (profile/FPS/histogram panels — log/log axes), `memprof.{c,h}` |
 | **src/support/** | Neutral: `cpuprof` (host-agnostic CPU prof, log-binned histograms), `gpuprof` (GL timer queries, injected fn table, GL-free TU), `mesh_ply` (pure PLY writer) |
@@ -286,45 +286,45 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 - File-private statics use `g_` prefix. Cross-module runtime state goes
   through typed facades: [`src/repl/state.h`](src/repl/state.h) (REPL),
   [`src/editor/state.h`](src/editor/state.h) (editor), peer accessors
-  (`replay_state_view()`, `variable_panel_state_view()`). Static helpers are
+  ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L126), `variable_panel_state_view()`). Static helpers are
   file-scoped; public API through module headers.
 - Prefixes express ownership: `repl_*` (language/program model), `editor_*`
   (text document), `glr_*` (app shell/controller/services), `render3d_*`
   (3D), `ui_*` (2D view), neutral (`prof`) for generic utilities. Don't
   introduce new top-level prefixes without documenting the boundary.
-- **Config toggles**: append a `ReplConfigItem` descriptor to `g_cfg_items[]`
+- **Config toggles**: append a [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor to `g_cfg_items[]`
   in [`src/app/glr_actions.c`](src/app/glr_actions.c) (under the right `### `
   section); count auto-computes, flyout membership is automatic.
-- **New GL commands**: add to `CmdType` ([`src/repl/command.h`](src/repl/command.h)),
-  handle in `repl_parser_parse_command_ctx()`, `repl_execute_program()`, and
+- **New GL commands**: add to [`CmdType`](src/repl/command.h#L37) ([`src/repl/command.h`](src/repl/command.h)),
+  handle in [`repl_parser_parse_command_ctx()`](src/repl/parser.h#L100), [`repl_execute_program()`](src/repl/executor.h#L199), and
   `flatten_range()` (static in flatten.c); add a `g_command_type_specs[]`
-  entry with the right `CmdSyntaxCategory`. Enum-arg / float-arg commands:
+  entry with the right [`CmdSyntaxCategory`](src/repl/command_spec.h#L153). Enum-arg / float-arg commands:
   append a row to `k_enum_command_specs[]` / `k_std_command_specs[]`
   (**keep alphabetical by GL name**).
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** — its
-  absence is the invariant). Per-slot `ReplEnumSlotKind`: `ENUM_ONLY`
+  absence is the invariant). Per-slot [`ReplEnumSlotKind`](src/repl/command_spec.h#L77): `ENUM_ONLY`
   (default), `ENUM_OR_CONST_VALUE` (bool masks, 0/1 reverse-mapped),
   `ENUM_OR_EXPR` (only `glLightModeli` slot 1).
-- `CmdType` set tests use the inline predicates in `command.h`
+- [`CmdType`](src/repl/command.h#L37) set tests use the inline predicates in [`command.h`](src/repl/command.h)
   (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`, `repl_cmd_is_block_head`
   / `_end`), never ad-hoc `||` chains. That's the *control-flow* taxonomy;
-  `CmdSyntaxCategory` is the separate *visual* one — don't fold one through
-  the other. A drift test in `tests/test_replay_walk.c` asserts agreement.
-- Splitting comma-separated call args: `repl_scan_next_arg_delim()` from
+  [`CmdSyntaxCategory`](src/repl/command_spec.h#L153) is the separate *visual* one — don't fold one through
+  the other. A drift test in [`tests/test_replay_walk.c`](tests/test_replay_walk.c) asserts agreement.
+- Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L428) from
   [`src/repl/eval.h`](src/repl/eval.h), never bare `strchr(s, ',')` — those
   are paren-naive and truncate `cos(i + phase)`.
 - **Keyboard bindings**: one [`keymap.h`](keymap.h) pair per action; call
   sites use `keymap_event_is(key, GLR_X)` and never spell out modifiers;
   `KM_KEY`/`KM_MODS` for case labels / initializers. Guard:
   `make check-keymap-no-dup`; `make keymap-list` shows bindings + free
-  slots. `editor_handle_key()` takes ASCII (Ctrl+X arrives as X & 0x1F),
-  `editor_handle_special()` F-keys/arrows. Cross-subsystem routing (replay /
+  slots. [`editor_handle_key()`](src/editor/input.h#L56) takes ASCII (Ctrl+X arrives as X & 0x1F),
+  [`editor_handle_special()`](src/editor/input.h#L57) F-keys/arrows. Cross-subsystem routing (replay /
   save / config / audio / camera / tutorial-ack) lives in the
   `glr_ctrl_router_*` helpers, dispatched before `editor_handle_key`.
   macOS Cmd+letter is normalized to Ctrl form at the top of
   `glr_ctrl_keyboard`.
-- Expression variables: `ExprVar` in eval.h; predef set via
-  `repl_state_variables()` + `repl_eval_declare_predef_var()`.
+- Expression variables: [`ExprVar`](src/repl/eval.h#L135) in eval.h; predef set via
+  `repl_state_variables()` + [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309).
 
 ## Architecture — agent gotchas
 
@@ -333,15 +333,15 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-`glr_ctrl_display_frame()` drives each frame: rebuild autonormals + flat
-program if dirty → build `Render3dRenderConfig` → clear chrome + load camera
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L140) drives each frame: rebuild autonormals + flat
+program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L135) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
-scissor, clears no color/depth) → `render3d_draw_scene()` (projection → user
+scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L136) (projection → user
 geometry callback → replay fades → grid/axes/backdrop → overlays → replay
 HUD) → 2D overlays. `render3d_demo` is the load-bearing proof that
 `src/render3d/` has no REPL dependency; `make render3d-hot` is its
 dlopen-based live-reload variant (state lives in the host TU; a
-`Render3dState` layout change still needs a relaunch).
+[`Render3dState`](src/render3d/render.h#L96) layout change still needs a relaunch).
 
 ### Accumulation effects
 
@@ -357,8 +357,8 @@ frame baseline so accumulating programs don't compound.
 
 ### Two-level command model
 
-Source `GLCmd[]` (per-line canonical **text lives in `EditorState`'s editor
-buffer, not on `GLCmd`**) → flat array (loops unrolled, funcs inlined, ifs
+Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L175)'s editor
+buffer, not on [`GLCmd`](src/repl/command.h#L95)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -369,9 +369,9 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` —
   handlers must accept input without a trailing `;`.
-- **`editor_feed_line()`** (file/example loading): copies the full line
+- **[`editor_feed_line()`](src/editor/input.h#L188)** (file/example loading): copies the full line
   *including* `;`, then runs the same chain.
-- Enter may or may not have `;`. `editor_load_line_to_input()` strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L182) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path — handlers checking for `;` must also accept end-of-string.
 
@@ -382,7 +382,7 @@ handlers to the right helper, not to call sites. **Ordering is
 load-bearing**: `editor_try_commit_float_decl` MUST run before
 `editor_try_commit_assign_variable` or `float x;` parses as an assignment.
 Handlers return 1 if consumed (success or error), 0 if no match; fallthrough
-is `repl_parse_and_normalize()` → `parse_command()`.
+is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()`.
 
 ### Float declarations (`CMD_VAR_DECLARE`)
 
@@ -390,10 +390,10 @@ is `repl_parse_and_normalize()` → `parse_command()`.
   every reference follows its declaration); editing an existing decl
   overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
-  `repl_eval_declare_predef_var()`.
-- `GLCmd` payload is a tagged union keyed on `type` (`payload.decl.*`,
+  [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309).
+- [`GLCmd`](src/repl/command.h#L95) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
-- Deleting a decl range goes through `repl_compile_delete_range()` which
+- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing
@@ -404,7 +404,7 @@ is `repl_parse_and_normalize()` → `parse_command()`.
 Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 ([`src/repl/scenes.c`](src/repl/scenes.c)); no automatic startup scene.
 Editing an example auto-promotes it into a fresh slot — the hook is
-`editor_undo_push_snapshot()` → `repl_promote_example_if_needed()` before
+[`editor_undo_push_snapshot()`](src/editor/undo.h#L106) → [`repl_promote_example_if_needed()`](src/repl/scenes.h#L46) before
 every mutation. LRU eviction to `<workspace_dir>/<slug>.c` only when a
 workspace is bound (else promotion is rejected with a status message).
 F12 cycles examples → user scenes → back. Inline rename filters
@@ -423,8 +423,8 @@ the single source of truth; reuse the macros, never duplicate literals)
 before applying the example's `@cfg`.** Camera is deliberately excluded
 (inherited unless a `// camera` header is present).
 `restore_user_scene()` restores commands + predef vars only. Touch
-`example_loader.c` / `export.c` / `examples.c` / `glr_defaults.h` /
-`tests/test_repl_core_examples.c` together; `make test_repl_core_examples`
+[`example_loader.c`](src/repl/example_loader.c) / [`export.c`](src/repl/export.c) / [`examples.c`](src/repl/examples.c) / [`glr_defaults.h`](src/app/glr_defaults.h) /
+[`tests/test_repl_core_examples.c`](tests/test_repl_core_examples.c) together; `make test_repl_core_examples`
 is the focused suite.
 
 ### Save / load
@@ -433,26 +433,26 @@ Export ([`src/repl/export.c`](src/repl/export.c)) writes standalone C:
 header directives (`@cfg`, `@scene-name`, `@workspace-dir`), camera as raw
 transforms, predefs + scratch arrays as globals, funcs, `display()` body.
 Import ([`src/repl/import.c`](src/repl/import.c)) reverses it line-by-line,
-feeding geometry through `editor_feed_line()`. The `IMPORT_EXPORT_STATE`
+feeding geometry through [`editor_feed_line()`](src/editor/input.h#L188). The `IMPORT_EXPORT_STATE`
 macro block is deliberately duplicated verbatim across the two TUs.
 `repl_cfg_get_int`/`_set_int` etc. go through the installed config bridge
 only (`check-repl-export-via-bridge`).
 
 ### Replay
 
-State in `replay_state_view()`; playback/fade/input split across
+State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L126); playback/fade/input split across
 `src/subsystems/replay/`. During playback the flat count is clamped to
-`replay_exec_limit()`; fade-batch ring renders old geometry in a blended
+[`replay_exec_limit()`](src/subsystems/replay/replay.h#L79); fade-batch ring renders old geometry in a blended
 pass. Fade replays skip `CMD_CLEAR`, and clamps never cut below the
 program's leading `glClear` (`replay_frame_setup_limit`).
 
 ### Undo
 
 32-slot global rings (not per-scene). **Any wholesale replacement of the
-live document must call `editor_undo_clear()` first** or post-switch Ctrl+Z
+live document must call [`editor_undo_clear()`](src/editor/undo.h#L128) first** or post-switch Ctrl+Z
 restores the previous scene into the new one (call sites:
 `glr_ctrl_reset_all`, F12 cycle, load-example/scene/workspace actions in
-`glr_actions.c`). Push clears the redo stack; push is also the
+[`glr_actions.c`](src/app/glr_actions.c)). Push clears the redo stack; push is also the
 auto-promotion hook.
 
 ### Cursor edit guides
@@ -471,7 +471,7 @@ commas before cursor), `AC_MODE_POINT_PARAM`. Enum modes also fire mid-line
 when the cursor ends the token being completed and the tail is only
 trailing args (Tab splices, keeps tail); the inline ghost stays
 end-of-input-only; function-name completion/hints too. Search: Ctrl+F,
-state via `editor_state_search()`.
+state via [`editor_state_search()`](src/editor/state.h#L384).
 
 ### Config / Tutorials menus (shared flyout engine)
 

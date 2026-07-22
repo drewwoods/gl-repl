@@ -17,7 +17,7 @@ make -C ../.. gl-repl BUILD=render3d-elements CFLAGS=-DMAX_FLAT_COMMANDS=32768
 
 Run those commands from `tools/render3d-elements/`. `BUILD=render3d-elements`
 keeps the larger-capacity objects under `build/render3d-elements/`; it does
-not change the project-wide default in `config.h`.
+not change the project-wide default in [`config.h`](../../config.h).
 
 On startup, allow roughly 60 warm-up frames for the application's default XZ
 Ruler theme to finish its transition to Off.  Captures taken sooner will show

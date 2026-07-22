@@ -74,15 +74,15 @@ Same teapot harness, but the `src/render3d` subtree is compiled into a shared
 library the host `dlopen()`s instead of static-linking. The running host polls
 the source tree; on a save it rebuilds just that library (`make
 render3d-hot-lib`) and re-`dlopen()`s a fresh copy, so `grid.c` / `backdrop.c`
-/ `lights.c` / `render.c` can be tweaked and seen **without relaunching**. The
+/ [`lights.c`](lights.c) / [`render.c`](render.c) can be tweaked and seen **without relaunching**. The
 HUD shows a `Hot  reloads=N  last build=ok/FAILED` line; a build error keeps the
 last good module loaded.
 
 **State survives the reload** because every piece of demo state — camera pose,
 2D/3D + projection blend, grid/axes themes, lighting, backdrop — lives in the
-host TU (`render3d_demo.c`), which is never reloaded; only the render3d `.c`
-bodies are. `Render3dState` crosses the boundary but is host-owned, and its
-layout is fixed by `render.h` at host-compile time — so editing `.c` bodies is
+host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
+bodies are. [`Render3dState`](render.h#L96) crosses the boundary but is host-owned, and its
+layout is fixed by [`render.h`](render.h) at host-compile time — so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
 
