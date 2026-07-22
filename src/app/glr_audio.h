@@ -107,6 +107,7 @@ int  glr_audio_get_loop_mode(void);
  * next track starts. */
 void glr_audio_set_paused(int paused);
 int  glr_audio_is_paused(void);
+int  glr_audio_is_enabled(void);
 
 void glr_audio_set_muted(int muted);
 int  glr_audio_is_muted(void);

@@ -878,15 +878,10 @@ int main(int argc, char **argv) {
          * caller (see glr_audio.c header comment). Native posts the slow
          * media-open request to the worker; web waits for the async manifest
          * and then streams the selected track from a browser URL. */
-        init_trace_detail("playlist start requested");
-        /* Apply saved audio cfg after play_playlist() so load_state() has
-         * already populated g_cfg_mode. The action layer maps that UI config
-         * value back onto the audio engine before the first frame. */
-        glr_actions_apply_defaults();
         init_trace("audio playlist started");
-    } else {
-        repl_set_status("Audio: disabled");
     }
+    /* Apply saved audio cfg (or emit disabled status if audio isn't active) */
+    glr_actions_apply_defaults();
 
     init_trace("entering main loop");
     glutDisplayFunc(display_func);

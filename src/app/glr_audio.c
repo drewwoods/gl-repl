@@ -808,6 +808,10 @@ int glr_audio_is_paused(void) {
     return g_paused;
 }
 
+int glr_audio_is_enabled(void) {
+    return g_inited;
+}
+
 void glr_audio_set_muted(int muted) {
     g_muted = muted ? 1 : 0;
     web_audio_js_set_muted(g_muted);
@@ -2114,6 +2118,13 @@ int glr_audio_is_paused(void) {
     int p = g_paused;
     audio_unlock();
     return p;
+}
+
+int glr_audio_is_enabled(void) {
+    audio_lock();
+    int inited = g_inited;
+    audio_unlock();
+    return inited;
 }
 
 void glr_audio_set_muted(int muted) {

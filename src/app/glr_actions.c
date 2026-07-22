@@ -969,6 +969,8 @@ void glr_actions_set_msaa_label(int samples) {
 }
 
 const char *glr_actions_audio_mode_status_string(int mode) {
+    if (!glr_audio_is_enabled())
+        return "Audio: disabled";
     return mode == AUDIO_CFG_PAUSE ? "Audio: paused" : "Audio: on";
 }
 
@@ -981,6 +983,10 @@ void glr_actions_apply_audio_cfg_mode(int mode) {
 }
 
 void glr_action_toggle_audio_play_pause(void) {
+    if (!glr_audio_is_enabled()) {
+        repl_set_status(glr_actions_audio_mode_status_string(AUDIO_CFG_PAUSE));
+        return;
+    }
     int next = glr_config_get(GLR_CONFIG_AUDIO_MODE) ? AUDIO_CFG_PAUSE
                                                      : AUDIO_CFG_ALL;
     glr_config_set(GLR_CONFIG_AUDIO_MODE, next);
@@ -1500,6 +1506,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
 }
 
 void glr_actions_apply_defaults(void) {
+    if (!glr_audio_is_enabled()) {
+        repl_set_status(glr_actions_audio_mode_status_string(AUDIO_CFG_PAUSE));
+        return;
+    }
     /* Restore the audio mode persisted from the previous session.
      * glr_audio_play_playlist() calls load_state() which stores the cfg_mode
      * in the audio module; pull it here so the UI config and the actual audio
