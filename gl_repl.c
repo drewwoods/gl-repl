@@ -432,11 +432,14 @@ static void timer_func(int value) {
     int delay;
     (void)value;
 
-    /* A title-bar close clears freeglut's current window before the destroy
-     * callback and before glutMainLoop() returns. An already-queued timer can
-     * still run in that interval. */
+    /* A native title-bar close clears freeglut's current window before the
+     * destroy callback and before glutMainLoop() returns. An already-queued
+     * timer can still run in that interval. Emscripten's GLUT surface has no
+     * glutGetWindow and browser teardown does not use this native close path. */
+#if !defined(__EMSCRIPTEN__)
     if (glutGetWindow() == 0)
         return;
+#endif
 
     glr_ctrl_on_frame_timer();
     glutPostRedisplay();
