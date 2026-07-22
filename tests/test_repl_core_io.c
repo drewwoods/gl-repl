@@ -2400,6 +2400,38 @@ int main(void) {
         unlink(savedc);
     }
 
+    /* A user-authored all-attributes alias stays compact in exported C and
+     * re-imports as the REPL's supported-group union. */
+    {
+        const char *attrib_all_path = "/tmp/repl_core_attrib_all_alias.c";
+        char buf[16384];
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glPushAttrib(GL_ALL_ATTRIB_BITS);");
+        editor_feed_line("glPopAttrib();");
+        ASSERT_INT("attrib-all source pair committed",
+                   repl_state_document_count(), 2);
+        repl_export_save_output(attrib_all_path, source_document_view(), NULL);
+        read_text_file(attrib_all_path, buf, sizeof(buf));
+        ASSERT_TRUE("attrib-all export retains real GL alias",
+                    count_substr(buf, "glPushAttrib(GL_ALL_ATTRIB_BITS);") >= 2);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("attrib-all exported source reloads",
+                    repl_export_load_from_file(attrib_all_path, NULL) == 1);
+        ASSERT_INT("attrib-all roundtrip command count",
+                   repl_state_document_count(), 2);
+        ASSERT_TRUE("attrib-all roundtrip keeps compact source",
+                    strstr(source_text_line(source_document_view(), 0),
+                           "glPushAttrib(GL_ALL_ATTRIB_BITS);") != NULL);
+        ASSERT_TRUE("attrib-all roundtrip restores supported union",
+                    (GLbitfield)repl_state_document_cmds()[0].args[0] ==
+                        (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
+                         GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
+        remove(attrib_all_path);
+    }
+
     test_config_variants_export();
     test_workspace_header_budget_worst_case();
     test_import_robustness();

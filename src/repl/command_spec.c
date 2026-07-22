@@ -137,10 +137,9 @@ static const ReplEnumEntry k_clear_bits[] = {
  * order is the canonical emission order for the ENUM_BITFIELD slot AND the
  * canonical bit-index order shared with the editor's per-bit highlighting.
  * Every value is a single bit < 2^24 so it round-trips through the
- * GLCmd.args[] float storage (see command.h). GL_ALL_ATTRIB_BITS
- * (0xFFFFFFFF, all bits) is deliberately absent: the ENUM_BITFIELD parser
- * requires non-zero single-bit table values, and the mask would not
- * round-trip through a float arg. */
+ * GLCmd.args[] float storage (see command.h). GL_ALL_ATTRIB_BITS remains out
+ * of this atomic table: the glPushAttrib slot exposes it as an alias for the
+ * union of these entries, whose value also round-trips exactly. */
 static const ReplEnumEntry k_attrib_bits[] = {
     { "GL_CURRENT_BIT",      GL_CURRENT_BIT },
     { "GL_POINT_BIT",        GL_POINT_BIT },
@@ -316,7 +315,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Save a group of state onto the attribute stack; restore with glPopAttrib.\n"
         "mask: GL_CURRENT_BIT, GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_LIGHTING_BIT,\n"
         "GL_FOG_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
-        "or several OR'd with | (GL_ALL_ATTRIB_BITS is not supported).",
+        "several OR'd with |, or GL_ALL_ATTRIB_BITS for all supported groups.",
         REPL_HELP_GROUP_STATE },
     { "glPopAttrib()",       "glPopAttrib()",                                            0, { NULL },
         "Restore the state saved by the matching glPushAttrib", REPL_HELP_GROUP_STATE },
@@ -491,7 +490,7 @@ static const ReplFuncCompletion k_func_completions[] = {
 
 /* One positional enum-arg slot. Keeps the spec table rows readable now
  * that each enum command carries an explicit args[] array. */
-#define ENUM_SLOT(tbl_, usage_, kind_) { (tbl_), (usage_), (kind_) }
+#define ENUM_SLOT(tbl_, usage_, kind_) { (tbl_), (usage_), (kind_), NULL }
 
 /* Strict token-only slot — the behavior-neutral baseline for every
  * non-bool enum slot (and, until the bool-slot policy lands, for
@@ -506,6 +505,10 @@ static const ReplFuncCompletion k_func_completions[] = {
 /* Bitfield mask slot — one or more of the slot's tokens joined by `|`.
  * The glClear mask policy. */
 #define ENUM_SLOT_BITS(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_BITFIELD)
+
+/* Bitfield slot with one canonical alias for the union of every table bit. */
+#define ENUM_SLOT_BITS_ALL(tbl_, usage_, alias_) \
+    { (tbl_), (usage_), REPL_ENUM_SLOT_ENUM_BITFIELD, (alias_) }
 
 static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glBegin",         CMD_BEGIN,          1, "%sglBegin(%s);",            1,
@@ -578,10 +581,12 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
     { "glPushAttrib",    CMD_PUSH_ATTRIB,    1, "%sglPushAttrib(%s);",       0,
-        .args = { ENUM_SLOT_BITS(k_attrib_bits,
-                                 "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
-                                 "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, "
-                                 "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, or several OR'd with |") } },
+        .args = { ENUM_SLOT_BITS_ALL(k_attrib_bits,
+                                     "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
+                                     "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_FOG_BIT, "
+                                     "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_ALL_ATTRIB_BITS, "
+                                     "or several OR'd with |",
+                                     "GL_ALL_ATTRIB_BITS") } },
     { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
         .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
     { .name = NULL }

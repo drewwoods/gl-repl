@@ -574,10 +574,13 @@ Agent-relevant policies:
   LINE/POLYGON/LIGHTING/FOG/DEPTH_BUFFER/TRANSFORM/ENABLE/COLOR_BUFFER_BIT.
   GL_FOG_BIT scopes the glFog* parameters; the GL_FOG enable flag rides both
   GL_FOG_BIT and GL_ENABLE_BIT, matching real GL.
-  GL_ALL_ATTRIB_BITS is deliberately unsupported (not a single bit;
-  0xFFFFFFFF doesn't round-trip the GLCmd float-arg storage). The executor
-  keeps a real GL stack only REPL_ATTRIB_STACK_CAP (8) deep — virtual push
-  depth is unbounded, an orphan glPopAttrib is a silent no-op, and unmatched
+  GL_ALL_ATTRIB_BITS aliases the union of those 10 modeled groups (rather than
+  storing the platform's broader GL value), canonical text retains the alias,
+  and its REPL meaning grows when another supported group is added. The alias
+  token itself has no
+  per-bit colour; its covered setter lines still receive per-bit markers. The
+  executor keeps a real GL stack only REPL_ATTRIB_STACK_CAP (8) deep — virtual
+  push depth is unbounded, an orphan glPopAttrib is a silent no-op, and unmatched
   pushes unwind at frame end, so only balanced pairs reach GL. Cursor on the
   push line highlights the prior setter lines it saves (per-token colours);
   cursor on the pop highlights what its restore reverts. Unbalanced pairs

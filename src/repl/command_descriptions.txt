@@ -198,7 +198,7 @@ Sets the fog color that distant geometry fades toward. Matching it to the glClea
 
 [command CMD_PUSH_ATTRIB]
 title = glPushAttrib
-Saves the state groups named in the mask onto the attribute stack. OR several GL_*_BIT tokens with | to save more than one group (GL_ALL_ATTRIB_BITS is not supported). Restore the saved state later with a matching glPopAttrib, so a local group of state changes does not leak into the rest of the scene. Parking the cursor on the line highlights the earlier setter lines whose values it saves.
+Saves the state groups named in the mask onto the attribute stack. OR several GL_*_BIT tokens with | to save more than one group, or use GL_ALL_ATTRIB_BITS for all groups the REPL supports. Restore the saved state later with a matching glPopAttrib, so a local group of state changes does not leak into the rest of the scene. Parking the cursor on the line highlights the earlier setter lines whose values it saves.
 
 [command CMD_POP_ATTRIB]
 title = glPopAttrib

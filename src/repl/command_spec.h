@@ -67,11 +67,13 @@ typedef struct {
  *    together with `|`. Numeric and expression input are rejected, as
  *    with ENUM_ONLY; the resolved mask is emitted in table order with
  *    duplicates dropped, so `GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT`
- *    canonicalizes to `GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`. Only
- *    glClear's mask slot uses this. A table wired to this kind must
- *    carry non-zero, single-bit values: emission tests each entry with
- *    `mask & value`, which a zero-valued entry (GL_FALSE, say) could
- *    never satisfy and a multi-bit entry would over-match. */
+ *    canonicalizes to `GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`. A slot
+ *    may additionally name an all-bits alias; it resolves to the union of
+ *    the table and is emitted whenever the resolved mask equals that union.
+ *    A table wired to this kind must carry non-zero, single-bit values:
+ *    ordinary emission tests each entry with `mask & value`, which a
+ *    zero-valued entry (GL_FALSE, say) could never satisfy and a multi-bit
+ *    entry would over-match. */
 typedef enum {
     REPL_ENUM_SLOT_ENUM_ONLY = 0,       /* token only; reject numeric + expr */
     REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE, /* token, else const value reverse-mapped */
@@ -81,13 +83,14 @@ typedef enum {
 
 /* One positional enum-argument spec: the source-of-truth enum token
  * table (also drives autocomplete), the per-slot diagnostic shown when
- * resolution fails, and the slot kind. `enums` is non-null for all
- * three kinds — the parser branches on `kind`, never on whether `enums`
- * is null. */
+ * resolution fails, the slot kind, and an optional all-bits alias for
+ * bitfield slots. `enums` is non-null for all four kinds — the parser
+ * branches on `kind`, never on whether `enums` is null. */
 typedef struct {
     const ReplEnumEntry *enums;
     const char          *usage;
     ReplEnumSlotKind     kind;
+    const char          *bitfield_all_alias;
 } ReplEnumArgSpec;
 
 #define MAX_FUNC_HINT_PARAMS 10

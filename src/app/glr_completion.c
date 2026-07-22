@@ -474,7 +474,8 @@ static void update_autocomplete(void) {
      * being completed is the segment after the last such comma, ending
      * at the cursor (== end of input in the historic case; mid-line the
      * trailing `, args…)` text is left alone and the accept path
-     * splices at the cursor). Matches come from def->args[slot].enums;
+     * splices at the cursor). Matches come from def->args[slot].enums plus
+     * an optional bitfield-all alias.
      * the accept suffix is ")" for the last enum slot, ", " otherwise,
      * and "" mid-line (the trailing text already has the separator).
      * abs(num_args) is the slot count so the custom glMaterialfv row
@@ -542,6 +543,17 @@ static void update_autocomplete(void) {
                 (int)strlen(tbl[j].name) > seg_len) {
                 ac->matches[ac->match_count] = tbl[j].name;
                 ac->insert_matches[ac->match_count] = tbl[j].name;
+                g_ac_func_matches[ac->match_count] = NULL;
+                ac->match_count++;
+            }
+        }
+        {
+            const char *alias = enum_cmds[i].args[slot].bitfield_all_alias;
+            if (alias && ac->match_count < MAX_AC_MATCHES &&
+                ac_prefix_match_ci(alias, seg, seg_len) &&
+                (int)strlen(alias) > seg_len) {
+                ac->matches[ac->match_count] = alias;
+                ac->insert_matches[ac->match_count] = alias;
                 g_ac_func_matches[ac->match_count] = NULL;
                 ac->match_count++;
             }

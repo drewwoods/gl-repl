@@ -1566,6 +1566,7 @@ int main(void) {
         static const char *k_bad[] = {
             "glClear(16640)",
             "glClear(GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)",
+            "glClear(GL_ALL_ATTRIB_BITS)",
             "glClear(GL_STENCIL_BUFFER_BIT)",
             "glClear(GL_ACCUM_BUFFER_BIT)",
             "glClear(GL_LIGHTING)",
@@ -1598,6 +1599,39 @@ int main(void) {
                     (GLbitfield)cmd.args[0] == GL_CURRENT_BIT);
         ASSERT_TRUE("glPushAttrib single-bit canonicalized",
                     strstr(cmd_text, "glPushAttrib(GL_CURRENT_BIT);") != NULL);
+    }
+    {
+        /* GL_ALL_ATTRIB_BITS is a REPL-level alias for the union of every
+         * modeled group, not the platform's broader GL value. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glPushAttrib(GL_ALL_ATTRIB_BITS)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(all alias) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib all alias resolves supported union",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
+                         GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
+        ASSERT_TRUE("glPushAttrib all alias canonicalized compactly",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_ALL_ATTRIB_BITS);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glPushAttrib(GL_ALL_ATTRIB_BITS | GL_FOG_BIT)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPushAttrib(all alias OR bit) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib all alias OR bit dedupes to alias",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_ALL_ATTRIB_BITS);") != NULL);
     }
     {
         glr_ctrl_reset_all();
@@ -1639,10 +1673,7 @@ int main(void) {
             "GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
             "GL_COLOR_BUFFER_BIT)";
         static const char *k_all_ten_canonical =
-            "glPushAttrib(GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT | "
-            "GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT | "
-            "GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
-            "GL_COLOR_BUFFER_BIT);";
+            "glPushAttrib(GL_ALL_ATTRIB_BITS);";
         glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
@@ -1656,7 +1687,7 @@ int main(void) {
                          GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
                          GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
                          GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
-        ASSERT_TRUE("glPushAttrib all ten bits canonicalized",
+        ASSERT_TRUE("glPushAttrib all ten bits canonicalize to alias",
                     strstr(cmd_text, k_all_ten_canonical) != NULL);
     }
     {
@@ -1691,14 +1722,12 @@ int main(void) {
         glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
-        /* Same mask policy as glClear: numeric literals, unsupported bits
-         * (incl. GL_ALL_ATTRIB_BITS, deliberately excluded), expressions,
-         * variables and empty terms all reject rather than resolve. */
+        /* Same mask policy as glClear: numeric literals, unsupported bits,
+         * expressions, variables and empty terms reject rather than resolve. */
         static const char *k_bad[] = {
             "glPushAttrib(1)",
             "glPushAttrib(GL_CURRENT_BIT + GL_LINE_BIT)",
             "glPushAttrib(GL_STENCIL_BUFFER_BIT)",
-            "glPushAttrib(GL_ALL_ATTRIB_BITS)",
             "glPushAttrib(x)",
             "glPushAttrib()",
             "glPushAttrib(GL_CURRENT_BIT | )",

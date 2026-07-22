@@ -2024,7 +2024,7 @@ header, your `help_group` is wrong.
 
 A new help group (beyond `TOP` / `LIGHTING` / `GLUT_SHAPES` / `GLU_TESS`
 / `MATH` / `NONE`) requires:
-- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L101) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
+- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L104) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
 - a `help_group_header` case in [`src/repl/help_text.c`](../src/repl/help_text.c)
 
 The hand-written language-level sections in [`src/repl/help_text.c`](../src/repl/help_text.c)

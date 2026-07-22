@@ -349,8 +349,9 @@ numeric argument everywhere is a full math expression.
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
   `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT`,
-  `GL_ENABLE_BIT`, `GL_COLOR_BUFFER_BIT`, OR'd with `|` (`GL_ALL_ATTRIB_BITS` is
-  not supported). `GL_FOG_BIT` scopes the `glFog*` parameters; the `GL_FOG`
+  `GL_ENABLE_BIT`, `GL_COLOR_BUFFER_BIT`, OR'd with `|`, or
+  `GL_ALL_ATTRIB_BITS` for all ten supported groups. `GL_FOG_BIT` scopes the
+  `glFog*` parameters; the `GL_FOG`
   enable flag rides both `GL_FOG_BIT` and `GL_ENABLE_BIT`
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
@@ -511,7 +512,9 @@ lights), `GL_FOG_BIT` (fog mode / density / start / end / colour),
 colour, colour mask). The `GL_FOG` enable flag is saved by both `GL_FOG_BIT`
 and `GL_ENABLE_BIT`, matching real GL. Join several with `|` — like `glClear`'s
 mask it is a fixed set of tokens (no expressions), canonicalised to a stable
-order. `GL_ALL_ATTRIB_BITS` is intentionally not offered.
+order. `GL_ALL_ATTRIB_BITS` is a compact alias for the union of every group the
+REPL can currently change; its scope therefore grows if a later release adds
+another supported group.
 
 Two editor affordances make the scope visible. Park the cursor on a
 `glPushAttrib` line and each mask token lights up in its own colour, and every

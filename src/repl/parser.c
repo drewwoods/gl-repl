@@ -338,16 +338,22 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
     case REPL_ENUM_SLOT_ENUM_BITFIELD: {
         /* `A | B | ...` — every term must be a token from this slot's
          * table (the exact-match above already handled the single-token
-         * case, so a `|` is present by the time we get here). Numeric
-         * and expression input stay rejected: a mask is not a quantity
-         * the REPL can animate, and accepting one would let a typo'd
-         * literal enable a bit the table deliberately omits.
+         * case, so a `|` is normally present by the time we get here), or
+         * the slot's optional all-bits alias. Numeric and expression input
+         * stay rejected: a mask is not a quantity the REPL can animate, and
+         * accepting one would let a typo'd literal enable a bit the table
+         * deliberately omits.
          *
-         * Emission is table order with duplicates dropped, so the
-         * canonical text of a given mask is unique regardless of how
-         * the user spelled it. */
+         * Emission is table order with duplicates dropped. When an all-bits
+         * alias is configured, any spelling that resolves to the complete
+         * table union emits that compact alias. */
         unsigned mask = 0;
+        unsigned all_mask = 0;
         const char *p = raw;
+        if (as->bitfield_all_alias) {
+            for (int i = 0; as->enums && as->enums[i].name; i++)
+                all_mask |= (unsigned)as->enums[i].value;
+        }
         /* Unconditional first iteration, and one more after every `|`:
          * an empty term ("A |", "| A", "A || B") must reach the len <= 0
          * rejection rather than be skipped by a loop guard. */
@@ -368,7 +374,12 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
             term[len] = '\0';
 
             int found = 0;
-            for (int i = 0; as->enums && as->enums[i].name; i++) {
+            if (as->bitfield_all_alias &&
+                strcmp(term, as->bitfield_all_alias) == 0) {
+                mask |= all_mask;
+                found = 1;
+            }
+            for (int i = 0; !found && as->enums && as->enums[i].name; i++) {
                 if (strcmp(term, as->enums[i].name) == 0) {
                     mask |= (unsigned)as->enums[i].value;
                     found = 1;
@@ -386,6 +397,15 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
 
         int off = 0;
         emit[0] = '\0';
+        if (as->bitfield_all_alias && mask == all_mask) {
+            if (snprintf(emit, (size_t)emit_sz, "%s",
+                         as->bitfield_all_alias) >= emit_sz) {
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+            *out_val = (float)mask;
+            return 1;
+        }
         for (int i = 0; as->enums && as->enums[i].name; i++) {
             if (!(mask & (unsigned)as->enums[i].value))
                 continue;
