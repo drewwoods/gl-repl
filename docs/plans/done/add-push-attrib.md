@@ -1,5 +1,7 @@
 # glPushAttrib / glPopAttrib: commands + per-bit cursor highlighting
 
+> **Status: landed.** All planned phases and the documented follow-ups are complete.
+
 ## Context
 
 The REPL supports many fixed-function state commands but no way to scope them. This adds
