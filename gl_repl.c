@@ -885,7 +885,7 @@ int main(int argc, char **argv) {
         glr_actions_apply_defaults();
         init_trace("audio playlist started");
     } else {
-        repl_set_status(glr_actions_audio_mode_status_string(AUDIO_CFG_PAUSE));
+        repl_set_status("Audio: disabled");
     }
 
     init_trace("entering main loop");

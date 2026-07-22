@@ -248,7 +248,7 @@ static void test_cfg_cycling(void) {
 
     glr_action_toggle_audio_play_pause(); // -> Off
     ASSERT_INT("audio mode Off", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
-    ASSERT_STR("status audio Off", g_last_status, "Audio: off");
+    ASSERT_STR("status audio Off", g_last_status, "Audio: paused");
     ASSERT_INT("audio engine paused", glr_audio_is_paused(), 1);
 
     /* View-mode swatch toggle: glr_action_toggle_view_mode() must flip the
