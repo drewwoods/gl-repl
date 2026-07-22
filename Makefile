@@ -922,7 +922,7 @@ test_render3d_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_palette.o
 test_render3d_palette_LDLIBS =
 test_render3d_palette_RUN ?= $(BINDIR)/test_render3d_palette
 
-test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/src/app/glr_audio.o
+test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/src/app/glr_audio.o $(OBJDIR)/src/app/glr_paths.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
 

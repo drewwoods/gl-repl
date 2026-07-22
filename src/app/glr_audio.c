@@ -154,18 +154,23 @@ static int build_mp3_playlist(const char *assets_dir,
     int n = scan_dir_into(assets_dir, "Assets",
                           out_paths, out_tracks, 0, max_paths);
 
-    char exe_assets[AUDIO_MUSIC_MAX_LEN];
-    if (executable_dir(exe_assets, sizeof(exe_assets))) {
-        size_t len = strlen(exe_assets);
-        snprintf(exe_assets + len, sizeof(exe_assets) - len,
-                 "/../Resources/assets");
-        n = scan_dir_into(exe_assets, "Assets",
+    char exedir[AUDIO_MUSIC_MAX_LEN];
+    if (executable_dir(exedir, sizeof(exedir))) {
+        /* Path can be exedir + "/../Resources/" + AUDIO_ASSETS_DIR + null. */
+        char bundled[AUDIO_MUSIC_MAX_LEN + 64];
+        snprintf(bundled, sizeof(bundled), "%s/../Resources/%s",
+                 exedir, AUDIO_ASSETS_DIR);
+        n = scan_dir_into(bundled, "Bundled",
                           out_paths, out_tracks, n, max_paths);
     }
 
-    char user_dir[AUDIO_MUSIC_MAX_LEN];
-    if (glr_paths_user_music_dir(user_dir, sizeof(user_dir))) {
-        n = scan_dir_into(user_dir, "User Music",
+    char udir[AUDIO_MUSIC_MAX_LEN];
+    if (glr_paths_user_music_dir(udir, sizeof(udir))) {
+        int created = 0;
+        if (glr_paths_ensure_dir(udir, &created) && created) {
+            fprintf(stderr, "repl_audio: add more music in %s\n", udir);
+        }
+        n = scan_dir_into(udir, "My Music",
                           out_paths, out_tracks, n, max_paths);
     }
     return n;

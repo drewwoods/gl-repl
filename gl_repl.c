@@ -11,7 +11,6 @@
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
 
 #include <ctype.h>
-#include <dirent.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,10 +18,6 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>
-#include <stdint.h>
-#endif
 
 /* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
  * since main() started so a slow phase (e.g. ma_engine_init opening the
@@ -56,19 +51,6 @@ static void init_trace(const char *phase) {
 static void init_trace_detail(const char *phase) {
     if (g_detailed_prof) init_trace(phase);
 }
-
-/* Native music assets live here, relative to gl-repl's working directory.
- * Any *.mp3 files dropped into this folder are picked up in filename order
- * as a playlist. The web build gets its playlist from assets/music.json and
- * streams those files directly via the browser.
- *
- * The playlist is built from three sources, in order (see
- * build_mp3_playlist): the primary assets dir — this working-directory
- * "assets" by default, or the --assets <dir> / GLR_ASSETS_DIR override
- * — then the copy bundled beside the executable in a macOS .app
- * (<exe>/../Resources/assets — where `make app` puts sample.mp3), and
- * a per-user music folder (glr_paths_user_music_dir) the user can drop more
- * tracks into. */
 
 static void print_usage(const char *prog) {
     const char *name = (prog && prog[0]) ? prog : "gl-repl";
