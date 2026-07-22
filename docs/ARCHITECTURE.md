@@ -1772,14 +1772,14 @@ when a stall happens.
 #### Music Asset Resolution
 
 The playlist is `*.mp3` files discovered at startup and played in
-filename order. `build_mp3_playlist()` ([`gl_repl.c`](../gl_repl.c)) concatenates **three
+filename order. `glr_audio_bootstrap()` ([`src/app/glr_audio.c`](../src/app/glr_audio.c)) concatenates **three
 sources**, each scanned by `scan_dir_into()` and sorted independently so
 every source keeps its own filename order:
 
 1. **Primary assets dir.** `./assets` relative to the working directory
    by default. Overridden by `--assets <dir>` (highest precedence) or the
    `GLR_ASSETS_DIR` env var — `--assets` beats env beats default,
-   resolved in `main()` and passed into `build_mp3_playlist()`. This is
+   resolved in `main()` and passed into `glr_audio_bootstrap()`. This is
    the only source the override touches.
 2. **Bundled-beside-the-executable.** `<exe>/../Resources/assets`, with
    the executable path from `executable_dir()` (`_NSGetExecutablePath` on

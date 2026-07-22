@@ -55,6 +55,122 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
+
+#include "app/glr_paths.h"
+
+#ifndef AUDIO_ASSETS_DIR
+#define AUDIO_ASSETS_DIR "assets"
+#endif
+
+#ifndef AUDIO_DEFAULT_MUSIC
+#define AUDIO_DEFAULT_MUSIC "assets/song.mp3"
+#endif
+
+#ifndef AUDIO_STATE_FILE
+#define AUDIO_STATE_FILE "audio_state.ini"
+#endif
+
+#define AUDIO_MUSIC_MAX_PATHS 64
+#define AUDIO_MUSIC_MAX_LEN   512
+
+#if !defined(__EMSCRIPTEN__)
+static char g_music_paths[AUDIO_MUSIC_MAX_PATHS][AUDIO_MUSIC_MAX_LEN];
+static GlrAudioTrackSpec g_music_tracks[AUDIO_MUSIC_MAX_PATHS];
+
+static int has_mp3_ext(const char *name) {
+    size_t n = name ? strlen(name) : 0;
+    if (n < 5) return 0;  /* need at least "x.mp3" */
+    const char *ext = name + n - 4;
+    return ext[0] == '.'
+        && (ext[1] == 'm' || ext[1] == 'M')
+        && (ext[2] == 'p' || ext[2] == 'P')
+        && ext[3] == '3';
+}
+
+static int cmp_mp3_path(const void *a, const void *b) {
+    return strcmp((const char *)a, (const char *)b);
+}
+
+static int scan_dir_into(const char *dir,
+                         const char *group,
+                         char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                         GlrAudioTrackSpec out_tracks[],
+                         int start, int max_paths) {
+    DIR *d = opendir(dir);
+    if (!d) return start;
+
+    int count = start;
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL && count < max_paths) {
+        const char *name = ent->d_name;
+        if (name[0] == '.') continue;
+        if (!has_mp3_ext(name)) continue;
+        snprintf(out_paths[count], AUDIO_MUSIC_MAX_LEN, "%s/%s", dir, name);
+        count++;
+    }
+    closedir(d);
+
+    if (count - start > 1) {
+        qsort(out_paths[start], (size_t)(count - start),
+              sizeof(out_paths[0]), cmp_mp3_path);
+    }
+    for (int i = start; i < count; i++) {
+        out_tracks[i].path = out_paths[i];
+        out_tracks[i].group = group;
+        out_tracks[i].display_name = NULL;
+    }
+    return count;
+}
+
+static int executable_dir(char *buf, size_t buflen) {
+#if defined(__APPLE__)
+    uint32_t sz = (uint32_t)buflen;
+    if (_NSGetExecutablePath(buf, &sz) != 0) return 0;
+#elif defined(__linux__)
+    ssize_t k = readlink("/proc/self/exe", buf, buflen - 1);
+    if (k <= 0) return 0;
+    buf[k] = '\0';
+#else
+    (void)buf; (void)buflen;
+    return 0;
+#endif
+    char *slash = strrchr(buf, '/');
+    if (!slash) return 0;
+    *slash = '\0';
+    return 1;
+}
+
+static int build_mp3_playlist(const char *assets_dir,
+                              char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                              GlrAudioTrackSpec out_tracks[],
+                              int max_paths) {
+    int n = scan_dir_into(assets_dir, "Assets",
+                          out_paths, out_tracks, 0, max_paths);
+
+    char exe_assets[AUDIO_MUSIC_MAX_LEN];
+    if (executable_dir(exe_assets, sizeof(exe_assets))) {
+        size_t len = strlen(exe_assets);
+        snprintf(exe_assets + len, sizeof(exe_assets) - len,
+                 "/../Resources/assets");
+        n = scan_dir_into(exe_assets, "Assets",
+                          out_paths, out_tracks, n, max_paths);
+    }
+
+    char user_dir[AUDIO_MUSIC_MAX_LEN];
+    if (glr_paths_user_music_dir(user_dir, sizeof(user_dir))) {
+        n = scan_dir_into(user_dir, "User Music",
+                          out_paths, out_tracks, n, max_paths);
+    }
+    return n;
+}
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Backend-shared module state + helpers                               */
@@ -2280,3 +2396,47 @@ int glr_audio_get_cfg_mode(void) {
 }
 
 #endif  /* !__EMSCRIPTEN__ */
+
+int glr_audio_bootstrap(const char *assets_override,
+                        GlrAudioTraceFn trace,
+                        GlrAudioTraceFn trace_detail) {
+    if (trace) trace("glr_audio_init begin");
+    if (glr_audio_init() != 0)
+        return -1;
+
+    if (trace) trace("glr_audio_init done");
+    glr_audio_set_state_file(AUDIO_STATE_FILE);
+
+    const char *assets_dir = assets_override;
+    if (!assets_dir) {
+        const char *env = getenv("GLR_ASSETS_DIR");
+        if (env && env[0]) assets_dir = env;
+    }
+    if (!assets_dir) assets_dir = AUDIO_ASSETS_DIR;
+
+#if defined(__EMSCRIPTEN__)
+    (void)assets_dir;
+    glr_audio_play_playlist();
+    if (trace_detail) trace_detail("web audio manifest requested");
+#else
+    int n = build_mp3_playlist(assets_dir, g_music_paths, g_music_tracks,
+                               AUDIO_MUSIC_MAX_PATHS);
+    if (trace_detail) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "playlist scan done (%d tracks)", n);
+        trace_detail(buf);
+    }
+    if (n > 0) {
+        glr_audio_set_playlist_specs(g_music_tracks, n);
+        glr_audio_play_playlist();
+    } else {
+        GlrAudioTrackSpec fallback_track = {
+            AUDIO_DEFAULT_MUSIC, "Default", NULL
+        };
+        glr_audio_set_playlist_specs(&fallback_track, 1);
+        glr_audio_play_playlist();
+    }
+#endif
+    if (trace) trace("audio playlist started");
+    return 0;
+}

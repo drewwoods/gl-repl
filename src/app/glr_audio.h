@@ -52,9 +52,16 @@ typedef struct {
 } GlrAudioTrackSpec;
 
 typedef double (*GlrAudioElapsedSecondsFn)(void);
+typedef void (*GlrAudioTraceFn)(const char *phase);
 
 int  glr_audio_init(void);
 void glr_audio_shutdown(void);
+
+/* Complete audio system bootstrap: initializes audio engine, sets state file,
+ * scans assets/music directories, registers and starts playlist playback.
+ * Preserves init-trace phases via optional trace/trace_detail callbacks.
+ * Returns 0 on success, nonzero if glr_audio_init() failed. */
+int  glr_audio_bootstrap(const char *assets_override, GlrAudioTraceFn trace, GlrAudioTraceFn trace_detail);
 
 /* Optional diagnostic clock for worker-hitch logs. The callback must be safe
  * to call from the audio worker and return seconds since the app's log origin.

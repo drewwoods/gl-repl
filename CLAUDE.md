@@ -173,13 +173,13 @@ default 50).
 
 - `t` starts at 0 and advances 1/60 s per simulation tick while playing;
   `--time`/`GLR_TIME` applies after `--example` load so the override sticks.
-- **Music**: `build_mp3_playlist()` in [`gl_repl.c`](gl_repl.c) concatenates
+- **Music**: `glr_audio_bootstrap()` in [`src/app/glr_audio.c`](src/app/glr_audio.c) concatenates
   three sources (each sorted by filename): primary assets dir
   (`./assets`, overridden by `--assets` > `GLR_ASSETS_DIR`), bundled
   `<exe>/../Resources/assets` (the `.app` case), and the per-user folder
   (`~/Library/Application Support/gl-repl/Music` on macOS,
   `$XDG_DATA_HOME/gl-repl/music` elsewhere; created on first run). Zero
-  mp3s → fallback `assets/song.mp3`. All in `gl_repl.c` statics; the
+  mp3s → fallback `assets/song.mp3`. All in `src/app/glr_audio.c` statics; the
   `#ifdef` platform branches must stay C99/portable and localized.
 - **Startup diagnostics**: always-on `[init +N.NNNs] <phase>` stderr trace in
   `main()`; `--no-audio` isolates `ma_engine_init()` stalls;
