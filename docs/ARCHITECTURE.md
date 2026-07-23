@@ -890,8 +890,8 @@ single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
-[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L65)
-enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L117) / [`ui_theme_active()`](../src/ui/core/theme.h#L118) seam keeps call
+[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L69)
+enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L121) / [`ui_theme_active()`](../src/ui/core/theme.h#L122) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no

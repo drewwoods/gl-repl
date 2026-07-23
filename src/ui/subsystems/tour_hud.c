@@ -3,8 +3,11 @@
  *
  * Feature-owned UI under the `tour_ui_*` prefix. Reads ONLY snap->tour (a
  * GlrTourPlaybackView) plus the scene rect; never live pointer-script state.
- * Mirrors the replay HUD's panel/progress/hint layout but sits at the TOP of
- * the scene viewport so both HUDs can show at once.
+ * Shares the replay HUD's line structure (metadata / progress / hints) but is
+ * styled apart from it — warm amber identity color, a solid top ribbon instead
+ * of a thin outline, and a segmented per-event step bar instead of the
+ * continuous groove — and sits at the TOP of the scene viewport so both HUDs
+ * can show at once without reading as the same control.
  */
 #include "ui/subsystems/tour_hud.h"
 #include "ui/app/snapshot.h"
@@ -15,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+
 
 static const char *tour_hud_state_text(GlrTourPlaybackState state) {
     switch (state) {
@@ -128,25 +132,43 @@ static void tour_hud_build_line2(char *dst, size_t dstsz, int max_chars) {
     tour_hud_fit(dst, dstsz, max_chars, cand, n);
 }
 
+/* Unlike the replay HUD's thin full outline, the tour panel wears a solid
+ * amber ribbon along its top edge (it hangs from the top of the scene) with
+ * only a dim bottom rule closing the silhouette. */
 static void draw_hud_panel(int x, int y, int w, int h) {
     ui_clr_a(UI_TOK_SURFACE, 0.94f);
     glRectf((float)x, (float)y, (float)(x + w), (float)(y + h));
-    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.95f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
-    glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
-    glVertex2f((float)(x + w) - 0.5f, (float)(y + h) - 0.5f);
-    glVertex2f((float)x + 0.5f,       (float)(y + h) - 0.5f);
+    ui_clr_a(UI_TOK_ACCENT_ALT, 0.95f);
+    glRectf((float)x, (float)(y + h - TOUR_HUD_RIBBON_H),
+            (float)(x + w), (float)(y + h));
+    ui_clr_a(UI_TOK_ACCENT_ALT_DIM, 0.9f);
+    glBegin(GL_LINES);
+    glVertex2f((float)x,       (float)y + 0.5f);
+    glVertex2f((float)(x + w), (float)y + 0.5f);
     glEnd();
 }
 
-static void draw_progress_groove(int x, int y, int w, float progress) {
+/* Segmented per-event step bar: a filled amber block per completed event with
+ * panel-colored separator ticks — tours advance in discrete steps, unlike the
+ * replay HUD's continuous command groove. Falls back to a plain fill when
+ * segments would be too narrow to read. */
+static void draw_step_bar(int x, int y, int w, float progress, int total) {
     ui_clr(UI_TOK_SUNKEN);
     glRectf((float)x, (float)y, (float)(x + w), (float)(y + TOUR_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT);
+    ui_clr(UI_TOK_ACCENT_ALT);
     glRectf((float)x, (float)y, (float)x + (float)w * progress,
             (float)(y + TOUR_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT_GLOW_BG);
+    if (total > 1 && w / total >= 4) {
+        ui_clr_a(UI_TOK_SURFACE, 0.94f);
+        glBegin(GL_LINES);
+        for (int i = 1; i < total; i++) {
+            float tx = (float)x + (float)w * (float)i / (float)total;
+            glVertex2f(tx, (float)y);
+            glVertex2f(tx, (float)(y + TOUR_HUD_PROGRESS_H));
+        }
+        glEnd();
+    }
+    ui_clr(UI_TOK_ACCENT_ALT_DIM);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
     glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
@@ -228,7 +250,7 @@ UiHit tour_ui_hud_hit_test(const struct UiRenderSnapshot *snap,
  * Layout:
  * +---------------------------------------------------------------------------+
  * | Tour  <name> | <State> | <speed>x | Step n / total | <file>:<line>        |
- * | [=== progress groove ===================================================] |
+ * | [==|==|==|== segmented step bar (one cell per event) ==|==|==|==|==|==|=] |
  * | Space play | « back | » step | +/- speed | Esc exit                       |
  * +---------------------------------------------------------------------------+
  */
@@ -268,7 +290,7 @@ void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {
 
     draw_hud_panel(hud_x, hud_y, hud_w, hud_h);
 
-    ui_clr(UI_TOK_ACCENT);
+    ui_clr(UI_TOK_ACCENT_ALT);
     gl2d_draw_string((float)(hud_x + TOUR_HUD_TEXT_PAD_X),
                      (float)(hud_y + (v->hud_expanded
                                      ? TOUR_HUD_TEXT_LINE1_Y
@@ -284,8 +306,8 @@ void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {
         gl2d_draw_string((float)collapse_x,
                          (float)(hud_y + TOUR_HUD_TEXT_LINE1_Y),
                          "[-]", FONT_SMALL);
-        draw_progress_groove(groove_x, hud_y + TOUR_HUD_PROGRESS_Y,
-                             groove_w, progress);
+        draw_step_bar(groove_x, hud_y + TOUR_HUD_PROGRESS_Y,
+                      groove_w, progress, v->total_events);
 
         ui_clr(UI_TOK_TEXT_MUTED);
         gl2d_draw_string((float)(hud_x + TOUR_HUD_TEXT_PAD_X),

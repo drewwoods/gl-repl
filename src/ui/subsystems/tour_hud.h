@@ -31,6 +31,7 @@ enum { UI_HIT_TOUR_HUD = UI_HIT_CORE_COUNT + 66 };
 #define TOUR_HUD_COMPACT_HEIGHT    26
 #define TOUR_HUD_PROGRESS_Y   22
 #define TOUR_HUD_PROGRESS_H    6
+#define TOUR_HUD_RIBBON_H      3   /* solid amber band along the top edge */
 #define TOUR_HUD_TEXT_PAD_X   10
 #define TOUR_HUD_TEXT_LINE1_Y 36
 #define TOUR_HUD_TEXT_LINE2_Y  4
