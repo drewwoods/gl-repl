@@ -2,25 +2,28 @@
 
 ## Summary and Current State
 
-Implement replay-style controls for Tours-menu tours while preserving both existing pointer-script modes.
+Implement replay-style controls for Tours-menu tours while preserving the
+environment-driven pointer-script capture mode.
 
 Already landed:
 
-- `6bea8dfa`: focused owner snapshot APIs.
-- `d5dd9c3a`: composite `GlrTourSnapshot`, restore synchronization, and passing round-trip test.
-- `glr_ctrl_after_tour_restore()` is available.
-- `PsEvent.source_line` is correctly started but remains uncommitted in `src/app/glr_pointer_script.c`; include it with the next transport commit.
+- Step 1, `8721a4b9`: focused owner snapshot APIs.
+- Step 2, `e30df777`: composite `GlrTourSnapshot`, restore synchronization,
+  `glr_ctrl_after_tour_restore()`, and the passing round-trip test.
+- Step 3, `37aa1d30`: `PsEvent.source_line`, catalog filename metadata, and
+  catalog-time rejection of timestamped tours.
+- Step 4, `fdf8e8b9`: `ps_advance_one_virtual_frame()` refactor.
+- Steps 5–8, `17206ba4`: controlled-tour state machine, completion fork,
+  baseline/restart lifecycle, immediate execution, and resumable backstep
+  seeking. This commit also removes `glr_pointer_script_start_lines()` and
+  migrates its still-relevant tests.
 
-Remaining work is the pointer-script transport, backstep seeking, input routing, HUD, catalog metadata, compatibility tests, and documentation.
+Remaining work is step 9 host input routing, step 10 HUD/UI integration, and
+step 11 focused transport tests, documentation, and final verification.
 
-> **Revision (no backward compatibility).** This is unreleased software.
-> The legacy runtime path `glr_pointer_script_start_lines()` is **removed
-> outright**, not preserved — tours run only through the new controlled
-> entrypoint. Every reference below to a "legacy runtime" run kind, to keeping
-> `start_lines()` compatibility tests green, or to a three-way fork is
-> superseded: there are exactly **two** run kinds, and the completion fork is
-> two-way. The `start_lines()`-based tests in `tests/test_glr_ctrl.c` and
-> `tests/test_glr_actions.c` are deleted or migrated to `start_tour`.
+This is unreleased software, so there is no backward-compatibility path for
+`glr_pointer_script_start_lines()`. There are exactly two run kinds:
+environment capture and controlled tours.
 
 ## Explicit Playback Semantics
 
@@ -298,7 +301,7 @@ With `start_lines()` gone, the env-capture path keeps no auto-stop at all.
 
 ## Catalog and Source Metadata
 
-The current uncommitted `PsEvent.source_line` change is correct. Keep both assignments:
+The landed `PsEvent.source_line` metadata uses both assignments:
 
 - environment loader: physical `lineno`;
 - in-memory loader: `i + 1`.
@@ -322,6 +325,11 @@ The HUD source line is:
 - next event’s line while paused before it;
 - final event’s line in Done;
 - `-1` only when no controlled tour exists.
+
+The HUD step number must identify the same logical event as `source_line`:
+`current_event + 1` while an event is active, `completed_events + 1` at a
+paused between-event boundary, and `total_events` in Done. Clamp the displayed
+value to `[1, total_events]`.
 
 ## Input Routing
 
@@ -376,10 +384,6 @@ Requirements:
 
 ### Primary modifications
 
-- `src/app/glr_pointer_script.{c,h}`: run kinds, state machine, virtual clock, controls, immediate execution, seeking, Done. **Remove `glr_pointer_script_start_lines()`.**
-- `src/app/glr_tours.c`: controlled-tour entrypoint and metadata.
-- `tests/test_glr_ctrl.c`, `tests/test_glr_actions.c`: drop/migrate the deleted `start_lines()` tests.
-- `scripts/gen_tours.py`: filename emission and catalog timed-script rejection.
 - `gl_repl.c`: transport-before-cancel routing.
 - `src/ui/app/snapshot.h`: playback view.
 - `src/app/glr_ctrl.c`: snapshot population and HUD render call.
@@ -388,22 +392,37 @@ Requirements:
 
 ### Already landed; do not reimplement
 
-- owner snapshot APIs;
-- `GlrTourSnapshot`;
-- `test_glr_tour_snapshot`;
-- `glr_ctrl_after_tour_restore()`.
+- Steps 1–2 (`8721a4b9`, `e30df777`): owner snapshot APIs,
+  `GlrTourSnapshot`, `test_glr_tour_snapshot`, and
+  `glr_ctrl_after_tour_restore()`.
+- Step 3 (`37aa1d30`): source-line/catalog metadata and generator validation.
+- Step 4 (`fdf8e8b9`): virtual-frame extraction.
+- Steps 5–8 (`17206ba4`): run kinds, state machine, virtual clock, controls,
+  immediate execution, seeking, Done, controlled-tour entrypoint, and removal
+  of `glr_pointer_script_start_lines()`.
 
 ## Implementation Sequence
 
-1. Commit the `source_line` extension with catalog filename metadata and timed-tour rejection.
-2. Refactor the existing frame body into `ps_advance_one_virtual_frame()` while keeping environment-script behavior unchanged.
-3. Introduce run kind, controlled-tour state, event accounting, speed, pause, immediate Right, and Done; **remove `start_lines()`** and its tests.
-4. Add the two-way completion fork (env never stops; controlled tour enters Done).
-5. Integrate baseline-pending capture and Done restart.
-6. Add resumable Back/Seeking using the landed snapshot layer.
-7. Route host transport keys before cancellation.
-8. Add the HUD and UI snapshot field.
-9. Add documentation and run all guards.
+1. **Landed — `8721a4b9`:** add focused owner snapshot APIs.
+2. **Landed — `e30df777`:** compose `GlrTourSnapshot`, add restore
+   synchronization, and pass the composite round-trip gate.
+3. **Landed — `37aa1d30`:** add `source_line`, catalog filename metadata, and
+   catalog timed-tour rejection.
+4. **Landed — `fdf8e8b9`:** extract `ps_advance_one_virtual_frame()` while
+   keeping environment-script behavior unchanged.
+5. **Landed — `17206ba4`:** introduce the controlled-tour run kind, playback
+   state, event accounting, speed, pause, immediate Right, and Done; remove
+   `start_lines()` and migrate its relevant tests.
+6. **Landed — `17206ba4`:** add the two-way completion fork: environment
+   capture never auto-stops; controlled tours enter Done.
+7. **Landed — `17206ba4`:** integrate baseline-pending capture and Done
+   restart.
+8. **Landed — `17206ba4`:** add resumable Back/Seeking using the snapshot
+   layer.
+9. **Remaining:** route host transport keys before cancellation.
+10. **Remaining:** add the HUD and UI snapshot field.
+11. **Remaining:** add the focused transport test, finish documentation/help
+    text, and run all verification commands.
 
 Each stage should leave the environment-script behavior intact.
 
@@ -457,7 +476,7 @@ Test every meaningful table entry, especially:
 - Physical source lines remain correct.
 - Tour filename reaches the HUD.
 - Tour and REPL replay HUDs render without overlap.
-- No HUD appears for environment or legacy runtime scripts.
+- No HUD appears for environment-capture scripts.
 
 ### Verification
 
