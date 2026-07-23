@@ -64,7 +64,10 @@ edits, config toggles, menu navigation, and scene changes land in the same
 state. Camera and slider **drags** reconstruct their end *position* (the glide's
 smoothstep samples are dispatched synchronously), but not their dynamics — the
 fast prefix replay skips the per-frame camera tick, so any leftover orbit
-momentum and its subsequent settling can differ from the live run. **Irreversible
+momentum and its subsequent settling can differ from the live run. Scene-camera
+presets are deterministic during Back: their normally eased camera target is
+applied immediately while the prefix reconstructs, so the pre-tour baseline
+angle does not flash or ease through the target again. **Irreversible
 side effects cannot be undone by backstep:** filesystem writes, process exit,
 and audio-position changes. Keep rewindable tours free of those actions.
 Speed affects only pointer-script timing, never animation `t`, camera easing,

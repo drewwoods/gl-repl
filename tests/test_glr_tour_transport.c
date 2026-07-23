@@ -7,7 +7,9 @@
  * + persistence, immediate Right step (paused / at Done), Space restart from
  * Done, timestamped-tour rejection, comment/blank exclusion + physical source
  * lines, filename metadata, backstep from Done / between events / in-flight,
- * 32-event seek chunking, and baseline reconstruction of a REPL commit.
+ * 32-event seek chunking, baseline reconstruction of a REPL commit, immediate
+ * reconstructed camera easing, and application/camera tick suppression while
+ * a multi-frame seek is active.
  *
  * Runs under GL stubs (make test-stubs) and links CORE_TEST_OBJS.
  */
@@ -186,6 +188,10 @@ static void test_space_restart_from_done(void) {
     ASSERT_INT("restart to Playing", v.state, GLR_TOUR_PLAYING);
     ASSERT_INT("restart resets completed", v.completed_events, 0);
     ASSERT_INT("restart resets in-flight", v.current_event, -1);
+    glr_camera_set(12.0f, 24.0f, 8.0f, 1.0f, 2.0f, 3.0f, 0.0f);
+    glr_camera_ease_to(30.0f, 60.0f, 5.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_INT("restart closes camera reconstruction scope",
+               glr_camera_target_active(), 1);
     ASSERT_TRUE("restart replays to Done", run_until_state(GLR_TOUR_DONE, 20));
 }
 
@@ -274,6 +280,91 @@ static void test_seek_processes_at_most_32_per_frame(void) {
     GlrTourPlaybackView v = glr_pointer_script_tour_view();
     ASSERT_INT("paused after second chunk", v.state, GLR_TOUR_PAUSED);
     ASSERT_INT("reached target 39", v.completed_events, 39);
+}
+
+static void test_seek_scene_camera_ease_is_immediate(void) {
+    const char *lines[] = {
+        "chord ctrl+shift c",  /* Reset camera: normally eased. */
+        "move 200 200",
+    };
+
+    start_tour(lines, 2);
+    glr_camera_set(55.0f, 120.0f, 11.0f, 3.0f, 4.0f, 5.0f, 0.0f);
+    frames(1);   /* capture the custom camera in the baseline */
+    ASSERT_TRUE("camera-reset tour reaches Done",
+                run_until_state(GLR_TOUR_DONE, 20));
+    ASSERT_INT("normal playback leaves reset-camera ease active",
+               glr_camera_target_active(), 1);
+    ASSERT_FLOAT("normal playback still shows pre-ease camera",
+                 glr_camera().rx, 55.0f);
+
+    /* Done -> Back targets one completed event, so prefix reconstruction
+     * replays Reset camera. Its ease must resolve before this frame renders. */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);
+    ASSERT_INT("camera backstep enters Seeking",
+               glr_pointer_script_tour_view().state, GLR_TOUR_SEEKING);
+    glr_pointer_script_frame();
+
+    ASSERT_INT("camera backstep lands Paused",
+               glr_pointer_script_tour_view().state, GLR_TOUR_PAUSED);
+    ASSERT_INT("reconstructed reset-camera ease is complete",
+               glr_camera_target_active(), 0);
+    ASSERT_FLOAT("reconstructed camera snaps to default rx",
+                 glr_camera().rx, 20.0f);
+    ASSERT_FLOAT("reconstructed camera snaps to default ry",
+                 glr_camera().ry, 30.0f);
+    ASSERT_FLOAT("reconstructed camera snaps to default distance",
+                 glr_camera().dist, 5.0f);
+}
+
+static void test_seek_suppresses_application_and_camera_ticks(void) {
+    int n = build_many(40);
+    start_tour(g_many, n);
+    repl_state_variables_mut()->anim_time = 3.0f;
+    repl_state_variables_mut()->time_playing = 1;
+    glr_camera_mut()->auto_rotate = 1;
+    frames(1);   /* capture the time/camera baseline */
+    ASSERT_TRUE("long tour reaches Done",
+                run_until_state(GLR_TOUR_DONE, 120));
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT); /* target 39 */
+    ASSERT_INT("seek suppresses tick immediately",
+               glr_pointer_script_tour_suppresses_app_tick(), 1);
+
+    float frozen_time = repl_state_variables().anim_time;
+    float frozen_ry = glr_camera().ry;
+    glr_ctrl_tick();
+    ASSERT_FLOAT("time frozen before first seek chunk",
+                 repl_state_variables().anim_time, frozen_time);
+    ASSERT_FLOAT("camera frozen before first seek chunk",
+                 glr_camera().ry, frozen_ry);
+
+    glr_pointer_script_frame();   /* first 32 events */
+    ASSERT_INT("tick remains suppressed between seek chunks",
+               glr_pointer_script_tour_suppresses_app_tick(), 1);
+    glr_ctrl_tick();
+    ASSERT_FLOAT("time frozen between seek chunks",
+                 repl_state_variables().anim_time, frozen_time);
+    ASSERT_FLOAT("camera frozen between seek chunks",
+                 glr_camera().ry, frozen_ry);
+
+    glr_pointer_script_frame();   /* final 7 events -> Paused */
+    ASSERT_INT("seek completion frame still suppresses tick",
+               glr_pointer_script_tour_suppresses_app_tick(), 1);
+    glr_ctrl_tick();
+    ASSERT_FLOAT("time frozen on seek completion frame",
+                 repl_state_variables().anim_time, frozen_time);
+    ASSERT_FLOAT("camera frozen on seek completion frame",
+                 glr_camera().ry, frozen_ry);
+
+    glr_pointer_script_frame();   /* present completed seek; Paused */
+    ASSERT_INT("following paused frame releases tick suppression",
+               glr_pointer_script_tour_suppresses_app_tick(), 0);
+    glr_ctrl_tick();
+    ASSERT_TRUE("application time resumes after seek",
+                repl_state_variables().anim_time > frozen_time);
+    ASSERT_TRUE("camera auto-rotation resumes after seek",
+                glr_camera().ry != frozen_ry);
 }
 
 static void test_backstep_reconstructs_repl_commit(void) {
@@ -547,6 +638,8 @@ int main(void) {
     test_backstep_between_events();
     test_backstep_in_flight_returns_to_start_boundary();
     test_seek_processes_at_most_32_per_frame();
+    test_seek_scene_camera_ease_is_immediate();
+    test_seek_suppresses_application_and_camera_ticks();
     test_backstep_reconstructs_repl_commit();
     test_backstep_reconstructs_camera_drag();
     test_view_inactive_after_stop();

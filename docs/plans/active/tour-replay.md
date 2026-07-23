@@ -26,6 +26,12 @@ Already landed:
 
 All steps are landed; the feature is complete.
 
+Post-plan camera rewind polish also scopes seeking as deterministic
+reconstruction: simulation/view/camera ticks are suppressed for the full seek
+frame, and camera eases requested by prefix events resolve immediately. This
+prevents a scene load from flashing the restored baseline camera and replaying
+its ease on every Back.
+
 This is unreleased software, so there is no backward-compatibility path for
 `glr_pointer_script_start_lines()`. There are exactly two run kinds:
 environment capture and controlled tours.
@@ -272,7 +278,18 @@ Process at most 32 events per rendered frame. With `PS_MAX_EVENTS == 256`, a ful
 
 Suppress historical echo/ring/ripple overlays during the prefix. Permit overlay creation only for the final replayed event so the target boundary has useful visual context without replaying every decorative artifact.
 
-Do not call `glr_ctrl_tick()` during seek.
+`glr_ctrl_tick()` may still be scheduled by the host during a rendered seek
+frame. It must consult
+`glr_pointer_script_tour_suppresses_app_tick()` and suppress animation `t`, REPL
+replay, view-transition, and camera advancement, including on the frame whose
+seek changes state to Paused. UI/status/audio housekeeping may continue.
+
+Wrap prefix execution in the camera owner's reconstruction scope. Within that
+scope, newly requested camera eases snap to their destination while a
+pre-existing target restored from the baseline remains frozen unless a prefix
+event replaces it. This avoids rendering the baseline angle between restore and
+the reconstructed scene-camera target without adding per-event camera
+snapshots.
 
 ### Emscripten shell events
 
@@ -504,4 +521,5 @@ make check-c99
 - Back uses one baseline plus prefix replay, not per-event snapshots.
 - Filesystem writes, process exit, audio position, and other external effects remain non-reversible.
 - Time-driven settling is not simulated during seek.
+- Camera eases authored by the reconstructed prefix resolve immediately.
 - Controlled tours remain in Done until restarted, canceled, replaced, or exited.

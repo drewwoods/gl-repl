@@ -69,7 +69,7 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L135) from REPL runtime state + view state and calls
-   [`glr_camera_load_modelview()`](glr_camera.h#L148) then [`render3d_draw_scene()`](../render3d/render.h#L136) (with the
+   [`glr_camera_load_modelview()`](glr_camera.h#L158) then [`render3d_draw_scene()`](../render3d/render.h#L136) (with the
    owned [`Render3dState`](../render3d/render.h#L96), once per accumulation-jitter sample);
 3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L71) and fans it out to the `ui_*_render`
    functions.

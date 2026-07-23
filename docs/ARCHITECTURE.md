@@ -957,13 +957,13 @@ Runtime shape:
 Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
-env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L122)
+env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L123)
 enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
 Done; env capture is never canceled and never auto-stops.
 
 Runtime shape:
 
-* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L189) (called
+* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L195) (called
   once per rendered frame) forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
@@ -972,7 +972,7 @@ Runtime shape:
   frames.
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
-  [`PsWait`](../src/app/glr_pointer_script.c#L166) completing does (immediate verbs complete the following virtual
+  [`PsWait`](../src/app/glr_pointer_script.c#L171) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
   **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
   its duration elapses, so a trailing ring delays Done — while `echo` and the
@@ -990,8 +990,14 @@ Runtime shape:
   resources, and controller frame caches are rebuilt, not stored. Discrete
   edits/toggles/scene actions reconstruct exactly; a drag's end *position* is
   reproduced (its glide samples dispatch synchronously) but not its dynamics —
-  seek skips the per-frame camera tick, so orbit momentum + time-driven settling
-  are not simulated.
+  seek suppresses animation-time, REPL-replay, view-transition, and camera ticks,
+  so orbit momentum + time-driven settling are not simulated. Camera easing
+  requested by the reconstructed prefix (most visibly an example's `// camera`
+  block) resolves immediately inside a scoped camera-reconstruction policy. The
+  target boundary therefore renders directly, instead of briefly exposing the
+  restored baseline camera and replaying the scene-load ease after every Back.
+  A target/ease already present in the baseline remains frozen and intact when
+  no prefix event replaces it.
 * **HUD.** The controller populates `snap->tour` from
   [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L143) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top

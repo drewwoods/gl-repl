@@ -142,6 +142,12 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
  * call any time; reports active == 0 when no controlled tour is running. */
 GlrTourPlaybackView glr_pointer_script_tour_view(void);
 
+/* True through the controller-tick phase of a rendered seek frame, including
+ * the frame in which prefix replay reaches its target and enters Paused. The
+ * controller uses this to keep animation time, REPL replay, view transitions,
+ * and camera motion from contaminating deterministic reconstruction. */
+int glr_pointer_script_tour_suppresses_app_tick(void);
+
 /* Host transport-key handlers, dispatched by gl_repl.c BEFORE the tour-cancel
  * intercept. Only consume keys while a controlled tour is running: Space
  * (play/pause/resume/restart), +/=/- (speed), Esc (stop). Return 1 when the
