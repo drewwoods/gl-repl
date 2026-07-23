@@ -18,7 +18,11 @@
 /* HUD footprint, shared with any helper that positions relative to it. */
 #define TOUR_HUD_MARGIN_X     18
 #define TOUR_HUD_MARGIN_Y     18   /* gap from the scene's top edge */
-#define TOUR_HUD_MIN_WIDTH    260
+/* The panel always spans the available scene width (minus margins) — it is
+ * never forced wider than the scene, so a narrow scene (left code panel, 90%
+ * panel fraction) can't push it into the code panel. Below this width the HUD
+ * is too cramped to read, so it is skipped entirely. */
+#define TOUR_HUD_MIN_VISIBLE  120
 #define TOUR_HUD_HEIGHT       56
 #define TOUR_HUD_PROGRESS_Y   22
 #define TOUR_HUD_PROGRESS_H    6

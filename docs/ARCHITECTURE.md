@@ -973,8 +973,12 @@ Runtime shape:
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
   [`PsWait`](../src/app/glr_pointer_script.c#L166) completing does (immediate verbs complete the following virtual
-  frame). Done requires `completed == count` with no in-flight event and does
-  not wait for decorative echo/ring/ripple.
+  frame). Done requires `completed == count` with no in-flight event. During
+  **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
+  its duration elapses, so a trailing ring delays Done — while `echo` and the
+  click `ripple` are non-blocking decoration that never delay it. Only
+  **immediate step / seek** bypasses the ring wait (a ring forced by Right or
+  fast seek counts complete at once); this does not change normal playback.
 * **Baseline + prefix replay.** Backstep does **not** snapshot every event. One
   whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
   is captured on the first frame after `start_tour` (deferred so the Tours-menu
@@ -984,8 +988,10 @@ Runtime shape:
   (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
   turn). The baseline is derived-state-free: the flat program, renderer
   resources, and controller frame caches are rebuilt, not stored. Discrete
-  edits/toggles/scene actions/sampled drags reconstruct exactly; time-driven
-  settling is not simulated during seek.
+  edits/toggles/scene actions reconstruct exactly; a drag's end *position* is
+  reproduced (its glide samples dispatch synchronously) but not its dynamics —
+  seek skips the per-frame camera tick, so orbit momentum + time-driven settling
+  are not simulated.
 * **HUD.** The controller populates `snap->tour` from
   [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L143) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top

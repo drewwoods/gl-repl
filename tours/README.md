@@ -59,8 +59,12 @@ and blank lines are not steps. These keys drive the tour instead of stopping it:
 
 Backstep works by restoring one whole-app baseline captured when the tour
 started, then fast-replaying the events up to the target boundary — there is no
-per-event snapshot. Reversible authored actions (edits, config toggles, menu
-navigation, scene changes, camera drags) reconstruct exactly. **Irreversible
+per-event snapshot. Reversible authored actions reconstruct faithfully: discrete
+edits, config toggles, menu navigation, and scene changes land in the same
+state. Camera and slider **drags** reconstruct their end *position* (the glide's
+smoothstep samples are dispatched synchronously), but not their dynamics — the
+fast prefix replay skips the per-frame camera tick, so any leftover orbit
+momentum and its subsequent settling can differ from the live run. **Irreversible
 side effects cannot be undone by backstep:** filesystem writes, process exit,
 and audio-position changes. Keep rewindable tours free of those actions.
 Speed affects only pointer-script timing, never animation `t`, camera easing,
