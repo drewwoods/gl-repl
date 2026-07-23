@@ -128,6 +128,19 @@ static void tour_hud_build_line2(char *dst, size_t dstsz, int max_chars) {
     tour_hud_fit(dst, dstsz, max_chars, cand, n);
 }
 
+/* Panel width for a scene `scene_w` px wide: the scene minus horizontal
+ * margins, and NEVER more (no forced minimum width that could push the panel
+ * past a narrow scene into a side code panel or off-window — feedback can't see
+ * the off-window part, so this is guarded arithmetically instead). Returns 0
+ * when the scene is too narrow to show a readable HUD (render is skipped).
+ * The single source of truth for the render below and the width guard test. */
+int tour_hud_panel_width(int scene_w) {
+    int hud_w = scene_w - 2 * TOUR_HUD_MARGIN_X;
+    if (hud_w < TOUR_HUD_MIN_VISIBLE)
+        return 0;
+    return hud_w;
+}
+
 static void draw_hud_panel(int x, int y, int w) {
     ui_clr_a(UI_TOK_SURFACE, 0.94f);
     glRectf((float)x, (float)y, (float)(x + w), (float)(y + TOUR_HUD_HEIGHT));
@@ -178,8 +191,8 @@ void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {
     /* The panel spans the scene width minus margins and is NEVER forced wider
      * than the scene, so it can't spill into a left code panel. Too-narrow
      * scenes skip the HUD; the text lines elide to whatever width remains. */
-    int hud_w = render3d_w - 2 * TOUR_HUD_MARGIN_X;
-    if (hud_w < TOUR_HUD_MIN_VISIBLE)
+    int hud_w = tour_hud_panel_width(render3d_w);
+    if (hud_w <= 0)
         return;
     int hud_x = render3d_x + TOUR_HUD_MARGIN_X;
     /* Sit TOUR_HUD_MARGIN_Y below the scene's top edge; ui_clamp_panel_y keeps

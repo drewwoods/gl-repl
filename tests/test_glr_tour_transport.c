@@ -15,6 +15,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_camera.h"        /* glr_camera_mut (drag reconstruction) */
 #include "ui/app/state.h"
+#include "ui/subsystems/tour_hud.h" /* tour_hud_panel_width (clamp guard) */
 #include "repl/state_owners.h"
 #include "gl_includes.h"           /* GLUT_KEY_LEFT / GLUT_KEY_RIGHT / buttons */
 
@@ -510,6 +511,34 @@ static void test_backstep_reconstructs_camera_drag(void) {
                  glr_camera_mut()->ry, ry0);
 }
 
+/* The HUD panel width is the scene width minus margins, NEVER forced to a
+ * minimum that would push it past a narrow scene (the overflow bug). This is
+ * the render path's actual width function; feedback can't see off-window
+ * overflow, so the clamp is guarded here arithmetically. */
+static void test_hud_panel_width_clamp(void) {
+    const int margins = 2 * TOUR_HUD_MARGIN_X;
+
+    ASSERT_INT("wide scene: full width minus margins",
+               tour_hud_panel_width(1200), 1200 - margins);
+    /* Regression: a 240px scene must yield 204, NOT a forced ~260 that would
+     * overflow the scene. */
+    ASSERT_INT("narrow scene: still scene minus margins (no forced minimum)",
+               tour_hud_panel_width(240), 240 - margins);
+    /* At the visibility floor it renders; one below, it is skipped. */
+    ASSERT_INT("at the visibility floor: renders",
+               tour_hud_panel_width(margins + TOUR_HUD_MIN_VISIBLE),
+               TOUR_HUD_MIN_VISIBLE);
+    ASSERT_INT("below the visibility floor: skipped",
+               tour_hud_panel_width(margins + TOUR_HUD_MIN_VISIBLE - 1), 0);
+
+    /* Invariant: whenever it renders, the panel never exceeds the scene. */
+    for (int sw = 100; sw <= 2000; sw += 7) {
+        int w = tour_hud_panel_width(sw);
+        if (w > 0)
+            ASSERT_TRUE("panel width never exceeds the scene", w <= sw);
+    }
+}
+
 static void test_view_inactive_after_stop(void) {
     int n = build_many(3);
     start_tour(g_many, n);
@@ -549,6 +578,7 @@ int main(void) {
     test_seek_processes_at_most_32_per_frame();
     test_backstep_reconstructs_repl_commit();
     test_backstep_reconstructs_camera_drag();
+    test_hud_panel_width_clamp();
     test_view_inactive_after_stop();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

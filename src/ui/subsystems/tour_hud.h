@@ -36,4 +36,9 @@
 struct UiRenderSnapshot;
 void tour_ui_hud_render(const struct UiRenderSnapshot *snap);
 
+/* Panel width for a scene `scene_w` px wide: scene minus horizontal margins,
+ * never forced wider (returns 0 when too narrow to render). The render path's
+ * single source of truth for the width; exposed for the clamp guard test. */
+int tour_hud_panel_width(int scene_w);
+
 #endif /* TOUR_UI_HUD_H */

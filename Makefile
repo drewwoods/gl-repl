@@ -1455,9 +1455,18 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 # no-op stub harness cannot model and headless CI cannot provide. These
 # are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
 # never build or run them. Run locally with a display via `make gl-tests`.
-GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl
+GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl \
+	test_tour_overlay_feedback
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+# Captures the controlled-tour overlay + HUD passes with GL_FEEDBACK and asserts
+# on the drawn geometry (ring suppression on seek, HUD containment). Needs the
+# whole controller graph, so it links CORE_TEST_OBJS like the stub transport
+# test but against a real GL context.
+$(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 
