@@ -13,9 +13,10 @@
  */
 #include "app/glr_pointer_script.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_camera.h"        /* glr_camera_mut (drag reconstruction) */
 #include "ui/app/state.h"
 #include "repl/state_owners.h"
-#include "gl_includes.h"           /* GLUT_KEY_LEFT / GLUT_KEY_RIGHT */
+#include "gl_includes.h"           /* GLUT_KEY_LEFT / GLUT_KEY_RIGHT / buttons */
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -295,6 +296,220 @@ static void test_backstep_reconstructs_repl_commit(void) {
     ASSERT_INT("landed at boundary 0", glr_pointer_script_tour_view().completed_events, 0);
 }
 
+static void test_right_while_playing_forces_complete_and_pauses(void) {
+    int n = build_many(5);
+    start_tour(g_many, n);
+    frames(2);   /* Playing, event 0 in flight */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("event 0 in flight", v.current_event, 0);
+    ASSERT_INT("none completed yet", v.completed_events, 0);
+
+    ASSERT_INT("Right consumed while Playing",
+               glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT), 1);
+    v = glr_pointer_script_tour_view();
+    ASSERT_INT("in-flight event forced complete", v.completed_events, 1);
+    ASSERT_INT("no in-flight event after step", v.current_event, -1);
+    ASSERT_INT("paused after step", v.state, GLR_TOUR_PAUSED);
+}
+
+/* A normal (non-stepped) ring is an authored beat: the tour stays Playing for
+ * the whole PS_WAIT_RING duration, then enters Done. */
+static void test_normal_ring_delays_done(void) {
+    const char *lines[] = { "ring 400 400 0.5" };   /* 30 virtual frames */
+    start_tour(lines, 1);
+    frames(2);   /* baseline, then the ring fires */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("ring in flight, still Playing", v.state, GLR_TOUR_PLAYING);
+    ASSERT_INT("ring not yet counted complete", v.completed_events, 0);
+
+    frames(12);  /* well within the 30-frame ring duration */
+    ASSERT_INT("still Playing mid-ring",
+               glr_pointer_script_tour_view().state, GLR_TOUR_PLAYING);
+
+    ASSERT_TRUE("ring expiry enters Done", run_until_state(GLR_TOUR_DONE, 60));
+    ASSERT_INT("ring counted once at Done",
+               glr_pointer_script_tour_view().completed_events, 1);
+}
+
+/* A ring forced by Right (or fast seek) counts complete immediately, so a
+ * trailing ring enters Done at once instead of waiting its duration; a backstep
+ * then lands on total-1 with the ring un-counted. */
+static void test_stepped_ring_immediate_done_and_backstep(void) {
+    const char *lines[] = { "move 100 100", "ring 400 400 5" }; /* 300-frame ring */
+    start_tour(lines, 2);
+    frames(2);   /* baseline; event 0 (move) fires */
+    /* Step to the ring and force it: two Rights (move, then ring). */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT);   /* completes move */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT);   /* next: ring, forced */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("stepped ring enters Done immediately", v.state, GLR_TOUR_DONE);
+    ASSERT_INT("both events counted", v.completed_events, 2);
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);    /* target = total-1 = 1 */
+    ASSERT_TRUE("seek settles", run_until_state(GLR_TOUR_PAUSED, 20));
+    ASSERT_INT("backstep counting agrees (ring un-counted)",
+               glr_pointer_script_tour_view().completed_events, 1);
+}
+
+/* A normal click blocks until its synthesized release frame; it is not counted
+ * complete on the fire frame. */
+static void test_normal_click_waits_release(void) {
+    const char *lines[] = { "click scene:0.5,0.5" };
+    start_tour(lines, 1);
+    frames(2);   /* baseline; the click fires (press, release scheduled) */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("click in flight, still Playing", v.state, GLR_TOUR_PLAYING);
+    ASSERT_INT("click not counted on the fire frame", v.completed_events, 0);
+
+    frames(3);   /* still before the ~6-frame release */
+    ASSERT_INT("still waiting for release",
+               glr_pointer_script_tour_view().completed_events, 0);
+
+    ASSERT_TRUE("click completes and enters Done",
+                run_until_state(GLR_TOUR_DONE, 20));
+    ASSERT_INT("click counted once", glr_pointer_script_tour_view().completed_events, 1);
+}
+
+/* Space / Left / Right are consumed but no-op while the baseline is still
+ * pending, and cannot corrupt the subsequent Playing run. */
+static void test_controls_during_baseline_pending_noop(void) {
+    int n = build_many(3);
+    start_tour(g_many, n);   /* BASELINE_PENDING */
+    ASSERT_INT("Space consumed in baseline-pending",
+               glr_pointer_script_handle_tour_key(' '), 1);
+    ASSERT_INT("Left consumed in baseline-pending",
+               glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT), 1);
+    ASSERT_INT("Right consumed in baseline-pending",
+               glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT), 1);
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("still baseline-pending", v.state, GLR_TOUR_BASELINE_PENDING);
+    ASSERT_INT("nothing completed", v.completed_events, 0);
+
+    frames(1);
+    ASSERT_INT("enters Playing cleanly", glr_pointer_script_tour_view().state,
+               GLR_TOUR_PLAYING);
+    ASSERT_TRUE("plays through to Done", run_until_state(GLR_TOUR_DONE, 20));
+}
+
+/* Space / Left / Right are consumed but no-op mid-seek, and the seek still
+ * settles to its target boundary. */
+static void test_controls_during_seeking_noop(void) {
+    int n = build_many(40);
+    start_tour(g_many, n);
+    run_until_state(GLR_TOUR_DONE, 120);
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);   /* target 39 -> SEEKING */
+    glr_pointer_script_frame();   /* first 32-event chunk */
+    ASSERT_INT("seeking mid-chunk", glr_pointer_script_tour_view().state,
+               GLR_TOUR_SEEKING);
+
+    ASSERT_INT("Space consumed while seeking",
+               glr_pointer_script_handle_tour_key(' '), 1);
+    ASSERT_INT("Left consumed while seeking",
+               glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT), 1);
+    ASSERT_INT("Right consumed while seeking",
+               glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT), 1);
+    ASSERT_INT("still seeking after inputs",
+               glr_pointer_script_tour_view().state, GLR_TOUR_SEEKING);
+
+    glr_pointer_script_frame();   /* second chunk settles */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("seek settled to Paused", v.state, GLR_TOUR_PAUSED);
+    ASSERT_INT("reached target 39", v.completed_events, 39);
+}
+
+static void test_speed_persists_through_done_restart(void) {
+    int n = build_many(3);
+    start_tour(g_many, n);
+    glr_pointer_script_handle_tour_key('+');
+    glr_pointer_script_handle_tour_key('+');   /* 4x */
+    run_until_state(GLR_TOUR_DONE, 20);
+    ASSERT_FLOAT("speed 4x at Done", glr_pointer_script_tour_view().speed, 4.0f);
+
+    glr_pointer_script_handle_tour_key(' ');   /* restart */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("restarted to Playing", v.state, GLR_TOUR_PLAYING);
+    ASSERT_FLOAT("speed persists through Done restart", v.speed, 4.0f);
+}
+
+/* A final `down` reaches Done with no held scripted button remaining. */
+static void test_final_down_releases_button_at_done(void) {
+    const char *lines[] = { "down scene:0.5,0.5" };
+    start_tour(lines, 1);
+    frames(2);   /* baseline; the down presses and holds */
+    ASSERT_INT("scripted button held after down",
+               ui_state_pointer().mouse_button, GLUT_LEFT_BUTTON);
+
+    ASSERT_TRUE("reaches Done", run_until_state(GLR_TOUR_DONE, 20));
+    ASSERT_INT("Done released the held button",
+               ui_state_pointer().mouse_button, -1);
+}
+
+/* A paused boundary after `down` intentionally retains the held button (so a
+ * following stepped glide/up reproduces a drag); Escape must release it. */
+static void test_escape_from_paused_post_down_releases(void) {
+    const char *lines[] = { "down scene:0.5,0.5", "move 100 100" };
+    start_tour(lines, 2);
+    frames(2);   /* baseline; down in flight */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT);   /* complete down, pause */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("paused after the down", v.state, GLR_TOUR_PAUSED);
+    ASSERT_INT("held button retained across the paused boundary",
+               ui_state_pointer().mouse_button, GLUT_LEFT_BUTTON);
+
+    ASSERT_INT("Esc consumed", glr_pointer_script_handle_tour_key(27), 1);
+    ASSERT_INT("tour stopped", glr_pointer_script_tour_view().active, 0);
+    ASSERT_INT("Esc released the held button",
+               ui_state_pointer().mouse_button, -1);
+}
+
+/* Backstep from a paused post-`down` boundary releases the held button before
+ * restoring the baseline. */
+static void test_backstep_from_paused_post_down_releases(void) {
+    const char *lines[] = { "down scene:0.5,0.5", "move 100 100", "move 200 200" };
+    start_tour(lines, 3);
+    frames(2);   /* baseline; down in flight */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_RIGHT);   /* complete down, pause */
+    ASSERT_INT("held button retained before backstep",
+               ui_state_pointer().mouse_button, GLUT_LEFT_BUTTON);
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);    /* target = 1-1 = 0 */
+    ASSERT_INT("backstep released the held button before restore",
+               ui_state_pointer().mouse_button, -1);
+    ASSERT_TRUE("seek settles", run_until_state(GLR_TOUR_PAUSED, 20));
+    ASSERT_INT("landed at boundary 0",
+               glr_pointer_script_tour_view().completed_events, 0);
+}
+
+static void test_escape_stops_tour(void) {
+    int n = build_many(3);
+    start_tour(g_many, n);
+    frames(2);
+    ASSERT_INT("Esc consumed", glr_pointer_script_handle_tour_key(27), 1);
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+    ASSERT_INT("tour inactive after Esc", v.active, 0);
+    ASSERT_INT("state OFF after Esc", v.state, GLR_TOUR_OFF);
+}
+
+/* Backstep restores the camera pose a scripted drag changed. begin_seek
+ * restores the baseline synchronously (before the prefix replays), so the pose
+ * is back at its captured value immediately after Left. */
+static void test_backstep_reconstructs_camera_drag(void) {
+    const char *lines[] = {
+        "down scene:0.5,0.5", "move 900 400", "up 900 400"
+    };
+    start_tour(lines, 3);
+    frames(1);   /* baseline captured */
+    float ry0 = glr_camera_mut()->ry;
+
+    run_until_state(GLR_TOUR_DONE, 40);
+    ASSERT_TRUE("drag changed the camera yaw",
+                glr_camera_mut()->ry != ry0);
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);   /* from Done: restore baseline */
+    ASSERT_FLOAT("backstep restored the baseline camera yaw",
+                 glr_camera_mut()->ry, ry0);
+}
+
 static void test_view_inactive_after_stop(void) {
     int n = build_many(3);
     start_tour(g_many, n);
@@ -313,15 +528,27 @@ int main(void) {
     test_speed_ladder_and_persistence();
     test_speed_affects_advance_rate();
     test_right_step_from_paused();
+    test_right_while_playing_forces_complete_and_pauses();
     test_right_at_done_is_noop();
     test_space_restart_from_done();
+    test_speed_persists_through_done_restart();
     test_timestamped_tour_rejected();
     test_comments_blanks_and_source_line();
+    test_normal_ring_delays_done();
+    test_stepped_ring_immediate_done_and_backstep();
+    test_normal_click_waits_release();
+    test_controls_during_baseline_pending_noop();
+    test_controls_during_seeking_noop();
+    test_final_down_releases_button_at_done();
+    test_escape_from_paused_post_down_releases();
+    test_backstep_from_paused_post_down_releases();
+    test_escape_stops_tour();
     test_backstep_from_done();
     test_backstep_between_events();
     test_backstep_in_flight_returns_to_start_boundary();
     test_seek_processes_at_most_32_per_frame();
     test_backstep_reconstructs_repl_commit();
+    test_backstep_reconstructs_camera_drag();
     test_view_inactive_after_stop();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

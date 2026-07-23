@@ -1148,6 +1148,19 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
     }
 }
 
+/* Clear the decorative overlays (highlight ring, echo caption, click ripple).
+ * Their lifetime is measured against the virtual clock (g_frame), which is
+ * FROZEN while paused/stepping — so an overlay shown at a step would otherwise
+ * hang on screen forever, and each step would stack a new stuck one. Transport
+ * steps and seeks clear them at the boundary; only the event the step lands on
+ * re-creates its own. */
+static void ps_clear_decor_overlays(void) {
+    g_ring_start = -1;
+    g_echo_start = -1;
+    g_echo_text[0] = '\0';
+    g_ripple_frame = -1;
+}
+
 /* Force the in-flight event's pending waits to completion without re-firing it
  * (Right Arrow mid-event): snap a glide to its endpoint, release a pending
  * synthesized click, flush paced typing, cancel a pause. */
@@ -1254,10 +1267,7 @@ static void ps_tour_begin_seek(int target) {
     g_type_text[0] = '\0';
     g_pause_until = -1;
     g_step_wait = PS_WAIT_NONE;
-    g_ring_start = -1;
-    g_echo_start = -1;
-    g_echo_text[0] = '\0';
-    g_ripple_frame = -1;
+    ps_clear_decor_overlays();
 
     glr_tour_snapshot_restore(g_baseline);
     glr_ctrl_after_tour_restore();
@@ -1316,6 +1326,9 @@ static void ps_tour_step_forward(void) {
     default:   /* baseline pending, seeking, stepping, off: consume, no-op */
         return;
     }
+    /* Drop the prior step's frozen ring/echo/ripple before advancing; only the
+     * event we land on (executed below) re-creates its own overlay. */
+    ps_clear_decor_overlays();
     if (g_current_event >= 0) {
         ps_force_current_complete();
         g_completed_events++;
