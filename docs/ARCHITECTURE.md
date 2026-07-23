@@ -1002,7 +1002,16 @@ Runtime shape:
   target boundary therefore renders directly, instead of briefly exposing the
   restored baseline camera and replaying the scene-load ease after every Back.
   A target/ease already present in the baseline remains frozen and intact when
-  no prefix event replaces it.
+  no prefix event replaces it. Decorative overlays are suppressed during the
+  sweep (no strobing) and then **reconstructed** at the landing by
+  `ps_tour_restore_landing_overlays()`: it re-walks `[0, target)` accumulating
+  each event's intrinsic playback cost (`ps_event_playback_cost`) into a virtual
+  landing frame, anchors `g_frame` there, and re-creates whatever live playback
+  would still be showing — chiefly a caption (`echo`) whose multi-second window
+  spans later events, plus a still-live click ripple, and a ring shown fresh
+  when the boundary lands directly on it. Single-slot semantics match live
+  playback (only the most-recent still-live echo/ripple shows), so rewinding
+  into a caption's on-screen window brings the caption back.
 * **HUD.** The controller populates `snap->tour` from
   [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L144) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top

@@ -230,6 +230,56 @@ static void test_step_past_ring_clears_overlay(void) {
                count_near(capture_overlay(), RING_CX, RING_CY, RING_R), 0);
 }
 
+/* A caption (echo) at (300, 200) mouse-space renders at (300, WIN_H - 200) in
+ * the y-up overlay; its glyph raster positions cluster there. */
+#define ECHO_CX 300.0f
+#define ECHO_CY (WIN_H - 200.0f)
+#define ECHO_R  60.0f
+
+/* Rewinding to a boundary still inside an earlier caption's on-screen window
+ * restores that caption — the still-live-caption behavior. The echo fires at
+ * event 0 with a 5s window; landing two events later (well within it) must
+ * bring the caption back, even though it is not the final replayed event. */
+static void test_backstep_restores_live_caption(void) {
+    const char *lines[] = {
+        "echo 300 200 18 5 Live caption",   /* event 0: 5s (300-frame) window */
+        "move 100 100",                     /* event 1 */
+        "move 150 150",                     /* event 2 */
+        "move 200 200",                     /* event 3 */
+        "move 250 250",                     /* event 4 */
+    };
+    start_tour(lines, 5);
+    step_right(4);           /* completed 4, paused */
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);   /* target = 3 */
+    ASSERT_TRUE("seek settles", run_until_paused(20));
+    int verts = capture_overlay();
+    ASSERT_TRUE("still-live caption restored at its point",
+                count_near(verts, ECHO_CX, ECHO_CY, ECHO_R) > 0);
+}
+
+/* A caption whose window has elapsed by the landing boundary is NOT restored —
+ * rewind reproduces what live playback would show, not a stale caption. The
+ * echo's 0.05s (3-frame) window is long gone four events later. */
+static void test_backstep_expired_caption_not_shown(void) {
+    const char *lines[] = {
+        "echo 300 200 18 0.05 Gone",        /* event 0: 3-frame window */
+        "move 100 100",                     /* event 1 */
+        "move 150 150",                     /* event 2 */
+        "move 200 200",                     /* event 3 */
+        "move 250 250",                     /* event 4 */
+        "move 300 300",                     /* event 5 */
+    };
+    start_tour(lines, 6);
+    step_right(5);           /* completed 5, paused */
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);   /* target = 4 */
+    ASSERT_TRUE("seek settles", run_until_paused(20));
+    int verts = capture_overlay();
+    ASSERT_INT("expired caption not restored",
+               count_near(verts, ECHO_CX, ECHO_CY, ECHO_R), 0);
+}
+
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
  * top-left inset and its captured width matches tour_hud_panel_width(scene_w)
  * exactly — tying the real GL output to the pure width function whose clamp is
@@ -299,6 +349,8 @@ int main(int argc, char **argv) {
     test_seek_suppresses_historical_ring();
     test_seek_keeps_final_ring();
     test_step_past_ring_clears_overlay();
+    test_backstep_restores_live_caption();
+    test_backstep_expired_caption_not_shown();
     test_hud_render_matches_width_helper();
     return test_harness_report(&g_harness, "tour_overlay_feedback");
 }

@@ -289,7 +289,7 @@ else
 
 Process at most 32 events per rendered frame. With `PS_MAX_EVENTS == 256`, a full seek requires at most eight rendered frames.
 
-Suppress historical echo/ring/ripple overlays during the prefix. Permit overlay creation only for the final replayed event so the target boundary has useful visual context without replaying every decorative artifact.
+Suppress all decorative overlays during the prefix sweep (no strobing as the seek blasts through 32 events/frame), then **reconstruct** the landing overlays once settled: `ps_tour_restore_landing_overlays()` re-walks `[0, target)` summing each event's intrinsic playback cost into a virtual landing frame, anchors `g_frame` there, and re-creates whatever live playback would still be showing — the most-recent still-live caption (`echo`) and click ripple, plus a ring shown fresh when the boundary lands directly on one. This is what makes rewinding into a caption's on-screen window bring the caption back, rather than only showing the final replayed event's overlay.
 
 `glr_ctrl_tick()` may still be scheduled by the host during a rendered seek
 frame. It must consult
@@ -511,7 +511,7 @@ Test every meaningful table entry, especially:
 - Back reconstructs editor commits, config toggles, scene changes, menus, and camera drags.
 - Seek processes no more than 32 events per rendered frame.
 - A `shell:` click yields and resumes on the next frame.
-- Historical overlays are suppressed; the target event overlay is retained.
+- Overlays are suppressed during the sweep, then the landing overlays are reconstructed: a still-live caption is restored, an expired one is not (`test_backstep_restores_live_caption` / `test_backstep_expired_caption_not_shown` in `test_tour_overlay_feedback`).
 - No scene/application time advances during seek.
 
 ### Metadata and HUD

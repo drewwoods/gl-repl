@@ -75,7 +75,11 @@ fast prefix replay skips the per-frame camera tick, so any leftover orbit
 momentum and its subsequent settling can differ from the live run. Scene-camera
 presets are deterministic during Back: their normally eased camera target is
 applied immediately while the prefix reconstructs, so the pre-tour baseline
-angle does not flash or ease through the target again. **Irreversible
+angle does not flash or ease through the target again. Decorative overlays are
+rebuilt to match the landing moment: a caption (`echo`) whose on-screen window
+still covers the boundary reappears where it would be in live playback — so
+rewinding into a caption you were reading brings it back — while captions that
+have already timed out stay gone. **Irreversible
 side effects cannot be undone by backstep:** filesystem writes, process exit,
 and audio-position changes. Keep rewindable tours free of those actions.
 Speed affects only pointer-script timing, never animation `t`, camera easing,

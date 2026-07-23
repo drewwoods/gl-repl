@@ -1307,18 +1307,121 @@ static void ps_tour_begin_seek(int target) {
     g_seek_target = target;
 }
 
+/* Resolve an event's point WITHOUT the tour-stopping side effect of
+ * ps_fire_point: overlay reconstruction is best-effort, so an unresolvable
+ * target just skips that overlay. Literal points pass through. */
+static int ps_resolve_event_point(const PsEvent *ev, float *x, float *y) {
+    int mx, my;
+    if (!ev->target[0]) {
+        *x = (float)ev->x;
+        *y = (float)ev->y;
+        return 1;
+    }
+    if (glr_pointer_script_resolve_target(ev->target, &mx, &my)) {
+        *x = (float)mx;
+        *y = (float)my;
+        return 1;
+    }
+    return 0;
+}
+
+/* Frames an event occupies in normal playback before the next one fires — its
+ * intrinsic blocking wait. Used to reconstruct the virtual timeline during a
+ * seek so a still-live caption lands at the right age. Approximate (it ignores
+ * the one-frame completion slop between events), which is fine: captions run
+ * seconds, the slop is sub-frame-per-event. */
+static int ps_event_playback_cost(const PsEvent *ev) {
+    switch (ev->verb) {
+    case PS_GLIDE:
+    case PS_RING:
+    case PS_PAUSE:
+        return ev->dur_frames > 0 ? ev->dur_frames : 1;
+    case PS_CLICK:
+    case PS_RIGHTCLICK:
+        return PS_CLICK_RELEASE_FRAMES;
+    case PS_KEY:
+        if (ev->cps > 0.0f) {
+            int len = (int)strlen(ev->text);
+            int f = (int)((float)(len > 1 ? len - 1 : 0) * PS_FPS /
+                          ev->cps + 0.5f);
+            return f > 1 ? f : 1;
+        }
+        return 1;
+    default:
+        return 1;   /* move / wheel / key / skey / chord / down / up / echo */
+    }
+}
+
+/* After a backstep settles, restore the decorative overlays normal playback
+ * would STILL be showing at the landing boundary — chiefly a caption (echo)
+ * whose multi-second window spans the events after it, which the plain
+ * suppress-the-prefix rule would have dropped. Reconstructs the virtual
+ * timeline over [0, target), sets g_frame to the landing time, and re-creates
+ * the last echo / click-ripple still within its lifetime; a ring landed on
+ * (the final replayed event) shows fresh as "you are here" context.
+ *
+ * Single-slot semantics match live playback: only the most-recent echo/ripple
+ * can show, and only while its own window covers the landing frame. */
+static void ps_tour_restore_landing_overlays(int target) {
+    int sim = 0;
+    int echo_fire = -1, echo_idx = -1;
+    int ripple_fire = -1, ripple_idx = -1;
+    float x, y;
+
+    if (target > g_event_count)
+        target = g_event_count;
+    for (int i = 0; i < target; i++) {
+        const PsEvent *ev = &g_events[i];
+        if (ev->verb == PS_ECHO) { echo_fire = sim; echo_idx = i; }
+        if (ev->verb == PS_CLICK || ev->verb == PS_RIGHTCLICK ||
+            ev->verb == PS_DOWN)  { ripple_fire = sim; ripple_idx = i; }
+        sim += ps_event_playback_cost(ev);
+    }
+    /* Anchor the frozen virtual clock at the landing time so every restored
+     * overlay's age (g_frame - start) reflects real elapsed playback. */
+    g_frame = sim;
+
+    if (echo_idx >= 0 && sim - echo_fire < g_events[echo_idx].dur_frames &&
+        ps_resolve_event_point(&g_events[echo_idx], &x, &y)) {
+        const PsEvent *ev = &g_events[echo_idx];
+        g_echo_start = echo_fire;
+        g_echo_dur = ev->dur_frames;
+        g_echo_x = x;
+        g_echo_y = y;
+        g_echo_size = ev->size;
+        snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
+    }
+    if (ripple_idx >= 0 && sim - ripple_fire < PS_RIPPLE_FRAMES &&
+        ps_resolve_event_point(&g_events[ripple_idx], &x, &y)) {
+        g_ripple_frame = ripple_fire;
+        g_ripple_x = x;
+        g_ripple_y = y;
+    }
+    /* A ring is a blocking beat (its window closes exactly as it completes), so
+     * it is never "still live" at a boundary — but landing directly on one
+     * should still highlight what it points at, shown fresh. */
+    if (target > 0 && g_events[target - 1].verb == PS_RING &&
+        ps_resolve_event_point(&g_events[target - 1], &x, &y)) {
+        const PsEvent *ev = &g_events[target - 1];
+        g_ring_start = sim;
+        g_ring_dur = ev->dur_frames;
+        g_ring_x = x;
+        g_ring_y = y;
+    }
+}
+
 /* Resumable prefix replay: fast-execute up to PS_SEEK_EVENTS_PER_FRAME events,
- * suppressing historical decoration (only the final replayed event may draw an
- * overlay). A shell: click schedules an async DOM callback, so yield the frame
- * after one and resume next frame. Advances no scene/application time. */
+ * suppressing all decoration during the sweep (ps_tour_restore_landing_overlays
+ * re-creates whatever is still live once the seek settles). A shell: click
+ * schedules an async DOM callback, so yield the frame after one and resume next
+ * frame. Advances no scene/application time. */
 static void ps_tour_seek_step(void) {
     int processed = 0;
     while (g_active && g_next_event < g_seek_target &&
            processed < PS_SEEK_EVENTS_PER_FRAME) {
         int idx = g_next_event++;
-        int allow = (idx == g_seek_target - 1);
         const PsEvent *ev = &g_events[idx];
-        ps_finish_event_immediate(ev, allow);
+        ps_finish_event_immediate(ev, /*allow_overlays=*/0);
         g_completed_events++;
         processed++;
 #if defined(__EMSCRIPTEN__)
@@ -1329,10 +1432,14 @@ static void ps_tour_seek_step(void) {
     if (!g_active)
         return;
     if (g_next_event >= g_seek_target) {
+        int target = g_seek_target;
         g_current_event = -1;
         g_step_wait = PS_WAIT_NONE;
         g_seek_target = -1;
         ps_tour_camera_reconstruction_end();
+        /* Re-create the overlays live playback would still show here (the
+         * still-live caption the user rewound expecting to see). */
+        ps_tour_restore_landing_overlays(target);
         if (g_completed_events >= g_event_count)
             ps_tour_enter_done();
         else
