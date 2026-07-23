@@ -13,9 +13,18 @@ Already landed:
 
 Remaining work is the pointer-script transport, backstep seeking, input routing, HUD, catalog metadata, compatibility tests, and documentation.
 
+> **Revision (no backward compatibility).** This is unreleased software.
+> The legacy runtime path `glr_pointer_script_start_lines()` is **removed
+> outright**, not preserved — tours run only through the new controlled
+> entrypoint. Every reference below to a "legacy runtime" run kind, to keeping
+> `start_lines()` compatibility tests green, or to a three-way fork is
+> superseded: there are exactly **two** run kinds, and the completion fork is
+> two-way. The `start_lines()`-based tests in `tests/test_glr_ctrl.c` and
+> `tests/test_glr_actions.c` are deleted or migrated to `start_tour`.
+
 ## Explicit Playback Semantics
 
-### Three pointer-script run kinds
+### Two pointer-script run kinds
 
 Replace ambiguous combinations of `g_tour`/`g_active` with an internal run-kind enum:
 
@@ -23,7 +32,6 @@ Replace ambiguous combinations of `g_tour`/`g_active` with an internal run-kind 
 typedef enum {
     PS_RUN_NONE = 0,
     PS_RUN_ENV_CAPTURE,
-    PS_RUN_LEGACY_RUNTIME,
     PS_RUN_CONTROLLED_TOUR
 } PsRunKind;
 ```
@@ -33,10 +41,11 @@ Behavior:
 | Run kind | Entrypoint | Transport/HUD | Completion |
 |---|---|---|---|
 | Environment capture | `glr_pointer_script_load_env()` | No | Never auto-stops; recorder owns exit |
-| Legacy runtime | `glr_pointer_script_start_lines()` | No | Existing overlay-aware auto-stop |
 | Controlled tour | new `glr_pointer_script_start_tour()` | Yes | Enters persistent Done |
 
-`glr_pointer_script_tour_active()` remains true for both runtime kinds so existing cancellation behavior continues. The new playback view reports active only for `PS_RUN_CONTROLLED_TOUR`.
+`glr_pointer_script_tour_active()` (the user-cancel gate) is true only for
+`PS_RUN_CONTROLLED_TOUR`; the env-capture kind is never canceled by user input.
+The playback view reports active only for `PS_RUN_CONTROLLED_TOUR`.
 
 ### Controlled tours are untimed only
 
@@ -46,7 +55,8 @@ Behavior:
 Tour scripts must use untimed, completion-driven events
 ```
 
-Keep timestamped support unchanged in environment and legacy `start_lines()` modes.
+Timestamped scripts remain supported only in the environment-capture mode
+(`glr_pointer_script_load_env()`).
 
 Also update `scripts/gen_tours.py` to reject catalog scripts whose executable lines begin with timestamps. Runtime rejection remains the authoritative backstop.
 
@@ -266,18 +276,14 @@ A `shell:` click schedules a DOM callback asynchronously. After executing one du
 
 The same resumable 32-event seek loop therefore provides the required browser event-loop yield; do not build a separate web-only seek mechanism.
 
-## Done and Legacy Auto-Stop
+## Done and Completion
 
-Replace the current single auto-stop block with explicit run-kind handling:
+Completion is a two-way fork on run kind:
 
 ```text
 PS_RUN_ENV_CAPTURE:
-    never auto-stop
-
-PS_RUN_LEGACY_RUNTIME:
-    retain the current condition:
-    all events fired and all glide/release/type/ring/echo/ripple effects expired
-    -> glr_pointer_script_stop()
+    never auto-stop (the shared env/capture frame path has no stop check;
+    the recorder owns exit)
 
 PS_RUN_CONTROLLED_TOUR:
     when the current logical event has completed and completed == count:
@@ -288,8 +294,7 @@ PS_RUN_CONTROLLED_TOUR:
 ```
 
 Do not call `glr_pointer_script_stop()` when a controlled tour reaches Done.
-
-This fork is required to keep `glr_pointer_script_start_lines()` compatibility tests passing.
+With `start_lines()` gone, the env-capture path keeps no auto-stop at all.
 
 ## Catalog and Source Metadata
 
@@ -371,8 +376,9 @@ Requirements:
 
 ### Primary modifications
 
-- `src/app/glr_pointer_script.{c,h}`: run kinds, state machine, virtual clock, controls, immediate execution, seeking, Done.
+- `src/app/glr_pointer_script.{c,h}`: run kinds, state machine, virtual clock, controls, immediate execution, seeking, Done. **Remove `glr_pointer_script_start_lines()`.**
 - `src/app/glr_tours.c`: controlled-tour entrypoint and metadata.
+- `tests/test_glr_ctrl.c`, `tests/test_glr_actions.c`: drop/migrate the deleted `start_lines()` tests.
 - `scripts/gen_tours.py`: filename emission and catalog timed-script rejection.
 - `gl_repl.c`: transport-before-cancel routing.
 - `src/ui/app/snapshot.h`: playback view.
@@ -390,16 +396,16 @@ Requirements:
 ## Implementation Sequence
 
 1. Commit the `source_line` extension with catalog filename metadata and timed-tour rejection.
-2. Refactor the existing frame body into `ps_advance_one_virtual_frame()` while keeping environment and legacy tests unchanged.
-3. Introduce run kind, controlled-tour state, event accounting, speed, pause, immediate Right, and Done.
-4. Add the explicit three-way completion/auto-stop fork.
+2. Refactor the existing frame body into `ps_advance_one_virtual_frame()` while keeping environment-script behavior unchanged.
+3. Introduce run kind, controlled-tour state, event accounting, speed, pause, immediate Right, and Done; **remove `start_lines()`** and its tests.
+4. Add the two-way completion fork (env never stops; controlled tour enters Done).
 5. Integrate baseline-pending capture and Done restart.
 6. Add resumable Back/Seeking using the landed snapshot layer.
 7. Route host transport keys before cancellation.
 8. Add the HUD and UI snapshot field.
 9. Add documentation and run all guards.
 
-Each stage should leave legacy `start_lines()` and environment-script tests passing.
+Each stage should leave the environment-script behavior intact.
 
 ## Required Tests
 
@@ -417,11 +423,13 @@ Each stage should leave legacy `start_lines()` and environment-script tests pass
 
 ### Mode compatibility
 
-- Timestamped catalog tour is rejected.
-- Timestamped `start_lines()` remains accepted.
-- Environment capture timing remains unchanged.
-- Legacy `start_lines()` retains overlay-aware auto-stop.
+- Timestamped catalog tour is rejected (`gen_tours.py` + runtime).
+- Timestamped controlled tour (`start_tour`) is rejected at runtime.
+- Environment capture timing (timed + untimed) remains unchanged.
 - Controlled tour enters persistent Done rather than calling stop.
+- `glr_pointer_script_start_lines()` no longer exists (removed); its
+  parser/paced-typing/pause/echo coverage moves to `start_tour` or the
+  new transport test where still relevant.
 
 ### Control-state matrix
 
