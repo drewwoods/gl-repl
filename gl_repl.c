@@ -372,11 +372,18 @@ static int tour_cancel_intercept(void) {
 
 static void keyboard_func(unsigned char key, int x, int y) {
     splash_skip(); /* any keypress dismisses the startup banner */
+    /* Controlled-tour transport (Space/+/=/-/Esc) wins over the cancel
+     * intercept so play/pause/speed/exit drive the tour instead of stopping
+     * it. Only a controlled tour consumes here; env-capture never does. */
+    if (glr_pointer_script_handle_tour_key(key)) return;
     if (tour_cancel_intercept()) return;
     glr_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
+    /* Left = backstep, Right = forward step during a controlled tour. Same
+     * transport-before-cancel ordering as keyboard_func. */
+    if (glr_pointer_script_handle_tour_special(key)) return;
     if (tour_cancel_intercept()) return;
     glr_ctrl_special(key, x, y);
 }
