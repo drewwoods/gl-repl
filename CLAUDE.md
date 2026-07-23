@@ -333,7 +333,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L140) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L147) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L135) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L136) (projection → user
@@ -404,7 +404,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
 Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 ([`src/repl/scenes.c`](src/repl/scenes.c)); no automatic startup scene.
 Editing an example auto-promotes it into a fresh slot — the hook is
-[`editor_undo_push_snapshot()`](src/editor/undo.h#L106) → [`repl_promote_example_if_needed()`](src/repl/scenes.h#L46) before
+[`editor_undo_push_snapshot()`](src/editor/undo.h#L123) → [`repl_promote_example_if_needed()`](src/repl/scenes.h#L46) before
 every mutation. LRU eviction to `<workspace_dir>/<slug>.c` only when a
 workspace is bound (else promotion is rejected with a status message).
 F12 cycles examples → user scenes → back. Inline rename filters
@@ -449,7 +449,7 @@ program's leading `glClear` (`replay_frame_setup_limit`).
 ### Undo
 
 32-slot global rings (not per-scene). **Any wholesale replacement of the
-live document must call [`editor_undo_clear()`](src/editor/undo.h#L128) first** or post-switch Ctrl+Z
+live document must call [`editor_undo_clear()`](src/editor/undo.h#L145) first** or post-switch Ctrl+Z
 restores the previous scene into the new one (call sites:
 `glr_ctrl_reset_all`, F12 cycle, load-example/scene/workspace actions in
 [`glr_actions.c`](src/app/glr_actions.c)). Push clears the redo stack; push is also the
@@ -471,7 +471,7 @@ commas before cursor), `AC_MODE_POINT_PARAM`. Enum modes also fire mid-line
 when the cursor ends the token being completed and the tail is only
 trailing args (Tab splices, keeps tail); the inline ghost stays
 end-of-input-only; function-name completion/hints too. Search: Ctrl+F,
-state via [`editor_state_search()`](src/editor/state.h#L384).
+state via [`editor_state_search()`](src/editor/state.h#L405).
 
 ### Config / Tutorials menus (shared flyout engine)
 

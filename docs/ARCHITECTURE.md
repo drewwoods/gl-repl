@@ -314,7 +314,7 @@ source line through `src_cmd_idx`, resolved via
 
 The active edit-line cursor is **editor-owned**: it lives in
 `EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L171)) and is read
-and written through [`editor_state_edit_line()`](../src/editor/state.h#L347) / `_set()` / `_clamp()`.
+and written through [`editor_state_edit_line()`](../src/editor/state.h#L368) / `_set()` / `_clamp()`.
 There is no `repl_state_edit_line()` and no cursor pointer inside
 [`ReplCommandStore`](../src/repl/command_store.h#L47). The REPL pipeline never reaches into editor cursor
 storage:
@@ -744,7 +744,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L107) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L114) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -761,7 +761,7 @@ signature for audited renderers.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
   [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
-  — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L347),
+  — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L368),
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers
@@ -1317,7 +1317,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L136) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L140) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L147) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
@@ -1344,7 +1344,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L107) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L114) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of

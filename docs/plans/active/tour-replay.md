@@ -1,54 +1,98 @@
-# Tour Transport and Backstep Authoring Controls
+# Revised Tour Transport and Backstep Plan
 
-## Summary
+## Summary and Current State
 
-Add replay-style controls to Tours-menu tours:
+Implement replay-style controls for Tours-menu tours while preserving both existing pointer-script modes.
 
-- Space: pause/resume; restart from Done.
-- Right Arrow: execute one event immediately, then remain paused.
-- Left Arrow: restore the tour-start state, fast-run to the preceding event boundary, then remain paused.
-- `+` / `-`: change tour timing from `0.25×` through `16×`.
-- Escape: exit the tour while preserving its current result.
-- HUD: show tour name, state, speed, event number, total events, and `.pointer` source line.
+Already landed:
 
-One executable `.pointer` line is one step. Environment-driven recording scripts retain their current behavior and receive no transport HUD or snapshot overhead.
+- `6bea8dfa`: focused owner snapshot APIs.
+- `d5dd9c3a`: composite `GlrTourSnapshot`, restore synchronization, and passing round-trip test.
+- `glr_ctrl_after_tour_restore()` is available.
+- `PsEvent.source_line` is correctly started but remains uncommitted in `src/app/glr_pointer_script.c`; include it with the next transport commit.
 
-Backstep will use one optimized baseline plus prefix replay. Do not implement per-event whole-app snapshots.
+Remaining work is the pointer-script transport, backstep seeking, input routing, HUD, catalog metadata, compatibility tests, and documentation.
 
-## New Files
+## Explicit Playback Semantics
 
-### `src/app/glr_tour_snapshot.{c,h}`
+### Three pointer-script run kinds
 
-Own the tour-start baseline and coordinate capture/restore across state owners.
-
-Expose an opaque API:
+Replace ambiguous combinations of `g_tour`/`g_active` with an internal run-kind enum:
 
 ```c
-typedef struct GlrTourSnapshot GlrTourSnapshot;
-
-GlrTourSnapshot *glr_tour_snapshot_capture(void);
-int              glr_tour_snapshot_restore(const GlrTourSnapshot *snapshot);
-void             glr_tour_snapshot_destroy(GlrTourSnapshot *snapshot);
+typedef enum {
+    PS_RUN_NONE = 0,
+    PS_RUN_ENV_CAPTURE,
+    PS_RUN_LEGACY_RUNTIME,
+    PS_RUN_CONTROLLED_TOUR
+} PsRunKind;
 ```
 
-The implementation must heap-allocate large components and clean up partially constructed snapshots on failure. No large snapshot structure should be placed on the stack.
+Behavior:
 
-### `src/ui/subsystems/tour_hud.{c,h}`
+| Run kind | Entrypoint | Transport/HUD | Completion |
+|---|---|---|---|
+| Environment capture | `glr_pointer_script_load_env()` | No | Never auto-stops; recorder owns exit |
+| Legacy runtime | `glr_pointer_script_start_lines()` | No | Existing overlay-aware auto-stop |
+| Controlled tour | new `glr_pointer_script_start_tour()` | Yes | Enters persistent Done |
 
-Render a compact, non-interactive transport HUD from the per-frame UI snapshot. Keep the renderer state-read-only and consistent with the replay HUD’s snapshot boundary.
+`glr_pointer_script_tour_active()` remains true for both runtime kinds so existing cancellation behavior continues. The new playback view reports active only for `PS_RUN_CONTROLLED_TOUR`.
 
-### Tests
+### Controlled tours are untimed only
 
-Add:
+`glr_pointer_script_start_tour()` must reject any timestamped event or mixed script before capturing a baseline. Report a clear authoring error such as:
 
-- `tests/test_glr_tour_snapshot.c` for baseline round trips.
-- `tests/test_glr_tour_transport.c` for playback, controls, seeking, and completion.
+```text
+Tour scripts must use untimed, completion-driven events
+```
 
-Both tests should run with GL stubs and link through `CORE_TEST_OBJS`.
+Keep timestamped support unchanged in environment and legacy `start_lines()` modes.
 
-## State and Interface Additions
+Also update `scripts/gen_tours.py` to reject catalog scripts whose executable lines begin with timestamps. Runtime rejection remains the authoritative backstop.
 
-### Tour playback state
+### Normal event completion
+
+During ordinary controlled playback, retain the current `PsWait` semantics exactly:
+
+| Event | Normal completion |
+|---|---|
+| `glide` | Glide reaches its endpoint |
+| `click`, `rightclick` | Synthesized release occurs |
+| paced `key@N` | All text is delivered |
+| `pause` | Pause duration expires |
+| `ring` | Ring duration expires |
+| `echo` | Immediate/non-blocking |
+| `move`, `wheel`, plain `key`, `skey`, `chord`, `down`, `up` | Immediate |
+
+A normal ring is therefore an authored beat. If the final event is a ring, the tour enters Done only after `PS_WAIT_RING` completes.
+
+Echo and ripple remain decorative and never delay Done.
+
+Immediate stepping and seeking deliberately bypass waits. A ring executed by Right Arrow or fast seek counts as complete immediately; this does not change normal playback semantics.
+
+### Event accounting
+
+Maintain:
+
+```c
+int g_next_event;       /* next event not yet fired */
+int g_current_event;    /* active/in-flight event, or -1 */
+int g_completed_events; /* count of completed events */
+```
+
+Rules:
+
+- Firing an event does not automatically increment `g_completed_events`.
+- Normal playback increments it only when the event’s `PsWait` completes.
+- Immediate step/seek increments it after forcing the event to completion.
+- `current_event` remains valid while a normal wait is active.
+- Done requires `completed_events == event_count` and no incomplete logical event.
+- Done does not wait for echo or ripple decoration.
+- Entering Done releases any held scripted mouse button.
+
+This prevents a normal still-animating ring from being counted as complete while retaining immediate-step behavior.
+
+## Transport State and Controls
 
 Add to `glr_pointer_script.h`:
 
@@ -76,14 +120,14 @@ typedef struct {
 } GlrTourPlaybackView;
 ```
 
-Add APIs:
+Add:
 
 ```c
-int  glr_pointer_script_start_tour(
-         const char *name,
-         const char *file,
-         const char *const *lines,
-         int line_count);
+int glr_pointer_script_start_tour(
+    const char *name,
+    const char *file,
+    const char *const *lines,
+    int line_count);
 
 GlrTourPlaybackView glr_pointer_script_tour_view(void);
 
@@ -91,13 +135,170 @@ int glr_pointer_script_handle_tour_key(unsigned char key);
 int glr_pointer_script_handle_tour_special(int key);
 ```
 
-Keep `glr_pointer_script_start_lines()` for existing tests and non-catalog callers. It must preserve its current behavior unless explicitly started as a tour.
+### Complete control-state table
 
-Extend `PsEvent` with the original one-based source line. Because the generator already embeds blank and comment lines, `i + 1` in the parser is the correct `.pointer` file line.
+| Input | Baseline pending | Playing | Paused | Stepping/Seeking | Done |
+|---|---|---|---|---|---|
+| Space | Consume, no-op | Pause without completing current event | Resume | Consume, no-op | Restore baseline and replay from start |
+| Right | Consume, no-op | Force current event complete, or execute next if between events; then pause | Execute next immediately; remain paused | Consume, no-op | Consume and report “at end” |
+| Left | Consume, no-op | Seek to boundary before the current event | Seek back one completed event | Consume, no-op | Seek to `total - 1` |
+| `+`, `=` | Adjust speed | Adjust speed | Adjust speed | Adjust stored speed | Adjust restart speed |
+| `-` | Adjust speed | Adjust speed | Adjust speed | Adjust stored speed | Adjust restart speed |
+| Escape | Stop | Stop | Stop | Stop | Stop |
+| Other real key | Cancel | Cancel | Cancel | Cancel | Cancel |
 
-### Catalog metadata
+Escape and ordinary cancellation preserve the current application result and destroy the baseline.
 
-Update `scripts/gen_tours.py` and `TourEntry` to emit:
+### Speed model
+
+Use discrete speeds:
+
+```text
+0.25×, 0.5×, 1×, 2×, 4×, 8×, 16×
+```
+
+Default to `1×`.
+
+Maintain:
+
+```c
+float g_speed;
+float g_frame_credit;
+int   g_frame; /* virtual tour frame */
+```
+
+While Playing:
+
+```text
+frame_credit += speed
+while frame_credit >= 1:
+    advance one virtual tour frame
+    frame_credit -= 1
+```
+
+Do not advance virtual frames while Paused, Done, Baseline Pending, or Seeking. Speed affects only pointer-script timing, not animation `t`, camera easing, REPL replay, status TTL, or audio.
+
+## Immediate Event Execution
+
+Create one helper used by both Right Arrow and fast seeking:
+
+```c
+static int ps_finish_event_immediate(const PsEvent *event);
+```
+
+Behavior:
+
+| Event | Immediate execution |
+|---|---|
+| `move` | Dispatch target position |
+| `glide` | Resolve once and dispatch smoothstep samples across the original duration, including the exact endpoint |
+| `click`, `rightclick` | Move if needed, press, then release synchronously |
+| `down` | Press and leave held |
+| `up` | Move if needed, then release |
+| `wheel` | Dispatch once |
+| `key`, `key@N` | Deliver the complete payload synchronously |
+| `skey`, `chord` | Dispatch once |
+| `pause` | Skip duration |
+| `ring`, `echo` | Create the overlay but mark the event complete immediately |
+
+A paused boundary after `down` may intentionally retain the held button so subsequent stepped glide/up events reproduce a drag. Escape, Back, cancellation, and Done must release it.
+
+If the final event is `down`, it is marked complete and Done immediately releases the held button.
+
+## Baseline Lifecycle and Backstep
+
+### Baseline capture
+
+`glr_pointer_script_start_tour()`:
+
+1. Stops and frees any previous run.
+2. Parses the script with “untimed required.”
+3. Stores tour name/file metadata.
+4. Enters `GLR_TOUR_BASELINE_PENDING`.
+5. Does not capture or execute an event yet.
+
+On the next `glr_pointer_script_frame()`:
+
+1. The Tours menu has completed its normal close path.
+2. Capture `GlrTourSnapshot`.
+3. Seed scripted pointer coordinates from `ui_state_pointer()`.
+4. Enter Playing.
+5. Wait until the next virtual frame before firing event zero.
+
+On allocation failure, stop the tour and report `Tour could not capture rewind state`.
+
+Retain the baseline through Playing, Paused, Seeking, and Done. Destroy it on stop, cancellation, failed start, replacement tour, or shutdown.
+
+### Backstep target
+
+```c
+if (state == GLR_TOUR_DONE)
+    target = max(0, event_count - 1);
+else if (g_current_event >= 0)
+    target = g_completed_events;       /* before in-flight event */
+else
+    target = max(0, g_completed_events - 1);
+```
+
+### Seek procedure
+
+1. Enter Seeking.
+2. Release held/pending mouse state and clear in-flight typing/glide/waits.
+3. Restore `GlrTourSnapshot`.
+4. Call `glr_ctrl_after_tour_restore()`.
+5. Reset script cursor/event counters to zero.
+6. Fast-execute events `[0, target)`.
+7. Enter Paused at `completed_events == target`.
+
+Process at most 32 events per rendered frame. With `PS_MAX_EVENTS == 256`, a full seek requires at most eight rendered frames.
+
+Suppress historical echo/ring/ripple overlays during the prefix. Permit overlay creation only for the final replayed event so the target boundary has useful visual context without replaying every decorative artifact.
+
+Do not call `glr_ctrl_tick()` during seek.
+
+### Emscripten shell events
+
+A `shell:` click schedules a DOM callback asynchronously. After executing one during Stepping or Seeking:
+
+- end the current rendered-frame chunk immediately;
+- retain the target and event cursor;
+- resume on the next rendered frame.
+
+The same resumable 32-event seek loop therefore provides the required browser event-loop yield; do not build a separate web-only seek mechanism.
+
+## Done and Legacy Auto-Stop
+
+Replace the current single auto-stop block with explicit run-kind handling:
+
+```text
+PS_RUN_ENV_CAPTURE:
+    never auto-stop
+
+PS_RUN_LEGACY_RUNTIME:
+    retain the current condition:
+    all events fired and all glide/release/type/ring/echo/ripple effects expired
+    -> glr_pointer_script_stop()
+
+PS_RUN_CONTROLLED_TOUR:
+    when the current logical event has completed and completed == count:
+        release any held button
+        clear in-flight wait/release/typing state
+        enter GLR_TOUR_DONE
+        retain baseline, HUD, cursor, and allowed decorative overlay
+```
+
+Do not call `glr_pointer_script_stop()` when a controlled tour reaches Done.
+
+This fork is required to keep `glr_pointer_script_start_lines()` compatibility tests passing.
+
+## Catalog and Source Metadata
+
+The current uncommitted `PsEvent.source_line` change is correct. Keep both assignments:
+
+- environment loader: physical `lineno`;
+- in-memory loader: `i + 1`.
+
+Update generated `TourEntry`:
 
 ```c
 typedef struct {
@@ -108,367 +309,167 @@ typedef struct {
 } TourEntry;
 ```
 
-`glr_tours_start()` passes the name and file to `glr_pointer_script_start_tour()`.
+`gen_tours.py` emits the catalog-relative `.pointer` filename. `glr_tours_start()` calls `glr_pointer_script_start_tour()` with name, file, lines, and count.
 
-### REPL checkpoint state
+The HUD source line is:
 
-Do not store the 6.8 MB `ReplFlatProgramState`; it is derived and must be rebuilt.
+- active event’s line during Playing/Stepping;
+- next event’s line while paused before it;
+- final event’s line in Done;
+- `-1` only when no controlled tour exists.
 
-Add to `src/repl/state.{c,h}`:
+## Input Routing
 
-```c
-typedef struct {
-    ReplDocumentState     document;
-    ReplVariableState     variables;
-    ReplRenderState       render;
-    ReplSceneRuntimeState scene_runtime;
-    ReplImportExportState import_export;
-} ReplCheckpointState;
-
-void repl_state_checkpoint_capture(ReplCheckpointState *out);
-void repl_state_checkpoint_restore(const ReplCheckpointState *snapshot);
-```
-
-Restore must:
-
-- rebind evaluator predef storage;
-- restore the special `t` binding;
-- invalidate expression and source-scope caches;
-- clear flat-program count;
-- mark the flat program dirty;
-- clear stale rebake/argument-dirty state.
-
-### Editor session state
-
-Do not copy per-frame transformers, highlights, virtual lines, or line overrides.
-
-Add an `EditorSessionSnapshot` containing:
-
-- `EditorBuffer`;
-- input and insert state;
-- selection and clipboard;
-- search and autocomplete;
-- scroll state and edit-line cursor;
-- cursor blink state.
-
-Add capture/restore APIs to `src/editor/state.{c,h}`. The REPL command array and editor text buffer must still restore in lockstep.
-
-### Undo/redo history
-
-The existing `EditorUndoRingState` stores only counters, not the actual history. Add an opaque, heap-backed history snapshot API to `src/editor/undo.{c,h}`:
-
-```c
-typedef struct EditorUndoHistorySnapshot EditorUndoHistorySnapshot;
-
-EditorUndoHistorySnapshot *editor_undo_history_capture(void);
-int editor_undo_history_restore(
-        const EditorUndoHistorySnapshot *snapshot);
-void editor_undo_history_destroy(
-        EditorUndoHistorySnapshot *snapshot);
-```
-
-Capture only live undo and redo entries, in logical oldest-to-newest order. Restore them into a canonical ring layout and restore the generation counter. Do not copy all 64 fixed slots when most are unused.
-
-### Scene catalog
-
-The active document is separate from `g_user_scenes[]`, so capture both.
-
-Add an opaque `ReplScenesSnapshot` API to `src/repl/scenes.{c,h}` that preserves:
-
-- every occupied slot’s index, name, LRU timestamp, and `SceneSnapshot`;
-- active user-scene index;
-- monotonic scene tick;
-- pre-example configuration bag.
-
-Capture must not call `repl_scenes_save_active_scene_if_any()`, because that would mutate the catalog while taking the baseline.
-
-### Missing peer snapshots
-
-Add complete snapshot APIs for state that current pose-only or reset-only functions cannot restore:
-
-- `GlrCameraRuntimeSnapshot`: live pose, ease target, target-active flag, target decay, control mode, scene default, pointer/button cache, modifier state, and all momentum velocities.
-- `GlrViewTransitionSnapshot`: projection mixes, target mode, phase, saved 3D camera, and validity.
-- `UiMenuBarRuntimeSnapshot`: open menu, hover row, flyout parent/state/scroll, and animation clocks; dropdown geometry cache remains derived.
-- `ColorPickerRuntimeSnapshot`: open line, HSV/alpha, palette/key state, drag state, anchor, value limits, and undo-captured flag; omit the installed host pointer and derived palette cache.
-- `UiOverlayLayoutSnapshot`: eased panel positions and reserved band.
-- Existing by-value snapshots: `GlrState`, `UiState`, `ReplayRuntimeState`, `TutorialRuntimeState`, `VariablePanelState`, and `EditorHelpSession`.
-
-Renderer resources, profiling histories, GL objects, audio engine internals, and controller frame caches are not baseline state.
-
-## Baseline Capture and Restore
-
-### Capture timing
-
-`glr_pointer_script_start_tour()` should parse the script and enter `GLR_TOUR_BASELINE_PENDING`, but not capture immediately.
-
-On the next `glr_pointer_script_frame()`:
-
-1. The Tours dropdown has completed its normal close path.
-2. Capture `GlrTourSnapshot`.
-3. Seed the scripted pointer from the restored UI pointer coordinates.
-4. Enter `GLR_TOUR_PLAYING`.
-5. Do not fire the first event until the following virtual tour frame.
-
-If capture fails, stop the tour, free partial allocations, and report `Tour could not capture rewind state`.
-
-### Snapshot contents
-
-`GlrTourSnapshot` should contain:
+In `gl_repl.c`, change keyboard and special callbacks to:
 
 ```text
-ReplCheckpointState
-EditorSessionSnapshot
-EditorUndoHistorySnapshot *
-ReplScenesSnapshot *
-GlrState
-UiState
-ReplayRuntimeState
-TutorialRuntimeState
-VariablePanelState
-EditorHelpSession
-GlrCameraRuntimeSnapshot
-GlrViewTransitionSnapshot
-UiMenuBarRuntimeSnapshot
-ColorPickerRuntimeSnapshot
-UiOverlayLayoutSnapshot
+if controlled-tour transport handler consumes:
+    return
+
+if existing tour cancel intercept fires:
+    return
+
+route to normal controller
 ```
 
-### Restore order
+Mouse-down and wheel remain cancel actions. Passive pointer motion remains non-canceling.
 
-Restore in this order:
+Synthetic script keys still call `glr_ctrl_*` directly and never pass through these host callbacks, so tour-authored Space/arrows/`+`/`-` do not collide with transport controls.
 
-1. Release any synthetic click or explicitly held pointer button.
-2. Clear the pointer engine’s in-flight glide, click-release, paced typing, wait, ring, echo, and ripple state.
-3. Restore the scene catalog.
-4. Restore `GlrState`.
-5. Restore the REPL checkpoint.
-6. Restore the editor session.
-7. Restore undo/redo history.
-8. Restore camera and view-transition state.
-9. Restore replay, tutorial, variable-panel, color-picker, and help-session state.
-10. Restore `UiState`, menu state, and overlay-layout state.
-11. Re-sync controller-derived chrome and invalidate controller frame caches.
-12. Refresh workspace-header, render-state, and camera export strings.
+## HUD
 
-Add an app-internal helper such as `glr_ctrl_after_tour_restore()` for step 11–12. It must not call `glr_ctrl_reset_transients()`, because that would erase restored camera defaults, menus, and peer state.
+Add:
 
-## Pointer-Script Transport
-
-### Virtual clock
-
-Separate rendered frames from tour virtual frames.
-
-Maintain:
-
-```c
-float g_speed;        /* default 1.0 */
-float g_frame_credit; /* accumulated virtual-frame credit */
-int   g_frame;        /* tour virtual frame */
-```
-
-For a playing live tour:
-
-```text
-frame_credit += speed
-while frame_credit >= 1:
-    advance one virtual tour frame
-    frame_credit -= 1
-```
-
-Use speed values `0.25`, `0.5`, `1`, `2`, `4`, `8`, and `16`. Clamp at the endpoints.
-
-Paused, Done, and baseline-pending tours accumulate no credit. Environment-driven capture scripts continue advancing exactly once per rendered frame.
-
-### Event accounting
-
-Track these separately:
-
-- `g_next_event`: next event that has not fired;
-- `g_current_event`: in-flight event, or `-1`;
-- `g_completed_events`: number whose completion condition has passed.
-
-Do not treat an event as completed merely because it fired. Update `g_completed_events` only after its `PsWait` is satisfied. The HUD shows:
-
-- Playing/Stepping: `current_event + 1` as the active step.
-- Paused between events: `completed_events`.
-- Done: `event_count / event_count`.
-
-The HUD source line is the active event’s line, or the next event’s line when paused before it.
-
-### Pause and completion
-
-Space:
-
-- Playing → Paused.
-- Paused → Playing.
-- Done → restore baseline, reset event position, enter Playing.
-- Seeking/Stepping → consume without changing state.
-- Baseline Pending → consume.
-
-A tour enters Done when every event has logically completed. Do not wait for decorative echo, ring, or ripple expiration. Retain the baseline and HUD until Escape, cancellation, or another tour starts.
-
-### Immediate Right-Arrow step
-
-Right Arrow from Paused executes exactly one event and returns to Paused.
-
-Immediate completion rules:
-
-| Event | Immediate behavior |
-|---|---|
-| `move` | Dispatch target position once. |
-| `glide` | Resolve once; dispatch smoothstep samples across its original virtual-frame count, ending exactly at the target. |
-| `click` / `rightclick` | Move if needed, press, and release synchronously. |
-| `down` | Press and remain held across the paused boundary. |
-| `up` | Move if needed and release. |
-| `wheel` | Dispatch once. |
-| `key` / `key@N` | Flush the complete payload synchronously. |
-| `skey` / `chord` | Dispatch once. |
-| `pause` | Complete without waiting. |
-| `echo` / `ring` | Create the overlay and complete immediately; freeze its tour-clock age while paused. |
-
-Escape or cancellation must release a button left held by a stepped `down`.
-
-### Left-Arrow backstep
-
-Define the target boundary as:
-
-```text
-if an event is in flight:
-    target = completed_events
-else:
-    target = max(0, completed_events - 1)
-```
-
-Then:
-
-1. Enter `GLR_TOUR_SEEKING`.
-2. Restore the baseline.
-3. Reset the pointer runtime to event zero.
-4. Fast-dispatch the first `target` events using the immediate rules above.
-5. Enter Paused with `completed_events == target`.
-
-Process at most 32 events per rendered frame while Seeking so a long tour cannot monopolize the UI thread. Suppress historical ripple/ring/echo rendering during the prefix; materialize only the overlay state belonging to the target boundary.
-
-For Emscripten `shell:` clicks, yield one browser event-loop turn after scheduling the DOM click before continuing the prefix. This preserves the asynchronous New-button behavior.
-
-Fast seeking must not call `glr_ctrl_tick()` or accelerate scene time, camera easing, REPL replay, status TTL, or audio. Those systems resume normally once the target boundary is reached. Discrete edits, toggles, scene actions, and sampled camera drags are reconstructed; time-driven settling may differ from the original traversal.
-
-## Input and HUD Integration
-
-### Host input routing
-
-In `gl_repl.c`, route tour transport keys before the existing cancel intercept:
-
-```text
-real key
-  -> tour transport handler
-  -> if consumed, return
-  -> otherwise cancel active tour and swallow event
-  -> normal controller routing when no tour is active
-```
-
-Special keys follow the same order.
-
-Mouse presses and wheel input continue to cancel. Passive pointer motion continues not to cancel. Synthetic events still call `glr_ctrl_*` directly and therefore bypass host interception.
-
-Recognized controls:
-
-- Space
-- Escape
-- `+`, `=`, `-`
-- Left Arrow
-- Right Arrow
-
-### UI snapshot
+- `src/ui/subsystems/tour_hud.c`
+- `src/ui/subsystems/tour_hud.h`
 
 Add `GlrTourPlaybackView tour` to `UiRenderSnapshot` and populate it in `glr_ctrl_build_ui_snapshot()`.
 
-Render `tour_ui_hud_render(&ui_snap)` near the top of the scene viewport. Keep it separate from the bottom-mounted REPL replay HUD so a tour demonstrating replay can show both simultaneously.
-
-HUD contents:
+Render a compact HUD at the top of the scene viewport, separate from the bottom REPL replay HUD:
 
 ```text
-Tour  Editing Basics  | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26
-[progress groove]
-Space play  |  ← back  |  → step  |  +/- speed  |  Esc exit
+Tour  Editing Basics | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26
+[progress]
+Space play | ← back | → step | +/- speed | Esc exit
 ```
 
-Use existing UI theme tokens and bitmap fonts. The HUD is display-only; do not add mouse hit-testing in this change.
+Requirements:
 
-The existing pointer/caption overlay remains rendered after the composited app frame, so it stays visually above the HUD.
+- read only from `UiRenderSnapshot`;
+- use existing theme tokens/fonts;
+- no mouse hit-testing;
+- no new profiling section;
+- render before compositor post-processing;
+- leave the existing pointer/ring/echo overlay after compositing so it remains visually topmost.
 
-## File-Level Work Map
+## Remaining File Work
 
-- `src/app/glr_pointer_script.{c,h}`: transport state machine, virtual clock, immediate execution, seeking, playback view.
-- `src/app/glr_tours.{c,h}` and `scripts/gen_tours.py`: pass tour name/file metadata.
-- `src/app/glr_tour_snapshot.{c,h}`: baseline orchestration and cleanup.
-- `gl_repl.c`: route transport keys before cancellation.
-- `src/app/glr_ctrl.c` and internal header: snapshot population, HUD call, post-restore cache/chrome synchronization.
-- `src/ui/app/snapshot.h`: add tour view.
-- `src/ui/subsystems/tour_hud.{c,h}`: HUD renderer.
-- REPL/editor/scene/camera/menu/peer owner modules: add the focused capture/restore APIs described above.
-- `Makefile`: add both test binaries under the GL-stub test set; application sources are already wildcarded.
-- `tours/README.md`, `docs/MODULES.md`, `docs/ARCHITECTURE.md`, and user-facing help text: document controls, state ownership, and rewind limitations.
+### New files
 
-## Implementation Order
+- `src/ui/subsystems/tour_hud.{c,h}`
+- `tests/test_glr_tour_transport.c`
 
-1. Add the focused owner snapshot APIs and their isolated round-trip tests.
-2. Implement `GlrTourSnapshot` capture/restore and verify a composite round trip.
-3. Refactor pointer-script frame advancement into a reusable one-virtual-frame function without changing existing behavior.
-4. Add live-tour state, pause, speed, immediate forward step, and Done.
-5. Add baseline-pending capture and Back/Seeking.
-6. Add host key interception and the HUD.
-7. Update generator metadata, documentation, Makefile tests, and guards.
-8. Run the full verification suite.
+### Primary modifications
 
-Do not begin Back/Seeking until the composite snapshot round-trip test passes.
+- `src/app/glr_pointer_script.{c,h}`: run kinds, state machine, virtual clock, controls, immediate execution, seeking, Done.
+- `src/app/glr_tours.c`: controlled-tour entrypoint and metadata.
+- `scripts/gen_tours.py`: filename emission and catalog timed-script rejection.
+- `gl_repl.c`: transport-before-cancel routing.
+- `src/ui/app/snapshot.h`: playback view.
+- `src/app/glr_ctrl.c`: snapshot population and HUD render call.
+- `Makefile`: add `test_glr_tour_transport` under GL-stub tests.
+- `tours/README.md`, `docs/MODULES.md`, `docs/ARCHITECTURE.md`, and help text.
 
-## Test and Acceptance Plan
+### Already landed; do not reimplement
 
-### Snapshot tests
+- owner snapshot APIs;
+- `GlrTourSnapshot`;
+- `test_glr_tour_snapshot`;
+- `glr_ctrl_after_tour_restore()`.
 
-- Capture two populated user scenes, variables, editor input, selection, config, camera target/momentum, replay, tutorial, menus, and undo/redo.
-- Mutate every captured owner.
-- Restore and compare public views to the baseline.
-- Assert the flat program is dirty and rebuilds to equivalent output.
-- Verify allocation failure leaves the live app unchanged and leaks nothing.
+## Implementation Sequence
 
-### Transport tests
+1. Commit the `source_line` extension with catalog filename metadata and timed-tour rejection.
+2. Refactor the existing frame body into `ps_advance_one_virtual_frame()` while keeping environment and legacy tests unchanged.
+3. Introduce run kind, controlled-tour state, event accounting, speed, pause, immediate Right, and Done.
+4. Add the explicit three-way completion/auto-stop fork.
+5. Integrate baseline-pending capture and Done restart.
+6. Add resumable Back/Seeking using the landed snapshot layer.
+7. Route host transport keys before cancellation.
+8. Add the HUD and UI snapshot field.
+9. Add documentation and run all guards.
 
-- Pause freezes event dispatch and virtual time.
-- Each speed advances the expected virtual-frame count.
-- Right Arrow completes every verb correctly and pauses.
-- A stepped drag preserves held-button behavior across `down`/`glide`/`up`.
-- Escape and cancellation always release held buttons.
-- Left Arrow during an in-flight event returns to its starting boundary.
-- Left Arrow between events returns one completed event.
-- Back reconstructs code commits, config toggles, menu navigation, scene creation/load, and camera drag state.
-- Done remains active; Space restores the baseline and restarts.
-- Event numbering ignores comments/blanks while source lines remain exact.
-- Timed environment scripts retain their original scheduling, auto-stop policy, and lack of HUD.
-- Native and web catalogs parse through the new tour-start path.
-- Tour and REPL replay HUDs render together without overlap.
+Each stage should leave legacy `start_lines()` and environment-script tests passing.
 
-### Required commands
+## Required Tests
+
+### Completion semantics
+
+- Normal final ring remains Playing until ring expiration, then enters Done.
+- Right-stepped final ring enters Done immediately.
+- Backstep counting agrees with both ring cases.
+- Echo and ripple never delay Done.
+- Normal click waits through its release frames.
+- Immediate click presses/releases synchronously.
+- Final `down` enters Done with no held button remaining.
+- Escape from a paused post-`down` boundary releases the button.
+- Back from a paused post-`down` boundary releases before restore.
+
+### Mode compatibility
+
+- Timestamped catalog tour is rejected.
+- Timestamped `start_lines()` remains accepted.
+- Environment capture timing remains unchanged.
+- Legacy `start_lines()` retains overlay-aware auto-stop.
+- Controlled tour enters persistent Done rather than calling stop.
+
+### Control-state matrix
+
+Test every meaningful table entry, especially:
+
+- Right while Playing forces the current event complete and pauses.
+- Right while Done is a no-op.
+- Left while Playing returns before the in-flight event.
+- Left from Done lands on `total - 1`.
+- Space from Done restores the baseline and restarts.
+- Inputs during Baseline Pending and Seeking cannot corrupt state.
+- Speed changes persist through pause, seek, and Done restart.
+
+### Seeking
+
+- Back reconstructs editor commits, config toggles, scene changes, menus, and camera drags.
+- Seek processes no more than 32 events per rendered frame.
+- A `shell:` click yields and resumes on the next frame.
+- Historical overlays are suppressed; the target event overlay is retained.
+- No scene/application time advances during seek.
+
+### Metadata and HUD
+
+- Comments and blanks are excluded from event count.
+- Physical source lines remain correct.
+- Tour filename reaches the HUD.
+- Tour and REPL replay HUDs render without overlap.
+- No HUD appears for environment or legacy runtime scripts.
+
+### Verification
 
 ```sh
 make check-tours-catalog
 make WEB=1 check-tours-catalog
+make test_glr_tour_snapshot USE_GL_STUBS=1
+make test_glr_tour_transport USE_GL_STUBS=1
 make test-stubs
 make gl-repl USE_GL_STUBS=1
 make check-state-ownership
 make check-c99
 ```
 
-Also run the focused tour snapshot/transport tests directly during development.
+## Assumptions
 
-## Assumptions and Boundaries
-
-- Every executable event line is one step; no grouping grammar is added.
-- All live Tours-menu tours expose the transport HUD and controls.
-- Speed affects tour timing only.
-- Back uses one baseline plus fast prefix replay.
-- Filesystem writes, process exit, audio playback position, and other external effects cannot be reversed. The current built-in tours do not use those actions; future authors must avoid them in rewindable tours.
-- Time-driven systems are not simulated during fast seek. They resume from restored baseline state after arrival.
-- Escape and ordinary cancellation preserve the current tour result; only Back and Done-restart restore the baseline.
-- The baseline remains allocated through Paused and Done and is destroyed on Escape, cancellation, failed start, replacement by another tour, or application shutdown.
+- One executable untimed event is one tour step.
+- Normal playback respects every existing `PsWait`, including ring duration.
+- Immediate step and seek intentionally bypass waits.
+- Back uses one baseline plus prefix replay, not per-event snapshots.
+- Filesystem writes, process exit, audio position, and other external effects remain non-reversible.
+- Time-driven settling is not simulated during seek.
+- Controlled tours remain in Done until restarted, canceled, replaced, or exited.
