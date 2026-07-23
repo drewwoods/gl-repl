@@ -73,6 +73,7 @@ typedef enum {
     UI_THEME_AMBER,
     UI_THEME_VIOLET,
     UI_THEME_MONO,
+    UI_THEME_NEON,
     UI_THEME_COUNT
 } UiTheme;
 
@@ -123,7 +124,7 @@ static inline UiTheme ui_theme_active(void) { return (UiTheme)g_ui_theme; }
 
 STATIC_ASSERT(UI_TOK_COUNT == 22,
               "UiThemeToken count changed - update g_ui_theme_table and test_ui_theme");
-STATIC_ASSERT(UI_THEME_COUNT == 6,
+STATIC_ASSERT(UI_THEME_COUNT == 7,
               "UiTheme row count changed - update g_ui_theme_table and test_ui_theme");
 STATIC_ASSERT(UI_THEME_DEFAULT >= 0 && UI_THEME_DEFAULT < UI_THEME_COUNT,
               "UI_THEME_DEFAULT (config.h) out of range for the UiTheme table");

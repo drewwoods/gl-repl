@@ -85,7 +85,7 @@
 /* Active UI color scheme, resolved at compile time. A bare integer
  * index into the UiTheme table in src/ui/theme.h (kept type-free here
  * so config.h stays clear of UI types per the dependency note above):
- *   0 green (default)  1 warm  2 cyan  3 amber  4 violet  5 mono
+ *   0 green  1 warm  2 cyan  3 amber  4 violet  5 mono  6 neon
  * Overridable from the build, e.g.
  * `make sample CPPFLAGS=-DUI_THEME_DEFAULT=1`. theme.h STATIC_ASSERTs
  * the value is in range against the UiTheme enum. */
