@@ -18,8 +18,13 @@ Already landed:
   seeking. This commit also removes `glr_pointer_script_start_lines()` and
   migrates its still-relevant tests.
 
-Remaining work is step 9 host input routing, step 10 HUD/UI integration, and
-step 11 focused transport tests, documentation, and final verification.
+- Step 9, `70a3e951`: host transport-key routing before the cancel intercept.
+- Step 10, `e7516251`: `tour_hud.{c,h}`, the `UiRenderSnapshot.tour` field, and
+  the top-of-scene HUD render call.
+- Step 11, `16201e2a`: `test_glr_tour_transport.c`, documentation
+  (tours/README, MODULES, ARCHITECTURE, F1 help), and full verification.
+
+All steps are landed; the feature is complete.
 
 This is unreleased software, so there is no backward-compatibility path for
 `glr_pointer_script_start_lines()`. There are exactly two run kinds:
@@ -419,10 +424,10 @@ Requirements:
    restart.
 8. **Landed — `17206ba4`:** add resumable Back/Seeking using the snapshot
    layer.
-9. **Remaining:** route host transport keys before cancellation.
-10. **Remaining:** add the HUD and UI snapshot field.
-11. **Remaining:** add the focused transport test, finish documentation/help
-    text, and run all verification commands.
+9. **Landed — `70a3e951`:** route host transport keys before cancellation.
+10. **Landed — `e7516251`:** add the HUD and UI snapshot field.
+11. **Landed — `16201e2a`:** add the focused transport test, finish
+    documentation/help text, and run all verification commands.
 
 Each stage should leave the environment-script behavior intact.
 
