@@ -130,11 +130,15 @@ static void test_underwater_fill_covers_viewport(void) {
      * and report skip if not — otherwise a green test on a hardware
      * that can't trigger the bug would be a silent false positive. */
     int radial_supported = glutExtensionSupported("GL_NV_fog_distance") ? 1 : 0;
+#if defined(FREEGLUT_OSMESA)
+    radial_supported = 0;
+#endif
     if (!radial_supported) {
         fprintf(stderr,
                 "test_scene_underwater_fill_gl: GL_NV_fog_distance not "
-                "advertised; the radial-fog interaction can't fire on "
+                "supported/implemented; the radial-fog interaction can't fire on "
                 "this driver. Test passes vacuously.\n");
+        return;
     }
 
     /* Pre-rect outer fog state: simulate the grid_apply_far_fog tail

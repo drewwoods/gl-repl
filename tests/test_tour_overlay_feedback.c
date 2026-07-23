@@ -109,9 +109,10 @@ static int count_near(int count, float cx, float cy, float r) {
     return c;
 }
 
-/* Capture the tour overlay pass in feedback mode, returning the vertex count. */
+/* Capture the tour overlay pass in feedback mode, returning the vertex count.
+ * The overlay's gl2d_begin sets the projection but no viewport, so set one. */
 static int capture_overlay(void) {
-    glViewport(0, 0, WIN_W, WIN_H);   /* overlay's gl2d_begin sets no viewport */
+    glViewport(0, 0, WIN_W, WIN_H);
     glFeedbackBuffer(FB_CAP, GL_2D, g_fb);
     glRenderMode(GL_FEEDBACK);
     glr_pointer_script_render_overlay(WIN_W, WIN_H);

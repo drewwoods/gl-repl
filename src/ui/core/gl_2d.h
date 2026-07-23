@@ -17,7 +17,13 @@ static inline void gl2d_begin(int w, int h) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    gluOrtho2D(0, w, 0, h);
+    /* glOrtho, not gluOrtho2D: they build the identical matrix, but GLU routes
+     * its internal glOrtho through libGLU's own libGL dispatch. Under OSMesa
+     * (linked against a separate libGL) that dispatch is NOT the current
+     * rendering context, so gluOrtho2D silently no-ops and every 2D overlay
+     * projects through identity. Calling glOrtho directly hits the live
+     * context on every backend. */
+    glOrtho(0.0, (double)w, 0.0, (double)h, -1.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
