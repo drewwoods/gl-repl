@@ -5,8 +5,9 @@ A tour is a `.pointer` script: it drives the same mouse and keyboard handlers
 as a person, and renders a cursor, click ripples, spotlight rings, and caption
 text while it runs. A menu-started tour is a **controlled tour**: it shows a
 transport HUD at the top of the scene and responds to replay-style controls
-(see below). A mouse click, wheel event, or any unrecognized key stops the tour
-and returns control to the user; the transport keys instead drive playback.
+(see below). Clicking the HUD expands/collapses its transport details. A mouse
+click outside the HUD, wheel event, or any unrecognized key stops the tour and
+returns control to the user; the transport keys instead drive playback.
 
 Tours are compiled into the application from [`catalog.ini`](catalog.ini) for
 native builds or [`catalog-emscripten.ini`](catalog-emscripten.ini) for the web
@@ -44,10 +45,15 @@ work when menu positions change.
 
 ## Transport controls
 
-While a menu-started tour runs, a compact HUD at the top of the scene shows the
-tour name, playback state, speed, the current step (`Step n / total`), and the
-active `.pointer` source line. One executable event line is one step; comments
-and blank lines are not steps. These keys drive the tour instead of stopping it:
+While a menu-started tour runs, a small strip at the top of the scene defaults
+to `Tour | <name> | [+]`, leaving the authored narration and scene unobstructed.
+Click anywhere on that strip to expand the playback state, speed, current step
+(`Step n / total`), active `.pointer` source line, progress, and keyboard
+controls. Click anywhere on the expanded HUD to collapse it again. The HUD
+choice survives Back reconstruction; every newly started tour begins compact.
+
+One executable event line is one step; comments and blank lines are not steps.
+These keys drive the tour instead of stopping it:
 
 | Key | Action |
 | --- | --- |

@@ -154,6 +154,7 @@ static int   g_speed_idx = PS_TOUR_SPEED_DEFAULT;
 static float g_frame_credit = 0.0f;     /* virtual-frame accumulator        */
 static const char *g_tour_name = NULL;  /* borrowed HUD metadata            */
 static const char *g_tour_file = NULL;
+static int   g_tour_hud_expanded = 0;   /* compact by default; not rewound  */
 static GlrTourSnapshot *g_baseline = NULL;  /* rewind baseline (NULL until   */
                                             /* BASELINE_PENDING resolves)    */
 static int   g_seek_target = -1;        /* SEEKING: prefix length to reach  */
@@ -658,6 +659,7 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
     g_run_kind = PS_RUN_CONTROLLED_TOUR;
     g_tour_name = name;
     g_tour_file = file;
+    g_tour_hud_expanded = 0;
     g_speed_idx = PS_TOUR_SPEED_DEFAULT;
     /* Defer the baseline capture + first event to the next frame: the Tours
      * menu's close path must fully run first (its state is part of the
@@ -727,6 +729,7 @@ void glr_pointer_script_stop(void) {
     g_tour_state = GLR_TOUR_OFF;
     g_tour_name = NULL;
     g_tour_file = NULL;
+    g_tour_hud_expanded = 0;
     g_seek_target = -1;
     ps_reset_runtime();
 }
@@ -1484,12 +1487,20 @@ GlrTourPlaybackView glr_pointer_script_tour_view(void) {
     v.state = g_tour_state;
     v.name = g_tour_name;
     v.file = g_tour_file;
+    v.hud_expanded = g_tour_hud_expanded;
     v.speed = k_tour_speeds[g_speed_idx];
     v.completed_events = g_completed_events;
     v.current_event = g_current_event;
     v.total_events = g_event_count;
     v.source_line = ps_tour_hud_source_line();
     return v;
+}
+
+int glr_pointer_script_toggle_tour_hud(void) {
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR)
+        return 0;
+    g_tour_hud_expanded = !g_tour_hud_expanded;
+    return 1;
 }
 
 int glr_pointer_script_tour_suppresses_app_tick(void) {

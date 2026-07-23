@@ -607,7 +607,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c); CPU/GPU/Max columns, GPU fed by [`src/support/gpuprof.c`](../src/support/gpuprof.c) timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at [`src/ui/support/memprof.c`](../src/ui/support/memprof.c)) |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed / normals); audited by `check-replay-ui-isolation` |
-| `tour_hud` | **Feature-UI** (controlled tours): top-of-scene transport HUD (name / state / speed / step / source line + progress + controls hint). Reads only `snap->tour` ([`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L119)) under the `tour_ui_*` prefix; display-only, no hit-testing. Separate from the bottom `replay_ui_hud` so both can show at once |
+| `tour_hud` | **Feature-UI** (controlled tours): collapsible top-of-scene transport HUD. Compact mode shows name + expand affordance; expanded mode adds state / speed / step / source line + progress + controls. Reads only `snap->tour` ([`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L119)) under the `tour_ui_*` prefix and returns `UI_HIT_TOUR_HUD`; the controller routes that passive hit to transport-owned expand/collapse state. Separate from the bottom `replay_ui_hud` so both can show at once |
 
 Files that do not belong in this layer:
 

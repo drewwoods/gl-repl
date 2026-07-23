@@ -219,10 +219,15 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y);
 int glr_ctrl_router_handle_camera_motion(int x, int y);
 int glr_ctrl_router_handle_camera_pointer_set(int x, int y);
 
+/* True when canonical UI z-order classifies this point as the visible tour
+ * HUD. The GLUT host uses it before its generic tour-cancel click intercept,
+ * allowing a HUD click to reach the controller and toggle compact/expanded. */
+int glr_ctrl_router_point_on_tour_hud(int x, int y);
+
 /* Dispatch a code-panel UiHit to the owning subsystem. Switches on
  * hit.kind: code text / insert line / gutter / inline color swatch /
  * clear-all chip / panel divider / pin button / menu button / menu item /
- * variable slider / floating color picker control. Returns 1 if the hit
+ * variable slider / floating color picker control / tour HUD. Returns 1 if the hit
  * was consumed (i.e. dispatched to an owner). The (x, y) screen coords
  * are passed through for helpers that need raw mouse coordinates
  * (e.g. color_picker_start expects screen-space my). */

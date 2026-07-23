@@ -14,6 +14,7 @@
 #include "app/glr_ctrl_export.h"
 #include "app/glr_mesh_export.h"     /* glr_export_mesh_ply (F11) */
 #include "app/glr_ctrl_replay_annotations.h"
+#include "app/glr_pointer_script.h"
 #include "subsystems/replay/replay_render.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
@@ -71,6 +72,7 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
+#include "ui/subsystems/tour_hud.h"
 #include "ui/app/autocomplete_panel.h"
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
@@ -1527,7 +1529,20 @@ static int code_panel_target_from_hit(UiHit hit) {
     }
 }
 
+static int route_tour_hud_hit(void) {
+    if (!glr_pointer_script_toggle_tour_hud())
+        return 0;
+    editor_request_redraw();
+    return 1;
+}
+
 int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+    /* HUD expansion is presentation-only. Route before generic click
+     * side-effects so inspecting transport details cannot cancel an inline
+     * rename/file prompt or dismiss a menu the authored tour is using. */
+    if (hit.kind == UI_HIT_TOUR_HUD)
+        return route_tour_hud_hit();
+
     /* Inline rename is a hard modal for keystrokes but NOT for the
      * mouse, so a click otherwise moves the cursor / switches tabs
      * while typed keys still feed the rename buffer — misleading.
@@ -1630,6 +1645,25 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     if (!consumed && dismissed_dropdown)
         return 1;
     return consumed;
+}
+
+/* The GLUT host asks before its generic "real click cancels the tour"
+ * intercept. Reuse canonical z-order classification rather than merely
+ * checking the HUD rectangle: a menu or later floating overlay painted over
+ * the same pixels must keep ownership and must not masquerade as a HUD click. */
+int glr_ctrl_router_point_on_tour_hud(int x, int y) {
+    UiRenderSnapshot snap;
+    UiHit hit;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, x, y, repl_eval_predef_view().count);
+    if (hit.kind != UI_HIT_NONE)
+        return 0;
+    if (glr_ctrl_router_point_in_gl_state_popup(x, y))
+        return 0;
+    hit = ui_panels_hit_test(&snap, x, y, repl_eval_predef_view().count);
+    return hit.kind == UI_HIT_TOUR_HUD;
 }
 
 int glr_ctrl_router_handle_code_panel_drag(int x, int y) {

@@ -32,6 +32,14 @@ frame, and camera eases requested by prefix events resolve immediately. This
 prevents a scene load from flashing the restored baseline camera and replaying
 its ease on every Back.
 
+Post-plan HUD polish makes the overlay compact by default:
+`Tour | <name> | [+]`. A click anywhere on the strip expands the original
+transport details, and a click anywhere on the expanded HUD collapses it.
+Canonical UI hit routing gives later overlays priority and exempts only a real
+HUD press from the host's click-to-cancel rule. `hud_expanded` belongs to
+controlled-tour transport metadata rather than the rewind snapshot, so the
+choice survives Back while each new tour begins compact.
+
 This is unreleased software, so there is no backward-compatibility path for
 `glr_pointer_script_start_lines()`. There are exactly two run kinds:
 environment capture and controlled tours.
@@ -380,10 +388,17 @@ Add:
 
 Add `GlrTourPlaybackView tour` to `UiRenderSnapshot` and populate it in `glr_ctrl_build_ui_snapshot()`.
 
-Render a compact HUD at the top of the scene viewport, separate from the bottom REPL replay HUD:
+Render a compact-by-default HUD at the top of the scene viewport, separate from
+the bottom REPL replay HUD:
 
 ```text
-Tour  Editing Basics | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26
+Tour | Editing Basics | [+]
+```
+
+Clicking it expands the detailed transport surface:
+
+```text
+Tour  Editing Basics | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26  [-]
 [progress]
 Space play | ← back | → step | +/- speed | Esc exit
 ```
@@ -392,7 +407,9 @@ Requirements:
 
 - read only from `UiRenderSnapshot`;
 - use existing theme tokens/fonts;
-- no mouse hit-testing;
+- return a passive `UI_HIT_TOUR_HUD` for the exact rendered bounds;
+- let controller/host routing toggle compact/expanded without canceling;
+- keep the presentation bit outside the rewind baseline;
 - no new profiling section;
 - render before compositor post-processing;
 - leave the existing pointer/ring/echo overlay after compositing so it remains visually topmost.
@@ -497,6 +514,9 @@ Test every meaningful table entry, especially:
 - Comments and blanks are excluded from event count.
 - Physical source lines remain correct.
 - Tour filename reaches the HUD.
+- New tours default to compact; clicks expand and collapse the full surface.
+- Expanded/collapsed choice survives Back reconstruction.
+- A click outside the HUD retains the tour-cancel behavior.
 - Tour and REPL replay HUDs render without overlap.
 - No HUD appears for environment-capture scripts.
 

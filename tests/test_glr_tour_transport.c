@@ -132,6 +132,43 @@ static void test_speed_ladder_and_persistence(void) {
     ASSERT_FLOAT("speed clamps at 0.25x", glr_pointer_script_tour_view().speed, 0.25f);
 }
 
+static void test_hud_defaults_compact_and_survives_backstep(void) {
+    const char *lines[] = {
+        "move 100 100", "move 200 200", "move 300 300"
+    };
+    GlrTourPlaybackView v;
+
+    start_tour(lines, 3);
+    v = glr_pointer_script_tour_view();
+    ASSERT_INT("new tour HUD defaults compact", v.hud_expanded, 0);
+    ASSERT_INT("HUD toggle consumed during tour",
+               glr_pointer_script_toggle_tour_hud(), 1);
+    ASSERT_INT("HUD expands",
+               glr_pointer_script_tour_view().hud_expanded, 1);
+
+    frames(1);  /* capture baseline */
+    ASSERT_TRUE("tour reaches Done", run_until_state(GLR_TOUR_DONE, 30));
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);
+    ASSERT_INT("HUD stays expanded when Back restores baseline",
+               glr_pointer_script_tour_view().hud_expanded, 1);
+    ASSERT_TRUE("backstep settles", run_until_state(GLR_TOUR_PAUSED, 20));
+    ASSERT_INT("HUD stays expanded after prefix replay",
+               glr_pointer_script_tour_view().hud_expanded, 1);
+
+    ASSERT_INT("collapse toggle consumed",
+               glr_pointer_script_toggle_tour_hud(), 1);
+    ASSERT_INT("HUD collapses",
+               glr_pointer_script_tour_view().hud_expanded, 0);
+    glr_pointer_script_stop();
+    ASSERT_INT("HUD toggle ignored without tour",
+               glr_pointer_script_toggle_tour_hud(), 0);
+
+    start_tour(lines, 3);
+    ASSERT_INT("next tour starts compact",
+               glr_pointer_script_tour_view().hud_expanded, 0);
+    glr_pointer_script_stop();
+}
+
 static void test_speed_affects_advance_rate(void) {
     int n = build_many(50);
 
@@ -617,6 +654,7 @@ int main(void) {
     test_baseline_pending_then_playing();
     test_pause_freezes_virtual_time();
     test_speed_ladder_and_persistence();
+    test_hud_defaults_compact_and_survives_backstep();
     test_speed_affects_advance_rate();
     test_right_step_from_paused();
     test_right_while_playing_forces_complete_and_pauses();

@@ -963,7 +963,7 @@ Done; env capture is never canceled and never auto-stops.
 
 Runtime shape:
 
-* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L195) (called
+* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L202) (called
   once per rendered frame) forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
@@ -972,7 +972,7 @@ Runtime shape:
   frames.
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
-  [`PsWait`](../src/app/glr_pointer_script.c#L171) completing does (immediate verbs complete the following virtual
+  [`PsWait`](../src/app/glr_pointer_script.c#L172) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
   **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
   its duration elapses, so a trailing ring delays Done — while `echo` and the
@@ -999,10 +999,15 @@ Runtime shape:
   A target/ease already present in the baseline remains frozen and intact when
   no prefix event replaces it.
 * **HUD.** The controller populates `snap->tour` from
-  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L143) and renders
+  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L144) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top
   of the scene, before the compositor pass and separate from the bottom replay
-  HUD, so a tour demonstrating replay shows both.
+  HUD, so a tour demonstrating replay shows both. It defaults to a compact
+  `Tour | name | [+]` strip. The same snapshot-pure UI module returns
+  `UI_HIT_TOUR_HUD` over its exact compact/expanded bounds; controller routing
+  toggles the transport-owned `hud_expanded` bit. That bit is intentionally
+  outside `GlrTourSnapshot`, so Back reconstruction cannot rewind presentation
+  choice. Every new tour resets it to compact.
 
 ## Keyboard Shortcut Definition Sites
 
@@ -1016,9 +1021,12 @@ centralized keymap.
 Before the controller sees a key, the GLUT host callbacks in
 [`gl_repl.c`](../gl_repl.c) give a running controlled tour first refusal: the
 transport handler (Space/`+`/`=`/`-`/Esc, Left/Right) runs, then the tour-cancel
-intercept (any other real key, or a mouse click/wheel, stops the tour). Only
-keys neither consumes reach `glr_ctrl_keyboard` / `glr_ctrl_special`. Synthetic
-script events call `glr_ctrl_*` directly and bypass this host layer.
+intercept (any other real key, a mouse click outside the tour HUD, or a wheel
+event stops the tour). A left press canonically classified as
+`UI_HIT_TOUR_HUD` reaches the controller first and toggles compact/expanded
+instead of canceling. Only input neither consumes reaches the remaining normal
+routes. Synthetic script events call `glr_ctrl_*` directly and bypass this host
+layer.
 
 `glr_ctrl_keyboard` and `glr_ctrl_special` in
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) route keys. An earlier layer that consumes a key
