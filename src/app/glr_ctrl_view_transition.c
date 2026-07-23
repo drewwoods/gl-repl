@@ -228,3 +228,25 @@ void glr_ctrl_view_reset(void) {
     g_view_xn_phase          = GLR_VIEW_XN_IDLE;
     g_saved_3d_camera_valid  = 0;
 }
+
+void glr_ctrl_view_transition_capture(GlrViewTransitionSnapshot *out) {
+    if (!out)
+        return;
+    out->projection_mix         = g_projection_mix;
+    out->projection_toggle_mix  = g_projection_toggle_mix;
+    out->view_mode_target_ortho = g_view_mode_target_ortho;
+    out->phase                  = (int)g_view_xn_phase;
+    out->saved_3d_camera        = g_saved_3d_camera;
+    out->saved_3d_camera_valid  = g_saved_3d_camera_valid;
+}
+
+void glr_ctrl_view_transition_restore(const GlrViewTransitionSnapshot *snap) {
+    if (!snap)
+        return;
+    g_projection_mix         = snap->projection_mix;
+    g_projection_toggle_mix  = snap->projection_toggle_mix;
+    g_view_mode_target_ortho = snap->view_mode_target_ortho;
+    g_view_xn_phase          = (GlrViewTransitionPhase)snap->phase;
+    g_saved_3d_camera        = snap->saved_3d_camera;
+    g_saved_3d_camera_valid  = snap->saved_3d_camera_valid;
+}

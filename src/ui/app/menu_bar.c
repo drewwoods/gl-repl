@@ -1544,6 +1544,33 @@ void ui_menu_bar_open_state_restore(UiMenuBarOpenState state) {
     submenu_reset();
 }
 
+void ui_menu_bar_runtime_capture(UiMenuBarRuntimeSnapshot *out) {
+    if (!out)
+        return;
+    out->open_menu          = g_open_menu;
+    out->item_hover         = g_menu_item_hover;
+    out->submenu_menu_id    = g_submenu_menu_id;
+    out->submenu_parent_row = g_submenu_parent_row;
+    out->submenu_open_time  = g_submenu_open_time;
+    out->submenu_scroll     = g_submenu_scroll;
+    out->menu_open_time     = g_menu_open_time;
+    out->search_open_time   = g_search_open_time;
+}
+
+void ui_menu_bar_runtime_restore(const UiMenuBarRuntimeSnapshot *snap) {
+    if (!snap)
+        return;
+    g_open_menu          = snap->open_menu;
+    g_menu_item_hover    = snap->item_hover;
+    g_submenu_menu_id    = snap->submenu_menu_id;
+    g_submenu_parent_row = snap->submenu_parent_row;
+    g_submenu_open_time  = snap->submenu_open_time;
+    g_submenu_scroll     = snap->submenu_scroll;
+    g_menu_open_time     = snap->menu_open_time;
+    g_search_open_time   = snap->search_open_time;
+    g_dropdown_cache.valid = 0;   /* derived geometry rebuilds next frame */
+}
+
 void ui_menu_bar_open_config(float now) {
     if (g_open_menu == MENU_CONFIG) {
         ui_menu_bar_close();

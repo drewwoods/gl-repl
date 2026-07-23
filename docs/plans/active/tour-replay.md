@@ -472,4 +472,3 @@ Also run the focused tour snapshot/transport tests directly during development.
 - Time-driven systems are not simulated during fast seek. They resume from restored baseline state after arrival.
 - Escape and ordinary cancellation preserve the current tour result; only Back and Done-restart restore the baseline.
 - The baseline remains allocated through Paused and Done and is destroyed on Escape, cancellation, failed start, replacement by another tour, or application shutdown.
-

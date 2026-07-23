@@ -528,6 +528,53 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
     g_repl_state.flat_program.rebake_ok = 0;
 }
 
+void repl_state_checkpoint_capture(ReplCheckpointState *out) {
+    if (!out)
+        return;
+
+    repl_state_bind_eval_predef_storage();
+    repl_state_refresh_workspace_header_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
+
+    /* Everything except the derived flat program. The flat program is
+     * rebuilt from the document on the next frame (see the restore path). */
+    out->document      = g_repl_state.document;
+    out->variables     = g_repl_state.variables;
+    out->render        = g_repl_state.render;
+    out->scene_runtime = g_repl_state.scene_runtime;
+    out->import_export = g_repl_state.import_export;
+}
+
+void repl_state_checkpoint_restore(const ReplCheckpointState *snapshot) {
+    if (!snapshot)
+        return;
+
+    g_repl_state.document      = snapshot->document;
+    g_repl_state.variables     = snapshot->variables;
+    g_repl_state.render        = snapshot->render;
+    g_repl_state.scene_runtime = snapshot->scene_runtime;
+    g_repl_state.import_export = snapshot->import_export;
+
+    repl_state_bind_eval_predef_storage();
+    ensure_t_var_idx();
+    g_repl_state.document.source_uses_time_dirty = 1;
+    repl_source_scope_depth_cache_invalidate();
+    /* The restored document (and possibly a reshaped predef table) makes
+     * every compiled expression — line indices, compile-time predef slots —
+     * stale wholesale. */
+    repl_expr_cache_invalidate(repl_expr_cache_live());
+    /* The flat program is derived and NOT part of this checkpoint. Force a
+     * full flatten and drop any inherited rebake eligibility / pending args
+     * dirt so no rebake runs against the just-invalidated cache. */
+    g_repl_state.flat_program.cmd_count = 0;
+    g_repl_state.flat_program.overflow_cmd_count = 0;
+    g_repl_state.flat_program.dirty = 1;
+    g_repl_state.flat_program.args_dirty_mask = 0;
+    g_repl_state.flat_program.rebake_ok = 0;
+    repl_state_flat_program_clear_current_block();
+}
+
 /* No in-tree callers today; kept so every state slice has a reset in
  * the per-slice reset family (facade symmetry). */
 /* cppcheck-suppress unusedFunction */

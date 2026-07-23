@@ -370,6 +370,50 @@ void glr_camera_restore(const GlrCameraState *snap) {
     }
 }
 
+void glr_camera_runtime_capture(GlrCameraRuntimeSnapshot *out) {
+    if (!out)
+        return;
+    out->camera            = g_camera;
+    out->target            = g_camera_target;
+    out->target_active     = g_camera_target_active;
+    out->target_decay      = g_camera_target_decay;
+    out->control_mode      = g_control_mode;
+    out->scene_default     = g_scene_camera_default;
+    out->scene_default_set = g_scene_camera_default_set;
+    out->pointer_x         = g_pointer_x;
+    out->pointer_y         = g_pointer_y;
+    out->pointer_button    = g_pointer_button;
+    out->mouse_mods        = g_mouse_mods;
+    out->vel_rx            = g_vel_rx;
+    out->vel_ry            = g_vel_ry;
+    out->vel_tx            = g_vel_tx;
+    out->vel_ty            = g_vel_ty;
+    out->vel_tz            = g_vel_tz;
+    out->vel_zoom          = g_vel_zoom;
+}
+
+void glr_camera_runtime_restore(const GlrCameraRuntimeSnapshot *snap) {
+    if (!snap)
+        return;
+    g_camera                   = snap->camera;
+    g_camera_target            = snap->target;
+    g_camera_target_active     = snap->target_active;
+    g_camera_target_decay      = snap->target_decay;
+    g_control_mode             = snap->control_mode;
+    g_scene_camera_default     = snap->scene_default;
+    g_scene_camera_default_set = snap->scene_default_set;
+    g_pointer_x                = snap->pointer_x;
+    g_pointer_y                = snap->pointer_y;
+    g_pointer_button           = snap->pointer_button;
+    g_mouse_mods               = snap->mouse_mods;
+    g_vel_rx                   = snap->vel_rx;
+    g_vel_ry                   = snap->vel_ry;
+    g_vel_tx                   = snap->vel_tx;
+    g_vel_ty                   = snap->vel_ty;
+    g_vel_tz                   = snap->vel_tz;
+    g_vel_zoom                 = snap->vel_zoom;
+}
+
 void glr_camera_set_scene_default(const GlrCameraState *pose) {
     if (pose) {
         g_scene_camera_default = *pose;

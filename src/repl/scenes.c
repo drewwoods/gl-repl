@@ -1136,3 +1136,42 @@ void repl_scenes_reset(void) {
      * reset alongside. */
     scene_cfg_reset_all();
 }
+
+/* Whole-catalog snapshot. The slot array dominates (~10 MB: 8 * SceneSnapshot),
+ * so this is heap-allocated. Copies every slot verbatim (occupied or not — a
+ * whole-array copy is drop-proof if UserScene grows a field) plus the active
+ * index, the LRU tick, and the pre-example cfg bag. */
+struct ReplScenesSnapshot {
+    UserScene     slots[MAX_USER_SCENES];
+    int           active_user_scene;
+    uint32_t      user_scene_tick;
+    ReplConfigBag pre_example;
+};
+
+ReplScenesSnapshot *repl_scenes_snapshot_capture(void) {
+    ReplScenesSnapshot *s =
+        (ReplScenesSnapshot *)malloc(sizeof(ReplScenesSnapshot));
+    if (!s)
+        return NULL;
+    /* Deliberately NOT repl_scenes_save_active_scene_if_any() — recording the
+     * catalog as-is, not flushing the live document into its slot. */
+    memcpy(s->slots, g_user_scenes, sizeof(g_user_scenes));
+    s->active_user_scene = g_active_user_scene;
+    s->user_scene_tick   = g_user_scene_tick;
+    s->pre_example       = g_pre_example;
+    return s;
+}
+
+int repl_scenes_snapshot_restore(const ReplScenesSnapshot *snapshot) {
+    if (!snapshot)
+        return 0;
+    memcpy(g_user_scenes, snapshot->slots, sizeof(g_user_scenes));
+    g_active_user_scene = snapshot->active_user_scene;
+    g_user_scene_tick   = snapshot->user_scene_tick;
+    g_pre_example       = snapshot->pre_example;
+    return 1;
+}
+
+void repl_scenes_snapshot_destroy(ReplScenesSnapshot *snapshot) {
+    free(snapshot);
+}

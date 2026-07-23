@@ -81,6 +81,23 @@ typedef struct {
     unsigned int generation;
 } EditorUndoRingState;
 
+/* Opaque, heap-backed snapshot of the LIVE undo/redo history — the actual
+ * ring entries, not just the head/count pointers that EditorUndoRingState
+ * carries. Used by the tour baseline (src/app/glr_tour_snapshot.c) so Back /
+ * Done-restart can reinstate the exact undo history the user had when the
+ * tour began.
+ *
+ * Capture copies only the live undo and redo entries (g_undo_count +
+ * g_redo_count of the 64 fixed slots), in logical oldest-to-newest order, plus
+ * the generation counter. Restore reinstates them into a canonical ring layout
+ * (entries at slots [0..count), head == count) and restores the generation.
+ * Returns NULL on allocation failure; destroy frees the snapshot. */
+typedef struct EditorUndoHistorySnapshot EditorUndoHistorySnapshot;
+
+EditorUndoHistorySnapshot *editor_undo_history_capture(void);
+int  editor_undo_history_restore(const EditorUndoHistorySnapshot *snapshot);
+void editor_undo_history_destroy(EditorUndoHistorySnapshot *snapshot);
+
 /* Save/restore helpers for manual snapshot capture and restore. Used by
  * import/export code and by editor input's aborted-navigation rollback to
  * preserve full state without involving the history rings.

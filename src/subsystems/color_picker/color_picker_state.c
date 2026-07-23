@@ -531,6 +531,48 @@ void color_picker_state_reset(void) {
     g_cp_key_set = 0;
 }
 
+void color_picker_runtime_capture(ColorPickerRuntimeSnapshot *out) {
+    if (!out)
+        return;
+    out->open_line     = g_cp_line;
+    out->hue           = g_cp_hue;
+    out->sat           = g_cp_sat;
+    out->val           = g_cp_val;
+    out->alpha         = g_cp_alpha;
+    out->px            = g_cp_px;
+    out->py            = g_cp_py;
+    out->drag          = (int)g_cp_drag;
+    out->has_alpha     = g_cp_has_alpha;
+    out->value_max     = g_cp_value_max;
+    out->undo_captured = g_cp_undo_captured;
+    out->palette_tab   = g_cp_tab;
+    out->key_set       = g_cp_key_set;
+    out->key_hue       = g_cp_key_hue;
+    out->key_sat       = g_cp_key_sat;
+    out->key_val       = g_cp_key_val;
+}
+
+void color_picker_runtime_restore(const ColorPickerRuntimeSnapshot *snap) {
+    if (!snap)
+        return;
+    g_cp_line          = snap->open_line;
+    g_cp_hue           = snap->hue;
+    g_cp_sat           = snap->sat;
+    g_cp_val           = snap->val;
+    g_cp_alpha         = snap->alpha;
+    g_cp_px            = snap->px;
+    g_cp_py            = snap->py;
+    g_cp_drag          = (CpDragTarget)snap->drag;
+    g_cp_has_alpha     = snap->has_alpha;
+    g_cp_value_max     = snap->value_max;
+    g_cp_undo_captured = snap->undo_captured;
+    g_cp_tab           = snap->palette_tab;
+    g_cp_key_set       = snap->key_set;
+    g_cp_key_hue       = snap->key_hue;
+    g_cp_key_sat       = snap->key_sat;
+    g_cp_key_val       = snap->key_val;
+}
+
 int color_picker_active_line(void) {
     return g_cp_line;
 }

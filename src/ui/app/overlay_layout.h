@@ -91,4 +91,18 @@ void ui_overlay_layout_panel_pos(const UiOverlayLayoutIn *in,
 /* Drop all eased positions (next tick / query starts from targets). */
 void ui_overlay_layout_reset(void);
 
+/* Snapshot of the eased panel-glide state: each panel's live/valid flag and
+ * eased position, plus the last-tick reserved band height. Used by the tour
+ * baseline so Back / Done-restart put the floating panels back where they were
+ * gliding to, instead of re-snapping. */
+typedef struct {
+    int   valid[UI_OVERLAY_PANEL_COUNT];
+    float x[UI_OVERLAY_PANEL_COUNT];
+    float y[UI_OVERLAY_PANEL_COUNT];
+    int   band_h;
+} UiOverlayLayoutSnapshot;
+
+void ui_overlay_layout_capture(UiOverlayLayoutSnapshot *out);
+void ui_overlay_layout_restore(const UiOverlayLayoutSnapshot *snapshot);
+
 #endif /* UI_APP_OVERLAY_LAYOUT_H */

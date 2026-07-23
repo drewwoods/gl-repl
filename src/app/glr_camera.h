@@ -93,6 +93,28 @@ void glr_camera_clear_scene_default(void);
 void glr_camera_capture(GlrCameraState *out);
 void glr_camera_restore(const GlrCameraState *snapshot);
 
+/* Complete camera-runtime snapshot: everything glr_camera owns, unlike the
+ * pose-only glr_camera_capture above. Covers the live pose, the ease target +
+ * active flag + per-ease decay, the control mode, the scene-default pose + its
+ * set flag, the internal pointer/button cache, the modifier mask, and all six
+ * momentum velocities. Used by the tour baseline so Back / Done-restart put the
+ * camera (and any in-flight ease/momentum) back exactly as the tour began. */
+typedef struct {
+    GlrCameraState       camera;
+    GlrCameraState       target;
+    int                  target_active;
+    float                target_decay;
+    GlrCameraControlMode control_mode;
+    GlrCameraState       scene_default;
+    int                  scene_default_set;
+    int                  pointer_x, pointer_y, pointer_button;
+    int                  mouse_mods;
+    float                vel_rx, vel_ry, vel_tx, vel_ty, vel_tz, vel_zoom;
+} GlrCameraRuntimeSnapshot;
+
+void glr_camera_runtime_capture(GlrCameraRuntimeSnapshot *out);
+void glr_camera_runtime_restore(const GlrCameraRuntimeSnapshot *snapshot);
+
 /* ---- Modelview projection (camera apply) --------------------------- */
 
 /* Minimal {pose} subset of GlrCameraState that scene callers need:

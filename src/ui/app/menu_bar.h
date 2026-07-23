@@ -84,6 +84,27 @@ typedef struct {
 UiMenuBarOpenState ui_menu_bar_open_state_capture(void);
 void ui_menu_bar_open_state_restore(UiMenuBarOpenState state);
 
+/* Complete menu-bar runtime snapshot: the open top-level menu, the hovered
+ * dropdown row, the open flyout's parent/menu/open-clock/scroll, and the menu +
+ * search fade clocks. Broader than UiMenuBarOpenState (which frames only the
+ * top-level dropdown for the Scene cycle rows). The dropdown geometry cache is
+ * derived and intentionally excluded — it rebuilds from these on the next
+ * frame. Used by the tour baseline so Back / Done-restart put an open menu (and
+ * any flyout) back exactly as the tour began. */
+typedef struct {
+    int   open_menu;
+    int   item_hover;
+    int   submenu_menu_id;
+    int   submenu_parent_row;
+    float submenu_open_time;
+    int   submenu_scroll;
+    float menu_open_time;
+    float search_open_time;
+} UiMenuBarRuntimeSnapshot;
+
+void ui_menu_bar_runtime_capture(UiMenuBarRuntimeSnapshot *out);
+void ui_menu_bar_runtime_restore(const UiMenuBarRuntimeSnapshot *snapshot);
+
 /* Notify menu bar that search overlay became active (used to highlight Search
  * pin button). `now` seeds the highlight fade-in. */
 void ui_menu_bar_note_search_opened(float now);

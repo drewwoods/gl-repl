@@ -75,6 +75,38 @@ void editor_state_reset(void) {
     g_editor_state = *editor_state_get_defaults();
 }
 
+void editor_state_session_capture(EditorSessionSnapshot *snapshot) {
+    if (!snapshot)
+        return;
+    editor_state_get_defaults();  /* ensure sentinels are live before copy */
+    snapshot->buffer       = g_editor_state.buffer;
+    snapshot->input        = g_editor_state.input;
+    snapshot->selection    = g_editor_state.selection;
+    snapshot->clipboard    = g_editor_state.clipboard;
+    snapshot->search       = g_editor_state.search;
+    snapshot->autocomplete = g_editor_state.autocomplete;
+    snapshot->scroll       = g_editor_state.scroll;
+    snapshot->document     = g_editor_state.document;
+    snapshot->cursor_blink = g_editor_state.cursor_blink;
+}
+
+void editor_state_session_restore(const EditorSessionSnapshot *snapshot) {
+    if (!snapshot)
+        return;
+    g_editor_state.buffer       = snapshot->buffer;
+    g_editor_state.input        = snapshot->input;
+    g_editor_state.selection    = snapshot->selection;
+    g_editor_state.clipboard    = snapshot->clipboard;
+    g_editor_state.search       = snapshot->search;
+    g_editor_state.autocomplete = snapshot->autocomplete;
+    g_editor_state.scroll       = snapshot->scroll;
+    g_editor_state.document     = snapshot->document;
+    g_editor_state.cursor_blink = snapshot->cursor_blink;
+    /* Transient overlay lists (transformers/highlights/virtual_lines/
+     * line_overrides) are deliberately left as-is; the controller refills
+     * them next frame. */
+}
+
 /* No in-tree callers today; kept so the buffer facade stays complete
  * alongside the narrower line accessors below. */
 /* cppcheck-suppress unusedFunction */

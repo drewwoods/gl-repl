@@ -203,6 +203,27 @@ void editor_state_capture(EditorState *snapshot);
 void editor_state_restore(const EditorState *snapshot);
 void editor_state_reset(void);
 
+/* Persistent editor-session slices, EXCLUDING the per-frame transient overlay
+ * lists (transformers, highlights, virtual lines, line overrides) — those are
+ * refilled by the controller every frame and carry borrowed pointers, so a
+ * long-lived baseline (the tour snapshot) must not copy them. The REPL command
+ * array and this buffer restore in lockstep; the tour-baseline restore pairs
+ * this with repl_state_checkpoint_restore(). */
+typedef struct {
+    EditorBuffer            buffer;
+    EditorInputState        input;
+    EditorSelectionState    selection;
+    EditorClipboardState    clipboard;
+    EditorSearchState       search;
+    EditorAutocompleteState autocomplete;
+    EditorScrollState       scroll;
+    EditorDocumentState     document;
+    EditorCursorBlinkState  cursor_blink;
+} EditorSessionSnapshot;
+
+void editor_state_session_capture(EditorSessionSnapshot *snapshot);
+void editor_state_session_restore(const EditorSessionSnapshot *snapshot);
+
 /* Struct-level access to the live buffer. Most readers and writers should use
  * the slice-level API below. */
 const EditorBuffer *editor_state_buffer(void);

@@ -185,3 +185,25 @@ void ui_overlay_layout_panel_pos(const UiOverlayLayoutIn *in,
 void ui_overlay_layout_reset(void) {
     memset(&g_ovl, 0, sizeof(g_ovl));
 }
+
+void ui_overlay_layout_capture(UiOverlayLayoutSnapshot *out) {
+    if (!out)
+        return;
+    for (int i = 0; i < UI_OVERLAY_PANEL_COUNT; i++) {
+        out->valid[i] = g_ovl.valid[i];
+        out->x[i]     = g_ovl.x[i];
+        out->y[i]     = g_ovl.y[i];
+    }
+    out->band_h = g_ovl.band_h;
+}
+
+void ui_overlay_layout_restore(const UiOverlayLayoutSnapshot *snap) {
+    if (!snap)
+        return;
+    for (int i = 0; i < UI_OVERLAY_PANEL_COUNT; i++) {
+        g_ovl.valid[i] = snap->valid[i];
+        g_ovl.x[i]     = snap->x[i];
+        g_ovl.y[i]     = snap->y[i];
+    }
+    g_ovl.band_h = snap->band_h;
+}

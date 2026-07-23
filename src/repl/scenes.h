@@ -161,4 +161,20 @@ int  repl_scenes_activate_first_loaded_slot(void);
 /* Drop all user-scene state. Called from glr_ctrl_reset_all. */
 void repl_scenes_reset(void);
 
+/* Opaque, heap-backed snapshot of the whole user-scene catalog: every slot's
+ * occupancy/name/LRU timestamp/SceneSnapshot, the active user-scene index, the
+ * monotonic scene tick, and the pre-example config bag. Used by the tour
+ * baseline (src/app/glr_tour_snapshot.c) so Back / Done-restart reinstate the
+ * exact scene catalog the tour started from.
+ *
+ * Capture deliberately does NOT call repl_scenes_save_active_scene_if_any() —
+ * that would mutate the catalog (flush the live document into its slot) while
+ * taking the baseline. It records the catalog exactly as it stands. Returns
+ * NULL on allocation failure; destroy frees it. */
+typedef struct ReplScenesSnapshot ReplScenesSnapshot;
+
+ReplScenesSnapshot *repl_scenes_snapshot_capture(void);
+int  repl_scenes_snapshot_restore(const ReplScenesSnapshot *snapshot);
+void repl_scenes_snapshot_destroy(ReplScenesSnapshot *snapshot);
+
 #endif /* REPL_SCENES_H */

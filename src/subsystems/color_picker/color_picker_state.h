@@ -150,6 +150,31 @@ void color_picker_start(int cmd_idx, int my);
 int  color_picker_stop(void);
 void color_picker_state_reset(void);
 
+/* Complete color-picker runtime snapshot: the open source line, the HSV/alpha
+ * slider values, the anchor, the value limit, the RGBA/has-alpha flag, the
+ * active drag target, the undo-captured flag, and the palette tab + harmony key
+ * state. The installed host bridge pointer and the derived Full-grid palette
+ * cache are deliberately excluded — the host is process-global and the cache
+ * rebuilds on demand. `drag` carries the file-local CpDragTarget value as an
+ * int so the enum stays peer-private. Used by the tour baseline so Back /
+ * Done-restart put an open picker (mid-drag included) back as the tour began. */
+typedef struct {
+    int          open_line;         /* g_cp_line, -1 when closed */
+    float        hue, sat, val;
+    float        alpha;
+    int          px, py;
+    int          drag;              /* CpDragTarget (peer-private enum) as int */
+    int          has_alpha;
+    float        value_max;
+    int          undo_captured;
+    CpPaletteTab palette_tab;
+    int          key_set;
+    float        key_hue, key_sat, key_val;
+} ColorPickerRuntimeSnapshot;
+
+void color_picker_runtime_capture(ColorPickerRuntimeSnapshot *out);
+void color_picker_runtime_restore(const ColorPickerRuntimeSnapshot *snapshot);
+
 /* Source-cmd index of the open picker, or -1 when closed. */
 int  color_picker_active_line(void);
 

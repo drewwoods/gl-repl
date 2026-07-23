@@ -10,6 +10,7 @@
 #define GLR_CTRL_INTERNAL_H
 
 #include "editor/input.h"   /* EditorInputDispatchEffects (by-value seam param) */
+#include "app/glr_camera.h" /* GlrCameraState for the view-transition snapshot */
 
 struct UiRenderSnapshot;    /* opaque here — only a pointer crosses the seam */
 
@@ -55,6 +56,23 @@ float glr_ctrl_projection_toggle_mix(void);
 
 /* Reset the transition state machine to the perspective default (reset_all). */
 void  glr_ctrl_view_reset(void);
+
+/* Complete snapshot of the 2D/3D view-transition state machine: both
+ * projection mixes, the target ortho mode, the phase, the saved 3D camera, and
+ * its validity flag. Used by the tour baseline so Back / Done-restart put the
+ * view-mode blend back exactly as the tour began (paired with the camera
+ * runtime restore). */
+typedef struct {
+    float          projection_mix;
+    float          projection_toggle_mix;
+    int            view_mode_target_ortho;
+    int            phase;             /* GlrViewTransitionPhase (file-local enum) */
+    GlrCameraState saved_3d_camera;
+    int            saved_3d_camera_valid;
+} GlrViewTransitionSnapshot;
+
+void glr_ctrl_view_transition_capture(GlrViewTransitionSnapshot *out);
+void glr_ctrl_view_transition_restore(const GlrViewTransitionSnapshot *snapshot);
 
 /* Push the camera control mode (2D vs 3D) to match the current view state.
  * Called by the camera-mouse routers after a drag. */

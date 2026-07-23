@@ -11,6 +11,7 @@
 #include "input.h"
 #include "repl/command_store.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
@@ -91,6 +92,90 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     editor_insert_mode_set(0);
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_source_dirty();
+}
+
+struct EditorUndoHistorySnapshot {
+    int                 undo_count;
+    int                 redo_count;
+    unsigned int        generation;
+    EditorUndoSnapshot *undo;   /* [undo_count], oldest-to-newest */
+    EditorUndoSnapshot *redo;   /* [redo_count], oldest-to-newest */
+};
+
+/* Copy `count` live ring entries oldest-to-newest out of `ring`, whose next
+ * write slot is `head`. Returns a heap array (caller frees), or NULL on OOM
+ * or when count == 0. */
+static EditorUndoSnapshot *undo_history_copy_ring(const EditorUndoSnapshot *ring,
+                                                  int head, int count) {
+    if (count <= 0)
+        return NULL;
+    EditorUndoSnapshot *out =
+        (EditorUndoSnapshot *)malloc((size_t)count * sizeof(EditorUndoSnapshot));
+    if (!out)
+        return NULL;
+    for (int i = 0; i < count; i++) {
+        int idx = ((head - count + i) % REPL_UNDO_DEPTH + REPL_UNDO_DEPTH)
+                  % REPL_UNDO_DEPTH;
+        out[i] = ring[idx];
+    }
+    return out;
+}
+
+EditorUndoHistorySnapshot *editor_undo_history_capture(void) {
+    EditorUndoHistorySnapshot *s =
+        (EditorUndoHistorySnapshot *)calloc(1, sizeof(*s));
+    if (!s)
+        return NULL;
+    s->undo_count = g_undo_count;
+    s->redo_count = g_redo_count;
+    s->generation = g_undo_generation;
+
+    if (s->undo_count > 0) {
+        s->undo = undo_history_copy_ring(g_undo_buf, g_undo_head, s->undo_count);
+        if (!s->undo) {
+            editor_undo_history_destroy(s);
+            return NULL;
+        }
+    }
+    if (s->redo_count > 0) {
+        s->redo = undo_history_copy_ring(g_redo_buf, g_redo_head, s->redo_count);
+        if (!s->redo) {
+            editor_undo_history_destroy(s);
+            return NULL;
+        }
+    }
+    return s;
+}
+
+int editor_undo_history_restore(const EditorUndoHistorySnapshot *snapshot) {
+    if (!snapshot)
+        return 0;
+
+    editor_undo_clear();
+    int un = snapshot->undo_count;
+    if (un > REPL_UNDO_DEPTH) un = REPL_UNDO_DEPTH;
+    for (int i = 0; i < un; i++)
+        g_undo_buf[i] = snapshot->undo[i];
+    g_undo_count = un;
+    g_undo_head = un % REPL_UNDO_DEPTH;
+
+    int rn = snapshot->redo_count;
+    if (rn > REPL_UNDO_DEPTH) rn = REPL_UNDO_DEPTH;
+    for (int i = 0; i < rn; i++)
+        g_redo_buf[i] = snapshot->redo[i];
+    g_redo_count = rn;
+    g_redo_head = rn % REPL_UNDO_DEPTH;
+
+    g_undo_generation = snapshot->generation;
+    return 1;
+}
+
+void editor_undo_history_destroy(EditorUndoHistorySnapshot *snapshot) {
+    if (!snapshot)
+        return;
+    free(snapshot->undo);
+    free(snapshot->redo);
+    free(snapshot);
 }
 
 void editor_undo_ring_state_capture(EditorUndoRingState *state) {
