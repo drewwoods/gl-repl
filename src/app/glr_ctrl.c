@@ -2851,6 +2851,22 @@ void glr_ctrl_reset_all(void) {
     glr_ctrl_sync_ui_chrome();
 }
 
+void glr_ctrl_after_tour_restore(void) {
+    /* Steps 11-12 of the tour-restore order. The owner restores in
+     * glr_tour_snapshot_restore() put presentation/camera/menu/peer state back;
+     * here we re-derive the app-side caches that hang off them. NOT
+     * glr_ctrl_reset_transients() — that would clear the restored camera scene
+     * default, close the restored menu, and stop the restored color picker. */
+    repl_state_refresh_workspace_header_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
+    glr_ctrl_sync_ui_chrome();
+    /* The camera control mode is a function of the restored view-transition
+     * phase + presentation ortho flag; re-derive it so a mid-transition
+     * baseline resumes with the right 2D/3D drag behavior. */
+    glr_ctrl_sync_camera_control_mode();
+}
+
 void glr_ctrl_sync_ui_chrome(void) {
     GlrPresentationState p = glr_state_presentation();
     UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();

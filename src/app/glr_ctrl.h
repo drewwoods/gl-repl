@@ -69,6 +69,13 @@ void glr_ctrl_reset_all(void);
  * camera / UI / picker / controller state, not editor-text state. */
 void glr_ctrl_reset_transients(void);
 
+/* Re-sync controller-derived chrome and refresh the export/render/camera text
+ * caches after a tour baseline restore (glr_tour_snapshot_restore). Steps 11-12
+ * of the plan's restore order. Deliberately does NOT call
+ * glr_ctrl_reset_transients() — that would erase the just-restored camera
+ * defaults, open menus, and peer state. */
+void glr_ctrl_after_tour_restore(void);
+
 /* Layout provider installed on the editor at glr_ctrl_init_gl so
  * src/editor/ can query the current code-panel layout without
  * depending on src/app/glr_state.h. */
