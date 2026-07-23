@@ -447,6 +447,13 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Left / Right         \tStep backward / forward (when paused)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "", "Stop replay");
     nk = key_emit(nk, "");
+    nk = key_emit(nk, "Guided Tours (while a Tours-menu tour runs):");
+    nk = key_emit(nk, "  Space                \tPause / resume (restart from the end)");
+    nk = key_emit(nk, "  Right                \tStep one event, then pause");
+    nk = key_emit(nk, "  Left                 \tBackstep to the previous step");
+    nk = key_emit(nk, "  + / -                \tChange tour speed (0.25x .. 16x)");
+    nk = key_emit(nk, "  Esc                  \tExit tour (keeps its result)");
+    nk = key_emit(nk, "");
     nk = key_emit(nk, "Render State:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_PANEL), KM_MODS(GLR_CODE_PANEL), 0, "",
                           "Cycle code panel layout");

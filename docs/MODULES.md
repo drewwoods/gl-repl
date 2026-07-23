@@ -116,7 +116,7 @@ Consequences:
   editor text and REPL command state. A failed validation updates
   neither. Undo restores both sides together.
 - **UI is view + hit-test, not a controller.** Renderers consume
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L51) and return.
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L51) and return.
   `glr_ctrl` dispatches based on `UiHit.kind`. There is no central
   dispatch enum; the editor and the peer subsystems are each their
   own controller.
@@ -263,7 +263,7 @@ lists to make the layer boundaries observable.
   / search/theme helpers, [`src/support/cpuprof.c`](../src/support/cpuprof.c). It deliberately does
   **not** link `src/ui/app`: the demo proves the editor model can render
   through generic UI primitives without the REPL code-panel adapter,
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
   shim-free: edit-line ownership lives in
   `EditorState.document.edit_line_idx`, and the demo's input dispatcher
   reaches edit-line through `editor_state_edit_line` / `_set` like the
@@ -430,8 +430,9 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the [`EditorState`](../src/editor/state.h#L175) text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state, owned by the app layer rather than [`ReplRuntimeState`](../src/repl/state.h#L18); reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
-| `src/app/glr_pointer_script` | Scripted synthetic pointer/keyboard engine: completion-driven untimed sequences (including `pause` and non-blocking, duration-controlled `echo` captions) or absolute-timestamp capture scripts, env-driven capture mode (`GLR_POINTER_SCRIPT`, video recording) plus runtime-started mode with auto-stop (`glr_pointer_script_start_lines`), symbolic point targets (`menu:`/`item:`/`sub:`/`pin:`/`scene:` resolved against live app layout, plus web-only `shell:` DOM controls), and the cursor/ripple/ring/caption overlay |
-| `src/app/glr_tours` | Built-in guided-tour catalog behind the Tours menu — file-backed like the example scenes (`tours/*.pointer` plus native `catalog.ini` / web `catalog-emscripten.ini`, compiled in by `scripts/gen_tours.py`), played as completion-driven `glr_pointer_script` sequences and authored with symbolic targets so they play at any window size; any real key/click cancels (intercepted in `gl_repl`'s GLUT callbacks) |
+| `src/app/glr_pointer_script` | Scripted synthetic pointer/keyboard engine. Two run kinds: env-driven capture (`GLR_POINTER_SCRIPT`, video recording; untimed-completion or absolute-timestamp, never canceled, no HUD) and menu-started **controlled tours** (untimed only; `glr_pointer_script_start_tour`) with a virtual clock, a `0.25×`–`16×` speed ladder, play/pause, immediate Right-Arrow step, Left-Arrow backstep (one whole-app baseline + prefix replay via `glr_tour_snapshot`), a persistent Done state, and the [`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L119) HUD feed. Symbolic point targets (`menu:`/`item:`/`sub:`/`pin:`/`scene:` resolved against live app layout, plus web-only `shell:` DOM controls) and the cursor/ripple/ring/caption overlay |
+| `src/app/glr_tour_snapshot` | Whole-app tour-rewind baseline: composes the focused per-owner captures (repl checkpoint, editor session, undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/help-session by-value states, and the camera / view-transition / menu-bar / color-picker / overlay-layout runtime snapshots) into one opaque, heap-allocated `GlrTourSnapshot`. Excludes derived state (flat program, renderer resources, controller frame caches); restore leaves the flat program dirty. [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L77) re-syncs derived chrome + export strings afterward |
+| `src/app/glr_tours` | Built-in guided-tour catalog behind the Tours menu — file-backed like the example scenes (`tours/*.pointer` plus native `catalog.ini` / web `catalog-emscripten.ini`, compiled in by `scripts/gen_tours.py`), played as controlled tours via `glr_pointer_script_start_tour` (name + `.pointer` filename passed for the HUD) and authored with symbolic targets so they play at any window size; a mouse click/wheel or any non-transport key cancels (intercepted in `gl_repl`'s GLUT callbacks), while Space/arrows/`+`/`-`/Esc drive transport |
 | `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D stage + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files |
 
@@ -585,13 +586,13 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | Module | Role |
 |--------|------|
 | `ui_state` | Owns [`UiState`](../src/ui/app/state.h#L20): viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` and are re-exported by `repl_state_views` where a view facade needs them |
-| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70), the read-only bundle passed to every UI renderer |
+| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L51), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L51); `glr_ctrl` dispatches on it |
 | `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L51) |
 | `ui_text_panel` | Generic text-panel renderer and hit-tester over [`UiTextPanelSnapshot`](../src/ui/core/text_panel.h#L265); owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`). REPL/editor-free; used by `editor_search` |
-| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
+| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure 3D viewport / code-panel rectangle geometry |
 | `ui_overlay_layout` ([`src/ui/app/overlay_layout.c`](../src/ui/app/overlay_layout.c)) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on. View builders read resolved positions; unticked queries fall back to pure solve targets |
 | `ui_text_layout` ([`src/ui/core/text_layout.c`](../src/ui/core/text_layout.c)) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / [`CodeLayout`](../src/ui/core/text_layout.h#L57) / [`CodeWrapIter`](../src/ui/core/text_layout.h#L70) convention |
@@ -606,6 +607,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c); CPU/GPU/Max columns, GPU fed by [`src/support/gpuprof.c`](../src/support/gpuprof.c) timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at [`src/ui/support/memprof.c`](../src/ui/support/memprof.c)) |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed / normals); audited by `check-replay-ui-isolation` |
+| `tour_hud` | **Feature-UI** (controlled tours): top-of-scene transport HUD (name / state / speed / step / source line + progress + controls hint). Reads only `snap->tour` ([`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L119)) under the `tour_ui_*` prefix; display-only, no hit-testing. Separate from the bottom `replay_ui_hud` so both can show at once |
 
 Files that do not belong in this layer:
 

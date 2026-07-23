@@ -94,13 +94,13 @@
 
 /* --- controlled tours (transport + backstep) ---------------------------- */
 
-/* A controlled tour is a third pointer-script run kind, alongside env-driven
- * capture (glr_pointer_script_load_env) and the legacy runtime
- * (glr_pointer_script_start_lines). It layers replay-style transport controls
- * on top of an untimed script: play/pause, immediate forward step, backstep
- * (via one whole-app baseline plus prefix replay), a discrete speed ladder,
- * and a persistent Done state at the end (no auto-stop). The legacy and
- * env-capture kinds are unchanged and never get a HUD or transport. */
+/* A controlled tour is one of two pointer-script run kinds, alongside
+ * env-driven capture (glr_pointer_script_load_env). It layers replay-style
+ * transport controls on top of an untimed script: play/pause, immediate
+ * forward step, backstep (via one whole-app baseline plus prefix replay), a
+ * discrete speed ladder, and a persistent Done state at the end (no
+ * auto-stop). The env-capture kind is never canceled, never auto-stops, and
+ * never gets a HUD or transport. */
 typedef enum {
     GLR_TOUR_OFF = 0,          /* no controlled tour                       */
     GLR_TOUR_BASELINE_PENDING, /* start_tour called; capture on next frame */

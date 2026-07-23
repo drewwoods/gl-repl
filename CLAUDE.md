@@ -275,7 +275,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | [`render_types.h`](src/render3d/render_types.h) / [`palette.h`](src/render3d/palette.h) | Shared config/context types; overlay/guide color tokens |
 | **src/ui/** | 2D view rendering + hit-test (pure over snapshots) |
 | `core/` | [`gl_2d.h`](src/ui/core/gl_2d.h), `text_layout.{c,h}`, `hit.h` ([`UiHit`](src/ui/core/hit.h#L51)), `tabbed_overlay.{c,h}`, [`layout_utils.h`](src/ui/core/layout_utils.h) |
-| `app/` | `state.c` (UiState + status history ring), `panels.{c,h}` (code panel + hit-test), `menu_bar.{c,h}` (dropdowns + shared flyout engine), `scene_tabs.{c,h}`, `layout.{c,h}`, `overlay_layout.{c,h}` (floating-panel stacking solve), `repl_code_panel.{c,h}`, `autocomplete_panel.{c,h}`, `gl_state_panel.{c,h}`, [`snapshot.h`](src/ui/app/snapshot.h) ([`UiRenderSnapshot`](src/ui/app/snapshot.h#L70)), [`editor.h`](src/ui/app/editor.h) |
+| `app/` | `state.c` (UiState + status history ring), `panels.{c,h}` (code panel + hit-test), `menu_bar.{c,h}` (dropdowns + shared flyout engine), `scene_tabs.{c,h}`, `layout.{c,h}`, `overlay_layout.{c,h}` (floating-panel stacking solve), `repl_code_panel.{c,h}`, `autocomplete_panel.{c,h}`, `gl_state_panel.{c,h}`, [`snapshot.h`](src/ui/app/snapshot.h) ([`UiRenderSnapshot`](src/ui/app/snapshot.h#L71)), [`editor.h`](src/ui/app/editor.h) |
 | `subsystems/` | `replay_hud`, `color_picker`, `variable_panel` renderers |
 | `support/` | `cpuprof.{c,h}` (profile/FPS/histogram panels — log/log axes), `memprof.{c,h}` |
 | **src/support/** | Neutral: `cpuprof` (host-agnostic CPU prof, log-binned histograms), `gpuprof` (GL timer queries, injected fn table, GL-free TU), `mesh_ply` (pure PLY writer) |

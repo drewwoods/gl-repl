@@ -3,8 +3,10 @@
 This directory contains the guided tours shown in gl-repl's **Tours** menu.
 A tour is a `.pointer` script: it drives the same mouse and keyboard handlers
 as a person, and renders a cursor, click ripples, spotlight rings, and caption
-text while it runs. A real key press, click, or wheel event stops a running
-tour and returns control to the user.
+text while it runs. A menu-started tour is a **controlled tour**: it shows a
+transport HUD at the top of the scene and responds to replay-style controls
+(see below). A mouse click, wheel event, or any unrecognized key stops the tour
+and returns control to the user; the transport keys instead drive playback.
 
 Tours are compiled into the application from [`catalog.ini`](catalog.ini) for
 native builds or [`catalog-emscripten.ini`](catalog-emscripten.ini) for the web
@@ -39,6 +41,35 @@ build. The same scripts can drive an offline recording through
 Use symbolic targets in built-in tours. They resolve against the live layout
 when an event fires, so the tour works at every window size and continues to
 work when menu positions change.
+
+## Transport controls
+
+While a menu-started tour runs, a compact HUD at the top of the scene shows the
+tour name, playback state, speed, the current step (`Step n / total`), and the
+active `.pointer` source line. One executable event line is one step; comments
+and blank lines are not steps. These keys drive the tour instead of stopping it:
+
+| Key | Action |
+| --- | --- |
+| `Space` | Pause / resume. From the end (Done), restart from the beginning. |
+| `→` | Execute one event immediately, then stay paused. |
+| `←` | Backstep: return to the previous step boundary (before the in-flight event, or one completed event back), then stay paused. |
+| `+` / `=` / `-` | Change speed along `0.25×, 0.5×, 1×, 2×, 4×, 8×, 16×`. |
+| `Esc` | Exit the tour, keeping whatever it has done so far. |
+
+Backstep works by restoring one whole-app baseline captured when the tour
+started, then fast-replaying the events up to the target boundary — there is no
+per-event snapshot. Reversible authored actions (edits, config toggles, menu
+navigation, scene changes, camera drags) reconstruct exactly. **Irreversible
+side effects cannot be undone by backstep:** filesystem writes, process exit,
+and audio-position changes. Keep rewindable tours free of those actions.
+Speed affects only pointer-script timing, never animation `t`, camera easing,
+REPL replay, status message lifetimes, or audio.
+
+A tour that reaches its last event enters a persistent **Done** state (it does
+not auto-stop): the HUD stays up so you can backstep, restart with `Space`, or
+exit with `Esc`. Environment-driven recording scripts
+(`GLR_POINTER_SCRIPT=`) get no HUD or transport and are never canceled by input.
 
 ## File structure and timing
 

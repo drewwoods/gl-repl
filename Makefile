@@ -819,7 +819,8 @@ TEST_BINS = \
 	test_tutorial_match \
 	test_tutorial_runner \
 	test_glr_camera \
-	test_glr_tour_snapshot
+	test_glr_tour_snapshot \
+	test_glr_tour_transport
 
 ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui

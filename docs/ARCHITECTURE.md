@@ -742,14 +742,14 @@ Responsibilities:
 * profile HUD
 * status banners and other screen-space overlays
 
-UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70) (defined in
+UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
 [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L114) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
 
-[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70) carries:
+[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71) carries:
 
 * by-value value-type slices (code_panel, replay, search, autocomplete,
   status, …) — small structs cheap to copy. Scene-presentation policy
@@ -952,6 +952,46 @@ Runtime shape:
 * `render3d_*.c` files contain no `repl_state_*` or `replay_*` calls; Makefile
   checks keep that true
 
+## Controlled Tours (transport + backstep)
+
+Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
+replay-style transport. The engine lives in
+[`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
+env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L122)
+enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
+Done; env capture is never canceled and never auto-stops.
+
+Runtime shape:
+
+* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L189) (called
+  once per rendered frame) forks on run kind. A playing tour accumulates
+  `frame_credit += speed` and spends whole credits as *virtual tour frames*
+  (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
+  without touching animation `t`, camera easing, REPL replay, status TTL, or
+  audio. Paused / Done / baseline-pending / seeking tours advance no virtual
+  frames.
+* **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
+  are tracked separately. Firing an event does not count it complete; its
+  [`PsWait`](../src/app/glr_pointer_script.c#L166) completing does (immediate verbs complete the following virtual
+  frame). Done requires `completed == count` with no in-flight event and does
+  not wait for decorative echo/ring/ripple.
+* **Baseline + prefix replay.** Backstep does **not** snapshot every event. One
+  whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
+  is captured on the first frame after `start_tour` (deferred so the Tours-menu
+  close path is part of the baseline). Left-Arrow restores that baseline, calls
+  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L77) to re-sync derived chrome + export strings,
+  then fast-executes the prefix `[0, target)` via `ps_finish_event_immediate`
+  (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
+  turn). The baseline is derived-state-free: the flat program, renderer
+  resources, and controller frame caches are rebuilt, not stored. Discrete
+  edits/toggles/scene actions/sampled drags reconstruct exactly; time-driven
+  settling is not simulated during seek.
+* **HUD.** The controller populates `snap->tour` from
+  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L143) and renders
+  [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top
+  of the scene, before the compositor pass and separate from the bottom replay
+  HUD, so a tour demonstrating replay shows both.
+
 ## Keyboard Shortcut Definition Sites
 
 Keyboard shortcuts are not defined in one place. Four layers contribute
@@ -960,6 +1000,13 @@ section records the current routing contract and the constraints on a future
 centralized keymap.
 
 ### Dispatch order (who wins a contested key)
+
+Before the controller sees a key, the GLUT host callbacks in
+[`gl_repl.c`](../gl_repl.c) give a running controlled tour first refusal: the
+transport handler (Space/`+`/`=`/`-`/Esc, Left/Right) runs, then the tour-cancel
+intercept (any other real key, or a mouse click/wheel, stops the tour). Only
+keys neither consumes reach `glr_ctrl_keyboard` / `glr_ctrl_special`. Synthetic
+script events call `glr_ctrl_*` directly and bypass this host layer.
 
 `glr_ctrl_keyboard` and `glr_ctrl_special` in
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) route keys. An earlier layer that consumes a key
@@ -1324,7 +1371,7 @@ that frame — here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
 frame" is *not* sufficient — the inputs themselves change mid-frame at
-the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70)'s existing
+the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
