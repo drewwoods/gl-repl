@@ -8,6 +8,8 @@ transport HUD at the top of the scene and responds to replay-style controls
 (see below). Clicking the HUD expands/collapses its transport details. A mouse
 click outside the HUD, wheel event, or any unrecognized key stops the tour and
 returns control to the user; the transport keys instead drive playback.
+Starting a tour also stops any active REPL replay before the tour captures its
+rewind baseline, so the tour always begins from the full scene.
 
 Tours are compiled into the application from [`catalog.ini`](catalog.ini) for
 native builds or [`catalog-emscripten.ini`](catalog-emscripten.ini) for the web

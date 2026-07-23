@@ -31,8 +31,9 @@
 int         glr_tours_count(void);
 const char *glr_tours_name(int idx);
 
-/* Start tour `idx`: load its script into the pointer-script engine and set
- * the status line. Returns 1 on success, 0 on a bad index or script error. */
+/* Start tour `idx`: load its script into the pointer-script engine, stop any
+ * active REPL replay before the tour baseline is captured, and set the status
+ * line. Returns 1 on success, 0 on a bad index or script error. */
 int glr_tours_start(int idx);
 
 #endif /* GLR_TOURS_H */

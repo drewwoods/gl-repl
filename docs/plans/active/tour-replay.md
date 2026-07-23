@@ -40,6 +40,11 @@ HUD press from the host's click-to-cancel rule. `hud_expanded` belongs to
 controlled-tour transport metadata rather than the rewind snapshot, so the
 choice survives Back while each new tour begins compact.
 
+At the Tours-menu entrypoint, a successfully loaded tour also stops any active
+REPL replay before the deferred baseline capture. This keeps replay's narrowed
+execution state out of tours and their Back reconstruction; a load failure
+leaves the prior replay untouched.
+
 This is unreleased software, so there is no backward-compatibility path for
 `glr_pointer_script_start_lines()`. There are exactly two run kinds:
 environment capture and controlled tours.

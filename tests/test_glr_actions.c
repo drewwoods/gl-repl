@@ -765,8 +765,23 @@ static void test_tours_menu_dispatch(void) {
     int n = glr_tours_count();
     ASSERT_TRUE("tour catalog is non-empty", n > 0);
     ASSERT_TRUE("name query rejects out-of-range", glr_tours_name(n) == NULL);
+    ASSERT_TRUE("first tour has a name", glr_tours_name(0) != NULL);
 
-    for (int i = 0; i < n; i++) {
+    /* A tour takes over scene execution, so launch must clear the narrower
+     * REPL replay render before the deferred tour baseline captures it. */
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glEnd();");
+    replay_start();
+    ASSERT_INT("replay active before tour launch", replay_active(), 1);
+    ASSERT_INT("first tour clears replay and starts",
+               glr_action_menu_item_activate(GLR_MENU_TOURS, 0), 1);
+    ASSERT_INT("tour launch stops active replay", replay_active(), 0);
+    ASSERT_INT("tour script loaded after replay stop",
+               glr_pointer_script_tour_active(), 1);
+    glr_pointer_script_stop();
+
+    for (int i = 1; i < n; i++) {
         ASSERT_TRUE("tour has a name", glr_tours_name(i) != NULL);
         ASSERT_INT("tour row activation starts tour and closes menu",
                    glr_action_menu_item_activate(GLR_MENU_TOURS, i), 1);

@@ -961,6 +961,11 @@ env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](..
 enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
 Done; env capture is never canceled and never auto-stops.
 
+At the Tours-menu boundary, a successful launch stops any active REPL replay
+before the next frame captures the controlled tour's rewind baseline. Tours
+therefore never inherit replay's narrowed execution/render state, and Back
+cannot restore it.
+
 Runtime shape:
 
 * **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L202) (called
