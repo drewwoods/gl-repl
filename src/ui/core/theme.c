@@ -67,6 +67,23 @@ const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT] = {
         [UI_TOK_ACCENT_ALT]             = { 0.950f, 0.250f, 1.000f, 1.0f }, /* logo magenta #f240ffff */
         [UI_TOK_ACCENT_ALT_DIM]         = { 0.551f, 0.145f, 0.580f, 1.0f }, /* dim magenta  #8d2594ff */
     },
+    /* AZURE - examples/README.md palette anchors: AZURE `0.15 0.55 1.00`
+     * (electric cool key) as primary, CORAL `1.00 0.35 0.20` (neon warm
+     * key) as alternate - the signature CORAL -> AZURE ramp used across
+     * the example catalog, primary/alt reversed from that ramp's order.
+     * Pure CORAL reads overpoweringly red as a UI alt-accent (the
+     * examples never sit at that end of the ramp either), so
+     * ACCENT_ALT is 80% CORAL / 20% AZURE instead of the raw anchor.
+     * Hover/glow bands follow the same 0.5x / 0.36x scale-down as the
+     * other accent-derived rows. */
+    [UI_THEME_AZURE] = {
+        UI_THEME_NEUTRAL_COLUMNS,
+        [UI_TOK_ACCENT]                 = { 0.150f, 0.550f, 1.000f, 1.0f }, /* AZURE  #268cffff */
+        [UI_TOK_DROPDOWN_ITEM_HOVER_BG] = { 0.075f, 0.275f, 0.500f, 1.0f }, /* #134680ff */
+        [UI_TOK_ACCENT_GLOW_BG]         = { 0.054f, 0.198f, 0.360f, 1.0f }, /* #0e325cff */
+        [UI_TOK_ACCENT_ALT]             = { 0.830f, 0.390f, 0.360f, 1.0f }, /* 80% CORAL / 20% AZURE  #d4635cff */
+        [UI_TOK_ACCENT_ALT_DIM]         = { 0.481f, 0.226f, 0.209f, 1.0f }, /* dim coral-azure mix  #7b3a35ff */
+    },
 };
 
 int g_ui_theme = UI_THEME_DEFAULT;
