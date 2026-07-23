@@ -898,9 +898,12 @@ static int ps_step_complete(void) {
     return 1;
 }
 
-void glr_pointer_script_frame(void) {
-    if (!g_active) return;
-
+/* Advance the script one virtual tour frame: fire due events, step glide +
+ * paced typing, tick the frame clock, and run the auto-stop check. A rendered
+ * frame maps to exactly one virtual frame for env-capture and legacy runtime
+ * scripts; controlled tours will drive this zero-or-more times per rendered
+ * frame under the virtual clock (speed control). */
+static void ps_advance_one_virtual_frame(void) {
     /* Synthesized click release first, so a click's press and release
      * bracket any events scheduled between them. */
     if (g_release_frame >= 0 && g_frame >= g_release_frame) {
@@ -965,6 +968,11 @@ void glr_pointer_script_frame(void) {
         (g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur) &&
         (g_ripple_frame < 0 || g_frame - g_ripple_frame >= PS_RIPPLE_FRAMES))
         glr_pointer_script_stop();
+}
+
+void glr_pointer_script_frame(void) {
+    if (!g_active) return;
+    ps_advance_one_virtual_frame();
 }
 
 /* --- overlay rendering -------------------------------------------------- */
