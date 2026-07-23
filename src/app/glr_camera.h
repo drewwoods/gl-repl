@@ -68,6 +68,16 @@ void             glr_camera_ease_to(float rx, float ry, float dist,
 void             glr_camera_set_target_decay(float decay);
 void             glr_camera_reset_default(void);
 
+/* Scoped deterministic-reconstruction policy used while a tour restores its
+ * baseline and fast-replays an event prefix. New ease requests resolve
+ * immediately to their destination, and glr_camera_tick is frozen, so a scene
+ * load cannot expose the restored baseline pose and then visibly replay its
+ * camera ease. Scopes may nest; every begin must have a matching end. Existing
+ * target/momentum state restored from a snapshot remains untouched unless the
+ * reconstructed prefix explicitly replaces it. */
+void             glr_camera_reconstruction_begin(void);
+void             glr_camera_reconstruction_end(void);
+
 /* Smoothly recenter the orbit target on the world origin, keeping the
  * current orbit angles and zoom. Uses the same easing as
  * glr_camera_ease_to so it is not an instant jump. */

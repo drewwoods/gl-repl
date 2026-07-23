@@ -3314,6 +3314,9 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  * The work is split from GLUT scheduling so test fixtures (which don't
  * initialize GLUT) can drive a single tick by calling glr_ctrl_tick directly. */
 void glr_ctrl_tick(void) {
+    int tour_reconstructing =
+        glr_pointer_script_tour_suppresses_app_tick();
+
     /* SIGINT (Ctrl+C) requested quit: the handler only set a flag; the
      * router owns the flag + the recovery save + exit (so no stdio/file
      * I/O runs inside the signal handler). Runs it here on the normal path. */
@@ -3342,9 +3345,14 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    repl_advance_time(GLR_FRAME_DT_SECS);
+    /* A backstep restores one baseline and reconstructs a prefix over as many
+     * as eight rendered frames. Those transport frames are not simulation
+     * time: advancing t, REPL replay, a view transition, or camera easing here
+     * would make the reconstructed boundary depend on prefix length. */
+    if (!tour_reconstructing)
+        repl_advance_time(GLR_FRAME_DT_SECS);
 
-    {
+    if (!tour_reconstructing) {
         ReplayRuntimeState *replay = replay_state_mut();
 
         if (replay->active)
@@ -3361,8 +3369,10 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
-    glr_camera_tick();
+    if (!tour_reconstructing) {
+        glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
+        glr_camera_tick();
+    }
     glr_ctrl_tick_overlay_xn();
 
     {

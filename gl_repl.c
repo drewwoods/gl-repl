@@ -389,6 +389,15 @@ static void special_func(int key, int x, int y) {
 }
 
 static void mouse_func(int button, int state, int x, int y) {
+    /* A left press on the visible tour HUD is transport UI, not an attempt to
+     * take over the scene. Let the normal controller hit route toggle its
+     * compact/expanded presentation. All other real presses retain the
+     * established stop-and-swallow behavior. */
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
+        glr_ctrl_router_point_on_tour_hud(x, y)) {
+        glr_ctrl_mouse(button, state, x, y);
+        return;
+    }
     if (state == GLUT_DOWN && tour_cancel_intercept()) {
         g_tour_swallow_release = 1; /* eat the paired release too */
         return;

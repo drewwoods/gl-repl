@@ -448,6 +448,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "", "Stop replay");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Guided Tours (while a Tours-menu tour runs):");
+    nk = key_emit(nk, "  Click tour HUD       \tExpand / collapse transport details");
     nk = key_emit(nk, "  Space                \tPause / resume (restart from the end)");
     nk = key_emit(nk, "  Right                \tStep one event, then pause");
     nk = key_emit(nk, "  Left                 \tBackstep to the previous step");

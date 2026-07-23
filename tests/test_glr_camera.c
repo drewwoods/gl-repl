@@ -91,6 +91,47 @@ static void test_camera_easing_and_decay(void) {
     ASSERT_TRUE("Moved slightly towards 0 pitch", glr_camera().rx < 45.0f);
 }
 
+static void test_camera_reconstruction_scope(void) {
+    GlrCameraState before;
+    GlrCameraState after;
+
+    glr_camera_reset_default();
+    glr_camera_set(12.0f, 24.0f, 8.0f, 1.0f, 2.0f, 3.0f, 0.0f);
+
+    /* A target that existed before reconstruction is preserved and frozen. */
+    glr_camera_ease_to(20.0f, 40.0f, 9.0f, 4.0f, 5.0f, 6.0f);
+    before = glr_camera();
+    glr_camera_reconstruction_begin();
+    glr_camera_tick();
+    after = glr_camera();
+    ASSERT_TRUE("pre-existing ease remains active while reconstructing",
+                glr_camera_target_active());
+    ASSERT_FLOAT_NEAR("reconstruction freezes existing camera rx",
+                      after.rx, before.rx, 0.001f);
+    ASSERT_FLOAT_NEAR("reconstruction freezes existing camera tx",
+                      after.tx, before.tx, 0.001f);
+
+    /* An ease authored by the reconstructed prefix resolves immediately. */
+    glr_camera_ease_to(-15.0f, 75.0f, 6.5f, -1.0f, -2.0f, -3.0f);
+    after = glr_camera();
+    ASSERT_TRUE("reconstructed ease completes immediately",
+                !glr_camera_target_active());
+    ASSERT_FLOAT_NEAR("reconstructed ease snaps rx", after.rx, -15.0f, 0.001f);
+    ASSERT_FLOAT_NEAR("reconstructed ease snaps ry", after.ry, 75.0f, 0.001f);
+    ASSERT_FLOAT_NEAR("reconstructed ease snaps distance",
+                      after.dist, 6.5f, 0.001f);
+    ASSERT_FLOAT_NEAR("reconstructed ease snaps tx", after.tx, -1.0f, 0.001f);
+
+    glr_camera_reconstruction_end();
+    glr_camera_ease_to(5.0f, 10.0f, 5.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE("normal ease restored after reconstruction",
+                glr_camera_target_active());
+    before = glr_camera();
+    glr_camera_tick();
+    ASSERT_TRUE("normal ease advances after reconstruction",
+                glr_camera().rx > before.rx);
+}
+
 static void test_camera_auto_rotation_and_focus(void) {
     glr_camera_reset_default();
 
@@ -178,6 +219,7 @@ int main(void) {
     test_camera_pitch_bounds();
     test_camera_distance_bounds();
     test_camera_easing_and_decay();
+    test_camera_reconstruction_scope();
     test_camera_auto_rotation_and_focus();
     test_camera_pose_lerp_and_changed();
 

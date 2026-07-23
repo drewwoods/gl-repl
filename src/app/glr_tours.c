@@ -14,6 +14,7 @@
 #include "app/glr_tours.h"
 #include "app/glr_pointer_script.h"
 #include "repl/host_effects.h"
+#include "subsystems/replay/replay.h"
 
 #include <stdio.h>
 
@@ -44,6 +45,13 @@ int glr_tours_start(int idx) {
         repl_set_status_error("Tour script failed to load");
         return 0;
     }
+    /* A tour owns the same scene-execution lane as REPL replay. End an
+     * existing replay before the next frame captures the tour baseline, so
+     * the tour never inherits a narrowed replay render or restores one on
+     * Back. Do this only after parsing/loading succeeds: a bad catalog entry
+     * must leave the user's active replay untouched. */
+    if (replay_active())
+        replay_stop();
     char msg[96];
     snprintf(msg, sizeof(msg),
              "Tour: %s  (Space play/pause, arrows step, Esc exit)",

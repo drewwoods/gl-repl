@@ -26,6 +26,25 @@ Already landed:
 
 All steps are landed; the feature is complete.
 
+Post-plan camera rewind polish also scopes seeking as deterministic
+reconstruction: simulation/view/camera ticks are suppressed for the full seek
+frame, and camera eases requested by prefix events resolve immediately. This
+prevents a scene load from flashing the restored baseline camera and replaying
+its ease on every Back.
+
+Post-plan HUD polish makes the overlay compact by default:
+`Tour | <name> | [+]`. A click anywhere on the strip expands the original
+transport details, and a click anywhere on the expanded HUD collapses it.
+Canonical UI hit routing gives later overlays priority and exempts only a real
+HUD press from the host's click-to-cancel rule. `hud_expanded` belongs to
+controlled-tour transport metadata rather than the rewind snapshot, so the
+choice survives Back while each new tour begins compact.
+
+At the Tours-menu entrypoint, a successfully loaded tour also stops any active
+REPL replay before the deferred baseline capture. This keeps replay's narrowed
+execution state out of tours and their Back reconstruction; a load failure
+leaves the prior replay untouched.
+
 This is unreleased software, so there is no backward-compatibility path for
 `glr_pointer_script_start_lines()`. There are exactly two run kinds:
 environment capture and controlled tours.
@@ -272,7 +291,18 @@ Process at most 32 events per rendered frame. With `PS_MAX_EVENTS == 256`, a ful
 
 Suppress historical echo/ring/ripple overlays during the prefix. Permit overlay creation only for the final replayed event so the target boundary has useful visual context without replaying every decorative artifact.
 
-Do not call `glr_ctrl_tick()` during seek.
+`glr_ctrl_tick()` may still be scheduled by the host during a rendered seek
+frame. It must consult
+`glr_pointer_script_tour_suppresses_app_tick()` and suppress animation `t`, REPL
+replay, view-transition, and camera advancement, including on the frame whose
+seek changes state to Paused. UI/status/audio housekeeping may continue.
+
+Wrap prefix execution in the camera owner's reconstruction scope. Within that
+scope, newly requested camera eases snap to their destination while a
+pre-existing target restored from the baseline remains frozen unless a prefix
+event replaces it. This avoids rendering the baseline angle between restore and
+the reconstructed scene-camera target without adding per-event camera
+snapshots.
 
 ### Emscripten shell events
 
@@ -363,10 +393,17 @@ Add:
 
 Add `GlrTourPlaybackView tour` to `UiRenderSnapshot` and populate it in `glr_ctrl_build_ui_snapshot()`.
 
-Render a compact HUD at the top of the scene viewport, separate from the bottom REPL replay HUD:
+Render a compact-by-default HUD at the top of the scene viewport, separate from
+the bottom REPL replay HUD:
 
 ```text
-Tour  Editing Basics | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26
+Tour | Editing Basics | [+]
+```
+
+Clicking it expands the detailed transport surface:
+
+```text
+Tour  Editing Basics | Paused | 4× | Step 17 / 43 | editing-basics.pointer:26  [-]
 [progress]
 Space play | ← back | → step | +/- speed | Esc exit
 ```
@@ -375,7 +412,9 @@ Requirements:
 
 - read only from `UiRenderSnapshot`;
 - use existing theme tokens/fonts;
-- no mouse hit-testing;
+- return a passive `UI_HIT_TOUR_HUD` for the exact rendered bounds;
+- let controller/host routing toggle compact/expanded without canceling;
+- keep the presentation bit outside the rewind baseline;
 - no new profiling section;
 - render before compositor post-processing;
 - leave the existing pointer/ring/echo overlay after compositing so it remains visually topmost.
@@ -480,6 +519,9 @@ Test every meaningful table entry, especially:
 - Comments and blanks are excluded from event count.
 - Physical source lines remain correct.
 - Tour filename reaches the HUD.
+- New tours default to compact; clicks expand and collapse the full surface.
+- Expanded/collapsed choice survives Back reconstruction.
+- A click outside the HUD retains the tour-cancel behavior.
 - Tour and REPL replay HUDs render without overlap.
 - No HUD appears for environment-capture scripts.
 
@@ -504,4 +546,5 @@ make check-c99
 - Back uses one baseline plus prefix replay, not per-event snapshots.
 - Filesystem writes, process exit, audio position, and other external effects remain non-reversible.
 - Time-driven settling is not simulated during seek.
+- Camera eases authored by the reconstructed prefix resolve immediately.
 - Controlled tours remain in Done until restarted, canceled, replaced, or exited.

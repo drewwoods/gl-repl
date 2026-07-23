@@ -121,6 +121,7 @@ typedef struct {
     GlrTourPlaybackState state;
     const char          *name;
     const char          *file;
+    int                  hud_expanded;
     float                speed;
     int                  completed_events;
     int                  current_event;
@@ -141,6 +142,18 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
 /* Snapshot of the controlled-tour transport for the HUD and tests. Safe to
  * call any time; reports active == 0 when no controlled tour is running. */
 GlrTourPlaybackView glr_pointer_script_tour_view(void);
+
+/* Toggle the controlled-tour HUD between its compact name strip and expanded
+ * transport details. Returns 1 when a controlled tour consumed the request,
+ * 0 when no tour is active. This presentation bit deliberately lives outside
+ * the rewind baseline so Back does not unexpectedly collapse/expand the HUD. */
+int glr_pointer_script_toggle_tour_hud(void);
+
+/* True through the controller-tick phase of a rendered seek frame, including
+ * the frame in which prefix replay reaches its target and enters Paused. The
+ * controller uses this to keep animation time, REPL replay, view transitions,
+ * and camera motion from contaminating deterministic reconstruction. */
+int glr_pointer_script_tour_suppresses_app_tick(void);
 
 /* Host transport-key handlers, dispatched by gl_repl.c BEFORE the tour-cancel
  * intercept. Only consume keys while a controlled tour is running: Space

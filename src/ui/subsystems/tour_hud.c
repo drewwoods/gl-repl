@@ -3,8 +3,11 @@
  *
  * Feature-owned UI under the `tour_ui_*` prefix. Reads ONLY snap->tour (a
  * GlrTourPlaybackView) plus the scene rect; never live pointer-script state.
- * Mirrors the replay HUD's panel/progress/hint layout but sits at the TOP of
- * the scene viewport so both HUDs can show at once.
+ * Shares the replay HUD's line structure (metadata / progress / hints) but is
+ * styled apart from it — warm amber identity color, a solid top ribbon instead
+ * of a thin outline, and a segmented per-event step bar instead of the
+ * continuous groove — and sits at the TOP of the scene viewport so both HUDs
+ * can show at once without reading as the same control.
  */
 #include "ui/subsystems/tour_hud.h"
 #include "ui/app/snapshot.h"
@@ -15,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+
 
 static const char *tour_hud_state_text(GlrTourPlaybackState state) {
     switch (state) {
@@ -128,12 +132,13 @@ static void tour_hud_build_line2(char *dst, size_t dstsz, int max_chars) {
     tour_hud_fit(dst, dstsz, max_chars, cand, n);
 }
 
-/* Panel width for a scene `scene_w` px wide: the scene minus horizontal
- * margins, and NEVER more (no forced minimum width that could push the panel
- * past a narrow scene into a side code panel or off-window — feedback can't see
- * the off-window part, so this is guarded arithmetically instead). Returns 0
- * when the scene is too narrow to show a readable HUD (render is skipped).
- * The single source of truth for the render below and the width guard test. */
+/* Available panel width for a scene `scene_w` px wide: the scene minus
+ * horizontal margins, and NEVER more (no forced minimum width that could push
+ * the panel past a narrow scene into a side code panel or off-window — feedback
+ * can't see the off-window part, so this is guarded arithmetically instead).
+ * Returns 0 when the scene is too narrow to show a readable HUD (render is
+ * skipped). tour_ui_hud_rect's expanded width and cap; the single source of
+ * truth for the width guard test. */
 int tour_hud_panel_width(int scene_w) {
     int hud_w = scene_w - 2 * TOUR_HUD_MARGIN_X;
     if (hud_w < TOUR_HUD_MIN_VISIBLE)
@@ -141,25 +146,43 @@ int tour_hud_panel_width(int scene_w) {
     return hud_w;
 }
 
-static void draw_hud_panel(int x, int y, int w) {
+/* Unlike the replay HUD's thin full outline, the tour panel wears a solid
+ * amber ribbon along its top edge (it hangs from the top of the scene) with
+ * only a dim bottom rule closing the silhouette. */
+static void draw_hud_panel(int x, int y, int w, int h) {
     ui_clr_a(UI_TOK_SURFACE, 0.94f);
-    glRectf((float)x, (float)y, (float)(x + w), (float)(y + TOUR_HUD_HEIGHT));
-    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.95f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
-    glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
-    glVertex2f((float)(x + w) - 0.5f, (float)(y + TOUR_HUD_HEIGHT) - 0.5f);
-    glVertex2f((float)x + 0.5f,       (float)(y + TOUR_HUD_HEIGHT) - 0.5f);
+    glRectf((float)x, (float)y, (float)(x + w), (float)(y + h));
+    ui_clr_a(UI_TOK_ACCENT_ALT, 0.95f);
+    glRectf((float)x, (float)(y + h - TOUR_HUD_RIBBON_H),
+            (float)(x + w), (float)(y + h));
+    ui_clr_a(UI_TOK_ACCENT_ALT_DIM, 0.9f);
+    glBegin(GL_LINES);
+    glVertex2f((float)x,       (float)y + 0.5f);
+    glVertex2f((float)(x + w), (float)y + 0.5f);
     glEnd();
 }
 
-static void draw_progress_groove(int x, int y, int w, float progress) {
+/* Segmented per-event step bar: a filled amber block per completed event with
+ * panel-colored separator ticks — tours advance in discrete steps, unlike the
+ * replay HUD's continuous command groove. Falls back to a plain fill when
+ * segments would be too narrow to read. */
+static void draw_step_bar(int x, int y, int w, float progress, int total) {
     ui_clr(UI_TOK_SUNKEN);
     glRectf((float)x, (float)y, (float)(x + w), (float)(y + TOUR_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT);
+    ui_clr(UI_TOK_ACCENT_ALT);
     glRectf((float)x, (float)y, (float)x + (float)w * progress,
             (float)(y + TOUR_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT_GLOW_BG);
+    if (total > 1 && w / total >= 4) {
+        ui_clr_a(UI_TOK_SURFACE, 0.94f);
+        glBegin(GL_LINES);
+        for (int i = 1; i < total; i++) {
+            float tx = (float)x + (float)w * (float)i / (float)total;
+            glVertex2f(tx, (float)y);
+            glVertex2f(tx, (float)(y + TOUR_HUD_PROGRESS_H));
+        }
+        glEnd();
+    }
+    ui_clr(UI_TOK_ACCENT_ALT_DIM);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
     glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
@@ -168,38 +191,92 @@ static void draw_progress_groove(int x, int y, int w, float progress) {
     glEnd();
 }
 
+static void tour_hud_build_compact(char *dst, size_t dstsz, int max_chars,
+                                   const GlrTourPlaybackView *v) {
+    const char *name = (v->name && v->name[0]) ? v->name : "Untitled";
+    char cand[2][256];
+
+    snprintf(cand[0], sizeof(cand[0]), "Tour | %s | [+]", name);
+    snprintf(cand[1], sizeof(cand[1]), "Tour | [+]");
+    tour_hud_fit(dst, dstsz, max_chars, cand, 2);
+}
+
+int tour_ui_hud_rect(const struct UiRenderSnapshot *snap,
+                     int *x, int *y, int *w, int *h) {
+    int scene_x, scene_y, scene_w, scene_h;
+    int avail_w;
+    int hud_w;
+    int hud_h;
+
+    if (!snap || !snap->tour.active)
+        return 0;
+
+    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+    avail_w = tour_hud_panel_width(scene_w);   /* scene minus margins, or 0 */
+    if (avail_w <= 0)
+        return 0;
+
+    hud_h = snap->tour.hud_expanded
+          ? TOUR_HUD_EXPANDED_HEIGHT : TOUR_HUD_COMPACT_HEIGHT;
+    if (snap->tour.hud_expanded) {
+        hud_w = avail_w;
+    } else {
+        const char *name = (snap->tour.name && snap->tour.name[0])
+                         ? snap->tour.name : "Untitled";
+        int desired_chars = (int)strlen("Tour |  | [+]") + (int)strlen(name);
+        hud_w = desired_chars * FONT_SMALL_W + 2 * TOUR_HUD_TEXT_PAD_X;
+        if (hud_w > avail_w)
+            hud_w = avail_w;
+        if (hud_w < TOUR_HUD_MIN_VISIBLE)
+            hud_w = TOUR_HUD_MIN_VISIBLE;
+    }
+
+    if (x) *x = scene_x + TOUR_HUD_MARGIN_X;
+    if (w) *w = hud_w;
+    if (h) *h = hud_h;
+    if (y) {
+        int hud_y = scene_y + scene_h - TOUR_HUD_MARGIN_Y - hud_h;
+        *y = ui_clamp_panel_y(scene_y, scene_h, hud_h, hud_y,
+                             /*prefer_top_on_overflow=*/1, STATUSBAR_H, 4);
+    }
+    return 1;
+}
+
+UiHit tour_ui_hud_hit_test(const struct UiRenderSnapshot *snap,
+                           int mx, int my) {
+    UiHit hit = ui_hit_none();
+    int x, y, w, h;
+    int gl_y;
+
+    if (!tour_ui_hud_rect(snap, &x, &y, &w, &h))
+        return hit;
+    gl_y = snap->viewport.window_h - my;
+    if (mx < x || mx >= x + w || gl_y < y || gl_y >= y + h)
+        return hit;
+
+    hit.kind = UI_HIT_TOUR_HUD;
+    hit.local_x = (float)(mx - x);
+    hit.local_y = (float)(gl_y - y);
+    return hit;
+}
+
 /*
  * Layout:
  * +---------------------------------------------------------------------------+
  * | Tour  <name> | <State> | <speed>x | Step n / total | <file>:<line>        |
- * | [=== progress groove ===================================================] |
+ * | [==|==|==|== segmented step bar (one cell per event) ==|==|==|==|==|==|=] |
  * | Space play | « back | » step | +/- speed | Esc exit                       |
  * +---------------------------------------------------------------------------+
  */
 void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {
-    int render3d_x, render3d_y, render3d_w, render3d_h;
+    int hud_x, hud_y, hud_w, hud_h;
     char line1[256];
     char kbd[256];
     float progress = 0.0f;
 
-    if (!snap || !snap->tour.active)
+    if (!tour_ui_hud_rect(snap, &hud_x, &hud_y, &hud_w, &hud_h))
         return;
     const GlrTourPlaybackView *v = &snap->tour;
-
-    ui_layout_scene_rect(&render3d_x, &render3d_y, &render3d_w, &render3d_h);
-
-    /* The panel spans the scene width minus margins and is NEVER forced wider
-     * than the scene, so it can't spill into a left code panel. Too-narrow
-     * scenes skip the HUD; the text lines elide to whatever width remains. */
-    int hud_w = tour_hud_panel_width(render3d_w);
-    if (hud_w <= 0)
-        return;
-    int hud_x = render3d_x + TOUR_HUD_MARGIN_X;
-    /* Sit TOUR_HUD_MARGIN_Y below the scene's top edge; ui_clamp_panel_y keeps
-     * it inside the scene and above the bottom status/replay-HUD band. */
-    int hud_y = render3d_y + render3d_h - TOUR_HUD_MARGIN_Y - TOUR_HUD_HEIGHT;
-    hud_y = ui_clamp_panel_y(render3d_y, render3d_h, TOUR_HUD_HEIGHT, hud_y,
-                             /*prefer_top_on_overflow=*/1, STATUSBAR_H, 4);
 
     if (v->total_events > 0) {
         progress = (float)v->completed_events / (float)v->total_events;
@@ -212,28 +289,45 @@ void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {
     int max_chars = (hud_w - 2 * TOUR_HUD_TEXT_PAD_X) / FONT_SMALL_W;
     if (max_chars < 1)
         max_chars = 1;
-    tour_hud_build_line1(line1, sizeof(line1), max_chars, v);
-    tour_hud_build_line2(kbd, sizeof(kbd), max_chars);
+    if (v->hud_expanded) {
+        /* Reserve room for the right-aligned collapse affordance. */
+        tour_hud_build_line1(line1, sizeof(line1), max_chars - 5, v);
+        tour_hud_build_line2(kbd, sizeof(kbd), max_chars);
+    } else {
+        tour_hud_build_compact(line1, sizeof(line1), max_chars, v);
+    }
 
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    draw_hud_panel(hud_x, hud_y, hud_w);
+    draw_hud_panel(hud_x, hud_y, hud_w, hud_h);
 
-    ui_clr(UI_TOK_ACCENT);
+    ui_clr(UI_TOK_ACCENT_ALT);
     gl2d_draw_string((float)(hud_x + TOUR_HUD_TEXT_PAD_X),
-                     (float)(hud_y + TOUR_HUD_TEXT_LINE1_Y), line1, FONT_SMALL);
+                     (float)(hud_y + (v->hud_expanded
+                                     ? TOUR_HUD_TEXT_LINE1_Y
+                                     : TOUR_HUD_COMPACT_TEXT_Y)),
+                     line1, FONT_SMALL);
 
-    int groove_x = hud_x + TOUR_HUD_TEXT_PAD_X;
-    int groove_w = hud_w - 2 * TOUR_HUD_TEXT_PAD_X;
-    draw_progress_groove(groove_x, hud_y + TOUR_HUD_PROGRESS_Y, groove_w, progress);
+    if (v->hud_expanded) {
+        int groove_x = hud_x + TOUR_HUD_TEXT_PAD_X;
+        int groove_w = hud_w - 2 * TOUR_HUD_TEXT_PAD_X;
+        int collapse_x = hud_x + hud_w - TOUR_HUD_TEXT_PAD_X -
+                         3 * FONT_SMALL_W;
 
-    ui_clr(UI_TOK_TEXT_MUTED);
-    gl2d_draw_string((float)(hud_x + TOUR_HUD_TEXT_PAD_X),
-                     (float)(hud_y + TOUR_HUD_TEXT_LINE2_Y), kbd, FONT_SMALL);
+        gl2d_draw_string((float)collapse_x,
+                         (float)(hud_y + TOUR_HUD_TEXT_LINE1_Y),
+                         "[-]", FONT_SMALL);
+        draw_step_bar(groove_x, hud_y + TOUR_HUD_PROGRESS_Y,
+                      groove_w, progress, v->total_events);
 
+        ui_clr(UI_TOK_TEXT_MUTED);
+        gl2d_draw_string((float)(hud_x + TOUR_HUD_TEXT_PAD_X),
+                         (float)(hud_y + TOUR_HUD_TEXT_LINE2_Y),
+                         kbd, FONT_SMALL);
+    }
     glDisable(GL_BLEND);
     gl2d_end();
 }

@@ -68,6 +68,9 @@ static GlrCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const GlrCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
 static GlrCameraState       g_camera_target;
 static int                   g_camera_target_active = 0;
+/* Deterministic baseline+prefix reconstruction is an orchestration scope, not
+ * camera state: it is deliberately absent from GlrCameraRuntimeSnapshot. */
+static int                   g_reconstruction_depth = 0;
 /* Per-ease decay override: each new ease resets to GLR_CAMERA_TARGET_DECAY;
  * callers that want to run faster/slower than the global default (e.g. the
  * 3D->2D view-mode transition) call glr_camera_set_target_decay AFTER
@@ -264,6 +267,8 @@ void glr_camera_ease_to(float rx, float ry, float dist,
     reset_velocities();
     if (target_deltas_within_epsilon(&g_camera))
         snap_to_target();
+    else if (g_reconstruction_depth > 0)
+        snap_to_target();
 }
 
 /* Override the per-ease decay for the current target. Call AFTER
@@ -284,6 +289,15 @@ void glr_camera_reset_default(void) {
     g_control_mode = GLR_CAMERA_CONTROL_3D;
     g_camera = g_camera_defaults;
     g_scene_camera_default_set = 0;
+}
+
+void glr_camera_reconstruction_begin(void) {
+    g_reconstruction_depth++;
+}
+
+void glr_camera_reconstruction_end(void) {
+    if (g_reconstruction_depth > 0)
+        g_reconstruction_depth--;
 }
 
 /* Pure GL modelview load. Audit #11: this used to live in
@@ -532,6 +546,9 @@ void glr_camera_drag_motion(int x, int y) {
 
 void glr_camera_tick(void) {
     GlrCameraState *c = &g_camera;
+
+    if (g_reconstruction_depth > 0)
+        return;
 
     if (g_camera_target_active && g_pointer_button == -1) {
         tick_target_ease();

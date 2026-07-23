@@ -55,9 +55,13 @@ typedef enum {
                                     * fill hue and is too dark for text) */
 
     /* Accent-derived - varies per theme row. */
-    UI_TOK_ACCENT,                 /* primary accent (green #6fb36f)     */
+    UI_TOK_ACCENT,                 /* primary accent                     */
     UI_TOK_DROPDOWN_ITEM_HOVER_BG, /* dropdown/submenu item hover band   */
     UI_TOK_ACCENT_GLOW_BG,         /* HUD / control accent band          */
+
+    /* Alternate accent-derived, used by tour - varies per theme row.    */
+    UI_TOK_ACCENT_ALT,            /* alternative accent                  */
+    UI_TOK_ACCENT_ALT_DIM,        /* dim rule, e.g. tour HUD border      */
 
     UI_TOK_COUNT
 } UiThemeToken;
@@ -117,7 +121,7 @@ static inline void ui_clr_a(UiThemeToken t, float a) {
 static inline void ui_theme_select(UiTheme th) { g_ui_theme = (int)th; }
 static inline UiTheme ui_theme_active(void) { return (UiTheme)g_ui_theme; }
 
-STATIC_ASSERT(UI_TOK_COUNT == 20,
+STATIC_ASSERT(UI_TOK_COUNT == 22,
               "UiThemeToken count changed - update g_ui_theme_table and test_ui_theme");
 STATIC_ASSERT(UI_THEME_COUNT == 6,
               "UiTheme row count changed - update g_ui_theme_table and test_ui_theme");

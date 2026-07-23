@@ -8,6 +8,7 @@
  * visible in the recorded frames.
  */
 #include "app/glr_pointer_script.h"
+#include "app/glr_camera.h"       /* deterministic camera reconstruction scope */
 #include "app/glr_ctrl.h"
 #include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
@@ -153,9 +154,14 @@ static int   g_speed_idx = PS_TOUR_SPEED_DEFAULT;
 static float g_frame_credit = 0.0f;     /* virtual-frame accumulator        */
 static const char *g_tour_name = NULL;  /* borrowed HUD metadata            */
 static const char *g_tour_file = NULL;
+static int   g_tour_hud_expanded = 0;   /* compact by default; not rewound  */
 static GlrTourSnapshot *g_baseline = NULL;  /* rewind baseline (NULL until   */
                                             /* BASELINE_PENDING resolves)    */
 static int   g_seek_target = -1;        /* SEEKING: prefix length to reach  */
+/* Stays asserted through the render/tick phase of every seek frame, including
+ * the frame whose prefix replay transitions Seeking -> Paused. */
+static int   g_suppress_app_tick = 0;
+static int   g_camera_reconstructing = 0;
 
 /* An explicit pause blocks event dispatch in either grammar. */
 static int g_pause_until = -1;
@@ -577,15 +583,31 @@ int glr_pointer_script_tour_active(void) {
     return g_active && g_run_kind == PS_RUN_CONTROLLED_TOUR;
 }
 
+static void ps_tour_camera_reconstruction_begin(void) {
+    if (g_camera_reconstructing)
+        return;
+    glr_camera_reconstruction_begin();
+    g_camera_reconstructing = 1;
+}
+
+static void ps_tour_camera_reconstruction_end(void) {
+    if (!g_camera_reconstructing)
+        return;
+    glr_camera_reconstruction_end();
+    g_camera_reconstructing = 0;
+}
+
 /* Reset the per-run state (clocks, glide, held button, overlays) without
  * touching the loaded event list. The env loader runs once at startup so it
  * never needed this; runtime tour starts reuse the statics mid-session. */
 static void ps_reset_runtime(void) {
+    ps_tour_camera_reconstruction_end();
     g_frame = 0;
     g_next_event = 0;
     g_current_event = -1;
     g_completed_events = 0;
     g_frame_credit = 0.0f;
+    g_suppress_app_tick = 0;
     g_pause_until = -1;
     g_step_wait = PS_WAIT_NONE;
     g_glide_active = 0;
@@ -637,6 +659,7 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
     g_run_kind = PS_RUN_CONTROLLED_TOUR;
     g_tour_name = name;
     g_tour_file = file;
+    g_tour_hud_expanded = 0;
     g_speed_idx = PS_TOUR_SPEED_DEFAULT;
     /* Defer the baseline capture + first event to the next frame: the Tours
      * menu's close path must fully run first (its state is part of the
@@ -706,6 +729,7 @@ void glr_pointer_script_stop(void) {
     g_tour_state = GLR_TOUR_OFF;
     g_tour_name = NULL;
     g_tour_file = NULL;
+    g_tour_hud_expanded = 0;
     g_seek_target = -1;
     ps_reset_runtime();
 }
@@ -1255,6 +1279,8 @@ static void ps_tour_begin_seek(int target) {
         return;
     }
     g_tour_state = GLR_TOUR_SEEKING;
+    g_suppress_app_tick = 1;
+    ps_tour_camera_reconstruction_begin();
 
     if (g_release_frame >= 0) {
         g_release_frame = -1;
@@ -1306,6 +1332,7 @@ static void ps_tour_seek_step(void) {
         g_current_event = -1;
         g_step_wait = PS_WAIT_NONE;
         g_seek_target = -1;
+        ps_tour_camera_reconstruction_end();
         if (g_completed_events >= g_event_count)
             ps_tour_enter_done();
         else
@@ -1379,6 +1406,7 @@ static void ps_tour_restart(void) {
     ps_tour_begin_seek(0);
     if (g_tour_state == GLR_TOUR_SEEKING) {   /* baseline existed */
         g_seek_target = -1;
+        ps_tour_camera_reconstruction_end();
         g_tour_state = GLR_TOUR_PLAYING;
         g_frame_credit = 0.0f;
     }
@@ -1407,6 +1435,9 @@ static void ps_tour_space(void) {
 /* Per-rendered-frame driver for a controlled tour: capture the baseline on the
  * first frame, spend virtual-frame credit while Playing, or step a seek. */
 static void ps_tour_frame(void) {
+    /* The previous seek-completion frame has now been presented. A live seek
+     * below reasserts this before controller ticking for the current frame. */
+    g_suppress_app_tick = 0;
     switch (g_tour_state) {
     case GLR_TOUR_BASELINE_PENDING:
         /* The Tours menu close path has finished; capture now, seed the
@@ -1431,6 +1462,7 @@ static void ps_tour_frame(void) {
         }
         break;
     case GLR_TOUR_SEEKING:
+        g_suppress_app_tick = 1;
         ps_tour_seek_step();
         break;
     case GLR_TOUR_PAUSED:
@@ -1455,12 +1487,25 @@ GlrTourPlaybackView glr_pointer_script_tour_view(void) {
     v.state = g_tour_state;
     v.name = g_tour_name;
     v.file = g_tour_file;
+    v.hud_expanded = g_tour_hud_expanded;
     v.speed = k_tour_speeds[g_speed_idx];
     v.completed_events = g_completed_events;
     v.current_event = g_current_event;
     v.total_events = g_event_count;
     v.source_line = ps_tour_hud_source_line();
     return v;
+}
+
+int glr_pointer_script_toggle_tour_hud(void) {
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR)
+        return 0;
+    g_tour_hud_expanded = !g_tour_hud_expanded;
+    return 1;
+}
+
+int glr_pointer_script_tour_suppresses_app_tick(void) {
+    return g_active && g_run_kind == PS_RUN_CONTROLLED_TOUR &&
+           g_suppress_app_tick;
 }
 
 int glr_pointer_script_handle_tour_key(unsigned char key) {

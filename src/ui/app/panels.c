@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "ui/subsystems/color_picker.h"
+#include "ui/subsystems/tour_hud.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/overlay_layout.h"
 #include "ui/core/gl_2d.h"
@@ -936,6 +937,15 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit code_hit = ui_repl_code_panel_hit_test(snap, mx, my);
         if (code_hit.kind != UI_HIT_NONE)
             return code_hit;
+    }
+
+    /* The tour HUD is painted into the scene before later app overlays.
+     * Those surfaces have already had first refusal above; claim only the
+     * remaining pixels inside the exact compact/expanded HUD bounds. */
+    {
+        UiHit tour_hit = tour_ui_hud_hit_test(snap, mx, my);
+        if (tour_hit.kind != UI_HIT_NONE)
+            return tour_hit;
     }
 
     hit.kind = UI_HIT_SCENE;

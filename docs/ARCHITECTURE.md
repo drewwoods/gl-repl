@@ -890,8 +890,8 @@ single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
-[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L65)
-enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L117) / [`ui_theme_active()`](../src/ui/core/theme.h#L118) seam keeps call
+[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L69)
+enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L121) / [`ui_theme_active()`](../src/ui/core/theme.h#L122) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no
@@ -957,13 +957,18 @@ Runtime shape:
 Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
-env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L122)
+env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L123)
 enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
 Done; env capture is never canceled and never auto-stops.
 
+At the Tours-menu boundary, a successful launch stops any active REPL replay
+before the next frame captures the controlled tour's rewind baseline. Tours
+therefore never inherit replay's narrowed execution/render state, and Back
+cannot restore it.
+
 Runtime shape:
 
-* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L189) (called
+* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L202) (called
   once per rendered frame) forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
@@ -972,7 +977,7 @@ Runtime shape:
   frames.
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
-  [`PsWait`](../src/app/glr_pointer_script.c#L166) completing does (immediate verbs complete the following virtual
+  [`PsWait`](../src/app/glr_pointer_script.c#L172) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
   **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
   its duration elapses, so a trailing ring delays Done — while `echo` and the
@@ -990,13 +995,24 @@ Runtime shape:
   resources, and controller frame caches are rebuilt, not stored. Discrete
   edits/toggles/scene actions reconstruct exactly; a drag's end *position* is
   reproduced (its glide samples dispatch synchronously) but not its dynamics —
-  seek skips the per-frame camera tick, so orbit momentum + time-driven settling
-  are not simulated.
+  seek suppresses animation-time, REPL-replay, view-transition, and camera ticks,
+  so orbit momentum + time-driven settling are not simulated. Camera easing
+  requested by the reconstructed prefix (most visibly an example's `// camera`
+  block) resolves immediately inside a scoped camera-reconstruction policy. The
+  target boundary therefore renders directly, instead of briefly exposing the
+  restored baseline camera and replaying the scene-load ease after every Back.
+  A target/ease already present in the baseline remains frozen and intact when
+  no prefix event replaces it.
 * **HUD.** The controller populates `snap->tour` from
-  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L143) and renders
+  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L144) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top
   of the scene, before the compositor pass and separate from the bottom replay
-  HUD, so a tour demonstrating replay shows both.
+  HUD, so a tour demonstrating replay shows both. It defaults to a compact
+  `Tour | name | [+]` strip. The same snapshot-pure UI module returns
+  `UI_HIT_TOUR_HUD` over its exact compact/expanded bounds; controller routing
+  toggles the transport-owned `hud_expanded` bit. That bit is intentionally
+  outside `GlrTourSnapshot`, so Back reconstruction cannot rewind presentation
+  choice. Every new tour resets it to compact.
 
 ## Keyboard Shortcut Definition Sites
 
@@ -1010,9 +1026,12 @@ centralized keymap.
 Before the controller sees a key, the GLUT host callbacks in
 [`gl_repl.c`](../gl_repl.c) give a running controlled tour first refusal: the
 transport handler (Space/`+`/`=`/`-`/Esc, Left/Right) runs, then the tour-cancel
-intercept (any other real key, or a mouse click/wheel, stops the tour). Only
-keys neither consumes reach `glr_ctrl_keyboard` / `glr_ctrl_special`. Synthetic
-script events call `glr_ctrl_*` directly and bypass this host layer.
+intercept (any other real key, a mouse click outside the tour HUD, or a wheel
+event stops the tour). A left press canonically classified as
+`UI_HIT_TOUR_HUD` reaches the controller first and toggles compact/expanded
+instead of canceling. Only input neither consumes reaches the remaining normal
+routes. Synthetic script events call `glr_ctrl_*` directly and bypass this host
+layer.
 
 `glr_ctrl_keyboard` and `glr_ctrl_special` in
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) route keys. An earlier layer that consumes a key

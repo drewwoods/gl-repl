@@ -15,10 +15,12 @@
 #include "ui/support/cpuprof.h"
 #include "subsystems/color_picker/color_picker_state.h"
 #include "ui/subsystems/color_picker.h"
+#include "app/glr_pointer_script.h"
 #include "ui/app/color_swatch.h"             /* ui_color_picker_render_swatch */
 #include "app/glr_color_picker_bridge.h"     /* glr_color_picker_install_host */
 #include "ui/app/autocomplete_panel.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/subsystems/tour_hud.h"
 #include "ui/app/variable_panel_view.h"
 #include "app/glr_actions.h"
 #include "ui/app/menu_bar.h"
@@ -1040,6 +1042,74 @@ static void test_ui_panels_hit_test_dispatch(void) {
     color_picker_stop();
 }
 
+static void test_tour_hud_compact_expand_hit_routing(void) {
+    const char *lines[] = { "move 100 100", "move 200 200" };
+    UiRenderSnapshot snap;
+    UiHit hit;
+    int x, y, w, h;
+    int mx, my;
+    unsigned long long compact_rects;
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+    glr_ctrl_sync_ui_chrome();
+    ASSERT_INT("test tour starts",
+               glr_pointer_script_start_tour(
+                   "Authorship Tour", "authorship.pointer", lines, 2), 1);
+
+    make_test_ui_snapshot(&snap);
+    ASSERT_INT("compact snapshot flag", snap.tour.hud_expanded, 0);
+    ASSERT_TRUE("compact HUD has a rect",
+                tour_ui_hud_rect(&snap, &x, &y, &w, &h));
+    ASSERT_INT("compact HUD height", h, TOUR_HUD_COMPACT_HEIGHT);
+    ASSERT_TRUE("compact HUD does not span whole scene", w < 764);
+    gl_stub_counts_reset();
+    tour_ui_hud_render(&snap);
+    compact_rects = gl_stub_counts[GL_STUB_glRectf];
+    ASSERT_TRUE("compact HUD renders its panel", compact_rects > 0);
+
+    mx = x + w / 2;
+    my = snap.viewport.window_h - (y + h / 2);
+    hit = tour_ui_hud_hit_test(&snap, mx, my);
+    ASSERT_INT("direct compact HUD hit", hit.kind, UI_HIT_TOUR_HUD);
+    hit = ui_panels_hit_test(&snap, mx, my, 0);
+    ASSERT_INT("canonical compact HUD hit", hit.kind, UI_HIT_TOUR_HUD);
+    ASSERT_INT("host pre-cancel probe recognizes HUD",
+               glr_ctrl_router_point_on_tour_hud(mx, my), 1);
+
+    /* The ordinary controller mouse route owns the actual toggle. */
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, mx, my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, mx, my);
+    make_test_ui_snapshot(&snap);
+    ASSERT_INT("click expands HUD", snap.tour.hud_expanded, 1);
+    ASSERT_TRUE("expanded HUD has a rect",
+                tour_ui_hud_rect(&snap, &x, &y, &w, &h));
+    ASSERT_INT("expanded HUD height", h, TOUR_HUD_EXPANDED_HEIGHT);
+    ASSERT_INT("expanded HUD spans available scene", w, 764);
+    gl_stub_counts_reset();
+    tour_ui_hud_render(&snap);
+    ASSERT_TRUE("expanded HUD adds progress geometry",
+                gl_stub_counts[GL_STUB_glRectf] > compact_rects);
+
+    mx = x + w - 5;
+    my = snap.viewport.window_h - (y + h / 2);
+    hit = tour_ui_hud_hit_test(&snap, mx, my);
+    ASSERT_INT("whole expanded surface is clickable",
+               hit.kind, UI_HIT_TOUR_HUD);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, mx, my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, mx, my);
+    ASSERT_INT("expanded click collapses HUD",
+               glr_pointer_script_tour_view().hud_expanded, 0);
+
+    make_test_ui_snapshot(&snap);
+    ASSERT_INT("outside direct HUD is none",
+               tour_ui_hud_hit_test(&snap, 0, 0).kind, UI_HIT_NONE);
+    ASSERT_INT("outside canonical hit remains scene",
+               ui_panels_hit_test(&snap, 400, 300, 0).kind, UI_HIT_SCENE);
+    glr_pointer_script_stop();
+}
+
 /* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the
  * code-panel splitter strip. */
 static void test_ui_panels_hit_test_panel_divider(void) {
@@ -1957,6 +2027,7 @@ int main(void) {
     test_menu_bar();
     test_ui_panels_hit_test();
     test_ui_menu_bar_hit_test();
+    test_tour_hud_compact_expand_hit_routing();
     test_ui_color_picker_hit_test();
     test_ui_variable_panel_hit_test();
     test_ui_panels_hit_test_dispatch();

@@ -242,6 +242,7 @@ static void test_hud_render_matches_width_helper(void) {
     ui_state_pointer_set(100, 100, -1);
     glr_pointer_script_start_tour("HUD Tour", "hud.pointer", lines, 2);
     glr_pointer_script_frame();   /* -> Playing, HUD active */
+    glr_pointer_script_toggle_tour_hud();   /* expand: full-width panel */
 
     int sx, sy, sw, sh;
     ui_layout_scene_rect(&sx, &sy, &sw, &sh);
