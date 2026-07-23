@@ -19,6 +19,7 @@
 
 typedef struct {
     const char        *name;
+    const char        *file;   /* catalog-relative .pointer filename */
     const char *const *lines;
     int                line_count;
 } TourEntry;

@@ -108,6 +108,8 @@ typedef struct {
     float  size;                   /* echo: requested cap height (px);   */
                                    /* picks the nearest GLUT bitmap font */
     float  cps;                    /* key@N: chars/sec (0 = all at once) */
+    int    source_line;            /* physical script line (1-based) for */
+                                   /* the tour HUD; 0 when unknown       */
     char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed;      */
                                    /* echo: caption text to draw         */
 } PsEvent;
@@ -520,6 +522,7 @@ int glr_pointer_script_load_env(void) {
                     "(max %d)\n", path, PS_MAX_EVENTS);
             exit(1);
         }
+        ev.source_line = lineno;
         g_events[g_event_count++] = ev;
     }
     fclose(fp);
@@ -588,6 +591,7 @@ int glr_pointer_script_start_lines(const char *const *lines, int count) {
             return 0;
         }
         if (timed) last_frame = ev.frame;
+        ev.source_line = i + 1;
         g_events[g_event_count++] = ev;
     }
     if (g_event_count == 0) return 0;

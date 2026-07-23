@@ -135,6 +135,25 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
         if not any(line.strip() and not line.lstrip().startswith("#") for line in lines):
             raise TourError(f"[{section}] tour script has no events: {rel_file}")
 
+        # Controlled tours (glr_pointer_script_start_tour) are untimed,
+        # completion-driven scripts. A leading timestamp selects the legacy
+        # absolute-time grammar the transport controls cannot step; the
+        # runtime rejects it too, but failing here keeps a bad catalog out of
+        # the build. A comment/blank line never counts as an executable line.
+        for lineno, line in enumerate(lines, start=1):
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            first = stripped.split(None, 1)[0]
+            try:
+                float(first)
+            except ValueError:
+                continue
+            raise TourError(
+                f"[{section}] {rel_file}:{lineno}: tour scripts must use "
+                f"untimed, completion-driven events (found timestamp {first!r})"
+            )
+
         entries.append(
             {
                 "section": section,
@@ -165,7 +184,10 @@ def render(entries: list[dict[str, object]]) -> str:
 
     out.append("static const TourEntry g_tours[] = {")
     for entry in entries:
-        out.append(f"    {{ {c_string(str(entry['name']))}, {entry['symbol']},")
+        out.append(
+            f"    {{ {c_string(str(entry['name']))}, "
+            f"{c_string(str(entry['file']))}, {entry['symbol']},"
+        )
         out.append(
             f"      (int)(sizeof({entry['symbol']}) / sizeof({entry['symbol']}[0])) }},"
         )
