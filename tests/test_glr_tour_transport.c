@@ -667,6 +667,28 @@ static void test_hud_panel_width_clamp(void) {
     }
 }
 
+/* Caption alpha: eases in/out during playback, but a frozen (paused/stepped/
+ * backstep-settled) clock renders full opacity so a caption caught mid-fade —
+ * or reconstructed at a tiny age on backstep — stays readable instead of hung
+ * half-transparent. */
+static void test_echo_alpha_frozen_is_full(void) {
+    /* Playing: ease-in ramps from 0 at age 0 to full by age 9. */
+    ASSERT_FLOAT("age 0 playing eases in from zero",
+                 glr_pointer_script_echo_alpha(0, 300, 0), 0.0f);
+    ASSERT_FLOAT("age 9 playing fully in",
+                 glr_pointer_script_echo_alpha(9, 300, 0), 1.0f);
+    ASSERT_FLOAT("mid-life playing full",
+                 glr_pointer_script_echo_alpha(100, 300, 0), 1.0f);
+
+    /* Frozen: full opacity regardless of where in the fade it was caught. */
+    ASSERT_FLOAT("age 0 frozen is full",
+                 glr_pointer_script_echo_alpha(0, 300, 1), 1.0f);
+    ASSERT_FLOAT("age 3 frozen is full (backstep landing)",
+                 glr_pointer_script_echo_alpha(3, 300, 1), 1.0f);
+    ASSERT_FLOAT("near-end frozen is full",
+                 glr_pointer_script_echo_alpha(295, 300, 1), 1.0f);
+}
+
 static void test_view_inactive_after_stop(void) {
     int n = build_many(3);
     start_tour(g_many, n);
@@ -710,6 +732,7 @@ int main(void) {
     test_backstep_reconstructs_repl_commit();
     test_backstep_reconstructs_camera_drag();
     test_hud_panel_width_clamp();
+    test_echo_alpha_frozen_is_full();
     test_view_inactive_after_stop();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

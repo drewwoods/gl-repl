@@ -167,6 +167,13 @@ int glr_pointer_script_handle_tour_key(unsigned char key);
  * Same consume/fallthrough contract as glr_pointer_script_handle_tour_key. */
 int glr_pointer_script_handle_tour_special(int key);
 
+/* Caption (echo) alpha for a given age/duration in frames. Eases in over the
+ * first ~9 frames and out over the last ~30 during playback; returns full
+ * opacity when `clock_frozen` (a paused/stepped tour is an inspection view, and
+ * the frozen virtual clock can't advance a fade). Pure; exposed for the
+ * overlay-alpha guard test. */
+float glr_pointer_script_echo_alpha(int age, int dur, int clock_frozen);
+
 /* Read GLR_POINTER_SCRIPT and parse the script it names. Returns nonzero
  * when a script is active (so main() can imply GLR_TICK_PER_FRAME). A parse
  * error reports the offending line on stderr and exits nonzero — a capture

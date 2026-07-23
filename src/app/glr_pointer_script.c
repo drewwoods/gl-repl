@@ -1733,9 +1733,29 @@ static void ps_draw_cursor(float px, float py) {
     glEnd();
 }
 
+float glr_pointer_script_echo_alpha(int age, int dur, int clock_frozen) {
+    if (clock_frozen)
+        return 1.0f;               /* paused inspection view: fully readable */
+    float alpha = 1.0f;
+    if (age < 9) alpha *= (float)age / 9.0f;          /* ease in  ~0.15s */
+    int left = dur - age;
+    if (left < 30) alpha *= (float)left / 30.0f;      /* ease out ~0.5s  */
+    if (alpha < 0.0f) alpha = 0.0f;
+    return alpha;
+}
+
 void glr_pointer_script_render_overlay(int win_w, int win_h) {
     if (!g_active) return;
     (void)win_w;
+
+    /* When a controlled tour's virtual clock is frozen (anything but Playing —
+     * paused, done, stepped, or settled after a backstep), the age-driven
+     * ease-in/out can't advance: a caption caught mid-fade would hang half-
+     * transparent forever, and a backstep can land it at a tiny age. A paused
+     * tour is an inspection view, so render captions at full alpha then. Env-
+     * capture always advances its clock, so its fades are untouched. */
+    int clock_frozen = (g_run_kind == PS_RUN_CONTROLLED_TOUR &&
+                        g_tour_state != GLR_TOUR_PLAYING);
 
     /* The overlay pass runs after glr_ctrl_display_frame, mirroring
      * splash_render: 2D ortho, blending on, y flipped from mouse space. */
@@ -1774,11 +1794,8 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
      * it reads over any scene; the whole caption eases in/out. */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
-        float age = (float)(g_frame - g_echo_start);
-        float alpha = 1.0f;
-        if (age < 9.0f) alpha *= age / 9.0f;          /* ease in ~0.15s   */
-        float left = (float)g_echo_dur - age;
-        if (left < 30.0f) alpha *= left / 30.0f;       /* ease out ~0.5s   */
+        float alpha = glr_pointer_script_echo_alpha(g_frame - g_echo_start,
+                                                    g_echo_dur, clock_frozen);
         void *font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
         static const float k_halo[][2] = {

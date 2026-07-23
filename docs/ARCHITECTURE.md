@@ -968,7 +968,7 @@ cannot restore it.
 
 Runtime shape:
 
-* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L202) (called
+* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L209) (called
   once per rendered frame) forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
