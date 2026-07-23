@@ -971,7 +971,7 @@ void glr_actions_set_msaa_label(int samples) {
 const char *glr_actions_audio_mode_status_string(int mode) {
     if (!glr_audio_is_enabled())
         return "Audio: disabled";
-    return mode == AUDIO_CFG_PAUSE ? "Audio: paused" : "Audio: on";
+    return mode == AUDIO_CFG_PAUSE ? "Audio: paused" : "Audio: playing";
 }
 
 void glr_actions_apply_audio_cfg_mode(int mode) {

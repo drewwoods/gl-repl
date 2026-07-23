@@ -242,7 +242,7 @@ static void test_cfg_cycling(void) {
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Off (pause)
     glr_action_toggle_audio_play_pause(); // -> On
     ASSERT_INT("audio mode On", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
-    ASSERT_STR("status audio On", g_last_status, "Audio: on");
+    ASSERT_STR("status audio On", g_last_status, "Audio: playing");
     ASSERT_INT("audio engine not paused", glr_audio_is_paused(), 0);
     ASSERT_INT("audio On preserves loop mode", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
 
