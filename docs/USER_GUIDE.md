@@ -403,6 +403,20 @@ polygon create holes (odd winding rule). See built-in examples *GLU
 concave arrow*, *GLU concave arrow cutout*, and *GLU concave arrow
 extrusion* for the syntax in action.
 
+- `gluBegin(GLU_POLYGON)` — start a tessellated polygon (REPL syntax over
+  [`gluTessBeginPolygon`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessBeginPolygon.xml))
+- `gluBegin(GLU_CONTOUR)` — start a contour within the polygon (REPL syntax
+  over [`gluTessBeginContour`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessBeginContour.xml))
+- `gluEnd()` — end the current contour or polygon, tracked by nesting depth
+  (REPL syntax over [`gluTessEndContour`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessEndContour.xml) /
+  [`gluTessEndPolygon`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessEndPolygon.xml))
+- `gluNormal(nx, ny, nz)` — set the per-vertex normal (REPL syntax over
+  [`gluTessNormal`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessNormal.xml))
+- `gluColor(r, g, b[, a])` — set the per-vertex color; alpha defaults to 1.0
+  when omitted (REPL-only convenience, no direct GLU equivalent)
+- `gluVertex(x, y, z)` — add a vertex to the current contour (REPL syntax
+  over [`gluTessVertex`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessVertex.xml))
+
 ### Bitmap text — `label()`
 
 ![The Orrery example uses labels that track 3D orbits](images/labels-orrery.png)
