@@ -25,6 +25,7 @@
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/replay/replay_state.h"
+#include "app/glr_pointer_script.h"          /* GlrTourPlaybackView */
 #include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
 
 #include "ui/app/state_types.h"
@@ -84,6 +85,7 @@ typedef struct UiRenderSnapshot {
     UiPointerState            pointer;
     GlrRenderState              render;
     ReplayRuntimeState      replay;
+    GlrTourPlaybackView         tour;
     ReplSceneRuntimeState       scenes;
     EditorScrollState           scroll;
     EditorCursorBlinkState      cursor_blink;

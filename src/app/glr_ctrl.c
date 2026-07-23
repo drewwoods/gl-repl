@@ -75,6 +75,8 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
+#include "ui/subsystems/tour_hud.h"
+#include "app/glr_pointer_script.h"   /* glr_pointer_script_tour_view */
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
@@ -1699,6 +1701,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->pointer        = ui_state_pointer();
     snap->render         = glr_state_render();
     snap->replay         = replay_state_view();
+    snap->tour           = glr_pointer_script_tour_view();
     snap->scenes         = repl_state_scenes();
     snap->scroll         = editor_state_scroll();
     snap->cursor_blink   = editor_state_cursor_blink();
@@ -2229,6 +2232,13 @@ void glr_ctrl_display_frame(void) {
         ui_snap.replay = saved_snap_replay;
         prof_end(PROF_REPLAY_HUD);
     }
+
+    /* Controlled-tour transport HUD (top of scene). Separate from the bottom
+     * replay HUD above so a tour demonstrating replay shows both. No-ops for
+     * env-capture scripts and when no controlled tour is running. Rendered
+     * before the compositor pass; the pointer/cursor overlay still composits
+     * on top afterward in gl_repl.c, staying visually topmost. */
+    tour_ui_hud_render(&ui_snap);
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
     for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
