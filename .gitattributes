@@ -1,5 +1,9 @@
 # GL-REPL / tutorial script files: use C highlighting on GitHub
 *.glr linguist-language=C
+
+# Regenerated doc media (scripts/docs-assets.sh) — binary, re-churns on every
+# regen. Route raster formats through Git LFS so new versions don't bloat the
+# packfile. SVGs stay in normal git (they're text and delta-compress fine).
 docs/images/**/*.png filter=lfs diff=lfs merge=lfs -text
 docs/images/**/*.gif filter=lfs diff=lfs merge=lfs -text
 docs/images/**/*.jpg filter=lfs diff=lfs merge=lfs -text
