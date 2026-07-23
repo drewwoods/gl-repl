@@ -2414,6 +2414,23 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
                              glr_state_presentation().light_theme);
 }
 
+/* Tutorial variant of the chrome reset. Examples deliberately inherit the
+ * camera and (via the shared defaults) the FAR grid; a tutorial should not.
+ * It opens a fresh transient scene whose geometry is unit-scale, so the
+ * lesson starts from the app's out-of-the-box view: default chrome, the
+ * built-in camera pose, and the CLOSE grid that frames it. Eases rather
+ * than snaps so the switch reads as a move, not a cut. Runs before the
+ * tutorial's own leading `@cfg`, which still wins over all of it. */
+static void glr_ctrl_reset_tutorial_chrome(void) {
+    glr_ctrl_reset_example_chrome(0);
+    glr_state_presentation_mut()->grid_extent_idx =
+        CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX;
+    /* Clear first: ease_to_default prefers a scene camera default (set by
+     * the previous example's `// camera` header) over the built-in pose. */
+    glr_camera_clear_scene_default();
+    glr_camera_ease_to_default();
+}
+
 /* Adapter for repl_executor_install_camera_distance_source. The
  * source is unconditionally installed; only the point-size fallback
  * (taken when the runtime GL lacks glPointParameterfv) consumes it,
@@ -2678,20 +2695,21 @@ static void glr_ctrl_host_set_time_playing(int playing) {
 
 /* The host-effect bridge routing core pipeline events to the UI and editor state. */
 static const ReplHostEffects g_glr_host_effects = {
-    .status                     = ui_state_status_set,
-    .status_error               = ui_state_status_set_error,
-    .example_presentation_reset = glr_ctrl_reset_example_chrome,
-    .input_reset                = glr_ctrl_host_input_reset,
-    .insert_mode_off            = glr_ctrl_host_insert_mode_off,
-    .scroll_to_line             = glr_ctrl_scroll_to_line,
-    .tutorial_teardown          = tutorial_teardown,
-    .edit_line_get              = editor_state_edit_line,
-    .edit_line_set              = editor_state_edit_line_set,
-    .host_cursor_park           = glr_ctrl_host_editor_cursor_park,
-    .completion_clear           = glr_ctrl_host_completion_clear,
-    .completion_update          = glr_ctrl_host_completion_update,
-    .host_input_get             = glr_ctrl_host_editor_input_get,
-    .set_time_playing           = glr_ctrl_host_set_time_playing,
+    .status                      = ui_state_status_set,
+    .status_error                = ui_state_status_set_error,
+    .example_presentation_reset  = glr_ctrl_reset_example_chrome,
+    .tutorial_presentation_reset = glr_ctrl_reset_tutorial_chrome,
+    .input_reset                 = glr_ctrl_host_input_reset,
+    .insert_mode_off             = glr_ctrl_host_insert_mode_off,
+    .scroll_to_line              = glr_ctrl_scroll_to_line,
+    .tutorial_teardown           = tutorial_teardown,
+    .edit_line_get               = editor_state_edit_line,
+    .edit_line_set               = editor_state_edit_line_set,
+    .host_cursor_park            = glr_ctrl_host_editor_cursor_park,
+    .completion_clear            = glr_ctrl_host_completion_clear,
+    .completion_update           = glr_ctrl_host_completion_update,
+    .host_input_get              = glr_ctrl_host_editor_input_get,
+    .set_time_playing            = glr_ctrl_host_set_time_playing,
 };
 
 /* Seed both overlay fade machines to the current presentation theme at steady full opacity. */

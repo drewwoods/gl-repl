@@ -1,6 +1,8 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "app/glr_actions.h"
+#include "app/glr_camera.h"       /* tutorial-start camera reset assertions */
 #include "app/glr_ctrl.h"
+#include "app/glr_defaults.h"     /* CFG_DEFAULT_* / CFG_DEFAULT_TUTORIAL_* */
 #include "editor/clipboard.h"
 #include "config.h"
 #include "editor/completion.h"
@@ -105,6 +107,65 @@ static void test_start_enters_transient_tutorial_scene(void) {
     ASSERT_STR("current expected text",
                tutorial_current_expected_text(),
                repl_tutorial_step_expected(0, 0));
+}
+
+/* A tutorial start is a fresh transient scene, so it must not inherit the
+ * previous scene's view: presentation chrome goes back to CFG_DEFAULT_*,
+ * the camera eases back to the built-in pose (examples deliberately
+ * inherit it; tutorials do not), and the grid narrows to CLOSE to frame
+ * unit-scale lesson geometry. "Color & Transform" ships no leading
+ * `@cfg`, so nothing layers over the reset. */
+static void test_start_resets_view_to_tutorial_defaults(void) {
+    reset_fixture();
+
+    /* Dirty every slug the reset owns, plus the camera. */
+    glr_config_set(GLR_CONFIG_GRID_THEME, GRID_THEME_RADAR);
+    glr_config_set(GLR_CONFIG_GRID_EXTENT, GRID_EXTENT_MID);
+    glr_config_set(GLR_CONFIG_PROJECTION, PROJ_ORTHO);
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_SUNSET);
+    glr_camera_set(72.0f, -140.0f, 31.0f, 3.0f, -2.0f, 1.5f, 0.0f);
+    /* Read the dirtied values back rather than assuming the writes stuck
+     * verbatim — the backdrop/grid pairing policy in glr_config.c can
+     * force a companion grid theme on top of what we asked for. */
+    int pre_grid   = repl_cfg_get_int("grid", -1);
+    int pre_extent = repl_cfg_get_int("grid_extent", -1);
+    ASSERT_TRUE("pre-tutorial grid extent is not the tutorial default",
+                pre_extent != CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
+
+    tutorial_start(1);
+    ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
+    ASSERT_INT("grid theme back to default",
+               repl_cfg_get_int("grid", -1), CFG_DEFAULT_GRID_THEME);
+    ASSERT_INT("projection back to perspective",
+               repl_cfg_get_int("projection", -1), CFG_DEFAULT_PROJECTION);
+    ASSERT_INT("backdrop back to default",
+               repl_cfg_get_int("backdrop", -1), CFG_DEFAULT_BACKDROP_MODE);
+    /* The one slug that deliberately differs from CFG_DEFAULT_*. */
+    ASSERT_INT("grid extent narrowed to close",
+               repl_cfg_get_int("grid_extent", -1),
+               CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
+
+    /* The camera eases rather than snaps, so the built-in pose shows up
+     * as the ease destination, not (yet) the live pose. */
+    GlrCameraState dest = glr_camera_destination();
+    ASSERT_TRUE("camera eases back to default orbit",
+                fabsf(dest.rx - 20.0f) < 0.001f &&
+                fabsf(dest.ry - 30.0f) < 0.001f);
+    ASSERT_TRUE("camera eases back to default distance",
+                fabsf(dest.dist - 5.0f) < 0.001f);
+    ASSERT_TRUE("camera eases back to origin target",
+                fabsf(dest.tx) < 0.001f && fabsf(dest.ty) < 0.001f &&
+                fabsf(dest.tz) < 0.001f);
+    ASSERT_INT("camera back in 3D control mode",
+               (int)glr_camera_control_mode(), (int)GLR_CAMERA_CONTROL_3D);
+
+    /* grid_extent rides the scene-subset baseline, so exit puts the
+     * user's own extent back rather than leaving CLOSE behind. */
+    tutorial_stop();
+    ASSERT_INT("exit restores the pre-tutorial grid extent",
+               repl_cfg_get_int("grid_extent", -1), pre_extent);
+    ASSERT_INT("exit restores the pre-tutorial grid theme",
+               repl_cfg_get_int("grid", -1), pre_grid);
 }
 
 static void test_catalog_includes_color_transform_tutorial(void) {
@@ -4054,6 +4115,7 @@ int main(void) {
     test_restart_during_tutorial_preserves_original_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();
     test_start_enters_transient_tutorial_scene();
+    test_start_resets_view_to_tutorial_defaults();
     test_catalog_includes_color_transform_tutorial();
     test_color_transform_walkthrough();
     test_runner_match_and_advance();

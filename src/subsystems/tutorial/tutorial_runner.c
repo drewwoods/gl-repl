@@ -63,8 +63,9 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
 
 /* Snapshot the user's pre-tutorial cfg into the bag. Two coverage
  * sources, unioned via the bag's slug-dedup:
- *   - `fill_scene_subset` (every per-scene presentation slug — so
- *     `presentation_reset(0)` and any cascading defaults revert too);
+ *   - `fill_scene_subset` (every per-scene presentation slug — so the
+ *     tutorial presentation reset, including its CLOSE grid extent, and
+ *     any cascading defaults revert too);
  *   - Tutorial-specific slugs referenced by entry `@cfg` or step
  *     SET/REQUIRE (e.g. `view_mode`, which is intentionally outside
  *     the scene subset). */
@@ -75,8 +76,8 @@ static void tutorial_baseline_capture(int idx) {
     if (b && b->fill_scene_subset)
         b->fill_scene_subset(&state->baseline_bag);
 
-    /* `presentation_reset_example_defaults` (called for every tutorial
-     * start) always touches `view_mode`/ortho_mode, but view_mode is
+    /* The presentation reset (run for every tutorial start) always
+     * touches `view_mode`/ortho_mode, but view_mode is
      * intentionally outside the scene-subset (it's a global, not a
      * per-scene property). Without an explicit record, a tutorial whose
      * @cfg / SET steps don't mention view_mode silently leaks the
@@ -109,10 +110,12 @@ static void tutorial_baseline_capture(int idx) {
 }
 
 static void tutorial_baseline_apply(int idx) {
-    /* Reset scene-presentation chrome to defaults, then apply any
-     * tutorial leading `@cfg` lines. Note: We pass 0 rather than the tag
-     * mask to avoid conflict between disjoint tutorial/example tag namespaces. */
-    repl_dispatch_example_presentation_reset(0);
+    /* Reset scene-presentation chrome, camera, and grid extent to the
+     * tutorial start state (see `tutorial_presentation_reset` in
+     * host_effects.h), then apply any tutorial leading `@cfg` lines on
+     * top. No tag mask is involved: tutorial and example tag namespaces
+     * are disjoint, so the example tag-default table must not run here. */
+    repl_dispatch_tutorial_presentation_reset();
 
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++)

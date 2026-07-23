@@ -45,6 +45,11 @@ void repl_dispatch_example_presentation_reset(unsigned int tag_mask) {
         g_host_effects->example_presentation_reset(tag_mask);
 }
 
+void repl_dispatch_tutorial_presentation_reset(void) {
+    if (g_host_effects && g_host_effects->tutorial_presentation_reset)
+        g_host_effects->tutorial_presentation_reset();
+}
+
 void repl_dispatch_input_reset(void) {
     if (g_host_effects && g_host_effects->input_reset)
         g_host_effects->input_reset();

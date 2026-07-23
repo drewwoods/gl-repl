@@ -2282,6 +2282,21 @@ label-placement steps target to splice commands into the scaffold
 (resolved against the live document at step entry). See
 [`docs/plans/done/tutorial-setup-scaffold.md`](plans/done/tutorial-setup-scaffold.md).
 
+**Start-of-tutorial view reset.** `tutorial_start` opens a fresh
+transient scene, so it must not inherit the previous scene's view.
+`tutorial_baseline_apply` calls `repl_dispatch_tutorial_presentation_reset()`
+(host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
+the example chrome reset with no tag mask and then adds the two things an
+example load deliberately inherits: the camera eases back to the built-in
+default pose (`glr_camera_clear_scene_default` + `glr_camera_ease_to_default`),
+and the grid extent narrows to `CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX`
+(CLOSE — lesson geometry is unit-scale and the default camera sits at
+dist 5.0, which the FAR default over-covers). The tutorial's own leading
+`@cfg` runs after the reset and still wins. Every slug touched here is in
+the `fill_scene_subset` baseline, so teardown restores the user's own
+values; the camera is not restored (the pre-tutorial scene's own snapshot
+carries it back when the user returns to that scene).
+
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits
 land in roughly the order below.

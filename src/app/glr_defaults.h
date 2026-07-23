@@ -66,6 +66,14 @@
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
 #define CFG_DEFAULT_DEPTH_VIZ        0   /* RENDER3D_DEPTH_VIZ_OFF */
 
+/* Tutorial-start override. Tutorials reset presentation to the values
+ * above and then narrow the grid: lesson geometry is unit-scale and the
+ * camera starts at the built-in default distance (5.0), so the CLOSE
+ * grid (also 5.0 units) frames it, where the FAR default reads as a
+ * dense carpet. Only this one slug differs from CFG_DEFAULT_*; a
+ * tutorial's own leading `@cfg` still wins over it. */
+#define CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX GRID_EXTENT_CLOSE
+
 /* Backdrop/grid pairing defaults. These rows declare which backdrops own a
  * companion grid; glr_config.c owns the enforcement policy (force the grid
  * while paired, hide paired grids from direct user cycling, restore the prior

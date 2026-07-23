@@ -58,6 +58,15 @@ typedef struct {
      * Order of precedence: example `@cfg` > tag default > global
      * default. */
     void (*example_presentation_reset)(unsigned int tag_mask);
+    /* Same reset for a tutorial start, plus the two things an example
+     * load deliberately inherits: the camera pose (eased back to the
+     * built-in default) and the grid extent (narrowed to
+     * CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX). A tutorial is a fresh
+     * transient scene with unit-scale geometry, so it starts from the
+     * app's out-of-the-box view rather than wherever the previous scene
+     * left the camera. The tutorial's own leading `@cfg` still runs
+     * after this and wins. NULL = no-op (pure REPL tests, demo). */
+    void (*tutorial_presentation_reset)(void);
     /* Clear the editor input buffer. */
     void (*input_reset)(void);
     /* Force the editor out of insert mode. */
@@ -97,6 +106,7 @@ void repl_install_host_effects(const ReplHostEffects *effects);
  * snippet-import / replay paths. Each is a no-op when the bridge is
  * unset or the matching callback is NULL. */
 void        repl_dispatch_example_presentation_reset(unsigned int tag_mask);
+void        repl_dispatch_tutorial_presentation_reset(void);
 void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
