@@ -388,13 +388,11 @@ compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) and
 
 ### GLUT solid shapes
 
-```
-glutSolidTorus(inner, outer, nsides, rings)
-glutSolidCube(size)
-glutSolidSphere(radius, slices, stacks)
-glutSolidTeapot(size)
-glutSolidCone(base, height, slices, stacks)
-```
+- [`glutSolidTorus(inner, outer, nsides, rings)`](https://github.com/freeglut/freeglut/blob/master/doc/api.md#152-glutwiretorus-glutsolidtorus)
+- [`glutSolidCube(size)`](https://github.com/freeglut/freeglut/blob/master/doc/api.md#155-glutwirecube-glutsolidcube)
+- [`glutSolidSphere(radius, slices, stacks)`](https://github.com/freeglut/freeglut/blob/master/doc/api.md#151--glutwiresphere-glutsolidsphere)
+- [`glutSolidTeapot(size)`](https://github.com/freeglut/freeglut/blob/master/doc/api.md#1511-glutwireteapot-glutsolidteapot-glutwireteacup)
+- [`glutSolidCone(base, height, slices, stacks)`](https://github.com/freeglut/freeglut/blob/master/doc/api.md#154-glutwirecone-glutsolidcone)
 
 ### GLU tessellator (concave / complex polygons)
 
