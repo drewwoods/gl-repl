@@ -38,13 +38,15 @@ const char *glr_tours_name(int idx) {
 
 int glr_tours_start(int idx) {
     if (idx < 0 || idx >= glr_tours_count()) return 0;
-    if (!glr_pointer_script_start_lines(g_tours[idx].lines,
-                                        g_tours[idx].line_count)) {
+    if (!glr_pointer_script_start_tour(g_tours[idx].name, g_tours[idx].file,
+                                       g_tours[idx].lines,
+                                       g_tours[idx].line_count)) {
         repl_set_status_error("Tour script failed to load");
         return 0;
     }
     char msg[96];
-    snprintf(msg, sizeof(msg), "Tour: %s  (any key or click stops it)",
+    snprintf(msg, sizeof(msg),
+             "Tour: %s  (Space play/pause, arrows step, Esc exit)",
              g_tours[idx].name);
     repl_set_status(msg);
     return 1;

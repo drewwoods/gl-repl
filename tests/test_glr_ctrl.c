@@ -4139,9 +4139,10 @@ static void run_pointer_script_line(const char *line) {
     const char *lines[1];
     lines[0] = line;
     ASSERT_INT("pointer script line accepted",
-               glr_pointer_script_start_lines(lines, 1), 1);
-    /* First frame fires the untimed event (a chord completes immediately,
-     * PS_WAIT_NONE); a second frame lets the tour auto-stop. */
+               glr_pointer_script_start_tour("Test", "test.pointer", lines, 1),
+               1);
+    /* Frame 1 captures the rewind baseline and enters Playing; frame 2 fires
+     * the untimed event (a chord completes immediately, PS_WAIT_NONE). */
     glr_pointer_script_frame();
     glr_pointer_script_frame();
     glr_pointer_script_stop();
@@ -4161,21 +4162,21 @@ static void test_scripted_chord_reaches_shift_shortcuts(void) {
     const char *bad4[1] = { "chord ctrl+ctrl c" };       /* duplicate modifier   */
     const char *bad5[1] = { "chord ctrl+shift c junk" }; /* trailing garbage     */
     ASSERT_INT("chord ctrl+shift c parses",
-               glr_pointer_script_start_lines(ok1, 1), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", ok1, 1), 1);
     glr_pointer_script_stop();
     ASSERT_INT("chord shift f12 parses",
-               glr_pointer_script_start_lines(ok2, 1), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", ok2, 1), 1);
     glr_pointer_script_stop();
     ASSERT_INT("shift-only printable rejected",
-               glr_pointer_script_start_lines(bad1, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad1, 1), 0);
     ASSERT_INT("unknown modifier rejected",
-               glr_pointer_script_start_lines(bad2, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad2, 1), 0);
     ASSERT_INT("empty modifier component rejected",
-               glr_pointer_script_start_lines(bad3, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad3, 1), 0);
     ASSERT_INT("duplicate modifier rejected",
-               glr_pointer_script_start_lines(bad4, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad4, 1), 0);
     ASSERT_INT("trailing garbage rejected",
-               glr_pointer_script_start_lines(bad5, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad5, 1), 0);
 
     /* Dispatch: the fixture camera sits at a non-default pose, so Ctrl+Shift+C
      * (GLR_RESET_CAMERA) begins an eased return to default. */

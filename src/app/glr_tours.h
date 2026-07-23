@@ -11,11 +11,13 @@
  * (or catalog-emscripten.ini for the web-safe set) and compiled in by
  * scripts/gen_tours.py. The Tours menu lists the
  * catalog; activating an entry hands the script to
- * glr_pointer_script_start_lines. Any real
- * key press, click, or wheel event cancels a running tour (intercepted in
- * gl_repl.c's GLUT callbacks — scripted events bypass those, so only the
- * user can trigger the cancel), and a tour that runs to completion stops
- * itself.
+ * glr_pointer_script_start_tour, which plays it as a controlled tour with
+ * replay-style transport (Space play/pause, arrows step/back, +/- speed,
+ * Esc exit; see src/app/glr_pointer_script.h). A real key/click/wheel event
+ * that is not a transport control cancels the tour (intercepted in gl_repl.c's
+ * GLUT callbacks — scripted events bypass those, so only the user can trigger
+ * the cancel), and a tour that plays to the end enters a persistent Done
+ * rather than stopping.
  *
  * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: — grammar
  * in glr_pointer_script.h) resolved against the live layout when each

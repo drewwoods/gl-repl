@@ -9,6 +9,7 @@
  */
 #include "app/glr_pointer_script.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
 #include "ui/app/layout.h"       /* ui_layout_scene_rect (scene: targets) */
 #include "ui/app/menu_bar.h"     /* ui_menu_bar_target_* (menu/item/sub/pin) */
@@ -114,14 +115,47 @@ typedef struct {
                                    /* echo: caption text to draw         */
 } PsEvent;
 
+/* Which run kind is active (see the header). Two kinds only: the env-driven
+ * capture hook (GLR_POINTER_SCRIPT — never canceled, never auto-stops, may be
+ * timed or untimed) and the menu-driven controlled tour (untimed, transport
+ * controls, HUD, persistent Done). Replaces the old g_tour flag. */
+typedef enum {
+    PS_RUN_NONE = 0,
+    PS_RUN_ENV_CAPTURE,
+    PS_RUN_CONTROLLED_TOUR
+} PsRunKind;
+static PsRunKind g_run_kind = PS_RUN_NONE;
+
 static PsEvent g_events[PS_MAX_EVENTS];
 static int     g_event_count = 0;
 static int     g_active = 0;
-static int     g_tour = 0;     /* runtime-started (auto-stop, cancelable) */
 
 static int g_frame = 0;        /* rendered-frame clock, first frame = 0  */
 static int g_next_event = 0;   /* events fire in file order              */
 static int g_sequential = 0;   /* untimed grammar: wait for each step    */
+
+/* --- controlled-tour transport state ------------------------------------ */
+
+/* Discrete speed ladder (see the header). The virtual clock advances
+ * g_frame_credit by g_speed each rendered frame and spends whole credits as
+ * virtual tour frames; speed touches pointer-script timing only. */
+static const float k_tour_speeds[] = {
+    0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f
+};
+#define PS_TOUR_SPEED_COUNT ((int)(sizeof(k_tour_speeds) / sizeof(k_tour_speeds[0])))
+#define PS_TOUR_SPEED_DEFAULT 2   /* index of 1.0x */
+#define PS_SEEK_EVENTS_PER_FRAME 32
+
+static GlrTourPlaybackState g_tour_state = GLR_TOUR_OFF;
+static int   g_current_event = -1;      /* in-flight event index, or -1     */
+static int   g_completed_events = 0;    /* events driven to completion      */
+static int   g_speed_idx = PS_TOUR_SPEED_DEFAULT;
+static float g_frame_credit = 0.0f;     /* virtual-frame accumulator        */
+static const char *g_tour_name = NULL;  /* borrowed HUD metadata            */
+static const char *g_tour_file = NULL;
+static GlrTourSnapshot *g_baseline = NULL;  /* rewind baseline (NULL until   */
+                                            /* BASELINE_PENDING resolves)    */
+static int   g_seek_target = -1;        /* SEEKING: prefix length to reach  */
 
 /* An explicit pause blocks event dispatch in either grammar. */
 static int g_pause_until = -1;
@@ -529,6 +563,7 @@ int glr_pointer_script_load_env(void) {
 
     g_sequential = (mode == 0);
     g_active = 1;
+    g_run_kind = PS_RUN_ENV_CAPTURE;
     fprintf(stderr, "gl-repl: pointer script: %d event(s) from %s\n",
             g_event_count, path);
     return 1;
@@ -539,7 +574,7 @@ int glr_pointer_script_active(void) {
 }
 
 int glr_pointer_script_tour_active(void) {
-    return g_active && g_tour;
+    return g_active && g_run_kind == PS_RUN_CONTROLLED_TOUR;
 }
 
 /* Reset the per-run state (clocks, glide, held button, overlays) without
@@ -548,6 +583,9 @@ int glr_pointer_script_tour_active(void) {
 static void ps_reset_runtime(void) {
     g_frame = 0;
     g_next_event = 0;
+    g_current_event = -1;
+    g_completed_events = 0;
+    g_frame_credit = 0.0f;
     g_pause_until = -1;
     g_step_wait = PS_WAIT_NONE;
     g_glide_active = 0;
@@ -563,42 +601,47 @@ static void ps_reset_runtime(void) {
     g_type_text[0] = '\0';
 }
 
-int glr_pointer_script_start_lines(const char *const *lines, int count) {
+int glr_pointer_script_start_tour(const char *name, const char *file,
+                                  const char *const *lines, int line_count) {
     glr_pointer_script_stop();
     g_event_count = 0;
-    int last_frame = 0;
-    int mode = -1;
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < line_count; i++) {
         PsEvent ev;
         int timed = 0;
         int r = ps_parse_line(lines[i], &ev, &timed);
-        if (r < 0 ||
-            (r > 0 && mode >= 0 && timed != mode) ||
-            (r > 0 && timed && ev.frame < last_frame)) {
+        /* Controlled tours are untimed, completion-driven scripts: a
+         * timestamped or malformed line is an authoring error (built-in tours
+         * are validated by gen_tours.py + tests, so this is a backstop). */
+        if (r < 0 || (r > 0 && timed)) {
             fprintf(stderr, "gl-repl: tour script line %d: %s: %s\n", i + 1,
-                    (r < 0 || (mode >= 0 && timed != mode))
-                        ? "bad line" : "out of order",
+                    (r < 0) ? "bad line"
+                            : "tours must use untimed, completion-driven events",
                     lines[i]);
             g_event_count = 0;
             return 0;
         }
         if (r == 0) continue;
-        if (mode < 0) mode = timed;
         if (g_event_count >= PS_MAX_EVENTS) {
             fprintf(stderr, "gl-repl: tour script: too many events (max %d)\n",
                     PS_MAX_EVENTS);
             g_event_count = 0;
             return 0;
         }
-        if (timed) last_frame = ev.frame;
         ev.source_line = i + 1;
         g_events[g_event_count++] = ev;
     }
     if (g_event_count == 0) return 0;
-    g_sequential = (mode == 0);
+    g_sequential = 1;
     ps_reset_runtime();
     g_active = 1;
-    g_tour = 1;
+    g_run_kind = PS_RUN_CONTROLLED_TOUR;
+    g_tour_name = name;
+    g_tour_file = file;
+    g_speed_idx = PS_TOUR_SPEED_DEFAULT;
+    /* Defer the baseline capture + first event to the next frame: the Tours
+     * menu's close path must fully run first (its state is part of the
+     * baseline), and event zero must not fire before the snapshot exists. */
+    g_tour_state = GLR_TOUR_BASELINE_PENDING;
     return 1;
 }
 
@@ -655,7 +698,15 @@ void glr_pointer_script_stop(void) {
     if (g_button_held >= 0)
         ps_release(g_button_held);
     g_active = 0;
-    g_tour = 0;
+    g_run_kind = PS_RUN_NONE;
+    /* Tear down the controlled-tour transport: drop the rewind baseline and
+     * clear playback metadata so a later legacy/env run starts clean. */
+    glr_tour_snapshot_destroy(g_baseline);
+    g_baseline = NULL;
+    g_tour_state = GLR_TOUR_OFF;
+    g_tour_name = NULL;
+    g_tour_file = NULL;
+    g_seek_target = -1;
     ps_reset_runtime();
 }
 
@@ -727,7 +778,7 @@ static int ps_fire_point(const PsEvent *ev, float *x, float *y) {
     }
     fprintf(stderr, "gl-repl: pointer script: cannot resolve target '%s'\n",
             ev->target);
-    if (!g_tour)
+    if (g_run_kind == PS_RUN_ENV_CAPTURE)
         exit(1);
     glr_pointer_script_stop();
     repl_set_status_error("Tour stopped (target not found)");
@@ -741,7 +792,7 @@ static int ps_fire_shell_click(const PsEvent *ev) {
 #endif
     fprintf(stderr, "gl-repl: pointer script: cannot activate target '%s'\n",
             ev->target);
-    if (!g_tour)
+    if (g_run_kind == PS_RUN_ENV_CAPTURE)
         exit(1);
     glr_pointer_script_stop();
     repl_set_status_error("Tour stopped (target unavailable)");
@@ -955,23 +1006,494 @@ static void ps_advance_one_virtual_frame(void) {
     }
 
     g_frame++;
+    /* No auto-stop on this path: env-driven capture keeps the overlay up until
+     * the recorder exits (the clip should never end cursor-less). Controlled
+     * tours run ps_tour_frame() and enter a persistent Done instead. */
+}
 
-    /* Tour auto-stop: once every event has fired and every in-flight effect
-     * (glide, pending release, ring/echo/ripple) has run out, hand the app
-     * back. Env-driven capture runs keep the overlay up until the recorder
-     * exits instead — the clip should never end cursor-less. */
-    if (g_tour && g_next_event >= g_event_count &&
-        g_release_frame < 0 && g_pause_until < 0 &&
-        !g_glide_active && !g_type_active &&
-        g_button_held < 0 &&
-        (g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur) &&
-        (g_echo_start < 0 || g_frame - g_echo_start >= g_echo_dur) &&
-        (g_ripple_frame < 0 || g_frame - g_ripple_frame >= PS_RIPPLE_FRAMES))
+/* --- controlled-tour transport engine ----------------------------------- */
+
+/* Seed the scripted pointer from the live UI pointer so the first glide/move
+ * eases from where the real cursor sits (baseline capture + every seek). */
+static void ps_tour_seed_pointer(void) {
+    UiPointerState p = ui_state_pointer();
+    g_px = (float)p.mouse_x;
+    g_py = (float)p.mouse_y;
+}
+
+/* HUD source line: the active event while playing/stepping, the next event
+ * while paused before it, the final event in Done, -1 with no event. */
+static int ps_tour_hud_source_line(void) {
+    if (g_event_count <= 0)
+        return -1;
+    if (g_tour_state == GLR_TOUR_DONE)
+        return g_events[g_event_count - 1].source_line;
+    if (g_current_event >= 0 && g_current_event < g_event_count)
+        return g_events[g_current_event].source_line;
+    if (g_next_event < g_event_count)
+        return g_events[g_next_event].source_line;
+    return g_events[g_event_count - 1].source_line;
+}
+
+/* Execute one event to completion synchronously, bypassing its PsWait. Shared
+ * by the Right-Arrow step and the fast-seek prefix. `allow_overlays` gates the
+ * decorative ring/echo/ripple: suppressed for historical seek events, permitted
+ * for a Right step and for the final replayed seek event. */
+static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
+    float x = 0.0f, y = 0.0f;
+    switch (ev->verb) {
+    case PS_MOVE:
+        if (!ps_fire_point(ev, &x, &y)) break;
+        g_glide_active = 0;
+        ps_dispatch_move(x, y);
+        break;
+    case PS_GLIDE: {
+        if (!ps_fire_point(ev, &x, &y)) break;
+        g_glide_active = 0;
+        float fx = g_px, fy = g_py;
+        int dur = ev->dur_frames > 0 ? ev->dur_frames : 1;
+        /* Dispatch smoothstep samples across the original duration, including
+         * the exact endpoint (f == dur => s == 1), so a held-button drag
+         * reproduces its intermediate motion. */
+        for (int f = 1; f <= dur; f++) {
+            float s = ps_smoothstep((float)f / (float)dur);
+            ps_dispatch_move(fx + (x - fx) * s, fy + (y - fy) * s);
+        }
+        break;
+    }
+    case PS_CLICK:
+    case PS_RIGHTCLICK: {
+        int button = (ev->verb == PS_CLICK) ? GLUT_LEFT_BUTTON
+                                            : GLUT_RIGHT_BUTTON;
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
+        if (ev->verb == PS_CLICK && strncmp(ev->target, "shell:", 6) == 0) {
+            if (!ps_fire_shell_click(ev)) break;
+            if (allow_overlays) {
+                g_ripple_frame = g_frame;
+                g_ripple_x = g_px;
+                g_ripple_y = g_py;
+            }
+            break;
+        }
+        ps_press(button);   /* press + release synchronously (no wait) */
+        ps_release(button);
+        if (!allow_overlays)
+            g_ripple_frame = -1;   /* ps_press armed a ripple; suppress it */
+        break;
+    }
+    case PS_DOWN:
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
+        ps_press(GLUT_LEFT_BUTTON);   /* leave held (drag reproduction) */
+        if (!allow_overlays)
+            g_ripple_frame = -1;
+        break;
+    case PS_UP:
+        if (ev->has_xy) {
+            if (!ps_fire_point(ev, &x, &y)) break;
+            ps_dispatch_move(x, y);
+        }
+        ps_release(GLUT_LEFT_BUTTON);
+        break;
+    case PS_WHEEL:
+        glr_ctrl_mousewheel(0, ev->wheel_dir,
+                            (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        break;
+    case PS_KEY:
+        ps_type_flush();
+        /* Deliver the whole payload synchronously (ignore key@N pacing). */
+        for (const char *c = ev->text; *c; c++)
+            glr_ctrl_keyboard((unsigned char)*c,
+                              (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        break;
+    case PS_SKEY:
+        ps_type_flush();
+        glr_ctrl_special(ev->special,
+                         (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        break;
+    case PS_CHORD:
+        ps_type_flush();
+        if (ev->special >= 0)
+            glr_ctrl_special_with_modifiers(ev->special, (int)(g_px + 0.5f),
+                                            (int)(g_py + 0.5f), ev->mods);
+        else
+            glr_ctrl_keyboard_with_modifiers(ev->key_byte, (int)(g_px + 0.5f),
+                                             (int)(g_py + 0.5f), ev->mods);
+        break;
+    case PS_RING:
+        if (!allow_overlays) break;   /* create overlay only when permitted */
+        if (!ps_fire_point(ev, &x, &y)) break;
+        g_ring_start = g_frame;
+        g_ring_dur = ev->dur_frames;
+        g_ring_x = x;
+        g_ring_y = y;
+        break;
+    case PS_ECHO:
+        if (!allow_overlays) break;
+        if (!ps_fire_point(ev, &x, &y)) break;
+        g_echo_start = g_frame;
+        g_echo_dur = ev->dur_frames;
+        g_echo_x = x;
+        g_echo_y = y;
+        g_echo_size = ev->size;
+        snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
+        break;
+    case PS_PAUSE:
+        break;   /* skip the dwell entirely */
+    }
+}
+
+/* Force the in-flight event's pending waits to completion without re-firing it
+ * (Right Arrow mid-event): snap a glide to its endpoint, release a pending
+ * synthesized click, flush paced typing, cancel a pause. */
+static void ps_force_current_complete(void) {
+    if (g_glide_active) {
+        ps_dispatch_move(g_glide_to_x, g_glide_to_y);
+        g_glide_active = 0;
+    }
+    if (g_release_frame >= 0) {
+        g_release_frame = -1;
+        ps_release(g_release_button);
+    }
+    ps_type_flush();
+    g_pause_until = -1;
+    /* A ring/echo overlay simply keeps running out on its own clock. */
+}
+
+/* Enter persistent Done: release any held button, clear in-flight wait/
+ * release/typing state, but retain the baseline, HUD, cursor, and any
+ * still-live decorative overlay. Never calls glr_pointer_script_stop(). */
+static void ps_tour_enter_done(void) {
+    if (g_release_frame >= 0) {
+        g_release_frame = -1;
+        ps_release(g_release_button);
+    }
+    if (g_button_held >= 0)
+        ps_release(g_button_held);
+    ps_type_flush();
+    g_glide_active = 0;
+    g_pause_until = -1;
+    g_current_event = -1;
+    g_step_wait = PS_WAIT_NONE;
+    g_frame_credit = 0.0f;
+    g_tour_state = GLR_TOUR_DONE;
+}
+
+/* One virtual tour frame under normal playback: complete the in-flight event,
+ * fire the next, step glide + paced typing, tick the clock, and detect Done.
+ * Event accounting: firing does not count completion; the PsWait completing
+ * does (immediate verbs complete the following virtual frame, as before). */
+static void ps_tour_advance_one_virtual_frame(void) {
+    if (g_release_frame >= 0 && g_frame >= g_release_frame) {
+        g_release_frame = -1;
+        ps_release(g_release_button);
+    }
+    if (g_pause_until >= 0 && g_frame >= g_pause_until)
+        g_pause_until = -1;
+
+    if (g_current_event >= 0 && ps_step_complete()) {
+        g_completed_events++;
+        g_current_event = -1;
+        g_step_wait = PS_WAIT_NONE;
+    }
+    if (g_active && g_current_event < 0 && g_next_event < g_event_count) {
+        int idx = g_next_event++;
+        g_current_event = idx;
+        const PsEvent *ev = &g_events[idx];
+        ps_fire(ev);
+        if (g_active)
+            ps_wait_for_event(ev);
+    }
+    if (!g_active)
+        return;
+
+    if (g_type_active)
+        ps_type_send((int)((float)(g_frame - g_type_start) *
+                           g_type_cps / PS_FPS) + 1);
+
+    if (g_glide_active) {
+        float t = (float)(g_frame - g_glide_start) / (float)g_glide_dur;
+        float s = ps_smoothstep(t);
+        ps_dispatch_move(g_glide_from_x + (g_glide_to_x - g_glide_from_x) * s,
+                         g_glide_from_y + (g_glide_to_y - g_glide_from_y) * s);
+        if (t >= 1.0f)
+            g_glide_active = 0;
+    }
+
+    g_frame++;
+
+    if (g_completed_events >= g_event_count && g_current_event < 0)
+        ps_tour_enter_done();
+}
+
+/* Begin a backstep/restart seek to `target` completed events: enter Seeking,
+ * release held/pending mouse state, clear in-flight typing/glide/waits/
+ * overlays, restore the baseline, re-sync controller chrome, and reset the
+ * script cursor. The prefix [0, target) is fast-executed by ps_tour_seek_step
+ * across subsequent frames. */
+static void ps_tour_begin_seek(int target) {
+    if (!g_baseline) {
+        g_tour_state = GLR_TOUR_PAUSED;
+        return;
+    }
+    g_tour_state = GLR_TOUR_SEEKING;
+
+    if (g_release_frame >= 0) {
+        g_release_frame = -1;
+        ps_release(g_release_button);
+    }
+    if (g_button_held >= 0)
+        ps_release(g_button_held);
+    g_glide_active = 0;
+    g_type_active = 0;
+    g_type_text[0] = '\0';
+    g_pause_until = -1;
+    g_step_wait = PS_WAIT_NONE;
+    g_ring_start = -1;
+    g_echo_start = -1;
+    g_echo_text[0] = '\0';
+    g_ripple_frame = -1;
+
+    glr_tour_snapshot_restore(g_baseline);
+    glr_ctrl_after_tour_restore();
+
+    g_frame = 0;
+    g_next_event = 0;
+    g_current_event = -1;
+    g_completed_events = 0;
+    g_frame_credit = 0.0f;
+    ps_tour_seed_pointer();
+    g_seek_target = target;
+}
+
+/* Resumable prefix replay: fast-execute up to PS_SEEK_EVENTS_PER_FRAME events,
+ * suppressing historical decoration (only the final replayed event may draw an
+ * overlay). A shell: click schedules an async DOM callback, so yield the frame
+ * after one and resume next frame. Advances no scene/application time. */
+static void ps_tour_seek_step(void) {
+    int processed = 0;
+    while (g_active && g_next_event < g_seek_target &&
+           processed < PS_SEEK_EVENTS_PER_FRAME) {
+        int idx = g_next_event++;
+        int allow = (idx == g_seek_target - 1);
+        const PsEvent *ev = &g_events[idx];
+        ps_finish_event_immediate(ev, allow);
+        g_completed_events++;
+        processed++;
+#if defined(__EMSCRIPTEN__)
+        if (ev->verb == PS_CLICK && strncmp(ev->target, "shell:", 6) == 0)
+            return;   /* yield to the browser event loop; resume next frame */
+#endif
+    }
+    if (!g_active)
+        return;
+    if (g_next_event >= g_seek_target) {
+        g_current_event = -1;
+        g_step_wait = PS_WAIT_NONE;
+        g_seek_target = -1;
+        if (g_completed_events >= g_event_count)
+            ps_tour_enter_done();
+        else
+            g_tour_state = GLR_TOUR_PAUSED;
+    }
+}
+
+/* Right Arrow: force the in-flight event complete, or execute the next event
+ * immediately when between events; then pause (or enter Done at the end). */
+static void ps_tour_step_forward(void) {
+    switch (g_tour_state) {
+    case GLR_TOUR_PLAYING:
+    case GLR_TOUR_PAUSED:
+        break;
+    case GLR_TOUR_DONE:
+        repl_set_status("Tour: at end");
+        return;
+    default:   /* baseline pending, seeking, stepping, off: consume, no-op */
+        return;
+    }
+    if (g_current_event >= 0) {
+        ps_force_current_complete();
+        g_completed_events++;
+        g_current_event = -1;
+        g_step_wait = PS_WAIT_NONE;
+    } else if (g_next_event < g_event_count) {
+        const PsEvent *ev = &g_events[g_next_event++];
+        ps_finish_event_immediate(ev, 1);
+        g_completed_events++;
+    }
+    if (!g_active)
+        return;
+    if (g_completed_events >= g_event_count)
+        ps_tour_enter_done();
+    else
+        g_tour_state = GLR_TOUR_PAUSED;
+}
+
+/* Left Arrow: compute the backstep target (plan's formula) and seek to it. */
+static void ps_tour_backstep(void) {
+    int target;
+    if (g_tour_state == GLR_TOUR_DONE) {
+        target = g_event_count > 0 ? g_event_count - 1 : 0;
+    } else if (g_tour_state == GLR_TOUR_PLAYING ||
+               g_tour_state == GLR_TOUR_PAUSED) {
+        if (g_current_event >= 0)
+            target = g_completed_events;
+        else
+            target = g_completed_events > 0 ? g_completed_events - 1 : 0;
+    } else {
+        return;   /* baseline pending, seeking, stepping, off: consume, no-op */
+    }
+    ps_tour_begin_seek(target);
+}
+
+/* Speed ladder step, clamped. Affects only pointer-script timing. */
+static void ps_tour_speed_adjust(int dir) {
+    g_speed_idx += dir;
+    if (g_speed_idx < 0)
+        g_speed_idx = 0;
+    if (g_speed_idx >= PS_TOUR_SPEED_COUNT)
+        g_speed_idx = PS_TOUR_SPEED_COUNT - 1;
+}
+
+/* Done -> restart: restore the baseline (a seek to target 0, no prefix) and
+ * replay from the start at the current speed. */
+static void ps_tour_restart(void) {
+    ps_tour_begin_seek(0);
+    if (g_tour_state == GLR_TOUR_SEEKING) {   /* baseline existed */
+        g_seek_target = -1;
+        g_tour_state = GLR_TOUR_PLAYING;
+        g_frame_credit = 0.0f;
+    }
+}
+
+/* Space: pause without completing the current event, resume, or (from Done)
+ * restore the baseline and replay from the start. No-op in the transient
+ * baseline-pending / seeking / stepping states. */
+static void ps_tour_space(void) {
+    switch (g_tour_state) {
+    case GLR_TOUR_PLAYING:
+        g_tour_state = GLR_TOUR_PAUSED;
+        break;
+    case GLR_TOUR_PAUSED:
+        g_tour_state = GLR_TOUR_PLAYING;
+        g_frame_credit = 0.0f;
+        break;
+    case GLR_TOUR_DONE:
+        ps_tour_restart();
+        break;
+    default:
+        break;
+    }
+}
+
+/* Per-rendered-frame driver for a controlled tour: capture the baseline on the
+ * first frame, spend virtual-frame credit while Playing, or step a seek. */
+static void ps_tour_frame(void) {
+    switch (g_tour_state) {
+    case GLR_TOUR_BASELINE_PENDING:
+        /* The Tours menu close path has finished; capture now, seed the
+         * pointer, enter Playing — but wait until the next frame to fire
+         * event zero (do not advance a virtual frame this frame). */
+        g_baseline = glr_tour_snapshot_capture();
+        if (!g_baseline) {
+            glr_pointer_script_stop();
+            repl_set_status_error("Tour could not capture rewind state");
+            return;
+        }
+        ps_tour_seed_pointer();
+        g_frame_credit = 0.0f;
+        g_tour_state = GLR_TOUR_PLAYING;
+        break;
+    case GLR_TOUR_PLAYING:
+        g_frame_credit += k_tour_speeds[g_speed_idx];
+        while (g_active && g_tour_state == GLR_TOUR_PLAYING &&
+               g_frame_credit >= 1.0f) {
+            ps_tour_advance_one_virtual_frame();
+            g_frame_credit -= 1.0f;
+        }
+        break;
+    case GLR_TOUR_SEEKING:
+        ps_tour_seek_step();
+        break;
+    case GLR_TOUR_PAUSED:
+    case GLR_TOUR_STEPPING:
+    case GLR_TOUR_DONE:
+    case GLR_TOUR_OFF:
+    default:
+        break;
+    }
+}
+
+GlrTourPlaybackView glr_pointer_script_tour_view(void) {
+    GlrTourPlaybackView v;
+    memset(&v, 0, sizeof(v));
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR) {
+        v.state = GLR_TOUR_OFF;
+        v.current_event = -1;
+        v.source_line = -1;
+        return v;
+    }
+    v.active = 1;
+    v.state = g_tour_state;
+    v.name = g_tour_name;
+    v.file = g_tour_file;
+    v.speed = k_tour_speeds[g_speed_idx];
+    v.completed_events = g_completed_events;
+    v.current_event = g_current_event;
+    v.total_events = g_event_count;
+    v.source_line = ps_tour_hud_source_line();
+    return v;
+}
+
+int glr_pointer_script_handle_tour_key(unsigned char key) {
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR)
+        return 0;
+    switch (key) {
+    case ' ':
+        ps_tour_space();
+        return 1;
+    case '+':
+    case '=':
+        ps_tour_speed_adjust(+1);
+        return 1;
+    case '-':
+    case '_':
+        ps_tour_speed_adjust(-1);
+        return 1;
+    case 27:   /* Esc: stop, preserving the current app result */
         glr_pointer_script_stop();
+        repl_set_status("Tour stopped");
+        return 1;
+    default:
+        return 0;   /* fall through to the tour-cancel intercept */
+    }
+}
+
+int glr_pointer_script_handle_tour_special(int key) {
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR)
+        return 0;
+    if (key == GLUT_KEY_LEFT) {
+        ps_tour_backstep();
+        return 1;
+    }
+    if (key == GLUT_KEY_RIGHT) {
+        ps_tour_step_forward();
+        return 1;
+    }
+    return 0;
 }
 
 void glr_pointer_script_frame(void) {
     if (!g_active) return;
+    if (g_run_kind == PS_RUN_CONTROLLED_TOUR) {
+        ps_tour_frame();
+        return;
+    }
     ps_advance_one_virtual_frame();
 }
 

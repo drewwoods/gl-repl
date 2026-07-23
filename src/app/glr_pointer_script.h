@@ -92,6 +92,68 @@
  * reaches the modified shortcuts (Ctrl+Shift+*, Shift+F*) neither can express.
  */
 
+/* --- controlled tours (transport + backstep) ---------------------------- */
+
+/* A controlled tour is a third pointer-script run kind, alongside env-driven
+ * capture (glr_pointer_script_load_env) and the legacy runtime
+ * (glr_pointer_script_start_lines). It layers replay-style transport controls
+ * on top of an untimed script: play/pause, immediate forward step, backstep
+ * (via one whole-app baseline plus prefix replay), a discrete speed ladder,
+ * and a persistent Done state at the end (no auto-stop). The legacy and
+ * env-capture kinds are unchanged and never get a HUD or transport. */
+typedef enum {
+    GLR_TOUR_OFF = 0,          /* no controlled tour                       */
+    GLR_TOUR_BASELINE_PENDING, /* start_tour called; capture on next frame */
+    GLR_TOUR_PLAYING,          /* virtual clock advancing under speed      */
+    GLR_TOUR_PAUSED,           /* held; Right steps one event at a time    */
+    GLR_TOUR_STEPPING,         /* transient: executing one immediate step  */
+    GLR_TOUR_SEEKING,          /* resumable backstep prefix replay          */
+    GLR_TOUR_DONE              /* reached the end; awaits restart/exit      */
+} GlrTourPlaybackState;
+
+/* Read-only playback view for the HUD / tests. `active` is nonzero only for a
+ * controlled tour (the legacy + env kinds always report inactive here, so the
+ * HUD never shows for them). `source_line` follows the plan's rule: the active
+ * event's line while playing/stepping, the next event's line while paused
+ * before it, the final event's line in Done, and -1 with no controlled tour. */
+typedef struct {
+    int                  active;
+    GlrTourPlaybackState state;
+    const char          *name;
+    const char          *file;
+    float                speed;
+    int                  completed_events;
+    int                  current_event;
+    int                  total_events;
+    int                  source_line;
+} GlrTourPlaybackView;
+
+/* Start a controlled tour from an in-memory grammar array (the Tours menu
+ * path). `name`/`file` are borrowed metadata for the HUD (the catalog holds
+ * static strings that outlive the run). The script must be untimed and
+ * completion-driven; a timestamped or mixed script is rejected (logs to
+ * stderr, returns 0 without activating). On success the tour enters
+ * GLR_TOUR_BASELINE_PENDING and captures its rewind baseline on the next
+ * glr_pointer_script_frame(). Returns 1 on success, 0 on a parse/mode error. */
+int glr_pointer_script_start_tour(const char *name, const char *file,
+                                  const char *const *lines, int line_count);
+
+/* Snapshot of the controlled-tour transport for the HUD and tests. Safe to
+ * call any time; reports active == 0 when no controlled tour is running. */
+GlrTourPlaybackView glr_pointer_script_tour_view(void);
+
+/* Host transport-key handlers, dispatched by gl_repl.c BEFORE the tour-cancel
+ * intercept. Only consume keys while a controlled tour is running: Space
+ * (play/pause/resume/restart), +/=/- (speed), Esc (stop). Return 1 when the
+ * key was consumed as a transport action, 0 to let the caller fall through to
+ * cancellation / normal input. Never consume anything for the legacy or
+ * env-capture kinds. */
+int glr_pointer_script_handle_tour_key(unsigned char key);
+
+/* Special-key transport handler (Left = backstep, Right = forward step).
+ * Same consume/fallthrough contract as glr_pointer_script_handle_tour_key. */
+int glr_pointer_script_handle_tour_special(int key);
+
 /* Read GLR_POINTER_SCRIPT and parse the script it names. Returns nonzero
  * when a script is active (so main() can imply GLR_TICK_PER_FRAME). A parse
  * error reports the offending line on stderr and exits nonzero — a capture
@@ -100,18 +162,6 @@ int glr_pointer_script_load_env(void);
 
 /* Nonzero once a script has loaded. */
 int glr_pointer_script_active(void);
-
-/* Start a script from an in-memory array of grammar lines (the guided-tour
- * path — the Tours menu plays a built-in catalog entry through the same
- * engine the capture hook uses). Unlike the env loader this runs mid-session:
- * the frame clock, glide, and overlay state reset, events fire on subsequent
- * glr_pointer_script_frame() calls, and the script auto-stops after its last
- * event and overlay effect finish. Untimed events are completion-driven;
- * timestamped events must be time-sorted. Returns 1 on success; a malformed,
- * mixed-mode, or out-of-order line logs to stderr and returns 0
- * without activating (built-in tours are validated by tests, so this is an
- * authoring backstop, not a user-facing error path). */
-int glr_pointer_script_start_lines(const char *const *lines, int count);
 
 /* Stop a running script now: release any scripted-held mouse button so the
  * app never sees a stuck drag, clear the overlay, and deactivate. Used by

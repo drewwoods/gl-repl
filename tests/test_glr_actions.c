@@ -755,9 +755,10 @@ static void test_tutorial_menu_dispatch(void) {
 }
 
 /* Tours menu: every catalog entry has a name, activating a row starts the
- * pointer-script tour (validating each built-in script parses and is
- * time-sorted — glr_pointer_script_start_lines rejects both authoring
- * errors) and closes the menu, and out-of-range rows are consumed. */
+ * controlled pointer-script tour (validating each built-in script parses as an
+ * untimed, completion-driven script — glr_pointer_script_start_tour rejects
+ * malformed and timestamped lines) and closes the menu, and out-of-range rows
+ * are consumed. */
 static void test_tours_menu_dispatch(void) {
     glr_ctrl_reset_all();
 
@@ -784,70 +785,80 @@ static void test_tours_menu_dispatch(void) {
                glr_pointer_script_tour_active(), 0);
 }
 
-/* A runtime-started tour auto-stops once its last event and overlay effect
- * have run out (env-driven capture scripts never auto-stop — the recorded
- * clip should keep its cursor to the end, so that mode isn't covered here). */
-static void test_tour_auto_stop(void) {
-    static const char *const tiny[] = { "0.0 move 10 10" };
+/* A controlled tour does not auto-stop: once its last event completes it enters
+ * a persistent Done (the baseline, HUD, and cursor stay up), so the user can
+ * restart or step back. It only leaves via Esc / cancel. */
+static void test_tour_reaches_done(void) {
+    static const char *const tiny[] = { "move 10 10" };
     glr_ctrl_reset_all();
 
     ASSERT_INT("tiny tour script loads",
-               glr_pointer_script_start_lines(tiny, 1), 1);
+               glr_pointer_script_start_tour("Tiny", "tiny.pointer", tiny, 1),
+               1);
     ASSERT_INT("tour playing after start",
                glr_pointer_script_tour_active(), 1);
 
-    /* Frame 1 fires the move; with nothing left in flight the same frame's
-     * completion check stops the tour. A couple extra frames guard against
-     * off-by-one drift without weakening the assertion below. */
-    for (int i = 0; i < 3 && glr_pointer_script_tour_active(); i++)
+    /* Frame 1 captures the baseline; frame 2 fires the move; frame 3 completes
+     * it and enters Done. Extra frames guard against off-by-one drift. */
+    for (int i = 0; i < 5 &&
+                    glr_pointer_script_tour_view().state != GLR_TOUR_DONE; i++)
         glr_pointer_script_frame();
-    ASSERT_INT("tour auto-stopped after last event",
-               glr_pointer_script_tour_active(), 0);
-    ASSERT_INT("overlay inactive after auto-stop",
-               glr_pointer_script_active(), 0);
+    ASSERT_INT("tour reached persistent Done",
+               glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
+    ASSERT_INT("controlled tour stays active in Done",
+               glr_pointer_script_tour_active(), 1);
+    ASSERT_INT("overlay still up in Done",
+               glr_pointer_script_active(), 1);
+    glr_pointer_script_stop();
 }
 
 /* `key@<cps>` paces the payload at chars/sec on the frame clock instead of
  * landing it all on the fire frame; malformed rates are authoring errors. */
 static void test_tour_paced_key(void) {
-    static const char *const bad_zero[] = { "0.0 key@0 x" };
-    static const char *const bad_rate[] = { "0.0 key@ x" };
-    static const char *const bad_tail[] = { "0.0 key@12x y" };
+    static const char *const bad_zero[] = { "key@0 x" };
+    static const char *const bad_rate[] = { "key@ x" };
+    static const char *const bad_tail[] = { "key@12x y" };
     /* 30 cps = one char every 2 frames; "abc" spans ~5 frames. */
-    static const char *const paced[] = { "0.0 key@30 abc" };
+    static const char *const paced[] = { "key@30 abc" };
 
     glr_ctrl_reset_all();
 
     ASSERT_INT("key@0 rejected",
-               glr_pointer_script_start_lines(bad_zero, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad_zero, 1), 0);
     ASSERT_INT("key@ with no rate rejected",
-               glr_pointer_script_start_lines(bad_rate, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad_rate, 1), 0);
     ASSERT_INT("key@12x trailing junk rejected",
-               glr_pointer_script_start_lines(bad_tail, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad_tail, 1), 0);
 
     int len0 = editor_state_input().input_len;
     ASSERT_INT("paced key script loads",
-               glr_pointer_script_start_lines(paced, 1), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", paced, 1), 1);
 
-    /* Frame 0 fires the event and delivers exactly the first character. */
+    /* Frame 1 captures the baseline; frame 2 fires the event and delivers
+     * exactly the first character. */
+    glr_pointer_script_frame();
     glr_pointer_script_frame();
     ASSERT_INT("first char lands on the fire frame",
                editor_state_input().input_len, len0 + 1);
-    ASSERT_INT("tour still active while typing is in flight",
-               glr_pointer_script_tour_active(), 1);
+    ASSERT_INT("tour still typing (not yet Done)",
+               glr_pointer_script_tour_view().state, GLR_TOUR_PLAYING);
 
-    /* Remaining chars arrive at 30 cps; the tour auto-stops once done. */
-    for (int i = 0; i < 8 && glr_pointer_script_tour_active(); i++)
+    /* Remaining chars arrive at 30 cps; the tour enters Done once complete. */
+    for (int i = 0; i < 8 &&
+                    glr_pointer_script_tour_view().state != GLR_TOUR_DONE; i++)
         glr_pointer_script_frame();
     ASSERT_INT("full payload delivered",
                editor_state_input().input_len, len0 + 3);
-    ASSERT_INT("tour auto-stopped after paced typing finished",
-               glr_pointer_script_tour_active(), 0);
+    ASSERT_INT("tour entered Done after paced typing finished",
+               glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
+    glr_pointer_script_stop();
 }
 
-/* Untimed scripts advance from completion rather than an absolute schedule,
- * and `pause` supplies an intentional delay between otherwise immediate
- * steps. Timed and untimed forms may not be mixed. */
+/* Controlled tours advance from completion rather than an absolute schedule,
+ * and `pause` supplies an intentional delay between otherwise immediate steps.
+ * Timestamped lines are rejected (untimed-only). Frame 1 always captures the
+ * rewind baseline, so each sub-sequence starts with an extra frame; completion
+ * enters Done rather than auto-stopping, and echo/ripple never delay Done. */
 static void test_tour_sequential_steps_and_pause(void) {
     static const char *const paced[] = {
         "key@30 abc",
@@ -864,10 +875,7 @@ static void test_tour_sequential_steps_and_pause(void) {
     };
     static const char *const bad_zero[] = { "pause 0" };
     static const char *const bad_tail[] = { "pause 1 later" };
-    static const char *const mixed[] = {
-        "0.0 key x",
-        "pause 1"
-    };
+    static const char *const timed[] = { "0.0 key x" };
     static const char *const shell_target[] = {
         "move shell:new"
     };
@@ -876,9 +884,10 @@ static void test_tour_sequential_steps_and_pause(void) {
     glr_ctrl_reset_all();
     len0 = editor_state_input().input_len;
     ASSERT_INT("untimed paced sequence loads",
-               glr_pointer_script_start_lines(paced, 2), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", paced, 2), 1);
 
-    glr_pointer_script_frame();
+    glr_pointer_script_frame(); /* baseline capture */
+    glr_pointer_script_frame(); /* key@30 abc fires, first char */
     ASSERT_INT("sequential typing starts with one character",
                editor_state_input().input_len, len0 + 1);
     for (int i = 0; i < 4; i++)
@@ -893,8 +902,11 @@ static void test_tour_sequential_steps_and_pause(void) {
     glr_ctrl_reset_all();
     len0 = editor_state_input().input_len;
     ASSERT_INT("pause sequence loads",
-               glr_pointer_script_start_lines(paused, 3), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", paused, 3), 1);
+    glr_pointer_script_frame(); /* baseline capture */
     glr_pointer_script_frame(); /* key x */
+    ASSERT_INT("first step types its character",
+               editor_state_input().input_len, len0 + 1);
     glr_pointer_script_frame(); /* pause starts */
     ASSERT_INT("pause leaves following step pending",
                editor_state_input().input_len, len0 + 1);
@@ -910,28 +922,31 @@ static void test_tour_sequential_steps_and_pause(void) {
     glr_ctrl_reset_all();
     len0 = editor_state_input().input_len;
     ASSERT_INT("caption sequence loads",
-               glr_pointer_script_start_lines(caption_then_key, 2), 1);
+               glr_pointer_script_start_tour("T", "t.pointer",
+                                             caption_then_key, 2), 1);
+    glr_pointer_script_frame(); /* baseline capture */
     glr_pointer_script_frame(); /* echo starts */
     ASSERT_INT("caption event does not type the following key immediately",
                editor_state_input().input_len, len0);
     glr_pointer_script_frame(); /* key z */
     ASSERT_INT("caption duration does not block the following step",
                editor_state_input().input_len, len0 + 1);
-    ASSERT_INT("tour remains active for the caption's on-screen duration",
-               glr_pointer_script_tour_active(), 1);
-    for (int i = 0; i < 70 && glr_pointer_script_tour_active(); i++)
-        glr_pointer_script_frame();
-    ASSERT_INT("tour stops after the non-blocking caption expires",
-               glr_pointer_script_tour_active(), 0);
+    glr_pointer_script_frame(); /* key z completes -> Done (echo not awaited) */
+    ASSERT_INT("echo does not delay Done",
+               glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
+    ASSERT_INT("echo overlay retained through Done",
+               glr_pointer_script_active(), 1);
+    glr_pointer_script_stop();
 
     ASSERT_INT("zero-duration pause rejected",
-               glr_pointer_script_start_lines(bad_zero, 1), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad_zero, 1), 0);
     ASSERT_INT("pause trailing junk rejected",
-               glr_pointer_script_start_lines(bad_tail, 1), 0);
-    ASSERT_INT("timed and untimed lines cannot mix",
-               glr_pointer_script_start_lines(mixed, 2), 0);
+               glr_pointer_script_start_tour("T", "t.pointer", bad_tail, 1), 0);
+    ASSERT_INT("timestamped line rejected (untimed-only)",
+               glr_pointer_script_start_tour("T", "t.pointer", timed, 1), 0);
     ASSERT_INT("web shell target is part of the pointer grammar",
-               glr_pointer_script_start_lines(shell_target, 1), 1);
+               glr_pointer_script_start_tour("T", "t.pointer", shell_target, 1),
+               1);
     glr_pointer_script_stop();
 }
 
@@ -2229,7 +2244,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
-    test_tour_auto_stop();
+    test_tour_reaches_done();
     test_tour_paced_key();
     test_tour_sequential_steps_and_pause();
     test_compute_profile_mode_names();
