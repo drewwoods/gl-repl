@@ -751,10 +751,14 @@ void tutorial_start(int idx) {
         return;
     }
 
-    /* If another tutorial is active, tear it down first so the true original
-     * configuration baseline is restored before we snapshot a new one. */
-    if (tutorial_active())
-        tutorial_teardown();
+    /* Tear down any predecessor first so the true original configuration
+     * baseline is restored before we snapshot a new one. Unconditional
+     * (not gated on tutorial_active) because a *finished* tutorial leaves
+     * its baseline pending — without the flush, chaining lesson B off
+     * lesson A would capture A's presentation as "the user's" and strand
+     * the real pre-tutorial config forever. Idempotent when there is
+     * neither an active tutorial nor a pending baseline. */
+    tutorial_teardown();
 
     /* Snapshot the user's true pre-tutorial config baseline before making any
      * tutorial mutations, so we can restore it cleanly on teardown/exit. */
@@ -796,7 +800,9 @@ void tutorial_start(int idx) {
 }
 
 void tutorial_teardown(void) {
-    if (!tutorial_active())
+    /* Also runs with no active tutorial when a finished one left a
+     * pending baseline (tutorial_end_keep_view) — this is the flush. */
+    if (!tutorial_active() && !tutorial_state_view().baseline_valid)
         return;
     /* Deactivate active status BEFORE restoring config to prevent step
      * auto-advancement side effects during config restore writes. */
@@ -805,14 +811,33 @@ void tutorial_teardown(void) {
     tutorial_state_reset();
 }
 
+/* End a tutorial the user saw through — completed, or exited on purpose —
+ * WITHOUT restoring the cfg baseline. Snapping the presentation back the
+ * instant the last step lands reads as the tutorial undoing itself, and
+ * throws away the very settings a SET/REQUIRE lesson just taught. The
+ * learner stays in the tutorial's transient scene, so its view stays too;
+ * the baseline survives in the bag as a pending restore that the next
+ * tutorial_teardown() flushes — i.e. when the document is next replaced
+ * wholesale (scene / example / workspace load, reset-all, or the next
+ * tutorial_start). Only the internal-failure paths tear down immediately:
+ * a tutorial that broke mid-step has no view worth keeping.
+ *
+ * `tutorial_state_reset_except_baseline` clears `active` along with the
+ * rest of the runtime state, so the tutorial is fully over either way. */
+static void tutorial_end_keep_view(void) {
+    if (!tutorial_active())
+        return;
+    tutorial_state_mut()->active = 0;
+    tutorial_state_reset_except_baseline();
+}
+
 void tutorial_stop(void) {
     if (!tutorial_active())
         return;
 
-    /* Set status before teardown so it is visible to the user. Teardown
-     * runs config restore and state reset together. */
+    /* Set status before ending so it is visible to the user. */
     repl_set_status("Tutorial exited");
-    tutorial_teardown();
+    tutorial_end_keep_view();
     repl_dispatch_completion_update();
 }
 
@@ -1084,12 +1109,12 @@ static TutorialStepResult tutorial_enter_step(int step) {
     int idx = state->tutorial_idx;
 
     if (!repl_tutorial_step_get(idx, step)) {
-        /* Past the last step — tutorial complete. teardown restores
-         * cfg + resets state; status set BEFORE teardown so it survives.
-         * (Keyed on the step lookup, not a NULL comment — comment-less
-         * COMMAND steps legitimately have no comment.) */
+        /* Past the last step — tutorial complete. The lesson's view is
+         * kept (see tutorial_end_keep_view); status set BEFORE ending so
+         * it survives. (Keyed on the step lookup, not a NULL comment —
+         * comment-less COMMAND steps legitimately have no comment.) */
         repl_set_status("Tutorial complete");
-        tutorial_teardown();
+        tutorial_end_keep_view();
         repl_dispatch_completion_update();
         return TUTORIAL_STEP_TERMINAL;
     }

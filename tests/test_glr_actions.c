@@ -675,13 +675,17 @@ static void test_tutorial_start_applies_cfg(void) {
         ASSERT_INT("First Triangle tutorial active", tutorial_active(), 1);
         ASSERT_INT("First Triangle cfg applied 2D view",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
-        /* tutorial_exit runs tutorial_teardown, which restores the
-         * cfg baseline captured at tutorial_start — see the bag-restore
+        /* Exit keeps the lesson's view (the learner is still in the
+         * tutorial's scene); the cfg baseline captured at tutorial_start
+         * is restored by the next teardown flush — see the bag-restore
          * lifecycle added in the REQUIRE/SET commit (8fefa82). The
-         * baseline here was the post-reset 3D default, so exit reverts
-         * the tutorial's 2D back to 3D. */
+         * baseline here was the post-reset 3D default, so the flush
+         * reverts the tutorial's 2D back to 3D. */
         tutorial_stop();
-        ASSERT_INT("tutorial_exit restores view mode to pre-start baseline",
+        ASSERT_INT("tutorial_exit keeps the tutorial's 2D view",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+        tutorial_teardown();
+        ASSERT_INT("flush restores view mode to pre-start baseline",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     }
 
@@ -706,7 +710,10 @@ static void test_tutorial_start_applies_cfg(void) {
          * test_baseline_captures_view_mode_even_when_unreferenced
          * for the dedicated regression. */
         tutorial_stop();
-        ASSERT_INT("no-cfg tutorial exit restores view mode to pre-start baseline",
+        ASSERT_INT("no-cfg tutorial exit keeps the reset 3D view",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+        tutorial_teardown();
+        ASSERT_INT("flush restores view mode to pre-start baseline",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
     }
 }

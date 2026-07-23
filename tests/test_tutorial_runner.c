@@ -159,12 +159,19 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
     ASSERT_INT("camera back in 3D control mode",
                (int)glr_camera_control_mode(), (int)GLR_CAMERA_CONTROL_3D);
 
-    /* grid_extent rides the scene-subset baseline, so exit puts the
-     * user's own extent back rather than leaving CLOSE behind. */
+    /* Exit leaves the lesson's view alone — the learner is still looking
+     * at the tutorial's scene, so nothing should snap out from under it. */
     tutorial_stop();
-    ASSERT_INT("exit restores the pre-tutorial grid extent",
+    ASSERT_INT("exit keeps the tutorial's grid extent",
+               repl_cfg_get_int("grid_extent", -1),
+               CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
+
+    /* grid_extent rides the scene-subset baseline, so the deferred flush
+     * puts the user's own extent back rather than leaving CLOSE behind. */
+    tutorial_teardown();
+    ASSERT_INT("flush restores the pre-tutorial grid extent",
                repl_cfg_get_int("grid_extent", -1), pre_extent);
-    ASSERT_INT("exit restores the pre-tutorial grid theme",
+    ASSERT_INT("flush restores the pre-tutorial grid theme",
                repl_cfg_get_int("grid", -1), pre_grid);
 }
 
@@ -3123,10 +3130,12 @@ static void test_setup_scaffold_preloads_locked_rows_and_cfg(void) {
     ASSERT_INT("setup @cfg header applied (2D view)",
                repl_cfg_get_int("view_mode", -1), expected_2d);
 
-    /* Setup @cfg slugs join the restore baseline like entry @cfg. */
+    /* Setup @cfg slugs join the restore baseline like entry @cfg — but
+     * the restore is deferred past exit, so flush before asserting it. */
     tutorial_stop();
     ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
-    ASSERT_INT("view_mode restored to pre-tutorial baseline",
+    tutorial_teardown();
+    ASSERT_INT("flush restores view_mode to pre-tutorial baseline",
                repl_cfg_get_int("view_mode", -1), view_baseline);
 }
 
@@ -3348,7 +3357,13 @@ static void test_exit_on_require_does_not_autoadvance(void) {
 
     tutorial_stop();
     ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
-    ASSERT_INT("vertex_outlines restored to baseline",
+    /* Exit keeps the lesson's view; the baseline restore is deferred to
+     * the next teardown flush, which is where the restore writes land. */
+    ASSERT_INT("exit keeps the tutorial's vertex_outlines",
+               repl_cfg_get_int("vertex_outlines", -1), 0);
+
+    tutorial_teardown();
+    ASSERT_INT("flush restores vertex_outlines to baseline",
                repl_cfg_get_int("vertex_outlines", -1), outlines_baseline);
     /* The whole point: the next-step SET (grid = RADAR) must NOT
      * have fired during the restore. Pre-fix, the notify hook saw a
@@ -3390,11 +3405,44 @@ static void test_restart_during_tutorial_preserves_original_baseline(void) {
     ASSERT_TRUE("tutorial 2 active", tutorial_active());
     ASSERT_INT("tutorial 2 idx", tutorial_state_view().tutorial_idx, idx2);
 
-    /* Exit tutorial 2: its baseline (captured after teardown of tour 1)
-     * must equal the original user baseline. */
+    /* Exit tutorial 2, then flush: its baseline (captured after teardown
+     * of tour 1) must equal the original user baseline. */
     tutorial_stop();
     ASSERT_TRUE("tutorial 2 inactive after exit", !tutorial_active());
+    tutorial_teardown();
     ASSERT_INT("grid restored to ORIGINAL baseline (not tour-1 mutated)",
+               repl_cfg_get_int("grid", -1), baseline);
+}
+
+/* Companion to the above, for the deferred-restore contract: a
+ * *finished* tutorial's pending baseline must be flushed by the next
+ * tutorial_start too, not just by an active-tutorial teardown. Chaining
+ * lesson B off a completed lesson A would otherwise capture A's
+ * presentation as "the user's" and strand the real pre-tutorial config. */
+static void test_start_after_finish_flushes_pending_baseline(void) {
+    reset_fixture();
+
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    int baseline = repl_cfg_get_int("grid", -1);
+    ASSERT_INT("baseline grid OFF", baseline, 0);
+
+    int idx1 = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked tour into REQUIRE", idx1 >= 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE → SET */
+    ASSERT_INT("grid mutated to RADAR mid-tutorial",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
+
+    /* Exit, and confirm the mutated view is kept (nothing flushed yet). */
+    tutorial_stop();
+    ASSERT_INT("exit keeps the tutorial's grid theme",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
+
+    int idx2 = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("found First Triangle", idx2 >= 0);
+    tutorial_start(idx2);
+    tutorial_stop();
+    tutorial_teardown();
+    ASSERT_INT("second lesson's baseline is the ORIGINAL user grid",
                repl_cfg_get_int("grid", -1), baseline);
 }
 
@@ -3423,7 +3471,10 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
 
     tutorial_stop();
     ASSERT_TRUE("color-transform inactive after exit", !tutorial_active());
-    ASSERT_INT("view_mode restored to pre-tutorial 2D",
+    ASSERT_INT("exit keeps the tutorial's 3D view",
+               repl_cfg_get_int("view_mode", -1), 0);
+    tutorial_teardown();
+    ASSERT_INT("flush restores view_mode to pre-tutorial 2D",
                repl_cfg_get_int("view_mode", -1), 1);
 }
 
@@ -4113,6 +4164,7 @@ int main(void) {
     test_validate_rejects_typo_symbolic_value_name();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();
+    test_start_after_finish_flushes_pending_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();
     test_start_enters_transient_tutorial_scene();
     test_start_resets_view_to_tutorial_defaults();

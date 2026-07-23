@@ -2297,6 +2297,23 @@ the `fill_scene_subset` baseline, so teardown restores the user's own
 values; the camera is not restored (the pre-tutorial scene's own snapshot
 carries it back when the user returns to that scene).
 
+**Deferred baseline restore.** Ending a tutorial does *not* write the
+baseline back. `tutorial_end_keep_view()` — used by both the completion
+path and `tutorial_stop()` (menu Exit) — clears `active` via
+`tutorial_state_reset_except_baseline()` and leaves the bag in place as a
+*pending* restore. Snapping the presentation back the instant the last
+step lands reads as the tutorial undoing itself, and discards the very
+settings a SET/REQUIRE lesson just taught; the learner is still sitting in
+the tutorial's transient scene, so its view stays too. The pending
+baseline is flushed by the next `tutorial_teardown()`, which now also runs
+with no active tutorial (guarded on `baseline_valid`). That is every point
+where the document is replaced wholesale — scene / example / workspace
+load, `glr_ctrl_reset_all`, and the next `tutorial_start` — so live cfg is
+always restored *before* anything stashes it as a pre-workspace or
+per-scene snapshot. The internal-failure paths in `tutorial_enter_step`
+still call `tutorial_teardown()` directly: a lesson that broke mid-step
+has no view worth keeping.
+
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits
 land in roughly the order below.
