@@ -66,13 +66,21 @@
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
 #define CFG_DEFAULT_DEPTH_VIZ        0   /* RENDER3D_DEPTH_VIZ_OFF */
 
-/* Tutorial-start override. Tutorials reset presentation to the values
- * above and then narrow the grid: lesson geometry is unit-scale and the
- * camera starts at the built-in default distance (5.0), so the CLOSE
- * grid (also 5.0 units) frames it, where the FAR default reads as a
- * dense carpet. Only this one slug differs from CFG_DEFAULT_*; a
- * tutorial's own leading `@cfg` still wins over it. */
+/* Tutorial-start overrides. Tutorials reset presentation to the values
+ * above, then differ on these three; a tutorial's own leading `@cfg`
+ * still wins over them.
+ *
+ * Grid extent: lesson geometry is unit-scale and the camera starts at the
+ * built-in default distance (5.0), so the CLOSE grid (also 5.0 units)
+ * frames it, where the FAR default reads as a dense carpet.
+ *
+ * Vertex outlines / points: on by default so a scene's structure is
+ * legible at a glance, but in a lesson they decorate the one primitive
+ * being taught and read as part of it. A tutorial starts on bare
+ * geometry; the overlays are a thing to turn on, not to unlearn. */
 #define CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX GRID_EXTENT_CLOSE
+#define CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES 1
+#define CFG_DEFAULT_TUTORIAL_VERTEX_POINTS   1
 
 /* Backdrop/grid pairing defaults. These rows declare which backdrops own a
  * companion grid; glr_config.c owns the enforcement policy (force the grid

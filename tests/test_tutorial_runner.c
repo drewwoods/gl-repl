@@ -112,8 +112,9 @@ static void test_start_enters_transient_tutorial_scene(void) {
 /* A tutorial start is a fresh transient scene, so it must not inherit the
  * previous scene's view: presentation chrome goes back to CFG_DEFAULT_*,
  * the camera eases back to the built-in pose (examples deliberately
- * inherit it; tutorials do not), and the grid narrows to CLOSE to frame
- * unit-scale lesson geometry. "Color & Transform" ships no leading
+ * inherit it; tutorials do not), the grid narrows to CLOSE to frame
+ * unit-scale lesson geometry, and the vertex overlays go off so the
+ * lesson starts on bare geometry. "Color & Transform" ships no leading
  * `@cfg`, so nothing layers over the reset. */
 static void test_start_resets_view_to_tutorial_defaults(void) {
     reset_fixture();
@@ -123,14 +124,18 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
     glr_config_set(GLR_CONFIG_GRID_EXTENT, GRID_EXTENT_MID);
     glr_config_set(GLR_CONFIG_PROJECTION, PROJ_ORTHO);
     glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_SUNSET);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
     glr_camera_set(72.0f, -140.0f, 31.0f, 3.0f, -2.0f, 1.5f, 0.0f);
     /* Read the dirtied values back rather than assuming the writes stuck
      * verbatim — the backdrop/grid pairing policy in glr_config.c can
      * force a companion grid theme on top of what we asked for. */
-    int pre_grid   = repl_cfg_get_int("grid", -1);
-    int pre_extent = repl_cfg_get_int("grid_extent", -1);
+    int pre_grid     = repl_cfg_get_int("grid", -1);
+    int pre_extent   = repl_cfg_get_int("grid_extent", -1);
+    int pre_outlines = repl_cfg_get_int("vertex_outlines", -1);
     ASSERT_TRUE("pre-tutorial grid extent is not the tutorial default",
                 pre_extent != CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
+    ASSERT_INT("pre-tutorial vertex outlines on", pre_outlines, 1);
 
     tutorial_start(1);
     ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
@@ -140,10 +145,16 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
                repl_cfg_get_int("projection", -1), CFG_DEFAULT_PROJECTION);
     ASSERT_INT("backdrop back to default",
                repl_cfg_get_int("backdrop", -1), CFG_DEFAULT_BACKDROP_MODE);
-    /* The one slug that deliberately differs from CFG_DEFAULT_*. */
+    /* The three slugs that deliberately differ from CFG_DEFAULT_*. */
     ASSERT_INT("grid extent narrowed to close",
                repl_cfg_get_int("grid_extent", -1),
                CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
+    ASSERT_INT("vertex outlines off for the lesson",
+               repl_cfg_get_int("vertex_outlines", -1),
+               CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES);
+    ASSERT_INT("vertex points off for the lesson",
+               repl_cfg_get_int("vertex_points", -1),
+               CFG_DEFAULT_TUTORIAL_VERTEX_POINTS);
 
     /* The camera eases rather than snaps, so the built-in pose shows up
      * as the ease destination, not (yet) the live pose. */
@@ -166,13 +177,16 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
                repl_cfg_get_int("grid_extent", -1),
                CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX);
 
-    /* grid_extent rides the scene-subset baseline, so the deferred flush
-     * puts the user's own extent back rather than leaving CLOSE behind. */
+    /* Every overridden slug rides the scene-subset baseline, so the
+     * deferred flush puts the user's own values back rather than leaving
+     * the tutorial's CLOSE grid and bare geometry behind. */
     tutorial_teardown();
     ASSERT_INT("flush restores the pre-tutorial grid extent",
                repl_cfg_get_int("grid_extent", -1), pre_extent);
     ASSERT_INT("flush restores the pre-tutorial grid theme",
                repl_cfg_get_int("grid", -1), pre_grid);
+    ASSERT_INT("flush restores the pre-tutorial vertex outlines",
+               repl_cfg_get_int("vertex_outlines", -1), pre_outlines);
 }
 
 static void test_catalog_includes_color_transform_tutorial(void) {

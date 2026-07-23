@@ -2415,16 +2415,20 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
 }
 
 /* Tutorial variant of the chrome reset. Examples deliberately inherit the
- * camera and (via the shared defaults) the FAR grid; a tutorial should not.
- * It opens a fresh transient scene whose geometry is unit-scale, so the
- * lesson starts from the app's out-of-the-box view: default chrome, the
- * built-in camera pose, and the CLOSE grid that frames it. Eases rather
- * than snaps so the switch reads as a move, not a cut. Runs before the
- * tutorial's own leading `@cfg`, which still wins over all of it. */
+ * camera and (via the shared defaults) the FAR grid and the vertex
+ * decorations; a tutorial should not. It opens a fresh transient scene
+ * whose geometry is unit-scale, so the lesson starts from the app's
+ * out-of-the-box view: default chrome, the built-in camera pose, the CLOSE
+ * grid that frames it, and bare geometry. Eases rather than snaps so the
+ * switch reads as a move, not a cut. Runs before the tutorial's own
+ * leading `@cfg`, which still wins over all of it. */
 static void glr_ctrl_reset_tutorial_chrome(void) {
+    GlrPresentationState *p = glr_state_presentation_mut();
+
     glr_ctrl_reset_example_chrome(0);
-    glr_state_presentation_mut()->grid_extent_idx =
-        CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX;
+    p->grid_extent_idx      = CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX;
+    p->show_vertex_outlines = CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES;
+    p->show_vertex_points   = CFG_DEFAULT_TUTORIAL_VERTEX_POINTS;
     /* Clear first: ease_to_default prefers a scene camera default (set by
      * the previous example's `// camera` header) over the built-in pose. */
     glr_camera_clear_scene_default();

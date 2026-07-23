@@ -891,7 +891,7 @@ type-free so [`config.h`](../config.h) stays clear of UI types per its dependenc
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
 [`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L69)
-enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L121) / [`ui_theme_active()`](../src/ui/core/theme.h#L122) seam keeps call
+enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L123) / [`ui_theme_active()`](../src/ui/core/theme.h#L124) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no
@@ -2284,14 +2284,17 @@ label-placement steps target to splice commands into the scaffold
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls `repl_dispatch_tutorial_presentation_reset()`
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L109)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
-the example chrome reset with no tag mask and then adds the two things an
+the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in
 default pose (`glr_camera_clear_scene_default` + `glr_camera_ease_to_default`),
-and the grid extent narrows to `CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX`
-(CLOSE — lesson geometry is unit-scale and the default camera sits at
-dist 5.0, which the FAR default over-covers). The tutorial's own leading
+the grid extent narrows to `CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX` (CLOSE —
+lesson geometry is unit-scale and the default camera sits at dist 5.0,
+which the FAR default over-covers), and vertex outlines and points go off
+(`CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES` / `_POINTS`) so a lesson starts on
+bare geometry rather than on decorations that read as part of the one
+primitive being taught. The tutorial's own leading
 `@cfg` runs after the reset and still wins. Every slug touched here is in
 the `fill_scene_subset` baseline, so teardown restores the user's own
 values; the camera is not restored (the pre-tutorial scene's own snapshot
@@ -2299,19 +2302,19 @@ carries it back when the user returns to that scene).
 
 **Deferred baseline restore.** Ending a tutorial does *not* write the
 baseline back. `tutorial_end_keep_view()` — used by both the completion
-path and `tutorial_stop()` (menu Exit) — clears `active` via
+path and [`tutorial_stop()`](../src/subsystems/tutorial/tutorial.h#L68) (menu Exit) — clears `active` via
 `tutorial_state_reset_except_baseline()` and leaves the bag in place as a
 *pending* restore. Snapping the presentation back the instant the last
 step lands reads as the tutorial undoing itself, and discards the very
 settings a SET/REQUIRE lesson just taught; the learner is still sitting in
 the tutorial's transient scene, so its view stays too. The pending
-baseline is flushed by the next `tutorial_teardown()`, which now also runs
+baseline is flushed by the next [`tutorial_teardown()`](../src/subsystems/tutorial/tutorial.h#L75), which now also runs
 with no active tutorial (guarded on `baseline_valid`). That is every point
 where the document is replaced wholesale — scene / example / workspace
 load, `glr_ctrl_reset_all`, and the next `tutorial_start` — so live cfg is
 always restored *before* anything stashes it as a pre-workspace or
 per-scene snapshot. The internal-failure paths in `tutorial_enter_step`
-still call `tutorial_teardown()` directly: a lesson that broke mid-step
+still call [`tutorial_teardown()`](../src/subsystems/tutorial/tutorial.h#L75) directly: a lesson that broke mid-step
 has no view worth keeping.
 
 Use this section as a checklist when adding a new kind. The
