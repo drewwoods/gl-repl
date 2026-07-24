@@ -113,8 +113,26 @@ typedef struct {
     int   input_text_len;
 } EditorClipboardState;
 
+/* Which widget of the find bar has keyboard focus. Tab cycles them in
+ * this order; the word chip is a focusable toggle so whole-word matching
+ * is reachable without a global keybinding (the keymap has no free
+ * Ctrl slot). */
+typedef enum {
+    EDITOR_SEARCH_FOCUS_FIND = 0,
+    EDITOR_SEARCH_FOCUS_REPLACE,
+    EDITOR_SEARCH_FOCUS_WORD,
+    EDITOR_SEARCH_FOCUS_COUNT
+} EditorSearchFocus;
+
 /* Search session state: the find-text query plus the current match
- * position the navigation has resolved to. */
+ * position the navigation has resolved to, and the replace-row session
+ * layered on top of it.
+ *
+ * `whole_word` is a property of matching, not of replacing: it feeds the
+ * match/count/ordinal helpers and the code-panel highlight pass, so the
+ * highlighted matches are exactly the ones a replace would rewrite.
+ * `replace_open` only controls whether the replace row is shown/focusable;
+ * the replacement text survives closing the row. */
 typedef struct {
     int  active;
     char query[MAX_INPUT_LEN];
@@ -124,6 +142,12 @@ typedef struct {
     int  hit_char_idx;
     int  hit_ordinal;
     int  match_count;
+    int  replace_open;
+    char replace[MAX_INPUT_LEN];
+    int  replace_len;
+    int  replace_cursor_pos;
+    int  whole_word;
+    EditorSearchFocus focus;
 } EditorSearchState;
 
 /* Autocomplete model: the live match list, ghost-text suffix the

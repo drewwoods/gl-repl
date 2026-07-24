@@ -31,10 +31,7 @@
  * Y / X tick labels right-align cleanly without spilling out of the
  * gutter. */
 static int tiny_text_w(const char *s) {
-    int w = 0;
-    for (; *s; s++)
-        w += glutBitmapWidth(FONT_TINY, (unsigned char)*s);
-    return w;
+    return gl2d_text_width(FONT_TINY, s);
 }
 
 /* Total panel height from the geometry constants above. The controller

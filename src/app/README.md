@@ -135,7 +135,7 @@ formatters free of any boot dependency.
 | [`glr_config.c`](glr_config.c) / `.h` | `ReplConfigKey` / [`ReplConfigItem`](../repl/cfg_baseline.h#L29) descriptor API for keyed config access |
 | [`glr_completion.c`](glr_completion.c) / `.h` | REPL-side completion provider; registers with `editor_completion` |
 | [`glr_state.c`](glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
-| [`glr_source_document.c`](glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](../editor/state.h#L175) buffer |
+| [`glr_source_document.c`](glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](../editor/state.h#L199) buffer |
 | [`glr_debug.c`](glr_debug.c) / `.h` | Diagnostic dump *formatters* for debug keystrokes and tests (the `--dump-*` dispatch lives in [`boot/glr_boot_dumps`](boot/glr_boot_dumps.c)) |
 | [`glr_defaults.h`](glr_defaults.h) | Controller-side 3D presentation defaults (`CFG_DEFAULT_*`) |
 

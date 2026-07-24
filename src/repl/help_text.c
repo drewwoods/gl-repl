@@ -402,6 +402,8 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Buffer Operations:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_SEARCH), KM_MODS(GLR_SEARCH), 0, "", "Search source buffer");
+    nk = key_emit(nk, "  Tab (in find bar)   \tCycle find field / replace field / whole-word chip");
+    nk = key_emit(nk, "  Enter (replace field)\tReplace all matches (one undo step)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_FOCUS), KM_MODS(GLR_CODE_FOCUS), 0, "",
                           "Toggle code focus (hide boilerplate chrome)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_DELETE_LINE), KM_MODS(GLR_DELETE_LINE), 0, "",

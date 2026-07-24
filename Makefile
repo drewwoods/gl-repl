@@ -798,6 +798,7 @@ TEST_BINS = \
 	test_repl_core_examples \
 	test_repl_core_search \
 	test_repl_core_search_extra \
+	test_repl_replace \
 	test_editor_completion \
 	test_editor_input_selection \
 	test_ui_menu_bar \

@@ -71,7 +71,7 @@ and without `src/ui/app`. The `render3d_demo` HUD shows the same fixed-function
 
 Inside the full app this is **layer 5** of the ownership map. Each frame the
 controller ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`UiRenderSnapshot`](app/snapshot.h#L71) from
-REPL runtime state + [`EditorState`](../editor/state.h#L175) + [`UiState`](app/state.h#L20) + peer state and fans it out to the
+REPL runtime state + [`EditorState`](../editor/state.h#L199) + [`UiState`](app/state.h#L20) + peer state and fans it out to the
 `ui_*_render` functions. On input, the controller asks UI to hit-test, gets
 a [`UiHit`](core/hit.h#L51) back, and dispatches it to the owning subsystem.
 

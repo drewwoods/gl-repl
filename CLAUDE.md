@@ -263,13 +263,15 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `tutorials.{c,h}` | Tutorial catalog (steps, tags, `@cfg`, setup scaffolds, subheadings): 23 lessons in contiguous Beginner/Intermediate/Advanced runs across six tag groups; Phase C adds block-language lessons plus effects, materials, culling, and bitmap-text coverage |
 | `export.{c,h}` / [`import.c`](src/repl/import.c) / [`export_state.h`](src/repl/export_state.h) | C export writer / import reader (workspace headers, `@declare`, C↔REPL translators) |
 | `help_text.{c,h}` | F1 help content tables |
+| `replace.{c,h}` | Atomic whole-document rebuild from substituted text (find-bar replace); SceneSnapshot rollback |
 | `time.{c,h}` / [`transform_utils.h`](src/repl/transform_utils.h) / [`program_query.c`](src/repl/program_query.c) | `repl_set_time`; header-only matrix helpers; decl-tag collectors |
 | **src/editor/** | |
 | `input.{c,h}` | REPL key dispatcher (`;` commit, Tab, Ctrl+R, tutorial guards); generic twin in [`tools/editor_demo/input.c`](tools/editor_demo/input.c) |
 | `edit_ops.{c,h}` | Generic text-edit primitives, REPL-free (`check-edit-ops-pure`) |
 | `commit.{c,h}` | Commit transaction boundary: compile → undo snapshot → buffer write → apply |
-| `state.{c,h}` | [`EditorState`](src/editor/state.h#L175): buffer, cursor, selection, search, autocomplete, scroll, undo rings |
-| `clipboard.{c,h}` / `undo.{c,h}` / `search.{c,h}` | Selection+clipboard; snapshot rings (+example auto-promote hook); Ctrl+F search |
+| `state.{c,h}` | [`EditorState`](src/editor/state.h#L199): buffer, cursor, selection, search, autocomplete, scroll, undo rings |
+| `clipboard.{c,h}` / `undo.{c,h}` / `search.{c,h}` | Selection+clipboard; snapshot rings (+example auto-promote hook); Ctrl+F search (query seeded from the input selection), whole-word flag, find/replace focus ring |
+| `replace.{c,h}` | Find-bar replace: text substitution + undo/rollback around [`repl_document_rebuild()`](src/repl/replace.h) |
 | `inline_rename.{c,h}` / `completion.{c,h}` / `help_session.{c,h}` / [`limits.h`](src/editor/limits.h) | Scene rename, provider registry, help-overlay session, capacity constants |
 | **src/subsystems/** | Peer subsystems (editor/UI-independent) |
 | `replay/` | Replay state machine, fade-batch ring, input routing, GL fade pass, annotations (`replay_*.c`) |
@@ -365,7 +367,7 @@ frame baseline so accumulating programs don't compound.
 
 ### Two-level command model
 
-Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L175)'s editor
+Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
 buffer, not on [`GLCmd`](src/repl/command.h#L96)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
@@ -479,7 +481,36 @@ commas before cursor), `AC_MODE_POINT_PARAM`. Enum modes also fire mid-line
 when the cursor ends the token being completed and the tail is only
 trailing args (Tab splices, keeps tail); the inline ghost stays
 end-of-input-only; function-name completion/hints too. Search: Ctrl+F,
-state via [`editor_state_search()`](src/editor/state.h#L405).
+state via [`editor_state_search()`](src/editor/state.h#L429).
+
+### Find / replace
+
+One [`EditorSearchState`](src/editor/state.h#L136) holds both fields plus `whole_word` and a 3-stop
+focus ring (find field / replace field / word chip) that **Tab** cycles —
+there is no free Ctrl slot in [`keymap.h`](keymap.h), so the ring *is* the keyboard
+path. `whole_word` belongs to *matching*, not replacing: it feeds the
+match/count/ordinal helpers and the code-panel highlight pass, so what is
+highlighted is exactly what a replace rewrites. Match primitives live in
+[`ui/core/text_search.c`](src/ui/core/text_search.c) (`_opts` twins take the flag; short names keep
+plain-substring behavior for the editor-demo twin).
+
+Replace is a **whole-document transaction**, not a sequence of commits:
+renaming a variable or funcN alias is invalid at every intermediate step.
+[`src/editor/replace.c`](src/editor/replace.c) substitutes text across the committed buffer (never
+the live input row, so half-typed lines can't fail the operation) and
+`repl_document_rebuild()` ([`src/repl/replace.c`](src/repl/replace.c))
+replays it through `repl_load_apply_line` — the file/example loader — under
+a [`SceneSnapshot`](src/repl/scene_snapshot.h#L17) that is restored wholesale if any line is rejected.
+Carry-overs the loader would otherwise drop: predef *values* (by name, plus
+the `rename_from`/`rename_to` pair) and `is_auto` on auto-normal rows (by
+row position; a substitution never changes the row count). One undo
+snapshot per replace; the ring is rewound via
+[`editor_undo_ring_state_restore()`](src/editor/undo.h#L116) when the
+rebuild fails, so a rejected replace leaves no trace.
+
+Replace-current addresses its match by **occurrence ordinal within the row**,
+not char offset: search rows read the unindented input buffer for the edit
+line while the document row carries its indentation.
 
 ### Config / Tutorials menus (shared flyout engine)
 
@@ -505,7 +536,8 @@ setup scaffolds): see `src/repl/tutorials.{c,h}` headers and
 | `;` | Execute/commit current line |
 | Enter | Insert new line |
 | Up/Down | Navigate lines |
-| Tab | Autocomplete |
+| Tab | Autocomplete; in the find bar, cycle find field / replace field / whole-word chip |
+| Ctrl+F | Find (query seeded from highlighted text); Enter in the replace field = Replace All |
 | Shift+Left/Right, Shift+Home/End | Extend input-buffer selection |
 | Double-click / drag / Shift+click | Word select / char select / extend (same row = chars, other row = line range) |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste — input selection wins over line-range; input-text goes to a separate clipboard slot |

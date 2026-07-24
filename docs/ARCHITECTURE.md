@@ -261,7 +261,7 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 [`GLCmd`](../src/repl/command.h#L96) is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
-`EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L175)**
+`EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L199)**
 ([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model — *not* in
 [`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L96) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
@@ -270,7 +270,7 @@ code passes both to text-aware command-store APIs
 with the command array.
 
 **The neutral source-document port.** The REPL pipeline must not depend on
-[`EditorState`](../src/editor/state.h#L175), so it never touches the editor buffer directly. Instead it
+[`EditorState`](../src/editor/state.h#L199), so it never touches the editor buffer directly. Instead it
 reads and mutates source text through the neutral port in
 [`source_document.h`](../source_document.h):
 
@@ -288,7 +288,7 @@ not a runtime callback table:
 
 | Host | Backing implementation |
 |---|---|
-| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) — forwards to [`EditorState`](../src/editor/state.h#L175) |
+| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) — forwards to [`EditorState`](../src/editor/state.h#L199) |
 | Standalone `repl_demo` | [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) — tiny editor-free line store |
 | Tests | whichever adapter the scenario links |
 
@@ -313,8 +313,8 @@ source line through `src_cmd_idx`, resolved via
 ### Document Cursor Ownership
 
 The active edit-line cursor is **editor-owned**: it lives in
-`EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L171)) and is read
-and written through [`editor_state_edit_line()`](../src/editor/state.h#L368) / `_set()` / `_clamp()`.
+`EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L195)) and is read
+and written through [`editor_state_edit_line()`](../src/editor/state.h#L392) / `_set()` / `_clamp()`.
 There is no `repl_state_edit_line()` and no cursor pointer inside
 [`ReplCommandStore`](../src/repl/command_store.h#L47). The REPL pipeline never reaches into editor cursor
 storage:
@@ -761,7 +761,7 @@ signature for audited renderers.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
   [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
-  — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L368),
+  — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers
@@ -1216,7 +1216,7 @@ The app controller installs four boundary mechanisms at startup.
 
 All source-text reads and mutations use `source_document_*`. The full app links
 [`glr_source_document.c`](../src/app/glr_source_document.c), which forwards to
-[`EditorState`](../src/editor/state.h#L175); the standalone demo links a tiny editor-free store
+[`EditorState`](../src/editor/state.h#L199); the standalone demo links a tiny editor-free store
 in [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c). This keeps editor state and
 logic out of the core link set.
 
@@ -1913,7 +1913,7 @@ When a module starts owning mutable REPL state, follow this template:
    genuinely REPL-language/program state. App-frame presentation and render
    policy belongs on [`glr_state`](../src/app/glr_state.h#L2)
    ([`src/app/glr_state.c`](../src/app/glr_state.c)), editor document/session
-   state on [`EditorState`](../src/editor/state.h#L175), and intentional
+   state on [`EditorState`](../src/editor/state.h#L199), and intentional
    sidecars (undo rings, user-scene slots) stay separate — call those out
    explicitly rather than folding them into [`ReplRuntimeState`](../src/repl/state.h#L18). REPL-pipeline
    TUs must not reach `glr_state`
@@ -2140,7 +2140,7 @@ unused-parameter warnings with `(void)`, no real rendering.
 Most commands round-trip automatically: [`src/repl/export.c`](../src/repl/export.c) writes the
 source-document line text (`source_text_line(view, cmd_idx)` via the
 neutral port — flat commands do not own source text, and [`export.c`](../src/repl/export.c) does
-not reach into [`EditorState`](../src/editor/state.h#L175) directly)
+not reach into [`EditorState`](../src/editor/state.h#L199) directly)
 verbatim into the exported `display()` body, and `repl_export_load_from_file`
 feeds those lines back through the commit pipeline. You only need to
 touch [`src/repl/export.c`](../src/repl/export.c) for commands with non-source-text encoding —

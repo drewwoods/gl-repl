@@ -109,7 +109,7 @@ state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h
 geometry.
 
 Render3d renderers **consume snapshots/configs and never read REPL runtime state,
-[`EditorState`](../editor/state.h#L175), or [`UiState`](../ui/app/state.h#L20) directly.** The two REPL-aware overlay passes
+[`EditorState`](../editor/state.h#L199), or [`UiState`](../ui/app/state.h#L20) directly.** The two REPL-aware overlay passes
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
 `src/subsystems/edit_overlays/` (driven by the controller each frame)

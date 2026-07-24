@@ -1607,10 +1607,14 @@ void ui_menu_bar_note_search_opened(float now) {
     g_search_open_time = now;
 }
 
-static void code_panel_format_search_query(EditorSearchState srch,
-                                           char *out, int out_sz,
-                                           int max_chars,
-                                           int *out_cursor_col) {
+/* Window a text field's contents to `max_chars`, keeping the caret in
+ * view, and report the caret's column within the windowed text. Serves
+ * both find-bar fields (find query and replacement). */
+static void code_panel_format_field_text(const char *text, int text_len,
+                                         int cursor_pos,
+                                         char *out, int out_sz,
+                                         int max_chars,
+                                         int *out_cursor_col) {
     int start = 0;
     int take = 0;
 
@@ -1621,18 +1625,18 @@ static void code_panel_format_search_query(EditorSearchState srch,
     if (out_cursor_col)
         *out_cursor_col = 0;
 
-    if (max_chars <= 0 || srch.query_len <= 0)
+    if (max_chars <= 0 || text_len <= 0)
         return;
 
-    if (srch.query_len > max_chars) {
-        start = srch.cursor_pos - max_chars + 1;
+    if (text_len > max_chars) {
+        start = cursor_pos - max_chars + 1;
         if (start < 0)
             start = 0;
-        if (start > srch.query_len - max_chars)
-            start = srch.query_len - max_chars;
+        if (start > text_len - max_chars)
+            start = text_len - max_chars;
     }
 
-    take = srch.query_len - start;
+    take = text_len - start;
     if (take > max_chars)
         take = max_chars;
     if (take >= out_sz)
@@ -1641,17 +1645,25 @@ static void code_panel_format_search_query(EditorSearchState srch,
         take = 0;
 
     if (take > 0)
-        memcpy(out, srch.query + start, (size_t)take);
+        memcpy(out, text + start, (size_t)take);
     out[take] = '\0';
 
     if (out_cursor_col) {
-        int col = srch.cursor_pos - start;
+        int col = cursor_pos - start;
         if (col < 0)
             col = 0;
         if (col > take)
             col = take;
         *out_cursor_col = col;
     }
+}
+
+static void code_panel_format_search_query(EditorSearchState srch,
+                                           char *out, int out_sz,
+                                           int max_chars,
+                                           int *out_cursor_col) {
+    code_panel_format_field_text(srch.query, srch.query_len, srch.cursor_pos,
+                                 out, out_sz, max_chars, out_cursor_col);
 }
 
 static float ui_fade_alpha(float anim_time, float open_time) {
@@ -1992,11 +2004,322 @@ static int search_nav_geometry(EditorSearchState srch,
     return 1;
 }
 
+/* ---------------------------------------------------------------------
+ * Replace row
+ *
+ * A second row hanging under the find box: the replacement text field,
+ * the whole-word chip, and the Replace / All buttons. It is wider than
+ * the find slot (which is squeezed between the menus and the 2D/3D
+ * swatch), so it right-aligns to the find box and grows leftwards,
+ * clamped to the code panel's left margin.
+ *
+ * One geometry function feeds both the renderer and the hit test so the
+ * two cannot drift — the same rule the match stepper follows.
+ * ------------------------------------------------------------------ */
+#define REPLACE_ROW_MIN_W     330
+#define REPLACE_ROW_MIN_TEXT  12    /* chars of replacement kept visible */
+#define REPLACE_BTN_PAD_X     10
+#define REPLACE_BTN_GAP       8   /* also clears the 2px keyboard-focus ring */
+/* Menu-bar rows are LINE_H (18px). Inset 2 leaves a 14px button, which
+ * clears FONT_TINY's 10px box top and bottom; the old inset of 4 left
+ * 10px of button for a 13px FONT_SMALL label — the text physically could
+ * not fit inside its own border. */
+#define REPLACE_BTN_INSET_Y   2
+/* Below this much room for the query the find row drops its "replace"
+ * affordance rather than squeezing the text the user is typing. */
+#define FIND_ROW_MIN_QUERY_CHARS 10
+/* Focused-field box: rows it insets from the row edges, padding it
+ * carries left of the text, and the clearance it keeps from the widget
+ * on its right. */
+#define FOCUS_BOX_INSET_Y     2
+#define FOCUS_BOX_PAD_X       4
+#define FOCUS_BOX_END_GAP     8
+
+typedef struct {
+    int x, y, w, h;
+    int text_x, text_w;
+    int chip_x, chip_w;
+    int one_x, one_w;
+    int all_x, all_w;
+    int btn_y, btn_h;
+} ReplaceRowGeom;
+
+static const char *const k_replace_chip_label = "word";
+static const char *const k_replace_one_label  = "Replace";
+static const char *const k_replace_all_label  = "All";
+
+/* Find-bar buttons label in FONT_TINY, not the FONT_SMALL the rest of
+ * the bar uses: a 13px cell inside a 14px button left the text pressed
+ * against the border. Helvetica 10 is proportional, so the width comes
+ * from GLUT per glyph rather than a strlen * FONT_*_W product. */
+static int replace_button_width(const char *label) {
+    return gl2d_text_width(FONT_TINY, label) + REPLACE_BTN_PAD_X * 2;
+}
+
+static int replace_row_geometry(EditorSearchState srch, ReplaceRowGeom *g) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int cp_x, cp_y, cp_w, cp_h;
+    int right_edge, left_limit, min_w;
+
+    if (!srch.active || !srch.replace_open)
+        return 0;
+
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+
+    g->chip_w = replace_button_width(k_replace_chip_label);
+    g->one_w  = replace_button_width(k_replace_one_label);
+    g->all_w  = replace_button_width(k_replace_all_label);
+
+    min_w = SEARCH_PAD_X * 2 + REPLACE_ROW_MIN_TEXT * FONT_SMALL_W +
+            g->chip_w + g->one_w + g->all_w + REPLACE_BTN_GAP * 3;
+    if (min_w < REPLACE_ROW_MIN_W)
+        min_w = REPLACE_ROW_MIN_W;
+
+    right_edge = pin_x[PIN_SEARCH] + pin_w[PIN_SEARCH];
+    left_limit = cp_x + CODE_MARGIN_X;
+
+    g->w = pin_w[PIN_SEARCH] > min_w ? pin_w[PIN_SEARCH] : min_w;
+    g->x = right_edge - g->w;
+    if (g->x < left_limit) {
+        g->x = left_limit;
+        g->w = right_edge - left_limit;
+    }
+    g->h = bh;
+    g->y = by - bh;
+
+    g->btn_h = g->h - REPLACE_BTN_INSET_Y * 2;
+    g->btn_y = g->y + REPLACE_BTN_INSET_Y;
+
+    g->all_x  = g->x + g->w - SEARCH_PAD_X - g->all_w;
+    g->one_x  = g->all_x - REPLACE_BTN_GAP - g->one_w;
+    g->chip_x = g->one_x - REPLACE_BTN_GAP - g->chip_w;
+    g->text_x = g->x + SEARCH_PAD_X;
+    g->text_w = g->chip_x - REPLACE_BTN_GAP - g->text_x;
+    if (g->text_w < FONT_SMALL_W)
+        g->text_w = FONT_SMALL_W;
+    return 1;
+}
+
+/* Marks the focused text field by sinking it into the row: a darker fill
+ * with a caret-colored outline, drawn *behind* the text.
+ *
+ * An underline was the obvious cue and the wrong one — a menu-bar row is
+ * 22px against a 13px font, which leaves no clear band under the
+ * descenders of a 'y' or 'p'. The box needs no vertical room of its own.
+ * `right_limit` is the neighboring widget's left edge; the box stops
+ * short of it so the two never touch. */
+static void draw_field_focus_box(int x0, int right_limit,
+                                 int row_y, int row_h, float alpha) {
+    float x1 = (float)(right_limit - FOCUS_BOX_END_GAP);
+    float y0 = (float)(row_y + FOCUS_BOX_INSET_Y);
+    float y1 = (float)(row_y + row_h - FOCUS_BOX_INSET_Y);
+    float bx = (float)(x0 - FOCUS_BOX_PAD_X);
+
+    if (x1 <= bx)
+        return;
+
+    ui_clr_a(UI_TOK_SUNKEN, alpha);
+    glRectf(bx, y0, x1, y1);
+    ui_clr_a(UI_TOK_CARET, 0.7f * alpha);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(bx + 0.5f, y0 + 0.5f);
+    glVertex2f(x1 - 0.5f, y0 + 0.5f);
+    glVertex2f(x1 - 0.5f, y1 - 0.5f);
+    glVertex2f(bx + 0.5f, y1 - 0.5f);
+    glEnd();
+}
+
+/* Small filled button with a label. `on` paints the "engaged" fill used
+ * by the word chip when whole-word matching is active; `focused` draws
+ * the keyboard-focus ring so Tab's position is always visible. The ring
+ * sits outside the button's own border rather than replacing it, so a
+ * focused chip reads as "chip + ring", not as two clashing outlines. */
+static void draw_replace_button(int x, int y, int w, int h,
+                                const char *label, int on, int focused,
+                                float alpha) {
+    int label_x = x + (w - gl2d_text_width(FONT_TINY, label)) / 2;
+    /* +2 lifts the raster position off the descender row: GLUT places
+     * bitmap text on its baseline, and FONT_TINY_H is the full box. */
+    int label_y = y + (h - FONT_TINY_H) / 2 + 2;
+
+    if (on)
+        ui_clr_a(UI_TOK_ACCENT, alpha);
+    else
+        ui_clr_a(UI_TOK_MENU_LABEL_HOVER_BG, alpha);
+    glRectf((float)x, (float)y, (float)(x + w), (float)(y + h));
+
+    ui_clr_a(UI_TOK_BORDER, alpha);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)(y + h) - 0.5f);
+    glVertex2f((float)x + 0.5f,       (float)(y + h) - 0.5f);
+    glEnd();
+
+    /* 1.5px out: enough to read as a separate ring, close enough that a
+     * 14px button inside an 18px row still keeps it off the row edges. */
+    if (focused) {
+        ui_clr_a(UI_TOK_CARET, alpha);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f((float)x - 1.5f,       (float)y - 1.5f);
+        glVertex2f((float)(x + w) + 1.5f, (float)y - 1.5f);
+        glVertex2f((float)(x + w) + 1.5f, (float)(y + h) + 1.5f);
+        glVertex2f((float)x - 1.5f,       (float)(y + h) + 1.5f);
+        glEnd();
+    }
+
+    ui_clr_a(on ? UI_TOK_TEXT_ON_HILITE : UI_TOK_TEXT_PRIMARY, alpha);
+    gl2d_draw_string((float)label_x, (float)label_y, label, FONT_TINY);
+}
+
+static void draw_replace_row(const UiRenderSnapshot *snap, float alpha) {
+    EditorSearchState srch = snap->search;
+    ReplaceRowGeom g;
+    char text_buf[128];
+    int cursor_col = 0;
+    int max_chars;
+    int text_y;
+    int focused_text = (srch.focus == EDITOR_SEARCH_FOCUS_REPLACE);
+
+    if (!replace_row_geometry(srch, &g))
+        return;
+
+    max_chars = g.text_w / FONT_SMALL_W;
+    if (max_chars < 1) max_chars = 1;
+    code_panel_format_field_text(srch.replace, srch.replace_len,
+                                 srch.replace_cursor_pos,
+                                 text_buf, sizeof(text_buf), max_chars,
+                                 &cursor_col);
+    text_y = g.y + (g.h - FONT_SMALL_H) / 2 + 1;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    ui_clr_a(UI_TOK_RAISED, alpha);
+    glRectf((float)g.x, (float)g.y, (float)(g.x + g.w), (float)(g.y + g.h));
+    ui_clr_a(UI_TOK_BORDER, alpha);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)g.x + 0.5f,           (float)g.y + 0.5f);
+    glVertex2f((float)(g.x + g.w) - 0.5f,   (float)g.y + 0.5f);
+    glVertex2f((float)(g.x + g.w) - 0.5f,   (float)(g.y + g.h) - 0.5f);
+    glVertex2f((float)g.x + 0.5f,           (float)(g.y + g.h) - 0.5f);
+    glEnd();
+
+    /* Focused field box first: it is the backdrop the text sits on, and
+     * the only cue distinguishing "typing goes here" from the find row. */
+    if (focused_text)
+        draw_field_focus_box(g.text_x, g.text_x + g.text_w, g.y, g.h, alpha);
+
+    if (srch.replace_len <= 0) {
+        ui_clr_a(UI_TOK_TEXT_PLACEHOLDER, alpha);
+        gl2d_draw_string((float)g.text_x, (float)text_y,
+                         "replace with...", FONT_SMALL);
+    } else {
+        ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
+        gl2d_draw_string((float)g.text_x, (float)text_y, text_buf, FONT_SMALL);
+    }
+
+    if (focused_text && snap->cursor_blink.cursor_visible) {
+        int cursor_x = g.text_x + cursor_col * FONT_SMALL_W;
+        ui_clr_a(UI_TOK_CARET, 0.85f * alpha);
+        glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
+                (float)(text_y - 2) + (float)(FONT_SMALL_H + 2));
+    }
+
+    glDisable(GL_BLEND);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    draw_replace_button(g.chip_x, g.btn_y, g.chip_w, g.btn_h,
+                        k_replace_chip_label, srch.whole_word,
+                        srch.focus == EDITOR_SEARCH_FOCUS_WORD, alpha);
+    draw_replace_button(g.one_x, g.btn_y, g.one_w, g.btn_h,
+                        k_replace_one_label, 0, 0, alpha);
+    draw_replace_button(g.all_x, g.btn_y, g.all_w, g.btn_h,
+                        k_replace_all_label, 0, 0, alpha);
+    glDisable(GL_BLEND);
+}
+
+/* Inner layout of the find box. Shared by the renderer and the hit test
+ * so the "replace" affordance can be clicked exactly where it is drawn.
+ * `count_out` receives the count/status text the geometry was measured
+ * against. `chip_w` is 0 when the box is too narrow to spare the room. */
+typedef struct {
+    int box_x, box_y, box_w, box_h;
+    int text_y;
+    int query_x;
+    int max_query_chars;
+    int count_x, count_w;
+    int chip_x, chip_w, chip_y, chip_h;
+    int has_nav;
+    float nav_x, nav_cy;
+} FindRowGeom;
+
+static const char *const k_find_replace_chip_label = "replace";
+
+static void find_row_geometry(EditorSearchState srch, FindRowGeom *g,
+                              char *count_out, int count_sz) {
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int pad_x = SEARCH_PAD_X;
+    int icon_r = 5;
+    int nav_reserve;
+    int query_right;
+
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    g->box_x = pin_x[PIN_SEARCH];
+    g->box_y = by;
+    g->box_w = pin_w[PIN_SEARCH];
+    g->box_h = bh;
+
+    if (srch.query_len <= 0)
+        snprintf(count_out, (size_t)count_sz, "type to search");
+    else if (srch.match_count <= 0)
+        snprintf(count_out, (size_t)count_sz, "0");
+    else
+        snprintf(count_out, (size_t)count_sz, "%d/%d",
+                 srch.hit_ordinal, srch.match_count);
+
+    g->text_y = g->box_y + (g->box_h - FONT_SMALL_H) / 2 + 1;
+    g->has_nav = search_nav_geometry(srch, g->box_x, g->box_y, g->box_w,
+                                     g->box_h, &g->nav_x, &g->nav_cy);
+    nav_reserve = g->has_nav ? ((int)SEARCH_NAV_BTN_W + SEARCH_NAV_GAP) : 0;
+    g->count_w = (int)strlen(count_out) * FONT_SMALL_W;
+    g->count_x = g->box_x + g->box_w - pad_x - nav_reserve - g->count_w;
+    g->query_x = g->box_x + pad_x + icon_r * 2 + 8;
+
+    /* The "replace" affordance is the discovery path for the row below:
+     * it only shows while that row is closed, and only when the query
+     * still gets a usable amount of room. */
+    g->chip_w = 0;
+    g->chip_h = g->box_h - REPLACE_BTN_INSET_Y * 2;
+    g->chip_y = g->box_y + REPLACE_BTN_INSET_Y;
+    g->chip_x = g->count_x;
+    if (!srch.replace_open) {
+        int want = replace_button_width(k_find_replace_chip_label);
+        int room = g->count_x - REPLACE_BTN_GAP - want - g->query_x;
+        if (room >= FIND_ROW_MIN_QUERY_CHARS * FONT_SMALL_W) {
+            g->chip_w = want;
+            g->chip_x = g->count_x - REPLACE_BTN_GAP - want;
+        }
+    }
+
+    query_right = (g->chip_w > 0) ? g->chip_x : g->count_x;
+    g->max_query_chars = (query_right - g->query_x - REPLACE_BTN_GAP) / FONT_SMALL_W;
+    if (g->max_query_chars < 1)
+        g->max_query_chars = 1;
+}
+
 void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     EditorSearchState srch = snap->search;
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;
+    FindRowGeom g;
 
     /* The search-open fade clock (g_search_open_time) is driven by the
      * controller via ui_menu_bar_note_search_opened() on both open
@@ -2009,40 +2332,22 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
 
     /* Anchor on the PIN_SEARCH slot so the search bar sits where the
      * placeholder was - matches the design's inline search affordance. */
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    find_row_geometry(srch, &g, count_buf, sizeof(count_buf));
 
-    int box_x = pin_x[PIN_SEARCH];
-    int box_y = by;
-    int box_w = pin_w[PIN_SEARCH];
-    int box_h = bh;
-
-    if (srch.query_len <= 0)
-        snprintf(count_buf, sizeof(count_buf), "type to search");
-    else if (srch.match_count <= 0)
-        snprintf(count_buf, sizeof(count_buf), "0");
-    else
-        snprintf(count_buf, sizeof(count_buf), "%d/%d",
-                 srch.hit_ordinal, srch.match_count);
-
-    int pad_x = SEARCH_PAD_X;
+    int box_x = g.box_x;
+    int box_y = g.box_y;
+    int box_w = g.box_w;
+    int box_h = g.box_h;
     int icon_r = 5;
-    int icon_cx = box_x + pad_x + icon_r;
+    int icon_cx = box_x + SEARCH_PAD_X + icon_r;
     int icon_cy = box_y + box_h / 2;
-    int text_y  = box_y + (box_h - FONT_SMALL_H) / 2 + 1;
-    float nav_x, nav_cy;
-    int has_nav = search_nav_geometry(srch, box_x, box_y, box_w, box_h,
-                                      &nav_x, &nav_cy);
-    int nav_reserve = has_nav ? ((int)SEARCH_NAV_BTN_W + SEARCH_NAV_GAP) : 0;
-    int count_w = (int)strlen(count_buf) * FONT_SMALL_W;
-    int count_x = box_x + box_w - pad_x - nav_reserve - count_w;
-    int query_x = icon_cx + icon_r + 8;
-    int max_query_chars = (count_x - query_x - pad_x) / FONT_SMALL_W;
-    if (max_query_chars < 1) max_query_chars = 1;
+    int text_y  = g.text_y;
+    int query_x = g.query_x;
+    int count_x = g.count_x;
+    int has_nav = g.has_nav;
+
     code_panel_format_search_query(srch, query_buf, sizeof(query_buf),
-                                   max_query_chars, &cursor_col);
+                                   g.max_query_chars, &cursor_col);
 
     float alpha = ui_fade_alpha(snap->anim_time, g_search_open_time);
 
@@ -2063,6 +2368,11 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     glVertex2f((float)box_x + 0.5f,              (float)(box_y + box_h) - 0.5f);
     glEnd();
 
+    /* Focused field box (behind the text) — only meaningful once there
+     * are two fields to choose between. */
+    if (srch.replace_open && srch.focus == EDITOR_SEARCH_FOCUS_FIND)
+        draw_field_focus_box(query_x, count_x, box_y, box_h, alpha);
+
     /* Magnifying-glass icon */
     ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
     draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
@@ -2081,7 +2391,10 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
         ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (snap->cursor_blink.cursor_visible) {
+    /* The caret only marks the find field while it holds focus — with the
+     * replace row open there are two text fields and exactly one caret. */
+    if (snap->cursor_blink.cursor_visible &&
+        srch.focus == EDITOR_SEARCH_FOCUS_FIND) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         ui_clr_a(UI_TOK_CARET, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
@@ -2090,18 +2403,33 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
 
     glDisable(GL_BLEND);
 
+    if (g.chip_w > 0) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        draw_replace_button(g.chip_x, g.chip_y, g.chip_w, g.chip_h,
+                            k_find_replace_chip_label, 0, 0, alpha);
+        glDisable(GL_BLEND);
+    }
+
     /* Match stepper last: it brackets its own blend state. */
     if (has_nav)
-        ui_stepper_render(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H);
+        ui_stepper_render(g.nav_x, g.nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H);
+
+    draw_replace_row(snap, alpha);
 }
 
-UiHit ui_menu_bar_search_nav_hit_test(const UiRenderSnapshot *snap,
-                                      int mx, int my) {
+static int point_in_rect(int px, int py, int x, int y, int w, int h) {
+    return px >= x && px < x + w && py >= y && py < y + h;
+}
+
+UiHit ui_menu_bar_search_hit_test(const UiRenderSnapshot *snap,
+                                  int mx, int my) {
     UiHit h = ui_hit_none();
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh, win_h, dir;
+    int by, bh, win_h, dir, gl_y;
     float nav_x, nav_cy;
+    ReplaceRowGeom g;
 
     if (!snap || !snap->search.active)
         return h;
@@ -2110,19 +2438,60 @@ UiHit ui_menu_bar_search_nav_hit_test(const UiRenderSnapshot *snap,
     if (win_h <= 0)
         return h;
 
+    gl_y = win_h - my;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    if (!search_nav_geometry(snap->search, pin_x[PIN_SEARCH], by,
-                             pin_w[PIN_SEARCH], bh, &nav_x, &nav_cy))
-        return h;
 
-    dir = ui_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
-                         mx, (float)(win_h - my));
-    if (dir == 0)
+    /* Replace row first: it hangs below the bar, over the code panel. */
+    if (replace_row_geometry(snap->search, &g) &&
+        point_in_rect(mx, gl_y, g.x, g.y, g.w, g.h)) {
+        if (point_in_rect(mx, gl_y, g.all_x, g.btn_y, g.all_w, g.btn_h)) {
+            h.kind = UI_HIT_SEARCH_REPLACE;
+            h.item_idx = 1;   /* all */
+        } else if (point_in_rect(mx, gl_y, g.one_x, g.btn_y, g.one_w, g.btn_h)) {
+            h.kind = UI_HIT_SEARCH_REPLACE;
+            h.item_idx = 0;   /* current match */
+        } else if (point_in_rect(mx, gl_y, g.chip_x, g.btn_y, g.chip_w, g.btn_h)) {
+            h.kind = UI_HIT_SEARCH_WORD_TOGGLE;
+        } else {
+            /* Anywhere else on the row means "type here". */
+            h.kind = UI_HIT_SEARCH_FOCUS;
+            h.item_idx = EDITOR_SEARCH_FOCUS_REPLACE;
+        }
         return h;
+    }
 
-    /* Up arrow (dir +1) = previous match → navigate(-1); down = next → +1. */
-    h.kind = UI_HIT_SEARCH_NAV;
-    h.item_idx = (dir > 0) ? -1 : +1;
+    if (search_nav_geometry(snap->search, pin_x[PIN_SEARCH], by,
+                            pin_w[PIN_SEARCH], bh, &nav_x, &nav_cy)) {
+        dir = ui_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
+                             mx, (float)gl_y);
+        if (dir != 0) {
+            /* Up arrow (dir +1) = previous match → navigate(-1). */
+            h.kind = UI_HIT_SEARCH_NAV;
+            h.item_idx = (dir > 0) ? -1 : +1;
+            return h;
+        }
+    }
+
+    {
+        FindRowGeom fg;
+        char count_buf[32];
+
+        find_row_geometry(snap->search, &fg, count_buf, sizeof(count_buf));
+        /* The "replace" affordance opens the row and lands the caret in
+         * it — the mouse twin of Tab. */
+        if (fg.chip_w > 0 &&
+            point_in_rect(mx, gl_y, fg.chip_x, fg.chip_y, fg.chip_w, fg.chip_h)) {
+            h.kind = UI_HIT_SEARCH_FOCUS;
+            h.item_idx = EDITOR_SEARCH_FOCUS_REPLACE;
+            return h;
+        }
+        /* Clicking the find box itself takes focus back from the replace row. */
+        if (snap->search.replace_open &&
+            point_in_rect(mx, gl_y, fg.box_x, fg.box_y, fg.box_w, fg.box_h)) {
+            h.kind = UI_HIT_SEARCH_FOCUS;
+            h.item_idx = EDITOR_SEARCH_FOCUS_FIND;
+        }
+    }
     return h;
 }
 

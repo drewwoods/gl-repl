@@ -858,12 +858,14 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
             return picker_hit;
     }
 
-    /* Find-bar match stepper overlaps the search pin slot, so claim it
-     * before the generic menu-bar hit-test (which would route the pin). */
+    /* Find-bar widgets overlap both the search pin slot (match stepper)
+     * and the code panel below it (replace row), so claim them before the
+     * generic menu-bar hit-test (which would route the pin) and before
+     * the panel. */
     {
-        UiHit nav_hit = ui_menu_bar_search_nav_hit_test(snap, mx, my);
-        if (nav_hit.kind != UI_HIT_NONE)
-            return nav_hit;
+        UiHit search_hit = ui_menu_bar_search_hit_test(snap, mx, my);
+        if (search_hit.kind != UI_HIT_NONE)
+            return search_hit;
     }
 
     {

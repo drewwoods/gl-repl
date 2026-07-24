@@ -18,7 +18,7 @@ completion", "scroll follows the cursor").
 `src/editor` is that model + controller, split along a deliberate seam:
 
 - **Generic, application-free core.** [`state.c`](state.c) owns the document
-  ([`EditorState`](state.h#L175): buffer, cursor, selection, scroll, undo, …) and
+  ([`EditorState`](state.h#L199): buffer, cursor, selection, scroll, undo, …) and
   [`edit_ops.c`](edit_ops.c) provides the primitive operations (insert a char, delete at
   cursor, consume a selection) that *any* plain-text editor needs. These
   know nothing about OpenGL, REPL grammar, or this app.
@@ -89,7 +89,7 @@ without the editor at all (see `repl_demo`).
 
 | File | Responsibility |
 |---|---|
-| [`state.c`](state.c) / `.h` | Owns [`EditorState`](state.h#L175): buffer, input, cursor, selection, scroll, search, autocomplete, undo, cursor blink |
+| [`state.c`](state.c) / `.h` | Owns [`EditorState`](state.h#L199): buffer, input, cursor, selection, scroll, search, autocomplete, undo, cursor blink |
 | [`edit_ops.c`](edit_ops.c) / `.h` | Generic text-editing primitives (REPL-free; shared with `editor_demo`) |
 | [`input.c`](input.c) / `.h` | REPL editor key/mouse dispatcher (`;` commit, Tab, Ctrl+R, comment toggle, …) |
 | [`commit.c`](commit.c) / `.h` | Commit transaction boundary: compile → undo → buffer write → REPL apply |

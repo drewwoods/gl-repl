@@ -240,6 +240,7 @@ typedef struct {
     int         query_len;      /* cached strlen(query) */
     int         hit_row;        /* search row index of the current match */
     int         hit_char;       /* char index of match start within that row */
+    int         whole_word;     /* match on identifier boundaries only */
 } UiTextPanelSearch;
 
 /* -------------------------------------------------------------------------

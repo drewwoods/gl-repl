@@ -701,6 +701,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
             .query_len = snap->search.query_len,
             .hit_row = snap->search.hit_line_idx,
             .hit_char = snap->search.hit_char_idx,
+            .whole_word = snap->search.whole_word,
         },
     };
 

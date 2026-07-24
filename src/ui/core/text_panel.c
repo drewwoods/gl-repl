@@ -516,9 +516,11 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
         row->search_row_idx < 0 || !text || seg_len <= 0)
         return;
 
-    for (int pos = ui_text_find_next_in_text(text, snap->search.query, 0);
+    for (int pos = ui_text_find_next_in_text_opts(text, snap->search.query, 0,
+                                                  snap->search.whole_word);
          pos >= 0;
-         pos = ui_text_find_next_in_text(text, snap->search.query, pos + 1)) {
+         pos = ui_text_find_next_in_text_opts(text, snap->search.query, pos + 1,
+                                              snap->search.whole_word)) {
         int match_end = pos + snap->search.query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;

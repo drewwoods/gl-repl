@@ -55,6 +55,20 @@ static inline void gl2d_draw_string(float x, float y, const char *s,
 #endif
 }
 
+/* Pixel width of `s` in a GLUT bitmap font, summed per glyph.
+ *
+ * Fixed-width fonts (FONT_SMALL / FONT_MONO) can be measured as
+ * strlen * FONT_*_W, but FONT_TINY is Helvetica 10 — proportional — so
+ * chrome that centers or right-aligns tiny text has to ask GLUT. */
+static inline int gl2d_text_width(void *font, const char *s) {
+    int w = 0;
+    if (!s)
+        return 0;
+    for (; *s; s++)
+        w += glutBitmapWidth(font, (unsigned char)*s);
+    return w;
+}
+
 /* Draw a floating-panel frame: filled background rect + 1px border line loop.
  * Expects blending already enabled; caller sets up gl2d_begin beforehand.
  * bg_tok / border_tok are UiThemeToken values; bg_alpha / border_alpha

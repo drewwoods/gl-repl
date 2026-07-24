@@ -39,6 +39,10 @@
 #define FONT_H          15
 #define FONT_SMALL_W    8
 #define FONT_SMALL_H    13
+/* FONT_TINY is proportional (Helvetica 10) — there is no per-glyph width
+ * constant to match FONT_SMALL_W; measure with gl2d_text_width(). The
+ * height is the cap-to-descender box used for vertical centering. */
+#define FONT_TINY_H     10
 
 /* ---- App-wide defaults retained in config.h --------------------------- */
 

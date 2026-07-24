@@ -10,9 +10,21 @@
 #ifndef EDITOR_SEARCH_H
 #define EDITOR_SEARCH_H
 
+#include "state.h"   /* EditorSearchFocus */
+
 void editor_search_clear_all(void);
 int  editor_search_handle_key(unsigned char key);
 int  editor_search_handle_special(int key);
+
+/* Move keyboard focus within the find bar (find field / replace field /
+ * whole-word chip). Focusing anything but the find field reveals the
+ * replace row. No-op while search is inactive; the same entry point
+ * serves Tab, the click routes, and the menu's Replace item. */
+void editor_search_set_focus(EditorSearchFocus focus);
+
+/* Flip whole-word (identifier-boundary) matching and re-run the scan, so
+ * the count and highlights immediately show what a replace would touch. */
+void editor_search_toggle_whole_word(void);
 
 /* Step to the next (+1) or previous (-1) match, wrapping at document ends.
  * Same path the Enter / Up / Down keys take; exposed for the find-bar
@@ -22,6 +34,24 @@ void editor_search_navigate(int direction);
 int  editor_search_row_count(void);
 const char *editor_search_row_text(int row_idx);
 int  editor_search_row_for_cmd_index(int cmd_idx);
+
+/* Inverse of editor_search_row_for_cmd_index: the document row a search
+ * row refers to, or -1 when the row is the live (uncommitted) input line
+ * and has no command behind it. */
+int  editor_search_row_to_doc_index(int row_idx);
+
+/* Re-run the incremental scan against the current query. Called after an
+ * edit changes the document under an open find bar (the replace path);
+ * clears the match state when nothing matches any more. */
+void editor_search_rescan(void);
+
+/* Which occurrence within its row the current hit is (0-based), or -1
+ * when there is no hit. Replace-current addresses the match this way
+ * rather than by character offset: search rows read the unindented input
+ * buffer for the edit line, while the document row carries its leading
+ * indentation, so offsets do not survive the crossing — the occurrence
+ * ordinal does. */
+int  editor_search_current_hit_occurrence(void);
 int  editor_search_find_next_in_text(const char *text, const char *query,
                                    int start_pos);
 int  editor_search_find_prev_in_text(const char *text, const char *query,

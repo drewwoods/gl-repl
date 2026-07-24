@@ -21,6 +21,7 @@
 #include "state.h"
 #include "input.h"
 #include "completion.h"
+#include "replace.h"
 #include "search.h"
 #include "ui/core/text_search.h"
 
@@ -47,14 +48,19 @@ static int search_row_to_nav_line(int row_idx) {
     return row_idx;
 }
 
+/* Both scanners apply the live session's whole-word flag, so every
+ * caller (navigation, counting, ordinals, the code-panel highlight
+ * pass) sees one definition of "a match". */
 int editor_search_find_next_in_text(const char *text, const char *query,
                                   int start_pos) {
-    return ui_text_find_next_in_text(text, query, start_pos);
+    return ui_text_find_next_in_text_opts(text, query, start_pos,
+                                          editor_state_search()->whole_word);
 }
 
 int editor_search_find_prev_in_text(const char *text, const char *query,
                                   int start_pos) {
-    return ui_text_find_prev_in_text(text, query, start_pos);
+    return ui_text_find_prev_in_text_opts(text, query, start_pos,
+                                          editor_state_search()->whole_word);
 }
 
 int editor_search_row_for_cmd_index(int cmd_idx) {
@@ -114,7 +120,8 @@ static int search_hit_exists(int row_idx, int char_pos) {
         return 0;
 
     text = editor_search_row_text(row_idx);
-    return ui_text_matches_at(text, srch->query, char_pos);
+    return ui_text_matches_at_opts(text, srch->query, char_pos,
+                                   srch->whole_word);
 }
 
 static int search_row_occurrence_index(int row_idx, int char_pos) {
@@ -212,6 +219,14 @@ void editor_search_clear_all(void) {
     srch->query[0] = '\0';
     srch->query_len = 0;
     srch->cursor_pos = 0;
+    srch->replace_open = 0;
+    srch->replace[0] = '\0';
+    srch->replace_len = 0;
+    srch->replace_cursor_pos = 0;
+    srch->focus = EDITOR_SEARCH_FOCUS_FIND;
+    /* whole_word deliberately survives: it is a matching preference, not
+     * part of the query, and re-arming it on every Ctrl+F would make the
+     * rename workflow tedious. */
     search_clear_matches();
 }
 
@@ -238,6 +253,22 @@ const char *editor_search_row_text(int row_idx) {
     if (text)
         return text;
     return "";
+}
+
+int editor_search_row_to_doc_index(int row_idx) {
+    if (row_idx < 0 || row_idx >= editor_search_row_count())
+        return -1;
+    /* The live input row only shadows a command while overwrite-mode
+     * editing an existing line; inserting (or sitting past the end) makes
+     * it a row of its own with nothing committed behind it. */
+    if (search_row_is_live_input(row_idx) &&
+        (editor_insert_mode() || row_idx >= editor_buffer_count()))
+        return -1;
+    if (editor_insert_mode() && row_idx > editor_state_edit_line())
+        row_idx--;
+    if (row_idx >= editor_buffer_count())
+        return -1;
+    return row_idx;
 }
 
 static int search_find_forward(int start_row, int start_char,
@@ -395,6 +426,17 @@ void editor_search_navigate(int direction) {
     search_navigate(direction);
 }
 
+void editor_search_rescan(void) {
+    search_refresh_query();
+}
+
+int editor_search_current_hit_occurrence(void) {
+    const EditorSearchState *srch = editor_state_search();
+    if (!srch->active || srch->hit_line_idx < 0 || srch->hit_char_idx < 0)
+        return -1;
+    return search_row_occurrence_index(srch->hit_line_idx, srch->hit_char_idx);
+}
+
 /* Seed the query from the input-buffer character selection, the usual
  * "find selected text" behavior. Returns 1 when the query was replaced.
  * A missing or empty selection leaves the previous query intact, so
@@ -437,8 +479,76 @@ static void search_open(void) {
         search_refresh_query();
 }
 
+/* The focused text field as a writable triple. Returns 0 when focus sits
+ * on the word chip, which owns no text. Editing through this handle is
+ * how one set of insert/delete/cursor branches serves both fields; only
+ * the find field re-runs the incremental scan afterwards (see
+ * search_field_edited). */
+typedef struct {
+    char *buf;
+    int  *len;
+    int  *cursor;
+} SearchField;
+
+static int search_focus_field(EditorSearchState *srch, SearchField *out) {
+    if (!srch || !out)
+        return 0;
+    if (srch->focus == EDITOR_SEARCH_FOCUS_REPLACE) {
+        out->buf = srch->replace;
+        out->len = &srch->replace_len;
+        out->cursor = &srch->replace_cursor_pos;
+        return 1;
+    }
+    if (srch->focus == EDITOR_SEARCH_FOCUS_FIND) {
+        out->buf = srch->query;
+        out->len = &srch->query_len;
+        out->cursor = &srch->cursor_pos;
+        return 1;
+    }
+    return 0;
+}
+
+/* Only the find query drives matches; replacement text edits are inert
+ * until the user runs a replace. */
+static void search_field_edited(const EditorSearchState *srch) {
+    if (srch->focus == EDITOR_SEARCH_FOCUS_FIND)
+        search_refresh_query();
+}
+
+void editor_search_set_focus(EditorSearchFocus focus) {
+    EditorSearchState *srch = editor_state_search_mut();
+    if (!srch->active)
+        return;
+    if (focus < 0 || focus >= EDITOR_SEARCH_FOCUS_COUNT)
+        return;
+    if (focus != EDITOR_SEARCH_FOCUS_FIND)
+        srch->replace_open = 1;
+    srch->focus = focus;
+}
+
+void editor_search_toggle_whole_word(void) {
+    EditorSearchState *srch = editor_state_search_mut();
+    if (!srch->active)
+        return;
+    srch->whole_word = !srch->whole_word;
+    /* Re-scan: the flag changes which matches exist, so the count,
+     * ordinal, and panel highlights all have to be re-derived. */
+    search_refresh_query();
+}
+
+/* Tab ring: find field -> replace field -> word chip -> find field. The
+ * first step also reveals the replace row, so Tab is the whole discovery
+ * path for replace (there is no free Ctrl slot in keymap.h for it). */
+static void search_cycle_focus(EditorSearchState *srch) {
+    srch->replace_open = 1;
+    srch->focus = (EditorSearchFocus)((srch->focus + 1) %
+                                      EDITOR_SEARCH_FOCUS_COUNT);
+}
+
 int editor_search_handle_key(unsigned char key) {
     EditorSearchState *srch = editor_state_search_mut();
+    SearchField field;
+
     if (keymap_event_is(key, GLR_SEARCH)) {
         search_open();
         return 1;
@@ -446,10 +556,18 @@ int editor_search_handle_key(unsigned char key) {
     if (!srch->active)
         return 0;
 
+    if (key == '\t') {
+        search_cycle_focus(srch);
+        return 1;
+    }
+
     if (keymap_event_is(key, GLR_PASTE)) {
         EditorClipboardKind kind = editor_state_clipboard_kind();
         const char *paste_str = NULL;
         int paste_len = 0;
+
+        if (!search_focus_field(srch, &field))
+            return 1;
 
         if (kind == EDITOR_CLIPBOARD_INPUT_TEXT) {
             paste_str = editor_clipboard_input_text();
@@ -464,20 +582,20 @@ int editor_search_handle_key(unsigned char key) {
         }
 
         if (paste_str && paste_len > 0) {
-            int room = (MAX_INPUT_LEN - 1) - srch->query_len;
+            int room = (MAX_INPUT_LEN - 1) - *field.len;
             if (room < 0)
                 room = 0;
             if (paste_len > room)
                 paste_len = room;
 
             if (paste_len > 0) {
-                memmove(&srch->query[srch->cursor_pos + paste_len],
-                        &srch->query[srch->cursor_pos],
-                        (size_t)(srch->query_len - srch->cursor_pos + 1));
-                memcpy(&srch->query[srch->cursor_pos], paste_str, (size_t)paste_len);
-                srch->query_len += paste_len;
-                srch->cursor_pos += paste_len;
-                search_refresh_query();
+                memmove(&field.buf[*field.cursor + paste_len],
+                        &field.buf[*field.cursor],
+                        (size_t)(*field.len - *field.cursor + 1));
+                memcpy(&field.buf[*field.cursor], paste_str, (size_t)paste_len);
+                *field.len += paste_len;
+                *field.cursor += paste_len;
+                search_field_edited(srch);
             }
         }
         return 1;
@@ -489,30 +607,47 @@ int editor_search_handle_key(unsigned char key) {
     }
 
     if (key == '\r' || key == '\n') {
-        search_navigate(+1);
+        /* Enter is per-widget: next match from the find field, toggle on
+         * the word chip, and Replace All from the replace field — the
+         * rename workflow this row exists for. */
+        if (srch->focus == EDITOR_SEARCH_FOCUS_REPLACE)
+            editor_replace_all();
+        else if (srch->focus == EDITOR_SEARCH_FOCUS_WORD)
+            editor_search_toggle_whole_word();
+        else
+            search_navigate(+1);
         return 1;
     }
 
+    if (srch->focus == EDITOR_SEARCH_FOCUS_WORD) {
+        if (key == ' ')
+            editor_search_toggle_whole_word();
+        return 1;
+    }
+
+    if (!search_focus_field(srch, &field))
+        return 1;
+
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (srch->cursor_pos > 0 && srch->query_len > 0) {
-            memmove(&srch->query[srch->cursor_pos - 1],
-                &srch->query[srch->cursor_pos],
-                (size_t)(srch->query_len - srch->cursor_pos + 1));
-            srch->query_len--;
-            srch->cursor_pos--;
-            search_refresh_query();
+        if (*field.cursor > 0 && *field.len > 0) {
+            memmove(&field.buf[*field.cursor - 1],
+                &field.buf[*field.cursor],
+                (size_t)(*field.len - *field.cursor + 1));
+            (*field.len)--;
+            (*field.cursor)--;
+            search_field_edited(srch);
         }
         return 1;
     }
 
-    if (key_is_printable_ascii(key) && srch->query_len < MAX_INPUT_LEN - 2) {
-        memmove(&srch->query[srch->cursor_pos + 1],
-                &srch->query[srch->cursor_pos],
-                (size_t)(srch->query_len - srch->cursor_pos + 1));
-        srch->query[srch->cursor_pos] = (char)key;
-        srch->query_len++;
-        srch->cursor_pos++;
-        search_refresh_query();
+    if (key_is_printable_ascii(key) && *field.len < MAX_INPUT_LEN - 2) {
+        memmove(&field.buf[*field.cursor + 1],
+                &field.buf[*field.cursor],
+                (size_t)(*field.len - *field.cursor + 1));
+        field.buf[*field.cursor] = (char)key;
+        (*field.len)++;
+        (*field.cursor)++;
+        search_field_edited(srch);
         return 1;
     }
 
@@ -521,24 +656,33 @@ int editor_search_handle_key(unsigned char key) {
 
 int editor_search_handle_special(int key) {
     EditorSearchState *srch = editor_state_search_mut();
+    SearchField field;
+    int have_field;
+
     if (!srch->active)
         return 0;
 
+    have_field = search_focus_field(srch, &field);
+
     switch (key) {
     case GLUT_KEY_LEFT:
-        if (srch->cursor_pos > 0)
-            srch->cursor_pos--;
+        if (have_field && *field.cursor > 0)
+            (*field.cursor)--;
         break;
     case GLUT_KEY_RIGHT:
-        if (srch->cursor_pos < srch->query_len)
-            srch->cursor_pos++;
+        if (have_field && *field.cursor < *field.len)
+            (*field.cursor)++;
         break;
     case GLUT_KEY_HOME:
-        srch->cursor_pos = 0;
+        if (have_field)
+            *field.cursor = 0;
         break;
     case GLUT_KEY_END:
-        srch->cursor_pos = srch->query_len;
+        if (have_field)
+            *field.cursor = *field.len;
         break;
+    /* Match navigation stays global to the bar: stepping through hits
+     * while the replacement text has focus is the normal review flow. */
     case GLUT_KEY_UP:
         search_navigate(-1);
         break;

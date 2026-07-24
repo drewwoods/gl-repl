@@ -39,6 +39,7 @@
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/input.h"
+#include "editor/replace.h"
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
@@ -1326,6 +1327,35 @@ static int route_search_nav_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_SEARCH_FOCUS: click on a find-bar text field. item_idx is the
+ * EditorSearchFocus the click targets. */
+static int route_search_focus_hit(const UiHit *hit) {
+    editor_search_set_focus((EditorSearchFocus)hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_SEARCH_WORD_TOGGLE: the whole-word chip. Clicking it both
+ * focuses and flips it, the way a checkbox behaves; Tab + Space is the
+ * keyboard twin. */
+static int route_search_word_toggle_hit(void) {
+    editor_search_set_focus(EDITOR_SEARCH_FOCUS_WORD);
+    editor_search_toggle_whole_word();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_SEARCH_REPLACE: item_idx 1 = Replace All, 0 = the current match.
+ * Both report their outcome through the status line. */
+static int route_search_replace_hit(const UiHit *hit) {
+    if (hit->item_idx == 1)
+        (void)editor_replace_all();
+    else
+        (void)editor_replace_current();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_MENU_BUTTON: top-level menu-bar button. Click on the open
  * menu's button toggles it closed; click on a different button
  * switches the open dropdown. */
@@ -1588,6 +1618,12 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_pin_button_hit(&hit); break;
     case UI_HIT_SEARCH_NAV:
         consumed = route_search_nav_hit(&hit); break;
+    case UI_HIT_SEARCH_FOCUS:
+        consumed = route_search_focus_hit(&hit); break;
+    case UI_HIT_SEARCH_WORD_TOGGLE:
+        consumed = route_search_word_toggle_hit(); break;
+    case UI_HIT_SEARCH_REPLACE:
+        consumed = route_search_replace_hit(&hit); break;
     case UI_HIT_MENU_BUTTON:
         consumed = route_menu_button_hit(&hit); break;
     case UI_HIT_MENU_ITEM:

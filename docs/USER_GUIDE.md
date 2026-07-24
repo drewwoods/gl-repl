@@ -250,6 +250,34 @@ to close it. If text is highlighted in the edit line when you press Ctrl+F,
 that text seeds the find field and searching starts from it; with nothing
 highlighted the previous query is kept.
 
+### Replace
+
+**Tab** in the find bar opens the replace row underneath it and cycles focus
+through *find field → replace field → whole-word chip*. In the replace field,
+**Enter** runs **Replace All**; the *Replace* button rewrites just the match
+you are parked on. Clicking any of the three widgets focuses (and, for the
+chip, toggles) it.
+
+The **word** chip switches matching from plain substring to whole identifiers,
+and it applies to the search as well as the replace — the match count and the
+highlights always show exactly what a replace would rewrite. Turn it on before
+renaming something short: without it, replacing `r` also hits the `r` inside
+`glColor3f`.
+
+Replace All is the tool for **renaming a variable or a function**. A rename
+cannot be done one line at a time — the REPL rejects a declaration whose name
+is still referenced below it, and rejects a use of a name that is not declared
+yet — so the whole document is rewritten and validated in a single
+transaction. If the result does not parse, nothing changes: the document, its
+variables, and its scratch arrays are restored, and the status line names the
+offending line. A successful replace is one **Ctrl+Z** away from being undone,
+and variable values (including anything you dialed in with a `@tune` slider)
+carry across the rename.
+
+Two things worth knowing: matching is case-insensitive, so `Radius` and
+`radius` are both replaced; and a replacement that pushes a line past the
+256-character limit fails the whole operation rather than truncating.
+
 ### Display default commands
 
 ```c
@@ -1636,7 +1664,9 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+D | Delete line or selection |
 | Ctrl+L | Clear all commands |
-| Ctrl+F | Search |
+| Ctrl+F | Search (seeded from highlighted text) |
+| Tab (find bar) | Cycle find field / replace field / whole-word chip |
+| Enter (replace field) | Replace all matches |
 | Ctrl+\ | Reformat buffer |
 | Ctrl+/ | Toggle comment |
 | Ctrl+Shift+S | Split multi-variable declaration |

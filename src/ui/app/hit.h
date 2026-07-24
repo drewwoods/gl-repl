@@ -31,6 +31,9 @@ typedef enum {
     UI_HIT_HELP_PANEL,
     UI_HIT_STATUS_HISTORY,   /* messages button: toggles recent-message list */
     UI_HIT_SEARCH_NAV,       /* find-bar match stepper: item_idx = +1 next / -1 prev */
+    UI_HIT_SEARCH_FOCUS,     /* find-bar field click: item_idx = EditorSearchFocus */
+    UI_HIT_SEARCH_WORD_TOGGLE, /* find-bar whole-word chip */
+    UI_HIT_SEARCH_REPLACE,   /* replace buttons: item_idx = 0 current / 1 all */
     UI_HIT_PROFILE_SECTION_TOGGLE, /* item_idx = ProfSection or TOGGLE_ALL */
     UI_HIT_HISTOGRAM_RESET,  /* histogram panel header "[reset]" control */
     UI_HIT_HISTOGRAM_SERIES_TOGGLE, /* item_idx = ProfSection; legend swatch click */
