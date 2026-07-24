@@ -2654,6 +2654,7 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
     view.anchor_py = vp.window_h - inspector.anchor_py;
     view.scroll_rows = inspector.scroll_rows;
     view.details_expanded = inspector.details_expanded;
+    view.setup_expanded = inspector.setup_expanded;
     view.report = &g_gl_state_report;
     return view;
 }

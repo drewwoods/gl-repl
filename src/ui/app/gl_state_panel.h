@@ -24,6 +24,10 @@
  * modelview matrix remains one report row but renders as four lines).
  * details_expanded widens the table with the default/source columns
  * (collapsed the popup shows only state + current, keeping it narrow).
+ * setup_expanded folds in the generated init()/display() rows (collapsed
+ * the popup shows only what the program itself wrote — see the report's
+ * user_row_count partition; the generated group is typically the large
+ * majority, so this is what keeps the popup readable).
  * `report` stays valid for the frame — it points at controller-owned
  * storage rebuilt each frame from the flat program. */
 typedef struct {
@@ -32,13 +36,17 @@ typedef struct {
     int anchor_px, anchor_py;
     int scroll_rows;
     int details_expanded;
+    int setup_expanded;
     const ReplGlStateReport *report;
 } UiGlStatePanelView;
 
 /* Render the popup table once per frame. No-op when view->visible is 0.
- * Rows that differ from the OpenGL 2.1 default draw their current value
- * in the warning accent; explicit writes of the default value draw in
- * the OK accent so touched-ness stays visible either way. */
+ * Program-authored rows that differ from the OpenGL 2.1 default draw their
+ * current value in the warning accent; explicit writes of the default value
+ * draw in the OK accent so touched-ness stays visible either way. Generated
+ * setup rows keep that distinction in the muted palette rather than the
+ * accents — nearly all of them differ from the GL default, so accenting the
+ * group would carry no signal. */
 void ui_gl_state_panel_render(const UiGlStatePanelView *view);
 
 /* Pure hit-test: 1 when (mx, my) — GLUT screen coords, y-down — lands
@@ -55,6 +63,14 @@ int ui_gl_state_panel_hit_test(const UiGlStatePanelView *view,
  * (the press is already swallowed by the popup's surface hit-test). */
 int ui_gl_state_panel_hit_test_details_toggle(const UiGlStatePanelView *view,
                                               int mx, int my);
+
+/* Pure hit-test for the title row's setup-fold chip ("[+] N from setup" /
+ * "[-] N from setup"): 1 when (mx, my) — GLUT screen coords, y-down — lands
+ * on the chip cell. The router flips
+ * ui_state_gl_state_inspector_toggle_setup() on a left press there. Returns 0
+ * when the report has no generated rows to fold. */
+int ui_gl_state_panel_hit_test_setup_toggle(const UiGlStatePanelView *view,
+                                            int mx, int my);
 
 /* Largest valid scroll_rows for the view's solved geometry (0 when the
  * whole report fits). The router clamps wheel scrolling against this. */

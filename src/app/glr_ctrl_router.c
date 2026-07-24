@@ -1114,7 +1114,9 @@ static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
     if (!view.visible)
         return 0;
     if (ui_gl_state_panel_hit_test(&view, x, y)) {
-        if (ui_gl_state_panel_hit_test_details_toggle(&view, x, y))
+        if (ui_gl_state_panel_hit_test_setup_toggle(&view, x, y))
+            ui_state_gl_state_inspector_toggle_setup();
+        else if (ui_gl_state_panel_hit_test_details_toggle(&view, x, y))
             ui_state_gl_state_inspector_toggle_details();
         editor_request_redraw();
         return 1;

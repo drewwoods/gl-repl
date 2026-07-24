@@ -1290,6 +1290,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
         repl_export_light_bridge();
     const ReplExportCameraBridge *saved_camera_bridge =
         repl_export_camera_bridge();
+    GLCmd cmds[1];
     FlatProgramView program;
     ReplGlStateReport report;
     const ReplGlStateReportRow *row;
@@ -1297,8 +1298,17 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     printf("--- repl_state generated fixed-function state ---\n");
     repl_export_install_light_bridge(&light_bridge);
     repl_export_install_camera_bridge(&camera_bridge);
+    /* A light's parameter rows are gated on the light being enabled (a
+     * disabled light's colours cannot reach the frame, and the generated
+     * setup writes all four slots every frame), so switch GL_LIGHT0 on
+     * before reading the generated values back. */
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_LIGHT0;
+    cmds[0].num_args = 1;
     memset(&program, 0, sizeof(program));
-    repl_gl_state_report_at_line(program, 0, &report);
+    program.cmds = cmds;
+    program.cmd_count = 1;
+    repl_gl_state_report_at_line(program, 1, &report);
 
     row = gl_state_test_find_row(&report, "GL_LINE_WIDTH");
     ASSERT_TRUE("generated init line width is reported", row != NULL);
@@ -1545,6 +1555,7 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
         repl_export_light_bridge();
     const ReplExportCameraBridge *saved_camera_bridge =
         repl_export_camera_bridge();
+    GLCmd cmds[1];
     FlatProgramView program;
     ReplGlStateReport report;
     const ReplGlStateReportRow *row;
@@ -1552,8 +1563,17 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     printf("--- repl_state eye light world position ---\n");
     repl_export_install_light_bridge(&light_bridge);
     repl_export_install_camera_bridge(&camera_bridge);
+    /* A light's parameter rows are gated on the light being enabled (a
+     * disabled light's colours cannot reach the frame, and the generated
+     * setup writes all four slots every frame), so switch GL_LIGHT0 on
+     * before reading the generated values back. */
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_LIGHT0;
+    cmds[0].num_args = 1;
     memset(&program, 0, sizeof(program));
-    repl_gl_state_report_at_line(program, 0, &report);
+    program.cmds = cmds;
+    program.cmd_count = 1;
+    repl_gl_state_report_at_line(program, 1, &report);
 
     row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (eye)");
     ASSERT_TRUE("eye-space light keeps submitted eye position", row != NULL);
@@ -1572,6 +1592,94 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
 
     repl_export_install_light_bridge(saved_light_bridge);
     repl_export_install_camera_bridge(saved_camera_bridge);
+}
+
+/* --- authorship partition + light gating ---------------------------------
+ *
+ * The popup's decluttering rests on two report-side properties, so pin both
+ * here rather than in the renderer: rows are partitioned program-authored
+ * first (with user_row_count as the boundary the popup folds on), and a
+ * light's parameter rows only appear while that light can actually affect
+ * the frame. */
+static void test_gl_state_report_partitions_by_author(void) {
+    GLCmd cmds[2];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    int i;
+
+    printf("--- repl_state report authorship partition ---\n");
+
+    cmds[0] = gl_state_test_cmd(CMD_DEPTH_FUNC, 0);
+    cmds[0].args[0] = (float)GL_GREATER; cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_POINT_SIZE, 1);
+    cmds[1].args[0] = 4; cmds[1].num_args = 1;
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 2;
+    repl_gl_state_report_at_line(program, 2, &report);
+
+    ASSERT_TRUE("partitioned report has rows", report.count > 0);
+    ASSERT_TRUE("user rows do not exceed the report",
+                report.user_row_count >= 0 &&
+                report.user_row_count <= report.count);
+    /* The two writes above are the only program-authored state. */
+    ASSERT_INT("both program writes are counted as authored",
+               report.user_row_count, 2);
+    /* The generated setup is the majority — the reason the popup folds it. */
+    ASSERT_TRUE("generated rows outnumber authored ones",
+                report.count - report.user_row_count > report.user_row_count);
+
+    for (i = 0; i < report.count; i++) {
+        char label[96];
+        int authored = report.rows[i].source.source_line_idx >= 0;
+        snprintf(label, sizeof(label),
+                 "row %d sits on the correct side of user_row_count", i);
+        ASSERT_INT(label, authored, i < report.user_row_count);
+    }
+
+    /* Stability: within the authored group, emission order is preserved
+     * (GL_DEPTH_FUNC is emitted before GL_POINT_SIZE by the cell order). */
+    ASSERT_STR("authored group keeps emission order (first)",
+               report.rows[0].name, "GL_DEPTH_FUNC");
+    ASSERT_STR("authored group keeps emission order (second)",
+               report.rows[1].name, "GL_POINT_SIZE");
+}
+
+static void test_gl_state_report_gates_disabled_light_rows(void) {
+    static const ReplExportLightBridge light_bridge = {
+        gl_state_test_fill_light
+    };
+    const ReplExportLightBridge *saved_light_bridge =
+        repl_export_light_bridge();
+    GLCmd cmds[2];
+    FlatProgramView program;
+    ReplGlStateReport report;
+
+    printf("--- repl_state disabled-light row gating ---\n");
+    repl_export_install_light_bridge(&light_bridge);
+
+    /* Nothing enabled: the generated setup still writes all four slots, but
+     * none of them can reach the frame, so none of them is reported. */
+    memset(&program, 0, sizeof(program));
+    repl_gl_state_report_at_line(program, 0, &report);
+    ASSERT_TRUE("disabled light contributes no diffuse row",
+                gl_state_test_find_row(&report, "GL_LIGHT0_DIFFUSE") == NULL);
+    ASSERT_TRUE("disabled light contributes no ambient row",
+                gl_state_test_find_row(&report, "GL_LIGHT3_AMBIENT") == NULL);
+
+    /* Enabled: the slot's rows come back. */
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_LIGHT0; cmds[0].num_args = 1;
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 1;
+    repl_gl_state_report_at_line(program, 1, &report);
+    ASSERT_TRUE("enabled light reports its diffuse",
+                gl_state_test_find_row(&report, "GL_LIGHT0_DIFFUSE") != NULL);
+    ASSERT_TRUE("still-disabled sibling stays hidden",
+                gl_state_test_find_row(&report, "GL_LIGHT1_DIFFUSE") == NULL);
+
+    repl_export_install_light_bridge(saved_light_bridge);
 }
 
 /* --- state-cell coverage guard -------------------------------------------
@@ -1795,6 +1903,8 @@ int main(void) {
     test_gl_state_report_includes_generated_fixed_function_state();
     test_gl_state_report_attrib_stack_fold();
     test_gl_state_report_converts_eye_light_position_to_world();
+    test_gl_state_report_partitions_by_author();
+    test_gl_state_report_gates_disabled_light_rows();
     test_gl_state_cell_coverage_sweep();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

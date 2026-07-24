@@ -36,9 +36,20 @@ typedef struct {
     ReplGlStateChangeSource source;
 } ReplGlStateReportRow;
 
+/* Rows are partitioned by authorship: every row whose latest change came from
+ * a user source line (source.source_line_idx >= 0) comes first, followed by
+ * the rows the generated init()/display() setup owns. `user_row_count` is the
+ * boundary, so rows[0, user_row_count) is "what this program did" and
+ * rows[user_row_count, count) is "what the harness set up around it" — the
+ * split the popup collapses on, because the generated group routinely
+ * outnumbers the authored one by an order of magnitude.
+ *
+ * The partition is stable: within each group rows keep the emission order of
+ * gl_state_append_report(), which follows ReplGlTrackedState field order. */
 typedef struct {
     ReplGlStateReportRow rows[REPL_GL_STATE_REPORT_MAX_ROWS];
     int                  count;
+    int                  user_row_count;
     int                  source_line_idx;
 } ReplGlStateReport;
 

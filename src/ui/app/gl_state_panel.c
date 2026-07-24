@@ -37,9 +37,14 @@ static const char GLSP_HDR_CUR[]    = "current";
 static const char GLSP_HDR_DEF[]    = "[-] default (GL 2.1)";
 static const char GLSP_HDR_SOURCE[] = "source";
 static const char GLSP_HDR_DETAILS_CLOSED[] = "[+] default/source";
+static const char GLSP_SETUP_CHIP_FMT_CLOSED[] = "[+] %d from setup";
+static const char GLSP_SETUP_CHIP_FMT_OPEN[]   = "[-] %d from setup";
+#define GLSP_SETUP_CHIP_MAX 32
 static const char GLSP_MODELVIEW_NAME[] = "GL_MODELVIEW_MATRIX";
 static const char GLSP_EMPTY_MSG[]  =
     "No init() or display() OpenGL state has been touched.";
+static const char GLSP_NO_USER_MSG[] =
+    "This program has not set any OpenGL state yet.";
 
 /* Solved popup geometry, shared by render and hit-test so the click-away
  * and wheel routing agree exactly with the drawn frame. */
@@ -51,6 +56,11 @@ typedef struct {
     int col0_x, col1_x, col2_x, col3_x;
     int tog_x0, tog_x1;       /* expand/collapse header chip cell (y-up; */
     int tog_y0, tog_y1;       /* zero-width when the report is empty) */
+    int setup;                /* generated-setup rows folded in */
+    int setup_count;          /* generated rows behind the fold */
+    int row_count;            /* report rows this fold actually shows */
+    int stu_x0, stu_x1;       /* setup fold chip cell, on the title row */
+    int stu_y0, stu_y1;       /* (zero-width when there is nothing to fold) */
     int visible_rows;         /* semantic report rows drawn */
     int viewport_lines;       /* visual value lines reserved in the frame */
     int total_lines;          /* visual value lines across the report */
@@ -172,12 +182,22 @@ static int glsp_value_max_chars(const ReplGlStateReportRow *row,
     return max_chars;
 }
 
-static int glsp_report_visual_lines(const ReplGlStateReport *report) {
+static int glsp_report_visual_lines(const ReplGlStateReport *report,
+                                    int row_count) {
     int lines = 0;
     int i;
-    for (i = 0; report && i < report->count; i++)
+    for (i = 0; report && i < row_count; i++)
         lines += glsp_row_visual_lines(&report->rows[i]);
     return lines;
+}
+
+/* Chip label for the authorship fold, e.g. "[+] 34 from setup". The count is
+ * the generated group's size either way, so the label does not jump around as
+ * the fold opens and closes. */
+static void glsp_setup_chip_text(const GlspLayout *lo, char *buf, int buf_size) {
+    snprintf(buf, (size_t)buf_size,
+             lo->setup ? GLSP_SETUP_CHIP_FMT_OPEN : GLSP_SETUP_CHIP_FMT_CLOSED,
+             lo->setup_count);
 }
 
 /* Solve the popup's frame, columns, and scrolled row window. Returns 0
@@ -210,6 +230,17 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
      * header's "[+]" chip rides inside the current column's header cell
      * (right-aligned), so it only floors that column's width instead of
      * adding a blank third column under itself. */
+    /* Authorship fold: the report is partitioned user-rows-first, so the
+     * shown set is always the prefix rows[0, row_count) — no filtering, which
+     * keeps scroll indices and hit-testing identical to the unfolded case. */
+    out->setup = view->setup_expanded ? 1 : 0;
+    out->setup_count = report->count - report->user_row_count;
+    if (out->setup_count < 0)
+        out->setup_count = 0;
+    out->row_count = out->setup ? report->count : report->user_row_count;
+    if (out->row_count > report->count) out->row_count = report->count;
+    if (out->row_count < 0)             out->row_count = 0;
+
     out->details = view->details_expanded ? 1 : 0;
     cur_floor = (int)strlen(GLSP_HDR_CUR);
     if (!out->details)
@@ -219,7 +250,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     out->cur_chars  = (int)strlen(GLSP_HDR_CUR);
     out->def_chars  = out->details ? (int)strlen(GLSP_HDR_DEF) : 0;
     out->source_chars = out->details ? (int)strlen(GLSP_HDR_SOURCE) : 0;
-    for (i = 0; i < report->count; i++) {
+    for (i = 0; i < out->row_count; i++) {
         const ReplGlStateReportRow *row = &report->rows[i];
         if ((int)strlen(row->name) > out->name_chars)
             out->name_chars = (int)strlen(row->name);
@@ -271,10 +302,24 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
             break;
         table_chars--;
     }
-    if (report->count == 0 && (int)strlen(GLSP_EMPTY_MSG) > table_chars)
-        table_chars = (int)strlen(GLSP_EMPTY_MSG);
-    if ((int)strlen(GLSP_TITLE) > table_chars)
-        table_chars = (int)strlen(GLSP_TITLE);
+    if (out->row_count == 0) {
+        const char *msg = report->count == 0 ? GLSP_EMPTY_MSG
+                                             : GLSP_NO_USER_MSG;
+        if ((int)strlen(msg) > table_chars)
+            table_chars = (int)strlen(msg);
+    }
+    {
+        /* The title row carries the setup chip on its right, so it floors the
+         * popup width at title + gap + chip rather than the title alone. */
+        char chip[GLSP_SETUP_CHIP_MAX];
+        int title_chars = (int)strlen(GLSP_TITLE);
+        if (out->setup_count > 0) {
+            glsp_setup_chip_text(out, chip, (int)sizeof(chip));
+            title_chars += GLSP_COL_GAP_CHARS + (int)strlen(chip);
+        }
+        if (title_chars > table_chars)
+            table_chars = title_chars;
+    }
     out->popup_w = table_chars * FONT_W + 2 * GLSP_PAD_X;
     if (out->popup_w > view->window_w - 2 * GLSP_EDGE_MARGIN)
         out->popup_w = view->window_w - 2 * GLSP_EDGE_MARGIN;
@@ -288,12 +333,12 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
                    / LINE_H - chrome_rows;
     if (row_capacity < 1)
         row_capacity = 1;
-    for (i = 0; i < report->count; i++) {
+    for (i = 0; i < out->row_count; i++) {
         int row_lines = glsp_row_visual_lines(&report->rows[i]);
         if (row_lines > row_capacity)
             row_capacity = row_lines;
     }
-    out->total_lines = glsp_report_visual_lines(report);
+    out->total_lines = glsp_report_visual_lines(report, out->row_count);
     out->viewport_lines = out->total_lines < row_capacity
                               ? out->total_lines : row_capacity;
 
@@ -302,7 +347,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     out->max_scroll = 0;
     if (out->total_lines > row_capacity) {
         int lines = 0;
-        for (i = report->count - 1; i >= 0; i--) {
+        for (i = out->row_count - 1; i >= 0; i--) {
             int row_lines = glsp_row_visual_lines(&report->rows[i]);
             if (lines > 0 && lines + row_lines > row_capacity) {
                 out->max_scroll = i + 1;
@@ -320,9 +365,9 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     if (out->scroll < 0) out->scroll = 0;
 
     out->visible_rows = 0;
-    if (report->count > 0) {
+    if (out->row_count > 0) {
         int lines = 0;
-        for (i = out->scroll; i < report->count; i++) {
+        for (i = out->scroll; i < out->row_count; i++) {
             int row_lines = glsp_row_visual_lines(&report->rows[i]);
             if (out->visible_rows > 0 &&
                 lines + row_lines > row_capacity)
@@ -335,8 +380,8 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     }
 
     out->popup_h = 2 * GLSP_PAD_Y +
-                   (chrome_rows + (report->count == 0 ? 0
-                                                      : out->viewport_lines)) *
+                   (chrome_rows + (out->row_count == 0 ? 0
+                                                       : out->viewport_lines)) *
                        LINE_H + 2;
 
     /* Anchor beside the click, clamped fully inside the window (y-up;
@@ -367,7 +412,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
      * empty-report popup has no header row and thus no chip. */
     out->tog_x0 = out->tog_x1 = 0;
     out->tog_y0 = out->tog_y1 = 0;
-    if (report->count > 0) {
+    if (out->row_count > 0) {
         if (out->details) {
             int chip_chars = (int)strlen(GLSP_HDR_DEF);
             if (chip_chars > out->def_chars)
@@ -381,6 +426,22 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         }
         out->tog_y1 = out->py - GLSP_PAD_Y - LINE_H;
         out->tog_y0 = out->tog_y1 - LINE_H;
+    }
+
+    /* Setup fold chip: right-aligned on the title row, one level above the
+     * details chip both visually and semantically — it picks which rows the
+     * table holds, where the details chip picks which columns. It survives
+     * row_count == 0, since that is exactly when the user needs it to get the
+     * folded rows back. */
+    out->stu_x0 = out->stu_x1 = 0;
+    out->stu_y0 = out->stu_y1 = 0;
+    if (out->setup_count > 0) {
+        char chip[GLSP_SETUP_CHIP_MAX];
+        glsp_setup_chip_text(out, chip, (int)sizeof(chip));
+        out->stu_x1 = out->px + out->popup_w - GLSP_PAD_X;
+        out->stu_x0 = out->stu_x1 - (int)strlen(chip) * FONT_W;
+        out->stu_y1 = out->py - GLSP_PAD_Y;
+        out->stu_y0 = out->stu_y1 - LINE_H;
     }
     return 1;
 }
@@ -407,6 +468,19 @@ int ui_gl_state_panel_hit_test_details_toggle(const UiGlStatePanelView *view,
     y_up = view->window_h - my;
     return mx >= lo.tog_x0 && mx <= lo.tog_x1 &&
            y_up >= lo.tog_y0 && y_up <= lo.tog_y1;
+}
+
+int ui_gl_state_panel_hit_test_setup_toggle(const UiGlStatePanelView *view,
+                                            int mx, int my) {
+    GlspLayout lo;
+    int y_up;
+    if (!glsp_solve(view, &lo))
+        return 0;
+    if (lo.stu_x1 <= lo.stu_x0)
+        return 0;
+    y_up = view->window_h - my;
+    return mx >= lo.stu_x0 && mx <= lo.stu_x1 &&
+           y_up >= lo.stu_y0 && y_up <= lo.stu_y1;
 }
 
 int ui_gl_state_panel_max_scroll(const UiGlStatePanelView *view) {
@@ -439,11 +513,19 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
     ty = lo.py - GLSP_PAD_Y - LINE_H + 5;
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)lo.col0_x, (float)ty, GLSP_TITLE, FONT_MONO);
+    if (lo.setup_count > 0) {
+        char chip[GLSP_SETUP_CHIP_MAX];
+        glsp_setup_chip_text(&lo, chip, (int)sizeof(chip));
+        ui_clr(lo.setup ? UI_TOK_TEXT_SECTION : UI_TOK_TEXT_MUTED);
+        gl2d_draw_string((float)lo.stu_x0, (float)ty, chip, FONT_MONO);
+    }
     ty -= LINE_H;
 
-    if (report->count == 0) {
+    if (lo.row_count == 0) {
         ui_clr(UI_TOK_TEXT_MUTED);
-        gl2d_draw_string((float)lo.col0_x, (float)ty, GLSP_EMPTY_MSG,
+        gl2d_draw_string((float)lo.col0_x, (float)ty,
+                         report->count == 0 ? GLSP_EMPTY_MSG
+                                            : GLSP_NO_USER_MSG,
                          FONT_MONO);
         glDisable(GL_BLEND);
         gl2d_end();
@@ -475,15 +557,27 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
 
         for (line = 0; line < line_count; line++) {
             if (line == 0) {
-                ui_clr(UI_TOK_TEXT_PRIMARY);
+                ui_clr(row->source.source_line_idx >= 0 ? UI_TOK_TEXT_PRIMARY
+                                                        : UI_TOK_TEXT_MUTED);
                 glsp_clip(clipped, (int)sizeof(clipped), row->name,
                           lo.name_chars);
                 gl2d_draw_string((float)lo.col0_x, (float)ty, clipped,
                                  FONT_MONO);
             }
 
-            ui_clr(row->differs_from_default ? UI_TOK_STATUS_WARN
-                                             : UI_TOK_STATUS_OK);
+            /* Two tiers, because "differs from the GL 2.1 default" is a
+             * near-constant for a generated-setup row — it is in the report
+             * precisely because the harness wrote it, so highlighting the
+             * whole group says nothing and drowns out the rows that matter.
+             * The saturated accents are reserved for state this program
+             * wrote; setup rows keep the touched/default distinction in the
+             * muted palette. */
+            if (row->source.source_line_idx >= 0)
+                ui_clr(row->differs_from_default ? UI_TOK_STATUS_WARN
+                                                 : UI_TOK_STATUS_OK);
+            else
+                ui_clr(row->differs_from_default ? UI_TOK_TEXT_MUTED
+                                                 : UI_TOK_TEXT_SECTION);
             glsp_value_line(row, row->current, line, value_line,
                             (int)sizeof(value_line));
             glsp_clip(clipped, (int)sizeof(clipped), value_line,

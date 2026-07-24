@@ -57,9 +57,12 @@ typedef struct {
  * flat program on every frame; UI state only owns the open/closed chrome, the
  * anchor line, the right-click position (GLUT screen coords, y-down) the
  * popup hangs from, the wheel-scroll row offset (clamped by the router
- * against the popup's solved row capacity), and whether the default/source
+ * against the popup's solved row capacity), whether the default/source
  * detail columns are expanded (collapsed on every open so the popup starts
- * narrow; toggled by clicking the header chip). */
+ * narrow; toggled by clicking the header chip), and whether the generated
+ * setup rows are shown (also collapsed on every open — the popup opens on
+ * what the program itself wrote, with the harness's own state one click
+ * away behind the title-row chip). */
 typedef struct {
     int visible;
     int source_line_idx;
@@ -67,6 +70,7 @@ typedef struct {
     int anchor_py;
     int scroll_rows;
     int details_expanded;
+    int setup_expanded;
 } UiGlStateInspectorState;
 
 /* Floating GL-command description popup. Like the state inspector, this

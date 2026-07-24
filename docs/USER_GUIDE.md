@@ -297,12 +297,22 @@ current, still-uncommitted empty input row.
 
 ![OpenGL state inspector opened on a blank source row](images/gl-state-inspector.png)
 
-The table contains every supported state variable touched before that row,
-including writes from generated `init()` and `display()` setup. It also keeps
-explicit writes that happen to match the initial OpenGL default. The current
-value is always visible; click the **[+]** chip to add the initial default and
-the source of the latest write — `init()`, generated `display()`, or a user
-`display()` line.
+The popup opens on the state **your program** wrote before that row. The
+generated `init()` and `display()` setup writes far more state than a typical
+scene does — often by a factor of ten — so those rows start folded behind the
+**[+] N from setup** chip on the title row. Click it to fold them in; they draw
+in a muted tone so the two groups stay distinguishable. Explicit writes that
+happen to match the initial OpenGL default are kept either way, so touched-ness
+stays visible.
+
+The current value is always visible; click the **[+] default/source** chip in
+the column header to add the initial default and the source of the latest
+write — `init()`, generated `display()`, or a user `display()` line.
+
+A light's parameter rows appear only while that light can affect the frame —
+that is, while it is enabled, or if your program set one of its parameters
+itself. Four disabled lights would otherwise contribute twenty rows of
+unreachable state.
 
 Modelview matrices use four aligned rows. Light positions are shown in both
 world and eye coordinates when available. Use the mouse wheel for a long

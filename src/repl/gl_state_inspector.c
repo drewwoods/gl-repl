@@ -492,6 +492,37 @@ static int gl_state_cap_enabled(ReplGlTrackedState *s, GLenum cap) {
     return tracked ? tracked->current : 0;
 }
 
+/* const twin for the report pass, which only reads. */
+static int gl_state_cap_enabled_const(const ReplGlTrackedState *s, GLenum cap) {
+    int i;
+    for (i = 0; i < s->cap_count; i++)
+        if (s->caps[i].cap == cap)
+            return s->caps[i].current;
+    return 0;
+}
+
+/* Should light `slot`'s parameter rows appear in the report?
+ *
+ * The generated display setup writes ambient/diffuse/specular/position for all
+ * REPL_LIGHT_SLOT_COUNT slots every frame, so without this gate a report is
+ * dominated by up to five rows per light for lights that are switched off —
+ * measured at 20 of 37 rows for a three-line program, all reading (0, 0, 0, 0).
+ * A disabled light's parameters cannot affect the frame, so they are noise.
+ *
+ * Enabled-ness alone is the wrong test, though: a program that configures a
+ * light above the cursor and calls glEnable(GL_LIGHTn) below it would lose the
+ * rows describing exactly the setup being read. So any parameter carrying a
+ * user source line keeps the whole light visible regardless of its switch. */
+static int gl_state_light_is_interesting(const ReplGlTrackedState *s, int slot) {
+    const ReplGlTrackedLight *light = &s->lights[slot];
+    if (gl_state_cap_enabled_const(s, (GLenum)(GL_LIGHT0 + slot)))
+        return 1;
+    return (light->ambient_source.source_line_idx  >= 0 ||
+            light->diffuse_source.source_line_idx  >= 0 ||
+            light->specular_source.source_line_idx >= 0 ||
+            light->position_source.source_line_idx >= 0);
+}
+
 static int gl_state_material_face_lo(GLenum face) {
     return face == GL_BACK ? 1 : 0;
 }
@@ -1331,6 +1362,8 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         const float *light_color_default = i == 0
             ? light_white_default : light_black_default;
         char name[REPL_GL_STATE_NAME_MAX];
+        if (!gl_state_light_is_interesting(s, i))
+            continue;
         if (light->ambient_touched) {
             snprintf(name, sizeof(name), "GL_LIGHT%d_AMBIENT", i);
             gl_state_report_vec(out, name, light->ambient,
@@ -1515,6 +1548,36 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     }
 }
 
+/* Stable-partition the emitted rows so user-authored ones lead, and record the
+ * boundary. Insertion-sort-style rotation rather than a comparison sort: the
+ * row array is small (<= REPL_GL_STATE_REPORT_MAX_ROWS) and stability is the
+ * point — within each group rows must keep gl_state_append_report()'s
+ * emission order, which is the module's canonical cell order. */
+static void gl_state_partition_report_by_author(ReplGlStateReport *out) {
+    int i, boundary = 0;
+    for (i = 0; i < out->count; i++) {
+        if (out->rows[i].source.source_line_idx < 0)
+            continue;
+        if (i != boundary) {
+            ReplGlStateReportRow moved = out->rows[i];
+            int j;
+            for (j = i; j > boundary; j--)
+                out->rows[j] = out->rows[j - 1];
+            out->rows[boundary] = moved;
+        }
+        boundary++;
+    }
+    out->user_row_count = boundary;
+}
+
+/* Append + partition. Every exit from repl_gl_state_report_at_line() goes
+ * through this, so user_row_count is never left stale at 0. */
+static void gl_state_finish_report(const ReplGlTrackedState *s,
+                                   ReplGlStateReport *out) {
+    gl_state_append_report(s, out);
+    gl_state_partition_report_by_author(out);
+}
+
 void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out) {
@@ -1539,7 +1602,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     }
 
     if (source_line_idx < 0) {
-        gl_state_append_report(&state, out);
+        gl_state_finish_report(&state, out);
         return;
     }
     source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
@@ -1552,7 +1615,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     gl_state_capture_light_world_positions(&state);
 
     if (!program.cmds) {
-        gl_state_append_report(&state, out);
+        gl_state_finish_report(&state, out);
         return;
     }
 
@@ -1610,5 +1673,5 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         state.attrib_stack_depth_source = user_attrib_source;
     }
 
-    gl_state_append_report(&state, out);
+    gl_state_finish_report(&state, out);
 }

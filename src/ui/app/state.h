@@ -62,6 +62,7 @@ void ui_state_gl_state_inspector_open(int source_line_idx,
 void ui_state_gl_state_inspector_close(void);
 void ui_state_gl_state_inspector_set_scroll(int scroll_rows);
 void ui_state_gl_state_inspector_toggle_details(void);
+void ui_state_gl_state_inspector_toggle_setup(void);
 
 /* Floating right-click GL-command description popup. */
 UiCommandDescriptionState ui_state_command_description(void);

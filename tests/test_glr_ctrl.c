@@ -1308,6 +1308,12 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     printf("--- imrepl_ctrl right-click blank OpenGL state report ---\n");
 
     prepare_code_panel_mouse_fixture();
+    /* The report only carries a light's parameter rows while that light is
+     * enabled, so switch one on before asserting the generated light values
+     * reach the popup. */
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append light enable for the report fixture",
+               editor_feed_line("glEnable(GL_LIGHT0);"), 1);
     blank_line = repl_state_document_count();
     editor_state_edit_line_set(blank_line);
     editor_insert_mode_set(0);
@@ -1511,6 +1517,7 @@ static void test_gl_state_popup_scroll_geometry(void) {
     prepare_code_panel_mouse_fixture();
     memset(&report, 0, sizeof(report));
     report.count = REPL_GL_STATE_REPORT_MAX_ROWS;
+    report.user_row_count = report.count;
     for (i = 0; i < report.count; i++) {
         snprintf(report.rows[i].name, sizeof(report.rows[i].name),
                  "GL_ROW_%02d", i);
@@ -1595,6 +1602,7 @@ static void test_gl_state_popup_modelview_uses_four_lines(void) {
 
     memset(&report, 0, sizeof(report));
     report.count = 1;
+    report.user_row_count = report.count;
     snprintf(report.rows[0].name, sizeof(report.rows[0].name),
              "GL_CURRENT_COLOR");
     snprintf(report.rows[0].current, sizeof(report.rows[0].current),
@@ -1685,6 +1693,38 @@ static int gl_state_popup_find_details_toggle(const UiGlStatePanelView *view,
     return 0;
 }
 
+/* Popup height, probed through the public hit-test so the measurement is the
+ * frame the router actually routes against. */
+static int gl_state_popup_solved_height(const UiGlStatePanelView *view) {
+    int mx, my, top = -1, bottom = -1;
+    for (my = 0; my < view->window_h; my++) {
+        int hit = 0;
+        for (mx = 0; mx < view->window_w && !hit; mx += 3)
+            hit = ui_gl_state_panel_hit_test(view, mx, my);
+        if (hit) {
+            if (top < 0)
+                top = my;
+            bottom = my;
+        }
+    }
+    return top < 0 ? 0 : bottom - top + 1;
+}
+
+static int gl_state_popup_find_setup_toggle(const UiGlStatePanelView *view,
+                                            int *out_x, int *out_y) {
+    int mx, my;
+    for (my = 0; my < view->window_h; my += 3) {
+        for (mx = 0; mx < view->window_w; mx += 3) {
+            if (ui_gl_state_panel_hit_test_setup_toggle(view, mx, my)) {
+                *out_x = mx;
+                *out_y = my;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 /* The default/source detail columns are collapsed by default and toggle
  * from the header's "[+]"/"[-]" chip: collapsed the popup solves
  * narrower than expanded, and a left press on the chip flips the
@@ -1703,6 +1743,7 @@ static void test_gl_state_popup_details_toggle(void) {
     /* Pure geometry: the same report solves narrower collapsed. */
     memset(&report, 0, sizeof(report));
     report.count = 4;
+    report.user_row_count = report.count;
     for (i = 0; i < report.count; i++) {
         snprintf(report.rows[i].name, sizeof(report.rows[i].name),
                  "GL_ROW_%02d", i);
@@ -1905,6 +1946,106 @@ static void test_editor_input_dismisses_gl_state_report(void) {
     }
 }
 
+/* The generated setup rows are folded away by default, so the popup opens on
+ * what the program itself wrote. The title-row chip unfolds them: the report
+ * partition means the shown set is always the rows[0, user_row_count) prefix,
+ * so folding is a row-count change, never a filter. */
+static void test_gl_state_popup_setup_fold(void) {
+    static ReplGlStateReport report;
+    UiGlStatePanelView view;
+    UiHit hit;
+    int blank_line;
+    int x = -1, y = -1;
+    int folded_h, unfolded_h;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL-state popup setup fold ---\n");
+
+    /* Two authored rows in front of six generated ones. */
+    memset(&report, 0, sizeof(report));
+    report.count = 8;
+    report.user_row_count = 2;
+    for (i = 0; i < report.count; i++) {
+        snprintf(report.rows[i].name, sizeof(report.rows[i].name),
+                 "GL_ROW_%02d", i);
+        snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
+        snprintf(report.rows[i].default_value,
+                 sizeof(report.rows[i].default_value), "0");
+        report.rows[i].differs_from_default = 1;
+        report.rows[i].source.kind = i < report.user_row_count
+            ? REPL_GL_STATE_SOURCE_DISPLAY : REPL_GL_STATE_SOURCE_INIT;
+        report.rows[i].source.source_line_idx =
+            i < report.user_row_count ? 10 + i : -1;
+    }
+    memset(&view, 0, sizeof(view));
+    view.visible = 1;
+    view.window_w = 800;
+    view.window_h = 600;
+    view.anchor_px = 40;
+    view.anchor_py = 400;
+    view.report = &report;
+
+    folded_h = gl_state_popup_solved_height(&view);
+    view.setup_expanded = 1;
+    unfolded_h = gl_state_popup_solved_height(&view);
+    ASSERT_TRUE("folded popup is shorter than unfolded",
+                folded_h > 0 && unfolded_h > folded_h);
+    view.setup_expanded = 0;
+
+    ASSERT_TRUE("folded popup offers the setup chip",
+                gl_state_popup_find_setup_toggle(&view, &x, &y));
+    view.setup_expanded = 1;
+    ASSERT_TRUE("unfolded popup keeps the setup chip",
+                gl_state_popup_find_setup_toggle(&view, &x, &y));
+    view.setup_expanded = 0;
+
+    /* A report with nothing generated has nothing to fold, so no chip. */
+    report.user_row_count = report.count;
+    ASSERT_TRUE("all-authored report has no setup chip",
+                !gl_state_popup_find_setup_toggle(&view, &x, &y));
+    report.user_row_count = 2;
+
+    /* Routed: right-click a blank line, then click the chip. */
+    prepare_code_panel_mouse_fixture();
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append committed blank line", editor_feed_line(""), 1);
+    ASSERT_TRUE("found empty source row hit",
+                find_code_text_hit_for_line(blank_line, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("right-click opens the popup",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("popup opens with setup folded",
+               ui_state_gl_state_inspector().setup_expanded, 0);
+
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_TRUE("live report has generated rows to fold",
+                view.report &&
+                view.report->count > view.report->user_row_count);
+    if (gl_state_popup_find_setup_toggle(&view, &x, &y)) {
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
+        ASSERT_INT("chip click unfolds the setup rows",
+                   ui_state_gl_state_inspector().setup_expanded, 1);
+        ASSERT_INT("chip click keeps the popup open",
+                   ui_state_gl_state_inspector().visible, 1);
+        ASSERT_INT("chip click leaves the detail columns alone",
+                   ui_state_gl_state_inspector().details_expanded, 0);
+
+        view = glr_ctrl_build_gl_state_panel_view();
+        if (gl_state_popup_find_setup_toggle(&view, &x, &y)) {
+            glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+            glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
+            ASSERT_INT("a second chip click folds them back",
+                       ui_state_gl_state_inspector().setup_expanded, 0);
+        }
+    } else {
+        ASSERT_TRUE("live popup exposes a setup chip", 0);
+    }
+}
+
 static void test_gl_state_popup_defers_to_front_overlay(void) {
     UiRenderSnapshot snap;
     UiVariablePanelView var_view;
@@ -1921,6 +2062,22 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
     printf("--- imrepl_ctrl OpenGL-state/front-overlay z routing ---\n");
 
     prepare_code_panel_mouse_fixture();
+    /* This test needs a report tall enough to overflow the popup. Light
+     * parameter rows are the bulk of a full report and are gated on the
+     * light being enabled, so light the scene rather than relying on a
+     * particular row count falling out of the fixture. */
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append light 0 for the overflow fixture",
+               editor_feed_line("glEnable(GL_LIGHT0);"), 1);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append light 1 for the overflow fixture",
+               editor_feed_line("glEnable(GL_LIGHT1);"), 1);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append light 2 for the overflow fixture",
+               editor_feed_line("glEnable(GL_LIGHT2);"), 1);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append light 3 for the overflow fixture",
+               editor_feed_line("glEnable(GL_LIGHT3);"), 1);
     blank_line = repl_state_document_count();
     editor_state_edit_line_set(blank_line);
     editor_insert_mode_set(0);
@@ -1937,6 +2094,10 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
     ui_state_gl_state_inspector_open(
         blank_line, vx + vw / 2,
         snap.viewport.window_h - (vy + vh / 2));
+    /* This test is about z-order and wheel routing, so it needs a popup tall
+     * enough to overflow: unfold the generated setup rows, which the popup
+     * hides by default. */
+    ui_state_gl_state_inspector_toggle_setup();
 #ifdef GL_STUBS
     /* Real-GL test binaries have no GL context; rendering a frame with
      * the popup visible would call into libGL (ui_gl_state_panel_render)
@@ -4451,6 +4612,7 @@ int main(void) {
     test_gl_state_popup_scroll_geometry();
     test_gl_state_popup_modelview_uses_four_lines();
     test_gl_state_popup_details_toggle();
+    test_gl_state_popup_setup_fold();
     test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();
