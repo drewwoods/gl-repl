@@ -628,6 +628,34 @@ glEnd();
 EOF
 }
 
+# Motion blur: a lit torus centered on the origin, spun about +Y. The torus
+# lies in the XY plane, so its ±X rim sweeps a 1.2-radius circle while the
+# ±Y points sit on the rotation axis and barely move — one shot showing the
+# smear scaling with distance from the axis, which a translated solid (every
+# point moving at the same speed) can't show.
+stage_blur2() { stage blur <<'EOF'
+/* @cfg accum_effect = 2 */
+/* @cfg accum_passes = 16 */
+/* @cfg variable_panel = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg light_indicators = 0 */
+// Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_COLOR_MATERIAL);
+glPushMatrix();
+glRotatef(t*200, 0, 1, 0);
+glColor3f(1, 0.35, 0.2);
+glutSolidTorus(0.4, 1.2, 24, 36);
+glPopMatrix();
+// Snippet end
+EOF
+}
+
 stage_blur() { stage blur <<'EOF'
 /* @cfg accum_effect = 2 */
 /* @cfg accum_passes = 16 */
@@ -638,9 +666,13 @@ stage_blur() { stage blur <<'EOF'
 // Snippet start
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_COLOR_MATERIAL);
 glPushMatrix();
-glRotatef(t*200, 0, 1, 0);
-glColor3f(1, 0.35, 0.2);
+glRotatef(t*600, 0, 1, 0);
+glColor3f(0.9, 0.35, 0.2);
 glTranslatef(1.2, 0, 0);
 glutSolidCube(0.6);
 glPopMatrix();
@@ -1102,7 +1134,7 @@ if want motion-blur; then
     # The blur itself is the scene's @cfg accum effect; no extra AA passes.
     # The status bar's "Blur 16x" indicator is part of the shot. WARM=12
     # captures just past startup, while t is small.
-    ( WARM=12
+    ( WARM=24
       still "$OUT/motion-blur.png" 0 "$(stage_blur)" )
 fi
 
