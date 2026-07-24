@@ -2417,11 +2417,11 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
 /* Tutorial variant of the chrome reset. Examples deliberately inherit the
  * camera and (via the shared defaults) the FAR grid and the vertex
  * decorations; a tutorial should not. It opens a fresh transient scene
- * whose geometry is unit-scale, so the lesson starts from the app's
- * out-of-the-box view: default chrome, the built-in camera pose, the CLOSE
- * grid that frames it, and bare geometry. Eases rather than snaps so the
- * switch reads as a move, not a cut. Runs before the tutorial's own
- * leading `@cfg`, which still wins over all of it. */
+ * whose geometry is authored in whole units, so the lesson starts from a
+ * known view: default chrome, the built-in camera orbit pulled back to
+ * frame that geometry, and the CLOSE grid as its stage. Eases rather than
+ * snaps so the switch reads as a move, not a cut. Runs before the
+ * tutorial's own leading `@cfg`, which still wins over all of it. */
 static void glr_ctrl_reset_tutorial_chrome(void) {
     GlrPresentationState *p = glr_state_presentation_mut();
 
@@ -2433,6 +2433,15 @@ static void glr_ctrl_reset_tutorial_chrome(void) {
      * the previous example's `// camera` header) over the built-in pose. */
     glr_camera_clear_scene_default();
     glr_camera_ease_to_default();
+    /* ...then re-aim the same ease at the tutorial distance. glr_camera has
+     * no "read the built-in pose" accessor, so take it off the ease we just
+     * issued: destination() is that pose, and re-easing to it with only
+     * dist replaced keeps orbit/target authoritative in one place. */
+    {
+        GlrCameraState d = glr_camera_destination();
+        glr_camera_ease_to(d.rx, d.ry, CFG_DEFAULT_TUTORIAL_CAMERA_DIST,
+                           d.tx, d.ty, d.tz);
+    }
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The

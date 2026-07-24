@@ -2298,12 +2298,22 @@ transient scene, so it must not inherit the previous scene's view.
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in
 default pose (`glr_camera_clear_scene_default` + `glr_camera_ease_to_default`),
-the grid extent narrows to `CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX` (CLOSE —
-lesson geometry is unit-scale and the default camera sits at dist 5.0,
-which the FAR default over-covers), and vertex outlines and points go off
-(`CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES` / `_POINTS`) so a lesson starts on
-bare geometry rather than on decorations that read as part of the one
-primitive being taught. The tutorial's own leading
+the grid extent narrows to `CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX` (CLOSE),
+and the distance pulls back to `CFG_DEFAULT_TUTORIAL_CAMERA_DIST`.
+`CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES` / `_POINTS` are the matching knobs
+for the vertex decorations (currently left at the global default).
+
+The distance exists because tutorial geometry is authored in **whole
+units** (see `src/repl/tutorials.c`): shapes sit on +/-1 or +/-2, solid
+sizes and radii are 1, and lineups step 4 apart. Decimal coordinates like
+`glVertex3f(0.8, -0.6, 0)` made lesson shapes so small that the
+cursor-bound overlays — vertex labels especially — were larger than the
+primitive being taught. Whole units read better in the code panel *and*
+give the overlays something to annotate, but +/-2 does not fit the
+built-in dist of 5.0 (which frames only +/-2.07 vertically), hence the
+pull-back. Two scaffolds whose scenes are genuinely wider or deeper than
+that (`glut_solids`, `fog`) carry their own `// camera` block. The
+tutorial's own leading
 `@cfg` runs after the reset and still wins. Every slug touched here is in
 the `fill_scene_subset` baseline, so teardown restores the user's own
 values; the camera is not restored (the pre-tutorial scene's own snapshot

@@ -156,14 +156,15 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
                repl_cfg_get_int("vertex_points", -1),
                CFG_DEFAULT_TUTORIAL_VERTEX_POINTS);
 
-    /* The camera eases rather than snaps, so the built-in pose shows up
-     * as the ease destination, not (yet) the live pose. */
+    /* The camera eases rather than snaps, so the target pose shows up as
+     * the ease destination, not (yet) the live pose: the built-in orbit
+     * and target, pulled back to the tutorial distance. */
     GlrCameraState dest = glr_camera_destination();
     ASSERT_TRUE("camera eases back to default orbit",
                 fabsf(dest.rx - 20.0f) < 0.001f &&
                 fabsf(dest.ry - 30.0f) < 0.001f);
-    ASSERT_TRUE("camera eases back to default distance",
-                fabsf(dest.dist - 5.0f) < 0.001f);
+    ASSERT_TRUE("camera eases out to the tutorial distance",
+                fabsf(dest.dist - CFG_DEFAULT_TUTORIAL_CAMERA_DIST) < 0.001f);
     ASSERT_TRUE("camera eases back to origin target",
                 fabsf(dest.tx) < 0.001f && fabsf(dest.ty) < 0.001f &&
                 fabsf(dest.tz) < 0.001f);
@@ -427,8 +428,10 @@ static void test_shadow_text_refreshes_on_advance(void) {
     (void)editor_handle_key(';', 0, 0);
 
     ac = editor_state_autocomplete();
+    /* Derived from the catalog: this asserts the ghost tracks the step,
+     * not what the lesson's second command happens to be. */
     ASSERT_STR("ghost shows next step's expected after advance",
-               ac->ghost, "glVertex3f(0, 0.8, 0)");
+               ac->ghost, repl_tutorial_step_expected(0, 1));
 }
 
 static void test_shadow_ghost_falls_through_off_expected_line(void) {
@@ -744,8 +747,15 @@ static void test_navigation_rejects_non_matching_input(void) {
                doc_after.line_count, doc_before.line_count);
     ASSERT_INT("step unchanged after rejected navigation",
                tutorial_state_view().step, 1);
-    ASSERT_STR("navigation rejection surfaces hint status",
-               status_text(), "expected: glVertex3f(0, 0.8, 0)");
+    /* Derived from the catalog: the assertion is that the hint quotes the
+     * step's expected text, not what that lesson's step 1 happens to be. */
+    {
+        char want[MAX_LINE_LEN];
+        snprintf(want, sizeof want, "expected: %s",
+                 repl_tutorial_step_expected(0, 1));
+        ASSERT_STR("navigation rejection surfaces hint status",
+                   status_text(), want);
+    }
 }
 
 static void test_navigation_advances_on_matching_input(void) {
@@ -3075,7 +3085,7 @@ static void test_comment_less_command_commits_without_instruction_row(void) {
     SourceTextView doc = source_document_view();
     const char *row = source_text_line(doc, doc_before);
     ASSERT_TRUE("committed row holds the expected command",
-                row && strstr(row, "glVertex3f(-0.7, -0.5, 0)") != NULL);
+                row && strstr(row, repl_tutorial_step_expected(idx, step)) != NULL);
 }
 
 /* --- Setup scaffold (Option A) ------------------------------------------- */

@@ -67,17 +67,23 @@
 #define CFG_DEFAULT_DEPTH_VIZ        0   /* RENDER3D_DEPTH_VIZ_OFF */
 
 /* Tutorial-start overrides. Tutorials reset presentation to the values
- * above, then differ on these three; a tutorial's own leading `@cfg`
- * still wins over them.
+ * above, then differ on these; a tutorial's own leading `@cfg` still
+ * wins over them.
  *
- * Grid extent: lesson geometry is unit-scale and the camera starts at the
- * built-in default distance (5.0), so the CLOSE grid (also 5.0 units)
- * frames it, where the FAR default reads as a dense carpet.
+ * Camera distance + grid extent go together. Tutorial geometry is
+ * authored in whole units (see src/repl/tutorials.c) — shapes on +/-1 or
+ * +/-2, solid sizes and radii of 1 — because decimal coordinates made
+ * lesson shapes small enough that the cursor-bound overlays (vertex
+ * labels especially) outweighed the primitive being taught. The built-in
+ * dist of 5.0 frames only +/-2.07 vertically, so tutorials pull back far
+ * enough to hold that vocabulary; the rest of the built-in pose (orbit,
+ * target) is unchanged. CLOSE then puts the grid at the scale of the
+ * geometry standing on it, where the FAR default reads as a dense carpet.
  *
- * Vertex outlines / points: on by default so a scene's structure is
- * legible at a glance, but in a lesson they decorate the one primitive
- * being taught and read as part of it. A tutorial starts on bare
- * geometry; the overlays are a thing to turn on, not to unlearn. */
+ * Vertex outlines / points: the knobs are here so a lesson's decorations
+ * can be tuned independently of the app default, which is what they
+ * currently track. */
+#define CFG_DEFAULT_TUTORIAL_CAMERA_DIST     8.0f
 #define CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX GRID_EXTENT_CLOSE
 #define CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES 1
 #define CFG_DEFAULT_TUTORIAL_VERTEX_POINTS   1
