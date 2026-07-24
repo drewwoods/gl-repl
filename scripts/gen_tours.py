@@ -196,6 +196,16 @@ def render(entries: list[dict[str, object]]) -> str:
     return "\n".join(out)
 
 
+def write_if_changed(path: Path, text: str) -> None:
+    # The Makefile rule is FORCE-driven, so this runs on every build; only touch
+    # the mtime when the content actually moved, or glr_tours.o recompiles and
+    # every test binary relinks each run.
+    if path.exists() and path.read_text(encoding="utf-8") == text:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--catalog", type=Path, default=repo_root() / "tours" / "catalog.ini")
@@ -217,8 +227,7 @@ def main() -> int:
         print("gen_tours: --out is required unless --check", file=sys.stderr)
         return 1
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(entries), encoding="utf-8")
+    write_if_changed(args.out, render(entries))
     return 0
 
 
