@@ -20,9 +20,9 @@
  * catalogs (glr_scene_example_*, glr_tours_*). Nothing here opens a window or
  * calls GL.
  */
-#include "app/glr_cli.h"
+#include "app/boot/glr_cli.h"
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
-#include "app/glr_debug.h"     /* glr_debug_run_dumps */
+#include "app/boot/glr_boot_dumps.h" /* glr_boot_run_dumps */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
 
 #include "support/test_harness.h"
@@ -329,7 +329,7 @@ static int run_dumps_capture(const GlrCliOptions *opts, char *buf, size_t buf_sz
     FILE *f = tmpfile();
     if (!f) return -1;
 
-    int rc = glr_debug_run_dumps(opts, f);
+    int rc = glr_boot_run_dumps(opts, f);
     fflush(f);
     rewind(f);
     size_t n = fread(buf, 1, buf_sz - 1, f);

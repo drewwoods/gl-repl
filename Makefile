@@ -382,6 +382,7 @@ endif
 	callgraph-static \
 	callgraph-static-entry \
 	check \
+	check-app-boot-band \
 	check-c99 \
 	check-color-picker-ui-isolation \
 	check-controller-boundaries \
@@ -478,7 +479,7 @@ FORCE:
 
 SUPPORT_SRCS = $(wildcard src/support/*.c)
 
-APP_CONTROLLER_SRCS = $(wildcard src/app/*.c)
+APP_CONTROLLER_SRCS = $(wildcard src/app/*.c) $(wildcard src/app/boot/*.c)
 
 EDITOR_SRCS = $(wildcard src/editor/*.c)
 
@@ -515,6 +516,7 @@ SRCS = \
 
 HDRS = \
 	$(wildcard src/app/*.h) \
+	$(wildcard src/app/boot/*.h) \
 	$(wildcard src/editor/*.h) \
 	$(wildcard src/render3d/*.h) \
 	$(wildcard src/render3d/guides/*.h) \
@@ -933,7 +935,7 @@ test_audio_RUN ?= $(BINDIR)/test_audio
 
 # The init trace is self-contained (stdio + gettimeofday), so it links alone
 # rather than dragging in CORE_TEST_OBJS.
-test_glr_init_trace_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_init_trace.o $(OBJDIR)/src/app/glr_init_trace.o
+test_glr_init_trace_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_init_trace.o $(OBJDIR)/src/app/boot/glr_init_trace.o
 test_glr_init_trace_LDLIBS = $(GL_LDFLAGS)
 test_glr_init_trace_RUN ?= $(BINDIR)/test_glr_init_trace
 
@@ -1742,6 +1744,9 @@ check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call
 
 check-repl-state-no-glr-state: ## Verify REPL pipeline TUs do not include src/app/glr_state.h or reference GlrState symbols.
 	@bash scripts/check/check-repl-state-no-glr-state.sh
+
+check-app-boot-band: ## Verify the frame-time controller band (src/app/*) does not include boot headers (src/app/boot/*).
+	@bash scripts/check/check-app-boot-band.sh
 
 check-glr-state-no-repl-mutators: ## Verify src/app/glr_state.c does not call back into REPL state mutators.
 	@bash scripts/check/check-glr-state-no-repl-mutators.sh

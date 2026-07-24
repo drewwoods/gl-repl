@@ -4,7 +4,7 @@
  * See glr_cli.h for the contract. All lookups here are pure reads over the
  * example/tour catalogs; nothing touches GL or controller state.
  */
-#include "app/glr_cli.h"
+#include "app/boot/glr_cli.h"
 
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */

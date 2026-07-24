@@ -12,7 +12,6 @@
 #include <stdio.h>
 
 #include "source_document.h" /* SourceTextView */
-#include "app/glr_cli.h"     /* GlrCliOptions */
 
 void glr_debug_dump_editor(FILE *out, SourceTextView text);
 void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text);
@@ -22,11 +21,10 @@ void glr_debug_dump_current_flat_commands_sync(FILE *out);
 void glr_debug_dump_current_flat_histogram(FILE *out);
 void glr_debug_dump_runtime_state_layout(FILE *out);
 
-/* CLI dump dispatch. If opts selects any --dump-* / --flat-histogram flag,
- * bootstrap the REPL (GL-free: no context, no window), load --example if
- * given, run the requested dumps to `out` (NULL -> stdout), and return 1 so
- * the caller exits 0. Returns 0 when no dump flag is set (proceed to the
- * windowed run). */
-int glr_debug_run_dumps(const GlrCliOptions *opts, FILE *out);
+/* The CLI dump-and-exit dispatch (glr_boot_run_dumps) lives in the boot band
+ * — src/app/boot/glr_boot_dumps.{c,h} — because it consumes GlrCliOptions
+ * (glr_cli) and orchestrates a GL-free bootstrap before any frame. It calls
+ * the dump primitives above; keeping it out of this TU keeps these formatters
+ * free of any boot dependency, so the controller can reuse them at runtime. */
 
 #endif /* GLR_DEBUG_H */

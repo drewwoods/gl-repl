@@ -311,6 +311,10 @@ check_ui_core_no_upper_layers() {
     bash scripts/check/check-ui-core-no-upper-layers.sh
 }
 
+check_app_boot_band() {
+    bash scripts/check/check-app-boot-band.sh
+}
+
 check_module_prefixes() {
     bash scripts/check/check-module-prefixes.sh
 }
@@ -428,6 +432,7 @@ else
     run_check check-repl-no-mut-reads check_repl_no_mut_reads
     run_check check-render3d-no-upper-layers check_render3d_no_upper_layers
     run_check check-ui-core-no-upper-layers check_ui_core_no_upper_layers
+    run_check check-app-boot-band check_app_boot_band
     run_check check-module-prefixes check_module_prefixes
     run_check check-include-style check_include_style
     run_check check-tier-c-function-size check_tier_c_function_size

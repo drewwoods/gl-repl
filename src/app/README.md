@@ -83,7 +83,47 @@ diagnostics from the REPL to the editor/status line. A guard
 (`check-glr-ctrl-not-editor-mirror`) keeps it from accreting one wrapper per
 editor operation.
 
+## Two bands: boot lifecycle vs frame-time controller
+
+`src/app` holds two bands, and the split is worth naming because they run in
+different worlds:
+
+- **Boot / lifecycle band — [`boot/`](boot/).** Process startup: the code that
+  runs *before or without* a live GL context and never sits on the frame loop.
+  CLI parse, the startup init trace, the headless capture-env `GLR_*` hooks,
+  the frame pacer (a pure timer-delay calculator), the splash banner, and the
+  `--dump-*` dump-and-exit path. These modules are reached **only from the host
+  [`gl_repl.c`](../../gl_repl.c)** (plus their tests and sibling boot modules) —
+  never from the controller.
+- **Frame-time controller band — the files directly in `src/app/`.** The
+  controller ([`glr_ctrl`](glr_ctrl.c)), its router / view-transition / snapshot
+  satellites, and the app-level services (camera, audio, config, actions,
+  completion, tours, pointer-script). These assume a **live GL context and a
+  running frame loop**.
+
+**Membership rule.** A module is boot if it runs during process startup and is
+called only from `gl_repl.c` (or other boot modules) — put it in `boot/`.
+Everything that participates in a frame stays directly in `src/app/`.
+
+**Direction rule.** `gl_repl.c` → `boot/` → controller → subsystems. Boot
+modules may call **down** into the controller band — that is how the
+dump-and-exit path ([`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c)) reuses the
+diagnostic formatters in [`glr_debug.c`](glr_debug.c). The controller band must
+**never** reach back **up** into `boot/`: a frame-time file that includes
+`"app/boot/..."` has taken a dependency on the startup lifecycle it is supposed
+to run underneath. The guard `check-app-boot-band`
+([`scripts/check/check-app-boot-band.sh`](../../scripts/check/check-app-boot-band.sh),
+in the `check-state-ownership` suite) enforces the one-way edge.
+
+`boot/glr_boot_dumps` is the shape this rule forces: the `--dump-*` dispatch
+consumes `GlrCliOptions` (a boot type), so it lives in `boot/`, while the dump
+*formatters* it drives stay in the controller-band `glr_debug` because the
+router calls them at runtime on a debug keystroke. Splitting the two keeps the
+formatters free of any boot dependency.
+
 ## File map
+
+### Frame-time controller band (`src/app/`)
 
 | File | Responsibility |
 |---|---|
@@ -96,8 +136,22 @@ editor operation.
 | [`glr_completion.c`](glr_completion.c) / `.h` | REPL-side completion provider; registers with `editor_completion` |
 | [`glr_state.c`](glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
 | [`glr_source_document.c`](glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](../editor/state.h#L175) buffer |
-| [`glr_debug.c`](glr_debug.c) / `.h` | Diagnostic dumps for CLI flags and tests |
+| [`glr_debug.c`](glr_debug.c) / `.h` | Diagnostic dump *formatters* for debug keystrokes and tests (the `--dump-*` dispatch lives in [`boot/glr_boot_dumps`](boot/glr_boot_dumps.c)) |
 | [`glr_defaults.h`](glr_defaults.h) | Controller-side 3D presentation defaults (`CFG_DEFAULT_*`) |
+
+(Router / view-transition / compositor / tours / pointer-script satellites live
+here too — see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full roster.)
+
+### Boot / lifecycle band ([`boot/`](boot/))
+
+| File | Responsibility |
+|---|---|
+| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tour` name→index resolve |
+| [`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c) / `.h` | `--dump-*` / `--flat-histogram` GL-free bootstrap-dump-and-exit path (drives `glr_debug` formatters) |
+| [`boot/glr_init_trace.c`](boot/glr_init_trace.c) / `.h` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof` phases |
+| [`boot/glr_capture_env.c`](boot/glr_capture_env.c) / `.h` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap) + `_frame_hook` (per-frame overlays) |
+| [`boot/glr_frame_pacer.c`](boot/glr_frame_pacer.c) / `.h` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
+| [`boot/splash.c`](boot/splash.c) / `.h` | Startup splash banner (host-drawn during the first frames; any keypress dismisses) |
 
 **Boundary:** `glr_ctrl` routes raw input to the owning subsystem and builds
 frame snapshots. It does **not** implement editor behavior or duplicate the

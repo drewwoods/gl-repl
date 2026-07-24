@@ -1,16 +1,16 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
-#include "app/glr_capture_env.h"
-#include "app/glr_cli.h"
-#include "app/glr_debug.h"
+#include "app/boot/glr_capture_env.h"
+#include "app/boot/glr_cli.h"
+#include "app/boot/glr_boot_dumps.h"
 #include "app/glr_audio.h"
-#include "app/glr_frame_pacer.h"
-#include "app/glr_init_trace.h"
+#include "app/boot/glr_frame_pacer.h"
+#include "app/boot/glr_init_trace.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
 #include "app/glr_pointer_script.h"
 #include "app/glr_tours.h"
-#include "app/splash.h"
+#include "app/boot/splash.h"
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
 
 #include <signal.h>
@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
 
     /* Dump-only CLI paths (--dump-* / --flat-histogram) run GL-free and exit
      * before any window opens. */
-    if (glr_debug_run_dumps(&opts, stdout))
+    if (glr_boot_run_dumps(&opts, stdout))
         return 0;
 
     glr_init_trace("glutInit begin");

@@ -4,12 +4,12 @@
  * See glr_capture_env.h for the apply-vs-frame-hook split. Everything here is
  * a no-op unless its GLR_* env var is set, so it never affects a normal run.
  */
-#include "app/glr_capture_env.h"
+#include "app/boot/glr_capture_env.h"
 
 #include "app/glr_actions.h"        /* glr_action_toggle_view_mode / _help_tab_next */
 #include "app/glr_ctrl.h"           /* glr_ctrl_* capture entry points */
 #include "app/glr_pointer_script.h" /* glr_pointer_script_load_env / _active */
-#include "app/splash.h"             /* splash_skip */
+#include "app/boot/splash.h"             /* splash_skip */
 
 #include <stdlib.h>                 /* getenv, atoi, atof, strtof */
 

@@ -223,12 +223,8 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | [`accent_palette.h`](accent_palette.h) | Shared accent palette anchors + semantic roles + brand-mark list; `make check-palette` ratchet, `make palette-list` |
 | [`prof_sections.h`](prof_sections.h) | `ProfSection` enum catalog, force-included (labels live in [`glr_prof.c`](src/app/glr_prof.c)) |
 | `include/` | Project-agnostic headers: [`keys.h`](include/keys.h) (physical key bytes), [`c_compat.h`](include/c_compat.h), [`gl_includes.h`](include/gl_includes.h) |
-| **src/app/** | |
+| **src/app/** (frame-time controller band) | see [`src/app/README.md`](src/app/README.md) — two bands: frame-time controller (here) + boot lifecycle (`boot/`); guard `check-app-boot-band` keeps the controller from including `boot/` |
 | `glr_ctrl.{c,h}` | App-frame controller: display/reshape/init-GL, builds [`Render3dRenderConfig`](src/render3d/render_types.h#L135), UI snapshot, chrome clear, camera load |
-| `glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
-| `glr_init_trace.{c,h}` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof`/`GLR_DETAILED_PROF` phases; elapsed clock shared with audio/controller |
-| `glr_cli.{c,h}` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--examples-dir` load, fail-fast `--example`/`--tour` name→index resolve |
-| `glr_capture_env.{c,h}` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap: time/pointer-script/splash/tick-per-frame/edit-line/type-keys/accum) + `_frame_hook` (per-frame: color-picker/GL-state/help/view-toggle) |
 | [`glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch shims, [`UiHit`](src/ui/core/hit.h#L51) routing, wheel, SIGINT-quit |
 | `glr_config.{c,h}` | Config-key impl + section model; `glr_config_set` tail notifies the tutorial runner |
 | `glr_actions.{c,h}` | `g_cfg_items[]` descriptor table, config shortcuts, menu actions |
@@ -237,10 +233,17 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `glr_tours.{c,h}` | Tours-menu catalog (file-backed `tours/*.pointer`) |
 | `glr_audio.{c,h}` | Playlist engine + persisted audio config (worker thread) |
 | `glr_mesh_export.{c,h}` | PLY export via one `GL_FEEDBACK` capture of the live flat program |
-| `glr_debug.{c,h}` | Diagnostic dumps for CLI flags/tests; `glr_debug_run_dumps` runs the GL-free `--dump-*` bootstrap+dump+exit path |
+| `glr_debug.{c,h}` | Diagnostic dump *formatters* for debug keystrokes/tests (the `--dump-*` dispatch lives in `boot/glr_boot_dumps`) |
 | `glr_prof.{c,h}` | `prof_section_info` table + GPU-bracketing policy |
 | [`glr_defaults.h`](src/app/glr_defaults.h) | `CFG_DEFAULT_*` scene/presentation defaults (single source of truth) |
 | [`glr_pointer_script.c`](src/app/glr_pointer_script.c) | Synthetic pointer/keyboard script engine (captures + tours) |
+| **src/app/boot/** (startup lifecycle) | pre/without-frame-loop; reached only from [`gl_repl.c`](gl_repl.c). Controller must not include these (guard `check-app-boot-band`) |
+| `boot/glr_cli.{c,h}` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--examples-dir` load, fail-fast `--example`/`--tour` name→index resolve |
+| `boot/glr_boot_dumps.{c,h}` | `glr_boot_run_dumps` — GL-free `--dump-*`/`--flat-histogram` bootstrap+dump+exit path (drives `glr_debug` formatters) |
+| `boot/glr_init_trace.{c,h}` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof`/`GLR_DETAILED_PROF` phases; elapsed clock shared with audio/controller |
+| `boot/glr_capture_env.{c,h}` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap: time/pointer-script/splash/tick-per-frame/edit-line/type-keys/accum) + `_frame_hook` (per-frame: color-picker/GL-state/help/view-toggle) |
+| `boot/glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
+| `boot/splash.{c,h}` | Startup splash banner (host-drawn during first frames; any keypress dismisses) |
 | **src/repl/** | Language pipeline — see `src/repl/ARCHITECTURE.md` |
 | [`command.h`](src/repl/command.h) | [`CmdType`](src/repl/command.h#L37) enum + [`GLCmd`](src/repl/command.h#L95) (pure parse result, no `source[]`) + set predicates |
 | `parser.{c,h}` | Source-line parser; canonical text via `ReplParsedLine.text` |

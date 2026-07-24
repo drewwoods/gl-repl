@@ -20,7 +20,7 @@
  * so the passes are simply interior fills, interior edges, exterior
  * fills, front edges.
  */
-#include "app/splash.h"
+#include "app/boot/splash.h"
 
 #include <math.h>
 #include <string.h>

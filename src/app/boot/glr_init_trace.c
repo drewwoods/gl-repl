@@ -5,7 +5,7 @@
  * file statics: the log origin (lazily captured on the first elapsed query)
  * and the detailed-phase flag.
  */
-#include "app/glr_init_trace.h"
+#include "app/boot/glr_init_trace.h"
 
 #include <stdio.h>
 #include <sys/time.h>

@@ -10,7 +10,7 @@
  *
  * Standalone: links only src/app/glr_init_trace.o — no GL, no controller.
  */
-#include "app/glr_init_trace.h"
+#include "app/boot/glr_init_trace.h"
 
 #include "support/test_harness.h"
 

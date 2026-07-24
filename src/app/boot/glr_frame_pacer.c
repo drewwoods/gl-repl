@@ -1,4 +1,4 @@
-#include "app/glr_frame_pacer.h"
+#include "app/boot/glr_frame_pacer.h"
 
 #include <math.h>
 

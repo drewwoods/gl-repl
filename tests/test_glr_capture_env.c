@@ -18,7 +18,7 @@
  * Runs GL-free (bootstrap_repl needs no context, same as the --dump-* path)
  * and links CORE_TEST_OBJS.
  */
-#include "app/glr_capture_env.h"
+#include "app/boot/glr_capture_env.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_config.h"
 #include "editor/state.h"

@@ -422,11 +422,13 @@ central dispatch enum and no "UI emits actions" layer.
 
 The application shell bootstrap, event routing, frame/snapshot coordination, and global app-level services.
 
+`src/app/` splits into two bands (see [`../src/app/README.md`](../src/app/README.md)): the **frame-time controller band** (files directly in `src/app/`, assuming a live GL context and running frame loop) and the **boot / lifecycle band** (`src/app/boot/`: CLI parse, init trace, capture-env hooks, frame pacer, splash, the `--dump-*` dispatch — reached only from `gl_repl`, before/without a frame). The guard `check-app-boot-band` enforces the one-way edge: boot may call down into the controller, never the reverse.
+
 | Module | Role |
 |--------|------|
 | `gl_repl` | `main()`, GLUT callback registration, frame-timer scheduling, redisplay, and buffer swap |
 | `glr_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, application tick policy, and non-editor input routing (`glr_ctrl_router_*` helpers route replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom to their owning subsystems). It is the only input-event mutation gate |
-| `src/app/glr_frame_pacer` | Pure absolute-deadline 60 Hz pacer; converts host-supplied monotonic time to the next integer-millisecond timer delay without accumulating rounding drift or catch-up bursts |
+| `src/app/boot/glr_frame_pacer` | Pure absolute-deadline 60 Hz pacer; converts host-supplied monotonic time to the next integer-millisecond timer delay without accumulating rounding drift or catch-up bursts |
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the [`EditorState`](../src/editor/state.h#L175) text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state, owned by the app layer rather than [`ReplRuntimeState`](../src/repl/state.h#L18); reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
