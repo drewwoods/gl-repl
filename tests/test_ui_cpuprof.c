@@ -383,7 +383,7 @@ static void test_histogram_axis_range(void) {
 
     prof_test_reset();
     ASSERT_INT_EQ("no samples means no axis",
-                  ui_histogram_axis_range(&lo, &hi), 0);
+                  ui_histogram_axis_range(0ULL, &lo, &hi), 0);
 
     /* One section around 2 ms. */
     prof_test_reset();
@@ -394,7 +394,7 @@ static void test_histogram_axis_range(void) {
         prof_end(PROF_FRAME_TOTAL);
     }
     ASSERT_INT_EQ("a populated series yields an axis",
-                  ui_histogram_axis_range(&lo, &hi), 1);
+                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("axis spans at least the minimum width", hi - lo + 1 >= 64);
     ASSERT_TRUE("axis stays inside the bin range",
                 lo >= 0 && hi <= PROF_HISTOGRAM_BIN_COUNT - 1);
@@ -411,7 +411,8 @@ static void test_histogram_axis_range(void) {
     prof_end(PROF_FRAME_TOTAL);
 
     int lo_before = lo;
-    ASSERT_INT_EQ("axis still resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_INT_EQ("axis still resolves",
+                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("the outlier is on-axis, not trimmed",
                 hi >= prof_histogram_bin_for_us(200000.0));
 
@@ -447,7 +448,7 @@ static void test_histogram_axis_covers_cheap_and_slow(void) {
         prof_end(PROF_FRAME_TOTAL);
     }
 
-    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("axis reaches the 6us section",
                 prof_histogram_bin_for_us(6.0) >= lo);
     ASSERT_TRUE("axis reaches the 2ms section",
@@ -490,7 +491,7 @@ static void test_histogram_silhouette_collapses_flat_runs(void) {
     }
 
     int lo = 0, hi = 0;
-    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("axis is wide enough for the collapse to matter",
                 hi - lo + 1 > 200);
 
@@ -649,6 +650,112 @@ static void test_histogram_hidden_series_drops_bars(void) {
     prof_test_reset();
 }
 
+/* Every plotted (depth-0) series toggled off. */
+static unsigned long long hist_all_series_hidden(void) {
+    unsigned long long mask = 0ULL;
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        mask = ui_histogram_panel_toggle_series(mask, s);
+    return mask;
+}
+
+/* The axis spans the plotted series only. A sub-microsecond section pins the
+ * lower bound at bin 0 (1 us) for everyone; hiding it must let the axis climb
+ * to the surviving distribution instead of leaving it crushed against the
+ * right edge. */
+static void test_histogram_axis_follows_hidden_series(void) {
+    int lo = -1, hi = -1;
+    int lo_all, hi_all;
+    unsigned long long hide_fast;
+
+    prof_test_reset();
+    for (int i = 0; i < 40; i++) {
+        double base = (double)i * 100000.0;
+        prof_test_set_now_us(base);
+        prof_begin(PROF_FRAME_RESTORE);        /* ~0.4 us -> bin 0 */
+        prof_test_set_now_us(base + 0.4);
+        prof_end(PROF_FRAME_RESTORE);
+
+        prof_begin(PROF_FRAME_TOTAL);          /* ~2 ms */
+        prof_test_set_now_us(base + 2000.0);
+        prof_end(PROF_FRAME_TOTAL);
+    }
+
+    ASSERT_INT_EQ("axis resolves with both series shown",
+                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+    lo_all = lo;
+    hi_all = hi;
+    ASSERT_INT_EQ("the sub-us series pins the lower bound at bin 0", lo_all, 0);
+
+    hide_fast = ui_histogram_panel_toggle_series(0ULL, (int)PROF_FRAME_RESTORE);
+    ASSERT_INT_EQ("axis still resolves with the fast series hidden",
+                  ui_histogram_axis_range(hide_fast, &lo, &hi), 1);
+    ASSERT_TRUE("hiding the fast series lifts the lower bound", lo > lo_all);
+    ASSERT_TRUE("the hidden series' bin is off-axis",
+                lo > prof_histogram_bin_for_us(0.4));
+    ASSERT_TRUE("the 2ms samples are still on-axis",
+                prof_histogram_bin_for_us(2000.0) >= lo &&
+                prof_histogram_bin_for_us(2000.0) <= hi);
+    ASSERT_TRUE("the surviving distribution gets a narrower axis",
+                hi - lo < hi_all - lo_all);
+
+    /* Nothing plotted is the same "no axis" answer as nothing sampled. */
+    ASSERT_INT_EQ("hiding every series leaves no axis",
+                  ui_histogram_axis_range(hist_all_series_hidden(), &lo, &hi), 0);
+    prof_test_reset();
+}
+
+/* Toggling every series off must not take the legend down with the plot: the
+ * legend is the only control that can put a series back. */
+static void test_histogram_all_hidden_keeps_legend(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10
+    };
+    int hit_section;
+    int legend_rows = 0;
+    int series = 0;
+
+    prof_test_reset();
+    for (int i = 0; i < 30; i++) {
+        prof_test_set_now_us((double)i * 100000.0);
+        prof_begin(PROF_FRAME_TOTAL);
+        prof_test_set_now_us((double)i * 100000.0 + 16000.0);
+        prof_end(PROF_FRAME_TOTAL);
+    }
+
+    view.hidden_series = hist_all_series_hidden();
+    ASSERT_TRUE("every plotted series is hidden", view.hidden_series != 0ULL);
+
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    /* Hidden swatches are hollow (GL_LINE_LOOP), so the legend shows up as
+     * vertices and label text even with no bars to draw. */
+    ASSERT_TRUE("all-hidden panel still draws the legend swatches",
+                gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    ASSERT_TRUE("all-hidden panel still draws the legend labels",
+                gl_stub_counts[GL_STUB_glutBitmapString] > 1);
+
+    /* And the legend cell is still clickable, so a series can be restored. */
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        if (prof_section_info((ProfSection)s).depth == 0 &&
+            prof_section_info((ProfSection)s).label &&
+            prof_section_info((ProfSection)s).label[0])
+            series++;
+    legend_rows = (series + 2 - 1) / 2;
+    {
+        int ly = view.panel_y + 8 + (legend_rows - 1) * 12;
+        hit_section = ui_histogram_panel_hit_test(&view, view.panel_x + 11,
+                                                  view.window_h - (ly + 6));
+    }
+    ASSERT_TRUE("a legend cell still hit-tests while all series are hidden",
+                hit_section >= 0);
+    ASSERT_TRUE("toggling it clears that series' bit",
+                ui_histogram_panel_toggle_series(view.hidden_series,
+                                                 hit_section)
+                    < view.hidden_series);
+    prof_test_reset();
+}
+
 static void test_histogram_render_hidden(void) {
     UiHistogramPanelView view = {
         .window_w = 800, .window_h = 600,
@@ -797,6 +904,8 @@ int main(void) {
     test_histogram_reset_hit_test();
     test_histogram_legend_toggle();
     test_histogram_hidden_series_drops_bars();
+    test_histogram_axis_follows_hidden_series();
+    test_histogram_all_hidden_keeps_legend();
     test_histogram_render_hidden();
     test_histogram_render_empty();
     test_histogram_render_with_samples();

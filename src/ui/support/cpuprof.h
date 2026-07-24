@@ -139,10 +139,13 @@ int  ui_fps_panel_height(void);
  *
  * hidden_series is a session-only mask (one bit per ProfSection, same shape as
  * the profile panel's collapsed_sections) of series the user has toggled off
- * by clicking their legend swatch. A hidden series is dropped from the plot
- * and from the y-scale (so hiding a dominant distribution lets the rest grow),
- * but keeps its legend slot — rendered as a hollow swatch — so the layout, and
- * therefore the legend hit-test, never shifts as series come and go. */
+ * by clicking their legend swatch. A hidden series is dropped from the plot,
+ * from the y-scale (so hiding a dominant distribution lets the rest grow) and
+ * from the x-axis span (so hiding the fast sections zooms the axis onto what
+ * is left), but keeps its legend slot — rendered as a hollow swatch — so the
+ * layout, and therefore the legend hit-test, never shifts as series come and
+ * go. With every series hidden the plot draws empty and says so; the legend
+ * still renders, since it is the only way back. */
 typedef struct {
     int window_w, window_h;
     int visible;            /* profile mode is PROFILE_PANEL_HISTOGRAM */
@@ -184,7 +187,12 @@ unsigned long long ui_histogram_panel_toggle_series(
  * Writes the inclusive bin range the plot draws: the occupied bins across
  * every plotted series, widened to a minimum span so a one-bin distribution is
  * still drawable. Returns 0 (leaving the outputs untouched) when no plotted
- * series has any samples.
+ * series has any samples — including when hidden_series masks them all off.
+ *
+ * Series hidden by hidden_series are excluded from the span, so the axis
+ * follows what is actually drawn: hide the sub-microsecond sections and a
+ * millisecond distribution gets the whole width instead of the right-hand
+ * sliver left over by a 1 us lower bound.
  *
  * No percentile trim is needed, because the bins are log-spaced: the axis is
  * linear in bin index and so logarithmic in time, and an outlier lands a
@@ -195,6 +203,7 @@ unsigned long long ui_histogram_panel_toggle_series(
  * Reads the live histograms rather than taking them as arguments, so it is not
  * pure; it is separated out because the range policy is the panel's one piece
  * of non-obvious logic. */
-int ui_histogram_axis_range(int *lo_bin, int *hi_bin);
+int ui_histogram_axis_range(unsigned long long hidden_series,
+                            int *lo_bin, int *hi_bin);
 
 #endif /* UI_CPUPROF_H */
