@@ -177,6 +177,29 @@ static void hidden_lines_finish_tess(int *tess_depth) {
     *tess_depth = 0;
 }
 
+/* The program's glClear IS the frame's clear for the scene rect — the host
+ * clears the chrome around it and nothing clears the rect on the program's
+ * behalf (see CMD_CLEAR in executor.c). This walk replaces the main fill in
+ * hidden-line mode, so without emitting it here the rect is never cleared:
+ * colour smears and the stale depth buffer defeats the hidden/visible split.
+ *
+ * Only the first of the three passes — the depth fill — may run it. The
+ * hidden- and visible-line passes replay the same program over the depth seed
+ * that pass laid down, so a second clear would wipe both the seed and the
+ * lines already drawn.
+ *
+ * glClear obeys glColorMask, and the depth-fill pass masks colour writes to
+ * seed depth only, so lift the mask for the clear alone under its own attrib
+ * push (the pass's own colour state is restored by the pop). Depth writes are
+ * already enabled there, and the host scissor keeps the clear inside the
+ * scene rect. */
+static void hidden_lines_emit_clear(const GLCmd *cmd) {
+    glPushAttrib(GL_COLOR_BUFFER_BIT);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClear((GLbitfield)cmd->args[0]);
+    glPopAttrib();
+}
+
 static int hidden_lines_cursor_owns_cmd(CmdType type) {
     if (repl_cmd_is_transform(type))
         return 1;
@@ -283,6 +306,17 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
             if (!repl_exec_cursor_step(&cursor))
                 break;
             continue;
+        }
+
+        /* The clear colour is the one piece of colour state this pass does
+         * not own — it only feeds the clear above, and the caller's
+         * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket contains it — so emit it
+         * for real rather than mirroring it into bookkeeping alone. */
+        if (cmd->type == CMD_CLEAR_COLOR) {
+            glClearColor(cmd->args[0], cmd->args[1],
+                         cmd->args[2], cmd->args[3]);
+        } else if (cmd->type == CMD_CLEAR && depth_fill) {
+            hidden_lines_emit_clear(cmd);
         }
 
         repl_apply_state_bookkeeping(cmd);
