@@ -228,6 +228,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
 | `glr_init_trace.{c,h}` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof`/`GLR_DETAILED_PROF` phases; elapsed clock shared with audio/controller |
 | `glr_cli.{c,h}` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--examples-dir` load, fail-fast `--example`/`--tour` name→index resolve |
+| `glr_capture_env.{c,h}` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap: time/pointer-script/splash/tick-per-frame/edit-line/type-keys/accum) + `_frame_hook` (per-frame: color-picker/GL-state/help/view-toggle) |
 | [`glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch shims, [`UiHit`](src/ui/core/hit.h#L51) routing, wheel, SIGINT-quit |
 | `glr_config.{c,h}` | Config-key impl + section model; `glr_config_set` tail notifies the tutorial runner |
 | `glr_actions.{c,h}` | `g_cfg_items[]` descriptor table, config shortcuts, menu actions |
