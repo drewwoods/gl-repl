@@ -1772,6 +1772,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     gl2d_begin(win_w, win_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    /* Unlike the panels, everything drawn here is a curve or a diagonal — ring,
+     * ripple, cursor outline — so this overlay opts back into the antialiasing
+     * gl2d_begin() turns off for pixel-aligned chrome. gl2d_end() pops it. */
+    glEnable(GL_LINE_SMOOTH);
 
     /* Highlight ring: two concentric pulsing circles in warm amber. */
     if (g_ring_start >= 0 && g_frame - g_ring_start < g_ring_dur) {

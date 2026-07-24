@@ -27,9 +27,20 @@ static inline void gl2d_begin(int w, int h) {
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
-    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_CURRENT_BIT);
+    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_CURRENT_BIT |
+                 GL_LINE_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
+    /* GL_LINE_BIT is the same argument as GL_CURRENT_BIT run the other way:
+     * not what leaks out, but what leaks in. 2D overlays are pixel work, and
+     * a 1px panel border or axis tick must not change width or pick up
+     * antialiasing because the scene left glLineWidth(5) or GL_LINE_SMOOTH
+     * behind — the user's program can set both, and so can the Line smooth
+     * config. Every overlay therefore starts from the same crisp 1px
+     * baseline, and any width an overlay sets for itself is popped by
+     * gl2d_end(). */
+    glLineWidth(1.0f);
+    glDisable(GL_LINE_SMOOTH);
 }
 
 static inline void gl2d_end(void) {

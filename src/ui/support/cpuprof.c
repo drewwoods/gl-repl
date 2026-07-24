@@ -944,6 +944,15 @@ int ui_histogram_axis_range(int *lo_bin, int *hi_bin) {
     return 1;
 }
 
+/* Snap a coordinate to the centre of a pixel. The 2D projection is 1:1 with
+ * pixels, so a 1px line asked for at a whole coordinate straddles two columns
+ * and GL picks one by the diamond-exit rule — neighbouring ticks then land on
+ * opposite sides and the row looks unevenly spaced. On a pixel centre there is
+ * nothing to decide: the line covers exactly that column. */
+static float ui_pixel_center(float v) {
+    return floorf(v) + 0.5f;
+}
+
 /* Where a time lands on the x axis. The axis is linear in bin index and the
  * bins are log-spaced, so this is the one place that mapping lives — gridlines,
  * ticks and labels all go through it. Returns 0 when the time falls outside the
@@ -952,8 +961,9 @@ static int hist_time_to_x(double us, int lo_bin, int hi_bin,
                           int plot_x, int plot_w, float *out_x) {
     int b = prof_histogram_bin_for_us(us);
     if (b <= lo_bin || b >= hi_bin) return 0;
-    *out_x = (float)plot_x + (float)plot_w * (float)(b - lo_bin)
-                                           / (float)(hi_bin - lo_bin + 1);
+    *out_x = ui_pixel_center((float)plot_x
+                             + (float)plot_w * (float)(b - lo_bin)
+                                             / (float)(hi_bin - lo_bin + 1));
     return 1;
 }
 
@@ -1084,8 +1094,9 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     ui_clr_a(UI_TOK_DIVIDER, 0.60f);
     glBegin(GL_LINES);
     for (unsigned long decade = 1; decade <= scale_peak; decade *= 10UL) {
-        float gy = (float)plot_y
-                 + hist_bar_frac((unsigned int)decade, log_peak) * (float)plot_h;
+        float gy = ui_pixel_center(
+            (float)plot_y
+            + hist_bar_frac((unsigned int)decade, log_peak) * (float)plot_h);
         glVertex2f((float)plot_x,          gy);
         glVertex2f((float)(plot_x + plot_w), gy);
     }
@@ -1264,16 +1275,19 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         if (lo_x + lo_w + 4 < hi_x) {
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            float cap_lo = ui_pixel_center((float)plot_x);
+            float cap_hi = ui_pixel_center((float)(plot_x + plot_w));
+            float rule   = ui_pixel_center((float)rule_y);
             ui_clr_a(UI_TOK_TEXT_PLACEHOLDER, 0.7f);
             glBegin(GL_LINES);
-            glVertex2f((float)plot_x,          (float)range_y);
-            glVertex2f((float)plot_x,          (float)(range_y + 8));
-            glVertex2f((float)plot_x,          (float)rule_y);
-            glVertex2f((float)lo_x - 2.0f,     (float)rule_y);
-            glVertex2f((float)(plot_x + plot_w), (float)range_y);
-            glVertex2f((float)(plot_x + plot_w), (float)(range_y + 8));
-            glVertex2f((float)(hi_x + hi_w + 2), (float)rule_y);
-            glVertex2f((float)(plot_x + plot_w), (float)rule_y);
+            glVertex2f(cap_lo,             (float)range_y);
+            glVertex2f(cap_lo,             (float)(range_y + 8));
+            glVertex2f(cap_lo,             rule);
+            glVertex2f((float)lo_x - 2.0f, rule);
+            glVertex2f(cap_hi,             (float)range_y);
+            glVertex2f(cap_hi,             (float)(range_y + 8));
+            glVertex2f((float)(hi_x + hi_w + 2), rule);
+            glVertex2f(cap_hi,             rule);
             glEnd();
             glDisable(GL_BLEND);
         }
