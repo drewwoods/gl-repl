@@ -1702,6 +1702,16 @@ static void ps_bitmap_text(float x, float y, void *font, const char *s) {
         glutBitmapCharacter(font, (unsigned char)*s);
 }
 
+/* Total advance width of a string in the given bitmap font, in pixels.
+ * Summed per glyph via glutBitmapWidth (core GLUT; the no-op stubs supply
+ * it too) so it stays portable across the real and stubbed builds. */
+static float ps_bitmap_width(void *font, const char *s) {
+    float w = 0.0f;
+    for (; *s; s++)
+        w += (float)glutBitmapWidth(font, (unsigned char)*s);
+    return w;
+}
+
 /* Classic pointer arrow at the current position. Local coords are y-down
  * (mouse space); px/py convert to the gl2d y-up ortho at the call site. */
 static void ps_draw_cursor(float px, float py) {
@@ -1798,6 +1808,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                                                     g_echo_dur, clock_frozen);
         void *font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
+        /* Center the caption horizontally on its anchor point rather than
+         * left-aligning at it, so the label sits symmetrically over the
+         * target it annotates. */
+        float cx = g_echo_x - ps_bitmap_width(font, g_echo_text) * 0.5f;
         static const float k_halo[][2] = {
             { -1, -1 }, { 0, -1 }, { 1, -1 }, { -1, 0 },
             {  1,  0 }, { -1, 1 }, { 0,  1 }, {  1, 1 },
@@ -1805,10 +1819,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         int i;
         glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.85f);
         for (i = 0; i < (int)(sizeof(k_halo) / sizeof(k_halo[0])); i++)
-            ps_bitmap_text(g_echo_x + k_halo[i][0], cy + k_halo[i][1],
+            ps_bitmap_text(cx + k_halo[i][0], cy + k_halo[i][1],
                            font, g_echo_text);
         glColor4f(0.98f, 0.98f, 0.99f, alpha);
-        ps_bitmap_text(g_echo_x, cy, font, g_echo_text);
+        ps_bitmap_text(cx, cy, font, g_echo_text);
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);
