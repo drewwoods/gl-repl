@@ -236,6 +236,10 @@ Autocomplete appears as you type:
 
 ![Typing glEnable(GL_LI: the popup lists the matching constants, ghost text completes inline](images/autocomplete.png)
 
+Your own functions complete too. Once a slot is defined, both spellings are
+offered — the bare `func3(` and any name you gave it (`drawCube(`) — and the
+parameter hint after the open paren names that definition's parameters.
+
 ### Editing what's there
 
 Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo

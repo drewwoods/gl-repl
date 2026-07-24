@@ -487,6 +487,52 @@ int main() {
         ASSERT_STR("user func hint arg2", g_ac_hint, "height)");
     }
 
+    /* 5b. Function aliases complete like built-in names, and the param
+     * hint follows the alias spelling as well as the bare funcN one. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+
+        /* No alias bound yet: nothing to offer. */
+        set_input_text("drawC");
+        editor_completion_update();
+        ASSERT_INT("no alias completion before definition", g_ac_count, 0);
+
+        editor_feed_line("drawCube(size, twist) {");
+        editor_feed_line("}");
+
+        set_input_text("drawC");
+        editor_completion_update();
+        ASSERT_TRUE("alias completion present", has_insert_match("drawCube("));
+        ASSERT_STR("alias ghost", g_ac_ghost, "ube(");
+        ASSERT_STR("alias param hint", g_ac_hint, "size, twist)");
+
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("alias input after accept",
+                   editor_state_input().input, "drawCube(");
+
+        /* Matching is case-insensitive; accept inserts the canonical name. */
+        set_input_text("DRAWCU");
+        editor_completion_update();
+        ASSERT_TRUE("alias completes case-insensitively",
+                    has_insert_match("drawCube("));
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("alias case corrected on accept",
+                   editor_state_input().input, "drawCube(");
+
+        /* Param hint for a call being typed with the alias spelling. */
+        set_input_text("drawCube(1, ");
+        editor_completion_update();
+        ASSERT_STR("alias call hint arg2", g_ac_hint, "twist)");
+
+        /* A fully-typed alias offers no candidate (nothing left to add). */
+        set_input_text("drawCube(");
+        editor_completion_update();
+        ASSERT_TRUE("fully typed alias offers no candidate",
+                    !has_insert_match("drawCube("));
+        ASSERT_STR("fully typed alias still hints",
+                   g_ac_hint, "size, twist)");
+    }
+
     /* 6. Statement keyword completion - float declarations */
     {
         glr_ctrl_reset_all(); declare_test_vars();

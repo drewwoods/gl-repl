@@ -480,8 +480,13 @@ Modes: `AC_MODE_FUNC_PREFIX`, `AC_MODE_ENUM_SLOT` (active slot = top-level
 commas before cursor), `AC_MODE_POINT_PARAM`. Enum modes also fire mid-line
 when the cursor ends the token being completed and the tail is only
 trailing args (Tab splices, keeps tail); the inline ghost stays
-end-of-input-only; function-name completion/hints too. Search: Ctrl+F,
-state via [`editor_state_search()`](src/editor/state.h#L429).
+end-of-input-only; function-name completion/hints too. `AC_MODE_FUNC_PREFIX`
+draws from the static `k_func_completions[]` table *plus* runtime func-slot
+aliases (candidate text materialized in glr_completion.c statics, filtered to
+slots with a live `CMD_FUNC_DEF` — alias names outlive deleted defs). Param
+hints resolve the callee through `repl_scan_func_name_token`, so `funcN(` and
+`drawCube(` behave alike. Search: Ctrl+F, state via
+[`editor_state_search()`](src/editor/state.h#L429).
 
 ### Find / replace
 

@@ -23,6 +23,17 @@
 #include "app/glr_completion.h"
 #include "subsystems/tutorial/tutorial.h"
 static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
+/* Func slot behind each match, or -1 when the candidate is not a user
+ * function alias. Parallel to ac->matches / ac->insert_matches (and
+ * permuted with them by sort_autocomplete_matches) so the preview can
+ * build a parameter hint from the alias's live CMD_FUNC_DEF row. */
+static int g_ac_alias_slots[MAX_AC_MATCHES];
+/* Insert text for alias candidates (`drawCube(`). The alias table is
+ * runtime REPL state and carries no trailing '(', so the candidate
+ * strings are materialized here; ac->insert_matches borrows these
+ * pointers, hence file-static storage rather than a local. Indexed by
+ * func slot, so a rebuild can't invalidate a still-referenced entry. */
+static char g_ac_alias_text[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX + 2];
 
 typedef enum {
     AC_MODE_NONE = 0,
@@ -101,6 +112,7 @@ static void reset_ac_statics(void) {
     g_ac_suffix[0] = '\0';
     for (int i = 0; i < MAX_AC_MATCHES; i++) {
         g_ac_func_matches[i] = NULL;
+        g_ac_alias_slots[i] = -1;
     }
 }
 
@@ -119,26 +131,30 @@ static int ac_name_cmp(const char *a, const char *b) {
     return strcmp(a, b);
 }
 
-/* Sort the three parallel match arrays (display text, insert text, and
- * func-completion pointer) alphabetically by display text so the popup
- * reads in order regardless of each source table's native ordering.
- * Insertion sort over the small (<= MAX_AC_MATCHES) match set; called
- * with selected_idx at its post-clear 0, before the preview builds. */
+/* Sort the four parallel match arrays (display text, insert text,
+ * func-completion pointer, and alias slot) alphabetically by display
+ * text so the popup reads in order regardless of each source table's
+ * native ordering. Insertion sort over the small (<= MAX_AC_MATCHES)
+ * match set; called with selected_idx at its post-clear 0, before the
+ * preview builds. */
 static void sort_autocomplete_matches(EditorAutocompleteState *ac) {
     for (int i = 1; i < ac->match_count; i++) {
         const char *disp = ac->matches[i];
         const char *ins = ac->insert_matches[i];
         const ReplFuncCompletion *fn = g_ac_func_matches[i];
+        int slot = g_ac_alias_slots[i];
         int j = i - 1;
         while (j >= 0 && ac_name_cmp(ac->matches[j], disp) > 0) {
             ac->matches[j + 1] = ac->matches[j];
             ac->insert_matches[j + 1] = ac->insert_matches[j];
             g_ac_func_matches[j + 1] = g_ac_func_matches[j];
+            g_ac_alias_slots[j + 1] = g_ac_alias_slots[j];
             j--;
         }
         ac->matches[j + 1] = disp;
         ac->insert_matches[j + 1] = ins;
         g_ac_func_matches[j + 1] = fn;
+        g_ac_alias_slots[j + 1] = slot;
     }
 }
 
@@ -221,30 +237,21 @@ static const ReplFuncCompletion *find_builtin_completion_for_input(const char *i
     return NULL;
 }
 
-static int find_defined_func_call_params(const char *input, const char **after_out,
-                                         int *count_out,
-                                         char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX]) {
-    const char *p = input;
-    int fn = 0;
-
-    if (strncmp(p, "func", 4) != 0)
-        return 0;
-    p += 4;
-    if (!isdigit((unsigned char)*p))
-        return 0;
-
-    while (isdigit((unsigned char)*p)) {
-        fn = fn * 10 + (*p - '0');
-        p++;
-    }
-    if (*p != '(')
-        return 0;
-
-    if (after_out)
-        *after_out = p + 1;
-
+/* Signature of the live CMD_FUNC_DEF row for func slot `fn`. Returns 1
+ * when the slot is defined in the current document, filling
+ * param_storage / *count_out with its parameter list (a zero-parameter
+ * definition still returns 1 with count 0). The document scan is also
+ * the liveness test for alias candidates: repl_apply_alias_ops only ever
+ * *sets* alias names, so a name can outlive the definition that bound
+ * it and must not be offered once the row is gone. */
+static int func_slot_signature(int fn, int *count_out,
+                               char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX]) {
     EditorBufferView text = editor_buffer_view();
     const GLCmd *cmds = repl_state_document_cmds();
+
+    if (fn < 0 || fn >= REPL_FUNC_SLOT_COUNT)
+        return 0;
+
     for (int i = 0; i < repl_state_document_count(); i++) {
         int parsed_fn = -1;
         int param_count = 0;
@@ -259,7 +266,7 @@ static int find_defined_func_call_params(const char *input, const char **after_o
                                            &param_count))
                 continue;
         }
-        if (parsed_fn != fn || param_count <= 0)
+        if (parsed_fn != fn)
             continue;
         if (count_out)
             *count_out = param_count;
@@ -267,6 +274,40 @@ static int find_defined_func_call_params(const char *input, const char **after_o
     }
 
     return 0;
+}
+
+/* Parameter list for a call being typed at the head of `input`. Accepts
+ * both spellings of the callee — bare `func3(` and an alias-named
+ * `drawCube(` — via the shared name-token scanner, so aliases get the
+ * same param hint their slot does. Only definitions with at least one
+ * parameter report a match; a zero-parameter call has nothing to hint. */
+static int find_defined_func_call_params(const char *input, const char **after_out,
+                                         int *count_out,
+                                         char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX]) {
+    const char *p = input;
+    char ident[REPL_FUNC_NAME_MAX];
+    int fn = -1;
+    int param_count = 0;
+    int kind = repl_scan_func_name_token(&p, &fn, ident);
+
+    if (kind == 0)
+        return 0;
+    if (kind == 2) {
+        fn = repl_func_alias_lookup_slot(ident);
+        if (fn < 0)
+            return 0;
+    }
+    if (*p != '(')
+        return 0;
+
+    if (after_out)
+        *after_out = p + 1;
+
+    if (!func_slot_signature(fn, &param_count, param_storage) || param_count <= 0)
+        return 0;
+    if (count_out)
+        *count_out = param_count;
+    return 1;
 }
 
 static void update_input_param_hint(void) {
@@ -319,6 +360,18 @@ static void update_selected_autocomplete_preview(void) {
             build_param_hint_text(g_ac_func_matches[ac->selected_idx]->params,
                                   g_ac_func_matches[ac->selected_idx]->param_count,
                                   "", ac->hint, (int)sizeof(ac->hint));
+        } else if (g_ac_alias_slots[ac->selected_idx] >= 0) {
+            /* Alias candidate: the parameter names come from the slot's
+             * definition row, not the static table. Ghost stays (the
+             * untyped tail of the name), matching the built-in shape. */
+            if (func_slot_signature(g_ac_alias_slots[ac->selected_idx],
+                                    &param_count, param_storage) && param_count > 0) {
+                const char *params[MAX_EXPR_VARS];
+                for (int j = 0; j < param_count; j++)
+                    params[j] = param_storage[j];
+                build_param_hint_text(params, param_count, "",
+                                      ac->hint, (int)sizeof(ac->hint));
+            }
         } else if (find_defined_func_call_params(inp.input, &after, &param_count, param_storage)) {
             const char *params[MAX_EXPR_VARS];
             for (int j = 0; j < param_count; j++)
@@ -602,6 +655,33 @@ static void update_autocomplete(void) {
             ac->match_count++;
         }
     }
+
+    /* Complete user function aliases (`drawCube(`). The bare funcN
+     * spellings live in the static completion table; an alias is
+     * runtime state, so its candidate text is materialized here. Both
+     * are offered for an aliased slot — the alias sorts under its own
+     * initial, so neither hides the other. */
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT && ac->match_count < MAX_AC_MATCHES; slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        char *cand = g_ac_alias_text[slot];
+        char params[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+
+        if (!alias || !alias[0])
+            continue;
+        snprintf(cand, sizeof(g_ac_alias_text[slot]), "%s(", alias);
+        if (!ac_prefix_match_ci(cand, input, input_len) ||
+            (int)strlen(cand) <= input_len)
+            continue;
+        if (!func_slot_signature(slot, NULL, params))
+            continue;
+
+        ac->matches[ac->match_count] = cand;
+        ac->insert_matches[ac->match_count] = cand;
+        g_ac_func_matches[ac->match_count] = NULL;
+        g_ac_alias_slots[ac->match_count] = slot;
+        ac->match_count++;
+    }
+
     if (ac->match_count > 0) {
         g_ac_mode = AC_MODE_FUNC_PREFIX;
         sort_autocomplete_matches(ac);
