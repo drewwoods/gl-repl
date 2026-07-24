@@ -828,7 +828,6 @@ TEST_BINS = \
 	test_glr_tour_snapshot \
 	test_glr_tour_transport
 
-ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
 TEST_BINS += test_ui_text_panel
 TEST_BINS += test_glr_actions
@@ -851,7 +850,6 @@ TEST_BINS += test_edit_overlays
 TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 TEST_BINS += test_hidden_lines
-endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
