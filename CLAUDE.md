@@ -236,7 +236,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `glr_tours.{c,h}` | Tours-menu catalog (file-backed `tours/*.pointer`) |
 | `glr_audio.{c,h}` | Playlist engine + persisted audio config (worker thread) |
 | `glr_mesh_export.{c,h}` | PLY export via one `GL_FEEDBACK` capture of the live flat program |
-| `glr_debug.{c,h}` | Diagnostic dumps for CLI flags/tests |
+| `glr_debug.{c,h}` | Diagnostic dumps for CLI flags/tests; `glr_debug_run_dumps` runs the GL-free `--dump-*` bootstrap+dump+exit path |
 | `glr_prof.{c,h}` | `prof_section_info` table + GPU-bracketing policy |
 | [`glr_defaults.h`](src/app/glr_defaults.h) | `CFG_DEFAULT_*` scene/presentation defaults (single source of truth) |
 | [`glr_pointer_script.c`](src/app/glr_pointer_script.c) | Synthetic pointer/keyboard script engine (captures + tours) |

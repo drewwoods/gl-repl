@@ -337,32 +337,10 @@ int main(int argc, char **argv) {
     g_export_ply_path = opts.export_ply_path;
     g_export_ply_srgb = opts.export_ply_srgb;
 
-    if (opts.dump_code || opts.dump_flat || opts.dump_flat_histogram ||
-        opts.dump_state_layout) {
-        /* Dump-only paths skip glr_ctrl_init_gl (no GL context, no
-         * window). glr_ctrl_bootstrap_repl now installs the app
-         * services (status sink + export-config bridge) at its top so
-         * @cfg in imported files is applied even on the dump path.
-         * Status messages still surface to UiState, but UiState is
-         * never rendered here, so they're effectively silent. */
-        if (opts.dump_code || opts.dump_flat || opts.dump_flat_histogram) {
-            glr_ctrl_bootstrap_repl(opts.input_file);
-            /* --example works on the dump paths too: the loader chain
-             * (reset transients, undo note, repl_load_example) is
-             * GL-free, so built-ins can be inspected without a window. */
-            if (opts.example_index >= 0)
-                glr_scene_load_example(opts.example_index);
-        }
-        if (opts.dump_code)
-            glr_debug_dump_current_editor(stdout);
-        if (opts.dump_flat)
-            glr_debug_dump_current_flat_commands_sync(stdout);
-        if (opts.dump_flat_histogram)
-            glr_debug_dump_current_flat_histogram(stdout);
-        if (opts.dump_state_layout)
-            glr_debug_dump_runtime_state_layout(stdout);
+    /* Dump-only CLI paths (--dump-* / --flat-histogram) run GL-free and exit
+     * before any window opens. */
+    if (glr_debug_run_dumps(&opts, stdout))
         return 0;
-    }
 
     glr_init_trace("glutInit begin");
     glutInit(&argc, argv);
