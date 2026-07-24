@@ -819,6 +819,9 @@ TEST_BINS = \
 	test_tutorial_match \
 	test_tutorial_runner \
 	test_glr_camera \
+	test_glr_capture_env \
+	test_glr_cli \
+	test_glr_init_trace \
 	test_glr_tour_snapshot \
 	test_glr_tour_transport
 
@@ -847,7 +850,7 @@ TEST_BINS += test_ui_cpuprof
 TEST_BINS += test_hidden_lines
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -927,6 +930,12 @@ test_render3d_palette_RUN ?= $(BINDIR)/test_render3d_palette
 test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/src/app/glr_audio.o $(OBJDIR)/src/app/glr_paths.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
+
+# The init trace is self-contained (stdio + gettimeofday), so it links alone
+# rather than dragging in CORE_TEST_OBJS.
+test_glr_init_trace_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_init_trace.o $(OBJDIR)/src/app/glr_init_trace.o
+test_glr_init_trace_LDLIBS = $(GL_LDFLAGS)
+test_glr_init_trace_RUN ?= $(BINDIR)/test_glr_init_trace
 
 test_render3d_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_guides.o \
 	$(OBJDIR)/src/render3d/overlays.o \
