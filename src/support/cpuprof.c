@@ -137,7 +137,7 @@ double prof_histogram_bin_hi_us(int bin) {
 static void prof_histogram_record(ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT],
                                   double elapsed_us) {
     int bin = prof_histogram_bin_for_us(elapsed_us);
-    if (bins[bin] < UINT16_MAX)
+    if (bins[bin] < UINT32_MAX)
         bins[bin]++;
 }
 

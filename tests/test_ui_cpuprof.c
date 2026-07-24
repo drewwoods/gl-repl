@@ -260,20 +260,20 @@ static void test_cpuprof_current_fps_averages_intervals(void) {
                 prof_fps_current() > 115.0 && prof_fps_current() < 125.0);
 }
 
-static void test_cpuprof_histogram_saturates_16_bit_bins(void) {
+static void test_cpuprof_histogram_32_bit_bins(void) {
     ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
 
     prof_test_reset();
     prof_test_set_now_us(0.0);
-    for (int i = 0; i < 65536; i++) {
+    for (int i = 0; i < 70000; i++) {
         prof_begin(PROF_REFORMAT);
         prof_end(PROF_REFORMAT);
     }
 
     prof_section_histogram(PROF_REFORMAT, bins,
                            PROF_HISTOGRAM_BIN_COUNT);
-    ASSERT_INT_EQ("histogram bin saturates at 16-bit max",
-                  bins[0], 65535);
+    ASSERT_INT_EQ("histogram bin does not saturate at 16-bit max and reaches 70000",
+                  (int)bins[0], 70000);
 }
 
 static void test_cpuprof_histogram_reset(void) {
@@ -894,7 +894,7 @@ int main(void) {
     test_cpuprof_section_histogram_accum_commit();
     test_cpuprof_frame_time_histogram();
     test_cpuprof_current_fps_averages_intervals();
-    test_cpuprof_histogram_saturates_16_bit_bins();
+    test_cpuprof_histogram_32_bit_bins();
     test_cpuprof_histogram_reset();
     test_cpuprof_log_bin_layout();
     test_histogram_axis_range();

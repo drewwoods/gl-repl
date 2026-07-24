@@ -96,7 +96,7 @@ int    prof_section_is_stale(ProfSection s);
  *
  * Each histogram is 1024 bins spaced *logarithmically* over 1 us .. 1 s, so
  * every bin is the same constant ratio (~1.36%) wide rather than the same
- * number of microseconds. Bin counts are 16-bit and saturate at 65535.
+ * number of microseconds. Bin counts are 32-bit and saturate at UINT32_MAX.
  *
  * Log spacing, not linear, because the sections being timed span four or five
  * decades at once: a whole frame runs in milliseconds while the cheap sections
@@ -118,7 +118,7 @@ int    prof_section_is_stale(ProfSection s);
 #define PROF_HISTOGRAM_MIN_US    1.0        /* bin 0's nominal lower edge */
 #define PROF_HISTOGRAM_MAX_US    1000000.0  /* last bin's upper edge (1 s) */
 #define PROF_HISTOGRAM_DECADES   6.0        /* log10(MAX_US / MIN_US)      */
-typedef uint16_t ProfHistogramBin;
+typedef uint32_t ProfHistogramBin;
 
 /* Bin containing `us`, clamped into [0, PROF_HISTOGRAM_BIN_COUNT - 1]. */
 int prof_histogram_bin_for_us(double us);
