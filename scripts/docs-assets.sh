@@ -598,7 +598,9 @@ EOF
 
 stage_axes() { stage axes <<'EOF'
 /* @cfg axes = AXES_THEME_COMPASS */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_OFF */
+/* @cfg accum_effect = 1 */
+/* @cfg accum_passes = 16 */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
@@ -836,12 +838,12 @@ stage_winding() { stage winding <<'EOF'
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_TRIANGLES);
-glVertex3f(-1.5, -0.8, 0);
-glVertex3f(-0.2, -0.8, 0);
+glVertex3f(-1.5, 0, 0);
+glVertex3f(-0.2, 0, 0);
 glVertex3f(-0.85, 0.8, 0);
-glVertex3f(0.2, -0.8, 0);
+glVertex3f(0.2, 0, 0);
 glVertex3f(0.85, 0.8, 0);
-glVertex3f(1.5, -0.8, 0);
+glVertex3f(1.5, 0, 0);
 glEnd();
 // Snippet end
 EOF
