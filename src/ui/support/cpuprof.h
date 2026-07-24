@@ -131,6 +131,12 @@ int  ui_fps_panel_height(void);
  * carries no reference at all, which is worst exactly where the frame
  * sections live — everything between 1 ms and 10 ms.
  *
+ * Under that sits a second, dimmer row carrying the drawn span's measured
+ * endpoints, flush to the plot edges with a cap at each. Those two are the
+ * only labels in the panel that are not centered over the thing they name, so
+ * they get a row of their own rather than reading as mispositioned ticks —
+ * and off the tick row they can no longer crowd out a decade label.
+ *
  * hidden_series is a session-only mask (one bit per ProfSection, same shape as
  * the profile panel's collapsed_sections) of series the user has toggled off
  * by clicking their legend swatch. A hidden series is dropped from the plot

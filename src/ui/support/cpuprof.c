@@ -726,7 +726,11 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
 #define HIST_HEADER_H      20
 #define HIST_PLOT_H       104
 #define HIST_PLOT_GUTTER   34   /* y-axis label gutter ("10k") */
-#define HIST_XAXIS_H       21   /* tick row + label row under the plot */
+#define HIST_XAXIS_LABEL_H 12   /* one text row under the plot */
+#define HIST_XAXIS_H       33   /* ticks + decade labels + range row */
+
+/* End caps on the range row, at the plot's left and right edge. */
+#define HIST_RANGE_CAP_W    4
 #define HIST_LEGEND_ROW_H  12
 #define HIST_LEGEND_COLS    2
 #define HIST_BOTTOM_PAD     8
@@ -1206,21 +1210,13 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                          (float)(gy - 4), lab, FONT_SMALL);
     }
 
-    /* X labels: the axis bounds, plus a centered tick per decade boundary. The
-     * bounds are the drawn range's real times, so they read as the actual
-     * fastest/slowest sample rather than the histogram's fixed 1us..1s span. */
+    /* Tick row: one label per decade boundary, centered on its tick. Nothing
+     * else shares this row — every label here means "the tick above me is this
+     * time", which is what makes the row readable at a glance. */
     {
-        int  label_y = plot_y - HIST_XAXIS_H + 2;
+        int  label_y = plot_y - HIST_XAXIS_H + 2 + HIST_XAXIS_LABEL_H;
         char lab[24];
 
-        fmt_us(lab, (int)sizeof(lab), prof_histogram_bin_lo_us(lo_bin));
-        gl2d_draw_string((float)plot_x, (float)label_y, lab, FONT_SMALL);
-
-        fmt_us(lab, (int)sizeof(lab), prof_histogram_bin_hi_us(hi_bin));
-        int max_x = plot_x + plot_w - (int)strlen(lab) * FONT_SMALL_W;
-        gl2d_draw_string((float)max_x, (float)label_y, lab, FONT_SMALL);
-
-        /* Decade ticks, skipped where they would collide with either bound. */
         for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
              dec *= 10.0) {
             float gxf;
@@ -1229,9 +1225,57 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
             fmt_us_decade(lab, (int)sizeof(lab), dec);
             int lw = (int)strlen(lab) * FONT_SMALL_W;
             int lx = (int)gxf - lw / 2;
-            if (lx < plot_x + FONT_SMALL_W * 5) continue;   /* clear of the low bound */
-            if (lx + lw > max_x - FONT_SMALL_W) continue;   /* clear of the high bound */
+            /* A decade sitting within half a label of an edge is allowed to
+             * overhang into the y gutter, but never off the panel or past the
+             * plot's right edge. */
+            if (lx < panel_x + 2) continue;
+            if (lx + lw > plot_x + plot_w) continue;
             gl2d_draw_string((float)lx, (float)label_y, lab, FONT_SMALL);
+        }
+    }
+
+    /* Range row: the drawn span's real endpoints, flush to the plot edges on
+     * their own row and dimmer than the tick labels. These are the fastest and
+     * slowest sample actually recorded, not decade boundaries — the only two
+     * labels in the panel whose text sits beside its position rather than
+     * centered over it, so they get a row where nothing invites that reading,
+     * with a rule running out to a cap at each plot edge to say which edge each
+     * one measures. Keeping them off the tick row is also what lets every
+     * decade label draw: they used to crowd 1 ms out whenever the slow end
+     * needed a wide label. */
+    {
+        int  range_y = plot_y - HIST_XAXIS_H + 2;
+        int  rule_y  = range_y + 4;
+        char lo_lab[24], hi_lab[24];
+
+        fmt_us(lo_lab, (int)sizeof(lo_lab), prof_histogram_bin_lo_us(lo_bin));
+        fmt_us(hi_lab, (int)sizeof(hi_lab), prof_histogram_bin_hi_us(hi_bin));
+
+        int lo_w = (int)strlen(lo_lab) * FONT_SMALL_W;
+        int hi_w = (int)strlen(hi_lab) * FONT_SMALL_W;
+        int lo_x = plot_x + HIST_RANGE_CAP_W + 2;
+        int hi_x = plot_x + plot_w - HIST_RANGE_CAP_W - 2 - hi_w;
+
+        ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+        gl2d_draw_string((float)lo_x, (float)range_y, lo_lab, FONT_SMALL);
+        gl2d_draw_string((float)hi_x, (float)range_y, hi_lab, FONT_SMALL);
+
+        /* Caps + leaders, drawn only when the two labels leave room for them. */
+        if (lo_x + lo_w + 4 < hi_x) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            ui_clr_a(UI_TOK_TEXT_PLACEHOLDER, 0.7f);
+            glBegin(GL_LINES);
+            glVertex2f((float)plot_x,          (float)range_y);
+            glVertex2f((float)plot_x,          (float)(range_y + 8));
+            glVertex2f((float)plot_x,          (float)rule_y);
+            glVertex2f((float)lo_x - 2.0f,     (float)rule_y);
+            glVertex2f((float)(plot_x + plot_w), (float)range_y);
+            glVertex2f((float)(plot_x + plot_w), (float)(range_y + 8));
+            glVertex2f((float)(hi_x + hi_w + 2), (float)rule_y);
+            glVertex2f((float)(plot_x + plot_w), (float)rule_y);
+            glEnd();
+            glDisable(GL_BLEND);
         }
     }
 
