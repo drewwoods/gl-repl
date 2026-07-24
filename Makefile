@@ -1036,7 +1036,27 @@ test_replay_walk_OBJS = $(OBJDIR)/$(TEST_DIR)/test_replay_walk.o $(filter-out $(
 test_edit_overlays_OBJS = $(OBJDIR)/$(TEST_DIR)/test_edit_overlays.o $(filter-out $(OBJDIR)/src/subsystems/edit_overlays/edit_overlays.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
-TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
+
+# Longest-processing-time-first (LPT) scheduling for the parallel runner. The
+# test-binary durations are heavily skewed (a handful of multi-second binaries,
+# then a cliff to <0.5s), so with a small pool a long binary discovered late
+# leaves one worker finishing it alone. Dispatching the historically-longest
+# binaries first (they occupy the pool from t=0 while the many tiny ones
+# backfill) cuts tail latency / makespan. Durations profiled via
+# `make test-stubs TEST_JOBS=3` (fewer jobs than performance cores). Only the
+# run ORDER changes; $(TEST_BINS) (build set) is untouched, and $(filter ...)
+# keeps stub-only entries out of the ordering when USE_GL_STUBS is off.
+TEST_SLOW_FIRST = \
+	test_ui_menu_bar \
+	test_repl_core_examples \
+	test_audio \
+	test_export_trace_parity \
+	test_glr_ctrl \
+	test_repl_flatten_differential
+TEST_BINS_ORDERED = \
+	$(foreach test,$(TEST_SLOW_FIRST),$(filter $(test),$(TEST_BINS))) \
+	$(filter-out $(TEST_SLOW_FIRST),$(TEST_BINS))
+TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS_ORDERED),'$(test):::$($(test)_RUN)')
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
 TEST_JOBS ?=
