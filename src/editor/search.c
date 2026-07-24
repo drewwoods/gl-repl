@@ -395,15 +395,46 @@ void editor_search_navigate(int direction) {
     search_navigate(direction);
 }
 
+/* Seed the query from the input-buffer character selection, the usual
+ * "find selected text" behavior. Returns 1 when the query was replaced.
+ * A missing or empty selection leaves the previous query intact, so
+ * Ctrl+F with nothing highlighted still reopens the last search. */
+static int search_seed_from_input_selection(EditorSearchState *srch) {
+    int lo, hi, len;
+
+    if (!editor_input_selection_active())
+        return 0;
+
+    lo = editor_input_selection_lo();
+    hi = editor_input_selection_hi();
+    len = hi - lo;
+    if (len <= 0)
+        return 0;
+    if (len > MAX_INPUT_LEN - 2)
+        len = MAX_INPUT_LEN - 2;
+
+    memcpy(srch->query, editor_input_text() + lo, (size_t)len);
+    srch->query[len] = '\0';
+    srch->query_len = len;
+    return 1;
+}
+
 static void search_open(void) {
     EditorSearchState *srch = editor_state_search_mut();
+    int seeded;
+
     if (srch->active)
         return;
 
     srch->active = 1;
+    seeded = search_seed_from_input_selection(srch);
     srch->cursor_pos = srch->query_len;
     editor_request_close_help();
     editor_completion_clear();
+    /* Run the same incremental scan a typed character would, so the
+     * seeded query lands on its first match immediately. */
+    if (seeded)
+        search_refresh_query();
 }
 
 int editor_search_handle_key(unsigned char key) {

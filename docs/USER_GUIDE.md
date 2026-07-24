@@ -246,7 +246,9 @@ defaults](#display-default-commands).
 
 **Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move
 to the previous / next match. Press **Enter** for the next match, or **Esc**
-to close it.
+to close it. If text is highlighted in the edit line when you press Ctrl+F,
+that text seeds the find field and searching starts from it; with nothing
+highlighted the previous query is kept.
 
 ### Display default commands
 

@@ -47,6 +47,14 @@ static void declare_test_vars(void) {
     repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
+/* Mark [anchor, cursor) of the live input as an input-buffer selection —
+ * the state Shift+arrows / drag-select leave behind. */
+static void select_input_range(int anchor, int cursor) {
+    EditorInputState *inp = editor_state_input_mut();
+    inp->anchor_pos = anchor;
+    inp->cursor_pos = cursor;
+}
+
 static void set_live_input(const char *text) {
     EditorInputState *inp = editor_state_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
@@ -249,6 +257,43 @@ int main(void) {
     ASSERT_TRUE("paste lines into search query", strcmp(g_search_query, "test") == 0);
     ASSERT_TRUE("paste lines updates query len", g_search_query_len == 4);
     ASSERT_TRUE("paste lines updates cursor pos", g_search_cursor_pos == 4);
+
+    /* Ctrl+F seeds the query from a highlighted input-buffer range */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_navigate_to_line(0);
+    set_live_input("glColor3f(0, 1, 0);");
+    select_input_range(0, 9); /* "glColor3f" */
+    open_search();
+    ASSERT_TRUE("ctrl-f seeds query from selection",
+                strcmp(g_search_query, "glColor3f") == 0);
+    ASSERT_TRUE("seeded query len", g_search_query_len == 9);
+    ASSERT_TRUE("seeded cursor at query end", g_search_cursor_pos == 9);
+    ASSERT_TRUE("seeded query scans immediately", g_search_match_count == 2);
+    ASSERT_TRUE("seeded query lands on first hit", g_search_hit_line == 0);
+    ASSERT_TRUE("seeded first hit char", g_search_hit_char == 0);
+
+    /* Reversed selection (cursor before anchor) seeds the same text */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glEnd();");
+    editor_navigate_to_line(0);
+    set_live_input("glEnd();");
+    select_input_range(5, 2); /* "End" */
+    open_search();
+    ASSERT_TRUE("reversed selection seeds lo..hi",
+                strcmp(g_search_query, "End") == 0);
+
+    /* No selection: Ctrl+F leaves the previous query in place */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glEnd();");
+    open_search();
+    type_search_text("End");
+    editor_handle_key(27, 0, 0); /* Esc clears query + closes */
+    set_live_input("glEnd();");
+    open_search();
+    ASSERT_TRUE("ctrl-f without selection keeps query empty",
+                g_search_query_len == 0);
 
     printf("repl_core_search: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
