@@ -416,6 +416,30 @@ dispatch_queue() {
     local k
     for (( k=0; k<jobs; k++ )); do printf '\n' >&9; done
 
+    # Parallel mode buffers each check's output and only replays it once every
+    # check has finished, so an interactive run would sit silent for a couple of
+    # seconds and look like a stall. When stderr is a terminal, run a background
+    # ticker that reports how many checks have completed (one .rc file each) on a
+    # single self-erasing line. Skipped when stderr is not a tty so piped/CI logs
+    # stay byte-identical to the serial run.
+    local progress_pid=
+    if [ -t 2 ] && [ "$n" -gt 1 ]; then
+        (
+            while :; do
+                # Count completed checks by their .rc files. A glob loop (not
+                # `ls`) stays safe under set -e/pipefail when none exist yet: the
+                # unmatched pattern is skipped by the -e test rather than erroring.
+                done=0
+                for f in "$dir"/*.rc; do [ -e "$f" ] && done=$((done+1)); done
+                printf '\r  %s▶%s running %d ownership guards… %d/%d' \
+                    "$YELLOW" "$NC" "$n" "$done" "$n" >&2
+                [ "$done" -ge "$n" ] && break
+                sleep 0.1
+            done
+        ) &
+        progress_pid=$!
+    fi
+
     local i
     for (( i=0; i<n; i++ )); do
         read -r -u 9                                          # acquire a token
@@ -423,6 +447,10 @@ dispatch_queue() {
     done
     wait
     exec 9>&-
+    if [ -n "$progress_pid" ]; then
+        wait "$progress_pid" 2>/dev/null || true
+        printf '\r\033[K' >&2   # erase the progress line before the report
+    fi
 
     local rc=0 crc
     for (( i=0; i<n; i++ )); do
