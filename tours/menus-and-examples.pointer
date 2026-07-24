@@ -10,32 +10,32 @@
 # right-hand column.
 
 move scene:0.55,0.30
-echo scene:0.25,0.76 18 3.2 Welcome! This tour drives gl-repl.
+echo scene:0.25,0.76 24 3.2 Welcome! This tour drives gl-repl.
 pause 3.2
-echo scene:0.25,0.76 18 2.8 Press any key or click to stop it.
+echo scene:0.25,0.76 24 2.8 Press any key or click to stop it.
 pause 2.8
-echo scene:0.25,0.76 18 3.6 The Scene menu holds the examples.
+echo scene:0.25,0.76 24 3.6 The Scene menu holds the examples.
 glide menu:scene 0.9         # up to the Scene menu
 click
 glide item:all 0.7           # hover All (every example, grouped)
 glide item:3d 0.6            # hover 3D -> examples flyout opens
 glide subenter:3d 0.5        # straight right into the flyout
-echo scene:0.25,0.76 18 3.2 Hover a tag; slide into its flyout.
+echo scene:0.25,0.76 24 3.2 Hover a tag; slide into its flyout.
 glide sub:3d:animated_ring 0.5   # hover highlight follows
 glide sub:3d:torus_knot 0.7
 ring sub:3d:torus_knot 1.2       # spotlight it
 glide sub:3d:whale 1.1           # down to the showcase
-echo scene:0.25,0.76 18 2.6 Click loads the example.
+echo scene:0.25,0.76 24 2.6 Click loads the example.
 click                        # load it; camera eases in
 pause 3.5
-echo scene:0.25,0.76 18 3.4 Tutorials teach step by step.
+echo scene:0.25,0.76 24 3.4 Tutorials teach step by step.
 glide menu:tutorials 1.0
 click
 glide item:geometry 0.7      # hover Geometry -> tutorial flyout
 glide subenter:geometry 0.4
 glide sub:geometry:first_triangle 0.5
 ring sub:geometry:first_triangle 1.6   # spotlight, don't start it
-echo scene:0.25,0.76 18 3.6 Config: grids, themes, overlays.
+echo scene:0.25,0.76 24 3.6 Config: grids, themes, overlays.
 glide menu:config 0.8
 click
 glide item:rendering 0.6     # hover Rendering
@@ -44,10 +44,10 @@ glide subenter:overlays 0.4
 glide sub:overlays:vertex_points 0.5
 ring sub:overlays:vertex_points 1.2
 click                        # Vertex points ON (whale lights up)
-echo scene:0.25,0.76 18 2.8 Toggles apply live.
+echo scene:0.25,0.76 24 2.8 Toggles apply live.
 click                        # ...and back OFF
 click scene:0.55,0.30        # dismiss the menu
-echo scene:0.25,0.76 18 3.2 Replay rebuilds the scene call by call.
+echo scene:0.25,0.76 24 3.2 Replay rebuilds the scene call by call.
 glide pin:replay 1.2
 click                        # start replay
 glide scene:0.70,0.40 1.0    # park; watch it build
@@ -55,4 +55,4 @@ pause 5.0                    # let replay build the scene
 # Ctrl+R exits the replay (the pin click would only pause it)
 key \cr
 glide scene:0.55,0.30 0.8
-echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!
+echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!

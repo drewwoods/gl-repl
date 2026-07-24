@@ -5,16 +5,16 @@
 # points are symbolic in-canvas targets (grammar: src/app/glr_pointer_script.h).
 
 move scene:0.55,0.30
-echo scene:0.25,0.76 18 3.0 Let's build a scene from scratch.
+echo scene:0.25,0.76 24 3.0 Let's build a scene from scratch.
 glide shell:new 0.8             # browser shell's New button
 click shell:new
 glide scene:0.55,0.30 0.6       # bring the tour cursor back into the canvas
-echo scene:0.25,0.76 18 3.4 A new scene seeds the GL boilerplate.
+echo scene:0.25,0.76 24 3.4 A new scene seeds the GL boilerplate.
 pause 3.4
-echo scene:0.25,0.76 18 3.4 Type a command; the ; key commits it.
+echo scene:0.25,0.76 24 3.4 Type a command; the ; key commits it.
 key@20 glRotatef(t * 40, 0, 1, 0)
 key ;
-echo scene:0.25,0.76 18 3.0 t is the animation clock (Ctrl+T).
+echo scene:0.25,0.76 24 3.0 t is the animation clock (Ctrl+T).
 key@20 glBegin(GL_TRIANGLES)
 key ;
 key@20 glColor3f(1, 0.42, 0.3)
@@ -31,11 +31,11 @@ key@20 glVertex3f(0, 1.1, 0)
 key ;
 key@20 glEnd()
 key ;
-echo scene:0.25,0.76 18 3.6 The gray ghost is autocomplete (Tab).
+echo scene:0.25,0.76 24 3.6 The gray ghost is autocomplete (Tab).
 key@20 glutSolidT
 pause 1.6                       # let the autocomplete ghost linger
 key@20 orus(0.25, 1.4, 16, 32)
 key ;
-echo scene:0.25,0.76 18 4.0 Lines re-run every frame. Undo: Ctrl+Z.
+echo scene:0.25,0.76 24 4.0 Lines re-run every frame. Undo: Ctrl+Z.
 pause 4.0
-echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!
+echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
