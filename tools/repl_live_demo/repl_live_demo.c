@@ -307,7 +307,7 @@ static UiVariablePanelView build_panel_view(void) {
     v.vars            = g_rows;
     v.var_count       = g_row_count;
     v.drag_active_var = variable_panel_drag_active_var();
-    v.drag_log_mode   = variable_panel_drag_log_mode();
+    v.drag_coarse     = variable_panel_drag_coarse();
     return v;
 }
 
@@ -622,8 +622,8 @@ static void mouse_func(int button, int state, int x, int y) {
             UiVariablePanelView view = build_panel_view();
             UiHit hit = ui_variable_panel_hit_test(&view, x, y);
             if (hit.kind == UI_HIT_VARIABLE_SLIDER) {
-                int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
-                variable_panel_handle_drag_begin(hit.item_idx, log_mode, x);
+                int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+                variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
                 g_slider_drag = 1;
                 return;
             }

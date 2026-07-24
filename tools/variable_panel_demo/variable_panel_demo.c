@@ -84,7 +84,7 @@ static UiVariablePanelView demo_build_view(void) {
     v.vars            = rows;
     v.var_count       = DEMO_VAR_COUNT;
     v.drag_active_var = variable_panel_drag_active_var();
-    v.drag_log_mode   = variable_panel_drag_log_mode();
+    v.drag_coarse     = variable_panel_drag_coarse();
     return v;
 }
 
@@ -152,8 +152,8 @@ static void mouse_func(int button, int state, int x, int y) {
         UiVariablePanelView view = demo_build_view();
         UiHit hit = ui_variable_panel_hit_test(&view, x, y);
         if (hit.kind == UI_HIT_VARIABLE_SLIDER) {
-            int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
-            variable_panel_handle_drag_begin(hit.item_idx, log_mode, x);
+            int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+            variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
         }
     } else if (state == GLUT_UP) {
         variable_panel_handle_drag_reset();
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
     glutKeyboardFunc(keyboard_func);
     glutIdleFunc(idle_func);
 
-    printf("variable_panel_demo: drag a slider row (left=linear, right=log) to\n");
+    printf("variable_panel_demo: drag a slider row (left=linear, right=coarse) to\n");
     printf("  reshape the torus. v=toggle panel  q=quit\n");
     glutMainLoop();
     return 0;
