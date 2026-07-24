@@ -15,6 +15,7 @@
 #include "repl/state_owners.h"
 #include "repl/export.h"
 #include "repl/executor.h"
+#include "repl/time.h"
 #include "ui/app/state.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 
@@ -2432,6 +2433,38 @@ int main(void) {
         remove(attrib_all_path);
     }
 
+    /* The animation clock round-trips. `t` is always the first predef
+     * global, and the exporter writes that block under a multi-line
+     * comment — which the importer has to drop rather than glue onto the
+     * decl below it (doing so silently reset every reloaded scene to
+     * t = 0, share links in the web build included). */
+    {
+        const char *time_path = "/tmp/repl_core_time_output.c";
+        char buf[16384];
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_LINE_STRIP);");
+        editor_feed_line("glVertex3f(t, 0, 0);");
+        editor_feed_line("glEnd();");
+        repl_set_time(7.5f);
+        repl_export_save_output(time_path, source_document_view(), NULL);
+        read_text_file(time_path, buf, sizeof(buf));
+        ASSERT_TRUE("export carries the live t snapshot",
+                    strstr(buf, "static float t = 7.5;") != NULL);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        ASSERT_TRUE("reset clears t", t_idx >= 0 &&
+                    fabsf(g_predef_vars[t_idx].value) < 1e-6f);
+        ASSERT_TRUE("exported scene reloads",
+                    repl_export_load_from_file(time_path, NULL) == 1);
+        t_idx = repl_eval_find_predef_var_idx("t");
+        ASSERT_TRUE("import restores t", t_idx >= 0 &&
+                    fabsf(g_predef_vars[t_idx].value - 7.5f) < 1e-6f);
+        ASSERT_INT("import keeps the geometry", repl_state_document_count(), 3);
+        remove(time_path);
+        glr_ctrl_reset_all(); declare_test_vars();
+    }
+
     test_config_variants_export();
     test_workspace_header_budget_worst_case();
     test_import_robustness();
@@ -2664,6 +2697,36 @@ static void test_import_robustness(void) {
                 strstr(editor_buffer_line(1), "gear") != NULL);
     ASSERT_TRUE("post-function command follows function",
                 strstr(editor_buffer_line(4), "glColor3f(0.4, 0.5, 0.6);") != NULL);
+
+    /* 9. A C comment spanning several physical lines is dropped whole. It
+     * has no line-level form, so without that the accumulator treats the
+     * opener as an unterminated statement and swallows the first real line
+     * after the comment (how `static float t = <snapshot>;` — the leading
+     * predef global — used to get lost). Blank lines are not comments and
+     * still survive as commands. */
+    f = fopen(test_path, "w");
+    fprintf(f, "/* Scene state variables.\n");
+    fprintf(f, " * Two lines of prose, then the decl below.\n");
+    fprintf(f, " */\n");
+    fprintf(f, "static float w = 2.5;\n");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glVertex3f(w, 0, 0);\n");
+    fprintf(f, "\n");
+    fprintf(f, "glVertex3f(0, w, 0);\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("load multi-line comment file",
+                repl_export_load_from_file(test_path, NULL) == 1);
+    {
+        int w_idx = repl_eval_find_predef_var_idx("w");
+        ASSERT_TRUE("decl under a multi-line comment keeps its value",
+                    w_idx >= 0 && fabsf(g_predef_vars[w_idx].value - 2.5f) < 1e-6f);
+    }
+    ASSERT_INT("multi-line comment file command count",
+               repl_state_document_count(), 3);
+    ASSERT_INT("blank line inside snippet survives",
+               repl_state_document_cmds()[1].type, CMD_EMPTY);
 
     remove(test_path);
 }

@@ -2121,6 +2121,60 @@ static int import_normalize_c89_comment_line(const char *line,
     return 1;
 }
 
+/* Strip the parts of `line` that sit inside a C block comment spanning
+ * more than one physical line, carrying the open/closed state across
+ * calls in `*in_comment`. Comments that open and close on one line are
+ * left untouched — import_normalize_c89_comment_line rewrites those into
+ * `//` form, and the workspace-header directives depend on it.
+ *
+ * Without this, the opener line of a multi-line comment reads as an
+ * unterminated statement, so the line accumulator glues the whole
+ * comment onto the next real one. The exporter's globals block is
+ * written under exactly such a comment, which is why `static float t =
+ * <snapshot>;` — always the first predef decl — never round-tripped.
+ *
+ * Returns 0 only for a line this strip emptied out (drop it); a line it
+ * did not touch is always kept, blank ones included — those still carry
+ * a REPL blank command through the snippet body. */
+static int import_strip_block_comment_span(char *line, int *in_comment) {
+    int stripped = 0;
+
+    if (*in_comment) {
+        char *close = strstr(line, "*/");
+        if (!close) {
+            line[0] = '\0';
+            return 0;
+        }
+        *in_comment = 0;
+        memmove(line, close + 2, strlen(close + 2) + 1);
+        stripped = 1;
+    }
+
+    const char *scan = line;
+    for (;;) {
+        const char *open = import_find_block_comment_start(scan);
+        if (!open)
+            break;
+        const char *close = strstr(open + 2, "*/");
+        if (!close) {
+            *in_comment = 1;
+            line[open - line] = '\0';
+            stripped = 1;
+            break;
+        }
+        scan = close + 2;
+    }
+
+    if (!stripped)
+        return 1;
+
+    for (const char *q = line; *q; q++) {
+        if (!isspace((unsigned char)*q))
+            return 1;
+    }
+    return 0;
+}
+
 static int is_line_comment_or_directive(const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -2204,6 +2258,7 @@ typedef struct {
     int line_no;
     int depth;
     int truncated;
+    int in_block_comment;
 } ImportAccum;
 
 static int import_line_has_snippet_marker(const char *line) {
@@ -2269,6 +2324,11 @@ static void import_process_physical_line(ImportState *state,
                                          ImportAccum *acc) {
     char normalized_line[MAX_LINE_LEN];
     const char *proc_line = line;
+
+    /* Multi-line comments are dropped before anything else looks at the
+     * line, so they can never be mistaken for an in-progress statement. */
+    if (!import_strip_block_comment_span(line, &acc->in_block_comment))
+        return;
 
     if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
         proc_line = normalized_line;
