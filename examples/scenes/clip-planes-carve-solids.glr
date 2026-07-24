@@ -90,4 +90,4 @@ label("1 plane: dome");
 glRasterPos3f(-0.85, -0.85, 0);
 label("2 planes: wedge");
 glRasterPos3f(2.0, -0.85, 0);
-label("animated d: cutaway");
+label("3 animated: cutaway");
