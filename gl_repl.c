@@ -3,6 +3,7 @@
 #include "app/glr_debug.h"
 #include "app/glr_audio.h"
 #include "app/glr_frame_pacer.h"
+#include "app/glr_init_trace.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
 #include "app/glr_pointer_script.h"
@@ -19,39 +20,6 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
-
-/* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
- * since main() started so a slow phase (e.g. ma_engine_init opening the
- * audio device) is visible in the terminal. gettimeofday keeps this
- * portable/C99 without the per-platform timebase branching in prof.c.
- *
- * Two granularity levels:
- *  - init_trace()          always emits — the baseline boot phases.
- *  - init_trace_detail()   emits only when --detailed-prof or the
- *                          GLR_DETAILED_PROF env var is set; covers
- *                          the finer-grained phases (glutInit split,
- *                          audio playlist sub-steps, first two frames). */
-static double g_init_t0 = -1.0;
-static int    g_detailed_prof = 0;
-
-static double init_now(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (double)tv.tv_sec + (double)tv.tv_usec / 1e6;
-}
-
-static double init_elapsed_seconds(void) {
-    if (g_init_t0 < 0.0) g_init_t0 = init_now();
-    return init_now() - g_init_t0;
-}
-
-static void init_trace(const char *phase) {
-    fprintf(stderr, "[init +%6.3fs] %s\n", init_elapsed_seconds(), phase);
-}
-
-static void init_trace_detail(const char *phase) {
-    if (g_detailed_prof) init_trace(phase);
-}
 
 static void print_usage(const char *prog) {
     const char *name = (prog && prog[0]) ? prog : "gl-repl";
@@ -324,25 +292,25 @@ static void display_func(void) {
     /* Scripted pointer/keyboard input (GLR_POINTER_SCRIPT): fire this
      * frame's events before the frame renders so it reflects them. */
     glr_pointer_script_frame();
-    /* Trace the first two frames separately (gated on g_detailed_prof
-     * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
+    /* Trace the first two frames separately (gated on the init-trace
+     * detailed flag — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
      * macOS first-drawable wait, GL stack lazy init / SW-fallback
      * chatter) that frame 2 reveals as gone. A side-by-side frame-1
      * vs. frame-2 gap proves the spend was first-frame-only and not
      * a steady-state regression. */
     static int frames_traced = 0;
-    int trace_this = g_detailed_prof && (frames_traced < 2);
+    int trace_this = glr_init_trace_detailed() && (frames_traced < 2);
     int frame_num = frames_traced + 1;
     char buf[64];
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d display callback", frame_num);
-        init_trace(buf);
+        glr_init_trace(buf);
     }
     glr_ctrl_display_frame();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d render done", frame_num);
-        init_trace(buf);
+        glr_init_trace(buf);
     }
 
     /* --export-ply: the scene has rendered one full frame, so it is loaded,
@@ -378,7 +346,7 @@ static void display_func(void) {
     glutSwapBuffers();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
-        init_trace(buf);
+        glr_init_trace(buf);
         frames_traced++;
     }
 
@@ -530,19 +498,19 @@ int main(int argc, char **argv) {
     int window_w  = 1200;
     int window_h  = 800;
 
-    init_trace("start");
-    glr_audio_set_hitch_log_elapsed_fn(init_elapsed_seconds);
-    glr_ctrl_set_init_log_elapsed_fn(init_elapsed_seconds);
+    glr_init_trace("start");
+    glr_audio_set_hitch_log_elapsed_fn(glr_init_trace_elapsed_seconds);
+    glr_ctrl_set_init_log_elapsed_fn(glr_init_trace_elapsed_seconds);
     glr_ctrl_set_program_name(argv[0]);
 
     /* GLR_DETAILED_PROF (any non-empty value) is the env-var twin of
      * --detailed-prof; either one promotes the optional fine-grained
-     * init_trace_detail() phases (glutInit split, audio playlist
+     * glr_init_trace_detail() phases (glutInit split, audio playlist
      * sub-steps, first-two-frames triple) to stderr. Default off so
      * a normal start emits only the baseline boot-phase set. */
     {
         const char *env = getenv("GLR_DETAILED_PROF");
-        if (env && *env) g_detailed_prof = 1;
+        if (env && *env) glr_init_trace_set_detailed(1);
     }
 
     for (int i = 1; i < argc; i++) {
@@ -562,7 +530,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--dump-state-layout") == 0)
             dump_state_layout = 1;
         else if (strcmp(argv[i], "--detailed-prof") == 0)
-            g_detailed_prof = 1;
+            glr_init_trace_set_detailed(1);
         else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
             g_export_ply_path = argv[++i];
         else if (strcmp(argv[i], "--export-ply-srgb") == 0)
@@ -669,18 +637,18 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    init_trace("glutInit begin");
+    glr_init_trace("glutInit begin");
     glutInit(&argc, argv);
-    init_trace_detail("glutInit done");
+    glr_init_trace_detail("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(window_w, window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
-    init_trace("window created");
+    glr_init_trace("window created");
 
     glr_ctrl_init_gl();
     atexit(glr_shutdown);
-    init_trace("GL init done");
+    glr_init_trace("GL init done");
     glr_ctrl_bootstrap_repl(input_file);
     if (example_index >= 0)
         glr_scene_load_example(example_index);
@@ -765,14 +733,14 @@ int main(int argc, char **argv) {
         splash_skip();       /* start clean — no splash band over the tour */
         glr_tours_start(tour_index);
     }
-    init_trace("REPL bootstrap done");
+    glr_init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
 
     if (!no_audio)
-        glr_audio_bootstrap(assets_override, init_trace, init_trace_detail);
+        glr_audio_bootstrap(assets_override, glr_init_trace, glr_init_trace_detail);
     glr_actions_apply_defaults();
 
-    init_trace("entering main loop");
+    glr_init_trace("entering main loop");
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
     glutKeyboardFunc(keyboard_func);
