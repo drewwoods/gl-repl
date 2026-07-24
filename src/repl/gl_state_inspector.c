@@ -63,6 +63,14 @@ typedef struct {
     ReplGlStateChangeSource position_source;
 } ReplGlTrackedLight;
 
+/* Field order here is the module's canonical cell order: gl_state_apply_cmd()
+ * and gl_state_append_report() both walk their cells in this sequence, so a
+ * side-by-side read of the three is a straight zip. Where one command writes
+ * several cells (glPushMatrix touches the stack depth but not the matrix), it
+ * sits at the position of the primary cell it writes.
+ *
+ * gl_state_restore_attrib_groups() is the deliberate exception — it is ordered
+ * by attribute group instead; see its comment. */
 typedef struct {
     ReplGlTrackedCap caps[REPL_GL_STATE_MAX_CAPS];
     int cap_count;
@@ -85,6 +93,10 @@ typedef struct {
     ReplGlStateChangeSource matrix_source;
     ReplGlStateChangeSource matrix_depth_source;
 
+    int attrib_stack_depth;
+    int attrib_stack_depth_touched;
+    ReplGlStateChangeSource attrib_stack_depth_source;
+
     GLenum color_material_face;
     GLenum color_material_mode;
     int color_material_touched;
@@ -103,10 +115,6 @@ typedef struct {
     ReplGlTrackedLight lights[REPL_LIGHT_SLOT_COUNT];
     float light_position_world_default[4];
     int light_position_world_default_valid;
-
-    int attrib_stack_depth;
-    int attrib_stack_depth_touched;
-    ReplGlStateChangeSource attrib_stack_depth_source;
 
     GLenum front_face;
     GLenum cull_face;
@@ -583,14 +591,25 @@ static int gl_state_mask_covers(unsigned mask, CmdType type) {
  * source to the pop line (the policy CMD_POP_MATRIX uses). Each field's bit
  * membership comes from attrib_bits via its setter command type; the only
  * fields with no REPL setter command (the per-light parameters, set solely by
- * generated writes) use the literal GL_LIGHTING_BIT the GL spec assigns them. */
+ * generated writes) use the literal GL_LIGHTING_BIT the GL spec assigns them.
+ *
+ * Ordering: this is the one function in the module that does NOT follow
+ * ReplGlTrackedState field order. It is grouped by attribute bit, in
+ * k_attrib_bits[] order (command_spec.c) — the question a reader brings here is
+ * "what does GL_LINE_BIT restore?", so a bit's cells must sit together. Keep
+ * new cells in their group and keep the groups in table order.
+ *
+ * GL_ENABLE_BIT is the exception to the exception: it cross-cuts every cap
+ * rather than owning cells of its own, so it runs as a prologue instead of
+ * taking its table slot between GL_TRANSFORM_BIT and GL_COLOR_BUFFER_BIT. */
 static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
                                            const ReplGlTrackedState *snap,
                                            unsigned mask,
                                            ReplGlStateChangeSource source) {
     int i, j;
 
-    /* Enable/disable state of every tracked cap (GL_ENABLE_BIT plus the cap's
+    /* --- GL_ENABLE_BIT (cross-cutting prologue) ---
+     * Enable/disable state of every tracked cap (GL_ENABLE_BIT plus the cap's
      * own group bit). */
     for (i = 0; i < s->cap_count; i++) {
         if (mask & repl_attrib_bits_for_type(CMD_ENABLE, s->caps[i].cap)) {
@@ -600,6 +619,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         }
     }
 
+    /* --- GL_CURRENT_BIT --- */
     if (gl_state_mask_covers(mask, CMD_COLOR3F)) {
         memcpy(s->current_color, snap->current_color, sizeof(s->current_color));
         s->current_color_touched = 1;
@@ -621,6 +641,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->raster_pos_source = source;
     }
 
+    /* --- GL_POINT_BIT --- */
     if (gl_state_mask_covers(mask, CMD_POINT_SIZE)) {
         s->point_size = snap->point_size;
         s->point_size_touched = 1;
@@ -633,6 +654,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->point_attenuation_source = source;
     }
 
+    /* --- GL_LINE_BIT --- */
     if (gl_state_mask_covers(mask, CMD_LINE_WIDTH)) {
         s->line_width = snap->line_width;
         s->line_width_touched = 1;
@@ -645,6 +667,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->line_stipple_source = source;
     }
 
+    /* --- GL_POLYGON_BIT --- */
     if (gl_state_mask_covers(mask, CMD_FRONT_FACE)) {
         s->front_face = snap->front_face;
         s->front_face_touched = 1;
@@ -656,6 +679,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->cull_face_source = source;
     }
 
+    /* --- GL_LIGHTING_BIT --- */
     if (gl_state_mask_covers(mask, CMD_SHADE_MODEL)) {
         s->shade_model = snap->shade_model;
         s->shade_model_touched = 1;
@@ -706,23 +730,8 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         }
     }
 
-    if (gl_state_mask_covers(mask, CMD_DEPTH_FUNC)) {
-        s->depth_func = snap->depth_func;
-        s->depth_func_touched = 1;
-        s->depth_func_source = source;
-    }
-    if (gl_state_mask_covers(mask, CMD_DEPTH_MASK)) {
-        s->depth_mask = snap->depth_mask;
-        s->depth_mask_touched = 1;
-        s->depth_mask_source = source;
-    }
-    if (gl_state_mask_covers(mask, CMD_CLEAR_DEPTH)) {
-        s->clear_depth = snap->clear_depth;
-        s->clear_depth_touched = 1;
-        s->clear_depth_source = source;
-    }
-
-    /* Fog parameters (mode/density/start/end/color) all ride GL_FOG_BIT; the
+    /* --- GL_FOG_BIT ---
+     * Fog parameters (mode/density/start/end/color) all ride GL_FOG_BIT; the
      * GL_FOG enable flag rides GL_ENABLE_BIT|GL_FOG_BIT and is restored above
      * with the other caps. */
     if (gl_state_mask_covers(mask, CMD_FOG_I)) {
@@ -743,6 +752,24 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->fog_color_source = source;
     }
 
+    /* --- GL_DEPTH_BUFFER_BIT --- */
+    if (gl_state_mask_covers(mask, CMD_DEPTH_FUNC)) {
+        s->depth_func = snap->depth_func;
+        s->depth_func_touched = 1;
+        s->depth_func_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_DEPTH_MASK)) {
+        s->depth_mask = snap->depth_mask;
+        s->depth_mask_touched = 1;
+        s->depth_mask_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_CLEAR_DEPTH)) {
+        s->clear_depth = snap->clear_depth;
+        s->clear_depth_touched = 1;
+        s->clear_depth_source = source;
+    }
+
+    /* --- GL_TRANSFORM_BIT --- */
     if (gl_state_mask_covers(mask, CMD_CLIP_PLANE)) {
         for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
             memcpy(s->clip_plane[i], snap->clip_plane[i],
@@ -752,6 +779,7 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         }
     }
 
+    /* --- GL_COLOR_BUFFER_BIT --- */
     if (gl_state_mask_covers(mask, CMD_CLEAR_COLOR)) {
         memcpy(s->clear_color, snap->clear_color, sizeof(s->clear_color));
         s->clear_color_touched = 1;

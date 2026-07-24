@@ -6,6 +6,8 @@
 #include "repl/state_owners.h"
 #include "repl/flatten.h"
 #include "repl/gl_state_inspector.h"
+#include "repl/attrib_bits.h"
+#include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/export.h"
 #include "repl/scenes.h"
 #include "repl/example_loader.h"
@@ -1572,6 +1574,203 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     repl_export_install_camera_bridge(saved_camera_bridge);
 }
 
+/* --- state-cell coverage guard -------------------------------------------
+ *
+ * A tracked state cell is implemented in four places in gl_state_inspector.c:
+ * the ReplGlTrackedState field, the gl_state_apply_cmd() write, the
+ * gl_state_restore_attrib_groups() restore, and the gl_state_append_report()
+ * row. None of them is exhaustive to the compiler — the switch has a default
+ * and the restore is an if-chain — so a new state command that reaches only
+ * three of the four builds clean and silently loses state on the fourth path.
+ *
+ * This sweep pins the property all four jointly implement. For every command
+ * type attrib_bits says carries state (the same table the executor and the
+ * overlays gate on), the table below names a representative pair of values
+ * and the report row they land in, and each entry is driven twice:
+ *
+ *   coverage: set(V2)                          -> row exists, reads as V2
+ *             (fails if apply_cmd or the report row is missing)
+ *   scoping:  set(V1) push(bit) set(V2) pop()  -> row reads back as V1
+ *             (fails if restore_attrib_groups is missing)
+ *
+ * The final loop is the ratchet: any CmdType with a non-zero attrib mask that
+ * is absent from the table fails, so a new state command cannot land without
+ * either joining the sweep or being explicitly excused below. */
+typedef struct {
+    CmdType     type;
+    int         num_args;
+    float       args_v1[8];   /* pre-push value  */
+    float       args_v2[8];   /* in-scope value  */
+    const char *row;          /* report row the cell lands in */
+    const char *expect_v1;    /* row->current after the pop   */
+    const char *expect_v2;    /* row->current with no push    */
+} GlStateCellCase;
+
+static const GlStateCellCase k_gl_state_cell_cases[] = {
+    /* GL_CURRENT_BIT */
+    { CMD_COLOR3F,       3, {1, 0, 0}, {0, 1, 0}, "GL_CURRENT_COLOR",
+      "(1, 0, 0, 1)", "(0, 1, 0, 1)" },
+    { CMD_COLOR4F,       4, {1, 0, 0, 1}, {0, 0, 1, 0.5f}, "GL_CURRENT_COLOR",
+      "(1, 0, 0, 1)", "(0, 0, 1, 0.5)" },
+    { CMD_NORMAL3F,      3, {1, 0, 0}, {0, 1, 0}, "GL_CURRENT_NORMAL",
+      "(1, 0, 0)", "(0, 1, 0)" },
+    { CMD_EDGE_FLAG,     1, {1}, {0}, "GL_EDGE_FLAG", "GL_TRUE", "GL_FALSE" },
+    { CMD_RASTER_POS3F,  3, {1, 2, 3}, {4, 5, 6},
+      "GL_CURRENT_RASTER_POSITION (object input)",
+      "(1, 2, 3, 1)", "(4, 5, 6, 1)" },
+    /* GL_POINT_BIT */
+    { CMD_POINT_SIZE,    1, {3}, {7}, "GL_POINT_SIZE", "3", "7" },
+    { CMD_POINT_PARAMETER_FV, 4,
+      {(float)GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0},
+      {(float)GL_POINT_DISTANCE_ATTENUATION, 0, 1, 0},
+      "GL_POINT_DISTANCE_ATTENUATION", "(1, 0, 0)", "(0, 1, 0)" },
+    /* GL_LINE_BIT */
+    { CMD_LINE_WIDTH,    1, {2}, {5}, "GL_LINE_WIDTH", "2", "5" },
+    { CMD_LINE_STIPPLE,  2, {2, 61680}, {4, 43690}, "GL_LINE_STIPPLE_REPEAT",
+      "2", "4" },
+    /* GL_POLYGON_BIT */
+    { CMD_FRONT_FACE,    1, {(float)GL_CW}, {(float)GL_CCW}, "GL_FRONT_FACE",
+      "GL_CW", "GL_CCW" },
+    { CMD_CULL_FACE,     1, {(float)GL_FRONT}, {(float)GL_BACK},
+      "GL_CULL_FACE_MODE", "GL_FRONT", "GL_BACK" },
+    /* GL_LIGHTING_BIT */
+    { CMD_SHADE_MODEL,   1, {(float)GL_FLAT}, {(float)GL_SMOOTH},
+      "GL_SHADE_MODEL", "GL_FLAT", "GL_SMOOTH" },
+    { CMD_COLOR_MATERIAL, 2, {(float)GL_FRONT, (float)GL_DIFFUSE},
+      {(float)GL_BACK, (float)GL_SPECULAR}, "GL_COLOR_MATERIAL_FACE",
+      "GL_FRONT", "GL_BACK" },
+    { CMD_LIGHT_MODEL_I, 2, {(float)GL_LIGHT_MODEL_TWO_SIDE, 1},
+      {(float)GL_LIGHT_MODEL_TWO_SIDE, 0}, "GL_LIGHT_MODEL_TWO_SIDE",
+      "GL_TRUE", "GL_FALSE" },
+    { CMD_MATERIALF,     3, {(float)GL_FRONT, (float)GL_SHININESS, 8},
+      {(float)GL_FRONT, (float)GL_SHININESS, 64}, "GL_FRONT_MATERIAL_SHININESS",
+      "8", "64" },
+    { CMD_MATERIALFV,    6, {(float)GL_FRONT, (float)GL_DIFFUSE, 1, 0, 0, 1},
+      {(float)GL_FRONT, (float)GL_DIFFUSE, 0, 1, 0, 1},
+      "GL_FRONT_MATERIAL_DIFFUSE", "(1, 0, 0, 1)", "(0, 1, 0, 1)" },
+    /* GL_FOG_BIT */
+    { CMD_FOG_I,         2, {(float)GL_FOG_MODE, (float)GL_LINEAR},
+      {(float)GL_FOG_MODE, (float)GL_EXP2}, "GL_FOG_MODE",
+      "GL_LINEAR", "GL_EXP2" },
+    { CMD_FOG_F,         2, {(float)GL_FOG_DENSITY, 0.25f},
+      {(float)GL_FOG_DENSITY, 0.75f}, "GL_FOG_DENSITY", "0.25", "0.75" },
+    { CMD_FOG_FV,        5, {(float)GL_FOG_COLOR, 1, 0, 0, 1},
+      {(float)GL_FOG_COLOR, 0, 1, 0, 1}, "GL_FOG_COLOR",
+      "(1, 0, 0, 1)", "(0, 1, 0, 1)" },
+    /* GL_DEPTH_BUFFER_BIT */
+    { CMD_DEPTH_FUNC,    1, {(float)GL_GREATER}, {(float)GL_LEQUAL},
+      "GL_DEPTH_FUNC", "GL_GREATER", "GL_LEQUAL" },
+    { CMD_DEPTH_MASK,    1, {1}, {0}, "GL_DEPTH_WRITEMASK",
+      "GL_TRUE", "GL_FALSE" },
+    { CMD_CLEAR_DEPTH,   1, {0.25f}, {0.75f}, "GL_DEPTH_CLEAR_VALUE",
+      "0.25", "0.75" },
+    /* GL_TRANSFORM_BIT */
+    { CMD_CLIP_PLANE,    5, {(float)GL_CLIP_PLANE0, 1, 0, 0, 0.5f},
+      {(float)GL_CLIP_PLANE0, 0, 1, 0, -0.5f},
+      "GL_CLIP_PLANE0_EQUATION (object)",
+      "(1, 0, 0, 0.5)", "(0, 1, 0, -0.5)" },
+    /* GL_COLOR_BUFFER_BIT */
+    { CMD_CLEAR_COLOR,   4, {0.1f, 0, 0, 1}, {0, 0.1f, 0, 1},
+      "GL_COLOR_CLEAR_VALUE", "(0.1, 0, 0, 1)", "(0, 0.1, 0, 1)" },
+    { CMD_BLEND_FUNC,    2, {(float)GL_ONE, (float)GL_ZERO},
+      {(float)GL_SRC_ALPHA, (float)GL_ONE_MINUS_SRC_ALPHA}, "GL_BLEND_SRC",
+      "GL_ONE", "GL_SRC_ALPHA" },
+    { CMD_COLOR_MASK,    4, {1, 1, 1, 1}, {1, 0, 1, 0}, "GL_COLOR_WRITEMASK",
+      "(T, T, T, T)", "(T, F, T, F)" },
+    /* GL_ENABLE_BIT (+ the cap's own group bit) */
+    { CMD_ENABLE,        1, {(float)GL_DEPTH_TEST}, {(float)GL_DEPTH_TEST},
+      "GL_DEPTH_TEST", "GL_TRUE", "GL_TRUE" },
+    { CMD_DISABLE,       1, {(float)GL_LIGHTING}, {(float)GL_LIGHTING},
+      "GL_LIGHTING", "GL_FALSE", "GL_FALSE" },
+};
+
+/* CmdTypes attrib_bits gives a mask but that the sweep deliberately skips:
+ * glPushAttrib/glPopAttrib are the bracket itself, not a cell it scopes. */
+static int gl_state_cell_case_excused(CmdType t) {
+    return t == CMD_PUSH_ATTRIB || t == CMD_POP_ATTRIB;
+}
+
+static GLCmd gl_state_case_cmd(const GlStateCellCase *c, const float *args,
+                               int source_line_idx) {
+    GLCmd cmd = gl_state_test_cmd(c->type, source_line_idx);
+    int i;
+    cmd.num_args = c->num_args;
+    for (i = 0; i < c->num_args && i < 8; i++)
+        cmd.args[i] = args[i];
+    return cmd;
+}
+
+static void test_gl_state_cell_coverage_sweep(void) {
+    const int n_cases = (int)(sizeof k_gl_state_cell_cases /
+                              sizeof k_gl_state_cell_cases[0]);
+    int ci, t_int;
+
+    printf("--- repl_state tracked-cell coverage sweep ---\n");
+
+    for (ci = 0; ci < n_cases; ci++) {
+        const GlStateCellCase *c = &k_gl_state_cell_cases[ci];
+        unsigned bit = repl_attrib_bits_for_type(c->type, (unsigned)c->args_v1[0]);
+        GLCmd cmds[4];
+        FlatProgramView program;
+        ReplGlStateReport report;
+        const ReplGlStateReportRow *row;
+        char label[160];
+
+        /* 1. coverage: the write reaches a report row at all. */
+        cmds[0] = gl_state_case_cmd(c, c->args_v2, 0);
+        memset(&program, 0, sizeof(program));
+        program.cmds = cmds;
+        program.cmd_count = 1;
+        repl_gl_state_report_at_line(program, 1, &report);
+        row = gl_state_test_find_row(&report, c->row);
+        snprintf(label, sizeof(label), "%s: writes row %s",
+                 cmd_type_name(c->type), c->row);
+        ASSERT_TRUE(label, row != NULL);
+        if (row) {
+            snprintf(label, sizeof(label), "%s: row %s reads back the write",
+                     cmd_type_name(c->type), c->row);
+            ASSERT_STR(label, row->current, c->expect_v2);
+        }
+
+        /* 2. scoping: glPushAttrib of the cell's own bit restores it. */
+        cmds[0] = gl_state_case_cmd(c, c->args_v1, 0);
+        cmds[1] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 1);
+        cmds[1].args[0] = (float)bit;
+        cmds[1].num_args = 1;
+        cmds[2] = gl_state_case_cmd(c, c->args_v2, 2);
+        cmds[3] = gl_state_test_cmd(CMD_POP_ATTRIB, 3);
+        memset(&program, 0, sizeof(program));
+        program.cmds = cmds;
+        program.cmd_count = 4;
+        repl_gl_state_report_at_line(program, 4, &report);
+        row = gl_state_test_find_row(&report, c->row);
+        snprintf(label, sizeof(label), "%s: row %s survives the pop",
+                 cmd_type_name(c->type), c->row);
+        ASSERT_TRUE(label, row != NULL);
+        if (row) {
+            snprintf(label, sizeof(label),
+                     "%s: glPopAttrib restores row %s",
+                     cmd_type_name(c->type), c->row);
+            ASSERT_STR(label, row->current, c->expect_v1);
+        }
+    }
+
+    /* 3. ratchet: every state-carrying CmdType is in the table. */
+    for (t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        int listed = 0;
+        char label[128];
+        if (repl_attrib_bits_for_type(t, 0) == 0 || gl_state_cell_case_excused(t))
+            continue;
+        for (ci = 0; ci < n_cases; ci++)
+            if (k_gl_state_cell_cases[ci].type == t) { listed = 1; break; }
+        snprintf(label, sizeof(label),
+                 "%s carries attrib state and is in the coverage sweep",
+                 cmd_type_name(t));
+        ASSERT_TRUE(label, listed);
+    }
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -1596,6 +1795,7 @@ int main(void) {
     test_gl_state_report_includes_generated_fixed_function_state();
     test_gl_state_report_attrib_stack_fold();
     test_gl_state_report_converts_eye_light_position_to_world();
+    test_gl_state_cell_coverage_sweep();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
