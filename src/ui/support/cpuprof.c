@@ -726,7 +726,7 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
 #define HIST_HEADER_H      20
 #define HIST_PLOT_H       104
 #define HIST_PLOT_GUTTER   34   /* y-axis label gutter ("10k") */
-#define HIST_XAXIS_H       18   /* tick row + label row under the plot */
+#define HIST_XAXIS_H       21   /* tick row + label row under the plot */
 #define HIST_LEGEND_ROW_H  12
 #define HIST_LEGEND_COLS    2
 #define HIST_BOTTOM_PAD     8
@@ -759,8 +759,8 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
  * inside the plot they would be buried under the baseline clutter of a dozen
  * overlaid series). Decade boundaries already carry a full-height gridline;
  * the longer mark anchors the row the minor ticks sit in. */
-#define HIST_TICK_MAJOR_H   5
-#define HIST_TICK_MINOR_H   3
+#define HIST_TICK_MAJOR_H   8
+#define HIST_TICK_MINOR_H   5
 
 /* Minor ticks closer together than this are dropped: past ~6 decades of span
  * the top of each decade compresses to a smear rather than a readable scale. */
@@ -1077,7 +1077,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     float col_w = (float)plot_w / (float)cols;
 
     /* Count (y) gridlines behind the series. */
-    ui_clr_a(UI_TOK_DIVIDER, 0.30f);
+    ui_clr_a(UI_TOK_DIVIDER, 0.60f);
     glBegin(GL_LINES);
     for (unsigned long decade = 1; decade <= scale_peak; decade *= 10UL) {
         float gy = (float)plot_y
