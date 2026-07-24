@@ -120,6 +120,9 @@ glr_ctrl_build_command_description_panel_view(void);
 /* Frame-lived storage for the right-click OpenGL-state popup report; the
  * view handed to ui_gl_state_panel_render points here. */
 static ReplGlStateReport g_gl_state_report;
+/* Gutter label per g_gl_state_report row, parallel by index (-1 when the row
+ * has no user source line, or its line has no code-panel row). */
+static int g_gl_state_gutter_labels[REPL_GL_STATE_REPORT_MAX_ROWS];
 static char g_command_description_title[96];
 
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
@@ -2279,7 +2282,7 @@ void glr_ctrl_display_frame(void) {
         ui_command_description_panel_render(&command_description_view);
     }
     {
-        UiGlStatePanelView gl_state_view = glr_ctrl_build_gl_state_panel_view();
+        UiGlStatePanelView gl_state_view = glr_ctrl_build_gl_state_panel_view(&ui_snap);
         ui_gl_state_panel_render(&gl_state_view);
     }
     ui_menu_bar_render_example_dropdown(&ui_snap);
@@ -2631,7 +2634,7 @@ static int glr_ctrl_gl_state_anchor_is_valid(int source_line_idx) {
  * the popup otherwise), folds the current flat program up to that boundary
  * into g_gl_state_report, and flips the stored GLUT click y into the
  * renderer's y-up coords. */
-UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
+UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *snap) {
     UiGlStatePanelView view;
     UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
     UiViewportState vp = ui_state_viewport();
@@ -2649,6 +2652,25 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
     repl_gl_state_report_at_line(repl_state_flat_program_view(),
                                  inspector.source_line_idx,
                                  &g_gl_state_report);
+    /* Resolve each program-authored row's code-panel gutter label, so the
+     * popup's source column cites the number the user can actually see in the
+     * margin. They differ whenever code focus is off: the gutter counts the
+     * derived-C chrome rows, the report carries document indices. Both the
+     * render and the router reach this through the controller's cached
+     * snapshot, so the solved column width agrees frame to frame. */
+    {
+        int lines[REPL_GL_STATE_REPORT_MAX_ROWS];
+        int i;
+        for (i = 0; i < g_gl_state_report.count; i++)
+            lines[i] = g_gl_state_report.rows[i].source.source_line_idx;
+        /* The display path hands in the very snapshot the code panel just
+         * rendered from, so the row cache hits and the labels come from the
+         * rows on screen. Callers with no snapshot in hand (the router's
+         * hit-test entries) fall back to the controller's cached one. */
+        ui_repl_code_panel_gutter_labels_for_lines(
+            snap ? snap : glr_ctrl_drag_hit_test_snapshot(), lines,
+            g_gl_state_gutter_labels, g_gl_state_report.count);
+    }
     view.visible = 1;
     view.anchor_px = inspector.anchor_px;
     view.anchor_py = vp.window_h - inspector.anchor_py;
@@ -2656,6 +2678,7 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
     view.details_expanded = inspector.details_expanded;
     view.setup_expanded = inspector.setup_expanded;
     view.report = &g_gl_state_report;
+    view.source_gutter_labels = g_gl_state_gutter_labels;
     return view;
 }
 

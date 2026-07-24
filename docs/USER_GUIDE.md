@@ -307,7 +307,10 @@ stays visible.
 
 The current value is always visible; click the **[+] default/source** chip in
 the column header to add the initial default and the source of the latest
-write — `init()`, generated `display()`, or a user `display()` line.
+write — `init()`, generated `display()`, or a user `display()` line. The line
+number it quotes is the one in the code panel's left margin, so it stays
+right whether or not code focus is hiding the derived C boilerplate (those
+hidden rows are counted in the margin numbering).
 
 A light's parameter rows appear only while that light can affect the frame —
 that is, while it is enabled, or if your program set one of its parameters

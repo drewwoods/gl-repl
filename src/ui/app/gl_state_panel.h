@@ -37,6 +37,11 @@ typedef struct {
     int scroll_rows;
     int details_expanded;
     int setup_expanded;
+    /* Parallel to report->rows: the code panel's gutter label for each row's
+     * latest-change line, or -1 to fall back to the document index. The
+     * controller resolves these because the gutter label counts the derived-C
+     * chrome rows that code focus hides, so it is not report-side data. */
+    const int *source_gutter_labels;
     const ReplGlStateReport *report;
 } UiGlStatePanelView;
 

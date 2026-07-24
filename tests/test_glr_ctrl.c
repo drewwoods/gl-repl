@@ -1349,7 +1349,7 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
         repl_state_flat_program_clear_dirty();
     }
 #endif
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_INT("popup view visible for valid anchor", view.visible, 1);
     ASSERT_TRUE("popup view carries a report", view.report != NULL);
     ASSERT_TRUE("popup report has touched state",
@@ -1396,7 +1396,7 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_INT("second right-click on anchor closes report",
                ui_state_gl_state_inspector().visible, 0);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_INT("popup view hidden after close", view.visible, 0);
 
     /* Left-click routing: a click on the popup surface is swallowed (the
@@ -1405,7 +1405,7 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     ASSERT_INT("third right-click reopens report",
                ui_state_gl_state_inspector().visible, 1);
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     {
         int in_x = -1, in_y = -1, out_x = -1, out_y = -1;
         int win_w = ui_state_viewport().window_w;
@@ -1482,7 +1482,7 @@ static void test_right_click_uncommitted_empty_line_opens_gl_state_report(void) 
                document_count);
     ASSERT_INT("opening report does not commit live row",
                repl_state_document_count(), document_count);
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_INT("live-row state report view remains visible", view.visible, 1);
     ASSERT_TRUE("live-row report is built", view.report != NULL);
     ASSERT_INT("live-row report uses pending-line boundary",
@@ -1804,7 +1804,7 @@ static void test_gl_state_popup_details_toggle(void) {
     }
 #endif
 
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_INT("popup view visible", view.visible, 1);
     ASSERT_TRUE("found the live popup's toggle chip",
                 gl_state_popup_find_details_toggle(&view, &x, &y));
@@ -1815,7 +1815,7 @@ static void test_gl_state_popup_details_toggle(void) {
     ASSERT_INT("chip click keeps the popup open",
                ui_state_gl_state_inspector().visible, 1);
 
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_TRUE("expanded live popup keeps a toggle chip",
                 gl_state_popup_find_details_toggle(&view, &x, &y));
     glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
@@ -1926,7 +1926,7 @@ static void test_editor_input_dismisses_gl_state_report(void) {
         repl_state_flat_program_clear_dirty();
     }
 #endif
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     for (py = 80; py < ui_state_viewport().window_h - 4 && off_x < 0;
          py += 4) {
         for (px = 4; px < ui_state_viewport().window_w - 4 && off_x < 0;
@@ -2020,7 +2020,7 @@ static void test_gl_state_popup_setup_fold(void) {
     ASSERT_INT("popup opens with setup folded",
                ui_state_gl_state_inspector().setup_expanded, 0);
 
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     ASSERT_TRUE("live report has generated rows to fold",
                 view.report &&
                 view.report->count > view.report->user_row_count);
@@ -2034,7 +2034,7 @@ static void test_gl_state_popup_setup_fold(void) {
         ASSERT_INT("chip click leaves the detail columns alone",
                    ui_state_gl_state_inspector().details_expanded, 0);
 
-        view = glr_ctrl_build_gl_state_panel_view();
+        view = glr_ctrl_build_gl_state_panel_view(NULL);
         if (gl_state_popup_find_setup_toggle(&view, &x, &y)) {
             glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
             glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
@@ -2044,6 +2044,92 @@ static void test_gl_state_popup_setup_fold(void) {
     } else {
         ASSERT_TRUE("live popup exposes a setup chip", 0);
     }
+}
+
+/* The popup's source column quotes a line number, and the only thing that
+ * number is good for is finding the line in the code panel — so it has to be
+ * the panel's own gutter label, not the document index. The two diverge the
+ * moment code focus is off, because the gutter counts the derived-C chrome
+ * rows the focus view hides. Before this was resolved through the panel's
+ * built rows, a three-line scene reported display():1 for a row the gutter
+ * numbered 101. */
+static void test_gl_state_popup_source_line_tracks_gutter(void) {
+    UiGlStatePanelView view;
+    UiHit hit;
+    int blank_line, enable_line;
+    int x = -1, y = -1;
+    int focused_label = -1, unfocused_label = -1;
+    int focused_right, unfocused_right;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL-state popup source line vs gutter ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    if (!glr_state_presentation().code_focus)
+        glr_ctrl_toggle_code_focus();
+
+    enable_line = repl_state_document_count();
+    editor_state_edit_line_set(enable_line);
+    ASSERT_INT("append a state write to cite",
+               editor_feed_line("glDepthFunc(GL_LEQUAL);"), 1);
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append committed blank line", editor_feed_line(""), 1);
+    ASSERT_TRUE("found empty source row hit",
+                find_code_text_hit_for_line(blank_line, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("right-click opens the popup",
+               ui_state_gl_state_inspector().visible, 1);
+    /* The source column only exists with the detail columns expanded. */
+    ui_state_gl_state_inspector_toggle_details();
+
+    glr_ctrl_display_frame();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
+    ASSERT_TRUE("popup view carries gutter labels",
+                view.source_gutter_labels != NULL);
+    ASSERT_TRUE("popup view carries a report", view.report != NULL);
+    if (!view.report || !view.source_gutter_labels)
+        return;
+    for (i = 0; i < view.report->count; i++) {
+        if (view.report->rows[i].source.source_line_idx == enable_line) {
+            focused_label = view.source_gutter_labels[i];
+            break;
+        }
+    }
+    ASSERT_TRUE("the cited row resolved a gutter label", focused_label > 0);
+    /* Focus on: chrome hidden, so the gutter is the 1-based document line. */
+    ASSERT_INT("focused gutter label is the document line",
+               focused_label, enable_line + 1);
+    focused_right = gl_state_popup_rightmost_hit_x(&view);
+
+    /* Focus off: the derived-C boilerplate is emitted above the program, so
+     * the same row's gutter label moves well past its document index. */
+    glr_ctrl_toggle_code_focus();
+    ASSERT_INT("code focus is off", glr_state_presentation().code_focus, 0);
+    glr_ctrl_display_frame();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
+    if (!view.report || !view.source_gutter_labels)
+        return;
+    for (i = 0; i < view.report->count; i++) {
+        if (view.report->rows[i].source.source_line_idx == enable_line) {
+            unfocused_label = view.source_gutter_labels[i];
+            break;
+        }
+    }
+    ASSERT_TRUE("the cited row still resolves a gutter label",
+                unfocused_label > 0);
+    ASSERT_TRUE("unfocused gutter label clears the chrome rows",
+                unfocused_label > focused_label);
+
+    /* And it reaches the renderer, not just the view: a wider source string
+     * widens the solved popup. */
+    unfocused_right = gl_state_popup_rightmost_hit_x(&view);
+    ASSERT_TRUE("the longer line number widens the solved popup",
+                unfocused_right > focused_right);
+
+    glr_ctrl_toggle_code_focus();
 }
 
 static void test_gl_state_popup_defers_to_front_overlay(void) {
@@ -2116,7 +2202,7 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
         repl_state_flat_program_clear_dirty();
     }
 #endif
-    state_view = glr_ctrl_build_gl_state_panel_view();
+    state_view = glr_ctrl_build_gl_state_panel_view(NULL);
     glr_ctrl_build_ui_snapshot(&snap);
     for (gl_y = vy; gl_y < vy + vh && overlap_x < 0; gl_y++) {
         int my = snap.viewport.window_h - gl_y;
@@ -2144,7 +2230,7 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
                ui_state_gl_state_inspector().visible, 1);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, overlap_x, overlap_y);
 
-    state_view = glr_ctrl_build_gl_state_panel_view();
+    state_view = glr_ctrl_build_gl_state_panel_view(NULL);
     max_scroll = ui_gl_state_panel_max_scroll(&state_view);
     ASSERT_TRUE("overlapped state report is scrollable", max_scroll > 0);
     if (max_scroll > 0) {
@@ -4613,6 +4699,7 @@ int main(void) {
     test_gl_state_popup_modelview_uses_four_lines();
     test_gl_state_popup_details_toggle();
     test_gl_state_popup_setup_fold();
+    test_gl_state_popup_source_line_tracks_gutter();
     test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();

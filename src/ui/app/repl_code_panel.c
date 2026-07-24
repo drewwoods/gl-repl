@@ -3192,6 +3192,67 @@ void ui_repl_code_panel_invalidate_row_cache_for_test(void) {
  * Returns 1 if a row was found and `out_rgba`/`out_active` were written;
  * 0 if no matching row exists. Used by the marker-priority cascade
  * regression test in tests/test_ui.c. */
+/* Resolve the gutter label (the number the code panel draws in its left
+ * margin) for each of `count` document line indices, writing -1 where no row
+ * represents that line.
+ *
+ * This exists because the gutter label is NOT the document index: it counts
+ * every emitted row, so with code focus off the derived-C chrome rows push
+ * every user line's label up by the size of that boilerplate. Anything
+ * quoting a line number to the user — the OpenGL-state popup's source column
+ * — has to name the row the way the gutter names it, or the two disagree on
+ * screen (measured at 100 apart on a three-line scene).
+ *
+ * Reading the label back off the built rows, rather than recomputing the
+ * offset, is deliberate: a parallel counter would have to track chrome
+ * emission, wrapping, and the placeholder rows that can consume a label
+ * mid-document, and would drift the first time one of those changed.
+ *
+ * Batched because a cache miss rebuilds every row; callers resolving a whole
+ * report must not pay that per row. */
+void ui_repl_code_panel_gutter_labels_for_lines(const UiRenderSnapshot *snap,
+                                                const int *source_lines,
+                                                int *out_labels,
+                                                int count) {
+    ReplCodePanelBuilder builder;
+    const UiTextPanelRow *rows;
+    int row_count;
+    int i, r;
+
+    if (!out_labels || count <= 0)
+        return;
+    for (i = 0; i < count; i++)
+        out_labels[i] = -1;
+    if (!snap || !source_lines)
+        return;
+
+    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+        builder = g_builder_cache.builder;
+    } else {
+        if (!repl_code_panel_init_builder(&builder, snap))
+            return;
+        repl_code_panel_build_rows(&builder);
+    }
+    rows = g_repl_code_panel_rows;
+    row_count = builder.text_snap.row_count;
+    if (row_count > UI_REPL_CODE_PANEL_MAX_ROWS)
+        row_count = UI_REPL_CODE_PANEL_MAX_ROWS;
+
+    for (r = 0; r < row_count; r++) {
+        const UiTextPanelRow *row = &rows[r];
+        if (row->source_line_idx < 0)
+            continue;
+        if (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT &&
+            row->kind != UI_TEXT_PANEL_ROW_PLACEHOLDER)
+            continue;
+        for (i = 0; i < count; i++) {
+            if (out_labels[i] < 0 && source_lines[i] == row->source_line_idx)
+                out_labels[i] = row->left_gutter_label;
+        }
+    }
+}
+
 int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
                                            int *out_active,
                                            float out_rgba[4]) {

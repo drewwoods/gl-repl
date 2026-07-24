@@ -106,6 +106,17 @@ int  ui_repl_code_panel_input_row_has_color_swatch(
 /* Test-only: clear the row builder cache shared by render and hit-test.
  * Lets tests start from a deterministic empty cache so a regression that
  * fails to refresh the cache after a snapshot change becomes observable. */
+/* Resolve the code panel's left-margin gutter label for each of `count`
+ * document line indices (parallel arrays; -1 where no row represents the
+ * line). The label is not the document index — with code focus off the
+ * derived-C chrome rows shift it — so any UI quoting a line number to the
+ * user must resolve it here rather than printing source_line_idx + 1.
+ * Batched: a cache miss rebuilds the whole row list. */
+void ui_repl_code_panel_gutter_labels_for_lines(const UiRenderSnapshot *snap,
+                                                const int *source_lines,
+                                                int *out_labels,
+                                                int count);
+
 void ui_repl_code_panel_invalidate_row_cache_for_test(void);
 
 /* Test-only: after a render call populates the row buffer, return the

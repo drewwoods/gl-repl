@@ -117,7 +117,12 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
  * anchor (closing if no longer a visually blank committed/live editor row),
  * rebuilds the report from the live flat program, and resolves the popup
  * anchor into y-up window coords. view.visible is 0 when closed. */
-UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void);
+/* Per-frame view for the floating OpenGL-state popup. `snap` is the frame's
+ * UI snapshot when the caller has one (the display path): it lets the source
+ * column's gutter-label resolution reuse the code panel's already-built rows
+ * instead of rebuilding them. Pass NULL from input/hit-test paths, which fall
+ * back to the controller's cached snapshot. */
+UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *snap);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);
 int glr_ctrl_code_panel_apply_scroll_follow_for_test(

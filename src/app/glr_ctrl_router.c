@@ -1081,7 +1081,7 @@ static int glr_ctrl_router_point_in_gl_state_popup(int x, int y) {
     UiGlStatePanelView view;
     if (!ui_state_gl_state_inspector().visible)
         return 0;
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     return view.visible && ui_gl_state_panel_hit_test(&view, x, y);
 }
 
@@ -1110,7 +1110,7 @@ static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
         return 0;
     if (ui_menu_bar_menu_dropdown_is_open())
         return 0;
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     if (!view.visible)
         return 0;
     if (ui_gl_state_panel_hit_test(&view, x, y)) {
@@ -1139,7 +1139,7 @@ static int glr_ctrl_router_handle_gl_state_popup_wheel(int x, int y,
 
     if (!inspector.visible)
         return 0;
-    view = glr_ctrl_build_gl_state_panel_view();
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
     if (!view.visible || !ui_gl_state_panel_hit_test(&view, x, y))
         return 0;
     max_scroll = ui_gl_state_panel_max_scroll(&view);

@@ -68,7 +68,14 @@ typedef struct {
     int scroll;               /* view->scroll_rows clamped to [0, max] */
 } GlspLayout;
 
+/* `gutter_label` is the code panel's left-margin number for the row's source
+ * line, or -1 when the controller could not resolve one. Quote that rather
+ * than source_line_idx + 1: with code focus off the panel's margin counts the
+ * derived-C chrome rows too, and a popup citing the document index sends the
+ * reader to the wrong line. The fallback keeps the old numbering for the
+ * cases with no code-panel row to name (headless tests, hand-built views). */
 static void glsp_source_text(const ReplGlStateReportRow *row,
+                             int gutter_label,
                              char *buf, int buf_size) {
     if (!buf || buf_size <= 0)
         return;
@@ -83,7 +90,8 @@ static void glsp_source_text(const ReplGlStateReportRow *row,
     case REPL_GL_STATE_SOURCE_DISPLAY:
         if (row->source.source_line_idx >= 0)
             snprintf(buf, (size_t)buf_size, "display():%d",
-                     row->source.source_line_idx + 1);
+                     gutter_label >= 0 ? gutter_label
+                                       : row->source.source_line_idx + 1);
         else
             snprintf(buf, (size_t)buf_size, "display()");
         break;
@@ -125,6 +133,11 @@ static int glsp_clamp_chars(int chars, int min_chars, int max_chars) {
 static int glsp_row_visual_lines(const ReplGlStateReportRow *row) {
     return row && strcmp(row->name, GLSP_MODELVIEW_NAME) == 0
                ? GLSP_MATRIX_ROWS : 1;
+}
+
+static int glsp_gutter_label(const UiGlStatePanelView *view, int row_idx) {
+    return view && view->source_gutter_labels
+               ? view->source_gutter_labels[row_idx] : -1;
 }
 
 /* Copy one visual value line. Matrix report strings use "; " between their
@@ -262,7 +275,8 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         value_chars = glsp_value_max_chars(row, row->default_value);
         if (value_chars > out->def_chars)
             out->def_chars = value_chars;
-        glsp_source_text(row, source_text, (int)sizeof(source_text));
+        glsp_source_text(row, glsp_gutter_label(view, i), source_text,
+                         (int)sizeof(source_text));
         if ((int)strlen(source_text) > out->source_chars)
             out->source_chars = (int)strlen(source_text);
     }
@@ -594,8 +608,8 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
                                  FONT_MONO);
 
                 if (line == 0) {
-                    glsp_source_text(row, source_text,
-                                     (int)sizeof(source_text));
+                    glsp_source_text(row, glsp_gutter_label(view, i),
+                                     source_text, (int)sizeof(source_text));
                     glsp_clip(clipped, (int)sizeof(clipped), source_text,
                               lo.source_chars);
                     gl2d_draw_string((float)lo.col3_x, (float)ty, clipped,

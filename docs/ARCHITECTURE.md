@@ -1398,7 +1398,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L147) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L152) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
