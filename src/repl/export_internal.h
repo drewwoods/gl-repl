@@ -90,6 +90,7 @@ const char *export_document_text(int cmd_idx);
 void export_format_decl_float(char *buf, size_t n, float v);
 void export_format_float_list(char *buf, size_t n, const float *v, int count);
 void export_write_c89_line(FILE *f, const char *line);
+void export_write_comment_run_as_c(FILE *f, int start_idx, int end_idx);
 
 void format_cmd_source_as_c(char *out, size_t out_sz,
                             const char *source_text, int translate_exprs);

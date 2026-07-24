@@ -2236,6 +2236,52 @@ int main(void) {
         remove(p83_path);
     }
 
+    /* --- Consecutive source comments export as one C comment block ----- */
+    {
+        const char *block_path = "/tmp/repl_core_comment_block_output.c";
+        char buf[16384];
+        SourceTextView doc;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("//");
+        editor_feed_line("// gl-repl Logo");
+        editor_feed_line("// An open cube rendered with two-sided lighting.");
+        editor_feed_line("//");
+        editor_feed_line("glBegin(GL_LINES);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glEnd();");
+
+        repl_export_save_output(block_path, source_document_view(), NULL);
+        read_text_file(block_path, buf, sizeof(buf));
+        ASSERT_TRUE("comment run exports as one conventional C block",
+                    strstr(buf,
+                           "  /*\n"
+                           "   *\n"
+                           "   * gl-repl Logo\n"
+                           "   * An open cube rendered with two-sided lighting.\n"
+                           "   *\n"
+                           "   */") != NULL);
+        ASSERT_TRUE("comment run no longer exports one block per source row",
+                    strstr(buf, "/* gl-repl Logo */") == NULL);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("multiline exported comment reloads",
+                    repl_export_load_from_file(block_path, NULL) == 1);
+        doc = source_document_view();
+        ASSERT_INT("multiline comment roundtrip command count",
+                   repl_state_document_count(), 7);
+        ASSERT_STR("multiline comment keeps leading empty row",
+                   source_text_line(doc, 0), "  //");
+        ASSERT_STR("multiline comment keeps title",
+                   source_text_line(doc, 1), "  // gl-repl Logo");
+        ASSERT_STR("multiline comment keeps description",
+                   source_text_line(doc, 2),
+                   "  // An open cube rendered with two-sided lighting.");
+        ASSERT_STR("multiline comment keeps trailing empty row",
+                   source_text_line(doc, 3), "  //");
+        remove(block_path);
+    }
+
     /* --- Trailing inline comments on commands round-trip --------------- */
     {
         glr_ctrl_reset_all(); declare_test_vars();

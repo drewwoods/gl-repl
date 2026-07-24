@@ -216,6 +216,59 @@ void export_write_c89_line(FILE *f, const char *line) {
     export_format_c89_comment_line(out, sizeof(out), line ? line : "");
     fprintf(f, "%s\n", out);
 }
+
+/* Emit a consecutive run of source comment rows as one conventional C block.
+ * A single row keeps the compact one-line form. The multiline opener is kept
+ * bare so import can distinguish user-authored blocks from the exporter's
+ * prose scaffolding, whose opener carries text on the same line. */
+void export_write_comment_run_as_c(FILE *f, int start_idx, int end_idx) {
+    int comment_count = 0;
+    int first_comment_idx = -1;
+    const char *first_text;
+    const char *first_comment;
+    size_t indent_len;
+
+    for (int cmd_idx = start_idx; cmd_idx < end_idx; cmd_idx++) {
+        if (!repl_state_document_cmds()[cmd_idx].valid ||
+            repl_state_document_cmds()[cmd_idx].type != CMD_COMMENT)
+            continue;
+        comment_count++;
+        if (first_comment_idx < 0)
+            first_comment_idx = cmd_idx;
+    }
+
+    if (comment_count <= 0)
+        return;
+    if (comment_count == 1) {
+        export_write_c89_line(f, export_document_text(first_comment_idx));
+        return;
+    }
+
+    first_text = export_document_text(first_comment_idx);
+    first_comment = export_line_comment_start(first_text);
+    indent_len = first_comment ? (size_t)(first_comment - first_text) : 0;
+    fprintf(f, "%.*s/*\n", (int)indent_len, first_text);
+
+    for (int cmd_idx = start_idx; cmd_idx < end_idx; cmd_idx++) {
+        char payload_safe[MAX_LINE_LEN * 2];
+        const char *comment;
+        size_t off = 0;
+
+        if (!repl_state_document_cmds()[cmd_idx].valid ||
+            repl_state_document_cmds()[cmd_idx].type != CMD_COMMENT)
+            continue;
+        comment = export_line_comment_start(export_document_text(cmd_idx));
+        if (comment)
+            export_append_c89_comment_payload(payload_safe,
+                                              sizeof(payload_safe),
+                                              &off, comment + 2);
+        payload_safe[off] = '\0';
+        fprintf(f, "%.*s *%s\n",
+                (int)indent_len, first_text, payload_safe);
+    }
+
+    fprintf(f, "%.*s */\n", (int)indent_len, first_text);
+}
 typedef void (*ExportScaffoldSectionEmitFn)(FILE *f,
                                             const ExportScaffoldContext *ctx);
 

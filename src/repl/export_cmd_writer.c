@@ -492,6 +492,22 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
             break;
         case CMD_FUNC_END:
             break;
+        case CMD_COMMENT: {
+            int block_end = cmd_idx + 1;
+            while (block_end < end_idx &&
+                   block_end < repl_state_document_count()) {
+                if (!repl_state_document_cmds()[block_end].valid) {
+                    block_end++;
+                    continue;
+                }
+                if (repl_state_document_cmds()[block_end].type != CMD_COMMENT)
+                    break;
+                block_end++;
+            }
+            export_write_comment_run_as_c(f, cmd_idx, block_end);
+            cmd_idx = block_end - 1;
+            break;
+        }
         default:
             write_canonical_cmd_as_c(f, &repl_state_document_cmds()[cmd_idx],
                                      cmd_idx, for_depth, &tess_depth);

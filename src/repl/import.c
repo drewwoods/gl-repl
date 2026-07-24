@@ -2074,6 +2074,8 @@ static const char *import_find_block_comment_start(const char *s) {
             in_chr = 1;
             continue;
         }
+        if (s[0] == '/' && s[1] == '/')
+            return NULL;
         if (s[0] == '/' && s[1] == '*')
             return s;
     }
@@ -2123,9 +2125,13 @@ static int import_normalize_c89_comment_line(const char *line,
 
 /* Strip the parts of `line` that sit inside a C block comment spanning
  * more than one physical line, carrying the open/closed state across
- * calls in `*in_comment`. Comments that open and close on one line are
- * left untouched — import_normalize_c89_comment_line rewrites those into
- * `//` form, and the workspace-header directives depend on it.
+ * calls in `*in_comment`. A bare slash-star opener selects the canonical
+ * block form used for consecutive user-authored comments; those payload
+ * rows are restored to `//` lines instead. Generated scaffold prose puts
+ * text on its opener and therefore remains discard-only. Comments that
+ * open and close on one line are left untouched —
+ * import_normalize_c89_comment_line rewrites those into `//` form, and
+ * the workspace-header directives depend on it.
  *
  * Without this, the opener line of a multi-line comment reads as an
  * unterminated statement, so the line accumulator glues the whole
@@ -2136,16 +2142,51 @@ static int import_normalize_c89_comment_line(const char *line,
  * Returns 0 only for a line this strip emptied out (drop it); a line it
  * did not touch is always kept, blank ones included — those still carry
  * a REPL blank command through the snippet body. */
-static int import_strip_block_comment_span(char *line, int *in_comment) {
+static int import_strip_block_comment_span(char *line, int *in_comment,
+                                           int *preserve_comment) {
     int stripped = 0;
 
     if (*in_comment) {
         char *close = strstr(line, "*/");
+        if (*preserve_comment) {
+            char *payload = line;
+            size_t indent_len;
+
+            while (*payload && isspace((unsigned char)*payload))
+                payload++;
+            indent_len = (size_t)(payload - line);
+            if (close && payload == close) {
+                *in_comment = 0;
+                *preserve_comment = 0;
+                return 0;
+            }
+            if (*payload == '*') {
+                size_t payload_len;
+                payload++;
+                if (close && close >= payload)
+                    *close = '\0';
+                payload_len = strlen(payload);
+                if (indent_len + 3 >= MAX_LINE_LEN)
+                    payload_len = 0;
+                else if (indent_len + 2 + payload_len >= MAX_LINE_LEN)
+                    payload_len = MAX_LINE_LEN - indent_len - 3;
+                memmove(line + indent_len + 2, payload, payload_len);
+                line[indent_len] = '/';
+                line[indent_len + 1] = '/';
+                line[indent_len + 2 + payload_len] = '\0';
+                if (close) {
+                    *in_comment = 0;
+                    *preserve_comment = 0;
+                }
+                return 1;
+            }
+        }
         if (!close) {
             line[0] = '\0';
             return 0;
         }
         *in_comment = 0;
+        *preserve_comment = 0;
         memmove(line, close + 2, strlen(close + 2) + 1);
         stripped = 1;
     }
@@ -2157,7 +2198,20 @@ static int import_strip_block_comment_span(char *line, int *in_comment) {
             break;
         const char *close = strstr(open + 2, "*/");
         if (!close) {
+            const char *before = line;
+            const char *after = open + 2;
+            int bare_opener = 1;
+
+            while (before < open && isspace((unsigned char)*before))
+                before++;
+            if (before != open)
+                bare_opener = 0;
+            while (*after && isspace((unsigned char)*after))
+                after++;
+            if (*after)
+                bare_opener = 0;
             *in_comment = 1;
+            *preserve_comment = bare_opener;
             line[open - line] = '\0';
             stripped = 1;
             break;
@@ -2259,6 +2313,7 @@ typedef struct {
     int depth;
     int truncated;
     int in_block_comment;
+    int preserve_block_comment;
 } ImportAccum;
 
 static int import_line_has_snippet_marker(const char *line) {
@@ -2327,7 +2382,8 @@ static void import_process_physical_line(ImportState *state,
 
     /* Multi-line comments are dropped before anything else looks at the
      * line, so they can never be mistaken for an in-progress statement. */
-    if (!import_strip_block_comment_span(line, &acc->in_block_comment))
+    if (!import_strip_block_comment_span(line, &acc->in_block_comment,
+                                         &acc->preserve_block_comment))
         return;
 
     if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))

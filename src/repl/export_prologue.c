@@ -192,10 +192,31 @@ void write_func_defs_as_c(FILE *f) {
                (repl_state_document_cmds()[comment_start - 1].type == CMD_COMMENT ||
                 repl_state_document_cmds()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
-        /* Emit any preceding comment lines. */
-        for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++) {
+        /* Emit any preceding comment and empty lines. */
+        for (int comment_idx = comment_start; comment_idx < cmd_idx; ) {
             fputc('\n', f);
-            export_write_c89_line(f, export_document_text(comment_idx));
+            if (!repl_state_document_cmds()[comment_idx].valid) {
+                comment_idx++;
+            } else if (repl_state_document_cmds()[comment_idx].type == CMD_EMPTY) {
+                fputc('\n', f);
+                comment_idx++;
+            } else if (repl_state_document_cmds()[comment_idx].type == CMD_COMMENT) {
+                int block_end = comment_idx + 1;
+                while (block_end < cmd_idx &&
+                       block_end < repl_state_document_count()) {
+                    if (!repl_state_document_cmds()[block_end].valid) {
+                        block_end++;
+                        continue;
+                    }
+                    if (repl_state_document_cmds()[block_end].type != CMD_COMMENT)
+                        break;
+                    block_end++;
+                }
+                export_write_comment_run_as_c(f, comment_idx, block_end);
+                comment_idx = block_end;
+            } else {
+                comment_idx++;
+            }
         }
 
         int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
