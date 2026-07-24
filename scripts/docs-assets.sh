@@ -426,6 +426,7 @@ montage1x2() {
 
 stage_triangle() { stage triangle <<'EOF'
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glColor3f(1, 0.85, 0.15);
 glBegin(GL_TRIANGLES);
 glVertex3f(0, 1, 0);
@@ -444,6 +445,7 @@ stage_overlays() { stage overlays <<'EOF'
 /* @cfg poly_highlight = 1 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(0.15, 0.55, 1);
 glBegin(GL_QUADS);
@@ -459,7 +461,7 @@ EOF
 
 
 # Two quads in one glBegin/glEnd block. GLR_EDIT_LINE parks the cursor on
-# the second quad's second vertex (line 9) so Single polygon scope narrows
+# the second quad's second vertex (line 10) so Single polygon scope narrows
 # the highlight/labels to just that quad, not the whole shared block.
 stage_single_polygon() { stage single_polygon <<'EOF'
 /* @cfg poly_highlight = 1 */
@@ -467,6 +469,7 @@ stage_single_polygon() { stage single_polygon <<'EOF'
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_SINGLE_POLYGON */
 /* @cfg grid = GRID_THEME_OFF */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_QUADS);
 glColor3f(0.95, 0.25, 1);
@@ -495,6 +498,7 @@ stage_torus_mesh() {
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -530,6 +534,7 @@ glRotatef(-118.0000f, 0.0f, 1.0f, 0.0f);
 glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 // Snippet start
 glClearColor(0.0, 0.0, 0.0, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -552,6 +557,7 @@ stage_grid_theme() {  # $1 = GRID_THEME_<NAME>
 /* @cfg vertex_points = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 //glColor3f(1, 0.35, 0.2);
 glEnable(GL_LIGHTING);
@@ -580,6 +586,7 @@ glTranslatef(0.0f, -0.5f, 0.0f);'
 /* @cfg light_indicators = 0 */
 $cam
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(0.8, 0.8, 0.8);
 glEnable(GL_LIGHTING);
@@ -596,6 +603,7 @@ stage_axes() { stage axes <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 glutSolidCube(0.8);
@@ -609,6 +617,7 @@ stage_tune() { stage tune <<'EOF'
 float amp = 1.2; // @tune
 float freq = 2; // @tune
 float spread = 0.8;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glColor3f(0.15, 0.55, 1);
 glBegin(GL_LINE_STRIP);
 for(i, 0, 64) {
@@ -627,6 +636,7 @@ stage_blur() { stage blur <<'EOF'
 /* @cfg vertex_points = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glPushMatrix();
 glRotatef(t*200, 0, 1, 0);
@@ -638,12 +648,13 @@ glPopMatrix();
 EOF
 }
 
-# Cursor parks on line 4 (glTranslatef) via GLR_EDIT_LINE.
+# Cursor parks on line 5 (glTranslatef) via GLR_EDIT_LINE.
 stage_guide() { stage guide <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 glutSolidCube(0.5);
@@ -668,6 +679,7 @@ stage_vertex_entry() { stage vertex_entry <<'EOF'
 /* @cfg light_indicators = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 glBegin(GL_TRIANGLES);
@@ -678,7 +690,7 @@ glVertex3f(0, 1.4, 0);
 EOF
 }
 
-# Clip plane: cursor parks on the glClipPlane line (GLR_EDIT_LINE=4 at the
+# Clip plane: cursor parks on the glClipPlane line (GLR_EDIT_LINE=5 at the
 # call site) so the clip-plane guide renders — gridded disc, ghost rim,
 # kept-half-space arrow with the P0 readout.
 stage_clip_plane() { stage clip_plane <<'EOF'
@@ -687,6 +699,7 @@ stage_clip_plane() { stage clip_plane <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -709,6 +722,7 @@ stage_clip_sweep() { stage clip_sweep <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -725,6 +739,7 @@ stage_replay() { stage replay <<'EOF'
 /* @cfg replay = 1 */
 /* @cfg variable_panel = 0 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_TRIANGLES);
 for(i, 0, 12) {
@@ -754,6 +769,7 @@ stage_depth_view() {  # $1 = depth_view mode
 /* @cfg light_indicators = 0 */
 /* @cfg code_panel = 3 */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -785,6 +801,7 @@ stage_winding() { stage winding <<'EOF'
 /* @cfg light_indicators = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_TRIANGLES);
 glVertex3f(-1.5, -0.8, 0);
@@ -806,6 +823,7 @@ stage_autocomplete() { stage autocomplete <<'EOF'
 /* @cfg light_indicators = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 glutSolidTeapot(0.8);
@@ -823,6 +841,7 @@ stage_color_picker() { stage color_picker <<'EOF'
 /* @cfg vertex_points = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -844,6 +863,7 @@ stage_stepper() { stage stepper <<'EOF'
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 float radius = 1.5;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(0.1, 0.95, 0.85);
 glutSolidSphere(radius, 32, 16);
@@ -852,7 +872,7 @@ EOF
 }
 
 # OpenGL state inspector: the blank row after the authored state changes is
-# line 8 after @cfg headers/snippet markers are stripped and the authored
+# line 9 after @cfg headers/snippet markers are stripped and the authored
 # light position is lifted into generated display setup. The GLR_OPEN_GL_STATE
 # capture hook opens the same popup a right-click would.
 stage_gl_state_inspector() { stage gl_state_inspector <<'EOF'
@@ -862,6 +882,7 @@ stage_gl_state_inspector() { stage gl_state_inspector <<'EOF'
 /* @cfg vertex_points = 0 */
 /* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_BLEND);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -903,6 +924,7 @@ stage_window_tour_dir() {
 // @scene-name First Triangle
 // Snippet start
 float lift = 1;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glColor3f(1, 0.85, 0.15);
 glBegin(GL_TRIANGLES);
 glVertex3f(0, lift, 0);
@@ -914,6 +936,7 @@ EOF
     cat > "$ws/ring.c" <<'EOF'
 // @scene-name Ring Sketch
 // Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glColor3f(0.1, 0.95, 0.85);
 glBegin(GL_LINE_LOOP);
 for(i, 0, 32) {
@@ -949,7 +972,7 @@ if want vertex-overlays; then
 fi
 
 if want single-polygon-scope; then
-    ( export GLR_EDIT_LINE=9
+    ( export GLR_EDIT_LINE=10
       still "$OUT/single-polygon-scope.png" 16 "$(stage_single_polygon)" )
 fi
 
@@ -1087,7 +1110,7 @@ fi
 # they stay scoped to one capture — explicit, and safe even under shells
 # (POSIX mode) where a VAR=x prefix on a function call persists after it.
 if want xform-guide-still; then
-    ( export GLR_EDIT_LINE=4
+    ( export GLR_EDIT_LINE=5
       still "$OUT/xform-guide-still.png" 16 "$(stage_guide)" )
 fi
 
@@ -1113,9 +1136,9 @@ if want autocomplete; then
 fi
 
 # Color picker: opened via the GLR_OPEN_COLOR_PICKER capture hook (the
-# picker otherwise needs a swatch click). Line 6 = the glColor3f.
+# picker otherwise needs a swatch click). Line 7 = the glColor3f.
 if want color-picker; then
-    ( export GLR_EDIT_LINE=6 GLR_OPEN_COLOR_PICKER=6
+    ( export GLR_EDIT_LINE=7 GLR_OPEN_COLOR_PICKER=7
       still "$OUT/color-picker.png" 16 "$(stage_color_picker)" )
 fi
 
@@ -1135,7 +1158,7 @@ fi
 # state changes. The full-window shot keeps both the source boundary and the
 # floating comparison table in view.
 if want gl-state-inspector; then
-    ( export GLR_EDIT_LINE=8 GLR_OPEN_GL_STATE=8
+    ( export GLR_EDIT_LINE=9 GLR_OPEN_GL_STATE=9
       still "$OUT/gl-state-inspector.png" 16 \
           "$(stage_gl_state_inspector)" )
 fi
@@ -1151,17 +1174,17 @@ if want profile-panels; then
 fi
 
 if want clip-plane; then
-    ( export GLR_EDIT_LINE=4
+    ( export GLR_EDIT_LINE=5
       still "$OUT/clip-plane.png" 16 "$(stage_clip_plane)" )
 fi
 
 if want clip-plane-sweep; then
-    ( export GLR_EDIT_LINE=4
+    ( export GLR_EDIT_LINE=5
       gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
-    ( export GLR_EDIT_LINE=4
+    ( export GLR_EDIT_LINE=5
       gif "$OUT/xform-guide.gif" 120 1 20 720 "$(stage_guide)" )
 fi
 
