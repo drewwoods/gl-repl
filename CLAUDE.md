@@ -149,6 +149,8 @@ keep stubs minimal no-op. After touching stubs verify: `make test-stubs`,
 ./gl-repl workspace/       # Load every *.c as a user scene
 ./gl-repl --example torus  # Start on a built-in example (name or 1-based index)
 ./gl-repl --list-examples
+./gl-repl --tour editing    # Play a built-in guided tour on launch (name or 1-based index)
+./gl-repl --list-tours
 ./gl-repl --no-audio       # Skip audio init
 ./gl-repl --assets <dir>   # Music dir override (also GLR_ASSETS_DIR)
 ./gl-repl --time 5         # Initial animation t (also GLR_TIME; --time wins)

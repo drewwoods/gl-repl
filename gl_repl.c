@@ -6,6 +6,7 @@
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
 #include "app/glr_pointer_script.h"
+#include "app/glr_tours.h"
 #include "app/splash.h"
 #include "repl/examples.h"
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
@@ -80,6 +81,10 @@ static void print_usage(const char *prog) {
             "  --examples-dir <dir>  Load example catalog.ini + scenes/ from\n"
             "               <dir> at runtime instead of compiled-in examples\n"
             "  --list-examples  Print the built-in examples and exit\n"
+            "  --tour <name|idx>  Start and play a built-in guided tour on\n"
+            "               launch (name is case-insensitive; or a 1-based\n"
+            "               index). Space play/pause, arrows step, Esc exit.\n"
+            "  --list-tours  Print the built-in guided tours and exit\n"
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
             "  --window <WxH>  Initial window size (default 1200x800). Headless\n"
@@ -133,14 +138,15 @@ static void print_usage(const char *prog) {
 }
 
 /* Case-insensitive full compare / substring test (keeps gl_repl.c free of a
- * <strings.h> / strcasecmp dependency). */
-static int example_ci_equal(const char *a, const char *b) {
+ * <strings.h> / strcasecmp dependency). Shared by --example and --tour name
+ * resolution. */
+static int arg_ci_equal(const char *a, const char *b) {
     for (; *a && *b; a++, b++)
         if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
             return 0;
     return *a == '\0' && *b == '\0';
 }
-static int example_ci_contains(const char *hay, const char *needle) {
+static int arg_ci_contains(const char *hay, const char *needle) {
     size_t nl = strlen(needle);
     if (nl == 0) return 0;
     for (; *hay; hay++) {
@@ -179,8 +185,41 @@ static int resolve_example_index(const char *arg) {
     for (int i = 0; i < n; i++) {
         const char *name = glr_scene_example_name(i);
         if (!name) continue;
-        if (example_ci_equal(name, arg)) return i;          /* exact wins */
-        if (substr < 0 && example_ci_contains(name, arg)) substr = i;
+        if (arg_ci_equal(name, arg)) return i;              /* exact wins */
+        if (substr < 0 && arg_ci_contains(name, arg)) substr = i;
+    }
+    return substr;
+}
+
+static void list_tours(FILE *out) {
+    int n = glr_tours_count();
+    fprintf(out, "Built-in tours (%d):\n", n);
+    for (int i = 0; i < n; i++)
+        fprintf(out, "  %2d  %s\n", i + 1, glr_tours_name(i));
+}
+
+/* Resolve --tour <arg> to a built-in tour index, same rules as
+ * resolve_example_index: all-digits is a 1-based index, otherwise a
+ * case-insensitive name (exact match preferred, else first substring match).
+ * Returns the index, or -1 if nothing matches. */
+static int resolve_tour_index(const char *arg) {
+    int n = glr_tours_count();
+    if (n <= 0 || !arg || !arg[0]) return -1;
+
+    int all_digits = 1;
+    for (const char *p = arg; *p; p++)
+        if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
+    if (all_digits) {
+        int idx = atoi(arg) - 1;
+        return (idx >= 0 && idx < n) ? idx : -1;
+    }
+
+    int substr = -1;
+    for (int i = 0; i < n; i++) {
+        const char *name = glr_tours_name(i);
+        if (!name) continue;
+        if (arg_ci_equal(name, arg)) return i;              /* exact wins */
+        if (substr < 0 && arg_ci_contains(name, arg)) substr = i;
     }
     return substr;
 }
@@ -485,6 +524,8 @@ int main(int argc, char **argv) {
     int dump_state_layout = 0;
     int no_audio  = 0;
     int list_examples_flag = 0;
+    int list_tours_flag = 0;
+    const char *tour_arg = NULL;          /* --tour NAME|IDX */
     int use_accum = 1;
     int window_w  = 1200;
     int window_h  = 800;
@@ -551,6 +592,11 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--list-examples") == 0) {
             list_examples_flag = 1;
         }
+        else if (strcmp(argv[i], "--tour") == 0 && i + 1 < argc)
+            tour_arg = argv[++i];
+        else if (strcmp(argv[i], "--list-tours") == 0) {
+            list_tours_flag = 1;
+        }
         else if (!input_file)
             input_file = argv[i];
     }
@@ -568,6 +614,10 @@ int main(int argc, char **argv) {
         list_examples(stdout);
         return 0;
     }
+    if (list_tours_flag) {
+        list_tours(stdout);
+        return 0;
+    }
 
     /* Resolve --example up front: a bad name fails fast (before opening a
      * window) and the error lists what is available. */
@@ -577,6 +627,18 @@ int main(int argc, char **argv) {
         if (example_index < 0) {
             fprintf(stderr, "gl-repl: unknown example \"%s\"\n", example_arg);
             list_examples(stderr);
+            return 1;
+        }
+    }
+
+    /* Resolve --tour up front too (same fail-fast contract). The tour itself
+     * needs a live window/layout, so it is started after bootstrap below. */
+    int tour_index = -1;
+    if (tour_arg) {
+        tour_index = resolve_tour_index(tour_arg);
+        if (tour_index < 0) {
+            fprintf(stderr, "gl-repl: unknown tour \"%s\"\n", tour_arg);
+            list_tours(stderr);
             return 1;
         }
     }
@@ -691,6 +753,17 @@ int main(int argc, char **argv) {
         const char *p_src = getenv("GLR_ACCUM_PASSES");
         if (p_src && *p_src)
             glr_ctrl_set_accum_passes(atoi(p_src));
+    }
+    /* --tour <name|idx>: start a built-in guided tour on launch. Deferred to
+     * here so it runs after every capture/env resolve above — in particular
+     * the GLR_TICK_PER_FRAME resolve, which keys off glr_pointer_script_active()
+     * and must not see the tour's controlled script (a launched tour plays on
+     * the real 60 Hz clock with live transport, like one started from the
+     * Tours menu). Index was validated up front; the events fire against the
+     * live layout once the main loop is drawing. Any real key/click cancels. */
+    if (tour_index >= 0) {
+        splash_skip();       /* start clean — no splash band over the tour */
+        glr_tours_start(tour_index);
     }
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
