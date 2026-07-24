@@ -238,7 +238,7 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | [`glr_defaults.h`](src/app/glr_defaults.h) | `CFG_DEFAULT_*` scene/presentation defaults (single source of truth) |
 | [`glr_pointer_script.c`](src/app/glr_pointer_script.c) | Synthetic pointer/keyboard script engine (captures + tours) |
 | **src/app/boot/** (startup lifecycle) | pre/without-frame-loop; reached only from [`gl_repl.c`](gl_repl.c). Controller must not include these (guard `check-app-boot-band`) |
-| `boot/glr_cli.{c,h}` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--examples-dir` load, fail-fast `--example`/`--tour` name→index resolve |
+| `boot/glr_cli.{c,h}` | argv → [`GlrCliOptions`](src/app/boot/glr_cli.h#L23) bag; `print_usage`, `--list-*`/`-h` exit paths, `--examples-dir` load, fail-fast `--example`/`--tour` name→index resolve |
 | `boot/glr_boot_dumps.{c,h}` | `glr_boot_run_dumps` — GL-free `--dump-*`/`--flat-histogram` bootstrap+dump+exit path (drives `glr_debug` formatters) |
 | `boot/glr_init_trace.{c,h}` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof`/`GLR_DETAILED_PROF` phases; elapsed clock shared with audio/controller |
 | `boot/glr_capture_env.{c,h}` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap: time/pointer-script/splash/tick-per-frame/edit-line/type-keys/accum) + `_frame_hook` (per-frame: color-picker/GL-state/help/view-toggle) |
@@ -344,12 +344,12 @@ follows is the trip-wire list.
 [`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L147) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L135) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
-scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L136) (projection → user
+scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
 geometry callback → replay fades → grid/axes/backdrop → overlays → replay
 HUD) → 2D overlays. `render3d_demo` is the load-bearing proof that
 `src/render3d/` has no REPL dependency; `make render3d-hot` is its
 dlopen-based live-reload variant (state lives in the host TU; a
-[`Render3dState`](src/render3d/render.h#L96) layout change still needs a relaunch).
+[`Render3dState`](src/render3d/render.h#L97) layout change still needs a relaunch).
 
 ### Accumulation effects
 

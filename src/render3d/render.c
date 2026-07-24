@@ -118,18 +118,22 @@ static int validate_render_config(const Render3dRenderConfig *config) {
         if (!(config->grid_major_steps[config->grid_major_idx] > 0.0f))
                                                               goto bad;
     }
-    /* accum_effect must be a known mode. accum_passes must come from the
-     * supported {1,2,4,8,12,16} ladder, but only when accumulation is
+    /* accum_effect must be a known mode. accum_passes must be a sane sample
+     * count in [1, MAX_ACCUM_SAMPLES], but only when accumulation is
      * actually active (effect != OFF on an accum-capable context) — a
      * memset(0) config from a non-accum caller (render3d_demo) leaves
      * accum_passes == 0, which is fine while effect is OFF. Mirrors the
-     * grid block above (validated only when grid_theme != OFF). */
+     * grid block above (validated only when grid_theme != OFF).
+     *
+     * Deliberately a range check, not the app's Accum-passes ladder: which
+     * counts the UI offers is app policy (GLR_ACCUM_PASS_LADDER in
+     * src/app/glr_config.h), and render3d must not depend on src/app. A
+     * ladder copy here would just silently reject new steps. */
     if (config->accum_effect < 0 ||
         config->accum_effect > RENDER3D_ACCUM_EFFECT_BLUR_CAMERA) goto bad;
     if (config->use_accum && config->accum_effect != RENDER3D_ACCUM_EFFECT_OFF) {
         int n = config->accum_passes;
-        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 12 && n != 16)
-            goto bad;
+        if (n < 1 || n > MAX_ACCUM_SAMPLES) goto bad;
     }
     if (config->depth_viz < 0 ||
         config->depth_viz >= RENDER3D_DEPTH_VIZ_COUNT)     goto bad;

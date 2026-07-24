@@ -20,9 +20,10 @@
 #include "render_types.h"
 #include "projection_mode.h"
 
-/* Accumulation-buffer AA supports 1, 2, 4, 8, and 16-sample passes. The
- * controller cycles across that fixed ladder, and the scene renderer keeps a
- * 16-entry jitter table whose first N offsets form a good N-sample set. */
+/* Accumulation-buffer AA supports any sample count in [1, MAX_ACCUM_SAMPLES].
+ * The scene renderer keeps a 16-entry jitter table whose first N offsets form
+ * a good N-sample set; which counts the UI actually offers is app policy
+ * (GLR_ACCUM_PASS_LADDER in src/app/glr_config.h). */
 #define MAX_ACCUM_SAMPLES 16
 
 /* One-time GL initialization called once at startup. Currently:
@@ -132,7 +133,7 @@ void render3d_state_init(Render3dState *state);
  * by validate_render_config: NULL config, non-positive render3d_w / render3d_h,
  * out-of-range grid_theme / axes_theme, grid index out of range or grid
  * extent/step <= 0 when grid is enabled, unknown accum_effect, or
- * accum_passes off the supported ladder when accumulation is active. */
+ * accum_passes outside [1, MAX_ACCUM_SAMPLES] when accumulation is active. */
 int render3d_draw_scene(Render3dState *state,
                           const Render3dRenderConfig *config);
 

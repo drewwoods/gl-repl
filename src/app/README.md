@@ -69,8 +69,8 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L135) from REPL runtime state + view state and calls
-   [`glr_camera_load_modelview()`](glr_camera.h#L158) then [`render3d_draw_scene()`](../render3d/render.h#L136) (with the
-   owned [`Render3dState`](../render3d/render.h#L96), once per accumulation-jitter sample);
+   [`glr_camera_load_modelview()`](glr_camera.h#L158) then [`render3d_draw_scene()`](../render3d/render.h#L137) (with the
+   owned [`Render3dState`](../render3d/render.h#L97), once per accumulation-jitter sample);
 3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L71) and fans it out to the `ui_*_render`
    functions.
 
@@ -102,10 +102,10 @@ different worlds:
   running frame loop**.
 
 **Membership rule.** A module is boot if it runs during process startup and is
-called only from `gl_repl.c` (or other boot modules) — put it in `boot/`.
+called only from [`gl_repl.c`](../../gl_repl.c) (or other boot modules) — put it in `boot/`.
 Everything that participates in a frame stays directly in `src/app/`.
 
-**Direction rule.** `gl_repl.c` → `boot/` → controller → subsystems. Boot
+**Direction rule.** [`gl_repl.c`](../../gl_repl.c) → `boot/` → controller → subsystems. Boot
 modules may call **down** into the controller band — that is how the
 dump-and-exit path ([`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c)) reuses the
 diagnostic formatters in [`glr_debug.c`](glr_debug.c). The controller band must
@@ -116,7 +116,7 @@ to run underneath. The guard `check-app-boot-band`
 in the `check-state-ownership` suite) enforces the one-way edge.
 
 `boot/glr_boot_dumps` is the shape this rule forces: the `--dump-*` dispatch
-consumes `GlrCliOptions` (a boot type), so it lives in `boot/`, while the dump
+consumes [`GlrCliOptions`](boot/glr_cli.h#L23) (a boot type), so it lives in `boot/`, while the dump
 *formatters* it drives stay in the controller-band `glr_debug` because the
 router calls them at runtime on a debug keystroke. Splitting the two keeps the
 formatters free of any boot dependency.
@@ -146,7 +146,7 @@ here too — see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full r
 
 | File | Responsibility |
 |---|---|
-| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → `GlrCliOptions` bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tour` name→index resolve |
+| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → [`GlrCliOptions`](boot/glr_cli.h#L23) bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tour` name→index resolve |
 | [`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c) / `.h` | `--dump-*` / `--flat-histogram` GL-free bootstrap-dump-and-exit path (drives `glr_debug` formatters) |
 | [`boot/glr_init_trace.c`](boot/glr_init_trace.c) / `.h` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof` phases |
 | [`boot/glr_capture_env.c`](boot/glr_capture_env.c) / `.h` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap) + `_frame_hook` (per-frame overlays) |

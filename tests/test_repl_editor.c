@@ -3450,40 +3450,43 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Ctrl++ / Ctrl+- step the Config "Accum passes" cycle
-     * (1/2/4/8/12/16, clamped, no wrap), gated on use_accum and the effect
-     * being active. The passes cycle never turns the effect off — it only
-     * changes the sample count. Cycle index: 0=1 1=2 2=4 3=8 4=12 5=16. */
+    /* Ctrl++ / Ctrl+- step the Config "Accum passes" cycle (clamped, no
+     * wrap), gated on use_accum and the effect being active. The passes
+     * cycle never turns the effect off — it only changes the sample count.
+     * Ladder steps and indices are derived from GLR_ACCUM_PASS_LADDER so
+     * editing the ladder can't silently invalidate this test. */
     {
         int saved_mods = g_mock_modifiers;
         GlrRenderState *rs = glr_state_render_mut();
+        static const int steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
+        const int top = (int)ARRAY_LEN(steps) - 1;
 
         glr_ctrl_reset_all();
         rs->use_accum = 1;
         rs->accum_effect = RENDER3D_ACCUM_EFFECT_AA;
-        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 1);   /* index 1 == 2 passes */
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 1);   /* second ladder step */
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Increment steps the cycle up and tracks accum_passes. */
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum +: cycle 2->4", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
-        ASSERT_INT("accum +: passes = 4", rs->accum_passes, 4);
+        ASSERT_INT("accum +: cycle 1->2", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
+        ASSERT_INT("accum +: passes = steps[2]", rs->accum_passes, steps[2]);
 
         glr_ctrl_router_handle_accum_samples_key('='); /* '=' == '+' w/o shift */
-        ASSERT_INT("accum =: cycle 4->8", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 3);
-        ASSERT_INT("accum =: passes = 8", rs->accum_passes, 8);
+        ASSERT_INT("accum =: cycle 2->3", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 3);
+        ASSERT_INT("accum =: passes = steps[3]", rs->accum_passes, steps[3]);
 
         /* Decrement steps back down. */
         glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum -: cycle 8->4", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
-        ASSERT_INT("accum -: passes = 4", rs->accum_passes, 4);
+        ASSERT_INT("accum -: cycle 3->2", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
+        ASSERT_INT("accum -: passes = steps[2]", rs->accum_passes, steps[2]);
 
-        /* Top clamp: 16 + Ctrl++ stays 16 (no wrap). */
-        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 5);
+        /* Top clamp: last step + Ctrl++ stays there (no wrap). */
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, top);
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum +: capped at 16", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 5);
-        ASSERT_INT("accum +: passes = 16", rs->accum_passes, 16);
+        ASSERT_INT("accum +: capped at top", glr_config_get(GLR_CONFIG_ACCUM_PASSES), top);
+        ASSERT_INT("accum +: passes = steps[top]", rs->accum_passes, steps[top]);
 
         /* Bottom clamp: index 0 == 1 pass, Ctrl+- stays there (no wrap). */
         glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0);

@@ -425,7 +425,7 @@ should remain mechanical because [`gl_repl.h`](../gl_repl.h) is included broadly
 REPL-aware data because this sample has one frontend and no plugin-host
 requirement.
 
-The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L136)
+The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L137)
 consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
 [`FlatProgramView`](../src/repl/flatten.h#L46), viewport, camera, animation, quality flags, lighting,
@@ -1370,8 +1370,8 @@ emitted source text** consumed by GL-free modules. Two cooperating
 mechanisms:
 
 1. **Render3d caches what it applied (Tenet 3).**
-   `render3d_apply_projection()` writes a jitter-free [`Render3dProjectionDesc`](../src/render3d/render.h#L59)
-   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L142) reads
+   `render3d_apply_projection()` writes a jitter-free [`Render3dProjectionDesc`](../src/render3d/render.h#L60)
+   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L143) reads
    it. The continuous perspective↔ortho blend is *snapped to the
    dominant side* (`mix < 0.5` ⇒ ortho) because `reshape()` emits one
    discrete mode, never an interpolated matrix. Render3d exposes data; it
@@ -1381,7 +1381,7 @@ mechanisms:
    [`ReplExportCameraBridge`](../src/repl/export.h#L84)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
-   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L142) and formats the C
+   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L143) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
    [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L181) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
@@ -1397,7 +1397,7 @@ state and (b) read by more than one consumer in the frame loop:
 
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
-*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L136) in
+*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
 [`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L147) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
@@ -1443,7 +1443,7 @@ Per the rule above:
   a controller-owned [`ReplExportLayout`](../src/repl/export.h#L228)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
-[`render3d_get_active_projection()`](../src/render3d/render.h#L142) is the *nearest-steady* projection: the
+[`render3d_get_active_projection()`](../src/render3d/render.h#L143) is the *nearest-steady* projection: the
 continuous blend is snapped to the dominant side (`mix < 0.5` ⇒ ortho).
 It is deliberately not the live blended 16-float matrix — `reshape()`
 emits one discrete mode, not an interpolation; a faithful mid-transition
@@ -1499,7 +1499,7 @@ freeze. The mouse wheel already drives `cam_dist`
 (`glr_camera_add_zoom_velocity` → `glr_camera_tick`), so this alone makes
 the ortho box grow/shrink with the wheel; no other wiring is needed. Both
 projection sites — `render3d_compute_active_projection()` (the cached
-[`Render3dProjectionDesc`](../src/render3d/render.h#L59)) and `render3d_apply_projection()` (each AA sample) —
+[`Render3dProjectionDesc`](../src/render3d/render.h#L60)) and `render3d_apply_projection()` (each AA sample) —
 read this one helper so they can't diverge, and it clamps to a positive
 floor so a deep zoom-in can't collapse or invert the box. Regression:
 `test_scene_ortho_zoom_rescales` in [`tests/test_render3d_render.c`](../tests/test_render3d_render.c).
@@ -2304,7 +2304,7 @@ and the distance pulls back to `CFG_DEFAULT_TUTORIAL_CAMERA_DIST`.
 for the vertex decorations (currently left at the global default).
 
 The distance exists because tutorial geometry is authored in **whole
-units** (see `src/repl/tutorials.c`): shapes sit on +/-1 or +/-2, solid
+units** (see [`src/repl/tutorials.c`](../src/repl/tutorials.c)): shapes sit on +/-1 or +/-2, solid
 sizes and radii are 1, and lineups step 4 apart. Decimal coordinates like
 `glVertex3f(0.8, -0.6, 0)` made lesson shapes so small that the
 cursor-bound overlays — vertex labels especially — were larger than the

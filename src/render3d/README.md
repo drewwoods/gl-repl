@@ -19,7 +19,7 @@ style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
 the caller fills a [`Render3dRenderConfig`](render_types.h#L135) (camera pose, lighting, grid/axes
 themes, AA settings, clear color) and supplies an `execute_fn` that draws
-the actual geometry. [`render3d_draw_scene()`](render.h#L136) does everything around that
+the actual geometry. [`render3d_draw_scene()`](render.h#L137) does everything around that
 callback:
 
 ```c
@@ -81,7 +81,7 @@ last good module loaded.
 **State survives the reload** because every piece of demo state — camera pose,
 2D/3D + projection blend, grid/axes themes, lighting, backdrop — lives in the
 host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
-bodies are. [`Render3dState`](render.h#L96) crosses the boundary but is host-owned, and its
+bodies are. [`Render3dState`](render.h#L97) crosses the boundary but is host-owned, and its
 layout is fixed by [`render.h`](render.h) at host-compile time — so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
@@ -103,8 +103,8 @@ target is untouched (it stays the link-proof `make test-full` and
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L135) from REPL runtime state + view
 state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L158) and
-[`render3d_draw_scene()`](render.h#L136) once per accumulation-jitter sample (with its own
-[`Render3dState`](render.h#L96)). The geometry callback is the REPL executor
+[`render3d_draw_scene()`](render.h#L137) once per accumulation-jitter sample (with its own
+[`Render3dState`](render.h#L97)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered
 geometry.
 

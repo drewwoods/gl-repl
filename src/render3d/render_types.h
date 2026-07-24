@@ -207,7 +207,7 @@ typedef struct Render3dRenderConfig {
     int line_smooth_enabled;
     int use_accum;          /* accumulation buffer available (--noaccum gate) */
     int accum_effect;       /* Render3dAccumEffect: OFF / AA / BLUR */
-    int accum_passes;       /* resolved sample count: 1,2,4,8,12,16 */
+    int accum_passes;       /* resolved sample count: 1..MAX_ACCUM_SAMPLES */
     int use_accum_aa_scissors; /* scissor the accum loop to the scene rect
                                 * (skip the dead region under the code panel).
                                 * Off by default — see CFG_DEFAULT_USE_ACCUM_AA_SCISSORS. */

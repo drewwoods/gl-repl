@@ -109,13 +109,20 @@ typedef struct {
  * and the GLR_ACCUM_PASSES startup validator (glr_ctrl.c) all derive
  * from this one list via the X-macro idiom, so the ladder is edited in
  * exactly one place and the three views can never drift. Each consumer
- * feeds one of the entry macros below to GLR_ACCUM_PASS_LADDER. */
+ * feeds one of the entry macros below to GLR_ACCUM_PASS_LADDER.
+ *
+ * render3d is deliberately NOT a view of this list (it must not depend on
+ * src/app): its config validator only range-checks accum_passes against
+ * MAX_ACCUM_SAMPLES, so steps may be added freely — but none may exceed it. */
 #define GLR_ACCUM_PASS_LADDER(X) \
     X(1)  \
     X(2)  \
     X(4)  \
+    X(6)  \
     X(8)  \
+    X(10) \
     X(12) \
+    X(14) \
     X(16)
 #define GLR_ACCUM_PASS_NAME_ENTRY(n) #n,   /* -> "1", "2", ...  (menu labels) */
 #define GLR_ACCUM_PASS_STEP_ENTRY(n) n,    /* -> 1, 2, ...      (sample counts) */
