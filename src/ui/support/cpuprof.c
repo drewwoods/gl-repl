@@ -95,6 +95,19 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
+/* Same, for a value that is exactly a power of ten (the histogram's decade
+ * ticks). The mantissa fmt_us() prints is all zeroes there, and those four
+ * characters are what pushed "1.00 ms" into the axis' high bound and got the
+ * whole label dropped — "1 ms" fits where it did not. */
+static void fmt_us_decade(char *buf, int buf_sz, double us) {
+    if (us < 1000.0)
+        snprintf(buf, (size_t)buf_sz, "%.0f us", us);
+    else if (us < 1000000.0)
+        snprintf(buf, (size_t)buf_sz, "%.0f ms", us / 1000.0);
+    else
+        snprintf(buf, (size_t)buf_sz, "%.0f s", us / 1000000.0);
+}
+
 /* Establish tightly-packed MSB-first rows once for every disclosure bitmap in
  * the panel. The GLUT string renderer temporarily changes the same state and
  * restores it after each string, so our surrounding state remains active.
@@ -713,7 +726,7 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
 #define HIST_HEADER_H      20
 #define HIST_PLOT_H       104
 #define HIST_PLOT_GUTTER   34   /* y-axis label gutter ("10k") */
-#define HIST_XAXIS_H       14
+#define HIST_XAXIS_H       18   /* tick row + label row under the plot */
 #define HIST_LEGEND_ROW_H  12
 #define HIST_LEGEND_COLS    2
 #define HIST_BOTTOM_PAD     8
@@ -741,6 +754,17 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
  * bars grow up out of the baseline as samples accumulate, and is inert once
  * any bin passes 10. */
 #define HIST_MIN_PEAK  10UL
+
+/* Tick lengths (pixels, hanging below the plot floor into the x-axis gutter —
+ * inside the plot they would be buried under the baseline clutter of a dozen
+ * overlaid series). Decade boundaries already carry a full-height gridline;
+ * the longer mark anchors the row the minor ticks sit in. */
+#define HIST_TICK_MAJOR_H   5
+#define HIST_TICK_MINOR_H   3
+
+/* Minor ticks closer together than this are dropped: past ~6 decades of span
+ * the top of each decade compresses to a smear rather than a readable scale. */
+#define HIST_TICK_MIN_GAP   3.0f
 
 /* Upper bound on the plot's pixel width, so the per-column envelopes below can
  * be plain stack arrays. */
@@ -916,6 +940,19 @@ int ui_histogram_axis_range(int *lo_bin, int *hi_bin) {
     return 1;
 }
 
+/* Where a time lands on the x axis. The axis is linear in bin index and the
+ * bins are log-spaced, so this is the one place that mapping lives — gridlines,
+ * ticks and labels all go through it. Returns 0 when the time falls outside the
+ * drawn range (the caller draws nothing). */
+static int hist_time_to_x(double us, int lo_bin, int hi_bin,
+                          int plot_x, int plot_w, float *out_x) {
+    int b = prof_histogram_bin_for_us(us);
+    if (b <= lo_bin || b >= hi_bin) return 0;
+    *out_x = (float)plot_x + (float)plot_w * (float)(b - lo_bin)
+                                           / (float)(hi_bin - lo_bin + 1);
+    return 1;
+}
+
 /* Collapse one series' bins onto the plot's pixel columns, taking the tallest
  * bin per column. The axis spans up to 1024 bins across ~338 px, so several
  * bins share a column; the max (rather than the sum) keeps a column's height
@@ -1053,11 +1090,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
      * even pixel intervals. */
     for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
          dec *= 10.0) {
-        int b = prof_histogram_bin_for_us(dec);
-        if (b <= lo_bin || b >= hi_bin) continue;
-        float gx = (float)plot_x
-                 + (float)plot_w * (float)(b - lo_bin)
-                                 / (float)(hi_bin - lo_bin + 1);
+        float gx;
+        if (!hist_time_to_x(dec, lo_bin, hi_bin, plot_x, plot_w, &gx)) continue;
         glVertex2f(gx, (float)plot_y);
         glVertex2f(gx, (float)(plot_y + plot_h));
     }
@@ -1129,6 +1163,35 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                    (float)plot_y + hist_bar_frac(run_h, log_peak) * (float)plot_h);
         glEnd();
     }
+
+    /* Axis ticks: a long mark per decade plus minor marks at 2..9 within each
+     * decade. The decade gridlines alone leave a whole decade of width
+     * unmarked between them, and that is exactly the millisecond stretch the
+     * frame sections live in — the minor ticks are what let a hump be read as
+     * "about 3 ms" instead of "somewhere past 1 ms". They are log-spaced like
+     * the axis, so each decade's marks crowd toward its right edge. */
+    for (int pass = 0; pass < 2; pass++) {
+        int   major  = (pass == 1);
+        float tick_h = major ? (float)HIST_TICK_MAJOR_H
+                             : (float)HIST_TICK_MINOR_H;
+        float last_x = -HIST_TICK_MIN_GAP;
+        ui_clr_a(UI_TOK_TEXT_MUTED, major ? 0.95f : 0.65f);
+        glBegin(GL_LINES);
+        for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+             dec *= 10.0) {
+            for (int mult = major ? 1 : 2; mult <= (major ? 1 : 9); mult++) {
+                float gx;
+                if (!hist_time_to_x(dec * (double)mult, lo_bin, hi_bin,
+                                    plot_x, plot_w, &gx))
+                    continue;
+                if (!major && gx - last_x < HIST_TICK_MIN_GAP) continue;
+                last_x = gx;
+                glVertex2f(gx, (float)plot_y);
+                glVertex2f(gx, (float)plot_y - tick_h);
+            }
+        }
+        glEnd();
+    }
     glDisable(GL_BLEND);
 
     /* Y labels (sample counts, log scale) right-aligned in the gutter. */
@@ -1160,12 +1223,12 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         /* Decade ticks, skipped where they would collide with either bound. */
         for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
              dec *= 10.0) {
-            int b = prof_histogram_bin_for_us(dec);
-            if (b <= lo_bin || b >= hi_bin) continue;
-            fmt_us(lab, (int)sizeof(lab), dec);
+            float gxf;
+            if (!hist_time_to_x(dec, lo_bin, hi_bin, plot_x, plot_w, &gxf))
+                continue;
+            fmt_us_decade(lab, (int)sizeof(lab), dec);
             int lw = (int)strlen(lab) * FONT_SMALL_W;
-            int gx = plot_x + plot_w * (b - lo_bin) / (hi_bin - lo_bin + 1);
-            int lx = gx - lw / 2;
+            int lx = (int)gxf - lw / 2;
             if (lx < plot_x + FONT_SMALL_W * 5) continue;   /* clear of the low bound */
             if (lx + lw > max_x - FONT_SMALL_W) continue;   /* clear of the high bound */
             gl2d_draw_string((float)lx, (float)label_y, lab, FONT_SMALL);

@@ -125,6 +125,12 @@ int  ui_fps_panel_height(void);
  * that spends nearly every frame in one bin would otherwise flatten every
  * spread-out neighbour to the baseline.
  *
+ * The time axis is marked like any log scale: a gridline and a label per
+ * decade ("1 us" .. "1 s"), plus minor ticks at 2..9 within each decade
+ * hanging below the axis line. Without the minor ticks a decade of width
+ * carries no reference at all, which is worst exactly where the frame
+ * sections live — everything between 1 ms and 10 ms.
+ *
  * hidden_series is a session-only mask (one bit per ProfSection, same shape as
  * the profile panel's collapsed_sections) of series the user has toggled off
  * by clicking their legend swatch. A hidden series is dropped from the plot
