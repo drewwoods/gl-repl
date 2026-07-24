@@ -1,5 +1,6 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
+#include "app/glr_cli.h"
 #include "app/glr_debug.h"
 #include "app/glr_audio.h"
 #include "app/glr_frame_pacer.h"
@@ -9,188 +10,13 @@
 #include "app/glr_pointer_script.h"
 #include "app/glr_tours.h"
 #include "app/splash.h"
-#include "repl/examples.h"
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
 
-#include <ctype.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <time.h>
-#include <unistd.h>
-
-static void print_usage(const char *prog) {
-    const char *name = (prog && prog[0]) ? prog : "gl-repl";
-
-    fprintf(stdout,
-            "Usage: %s [options] [input.c | workspace]\n"
-            "\n"
-            "Options:\n"
-            "  -h, --help   Show this help text and exit\n"
-            "  --no-accum   Disable accumulation buffer antialiasing\n"
-            "  --no-audio   Start without audio (disables music entirely)\n"
-            "  --assets <dir>  Music directory to scan for *.mp3 instead of\n"
-            "               ./assets (also via GLR_ASSETS_DIR env var)\n"
-            "  --dump-code  Load the session and print the editor buffer\n"
-            "  --dump-flat  Load the session and print flattened commands\n"
-            "  --flat-histogram  Load the session and print per-function /\n"
-            "               per-line flat-command costs (budget breakdown)\n"
-            "  --dump-state-layout  Print ReplRuntimeState field layout\n"
-            "  --detailed-prof  Emit finer-grained startup init traces\n"
-            "               (also via GLR_DETAILED_PROF env var)\n"
-            "  --export-ply <file>  Render one frame, capture geometry to <file>\n"
-            "               as a PLY mesh, then exit (needs a display)\n"
-            "  --export-ply-srgb  Decode vertex colors sRGB -> linear on export\n"
-            "               (for color-managed viewers; pair with --export-ply)\n"
-            "  --example <name|idx>  Start on a built-in example (name is\n"
-            "               case-insensitive; or a 1-based index)\n"
-            "  --examples-dir <dir>  Load example catalog.ini + scenes/ from\n"
-            "               <dir> at runtime instead of compiled-in examples\n"
-            "  --list-examples  Print the built-in examples and exit\n"
-            "  --tour <name|idx>  Start and play a built-in guided tour on\n"
-            "               launch (name is case-insensitive; or a 1-based\n"
-            "               index). Space play/pause, arrows step, Esc exit.\n"
-            "  --list-tours  Print the built-in guided tours and exit\n"
-            "  --time <secs>  Set the initial animation time t at startup\n"
-            "               (else GLR_TIME; --time wins). Start animations later.\n"
-            "  --window <WxH>  Initial window size (default 1200x800). Headless\n"
-            "               captures render at 2x and downscale for 4x supersampling.\n"
-            "\n"
-            "Environment:\n"
-            "  GLR_EDIT_LINE=<n>  Park the cursor on source line n (0-based)\n"
-            "               after load, as if arrowed to. Poses cursor-bound\n"
-            "               overlays (transform guides, vertex labels) for\n"
-            "               headless captures.\n"
-            "  GLR_ACCUM_PASSES=<n>  Accumulation AA sample count (1/2/4/8/12/16).\n"
-            "               Captures use it to smooth 3D edges at full UI text\n"
-            "               size (the 2D UI renders outside the accum loop).\n"
-            "  GLR_TICK_PER_FRAME=1  Advance the fixed-dt simulation exactly\n"
-            "               once per rendered frame instead of per timer tick.\n"
-            "               Intended for deterministic offline recording.\n"
-            "  GLR_VIEW_TOGGLE_AT=<t1,t2,...>  Toggle the 2D/3D view mode as the\n"
-            "               rendered-frame clock crosses each listed second (t\n"
-            "               advances 1/60 s per frame). Records the menu-bar\n"
-            "               2D/3D swatch transition headlessly and implicitly\n"
-            "               enables GLR_TICK_PER_FRAME.\n"
-            "  GLR_TYPE_KEYS=<text>  Feed each character through the keyboard\n"
-            "               dispatch after load, exactly as typing would.\n"
-            "               Poses mid-typing states (partial-input guides,\n"
-            "               autocomplete ghost) for headless captures.\n"
-            "  GLR_OPEN_COLOR_PICKER=<n>  Open the floating color picker on\n"
-            "               source line n (0-based; the line must be an\n"
-            "               editable color command). Poses the picker for\n"
-            "               captures - it otherwise needs a swatch click.\n"
-            "  GLR_OPEN_GL_STATE=<n>  Open the floating OpenGL-state popup\n"
-            "               anchored to source line n (0-based; the line\n"
-            "               must be a visually blank editor row). Poses the\n"
-            "               popup for captures - it otherwise needs a\n"
-            "               right-click.\n"
-            "  GLR_OPEN_HELP=<tab>  Open the F1 help overlay on tab index\n"
-            "               tab (0=Overview 1=Commands 2=Keys 3=About) on\n"
-            "               the first frame. Poses the overlay for captures\n"
-            "               - it otherwise needs an F1 special-key press.\n"
-            "  GLR_POINTER_SCRIPT=<file>  Drive scripted synthetic mouse +\n"
-            "               keyboard input on the rendered-frame clock\n"
-            "               (implies GLR_TICK_PER_FRAME) with a visible\n"
-            "               cursor overlay. Video capture hook - records\n"
-            "               menu navigation; see scripts/record-video.sh.\n"
-            "  GLR_NO_SPLASH=1  Skip the startup splash banner (captures\n"
-            "               that should not open on the splash band).\n"
-            "\n"
-            "Arguments:\n"
-            "  input.c      Optional saved session to load at startup\n"
-            "  workspace/   Optional directory: load every *.c as a user scene\n",
-            name);
-}
-
-/* Case-insensitive full compare / substring test (keeps gl_repl.c free of a
- * <strings.h> / strcasecmp dependency). Shared by --example and --tour name
- * resolution. */
-static int arg_ci_equal(const char *a, const char *b) {
-    for (; *a && *b; a++, b++)
-        if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
-            return 0;
-    return *a == '\0' && *b == '\0';
-}
-static int arg_ci_contains(const char *hay, const char *needle) {
-    size_t nl = strlen(needle);
-    if (nl == 0) return 0;
-    for (; *hay; hay++) {
-        size_t k = 0;
-        while (hay[k] && needle[k] &&
-               tolower((unsigned char)hay[k]) == tolower((unsigned char)needle[k]))
-            k++;
-        if (k == nl) return 1;
-    }
-    return 0;
-}
-
-static void list_examples(FILE *out) {
-    int n = glr_scene_example_count();
-    fprintf(out, "Built-in examples (%d):\n", n);
-    for (int i = 0; i < n; i++)
-        fprintf(out, "  %2d  %s\n", i + 1, glr_scene_example_name(i));
-}
-
-/* Resolve --example <arg> to a built-in example index. `arg` is either an
- * index (all digits) or a name (case-insensitive: exact match preferred, else
- * the first substring match). Returns the index, or -1 if nothing matches. */
-static int resolve_example_index(const char *arg) {
-    int n = glr_scene_example_count();
-    if (n <= 0 || !arg || !arg[0]) return -1;
-
-    int all_digits = 1;
-    for (const char *p = arg; *p; p++)
-        if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
-    if (all_digits) {
-        int idx = atoi(arg) - 1;
-        return (idx >= 0 && idx < n) ? idx : -1;
-    }
-
-    int substr = -1;
-    for (int i = 0; i < n; i++) {
-        const char *name = glr_scene_example_name(i);
-        if (!name) continue;
-        if (arg_ci_equal(name, arg)) return i;              /* exact wins */
-        if (substr < 0 && arg_ci_contains(name, arg)) substr = i;
-    }
-    return substr;
-}
-
-static void list_tours(FILE *out) {
-    int n = glr_tours_count();
-    fprintf(out, "Built-in tours (%d):\n", n);
-    for (int i = 0; i < n; i++)
-        fprintf(out, "  %2d  %s\n", i + 1, glr_tours_name(i));
-}
-
-/* Resolve --tour <arg> to a built-in tour index, same rules as
- * resolve_example_index: all-digits is a 1-based index, otherwise a
- * case-insensitive name (exact match preferred, else first substring match).
- * Returns the index, or -1 if nothing matches. */
-static int resolve_tour_index(const char *arg) {
-    int n = glr_tours_count();
-    if (n <= 0 || !arg || !arg[0]) return -1;
-
-    int all_digits = 1;
-    for (const char *p = arg; *p; p++)
-        if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
-    if (all_digits) {
-        int idx = atoi(arg) - 1;
-        return (idx >= 0 && idx < n) ? idx : -1;
-    }
-
-    int substr = -1;
-    for (int i = 0; i < n; i++) {
-        const char *name = glr_tours_name(i);
-        if (!name) continue;
-        if (arg_ci_equal(name, arg)) return i;              /* exact wins */
-        if (substr < 0 && arg_ci_contains(name, arg)) substr = i;
-    }
-    return substr;
-}
 
 /* Set by --export-ply <file>: when non-NULL, the first rendered frame
  * captures the scene to this path (PLY) and the process exits. */
@@ -481,22 +307,8 @@ static void on_sigint(int sig) {
 }
 
 int main(int argc, char **argv) {
-    const char *input_file = NULL;
-    const char *example_arg = NULL;
-    const char *examples_dir = NULL;
-    const char *assets_override = NULL;   /* --assets DIR (else GLR_ASSETS_DIR) */
-    const char *time_arg = NULL;          /* --time SECS (else GLR_TIME) */
-    int dump_code = 0;
-    int dump_flat = 0;
-    int dump_flat_histogram = 0;
-    int dump_state_layout = 0;
-    int no_audio  = 0;
-    int list_examples_flag = 0;
-    int list_tours_flag = 0;
-    const char *tour_arg = NULL;          /* --tour NAME|IDX */
-    int use_accum = 1;
-    int window_w  = 1200;
-    int window_h  = 800;
+    GlrCliOptions opts;
+    int exit_code = 0;
 
     glr_init_trace("start");
     glr_audio_set_hitch_log_elapsed_fn(glr_init_trace_elapsed_seconds);
@@ -513,126 +325,41 @@ int main(int argc, char **argv) {
         if (env && *env) glr_init_trace_set_detailed(1);
     }
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
-            return 0;
-        } else if (strcmp(argv[i], "--no-accum") == 0)
-            use_accum = 0;
-        else if (strcmp(argv[i], "--no-audio") == 0)
-            no_audio = 1;
-        else if (strcmp(argv[i], "--dump-code") == 0)
-            dump_code = 1;
-        else if (strcmp(argv[i], "--dump-flat") == 0)
-            dump_flat = 1;
-        else if (strcmp(argv[i], "--flat-histogram") == 0)
-            dump_flat_histogram = 1;
-        else if (strcmp(argv[i], "--dump-state-layout") == 0)
-            dump_state_layout = 1;
-        else if (strcmp(argv[i], "--detailed-prof") == 0)
-            glr_init_trace_set_detailed(1);
-        else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
-            g_export_ply_path = argv[++i];
-        else if (strcmp(argv[i], "--export-ply-srgb") == 0)
-            g_export_ply_srgb = 1;
-        else if (strcmp(argv[i], "--assets") == 0 && i + 1 < argc)
-            assets_override = argv[++i];
-        else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
-            example_arg = argv[++i];
-        else if (strcmp(argv[i], "--examples-dir") == 0 && i + 1 < argc)
-            examples_dir = argv[++i];
-        else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc)
-            time_arg = argv[++i];
-        else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
-            /* --window WxH: initial window size. Headless captures use
-             * it to render at 2x and downscale (4x supersampling) since
-             * the software rasterizer has no MSAA. */
-            int w = 0, h = 0;
-            if (sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) {
-                window_w = w;
-                window_h = h;
-            } else {
-                fprintf(stderr, "gl-repl: bad --window \"%s\" (want WxH)\n",
-                        argv[i]);
-                return 1;
-            }
-        }
-        else if (strcmp(argv[i], "--list-examples") == 0) {
-            list_examples_flag = 1;
-        }
-        else if (strcmp(argv[i], "--tour") == 0 && i + 1 < argc)
-            tour_arg = argv[++i];
-        else if (strcmp(argv[i], "--list-tours") == 0) {
-            list_tours_flag = 1;
-        }
-        else if (!input_file)
-            input_file = argv[i];
-    }
+    /* Parse the command line: glr_cli handles -h/--list-* itself and resolves
+     * --examples-dir / --example / --tour up front (fail-fast before a window
+     * opens). A 0 return means "exit now with exit_code" (help/list/error). */
+    if (!glr_cli_parse(argc, argv, &opts, &exit_code))
+        return exit_code;
+    if (opts.detailed_prof)
+        glr_init_trace_set_detailed(1);
+    /* --export-ply is consumed on the first display callback (needs a live GL
+     * context), so hand it to the file-static seen by display_func. */
+    g_export_ply_path = opts.export_ply_path;
+    g_export_ply_srgb = opts.export_ply_srgb;
 
-    if (examples_dir) {
-        char err[512];
-        if (!repl_examples_load_dir(examples_dir, err, sizeof(err))) {
-            fprintf(stderr, "gl-repl: could not load examples from %s: %s\n",
-                    examples_dir, err[0] ? err : "unknown error");
-            return 1;
-        }
-    }
-
-    if (list_examples_flag) {
-        list_examples(stdout);
-        return 0;
-    }
-    if (list_tours_flag) {
-        list_tours(stdout);
-        return 0;
-    }
-
-    /* Resolve --example up front: a bad name fails fast (before opening a
-     * window) and the error lists what is available. */
-    int example_index = -1;
-    if (example_arg) {
-        example_index = resolve_example_index(example_arg);
-        if (example_index < 0) {
-            fprintf(stderr, "gl-repl: unknown example \"%s\"\n", example_arg);
-            list_examples(stderr);
-            return 1;
-        }
-    }
-
-    /* Resolve --tour up front too (same fail-fast contract). The tour itself
-     * needs a live window/layout, so it is started after bootstrap below. */
-    int tour_index = -1;
-    if (tour_arg) {
-        tour_index = resolve_tour_index(tour_arg);
-        if (tour_index < 0) {
-            fprintf(stderr, "gl-repl: unknown tour \"%s\"\n", tour_arg);
-            list_tours(stderr);
-            return 1;
-        }
-    }
-
-    if (dump_code || dump_flat || dump_flat_histogram || dump_state_layout) {
+    if (opts.dump_code || opts.dump_flat || opts.dump_flat_histogram ||
+        opts.dump_state_layout) {
         /* Dump-only paths skip glr_ctrl_init_gl (no GL context, no
          * window). glr_ctrl_bootstrap_repl now installs the app
          * services (status sink + export-config bridge) at its top so
          * @cfg in imported files is applied even on the dump path.
          * Status messages still surface to UiState, but UiState is
          * never rendered here, so they're effectively silent. */
-        if (dump_code || dump_flat || dump_flat_histogram) {
-            glr_ctrl_bootstrap_repl(input_file);
+        if (opts.dump_code || opts.dump_flat || opts.dump_flat_histogram) {
+            glr_ctrl_bootstrap_repl(opts.input_file);
             /* --example works on the dump paths too: the loader chain
              * (reset transients, undo note, repl_load_example) is
              * GL-free, so built-ins can be inspected without a window. */
-            if (example_index >= 0)
-                glr_scene_load_example(example_index);
+            if (opts.example_index >= 0)
+                glr_scene_load_example(opts.example_index);
         }
-        if (dump_code)
+        if (opts.dump_code)
             glr_debug_dump_current_editor(stdout);
-        if (dump_flat)
+        if (opts.dump_flat)
             glr_debug_dump_current_flat_commands_sync(stdout);
-        if (dump_flat_histogram)
+        if (opts.dump_flat_histogram)
             glr_debug_dump_current_flat_histogram(stdout);
-        if (dump_state_layout)
+        if (opts.dump_state_layout)
             glr_debug_dump_runtime_state_layout(stdout);
         return 0;
     }
@@ -641,23 +368,23 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glr_init_trace_detail("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
-                        (use_accum ? GLUT_ACCUM : 0));
-    glutInitWindowSize(window_w, window_h);
+                        (opts.use_accum ? GLUT_ACCUM : 0));
+    glutInitWindowSize(opts.window_w, opts.window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
     glr_init_trace("window created");
 
     glr_ctrl_init_gl();
     atexit(glr_shutdown);
     glr_init_trace("GL init done");
-    glr_ctrl_bootstrap_repl(input_file);
-    if (example_index >= 0)
-        glr_scene_load_example(example_index);
+    glr_ctrl_bootstrap_repl(opts.input_file);
+    if (opts.example_index >= 0)
+        glr_scene_load_example(opts.example_index);
     /* Initial animation time: --time SECS wins over GLR_TIME. Applied after
      * any example load (which resets t to 0) so the override sticks. Lets a
      * headless capture start the animation from a later point in its
      * timeline (e.g. skip a long intro before recording). */
     {
-        const char *t_src = time_arg ? time_arg : getenv("GLR_TIME");
+        const char *t_src = opts.time_arg ? opts.time_arg : getenv("GLR_TIME");
         if (t_src && *t_src)
             glr_ctrl_set_time((float)atof(t_src));
     }
@@ -729,15 +456,15 @@ int main(int argc, char **argv) {
      * the real 60 Hz clock with live transport, like one started from the
      * Tours menu). Index was validated up front; the events fire against the
      * live layout once the main loop is drawing. Any real key/click cancels. */
-    if (tour_index >= 0) {
+    if (opts.tour_index >= 0) {
         splash_skip();       /* start clean — no splash band over the tour */
-        glr_tours_start(tour_index);
+        glr_tours_start(opts.tour_index);
     }
     glr_init_trace("REPL bootstrap done");
-    glr_ctrl_set_accum(use_accum);
+    glr_ctrl_set_accum(opts.use_accum);
 
-    if (!no_audio)
-        glr_audio_bootstrap(assets_override, glr_init_trace, glr_init_trace_detail);
+    if (!opts.no_audio)
+        glr_audio_bootstrap(opts.assets_override, glr_init_trace, glr_init_trace_detail);
     glr_actions_apply_defaults();
 
     glr_init_trace("entering main loop");
