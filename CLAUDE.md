@@ -245,11 +245,11 @@ Terse map; per-file responsibilities in depth: `docs/MODULES.md`.
 | `boot/glr_frame_pacer.{c,h}` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |
 | `boot/splash.{c,h}` | Startup splash banner (host-drawn during first frames; any keypress dismisses) |
 | **src/repl/** | Language pipeline — see `src/repl/ARCHITECTURE.md` |
-| [`command.h`](src/repl/command.h) | [`CmdType`](src/repl/command.h#L37) enum + [`GLCmd`](src/repl/command.h#L95) (pure parse result, no `source[]`) + set predicates |
+| [`command.h`](src/repl/command.h) | [`CmdType`](src/repl/command.h#L37) enum + [`GLCmd`](src/repl/command.h#L96) (pure parse result, no `source[]`) + set predicates |
 | `parser.{c,h}` | Source-line parser; canonical text via `ReplParsedLine.text` |
 | `command_spec.{c,h}` | Command metadata; `k_enum_command_specs[]`/`k_std_command_specs[]` (alphabetical by GL name); owns `k_attrib_bits[]` (the glPushAttrib `GL_*_BIT` groups, canonical order) + `repl_attrib_bit_entries()` |
 | `attrib_bits.{c,h}` | Pure (no-GL) glPushAttrib/glPopAttrib mapping: command → bit mask, per-cell state writes (flow-sensitive color-material), masked-LIFO-fold collectors for the editor per-bit highlighting; also consumed by [`gl_state_inspector.c`](src/repl/gl_state_inspector.c) so the two can't drift |
-| `command_store.{c,h}` | Low-level [`GLCmd`](src/repl/command.h#L95) array mechanics |
+| `command_store.{c,h}` | Low-level [`GLCmd`](src/repl/command.h#L96) array mechanics |
 | `compile.{c,h}` / `apply.{c,h}` | Pure validators → [`ReplCompiledChange`](src/repl/compile.h#L130) descriptors; apply mutates runtime arrays |
 | [`normalize.c`](src/repl/normalize.c) / `reformat.c` / `format.{c,h}` / `source_scope.{c,h}` | Parse-and-normalize, reformatter, indentation, block-depth cache |
 | `flatten.{c,h}` / `flatten_expr.{c,h}` / `flatten_query.{c,h}` / `expr_program.{c,h}` | Source→flat expansion, dep masks + value-only rebake, compiled-expression cache, cursor/cost queries |
@@ -366,7 +366,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L175)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L95)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L96)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -399,7 +399,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309).
-- [`GLCmd`](src/repl/command.h#L95) payload is a tagged union keyed on `type` (`payload.decl.*`,
+- [`GLCmd`](src/repl/command.h#L96) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
   validates no variable is still referenced outside the range. Cut/copy/
@@ -540,6 +540,7 @@ glVertex3f(x,y,z), glVertex2f(x,y), glNormal3f(x,y,z)
 glColor3f(r,g,b), glColor4f(r,g,b,a)
 glClearColor(r,g,b,a)          (channels clamped >= 0.15)
 glClear(mask)                  (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+glClearDepth(depth)            (depth value glClear writes; GL clamps to 0..1)
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
 glPushAttrib(mask), glPopAttrib()  (attribute-stack save/restore; GL_*_BIT tokens)
 glEnable(CAP), glDisable(CAP)  (depth/lighting/blend/cull/fog/lights 0-3,

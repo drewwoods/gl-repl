@@ -412,6 +412,15 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         /* Render-state clear color recorded by repl_apply_state_bookkeeping. */
         glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
+    case CMD_CLEAR_DEPTH:
+        /* GL clamps the GLclampd to [0,1] itself, so no REPL-side clamp —
+         * an out-of-range literal behaves exactly as the exported C does.
+         * Unlike the clear color there is no render-state mirror: the host
+         * never needs the program's depth-clear value, and every host-side
+         * depth clear sets the value it wants first (see
+         * glr_ctrl_clear_chrome). */
+        glClearDepth((GLclampd)cmd->args[0]);
+        return 1;
     case CMD_CLEAR:
         /* args[0] is the resolved GL_*_BUFFER_BIT mask. This IS the
          * frame's clear for the scene rect — nothing clears it on the
@@ -939,6 +948,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_POINT_PARAMETER_FV:
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:
+    case CMD_CLEAR_DEPTH:
     case CMD_CLIP_PLANE:
     case CMD_CLEAR:
     case CMD_FOG_I:

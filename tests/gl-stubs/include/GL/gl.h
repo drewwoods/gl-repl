@@ -278,7 +278,7 @@ static inline void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset
 static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glTexParameteri %u %u %d\n", (unsigned)target, (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glTexParameteri); }
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
-static inline void glClearDepth(GLclampd depth) { (void)depth; }
+static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDepth %g\n", (double)depth); gl_stub_tick(GL_STUB_glClearDepth); }
 /* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so
  * occlusion-style depth reads behave as if every vertex is visible. */
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,

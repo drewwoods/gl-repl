@@ -369,6 +369,11 @@ numeric argument everywhere is a full math expression.
 - [`glClear(mask)`](https://docs.gl/gl2/glClear) — clear again part-way down a scene (see Clearing
   mid-scene). `mask` is `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, or both
   OR'd with `|`
+- [`glClearDepth(depth)`](https://docs.gl/gl2/glClearDepth) — the depth value a
+  `GL_DEPTH_BUFFER_BIT` clear writes. GL clamps it to 0..1 and defaults to 1
+  (the far plane); a lower value makes the cleared buffer reject geometry
+  further away than that depth. Scoped by `GL_DEPTH_BUFFER_BIT` on the
+  attribute stack, alongside `glDepthFunc` / `glDepthMask`
 - [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
 - [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
   plane (see Clip planes)

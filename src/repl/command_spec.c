@@ -372,6 +372,9 @@ static const ReplFuncCompletion k_func_completions[] = {
         "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with |\n"
         "Colour clears to glClearColor and is confined to the 3D viewport",
         REPL_HELP_GROUP_DEPTH_MASK },
+    { "glClearDepth(",       "glClearDepth(depth)",                                      1, { "depth" },
+        "Depth value glClear(GL_DEPTH_BUFFER_BIT) writes (0..1, default 1)",
+        REPL_HELP_GROUP_DEPTH_MASK },
     /* --- Lighting & materials --- */
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" },
         "face: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK\n"
@@ -594,6 +597,7 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
 
 static const ReplStdCommandSpec k_std_command_specs[] = {
     { "glClearColor",   CMD_CLEAR_COLOR,      4, "glClearColor(%g, %g, %g, %g);",   "Usage: glClearColor(r, g, b, a)", 0 },
+    { "glClearDepth",   CMD_CLEAR_DEPTH,      1, "glClearDepth(%g);",               "Usage: glClearDepth(depth)", 0 },
     { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
     { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
     { "glLineStipple",  CMD_LINE_STIPPLE,     2, "glLineStipple(%g, %g);",          "Usage: glLineStipple(factor, pattern)", 0 },
@@ -695,6 +699,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, "glPointParameterfv",  1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_BLEND_FUNC,         "glBlendFunc",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        "glClearColor",        1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_DEPTH,        "glClearDepth",        1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_DEPTH_MASK,         "glDepthMask",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_COLOR_MASK,         "glColorMask",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED(CMD_EDGE_FLAG,              "glEdgeFlag",           1, CMD_CAT_STATE),

@@ -1011,6 +1011,11 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
      * after (which is what reusing the stale GL clear color would give). */
     glClearColor(config->clear_color[0], config->clear_color[1],
                  config->clear_color[2], config->clear_color[3]);
+    /* The chrome strips clear depth too, and a program glClearDepth leaves
+     * its value live in GL after the scene walk. Own the value here rather
+     * than inheriting last frame's leftover — same reason as the clear
+     * color above. (The view-mode swatch does the same for its cell.) */
+    glClearDepth(1.0);
     glPushAttrib(GL_SCISSOR_BIT);
     glEnable(GL_SCISSOR_TEST);
     glr_ctrl_clear_strip(0, 0, sx, vp.window_h);                       /* left  */

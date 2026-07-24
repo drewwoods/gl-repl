@@ -144,6 +144,10 @@ typedef struct {
     int clear_color_touched;
     ReplGlStateChangeSource clear_color_source;
 
+    float clear_depth;
+    int clear_depth_touched;
+    ReplGlStateChangeSource clear_depth_source;
+
     int depth_mask;
     int color_mask[4];
     int edge_flag;
@@ -712,6 +716,11 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->depth_mask_touched = 1;
         s->depth_mask_source = source;
     }
+    if (gl_state_mask_covers(mask, CMD_CLEAR_DEPTH)) {
+        s->clear_depth = snap->clear_depth;
+        s->clear_depth_touched = 1;
+        s->clear_depth_source = source;
+    }
 
     /* Fog parameters (mode/density/start/end/color) all ride GL_FOG_BIT; the
      * GL_FOG enable flag rides GL_ENABLE_BIT|GL_FOG_BIT and is restored above
@@ -915,6 +924,11 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         memcpy(s->clear_color, cmd->args, 4 * sizeof(float));
         s->clear_color_touched = 1;
         s->clear_color_source = source;
+        break;
+    case CMD_CLEAR_DEPTH:
+        s->clear_depth = cmd->args[0];
+        s->clear_depth_touched = 1;
+        s->clear_depth_source = source;
         break;
     case CMD_DEPTH_MASK:
         s->depth_mask = cmd->args[0] != 0.0f;
@@ -1407,6 +1421,10 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         gl_state_report_vec(out, "GL_COLOR_CLEAR_VALUE", s->clear_color,
                             clear_default, 4);
         gl_state_report_set_last_source(out, s->clear_color_source);
+    }
+    if (s->clear_depth_touched) {
+        gl_state_report_float(out, "GL_DEPTH_CLEAR_VALUE", s->clear_depth, 1.0f);
+        gl_state_report_set_last_source(out, s->clear_depth_source);
     }
     if (s->depth_mask_touched) {
         gl_state_report_bool(out, "GL_DEPTH_WRITEMASK", s->depth_mask, 1);

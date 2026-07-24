@@ -274,6 +274,29 @@ static void test_depth_buffer_bit(void) {
     glDepthFunc(GL_GREATER);
     glPopAttrib();
     expect_intv("POINT_BIT leaves depth func", GL_DEPTH_FUNC, GL_GREATER);
+
+    /* Depth clear value: the counterpart to glClearColor on COLOR_BUFFER_BIT. */
+    {
+        static const GLfloat d1[1] = { 0.25f };
+        static const GLfloat d2[1] = { 0.75f };
+
+        expect_membership("DEPTH: glClearDepth -> DEPTH_BUFFER_BIT",
+                          CMD_CLEAR_DEPTH, 0, GL_DEPTH_BUFFER_BIT);
+
+        glClearDepth((GLclampd)d1[0]);
+        glPushAttrib(GL_DEPTH_BUFFER_BIT);
+        glClearDepth((GLclampd)d2[0]);
+        glPopAttrib();
+        expect_floatv("DEPTH_BUFFER_BIT restores depth clear value",
+                      GL_DEPTH_CLEAR_VALUE, d1, 1);
+
+        glClearDepth((GLclampd)d1[0]);
+        glPushAttrib(GL_COLOR_BUFFER_BIT);
+        glClearDepth((GLclampd)d2[0]);
+        glPopAttrib();
+        expect_floatv("COLOR_BUFFER_BIT leaves depth clear value",
+                      GL_DEPTH_CLEAR_VALUE, d2, 1);
+    }
 }
 
 static void test_transform_bit(void) {

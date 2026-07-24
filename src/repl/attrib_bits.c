@@ -37,6 +37,7 @@ enum {
     ITEM_KIND_CULL_FACE,   /* (POLYGON) */
     ITEM_KIND_DEPTH_FUNC,  /* (DEPTH_BUFFER) */
     ITEM_KIND_DEPTH_MASK,  /* (DEPTH_BUFFER) */
+    ITEM_KIND_CLEAR_DEPTH, /* (DEPTH_BUFFER) */
     ITEM_KIND_BLEND_FUNC,  /* (COLOR_BUFFER) */
     ITEM_KIND_COLOR_MASK,  /* (COLOR_BUFFER) */
     ITEM_KIND_CLEAR_COLOR, /* (COLOR_BUFFER) */
@@ -96,6 +97,7 @@ static unsigned cell_cover(unsigned item_id) {
     case ITEM_KIND_FRONT_FACE: case ITEM_KIND_CULL_FACE:
         return GL_POLYGON_BIT;
     case ITEM_KIND_DEPTH_FUNC: case ITEM_KIND_DEPTH_MASK:
+    case ITEM_KIND_CLEAR_DEPTH:
         return GL_DEPTH_BUFFER_BIT;
     case ITEM_KIND_BLEND_FUNC: case ITEM_KIND_COLOR_MASK:
     case ITEM_KIND_CLEAR_COLOR:
@@ -135,7 +137,7 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
         return GL_POINT_BIT;
     case CMD_CULL_FACE: case CMD_FRONT_FACE:
         return GL_POLYGON_BIT;
-    case CMD_DEPTH_FUNC: case CMD_DEPTH_MASK:
+    case CMD_DEPTH_FUNC: case CMD_DEPTH_MASK: case CMD_CLEAR_DEPTH:
         return GL_DEPTH_BUFFER_BIT;
     case CMD_BLEND_FUNC: case CMD_COLOR_MASK: case CMD_CLEAR_COLOR:
         return GL_COLOR_BUFFER_BIT;
@@ -346,6 +348,10 @@ int repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
         break;
     case CMD_DEPTH_MASK:
         n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_DEPTH_MASK, 0),
+                     GL_DEPTH_BUFFER_BIT);
+        break;
+    case CMD_CLEAR_DEPTH:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_CLEAR_DEPTH, 0),
                      GL_DEPTH_BUFFER_BIT);
         break;
     case CMD_BLEND_FUNC:

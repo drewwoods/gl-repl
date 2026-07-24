@@ -156,6 +156,10 @@ Chooses source and destination factors for combining a fragment with the existin
 title = glClearColor
 Sets the RGBA value used when the color buffer is cleared. It changes the scene background on the next clear; it does not draw geometry.
 
+[command CMD_CLEAR_DEPTH]
+title = glClearDepth
+Sets the depth value written when glClear clears the depth buffer. It is clamped to 0..1 and defaults to 1, the far plane; lowering it makes the cleared buffer reject geometry beyond that depth.
+
 [command CMD_DEPTH_MASK]
 title = glDepthMask
 Enables or disables writes to the depth buffer. Depth testing can remain active while writes are off, which is useful for translucent geometry drawn after opaque surfaces.
