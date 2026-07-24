@@ -67,6 +67,19 @@ glEnd();
 
 ### Quick start
 
+The screenshots and GIFs under `docs/images/` are stored in **Git LFS**.
+Install it *before* cloning, or the image files arrive as ~130-byte pointer
+text instead of pictures:
+
+```bash
+# macOS: brew install git-lfs
+# Linux: sudo apt install git-lfs
+git lfs install             # one-time, per user
+git lfs pull                # already cloned without it? fetch the real bytes
+```
+
+Nothing in the build or the app depends on those assets — only the docs do.
+
 ```bash
 # macOS: needs cmake (brew install cmake) — builds the vendored freeglut
 # Linux: sudo apt install freeglut3-dev
