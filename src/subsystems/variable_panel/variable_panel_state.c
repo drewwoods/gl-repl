@@ -8,7 +8,7 @@
         .view = { .visible = 1 },                           \
         .drag = {                                           \
             .var_idx     = -1,                              \
-            .log_mode    = 0,                               \
+            .coarse      = 0,                               \
             .start_value = 0.0f,                            \
         },                                                  \
     }
@@ -55,10 +55,10 @@ void variable_panel_set_visible(int visible) {
 }
 
 /* Drag transaction handlers. The pure-pass-through query / handler
- * wrappers (variable_panel_drag_active / _active_var / _log_mode /
+ * wrappers (variable_panel_drag_active / _active_var / _coarse /
  * variable_panel_handle_drag_begin / _motion / _reset) live in
  * variable_panel_drag.c — they sit alongside the value-mapping
- * logic (linear / log) so the implementation file is self-contained.
+ * logic (normal + coarse linear) so the implementation file is self-contained.
  *
  * The two undo-snapshot fields are kept here because they're a pure
  * field accessor on the peer's drag state; no value-mapping logic

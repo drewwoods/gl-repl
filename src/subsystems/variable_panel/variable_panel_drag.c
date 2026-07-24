@@ -7,23 +7,18 @@
  * motion into requested value changes without mutating REPL/editor
  * state directly.
  *
- * Linear drag: 1 pixel = 0.05 units.
- * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
- *              Near-zero start value falls back to a linear bootstrap
- *              so the slider can walk off zero.
+ * Linear drag:  1 pixel = VAR_DRAG_LINEAR_UNITS_PER_PX units (0.1).
+ * Coarse drag:  the right-click "fast" scrub is the same linear scrub at
+ *               GLR_ADJUST_COARSE_SCALE (10x) the rate, i.e. 1.0 units/px.
  */
-#include <math.h>
 #include <stdio.h>
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
-/* Drag-scaling tunables (the prose spec in the file header above is the
- * authority — keep them in sync). VAR_DRAG_ZERO_EPS is the |start|
- * threshold below which log drag falls back to the linear bootstrap. */
-#define VAR_DRAG_LINEAR_UNITS_PER_PX  0.05f   /* 1 px = 0.05 units */
-#define VAR_DRAG_PX_PER_DECADE        200.0f  /* 200 px = x10 / div10 */
-#define VAR_DRAG_ZERO_EPS             1e-6f
-#define VAR_DRAG_ZERO_BOOTSTRAP_RATE  0.001f  /* units/px while |start| ~ 0 */
+/* Drag-scaling tunable (the prose spec in the file header above is the
+ * authority — keep it in sync). The coarse (right-click) scrub multiplies
+ * this by GLR_ADJUST_COARSE_SCALE from config.h. */
+#define VAR_DRAG_LINEAR_UNITS_PER_PX  0.10f   /* 1 px = 0.1 units */
 
 static int g_drag_start_x = 0;
 static const VariablePanelValueSource *g_value_source = NULL;
@@ -40,11 +35,11 @@ int variable_panel_drag_active_var(void) {
     return variable_panel_drag().var_idx;
 }
 
-int variable_panel_drag_log_mode(void) {
-    return variable_panel_drag().log_mode;
+int variable_panel_drag_coarse(void) {
+    return variable_panel_drag().coarse;
 }
 
-void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
+void variable_panel_handle_drag_begin(int row, int coarse, int x) {
     char  name[REPL_PREDEF_NAME_MAX] = {0};
     float value = 0.0f;
     /* Bridge fills name + value and bounds-checks the row; unset source or
@@ -54,7 +49,7 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
         return;
     VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
-    drag->log_mode = log_mode ? 1 : 0;
+    drag->coarse = coarse ? 1 : 0;
     drag->start_value = value;
     g_drag_start_x = x;
     snprintf(drag->name, sizeof(drag->name), "%s", name);
@@ -66,7 +61,7 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
 void variable_panel_handle_drag_reset(void) {
     VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = -1;
-    drag->log_mode = 0;
+    drag->coarse = 0;
     drag->start_value = 0.0f;
     g_drag_start_x = 0;
     drag->name[0] = '\0';
@@ -75,21 +70,14 @@ void variable_panel_handle_drag_reset(void) {
     drag->final_value = 0.0f;
 }
 
-static float drag_log_value(float start_value, int dx) {
-    float dx_total = (float)dx;
-    float mag = fabsf(start_value);
-    if (mag < VAR_DRAG_ZERO_EPS) {
-        /* Bootstrap from zero: treat first pixels as linear, then log. */
-        return dx_total * VAR_DRAG_ZERO_BOOTSTRAP_RATE;
-    } else {
-        float sign = (start_value >= 0.0f) ? 1.0f : -1.0f;
-        return sign * mag * expf(dx_total * (logf(10.0f) / VAR_DRAG_PX_PER_DECADE));
-    }
-}
-
-static float drag_linear_value(float start_value, int dx) {
-    float delta = (float)dx * VAR_DRAG_LINEAR_UNITS_PER_PX;
-    return start_value + delta;
+/* Map a horizontal drag delta to a value. Both drag modes are linear; the
+ * right-click "coarse" mode scrubs at GLR_ADJUST_COARSE_SCALE (10x) the
+ * units-per-pixel of the plain left-click drag. */
+static float drag_linear_value(float start_value, int dx, int coarse) {
+    float upx = VAR_DRAG_LINEAR_UNITS_PER_PX;
+    if (coarse)
+        upx *= GLR_ADJUST_COARSE_SCALE;
+    return start_value + (float)dx * upx;
 }
 
 int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
@@ -104,11 +92,7 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
         return 0;
 
     int dx = x - g_drag_start_x;
-    if (drag->log_mode) {
-        new_val = drag_log_value(drag->start_value, dx);
-    } else {
-        new_val = drag_linear_value(drag->start_value, dx);
-    }
+    new_val = drag_linear_value(drag->start_value, dx, drag->coarse);
 
     if (out) {
         /* drag->name was captured from the value source at drag-begin. */

@@ -496,8 +496,8 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
         return 0;
     if (replay_active())
         replay_stop();
-    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
-    variable_panel_handle_drag_begin(row_idx, log_mode, x);
+    int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+    variable_panel_handle_drag_begin(row_idx, coarse, x);
     editor_request_redraw();
     return 1;
 }
@@ -639,7 +639,9 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
         return 0;
     if (variable_panel_handle_drag_motion(x, &value_change)) {
         VariablePanelDragState drag = variable_panel_drag();
-        if (!drag.log_mode) {
+        /* Shift fine-scaling only applies to the normal left-click scrub; the
+         * coarse (right-click) scrub is a flat 10x. */
+        if (!drag.coarse) {
             float scale = glr_ctrl_adjustment_modifier_scale(
                 0, glr_ctrl_shift_fine_modifier_active());
             value_change.value = drag.start_value +

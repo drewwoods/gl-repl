@@ -30,9 +30,9 @@ static const float k_var_name[3]           = { 0.70f, 0.85f, 0.70f };
 static const float k_var_value[3]          = { 0.90f, 0.90f, 0.60f };
 static const float k_var_name_written[3]   = { 0.38f, 0.48f, 0.38f };
 static const float k_var_value_written[3]  = { 0.48f, 0.48f, 0.34f };
-static const float k_var_drag_log_bg[4]    = { 0.30f, 0.20f, 0.05f, 0.60f };
+static const float k_var_drag_coarse_bg[4] = { 0.30f, 0.20f, 0.05f, 0.60f };
 static const float k_var_drag_linear_bg[4] = { 0.20f, 0.20f, 0.40f, 0.60f };
-static const float k_var_handle_log[4]     = { 1.00f, 0.55f, 0.10f, 0.95f };
+static const float k_var_handle_coarse[4]  = { 1.00f, 0.55f, 0.10f, 0.95f };
 static const float k_var_handle_linear[4]  = { 1.00f, 0.80f, 0.20f, 0.95f };
 static const float k_var_handle_idle[4]    = { 0.55f, 0.70f, 1.00f, 0.90f };
 static const float k_var_handle_written[4] = { 0.34f, 0.42f, 0.60f, 0.70f };
@@ -216,9 +216,9 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         int text_y = row_y + 4;
         float val  = ui_variable_value(var);
 
-        /* Drag highlight - amber tint for log mode, blue for linear */
+        /* Drag highlight - amber tint for coarse mode, blue for normal */
         if (view->drag_active_var == i) {
-            glColor4fv(view->drag_log_mode ? k_var_drag_log_bg : k_var_drag_linear_bg);
+            glColor4fv(view->drag_coarse ? k_var_drag_coarse_bg : k_var_drag_linear_bg);
             glRectf((float)(px + 1), (float)row_y, (float)(px + pw - 1), (float)(row_y + VAR_ROW_H));
         }
 
@@ -254,11 +254,11 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         glEnd();
 
         /* Handle - position computed via shared log-normalized scale.
-         * Yellow = linear drag, orange = log drag, blue = idle. */
+         * Yellow = normal drag, orange = coarse drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
         if (view->drag_active_var == i) {
-            glColor4fv(view->drag_log_mode ? k_var_handle_log : k_var_handle_linear);
+            glColor4fv(view->drag_coarse ? k_var_handle_coarse : k_var_handle_linear);
         } else {
             glColor4fv(var->written ? k_var_handle_written : k_var_handle_idle);
         }

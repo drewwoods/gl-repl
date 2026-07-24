@@ -37,7 +37,7 @@ UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap) {
     v.vars            = snap->variable_panel_vars.vars;
     v.var_count       = snap->variable_panel_vars.count;
     v.drag_active_var = snap->variable_drag.active_var;
-    v.drag_log_mode   = snap->variable_drag.log_mode;
+    v.drag_coarse     = snap->variable_drag.coarse;
     return v;
 }
 
@@ -61,6 +61,6 @@ UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
     v.vars            = NULL;            /* geometry-only: no value rows */
     v.var_count       = var_count;
     v.drag_active_var = -1;
-    v.drag_log_mode   = 0;
+    v.drag_coarse     = 0;
     return v;
 }

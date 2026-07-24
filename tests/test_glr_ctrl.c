@@ -633,15 +633,15 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
      * mouse-up, so a drag performs no source mutation per pointer event. */
     ASSERT_STR("drag leaves declaration source at its start text",
                editor_buffer_line(0), "  static float testvar = 1;");
-    ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 6.0f);
+    ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 11.0f);
 
     ASSERT_INT("drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("release rewrites declaration source through compiler",
-               editor_buffer_line(0), "  static float testvar = 6;");
+               editor_buffer_line(0), "  static float testvar = 11;");
     ASSERT_FLOAT("release keeps live predef value",
-                 g_predef_vars[var_idx].value, 6.0f);
+                 g_predef_vars[var_idx].value, 11.0f);
     editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("release captures no second undo snapshot",
                undo_state.undo_count, 1);
@@ -702,7 +702,7 @@ static void test_variable_panel_shift_left_drag_uses_fine_scale(void) {
                1);
     ASSERT_FLOAT("fine drag applies shared fine scale",
                  g_predef_vars[var_idx].value,
-                 1.0f + 5.0f * GLR_ADJUST_FINE_SCALE);
+                 1.0f + 10.0f * GLR_ADJUST_FINE_SCALE);
     ASSERT_STR("fine drag motion leaves declaration source alone",
                editor_buffer_line(0), "  static float testvar = 1;");
 
@@ -710,7 +710,7 @@ static void test_variable_panel_shift_left_drag_uses_fine_scale(void) {
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("fine drag release rewrites declaration source",
-               editor_buffer_line(0), "  static float testvar = 2;");
+               editor_buffer_line(0), "  static float testvar = 3;");
     ASSERT_TRUE("fine drag inactive after release", !variable_panel_drag_active());
 
     g_simulated_mods = 0;
@@ -766,7 +766,7 @@ static void test_variable_panel_motion_preserves_reset_assignment_without_declar
                undo_state.undo_count, 1);
     ASSERT_STR("reset assignment source preserved",
                editor_buffer_line(0), "  t = 0;");
-    ASSERT_FLOAT("reset drag updates live t value", g_predef_vars[var_idx].value, 5.0f);
+    ASSERT_FLOAT("reset drag updates live t value", g_predef_vars[var_idx].value, 10.0f);
 
     ASSERT_INT("reset drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
@@ -834,13 +834,13 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_STR("uninitialized drag motion leaves the bare declaration",
                editor_buffer_line(0), "  static float testvar;");
     ASSERT_FLOAT("uninitialized drag updates live predef value",
-                 g_predef_vars[var_idx].value, 5.0f);
+                 g_predef_vars[var_idx].value, 10.0f);
 
     ASSERT_INT("uninitialized drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("uninitialized drag release adds explicit initializer",
-               editor_buffer_line(0), "  static float testvar = 5;");
+               editor_buffer_line(0), "  static float testvar = 10;");
     ASSERT_TRUE("uninitialized drag inactive after release",
                 !variable_panel_drag_active());
     ASSERT_INT("uninitialized undo flag cleared after release",
@@ -913,7 +913,7 @@ static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
     ASSERT_STR("100 motions leave the declaration text alone",
                editor_buffer_line(0), "  static float testvar = 1;");
     ASSERT_FLOAT("100 motions update the live value",
-                 g_predef_vars[var_idx].value, 1.0f + 100.0f * 0.05f);
+                 g_predef_vars[var_idx].value, 1.0f + 100.0f * 0.1f);
 
     ASSERT_INT("deferred-write release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
@@ -921,9 +921,9 @@ static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
     ASSERT_INT("release marks the source dirty once",
                repl_state_normals_dirty(), 1);
     ASSERT_STR("release persists the settled value",
-               editor_buffer_line(0), "  static float testvar = 6;");
+               editor_buffer_line(0), "  static float testvar = 11;");
     ASSERT_FLOAT("release keeps the live value",
-                 g_predef_vars[var_idx].value, 6.0f);
+                 g_predef_vars[var_idx].value, 11.0f);
 }
 
 /* Press + release with no motion in between: no compile, no source write, no
@@ -1014,7 +1014,7 @@ static void test_variable_panel_drag_release_without_declaration_is_a_noop(void)
     ASSERT_STR("no-decl release preserves the assignment row",
                editor_buffer_line(0), "  t = 0;");
     ASSERT_FLOAT("no-decl release keeps the live value",
-                 g_predef_vars[var_idx].value, 5.0f);
+                 g_predef_vars[var_idx].value, 10.0f);
     editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("no-decl release captures no second undo snapshot",
                undo_state.undo_count, 1);
@@ -1023,7 +1023,7 @@ static void test_variable_panel_drag_release_without_declaration_is_a_noop(void)
 /* Audit #18 (Tier B, commit 783d7e3) regression: variable_drag must arrive
  * in UiRenderSnapshot from the controller's snapshot-build phase, not be
  * re-fetched from peer file-statics inside ui_variable_panel_render. Pin
- * that glr_ctrl_build_ui_snapshot copies both fields (active_var, log_mode)
+ * that glr_ctrl_build_ui_snapshot copies both fields (active_var, coarse)
  * — a revert to live peer reads would silently still pass every existing
  * variable_drag test but would re-introduce the snapshot-purity violation. */
 static void test_variable_drag_snapshot_wiring(void) {
@@ -1033,18 +1033,18 @@ static void test_variable_drag_snapshot_wiring(void) {
     ASSERT_INT("no drag active before begin",
                variable_panel_drag_active(), 0);
 
-    variable_panel_handle_drag_begin(0, /*log_mode=*/1, /*x=*/100);
+    variable_panel_handle_drag_begin(0, /*coarse=*/1, /*x=*/100);
     ASSERT_INT("drag active after begin",
                variable_panel_drag_active(), 1);
     ASSERT_INT("active var seeded", variable_panel_drag_active_var(), 0);
-    ASSERT_INT("log mode seeded", variable_panel_drag_log_mode(), 1);
+    ASSERT_INT("coarse mode seeded", variable_panel_drag_coarse(), 1);
 
     glr_ctrl_display_frame();
 
     ASSERT_INT("snap.variable_drag.active_var arrives in snapshot",
                g_last_replay_hud_snap.variable_drag.active_var, 0);
-    ASSERT_INT("snap.variable_drag.log_mode arrives in snapshot",
-               g_last_replay_hud_snap.variable_drag.log_mode, 1);
+    ASSERT_INT("snap.variable_drag.coarse arrives in snapshot",
+               g_last_replay_hud_snap.variable_drag.coarse, 1);
 
     /* Release: the next frame's snapshot must reflect the cleared state
      * (proves the snapshot path is re-evaluated, not stale-cached). */
@@ -3516,7 +3516,7 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
     variable_panel_handle_drag_begin(t_idx, 0, 0);
     ASSERT_TRUE("variable-panel t motion consumed",
                 glr_ctrl_router_handle_variable_panel_motion(50, 0));
-    ASSERT_FLOAT("variable panel changed t", g_predef_vars[t_idx].value, 2.5f);
+    ASSERT_FLOAT("variable panel changed t", g_predef_vars[t_idx].value, 5.0f);
     /* glVertex3f(t, ...) is a value-only use of t, so the drag routes to
      * args_dirty_mask (rebake) rather than the full flat-dirty flag; the
      * frame gate below still rebuilds from it. */
@@ -3529,9 +3529,9 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
     glr_ctrl_display_frame();
 
     ASSERT_TRUE("post-frame flat vertex exists", first_flat_vertex_x(&x));
-    ASSERT_FLOAT("post-frame flat vertex uses panel t", x, 2.5f);
+    ASSERT_FLOAT("post-frame flat vertex uses panel t", x, 5.0f);
     ASSERT_FLOAT("time remains paused at panel value",
-                 g_predef_vars[t_idx].value, 2.5f);
+                 g_predef_vars[t_idx].value, 5.0f);
     ASSERT_INT("auto time remains off",
                repl_state_variables().time_playing, 0);
 
@@ -3540,7 +3540,7 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
     ASSERT_TRUE("same-value variable-panel t motion consumed",
                 glr_ctrl_router_handle_variable_panel_motion(0, 0));
     ASSERT_FLOAT("same-value variable-panel leaves t unchanged",
-                 g_predef_vars[t_idx].value, 2.5f);
+                 g_predef_vars[t_idx].value, 5.0f);
     ASSERT_INT("same-value variable-panel leaves flat clean",
                repl_state_flat_program_dirty(), 0);
     ASSERT_INT("same-value variable-panel leaves args-dirty clean",

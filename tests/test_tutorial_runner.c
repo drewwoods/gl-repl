@@ -4019,9 +4019,9 @@ static void test_require_var_advances_on_slider_drag(void) {
     float cur = g_predef_vars[n_idx].value;
     float target = repl_tutorial_step_var_target(tutorial_state_view().tutorial_idx,
                                                  tutorial_state_view().step);
-    /* Linear drag: 1 px = 0.05 units, so dx px maps to dx*0.05 units. */
-    int dx = (int)((target - cur) / 0.05f + 0.5f);
-    variable_panel_handle_drag_begin(n_idx, /*log_mode=*/0, /*x=*/0);
+    /* Linear drag: 1 px = 0.1 units, so dx px maps to dx*0.1 units. */
+    int dx = (int)((target - cur) / 0.1f + 0.5f);
+    variable_panel_handle_drag_begin(n_idx, /*coarse=*/0, /*x=*/0);
     glr_ctrl_router_handle_variable_panel_motion(/*x=*/dx, /*y=*/0);
 
     ASSERT_TRUE("n value reflects drag to the final target",

@@ -1683,7 +1683,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->help_session   = editor_help_session_view();
     snap->variable_panel = variable_panel_view();
     snap->variable_drag.active_var = variable_panel_drag_active_var();
-    snap->variable_drag.log_mode   = variable_panel_drag_log_mode();
+    snap->variable_drag.coarse     = variable_panel_drag_coarse();
     snap->profile_panel  = ui_state_profile_panel();
     snap->memory_panel   = ui_state_memory_panel();
     snap->status         = ui_state_status();

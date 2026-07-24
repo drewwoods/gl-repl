@@ -162,7 +162,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     drag = variable_panel_drag_mut();
     drag->var_idx = 3;
-    drag->log_mode = 1;
+    drag->coarse = 1;
     drag->start_value = 2.5f;
     ui_state_profile_panel_mut()->mode = PROFILE_PANEL_HISTOGRAM;
 
@@ -361,7 +361,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("code panel blink restored", editor_state_cursor_blink().blink_tick, 12);
     ASSERT_INT("variable panel restored", variable_panel_view().visible, 0);
     ASSERT_INT("variable drag idx restored", variable_panel_drag().var_idx, 3);
-    ASSERT_INT("variable drag log restored", variable_panel_drag().log_mode, 1);
+    ASSERT_INT("variable drag coarse restored", variable_panel_drag().coarse, 1);
     ASSERT_TRUE("variable drag value restored",
                 variable_panel_drag().start_value == 2.5f);
     ASSERT_INT("profile panel restored",

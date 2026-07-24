@@ -734,12 +734,11 @@ sits and how export lifts it.
 The variable panel (bottom-right) lists `t` plus every declared variable with
 its current value and a slider:
 
-- **Left-click drag** on a row scrubs the value linearly.
-- **Right-click drag** is the *fast* scrub: it scales the value
-  multiplicatively (a decade per ~200 px of drag), covering large ranges
-  quickly — and staying fine near zero.
-- **Shift + click drag** is the *slow* scrub: linear deltas at 1/5 speed,
-  for dialing in a precise value.
+- **Left-click drag** on a row scrubs the value linearly (0.1 units/px).
+- **Right-click drag** is the *fast* scrub: the same linear scrub at 10×
+  the rate (1.0 units/px), for covering large ranges quickly.
+- **Shift + click drag** is the *slow* scrub: linear deltas at 1/5 speed
+  (0.02 units/px), for dialing in a precise value.
 - Toggle the panel with **`** backquote or the *Variable panel* config item.
 
 Row brightness distinguishes knobs from storage:

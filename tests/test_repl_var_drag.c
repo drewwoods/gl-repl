@@ -46,7 +46,7 @@ static void test_inactive_queries(void) {
 
     ASSERT_INT("no drag active", variable_panel_drag_active(), 0);
     ASSERT_INT("active var is -1", variable_panel_drag_active_var(), -1);
-    ASSERT_INT("log mode is 0", variable_panel_drag_log_mode(), 0);
+    ASSERT_INT("coarse mode is 0", variable_panel_drag_coarse(), 0);
     ASSERT_INT("undo snapshot flag clear", variable_panel_drag_undo_snapshot_pushed(), 0);
 }
 
@@ -61,7 +61,7 @@ static void test_begin_captures_drag_metadata(void) {
 
     ASSERT_INT("drag active", variable_panel_drag_active(), 1);
     ASSERT_INT("active var stored", variable_panel_drag_active_var(), 0);
-    ASSERT_INT("linear mode stored", variable_panel_drag_log_mode(), 0);
+    ASSERT_INT("normal (non-coarse) mode stored", variable_panel_drag_coarse(), 0);
     ASSERT_STR("drag name stored", drag.name, g_predef_vars[0].name);
     ASSERT_INT("undo flag reset on begin", variable_panel_drag_undo_snapshot_pushed(), 0);
 }
@@ -86,37 +86,43 @@ static void test_linear_motion_emits_request_without_mutation(void) {
     ASSERT_INT("linear motion emits request",
                variable_panel_handle_drag_motion(120, &change), 1);
     ASSERT_STR("linear request name", change.name, g_predef_vars[0].name);
-    ASSERT_FLOAT("linear request value", change.value, 6.0f, 1e-5f);
+    /* dx = 20 px at 0.1 units/px = +2.0. */
+    ASSERT_FLOAT("linear request value", change.value, 7.0f, 1e-5f);
     ASSERT_FLOAT("linear motion does not mutate live value",
                  g_predef_vars[0].value, 5.0f, 1e-5f);
 }
 
-static void test_log_motion_emits_request_without_mutation(void) {
+/* The coarse (right-click) scrub is the same linear scrub at
+ * GLR_ADJUST_COARSE_SCALE (10x) the units-per-pixel. */
+static void test_coarse_motion_is_ten_times_linear(void) {
     VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
-    g_predef_vars_mut[0].value = 10.0f;
+    g_predef_vars_mut[0].value = 5.0f;
 
-    variable_panel_handle_drag_begin(0, 1, 300);
-    ASSERT_INT("log motion emits request",
-               variable_panel_handle_drag_motion(100, &change), 1);
-    ASSERT_FLOAT("log request value", change.value, 1.0f, 0.01f);
-    ASSERT_FLOAT("log motion does not mutate live value",
-                 g_predef_vars[0].value, 10.0f, 1e-5f);
+    variable_panel_handle_drag_begin(0, /*coarse=*/1, 100);
+    ASSERT_INT("coarse motion emits request",
+               variable_panel_handle_drag_motion(120, &change), 1);
+    /* dx = 20 px at 0.1 * 10 = 1.0 units/px = +20.0 (10x the linear +2.0). */
+    ASSERT_FLOAT("coarse request value", change.value, 25.0f, 1e-5f);
+    ASSERT_FLOAT("coarse motion does not mutate live value",
+                 g_predef_vars[0].value, 5.0f, 1e-5f);
 }
 
-static void test_log_near_zero_bootstrap_emits_request(void) {
+/* Pure linear means the coarse scrub walks off zero with no special-casing. */
+static void test_coarse_from_zero_emits_request(void) {
     VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
-    g_predef_vars_mut[0].value = 1e-7f;
+    g_predef_vars_mut[0].value = 0.0f;
 
-    variable_panel_handle_drag_begin(0, 1, 100);
-    ASSERT_INT("near-zero log motion emits request",
+    variable_panel_handle_drag_begin(0, /*coarse=*/1, 100);
+    ASSERT_INT("coarse-from-zero motion emits request",
                variable_panel_handle_drag_motion(140, &change), 1);
-    ASSERT_FLOAT("near-zero bootstrap value", change.value, 0.04f, 1e-5f);
-    ASSERT_FLOAT("near-zero motion does not mutate live value",
-                 g_predef_vars[0].value, 1e-7f, 1e-8f);
+    /* dx = 40 px at 1.0 units/px = +40.0. */
+    ASSERT_FLOAT("coarse-from-zero value", change.value, 40.0f, 1e-5f);
+    ASSERT_FLOAT("coarse-from-zero motion does not mutate live value",
+                 g_predef_vars[0].value, 0.0f, 1e-5f);
 }
 
 static void test_motion_without_active_drag_is_noop(void) {
@@ -145,7 +151,7 @@ static void test_reset_clears_drag_state_and_undo_flag(void) {
 
     ASSERT_INT("drag inactive after reset", variable_panel_drag_active(), 0);
     ASSERT_INT("active var cleared after reset", variable_panel_drag_active_var(), -1);
-    ASSERT_INT("log mode cleared after reset", variable_panel_drag_log_mode(), 0);
+    ASSERT_INT("coarse mode cleared after reset", variable_panel_drag_coarse(), 0);
     ASSERT_INT("undo flag cleared after reset", variable_panel_drag_undo_snapshot_pushed(), 0);
 }
 
@@ -163,7 +169,8 @@ static void test_request_uses_dragged_variable_name(void) {
     ASSERT_INT("named drag emits request",
                variable_panel_handle_drag_motion(120, &change), 1);
     ASSERT_STR("named request uses x", change.name, "x");
-    ASSERT_FLOAT("named request value", change.value, 4.0f, 1e-5f);
+    /* dx = 20 px at 0.1 units/px = +2.0. */
+    ASSERT_FLOAT("named request value", change.value, 5.0f, 1e-5f);
 }
 
 static void test_sequential_drags_reanchor_to_new_start_value(void) {
@@ -175,15 +182,17 @@ static void test_sequential_drags_reanchor_to_new_start_value(void) {
     variable_panel_handle_drag_begin(0, 0, 100);
     ASSERT_INT("first drag emits request",
                variable_panel_handle_drag_motion(120, &change), 1);
-    ASSERT_FLOAT("first drag request", change.value, 6.0f, 1e-5f);
+    /* dx = 20 px at 0.1 units/px = +2.0. */
+    ASSERT_FLOAT("first drag request", change.value, 7.0f, 1e-5f);
 
     variable_panel_handle_drag_reset();
     g_predef_vars_mut[0].value = 10.0f;
     variable_panel_handle_drag_begin(0, 0, 50);
     ASSERT_INT("second drag emits request",
                variable_panel_handle_drag_motion(100, &change), 1);
+    /* dx = 50 px at 0.1 units/px = +5.0, anchored to the new start. */
     ASSERT_FLOAT("second drag reanchors to new start value",
-                 change.value, 12.5f, 1e-5f);
+                 change.value, 15.0f, 1e-5f);
 }
 
 int main(void) {
@@ -192,8 +201,8 @@ int main(void) {
     test_begin_captures_drag_metadata();
     test_begin_invalid_rows_leave_drag_inactive();
     test_linear_motion_emits_request_without_mutation();
-    test_log_motion_emits_request_without_mutation();
-    test_log_near_zero_bootstrap_emits_request();
+    test_coarse_motion_is_ten_times_linear();
+    test_coarse_from_zero_emits_request();
     test_motion_without_active_drag_is_noop();
     test_reset_clears_drag_state_and_undo_flag();
     test_request_uses_dragged_variable_name();

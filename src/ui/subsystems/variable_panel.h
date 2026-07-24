@@ -59,7 +59,8 @@ typedef struct {
     const UiVariable *vars;    /* may be NULL for hit-only views */
     int   var_count;
     int   drag_active_var;     /* row being dragged, -1 when idle */
-    int   drag_log_mode;       /* 1 = log drag (only meaningful when dragging) */
+    int   drag_coarse;         /* 1 = coarse (right-click) drag (only meaningful
+                                * when dragging) */
 } UiVariablePanelView;
 
 /* Render the variable panel with all declared variables and current values.
