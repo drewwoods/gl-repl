@@ -1,15 +1,35 @@
 #!/bin/sh
-# Pre-push gate: run the headless test suite before publishing.
+# Pre-push gate: run the headless test suite before publishing, then hand
+# off to git-lfs so the doc-media objects actually travel with the push.
 #
 # Catches the class of bug where a commit lands on origin without ever
 # having `make test-stubs` exercised locally. test-stubs is the ASan +
 # UBSan run that builds against the bundled GL stubs, so no system GL
 # dev libs are required.
 #
+# The git-lfs tail is not redundant: `git lfs install` writes its uploader
+# to .git/hooks/pre-push, which git never runs once core.hooksPath points
+# here. Without this call `git push` sends the docs/images/** pointers with
+# no bytes behind them and GitHub rejects it (GH008: unknown LFS objects).
+# git lfs pre-push reads the ref list on stdin, so capture stdin before the
+# checks run rather than letting make inherit (and possibly drain) it.
+#
 # Install once per clone: `make install-hooks`. Bypass with `git push
 # --no-verify` if you must (e.g. pushing a WIP branch).
 set -e
 
+refs=$(cat)
+
 cd "$(git rev-parse --show-toplevel)"
 make --no-print-directory check-trailing-whitespace
-exec make --no-print-directory test-stubs TEST_JOBS=6
+make --no-print-directory test-stubs TEST_JOBS=6
+
+# No git-lfs on this machine means no LFS filters either, so the clone has
+# no pointers to back — warn rather than block an otherwise fine push.
+if [ -n "$refs" ]; then
+    if command -v git-lfs >/dev/null 2>&1; then
+        printf '%s\n' "$refs" | git lfs pre-push "$@"
+    else
+        echo "pre-push: git-lfs not installed; skipping LFS object upload" >&2
+    fi
+fi

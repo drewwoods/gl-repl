@@ -1978,7 +1978,7 @@ test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
-	@echo "git core.hooksPath -> .githooks (pre-push: check-trailing-whitespace + test-stubs)"
+	@echo "git core.hooksPath -> .githooks (pre-push: check-trailing-whitespace + test-stubs + git lfs pre-push)"
 
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive
