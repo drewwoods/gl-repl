@@ -343,23 +343,94 @@ check_palette() {
     python3 scripts/check/check-palette.py
 }
 
+# Emit a check's captured output with the same header + coloring the serial
+# path used. Reads $target / $out / already-run status from the caller.
+emit_check_output() {
+    local target="$1"
+    local out="$2"
+    printf "  ${YELLOW}▶${NC} %s\n" "$target"
+    if [ -n "$out" ]; then
+        echo "$out" | sed 's/^/    /' | sed $'s/WARNING:/\033[0;33mWARNING:\033[0m/g; s/ OK / \033[0;32mOK\033[0m /g; s/ OK$/ \033[0;32mOK\033[0m/'
+    fi
+}
+
+# In "run all" mode (PARALLEL_COLLECT=1) run_check only records the target+func
+# into a queue; dispatch_queue then runs them concurrently. In single-target
+# mode it runs the check synchronously, exactly as before.
+Q_TARGET=()
+Q_FUNC=()
 run_check() {
     local target="$1"
     local func="$2"
     shift 2
-    printf "  ${YELLOW}▶${NC} %s\n" "$target"
+
+    if [ -n "${PARALLEL_COLLECT:-}" ]; then
+        Q_TARGET[${#Q_TARGET[@]}]="$target"
+        Q_FUNC[${#Q_FUNC[@]}]="$func"
+        return 0
+    fi
 
     local out
     local rc=0
     out=$( "$func" "$@" 2>&1 ) || rc=$?
-
-    if [ -n "$out" ]; then
-        echo "$out" | sed 's/^/    /' | sed $'s/WARNING:/\033[0;33mWARNING:\033[0m/g; s/ OK / \033[0;32mOK\033[0m /g; s/ OK$/ \033[0;32mOK\033[0m/'
-    fi
-
+    emit_check_output "$target" "$out"
     if [ "$rc" -ne 0 ]; then
         exit "$rc"
     fi
+}
+
+# Run one queued check, writing its formatted output and exit code to $dir.
+run_queue_worker() {
+    local idx="$1"
+    local dir="$2"
+    local out rc=0
+    out=$( "${Q_FUNC[$idx]}" 2>&1 ) || rc=$?
+    emit_check_output "${Q_TARGET[$idx]}" "$out" > "$dir/$idx.out" 2>&1
+    printf '%s' "$rc" > "$dir/$idx.rc"
+}
+
+# Run the collected queue concurrently (bounded), then replay each check's
+# output in the original order so the log stays deterministic. Exits non-zero
+# if any check failed (all checks run — failures are reported together rather
+# than fail-fast on the first one).
+dispatch_queue() {
+    local n=${#Q_TARGET[@]}
+    local jobs="${STATE_OWNERSHIP_JOBS:-}"
+    if [ -z "$jobs" ]; then
+        jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+    fi
+    [ "$jobs" -ge 1 ] 2>/dev/null || jobs=1
+
+    local dir
+    dir=$(mktemp -d "${TMPDIR:-/tmp}/state-ownership.XXXXXX")
+    # shellcheck disable=SC2064
+    trap "rm -rf '$dir'" EXIT
+
+    # FIFO semaphore: bash 3.2 has no `wait -n`, so bound concurrency with a
+    # token bucket. Seed $jobs tokens; each worker acquires one before it runs
+    # and returns it on finish, so the next queued check starts the instant any
+    # running one completes (true streaming, not fixed batches).
+    local fifo="$dir/tokens"
+    mkfifo "$fifo"
+    exec 9<>"$fifo"
+    local k
+    for (( k=0; k<jobs; k++ )); do printf '\n' >&9; done
+
+    local i
+    for (( i=0; i<n; i++ )); do
+        read -r -u 9                                          # acquire a token
+        { run_queue_worker "$i" "$dir"; printf '\n' >&9; } &  # release when done
+    done
+    wait
+    exec 9>&-
+
+    local rc=0 crc
+    for (( i=0; i<n; i++ )); do
+        cat "$dir/$i.out"
+        crc=$(cat "$dir/$i.rc" 2>/dev/null || echo 1)
+        [ "$crc" -eq 0 ] 2>/dev/null || rc="$crc"
+    done
+    exit "$rc"
 }
 
 # Run a single target if passed, otherwise run all in order
@@ -373,6 +444,7 @@ if [ -n "$1" ]; then
         exit 1
     fi
 else
+    PARALLEL_COLLECT=1
     run_check check-controller-boundaries check_controller_boundaries
     run_check check-render3d-no-repl-state-mut check_render3d_no_repl_state_mut
     run_check check-pure-render3d-no-repl-state check_pure_render3d_no_repl_state
@@ -440,4 +512,6 @@ else
     run_check check-prof-sections-instrumented check_prof_sections_instrumented
     run_check check-keymap-no-dup check_keymap_no_dup
     run_check check-palette check_palette
+    PARALLEL_COLLECT=
+    dispatch_queue
 fi
