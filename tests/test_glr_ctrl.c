@@ -3005,6 +3005,37 @@ static void test_push_attrib_bit_token_highlights(void) {
                count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 1), 1);
 }
 
+/* Cursor on a glBegin brackets its glEnd and vice versa, the same way the
+ * matrix and attrib stacks pair. Two sequential primitive blocks, so a
+ * mispaired matcher would light the wrong partner rather than nothing. */
+static void test_begin_end_bracket_highlights(void) {
+    printf("--- imrepl_ctrl glBegin/glEnd bracket highlights ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_LINES);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glColor3f(0, 0, 1);");
+    editor_feed_line("glEnd();");
+
+    glr_ctrl_set_edit_line(0);
+    editor_insert_mode_set(0);
+    glr_ctrl_push_highlights();
+    ASSERT_INT("begin cursor brackets its own end",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 2), 1);
+    ASSERT_INT("begin cursor leaves the later block's end alone",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 5), 0);
+
+    glr_ctrl_set_edit_line(5);
+    editor_insert_mode_set(0);
+    glr_ctrl_push_highlights();
+    ASSERT_INT("end cursor brackets its own begin",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 3), 1);
+    ASSERT_INT("end cursor leaves the earlier block's begin alone",
+               count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 0), 0);
+}
+
 static void test_replay_call_site_highlights_are_pushed(void) {
     printf("--- imrepl_ctrl replay call-site highlights ---\n");
 
@@ -4440,6 +4471,7 @@ int main(void) {
     test_display_frame_no_replay_means_no_fade_plumbing();
     test_display_frame_follows_replay_line_after_tick();
     test_push_attrib_bit_token_highlights();
+    test_begin_end_bracket_highlights();
     test_replay_call_site_highlights_are_pushed();
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();

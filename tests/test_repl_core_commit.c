@@ -1831,6 +1831,34 @@ int main(void) {
     editor_feed_line("glPushAttrib(GL_CURRENT_BIT);");
     ASSERT_TRUE("orphan attrib push → -1", repl_find_matching_pop_attrib(0) == -1);
 
+    /* repl_find_matching_begin / _end: the glBegin/glEnd primitive-block
+     * bracket matchers. Two sequential blocks (GL forbids nesting), so each
+     * glEnd must pair with its own glBegin rather than the first one seen. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_LINES);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glColor3f(0, 0, 1);");
+    editor_feed_line("glEnd();");
+    ASSERT_TRUE("first end matches first begin",  repl_find_matching_begin(2) == 0);
+    ASSERT_TRUE("second end matches second begin", repl_find_matching_begin(5) == 3);
+    ASSERT_TRUE("first begin matches first end",  repl_find_matching_end(0) == 2);
+    ASSERT_TRUE("second begin matches second end", repl_find_matching_end(3) == 5);
+    ASSERT_TRUE("non-end line → -1",              repl_find_matching_begin(1) == -1);
+    ASSERT_TRUE("begin line → -1",                repl_find_matching_begin(0) == -1);
+    ASSERT_TRUE("non-begin line → -1",            repl_find_matching_end(1) == -1);
+    ASSERT_TRUE("end line → -1",                  repl_find_matching_end(2) == -1);
+    ASSERT_TRUE("oob matching begin → -1",        repl_find_matching_begin(-1) == -1);
+    ASSERT_TRUE("oob matching end → -1",          repl_find_matching_end(99) == -1);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glEnd();");
+    ASSERT_TRUE("orphan end → -1", repl_find_matching_begin(0) == -1);
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_LINES);");
+    ASSERT_TRUE("orphan begin → -1", repl_find_matching_end(0) == -1);
+
     /* repl_attrib_bits_for_cmd: context-free coarse GL_*_BIT mask. Multi-bit
      * membership (an enable rides GL_ENABLE_BIT *and* its group) falls out
      * naturally; a non-setter maps to 0. glColor's flow-dependent LIGHTING

@@ -721,6 +721,16 @@ static void glr_ctrl_push_highlights(void) {
                 if (pop_idx >= 0)
                     editor_state_highlights_append(pop_idx, -1, -1,
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
+            } else if (cmd->type == CMD_END) {
+                int begin_idx = repl_find_matching_begin(edit_line);
+                if (begin_idx >= 0)
+                    editor_state_highlights_append(begin_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
+            } else if (cmd->type == CMD_BEGIN) {
+                int end_idx = repl_find_matching_end(edit_line);
+                if (end_idx >= 0)
+                    editor_state_highlights_append(end_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
             } else if (cmd->type == CMD_PUSH_ATTRIB) {
                 /* Cursor on the push: bracket the matching pop, mark the prior
                  * setter lines this push saves, and colour each mask token on

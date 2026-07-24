@@ -58,9 +58,9 @@ typedef enum {
     /* Push/pop bracket match: cursor-on-glPopMatrix highlights the
      * matching glPushMatrix line, and cursor-on-glPushMatrix highlights
      * the matching glPopMatrix line. Same gutter color either way. Reused
-     * verbatim for the glPushAttrib/glPopAttrib bracket pair (the attrib
-     * per-bit state highlighting is layered on separately via the two
-     * ATTRIB kinds below). */
+     * verbatim for the glPushAttrib/glPopAttrib and glBegin/glEnd bracket
+     * pairs (the attrib per-bit state highlighting is layered on separately
+     * via the two ATTRIB kinds below). */
     HIGHLIGHT_MATCHING_PUSH_MATRIX,
     /* Cursor-on-vertex/glutSolid* highlights every modelview transform
      * (glTranslatef/glScalef/glRotatef) currently in scope, accounting

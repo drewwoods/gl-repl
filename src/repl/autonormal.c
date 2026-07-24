@@ -395,6 +395,18 @@ int repl_find_matching_pop_attrib(int line_idx) {
                                       1);
 }
 
+/* Primitive-block (glBegin/glEnd) bracket matching, same source-order LIFO
+ * heuristic again. Real GL forbids nesting, but the REPL tolerates an
+ * unbalanced document, so the shared depth walk is what makes an orphan
+ * glEnd pair with nothing instead of stealing an unrelated glBegin. */
+int repl_find_matching_begin(int line_idx) {
+    return repl_find_matching_bracket(line_idx, CMD_BEGIN, CMD_END, -1);
+}
+
+int repl_find_matching_end(int line_idx) {
+    return repl_find_matching_bracket(line_idx, CMD_BEGIN, CMD_END, 1);
+}
+
 /* Walk backwards from line_idx past a CMD_FUNC_END to its matching
  * CMD_FUNC_DEF. Returns the source index of the matching CMD_FUNC_DEF
  * (or -1 if unbalanced). The caller passes the index of the FUNC_END

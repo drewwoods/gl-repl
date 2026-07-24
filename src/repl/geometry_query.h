@@ -26,6 +26,12 @@ int repl_find_matching_pop_matrix(int line_idx);
 int repl_find_matching_push_attrib(int line_idx);
 int repl_find_matching_pop_attrib(int line_idx);
 
+/* Primitive-block (glBegin/glEnd) analogues of the same bracket matchers.
+ * begin→end when the cursor is on a CMD_BEGIN; end→begin when on a CMD_END.
+ * Returns -1 for the wrong cursor line or no partner. */
+int repl_find_matching_begin(int line_idx);
+int repl_find_matching_end(int line_idx);
+
 /* When the cursor sits on a color-consuming line (immediate vertex,
  * gluVertex, or glutSolid*), fills out_line_idx[] with up to out_cap
  * source-line indices of the modelview-affecting transforms in scope
