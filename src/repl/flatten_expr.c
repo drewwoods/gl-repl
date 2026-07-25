@@ -3,6 +3,7 @@
  */
 #include <string.h>
 
+#include "repl/command.h"      /* REPL_MATRIX_CELL_COUNT */
 #include "repl/flatten_expr.h"
 
 static int capture_expr(void *user_data, ReplExprRole role, int ordinal,
@@ -24,9 +25,15 @@ static int capture_expr(void *user_data, ReplExprRole role, int ordinal,
         }
         memcpy(list_text, begin, (size_t)len);
         list_text[len] = '\0';
+        /* The cap is the widest captured list any command has, not the
+         * args[] width: glMultMatrixf's compound literal captures 16 cells
+         * into payload.matrix. Commands with narrower lists are unaffected
+         * — they validate their own arity in the parser, and ordinals past
+         * their arity are never read back. */
         return repl_flatten_expr_compile_active_list(
                    engine, REPL_EXPR_ROLE_CMD_ARG, ordinal, list_text,
-                   role == REPL_EXPR_ROLE_CMD_ARG_LIST, 8) >= 0;
+                   role == REPL_EXPR_ROLE_CMD_ARG_LIST,
+                   REPL_MATRIX_CELL_COUNT) >= 0;
     }
 
     {

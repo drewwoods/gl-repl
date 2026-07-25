@@ -154,11 +154,32 @@ void write_glfloat_vector_helpers(FILE *f) {
         "  repl_gldouble4_buf[2] = c;\n"
         "  repl_gldouble4_buf[3] = d;\n"
         "  return repl_gldouble4_buf;\n"
+        "}\n"
+        "\n"
+        /* glMultMatrixf's compound-literal form. Sixteen named parameters
+         * rather than a varargs list: this has to compile as C89 and stay
+         * type-checked, and the call site always passes exactly 16. */
+        "static GLfloat repl_glfloat16_buf[16];\n"
+        "\n"
+        "static GLfloat *%s(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,\n"
+        "                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,\n"
+        "                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,\n"
+        "                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {\n"
+        "  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;\n"
+        "  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;\n"
+        "  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;\n"
+        "  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;\n"
+        "  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;\n"
+        "  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;\n"
+        "  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;\n"
+        "  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;\n"
+        "  return repl_glfloat16_buf;\n"
         "}\n",
         REPL_EXPORT_GLFLOAT1_HELPER,
         REPL_EXPORT_GLFLOAT3_HELPER,
         REPL_EXPORT_GLFLOAT4_HELPER,
-        REPL_EXPORT_GLDOUBLE4_HELPER);
+        REPL_EXPORT_GLDOUBLE4_HELPER,
+        REPL_EXPORT_GLFLOAT16_HELPER);
 }
 /* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
  * string and substitutes each `%f` with `%g`-formatted output (matching

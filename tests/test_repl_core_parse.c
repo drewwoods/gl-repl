@@ -1127,7 +1127,7 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
-    /* glMultMatrixf — the argument is a scratch-array name, not an
+    /* glMultMatrixf, scratch-array form — the argument is a name, not an
      * expression, so the accept/reject set is unusually narrow. */
     {
         glr_ctrl_reset_all();
@@ -1188,6 +1188,86 @@ int main(void) {
         ASSERT_TRUE("glMultMatrixf rejects an empty arg",
                     parse_cmd_with_text("glMultMatrixf()", &cmd,
                                         cmd_text, sizeof(cmd_text)) == 0);
+    }
+
+    /* glMultMatrixf, compound-literal form — 16 values inline. Unlike the
+     * array form these are ordinary expressions, and they live in the
+     * payload rather than args[] (which holds 8). */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        GLCmd cmd2;
+        char cmd_text[MAX_LINE_LEN] = "";
+        char cmd_text2[MAX_LINE_LEN] = "";
+        ExprVar vars[1] = { { "shear", 0.25f } };
+        int ok;
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_cmd_with_text(
+            "glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0.5, 1, 0, 0, "
+            "0, 0, 1, 0, 2, 3, 4, 1})",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMultMatrixf literal parse ok", ok == 1);
+        ASSERT_TRUE("glMultMatrixf literal type", cmd.type == CMD_MULT_MATRIXF);
+        /* num_args 0 is the discriminator the flatten/export paths read —
+         * there is no array behind this form. */
+        ASSERT_TRUE("glMultMatrixf literal num_args", cmd.num_args == 0);
+        ASSERT_TRUE("glMultMatrixf literal is not the array form",
+                    !repl_cmd_mult_matrix_from_array(&cmd));
+        ASSERT_TRUE("glMultMatrixf literal cells land in the payload",
+                    cmd.payload.matrix.m[0] == 1.0f &&
+                    cmd.payload.matrix.m[4] == 0.5f &&
+                    cmd.payload.matrix.m[12] == 2.0f &&
+                    cmd.payload.matrix.m[14] == 4.0f &&
+                    cmd.payload.matrix.m[15] == 1.0f);
+        ASSERT_TRUE("glMultMatrixf literal has_vars false", cmd.has_vars == 0);
+
+        ok = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glMultMatrixf literal canonical re-parses", ok == 1);
+        ASSERT_TRUE("glMultMatrixf literal canonical text stable",
+                    strcmp(cmd_text, cmd_text2) == 0);
+
+        /* Flat shorthand rewrites to the compound-literal form, matching
+         * glClipPlane / glFogfv / glMaterialfv. */
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_cmd_with_text(
+            "glMultMatrixf(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMultMatrixf flat parse ok", ok == 1);
+        ASSERT_TRUE("glMultMatrixf flat canonical emits compound literal",
+                    strstr(cmd_text,
+                           "glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                           "0, 0, 1, 0, 0, 0, 0, 1});") != NULL);
+
+        /* Cells are expressions: a variable-backed one bakes its value and
+         * marks the line for re-evaluation. */
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test_with_vars(
+            "glMultMatrixf((GLfloat[]){1, 0, 0, 0, shear, 1, 0, 0, "
+            "0, 0, 1, 0, 0, 0, 0, 1})",
+            &cmd, vars, 1);
+        ASSERT_TRUE("glMultMatrixf literal var parse ok", ok == 1);
+        ASSERT_TRUE("glMultMatrixf literal var has_vars", cmd.has_vars == 1);
+        ASSERT_TRUE("glMultMatrixf literal var value baked",
+                    cmd.payload.matrix.m[4] == 0.25f);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects 15 cells",
+                    parse_cmd_with_text(
+                        "glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                        "0, 0, 1, 0, 0, 0, 1})",
+                        &cmd, cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects 17 cells",
+                    parse_cmd_with_text(
+                        "glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                        "0, 0, 1, 0, 0, 0, 0, 1, 1})",
+                        &cmd, cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects an unclosed literal",
+                    parse_cmd_with_text(
+                        "glMultMatrixf((GLfloat[]){1, 0, 0, 0)",
+                        &cmd, cmd_text, sizeof(cmd_text)) == 0);
     }
 
     /* glClipPlane */

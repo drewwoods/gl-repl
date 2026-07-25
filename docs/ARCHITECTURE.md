@@ -90,7 +90,7 @@ The editor owns text-document behavior; UI renders its 2D view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
-Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L46), [`CmdType`](../src/repl/command.h#L37), and other
+Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L46), [`CmdType`](../src/repl/command.h#L44), and other
 command-domain data when that data is already present in the
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L135) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
@@ -183,7 +183,7 @@ data.
 
 > [!NOTE]
 > This section is the app-level summary. For the full treatment of the
-> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L99) record and provenance, the
+> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L106) record and provenance, the
 > compile→apply edit flow, the flatten→execute frame flow, the [`ReplRuntimeState`](../src/repl/state.h#L18)
 > ownership slices, and the host-effects bridge — see the module-local deep
 > dive [`src/repl/ARCHITECTURE.md`](../src/repl/ARCHITECTURE.md) (with a worked
@@ -213,7 +213,7 @@ derived from it instead of poking raw global arrays.
 
 [`repl_flatten_commands()`](../src/repl/pipeline.h#L21) is the expensive interpreter boundary. It expands
 loops/functions/conditionals, evaluates expressions and variable/scratch
-assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L99) records
+assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L106) records
 in the flat program. For example:
 
 ```c
@@ -258,12 +258,12 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 
 ### Editor-Owned Text
 
-[`GLCmd`](../src/repl/command.h#L99) is a pure parse-result struct: `type`, `args[]`, validity / vars
+[`GLCmd`](../src/repl/command.h#L106) is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
 `EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L199)**
 ([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model — *not* in
-[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L99) and the canonical
+[`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L106) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
 code passes both to text-aware command-store APIs
 (`repl_command_store_*_with_line[s]`) so the text buffer moves in lockstep
@@ -639,9 +639,9 @@ GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L223) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L217) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L242) in [`src/repl/command.h`](../src/repl/command.h)
 — the single source that also feeds `repl_cmd_starts_geometry_emit` and
-`repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L37) joins all
+`repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L44) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)
 pins the set). Cursor-on-the-line picks `RENDER3D_CLR_OUTLINE_ACTIVE` at a
 thicker line; otherwise the standing outline uses `RENDER3D_CLR_OUTLINE_EDGE`.
@@ -1955,7 +1955,7 @@ shapes.
 >   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
 >   helper because the line is not a real GL symbol.
 > - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) — these are
->   evaluated inline by [`src/repl/eval.c`](../src/repl/eval.c), never become a [`CmdType`](../src/repl/command.h#L37), and skip
+>   evaluated inline by [`src/repl/eval.c`](../src/repl/eval.c), never become a [`CmdType`](../src/repl/command.h#L44), and skip
 >   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
 > - **Structured / control-flow syntax** (a new block construct, branch
@@ -1979,7 +1979,7 @@ list changes.
 #### 0b. Math / expression functions take a different path
 
 Functions evaluated inside expressions (e.g. `rand2(seed, iter)` inside
-`glVertex3f(rand2(t, 0), …)`) do **not** become a [`CmdType`](../src/repl/command.h#L37) and do **not**
+`glVertex3f(rand2(t, 0), …)`) do **not** become a [`CmdType`](../src/repl/command.h#L44) and do **not**
 go through [`src/repl/executor.c`](../src/repl/executor.c). They live entirely inside [`src/repl/eval.c`](../src/repl/eval.c):
 
 1. Add the name to `k_reserved_idents[]` so the user can't shadow it with a
@@ -2001,8 +2001,8 @@ and 6 do not apply to math functions.
 
 #### 1. [`src/repl/command.h`](../src/repl/command.h) — declare the type
 
-Add a new [`CmdType`](../src/repl/command.h#L37) enum entry in the `CMD_*` block, adjacent to related
-commands. The enum drives switch dispatch everywhere. ([`CmdType`](../src/repl/command.h#L37) lives in
+Add a new [`CmdType`](../src/repl/command.h#L44) enum entry in the `CMD_*` block, adjacent to related
+commands. The enum drives switch dispatch everywhere. ([`CmdType`](../src/repl/command.h#L44) lives in
 [`src/repl/command.h`](../src/repl/command.h); [`gl_repl.h`](../gl_repl.h) only re-exports it transitively via
 `#include "repl/command.h"`.)
 
@@ -2218,7 +2218,7 @@ and a worked `else if` example, read
 > replay.** A command works in one path and silently breaks in the other exactly
 > when those two levels get mixed.
 
-Beyond the shared [`CmdType`](../src/repl/command.h#L37) + `command_spec` wiring already covered by the
+Beyond the shared [`CmdType`](../src/repl/command.h#L44) + `command_spec` wiring already covered by the
 checklist above (its steps 1–2), a structured command touches:
 
 1. **Predicates vs. categories** (when you do that shared wiring). Update the
@@ -2246,7 +2246,7 @@ checklist above (its steps 1–2), a structured command touches:
    conditionals select arms here. The executor should only learn about a new
    command when it can actually appear in the flat program.
 6. **Round-trip: export / import / reformat.** Export can often emit canonical
-   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L99) through
+   source text unchanged, but import must rebuild the same [`GLCmd`](../src/repl/command.h#L106) through
    [`repl_load_apply_line()`](../src/repl/load.h#L78), and reformat must preserve canonical text plus
    indentation. (A GL command that needs a standalone export helper is the
    checklist's step 7 instead.)

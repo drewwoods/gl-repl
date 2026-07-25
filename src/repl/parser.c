@@ -1207,56 +1207,144 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     return 1;
 }
 
-/* glMultMatrixf(A) — post-multiply the current matrix by a scratch array
- * read as a column-major 4x4. The argument is a bare scratch-array name
- * (A / B / C), not an expression and not a compound literal: the 16 cells
- * are the matrix, and they are written the ordinary way, with `A[k] = ...`
- * lines ahead of this one. Storing the name here (args[0]) rather than the
- * values keeps the source line stable across frames; flatten snapshots the
- * live cells into payload.matrix when it emits the flat command. */
-static int parse_mult_matrixf(const char *args, GLCmd *cmd,
-                              char *text_out, int text_sz,
-                              const char *indent,
-                              const ReplParseContext *ctx) {
-    char name[REPL_PREDEF_NAME_MAX] = "";
-    int n = 0;
-    int array_idx;
+/* True when `args` is nothing but an identifier — the shape that selects
+ * glMultMatrixf's scratch-array form. Anything else (a brace literal, a
+ * number, a subscript, a comma list) falls through to the value form,
+ * which produces the better diagnostic for it. */
+static int mult_matrixf_lone_ident(const char *args,
+                                   char *name, int name_sz) {
     const char *p = args;
+    int n = 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
-    while (*p && n < (int)sizeof(name) - 1 &&
+    if (!repl_eval_is_ident_start((unsigned char)*p))
+        return 0;
+    while (*p && n < name_sz - 1 &&
            repl_eval_is_ident_continue((unsigned char)*p))
         name[n++] = *p++;
     name[n] = '\0';
     while (*p && isspace((unsigned char)*p)) p++;
+    return *p == '\0';
+}
 
-    array_idx = repl_eval_scratch_array_index(name);
-    if (*p != '\0' || array_idx < 0) {
-        parser_emit_error_static(ctx,
-            "Usage: glMultMatrixf(A) - a scratch array (A, B, or C) "
-            "holding 16 column-major values");
-        return 0;
-    }
+/* glMultMatrixf — post-multiply the current matrix by a column-major 4x4,
+ * in either of two argument forms:
+ *
+ *   glMultMatrixf(A)                        a scratch array (A, B, or C),
+ *                                           its 16 cells written the
+ *                                           ordinary way by `A[k] = ...`
+ *                                           lines ahead of this one
+ *   glMultMatrixf((GLfloat[]){m0, ..., m15}) the 16 values inline
+ *
+ * plus the flat shorthand `glMultMatrixf(m0, ..., m15)`, rewritten to the
+ * compound-literal form in the canonical text — the glMaterialfv /
+ * glClipPlane / glFogfv precedent.
+ *
+ * The forms differ in where the values come from, not in what reaches the
+ * flat program: both land in payload.matrix. The array form stores only
+ * the name (args[0]), which keeps the source line stable while the cells
+ * behind it change, and flatten snapshots those cells when it emits the
+ * flat command. The value form has no indirection to preserve, so the
+ * parse fills the payload and the captured expression slots re-evaluate
+ * it — that is what lets a literal matrix animate. */
+static int parse_mult_matrixf(const char *args, GLCmd *cmd,
+                              char *text_out, int text_sz,
+                              const char *indent,
+                              const ReplParseContext *ctx) {
+    static const char k_usage[] =
+        "Usage: glMultMatrixf(A) - a scratch array (A, B, or C) - or "
+        "glMultMatrixf((GLfloat[]){m0, ..., m15}) - 16 column-major values";
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char name[REPL_PREDEF_NAME_MAX] = "";
 
     cmd->type = CMD_MULT_MATRIXF;
     cmd->valid = 1;
-    cmd->args[0] = (float)array_idx;
-    cmd->num_args = 1;
-    /* No expression slots to re-evaluate — the line is a name. The cells
-     * behind that name still change every frame, but they are picked up by
-     * the flatten-time snapshot, which runs on every path into the flat
-     * array including this command's has_vars=0 fast path. */
-    cmd->has_vars = 0;
-    /* Identity until flatten fills it: a zeroed matrix would collapse the
-     * scene, and this command's values never come from the parse. */
     memset(&cmd->payload, 0, sizeof(cmd->payload));
-    cmd->payload.matrix.m[0] = 1.0f;
-    cmd->payload.matrix.m[5] = 1.0f;
-    cmd->payload.matrix.m[10] = 1.0f;
-    cmd->payload.matrix.m[15] = 1.0f;
 
-    write_text(text_out, text_sz, "%sglMultMatrixf(%s);", indent, name);
-    return 1;
+    if (mult_matrixf_lone_ident(args, name, (int)sizeof(name))) {
+        int array_idx = repl_eval_scratch_array_index(name);
+        if (array_idx < 0) {
+            parser_emit_error_static(ctx, k_usage);
+            return 0;
+        }
+        cmd->args[0] = (float)array_idx;
+        cmd->num_args = 1;
+        /* No expression slots to re-evaluate — the line is a name. The
+         * cells behind that name still change every frame, but they are
+         * picked up by the flatten-time snapshot, which runs on every path
+         * into the flat array including this command's has_vars=0 fast
+         * path. */
+        cmd->has_vars = 0;
+        /* Identity until flatten fills it: a zeroed matrix would collapse
+         * the scene, and this form's values never come from the parse. */
+        cmd->payload.matrix.m[0] = 1.0f;
+        cmd->payload.matrix.m[5] = 1.0f;
+        cmd->payload.matrix.m[10] = 1.0f;
+        cmd->payload.matrix.m[15] = 1.0f;
+
+        write_text(text_out, text_sz, "%sglMultMatrixf(%s);", indent, name);
+        return 1;
+    }
+
+    {
+        const char *to_parse = args;
+        char interior_buf[MAX_LINE_LEN];
+        /* One past the cell count, so an over-long list is caught here
+         * rather than silently truncated (the glClipPlane precedent). */
+        float parsed[REPL_MATRIX_CELL_COUNT + 1];
+        int num_parsed;
+
+        if (!parse_compound_literal_arg(args, "(GLfloat[]){",
+                                        "Unclosed (GLfloat[]){...} literal",
+                                        "Trailing content after (GLfloat[]){...} compound literal",
+                                        interior_buf,
+                                        (int)sizeof(interior_buf),
+                                        &to_parse, ctx))
+            return 0;
+
+        num_parsed = parse_canonical_float_list(to_parse, parsed,
+                                                REPL_MATRIX_CELL_COUNT + 1,
+                                                vars, num_vars, ctx);
+        if (num_parsed < 0)
+            return 0;
+        if (num_parsed != REPL_MATRIX_CELL_COUNT) {
+            parser_emit_error_static(ctx, k_usage);
+            return 0;
+        }
+        /* The cells are the whole command, so they capture from ordinal 0.
+         * args[] stays empty — the values do not fit in it — which is also
+         * how the two forms are told apart downstream
+         * (repl_cmd_mult_matrix_from_array). */
+        parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                                 0, to_parse);
+
+        cmd->num_args = 0;
+        cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
+        for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++)
+            cmd->payload.matrix.m[k] = parsed[k];
+
+        if (text_out && text_sz > 0) {
+            char list[MAX_LINE_LEN];
+            int used = 0;
+
+            list[0] = '\0';
+            for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++) {
+                char b[REPL_SOURCE_FLOAT_TEXT_MAX];
+                int wrote = snprintf(list + used, sizeof(list) - (size_t)used,
+                                     "%s%s", k ? ", " : "",
+                                     fmt_source_float(b, parsed[k]));
+                if (wrote < 0 || wrote >= (int)sizeof(list) - used) {
+                    used = (int)sizeof(list) - 1;
+                    break;
+                }
+                used += wrote;
+            }
+            snprintf(text_out, (size_t)text_sz,
+                     "%sglMultMatrixf((GLfloat[]){%s});", indent, list);
+        }
+        return 1;
+    }
 }
 
 /* glFogf(pname, value) — enum pname + one scalar expression, the

@@ -338,6 +338,13 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         if (!write_clip_plane_as_c89(f, source_text))
             write_cmd_source_as_c(f, source_text, cmd->has_vars);
         break;
+    case CMD_MULT_MATRIXF:
+        /* The array form is already C: `glMultMatrixf(A);` against the
+         * scratch global the needs pass declared for it. */
+        if (repl_cmd_mult_matrix_from_array(cmd) ||
+            !write_mult_matrixf_as_c89(f, source_text))
+            write_cmd_source_as_c(f, source_text, cmd->has_vars);
+        break;
     case CMD_FOG_FV:
         if (!write_fog_fv_as_c89(f, source_text))
             write_cmd_source_as_c(f, source_text, cmd->has_vars);
@@ -569,12 +576,19 @@ static int export_extract_vector_payload(const char *arg,
     return 1;
 }
 
+/* Widest vector payload any command writes: glMultMatrixf's 4x4. */
+#define EXPORT_VECTOR_ARGS_MAX REPL_MATRIX_CELL_COUNT
+
 static int export_translate_vector_args(const char *payload,
                                         char out[][MAX_LINE_LEN],
                                         int expected_count) {
-    char raw[4][MAX_LINE_LEN];
-    int count = split_top_level_args(payload, raw, 4);
+    char raw[EXPORT_VECTOR_ARGS_MAX][MAX_LINE_LEN];
+    int count;
     int arg_idx;
+
+    if (expected_count < 0 || expected_count > EXPORT_VECTOR_ARGS_MAX)
+        return 0;
+    count = split_top_level_args(payload, raw, EXPORT_VECTOR_ARGS_MAX);
 
     if (count != expected_count)
         return 0;
@@ -701,6 +715,35 @@ int write_clip_plane_as_c89(FILE *f, const char *source_text) {
     fprintf(f, "%.*sglClipPlane(%s, %s(%s, %s, %s, %s));\n",
             indent, source_text, plane[0], REPL_EXPORT_GLDOUBLE4_HELPER,
             c_args[0], c_args[1], c_args[2], c_args[3]);
+    return 1;
+}
+
+/* glMultMatrixf((GLfloat[]){m0, ..., m15}) — compound literals are C99,
+ * so the exported C89 line routes the 16 cells through the repl_glfloat16
+ * helper instead. Only the literal form comes here; `glMultMatrixf(A)` is
+ * already valid C against the exported scratch global and takes the
+ * default source-text path. */
+int write_mult_matrixf_as_c89(FILE *f, const char *source_text) {
+    char tokens[1][MAX_LINE_LEN];   /* unused: the call has no leading args */
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[REPL_MATRIX_CELL_COUNT][MAX_LINE_LEN];
+    int indent;
+
+    if (!export_parse_vector_call(source_text, "glMultMatrixf", tokens, 0,
+                                  vector_payload, sizeof(vector_payload),
+                                  &indent))
+        return 0;
+    if (!export_translate_vector_args(vector_payload, c_args,
+                                      REPL_MATRIX_CELL_COUNT))
+        return 0;
+
+    fprintf(f, "%.*sglMultMatrixf(%s(%s, %s, %s, %s, %s, %s, %s, %s, "
+               "%s, %s, %s, %s, %s, %s, %s, %s));\n",
+            indent, source_text, REPL_EXPORT_GLFLOAT16_HELPER,
+            c_args[0], c_args[1], c_args[2], c_args[3],
+            c_args[4], c_args[5], c_args[6], c_args[7],
+            c_args[8], c_args[9], c_args[10], c_args[11],
+            c_args[12], c_args[13], c_args[14], c_args[15]);
     return 1;
 }
 

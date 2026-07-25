@@ -121,7 +121,7 @@ The triangle appears as soon as the vertices commit. Now:
 
 ## Built-in Examples
 
-**F12** cycles forward through the 35 built-in examples, then any saved
+**F12** cycles forward through the 36 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -146,7 +146,7 @@ Developers can point the app at an editable catalog with
 15  Sierpinski sponge (3D recursion)                    33  Bubble sort (scratch arrays)
 16  Animated spirograph curve                           34  Clip planes carve solids (glClipPlane)
 17  Traveling ripple ring                               35  Fog ring tunnel (glFog)
-18  Bezier curve with guides
+18  Bezier curve with guides                            36  Planar shadows (glMultMatrixf)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -392,8 +392,9 @@ numeric argument everywhere is a full math expression.
   [`glRotatef(deg,x,y,z)`](https://docs.gl/gl2/glRotate)
 - [`glPushMatrix()`](https://docs.gl/gl2/glPushMatrix), [`glPopMatrix()`](https://docs.gl/gl2/glPushMatrix),
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
-- [`glMultMatrixf(A)`](https://docs.gl/gl2/glMultMatrix) — post-multiply by a
-  scratch array read as a 4x4 (see [Arbitrary matrices](#arbitrary-matrices))
+- [`glMultMatrixf((GLfloat[]){m0, ..., m15})`](https://docs.gl/gl2/glMultMatrix) —
+  post-multiply by a column-major 4x4, given inline or as a scratch array name
+  (`glMultMatrixf(A)`); see [Arbitrary matrices](#arbitrary-matrices)
 - [`glPolygonMode(face,mode)`](https://docs.gl/gl2/glPolygonMode) — `GL_FILL`,
   `GL_LINE`, or `GL_POINT` rasterization, per face
 - [`glPolygonOffset(factor,units)`](https://docs.gl/gl2/glPolygonOffset) — depth
@@ -730,8 +731,49 @@ arrays persist and round-trip through save/load.
 
 ### Arbitrary matrices
 
-Sixteen cells is also exactly a 4x4 matrix, which is what `glMultMatrixf`
-reads them as:
+`glTranslatef`, `glRotatef`, and `glScalef` cover almost everything, and they
+read far better than sixteen numbers. `glMultMatrixf` is for what they cannot
+express between them — a shear, a mirror, a planar shadow projection. It
+post-multiplies the current matrix by a 4x4 you supply, written inline:
+
+```c
+glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0.4, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1});
+```
+
+The flat shorthand `glMultMatrixf(m0, ..., m15)` is accepted too and rewrites
+itself to the compound-literal form, the same as `glMaterialfv`, `glFogfv`, and
+`glClipPlane`.
+
+The layout is OpenGL's **column-major** order, the same one `glGetFloatv`
+returns: the first four values are the first column, the next four the second,
+and — the one worth memorizing — cells 12, 13, 14 hold the translation. The
+example above shears x by 0.4 of y.
+
+Cells are ordinary expressions, re-evaluated every frame like any other
+argument, so a matrix built from `t` animates. The transform guides, replay,
+and overlays all follow it, because they see the same matrix the frame did.
+
+The classic use is the planar shadow projection — the matrix that squashes
+geometry onto a plane as seen from a light, so drawing the shape a second time
+through it draws its shadow (the *Planar shadows (glMultMatrixf)* example is
+this, animated):
+
+```c
+float lx, ly, lz;         // light position, over a floor at y = 0
+lx = 2*cos(t);
+ly = 4;
+lz = 2*sin(t);
+glPushMatrix();
+glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
+glColor3f(0.1, 0.1, 0.12);   // draw the geometry again, flattened and dark
+glutSolidTeapot(1);
+glPopMatrix();
+```
+
+#### From a scratch array
+
+Sixteen cells is also exactly a 4x4, so `glMultMatrixf` accepts a bare scratch
+array name instead — `A`, `B`, or `C`:
 
 ```c
 A[0] = 1;                 // the identity matrix: 1s down the diagonal
@@ -741,49 +783,15 @@ A[15] = 1;
 glMultMatrixf(A);         // post-multiply the current matrix by A
 ```
 
-The argument is a bare array name — `A`, `B`, or `C`. Not an expression, not a
-subscript, not a list of numbers: the array *is* the matrix, and you fill it
-with ordinary `A[k] = ...` lines above the call, in the same block. Cells you
-never assign are zero, so write all sixteen (or at least every one your matrix
-needs non-zero — an unassigned `A[15]` leaves the matrix singular and your
-geometry gone).
+This form is worth it when the matrix is built up over several lines — in a
+loop, or by a `funcN` — or reused by more than one call. The name is not an
+expression and not a subscript: the array *is* the matrix, filled by ordinary
+`A[k] = ...` lines above the call, in the same block. Cells you never assign
+are zero, so write every one your matrix needs non-zero — an unassigned
+`A[15]` leaves the matrix singular and your geometry gone.
 
-The layout is OpenGL's **column-major** order, the same one `glGetFloatv`
-returns: `A[0..3]` is the first column, `A[4..7]` the second, and — the one
-worth memorizing — `A[12]`, `A[13]`, `A[14]` hold the translation.
-
-`glTranslatef`, `glRotatef`, and `glScalef` cover almost everything, and they
-read far better than sixteen assignments; reach for `glMultMatrixf` only for
-what they cannot express between them. A shear is one. A mirror is another.
-The classic is the planar shadow projection — the matrix that squashes
-geometry onto a plane as seen from a light, so drawing the shape a second
-time through it draws its shadow:
-
-```c
-float lx, ly, lz;         // light position, over a floor at y = 0
-lx = 2;
-ly = 4;
-lz = 1;
-A[0] = ly;                // only five cells are non-zero for this one;
-A[4] = -lx;               // the rest of A must be 0, which is how a
-A[6] = -lz;               // freshly reset scratch array already reads
-A[7] = -1;
-A[10] = ly;
-A[15] = ly;
-glPushMatrix();
-glMultMatrixf(A);
-glColor3f(0.1, 0.1, 0.12);   // draw the geometry again, flattened and dark
-glutSolidTeapot(1);
-glPopMatrix();
-```
-
-(One statement per line, as everywhere else in the REPL — the sixteen cells
-are sixteen lines when a matrix needs all of them.)
-
-The values are read when the frame is built, at that point in the program, so
-a matrix assembled from `t` animates like any other expression — and the
-transform guides, replay, and overlays all follow it, because they see the
-same matrix the frame did.
+The array is read when the frame is built, at that point in the program, so
+cells fed by `t` animate exactly as inline expressions do.
 
 ### For-loops
 

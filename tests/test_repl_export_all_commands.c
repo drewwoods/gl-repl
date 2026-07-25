@@ -371,6 +371,10 @@ int main(void) {
     editor_feed_line("A[10] = 1;");
     editor_feed_line("A[15] = 1;");
     editor_feed_line("glMultMatrixf(A);");
+    /* The other glMultMatrixf form: 16 inline cells, which export writes
+     * through the repl_glfloat16 C89 helper and import reads back. */
+    editor_feed_line("glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                     "0, 0, 1, 0, 0.5, 0, 0, 1});");
 
     /* State/capability commands */
     editor_feed_line("glEnable(GL_DEPTH_TEST);");
@@ -480,6 +484,18 @@ int main(void) {
     ASSERT_TRUE("no exported helper uses C99 for-loop declarations",
                 strstr(export_text, "for (const char *") == NULL &&
                 strstr(export_text, "for (int c =") == NULL);
+    /* glMultMatrixf's two forms export differently: the array form is
+     * already C against the scratch global, the literal form has to route
+     * its C99 compound literal through the C89 helper. */
+    ASSERT_TRUE("glMultMatrixf array form exports verbatim",
+                strstr(export_text, "glMultMatrixf(A);") != NULL);
+    ASSERT_TRUE("glMultMatrixf literal form exports via the C89 helper",
+                strstr(export_text,
+                       "glMultMatrixf(repl_glfloat16(1, 0, 0, 0, 0, 1, 0, 0, "
+                       "0, 0, 1, 0, 0.5, 0, 0, 1));") != NULL);
+    ASSERT_TRUE("no exported line uses a C99 compound literal",
+                strstr(export_text, "(GLfloat[]){") == NULL &&
+                strstr(export_text, "(GLdouble[]){") == NULL);
 
     /* Reimport from file */
     glr_ctrl_reset_all();

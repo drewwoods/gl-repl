@@ -200,7 +200,7 @@ authority; don't re-derive a file's job from its name.
 | **src/app/** | Frame-time controller: display/reshape/init-GL, input routing, config, camera, audio, PLY export, profiling. See [`src/app/README.md`](src/app/README.md) |
 | **src/app/boot/** | Startup lifecycle — pre/without frame loop, reached only from [`gl_repl.c`](gl_repl.c). CLI parsing, `--dump-*`, init trace, capture env, frame pacer, splash. **Guard `check-app-boot-band`: the controller must not include these.** |
 | **src/repl/** | Language pipeline: parse → compile → apply → flatten → execute, plus specs, eval, scenes, export/import, tutorials. See `src/repl/ARCHITECTURE.md` |
-| **src/editor/** | Text document: key dispatch, commit transaction, `EditorState`, clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
+| **src/editor/** | Text document: key dispatch, commit transaction, [`EditorState`](src/editor/state.h#L199), clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
 | **src/subsystems/** | Editor/UI-independent peers: `replay/`, `tutorial/`, `color_picker/`, `variable_panel/`, `edit_overlays/` |
 | **src/render3d/** | 3D scene renderer — **no REPL dependency** (proof: `render3d_demo`). Grid/axes/backdrop/lights/overlays/depth-viz/guides |
 | **src/ui/** | 2D view rendering + hit-test, **pure over snapshots**. `core/` primitives, `app/` panels + menus + layout, `subsystems/` peer renderers, `support/` prof panels |
@@ -208,7 +208,7 @@ authority; don't re-derive a file's job from its name.
 | `tests/` | Tests, `tests/support/` harness, `tests/gl-stubs/` no-op GL headers |
 
 Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/glr_defaults.h)
-(`CFG_DEFAULT_*`), [`keymap.h`](keymap.h) (bindings), `command_spec.c`
+(`CFG_DEFAULT_*`), [`keymap.h`](keymap.h) (bindings), [`command_spec.c`](src/repl/command_spec.c)
 (command metadata), [`src/repl/state.h`](src/repl/state.h) / [`src/editor/state.h`](src/editor/state.h) (state facades).
 
 ## Conventions
@@ -226,13 +226,13 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
   under the right `### ` section; count + flyout membership auto-compute.
 - **New GL commands** → skill `gl-repl-new-command` (five required edits:
-  [`CmdType`](src/repl/command.h#L37), parser, executor, `flatten_range()`, spec tables).
+  [`CmdType`](src/repl/command.h#L44), parser, executor, `flatten_range()`, spec tables).
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** — its
   absence is the invariant). Per-slot [`ReplEnumSlotKind`](src/repl/command_spec.h#L77): `ENUM_ONLY`
   (default), `ENUM_OR_CONST_VALUE` (bool masks, 0/1 reverse-mapped),
   `ENUM_OR_EXPR` (only `glLightModeli` slot 1). Spec tables stay **alphabetical
   by GL name**.
-- [`CmdType`](src/repl/command.h#L37) set tests use the inline predicates in [`command.h`](src/repl/command.h)
+- [`CmdType`](src/repl/command.h#L44) set tests use the inline predicates in [`command.h`](src/repl/command.h)
   (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`, `repl_cmd_is_block_head`
   / `_end`), never ad-hoc `||` chains. That's the *control-flow* taxonomy;
   [`CmdSyntaxCategory`](src/repl/command_spec.h#L153) is the separate *visual* one — don't fold one through
@@ -285,7 +285,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L99)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L106)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -318,7 +318,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319).
-- [`GLCmd`](src/repl/command.h#L99) payload is a tagged union keyed on `type` (`payload.decl.*`,
+- [`GLCmd`](src/repl/command.h#L106) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
   validates no variable is still referenced outside the range. Cut/copy/
@@ -416,7 +416,7 @@ Replace is a **whole-document transaction**, not a sequence of commits:
 renaming a variable or funcN alias is invalid at every intermediate step.
 [`src/editor/replace.c`](src/editor/replace.c) substitutes text across the committed buffer (never
 the live input row, so half-typed lines can't fail the operation) and
-`repl_document_rebuild()` ([`src/repl/replace.c`](src/repl/replace.c))
+[`repl_document_rebuild()`](src/repl/replace.h#L60) ([`src/repl/replace.c`](src/repl/replace.c))
 replays it through `repl_load_apply_line` — the file/example loader — under
 a [`SceneSnapshot`](src/repl/scene_snapshot.h#L17) that is restored wholesale if any line is rejected.
 Carry-overs the loader would otherwise drop: predef *values* (by name, plus
@@ -463,7 +463,8 @@ finds, Ctrl+Z undoes, F1 is help.
 glBegin/glEnd, glVertex3f/glVertex2f, glNormal3f, glColor3f/glColor4f
 glClearColor, glClear(mask), glClearDepth
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
-glMultMatrixf(A)               (scratch array as a column-major 4x4)
+glMultMatrixf((GLfloat[]){m0..m15}) | glMultMatrixf(A)   (column-major 4x4:
+                               16 inline expressions, or a scratch array)
 glPushAttrib(mask)/glPopAttrib, glEnable/glDisable(CAP)
 glFogi/glFogf/glFogfv, glClipPlane, glShadeModel, glPointSize, glLineWidth
 glLineStipple, glPointParameterfv, glBlendFunc, glColorMaterial, glMaterialfv
@@ -498,7 +499,7 @@ smoothstep sign floor ceil fmod rem rand rand2` — `log` is base-10, `ln`
 natural; `asin`/`acos` clamp their input to [-1, 1] (the evaluator stays
 total); `lerp` is deliberately unclamped. `clamp`/`lerp`/`smoothstep`/`sign`
 have no libm twin, so export emits a `repl_*f` helper per used one
-(`write_shape_helpers`) — keep those bodies identical to `eval.c`'s. Constants
+(`write_shape_helpers`) — keep those bodies identical to [`eval.c`](src/repl/eval.c)'s. Constants
 `PI`, `TAU`, `e`. Only `t` is predefined; others need `float name;`
 (`MAX_PREDEF_VARS` = 32, 31 user slots).
 Scratch arrays `A`/`B`/`C[16]` are fixed globals — those names, plus `t`, `PI`,

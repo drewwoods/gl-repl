@@ -57,7 +57,7 @@ glEnd();
 &nbsp;
 <a href="docs/SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="31%"></a>
 
-<sub>**[The full showcase →](docs/SHOWCASE.md)** — 35 built-in scenes, each one a screenful of typed GL.</sub>
+<sub>**[The full showcase →](docs/SHOWCASE.md)** — 36 built-in scenes, each one a screenful of typed GL.</sub>
 
 </div>
 
@@ -86,7 +86,7 @@ Nothing in the build or the app depends on those assets — only the docs do.
 make gl-repl
 
 ./gl-repl                  # fresh session — type GL commands, ; after each
-./gl-repl --example "Torus knot (animated)"  # or start from a built-in (F12 cycles all 35)
+./gl-repl --example "Torus knot (animated)"  # or start from a built-in (F12 cycles all 36)
 ./gl-repl output.c         # reload a saved session
 ```
 

@@ -1284,21 +1284,26 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     return 0;
 }
 
+/* Widest value list any of the readers below accepts: glMultMatrixf's
+ * 4x4. Bounds both the caller's repl_args[] and the scratch split. */
+#define IMPORT_PAYLOAD_ARGS_MAX REPL_MATRIX_CELL_COUNT
+
 /* Shared skeleton for the glPointParameterfv / glClipPlane /
- * glMaterialfv C-to-REPL readers. Matches `prefix` after leading
- * whitespace, extracts the payload between the call's outer parens,
- * peels `token_count` leading comma-delimited tokens (trimmed) into
- * tokens[], then reads the value list from either a `{...}` compound
+ * glMaterialfv / glMultMatrixf C-to-REPL readers. Matches `prefix` after
+ * leading whitespace, extracts the payload between the call's outer
+ * parens, peels `token_count` leading comma-delimited tokens (trimmed)
+ * into tokens[], then reads the value list from either a `{...}` compound
  * literal or the first matching exporter helper call in helpers[],
- * splits it into at most 4 top-level args, and converts each through
- * the C-to-REPL expression converter into repl_args[]. Returns the
- * converted arg count, or 0 on any structural mismatch (callers check
+ * splits it into at most `max_args` top-level args, and converts each
+ * through the C-to-REPL expression converter into repl_args[]. Returns
+ * the converted arg count, or 0 on any structural mismatch (callers check
  * the count they expect). */
 static int import_parse_payload_call(const char *line, const char *prefix,
                                      char tokens[][64], int token_count,
                                      const char *const *helpers,
                                      int helper_count,
-                                     char repl_args[4][MAX_LINE_LEN]) {
+                                     char repl_args[][MAX_LINE_LEN],
+                                     int max_args) {
     const char *p = line;
     const char *open;
     const char *close;
@@ -1307,10 +1312,13 @@ static int import_parse_payload_call(const char *line, const char *prefix,
     const char *brace_close;
     char payload[MAX_LINE_LEN];
     char values[MAX_LINE_LEN];
-    char raw_args[4][MAX_LINE_LEN];
+    char raw_args[IMPORT_PAYLOAD_ARGS_MAX][MAX_LINE_LEN];
     int payload_len;
     int values_len;
     int count;
+
+    if (max_args < 0 || max_args > IMPORT_PAYLOAD_ARGS_MAX)
+        return 0;
 
     while (*p && isspace((unsigned char)*p))
         p++;
@@ -1370,7 +1378,7 @@ static int import_parse_payload_call(const char *line, const char *prefix,
         values[values_len] = '\0';
     }
 
-    count = split_top_level_args(values, raw_args, 4);
+    count = split_top_level_args(values, raw_args, max_args);
     if (count <= 0)
         return 0;
 
@@ -1392,7 +1400,7 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
     char repl_args[4][MAX_LINE_LEN];
 
     if (import_parse_payload_call(line, "glPointParameterfv(",
-                                  pname, 1, helpers, 1, repl_args) != 3)
+                                  pname, 1, helpers, 1, repl_args, 4) != 3)
         return 0;
     return repl_format_fits(out, (size_t)out_sz,
                             "glPointParameterfv(%s, %s, %s, %s);",
@@ -1410,7 +1418,7 @@ static int import_make_repl_clip_plane_line(const char *line, char *out, int out
     char repl_args[4][MAX_LINE_LEN];
 
     if (import_parse_payload_call(line, "glClipPlane(",
-                                  plane, 1, helpers, 1, repl_args) != 4)
+                                  plane, 1, helpers, 1, repl_args, 4) != 4)
         return 0;
     return repl_format_fits(out, (size_t)out_sz,
                             "glClipPlane(%s, (GLdouble[]){%s, %s, %s, %s});",
@@ -1429,7 +1437,7 @@ static int import_make_repl_fog_fv_line(const char *line, char *out, int out_sz)
     char repl_args[4][MAX_LINE_LEN];
 
     if (import_parse_payload_call(line, "glFogfv(",
-                                  pname, 1, helpers, 1, repl_args) != 4)
+                                  pname, 1, helpers, 1, repl_args, 4) != 4)
         return 0;
     return repl_format_fits(out, (size_t)out_sz,
                             "glFogfv(%s, (GLfloat[]){%s, %s, %s, %s});",
@@ -1452,7 +1460,7 @@ static int import_make_repl_materialfv_line(const char *line, char *out, int out
     int count;
 
     count = import_parse_payload_call(line, "glMaterialfv(",
-                                      tokens, 2, helpers, 2, repl_args);
+                                      tokens, 2, helpers, 2, repl_args, 4);
     if (count != 1 && count != 4)
         return 0;
 
@@ -1465,6 +1473,33 @@ static int import_make_repl_materialfv_line(const char *line, char *out, int out
                             "glMaterialfv(%s, %s, (GLfloat[]){%s, %s, %s, %s});",
                             tokens[0], tokens[1],
                             repl_args[0], repl_args[1], repl_args[2], repl_args[3]);
+}
+
+/* C-to-REPL line translator: `glMultMatrixf(<cells>)` where <cells> is
+ * either a compound literal `(GLfloat[]){...}` or the exporter's
+ * repl_glfloat16 helper call. The 16 expressions run through the
+ * C-to-REPL converter and re-emit in the canonical compound-literal
+ * form. The scratch-array form `glMultMatrixf(A)` never reaches here:
+ * it is already REPL syntax, and a lone name is not a value list, so
+ * the split below rejects it and the line falls through unchanged. */
+static int import_make_repl_mult_matrixf_line(const char *line, char *out, int out_sz) {
+    static const char *const helpers[] = { REPL_EXPORT_GLFLOAT16_HELPER };
+    char tokens[1][64];  /* unused: the call has no leading args */
+    char repl_args[REPL_MATRIX_CELL_COUNT][MAX_LINE_LEN];
+
+    if (import_parse_payload_call(line, "glMultMatrixf(",
+                                  tokens, 0, helpers, 1, repl_args,
+                                  REPL_MATRIX_CELL_COUNT)
+            != REPL_MATRIX_CELL_COUNT)
+        return 0;
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glMultMatrixf((GLfloat[]){%s, %s, %s, %s, "
+                            "%s, %s, %s, %s, %s, %s, %s, %s, "
+                            "%s, %s, %s, %s});",
+                            repl_args[0], repl_args[1], repl_args[2], repl_args[3],
+                            repl_args[4], repl_args[5], repl_args[6], repl_args[7],
+                            repl_args[8], repl_args[9], repl_args[10], repl_args[11],
+                            repl_args[12], repl_args[13], repl_args[14], repl_args[15]);
 }
 
 static int import_make_repl_glut_bitmap_string(const char *line,
@@ -1545,6 +1580,7 @@ static void import_translate_repl_line(const char *line,
         import_make_repl_point_parameter_line(line, repl_line, repl_line_sz) ||
         import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||
         import_make_repl_fog_fv_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_mult_matrixf_line(line, repl_line, repl_line_sz) ||
         import_make_repl_label(line, repl_line, repl_line_sz) ||
         import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
         return;

@@ -211,10 +211,13 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
      * calls repl_eval_scratch_set), so the array holds exactly what the
      * lines above this one put there. Baking the 16 cells onto the flat
      * command makes it self-contained for every later walker — including
-     * the ones in render3d, which cannot call into the scratch table. */
-    if (cmd->type == CMD_MULT_MATRIXF) {
+     * the ones in render3d, which cannot call into the scratch table.
+     * The compound-literal form has no array to read: its payload arrives
+     * already filled by the parse (or by the expression-slot refresh in
+     * flatten_reparse_line), and reading array 0 here would overwrite it. */
+    if (cmd->type == CMD_MULT_MATRIXF && repl_cmd_mult_matrix_from_array(cmd)) {
         int array_idx = (int)cmd->args[0];
-        for (int k = 0; k < 16 && k < REPL_SCRATCH_ARRAY_LEN; k++)
+        for (int k = 0; k < REPL_MATRIX_CELL_COUNT && k < REPL_SCRATCH_ARRAY_LEN; k++)
             repl_eval_scratch_get(array_idx, k,
                                   &ctx->flat_cmds[flat_cmd_idx].payload.matrix.m[k]);
     }
@@ -598,6 +601,16 @@ static int flatten_cmd_is_source_only_cond_marker(CmdType type) {
     return (type == CMD_IF_END || repl_cmd_is_if_branch_separator(type));
 }
 
+/* True for the glMultMatrixf form whose 16 cells are expression slots on
+ * the line rather than a scratch array read at bake time. Those slots sit
+ * at REPL_EXPR_ROLE_CMD_ARG ordinals 0..15 — past the args[] window every
+ * other command re-evaluates — so each of the three refresh paths (warm
+ * flatten, dep-note, rebake) needs an extra pass keyed on this. */
+static int flatten_cmd_has_matrix_slots(const GLCmd *cmd) {
+    return cmd->type == CMD_MULT_MATRIXF &&
+           !repl_cmd_mult_matrix_from_array(cmd);
+}
+
 /* A committed standard command already records its command type and arity.
  * Re-evaluate only the argument substring instead of redispatching and
  * revalidating the whole source line. Returning 0 is deliberately a soft
@@ -715,6 +728,17 @@ static int flatten_reparse_line(FlattenContext *ctx,
                 repl_flatten_expr_note_value(&ctx->expr, v.deps);
             }
         }
+        if (flatten_cmd_has_matrix_slots(&tmp)) {
+            for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++) {
+                ReplFlattenExprValue v = repl_flatten_expr_eval(
+                    &ctx->expr, i, REPL_EXPR_ROLE_CMD_ARG, k,
+                    vars, var_deps, nv, /*structural=*/0);
+                if (v.found) {
+                    tmp.payload.matrix.m[k] = v.value;
+                    repl_flatten_expr_note_value(&ctx->expr, v.deps);
+                }
+            }
+        }
         /* Mirror the parser's post-eval fixup: glClearColor clamps each
          * RGB channel at commit AND on every reparse. */
         if (tmp.type == CMD_CLEAR_COLOR) {
@@ -800,7 +824,10 @@ static int flatten_reparse_line(FlattenContext *ctx,
          * reached READY can't be re-evaluated in place, so it also
          * forfeits rebake for this flat program. */
         if (tmp.has_vars) {
-            for (int k = 0; k < tmp.num_args && k < 8; k++)
+            int slots = flatten_cmd_has_matrix_slots(&tmp)
+                      ? REPL_MATRIX_CELL_COUNT
+                      : (tmp.num_args < 8 ? tmp.num_args : 8);
+            for (int k = 0; k < slots; k++)
                 repl_flatten_expr_note_value(
                     &ctx->expr,
                     repl_flatten_expr_deps(
@@ -1334,6 +1361,20 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
 
     if (!cmd->has_vars)
         return 1;   /* constant non-assignment commands need no work */
+
+    /* Literal-form glMultMatrixf: the cells are the command, and they live
+     * in the payload rather than args[]. */
+    if (flatten_cmd_has_matrix_slots(cmd)) {
+        for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++) {
+            float v = 0.0f;
+            if (repl_flatten_expr_rebake_eval(
+                    o->expr_cache, line, REPL_EXPR_ROLE_CMD_ARG, k,
+                    locals ? locals->vars : NULL,
+                    locals ? locals->num_vars : 0, &v))
+                cmd->payload.matrix.m[k] = v;
+        }
+        return 1;
+    }
 
     /* Generic GL command: re-evaluate the expression-backed arg slots.
      * Slots without a program (enum tokens, omitted defaults) keep their

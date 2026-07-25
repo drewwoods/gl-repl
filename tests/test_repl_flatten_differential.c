@@ -392,6 +392,53 @@ static void test_mult_matrixf_snapshot(void) {
                               mult_matrix_cell(&g_reparse, 0), 8.0f);
 }
 
+/* The compound-literal form has no scratch array to snapshot: its cells are
+ * expression slots on the line, sitting at REPL_EXPR_ROLE_CMD_ARG ordinals
+ * 0..15 — past the args[] window the generic refresh walks. Miss them and a
+ * matrix built from `t` freezes at its commit-time value on the second
+ * flatten, when the warm compiled path takes over from the text reparse. */
+static void test_mult_matrixf_literal_reeval(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0.5, 1, 0, 0, "
+                     "0, 0, 1, 0, 2, 0, 0, 1});");
+
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_TRUE(&g_harness, "literal glMultMatrixf reaches the flat program",
+                     mult_matrix_flat_idx(&g_fast) >= 0);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "literal shear cell",
+                              mult_matrix_cell(&g_fast, 4), 0.5f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "literal translation cell",
+                              mult_matrix_cell(&g_fast, 12), 2.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "literal zero cell stays zero",
+                              mult_matrix_cell(&g_fast, 1), 0.0f);
+
+    /* A constant literal must survive a second flatten unchanged: the array
+     * form's scratch bake would overwrite the payload with array A. */
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "literal cells survive a reflatten",
+                              mult_matrix_cell(&g_fast, 4), 0.5f);
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                     "0, 0, 1, 0, t * 2, 0, 0, 1});");
+
+    repl_state_time_set(1.5f);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "animated literal cell at t=1.5",
+                              mult_matrix_cell(&g_fast, 12), 3.0f);
+
+    /* Second flatten: the line is compiled now, so this is the warm path. */
+    repl_state_time_set(4.0f);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "animated literal cell re-evals at t=4",
+                              mult_matrix_cell(&g_fast, 12), 8.0f);
+
+    flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness,
+                              "forced reparse agrees on the animated cell",
+                              mult_matrix_cell(&g_reparse, 12), 8.0f);
+}
+
 static void test_auto_normal_differential(void) {
     load_auto_normal_doc();
     flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
@@ -559,6 +606,7 @@ int main(void) {
     test_literal_cmd_keeps_local_snapshot();
     test_literal_cmd_keeps_is_auto();
     test_mult_matrixf_snapshot();
+    test_mult_matrixf_literal_reeval();
     test_auto_normal_differential();
     test_var_assign_differential();
     test_direct_eval_differential();

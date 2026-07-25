@@ -27,6 +27,13 @@
 #define GLUT_BITMAP_MAX_SUB_ARGS 4
 #endif
 
+/* Cells in a CMD_MULT_MATRIXF payload — a 4x4, column-major. Twice the
+ * args[] capacity, which is why the matrix lives in the payload union
+ * rather than in args[]. */
+#ifndef REPL_MATRIX_CELL_COUNT
+#define REPL_MATRIX_CELL_COUNT 16
+#endif
+
 #include "repl/eval.h"
 
 /* Loosely grouped by kind (geometry, transforms, control flow, GLUT
@@ -133,18 +140,26 @@ typedef struct {
             char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
         } label;
         /* CMD_MULT_MATRIXF carries its 4x4 by value rather than by
-         * scratch-array reference (args[0] names the source array, and
-         * stays meaningful for the panel and export). Flatten snapshots
-         * the array's live 16 cells into `m` in stream order, so every
-         * consumer that walks the flat program — the executor, the replay
-         * and overlay matrix trackers, the transform guides — applies the
-         * same matrix the scene meant, with no way to read the scratch
-         * table. That last part is load-bearing: those trackers share the
-         * inline applier in repl/transform_utils.h, which render3d uses in
-         * a build that links no src/repl objects at all. Column-major,
-         * matching glMultMatrixf and glGetFloatv. */
+         * scratch-array reference. Both argument forms end up here, and
+         * every consumer that walks the flat program — the executor, the
+         * replay and overlay matrix trackers, the transform guides —
+         * reads only this, with no way to tell the forms apart and no
+         * way to read the scratch table. That last part is load-bearing:
+         * those trackers share the inline applier in
+         * repl/transform_utils.h, which render3d uses in a build that
+         * links no src/repl objects at all.
+         *
+         *   glMultMatrixf(A)   — args[0] names the array (num_args 1);
+         *                        flatten snapshots its live cells into
+         *                        `m` in stream order.
+         *   glMultMatrixf((GLfloat[]){...}) — no array behind it
+         *                        (num_args 0); the 16 values are parsed
+         *                        into `m` directly and re-evaluated from
+         *                        the compiled expression slots.
+         *
+         * Column-major, matching glMultMatrixf and glGetFloatv. */
         struct {
-            float m[16];
+            float m[REPL_MATRIX_CELL_COUNT];
         } matrix;
     } payload;
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
@@ -162,6 +177,16 @@ static inline int repl_cmd_is_transform(CmdType type) {
     return (type == CMD_TRANSLATE3F || type == CMD_SCALEF  || type == CMD_ROTATEF ||
             type == CMD_PUSH_MATRIX || type == CMD_POP_MATRIX ||
             type == CMD_LOAD_IDENTITY || type == CMD_MULT_MATRIXF);
+}
+
+/* Which of glMultMatrixf's two argument forms this command is: 1 when the
+ * matrix comes from the scratch array named in args[0], 0 when the 16
+ * values are inline. num_args is the discriminator — the array form
+ * carries one arg, the literal form none. Only the parse, the flatten-time
+ * refresh, and export care; everything downstream reads payload.matrix and
+ * is form-blind. Callers must have established the type already. */
+static inline int repl_cmd_mult_matrix_from_array(const GLCmd *cmd) {
+    return cmd && cmd->num_args == 1;
 }
 
 /* True for every command type that contributes a per-vertex position to

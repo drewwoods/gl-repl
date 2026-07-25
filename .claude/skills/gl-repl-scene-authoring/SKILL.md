@@ -15,8 +15,11 @@ glClearColor(r,g,b,a)          (channels clamped >= 0.15)
 glClear(mask)                  (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 glClearDepth(depth)            (depth value glClear writes; GL clamps to 0..1)
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
-glMultMatrixf(A)               (scratch array A/B/C as a column-major 4x4;
-                                bare name only — no expression, no subscript)
+glMultMatrixf((GLfloat[]){m0, ..., m15})  (column-major 4x4; cells are
+                                ordinary expressions. Flat shorthand
+                                glMultMatrixf(m0, ..., m15) accepted)
+glMultMatrixf(A)               (same, read from scratch array A/B/C; bare
+                                name only — no expression, no subscript)
 glPushAttrib(mask), glPopAttrib()  (attribute-stack save/restore; GL_*_BIT tokens)
 glEnable(CAP), glDisable(CAP)  (depth/lighting/blend/cull/fog/lights 0-3,
                                 GL_CLIP_PLANE0..5, line/point smooth, ...)
@@ -128,15 +131,28 @@ predef vars only.
 
 ## Files that move together
 
-Editing an example means touching all of these in one change:
+Built-in examples are file-backed: a scene under `examples/scenes/` plus a
+catalog row. `build/generated/repl_examples_data.inc` is generated from them —
+never edit it. Adding or renaming one means touching all of:
 
-- `src/repl/example_loader.c`
-- `src/repl/export.c`
-- `src/repl/examples.c`
-- `src/app/glr_defaults.h`
-- `tests/test_repl_core_examples.c`
+- `examples/scenes/<slug>.glr` (or `.c`) — the scene itself
+- `examples/catalog.ini` — section id, `file`, `name`, `tags`, `group`
+- `tests/testdata/repl_examples_ui/NN.golden.txt` — the 0-based index golden
+- `docs/USER_GUIDE.md` — the numbered example list *and* the count claim
+- `README.md` — two count claims
 
-`make test_repl_core_examples` is the focused suite.
+Details in `examples/README.md`. Checks and regeneration:
+
+```bash
+make check-examples-catalog        # catalog/scene structure
+make check-user-guide-examples     # count + name drift across docs
+make test_repl_core_examples       # focused suite (load, export, reimport)
+build/release-gl-stubs/test_repl_core_examples --dump-index N \
+    > tests/testdata/repl_examples_ui/NN.golden.txt   # regen one golden
+```
+
+Live iteration without regenerating: `./gl-repl --examples-dir examples
+--example <name-or-idx>`.
 
 **Index-keyed goldens shift when you insert mid-catalog.** Appending is cheap;
 inserting is not.

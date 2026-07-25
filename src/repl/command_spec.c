@@ -371,11 +371,13 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Pop matrix from stack", REPL_HELP_GROUP_TRANSFORM },
     { "glLoadIdentity()",    "glLoadIdentity()",                                         0, { NULL },
         "Reset the current matrix to identity", REPL_HELP_GROUP_TRANSFORM },
-    { "glMultMatrixf(",      "glMultMatrixf(A)",                                         1, { "A" },
-        "Post-multiply the current matrix by a scratch array (A, B, or C)\n"
-        "read as 16 column-major values — the escape hatch for transforms\n"
-        "translate/rotate/scale cannot express, such as a planar shadow\n"
-        "projection or a shear. Fill the cells with A[k] = ... lines above.",
+    { "glMultMatrixf(",      "glMultMatrixf((GLfloat[]){m0, ..., m15})",                 1, { "(GLfloat[]){m0, ..., m15}" },
+        "Post-multiply the current matrix by 16 column-major values — the\n"
+        "escape hatch for transforms translate/rotate/scale cannot express,\n"
+        "such as a planar shadow projection or a shear.\n"
+        "Flat shorthand accepted: glMultMatrixf(m0, ..., m15).\n"
+        "glMultMatrixf(A) instead reads a scratch array (A, B, or C), whose\n"
+        "cells the A[k] = ... lines above it fill.",
         REPL_HELP_GROUP_TRANSFORM },
     /* --- Depth & write-mask state --- */
     { "glCullFace(",         "glCullFace(mode)",                                         1, { "mode" },

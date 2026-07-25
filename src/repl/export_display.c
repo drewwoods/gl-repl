@@ -184,8 +184,10 @@ ExportNeeds export_collect_needs(void) {
         /* glMultMatrixf(A) names its scratch array without subscripting it,
          * so the "A[" text scan below cannot see it; the command type says
          * which array exactly, so key off that instead of widening the
-         * scan to a bare `A` token. */
-        if (cmd->type == CMD_MULT_MATRIXF) {
+         * scan to a bare `A` token. The compound-literal form names no
+         * array at all and must not conjure an unused global. */
+        if (cmd->type == CMD_MULT_MATRIXF &&
+            repl_cmd_mult_matrix_from_array(cmd)) {
             switch ((int)cmd->args[0]) {
             case 0: needs.needs_scratch_a = 1; break;
             case 1: needs.needs_scratch_b = 1; break;
