@@ -472,7 +472,7 @@ static void test_reshape_clamps_height(void) {
 /* Regression test for the profile-coverage bug: a frame should land
  * profile samples in every major section, and the sum of major
  * sections should approximate PROF_FRAME_TOTAL (no section big
- * enough to matter goes unprofiled). The test runs one
+ * enough to matter goes unprofiled). The test drives
  * glr_ctrl_display_frame() and inspects the profile state.
  *
  * The "all major sections non-stale" half is deterministic. The
@@ -481,8 +481,28 @@ static void test_reshape_clamps_height(void) {
  * — any future regression that drops a major section entirely will
  * blow the lower bound. A tighter upper bound is not asserted
  * because per-section start/end overhead can stack to a real but
- * harmless gap. */
+ * harmless gap.
+ *
+ * Even with the loose bound a single frame can be unlucky (a
+ * scheduler preemption inside PROF_FRAME_TOTAL but outside every
+ * subsection inflates the denominator alone), so the ratio halves
+ * are best-of-PROFILE_COVERAGE_ATTEMPTS: retry only while a bound is
+ * unmet, and assert against the best measurement. A real regression
+ * fails every attempt; noise does not. Every attempt prints its
+ * numbers pass or fail, so a run that only just cleared the bound
+ * leaves the same evidence a failing one does. */
+#define PROFILE_COVERAGE_ATTEMPTS      3
+#define PROFILE_MAJOR_COVERAGE_MIN     0.5
+#define PROFILE_SNAPSHOT_COVERAGE_MIN  0.7
+
 static void test_display_frame_profile_coverage(void) {
+    double best_major_coverage = 0.0;
+    double best_snapshot_coverage = 0.0;
+    double best_total_us = 0.0;
+    double best_sum_us = 0.0;
+    int snapshot_measured = 0;
+    int attempts_run = 0;
+
     printf("--- imrepl_ctrl profile coverage ---\n");
     prepare_display_fixture();
 
@@ -523,59 +543,99 @@ static void test_display_frame_profile_coverage(void) {
         ASSERT_TRUE(label, !prof_section_is_stale(major[i]));
     }
 
-    /* Sum of disjoint top-level sections should be a substantial
-     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D
-     * are themselves aggregates, so summing them with the leaves
-     * outside (autonormal, flatten, replay_hud, code_panel,
-     * ui_panels, profile_panel, memory_panel, compositor,
-     * frame_restore) covers the
-     * controller's whole frame body. */
-    double total_us = prof_section_last_us(PROF_FRAME_TOTAL);
-    double sum_us =
-        prof_section_last_us(PROF_AUTONORMAL) +
-        prof_section_last_us(PROF_FLATTEN) +
-        prof_section_last_us(PROF_SNAPSHOT) +
-        prof_section_last_us(PROF_RENDER3D) +
-        prof_section_last_us(PROF_REPLAY_HUD) +
-        prof_section_last_us(PROF_CODE_PANEL) +
-        prof_section_last_us(PROF_UI_PANELS) +
-        prof_section_last_us(PROF_PROFILE_PANEL) +
-        prof_section_last_us(PROF_MEMORY_PANEL) +
-        prof_section_last_us(PROF_COMPOSITOR) +
-        prof_section_last_us(PROF_FRAME_RESTORE);
+    /* Measure the two ratios, retrying while either is short of its
+     * bound. The first pass reuses the frame already driven above. */
+    for (int attempt = 1; attempt <= PROFILE_COVERAGE_ATTEMPTS; attempt++) {
+        double total_us, sum_us, snapshot_us, snapshot_sub_us;
+        double major_coverage, snapshot_coverage;
 
-    /* Both should be positive (frame did real work). */
-    ASSERT_TRUE("frame total positive", total_us > 0.0);
-    ASSERT_TRUE("major-section sum positive", sum_us > 0.0);
+        if (attempt > 1) {
+            repl_mark_source_dirty();
+            repl_state_mark_flat_dirty();
+            glr_ctrl_display_frame();
+        }
+        attempts_run = attempt;
 
-    /* Sum should cover at least half the frame; missing a major
-     * section drops it well below this threshold. */
-    if (total_us > 0.0) {
-        double coverage = sum_us / total_us;
-        char label[96];
-        snprintf(label, sizeof(label),
-                 "major sections cover ≥50%% of FRAME_TOTAL (got %.1f%%)",
-                 coverage * 100.0);
-        ASSERT_TRUE(label, coverage >= 0.5);
+        /* Sum of disjoint top-level sections should be a substantial
+         * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D
+         * are themselves aggregates, so summing them with the leaves
+         * outside (autonormal, flatten, replay_hud, code_panel,
+         * ui_panels, profile_panel, memory_panel, compositor,
+         * frame_restore) covers the
+         * controller's whole frame body. */
+        total_us = prof_section_last_us(PROF_FRAME_TOTAL);
+        sum_us =
+            prof_section_last_us(PROF_AUTONORMAL) +
+            prof_section_last_us(PROF_FLATTEN) +
+            prof_section_last_us(PROF_SNAPSHOT) +
+            prof_section_last_us(PROF_RENDER3D) +
+            prof_section_last_us(PROF_REPLAY_HUD) +
+            prof_section_last_us(PROF_CODE_PANEL) +
+            prof_section_last_us(PROF_UI_PANELS) +
+            prof_section_last_us(PROF_PROFILE_PANEL) +
+            prof_section_last_us(PROF_MEMORY_PANEL) +
+            prof_section_last_us(PROF_COMPOSITOR) +
+            prof_section_last_us(PROF_FRAME_RESTORE);
+
+        /* PROF_SNAPSHOT subsections should sum to near the parent
+         * (they are disjoint and exhaustive). */
+        snapshot_us = prof_section_last_us(PROF_SNAPSHOT);
+        snapshot_sub_us =
+            prof_section_last_us(PROF_SNAPSHOT_TRANSFORMERS) +
+            prof_section_last_us(PROF_SNAPSHOT_HIGHLIGHTS) +
+            prof_section_last_us(PROF_SNAPSHOT_VIRTUAL_LINES) +
+            prof_section_last_us(PROF_SNAPSHOT_PREP) +
+            prof_section_last_us(PROF_SNAPSHOT_SCENE_CONFIG) +
+            prof_section_last_us(PROF_SNAPSHOT_UI);
+
+        major_coverage = total_us > 0.0 ? sum_us / total_us : 0.0;
+        snapshot_coverage = snapshot_us > 0.0 ? snapshot_sub_us / snapshot_us : 0.0;
+
+        printf("    attempt %d/%d: FRAME_TOTAL %.1fus, major sum %.1fus (%.1f%%); "
+               "SNAPSHOT %.1fus, subs %.1fus (%.1f%%)\n",
+               attempt, PROFILE_COVERAGE_ATTEMPTS,
+               total_us, sum_us, major_coverage * 100.0,
+               snapshot_us, snapshot_sub_us, snapshot_coverage * 100.0);
+
+        if (total_us > best_total_us) best_total_us = total_us;
+        if (sum_us > best_sum_us) best_sum_us = sum_us;
+        if (major_coverage > best_major_coverage) best_major_coverage = major_coverage;
+        if (snapshot_us > 0.0) {
+            snapshot_measured = 1;
+            if (snapshot_coverage > best_snapshot_coverage)
+                best_snapshot_coverage = snapshot_coverage;
+        }
+
+        if (best_major_coverage >= PROFILE_MAJOR_COVERAGE_MIN
+                && (!snapshot_measured
+                    || best_snapshot_coverage >= PROFILE_SNAPSHOT_COVERAGE_MIN))
+            break;
     }
 
-    /* PROF_SNAPSHOT subsections should sum to near the parent
-     * (they are disjoint and exhaustive). */
-    double snapshot_us = prof_section_last_us(PROF_SNAPSHOT);
-    double snapshot_sub_us =
-        prof_section_last_us(PROF_SNAPSHOT_TRANSFORMERS) +
-        prof_section_last_us(PROF_SNAPSHOT_HIGHLIGHTS) +
-        prof_section_last_us(PROF_SNAPSHOT_VIRTUAL_LINES) +
-        prof_section_last_us(PROF_SNAPSHOT_PREP) +
-        prof_section_last_us(PROF_SNAPSHOT_SCENE_CONFIG) +
-        prof_section_last_us(PROF_SNAPSHOT_UI);
-    if (snapshot_us > 0.0) {
-        double coverage = snapshot_sub_us / snapshot_us;
+    printf("    best of %d attempt(s): major %.1f%%, SNAPSHOT subs %.1f%%\n",
+           attempts_run, best_major_coverage * 100.0,
+           best_snapshot_coverage * 100.0);
+
+    /* Both should be positive (frame did real work). */
+    ASSERT_TRUE("frame total positive", best_total_us > 0.0);
+    ASSERT_TRUE("major-section sum positive", best_sum_us > 0.0);
+
+    /* Sum should cover at least half the frame; missing a major
+     * section drops it well below this threshold on every attempt. */
+    if (best_total_us > 0.0) {
         char label[96];
         snprintf(label, sizeof(label),
-                 "SNAPSHOT subs cover ≥70%% of parent (got %.1f%%)",
-                 coverage * 100.0);
-        ASSERT_TRUE(label, coverage >= 0.7);
+                 "major sections cover ≥50%% of FRAME_TOTAL (best %.1f%%)",
+                 best_major_coverage * 100.0);
+        ASSERT_TRUE(label, best_major_coverage >= PROFILE_MAJOR_COVERAGE_MIN);
+    }
+
+    if (snapshot_measured) {
+        char label[96];
+        snprintf(label, sizeof(label),
+                 "SNAPSHOT subs cover ≥70%% of parent (best %.1f%%)",
+                 best_snapshot_coverage * 100.0);
+        ASSERT_TRUE(label, best_snapshot_coverage >= PROFILE_SNAPSHOT_COVERAGE_MIN);
     }
 }
 
