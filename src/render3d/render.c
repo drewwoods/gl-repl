@@ -798,18 +798,32 @@ static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
     prof_begin(PROF_RENDER3D_ORBIT_TARGET);
     draw_orbit_target(frame_ctx);
     prof_accum_end(PROF_RENDER3D_ORBIT_TARGET);
+    /* Light-slot gizmos are host chrome like the grid and axes — driven by
+     * the program's glLight* state, but drawn as the renderer's own
+     * indicators, not as a report about user geometry. They render last of
+     * the helpers so they sit on top of the ones that write depth (they
+     * disable GL_DEPTH_TEST themselves, so this is presentation order, not
+     * a depth dependency). */
+    prof_begin(PROF_RENDER3D_LIGHTS);
+    render3d_lights_render(frame_ctx);
+    prof_accum_end(PROF_RENDER3D_LIGHTS);
     prof_accum_end(PROF_RENDER3D_HELPERS);
 }
 
 /* Polygon outline overlay, vertex-point overlay, vertex-number /
  * normal-vector labels, and the cursor-edit guide stack all render
  * here through post_overlays_fn — none of them are scene-internal
- * any more (see src/app/glr_ctrl.c for the bodies). post_overlays_fn
- * fires after lights_render so its output sits on top of the
- * scene's helpers. */
+ * any more (see src/app/glr_ctrl.c for the bodies).
+ *
+ * This pass is exactly the geometry-reporting layer: everything drawn
+ * here describes the user's geometry, and runs after every piece of host
+ * chrome (backdrop/grid/axes/orbit target/light gizmos, all in
+ * render3d_pass_helpers) so it sits on top. Keeping that split clean
+ * matters to callers that must treat the two categories differently —
+ * a report about masked-away geometry should be masked away too, while
+ * chrome never should. */
 static void render3d_pass_overlays(const Render3dFrameRenderContext *frame_ctx) {
     prof_begin(PROF_RENDER3D_OVERLAYS);
-    render3d_lights_render(frame_ctx);
     if (frame_ctx->config.post_overlays_fn)
         frame_ctx->config.post_overlays_fn(
             frame_ctx->config.post_overlays_user_data);

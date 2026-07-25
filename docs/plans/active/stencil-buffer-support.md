@@ -686,8 +686,7 @@ and it cannot be deferred to Phase 2 with the inspector — Phase 2 is about
 
 | Pass | Stencil behavior | Rationale |
 |---|---|---|
-| Backdrop / grid / axes (`render3d_pass_helpers`) | **Suspend `GL_STENCIL_TEST`** | Host chrome is not the user's geometry; masking it is never what was meant |
-| **Light indicators** (`render3d_lights_render`) | **Suspend** | Same rationale as the grid. Easy to miss because it lives in `render3d_pass_overlays` (`render.c:812`), *not* in `_pass_helpers` — so it is inside the same live-state region as the edit overlays but is host chrome, not geometry reporting |
+| Backdrop / grid / axes / orbit target / **light indicators** (`render3d_pass_helpers`) | **Suspend `GL_STENCIL_TEST`** | Host chrome is not the user's geometry; masking it is never what was meant |
 | Polygon outlines, vertex points, geometry guides | **Reproduce** the user's stencil visibility | These report *what the geometry did*; an outline around masked-away geometry is a lie. Same principle as the existing clip/cull mirroring |
 | Cursor / current-block highlight | **Suspend** | Matches the existing Polygon-highlight On behavior, which already suspends clip planes and culling so the cursor's subject stays visible |
 | Bitmap labels (`post_resolve_overlays_fn`) | **Suspend** | Screen-anchored annotation, not geometry |
@@ -716,10 +715,22 @@ glPopAttrib();
 
 `GL_ENABLE_BIT` scoping restores the user's stencil test before
 `buffer_pass_overlay_fn` and the edit overlays run, so neither sees a modified
-enable state. The light indicators need the same treatment — but they sit inside
-`render3d_pass_overlays` (`render.c:812`), so bracket `render3d_lights_render`
-individually rather than widening the helpers bracket, which would also swallow
-the geometry-reporting overlays that must *keep* the stencil test.
+enable state.
+
+**One bracket covers all host chrome**, because the prerequisite commit
+(`render3d_lights_render` moved from `render3d_pass_overlays` to the tail of
+`_pass_helpers`) made the two pass functions align with the two stencil
+categories exactly:
+
+- `render3d_pass_helpers` — backdrop, grid, axes, orbit target, light gizmos.
+  All host chrome. **Suspend.**
+- `render3d_pass_overlays` — `post_overlays_fn` only. All geometry reporting.
+  **Reproduce**, with per-draw exceptions handled inside `edit_overlays.c`.
+
+Before that move, light indicators sat at the head of `_pass_overlays` and would
+have needed their own bracket — widening the helpers bracket was not an option,
+since it would also have swallowed the geometry-reporting overlays that must
+*keep* the stencil test.
 
 **(b) Overlay tracking in `edit_overlays.c`** is more than the three functions
 the earlier draft named. The full list:

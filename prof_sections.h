@@ -37,11 +37,12 @@ typedef enum {
     PROF_RENDER3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
     PROF_RENDER3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
     PROF_RENDER3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
-    PROF_RENDER3D_HELPERS,      /* backdrop/grid/axes/orbit-target aggregate */
+    PROF_RENDER3D_HELPERS,      /* backdrop/grid/axes/orbit-target/lights aggregate */
     PROF_RENDER3D_BACKDROP,     /* render3d_backdrop_render() – stale when off */
     PROF_RENDER3D_GRID,         /* render3d_grid_render() */
     PROF_RENDER3D_AXES,         /* render3d_axes_render() */
     PROF_RENDER3D_ORBIT_TARGET, /* draw_orbit_target() */
+    PROF_RENDER3D_LIGHTS,       /* render3d_lights_render() light-slot gizmos */
     PROF_RENDER3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
     PROF_RENDER3D_OVERLAY_OUTLINES,  /* polygon outline + current-block highlight */
     PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
