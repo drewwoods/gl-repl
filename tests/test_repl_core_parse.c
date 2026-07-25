@@ -1621,10 +1621,47 @@ int main(void) {
     {
         glr_ctrl_reset_all();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glStencilFunc(GL_EQUAL, 0x7F, 42)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glStencilFunc hexadecimal ref parses", ok == 1);
+        ASSERT_TRUE("glStencilFunc hexadecimal ref value", (int)cmd.args[1] == 127);
+        ASSERT_TRUE("glStencilFunc decimal mask value", (int)cmd.args[2] == 42);
+        ASSERT_TRUE("glStencilFunc decimal mask canonicalizes to hex",
+                    strstr(cmd_text, "0x2A") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        ExprVar vars[1] = { { "i", 0.0f } };
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test_with_vars(
+            "glStencilFunc(GL_EQUAL, min(i, 3), 0xFF)", &cmd,
+            vars, ARRAY_LEN(vars));
+        ASSERT_TRUE("glStencilFunc paren-aware ref expression parses", ok == 1);
+        ASSERT_TRUE("glStencilFunc expression retains dynamic flag", cmd.has_vars == 1);
+        ASSERT_TRUE("glStencilFunc expression retains the default value",
+                    (int)cmd.args[1] == 0);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glStencilFunc(GL_EQUAL, 256, 0xFF)", &cmd);
         ASSERT_TRUE("glStencilFunc ref over limit rejected", ok == 0);
         assert_status_contains("glStencilFunc ref range message", "0..255");
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glStencilFunc negative constant ref rejected",
+                    parse_for_test("glStencilFunc(GL_EQUAL, -0.1, 0xFF)", &cmd) == 0);
+        ASSERT_TRUE("glStencilFunc oversized mask rejected",
+                    parse_for_test("glStencilFunc(GL_EQUAL, 1, 256)", &cmd) == 0);
+        ASSERT_TRUE("glStencilMask negative mask rejected",
+                    parse_for_test("glStencilMask(-1)", &cmd) == 0);
     }
     {
         glr_ctrl_reset_all();
@@ -1781,6 +1818,44 @@ int main(void) {
         ASSERT_TRUE("glClear stencil bit table order",
                     strstr(cmd_text,
                            "glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClear stencil-only parse ok",
+                    parse_cmd_with_text("glClear(GL_STENCIL_BUFFER_BIT)",
+                                        &cmd, cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glClear stencil-only emits canonical singleton",
+                    strstr(cmd_text, "glClear(GL_STENCIL_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClear all bits reversed and unspaced parses",
+                    parse_cmd_with_text("glClear(GL_STENCIL_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT)",
+                                        &cmd, cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glClear all bits resolve",
+                    (GLbitfield)cmd.args[0] ==
+                        (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT |
+                         GL_STENCIL_BUFFER_BIT));
+        ASSERT_TRUE("glClear all bits emit table order",
+                    strstr(cmd_text,
+                           "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClear repeated stencil bit parses",
+                    parse_cmd_with_text("glClear(GL_STENCIL_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)",
+                                        &cmd, cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glClear repeated stencil bit dedupes",
+                    strstr(cmd_text, "glClear(GL_STENCIL_BUFFER_BIT);") != NULL);
     }
     {
         glr_ctrl_reset_all();

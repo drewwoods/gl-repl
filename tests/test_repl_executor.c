@@ -221,6 +221,21 @@ static void test_enum_arg_gl_trace(void) {
     cmd.args[1] = 0.25f; cmd.args[2] = 0.5f; cmd.args[3] = 1; cmd.args[4] = 1;
     repl_apply_state_cmd(&cmd, 1.0f);
 
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_STENCIL_FUNC; cmd.num_args = 3;
+    cmd.args[0] = GL_GREATER; cmd.args[1] = 123; cmd.args[2] = 0xF0;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_STENCIL_OP; cmd.num_args = 3;
+    cmd.args[0] = GL_INVERT; cmd.args[1] = GL_DECR; cmd.args[2] = GL_INCR;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_STENCIL_MASK; cmd.num_args = 1;
+    cmd.args[0] = 0x7F;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
     gl_stub_trace_close();
 
     char buf[4096] = "";
@@ -274,6 +289,19 @@ static void test_enum_arg_gl_trace(void) {
              (unsigned)GL_FOG_COLOR);
     ASSERT_TRUE("glFogfv receives (pname, r, g, b, a) in order",
                 strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilFunc %u %d %u\n",
+             (unsigned)GL_GREATER, 123, 0xF0u);
+    ASSERT_TRUE("glStencilFunc receives (func, ref, mask) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilOp %u %u %u\n",
+             (unsigned)GL_INVERT, (unsigned)GL_DECR, (unsigned)GL_INCR);
+    ASSERT_TRUE("glStencilOp receives (sfail, dpfail, dppass) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilMask %u\n", 0x7Fu);
+    ASSERT_TRUE("glStencilMask receives its write mask", strstr(buf, want) != NULL);
 }
 
 /* End-to-end P1 regression: drive the *full* path the real app uses —
@@ -297,6 +325,9 @@ static void test_enum_arg_end_to_end_trace(void) {
     editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
     editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
     editor_feed_line("glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("glStencilFunc(GL_GREATER, 7.9, 0xFE);");
+    editor_feed_line("glStencilOp(GL_KEEP, GL_DECR, GL_INCR);");
+    editor_feed_line("glStencilMask(0x7F);");
     repl_flatten_commands(editor_state_edit_line());
     repl_execute_commands();
 
@@ -346,6 +377,19 @@ static void test_enum_arg_end_to_end_trace(void) {
              (unsigned)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
     ASSERT_TRUE("e2e glClear(A | B) reaches GL as the OR'd mask",
                 strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilFunc %u %d %u\n",
+             (unsigned)GL_GREATER, 7, 0xFEu);
+    ASSERT_TRUE("e2e glStencilFunc truncates ref and preserves arg order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilOp %u %u %u\n",
+             (unsigned)GL_KEEP, (unsigned)GL_DECR, (unsigned)GL_INCR);
+    ASSERT_TRUE("e2e glStencilOp preserves all three enum slots",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glStencilMask %u\n", 0x7Fu);
+    ASSERT_TRUE("e2e glStencilMask preserves write mask", strstr(buf, want) != NULL);
 }
 
 static void test_execute_edge_cases(void) {

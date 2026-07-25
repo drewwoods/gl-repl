@@ -271,6 +271,91 @@ static const char *const k_scene_constant_resets[] = {
     NULL,
 };
 
+/* A stencil reference is an expression slot, not an enum or a pre-truncated
+ * parser literal. It must be clamped after every evaluation, including the
+ * fast rebake path. */
+static const char *const k_scene_stencil_ref[] = {
+    "glStencilFunc(GL_EQUAL, t * 100.75 - 1.9, 0xFF);",
+    NULL,
+};
+
+static int live_stencil_ref(void) {
+    const GLCmd *cmds = repl_state_flat_program_cmds();
+    int n = repl_state_flat_program_count();
+
+    for (int i = 0; i < n; i++)
+        if (cmds[i].type == CMD_STENCIL_FUNC)
+            return (int)cmds[i].args[1];
+    return -1;
+}
+
+static int c_stencil_ref(float t) {
+    GLint ref = (GLint)(t * 100.75f - 1.9f);
+
+    if (ref < 0)
+        return 0;
+    if (ref > 255)
+        return 255;
+    return (int)ref;
+}
+
+static void test_dynamic_stencil_ref_rebake(void) {
+    static const float values[] = { -0.1f, 0.05f, 3.0f };
+    const char *const loop_scene[] = {
+        "for(i, 0, 4) {",
+        "glStencilFunc(GL_EQUAL, i + 0.9, 0xFF);",
+        "}",
+        NULL,
+    };
+
+    printf("--- rebake: dynamic stencil reference ---\n");
+    load_scene(k_scene_stencil_ref);
+    repl_state_time_set(0.0f);
+    repl_ensure_flat_program_with_live_vars(0);
+
+    for (int i = 0; i < (int)ARRAY_LEN(values); i++) {
+        char label[160];
+
+        repl_state_flat_program_clear_dirty();
+        repl_state_time_set(values[i]);
+        snprintf(label, sizeof(label), "stencil ref %g uses rebake", values[i]);
+        TEST_ASSERT_INT(&g_harness, label, repl_refresh_flat_program(0),
+                        REPL_FLAT_REFRESH_REBAKE);
+        snprintf(label, sizeof(label),
+                 "stencil ref %g matches C GLint truncation and clamp", values[i]);
+        TEST_ASSERT_INT(&g_harness, label, live_stencil_ref(),
+                        c_stencil_ref(values[i]));
+    }
+
+    /* A cache-warm full reflatten has the same post-evaluation clamp. */
+    repl_state_time_set(0.05f);
+    (void)repl_refresh_flat_program(0);
+    repl_state_mark_flat_dirty();
+    ASSERT_INT("stencil ref warm-cache refresh takes full flatten",
+               repl_refresh_flat_program(0), REPL_FLAT_REFRESH_FULL);
+    ASSERT_INT("stencil ref warm-cache reflatten keeps truncation",
+               live_stencil_ref(), c_stencil_ref(0.05f));
+
+    /* Local loop variables exercise the normal flatten path rather than the
+     * value-only rebake path. Each fractional local reference truncates after
+     * substitution, exactly like a predef-backed expression. */
+    load_scene(loop_scene);
+    repl_ensure_flat_program_with_live_vars(0);
+    {
+        const GLCmd *cmds = repl_state_flat_program_cmds();
+        int found = 0;
+
+        for (int i = 0; i < repl_state_flat_program_count(); i++) {
+            if (cmds[i].type != CMD_STENCIL_FUNC)
+                continue;
+            ASSERT_INT("loop stencil ref truncates local value",
+                       (int)cmds[i].args[1], found);
+            found++;
+        }
+        ASSERT_INT("loop emits four dynamic stencil refs", found, 4);
+    }
+}
+
 static void test_rebake_value_scene(void) {
     printf("--- rebake: value-only scene ---\n");
     check_rebake_matches_full("value", k_scene_value, 0.0f, 1.7f);
@@ -558,6 +643,7 @@ int main(void) {
     test_rebake_assignment_scene();
     test_rebake_scratch_scene();
     test_rebake_replays_constant_assignment_resets();
+    test_dynamic_stencil_ref_rebake();
     test_structural_change_takes_full_flatten();
     test_not_ok_routes_to_full_flatten();
     test_midwalk_failure_rolls_back_before_full();

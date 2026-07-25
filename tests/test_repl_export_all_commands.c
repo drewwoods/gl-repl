@@ -344,6 +344,7 @@ int main(void) {
     char *code_reexport = NULL;
     char *export_text = NULL;
     int diff_line = 0;
+    int dynamic_stencil_ref = -1;
 
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();
@@ -387,6 +388,7 @@ int main(void) {
     editor_feed_line("glCullFace(GL_BACK);");
     editor_feed_line("glDepthFunc(GL_LEQUAL);");
     editor_feed_line("glStencilFunc(GL_EQUAL, 1, 0xFF);");
+    editor_feed_line("glStencilFunc(GL_EQUAL, x + 0.9, 0xFF);");
     editor_feed_line("glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);");
     editor_feed_line("glStencilMask(0x7F);");
     editor_feed_line("glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);");
@@ -454,6 +456,26 @@ int main(void) {
         cmd_types_before[i] = repl_state_document_cmds()[i].type;
     }
 
+    /* The live flat command truncates the dynamic reference exactly as C's
+     * GLint parameter conversion does, while export retains the expression
+     * for the standalone C program to evaluate at runtime. */
+    {
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("dynamic stencil ref predef exists", x_idx >= 0);
+        if (x_idx >= 0)
+            g_predef_vars_mut[x_idx].value = 3.9f;
+        repl_flatten_commands(editor_state_edit_line());
+        for (int i = 0; i < repl_state_flat_program_count(); i++) {
+            const GLCmd *cmd = &repl_state_flat_program_cmds()[i];
+            if (cmd->type == CMD_STENCIL_FUNC && cmd->has_vars)
+                dynamic_stencil_ref = (int)cmd->args[1];
+        }
+        ASSERT_TRUE("dynamic stencil ref reaches the flat program",
+                    dynamic_stencil_ref >= 0);
+        ASSERT_TRUE("dynamic stencil ref matches C GLint truncation",
+                    dynamic_stencil_ref == (GLint)(3.9f + 0.9f));
+    }
+
     /* Capture code before export */
     code_before = dump_code_panel();
     ASSERT_TRUE("code before export captured", code_before != NULL);
@@ -462,6 +484,9 @@ int main(void) {
     repl_export_save_output(path1, source_document_view(), NULL);
     export_text = slurp_path(path1);
     ASSERT_TRUE("export file readable", export_text != NULL);
+    ASSERT_TRUE("export preserves dynamic stencil expression for C conversion",
+                export_text &&
+                strstr(export_text, "glStencilFunc(GL_EQUAL, x + 0.9") != NULL);
     ASSERT_TRUE("export uses C89 block comments",
                 strstr(export_text, "//") == NULL);
     ASSERT_TRUE("export avoids C99 compound GLfloat literals",
