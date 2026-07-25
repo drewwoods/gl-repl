@@ -203,7 +203,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <img src="images/animated-ring.gif" alt="Animated ring" width="100%">
 
 **[Animated ring](../examples/scenes/animated-ring-for-t.glr)**
-<br><sub>`for` + `t`, line loop + fan</sub>
+<br><sub>`for` + `t`, line loop + fan; see also the [2D assignment sketch](../examples/scenes/2d-assignment-sketch-vars-only.glr)</sub>
 
 </td>
 </tr>
@@ -268,7 +268,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
 
 **[Lit cube](../examples/scenes/glr-logo.glr)**
-<br><sub>lighting + material basics</sub>
+<br><sub>lighting + material basics; compare the [rotating cube](../examples/scenes/rotating-cube.glr)</sub>
 
 </td>
 </tr>
@@ -330,7 +330,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <img src="images/showcase/function-polygons.png" alt="Function polygons" width="100%">
 
 **[Function polygons](../examples/scenes/function-polygons-args-for.glr)**
-<br><sub>args + `for`</sub>
+<br><sub>args + `for`; then [function branching](../examples/scenes/function-branching-args-if.glr) adds `if`</sub>
 
 </td>
 <td width="33%" align="center">
@@ -415,8 +415,46 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>aurora sky + grid, additive glow accents</sub>
 
 </td>
+<td width="33%" align="center">
+
+<img src="images/hero.png" alt="Teapot carousel with transform stacks and glow points" width="100%">
+
+**[Teapot carousel](../examples/scenes/teapot-carousel-transform-stacks-glow-points.glr)**
+<br><sub>transform stacks + chasing glow points</sub>
+
+</td>
 <td width="33%"></td>
-<td width="33%"></td>
+</tr>
+</table>
+
+### Transforms & GL state
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/planar-shadows.gif
+     scripts/docs-assets.sh sc-planar-shadows -->
+<img src="images/showcase/planar-shadows.gif" alt="A moving light casts an animated planar teapot shadow" width="100%">
+
+**[Planar shadows](../examples/scenes/planar-shadows-glmultmatrixf.glr)**
+<br><sub>an animated 4×4 projection via `glMultMatrixf`</sub>
+
+</td>
+<td width="33%" align="center">
+
+<img src="images/clip-plane-sweep.gif" alt="A clip plane sweeping through solid geometry" width="100%">
+
+**[Clip planes carve solids](../examples/scenes/clip-planes-carve-solids.glr)**
+<br><sub>`glClipPlane` reveals the section through a solid</sub>
+
+</td>
+<td width="33%" align="center">
+
+**[Fog ring tunnel](../examples/scenes/fog-ring-tunnel.glr)**
+<br><sub>`glFog` hides each ring's return at the far end of an endless tunnel</sub>
+
+</td>
 </tr>
 </table>
 

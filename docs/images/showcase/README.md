@@ -38,6 +38,7 @@ scripts/docs-assets.sh --list             # asset names
 | `conditional-colors.gif` | `sc-conditional-colors` | Conditional colors (if + t) |
 | `whale.gif` | `sc-whale` | Whale (particle system + lit model) |
 | `stress-test.gif` | `sc-stress-test` | Dusk lighthouse atoll (stress test) |
+| `planar-shadows.gif` | `sc-planar-shadows` | Planar shadows (glMultMatrixf) |
 | `feature-time.gif` | `sc-feature-time` | Conditional colors (if + t) — a t-driven clip |
 
 Stand-ins (the ideal shot needs an external tool we can't drive headlessly):

@@ -95,6 +95,7 @@ GIF_ASSETS=(
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
     sc-whale sc-stress-test sc-aurora-observatory
+    sc-planar-shadows
     sc-feature-time
 )
 
@@ -1331,6 +1332,13 @@ if want sc-aurora-observatory; then
     # ~3.9 s) rides mid-clip while the dish drifts and the pulses cycle.
     gif "$SHOW/aurora-observatory.gif" 200 2 20 560 \
         --example "Aurora observatory (dish tracks the sky)"
+fi
+
+# Transforms & GL state.
+if want sc-planar-shadows; then
+    ( export GLR_EDIT_LINE=6
+    gif "$SHOW/planar-shadows.gif" 200 2 20 560 \
+        --example "Planar shadows (glMultMatrixf)" )
 fi
 
 # "Beyond the still image" — interactive features. feature-time is a real

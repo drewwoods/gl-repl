@@ -12,6 +12,8 @@ docs/*.md files from drifting, and also checks docs/USER_GUIDE.md's
   - the numbered table in that section must list every catalog entry with
     its exact 1-based index and display name — a mid-catalog insert that
     shifts later indices fails here instead of silently misnumbering;
+  - docs/SHOWCASE.md must link every catalog scene file, so adding an example
+    cannot silently leave the "full showcase" incomplete;
   - `--example "<name>"` references in any top-level docs/*.md file must name
     a real example (the CLI matches names case-insensitively);
   - bare numeric `--example <idx>` references in those docs are rejected: they
@@ -125,11 +127,28 @@ def doc_reference_failures(path: Path, text: str,
     return failures
 
 
+def showcase_entry_failures(text: str,
+                            entries: list[dict[str, object]]) -> list[str]:
+    """Return catalog scenes without a corresponding SHOWCASE.md link."""
+    linked_scenes = set(re.findall(
+        r"\]\((\.\./examples/[^)\s]+)\)", text))
+    failures: list[str] = []
+    for entry in entries:
+        expected = f"../examples/{entry['file']}"
+        if expected not in linked_scenes:
+            failures.append(
+                f"SHOWCASE.md: missing entry for {entry['name']!r} "
+                f"(expected link {expected})")
+    return failures
+
+
 def main() -> int:
     root = repo_root()
     docs = [root / "README.md", *sorted((root / "docs").glob("*.md"))]
     guide_path = root / "docs" / "USER_GUIDE.md"
+    showcase_path = root / "docs" / "SHOWCASE.md"
     guide = guide_path.read_text(encoding="utf-8")
+    showcase = showcase_path.read_text(encoding="utf-8")
 
     try:
         entries = gen_examples.read_catalog(root / "examples" / "catalog.ini")
@@ -140,6 +159,7 @@ def main() -> int:
 
     failures: list[str] = []
     section = guide_examples_section(guide)
+    failures.extend(showcase_entry_failures(showcase, entries))
 
     if not COUNT_CLAIM_RE.search(section):
         failures.append(
