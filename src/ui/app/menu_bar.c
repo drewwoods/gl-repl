@@ -2019,7 +2019,7 @@ static int search_nav_geometry(EditorSearchState srch,
 #define REPLACE_ROW_MIN_W     330
 #define REPLACE_ROW_MIN_TEXT  12    /* chars of replacement kept visible */
 #define REPLACE_BTN_PAD_X     10
-#define REPLACE_BTN_GAP       8   /* also clears the 2px keyboard-focus ring */
+#define REPLACE_BTN_GAP       8
 /* Menu-bar rows are LINE_H (18px). Inset 2 leaves a 14px button, which
  * clears FONT_TINY's 10px box top and bottom; the old inset of 4 left
  * 10px of button for a 13px FONT_SMALL label — the text physically could
@@ -2104,13 +2104,15 @@ static int replace_row_geometry(EditorSearchState srch, ReplaceRowGeom *g) {
 }
 
 /* Marks the focused text field by sinking it into the row: a darker fill
- * with a caret-colored outline, drawn *behind* the text.
+ * drawn *behind* the text.
  *
  * An underline was the obvious cue and the wrong one — a menu-bar row is
  * 22px against a 13px font, which leaves no clear band under the
- * descenders of a 'y' or 'p'. The box needs no vertical room of its own.
- * `right_limit` is the neighboring widget's left edge; the box stops
- * short of it so the two never touch. */
+ * descenders of a 'y' or 'p'. The fill needs no vertical room of its own.
+ * `right_limit` is the neighboring widget's left edge; the fill stops
+ * short of it so the two never touch. The fill carries the cue alone —
+ * an outline on top of it read as a wire cage around the text, and the
+ * blinking caret already says where typing lands. */
 static void draw_field_focus_box(int x0, int right_limit,
                                  int row_y, int row_h, float alpha) {
     float x1 = (float)(right_limit - FOCUS_BOX_END_GAP);
@@ -2123,22 +2125,14 @@ static void draw_field_focus_box(int x0, int right_limit,
 
     ui_clr_a(UI_TOK_SUNKEN, alpha);
     glRectf(bx, y0, x1, y1);
-    ui_clr_a(UI_TOK_CARET, 0.7f * alpha);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(bx + 0.5f, y0 + 0.5f);
-    glVertex2f(x1 - 0.5f, y0 + 0.5f);
-    glVertex2f(x1 - 0.5f, y1 - 0.5f);
-    glVertex2f(bx + 0.5f, y1 - 0.5f);
-    glEnd();
 }
 
 /* Small filled button with a label. `on` paints the "engaged" fill used
- * by the word chip when whole-word matching is active; `focused` draws
- * the keyboard-focus ring so Tab's position is always visible. The ring
- * sits outside the button's own border rather than replacing it, so a
- * focused chip reads as "chip + ring", not as two clashing outlines. */
+ * by the word chip when whole-word matching is active — that fill is the
+ * whole cue, deliberately with no extra focus ring stacked outside the
+ * button's border. */
 static void draw_replace_button(int x, int y, int w, int h,
-                                const char *label, int on, int focused,
+                                const char *label, int on,
                                 float alpha) {
     int label_x = x + (w - gl2d_text_width(FONT_TINY, label)) / 2;
     /* +2 lifts the raster position off the descender row: GLUT places
@@ -2158,18 +2152,6 @@ static void draw_replace_button(int x, int y, int w, int h,
     glVertex2f((float)(x + w) - 0.5f, (float)(y + h) - 0.5f);
     glVertex2f((float)x + 0.5f,       (float)(y + h) - 0.5f);
     glEnd();
-
-    /* 1.5px out: enough to read as a separate ring, close enough that a
-     * 14px button inside an 18px row still keeps it off the row edges. */
-    if (focused) {
-        ui_clr_a(UI_TOK_CARET, alpha);
-        glBegin(GL_LINE_LOOP);
-        glVertex2f((float)x - 1.5f,       (float)y - 1.5f);
-        glVertex2f((float)(x + w) + 1.5f, (float)y - 1.5f);
-        glVertex2f((float)(x + w) + 1.5f, (float)(y + h) + 1.5f);
-        glVertex2f((float)x - 1.5f,       (float)(y + h) + 1.5f);
-        glEnd();
-    }
 
     ui_clr_a(on ? UI_TOK_TEXT_ON_HILITE : UI_TOK_TEXT_PRIMARY, alpha);
     gl2d_draw_string((float)label_x, (float)label_y, label, FONT_TINY);
@@ -2234,12 +2216,11 @@ static void draw_replace_row(const UiRenderSnapshot *snap, float alpha) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     draw_replace_button(g.chip_x, g.btn_y, g.chip_w, g.btn_h,
-                        k_replace_chip_label, srch.whole_word,
-                        srch.focus == EDITOR_SEARCH_FOCUS_WORD, alpha);
+                        k_replace_chip_label, srch.whole_word, alpha);
     draw_replace_button(g.one_x, g.btn_y, g.one_w, g.btn_h,
-                        k_replace_one_label, 0, 0, alpha);
+                        k_replace_one_label, 0, alpha);
     draw_replace_button(g.all_x, g.btn_y, g.all_w, g.btn_h,
-                        k_replace_all_label, 0, 0, alpha);
+                        k_replace_all_label, 0, alpha);
     glDisable(GL_BLEND);
 }
 
@@ -2407,7 +2388,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         draw_replace_button(g.chip_x, g.chip_y, g.chip_w, g.chip_h,
-                            k_find_replace_chip_label, 0, 0, alpha);
+                            k_find_replace_chip_label, 0, alpha);
         glDisable(GL_BLEND);
     }
 
