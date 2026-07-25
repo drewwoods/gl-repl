@@ -5,6 +5,7 @@
 #include "repl/text_helpers.h"
 #include "editor/input.h"
 #include "repl/parser.h"
+#include "repl/flatten.h"
 #include "repl/state_views.h"
 #include "ui/app/state.h"
 #include "support/repl_test_support.h"
@@ -84,6 +85,26 @@ static int parse_for_test_with_vars(const char *line, GLCmd *cmd,
     return ok;
 }
 
+static void test_flat_stencil_clear_predicate(void) {
+    GLCmd cmds[3];
+
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_CLEAR;
+    cmds[0].valid = 1;
+    cmds[0].args[0] = (float)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    ASSERT_TRUE("flat clear predicate ignores color/depth", !repl_flat_clears_stencil(cmds, 1));
+
+    cmds[1].type = CMD_CLEAR;
+    cmds[1].valid = 0; /* Deleted source rows must not suppress the warning. */
+    cmds[1].args[0] = (float)GL_STENCIL_BUFFER_BIT;
+    ASSERT_TRUE("flat clear predicate ignores invalid rows", !repl_flat_clears_stencil(cmds, 2));
+
+    cmds[2].type = CMD_CLEAR;
+    cmds[2].valid = 1;
+    cmds[2].args[0] = (float)(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    ASSERT_TRUE("flat clear predicate finds stencil bit", repl_flat_clears_stencil(cmds, 3));
+}
+
 static void declare_test_vars(void) {
     char err[128];
     static const char *const names[] = { "x", "y", "z" };
@@ -100,6 +121,7 @@ int main(void) {
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();
     declare_test_vars();
+    test_flat_stencil_clear_predicate();
 
     {
         char payload[128];

@@ -129,6 +129,11 @@ typedef struct {
 int  repl_flatten_program(const ReplFlattenOptions *options,
                           ReplFlattenResult *result);
 
+/* True when the executable (post-expansion) stream clears the stencil buffer.
+ * Kept as a flat-program query so dead branches and uncalled functions do not
+ * suppress the stencil-view clear warning. */
+int repl_flat_clears_stencil(const GLCmd *flat_cmds, int flat_count);
+
 /* ---- In-place rebake (flatten plan phase 3b) -----------------------------
  *
  * Re-evaluate the VALUES of an existing flat command stream without

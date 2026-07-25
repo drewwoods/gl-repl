@@ -1181,6 +1181,20 @@ static int flatten_flat_lighting_enabled(const GLCmd *flat_cmds,
     return user_lighting_enabled;
 }
 
+int repl_flat_clears_stencil(const GLCmd *flat_cmds, int flat_count) {
+    int i;
+
+    if (!flat_cmds || flat_count <= 0)
+        return 0;
+    for (i = 0; i < flat_count; i++) {
+        if (!flat_cmds[i].valid || flat_cmds[i].type != CMD_CLEAR)
+            continue;
+        if (((GLbitfield)flat_cmds[i].args[0] & GL_STENCIL_BUFFER_BIT) != 0)
+            return 1;
+    }
+    return 0;
+}
+
 int repl_flatten_program(const ReplFlattenOptions *options,
                          ReplFlattenResult *result) {
     ReplFlattenResult local_result;
