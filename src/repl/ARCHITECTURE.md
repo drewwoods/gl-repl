@@ -1087,7 +1087,7 @@ the whole program every frame, what that buys, and what it would take to stop
 paying for it. A staged implementation plan for both escape routes — the
 structure-stable fast path (§13.5) and the control-flow-interpreting VM
 (§13.6) — lives in
-[docs/plans/not-started/rethinking-flattening-behaviour.md](../../docs/plans/not-started/rethinking-flattening-behaviour.md).
+[docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
 
 ### 13.1 The cost, and why the flat-command cap exists
 
@@ -1212,7 +1212,7 @@ per edit (not per frame): re-flatten unless every `for` header, `if` /
 `else if` condition, and call-arg list is free of predef vars, scratch
 arrays, and `rand`/`rand2`. The worked plan — classifier rule, dirty-flag
 routing, the re-bake pass, and its differential test strategy — is Phase A of
-[docs/plans/not-started/rethinking-flattening-behaviour.md](../../docs/plans/not-started/rethinking-flattening-behaviour.md).
+[docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
 
 ### 13.6 Bigger future work: a control-flow-interpreting executor
 
@@ -1254,4 +1254,4 @@ opposite bet: pay CPU every frame to keep the executor and all its consumers
 dumb and the cost model a single static cap. A staged design for this VM — with
 the "VM is the one flattener" shape, milestones, and per-consumer migration
 stories — is Phase B of
-[docs/plans/not-started/rethinking-flattening-behaviour.md](../../docs/plans/not-started/rethinking-flattening-behaviour.md).
+[docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
