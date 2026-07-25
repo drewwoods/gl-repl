@@ -23,8 +23,8 @@
 #include <stddef.h>   /* NULL */
 
 /* Indexed by ProfSection (designated initializers keep label/depth co-located
- * with each enum constant). PROF_RENDER3D_LAST aliases _POST_PROCESS, so it
- * shares that row. Any section left out reads back as {NULL,...} and is
+ * with each enum constant). PROF_RENDER3D_LAST aliases PROF_BUFFER_VIZ_DEPTH,
+ * so it shares that row. Any section left out reads back as {NULL,...} and is
  * rendered as "?" by the accessor below. */
 static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D]                          = { "Render 3D",       0, 0 },
@@ -50,7 +50,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     /* Depth-viz cost is dominated by the synchronous glReadPixels stall
      * plus the CPU convert — a CPU-side number by nature, so the row is
      * deliberately NOT in k_gpu_sections below. */
-    [PROF_RENDER3D_DEPTH_VIZ]                = { "depth viz",       1, 0 },
+    [PROF_BUFFER_VIZ_DEPTH]                  = { "depth viz",       1, 0 },
     [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
     [PROF_CODE_PANEL_ROWS]                   = { "build rows",      1, 0 },
     [PROF_CODE_PANEL_TEXT]                   = { "draw text",       1, 0 },

@@ -64,7 +64,7 @@
 #define CFG_DEFAULT_CODE_FOCUS        1   /* focus view by default */
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
-#define CFG_DEFAULT_DEPTH_VIZ        0   /* RENDER3D_DEPTH_VIZ_OFF */
+#define CFG_DEFAULT_DEPTH_VIZ        0   /* BUFFER_VIZ_DEPTH_OFF */
 
 /* Tutorial-start overrides. Tutorials reset presentation to the values
  * above, then differ on these; a tutorial's own leading `@cfg` still

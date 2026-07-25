@@ -11,7 +11,7 @@
  * drawn as a GL_LUMINANCE textured quad just before the scene
  * post-filter.
  *
- * Conventions (see render3d_depth_viz_map for the math):
+ * Conventions (see buffer_viz_depth_map for the math):
  *   - Depth is linearized through the active projection: perspective
  *     L = n*f / (f - z*(f-n)) (eye distance), ortho L = z (already
  *     linear in eye z). Mid 2D<->3D transition frames use the snapped
@@ -28,36 +28,39 @@
  *     geometry and the texture crop).
  *
  * Pure fixed-function GL (no shaders, no FBOs, no glDrawPixels — the
- * latter is absent from both the web build and the GL stubs). No REPL /
- * app dependencies; links into render3d_demo like the rest of
- * src/render3d/.
+ * latter is absent from both the web build and the GL stubs). Depends
+ * downward on render3d (the projection desc, the screen-space 2D
+ * bracket) and on nothing above it — the peer-subsystem direction
+ * src/subsystems/edit_overlays/ already takes.
  */
-#ifndef RENDER3D_DEPTH_VIZ_H
-#define RENDER3D_DEPTH_VIZ_H
+#ifndef BUFFER_VIZ_DEPTH_H
+#define BUFFER_VIZ_DEPTH_H
 
-#include "render.h"   /* Render3dProjectionDesc */
+#include "render3d/render.h"   /* Render3dProjectionDesc */
 
-typedef enum Render3dDepthVizMode {
-    RENDER3D_DEPTH_VIZ_OFF = 0,
-    RENDER3D_DEPTH_VIZ_LINEAR,   /* full near..far range */
-    RENDER3D_DEPTH_VIZ_SCENE,    /* normalized to captured geometry range */
-    RENDER3D_DEPTH_VIZ_SPLIT,    /* right half depth (scene-normalized) */
-    RENDER3D_DEPTH_VIZ_COUNT
-} Render3dDepthVizMode;
+typedef enum BufferVizDepthMode {
+    BUFFER_VIZ_DEPTH_OFF = 0,
+    BUFFER_VIZ_DEPTH_LINEAR,   /* full near..far range */
+    BUFFER_VIZ_DEPTH_SCENE,    /* normalized to captured geometry range */
+    BUFFER_VIZ_DEPTH_SPLIT,    /* right half depth (scene-normalized) */
+    BUFFER_VIZ_DEPTH_COUNT
+} BufferVizDepthMode;
 
-/* EMA-smoothed linear-depth range for SCENE normalization. Owned by the
+/* EMA-smoothed value range for range-normalized modes. Owned by the
  * module for the live path; exposed so the pure mapping function below
- * can be driven with caller-owned state in tests. */
-typedef struct Render3dDepthVizRange {
+ * can be driven with caller-owned state in tests. Deliberately not
+ * prefixed by buffer kind: the smoothing is the same problem for any
+ * buffer whose interesting range is the captured data's own extent. */
+typedef struct BufferVizRange {
     float lo, hi;
     int   valid;   /* 0 until the first in-range capture seeds lo/hi */
-} Render3dDepthVizRange;
+} BufferVizRange;
 
 /* Free the CPU buffers, delete the texture, clear the EMA range and the
  * cached GL_MAX_TEXTURE_SIZE. Called by the controller from
  * glr_ctrl_init_gl() so a fresh GL context never reuses a stale texture
  * name. */
-void render3d_depth_viz_reset(void);
+void buffer_viz_depth_reset(void);
 
 /* Read the scene-rect depth buffer (GL window coords, the rect the
  * scene rendered into). Call from buffer_read_fn (fill-end, before the
@@ -65,15 +68,15 @@ void render3d_depth_viz_reset(void);
  * subscriber gates on the hook's is_final_pass. Reads the FULL rect even
  * for SPLIT so the scene-normalized range is independent of the split
  * position. Buffer-allocation failure degrades to a no-op capture. */
-void render3d_depth_viz_capture(int sx, int sy, int sw, int sh);
+void buffer_viz_depth_capture(int sx, int sy, int sw, int sh);
 
 /* Convert the captured depth to luminance and draw the quad over the
  * scene rect (right half only for SPLIT). No-op without a valid
  * same-sized capture from this frame; each capture is consumed by at
  * most one render. */
-void render3d_depth_viz_render(Render3dDepthVizMode mode,
-                               const Render3dProjectionDesc *proj,
-                               int sx, int sy, int sw, int sh);
+void buffer_viz_depth_render(BufferVizDepthMode mode,
+                             const Render3dProjectionDesc *proj,
+                             int sx, int sy, int sw, int sh);
 
 /* Pure (no GL calls) depth -> luminance conversion; the render path is
  * a thin GL wrapper around this, and synthetic depth-map tests drive it
@@ -84,10 +87,10 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
  * — and writes one byte per input. Degenerate spans (constant-depth
  * scene) map in-range pixels to mid-gray instead of dividing by ~0; a
  * capture with no in-range pixel at all falls back to the LINEAR map. */
-void render3d_depth_viz_map(const float *depth, int count,
-                            Render3dDepthVizMode mode,
-                            const Render3dProjectionDesc *proj,
-                            Render3dDepthVizRange *range,
-                            unsigned char *lum_out);
+void buffer_viz_depth_map(const float *depth, int count,
+                          BufferVizDepthMode mode,
+                          const Render3dProjectionDesc *proj,
+                          BufferVizRange *range,
+                          unsigned char *lum_out);
 
-#endif /* RENDER3D_DEPTH_VIZ_H */
+#endif /* BUFFER_VIZ_DEPTH_H */

@@ -62,7 +62,7 @@ typedef struct {
      * workspace @cfg headers, but intentionally outside the per-example scene
      * snapshot/default-reset subset so F12 example switches do not change it. */
     int winding_view;
-    /* Depth-buffer visualization (Render3dDepthVizMode: Off / Linear /
+    /* Depth-buffer visualization (BufferVizDepthMode: Off / Linear /
      * Scene / Split). Config-backed (GLR_CONFIG_DEPTH_VIZ): like
      * winding_view it is saved in full workspace @cfg headers but
      * intentionally outside the per-example scene subset/default-reset,

@@ -34,7 +34,7 @@
 #include "render3d/grid.h"                   /* render3d_grid_reveal (transition curve) */
 #include "render3d/axes.h"                   /* render3d_axes_reveal (transition curve) */
 #include "render3d/lights.h"                 /* render3d_lights_apply_theme */
-#include "render3d/depth_viz.h"              /* depth-viz buffer-hook subscriber */
+#include "subsystems/buffer_viz/depth_viz.h"              /* depth-viz buffer-hook subscriber */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -1213,7 +1213,7 @@ const char *glr_ctrl_depth_readback_unsupported_reason(void) {
  * g_overlay_pack idiom) rather than a subsystem global, so what a frame
  * asked for is explicit at the subscription site. */
 typedef struct {
-    int depth_mode;   /* Render3dDepthVizMode, already capability-masked */
+    int depth_mode;   /* BufferVizDepthMode, already capability-masked */
 } GlrBufferVizFrame;
 
 static GlrBufferVizFrame g_buffer_viz_frame;
@@ -1226,8 +1226,8 @@ static void glr_ctrl_buffer_read(void *user_data, int is_final_pass,
     /* Depth wants one read per frame: under accumulation every pass
      * clears and rewrites depth, so only the final pass survives into
      * the resolved image the quad is drawn over. */
-    if (is_final_pass && frame->depth_mode != RENDER3D_DEPTH_VIZ_OFF)
-        render3d_depth_viz_capture(sx, sy, sw, sh);
+    if (is_final_pass && frame->depth_mode != BUFFER_VIZ_DEPTH_OFF)
+        buffer_viz_depth_capture(sx, sy, sw, sh);
 }
 
 static void glr_ctrl_buffer_resolve_overlay(void *user_data,
@@ -1236,8 +1236,8 @@ static void glr_ctrl_buffer_resolve_overlay(void *user_data,
     const GlrBufferVizFrame *frame = (const GlrBufferVizFrame *)user_data;
     if (!frame)
         return;
-    render3d_depth_viz_render((Render3dDepthVizMode)frame->depth_mode, proj,
-                              sx, sy, sw, sh);
+    buffer_viz_depth_render((BufferVizDepthMode)frame->depth_mode, proj,
+                            sx, sy, sw, sh);
 }
 
 /* The 2D/3D view-mode transition state machine lives in
@@ -1399,7 +1399,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * which stays intact so @cfg round-trips. */
     g_buffer_viz_frame.depth_mode =
         g_depth_readback_supported ? presentation.depth_viz
-                                   : RENDER3D_DEPTH_VIZ_OFF;
+                                   : BUFFER_VIZ_DEPTH_OFF;
     config->buffer_read_fn        = glr_ctrl_buffer_read;
     config->buffer_read_user_data = &g_buffer_viz_frame;
     config->buffer_resolve_overlay_fn        = glr_ctrl_buffer_resolve_overlay;
@@ -3093,7 +3093,7 @@ void glr_ctrl_init_gl(void) {
     /* Buffer-viz caches are the app's to reset now that render3d owns no
      * buffer inspection: a fresh GL context must not reuse a stale
      * texture name or a stale EMA range. */
-    render3d_depth_viz_reset();
+    buffer_viz_depth_reset();
     render3d_state_init(&g_scene_renderer);
     repl_executor_init_resources();
     hidden_lines_init_resources();

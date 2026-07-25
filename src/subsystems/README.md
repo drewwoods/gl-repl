@@ -43,6 +43,18 @@ subsystems here:
 - **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
   execution cursor through the render3d renderer's hidden/depth/visible wireframe
   passes while skipping pass-local state commands.
+- **`buffer_viz/`** — framebuffer *inspection*: read a GL buffer back and
+  composite a false-colour view of it (today `depth_viz.c`). The odd one
+  out in one respect — its input is not user input but the pixels
+  render3d just wrote — so it plugs in through render3d's neutral buffer
+  hooks ([`Render3dRenderConfig`](../render3d/render_types.h)
+  `buffer_read_fn` / `buffer_pass_overlay_fn` /
+  `buffer_resolve_overlay_fn`) rather than through routed input. render3d
+  fires those hooks knowing nothing about what subscribes; the controller
+  supplies the per-frame modes as the hooks' `user_data`. Each viz splits
+  into a **GL-free conversion core** (unit-tested against synthetic
+  buffers — that is where the interesting math lives) and a thin GL
+  shell around `glReadPixels` + a textured quad.
 
 Subsystem file shapes vary: a single co-located file (like
 [`color_picker_state.c`](color_picker/color_picker_state.c)), a `*_state.c` storage file plus a `*.c`

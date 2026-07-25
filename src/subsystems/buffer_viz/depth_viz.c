@@ -1,17 +1,17 @@
 /*
  * depth_viz.c - see depth_viz.h.
  *
- * Split into a pure conversion core (render3d_depth_viz_map — no GL,
+ * Split into a pure conversion core (buffer_viz_depth_map — no GL,
  * unit-tested with synthetic buffers) and a thin GL shell: capture
  * (glReadPixels GL_DEPTH_COMPONENT into a persistent float buffer,
  * grown on resize) and render (byte conversion + POT GL_LUMINANCE
  * texture sub-upload + screen-space quad, reusing postprocess_filter's
  * 2D bracket). GL_NEAREST filtering — the quad is a 1:1 pixel overlay.
  */
-#include "depth_viz.h"
+#include "subsystems/buffer_viz/depth_viz.h"
 
-#include "postprocess_filter.h"   /* render3d_post_2d_begin/_end */
-#include "projection_mode.h"
+#include "render3d/postprocess_filter.h"   /* render3d_post_2d_begin/_end */
+#include "render3d/projection_mode.h"
 #include "gl_includes.h"
 #include "support/cpuprof.h"
 
@@ -48,9 +48,9 @@ static int    g_tex_h = 0;
  * stubs) so the size guard is not enforced. */
 static GLint  g_max_tex_size = 0;
 
-static Render3dDepthVizRange g_range = { 0.0f, 0.0f, 0 };
+static BufferVizRange g_range = { 0.0f, 0.0f, 0 };
 
-void render3d_depth_viz_reset(void) {
+void buffer_viz_depth_reset(void) {
     free(g_depth);
     g_depth = NULL;
     free(g_lum);
@@ -106,11 +106,11 @@ static unsigned char depth_viz_linear_byte(float z, float near_z,
     return (unsigned char)((1.0f - d01) * 255.0f + 0.5f);
 }
 
-void render3d_depth_viz_map(const float *depth, int count,
-                            Render3dDepthVizMode mode,
-                            const Render3dProjectionDesc *proj,
-                            Render3dDepthVizRange *range,
-                            unsigned char *lum_out) {
+void buffer_viz_depth_map(const float *depth, int count,
+                          BufferVizDepthMode mode,
+                          const Render3dProjectionDesc *proj,
+                          BufferVizRange *range,
+                          unsigned char *lum_out) {
     int perspective;
     float near_z, far_z;
     int range_normalize;
@@ -121,8 +121,8 @@ void render3d_depth_viz_map(const float *depth, int count,
     perspective = (proj->projection == PROJ_PERSPECTIVE);
     near_z = (float)proj->near_z;
     far_z  = (float)proj->far_z;
-    range_normalize = (mode == RENDER3D_DEPTH_VIZ_SCENE ||
-                  mode == RENDER3D_DEPTH_VIZ_SPLIT);
+    range_normalize = (mode == BUFFER_VIZ_DEPTH_SCENE ||
+                  mode == BUFFER_VIZ_DEPTH_SPLIT);
 
     if (range_normalize && range) {
         /* Scan pass: raw linear-depth extent of the in-range pixels. */
@@ -210,13 +210,13 @@ void render3d_depth_viz_map(const float *depth, int count,
  * call: the hook is deliberately neutral, so render3d must not name a
  * viz section, and bracketing on this side also stops charging the
  * section on frames where the mode is Off. */
-void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
+void buffer_viz_depth_capture(int sx, int sy, int sw, int sh) {
     size_t px;
 
     g_cap_valid = 0;
     if (sw <= 0 || sh <= 0)
         return;
-    prof_begin(PROF_RENDER3D_DEPTH_VIZ);
+    prof_begin(PROF_BUFFER_VIZ_DEPTH);
     px = (size_t)sw * (size_t)sh;
     if (px > g_buf_px) {
         float *new_depth = (float *)malloc(px * sizeof(float));
@@ -224,7 +224,7 @@ void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
         if (!new_depth || !new_lum) {
             free(new_depth);
             free(new_lum);
-            prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
+            prof_accum_end(PROF_BUFFER_VIZ_DEPTH);
             return; /* degrade to no capture this frame */
         }
         free(g_depth);
@@ -239,7 +239,7 @@ void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
     g_cap_w = sw;
     g_cap_h = sh;
     g_cap_valid = 1;
-    prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
+    prof_accum_end(PROF_BUFFER_VIZ_DEPTH);
 }
 
 /* See postprocess_filter.c: GL 1.1 baseline needs power-of-two texture
@@ -296,14 +296,14 @@ static int depth_viz_upload_texture(int sw, int sh) {
     return 1;
 }
 
-void render3d_depth_viz_render(Render3dDepthVizMode mode,
-                               const Render3dProjectionDesc *proj,
-                               int sx, int sy, int sw, int sh) {
+void buffer_viz_depth_render(BufferVizDepthMode mode,
+                             const Render3dProjectionDesc *proj,
+                             int sx, int sy, int sw, int sh) {
     GLint saved_matrix_mode = 0;
     float umax, vmax, u0;
     int x0;
 
-    if (mode <= RENDER3D_DEPTH_VIZ_OFF || mode >= RENDER3D_DEPTH_VIZ_COUNT)
+    if (mode <= BUFFER_VIZ_DEPTH_OFF || mode >= BUFFER_VIZ_DEPTH_COUNT)
         return;
     if (!proj || sw <= 0 || sh <= 0)
         return;
@@ -311,13 +311,13 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
         return;
     g_cap_valid = 0; /* consume: never redraw a stale capture */
 
-    prof_begin(PROF_RENDER3D_DEPTH_VIZ);
-    render3d_depth_viz_map(g_depth, sw * sh, mode, proj, &g_range, g_lum);
+    prof_begin(PROF_BUFFER_VIZ_DEPTH);
+    buffer_viz_depth_map(g_depth, sw * sh, mode, proj, &g_range, g_lum);
 
     render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
     if (!depth_viz_upload_texture(sw, sh)) {
         render3d_post_2d_end(saved_matrix_mode);
-        prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
+        prof_accum_end(PROF_BUFFER_VIZ_DEPTH);
         return; /* texture would exceed the GL limit — skip this frame */
     }
 
@@ -328,7 +328,7 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
      * boundary and texel origin land on the same column). */
     x0 = 0;
     u0 = 0.0f;
-    if (mode == RENDER3D_DEPTH_VIZ_SPLIT) {
+    if (mode == BUFFER_VIZ_DEPTH_SPLIT) {
         int split = sw / 2;
         x0 = split;
         u0 = (float)split / (float)g_tex_w;
@@ -341,7 +341,7 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
         glTexCoord2f(u0,   vmax); glVertex2f((float)x0, (float)sh);
     glEnd();
 
-    if (mode == RENDER3D_DEPTH_VIZ_SPLIT) {
+    if (mode == BUFFER_VIZ_DEPTH_SPLIT) {
         glDisable(GL_TEXTURE_2D);
         glColor4f(0.5f, 0.5f, 0.5f, 1.0f);
         glLineWidth(1.0f);
@@ -352,5 +352,5 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
     }
 
     render3d_post_2d_end(saved_matrix_mode);
-    prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
+    prof_accum_end(PROF_BUFFER_VIZ_DEPTH);
 }

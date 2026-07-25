@@ -341,7 +341,7 @@ static const char *overlay_scope_names[OVERLAY_SCOPE_COUNT] = {
  * glr_config.c (accum_passes_*_cycle); these labels and that int table
  * both expand from GLR_ACCUM_PASS_LADDER (glr_config.h). */
 static const char *accum_effect_names[] = { "Off", "AA", "Blur", "Blur Cam" };
-/* Depth view states mirror Render3dDepthVizMode (depth_viz.h): Linear
+/* Depth view states mirror BufferVizDepthMode (subsystems/buffer_viz/depth_viz.h): Linear
  * maps eye depth across the full near/far range, Scene normalizes to
  * the user geometry's own depth extent, Split overlays the right half
  * of the scene with the scene-normalized image. */

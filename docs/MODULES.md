@@ -178,8 +178,8 @@ import/export via the `// @func N = name` directive.
 [`src/subsystems/`](../src/subsystems/README.md) is for vertical feature modules
 that own their own state and controller while still plugging into the app's
 routed-input, snapshot, and UI-rendering flow. Current peers include replay,
-variable panel, color picker, tutorial, edit overlays, and hidden-line
-wireframe support. Their renderers may live in [`src/ui/subsystems/`](../src/ui/subsystems),
+variable panel, color picker, tutorial, edit overlays, hidden-line
+wireframe support, and buffer visualization. Their renderers may live in [`src/ui/subsystems/`](../src/ui/subsystems),
 but the state and mutation policy stay with the subsystem.
 
 [`src/support/`](../src/support/README.md) is for neutral utilities that do not
@@ -312,6 +312,7 @@ handlers — they just log) plus Quit.
 | `glr_*` | Application controller/composition layer: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status. Intended to be a router/coordinator; currently still carries too much mixed app policy, so new behavior should move toward the owning layer when possible |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
 | `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
+| `buffer_viz_*` | Peer subsystem: framebuffer inspection — reads a GL buffer back and composites a false-colour view of it. Owns the readback caches, the conversion math, and the EMA range smoothing; owns **no** policy — the mode for a frame arrives from the controller through render3d's neutral buffer hooks. Types are `BufferViz*`, enumerators `BUFFER_VIZ_*`. The boundary against `render3d_*` is the point of the prefix: render3d draws the *scene*, buffer_viz reports on the *buffers the scene wrote*, and render3d must not learn which is which (`check-render3d-no-upper-layers`) |
 | `support` / `prof` | Neutral utilities with no ownership of REPL/editor/render3d/UI/app state |
 
 > [!IMPORTANT]
@@ -556,6 +557,7 @@ controllers; UI may render them; their input routes to them through
 | `tutorial` | Runner behind `tutorial_state`. `tutorial_start` / `_stop` orchestrate the transient-scene boundary via `repl_scenes_enter_transient_scene` + `repl_scenes_reset_for_transient`. Five step kinds (COMMAND / NOTE / SET / REQUIRE / REQUIRE_VAR) are walked by a shared iterative `tutorial_enter_step` + advance loop: COMMAND uses the "type the expected GL call" flow and may omit `comment` (no locked instruction row; the ghost/status hint teach the command, and the committed row is locked afterward); NOTE reveals a comment-only instruction and advances when `tutorial_handle_ack_key` consumes Enter / Tab / Space; SET applies `cfg_slug = cfg_value` on entry (via `repl_cfg_set_int`) and advances on the same ack keys; REQUIRE advances when `tutorial_notify_state_changed` (hooked into `glr_config_set`) observes the watched slug reach its target; REQUIRE_VAR advances when the watched predef variable reaches its target through a typed commit or variable-panel drag. `tutorial_handle_commit_attempt` + the editor-precheck shim (`tutorial_reject_noncommand_commit_with_hint`) gate commits; `tutorial_guard_source_change` freezes NOTE / SET / REQUIRE steps while allowing COMMAND and REQUIRE_VAR through the locked-line and expected-line guards. Restore-on-stop cfg lifecycle: a `fill_scene_subset`+tutorial-slugs baseline is captured BEFORE the tutorial presentation reset (`repl_dispatch_tutorial_presentation_reset` — example chrome defaults plus a camera ease back to the built-in pose, the CLOSE grid extent, and vertex outlines/points off) and written back by `tutorial_teardown` — deferred: finishing or exiting a lesson keeps its view (`tutorial_end_keep_view`) and leaves the bag pending, and the next `tutorial_teardown` flushes it. That teardown replaces the direct `tutorial_state_reset` calls at every active-tutorial teardown site (stop, completion, workspace / scene / example load, `glr_ctrl_reset_all`) so a workspace-load stash never enshrines tutorial-mutated cfg as the new baseline. Per-character reveal runs at a fixed `TUTORIAL_FADE_CHARS_PER_SEC` rate, not a fixed total duration |
 | `edit_overlays` | Peer subsystem ([`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), extracted from [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)): owns the cursor edit-guide snapshot (`cursor_guide_snapshot_with_flat_args`) and the flat-program walk (`edit_overlays_render_cursor_guides`) that drives the 3D overlay primitives (`render3d_draw_vertex_label_text` / `render3d_draw_normal_vector_arrow`) at each visited vertex/normal |
 | `hidden_lines` | Peer subsystem ([`src/subsystems/hidden_lines/hidden_lines.c`](../src/subsystems/hidden_lines/hidden_lines.c)): hidden-line wireframe execution; drives the REPL execution cursor through the render3d renderer's hidden/depth/visible wireframe passes while skipping pass-local state commands |
+| `buffer_viz` | Peer subsystem ([`src/subsystems/buffer_viz/depth_viz.c`](../src/subsystems/buffer_viz/depth_viz.c)): framebuffer *inspection* — reads a buffer back and composites a false-colour view of it. Today depth-buffer visualization (linear / scene-relative / split-screen); split into a GL-free conversion core (`buffer_viz_depth_map`, unit-tested on synthetic buffers) and a thin GL shell. render3d still *executes* the passes but is agnostic to them: the subsystem subscribes the neutral [`Render3dRenderConfig`](../src/render3d/render_types.h#L140) buffer hooks (`buffer_read_fn` / `buffer_pass_overlay_fn` / `buffer_resolve_overlay_fn`) through the controller, which owns the modes and the readback-capability mask |
 | `repl_help_text` | REPL-side producer of the neutral help-overlay text. Walks `k_func_completions[]`, groups by [`ReplHelpGroup`](../src/repl/command_spec.h#L104), emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27); renderer ([`src/ui/core/tabbed_overlay.c`](../src/ui/core/tabbed_overlay.c)) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
@@ -604,7 +606,6 @@ scratch, `world_*` or `stage_*` would be more direct.
 | `src/render3d/backdrop` | Backdrop/environment rendering |
 | `src/render3d/lights` | Baseline lighting and light indicators |
 | `src/render3d/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). The REPL-aware walk that decides *where* to draw them lives in the `edit_overlays` peer ([`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c)), not here and no longer in `glr_ctrl` |
-| `src/render3d/depth_viz` | Depth-buffer visualization passes (linear / scene-relative / split-screen), driven from the render3d frame |
 | `src/render3d/postprocess_surface` | Shared offscreen capture surface (texture alloc / resize / rect readback) the post-process passes draw through |
 | `src/render3d/postprocess_filter` | Optional post-process pass: **chromatic aberration** (capture the rect to a texture, redraw channel-offset passes) or **vignette** (blended elliptical darkening; no capture). Pure fixed-function GL, dispatched on [`Render3dPostFilterMode`](../src/render3d/postprocess_filter.h#L19). Driven over the **3D viewport rect** once per frame by `src/render3d/render`; the *same primitives* are reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
 | `src/render3d/themes` | Shared 3D theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and render3d renderers share (header-only) |
@@ -726,7 +727,7 @@ flowchart TB
 
     editor["<b>2. Editor</b><br/>input · edit_ops · commit · state · undo · clipboard ·<br/>search · replace · completion · reformat ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
 
-    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · camera<br/>(each owns its own state)"]
+    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · buffer_viz · camera<br/>(each owns its own state)"]
 
     repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>parser · normalize · compile · apply · load · replace ·<br/>source_scope · command_spec · attrib_bits · command_store ·<br/>flatten · flatten_expr · flatten_query · expr_program ·<br/>executor · eval · gl_state_inspector · bootstrap · host_effects"]
 
@@ -736,7 +737,7 @@ flowchart TB
 
     ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · repl_code_panel ·<br/>layout · overlay_layout · autocomplete_panel · gl_state_panel ·<br/>command_description_panel · color/numeric/view_mode swatches ·<br/>variable_panel_view<br/><b>ui/subsystems:</b> color_picker · variable_panel ·<br/>replay_hud · tour_hud<br/><b>ui/support:</b> cpuprof · memprof panels<br/>(snapshots in, UiHit out — never mutates)"]
 
-    render3d["<b>4. 3D rendering (render3d)</b><br/>render · grid · axes · backdrop · lights ·<br/>overlays · depth_viz · postprocess_filter ·<br/>postprocess_surface · guides · render3d_transition"]
+    render3d["<b>4. 3D rendering (render3d)</b><br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter ·<br/>postprocess_surface · guides · render3d_transition"]
 
     services["<b>6. Services + neutral support</b><br/>repl_export (+ prologue/setup/display/cmd_writer) · import ·<br/>cfg_baseline · glr_mesh_export · glr_audio · src/support/*<br/>cpuprof · gpuprof · memprof · mesh_ply"]
 
@@ -873,6 +874,7 @@ flowchart LR
         tutorial_sys["src/subsystems/tutorial/tutorial_runner.c + tutorial_animation.c + tutorial_match.c<br/>+ src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · matching · fade timing"]
         edit_overlays["src/subsystems/edit_overlays/edit_overlays.c<br/>cursor edit-guide + vertex/normal overlay walk"]
         hidden["src/subsystems/hidden_lines/hidden_lines.c<br/>hidden-line wireframe execution"]
+        sdepth["src/subsystems/buffer_viz/depth_viz.c<br/>depth-buffer visualization<br/>(subscribes render3d buffer hooks)"]
         camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
@@ -928,7 +930,6 @@ flowchart LR
         sbackdrop["src/render3d/backdrop.c<br/>backdrop"]
         slights["src/render3d/lights.c<br/>lights"]
         soverlays["src/render3d/overlays.c<br/>overlay primitives"]
-        sdepth["src/render3d/depth_viz.c<br/>depth visualization passes"]
         spost["src/render3d/postprocess_filter.c<br/>3D viewport post-process<br/>(chromatic aberration / vignette;<br/>reused by glr_compositor)"]
         spostsurf["src/render3d/postprocess_surface.c<br/>offscreen capture surface"]
     end
@@ -1104,7 +1105,7 @@ flowchart LR
     render3dR i29@--> sgrid
     render3dR i30@--> saxes
     render3dR i40@--> spost
-    render3dR i71@--> sdepth
+    ctrl i71@--> sdepth
     render3dR i72@--> hidden
     hidden i73@--> exec
     spost -.-> spostsurf

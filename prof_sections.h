@@ -49,8 +49,14 @@ typedef enum {
     PROF_RENDER3D_OVERLAY_NORMALS,        /* normal vector labels */
     PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
     PROF_RENDER3D_POST_PROCESS,   /* render3d_postprocess_filter_render() */
-    PROF_RENDER3D_DEPTH_VIZ,      /* depth-viz readback + convert + quad */
-    PROF_RENDER3D_LAST = PROF_RENDER3D_DEPTH_VIZ,
+    /* Buffer visualization lives in src/subsystems/buffer_viz/, but its
+     * sections stay INSIDE the render3d index range: the profile panel's
+     * "Render 3D" aggregate is an index sweep (PROF_RENDER3D_SETUP ..
+     * PROF_RENDER3D_LAST), and the work still happens inside that frame
+     * phase, so moving the constants out would silently change what the
+     * render3d row reports. */
+    PROF_BUFFER_VIZ_DEPTH,      /* depth-viz readback + convert + quad */
+    PROF_RENDER3D_LAST = PROF_BUFFER_VIZ_DEPTH,
     PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
     PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
     PROF_CODE_PANEL_TEXT,     /* generic ui_text_panel_render() */
