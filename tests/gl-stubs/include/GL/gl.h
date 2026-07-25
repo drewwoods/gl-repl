@@ -153,6 +153,7 @@ typedef double GLclampd;
 #define GL_MULTISAMPLE 0x809D
 #define GL_SAMPLES 0x80A9
 #define GL_ACCUM_RED_BITS 0x0D58
+#define GL_STENCIL_BITS 0x0D57
 #define GL_NO_ERROR 0
 #define GL_NORMALIZE 0x0BA1
 #define GL_POINT_SMOOTH 0x0B10

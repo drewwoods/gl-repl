@@ -1582,7 +1582,7 @@ int main(int argc, char **argv) {
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
      * for GLUT symbol declarations. */
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL);
     glutInitWindowSize(800, 600);
     glutCreateWindow("test_scene_render");
 #else

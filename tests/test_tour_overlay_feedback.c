@@ -337,7 +337,7 @@ int main(int argc, char **argv) {
     }
 #endif
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_STENCIL);
     glutInitWindowSize(WIN_W, WIN_H);
     if (glutCreateWindow("tour-overlay-feedback-test") <= 0) {
         fprintf(stderr, "test_tour_overlay_feedback: no GL context "

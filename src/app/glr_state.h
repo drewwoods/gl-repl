@@ -99,6 +99,7 @@ typedef struct {
 typedef struct {
     int   use_accum;
     int   accum_bits;     /* accumulation depth probed at GL init; -1 = not probed */
+    int   stencil_bits;   /* stencil depth probed at GL init; -1 = not probed */
     int   accum_effect;   /* Render3dAccumEffect: OFF / AA / BLUR */
     int   accum_passes;   /* resolved sample count: a GLR_ACCUM_PASS_LADDER step */
     int   multisample_enabled;

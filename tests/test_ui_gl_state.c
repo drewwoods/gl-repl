@@ -249,7 +249,7 @@ int main(int argc, char **argv) {
     }
 #endif
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_STENCIL);
     glutInitWindowSize(64, 64);
     if (glutCreateWindow("gl-state-test") <= 0) {
         fprintf(stderr, "test_ui_gl_state: no GL context (need a display); "

@@ -790,7 +790,8 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
 
 int main(int argc, char **argv) {
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_STENCIL |
+                        GLUT_MULTISAMPLE);
     glutInitWindowSize(g_window_w, g_window_h);
     glutCreateWindow("scene-module teapot demo");
 

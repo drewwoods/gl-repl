@@ -390,7 +390,7 @@ const char *g_footer_post_init[] = {
     "",
     "int main(int argc, char **argv) {",
     "  glutInit(&argc, argv);",
-    "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);",
+    "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_STENCIL|GLUT_MULTISAMPLE);",
     "  glutInitWindowSize(800, 600);",
     "  glutCreateWindow(\"OpenGL REPL\");",
     "  init();",
@@ -413,7 +413,7 @@ void emit_footer_post_init(FILE *f, int win_w, int win_h,
         "\n"
         "int main(int argc, char **argv) {\n"
         "  glutInit(&argc, argv);\n"
-        "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_MULTISAMPLE);\n"
+        "  glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|GLUT_STENCIL|GLUT_MULTISAMPLE);\n"
         "  glutInitWindowSize(%d, %d);\n"
         "  glutCreateWindow(\"OpenGL REPL\");\n"
         "  init();\n"

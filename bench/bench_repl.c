@@ -1880,7 +1880,7 @@ static int bench_gl_context_init(int *argc, char **argv) {
     }
 #endif
     glutInit(argc, argv);
-    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH | GLUT_STENCIL);
     glutInitWindowSize(1, 1);
     glutCreateWindow("bench_repl");
     glut_inited = 1;

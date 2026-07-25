@@ -3250,6 +3250,15 @@ void glr_ctrl_init_gl(void) {
     (void)glGetError(); /* clear the GL_INVALID_ENUM a GLES context raises */
     glr_state_render_mut()->accum_bits = (int)accum_bits;
 
+    /* Requesting GLUT_STENCIL is not a promise that a native visual actually
+     * has stencil planes. Keep the queried width so the stencil visualizer can
+     * refuse an otherwise silent no-op context with a useful explanation. */
+    GLint stencil_bits = 0;
+    glGetIntegerv(GL_STENCIL_BITS, &stencil_bits);
+    (void)glGetError(); /* GLES may reject this pname too. */
+    glr_state_render_mut()->stencil_bits = (int)stencil_bits;
+    glr_ctrl_init_log("stencil buffer: %d bits", (int)stencil_bits);
+
     /* Probe depth readback once (same probe-and-mask pattern as the
      * accum-bits check above): read one depth pixel and see whether the
      * context objects. WebGL cannot read GL_DEPTH_COMPONENT from the
