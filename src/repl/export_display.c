@@ -160,6 +160,10 @@ ExportNeeds export_collect_needs(void) {
     ExportNeeds needs = {
         .needs_tess = export_uses_tess_commands(),
         .needs_rand = 0,
+        .needs_clamp = 0,
+        .needs_lerp = 0,
+        .needs_smoothstep = 0,
+        .needs_sign = 0,
         .needs_label = 0,
         .needs_scratch_a = 0,
         .needs_scratch_b = 0,
@@ -182,6 +186,15 @@ ExportNeeds export_collect_needs(void) {
         if (export_text_uses_token(src, "rand2(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "repl_randf(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "repl_rand2f(")) needs.needs_rand = 1;
+        if (export_text_uses_token(src, "clamp(") ||
+            export_text_uses_token(src, "repl_clampf(")) needs.needs_clamp = 1;
+        if (export_text_uses_token(src, "lerp(") ||
+            export_text_uses_token(src, "repl_lerpf(")) needs.needs_lerp = 1;
+        if (export_text_uses_token(src, "smoothstep(") ||
+            export_text_uses_token(src, "repl_smoothstepf("))
+            needs.needs_smoothstep = 1;
+        if (export_text_uses_token(src, "sign(") ||
+            export_text_uses_token(src, "repl_signf(")) needs.needs_sign = 1;
         if (export_text_uses_token(src, "A["))    needs.needs_scratch_a = 1;
         if (export_text_uses_token(src, "B["))    needs.needs_scratch_b = 1;
         if (export_text_uses_token(src, "C["))    needs.needs_scratch_c = 1;

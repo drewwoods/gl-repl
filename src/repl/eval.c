@@ -369,6 +369,38 @@ static float builtin_ceil(const float *args)  { return ceilf(args[0]); }
 static float builtin_round(const float *args) { return roundf(args[0]); }
 static float builtin_fmod(const float *args)  { return fmodf(args[0], args[1]); }
 static float builtin_rem(const float *args)   { return remainderf(args[0], args[1]); }
+/* Shaping helpers. These have no libm twin, so the exporter emits matching
+ * repl_*f helpers (write_shape_helpers in export_prologue.c) — keep the two
+ * bodies identical or a scene diverges between the REPL and its export. */
+static float builtin_clamp(const float *args) {
+    /* Bounds crossed (hi < lo) is a user typo, not a mode: lo wins, which is
+     * what the naive two-compare form does. */
+    if (args[0] < args[1]) return args[1];
+    if (args[0] > args[2]) return args[2];
+    return args[0];
+}
+static float builtin_lerp(const float *args)  {
+    /* Deliberately unclamped: s outside [0, 1] extrapolates, which is how
+     * overshoot easings are written. Clamp s yourself for a hard stop. */
+    return args[0] + (args[1] - args[0]) * args[2];
+}
+static float builtin_smoothstep(const float *args) {
+    float e0 = args[0], span = args[1] - args[0], u;
+    /* A zero-width edge pair would divide by ~0; degenerate to the step
+     * function it is the limit of rather than returning 0. */
+    if (fabsf(span) < 1e-9f)
+        return args[2] < e0 ? 0.0f : 1.0f;
+    u = (args[2] - e0) / span;
+    if (u < 0.0f) u = 0.0f;
+    if (u > 1.0f) u = 1.0f;
+    return u * u * (3.0f - 2.0f * u);
+}
+static float builtin_sign(const float *args)  {
+    /* Exactly 0 (and NaN) return 0 — not copysignf's signed zero. */
+    if (args[0] > 0.0f) return 1.0f;
+    if (args[0] < 0.0f) return -1.0f;
+    return 0.0f;
+}
 static float builtin_log(const float *args)   { return log10f(args[0]); }
 static float builtin_ln(const float *args)    { return logf(args[0]); }
 static float builtin_rand(const float *args)  { return expr_rand01(args[0], args[1]); }
@@ -389,6 +421,10 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "ln",    "logf",       1, 1, builtin_ln    },
     { "min",   "fminf",      2, 2, builtin_min   },
     { "max",   "fmaxf",      2, 2, builtin_max   },
+    { "clamp", "repl_clampf", 3, 3, builtin_clamp },
+    { "lerp",  "repl_lerpf", 3, 3, builtin_lerp  },
+    { "smoothstep", "repl_smoothstepf", 3, 3, builtin_smoothstep },
+    { "sign",  "repl_signf", 1, 1, builtin_sign  },
     { "floor", "floorf",     1, 1, builtin_floor },
     { "ceil",  "ceilf",      1, 1, builtin_ceil  },
     { "round", "roundf",     1, 1, builtin_round },
@@ -1209,7 +1245,7 @@ static float eval_primary(ExprCtx *ctx) {
         /* Functions (consume opening paren) */
         if (*q == '(') {
             const ExprBuiltin *builtin = find_expr_builtin(name);
-            float args[2] = { 0.0f, 0.0f };
+            float args[REPL_EXPR_BUILTIN_ARGS_MAX] = { 0.0f };
             int arg_count = 0;
             int arg_overflow = 0;
 

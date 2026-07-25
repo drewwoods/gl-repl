@@ -288,6 +288,31 @@ static void run_tests(void) {
     ASSERT_FLOAT("abs(-3)", 3.0f);
     ASSERT_FLOAT("pow(2,3)", 8.0f);
     ASSERT_FLOAT("min(3,5)", 3.0f);
+    ASSERT_FLOAT("clamp(5,0,1)", 1.0f);
+    ASSERT_FLOAT("clamp(-5,0,1)", 0.0f);
+    ASSERT_FLOAT("clamp(0.25,0,1)", 0.25f);
+    ASSERT_FLOAT("clamp(3,-2,-1)", -1.0f);
+    ASSERT_FLOAT("clamp(0,5,1)", 5.0f);       /* crossed bounds: lo wins */
+    ASSERT_FLOAT("clamp(1,2)", 0.0f);         /* arity 3 required */
+    ASSERT_FLOAT("lerp(0,10,0)", 0.0f);
+    ASSERT_FLOAT("lerp(0,10,1)", 10.0f);
+    ASSERT_FLOAT("lerp(0,10,0.25)", 2.5f);
+    ASSERT_FLOAT("lerp(0,10,2)", 20.0f);      /* unclamped: extrapolates */
+    ASSERT_FLOAT("lerp(0,10,-1)", -10.0f);
+    ASSERT_FLOAT("lerp(-4,4,0.5)", 0.0f);
+    ASSERT_FLOAT("smoothstep(0,1,0)", 0.0f);
+    ASSERT_FLOAT("smoothstep(0,1,1)", 1.0f);
+    ASSERT_FLOAT("smoothstep(0,1,0.5)", 0.5f);
+    ASSERT_FLOAT("smoothstep(0,1,-3)", 0.0f);  /* clamped below */
+    ASSERT_FLOAT("smoothstep(0,1,7)", 1.0f);   /* clamped above */
+    ASSERT_FLOAT("smoothstep(2,4,3)", 0.5f);   /* midpoint of any span */
+    ASSERT_FLOAT("smoothstep(1,1,0.5)", 0.0f); /* zero span -> step */
+    ASSERT_FLOAT("smoothstep(1,1,2)", 1.0f);
+    ASSERT_FLOAT("smoothstep(0,1,0.25)", 0.15625f); /* u*u*(3-2u) */
+    ASSERT_FLOAT("sign(3.5)", 1.0f);
+    ASSERT_FLOAT("sign(-3.5)", -1.0f);
+    ASSERT_FLOAT("sign(0)", 0.0f);
+    ASSERT_FLOAT("sign(-0)", 0.0f);
     ASSERT_FLOAT("max(3,5)", 5.0f);
     ASSERT_FLOAT("floor(2.7)", 2.0f);
     ASSERT_FLOAT("ceil(2.3)", 3.0f);
@@ -693,6 +718,10 @@ static void run_tests(void) {
     ASSERT_TO_C("asin(x)", "asinf(x)");
     ASSERT_TO_C("acos(x)", "acosf(x)");
     ASSERT_TO_C("atan(x)", "atanf(x)");
+    ASSERT_TO_C("clamp(x,0,1)", "repl_clampf(x,0,1)");
+    ASSERT_TO_C("lerp(a,b,s)", "repl_lerpf(a,b,s)");
+    ASSERT_TO_C("smoothstep(0,1,x)", "repl_smoothstepf(0,1,x)");
+    ASSERT_TO_C("sign(x)", "repl_signf(x)");
     ASSERT_TO_C("atan2(y,x)", "atan2f(y,x)");
     ASSERT_TO_C("x % 2", "fmodf(x, 2)");
     ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
@@ -718,6 +747,10 @@ static void run_tests(void) {
     ASSERT_TO_REPL("asinf(x)", "asin(x)");
     ASSERT_TO_REPL("acosf(x)", "acos(x)");
     ASSERT_TO_REPL("atanf(x)", "atan(x)");
+    ASSERT_TO_REPL("repl_clampf(x,0,1)", "clamp(x,0,1)");
+    ASSERT_TO_REPL("repl_lerpf(a,b,s)", "lerp(a,b,s)");
+    ASSERT_TO_REPL("repl_smoothstepf(0,1,x)", "smoothstep(0,1,x)");
+    ASSERT_TO_REPL("repl_signf(x)", "sign(x)");
     ASSERT_TO_REPL("atan2f(y,x)", "atan2(y,x)");
     ASSERT_TO_REPL("remainderf(x,2)", "rem(x,2)");
     ASSERT_TO_REPL("nan", "NAN");
@@ -959,13 +992,28 @@ static void run_tests(void) {
         ok = repl_eval_declare_predef_var("C", err, sizeof(err));
         ASSERT_TRUE("reserved name C should fail", !ok);
 
+        /* lerp was this case's "not a builtin, so declarable" name until it
+         * became one; gain is the stand-in. Both directions still matter:
+         * a builtin name is refused, a free name registers. */
         ok = repl_eval_declare_predef_var("lerp", err, sizeof(err));
-        ASSERT_TRUE("name lerp now allowed", ok);
-        ASSERT_TRUE("name lerp registered",
-                repl_eval_find_predef_var_idx("lerp") >= 0);
-        repl_eval_undeclare_predef_var("lerp");
-        ASSERT_TRUE("name lerp removed",
-                repl_eval_find_predef_var_idx("lerp") < 0);
+        ASSERT_TRUE("reserved name lerp should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("clamp", err, sizeof(err));
+        ASSERT_TRUE("reserved name clamp should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("smoothstep", err, sizeof(err));
+        ASSERT_TRUE("reserved name smoothstep should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("sign", err, sizeof(err));
+        ASSERT_TRUE("reserved name sign should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("gain", err, sizeof(err));
+        ASSERT_TRUE("name gain now allowed", ok);
+        ASSERT_TRUE("name gain registered",
+                repl_eval_find_predef_var_idx("gain") >= 0);
+        repl_eval_undeclare_predef_var("gain");
+        ASSERT_TRUE("name gain removed",
+                repl_eval_find_predef_var_idx("gain") < 0);
 
         ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         ASSERT_TRUE("reserved name t should fail (already declared)", !ok);

@@ -45,10 +45,17 @@ Semantics in depth: `docs/USER_GUIDE.md`.
 ## Math
 
 Functions: `sin cos tan asin acos atan atan2(y,x) sqrt abs pow log ln min max
-floor ceil fmod rem rand(seed[,iter]) rand2(seed[,iter])` — `log` is base-10, `ln`
-natural; `asin`/`acos` clamp to [-1,1] before the call, `atan2` returns
-[-PI, PI] (the aim-at / polar-angle primitive); `rand` ∈ [0,1], `rand2` ∈
-[-1,1], both deterministic per (seed, iter). Constants: `PI`, `TAU`, `e`.
+clamp(x,lo,hi) lerp(a,b,s) smoothstep(e0,e1,x) sign floor ceil fmod rem
+rand(seed[,iter]) rand2(seed[,iter])` — `log` is base-10, `ln` natural;
+`asin`/`acos` clamp to [-1,1] before the call, `atan2` returns [-PI, PI] (the
+aim-at / polar-angle primitive); `lerp` is unclamped (s outside [0,1]
+extrapolates), `smoothstep` clamps and eases, `sign` gives 0 at exactly 0;
+`rand` ∈ [0,1], `rand2` ∈ [-1,1], both deterministic per (seed, iter).
+Constants: `PI`, `TAU`, `e`.
+
+Prefer `clamp`/`lerp`/`smoothstep` over hand-rolled `min(max(...))` chains and
+cubic polynomials — shorter lines, and they stay inside the per-example body
+budget.
 
 Only `t` is predefined; everything else needs `float name;`. `t` starts at 0 and
 advances 1/60 s per simulation tick while playing.

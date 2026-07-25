@@ -466,6 +466,20 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Smaller of a or b", REPL_HELP_GROUP_MATH },
     { "max(",                "max(a, b)",                                                2, { "a", "b" },
         "Larger of a or b", REPL_HELP_GROUP_MATH },
+    { "clamp(",              "clamp(x, lo, hi)",                                         3, { "x", "lo", "hi" },
+        "x limited to the range [lo, hi]. Replaces min(max(x, lo), hi).",
+        REPL_HELP_GROUP_MATH },
+    { "lerp(",               "lerp(a, b, s)",                                            3, { "a", "b", "s" },
+        "Blend from a to b by s: a at s=0, b at s=1. Not clamped, so s\n"
+        "outside [0, 1] extrapolates past the endpoints (overshoot easings).",
+        REPL_HELP_GROUP_MATH },
+    { "smoothstep(",         "smoothstep(e0, e1, x)",                                    3, { "e0", "e1", "x" },
+        "Eased 0-to-1 ramp as x crosses from e0 to e1: 0 below e0, 1 above\n"
+        "e1, and a curve that leaves and arrives at zero slope in between.\n"
+        "The fade that doesn't visibly start or stop.",
+        REPL_HELP_GROUP_MATH },
+    { "sign(",               "sign(x)",                                                  1, { "x" },
+        "-1, 0, or 1 by the sign of x (exactly 0 gives 0)", REPL_HELP_GROUP_MATH },
     { "floor(",              "floor(x)",                                                 1, { "x" },
         "Largest integer <= x", REPL_HELP_GROUP_MATH },
     { "ceil(",               "ceil(x)",                                                  1, { "x" },

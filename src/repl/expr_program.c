@@ -400,7 +400,7 @@ static void compile_primary(ExprCompiler *c) {
             }
             c->p++;
             if (argc < builtin.arity_min || argc > builtin.arity_max ||
-                argc > 2) {
+                argc > REPL_EXPR_BUILTIN_ARGS_MAX) {
                 compiler_fail(c);       /* text: arity error + 0 */
                 return;
             }
@@ -801,10 +801,10 @@ ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
             break;
         case EXPR_OP_CALL: {
             ReplEvalBuiltinView builtin = repl_eval_builtin_at(ins->slot);
-            /* Same shape as eval_primary's call site: a {0, 0}-initialized
-             * pair so 1-arg calls to 2-max builtins (rand(seed)) see the
-             * same implicit second argument. */
-            float args[2] = { 0.0f, 0.0f };
+            /* Same shape as eval_primary's call site: a zero-initialized
+             * buffer so a call passing fewer than arity_max args
+             * (rand(seed)) sees the same implicit trailing zeros. */
+            float args[REPL_EXPR_BUILTIN_ARGS_MAX] = { 0.0f };
             int argc = ins->a;
             ReplExprDepMask d = 0;
             for (int k = 0; k < argc; k++) {

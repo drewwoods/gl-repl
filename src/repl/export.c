@@ -347,6 +347,13 @@ static void emit_export_rand_helper_section(FILE *f,
     write_rand_helper(f);
 }
 
+static void emit_export_shape_helper_section(FILE *f,
+                                             const ExportScaffoldContext *ctx) {
+    if (!ctx)
+        return;
+    write_shape_helpers(f, &ctx->needs);
+}
+
 static void emit_export_label_helper_section(FILE *f,
                                              const ExportScaffoldContext *ctx) {
     if (!ctx || !ctx->needs.needs_label)
@@ -407,6 +414,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_predef_globals_section },
     { emit_export_scratch_globals_section },
     { emit_export_rand_helper_section },
+    { emit_export_shape_helper_section },
     { emit_export_label_helper_section },
     { emit_export_tess_preamble_section },
     { emit_export_save_restore_section },

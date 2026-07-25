@@ -173,6 +173,7 @@ int main(void) {
     const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
     const char *rand_alias_path = "/tmp/repl_core_rand_alias_output.c";
+    const char *shape_fn_path = "/tmp/repl_core_shape_output.c";
 
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all(); declare_test_vars();
@@ -416,6 +417,43 @@ int main(void) {
         ASSERT_TRUE("rand2 helper emitted once",
                     count_substr(buf, "static float repl_rand2f(float seed, float iter)") == 1);
         remove(rand_alias_path);
+    }
+
+    /* Shaping builtins have no libm twin, so each one the scene uses must
+     * drag its hand-written helper into the exported file — and the ones it
+     * does not use must stay out, or -Wall flags an unused static. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(clamp(x, 0, 1), smoothstep(0, 1, x), 0);");
+        repl_export_save_output(shape_fn_path, source_document_view(), NULL);
+        char buf[8192];
+        read_text_file(shape_fn_path, buf, sizeof(buf));
+        ASSERT_TRUE("clamp helper emitted",
+                    count_substr(buf, "static float repl_clampf(") == 1);
+        ASSERT_TRUE("smoothstep helper emitted",
+                    count_substr(buf, "static float repl_smoothstepf(") == 1);
+        ASSERT_TRUE("lerp helper omitted when unused",
+                    strstr(buf, "static float repl_lerpf(") == NULL);
+        ASSERT_TRUE("sign helper omitted when unused",
+                    strstr(buf, "static float repl_signf(") == NULL);
+        ASSERT_TRUE("clamp call written in C form",
+                    strstr(buf, "repl_clampf(x, 0, 1)") != NULL);
+        remove(shape_fn_path);
+    }
+
+    /* Same already-C-spelling tolerance the RNG gate has: a source line
+     * carrying the exported name still pulls its helper in. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(repl_lerpf(0, 1, x), repl_signf(x), 0);");
+        repl_export_save_output(shape_fn_path, source_document_view(), NULL);
+        char buf[8192];
+        read_text_file(shape_fn_path, buf, sizeof(buf));
+        ASSERT_TRUE("lerp helper emitted for repl_lerpf source",
+                    count_substr(buf, "static float repl_lerpf(") == 1);
+        ASSERT_TRUE("sign helper emitted for repl_signf source",
+                    count_substr(buf, "static float repl_signf(") == 1);
+        remove(shape_fn_path);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();

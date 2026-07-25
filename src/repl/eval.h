@@ -4,8 +4,8 @@
  * Recursive-descent expression evaluator for the REPL math layer. Supports
  * binary operators (+, -, *, /, %), unary minus, parentheses, function
  * calls (sin, cos, tan, asin, acos, atan, atan2, sqrt, abs, pow, min, max,
- * floor, ceil, round, fmod, rem, rand, rand2), and constants (PI, TAU, e, NAN,
- * INFINITY). All values are floats.
+ * clamp, lerp, smoothstep, sign, floor, ceil, round, fmod, rem, rand, rand2),
+ * and constants (PI, TAU, e, NAN, INFINITY). All values are floats.
  *
  * Predefined variables (float x, y, z, t, etc.) are declared via
  * repl_eval_declare_predef_var(). The time variable 't' is special: it
@@ -274,11 +274,20 @@ int  repl_eval_is_builtin_function(const char *name);
 
 /* ---- Builtin-function table view --------------------------------------- */
 
+/* Widest builtin argument list in the table (clamp / lerp / smoothstep take
+ * three). Both evaluators size their call-argument buffer off this and
+ * zero-fill the unused tail, so a call that passes fewer than arity_max args
+ * (rand(seed)) sees the same implicit zeros on either path. Raising it is the
+ * only edit needed to admit a wider builtin. */
+#ifndef REPL_EXPR_BUILTIN_ARGS_MAX
+#define REPL_EXPR_BUILTIN_ARGS_MAX 3
+#endif
+
 /* Read-only view of one entry in the evaluator's builtin table (sin, cos,
  * rand, ...). `eval` is the same function pointer the text evaluator calls,
  * so a caller that evaluates through it (the compiled-expression path in
  * src/repl/expr_program.c) is bit-identical with text evaluation by
- * construction. args[] carries arity_max floats. */
+ * construction. args[] carries REPL_EXPR_BUILTIN_ARGS_MAX floats. */
 typedef struct {
     const char *name;
     int         arity_min;

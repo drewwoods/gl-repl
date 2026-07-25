@@ -42,6 +42,12 @@
 typedef struct ExportNeeds {
     int needs_tess;
     int needs_rand;
+    /* Shaping builtins have no libm twin, so each drags in a hand-written
+     * helper; gated one-by-one so an unused static never reaches the file. */
+    int needs_clamp;
+    int needs_lerp;
+    int needs_smoothstep;
+    int needs_sign;
     int needs_label;
     int needs_scratch_a;
     int needs_scratch_b;
@@ -107,6 +113,7 @@ int export_has_persistent_predef_vars(void);
 void write_predef_var_globals(FILE *f);
 void write_save_restore_helpers(FILE *f);
 void write_rand_helper(FILE *f);
+void write_shape_helpers(FILE *f, const ExportNeeds *needs);
 void write_glfloat_vector_helpers(FILE *f);
 void write_label_helper(FILE *f);
 void write_render_helper_as_c(FILE *f, const char *name);

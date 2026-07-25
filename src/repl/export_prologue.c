@@ -76,6 +76,49 @@ void write_rand_helper(FILE *f) {
         "}\n");
 }
 
+/* Shaping builtins with no libm twin. Bodies must stay identical to
+ * builtin_clamp / builtin_lerp / builtin_smoothstep / builtin_sign in
+ * src/repl/eval.c — the exported binary and the live REPL are supposed to
+ * render the same frame, and these are pure math with no GL state to hide a
+ * divergence. */
+void write_shape_helpers(FILE *f, const ExportNeeds *needs) {
+    if (!needs)
+        return;
+    /* One gate per helper rather than one for the group: an exported file
+     * compiled with -Wall would warn on every static the scene doesn't
+     * call. */
+    if (needs->needs_clamp)
+        fprintf(f,
+            "\nstatic float repl_clampf(float x, float lo, float hi) {\n"
+            "  if (x < lo) return lo;\n"
+            "  if (x > hi) return hi;\n"
+            "  return x;\n"
+            "}\n");
+    if (needs->needs_lerp)
+        fprintf(f,
+            "\nstatic float repl_lerpf(float a, float b, float s) {\n"
+            "  return a + (b - a) * s;\n"
+            "}\n");
+    if (needs->needs_smoothstep)
+        fprintf(f,
+            "\nstatic float repl_smoothstepf(float e0, float e1, float x) {\n"
+            "  float span = e1 - e0;\n"
+            "  float u;\n"
+            "  if (fabsf(span) < 1e-9f) return x < e0 ? 0.0f : 1.0f;\n"
+            "  u = (x - e0) / span;\n"
+            "  if (u < 0.0f) u = 0.0f;\n"
+            "  if (u > 1.0f) u = 1.0f;\n"
+            "  return u * u * (3.0f - 2.0f * u);\n"
+            "}\n");
+    if (needs->needs_sign)
+        fprintf(f,
+            "\nstatic float repl_signf(float x) {\n"
+            "  if (x > 0.0f) return 1.0f;\n"
+            "  if (x < 0.0f) return -1.0f;\n"
+            "  return 0.0f;\n"
+            "}\n");
+}
+
 void write_glfloat_vector_helpers(FILE *f) {
     fprintf(f,
         "\n/* C89 replacement for C99 compound GLfloat literals. */\n"

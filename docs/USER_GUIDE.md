@@ -595,11 +595,12 @@ Every numeric argument is a full expression, evaluated when the line runs:
 - **Operators:** `+ - * / %` and parentheses; comparisons
   `> < >= <= == !=`; logical `&& || !`.
 - **Functions:** `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2(y, x)`,
-  `sqrt`, `abs`, `pow`, `log` (base 10), `ln` (base e), `min`, `max`, `floor`, `ceil`,
-  `round`, `fmod`, `rem`, `rand(seed[, iter])`, `rand2(seed[, iter])`. `fmod`
-  is the C `fmodf` (result takes the sign of the dividend); `rem` is the IEEE
-  remainder via `remainderf` (rounds the quotient to nearest, so the result can
-  differ in sign).
+  `sqrt`, `abs`, `pow`, `log` (base 10), `ln` (base e), `min`, `max`,
+  `clamp(x, lo, hi)`, `lerp(a, b, s)`, `smoothstep(e0, e1, x)`, `sign`,
+  `floor`, `ceil`, `round`, `fmod`, `rem`, `rand(seed[, iter])`,
+  `rand2(seed[, iter])`. `fmod` is the C `fmodf` (result takes the sign of the
+  dividend); `rem` is the IEEE remainder via `remainderf` (rounds the quotient
+  to nearest, so the result can differ in sign).
 - **Constants:** `PI`, `TAU`, `e`.
 
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter)
@@ -620,6 +621,35 @@ from two coordinates prefer `atan2`. `asin` and `acos` invert the other two:
 both clamp their argument to `[-1, 1]` first, so a dot product that drifts a
 hair past 1 returns `0` rather than a NaN that would erase the geometry
 mid-edit.
+
+`clamp`, `lerp`, `smoothstep`, and `sign` are the animation-shaping set — the
+things most scenes end up spelling out by hand:
+
+```c
+clamp(x, lo, hi)         // x held inside [lo, hi]; replaces min(max(x, lo), hi)
+lerp(a, b, s)            // a at s=0, b at s=1, straight line between
+smoothstep(e0, e1, x)    // 0 below e0, 1 above e1, eased curve in between
+sign(x)                  // -1, 0, or 1
+```
+
+`lerp` is the one to reach for whenever something moves *from* one value *to*
+another: `lerp(1, 3, s)` grows a radius, and nesting a `sin` in the blend
+factor gives an oscillation between two poses. It is deliberately **not**
+clamped, so `s` past 1 (or below 0) overshoots the endpoints — that is how
+springy easings are written, and `clamp(s, 0, 1)` is the hard stop when you
+don't want it.
+
+`smoothstep` is the fade whose start and stop you can't see: it leaves `e0` and
+arrives at `e1` with zero slope, where a bare `lerp` visibly kinks at both
+ends. Feed it a *distance* for a soft edge (`smoothstep(4, 2, dist)` fades a
+glow in as geometry approaches) or a *time* for an entrance
+(`smoothstep(0, 1, t)`). Its edges may run either direction: passing `e0 > e1`
+ramps from 1 down to 0.
+
+`sign` returns exactly `0` at `0` — it is not a rounding function, it answers
+"which side". Multiplying by it mirrors a value about the origin
+(`sign(x) * 0.5` snaps to one side or the other), and it turns a comparison
+into arithmetic without an `if`.
 
 ### Variables
 
