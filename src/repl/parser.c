@@ -12,6 +12,7 @@
 
 #include "repl/command_spec.h"
 #include "repl/color_limits.h"
+#include "repl/stencil_limits.h"
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/source_scope.h"
@@ -551,6 +552,11 @@ static void format_enum_command_text(char *out, int out_sz,
     if (num_slots == 2 && def->fmt) {
         snprintf(out, (size_t)out_sz, def->fmt, indent,
                  slot_emit[0], slot_emit[1]);
+        return;
+    }
+    if (num_slots == 3 && def->fmt) {
+        snprintf(out, (size_t)out_sz, def->fmt, indent,
+                 slot_emit[0], slot_emit[1], slot_emit[2]);
         return;
     }
     if (num_slots == 4 && def->fmt) {
@@ -1487,6 +1493,124 @@ static int parse_fogfv(const char *args, GLCmd *cmd,
     return 1;
 }
 
+static int parse_stencil_value_literal(const char *text, int *out_value,
+                                       const char *usage,
+                                       const ReplParseContext *ctx) {
+    char buf[REPL_ENUM_ARG_MAX];
+    char *p = buf;
+    char *end;
+    long value;
+    int base = 10;
+    size_t len;
+
+    while (*text && isspace((unsigned char)*text)) text++;
+    len = strlen(text);
+    while (len > 0 && isspace((unsigned char)text[len - 1])) len--;
+    if (len == 0 || len >= sizeof(buf)) {
+        parser_emit_error_static(ctx, usage);
+        return 0;
+    }
+    memcpy(buf, text, len);
+    buf[len] = '\0';
+    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
+        base = 16;
+    value = strtol(p, &end, base);
+    if (end == p || *end != '\0' || value < REPL_STENCIL_VALUE_MIN ||
+        value > REPL_STENCIL_VALUE_MAX) {
+        parser_emit_error_static(ctx, usage);
+        return 0;
+    }
+    *out_value = (int)value;
+    return 1;
+}
+
+static int parse_stencil_func(const char *args, GLCmd *cmd,
+                              char *text_out, int text_sz,
+                              const char *indent,
+                              const ReplParseContext *ctx) {
+    char slot_raw[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX];
+    const ReplEnumEntry *funcs = repl_depth_func_entries();
+    GLenum func = 0;
+    int found = 0;
+    float parsed[2];
+    int parsed_count;
+    int ref;
+    int mask;
+    int has_vars;
+
+    if (!split_enum_command_args(args, 3, slot_raw)) {
+        parser_emit_error_static(ctx, "Usage: glStencilFunc(func, ref, mask)");
+        return 0;
+    }
+    for (int i = 0; funcs[i].name; i++) {
+        if (strcmp(slot_raw[0], funcs[i].name) == 0) {
+            func = funcs[i].value;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        parser_emit_error_static(ctx,
+            "func: GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS");
+        return 0;
+    }
+    if (!parser_validate_expression_idents(slot_raw[1], ctx->vars, ctx->num_vars, ctx))
+        return 0;
+    parsed_count = parse_canonical_float_list(slot_raw[1], parsed, 2,
+                                               ctx->vars, ctx->num_vars, ctx);
+    if (parsed_count < 0)
+        return 0;
+    if (parsed_count != 1) {
+        parser_emit_error_static(ctx, "ref: expected one numeric expression");
+        return 0;
+    }
+    has_vars = input_has_any_visible_vars(slot_raw[1], ctx->vars, ctx->num_vars);
+    if (!has_vars && !repl_stencil_clamp_ref(parsed[0], &ref)) {
+        parser_emit_error_static(ctx, "ref: must be in the range 0..255");
+        return 0;
+    }
+    (void)repl_stencil_clamp_ref(parsed[0], &ref);
+    if (!parse_stencil_value_literal(slot_raw[2], &mask,
+                                     "mask: decimal or 0xNN literal in 0..255", ctx))
+        return 0;
+
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT, 1,
+                             slot_raw[1]);
+    cmd->type = CMD_STENCIL_FUNC;
+    cmd->valid = 1;
+    cmd->args[0] = (float)func;
+    cmd->args[1] = (float)ref;
+    cmd->args[2] = (float)mask;
+    cmd->num_args = 3;
+    cmd->has_vars = has_vars;
+    if (text_out && text_sz > 0) {
+        char ref_text[REPL_SOURCE_FLOAT_TEXT_MAX];
+        snprintf(text_out, (size_t)text_sz, "%sglStencilFunc(%s, %s, 0x%02X);",
+                 indent, slot_raw[0], has_vars ? slot_raw[1]
+                                           : fmt_source_float(ref_text, parsed[0]),
+                 (unsigned)mask);
+    }
+    return 1;
+}
+
+static int parse_stencil_mask(const char *args, GLCmd *cmd,
+                              char *text_out, int text_sz,
+                              const char *indent,
+                              const ReplParseContext *ctx) {
+    int mask;
+    if (!parse_stencil_value_literal(args, &mask,
+                                     "Usage: glStencilMask(mask) — mask is decimal or 0xNN in 0..255", ctx))
+        return 0;
+    cmd->type = CMD_STENCIL_MASK;
+    cmd->valid = 1;
+    cmd->args[0] = (float)mask;
+    cmd->num_args = 1;
+    cmd->has_vars = 0;
+    write_text(text_out, text_sz, "%sglStencilMask(0x%02X);", indent,
+               (unsigned)mask);
+    return 1;
+}
+
 /* Dispatcher for the custom-branch commands that escape both spec
  * tables. Returns -1 when `func` matches none of them (the caller
  * falls through to the remaining parsers); otherwise the handler's
@@ -1521,6 +1645,10 @@ static int try_parse_custom_arg_command(const char *func, const char *args,
         return parse_fogf(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glFogfv") == 0)
         return parse_fogfv(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glStencilFunc") == 0)
+        return parse_stencil_func(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glStencilMask") == 0)
+        return parse_stencil_mask(args, cmd, text_out, text_sz, indent, ctx);
     return -1;
 }
 

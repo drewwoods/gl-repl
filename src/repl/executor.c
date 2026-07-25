@@ -395,6 +395,17 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_DEPTH_FUNC:
         glDepthFunc((GLenum)cmd->args[0]);
         return 1;
+    case CMD_STENCIL_FUNC:
+        glStencilFunc((GLenum)cmd->args[0], (GLint)cmd->args[1],
+                      (GLuint)cmd->args[2]);
+        return 1;
+    case CMD_STENCIL_OP:
+        glStencilOp((GLenum)cmd->args[0], (GLenum)cmd->args[1],
+                    (GLenum)cmd->args[2]);
+        return 1;
+    case CMD_STENCIL_MASK:
+        glStencilMask((GLuint)cmd->args[0]);
+        return 1;
     case CMD_DEPTH_MASK:
         glDepthMask((GLboolean)cmd->args[0]);
         return 1;
@@ -955,6 +966,9 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_POLYGON_MODE:
     case CMD_POLYGON_OFFSET:
     case CMD_DEPTH_FUNC:
+    case CMD_STENCIL_FUNC:
+    case CMD_STENCIL_OP:
+    case CMD_STENCIL_MASK:
     case CMD_DEPTH_MASK:
     case CMD_COLOR_MASK:
     case CMD_EDGE_FLAG:

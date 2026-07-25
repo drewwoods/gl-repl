@@ -76,6 +76,9 @@ static const CmdType expected_commands[] = {
     CMD_FRONT_FACE,
     CMD_CULL_FACE,
     CMD_DEPTH_FUNC,
+    CMD_STENCIL_FUNC,
+    CMD_STENCIL_OP,
+    CMD_STENCIL_MASK,
     CMD_POINT_SIZE,
     CMD_LINE_WIDTH,
     CMD_LINE_STIPPLE,
@@ -383,6 +386,9 @@ int main(void) {
     editor_feed_line("glFrontFace(GL_CCW);");
     editor_feed_line("glCullFace(GL_BACK);");
     editor_feed_line("glDepthFunc(GL_LEQUAL);");
+    editor_feed_line("glStencilFunc(GL_EQUAL, 1, 0xFF);");
+    editor_feed_line("glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);");
+    editor_feed_line("glStencilMask(0x7F);");
     editor_feed_line("glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);");
     editor_feed_line("glPolygonOffset(-1, -1);");
 

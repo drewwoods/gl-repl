@@ -51,6 +51,9 @@ extern "C" {
     X(glColorMaterial)                 \
     X(glCullFace)                      \
     X(glDepthFunc)                     \
+    X(glStencilFunc)                   \
+    X(glStencilOp)                     \
+    X(glStencilMask)                   \
     X(glDepthMask)                     \
     X(glDepthRange)                    \
     X(glDisable)                       \

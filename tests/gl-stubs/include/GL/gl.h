@@ -78,6 +78,12 @@ typedef double GLclampd;
 #define GL_GEQUAL 0x0206
 #define GL_ALWAYS 0x0207
 
+#define GL_KEEP 0x1E00
+#define GL_REPLACE 0x1E01
+#define GL_INCR 0x1E02
+#define GL_DECR 0x1E03
+#define GL_INVERT 0x150A
+
 #define GL_POINT 0x1B00
 #define GL_LINE 0x1B01
 #define GL_FILL 0x1B02
@@ -302,6 +308,9 @@ static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, G
 static inline void glColorMaterial(GLenum face, GLenum mode) { GL_STUB_TRACE_LINE("glColorMaterial %u %u\n", (unsigned)face, (unsigned)mode); gl_stub_tick(GL_STUB_glColorMaterial); }
 static inline void glCullFace(GLenum mode) { GL_STUB_TRACE_LINE("glCullFace %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glCullFace); }
 static inline void glDepthFunc(GLenum func) { GL_STUB_TRACE_LINE("glDepthFunc %u\n", (unsigned)func); gl_stub_tick(GL_STUB_glDepthFunc); }
+static inline void glStencilFunc(GLenum func, GLint ref, GLuint mask) { GL_STUB_TRACE_LINE("glStencilFunc %u %d %u\n", (unsigned)func, (int)ref, (unsigned)mask); gl_stub_tick(GL_STUB_glStencilFunc); }
+static inline void glStencilOp(GLenum sfail, GLenum dpfail, GLenum dppass) { GL_STUB_TRACE_LINE("glStencilOp %u %u %u\n", (unsigned)sfail, (unsigned)dpfail, (unsigned)dppass); gl_stub_tick(GL_STUB_glStencilOp); }
+static inline void glStencilMask(GLuint mask) { GL_STUB_TRACE_LINE("glStencilMask %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glStencilMask); }
 static inline void glClipPlane(GLenum plane, const GLdouble *equation) { GL_STUB_TRACE_LINE("glClipPlane %u %g %g %g %g\n", (unsigned)plane, equation[0], equation[1], equation[2], equation[3]); gl_stub_tick(GL_STUB_glClipPlane); }
 static inline void glGetClipPlane(GLenum plane, GLdouble *equation) { GL_STUB_TRACE_LINE("glGetClipPlane %u\n", (unsigned)plane); gl_stub_tick(GL_STUB_glGetClipPlane); if (equation) { equation[0] = equation[1] = equation[2] = equation[3] = 0.0; } }
 static inline void glDepthMask(GLboolean flag) { GL_STUB_TRACE_LINE("glDepthMask %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glDepthMask); }

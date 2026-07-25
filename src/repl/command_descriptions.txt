@@ -92,6 +92,18 @@ Shifts the depth value of polygon fragments before the depth test, by factor tim
 title = glDepthFunc
 Chooses the comparison used by the depth test. The default GL_LESS accepts a fragment when its depth is nearer than the stored depth; other modes support equal, reversed, or unconditional tests.
 
+[command CMD_STENCIL_FUNC]
+title = glStencilFunc
+Chooses the comparison made between each fragment's reference value and the stored stencil value while GL_STENCIL_TEST is enabled. The reference accepts an expression and is limited to 0 through 255; the mask is a decimal or 0xNN literal in that same range.
+
+[command CMD_STENCIL_OP]
+title = glStencilOp
+Chooses how the stencil buffer changes when the stencil test fails, when stencil passes but depth fails, and when both tests pass. GL_KEEP preserves the value; GL_ZERO, GL_REPLACE, GL_INCR, GL_DECR, and GL_INVERT build common masks and counters.
+
+[command CMD_STENCIL_MASK]
+title = glStencilMask
+Restricts which stencil-buffer bits later fragments may write. Supply a decimal or 0xNN mask from 0 through 255; use 0 to protect an existing mask while drawing geometry through it.
+
 [command CMD_GLUT_TORUS]
 title = glutSolidTorus
 Draws a solid torus centered at the origin around the z axis. innerR controls tube radius, outerR controls ring radius, and the two segment counts trade smoothness for geometry cost.

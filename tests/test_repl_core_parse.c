@@ -1581,6 +1581,53 @@ int main(void) {
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
 
+    /* Stencil state — custom mixed enum/expression/literal forms plus the
+     * generalized three-enum glStencilOp path. */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glStencilFunc(GL_EQUAL, 3.9, 0xff)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glStencilFunc parse ok", ok == 1);
+        ASSERT_TRUE("glStencilFunc type", cmd.type == CMD_STENCIL_FUNC);
+        ASSERT_TRUE("glStencilFunc ref truncates", (int)cmd.args[1] == 3);
+        ASSERT_TRUE("glStencilFunc hex mask", (int)cmd.args[2] == 255);
+        ASSERT_TRUE("glStencilFunc canonical hex", strstr(cmd_text, "0xFF") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glStencilFunc(GL_EQUAL, 256, 0xFF)", &cmd);
+        ASSERT_TRUE("glStencilFunc ref over limit rejected", ok == 0);
+        assert_status_contains("glStencilFunc ref range message", "0..255");
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glStencilOp(GL_KEEP, GL_ZERO, GL_REPLACE)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glStencilOp parse ok", ok == 1);
+        ASSERT_TRUE("glStencilOp type", cmd.type == CMD_STENCIL_OP);
+        ASSERT_TRUE("glStencilOp source canonicalized",
+                    strstr(cmd_text, "glStencilOp(GL_KEEP, GL_ZERO, GL_REPLACE);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glStencilMask(127)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glStencilMask parse ok", ok == 1);
+        ASSERT_TRUE("glStencilMask type", cmd.type == CMD_STENCIL_MASK);
+        ASSERT_TRUE("glStencilMask canonical hex", strstr(cmd_text, "0x7F") != NULL);
+    }
+
     /* glDepthMask - bool-enum state command */
     {
         glr_ctrl_reset_all();

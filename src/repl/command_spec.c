@@ -90,6 +90,16 @@ static const ReplEnumEntry k_depth_funcs[] = {
     { NULL, 0 }
 };
 
+static const ReplEnumEntry k_stencil_ops[] = {
+    { "GL_KEEP",    GL_KEEP },
+    { "GL_ZERO",    GL_ZERO },
+    { "GL_REPLACE", GL_REPLACE },
+    { "GL_INCR",    GL_INCR },
+    { "GL_DECR",    GL_DECR },
+    { "GL_INVERT",  GL_INVERT },
+    { NULL, 0 }
+};
+
 static const ReplEnumEntry k_material_params[] = {
     { "GL_AMBIENT",             GL_AMBIENT },
     { "GL_DIFFUSE",             GL_DIFFUSE },
@@ -295,7 +305,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Enable a GL capability\n"
         "GL_BLEND, GL_CLIP_PLANE0..GL_CLIP_PLANE5, GL_COLOR_MATERIAL\n"
         "GL_CULL_FACE, GL_DEPTH_TEST, GL_FOG, GL_LIGHTING, GL_LIGHT0..GL_LIGHT3\n"
-        "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH",
+        "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH, GL_STENCIL_TEST",
         REPL_HELP_GROUP_STATE },
     { "glDisable(",          "glDisable(cap)",                                           1, { "cap" },
         "Disable a GL capability (same caps as glEnable)", REPL_HELP_GROUP_STATE },
@@ -326,6 +336,16 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glFogfv(",            "glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})",           2, { "GL_FOG_COLOR", "(GLfloat[]){r, g, b, a}" },
         "Set the fog color distant geometry fades toward (usually the clear color).\n"
         "Flat shorthand accepted: glFogfv(GL_FOG_COLOR, r, g, b, a).",
+        REPL_HELP_GROUP_STATE },
+    { "glStencilFunc(",      "glStencilFunc(func, ref, mask)",                           3, { "func", "ref", "mask" },
+        "Choose the stencil comparison. ref is a 0..255 expression; mask is a\n"
+        "0..255 decimal or 0xNN literal. Enable GL_STENCIL_TEST to apply it.",
+        REPL_HELP_GROUP_STATE },
+    { "glStencilOp(",        "glStencilOp(sfail, dpfail, dppass)",                       3, { "sfail", "dpfail", "dppass" },
+        "Choose the stencil-buffer update for stencil fail, depth fail, and pass.",
+        REPL_HELP_GROUP_STATE },
+    { "glStencilMask(",      "glStencilMask(mask)",                                     1, { "mask" },
+        "Restrict writable stencil bits with a 0..255 decimal or 0xNN literal.",
         REPL_HELP_GROUP_STATE },
     { "glPushAttrib(",       "glPushAttrib(mask)",                                       1, { "mask" },
         "Save a group of state onto the attribute stack; restore with glPopAttrib.\n"
@@ -659,6 +679,14 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
                                      "GL_ALL_ATTRIB_BITS") } },
     { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
         .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
+    { "glStencilFunc",   CMD_STENCIL_FUNC,  -1, NULL,                           0,
+        .args = { ENUM_SLOT_TOK(k_depth_funcs, "func: GL_NEVER, GL_LESS, GL_EQUAL, ...") } },
+    { "glStencilMask",   CMD_STENCIL_MASK,  -1, NULL,                           0,
+        .args = { { NULL, "mask: decimal or 0xNN literal in 0..255", REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
+    { "glStencilOp",     CMD_STENCIL_OP,     3, "%sglStencilOp(%s, %s, %s);", 0,
+        .args = { ENUM_SLOT_TOK(k_stencil_ops, "sfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
+                  ENUM_SLOT_TOK(k_stencil_ops, "dpfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
+                  ENUM_SLOT_TOK(k_stencil_ops, "dppass: GL_KEEP, GL_ZERO, GL_REPLACE, ...") } },
     { .name = NULL }
 };
 
@@ -737,6 +765,9 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POLYGON_MODE,   "glPolygonMode",   1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POLYGON_OFFSET, "glPolygonOffset", 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_DEPTH_FUNC,                   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_STENCIL_FUNC, "glStencilFunc", 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_STENCIL_OP,   "glStencilOp",   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_STENCIL_MASK, "glStencilMask", 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FOR_BEGIN,                    1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FUNC_DEF,                     1, CMD_CAT_FUNCTION),
@@ -860,6 +891,10 @@ const char *repl_func_signature_for_name(const char *name) {
 
 const ReplEnumEntry *repl_face_type_entries(void) {
     return k_face_types;
+}
+
+const ReplEnumEntry *repl_depth_func_entries(void) {
+    return k_depth_funcs;
 }
 
 const ReplEnumEntry *repl_material_param_entries(void) {

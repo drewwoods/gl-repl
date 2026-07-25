@@ -8,6 +8,7 @@
 #include "repl/pipeline.h"
 #include "source_document.h"
 #include "repl/color_limits.h"   /* REPL_CLEAR_COLOR_MAX_V (compiled-path clamp) */
+#include "repl/stencil_limits.h"
 #include "repl/command.h"
 #include "repl/command_spec.h"
 #include "repl/eval.h"
@@ -747,6 +748,11 @@ static int flatten_reparse_line(FlattenContext *ctx,
                     tmp.args[ci] = REPL_CLEAR_COLOR_MAX_V;
             }
         }
+        if (tmp.type == CMD_STENCIL_FUNC) {
+            int ref;
+            (void)repl_stencil_clamp_ref(tmp.args[1], &ref);
+            tmp.args[1] = (float)ref;
+        }
         /* has_vars stays the committed value — identical to the text
          * branch's rules for a has_vars source command (kept under local
          * bindings, forced 1 otherwise; it is 1 here either way). */
@@ -1392,6 +1398,11 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
         for (int ci = 0; ci < 3; ci++)
             if (cmd->args[ci] > REPL_CLEAR_COLOR_MAX_V)
                 cmd->args[ci] = REPL_CLEAR_COLOR_MAX_V;
+    }
+    if (cmd->type == CMD_STENCIL_FUNC) {
+        int ref;
+        (void)repl_stencil_clamp_ref(cmd->args[1], &ref);
+        cmd->args[1] = (float)ref;
     }
     return 1;
 }

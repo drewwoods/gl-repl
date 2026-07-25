@@ -286,6 +286,7 @@ const char *repl_func_signature_for_name(const char *name);
  * and glPointParameterfv pname values. Used by autocomplete to populate
  * parameter suggestions. */
 const ReplEnumEntry *repl_face_type_entries(void);
+const ReplEnumEntry *repl_depth_func_entries(void);
 const ReplEnumEntry *repl_material_param_entries(void);
 const ReplEnumEntry *repl_point_param_pname_entries(void);
 const ReplEnumEntry *repl_clip_plane_entries(void);
