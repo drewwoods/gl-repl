@@ -108,6 +108,10 @@ historical context and are not in the table below.
 | `flatten-performance-without-vm.md` | 2026-07-17 | Direct and compiled expression evaluation plus dependency-aware in-place rebaking; preserves full flattening for structural changes and makes multi-sample Accum Blur practical, especially in Emscripten. |
 | `tour-replay.md` | 2026-07-25 | Controlled-tour replay-style transport state machine: Play, Pause, Step, Back, Seek, discrete speeds, and collapsible HUD visual overlays. |
 | `release-cleanup.md` | 2026-07-25 | Pre-release cleanup sweep: scanner signal fixes (clangd/clang-tidy/cppcheck), dead-code removals, and PMD CPD duplication hoists. |
+| `cli-options-extraction.md` | 2026-07-25 | Extracted flag and CLI handling out of `gl_repl.c` (`main()`) into a dedicated testable `glr_cli` module. |
+| `rethinking-flattening-behaviour.md` | 2026-07-25 | Superseded by the dependency-aware evaluation design in `flatten-performance-without-vm.md`. |
+| `bounded-global-arrays.md` | 2026-07-25 | Superseded by fixed scratch arrays `A`/`B`/`C` and per-seed/iter deterministic `rand()`. |
+| `tutorial-replay-system.md` | 2026-07-25 | Superseded by the walkthrough-style tutorial runner and Tutorials menu. |
 
 Plans not in this directory are active, partial, not-started, not-landed, or
 external; see the sibling subdirectories.
