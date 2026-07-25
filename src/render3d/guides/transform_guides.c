@@ -27,11 +27,10 @@ static void transform_guides_pop_state(void) {
  * self-overlaps (a >360° rotate arc lapping itself, the dial/ticks/
  * sector sharing the rotation plane) would otherwise z-fight their own
  * first lap. Depth *testing* against scene geometry still applies in
- * the solid pass. The one exception is draw_cone_head, which brackets
- * itself with depth writes back on: the cone is a solid, not a coplanar
- * wash, and needs real self-occlusion (cap behind side fan) to look
- * right from every view angle. All of it is restored by the paired
- * transform_guides_pop_state(). */
+ * the solid pass. The one exception is draw_cone_head's colorless depth
+ * prepass: the cone is a solid, not a coplanar wash, and needs real
+ * self-occlusion (cap behind side fan) to look right from every view angle.
+ * All of it is restored by the paired transform_guides_pop_state(). */
 static void transform_guides_begin_overlay_state(void) {
     transform_guides_push_state();
     glDisable(GL_LIGHTING);
@@ -83,6 +82,12 @@ static void transform_guides_begin_overlay_state(void) {
  * exactly what the translate/rotate moves), so the occluded pass
  * carries more of the read than for other scene overlays. */
 #define TG_GHOST_ALPHA_MUL 0.55f
+
+/* A filled cone alpha-stacks its front and back side surfaces while depth is
+ * disabled, unlike the stippled one-pixel shaft. Keep its hidden pass much
+ * fainter than the rest of the guide; at 0.22 * 0.95, two overlapping side
+ * layers composite to about 0.37 instead of the old 0.77. */
+#define TG_CONE_GHOST_ALPHA_MUL 0.22f
 
 /* Clamp the head length to the [min, max] ladder. When dlen itself is
  * below min we still want a proportional little nubbin, hence the
@@ -293,14 +298,8 @@ static void draw_cone_head(const float tip[3], const float dir[3],
                            float head_len, const float rgb[3],
                            float alpha_mul) {
     float r[3], b[3];
-    /* Depth writes back on for the cone only: unlike the coplanar arc/
-     * sector washes the overlay state protects (see
-     * transform_guides_begin_overlay_state), the cone is a solid whose
-     * base cap must be occluded by its side fan or the head reads as a
-     * flat dark disc when viewed tip-on. No-op in the ghost pass, where
-     * GL_DEPTH_TEST is disabled (a disabled depth test also disables
-     * depth writes), so the translucent ghost cone is unchanged. */
-    glDepthMask(GL_TRUE);
+    int ghost_pass = alpha_mul < 1.0f;
+    float cone_alpha_mul = ghost_pass ? TG_CONE_GHOST_ALPHA_MUL : alpha_mul;
     make_arrow_basis(dir, r, b);
     float base[3] = {
         tip[0] - dir[0] * head_len,
@@ -319,34 +318,62 @@ static void draw_cone_head(const float tip[3], const float dir[3],
         shade[k] = 0.62f + 0.38f * c;
     }
 
+    /* Seed only the nearest solid-cone surface into depth before drawing any
+     * color. Straight-arrow callers draw the cone before the shaft, so the
+     * later shaft fragments can now pass in front of the head or fail behind
+     * it instead of the cone always winning by draw order. LEQUAL lets the
+     * color pass land on the depths written here. The ghost pass deliberately
+     * skips this because it must remain visible through scene geometry. */
+    if (!ghost_pass) {
+        glDepthFunc(GL_LEQUAL);
+        glDepthMask(GL_TRUE);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3fv(tip);
+        for (int k = 0; k <= TG_CONE_SLICES; k++)
+            glVertex3fv(ring[k]);
+        glEnd();
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3fv(base);
+        for (int k = TG_CONE_SLICES; k >= 0; k--)
+            glVertex3fv(ring[k]);
+        glEnd();
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_FALSE);
+    }
+
     /* Side surface: fan from the (brightest) tip around the ring. */
     glBegin(GL_TRIANGLE_FAN);
-    tg_color4f(rgb[0], rgb[1], rgb[2], 0.95f, alpha_mul);
+    tg_color4f(rgb[0], rgb[1], rgb[2], 0.95f, cone_alpha_mul);
     glVertex3fv(tip);
     for (int k = 0; k <= TG_CONE_SLICES; k++) {
         tg_color4f(rgb[0] * shade[k], rgb[1] * shade[k], rgb[2] * shade[k],
-                   0.95f, alpha_mul);
+                   0.95f, cone_alpha_mul);
         glVertex3fv(ring[k]);
     }
     glEnd();
 
-    /* Base cap, uniformly darker so the back face reads as the back. */
-    glBegin(GL_TRIANGLE_FAN);
-    tg_color4f(rgb[0] * 0.5f, rgb[1] * 0.5f, rgb[2] * 0.5f, 0.95f, alpha_mul);
-    glVertex3fv(base);
-    for (int k = TG_CONE_SLICES; k >= 0; k--)
-        glVertex3fv(ring[k]);
-    glEnd();
+    /* The solid pass keeps the darker base so the back reads as the back. The
+     * depth-off ghost omits it: a third blended layer made hidden heads look
+     * nearly opaque, especially when viewed along the arrow direction. */
+    if (!ghost_pass) {
+        glBegin(GL_TRIANGLE_FAN);
+        tg_color4f(rgb[0] * 0.5f, rgb[1] * 0.5f, rgb[2] * 0.5f,
+                   0.95f, cone_alpha_mul);
+        glVertex3fv(base);
+        for (int k = TG_CONE_SLICES; k >= 0; k--)
+            glVertex3fv(ring[k]);
+        glEnd();
+    }
 
     /* Dark rim around the base circle. */
     glLineWidth(1.5f);
-    tg_color4f(TG_HALO_R, TG_HALO_G, TG_HALO_B, 0.55f, alpha_mul);
+    tg_color4f(TG_HALO_R, TG_HALO_G, TG_HALO_B, 0.55f, cone_alpha_mul);
     glBegin(GL_LINE_LOOP);
     for (int k = 0; k < TG_CONE_SLICES; k++)
         glVertex3fv(ring[k]);
     glEnd();
     glLineWidth(1.0f);
-    glDepthMask(GL_FALSE);
 }
 
 /* Pulse shader for a straight segment in the axes-pulse style: a solid
@@ -424,8 +451,8 @@ static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
 
     transform_guides_begin_overlay_state();
 
-    draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
     draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
+    draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
 
     glPointSize(4.0f);
     glBegin(GL_POINTS);
@@ -490,8 +517,8 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
                 p1[2] - dir[2] * head_len
             };
 
-            draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
             draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
+            draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
 
             /* Factor readout at the arrow tip, once (solid pass only — the
              * label helper is depth-off, so a ghost-pass copy would just
@@ -572,8 +599,8 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
                 axis_rgb[a][1]*0.6f + 0.4f,
                 axis_rgb[a][2]*0.6f + 0.4f
             };
-            draw_pulse_segment(snapshot, from, base, axis_rgb[a], alpha_mul);
             draw_cone_head(tip, dir, head_len, head_rgb, alpha_mul);
+            draw_pulse_segment(snapshot, from, base, axis_rgb[a], alpha_mul);
         }
 
         /* Factor readout at the most-deviating axis tip, once (solid pass

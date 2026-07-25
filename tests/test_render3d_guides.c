@@ -138,6 +138,14 @@ static void test_transform_guides_render(void) {
         render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("translate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
         ASSERT_TRUE("translate rendering calls glPushAttrib", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+        ASSERT_INT("translate cone brackets one colorless depth prepass",
+                   (int)gl_stub_counts[GL_STUB_glColorMask], 2);
+        ASSERT_INT("translate cone uses LEQUAL for its depth and color passes",
+                   (int)gl_stub_counts[GL_STUB_glDepthFunc], 1);
+        /* Seven ghost-pass primitives (no base cap) plus ten solid-pass
+         * primitives (including the two-fan depth prepass). */
+        ASSERT_INT("translate ghost cone omits its base cap",
+                   (int)gl_stub_counts[GL_STUB_glBegin], 17);
         ASSERT_INT("translate records one endpoint label", capture.count, 1);
         ASSERT_INT("translate label has primary and detail runs",
                    capture.labels[0].run_count, 2);
