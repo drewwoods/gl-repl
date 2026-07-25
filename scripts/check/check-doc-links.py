@@ -116,6 +116,60 @@ def is_function_anchor_ok(line: str, label: str) -> bool:
     return bool(re.search(r"\b" + re.escape(match.group(1)) + r"\s*\(", line))
 
 
+def anchor_line_accepts_label(lines: list[str], line_idx: int, label_norm: str) -> bool:
+    """Whether validate_line_anchor() would accept `lines[line_idx]` for `label_norm`."""
+    linked_line = normalize_line(lines[line_idx])
+    if label_norm and label_norm in linked_line:
+        return True
+    if is_function_anchor_ok(linked_line, label_norm):
+        return True
+    return is_typedef_anchor_ok(lines, line_idx, label_norm)
+
+
+def find_anchor_line(lines: list[str], label_norm: str, old_line_no: int) -> int | None:
+    """Line number (1-based) this label's anchor should point at now, or None.
+
+    Nearly every broken anchor in this repo is line drift: the target moved
+    when lines were inserted above it. Ranking prefers a declaration line over
+    a comment that merely mentions the label, then the candidate closest to
+    the stale anchor — drift is local, so the nearest match is the one that
+    moved. Returns None when the label appears nowhere in the file (a genuine
+    dead link, which is not this function's to guess at) or when the match is
+    ambiguous between two equally-close declarations.
+    """
+    if not label_norm:
+        return None
+
+    candidates = [
+        idx + 1 for idx in range(len(lines)) if anchor_line_accepts_label(lines, idx, label_norm)
+    ]
+    if not candidates:
+        return None
+
+    def rank(line_no: int) -> tuple[int, int, int]:
+        text = normalize_line(lines[line_no - 1])
+        is_comment = 1 if text.startswith(("*", "//", "/*")) else 0
+        return (is_comment, abs(line_no - old_line_no), line_no)
+
+    candidates.sort(key=rank)
+    if len(candidates) > 1 and rank(candidates[0])[:2] == rank(candidates[1])[:2]:
+        return None  # two equally good targets: a human picks
+    return candidates[0]
+
+
+def repoint_line_anchor(target_file: Path, anchor: str, label: str) -> int | None:
+    """The line `anchor` should have pointed at in `target_file`, or None."""
+    m = LINE_ANCHOR_RE.match(anchor)
+    if not m or "-" in anchor:
+        return None
+    try:
+        lines = target_file.read_text(encoding="utf-8").splitlines()
+    except (UnicodeDecodeError, OSError):
+        return None
+    new_line = find_anchor_line(lines, normalize_label(label), int(m.group(1)))
+    return new_line if new_line != int(m.group(1)) else None
+
+
 def validate_line_anchor(
     *,
     source_file: Path,
@@ -160,7 +214,14 @@ def validate_line_anchor(
     )
 
 
-def validate_file(path: Path, root: Path, errors: list[str], strip: bool = False) -> int:
+def validate_file(
+    path: Path,
+    root: Path,
+    errors: list[str],
+    strip: bool = False,
+    repoint: bool = False,
+    repointed: list[str] | None = None,
+) -> int:
     link_count = 0
     try:
         content = path.read_text(encoding="utf-8")
@@ -245,6 +306,28 @@ def validate_file(path: Path, root: Path, errors: list[str], strip: bool = False
                     label=label,
                 )
 
+            if err is not None and repoint and anchor.startswith("L") and target_path.exists():
+                # Repair the anchor in place rather than dropping the link:
+                # a drifted line number is a stale coordinate, not a dead
+                # reference, and stripping one loses information the file
+                # still holds.
+                new_line_no = repoint_line_anchor(target_path, anchor, label)
+                if new_line_no is not None:
+                    start, end = match.span()
+                    new_dest = match.group(3).replace(f"#{anchor}", f"#L{new_line_no}", 1)
+                    current_line = (
+                        current_line[:start]
+                        + f"{match.group(1)}[{match.group(2)}]({new_dest})"
+                        + current_line[end:]
+                    )
+                    modified = True
+                    if repointed is not None:
+                        repointed.append(
+                            f"{path}:{line_no}: {normalize_label(label)} "
+                            f"#{anchor} -> #L{new_line_no}"
+                        )
+                    continue
+
             if err is not None:
                 errors.append(err)
                 if strip:
@@ -254,7 +337,7 @@ def validate_file(path: Path, root: Path, errors: list[str], strip: bool = False
 
         new_lines.append(current_line)
 
-    if strip and modified:
+    if (strip or repoint) and modified:
         new_content = "\n".join(new_lines)
         if content.endswith("\n"):
             new_content += "\n"
@@ -274,6 +357,13 @@ def main(argv: list[str]) -> int:
         help="Strip the link destination from failing links, leaving only the label.",
     )
     parser.add_argument(
+        "--repoint",
+        action="store_true",
+        help="Repair failing line anchors in place by relocating the label in the "
+        "linked file. Touches only links that already fail; links it cannot "
+        "resolve are still reported.",
+    )
+    parser.add_argument(
         "files",
         nargs="*",
         help="Files to validate.",
@@ -288,6 +378,7 @@ def main(argv: list[str]) -> int:
     print("    Checking Markdown doc links...", flush=True)
 
     errors: list[str] = []
+    repointed: list[str] = []
     link_count = 0
     for path in files:
         if not path.exists():
@@ -295,7 +386,23 @@ def main(argv: list[str]) -> int:
             continue
         if path.is_dir():
             continue
-        link_count += validate_file(path.resolve(), root, errors, strip=args.strip)
+        link_count += validate_file(
+            path.resolve(),
+            root,
+            errors,
+            strip=args.strip,
+            repoint=args.repoint,
+            repointed=repointed,
+        )
+
+    if repointed:
+        print(f"    repointed {len(repointed)} drifted line anchor(s):")
+        for entry in repointed:
+            try:
+                display = str(Path(entry).relative_to(root))
+            except (ValueError, OSError):
+                display = entry
+            print(f"      {display}")
 
     if errors:
         print("    ERROR: invalid Markdown links:", file=sys.stderr)
