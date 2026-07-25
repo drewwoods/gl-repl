@@ -961,11 +961,14 @@ test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
 # Synthetic depth-map tests for the pure conversion core
 # (render3d_depth_viz_map). depth_viz.o carries GL calls for its
 # capture/render shell, hence GL_LDFLAGS on real-GL builds (no-op inline
-# stubs under USE_GL_STUBS=1, like test_render3d_guides).
+# stubs under USE_GL_STUBS=1, like test_render3d_guides); cpuprof.o
+# because the shell brackets itself with prof_begin/prof_accum_end now
+# that render3d's neutral buffer hooks name no viz section.
 test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
 	$(OBJDIR)/src/render3d/depth_viz.o \
 	$(OBJDIR)/src/render3d/postprocess_filter.o \
 	$(OBJDIR)/src/render3d/postprocess_surface.o \
+	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_depth_viz_LDLIBS = $(GL_LDFLAGS)
 test_depth_viz_RUN ?= $(BINDIR)/test_depth_viz

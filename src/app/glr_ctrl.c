@@ -34,6 +34,7 @@
 #include "render3d/grid.h"                   /* render3d_grid_reveal (transition curve) */
 #include "render3d/axes.h"                   /* render3d_axes_reveal (transition curve) */
 #include "render3d/lights.h"                 /* render3d_lights_apply_theme */
+#include "render3d/depth_viz.h"              /* depth-viz buffer-hook subscriber */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -1205,6 +1206,40 @@ const char *glr_ctrl_depth_readback_unsupported_reason(void) {
 #endif
 }
 
+/* --- Buffer-visualization hook subscriptions ------------------------
+ * render3d fires three neutral buffer hooks and knows nothing about
+ * what for; the app decides what looks at the framebuffer. The modes in
+ * effect for a frame travel through the hooks' user_data (the
+ * g_overlay_pack idiom) rather than a subsystem global, so what a frame
+ * asked for is explicit at the subscription site. */
+typedef struct {
+    int depth_mode;   /* Render3dDepthVizMode, already capability-masked */
+} GlrBufferVizFrame;
+
+static GlrBufferVizFrame g_buffer_viz_frame;
+
+static void glr_ctrl_buffer_read(void *user_data, int is_final_pass,
+                                 int sx, int sy, int sw, int sh) {
+    const GlrBufferVizFrame *frame = (const GlrBufferVizFrame *)user_data;
+    if (!frame)
+        return;
+    /* Depth wants one read per frame: under accumulation every pass
+     * clears and rewrites depth, so only the final pass survives into
+     * the resolved image the quad is drawn over. */
+    if (is_final_pass && frame->depth_mode != RENDER3D_DEPTH_VIZ_OFF)
+        render3d_depth_viz_capture(sx, sy, sw, sh);
+}
+
+static void glr_ctrl_buffer_resolve_overlay(void *user_data,
+                                            const Render3dProjectionDesc *proj,
+                                            int sx, int sy, int sw, int sh) {
+    const GlrBufferVizFrame *frame = (const GlrBufferVizFrame *)user_data;
+    if (!frame)
+        return;
+    render3d_depth_viz_render((Render3dDepthVizMode)frame->depth_mode, proj,
+                              sx, sy, sw, sh);
+}
+
 /* The 2D/3D view-mode transition state machine lives in
  * src/app/glr_ctrl_view_transition.c (carved out of this file). The frame
  * loop ticks it via glr_ctrl_tick_view_transition; the scene-config builder
@@ -1356,8 +1391,19 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
     config->winding_view = presentation.winding_view;
-    config->depth_viz = g_depth_readback_supported ? presentation.depth_viz
-                                                   : 0;
+
+    /* --- Buffer-visualization hooks ---
+     * Capability masking is the controller's job (the subsystem is told a
+     * mode, never asked to second-guess it): a context that cannot read
+     * GL_DEPTH_COMPONENT gets Off regardless of the stored config value,
+     * which stays intact so @cfg round-trips. */
+    g_buffer_viz_frame.depth_mode =
+        g_depth_readback_supported ? presentation.depth_viz
+                                   : RENDER3D_DEPTH_VIZ_OFF;
+    config->buffer_read_fn        = glr_ctrl_buffer_read;
+    config->buffer_read_user_data = &g_buffer_viz_frame;
+    config->buffer_resolve_overlay_fn        = glr_ctrl_buffer_resolve_overlay;
+    config->buffer_resolve_overlay_user_data = &g_buffer_viz_frame;
     /* Single source of truth: the executor's capability flag + loaded
      * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
      * attenuation through the same callable entry point the executor
@@ -3044,6 +3090,10 @@ void glr_ctrl_init_gl(void) {
     glr_ctrl_reset_all();
     repl_ensure_init_bootstrap_ready();
     render3d_init_gl();
+    /* Buffer-viz caches are the app's to reset now that render3d owns no
+     * buffer inspection: a fresh GL context must not reuse a stale
+     * texture name or a stale EMA range. */
+    render3d_depth_viz_reset();
     render3d_state_init(&g_scene_renderer);
     repl_executor_init_resources();
     hidden_lines_init_resources();

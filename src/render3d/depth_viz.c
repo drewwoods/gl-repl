@@ -13,6 +13,7 @@
 #include "postprocess_filter.h"   /* render3d_post_2d_begin/_end */
 #include "projection_mode.h"
 #include "gl_includes.h"
+#include "support/cpuprof.h"
 
 #include <stdlib.h>
 
@@ -205,12 +206,17 @@ void render3d_depth_viz_map(const float *depth, int count,
     }
 }
 
+/* The profile bracket lives here rather than around the render3d hook
+ * call: the hook is deliberately neutral, so render3d must not name a
+ * viz section, and bracketing on this side also stops charging the
+ * section on frames where the mode is Off. */
 void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
     size_t px;
 
     g_cap_valid = 0;
     if (sw <= 0 || sh <= 0)
         return;
+    prof_begin(PROF_RENDER3D_DEPTH_VIZ);
     px = (size_t)sw * (size_t)sh;
     if (px > g_buf_px) {
         float *new_depth = (float *)malloc(px * sizeof(float));
@@ -218,6 +224,7 @@ void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
         if (!new_depth || !new_lum) {
             free(new_depth);
             free(new_lum);
+            prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
             return; /* degrade to no capture this frame */
         }
         free(g_depth);
@@ -232,6 +239,7 @@ void render3d_depth_viz_capture(int sx, int sy, int sw, int sh) {
     g_cap_w = sw;
     g_cap_h = sh;
     g_cap_valid = 1;
+    prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
 }
 
 /* See postprocess_filter.c: GL 1.1 baseline needs power-of-two texture
@@ -303,11 +311,13 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
         return;
     g_cap_valid = 0; /* consume: never redraw a stale capture */
 
+    prof_begin(PROF_RENDER3D_DEPTH_VIZ);
     render3d_depth_viz_map(g_depth, sw * sh, mode, proj, &g_range, g_lum);
 
     render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
     if (!depth_viz_upload_texture(sw, sh)) {
         render3d_post_2d_end(saved_matrix_mode);
+        prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
         return; /* texture would exceed the GL limit — skip this frame */
     }
 
@@ -342,4 +352,5 @@ void render3d_depth_viz_render(Render3dDepthVizMode mode,
     }
 
     render3d_post_2d_end(saved_matrix_mode);
+    prof_accum_end(PROF_RENDER3D_DEPTH_VIZ);
 }

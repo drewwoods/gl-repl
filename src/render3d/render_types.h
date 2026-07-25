@@ -31,6 +31,11 @@
 #define GL_EYE_RADIAL_NV 0x855B
 #endif
 
+/* Defined in render.h, which includes this header — the buffer-inspection
+ * hooks below only pass it by pointer, so a tag declaration is enough and
+ * the include direction stays render.h -> render_types.h. */
+struct Render3dProjectionDesc;
+
 #define MAX_LIGHTS 4
 
 /* Glacial blue-white shared by the Frozen Lake grid (under-ice
@@ -165,6 +170,44 @@ typedef struct Render3dRenderConfig {
     void (*post_resolve_overlays_fn)(void *user_data);
     void  *post_resolve_overlays_user_data;
 
+    /* --- Optional buffer-inspection hooks ---
+     * Three neutral "here is a point where you may read or composite"
+     * slots. render3d fires them and knows nothing about what for; the
+     * controller subscribes whatever wants to look at the framebuffer
+     * (today the depth/stencil visualizations). All three fire
+     * unconditionally when installed — the subscriber no-ops when its
+     * own modes are off — which is what lets one hook serve a reader
+     * that wants a single read per frame and one that composites per
+     * accumulation pass. */
+
+    /* Fires at the fill/helpers boundary of every accumulation pass:
+     * user geometry and the post_fill_fn hook have written their
+     * buffers, the backdrop/grid/axes helpers (which write depth of
+     * their own) have not, so a read here sees geometry only.
+     * is_final_pass is 0 on every pass but the last; subscribers that
+     * want one read per frame gate on it, subscribers that composite
+     * per pass ignore it. */
+    void (*buffer_read_fn)(void *user_data, int is_final_pass,
+                           int sx, int sy, int sw, int sh);
+    void  *buffer_read_user_data;
+
+    /* Fires after the helper passes, before the geometry-reporting edit
+     * overlays, once per accumulation pass. For subscribers compositing
+     * a sparse overlay that must stay UNDER the outlines/points/guides. */
+    void (*buffer_pass_overlay_fn)(void *user_data, int is_final_pass,
+                                   int sx, int sy, int sw, int sh);
+    void  *buffer_pass_overlay_user_data;
+
+    /* Fires ONCE per frame on the resolved image: after
+     * post_resolve_overlays_fn, before the scene post-filter, so Post FX
+     * applies uniformly across a Split seam. `proj` is the canonical
+     * jitter-free active projection for this frame. For full-rect
+     * replacements that belong on the resolved image. */
+    void (*buffer_resolve_overlay_fn)(void *user_data,
+                                      const struct Render3dProjectionDesc *proj,
+                                      int sx, int sy, int sw, int sh);
+    void  *buffer_resolve_overlay_user_data;
+
     /* --- Background clear color (RGBA) ---
      * Populated by the controller from the user's CMD_CLEAR_COLOR (or a
      * default if none was set). The scene module no longer scans the
@@ -266,13 +309,6 @@ typedef struct Render3dRenderConfig {
      * filter that suppresses the program's own material/lighting/cull
      * commands (see ReplExecutionOptions.state_filter). 0 = off. */
     int winding_view;
-    /* Depth-buffer visualization (Render3dDepthVizMode as a plain int:
-     * 0 = off, 1 = linear near..far, 2 = scene-normalized, 3 = split
-     * screen; kept untyped here because depth_viz.h includes render.h,
-     * which includes this header). The controller forces 0 when the GL
-     * context cannot read GL_DEPTH_COMPONENT (web). memset-zero = off,
-     * so non-REPL callers (render3d_demo) are unaffected. */
-    int depth_viz;
 
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)

@@ -11,7 +11,6 @@
 #include "render3d/guides/geometry_guides.h"
 #include "render3d/render.h"
 #include "render3d/render_types.h"
-#include "render3d/depth_viz.h"
 #include "render3d/postprocess_filter.h"
 #include "render3d/postprocess_surface.h"
 
@@ -542,39 +541,211 @@ static void test_render3d_winding_and_gizmo(void) {
 #endif
 }
 
-/* Depth-buffer visualization: every mode renders cleanly through both
- * the single-pass and accumulation branches (the stub glReadPixels
- * fills 1.0, so this is the empty-scene/structural path — the math
- * coverage lives in test_depth_viz), and an out-of-range mode is
- * rejected by validate_render_config before any GL work. */
-static void test_depth_viz_render_modes(void) {
-    printf("--- depth-viz render modes ---\n");
+/* --- Buffer-inspection hook contract ------------------------------- *
+ *
+ * render3d fires three neutral hooks and knows nothing about what
+ * subscribes to them, so the ONLY thing keeping a subscriber correct is
+ * where and how often they fire. Nothing else in the tree pins that, and
+ * the depth/stencil visualizations depend on all of it: a per-frame
+ * reader takes the pass flagged final, a per-pass compositor takes every
+ * pass, and the full-rect composite must land after the resolve
+ * overlays and before the post filter. */
+
+#ifdef GL_STUBS
+
+#define BUFFER_HOOK_TRACE_MAX 128
+
+typedef enum {
+    BUFFER_HOOK_READ = 1,
+    BUFFER_HOOK_PASS_OVERLAY,
+    BUFFER_HOOK_RESOLVE_OVERLAY,
+    BUFFER_HOOK_POST_RESOLVE_OVERLAYS   /* the neighbouring existing hook */
+} BufferHookKind;
+
+typedef struct {
+    int kind[BUFFER_HOOK_TRACE_MAX];
+    int is_final[BUFFER_HOOK_TRACE_MAX];
+    int count;
+    int rect_ok;      /* every call saw the config's scene rect */
+    int proj_ok;      /* the resolve hook received a non-NULL projection */
+} BufferHookTrace;
+
+static void buffer_hook_record(BufferHookTrace *tr, int kind, int is_final) {
+    if (!tr || tr->count >= BUFFER_HOOK_TRACE_MAX)
+        return;
+    tr->kind[tr->count] = kind;
+    tr->is_final[tr->count] = is_final;
+    tr->count++;
+}
+
+static void buffer_hook_check_rect(BufferHookTrace *tr,
+                                   int sx, int sy, int sw, int sh) {
+    if (sx != 0 || sy != 0 || sw != 800 || sh != 600)
+        tr->rect_ok = 0;
+}
+
+static void buffer_hook_read(void *ud, int is_final_pass,
+                             int sx, int sy, int sw, int sh) {
+    BufferHookTrace *tr = (BufferHookTrace *)ud;
+    buffer_hook_record(tr, BUFFER_HOOK_READ, is_final_pass);
+    buffer_hook_check_rect(tr, sx, sy, sw, sh);
+}
+
+static void buffer_hook_pass_overlay(void *ud, int is_final_pass,
+                                     int sx, int sy, int sw, int sh) {
+    BufferHookTrace *tr = (BufferHookTrace *)ud;
+    buffer_hook_record(tr, BUFFER_HOOK_PASS_OVERLAY, is_final_pass);
+    buffer_hook_check_rect(tr, sx, sy, sw, sh);
+}
+
+static void buffer_hook_resolve_overlay(void *ud,
+                                        const Render3dProjectionDesc *proj,
+                                        int sx, int sy, int sw, int sh) {
+    BufferHookTrace *tr = (BufferHookTrace *)ud;
+    buffer_hook_record(tr, BUFFER_HOOK_RESOLVE_OVERLAY, 1);
+    buffer_hook_check_rect(tr, sx, sy, sw, sh);
+    if (!proj)
+        tr->proj_ok = 0;
+}
+
+static void buffer_hook_post_resolve_overlays(void *ud) {
+    buffer_hook_record((BufferHookTrace *)ud,
+                       BUFFER_HOOK_POST_RESOLVE_OVERLAYS, 1);
+}
+
+static void buffer_hook_install(Render3dRenderConfig *cfg,
+                                BufferHookTrace *tr) {
+    tr->count = 0;
+    tr->rect_ok = 1;
+    tr->proj_ok = 1;
+    cfg->buffer_read_fn                    = buffer_hook_read;
+    cfg->buffer_read_user_data             = tr;
+    cfg->buffer_pass_overlay_fn            = buffer_hook_pass_overlay;
+    cfg->buffer_pass_overlay_user_data     = tr;
+    cfg->buffer_resolve_overlay_fn         = buffer_hook_resolve_overlay;
+    cfg->buffer_resolve_overlay_user_data  = tr;
+    cfg->post_resolve_overlays_fn          = buffer_hook_post_resolve_overlays;
+    cfg->post_resolve_overlays_user_data   = tr;
+}
+
+/* Count occurrences of one hook kind, and (for the per-pass hooks) how
+ * many of those carried is_final_pass. */
+static int buffer_hook_count(const BufferHookTrace *tr, int kind,
+                             int *out_final) {
+    int n = 0, finals = 0;
+    for (int i = 0; i < tr->count; i++) {
+        if (tr->kind[i] != kind) continue;
+        n++;
+        if (tr->is_final[i]) finals++;
+    }
+    if (out_final) *out_final = finals;
+    return n;
+}
+
+/* Index of the first call of `kind`, or -1. */
+static int buffer_hook_first(const BufferHookTrace *tr, int kind) {
+    for (int i = 0; i < tr->count; i++)
+        if (tr->kind[i] == kind) return i;
+    return -1;
+}
+
+/* read -> pass_overlay is a per-pass alternation; assert it holds for
+ * every pass rather than only comparing first occurrences. */
+static int buffer_hook_read_precedes_each_pass_overlay(
+        const BufferHookTrace *tr) {
+    int pending_read = 0;
+    for (int i = 0; i < tr->count; i++) {
+        if (tr->kind[i] == BUFFER_HOOK_READ) {
+            if (pending_read) return 0;   /* two reads, no overlay between */
+            pending_read = 1;
+        } else if (tr->kind[i] == BUFFER_HOOK_PASS_OVERLAY) {
+            if (!pending_read) return 0;  /* overlay with no read before it */
+            pending_read = 0;
+        }
+    }
+    return pending_read == 0;
+}
+
+static void buffer_hooks_check_one(const char *label,
+                                   Render3dState *state,
+                                   Render3dRenderConfig *cfg,
+                                   int expect_passes) {
+    BufferHookTrace tr;
+    int read_finals = 0, overlay_finals = 0;
+    int reads, overlays, resolves;
+    char msg[128];
+
+    buffer_hook_install(cfg, &tr);
+    snprintf(msg, sizeof msg, "%s: draw ok", label);
+    ASSERT_INT(msg, render3d_draw_scene(state, cfg), 0);
+
+    reads    = buffer_hook_count(&tr, BUFFER_HOOK_READ, &read_finals);
+    overlays = buffer_hook_count(&tr, BUFFER_HOOK_PASS_OVERLAY,
+                                 &overlay_finals);
+    resolves = buffer_hook_count(&tr, BUFFER_HOOK_RESOLVE_OVERLAY, NULL);
+
+    snprintf(msg, sizeof msg, "%s: read fires once per pass", label);
+    ASSERT_INT(msg, reads, expect_passes);
+    snprintf(msg, sizeof msg, "%s: pass overlay fires once per pass", label);
+    ASSERT_INT(msg, overlays, expect_passes);
+    snprintf(msg, sizeof msg, "%s: exactly one final read", label);
+    ASSERT_INT(msg, read_finals, 1);
+    snprintf(msg, sizeof msg, "%s: exactly one final pass overlay", label);
+    ASSERT_INT(msg, overlay_finals, 1);
+    snprintf(msg, sizeof msg, "%s: resolve overlay fires once per frame",
+             label);
+    ASSERT_INT(msg, resolves, 1);
+    snprintf(msg, sizeof msg, "%s: read precedes each pass overlay", label);
+    ASSERT_TRUE(msg, buffer_hook_read_precedes_each_pass_overlay(&tr));
+    snprintf(msg, sizeof msg, "%s: resolve overlay is last", label);
+    ASSERT_INT(msg, tr.kind[tr.count - 1], BUFFER_HOOK_RESOLVE_OVERLAY);
+    snprintf(msg, sizeof msg, "%s: resolve follows post_resolve_overlays",
+             label);
+    ASSERT_TRUE(msg,
+                buffer_hook_first(&tr, BUFFER_HOOK_POST_RESOLVE_OVERLAYS) <
+                buffer_hook_first(&tr, BUFFER_HOOK_RESOLVE_OVERLAY));
+    snprintf(msg, sizeof msg, "%s: every hook saw the scene rect", label);
+    ASSERT_TRUE(msg, tr.rect_ok);
+    snprintf(msg, sizeof msg, "%s: resolve got a projection", label);
+    ASSERT_TRUE(msg, tr.proj_ok);
+}
+#endif
+
+static void test_buffer_hooks(void) {
+    printf("--- buffer-inspection hooks ---\n");
 
 #ifdef GL_STUBS
     Render3dRenderConfig cfg = make_test_config();
     Render3dState state;
     render3d_state_init(&state);
 
-    for (int mode = RENDER3D_DEPTH_VIZ_OFF;
-         mode < RENDER3D_DEPTH_VIZ_COUNT; mode++) {
-        cfg.depth_viz = mode;
-        cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
-        ASSERT_INT("depth-viz single-pass render ok",
-                   render3d_draw_scene(&state, &cfg), 0);
-        cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
-        cfg.accum_passes = 16;
-        ASSERT_INT("depth-viz accum render ok",
-                   render3d_draw_scene(&state, &cfg), 0);
-    }
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+    buffer_hooks_check_one("single pass", &state, &cfg, 1);
 
-    cfg.depth_viz = RENDER3D_DEPTH_VIZ_COUNT;
-    errno = 0;
-    ASSERT_INT("depth-viz out-of-range rejected",
-               render3d_draw_scene(&state, &cfg), -1);
-    ASSERT_INT("depth-viz reject sets EINVAL", errno, EINVAL);
-    cfg.depth_viz = -1;
-    ASSERT_INT("depth-viz negative rejected",
-               render3d_draw_scene(&state, &cfg), -1);
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
+    cfg.accum_passes = 16;
+    buffer_hooks_check_one("16-pass accum", &state, &cfg, 16);
+
+    /* Blur without a setup_subframe_fn degrades to the AA jitter path;
+     * with one it takes the per-pass config-copy branch, which forwards
+     * is_final_pass separately. Cover both. */
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_BLUR;
+    cfg.accum_passes = 4;
+    buffer_hooks_check_one("blur (jitter fallback)", &state, &cfg, 4);
+    cfg.setup_subframe_fn = test_setup_subframe_count;
+    cfg.setup_subframe_user_data = NULL;
+    buffer_hooks_check_one("blur (subframe hook)", &state, &cfg, 4);
+    cfg.setup_subframe_fn = NULL;
+
+    /* Unsubscribed hooks are simply not called — a config that leaves
+     * them NULL (render3d_demo, every non-REPL caller) still renders. */
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+    cfg.buffer_read_fn = NULL;
+    cfg.buffer_pass_overlay_fn = NULL;
+    cfg.buffer_resolve_overlay_fn = NULL;
+    cfg.post_resolve_overlays_fn = NULL;
+    ASSERT_INT("no subscribers still renders",
+               render3d_draw_scene(&state, &cfg), 0);
 #endif
 }
 
@@ -1446,7 +1617,7 @@ int main(int argc, char **argv) {
     test_scene_axes_render();
     test_scene_backdrop_render();
     test_render3d_winding_and_gizmo();
-    test_depth_viz_render_modes();
+    test_buffer_hooks();
     test_scene_lights();
     test_scene_overlays();
     test_anim_time_propagation();

@@ -67,8 +67,10 @@ void render3d_postprocess_filter_reset(void);
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode,
                                      int sx, int sy, int sw, int sh);
 
-/* Scene-layer screen-space 2D bracket shared by the post filters and the
- * depth-viz quad (src/render3d/ must not depend on ui/gl_2d.h). begin
+/* Scene-layer screen-space 2D bracket shared by the post filters and by
+ * whatever composites over the scene rect through the buffer hooks —
+ * today the buffer-viz quads (src/render3d/ must not depend on
+ * ui/gl_2d.h, and neither may a subscriber reach for it). begin
  * pushes GL_ALL_ATTRIB_BITS + all three matrix stacks, sets a pixel
  * ortho over the rect with texturing on (GL_REPLACE) and depth/light/
  * blend off; end pops it all back. The matrix mode is snapshot/restored

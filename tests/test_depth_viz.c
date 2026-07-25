@@ -222,6 +222,39 @@ static void test_degenerate_inputs(void) {
     AT("degenerate: scene w/o range still writes", lum[0] != 7);
 }
 
+/* Mode-range validation belongs to this module, not to the renderer:
+ * render3d fires a neutral buffer hook and never sees a viz mode, so an
+ * out-of-range value has to bounce off render3d_depth_viz_render itself.
+ * (It used to be rejected by validate_render_config, back when the mode
+ * travelled as a Render3dRenderConfig field.)
+ *
+ * Every rejection path below returns before the first GL call, so this
+ * runs with no GL context in either build: an out-of-range mode is
+ * refused up front, and a valid mode with no capture from this frame
+ * refuses on the capture check. */
+static void test_render_rejects_bad_modes(void) {
+    Render3dProjectionDesc proj = make_desc(PROJ_PERSPECTIVE);
+
+    render3d_depth_viz_reset();
+    render3d_depth_viz_render((Render3dDepthVizMode)-1, &proj, 0, 0, 4, 4);
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_COUNT, &proj, 0, 0, 4, 4);
+    render3d_depth_viz_render((Render3dDepthVizMode)(RENDER3D_DEPTH_VIZ_COUNT + 7),
+                              &proj, 0, 0, 4, 4);
+    /* OFF is in range but draws nothing. */
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_OFF, &proj, 0, 0, 4, 4);
+    /* In-range mode, but no capture this frame / degenerate rect. */
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_LINEAR, &proj, 0, 0, 4, 4);
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_LINEAR, NULL, 0, 0, 4, 4);
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_LINEAR, &proj, 0, 0, 0, 0);
+    AT("render: out-of-range and captureless modes are no-ops", 1);
+
+    /* A degenerate rect never produces a capture to consume, so the
+     * render above stays refused rather than reading a stale buffer. */
+    render3d_depth_viz_capture(0, 0, 0, 0);
+    render3d_depth_viz_render(RENDER3D_DEPTH_VIZ_LINEAR, &proj, 0, 0, 4, 4);
+    AT("render: empty capture leaves nothing to draw", 1);
+}
+
 int main(void) {
     test_linear_perspective();
     test_scene_two_depths();
@@ -232,5 +265,6 @@ int main(void) {
     test_split_maps_like_scene();
     test_ortho_passthrough();
     test_degenerate_inputs();
+    test_render_rejects_bad_modes();
     return test_harness_report(&g_h, "depth_viz");
 }

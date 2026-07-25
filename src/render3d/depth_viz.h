@@ -1,13 +1,15 @@
 /*
  * depth_viz.h - Depth-buffer visualization overlay.
  *
- * Renders the scene's depth buffer as a grayscale image: the controller-
- * selected mode flows through Render3dRenderConfig.depth_viz, render.c
- * captures the scene-rect depth at the end of the fill pass (after user
- * geometry + the replay-fade post_fill hook, BEFORE the backdrop/grid
- * helpers write their own depths — so grid exclusion falls out of read
- * placement), and the resolved image is drawn as a GL_LUMINANCE textured
- * quad just before the scene post-filter.
+ * Renders the scene's depth buffer as a grayscale image. The controller
+ * owns the mode and drives both halves through render3d's neutral
+ * buffer hooks (Render3dRenderConfig.buffer_read_fn /
+ * buffer_resolve_overlay_fn): the scene-rect depth is captured at the
+ * end of the fill pass (after user geometry + the replay-fade post_fill
+ * hook, BEFORE the backdrop/grid helpers write their own depths — so
+ * grid exclusion falls out of read placement), and the resolved image is
+ * drawn as a GL_LUMINANCE textured quad just before the scene
+ * post-filter.
  *
  * Conventions (see render3d_depth_viz_map for the math):
  *   - Depth is linearized through the active projection: perspective
@@ -52,13 +54,15 @@ typedef struct Render3dDepthVizRange {
 } Render3dDepthVizRange;
 
 /* Free the CPU buffers, delete the texture, clear the EMA range and the
- * cached GL_MAX_TEXTURE_SIZE. Called from render3d_init_gl() so a fresh
- * GL context never reuses a stale texture name. */
+ * cached GL_MAX_TEXTURE_SIZE. Called by the controller from
+ * glr_ctrl_init_gl() so a fresh GL context never reuses a stale texture
+ * name. */
 void render3d_depth_viz_reset(void);
 
 /* Read the scene-rect depth buffer (GL window coords, the rect the
- * scene rendered into). Call at fill-end, before the helper passes;
- * under accumulation, on the last pass only. Reads the FULL rect even
+ * scene rendered into). Call from buffer_read_fn (fill-end, before the
+ * helper passes); under accumulation, on the final pass only — the
+ * subscriber gates on the hook's is_final_pass. Reads the FULL rect even
  * for SPLIT so the scene-normalized range is independent of the split
  * position. Buffer-allocation failure degrades to a no-op capture. */
 void render3d_depth_viz_capture(int sx, int sy, int sw, int sh);
