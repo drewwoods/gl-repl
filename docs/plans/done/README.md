@@ -106,6 +106,8 @@ historical context and are not in the table below.
 | `audio-menu.md` | 2026-07-06 | Add a top-level Audio menu grouping discovered tracks by source, highlighting the playing track, displaying track duration, and integrating Play/Pause, Next/Previous controls, and loop modes. |
 | `tutorial-setup-scaffold.md` | 2026-07-08 | Locked `TutorialEntry.setup` scaffolds with example-header support, setup-label anchors, catalog validation, and Color Interpolation as the composition example. |
 | `flatten-performance-without-vm.md` | 2026-07-17 | Direct and compiled expression evaluation plus dependency-aware in-place rebaking; preserves full flattening for structural changes and makes multi-sample Accum Blur practical, especially in Emscripten. |
+| `tour-replay.md` | 2026-07-25 | Controlled-tour replay-style transport state machine: Play, Pause, Step, Back, Seek, discrete speeds, and collapsible HUD visual overlays. |
+| `release-cleanup.md` | 2026-07-25 | Pre-release cleanup sweep: scanner signal fixes (clangd/clang-tidy/cppcheck), dead-code removals, and PMD CPD duplication hoists. |
 
 Plans not in this directory are active, partial, not-started, not-landed, or
 external; see the sibling subdirectories.
