@@ -711,6 +711,52 @@ static void buffer_hooks_check_one(const char *label,
 }
 #endif
 
+/* Host chrome renders with GL_STENCIL_TEST suspended. A program that
+ * enables the stencil test leaves it enabled for everything drawn after
+ * its own geometry, and the grid / axes / backdrop / light gizmos are not
+ * the user's geometry — masking them is never what a glStencilFunc meant.
+ * The suspension is scoped so the geometry-reporting overlays that follow
+ * still see (and reproduce) the program's real mask, which is the half of
+ * the contract that would break silently if someone widened the bracket. */
+static void test_helpers_suspend_stencil_test(void) {
+    printf("--- helper passes suspend the stencil test ---\n");
+
+#ifdef GL_STUBS
+    Render3dRenderConfig cfg = make_test_config();
+    Render3dState state;
+    TraceLog trace;
+    int helpers_disable, overlays_pop;
+    /* GL_STENCIL_TEST = 0x0B90, GL_ENABLE_BIT = 0x2000. */
+    const char *stencil_disable = "glDisable 2960";
+    const char *enable_push = "glPushAttrib 8192";
+
+    render3d_state_init(&state);
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+    cfg.grid_theme = 1;             /* give the helper pass something to draw */
+    cfg.post_overlays_fn = NULL;
+
+    trace_begin();
+    ASSERT_INT("stencil-suspend draw ok", render3d_draw_scene(&state, &cfg), 0);
+    trace_end(&trace);
+
+    ASSERT_TRUE("helpers are bracketed by a GL_ENABLE_BIT push",
+                trace_count_line(&trace, enable_push) >= 1);
+    helpers_disable = trace_find_after(&trace, 0, stencil_disable);
+    ASSERT_TRUE("helpers run with the stencil test disabled",
+                helpers_disable >= 0);
+    /* The disable must land after the push that scopes it, so the pop puts
+     * the program's enable state back rather than leaving it off. */
+    ASSERT_TRUE("the disable is inside the scoped push",
+                trace_find_after(&trace, 0, enable_push) < helpers_disable);
+    /* And the bracket must close before the overlay pass: the scene pass's
+     * own outermost glPopAttrib is the last one, so a pop has to precede
+     * it. GL_ALL_ATTRIB_BITS push = 4294967295. */
+    overlays_pop = trace_find_after(&trace, helpers_disable, "glPopAttrib");
+    ASSERT_TRUE("the helper bracket closes before the overlays",
+                overlays_pop > helpers_disable);
+#endif
+}
+
 static void test_buffer_hooks(void) {
     printf("--- buffer-inspection hooks ---\n");
 
@@ -1618,6 +1664,7 @@ int main(int argc, char **argv) {
     test_scene_backdrop_render();
     test_render3d_winding_and_gizmo();
     test_buffer_hooks();
+    test_helpers_suspend_stencil_test();
     test_scene_lights();
     test_scene_overlays();
     test_anim_time_propagation();

@@ -714,6 +714,140 @@ static void test_overlays_honor_culling(void) {
                                   "glVertex3f 1 0 0"), 1);
 }
 
+/* The stencil test is replayed like the clip planes — an outline around
+ * geometry a mask threw away is a lie about what is on screen — but the
+ * stencil WRITE state is deliberately not, because a pass that reports on a
+ * buffer must not modify it. That split is the whole point of the stencil
+ * handling, so it is what these assertions pin. */
+static void test_overlays_honor_stencil_test(void) {
+    printf("--- edit_overlays stencil test replay ---\n");
+
+    /* GL_STENCIL_TEST = 2960, GL_EQUAL = 514, GL_KEEP = 7680,
+     * GL_REPLACE = 7681, GL_ALWAYS = 519. */
+    GLCmd cmds[10];
+    mk_cmd(&cmds[0], CMD_STENCIL_FUNC, (float)GL_EQUAL, 1, 255);
+    cmds[0].num_args = 3;
+    /* Mask-building write state: the program's own, and exactly what an
+     * overlay must NOT inherit. */
+    mk_cmd(&cmds[1], CMD_STENCIL_OP, (float)GL_KEEP, (float)GL_KEEP,
+           (float)GL_REPLACE);
+    cmds[1].num_args = 3;
+    mk_cmd(&cmds[2], CMD_STENCIL_MASK, 255, 0, 0);
+    cmds[2].num_args = 1;
+    mk_cmd(&cmds[3], CMD_ENABLE, (float)GL_STENCIL_TEST, 0, 0);
+    cmds[3].num_args = 1;
+    mk_cmd(&cmds[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 1, 0, 0); cmds[5].src_cmd_idx = 5;
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 3, 0, 0);
+    mk_cmd(&cmds[8], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[9], CMD_DISABLE, (float)GL_STENCIL_TEST, 0, 0);
+    cmds[9].num_args = 1;
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 9;   /* stop before the trailing disable */
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_TRUE("outlines replay the stencil comparison",
+                trace_count_line(&log, "glStencilFunc 514 1 255") >= 1);
+    ASSERT_INT("outlines are drawn with the stencil test live",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("the pass leaves the stencil test off for later overlays",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  NULL), 0);
+
+    /* Writes: each walk opens with them shut and never reopens them, so the
+     * program's own glStencilOp / glStencilMask must not appear at all.
+     * Three baselines because the outline render runs three walks — same
+     * count the cull replay above sees for glEnable. */
+    ASSERT_INT("every walk shuts stencil writes at entry",
+               trace_count_line(&log, "glStencilMask 0"), 3);
+    ASSERT_INT("the walk never reopens stencil writes",
+               trace_count_line(&log, "glStencilMask 255"), 0);
+    ASSERT_INT("every walk pins the stencil op to KEEP/KEEP/KEEP",
+               trace_count_line(&log, "glStencilOp 7680 7680 7680"), 3);
+    ASSERT_INT("the program's mask-building op is never replayed",
+               trace_count_line(&log, "glStencilOp 7680 7680 7681"), 0);
+
+    /* Vertex points take the same policy through their own walker. */
+    ctx.show_vertex_outlines = 0;
+    ctx.show_vertex_points = 1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("vertex points are drawn with the stencil test live",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("vertex points never reopen stencil writes",
+               trace_count_line(&log, "glStencilMask 255"), 0);
+    ctx.show_vertex_points = 0;
+
+    /* The cursor highlight opts out under On: finding the line you are
+     * editing matters even when a mask removed its geometry. */
+    ctx.cursor.edit_line_idx = 5;
+    ctx.highlight_current_poly = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("On mode draws the highlight with the stencil test suspended",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  "glVertex3f 1 0 0"), 0);
+
+    /* ...and follows the program under Clipped & culled. */
+    ctx.highlight_clipped_culled = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("Clipped & culled draws the highlight with the stencil live",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  "glVertex3f 1 0 0"), 1);
+
+    /* A GL_ENABLE_BIT scope reverts the stencil-test enable at the pop,
+     * exactly like the cull cap. Attrib membership is routed through
+     * attrib_bits, so this is the branch that will pick up the stencil
+     * attrib group for free when Phase 2 adds it. */
+    GLCmd scoped[8];
+    mk_cmd(&scoped[0], CMD_ENABLE, (float)GL_STENCIL_TEST, 0, 0);
+    scoped[0].num_args = 1;
+    mk_cmd(&scoped[1], CMD_PUSH_ATTRIB, (float)GL_ENABLE_BIT, 0, 0);
+    scoped[1].num_args = 1;
+    mk_cmd(&scoped[2], CMD_DISABLE, (float)GL_STENCIL_TEST, 0, 0);
+    scoped[2].num_args = 1;
+    mk_cmd(&scoped[3], CMD_POP_ATTRIB, 0, 0, 0);
+    scoped[3].num_args = 0;
+    mk_cmd(&scoped[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&scoped[5], CMD_VERTEX3F, 8, 0, 0);
+    mk_cmd(&scoped[6], CMD_VERTEX3F, 9, 0, 0);
+    mk_cmd(&scoped[7], CMD_END, 0, 0, 0);
+
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = scoped;
+    ctx.program.cmd_count = 8;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("a GL_ENABLE_BIT pop restores the stencil-test enable",
+               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+                                  "glVertex3f 8 0 0"), 1);
+}
+
 /* glPushAttrib/glPopAttrib scope the state the overlay walks replay: a scoped
  * glDisable(GL_CULL_FACE) reverts at the pop, so geometry after the pop culls
  * like the real render — in EVERY walker (glBegin outline, glut-solid outline,
@@ -2715,6 +2849,7 @@ int main(void) {
     test_current_poly_highlight_respects_overlay_scope();
     test_highlight_clip_planes();
     test_overlays_honor_culling();
+    test_overlays_honor_stencil_test();
     test_overlays_scope_push_pop_attrib();
     test_single_polygon_highlight_strip_winding();
     test_overlays_honor_color_mask();

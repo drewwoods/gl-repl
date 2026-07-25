@@ -247,14 +247,15 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
     return mat4_transform_normal_frame(model, normal, out);
 }
 
-/* --- overlays that honor the program's clipping and culling ---
+/* --- overlays that honor the program's clipping, culling and stencil ---
  *
  * The user program runs inside a glPushAttrib(GL_ALL_ATTRIB_BITS) bracket, so
- * by the time these passes retrace its geometry the clip planes and the cull
- * state it set are gone. An overlay would then trace the whole uncut, unculled
- * silhouette — outlining a sphere over what the frame actually shows as a
- * dome, or drawing every far-side edge of a culled solid. So every pass
- * re-issues the program's own clip / cull commands as it walks:
+ * by the time these passes retrace its geometry the clip planes, the cull
+ * state and the stencil test it set are gone. An overlay would then trace the
+ * whole uncut, unculled, unmasked silhouette — outlining a sphere over what
+ * the frame actually shows as a dome, or drawing every far-side edge of a
+ * culled solid. So every pass re-issues the program's own clip / cull /
+ * stencil-test commands as it walks:
  *
  *   - glClipPlane bakes its equation into eye space using the modelview
  *     current at the call, and these passes track the same modelview the
@@ -268,17 +269,29 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
  *     GL_POINTS primitives are never culled, so the authored vertex-point walk
  *     tracks the state but keeps drawing (a vertex shared by a front and a
  *     back face still sits on a face you can see).
+ *   - The stencil TEST replays (GL_STENCIL_TEST + glStencilFunc): an outline
+ *     around geometry a mask threw away is a lie about what is on screen.
+ *     The stencil WRITE state does not — see overlay_gl_walk_begin. This is
+ *     the one place where "reproduce the program's state" splits in two, and
+ *     it splits along test-vs-write, not along command boundaries.
+ *
+ * Host chrome takes the opposite policy and is handled elsewhere: render.c
+ * brackets render3d_pass_helpers (backdrop / grid / axes / orbit target /
+ * light gizmos) with the stencil test suspended, because masking chrome the
+ * user never authored is never what was meant. That split works because the
+ * two render3d passes align exactly with the two policies — helpers are all
+ * chrome, overlays are all geometry reporting.
  *
  * Vertex points and plain outlines honor all of it unconditionally: they exist
  * to report the geometry you can see. The cursor highlight is the one opt-out —
  * under POLY_HIGHLIGHT_ON it draws the shape as authored, via
  * overlay_gl_suspend/_resume around that single draw, so you can still see the
- * whole solid a plane cuts into or the far side of a culled shell.
- * POLY_HIGHLIGHT_CLIPPED_CULLED (ctx->highlight_clipped_culled) drops the
- * opt-out.
+ * whole solid a plane cuts into, the far side of a culled shell, or the part a
+ * mask removed. POLY_HIGHLIGHT_CLIPPED_CULLED (ctx->highlight_clipped_culled)
+ * drops the opt-out.
  *
  * overlay_gl_reset() drops what the pass turned on, so the label / guide passes
- * that run afterward are neither clipped nor culled.
+ * that run afterward are neither clipped, culled, nor masked.
  */
 #define OUTLINE_CLIP_PLANE_COUNT 6
 
@@ -292,6 +305,10 @@ typedef struct OverlayGlState {
     int      cull_enabled;       /* we enabled GL_CULL_FACE */
     GLenum   front_face;         /* live glFrontFace mode, GL's own default */
     int      color_writes;       /* program's glColorMask writes RGB */
+    int      stencil_enabled;    /* we enabled GL_STENCIL_TEST */
+    GLenum   stencil_func;       /* live glStencilFunc comparison */
+    GLint    stencil_ref;        /* live glStencilFunc reference value */
+    GLuint   stencil_value_mask; /* live glStencilFunc compare mask */
 } OverlayGlState;
 
 /* One saved attribute frame: the push mask, the mirror snapshot, and the live
@@ -316,6 +333,31 @@ static void overlay_gl_tracker_init(OverlayGlTracker *trk) {
     memset(trk, 0, sizeof(*trk));
     trk->st.front_face = GL_CCW;   /* GL's own default */
     trk->st.color_writes = 1;
+    trk->st.stencil_func = GL_ALWAYS;          /* GL's own defaults */
+    trk->st.stencil_ref = 0;
+    trk->st.stencil_value_mask = 0xFFu;
+}
+
+/* Start a walk: reset the mirror AND put live GL into the baseline the
+ * mirror claims, rather than assuming the frame left one.
+ *
+ * The stencil write state is set once here and never touched again for
+ * the rest of the walk — see overlay_gl_apply_cmd, which deliberately
+ * refuses to replay glStencilOp / glStencilMask. An overlay pass redraws
+ * the user's geometry, so with the program's own op/mask live it would
+ * *write* to the stencil buffer as a side effect: corrupting the mask a
+ * later pass depends on, and the buffer the stencil visualization is
+ * about to read. Reporting on a buffer must not modify it.
+ *
+ * Restoring all of this is the frame's job: every overlay walk runs
+ * inside the scene pass's glPushAttrib(GL_ALL_ATTRIB_BITS), which covers
+ * GL_STENCIL_BUFFER_BIT. */
+static void overlay_gl_walk_begin(OverlayGlTracker *trk) {
+    overlay_gl_tracker_init(trk);
+    glDisable(GL_STENCIL_TEST);
+    glStencilFunc(GL_ALWAYS, 0, 0xFFu);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    glStencilMask(0);
 }
 
 static int outline_clip_cap_index(GLenum cap) {
@@ -367,6 +409,23 @@ static int overlay_gl_apply_cmd(const GLCmd *cmd, OverlayGlState *st) {
     case CMD_COLOR_MASK:
         st->color_writes = color_mask_writes_color(cmd);
         return 1;
+    case CMD_STENCIL_FUNC:
+        /* Replayed, because it is a *test*: an outline drawn around
+         * geometry the program's mask threw away would be a lie about
+         * what is on screen. Same principle as the clip planes above. */
+        st->stencil_func = (GLenum)cmd->args[0];
+        st->stencil_ref = (GLint)cmd->args[1];
+        st->stencil_value_mask = (GLuint)cmd->args[2];
+        glStencilFunc(st->stencil_func, st->stencil_ref, st->stencil_value_mask);
+        return 1;
+    case CMD_STENCIL_OP:
+    case CMD_STENCIL_MASK:
+        /* Consumed but deliberately NOT replayed: these are write state,
+         * and an overlay pass must never write to the stencil buffer (see
+         * overlay_gl_walk_begin). Returning 1 is what keeps them out of
+         * the caller's draw path; leaving them unmirrored is what keeps
+         * the buffer intact. */
+        return 1;
     case CMD_ENABLE:
     case CMD_DISABLE: {
         GLenum cap = (GLenum)cmd->args[0];
@@ -380,6 +439,11 @@ static int overlay_gl_apply_cmd(const GLCmd *cmd, OverlayGlState *st) {
         if (cap == GL_CULL_FACE) {
             if (on) glEnable(cap); else glDisable(cap);
             st->cull_enabled = on;
+            return 1;
+        }
+        if (cap == GL_STENCIL_TEST) {
+            if (on) glEnable(cap); else glDisable(cap);
+            st->stencil_enabled = on;
             return 1;
         }
         return 0;  /* some other cap: not ours to mirror */
@@ -435,6 +499,30 @@ static void overlay_gl_restore_frame(const OverlayAttribFrame *fr,
     }
     if (mask & repl_attrib_bits_for_type(CMD_COLOR_MASK, 0))
         st->color_writes = target->color_writes;
+    if (mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_STENCIL_TEST)) {
+        if (target->stencil_enabled != st->stencil_enabled) {
+            if (target->stencil_enabled) glEnable(GL_STENCIL_TEST);
+            else                         glDisable(GL_STENCIL_TEST);
+        }
+        st->stencil_enabled = target->stencil_enabled;
+    }
+    /* glStencilFunc belongs to GL_STENCIL_BUFFER_BIT, which the REPL does
+     * not accept in glPushAttrib yet — repl_attrib_bits_for_type returns 0
+     * for CMD_STENCIL_FUNC, so this branch is unreachable today and turns
+     * itself on with the rest of the stencil attrib group. Routing it
+     * through attrib_bits rather than hardcoding a bit is what makes that
+     * automatic (and is why the whole restore reads that way). */
+    if (mask & repl_attrib_bits_for_type(CMD_STENCIL_FUNC, 0)) {
+        if (target->stencil_func != st->stencil_func ||
+            target->stencil_ref != st->stencil_ref ||
+            target->stencil_value_mask != st->stencil_value_mask) {
+            glStencilFunc(target->stencil_func, target->stencil_ref,
+                          target->stencil_value_mask);
+        }
+        st->stencil_func = target->stencil_func;
+        st->stencil_ref = target->stencil_ref;
+        st->stencil_value_mask = target->stencil_value_mask;
+    }
 }
 
 /* Step one flat command through the tracker: glPushAttrib/glPopAttrib scope
@@ -478,9 +566,16 @@ static void overlay_gl_reset(OverlayGlState *st) {
     if (st->cull_enabled)
         glDisable(GL_CULL_FACE);
     /* glCullFace / glFrontFace modes are left as the program set them: with
-     * GL_CULL_FACE off they select nothing, and no later overlay pass culls. */
+     * GL_CULL_FACE off they select nothing, and no later overlay pass culls.
+     * The stencil test is dropped for the same reason the clip planes are:
+     * the label and guide passes that run afterward report positions, not
+     * geometry, and must not be masked away. glStencilFunc is left as the
+     * walk set it — with the test off it selects nothing. */
+    if (st->stencil_enabled)
+        glDisable(GL_STENCIL_TEST);
     st->clip_enabled_mask = 0;
     st->cull_enabled = 0;
+    st->stencil_enabled = 0;
 }
 
 /* Lift the program's clipping and culling for one highlight draw
@@ -497,6 +592,11 @@ static void overlay_gl_suspend(const OverlayWalkCtx *ctx, const OverlayGlState *
     }
     if (st->cull_enabled)
         glDisable(GL_CULL_FACE);
+    /* The stencil test joins the opt-out for the same reason: finding the
+     * line you are editing matters even when its geometry is the part a
+     * mask threw away. */
+    if (st->stencil_enabled)
+        glDisable(GL_STENCIL_TEST);
 }
 
 static void overlay_gl_resume(const OverlayWalkCtx *ctx, const OverlayGlState *st) {
@@ -508,6 +608,8 @@ static void overlay_gl_resume(const OverlayWalkCtx *ctx, const OverlayGlState *s
     }
     if (st->cull_enabled)
         glEnable(GL_CULL_FACE);
+    if (st->stencil_enabled)
+        glEnable(GL_STENCIL_TEST);
 }
 
 static int outline_begin_mode_has_overlay(GLenum mode) {
@@ -690,7 +792,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     OverlayGlTracker trk;
     int block_clip_suspended = 0;
 
-    overlay_gl_tracker_init(&trk);
+    overlay_gl_walk_begin(&trk);
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
@@ -794,7 +896,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     OverlayGlTracker trk;
     int contour_clip_suspended = 0;
 
-    overlay_gl_tracker_init(&trk);
+    overlay_gl_walk_begin(&trk);
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
@@ -888,7 +990,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     int selected_shape = one_instance ? last_selected_glut_shape(ctx) : -1;
     OverlayGlTracker trk;
 
-    overlay_gl_tracker_init(&trk);
+    overlay_gl_walk_begin(&trk);
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
@@ -947,7 +1049,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
     if (!has_glut_solid)
         return;
 
-    overlay_gl_tracker_init(&trk);
+    overlay_gl_walk_begin(&trk);
     glPushMatrix();
     glPointSize(EDIT_OVERLAY_VERTEX_POINT_SIZE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
@@ -1072,7 +1174,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         GLenum primitive_mode = 0;
         OverlayGlTracker trk;
 
-        overlay_gl_tracker_init(&trk);
+        overlay_gl_walk_begin(&trk);
         for (int i = 0; i < flat_cmd_count; i++) {
             if (!flat_cmds[i].valid) continue;
             if (repl_cmd_is_transform(flat_cmds[i].type)) {
@@ -2294,6 +2396,14 @@ void edit_overlays_post_resolve_overlays(void *user_data) {
     const OverlaySnapshotPack *pack = (const OverlaySnapshotPack *)user_data;
     if (!pack) return;
 
+    /* Screen-anchored annotation, not geometry: a label says where a
+     * vertex is, so a stencil mask meant for the program's polygons must
+     * not delete it. Unlike the in-pass overlays this runs after the
+     * scene pass popped its own GL_ALL_ATTRIB_BITS frame, so it brackets
+     * its own suspension. */
+    glPushAttrib(GL_ENABLE_BIT);
+    glDisable(GL_STENCIL_TEST);
+
     if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF) {
         prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_vertex_numbers(&pack->walk,
@@ -2307,4 +2417,6 @@ void edit_overlays_post_resolve_overlays(void *user_data) {
         edit_overlays_render_replay_vertex_label(&pack->walk);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
+
+    glPopAttrib();
 }

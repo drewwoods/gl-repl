@@ -848,7 +848,24 @@ static void render_3d_scene_pass(const Render3dState *state,
         config->buffer_read_fn(config->buffer_read_user_data, is_final_pass,
                                config->render3d_x, config->render3d_y,
                                config->render3d_w, config->render3d_h);
+    /* Host chrome renders with GL_STENCIL_TEST suspended. A program that
+     * enables the stencil test leaves it enabled for everything drawn
+     * afterwards, and the frame does not end where the user's geometry
+     * does — without this, a mask meant for the program's own polygons
+     * silently clips the grid, axes, backdrop and light gizmos, which the
+     * user never asked to mask. GL_ENABLE_BIT scoping puts the program's
+     * enable state back before the overlays run, so the geometry-reporting
+     * pass below still sees (and reproduces) the real mask.
+     *
+     * This is the one bracket that covers all chrome: render3d_pass_helpers
+     * is exactly the host-chrome pass and render3d_pass_overlays is exactly
+     * the geometry-reporting one, so the split already matches the two
+     * stencil policies. Naming no viz vocabulary keeps it correct whether
+     * or not anything is visualizing the buffer. */
+    glPushAttrib(GL_ENABLE_BIT);
+    glDisable(GL_STENCIL_TEST);
     render3d_pass_helpers(&frame_ctx);
+    glPopAttrib();
     /* Between the host chrome and the geometry-reporting overlays: a
      * sparse composite here stays under the outlines/points/guides. */
     if (config->buffer_pass_overlay_fn)
