@@ -1169,6 +1169,35 @@ static void test_depth_viz_row_metadata(void) {
     ASSERT_INT("Depth view is a normal-key binding", item->is_special, 0);
 }
 
+/* Stencil view mirrors depth view's session-scoped config plumbing but has
+ * no shortcut yet: the menu row is its only interactive entry point. */
+static void test_stencil_viz_row_metadata(void) {
+    const GlrConfigItem *item = NULL;
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *candidate = glr_config_item_at(i);
+        if (candidate && candidate->key == GLR_CONFIG_STENCIL_VIZ) {
+            item = candidate;
+            break;
+        }
+    }
+    ASSERT_TRUE("found Stencil view row", item != NULL);
+    if (!item)
+        return;
+
+    ASSERT_STR("Stencil view label", item->label, "Stencil view");
+    ASSERT_STR("Stencil view slug", glr_config_item_slug(item), "stencil_view");
+    ASSERT_INT("Stencil view has 4 states",
+               glr_config_state_count(GLR_CONFIG_STENCIL_VIZ), 4);
+    ASSERT_STR("stencil state 0", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 0), "Off");
+    ASSERT_STR("stencil state 1", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 1), "Palette");
+    ASSERT_STR("stencil state 2", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 2), "Ramp");
+    ASSERT_STR("stencil state 3", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 3), "Split");
+    ASSERT_INT("Stencil view has no key binding", item->key_code, 0);
+    ASSERT_INT("Stencil view has no modifiers", item->modifiers, 0);
+    ASSERT_INT("Stencil view is not a special key", item->is_special, 0);
+}
+
 /* Audit #18: GLR_CONFIG_NONE must return 0/NULL state count and name,
  * and must not match the first rendering row (which carries GLR_CONFIG_NONE). */
 static void test_config_none_handling(void) {
@@ -1283,6 +1312,35 @@ static void test_depth_viz_cycle_refuses_without_readback(void) {
     ASSERT_INT("depth view cycles once readback is supported",
                glr_config_get(GLR_CONFIG_DEPTH_VIZ), 1);
     glr_state_presentation_mut()->depth_viz = 0;
+}
+
+static void test_stencil_viz_cycle_refuses_without_readback(void) {
+    int stencil_viz_row = -1;
+
+    glr_ctrl_reset_all();
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_STENCIL_VIZ)
+            stencil_viz_row = i;
+    }
+    ASSERT_TRUE("found stencil view row", stencil_viz_row >= 0);
+    ASSERT_TRUE("supported context reports no stencil refusal reason",
+                glr_ctrl_stencil_readback_unsupported_reason() == NULL);
+
+    glr_ctrl_set_stencil_readback_supported_for_test(0);
+    ASSERT_TRUE("unsupported context reports stencil refusal reason",
+                glr_ctrl_stencil_readback_unsupported_reason() != NULL);
+    glr_cfg_cycle_row(stencil_viz_row, 1);
+    ASSERT_INT("stencil view stays Off on refused cycle",
+               glr_config_get(GLR_CONFIG_STENCIL_VIZ), 0);
+    ASSERT_TRUE("status names the missing stencil capability",
+                strstr(ui_state_status().text, "can't read the stencil buffer") != NULL);
+
+    glr_ctrl_set_stencil_readback_supported_for_test(1);
+    glr_cfg_cycle_row(stencil_viz_row, 1);
+    ASSERT_INT("stencil view cycles once readback is supported",
+               glr_config_get(GLR_CONFIG_STENCIL_VIZ), 1);
+    glr_state_presentation_mut()->stencil_viz = 0;
 }
 
 static void test_replay_config_set_uses_lifecycle(void) {
@@ -2275,10 +2333,12 @@ int main(void) {
     test_scene_menu_cycle_actions();
     test_msaa_display_label_override();
     test_depth_viz_row_metadata();
+    test_stencil_viz_row_metadata();
     test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
     test_depth_viz_cycle_refuses_without_readback();
+    test_stencil_viz_cycle_refuses_without_readback();
     test_replay_config_set_uses_lifecycle();
     test_status_set_drops_empty_message();
     test_cfg_cycle_focus_origin_eases_to_origin();

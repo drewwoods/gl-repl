@@ -67,6 +67,7 @@
 #include "repl/gl_state_inspector.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
+#include "repl/flatten.h"                  /* repl_flat_clears_stencil */
 #include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
@@ -1192,9 +1193,15 @@ static int g_nv_fog_distance_supported = 0;
  * forces the render-config copy to Off. Defaults to 1: tests that never
  * run init-GL keep the feature exercisable. */
 static int g_depth_readback_supported = 1;
+static int g_stencil_readback_supported = 1;
+static int g_stencil_clear_warning_active = 0;
 
 void glr_ctrl_set_depth_readback_supported_for_test(int supported) {
     g_depth_readback_supported = supported ? 1 : 0;
+}
+
+void glr_ctrl_set_stencil_readback_supported_for_test(int supported) {
+    g_stencil_readback_supported = supported ? 1 : 0;
 }
 
 const char *glr_ctrl_depth_readback_unsupported_reason(void) {
@@ -1205,6 +1212,19 @@ const char *glr_ctrl_depth_readback_unsupported_reason(void) {
            "buffer (works in the native build)";
 #else
     return "Depth view unavailable: GL context can't read the depth buffer";
+#endif
+}
+
+const char *glr_ctrl_stencil_readback_unsupported_reason(void) {
+    if (g_stencil_readback_supported)
+        return NULL;
+    if (glr_state_render().stencil_bits == 0)
+        return "Stencil view unavailable: GL context has no stencil buffer";
+#if defined(__EMSCRIPTEN__)
+    return "Stencil view unavailable: WebGL context can't read the stencil "
+           "buffer (works in the native build)";
+#else
+    return "Stencil view unavailable: GL context can't read the stencil buffer";
 #endif
 }
 
@@ -1376,10 +1396,9 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     g_buffer_viz_frame.depth_mode =
         g_depth_readback_supported ? presentation.depth_viz
                                    : BUFFER_VIZ_DEPTH_OFF;
-    /* Stencil view has no config row yet (plan §1.7); until then the mode
-     * is always Off, which is also what a context without stencil planes
-     * or without stencil readback will be handed. */
-    g_buffer_viz_frame.stencil_mode = BUFFER_VIZ_STENCIL_OFF;
+    g_buffer_viz_frame.stencil_mode =
+        g_stencil_readback_supported ? presentation.stencil_viz
+                                     : BUFFER_VIZ_STENCIL_OFF;
     buffer_viz_install(config, &g_buffer_viz_frame);
     /* Single source of truth: the executor's capability flag + loaded
      * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
@@ -2078,6 +2097,7 @@ void glr_ctrl_display_frame(void) {
     float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
+    ReplFlatRefreshKind flat_refresh = REPL_FLAT_REFRESH_NONE;
     /* Capture replay state once before replay_prepare_frame so the
      * HUD shows the per-frame "before-prepare" view (the contract that
      * test_glr_ctrl pins). Per-field narrow accessors elsewhere in
@@ -2127,12 +2147,29 @@ void glr_ctrl_display_frame(void) {
      * This runs inside the frame-level predef/scratch save/restore below, so
      * assignment threading is undone after the frame. */
     {
-        ReplFlatRefreshKind refreshed =
-            repl_refresh_flat_program(editor_state_edit_line());
-        if (refreshed != REPL_FLAT_REFRESH_NONE) {
+        flat_refresh = repl_refresh_flat_program(editor_state_edit_line());
+        if (flat_refresh != REPL_FLAT_REFRESH_NONE) {
             flat_program = repl_state_flat_program_view();
             num_flat_cmds = flat_program.cmd_count;
         }
+    }
+
+    /* Stencil is deliberately not host-cleared: the program's own
+     * glClear(GL_STENCIL_BUFFER_BIT) is the only clear that preserves export
+     * parity. When inspection is active, point out the easy-to-miss result
+     * once after each program refresh (or when the view is newly enabled),
+     * not every frame. A context that cannot display stencil is masked Off
+     * and therefore does not produce an irrelevant warning. */
+    {
+        int stencil_view_on = g_stencil_readback_supported &&
+            glr_state_presentation().stencil_viz != BUFFER_VIZ_STENCIL_OFF;
+        int missing_clear = stencil_view_on &&
+            !repl_flat_clears_stencil(flat_program.cmds, flat_program.cmd_count);
+        if (missing_clear && (!g_stencil_clear_warning_active ||
+                              flat_refresh != REPL_FLAT_REFRESH_NONE)) {
+            repl_set_status("Stencil view: program never clears GL_STENCIL_BUFFER_BIT");
+        }
+        g_stencil_clear_warning_active = missing_clear;
     }
 
     /* Snapshot production: every per-frame list/snapshot the UI consumes
@@ -3253,6 +3290,24 @@ void glr_ctrl_init_gl(void) {
     if (!g_depth_readback_supported)
         fprintf(stderr, "gl-repl: GL context cannot read the depth buffer; "
                         "Depth view is disabled\n");
+
+    /* A stencil visual can be requested but not supplied by native GLUT, so
+     * require both a non-zero queried width and a working readback. */
+    {
+        GLubyte probe_stencil = 0;
+        (void)glGetError();
+        glReadPixels(0, 0, 1, 1, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE,
+                     &probe_stencil);
+        g_stencil_readback_supported =
+            glr_state_render().stencil_bits > 0 &&
+            glGetError() == GL_NO_ERROR;
+    }
+#if defined(__EMSCRIPTEN__)
+    g_stencil_readback_supported = 0;
+#endif
+    if (!g_stencil_readback_supported)
+        fprintf(stderr, "gl-repl: GL context cannot read the stencil buffer; "
+                        "Stencil view is disabled\n");
 
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /

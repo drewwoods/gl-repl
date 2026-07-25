@@ -251,6 +251,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_VERTEX_POINTS:        return &glr_state_presentation_mut()->show_vertex_points;
     case GLR_CONFIG_WINDING_VIEW:        return &glr_state_presentation_mut()->winding_view;
     case GLR_CONFIG_DEPTH_VIZ:           return &glr_state_presentation_mut()->depth_viz;
+    case GLR_CONFIG_STENCIL_VIZ:         return &glr_state_presentation_mut()->stencil_viz;
     case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_state_mut()->visible;
     case GLR_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case GLR_CONFIG_MEMORY_PROFILE:      return &ui_state_memory_panel_mut()->mode;
@@ -312,6 +313,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_VERTEX_POINTS:        return glr_state_presentation().show_vertex_points;
     case GLR_CONFIG_WINDING_VIEW:        return glr_state_presentation().winding_view;
     case GLR_CONFIG_DEPTH_VIZ:           return glr_state_presentation().depth_viz;
+    case GLR_CONFIG_STENCIL_VIZ:         return glr_state_presentation().stencil_viz;
     case GLR_CONFIG_VARIABLE_PANEL:      return variable_panel_view().visible;
     case GLR_CONFIG_CPU_PROFILE:         return ui_state_profile_panel().mode;
     case GLR_CONFIG_MEMORY_PROFILE:      return ui_state_memory_panel().mode;

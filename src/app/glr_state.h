@@ -70,6 +70,11 @@ typedef struct {
      * controller forces the render-config copy to Off when the GL
      * context cannot read depth (web). */
     int depth_viz;
+    /* Stencil-buffer visualization (BufferVizStencilMode: Off / Palette /
+     * Ramp / Split). Like depth_viz it is a session inspection setting:
+     * persisted in full workspace @cfg headers but intentionally left out of
+     * per-example defaults and scene-local config. */
+    int stencil_viz;
     Render3dViewMode ortho_mode;
     /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view:
      * PROJ_PERSPECTIVE = perspective, PROJ_ORTHO = orthographic.

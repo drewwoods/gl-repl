@@ -69,6 +69,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .compositor_filter_mode = RENDER3D_POST_FILTER_OFF, \
         .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
         .depth_viz              = CFG_DEFAULT_DEPTH_VIZ, \
+        .stencil_viz            = CFG_DEFAULT_STENCIL_VIZ, \
         .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
         .projection_mode        = CFG_DEFAULT_PROJECTION, \
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \

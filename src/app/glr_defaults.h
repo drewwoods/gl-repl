@@ -65,6 +65,7 @@
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
 #define CFG_DEFAULT_DEPTH_VIZ        0   /* BUFFER_VIZ_DEPTH_OFF */
+#define CFG_DEFAULT_STENCIL_VIZ      0   /* BUFFER_VIZ_STENCIL_OFF */
 
 /* Tutorial-start overrides. Tutorials reset presentation to the values
  * above, then differ on these; a tutorial's own leading `@cfg` still

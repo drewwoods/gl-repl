@@ -346,6 +346,8 @@ static const char *accum_effect_names[] = { "Off", "AA", "Blur", "Blur Cam" };
  * the user geometry's own depth extent, Split overlays the right half
  * of the scene with the scene-normalized image. */
 static const char *depth_viz_names[] = { "Off", "Linear", "Scene", "Split" };
+/* Stencil view states mirror BufferVizStencilMode (stencil_viz.h). */
+static const char *stencil_viz_names[] = { "Off", "Palette", "Ramp", "Split" };
 static const char *accum_passes_names[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_NAME_ENTRY) };
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
@@ -463,6 +465,8 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Depth view", .key = GLR_CONFIG_DEPTH_VIZ,
       .state_count = ARRAY_LEN(depth_viz_names), .state_names = depth_viz_names,
       .key_code = KM_KEY(GLR_DEPTH_VIZ), .modifiers = KM_MODS(GLR_DEPTH_VIZ) },
+    { .label = "Stencil view", .key = GLR_CONFIG_STENCIL_VIZ,
+      .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 
@@ -1094,6 +1098,13 @@ void glr_cfg_cycle_row(int row, int delta) {
      * bypass this (they write via glr_config_set), so files round-trip. */
     if (item->key == GLR_CONFIG_DEPTH_VIZ) {
         const char *reason = glr_ctrl_depth_readback_unsupported_reason();
+        if (reason) {
+            repl_set_status(reason);
+            return;
+        }
+    }
+    if (item->key == GLR_CONFIG_STENCIL_VIZ) {
+        const char *reason = glr_ctrl_stencil_readback_unsupported_reason();
         if (reason) {
             repl_set_status(reason);
             return;

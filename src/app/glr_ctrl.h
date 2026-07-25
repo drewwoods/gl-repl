@@ -139,6 +139,12 @@ void glr_ctrl_set_accum(int enabled);
 const char *glr_ctrl_depth_readback_unsupported_reason(void);
 void glr_ctrl_set_depth_readback_supported_for_test(int supported);
 
+/* Stencil-view twin of the depth readback capability gate. A context needs
+ * both actual stencil planes and GL_STENCIL_INDEX readback; commands still
+ * work when this returns a reason, only the diagnostic view is unavailable. */
+const char *glr_ctrl_stencil_readback_unsupported_reason(void);
+void glr_ctrl_set_stencil_readback_supported_for_test(int supported);
+
 /* Request a deferred save-and-quit. Async-signal-safe (sets a sig_atomic_t
  * flag only), so it is used by SIGINT and by UI actions that should share
  * the same recovery-save exit path. The recovery save + exit happen on the

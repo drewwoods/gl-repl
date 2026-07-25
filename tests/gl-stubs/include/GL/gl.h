@@ -370,6 +370,8 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
     } else if (pname == GL_SAMPLES) {
         extern int g_gl_stub_samples;
         params[0] = g_gl_stub_samples;
+    } else if (pname == GL_STENCIL_BITS) {
+        params[0] = 8;
     } else {
         params[0] = 0;
     }
