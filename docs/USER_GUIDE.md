@@ -121,7 +121,7 @@ The triangle appears as soon as the vertices commit. Now:
 
 ## Built-in Examples
 
-**F12** cycles forward through the 36 built-in examples, then any saved
+**F12** cycles forward through the 37 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -143,10 +143,11 @@ Developers can point the app at an editable catalog with
 12  Function branching (args + if)                      30  Teapot carousel (transform stacks + glow points)
 13  Recursive triangle tree (func + recursion)          31  Ringed planet (nebula skies)
 14  Sierpinski carpet (2D recursion)                    32  Aurora observatory (dish tracks the sky)
-15  Sierpinski sponge (3D recursion)                    33  Bubble sort (scratch arrays)
-16  Animated spirograph curve                           34  Clip planes carve solids (glClipPlane)
-17  Traveling ripple ring                               35  Fog ring tunnel (glFog)
-18  Bezier curve with guides                            36  Planar shadows (glMultMatrixf)
+15  Sierpinski sponge (3D recursion)                    33  Pulse bars (easing)
+16  Animated spirograph curve                           34  Bubble sort (scratch arrays)
+17  Traveling ripple ring                               35  Clip planes carve solids (glClipPlane)
+18  Bezier curve with guides                            36  Fog ring tunnel (glFog)
+                                                        37  Planar shadows (glMultMatrixf)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,

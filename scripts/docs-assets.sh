@@ -95,7 +95,7 @@ GIF_ASSETS=(
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
     sc-whale sc-stress-test sc-aurora-observatory
-    sc-planar-shadows
+    sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars
     sc-feature-time
 )
 
@@ -1339,6 +1339,14 @@ if want sc-planar-shadows; then
     ( export GLR_EDIT_LINE=2
     gif "$SHOW/planar-shadows.gif" 200 2 20 560 \
         --example "Planar shadows (glMultMatrixf)" )
+fi
+if want sc-fog-ring-tunnel; then
+    gif "$SHOW/fog-ring-tunnel.gif" 200 2 20 560 \
+        --example "Fog ring tunnel (glFog)"
+fi
+if want sc-pulse-bars; then
+    gif "$SHOW/pulse-bars.gif" 200 2 20 560 \
+        --example "Pulse bars (easing)"
 fi
 
 # "Beyond the still image" — interactive features. feature-time is a real

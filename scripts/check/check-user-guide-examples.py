@@ -14,6 +14,8 @@ docs/*.md files from drifting, and also checks docs/USER_GUIDE.md's
     shifts later indices fails here instead of silently misnumbering;
   - docs/SHOWCASE.md must link every catalog scene file, so adding an example
     cannot silently leave the "full showcase" incomplete;
+  - each catalog scene's Showcase tile (or feature section) must embed a local
+    PNG, JPEG, or GIF, and that media file must exist;
   - `--example "<name>"` references in any top-level docs/*.md file must name
     a real example (the CLI matches names case-insensitively);
   - bare numeric `--example <idx>` references in those docs are rejected: they
@@ -35,6 +37,8 @@ import gen_examples
 QUOTED_EXAMPLE_RE = re.compile(
     r"--example\s+(?:\"([^\"\n]+)\"|'([^'\n]+)')")
 NUMERIC_EXAMPLE_RE = re.compile(r"--example\s+\d+")
+SHOWCASE_IMAGE_RE = re.compile(
+    r'<img\b[^>]*\bsrc="([^"?#]+\.(?:png|jpe?g|gif))"', re.IGNORECASE)
 COUNT_CLAIM_RE = re.compile(
     r"\b(?P<built_in>\d+)\s+built-in\s+(?:examples|scenes)\b"
     r"|\bF12\*{0,2}\s+cycles(?:\s+\w+){0,4}\s+all\s+(?P<f12>\d+)\b",
@@ -127,9 +131,23 @@ def doc_reference_failures(path: Path, text: str,
     return failures
 
 
-def showcase_entry_failures(text: str,
+def showcase_media_scope(text: str, offset: int) -> str:
+    """Return the gallery tile or feature section containing an entry link."""
+    tile_start = text.rfind("<td", 0, offset)
+    tile_end = text.find("</td>", offset)
+    if tile_start >= 0 and tile_end >= offset:
+        return text[tile_start:tile_end]
+
+    section_start = text.rfind("\n### ", 0, offset)
+    section_end = text.find("\n### ", offset)
+    if section_end < 0:
+        section_end = len(text)
+    return text[section_start if section_start >= 0 else 0:section_end]
+
+
+def showcase_entry_failures(showcase_path: Path, text: str,
                             entries: list[dict[str, object]]) -> list[str]:
-    """Return catalog scenes without a corresponding SHOWCASE.md link."""
+    """Return catalog scenes without a Showcase link or local gallery media."""
     linked_scenes = set(re.findall(
         r"\]\((\.\./examples/[^)\s]+)\)", text))
     failures: list[str] = []
@@ -139,6 +157,22 @@ def showcase_entry_failures(text: str,
             failures.append(
                 f"SHOWCASE.md: missing entry for {entry['name']!r} "
                 f"(expected link {expected})")
+            continue
+
+        link_offset = text.find(f"]({expected})")
+        scope = showcase_media_scope(text, link_offset)
+        media = SHOWCASE_IMAGE_RE.findall(scope)
+        if not media:
+            failures.append(
+                f"SHOWCASE.md: {entry['name']!r} has no PNG, JPEG, or GIF "
+                "in its Showcase tile or feature section")
+            continue
+        for src in media:
+            media_path = (showcase_path.parent / src).resolve()
+            if not media_path.is_file():
+                failures.append(
+                    f"SHOWCASE.md: {entry['name']!r} references missing media "
+                    f"{src}")
     return failures
 
 
@@ -159,7 +193,7 @@ def main() -> int:
 
     failures: list[str] = []
     section = guide_examples_section(guide)
-    failures.extend(showcase_entry_failures(showcase, entries))
+    failures.extend(showcase_entry_failures(showcase_path, showcase, entries))
 
     if not COUNT_CLAIM_RE.search(section):
         failures.append(

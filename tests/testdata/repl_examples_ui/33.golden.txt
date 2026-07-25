@@ -9,15 +9,15 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid = GRID_THEME_PLANES */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -30,7 +30,7 @@
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -87,98 +87,85 @@ void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
-  // Eye-space light positions, set before the camera transform.
-  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
   // camera
-  glTranslatef(0.0000f, 0.0000f, -9.5000f);
-  glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.5000f, -0.0000f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float d; // sliding cut offset for the animated cutaway
-
-  // Clip planes carve new shapes out of stock solids. glClipPlane sets a
-  // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
-  // discards everything else. The equation is captured in the modelview
-  // frame current AT THE CALL, so transforms placed before glClipPlane
-  // position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
-  // Tip: park the cursor on a glClipPlane line to see its plane guide.
-
-  glClearColor(0.04, 0.05, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
-  glShadeModel(GL_SMOOTH);
-  // Clipping opens each solid up, so light the exposed inside faces too:
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
-
-  // --- Material Colors ----------------
+  static float rate = 45; // compare steps per second @tune
+  static float hold = 1.5; // seconds to rest on the sorted bars @tune
+  static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
+  static float tmp; // swap scratch
+  static float x, h, s; // bar center x, bar height, palette mix
+  static float cur; // bar index under the compare marker
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE); // dark inner core
-  glColor3f(0.05, 0.06, 0.08);
-  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE); // outer color set by glColor3f calls below
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-
-  // 1) Dome - one plane. (0, 1, 0, 0) keeps y >= 0: the sphere's top
-  // half. The plane rides the translated frame, so it cuts through the
-  // sphere's own equator, not the world origin.
-  glPushMatrix();
-    glTranslatef(-2.9, 0.75, 0);
-    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0});
-    glEnable(GL_CLIP_PLANE0);
-    glColor3f(0.95, 0.55, 0.3);
-    glutSolidSphere(1.15, 28, 20);
-    glDisable(GL_CLIP_PLANE0);
-  glPopMatrix();
-
-  // 2) Wedge - two planes. Each plane keeps half the sphere; rotating
-  // the frame 120 degrees between the two calls overlaps the kept halves
-  // into a 120-degree orange slice. The slow spin carries the flat cut
-  // faces around so you can see both of them.
-  glPushMatrix();
-    glTranslatef(0, 0.75, 0);
-    glRotatef(20*t, 0, 1, 0);
-    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 0, 1, 0});
-    glEnable(GL_CLIP_PLANE0);
-    glRotatef(120, 0, 1, 0);
-    glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 0, -1, 0});
-    glEnable(GL_CLIP_PLANE1);
-    glRotatef(-120, 0, 1, 0); // back to the wedge's frame before drawing
-    glColor3f(0.4, 0.82, 0.5);
-    glutSolidSphere(1.15, 28, 20);
-    glDisable(GL_CLIP_PLANE0);
-    glDisable(GL_CLIP_PLANE1);
-  glPopMatrix();
-
-  // 3) Cutaway - coefficients can animate. {-1, 0, -0.7, d} keeps x <= d,
-  // so sweeping d slides the plane through the torus and exposes the
-  // tube's circular cross-sections.
-  d = 1.5*sin(0.7*t);
-  glPushMatrix();
-    glTranslatef(2.9, 0.75, 0);
-    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, -0.7, d});
-    glEnable(GL_CLIP_PLANE0);
-    glColor3f(0.42, 0.62, 0.95);
-    glutSolidTorus(0.42, 0.85, 20, 28);
-    glDisable(GL_CLIP_PLANE0);
-  glPopMatrix();
-
-  // Captions (lighting off so the text color is not shaded)
+  glClearColor(0.05, 0.06, 0.08, 1);
+  // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
+  // loops below are the classic compare-and-swap, but each compare only
+  // runs once enough time has passed (its overall index p*15 + j must stay
+  // under steps). Every frame re-seeds and re-sorts from scratch, so the
+  // bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
+  // time slider or replay to scrub the sort.
   glDisable(GL_LIGHTING);
-  glColor3f(0.78, 0.82, 0.9);
-  glRasterPos3f(-3.6, -0.85, 0);
-  label("1 plane: dome");
-  glRasterPos3f(-0.85, -0.85, 0);
-  label("2 planes: wedge");
-  glRasterPos3f(2, -0.85, 0);
-  label("3 animated: cutaway");
+  glEnable(GL_DEPTH_TEST);
+  period = 225/rate + hold;
+  cycle = floor(t/period);
+  steps = fmod(t, period)*rate;
+  // A fresh deterministic shuffle each cycle
+  for(i, 0, 16) {
+    A[i] = rand(i, cycle);
+  }
+  // Pass p bubbles the largest unsorted value to the right
+  for(p, 0, 15) {
+    for(j, 0, 15) {
+      if(p*15 + j < steps && A[j] > A[j+1]) {
+        tmp = A[j];
+        A[j] = A[j+1];
+        A[j+1] = tmp;
+      }
+    }
+  }
+  // Bars: height and color both follow the value, so sorted reads as a
+  // staircase with a smooth left-to-right gradient
+  glBegin(GL_QUADS);
+    for(i, 0, 16) {
+      s = A[i];
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      x = (i - 7.5)*0.42;
+      h = 0.3 + 2.4*s;
+      glVertex3f(x - 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5 + h, 0);
+      glVertex3f(x - 0.15, -1.5 + h, 0);
+    }
+  glEnd();
+  if(steps < 225) {
+    // Two dots mark the pair the sort is comparing right now
+    cur = fmod(floor(steps), 15);
+    glPointSize(7);
+    glColor3f(1, 0.85, 0.15);
+    glBegin(GL_POINTS);
+      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
+      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
+    glEnd();
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("pass %f of 15", floor(steps/15) + 1);
+  } else {
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("sorted");
+  }

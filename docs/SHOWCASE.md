@@ -451,6 +451,10 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td width="33%" align="center">
 
+<!-- images/showcase/fog-ring-tunnel.gif
+     scripts/docs-assets.sh sc-fog-ring-tunnel -->
+<img src="images/showcase/fog-ring-tunnel.gif" alt="A foggy animated tunnel of glowing rings" width="100%">
+
 **[Fog ring tunnel](../examples/scenes/fog-ring-tunnel.glr)**
 <br><sub>`glFog` hides each ring's return at the far end of an endless tunnel</sub>
 
@@ -488,6 +492,25 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>array sort scrubbed by `t`</sub>
 
 </td>
+</tr>
+</table>
+
+### Easing
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/pulse-bars.gif
+     scripts/docs-assets.sh sc-pulse-bars -->
+<img src="images/showcase/pulse-bars.gif" alt="A pulse moving through a row of easing bars" width="100%">
+
+**[Pulse bars (easing)](../examples/scenes/pulse_bars_easing.c)**
+<br><sub>a sine-driven bar pulse with `smoothstep` falloff and `lerp`d height</sub>
+
+</td>
+<td width="33%"></td>
+<td width="33%"></td>
 </tr>
 </table>
 
