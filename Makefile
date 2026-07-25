@@ -1478,7 +1478,25 @@ $(BINDIR)/$(1): $$($(1)_OBJS)
 $(1): $$(BINDIR)/$(1)
 endef
 
-$(foreach test,$(TEST_BINS),$(eval $(call built_binary,$(test))))
+# Ordinary tests are always built against the no-op GL/GLU/GLUT stubs.  Keep
+# their public aliases self-contained too: `make test_glr_ctrl` must not
+# accidentally select the native GL link path just because it bypasses
+# `make test`.  Tests that need a real context are listed separately in
+# GL_TEST_BINS and run only through `make gl-tests`.
+define built_test_binary
+$(BINDIR)/$(1): $$($(1)_OBJS)
+	@mkdir -p $$(dir $$@)
+	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
+
+ifeq ($$(USE_GL_STUBS),1)
+$(1): $$(BINDIR)/$(1)
+else
+$(1):
+	+$$(MAKE) --no-print-directory $$@ USE_GL_STUBS=1
+endif
+endef
+
+$(foreach test,$(TEST_BINS),$(eval $(call built_test_binary,$(test))))
 $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 
 # Real-GL tests: need an actual GL context (created via GLUT), which the
