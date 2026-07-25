@@ -462,6 +462,25 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </tr>
 </table>
 
+### Stencil masking
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/stencil-mask.gif
+     scripts/docs-assets.sh sc-stencil-mask -->
+<img src="images/showcase/stencil-mask.gif" alt="A rotating stencil window revealing a teapot" width="100%">
+
+**[Stencil mask window](../examples/scenes/stencil_mask_window_glstencilop.c)**
+<br><sub>three passes with `glStencilFunc`, `glStencilMask`, and `glStencilOp`</sub>
+
+</td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
+
 ### Tessellation, guides & algorithms
 
 <table>

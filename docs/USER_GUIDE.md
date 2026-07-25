@@ -121,7 +121,7 @@ The triangle appears as soon as the vertices commit. Now:
 
 ## Built-in Examples
 
-**F12** cycles forward through the 37 built-in examples, then any saved
+**F12** cycles forward through the 38 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -148,6 +148,7 @@ Developers can point the app at an editable catalog with
 17  Traveling ripple ring                               35  Clip planes carve solids (glClipPlane)
 18  Bezier curve with guides                            36  Fog ring tunnel (glFog)
                                                         37  Planar shadows (glMultMatrixf)
+                                                        38  Stencil mask window (glStencilOp)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -552,12 +553,12 @@ code panel or the menu bar — the rest of the window keeps the background the
 frame started with.
 
 `mask` is one bit, or both OR'd with `|`. Unlike every other numeric
-argument, it is not an expression: only these two tokens are accepted, and
+argument, it is not an expression: only these three tokens are accepted, and
 the line is stored in a fixed order regardless of how you spell it
 (`GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT` commits as
-`GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`). The stencil and accumulation
-bits are not offered: nothing in the REPL writes stencil, and clearing the
-accumulation buffer would fight the accum effects under [Rendering
+`GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`). The stencil buffer is available
+as `GL_STENCIL_BUFFER_BIT` for masked rendering. The accumulation bit is not
+offered because clearing it would fight the accum effects under [Rendering
 quality](#rendering-quality).
 
 ### Wireframe & decals — glPolygonMode, glPolygonOffset

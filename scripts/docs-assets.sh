@@ -95,7 +95,7 @@ GIF_ASSETS=(
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
     sc-whale sc-stress-test sc-aurora-observatory
-    sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars
+    sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars sc-stencil-mask
     sc-feature-time
 )
 
@@ -1347,6 +1347,10 @@ fi
 if want sc-pulse-bars; then
     gif "$SHOW/pulse-bars.gif" 200 2 20 560 \
         --example "Pulse bars (easing)"
+fi
+if want sc-stencil-mask; then
+    gif "$SHOW/stencil-mask.gif" 200 2 20 560 \
+        --example "Stencil mask window (glStencilOp)"
 fi
 
 # "Beyond the still image" — interactive features. feature-time is a real
