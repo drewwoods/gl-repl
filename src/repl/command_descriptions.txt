@@ -210,7 +210,7 @@ Defines one user clip plane from equation coefficients (a, b, c, d). Enable the 
 
 [command CMD_CLEAR]
 title = glClear
-Clears the buffers named in the mask: GL_COLOR_BUFFER_BIT resets the 3D viewport to the current glClearColor, GL_DEPTH_BUFFER_BIT resets the depth buffer. OR the two together with | to clear both. The REPL already clears both at the start of every frame, so this is for clearing again part-way down a scene: a depth clear makes everything below the line draw over what came before it, ignoring depth.
+Clears the buffers named in the mask: GL_COLOR_BUFFER_BIT resets the 3D viewport to the current glClearColor, GL_DEPTH_BUFFER_BIT resets the depth buffer, and GL_STENCIL_BUFFER_BIT resets stencil to its fixed value of 0. OR any of the bits together with |. The program owns its frame setup, just as its exported C does, so omitting a needed bit leaves that buffer's prior contents intact.
 
 [command CMD_FOG_I]
 title = glFogi

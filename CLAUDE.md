@@ -469,6 +469,7 @@ glPushAttrib(mask)/glPopAttrib, glEnable/glDisable(CAP)
 glFogi/glFogf/glFogfv, glClipPlane, glShadeModel, glPointSize, glLineWidth
 glLineStipple, glPointParameterfv, glBlendFunc, glColorMaterial, glMaterialfv
 glLightModeli, glFrontFace, glCullFace, glDepthFunc, glDepthMask, glColorMask
+glStencilFunc, glStencilOp, glStencilMask
 glPolygonMode(face, mode), glPolygonOffset(factor, units)
 glutSolidTorus/Cube/Sphere/Teapot/Cone, glRasterPos3f
 label("fmt", ...)              (bitmap text; REPL primitive)

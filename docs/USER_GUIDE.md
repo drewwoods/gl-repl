@@ -412,7 +412,8 @@ numeric argument everywhere is a full math expression.
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
-    `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
+    `GL_LINE_STIPPLE`, `GL_MULTISAMPLE`, `GL_STENCIL_TEST`, `GL_LIGHT0..GL_LIGHT3`,
+    `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
 - [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
@@ -421,10 +422,13 @@ numeric argument everywhere is a full math expression.
 - [`glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glMaterial)
 - [`glLightModeli(pname, param)`](https://docs.gl/gl2/glLightModel), [`glFrontFace(mode)`](https://docs.gl/gl2/glFrontFace)
 - [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
+- [`glStencilFunc(func, ref, mask)`](https://docs.gl/gl2/glStencilFunc),
+  [`glStencilOp(stencil-fail, depth-fail, depth-pass)`](https://docs.gl/gl2/glStencilOp),
+  [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) — stencil-mask setup
 - [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) — each channel GL_TRUE/GL_FALSE or 0/1
 - [`glClear(mask)`](https://docs.gl/gl2/glClear) — clear again part-way down a scene (see Clearing
-  mid-scene). `mask` is `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, or both
-  OR'd with `|`
+  mid-scene). `mask` combines `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, and
+  `GL_STENCIL_BUFFER_BIT` with `|`
 - [`glClearDepth(depth)`](https://docs.gl/gl2/glClearDepth) — the depth value a
   `GL_DEPTH_BUFFER_BIT` clear writes. GL clamps it to 0..1 and defaults to 1
   (the far plane); a lower value makes the cleared buffer reject geometry
@@ -528,11 +532,12 @@ moves — one plane (a sphere becomes a dome), two planes meeting at an angle
 ```c
 glClear(GL_DEPTH_BUFFER_BIT);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glClear(GL_STENCIL_BUFFER_BIT);
 ```
 
-The REPL already clears colour and depth before it runs your first line, so
-`glClear` is not the frame setup it is in a normal GL program — it is a line
-you put *in the middle* of a scene to clear again from there down.
+The REPL does not clear the scene rectangle on your program's behalf. Like the
+exported C, a scene's own `glClear` is its frame setup; use another one in the
+middle of a scene when a later pass needs a fresh buffer.
 
 The useful one is `GL_DEPTH_BUFFER_BIT`. It throws away the depth of
 everything drawn so far, so geometry below the line draws over what came
@@ -552,7 +557,7 @@ above the line. It is confined to the 3D viewport, so it cannot touch the
 code panel or the menu bar — the rest of the window keeps the background the
 frame started with.
 
-`mask` is one bit, or both OR'd with `|`. Unlike every other numeric
+`mask` is one bit, or any combination OR'd with `|`. Unlike every other numeric
 argument, it is not an expression: only these three tokens are accepted, and
 the line is stored in a fixed order regardless of how you spell it
 (`GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT` commits as
@@ -560,6 +565,27 @@ the line is stored in a fixed order regardless of how you spell it
 as `GL_STENCIL_BUFFER_BIT` for masked rendering. The accumulation bit is not
 offered because clearing it would fight the accum effects under [Rendering
 quality](#rendering-quality).
+
+### Stencil masks
+
+Stencil commands let a first pass write a byte-sized mask and later geometry
+draw only where that mask passes. Start a frame with
+`glClear(GL_STENCIL_BUFFER_BIT)`; its clear value is fixed at 0. There is no
+`glClearStencil` command yet.
+
+`glStencilFunc(func, ref, mask)` compares the incoming reference with the
+stored value while `GL_STENCIL_TEST` is enabled. `ref` may be an expression;
+`ref` and the decimal-or-hexadecimal `mask` are restricted to 0 through 255.
+Fractional references truncate toward zero before GL receives them.
+`glStencilOp` chooses the actions for stencil failure, depth failure, and a
+full pass; `glStencilMask` limits which stencil bits can be written. Use
+`glStencilMask(0)` to protect a completed mask while later geometry tests it.
+
+The **Stencil view** menu visualizes zero versus non-zero values, not write
+history: it cannot distinguish an untouched pixel, a clear to zero, and an
+explicit write of zero. Its Palette mode intentionally repeats every 16 values;
+the legend prints numeric values to disambiguate matching swatches. Replay
+fades can add values to that legend while a fade is active.
 
 ### Wireframe & decals — glPolygonMode, glPolygonOffset
 
