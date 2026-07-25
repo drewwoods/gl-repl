@@ -237,7 +237,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   / `_end`), never ad-hoc `||` chains. That's the *control-flow* taxonomy;
   [`CmdSyntaxCategory`](src/repl/command_spec.h#L153) is the separate *visual* one — don't fold one through
   the other. A drift test in [`tests/test_replay_walk.c`](tests/test_replay_walk.c) asserts agreement.
-- Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L428) from
+- Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L429) from
   [`src/repl/eval.h`](src/repl/eval.h), never bare `strchr(s, ',')` — those
   are paren-naive and truncate `cos(i + phase)`.
 - **Keyboard bindings**: one [`keymap.h`](keymap.h) pair per action; call
@@ -250,8 +250,8 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   `glr_ctrl_router_*` helpers, dispatched before `editor_handle_key`.
   macOS Cmd+letter is normalized to Ctrl form at the top of
   `glr_ctrl_keyboard`.
-- Expression variables: [`ExprVar`](src/repl/eval.h#L135) in eval.h; predef set via
-  `repl_state_variables()` + [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309).
+- Expression variables: [`ExprVar`](src/repl/eval.h#L136) in eval.h; predef set via
+  `repl_state_variables()` + [`repl_eval_declare_predef_var()`](src/repl/eval.h#L310).
 
 ## Architecture — agent gotchas
 
@@ -317,7 +317,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   every reference follows its declaration); editing an existing decl
   overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
-  [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309).
+  [`repl_eval_declare_predef_var()`](src/repl/eval.h#L310).
 - [`GLCmd`](src/repl/command.h#L96) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
@@ -491,8 +491,9 @@ Two policies that bite from a distance, so they stay here:
 
 ## Math
 
-`sin cos tan sqrt abs pow log ln min max floor ceil fmod rem rand rand2` —
-`log` is base-10, `ln` natural. Constants `PI`, `TAU`, `e`. Only `t` is
+`sin cos tan asin acos atan atan2 sqrt abs pow log ln min max floor ceil fmod rem
+rand rand2` — `log` is base-10, `ln` natural; `asin`/`acos` clamp their input
+to [-1, 1] (the evaluator stays total). Constants `PI`, `TAU`, `e`. Only `t` is
 predefined; others need `float name;` (`MAX_PREDEF_VARS` = 32, 31 user slots).
 Scratch arrays `A`/`B`/`C[16]` are fixed globals — those names, plus `t`, `PI`,
 `TAU`, `float`, `var`, reject a declaration.

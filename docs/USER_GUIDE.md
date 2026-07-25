@@ -594,12 +594,12 @@ Every numeric argument is a full expression, evaluated when the line runs:
 
 - **Operators:** `+ - * / %` and parentheses; comparisons
   `> < >= <= == !=`; logical `&& || !`.
-- **Functions:** `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `log` (base 10),
-  `ln` (base e), `min`, `max`, `floor`, `ceil`, `round`, `fmod`, `rem`,
-  `rand(seed[, iter])`, `rand2(seed[, iter])`. `fmod` is the C `fmodf`
-  (result takes the sign of the dividend); `rem` is the IEEE remainder via
-  `remainderf` (rounds the quotient to nearest, so the result can differ in
-  sign).
+- **Functions:** `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2(y, x)`,
+  `sqrt`, `abs`, `pow`, `log` (base 10), `ln` (base e), `min`, `max`, `floor`, `ceil`,
+  `round`, `fmod`, `rem`, `rand(seed[, iter])`, `rand2(seed[, iter])`. `fmod`
+  is the C `fmodf` (result takes the sign of the dividend); `rem` is the IEEE
+  remainder via `remainderf` (rounds the quotient to nearest, so the result can
+  differ in sign).
 - **Constants:** `PI`, `TAU`, `e`.
 
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter)
@@ -607,6 +607,19 @@ pair; `rand2` is the same hash mapped to `[-1, 1]` — useful for centered
 jitter. Determinism means particle systems look the same every frame and
 every run — it is the stateless substitute for storing random values, a
 pattern covered in [Working without state](#working-without-state).
+
+`atan2(y, x)` is the inverse of the polar pair: it returns the angle in
+`[-PI, PI]` from the +X axis to `(x, y)`, using both signs to pick the right
+quadrant (unlike a plain `y/x` ratio). It is how a shape turns to face
+something — `glRotatef(atan2(tz, tx) * 180 / PI, 0, 1, 0)` aims the local +X
+axis at the target `(tx, tz)`, and `atan2` of a vertex's own coordinates
+recovers the polar angle a ring was built from. Plain `atan(x)` takes a slope
+instead of a pair, so it can only answer within `(-PI/2, PI/2)` — reach for it
+when you already have a ratio (a tilt from `rise/run`), and for anything built
+from two coordinates prefer `atan2`. `asin` and `acos` invert the other two:
+both clamp their argument to `[-1, 1]` first, so a dot product that drifts a
+hair past 1 returns `0` rather than a NaN that would erase the geometry
+mid-edit.
 
 ### Variables
 

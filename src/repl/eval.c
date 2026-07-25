@@ -346,6 +346,19 @@ static float expr_rand_signed(float seed, float iter);
 static float builtin_sin(const float *args)   { return sinf(args[0]); }
 static float builtin_cos(const float *args)   { return cosf(args[0]); }
 static float builtin_tan(const float *args)   { return tanf(args[0]); }
+/* asin/acos clamp their argument the way sqrt absolute-values its own: the
+ * evaluator stays total, so a value that drifts a hair outside [-1, 1]
+ * during live editing yields +-PI/2 (or 0 / PI) instead of NaN. */
+static float builtin_asin(const float *args)  {
+    float x = args[0] < -1.0f ? -1.0f : (args[0] > 1.0f ? 1.0f : args[0]);
+    return asinf(x);
+}
+static float builtin_acos(const float *args)  {
+    float x = args[0] < -1.0f ? -1.0f : (args[0] > 1.0f ? 1.0f : args[0]);
+    return acosf(x);
+}
+static float builtin_atan(const float *args)  { return atanf(args[0]); }
+static float builtin_atan2(const float *args) { return atan2f(args[0], args[1]); }
 static float builtin_sqrt(const float *args)  { return sqrtf(fabsf(args[0])); }
 static float builtin_abs(const float *args)   { return fabsf(args[0]); }
 static float builtin_pow(const float *args)   { return powf(args[0], args[1]); }
@@ -365,6 +378,10 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "sin",   "sinf",       1, 1, builtin_sin   },
     { "cos",   "cosf",       1, 1, builtin_cos   },
     { "tan",   "tanf",       1, 1, builtin_tan   },
+    { "asin",  "asinf",      1, 1, builtin_asin  },
+    { "acos",  "acosf",      1, 1, builtin_acos  },
+    { "atan",  "atanf",      1, 1, builtin_atan  },
+    { "atan2", "atan2f",     2, 2, builtin_atan2 },
     { "sqrt",  "sqrtf",      1, 1, builtin_sqrt  },
     { "abs",   "fabsf",      1, 1, builtin_abs   },
     { "pow",   "powf",       2, 2, builtin_pow   },

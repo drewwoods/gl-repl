@@ -440,6 +440,21 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Cosine of x (radians)", REPL_HELP_GROUP_MATH },
     { "tan(",                "tan(x)",                                                   1, { "x" },
         "Tangent of x (radians)", REPL_HELP_GROUP_MATH },
+    { "asin(",               "asin(x)",                                                  1, { "x" },
+        "Arc sine of x in radians, [-PI/2, PI/2] (x is clamped to [-1, 1])",
+        REPL_HELP_GROUP_MATH },
+    { "acos(",               "acos(x)",                                                  1, { "x" },
+        "Arc cosine of x in radians, [0, PI] (x is clamped to [-1, 1])",
+        REPL_HELP_GROUP_MATH },
+    { "atan(",               "atan(x)",                                                  1, { "x" },
+        "Arc tangent of x in radians, (-PI/2, PI/2). Takes a slope, so it\n"
+        "cannot tell which quadrant the point was in — use atan2 for that.",
+        REPL_HELP_GROUP_MATH },
+    { "atan2(",              "atan2(y, x)",                                              2, { "y", "x" },
+        "Angle in radians from +X to the point (x, y), in [-PI, PI].\n"
+        "The way to recover a heading from coordinates: atan2(tz, tx) aims\n"
+        "at a target, atan2(y, x) is the polar angle of a vertex.",
+        REPL_HELP_GROUP_MATH },
     { "sqrt(",               "sqrt(x)",                                                  1, { "x" },
         "Square root of |x| (negatives are absolute-valued before sqrt)",
         REPL_HELP_GROUP_MATH },

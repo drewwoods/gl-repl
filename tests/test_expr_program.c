@@ -144,6 +144,9 @@ static void test_parity_corpus(void) {
         "nan", "inf", "infinity", "-INFINITY", "NAN + 1", "0 * INFINITY",
         /* builtins, all of them */
         "sin(1)", "cos(1)", "tan(0.5)", "sqrt(2)", "sqrt(-4)", "abs(-3)",
+        "asin(0.5)", "asin(2)", "acos(0.5)", "acos(-2)",
+        "atan(0.5)", "atan(-3)",
+        "atan2(1, 2)", "atan2(-1, -2)", "atan2(0, 0)",
         "pow(2, 10)", "log(100)", "ln(e)", "min(3, 4)", "max(3, 4)",
         "floor(2.7)", "ceil(2.1)", "round(2.5)", "fmod(7, 3)", "rem(7, 3)",
         "rand(1)", "rand(1, 2)", "rand2(1)", "rand2(1, 2)",

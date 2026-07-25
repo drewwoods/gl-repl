@@ -44,10 +44,11 @@ Semantics in depth: `docs/USER_GUIDE.md`.
 
 ## Math
 
-Functions: `sin cos tan sqrt abs pow log ln min max floor ceil fmod rem
-rand(seed[,iter]) rand2(seed[,iter])` — `log` is base-10, `ln` natural; `rand`
-∈ [0,1], `rand2` ∈ [-1,1], both deterministic per (seed, iter). Constants:
-`PI`, `TAU`, `e`.
+Functions: `sin cos tan asin acos atan atan2(y,x) sqrt abs pow log ln min max
+floor ceil fmod rem rand(seed[,iter]) rand2(seed[,iter])` — `log` is base-10, `ln`
+natural; `asin`/`acos` clamp to [-1,1] before the call, `atan2` returns
+[-PI, PI] (the aim-at / polar-angle primitive); `rand` ∈ [0,1], `rand2` ∈
+[-1,1], both deterministic per (seed, iter). Constants: `PI`, `TAU`, `e`.
 
 Only `t` is predefined; everything else needs `float name;`. `t` starts at 0 and
 advances 1/60 s per simulation tick while playing.

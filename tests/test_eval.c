@@ -260,6 +260,30 @@ static void run_tests(void) {
     ASSERT_FLOAT("sin(0)", 0.0f);
     ASSERT_FLOAT("cos(0)", 1.0f);
     ASSERT_FLOAT("tan(0)", 0.0f);
+    ASSERT_FLOAT("asin(0)", 0.0f);
+    ASSERT_FLOAT("asin(1)", (float)M_PI / 2.0f);
+    ASSERT_FLOAT("asin(-1)", -(float)M_PI / 2.0f);
+    ASSERT_FLOAT("asin(2)", (float)M_PI / 2.0f);    /* clamped, never NaN */
+    ASSERT_FLOAT("asin(-2)", -(float)M_PI / 2.0f);
+    ASSERT_FLOAT("acos(1)", 0.0f);
+    ASSERT_FLOAT("acos(0)", (float)M_PI / 2.0f);
+    ASSERT_FLOAT("acos(-1)", (float)M_PI);
+    ASSERT_FLOAT("acos(5)", 0.0f);                  /* clamped, never NaN */
+    ASSERT_FLOAT("acos(-5)", (float)M_PI);
+    ASSERT_FLOAT("atan(0)", 0.0f);
+    ASSERT_FLOAT("atan(1)", (float)M_PI / 4.0f);
+    ASSERT_FLOAT("atan(-1)", -(float)M_PI / 4.0f);
+    ASSERT_FLOAT("tan(atan(0.75))", 0.75f);           /* round-trip */
+    ASSERT_FLOAT("atan2(0,1)", 0.0f);
+    ASSERT_FLOAT("atan2(1,0)", (float)M_PI / 2.0f); /* +Y axis */
+    ASSERT_FLOAT("atan2(1,1)", (float)M_PI / 4.0f);
+    ASSERT_FLOAT("atan2(-1,-1)", -3.0f * (float)M_PI / 4.0f); /* quadrant from both signs */
+    ASSERT_FLOAT("atan2(0,-1)", (float)M_PI);
+    ASSERT_FLOAT("atan2(0,0)", 0.0f);               /* degenerate, but total */
+    ASSERT_FLOAT("atan2(1)", 0.0f);                 /* arity 2 required */
+    ASSERT_FLOAT("sin(asin(0.5))", 0.5f);           /* round-trip */
+    ASSERT_FLOAT("cos(acos(0.25))", 0.25f);
+    ASSERT_FLOAT("atan2(sin(1), cos(1))", 1.0f);    /* angle recovered from a point */
     ASSERT_FLOAT("sqrt(4)", 2.0f);
     ASSERT_FLOAT("abs(-3)", 3.0f);
     ASSERT_FLOAT("pow(2,3)", 8.0f);
@@ -666,6 +690,10 @@ static void run_tests(void) {
     ASSERT_TO_C("pow(x,2)", "powf(x,2)");
     ASSERT_TO_C("min(x,y)", "fminf(x,y)");
     ASSERT_TO_C("rand(i,3)", "repl_randf(i,3)");
+    ASSERT_TO_C("asin(x)", "asinf(x)");
+    ASSERT_TO_C("acos(x)", "acosf(x)");
+    ASSERT_TO_C("atan(x)", "atanf(x)");
+    ASSERT_TO_C("atan2(y,x)", "atan2f(y,x)");
     ASSERT_TO_C("x % 2", "fmodf(x, 2)");
     ASSERT_TO_C("10 % 3", "fmodf(10, 3)");
     ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
@@ -687,6 +715,10 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
     ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
+    ASSERT_TO_REPL("asinf(x)", "asin(x)");
+    ASSERT_TO_REPL("acosf(x)", "acos(x)");
+    ASSERT_TO_REPL("atanf(x)", "atan(x)");
+    ASSERT_TO_REPL("atan2f(y,x)", "atan2(y,x)");
     ASSERT_TO_REPL("remainderf(x,2)", "rem(x,2)");
     ASSERT_TO_REPL("nan", "NAN");
     ASSERT_TO_REPL("INFINITY", "INFINITY");

@@ -3,8 +3,9 @@
  *
  * Recursive-descent expression evaluator for the REPL math layer. Supports
  * binary operators (+, -, *, /, %), unary minus, parentheses, function
- * calls (sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil, round, fmod, rem,
- * rand, rand2), and constants (PI, TAU, e, NAN, INFINITY). All values are floats.
+ * calls (sin, cos, tan, asin, acos, atan, atan2, sqrt, abs, pow, min, max,
+ * floor, ceil, round, fmod, rem, rand, rand2), and constants (PI, TAU, e, NAN,
+ * INFINITY). All values are floats.
  *
  * Predefined variables (float x, y, z, t, etc.) are declared via
  * repl_eval_declare_predef_var(). The time variable 't' is special: it

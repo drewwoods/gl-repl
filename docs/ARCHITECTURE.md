@@ -675,7 +675,7 @@ command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overl
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
-parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L428) so nested expressions such as
+parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L429) so nested expressions such as
 `cos(i + phase)` do not truncate at an inner comma/paren.
 
 ##### Live transform guides (render-while-typing)
@@ -759,7 +759,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L118): per-light state + clear
   color) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
+  [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
   `flat_program_count`, …)
@@ -2369,7 +2369,7 @@ land in roughly the order below.
 - Add a `tutorial_<kind>_matches_target(...)` predicate. For
   cfg-shaped kinds it reads via `repl_cfg_get_int` / `_resolve_text`;
   for variable-shaped kinds it reads via
-  [`repl_eval_predef_view()`](../src/repl/eval.h#L192) after a `repl_eval_find_predef_var_idx`
+  [`repl_eval_predef_view()`](../src/repl/eval.h#L193) after a `repl_eval_find_predef_var_idx`
   lookup. Apply any tolerance (e.g. `TUTORIAL_VAR_EPS` from
   [`src/subsystems/tutorial/tutorial.h`](../src/subsystems/tutorial/tutorial.h)) here so the boundary policy
   lives in one place.
@@ -2592,7 +2592,7 @@ work can either close the gap or document the intentional behaviour.
 ### Documented but uncovered
 
 - **Func alias slot exhaustion.** `editor_try_commit_func_def` (in
-  [`src/editor/commit.c`](../src/editor/commit.c)) calls [`repl_func_alias_first_free_slot()`](../src/repl/eval.h#L219); when all
+  [`src/editor/commit.c`](../src/editor/commit.c)) calls [`repl_func_alias_first_free_slot()`](../src/repl/eval.h#L220); when all
   10 slots are taken it returns the diagnostic
   `"no free function slots (max %d)"`. No test fires this path — adding the
   10 distinct user-named func defs and asserting the 11th is rejected with

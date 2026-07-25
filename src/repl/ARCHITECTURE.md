@@ -736,7 +736,7 @@ rationale is in [`eval.h`](eval.h)):
   exceed the 32-slot table with "variable table full (max 32)".
 - **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
   parse (visible loop iterators + function params). Predefined globals are
-  supplied separately through [`ReplPredefView`](eval.h#L178) / [`ExprCtx`](eval.h#L142), so a full predef
+  supplied separately through [`ReplPredefView`](eval.h#L179) / [`ExprCtx`](eval.h#L143), so a full predef
   table does not consume expression-local slots.
   [`collect_visible_vars_in()`](visible_vars.h#L16) ([`visible_vars.c`](visible_vars.c)) builds this per parse;
   it reads no live state, so compile passes its context's document view.

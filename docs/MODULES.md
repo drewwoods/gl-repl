@@ -336,7 +336,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 > ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
-  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L96), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L135), [`ExprCtx`](../src/repl/eval.h#L142),
+  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L96), [`CmdType`](../src/repl/command.h#L37), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
   [`TessVertex`](../src/repl/executor.h#L67), [`FlatCmdLocalVars`](../src/repl/flatten.h#L37), [`FlatProgramView`](../src/repl/flatten.h#L46),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L153), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
