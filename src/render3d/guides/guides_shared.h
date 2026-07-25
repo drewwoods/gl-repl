@@ -63,6 +63,11 @@ typedef struct Render3dGuideSnapshot {
     int input_len;
     int cursor_pos;
     int edit_line_idx;
+    /* A cursor line inside a loop expands to several flat commands. When set,
+     * anchor the guide on the LAST of them instead of the first, so it lands
+     * on the same unrolled copy the overlay highlights and the variable panel
+     * report. Ignored during replay, which anchors on the replay step. */
+    int prefer_last_instance;
     int inserting;
     const char *edit_line_committed_text; /* editor buffer text; NULL = no committed line */
 

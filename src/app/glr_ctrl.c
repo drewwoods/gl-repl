@@ -311,8 +311,12 @@ static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid && repl_cmd_emits_vertex(cmd->type);
 }
 
-static int glr_ctrl_first_flat_color_consumer_for_source_line(int line_idx) {
+/* Last unrolled draw emitted by `line_idx` — the copy the last-instance
+ * scopes highlight, and the one whose loop-body variable values the
+ * variable panel still reports after the frame. */
+static int glr_ctrl_last_flat_color_consumer_for_source_line(int line_idx) {
     FlatProgramView flat = repl_state_flat_program_view();
+    int found = -1;
 
     for (int i = 0; i < flat.cmd_count; i++) {
         const GLCmd *cmd = &flat.cmds[i];
@@ -320,9 +324,9 @@ static int glr_ctrl_first_flat_color_consumer_for_source_line(int line_idx) {
             continue;
         if (cmd->src_cmd_idx == line_idx &&
             repl_cmd_consumes_current_color(cmd->type))
-            return i;
+            found = i;
     }
-    return -1;
+    return found;
 }
 
 static int glr_ctrl_find_affecting_transform_highlights(int line_idx,
@@ -330,9 +334,9 @@ static int glr_ctrl_find_affecting_transform_highlights(int line_idx,
                                                         int out_cap) {
     GlrPresentationState presentation = glr_state_presentation();
 
-    if (presentation.overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE ||
+    if (presentation.overlay_scope == OVERLAY_SCOPE_LAST_INSTANCE ||
         presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
-        int flat_idx = glr_ctrl_first_flat_color_consumer_for_source_line(line_idx);
+        int flat_idx = glr_ctrl_last_flat_color_consumer_for_source_line(line_idx);
         if (flat_idx >= 0)
             return repl_find_affecting_transforms_for_flat_vertex(
                 flat_idx, out, out_cap);
@@ -547,6 +551,9 @@ static Render3dGuideSnapshot glr_ctrl_build_guide_snapshot(const Render3dRenderC
         .input_len = input.input_len,
         .cursor_pos = input.cursor_pos,
         .edit_line_idx = edit_line,
+        .prefer_last_instance =
+            (presentation.overlay_scope == OVERLAY_SCOPE_LAST_INSTANCE ||
+             presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON),
         .inserting = editor_insert_mode(),
         .edit_line_committed_text = editor_buffer_line(edit_line),
         .source_cmds = repl_state_document_cmds(),

@@ -1937,8 +1937,17 @@ test-detailed: ## Run stubbed tests with verbose example export/compile logging.
 	$(MAKE) --no-print-directory test-detailed USE_GL_STUBS=1
 endif
 
+# Like individual test aliases, rebuild-golden must enter the stubbed build
+# before resolving BINDIR.  Otherwise its prerequisite builds
+# *-gl-stubs/test_repl_core_examples while the recipe tries to run the native
+# build path (and, with BUILD=debug, can also select the wrong configuration).
+ifeq ($(USE_GL_STUBS),1)
 rebuild-golden: test_repl_core_examples ## Rebuild all the golden examples from test_repl_core_examples.
 	@$(BINDIR)/test_repl_core_examples --update-golden
+else
+rebuild-golden: ## Rebuild all the golden examples from test_repl_core_examples.
+	+$(MAKE) --no-print-directory $@ USE_GL_STUBS=1
+endif
 
 
 # Run these from the recipe instead of declaring them as prerequisites: the
@@ -2324,7 +2333,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
-	@printf "GL stubs:        make test (or test-stubs); add USE_GL_STUBS=1 to an individual target.\n"
+	@printf "GL stubs:        make test (or test-stubs); ordinary individual tests use stubs automatically.\n"
 	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
 	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
 	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"

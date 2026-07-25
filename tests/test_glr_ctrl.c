@@ -3440,18 +3440,18 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
     ASSERT_INT("second replay vertex shows second translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 
-    /* Off replay the edit-cursor set now follows overlay_scope. First-instance
-     * resolves the first flat expansion of the cursor line, so it shows only
-     * that expansion's transform set. */
+    /* Off replay the edit-cursor set now follows overlay_scope. Last-instance
+     * resolves the LAST flat expansion of the cursor line — here the second
+     * func0() call — so it shows that expansion's transform set: all three. */
     replay_stop();
-    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
     glr_ctrl_push_highlights();
-    ASSERT_INT("post-replay first-instance shows first translate",
+    ASSERT_INT("post-replay last-instance shows first translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);
-    ASSERT_INT("post-replay first-instance hides second-call rotate",
-               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 0);
-    ASSERT_INT("post-replay first-instance hides second-call translate",
-               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 0);
+    ASSERT_INT("post-replay last-instance shows second-call rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 1);
+    ASSERT_INT("post-replay last-instance shows second-call translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 
     /* All-instances restores the old source-line union behavior. */
     glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
@@ -3462,6 +3462,46 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 1);
     ASSERT_INT("post-replay all-instances shows second translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
+}
+
+/* Last-instance scope resolves the cursor line's LAST flat expansion — the
+ * copy whose loop/call state the variable panel still holds. Scoping the
+ * first call in a glPushMatrix/glPopMatrix pair makes the two expansions
+ * disagree, so this pins which one the highlight set comes from. */
+static void test_overlay_scope_last_instance_affecting_transforms(void) {
+    printf("--- imrepl_ctrl last-instance affecting transforms ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");               /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");     /* 1 */
+    editor_feed_line("glVertex3f(0, 0, 0);");    /* 2 */
+    editor_feed_line("glEnd();");                /* 3 */
+    editor_feed_line("}");                       /* 4 */
+    editor_feed_line("glPushMatrix();");         /* 5 */
+    editor_feed_line("glRotatef(45, 0, 0, 1);"); /* 6 */
+    editor_feed_line("func0();");                /* 7 */
+    editor_feed_line("glPopMatrix();");          /* 8 */
+    editor_feed_line("glTranslatef(2, 0, 0);");  /* 9 */
+    editor_feed_line("func0();");                /* 10 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(2);
+
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    glr_ctrl_push_highlights();
+    ASSERT_INT("last-instance shows the second call's translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 9), 1);
+    ASSERT_INT("last-instance hides the popped rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 6), 0);
+
+    /* All-instances unions both expansions, so the popped rotate returns. */
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    glr_ctrl_push_highlights();
+    ASSERT_INT("all-instances shows the popped rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 6), 1);
+    ASSERT_INT("all-instances still shows the translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 9), 1);
 }
 
 /* A glutSolid* is a replay draw anchor too (it emits no REPL vertex but vertex
@@ -4786,6 +4826,7 @@ int main(void) {
     test_replay_call_site_highlights_are_pushed();
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();
+    test_overlay_scope_last_instance_affecting_transforms();
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_step_commits_bare_assignment();
     test_numeric_swatch_visible_inside_loop_expr();

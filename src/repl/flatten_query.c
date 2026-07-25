@@ -374,8 +374,9 @@ ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
     /* Cursor ordinal = the first vertex (in emission order) whose source
      * line is at or after the cursor; a cursor past the last vertex line
      * builds the block's final primitive. Matching in emission order
-     * resolves a cursor inside an inner loop body to the first unrolled
-     * iteration (first-instance semantics). */
+     * resolves a cursor inside an inner loop body against the cached
+     * (first) unrolled iteration; the ordinals are block-local, so they
+     * address the same primitive in every copy. */
     for (int i = begin + 1; i < end; i++) {
         if (!flat_cmds[i].valid) continue;
         if (flat_cmds[i].type != CMD_VERTEX3F &&

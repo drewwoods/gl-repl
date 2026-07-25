@@ -1054,9 +1054,12 @@ The overlay toggles annotate geometry scene-wide:
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
-- **Label & highlight scope** (F8): First instance / All instances / At vertex /
+- **Label & highlight scope** (F8): Last instance / All instances / At vertex /
   Visible only / Single polygon — controls how broadly cursor-bound overlays
-  are shown around repeated function/loop instances.
+  are shown around repeated function/loop instances. *Last instance* picks the
+  final unrolled copy, so the highlight, the vertex labels and the cursor guide
+  all sit on the copy whose loop-body variable values the **variable panel** is
+  showing — and on the last polygon a replay draws.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.

@@ -1253,7 +1253,7 @@ int main() {
          * scopes' block highlighting) treats the CMD_END line itself as
          * outside the block — edit_line_idx < end_line, not <=. So the
          * cursor sitting exactly on glEnd() resolves no block at all,
-         * same as the pre-existing FIRST_INSTANCE/ALL_INSTANCES behavior. */
+         * same as the pre-existing LAST_INSTANCE/ALL_INSTANCES behavior. */
         p = repl_flatten_cursor_polygon(14);
         ASSERT_INT("glEnd line itself is outside the block", p.valid, 0);
         ASSERT_INT("no fan anchor for GL_QUADS", p.fan_anchor, 0);
@@ -1429,9 +1429,10 @@ int main() {
         ASSERT_INT("GL_LINE_LOOP never resolves a single primitive", p.valid, 0);
     }
 
-    /* repl_flatten_cursor_polygon inside a for-loop: first-instance
-     * semantics — the cursor's polygon is resolved against the FIRST
-     * unrolled iteration only, matching the existing current-block cache. */
+    /* repl_flatten_cursor_polygon inside a for-loop: the polygon is resolved
+     * against the cached (first) unrolled iteration. The result is a
+     * block-local ordinal range, so it addresses the same primitive in
+     * whichever copy the overlay scope ends up highlighting. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 2) {");           /* 0 */

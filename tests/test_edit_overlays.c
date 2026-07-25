@@ -614,16 +614,16 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
     ctx.show_vertex_outlines = 0;
 
     TraceLog log;
-    ctx.cursor_overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("first-instance highlights only the first matching block",
+    ASSERT_INT("last-instance highlights only the last matching block",
                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
-    ASSERT_INT("first-instance draws first highlighted block",
-               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
-    ASSERT_INT("first-instance skips later matching blocks",
-               trace_count_line(&log, "glVertex3f 2 0 0"), 0);
+    ASSERT_INT("last-instance skips earlier matching blocks",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("last-instance draws the last highlighted block",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 1);
 
     ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
     trace_begin();
@@ -1733,7 +1733,7 @@ static void test_vertex_label_guide_obstacle_layout(void) {
     reset_test_label_sticky();
     guide_label_obstacles_reset();
     add_identity_guide_obstacle(512.0f, 384.0f, 32.0f);
-    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_FIRST_INSTANCE);
+    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_LAST_INSTANCE);
     vertex_labels_layout_and_draw(&ctx);
     ASSERT_INT("vertex label remains drawable beside one guide obstacle",
                ctx.labels[0].drawn, 1);
@@ -1759,7 +1759,7 @@ static void test_vertex_label_guide_obstacle_layout(void) {
                      (VERTEX_LABEL_LINE_H + VERTEX_LABEL_GAP),
             32.0f);
     }
-    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_FIRST_INSTANCE);
+    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_LAST_INSTANCE);
     vertex_labels_layout_and_draw(&ctx);
     ASSERT_INT("label drops when every bounded row is obstructed",
                ctx.labels[0].drawn, 0);
@@ -1790,7 +1790,7 @@ static void test_on_vertex_number_label_callback(void) {
     memcpy(idx_ctx.proj, id, sizeof(id));
     idx_ctx.vw = 1024;
     idx_ctx.vh = 768;
-    idx_ctx.block_instances = 1;   /* inside the first selected block */
+    idx_ctx.block_instances = 1;   /* mid-block: not a copy boundary */
     on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &idx_ctx);
     ASSERT_INT("index label collected", idx_ctx.count, 1);
     ASSERT_TRUE("index label anchored at projected vertex",
@@ -1867,11 +1867,12 @@ static void test_on_vertex_number_label_callback(void) {
     ASSERT_INT("off-screen vertex culled", cull_ctx.count, 0);
 }
 
-/* Overlay scope: first-instance mode labels only the first unrolled copy of a
+/* Overlay scope: last-instance mode labels only the last unrolled copy of a
  * looped primitive (the parametric-torus duplicate-label fix), while
  * all-instances mode labels every vertex with a globally-unique number. The
  * walk resets vertex_idx_in_block to 0 at each block, which is how the callback
- * detects block (loop-iteration) boundaries. */
+ * detects block (loop-iteration) boundaries — and how the forward-only walk
+ * knows to discard the copy it had collected so far. */
 static void test_overlay_scope(void) {
     printf("--- edit_overlays overlay scope ---\n");
 
@@ -1890,11 +1891,11 @@ static void test_overlay_scope(void) {
     };
     const int vidx[4] = { 0, 1, 0, 1 };
 
-    /* First-instance: only block 0's two vertices, numbered by in-block index. */
+    /* Last-instance: only block 1's two vertices, numbered by in-block index. */
     VertexLabelCtx one;
     memset(&one, 0, sizeof(one));
     one.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    one.label_options = OVERLAY_SCOPE_FIRST_INSTANCE;
+    one.label_options = OVERLAY_SCOPE_LAST_INSTANCE;
     memcpy(one.proj, id, sizeof(id));
     one.vw = 1024;
     one.vh = 768;
@@ -1902,10 +1903,15 @@ static void test_overlay_scope(void) {
         state.vertex_idx_in_block = vidx[i];
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &one);
     }
-    ASSERT_INT("first-instance collects only the first block", one.count, 2);
-    ASSERT_TRUE("first-instance numbers by in-block index",
+    ASSERT_INT("last-instance collects only one block", one.count, 2);
+    ASSERT_TRUE("last-instance numbers by in-block index",
                 strcmp(one.labels[0].idx, " v0") == 0 &&
                 strcmp(one.labels[1].idx, " v1") == 0);
+    ASSERT_TRUE("last-instance keeps the LAST block's vertices",
+                one.labels[0].anchor_x ==
+                    (verts[2][0] * 0.5f + 0.5f) * 1024.0f &&
+                one.labels[1].anchor_x ==
+                    (verts[3][0] * 0.5f + 0.5f) * 1024.0f);
 
     /* All-instances: every vertex, numbered globally and uniquely. */
     VertexLabelCtx all;
@@ -1956,7 +1962,7 @@ static void test_overlay_scope(void) {
     ASSERT_TRUE("label 3 draw_y equals anchor_y", at_vert.labels[3].draw_y == at_vert.labels[3].anchor_y);
 }
 
-/* Single-polygon label scope: narrows first-instance further to the
+/* Single-polygon label scope: narrows last-instance further to the
  * ordinal range of the cursor's primitive, but only inside a glBegin
  * block (primitive_mode != 0) — tess (GLU) polygons keep whole-block
  * labels regardless of the resolved range. */
@@ -2004,8 +2010,8 @@ static void test_single_polygon_label_scope(void) {
                 strcmp(quad.labels[3].idx, " v7") == 0);
 
     /* A tess (GLU) polygon reports primitive_mode == 0: the per-primitive
-     * filter is bypassed and every vertex in the (first) block labels,
-     * same as plain first-instance scope. */
+     * filter is bypassed and every vertex in the selected block labels,
+     * same as plain last-instance scope. */
     VertexLabelCtx tess;
     memset(&tess, 0, sizeof(tess));
     tess.mode = OVERLAY_VERTEX_LABEL_INDEX;
@@ -2485,6 +2491,71 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
                trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 2);
 }
 
+/* A cursor line inside a loop expands to several flat vertices. The guide has
+ * to read the same copy the highlight does: prefer_last_instance (set by the
+ * last-instance overlay scopes) moves it from the first expansion to the last,
+ * so it agrees with the loop values the variable panel is showing. */
+static void test_cursor_guides_follow_last_instance(void) {
+    printf("--- edit_overlays cursor guides prefer the last instance ---\n");
+
+    /* Two unrolled copies of source line 1, at different positions. */
+    GLCmd cmds[4];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_POINTS, 0, 0);
+    cmds[0].src_cmd_idx = 0;
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.25f, 0.5f, 0.75f);
+    cmds[1].src_cmd_idx = 1;
+    mk_cmd(&cmds[2], CMD_VERTEX3F, -0.25f, -0.5f, -0.75f);
+    cmds[2].src_cmd_idx = 1;
+    mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
+    cmds[3].src_cmd_idx = 2;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 4;
+    walk.cursor.edit_line_idx = 1;
+    walk.cursor.cursor_block_begin = -1;
+    walk.cursor.cursor_block_end = -1;
+
+    const char *input = "glVertex3f(x, y, z)";
+    Render3dGuideSnapshot snap;
+    memset(&snap, 0, sizeof(snap));
+    snap.show_guides = 1;
+    snap.input = input;
+    snap.input_len = (int)strlen(input);
+    snap.edit_line_idx = 1;
+    snap.flat_program = walk.program;
+    snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
+    snap.vertex_n_filled = 3;
+    snap.alpha_scale = 1.0f;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+    ASSERT_TRUE("default guide reads the first expansion",
+                trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") > 0);
+    ASSERT_INT("default guide ignores the later expansion",
+               trace_count_line(&log, "glVertex3f -0.25 -0.5 -0.75"), 0);
+
+    snap.prefer_last_instance = 1;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+    ASSERT_TRUE("last-instance guide reads the final expansion",
+                trace_count_line(&log, "glVertex3f -0.25 -0.5 -0.75") > 0);
+    ASSERT_INT("last-instance guide ignores the first expansion",
+               trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 0);
+
+    /* Replay anchors on its own step, so the flag must not divert the walk. */
+    snap.replaying = 1;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+    ASSERT_INT("replay draws no cursor geometry guide",
+               trace_count_line(&log, "glVertex3f -0.25 -0.5 -0.75"), 0);
+}
+
 static void test_cursor_guides_render_for_raster_pos(void) {
     printf("--- edit_overlays cursor guides for glRasterPos3f ---\n");
 
@@ -2613,7 +2684,7 @@ static void test_guide_obstacle_store_per_subpass(void) {
     pack.snapshot.xform_n_filled = 3;
     pack.snapshot.alpha_scale = 1.0f;
     pack.vertex_label_mode = OVERLAY_VERTEX_LABEL_INDEX;
-    pack.overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
+    pack.overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
 
     guide_label_obstacles_reset();
     edit_overlays_post_overlays(&pack);
@@ -2668,6 +2739,7 @@ int main(void) {
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_cursor_guides_render_for_unterminated_begin();
+    test_cursor_guides_follow_last_instance();
     test_cursor_guides_render_for_raster_pos();
     test_cursor_guides_render_for_new_transform_line();
     test_guide_obstacle_store_per_subpass();

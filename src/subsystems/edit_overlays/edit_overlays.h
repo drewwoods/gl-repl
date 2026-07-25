@@ -21,8 +21,14 @@ typedef enum OverlayVertexLabelMode {
     OVERLAY_VERTEX_LABEL_COUNT
 } OverlayVertexLabelMode;
 
+/* LAST_INSTANCE picks the final unrolled copy of the cursor's block. Flatten
+ * threads assignments forward, so it is the copy whose loop-body variable
+ * values the variable panel still reports, and the last one a replay draws —
+ * highlights, labels and cursor guides then agree with the rest of the UI.
+ * (The `for` counter itself is loop-scoped and restored, so it reads as its
+ * declared value either way.) */
 #define OVERLAY_SCOPE_LIST(X) \
-    X(FIRST_INSTANCE, "First instance")    \
+    X(LAST_INSTANCE, "Last instance")      \
     X(ALL_INSTANCES, "All instances")      \
     X(AT_VERTEX, "At vertex")              \
     X(VISIBLE, "Visible only")             \
@@ -105,6 +111,8 @@ typedef struct OverlayWalkCtx {
     int              xform_guide_mode;       /* Render3dXformGuideMode */
     /* SINGLE_POLYGON scope: block-local vertex-ordinal range of the primitive
      * under the cursor, resolved by the controller (repl_flatten_cursor_polygon).
+     * The ordinals are block-local, so they address the same primitive in
+     * whichever unrolled copy LAST_INSTANCE selection lands on.
      * cursor_poly_valid == 0 means "no single primitive" (cursor on the glBegin
      * line, GL_POLYGON/GL_LINE_LOOP, tess block, ...) and the whole block is
      * treated as current, matching the other scopes. */
@@ -118,7 +126,7 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    int overlay_scope;    /* 0 = first loop instance, 1 = all, 2 = all at vertex
+    int overlay_scope;    /* 0 = last loop instance, 1 = all, 2 = all at vertex
                             * (no declutter), 3 = all but depth-tested (visible) */
     Render3dViewMode ortho_mode;
     int show_normal_vectors;

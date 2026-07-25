@@ -563,16 +563,44 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
-static int cursor_scope_allows_instance(const OverlayWalkCtx *ctx,
-                                        int selected_instance) {
-    /* SINGLE_POLYGON narrows FIRST_INSTANCE, so it shares the
-     * first-unrolled-copy gate (tess and glut shapes, which the
-     * per-primitive filter deliberately excludes, degrade to
-     * first-instance behavior). */
-    if (ctx->cursor_overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE ||
-        ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON)
-        return selected_instance == 1;
-    return 1;
+/* Does the scope highlight exactly one unrolled copy of the cursor's block?
+ * SINGLE_POLYGON narrows LAST_INSTANCE, so it shares the gate (tess and glut
+ * shapes, which the per-primitive filter deliberately excludes, degrade to
+ * plain last-instance behavior). */
+static int cursor_scope_selects_one_instance(const OverlayWalkCtx *ctx) {
+    return ctx->cursor_overlay_scope == OVERLAY_SCOPE_LAST_INSTANCE ||
+           ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON;
+}
+
+/* Index of the LAST block head (CMD_BEGIN, or CMD_TESS_BEGIN_POLYGON when
+ * is_tess) whose block matches the cursor line, or -1 if none does. The
+ * render passes walk forward, so the copy to highlight has to be resolved
+ * before they start; the predicate is the same one they use, and it costs a
+ * second GL-free walk of the flat program. */
+static int last_selected_block_head(const OverlayWalkCtx *ctx,
+                                    CmdType head_type, int is_tess) {
+    const GLCmd *cmds = ctx->program.cmds;
+    int found = -1;
+
+    if (!ctx->highlight_current_poly) return -1;
+    for (int i = 0; i < ctx->program.cmd_count; i++) {
+        if (!cmds[i].valid || cmds[i].type != head_type) continue;
+        if (outline_block_matches_cursor(i, is_tess, ctx)) found = i;
+    }
+    return found;
+}
+
+/* Same, for the glutSolid* pass — those match per command, not per block. */
+static int last_selected_glut_shape(const OverlayWalkCtx *ctx) {
+    const GLCmd *cmds = ctx->program.cmds;
+    int found = -1;
+
+    if (!ctx->highlight_current_poly) return -1;
+    for (int i = 0; i < ctx->program.cmd_count; i++) {
+        if (!cmds[i].valid || !repl_cmd_is_glut_solid(cmds[i].type)) continue;
+        if (outline_cmd_matches_cursor(i, ctx)) found = i;
+    }
+    return found;
 }
 
 /* SINGLE_POLYGON scope with a resolved primitive range: does block-local
@@ -656,7 +684,9 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     int in_begin = 0;
     int matrix_depth = 0;
     int block_is_current = 0;
-    int selected_block_instances = 0;
+    int one_instance = cursor_scope_selects_one_instance(ctx);
+    int selected_head = one_instance
+                        ? last_selected_block_head(ctx, CMD_BEGIN, 0) : -1;
     OverlayGlTracker trk;
     int block_clip_suspended = 0;
 
@@ -688,13 +718,8 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 overlay_gl_resume(ctx, &trk.st);
                 block_clip_suspended = 0;
             }
-            if (block_matches_current) {
-                selected_block_instances++;
-                block_is_current =
-                    cursor_scope_allows_instance(ctx, selected_block_instances);
-            } else {
-                block_is_current = 0;
-            }
+            block_is_current = block_matches_current &&
+                               (!one_instance || i == selected_head);
             if (block_is_current &&
                 ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
                 ctx->cursor_poly_valid) {
@@ -762,7 +787,10 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
-    int selected_poly_instances = 0;
+    int one_instance = cursor_scope_selects_one_instance(ctx);
+    int selected_head = one_instance
+                        ? last_selected_block_head(ctx, CMD_TESS_BEGIN_POLYGON, 1)
+                        : -1;
     OverlayGlTracker trk;
     int contour_clip_suspended = 0;
 
@@ -781,17 +809,9 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
 
         switch (cmds[i].type) {
         case CMD_TESS_BEGIN_POLYGON:
-            {
-                int poly_matches_current = ctx->highlight_current_poly &&
-                                           outline_block_matches_cursor(i, 1, ctx);
-                if (poly_matches_current) {
-                    selected_poly_instances++;
-                    tess_poly_is_current =
-                        cursor_scope_allows_instance(ctx, selected_poly_instances);
-                } else {
-                    tess_poly_is_current = 0;
-                }
-            }
+            tess_poly_is_current = ctx->highlight_current_poly &&
+                                   outline_block_matches_cursor(i, 1, ctx) &&
+                                   (!one_instance || i == selected_head);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             if (ctx->replay_tess_preview) break;
@@ -864,7 +884,8 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
     int matrix_depth = 0;
-    int selected_shape_instances = 0;
+    int one_instance = cursor_scope_selects_one_instance(ctx);
+    int selected_shape = one_instance ? last_selected_glut_shape(ctx) : -1;
     OverlayGlTracker trk;
 
     overlay_gl_tracker_init(&trk);
@@ -881,12 +902,8 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
         if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
 
         int is_current = ctx->highlight_current_poly &&
-                         outline_cmd_matches_cursor(i, ctx);
-        if (is_current) {
-            selected_shape_instances++;
-            is_current = cursor_scope_allows_instance(ctx,
-                                                      selected_shape_instances);
-        }
+                         outline_cmd_matches_cursor(i, ctx) &&
+                         (!one_instance || i == selected_shape);
         if (is_current) {
             overlay_gl_suspend(ctx, &trk.st);
             glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
@@ -1211,7 +1228,7 @@ typedef struct {
     int   vw, vh;
     VertexLabel labels[VERTEX_LABEL_MAX];
     int   count;
-    /* Scope: 0 labels only the first unrolled copy of the cursor's looped
+    /* Scope: 0 labels only the last unrolled copy of the cursor's looped
      * primitive (the parametric torus shows v0..vN once, not per ring);
      * 1 labels every unrolled vertex with a globally-unique number;
      * 2 labels all instances at their vertex positions (without decluttering);
@@ -1408,20 +1425,23 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
      * at each block, so it marks block boundaries; count them. The global index
      * advances for every labelable vertex (independent of the off-screen cull
      * below), so a given vertex keeps the same number as the camera moves. */
-    if (state->vertex_idx_in_block == 0)
+    /* Last-instance mode: only the last unrolled copy (else the torus repeats
+     * v0..vN once per ring). The walk is forward-only and can't know which copy
+     * is last, so every new copy simply discards what the previous one
+     * collected. All-instances and At-vertex modes keep all copies; declutter
+     * pass still drops whatever doesn't fit for All-instances. Single-polygon
+     * narrows last-instance further to the primitive under the cursor — but
+     * only for glBegin blocks (primitive_mode != 0); tess (GLU) polygons keep
+     * whole-block labels by design. */
+    if (state->vertex_idx_in_block == 0) {
         ctx->block_instances++;
+        if ((ctx->label_options == OVERLAY_SCOPE_LAST_INSTANCE ||
+             ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON) &&
+            ctx->block_instances > 1)
+            ctx->count = 0;
+    }
     global_num = ctx->labelable_seen++;
 
-    /* First-instance mode: only the first unrolled copy (else the torus repeats
-     * v0..vN once per ring). All-instances and At-vertex modes keep all copies;
-     * declutter pass still drops whatever doesn't fit for All-instances.
-     * Single-polygon narrows first-instance further to the primitive under the
-     * cursor — but only for glBegin blocks (primitive_mode != 0); tess (GLU)
-     * polygons keep whole-block labels by design. */
-    if ((ctx->label_options == OVERLAY_SCOPE_FIRST_INSTANCE ||
-         ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON) &&
-        ctx->block_instances != 1)
-        return;
     if (ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON &&
         ctx->poly_valid && state->primitive_mode != 0) {
         int ord = state->vertex_idx_in_block;
@@ -2032,8 +2052,25 @@ typedef struct {
     float                     cam_view[16];
     int                       have_xform;
     int                       geometry_guide_done;
+    /* Flat index the geometry (vertex/normal) guide must wait for, or -1 to
+     * take the first command from the cursor row. Set for the last-instance
+     * scopes so the guide reads the same unrolled copy the highlight uses. */
+    int                       geometry_target_flat_idx;
     int                       early_stop;
 } CursorGuideRenderCtx;
+
+/* Last valid flat command originating from `src_line`, or -1. */
+static int last_flat_idx_for_source_line(const FlatProgramView *flat,
+                                         int src_line) {
+    int found = -1;
+
+    if (!flat || !flat->cmds) return -1;
+    for (int i = 0; i < flat->cmd_count; i++) {
+        if (flat->cmds[i].valid && flat->cmds[i].src_cmd_idx == src_line)
+            found = i;
+    }
+    return found;
+}
 
 static int find_next_vertex_args_in_flat(const FlatProgramView *flat,
                                          int start_idx, float out[3]) {
@@ -2099,7 +2136,9 @@ Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSn
 static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
                                         void *user) {
     CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
-    int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
+    int is_cursor = (ctx->geometry_target_flat_idx >= 0)
+                    ? (state->flat_cmd_idx == ctx->geometry_target_flat_idx)
+                    : (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
 
     if (is_cursor && !ctx->geometry_guide_done && !ctx->snapshot->replaying) {
         const GLCmd *flat =
@@ -2148,6 +2187,11 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
     ctx.geometry_guide_done = 0;
+    ctx.geometry_target_flat_idx =
+        (snapshot->prefer_last_instance && !snapshot->replaying)
+        ? last_flat_idx_for_source_line(&snapshot->flat_program,
+                                        snapshot->edit_line_idx)
+        : -1;
     ctx.early_stop = 0;
     ctx.have_xform = render3d_transform_guides_prepare(snapshot, &ctx.xform_plan);
 

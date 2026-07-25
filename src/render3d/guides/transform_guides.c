@@ -1121,13 +1121,15 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
 
     const GLCmd *flat_cmds = snapshot->flat_program.cmds;
     int flat_cmd_count = snapshot->flat_program.cmd_count;
-    /* First emitted flat command originating from the cursor row. */
+    /* The flat command originating from the cursor row: its first expansion,
+     * or the last one when the snapshot asks for the last unrolled copy. */
     for (int flat_cmd_idx = 0; flat_cmd_idx < flat_cmd_count; flat_cmd_idx++) {
         if (!flat_cmds[flat_cmd_idx].valid)
             continue;
         if (flat_cmds[flat_cmd_idx].src_cmd_idx == edit_line_idx) {
             plan->cursor_flat_idx = flat_cmd_idx;
-            break;
+            if (!snapshot->prefer_last_instance)
+                break;
         }
     }
     if (plan->cursor_flat_idx < 0) {

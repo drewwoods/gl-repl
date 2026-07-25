@@ -52,9 +52,10 @@ ReplFlatCost repl_flatten_cost_at_line(int line_idx);
  * cursor's position between vertex lines picks the polygon being built
  * there: any line after glBegin up to the Nth vertex of a primitive
  * belongs to that primitive; the line after its last vertex starts the
- * next one. The result is a block-local vertex-ordinal range over the
- * FIRST flat instance of the source block (loop-unrolled copies follow
- * first-instance semantics).
+ * next one. The result is a block-local vertex-ordinal range resolved
+ * against the cursor's cached flat block. Unrolled copies of a block
+ * share their ordinal layout, so the overlay applies the range to
+ * whichever copy its scope selects.
  *
  * valid == 0 means no single primitive was resolved and callers should
  * fall back to whole-block behavior: cursor outside any glBegin block,
