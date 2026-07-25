@@ -140,10 +140,11 @@ void glr_capture_env_apply(const char *time_arg) {
     }
     /* Cursor line override: GLR_EDIT_LINE=<line> (0-based, clamped)
      * parks the cursor on a committed source line and loads it into the
-     * input buffer, exactly as arrowing to it would. Headless-capture
-     * hook: cursor-bound overlays (transform guides, vertex labels)
-     * can't otherwise be posed without live keyboard input. Applied
-     * after the file/example load so the line exists. */
+     * input buffer, then requests follow-scroll so the next frame makes
+     * that line visible, exactly as arrowing to it would. Headless-
+     * capture hook: cursor-bound overlays (transform guides, vertex
+     * labels) can't otherwise be posed without live keyboard input.
+     * Applied after the file/example load so the line exists. */
     {
         const char *l_src = getenv("GLR_EDIT_LINE");
         if (l_src && *l_src)

@@ -6,7 +6,7 @@
  * hook fires only when its variable is set, and lands on the value asked for
  * rather than a default. Hooks are asserted through the state they write:
  * GLR_ACCUM_PASSES -> glr_config_get(GLR_CONFIG_ACCUM_PASSES),
- * GLR_EDIT_LINE    -> editor_state_edit_line().
+ * GLR_EDIT_LINE    -> editor_state_edit_line() + follow-scroll request.
  *
  * Values are set explicitly and compared against what was set (never against
  * a shipped default), so retuning the defaults cannot silently pass this.
@@ -106,11 +106,14 @@ static void test_edit_line_hook(void) {
     editor_feed_line("glEnd();");
 
     editor_state_edit_line_set(0);
+    editor_scroll_follow_cursor_set(0);
     ASSERT_INT("edit line seeded at 0", editor_state_edit_line(), 0);
 
     setenv("GLR_EDIT_LINE", "2", 1);
     glr_capture_env_apply(NULL);
     ASSERT_INT("GLR_EDIT_LINE parks the cursor", editor_state_edit_line(), 2);
+    ASSERT_INT("GLR_EDIT_LINE requests scroll follow",
+               editor_scroll_follow_cursor(), 1);
 
     /* Unset leaves the cursor where it was rather than resetting it. */
     clear_capture_env();

@@ -32,7 +32,7 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 
 | Var | Effect |
 |---|---|
-| `GLR_EDIT_LINE=<n>` | park cursor → cursor-bound overlays render headlessly |
+| `GLR_EDIT_LINE=<n>` | park cursor and scroll it into view → cursor-bound overlays render headlessly |
 | `GLR_TYPE_KEYS='...'` | feed keystrokes after load |
 | `GLR_OPEN_COLOR_PICKER=<line>` | open the floating picker on frame 1 |
 | `GLR_OPEN_GL_STATE=<line>` | open the GL-state popup on frame 1 |

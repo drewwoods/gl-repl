@@ -1336,7 +1336,7 @@ fi
 
 # Transforms & GL state.
 if want sc-planar-shadows; then
-    ( export GLR_EDIT_LINE=6
+    ( export GLR_EDIT_LINE=2
     gif "$SHOW/planar-shadows.gif" 200 2 20 560 \
         --example "Planar shadows (glMultMatrixf)" )
 fi

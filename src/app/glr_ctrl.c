@@ -3307,6 +3307,7 @@ void glr_ctrl_set_edit_line(int line) {
     if (line >= count) line = count - 1;
     editor_state_edit_line_set(line);
     editor_load_line_to_input(line);
+    editor_scroll_follow_cursor_set(1);
 }
 
 void glr_ctrl_open_color_picker(int line) {

@@ -53,7 +53,7 @@ static void print_usage(const char *prog) {
             "               captures render at 2x and downscale for 4x supersampling.\n"
             "\n"
             "Environment:\n"
-            "  GLR_EDIT_LINE=<n>  Park the cursor on source line n (0-based)\n"
+            "  GLR_EDIT_LINE=<n>  Park and reveal source line n (0-based)\n"
             "               after load, as if arrowed to. Poses cursor-bound\n"
             "               overlays (transform guides, vertex labels) for\n"
             "               headless captures.\n"

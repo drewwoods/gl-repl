@@ -1772,8 +1772,9 @@ runs.
 ```
 
 Useful environment variables: `GLR_TIME`, `GLR_ASSETS_DIR`,
-`GLR_EDIT_LINE=<n>` (park the cursor on source line *n* after load — poses
-cursor-bound overlays like transform guides for headless captures),
+`GLR_EDIT_LINE=<n>` (park the cursor on source line *n* after load and scroll
+it into view — poses cursor-bound overlays like transform guides for headless
+captures),
 `GLR_TYPE_KEYS=<text>` (feed keystrokes through the keyboard dispatch after
 load — poses mid-typing states like the vertex entry guides and the
 autocomplete popup),

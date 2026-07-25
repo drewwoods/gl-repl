@@ -44,7 +44,7 @@ When both a command-line flag and an env var exist, the flag wins.
 |---|---|---|
 | `GLR_ASSETS_DIR` | Directory path; default `./assets`; `--assets` wins. | Primary music directory scanned for `*.mp3`. |
 | `GLR_TIME` | Seconds; default `0`; `--time` wins. | Initial animation time `t`, applied after any example/file load. |
-| `GLR_EDIT_LINE` | 0-based line index; clamped. | Parks the cursor after load so cursor-bound overlays render in captures. |
+| `GLR_EDIT_LINE` | 0-based line index; clamped. | Parks the cursor after load and scrolls it into view so cursor-bound overlays render in captures. |
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |
 | `GLR_OPEN_COLOR_PICKER` | 0-based line index of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |

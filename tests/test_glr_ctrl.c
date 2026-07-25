@@ -4618,16 +4618,18 @@ static void test_code_panel_scroll_clamping_and_follow(void) {
 
     /* 2. Cursor follow-scroll test */
     editor_scroll_set(0);
-    editor_scroll_follow_cursor_set(1);
-    editor_state_edit_line_set(80);
+    editor_scroll_follow_cursor_set(0);
+    glr_ctrl_set_edit_line(80);
+    ASSERT_INT("programmatic cursor park requests scroll follow",
+               editor_scroll_follow_cursor(), 1);
 
     glr_ctrl_display_frame();
 
     glr_ctrl_code_panel_apply_scroll_follow_for_test(
         &g_last_ui_snapshot, &follow_doc_line, &visible_lines);
 
-    ASSERT_TRUE("scroll moved down to follow cursor", editor_scroll() > 0);
-    ASSERT_TRUE("cursor is inside visible range",
+    ASSERT_TRUE("cursor park scrolls the code panel down", editor_scroll() > 0);
+    ASSERT_TRUE("parked cursor is inside visible range",
                 follow_doc_line >= editor_scroll() &&
                 follow_doc_line < editor_scroll() + visible_lines);
 }
