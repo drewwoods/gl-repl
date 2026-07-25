@@ -37,6 +37,7 @@
 #define BUFFER_VIZ_DEPTH_H
 
 #include "render3d/render.h"   /* Render3dProjectionDesc */
+#include "subsystems/buffer_viz/buffer_viz.h"   /* BufferVizRange */
 
 typedef enum BufferVizDepthMode {
     BUFFER_VIZ_DEPTH_OFF = 0,
@@ -46,15 +47,10 @@ typedef enum BufferVizDepthMode {
     BUFFER_VIZ_DEPTH_COUNT
 } BufferVizDepthMode;
 
-/* EMA-smoothed value range for range-normalized modes. Owned by the
- * module for the live path; exposed so the pure mapping function below
- * can be driven with caller-owned state in tests. Deliberately not
- * prefixed by buffer kind: the smoothing is the same problem for any
- * buffer whose interesting range is the captured data's own extent. */
-typedef struct BufferVizRange {
-    float lo, hi;
-    int   valid;   /* 0 until the first in-range capture seeds lo/hi */
-} BufferVizRange;
+/* The SCENE normalization range is the shared BufferVizRange from
+ * buffer_viz.h — owned by this module for the live path, but taken as a
+ * parameter by the mapping function below so tests can drive it with
+ * caller-owned state. */
 
 /* Free the CPU buffers, delete the texture, clear the EMA range and the
  * cached GL_MAX_TEXTURE_SIZE. Called by the controller from

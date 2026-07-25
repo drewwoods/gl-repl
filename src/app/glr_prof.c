@@ -23,7 +23,7 @@
 #include <stddef.h>   /* NULL */
 
 /* Indexed by ProfSection (designated initializers keep label/depth co-located
- * with each enum constant). PROF_RENDER3D_LAST aliases PROF_BUFFER_VIZ_DEPTH,
+ * with each enum constant). PROF_RENDER3D_LAST aliases PROF_BUFFER_VIZ_STENCIL,
  * so it shares that row. Any section left out reads back as {NULL,...} and is
  * rendered as "?" by the accessor below. */
 static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
@@ -47,10 +47,13 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D_OVERLAY_NORMALS]          = { "normals",         2, 0 },
     [PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
     [PROF_RENDER3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
-    /* Depth-viz cost is dominated by the synchronous glReadPixels stall
-     * plus the CPU convert — a CPU-side number by nature, so the row is
-     * deliberately NOT in k_gpu_sections below. */
+    /* Buffer-viz cost is dominated by the synchronous glReadPixels stall
+     * plus the CPU convert — CPU-side numbers by nature, so these rows are
+     * deliberately NOT in k_gpu_sections below. Stencil reads once per
+     * accumulation pass (it composites per pass), depth once per frame, so
+     * the two rows are not comparable at accum > 1. */
     [PROF_BUFFER_VIZ_DEPTH]                  = { "depth viz",       1, 0 },
+    [PROF_BUFFER_VIZ_STENCIL]                = { "stencil viz",     1, 0 },
     [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
     [PROF_CODE_PANEL_ROWS]                   = { "build rows",      1, 0 },
     [PROF_CODE_PANEL_TEXT]                   = { "draw text",       1, 0 },

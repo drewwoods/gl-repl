@@ -34,7 +34,9 @@
 #include "render3d/grid.h"                   /* render3d_grid_reveal (transition curve) */
 #include "render3d/axes.h"                   /* render3d_axes_reveal (transition curve) */
 #include "render3d/lights.h"                 /* render3d_lights_apply_theme */
-#include "subsystems/buffer_viz/depth_viz.h"              /* depth-viz buffer-hook subscriber */
+#include "subsystems/buffer_viz/buffer_viz.h"      /* buffer-hook subscriber + frame modes */
+#include "subsystems/buffer_viz/depth_viz.h"        /* BufferVizDepthMode */
+#include "subsystems/buffer_viz/stencil_viz.h"      /* BufferVizStencilMode */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -1206,39 +1208,13 @@ const char *glr_ctrl_depth_readback_unsupported_reason(void) {
 #endif
 }
 
-/* --- Buffer-visualization hook subscriptions ------------------------
- * render3d fires three neutral buffer hooks and knows nothing about
- * what for; the app decides what looks at the framebuffer. The modes in
- * effect for a frame travel through the hooks' user_data (the
- * g_overlay_pack idiom) rather than a subsystem global, so what a frame
- * asked for is explicit at the subscription site. */
-typedef struct {
-    int depth_mode;   /* BufferVizDepthMode, already capability-masked */
-} GlrBufferVizFrame;
-
-static GlrBufferVizFrame g_buffer_viz_frame;
-
-static void glr_ctrl_buffer_read(void *user_data, int is_final_pass,
-                                 int sx, int sy, int sw, int sh) {
-    const GlrBufferVizFrame *frame = (const GlrBufferVizFrame *)user_data;
-    if (!frame)
-        return;
-    /* Depth wants one read per frame: under accumulation every pass
-     * clears and rewrites depth, so only the final pass survives into
-     * the resolved image the quad is drawn over. */
-    if (is_final_pass && frame->depth_mode != BUFFER_VIZ_DEPTH_OFF)
-        buffer_viz_depth_capture(sx, sy, sw, sh);
-}
-
-static void glr_ctrl_buffer_resolve_overlay(void *user_data,
-                                            const Render3dProjectionDesc *proj,
-                                            int sx, int sy, int sw, int sh) {
-    const GlrBufferVizFrame *frame = (const GlrBufferVizFrame *)user_data;
-    if (!frame)
-        return;
-    buffer_viz_depth_render((BufferVizDepthMode)frame->depth_mode, proj,
-                            sx, sy, sw, sh);
-}
+/* Per-frame buffer-visualization modes. render3d fires three neutral
+ * buffer hooks and knows nothing about what for; buffer_viz subscribes
+ * them and reads this struct as their user_data (the g_overlay_pack
+ * idiom), so what a frame asked for is explicit at the subscription site
+ * rather than ambient in the subsystem. Capability masking happens where
+ * it is built, in glr_ctrl_build_scene_config. */
+static BufferVizFrameConfig g_buffer_viz_frame;
 
 /* The 2D/3D view-mode transition state machine lives in
  * src/app/glr_ctrl_view_transition.c (carved out of this file). The frame
@@ -1400,10 +1376,11 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     g_buffer_viz_frame.depth_mode =
         g_depth_readback_supported ? presentation.depth_viz
                                    : BUFFER_VIZ_DEPTH_OFF;
-    config->buffer_read_fn        = glr_ctrl_buffer_read;
-    config->buffer_read_user_data = &g_buffer_viz_frame;
-    config->buffer_resolve_overlay_fn        = glr_ctrl_buffer_resolve_overlay;
-    config->buffer_resolve_overlay_user_data = &g_buffer_viz_frame;
+    /* Stencil view has no config row yet (plan §1.7); until then the mode
+     * is always Off, which is also what a context without stencil planes
+     * or without stencil readback will be handed. */
+    g_buffer_viz_frame.stencil_mode = BUFFER_VIZ_STENCIL_OFF;
+    buffer_viz_install(config, &g_buffer_viz_frame);
     /* Single source of truth: the executor's capability flag + loaded
      * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
      * attenuation through the same callable entry point the executor
@@ -3093,7 +3070,7 @@ void glr_ctrl_init_gl(void) {
     /* Buffer-viz caches are the app's to reset now that render3d owns no
      * buffer inspection: a fresh GL context must not reuse a stale
      * texture name or a stale EMA range. */
-    buffer_viz_depth_reset();
+    buffer_viz_reset();
     render3d_state_init(&g_scene_renderer);
     repl_executor_init_resources();
     hidden_lines_init_resources();

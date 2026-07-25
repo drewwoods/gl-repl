@@ -56,7 +56,8 @@ typedef enum {
      * phase, so moving the constants out would silently change what the
      * render3d row reports. */
     PROF_BUFFER_VIZ_DEPTH,      /* depth-viz readback + convert + quad */
-    PROF_RENDER3D_LAST = PROF_BUFFER_VIZ_DEPTH,
+    PROF_BUFFER_VIZ_STENCIL,    /* stencil-viz readback + convert + quad */
+    PROF_RENDER3D_LAST = PROF_BUFFER_VIZ_STENCIL,
     PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
     PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
     PROF_CODE_PANEL_TEXT,     /* generic ui_text_panel_render() */

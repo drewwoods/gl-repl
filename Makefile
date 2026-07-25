@@ -810,6 +810,7 @@ TEST_BINS = \
 	test_render3d_guides \
 	test_render3d_render \
 	test_depth_viz \
+	test_stencil_viz \
 	test_repl_editor \
 	test_repl_core_extra \
 	test_repl_autonormal \
@@ -851,7 +852,7 @@ TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 TEST_BINS += test_hidden_lines
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -958,20 +959,33 @@ test_render3d_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_render.o \
 test_render3d_render_LDLIBS = $(GL_LDFLAGS)
 test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
 
-# Synthetic depth-map tests for the pure conversion core
-# (buffer_viz_depth_map). depth_viz.o carries GL calls for its
-# capture/render shell, hence GL_LDFLAGS on real-GL builds (no-op inline
-# stubs under USE_GL_STUBS=1, like test_render3d_guides); cpuprof.o
-# because the shell brackets itself with prof_begin/prof_accum_end now
-# that render3d's neutral buffer hooks name no viz section.
-test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
+# Synthetic-buffer tests for the pure conversion cores
+# (buffer_viz_depth_map, buffer_viz_stencil_scan/_map). The viz .o files
+# carry GL calls for their capture/render shells, hence GL_LDFLAGS on
+# real-GL builds (no-op inline stubs under USE_GL_STUBS=1, like
+# test_render3d_guides); cpuprof.o because the shells bracket themselves
+# with prof_begin/prof_accum_end now that render3d's neutral buffer hooks
+# name no viz section. Both binaries link the whole subsystem —
+# buffer_viz.o owns the shared range smoothing, and its hook fan-out
+# references both viz modules.
+BUFFER_VIZ_TEST_OBJS = \
+	$(OBJDIR)/src/subsystems/buffer_viz/buffer_viz.o \
 	$(OBJDIR)/src/subsystems/buffer_viz/depth_viz.o \
+	$(OBJDIR)/src/subsystems/buffer_viz/stencil_viz.o \
 	$(OBJDIR)/src/render3d/postprocess_filter.o \
 	$(OBJDIR)/src/render3d/postprocess_surface.o \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+
+test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
+	$(BUFFER_VIZ_TEST_OBJS)
 test_depth_viz_LDLIBS = $(GL_LDFLAGS)
 test_depth_viz_RUN ?= $(BINDIR)/test_depth_viz
+
+test_stencil_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_stencil_viz.o \
+	$(BUFFER_VIZ_TEST_OBJS)
+test_stencil_viz_LDLIBS = $(GL_LDFLAGS)
+test_stencil_viz_RUN ?= $(BINDIR)/test_stencil_viz
 
 test_scene_file_menu_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_file_menu.o $(CORE_TEST_OBJS)
 test_scene_file_menu_LDLIBS = $(GL_LDFLAGS)

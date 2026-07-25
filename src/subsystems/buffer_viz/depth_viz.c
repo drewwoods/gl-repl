@@ -23,11 +23,6 @@
 /* Below this linear-depth span the SCENE normalization would divide by
  * ~0 (constant-depth scene); in-range pixels map to mid-gray instead. */
 #define DEPTH_VIZ_SPAN_EPS     1e-6f
-/* EMA smoothing for the SCENE range: s += alpha * (raw - s). */
-#define DEPTH_VIZ_EMA_ALPHA    0.25f
-/* Snap (no smoothing) when the raw span jumps past this ratio of the
- * smoothed span in either direction — example switches must not lag. */
-#define DEPTH_VIZ_SNAP_RATIO   2.0f
 /* SCENE mode maps its farthest pixel to this luminance floor so it
  * stays distinguishable from the black background. */
 #define DEPTH_VIZ_SCENE_FAR_LUM 0.1f
@@ -149,19 +144,9 @@ void buffer_viz_depth_map(const float *depth, int count,
              * anyway) and leave the EMA range untouched. */
             range_normalize = 0;
         } else {
-            float raw_span = raw_hi - raw_lo;
-            float ema_span = range->hi - range->lo;
-            int snap = !range->valid ||
-                       raw_span > ema_span * DEPTH_VIZ_SNAP_RATIO ||
-                       ema_span > raw_span * DEPTH_VIZ_SNAP_RATIO;
-            if (snap) {
-                range->lo = raw_lo;
-                range->hi = raw_hi;
-                range->valid = 1;
-            } else {
-                range->lo += DEPTH_VIZ_EMA_ALPHA * (raw_lo - range->lo);
-                range->hi += DEPTH_VIZ_EMA_ALPHA * (raw_hi - range->hi);
-            }
+            /* Shared with stencil RAMP: same snap-on-jump + EMA policy,
+             * one implementation (buffer_viz.c). */
+            buffer_viz_range_update(range, raw_lo, raw_hi);
         }
     } else if (range_normalize) {
         range_normalize = 0; /* no range state supplied: LINEAR fallback */

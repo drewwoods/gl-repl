@@ -100,6 +100,7 @@ typedef double GLclampd;
 #define GL_STENCIL_BUFFER_BIT 0x00000400
 #define GL_COLOR_BUFFER_BIT 0x00004000
 
+#define GL_PACK_ALIGNMENT 0x0D05
 #define GL_UNPACK_ALIGNMENT 0x0CF5
 #define GL_UNPACK_SWAP_BYTES 0x0CF0
 #define GL_UNPACK_LSB_FIRST 0x0CF1
@@ -130,6 +131,7 @@ typedef double GLclampd;
 #define GL_ALL_ATTRIB_BITS 0xFFFFFFFF
 
 #define GL_DEPTH_COMPONENT 0x1902
+#define GL_STENCIL_INDEX 0x1901
 #define GL_FLOAT 0x1406
 #define GL_MODELVIEW 0x1700
 #define GL_PROJECTION 0x1701
@@ -288,14 +290,21 @@ static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_L
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
 static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDepth %g\n", (double)depth); gl_stub_tick(GL_STUB_glClearDepth); }
 /* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so
- * occlusion-style depth reads behave as if every vertex is visible. */
+ * occlusion-style depth reads behave as if every vertex is visible. The fill
+ * MUST branch on `type` — a GL_UNSIGNED_BYTE read (stencil) hands us a
+ * one-byte-per-pixel buffer, and writing floats into it overruns by 4x. */
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                                 GLenum format, GLenum type, void *pixels) {
-    (void)x; (void)y; (void)format; (void)type;
+    (void)x; (void)y; (void)format;
     if (pixels && width > 0 && height > 0) {
-        float *p = (float *)pixels;
         long n = (long)width * (long)height, i;
-        for (i = 0; i < n; i++) p[i] = 1.0f;
+        if (type == GL_UNSIGNED_BYTE) {
+            unsigned char *p = (unsigned char *)pixels;
+            for (i = 0; i < n; i++) p[i] = 0;   /* empty stencil */
+        } else {
+            float *p = (float *)pixels;
+            for (i = 0; i < n; i++) p[i] = 1.0f;
+        }
     }
 }
 static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { GL_STUB_TRACE_LINE("glClearColor %g %g %g %g\n", (double)red, (double)green, (double)blue, (double)alpha); gl_stub_tick(GL_STUB_glClearColor); }
