@@ -15,6 +15,8 @@ glClearColor(r,g,b,a)          (channels clamped >= 0.15)
 glClear(mask)                  (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 glClearDepth(depth)            (depth value glClear writes; GL clamps to 0..1)
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
+glMultMatrixf(A)               (scratch array A/B/C as a column-major 4x4;
+                                bare name only — no expression, no subscript)
 glPushAttrib(mask), glPopAttrib()  (attribute-stack save/restore; GL_*_BIT tokens)
 glEnable(CAP), glDisable(CAP)  (depth/lighting/blend/cull/fog/lights 0-3,
                                 GL_CLIP_PLANE0..5, line/point smooth, ...)

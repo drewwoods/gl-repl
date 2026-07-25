@@ -285,7 +285,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L96)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L97)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -318,7 +318,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319).
-- [`GLCmd`](src/repl/command.h#L96) payload is a tagged union keyed on `type` (`payload.decl.*`,
+- [`GLCmd`](src/repl/command.h#L97) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
   validates no variable is still referenced outside the range. Cut/copy/
@@ -463,6 +463,7 @@ finds, Ctrl+Z undoes, F1 is help.
 glBegin/glEnd, glVertex3f/glVertex2f, glNormal3f, glColor3f/glColor4f
 glClearColor, glClear(mask), glClearDepth
 glTranslatef/glScalef/glRotatef, glPushMatrix/glPopMatrix/glLoadIdentity
+glMultMatrixf(A)               (scratch array as a column-major 4x4)
 glPushAttrib(mask)/glPopAttrib, glEnable/glDisable(CAP)
 glFogi/glFogf/glFogfv, glClipPlane, glShadeModel, glPointSize, glLineWidth
 glLineStipple, glPointParameterfv, glBlendFunc, glColorMaterial, glMaterialfv

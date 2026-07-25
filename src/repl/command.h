@@ -47,6 +47,7 @@ typedef enum {
     CMD_PUSH_MATRIX,
     CMD_POP_MATRIX,
     CMD_LOAD_IDENTITY,
+    CMD_MULT_MATRIXF,
     CMD_COLOR_MATERIAL,
     CMD_LIGHT_MODEL_I,
     CMD_FRONT_FACE,
@@ -117,6 +118,7 @@ typedef struct {
      * Active member is keyed by `type`:
      *   CMD_VAR_DECLARE  -> payload.decl
      *   CMD_LABEL        -> payload.label
+     *   CMD_MULT_MATRIXF -> payload.matrix
      *   anything else    -> zeroed; do not read.
      *
      * Writers must zero/init the relevant member before touching it. */
@@ -128,6 +130,20 @@ typedef struct {
         struct {
             char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
         } label;
+        /* CMD_MULT_MATRIXF carries its 4x4 by value rather than by
+         * scratch-array reference (args[0] names the source array, and
+         * stays meaningful for the panel and export). Flatten snapshots
+         * the array's live 16 cells into `m` in stream order, so every
+         * consumer that walks the flat program — the executor, the replay
+         * and overlay matrix trackers, the transform guides — applies the
+         * same matrix the scene meant, with no way to read the scratch
+         * table. That last part is load-bearing: those trackers share the
+         * inline applier in repl/transform_utils.h, which render3d uses in
+         * a build that links no src/repl objects at all. Column-major,
+         * matching glMultMatrixf and glGetFloatv. */
+        struct {
+            float m[16];
+        } matrix;
     } payload;
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
@@ -143,7 +159,7 @@ typedef struct {
 static inline int repl_cmd_is_transform(CmdType type) {
     return (type == CMD_TRANSLATE3F || type == CMD_SCALEF  || type == CMD_ROTATEF ||
             type == CMD_PUSH_MATRIX || type == CMD_POP_MATRIX ||
-            type == CMD_LOAD_IDENTITY);
+            type == CMD_LOAD_IDENTITY || type == CMD_MULT_MATRIXF);
 }
 
 /* True for every command type that contributes a per-vertex position to

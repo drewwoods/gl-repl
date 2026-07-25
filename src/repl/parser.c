@@ -1207,6 +1207,58 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     return 1;
 }
 
+/* glMultMatrixf(A) — post-multiply the current matrix by a scratch array
+ * read as a column-major 4x4. The argument is a bare scratch-array name
+ * (A / B / C), not an expression and not a compound literal: the 16 cells
+ * are the matrix, and they are written the ordinary way, with `A[k] = ...`
+ * lines ahead of this one. Storing the name here (args[0]) rather than the
+ * values keeps the source line stable across frames; flatten snapshots the
+ * live cells into payload.matrix when it emits the flat command. */
+static int parse_mult_matrixf(const char *args, GLCmd *cmd,
+                              char *text_out, int text_sz,
+                              const char *indent,
+                              const ReplParseContext *ctx) {
+    char name[REPL_PREDEF_NAME_MAX] = "";
+    int n = 0;
+    int array_idx;
+    const char *p = args;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && n < (int)sizeof(name) - 1 &&
+           repl_eval_is_ident_continue((unsigned char)*p))
+        name[n++] = *p++;
+    name[n] = '\0';
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    array_idx = repl_eval_scratch_array_index(name);
+    if (*p != '\0' || array_idx < 0) {
+        parser_emit_error_static(ctx,
+            "Usage: glMultMatrixf(A) - a scratch array (A, B, or C) "
+            "holding 16 column-major values");
+        return 0;
+    }
+
+    cmd->type = CMD_MULT_MATRIXF;
+    cmd->valid = 1;
+    cmd->args[0] = (float)array_idx;
+    cmd->num_args = 1;
+    /* No expression slots to re-evaluate — the line is a name. The cells
+     * behind that name still change every frame, but they are picked up by
+     * the flatten-time snapshot, which runs on every path into the flat
+     * array including this command's has_vars=0 fast path. */
+    cmd->has_vars = 0;
+    /* Identity until flatten fills it: a zeroed matrix would collapse the
+     * scene, and this command's values never come from the parse. */
+    memset(&cmd->payload, 0, sizeof(cmd->payload));
+    cmd->payload.matrix.m[0] = 1.0f;
+    cmd->payload.matrix.m[5] = 1.0f;
+    cmd->payload.matrix.m[10] = 1.0f;
+    cmd->payload.matrix.m[15] = 1.0f;
+
+    write_text(text_out, text_sz, "%sglMultMatrixf(%s);", indent, name);
+    return 1;
+}
+
 /* glFogf(pname, value) — enum pname + one scalar expression, the
  * glMaterialf shape without the face arg. GL_FOG_MODE lives on glFogi
  * (it takes an enum, not a float) and GL_FOG_COLOR on glFogfv. */
@@ -1375,6 +1427,8 @@ static int try_parse_custom_arg_command(const char *func, const char *args,
         return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glClipPlane") == 0)
         return parse_clip_plane(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glMultMatrixf") == 0)
+        return parse_mult_matrixf(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glFogf") == 0)
         return parse_fogf(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glFogfv") == 0)

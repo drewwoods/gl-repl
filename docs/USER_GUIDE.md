@@ -392,6 +392,8 @@ numeric argument everywhere is a full math expression.
   [`glRotatef(deg,x,y,z)`](https://docs.gl/gl2/glRotate)
 - [`glPushMatrix()`](https://docs.gl/gl2/glPushMatrix), [`glPopMatrix()`](https://docs.gl/gl2/glPushMatrix),
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
+- [`glMultMatrixf(A)`](https://docs.gl/gl2/glMultMatrix) — post-multiply by a
+  scratch array read as a 4x4 (see [Arbitrary matrices](#arbitrary-matrices))
 - [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
@@ -679,6 +681,63 @@ glVertex3f(A[0], 0, 0);
 
 Indices truncate to int and must stay in `0..15`. Like variables, scratch
 arrays persist and round-trip through save/load.
+
+### Arbitrary matrices
+
+Sixteen cells is also exactly a 4x4 matrix, which is what `glMultMatrixf`
+reads them as:
+
+```c
+A[0] = 1;                 // the identity matrix: 1s down the diagonal
+A[5] = 1;
+A[10] = 1;
+A[15] = 1;
+glMultMatrixf(A);         // post-multiply the current matrix by A
+```
+
+The argument is a bare array name — `A`, `B`, or `C`. Not an expression, not a
+subscript, not a list of numbers: the array *is* the matrix, and you fill it
+with ordinary `A[k] = ...` lines above the call, in the same block. Cells you
+never assign are zero, so write all sixteen (or at least every one your matrix
+needs non-zero — an unassigned `A[15]` leaves the matrix singular and your
+geometry gone).
+
+The layout is OpenGL's **column-major** order, the same one `glGetFloatv`
+returns: `A[0..3]` is the first column, `A[4..7]` the second, and — the one
+worth memorizing — `A[12]`, `A[13]`, `A[14]` hold the translation.
+
+`glTranslatef`, `glRotatef`, and `glScalef` cover almost everything, and they
+read far better than sixteen assignments; reach for `glMultMatrixf` only for
+what they cannot express between them. A shear is one. A mirror is another.
+The classic is the planar shadow projection — the matrix that squashes
+geometry onto a plane as seen from a light, so drawing the shape a second
+time through it draws its shadow:
+
+```c
+float lx, ly, lz;         // light position, over a floor at y = 0
+lx = 2;
+ly = 4;
+lz = 1;
+A[0] = ly;                // only five cells are non-zero for this one;
+A[4] = -lx;               // the rest of A must be 0, which is how a
+A[6] = -lz;               // freshly reset scratch array already reads
+A[7] = -1;
+A[10] = ly;
+A[15] = ly;
+glPushMatrix();
+glMultMatrixf(A);
+glColor3f(0.1, 0.1, 0.12);   // draw the geometry again, flattened and dark
+glutSolidTeapot(1);
+glPopMatrix();
+```
+
+(One statement per line, as everywhere else in the REPL — the sixteen cells
+are sixteen lines when a matrix needs all of them.)
+
+The values are read when the frame is built, at that point in the program, so
+a matrix assembled from `t` animates like any other expression — and the
+transform guides, replay, and overlays all follow it, because they see the
+same matrix the frame did.
 
 ### For-loops
 

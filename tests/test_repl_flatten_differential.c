@@ -129,6 +129,10 @@ static int flat_cmd_equal(const GLCmd *a, const GLCmd *b) {
     if (a->type == CMD_VAR_DECLARE &&
         memcmp(&a->payload.decl, &b->payload.decl, sizeof(a->payload.decl)) != 0)
         return 0;
+    if (a->type == CMD_MULT_MATRIXF &&
+        memcmp(&a->payload.matrix, &b->payload.matrix,
+               sizeof(a->payload.matrix)) != 0)
+        return 0;
     return 1;
 }
 
@@ -317,6 +321,77 @@ static void test_literal_cmd_keeps_is_auto(void) {
  * flatten_reparse_line, the reparsed normal loses is_auto and the seam is not
  * semantically equivalent. test_corpus_differential cannot catch this: no
  * built-in example carries an auto-normal, so the field never differs there. */
+/* Flat index of the run's single glMultMatrixf, or -1. */
+static int mult_matrix_flat_idx(const FlattenRun *run) {
+    for (int i = 0; i < run->result.flat_cmd_count; i++)
+        if (run->cmds[i].type == CMD_MULT_MATRIXF)
+            return i;
+    return -1;
+}
+
+static float mult_matrix_cell(const FlattenRun *run, int cell) {
+    int idx = mult_matrix_flat_idx(run);
+    return idx >= 0 ? run->cmds[idx].payload.matrix.m[cell] : 0.0f;
+}
+
+/* glMultMatrixf's 16 cells are read out of the scratch table at flatten
+ * time, in stream order, and baked onto the flat command. Two things have
+ * to hold: the bake sees the writes from the A[k] = ... lines above it (not
+ * a stale or zeroed array), and it happens on every path into the flat
+ * array — the command carries has_vars=0, so the fast path copies the
+ * source command wholesale and would otherwise ship the parser's identity
+ * placeholder while the forced-reparse path shipped the real matrix. */
+static void test_mult_matrixf_snapshot(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float s;");
+    editor_feed_line("s = 3;");
+    editor_feed_line("A[0] = s;");
+    editor_feed_line("A[5] = 2;");
+    editor_feed_line("A[10] = 1;");
+    editor_feed_line("A[12] = 7;");
+    editor_feed_line("A[15] = 1;");
+    editor_feed_line("glMultMatrixf(A);");
+
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+
+    TEST_ASSERT_TRUE(&g_harness, "glMultMatrixf reaches the flat program",
+                     mult_matrix_flat_idx(&g_fast) >= 0);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot sees a var-backed cell",
+                              mult_matrix_cell(&g_fast, 0), 3.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot sees a literal cell",
+                              mult_matrix_cell(&g_fast, 5), 2.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot sees the translation cell",
+                              mult_matrix_cell(&g_fast, 12), 7.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "unwritten cells stay zero",
+                              mult_matrix_cell(&g_fast, 1), 0.0f);
+
+    /* The baked matrix must not outlive the values behind it: a cell fed
+     * by `t` re-reads on the next flatten, which is what makes an animated
+     * matrix animate at all. */
+    glr_ctrl_reset_all();
+    editor_feed_line("A[0] = t * 2;");
+    editor_feed_line("A[5] = 1;");
+    editor_feed_line("A[10] = 1;");
+    editor_feed_line("A[15] = 1;");
+    editor_feed_line("glMultMatrixf(A);");
+
+    repl_state_time_set(1.5f);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "animated cell baked at t=1.5",
+                              mult_matrix_cell(&g_fast, 0), 3.0f);
+
+    repl_state_time_set(4.0f);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "animated cell re-bakes at t=4",
+                              mult_matrix_cell(&g_fast, 0), 8.0f);
+
+    /* Both flatten paths must ship the same matrix — see the has_vars=0
+     * fast-path note above. */
+    flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "forced reparse bakes the same cell",
+                              mult_matrix_cell(&g_reparse, 0), 8.0f);
+}
+
 static void test_auto_normal_differential(void) {
     load_auto_normal_doc();
     flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
@@ -483,6 +558,7 @@ int main(void) {
     test_capture_construct_coverage();
     test_literal_cmd_keeps_local_snapshot();
     test_literal_cmd_keeps_is_auto();
+    test_mult_matrixf_snapshot();
     test_auto_normal_differential();
     test_var_assign_differential();
     test_direct_eval_differential();

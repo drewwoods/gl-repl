@@ -60,6 +60,10 @@ Restores the previous matrix from the current matrix stack. It must be balanced 
 title = glLoadIdentity
 Replaces the current matrix with the identity matrix. Later transforms then start from an untransformed coordinate system.
 
+[command CMD_MULT_MATRIXF]
+title = glMultMatrixf
+Post-multiplies the current matrix by a scratch array read as a 4x4 in column-major order: A[0..3] is the first column, and A[12..14] holds the translation. Fill the sixteen cells with A[k] = ... lines above this one, in the same block. It is the escape hatch for transforms glTranslatef, glRotatef, and glScalef cannot express between them - a shear, a mirror, or the classic planar shadow projection that flattens geometry onto a plane away from a light.
+
 [command CMD_COLOR_MATERIAL]
 title = glColorMaterial
 Chooses which material property tracks the current color while GL_COLOR_MATERIAL is enabled. This is a compact way to vary ambient and/or diffuse material values per vertex.

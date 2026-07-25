@@ -48,6 +48,13 @@ static inline void apply_tracked_transform(const GLCmd *cmd, int *depth) {
     case CMD_ROTATEF:
         glRotatef(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         break;
+    case CMD_MULT_MATRIXF:
+        /* Values ride on the command (flatten snapshots the scratch array
+         * into payload.matrix), so this stays a pure GLCmd read — no
+         * scratch-table lookup, which is what keeps this header linkable
+         * from render3d. */
+        glMultMatrixf(cmd->payload.matrix.m);
+        break;
     default:
         break;
     }

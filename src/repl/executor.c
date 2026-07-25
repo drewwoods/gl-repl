@@ -205,6 +205,11 @@ static void repl_executor_apply_non_stack_transform_cmd(const GLCmd *cmd) {
     case CMD_LOAD_IDENTITY:
         glLoadIdentity();
         break;
+    case CMD_MULT_MATRIXF:
+        /* Snapshotted by flatten at this point in the stream — see the
+         * payload.matrix comment in command.h. */
+        glMultMatrixf(cmd->payload.matrix.m);
+        break;
     default:
         break;
     }
@@ -880,7 +885,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     /* Transforms handled by repl_cmd_is_transform() early-continue above. */
     case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
     case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
-    case CMD_LOAD_IDENTITY:
+    case CMD_LOAD_IDENTITY: case CMD_MULT_MATRIXF:
     /* These are resolved during flatten and should not appear in flat_cmds. */
     case CMD_FOR_BEGIN: case CMD_FOR_END:
     case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:

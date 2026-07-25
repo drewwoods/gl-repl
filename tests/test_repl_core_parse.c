@@ -1127,6 +1127,69 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
+    /* glMultMatrixf — the argument is a scratch-array name, not an
+     * expression, so the accept/reject set is unusually narrow. */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        GLCmd cmd2;
+        char cmd_text[MAX_LINE_LEN] = "";
+        char cmd_text2[MAX_LINE_LEN] = "";
+        int ok;
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_cmd_with_text("glMultMatrixf(A)", &cmd,
+                                 cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMultMatrixf parse ok", ok == 1);
+        ASSERT_TRUE("glMultMatrixf type", cmd.type == CMD_MULT_MATRIXF);
+        ASSERT_TRUE("glMultMatrixf num_args", cmd.num_args == 1);
+        ASSERT_TRUE("glMultMatrixf array index", cmd.args[0] == 0.0f);
+        ASSERT_TRUE("glMultMatrixf has_vars false", cmd.has_vars == 0);
+        /* Identity until flatten snapshots the live cells — never a zero
+         * matrix, which would collapse everything after it. */
+        ASSERT_TRUE("glMultMatrixf payload starts identity",
+                    cmd.payload.matrix.m[0] == 1.0f &&
+                    cmd.payload.matrix.m[5] == 1.0f &&
+                    cmd.payload.matrix.m[10] == 1.0f &&
+                    cmd.payload.matrix.m[15] == 1.0f &&
+                    cmd.payload.matrix.m[1] == 0.0f &&
+                    cmd.payload.matrix.m[12] == 0.0f);
+        ASSERT_TRUE("glMultMatrixf canonical text",
+                    strstr(cmd_text, "glMultMatrixf(A);") != NULL);
+
+        ok = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glMultMatrixf canonical re-parses", ok == 1);
+        ASSERT_TRUE("glMultMatrixf canonical text stable",
+                    strcmp(cmd_text, cmd_text2) == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_cmd_with_text("glMultMatrixf( C )", &cmd,
+                                 cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMultMatrixf tolerates spacing", ok == 1);
+        ASSERT_TRUE("glMultMatrixf picks named array", cmd.args[0] == 2.0f);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects unknown array",
+                    parse_cmd_with_text("glMultMatrixf(D)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects a subscript",
+                    parse_cmd_with_text("glMultMatrixf(A[0])", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects two arrays",
+                    parse_cmd_with_text("glMultMatrixf(A, B)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects a number",
+                    parse_cmd_with_text("glMultMatrixf(1)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 0);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glMultMatrixf rejects an empty arg",
+                    parse_cmd_with_text("glMultMatrixf()", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 0);
+    }
+
     /* glClipPlane */
     {
         glr_ctrl_reset_all();

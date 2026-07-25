@@ -355,6 +355,12 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Pop matrix from stack", REPL_HELP_GROUP_TRANSFORM },
     { "glLoadIdentity()",    "glLoadIdentity()",                                         0, { NULL },
         "Reset the current matrix to identity", REPL_HELP_GROUP_TRANSFORM },
+    { "glMultMatrixf(",      "glMultMatrixf(A)",                                         1, { "A" },
+        "Post-multiply the current matrix by a scratch array (A, B, or C)\n"
+        "read as 16 column-major values — the escape hatch for transforms\n"
+        "translate/rotate/scale cannot express, such as a planar shadow\n"
+        "projection or a shear. Fill the cells with A[k] = ... lines above.",
+        REPL_HELP_GROUP_TRANSFORM },
     /* --- Depth & write-mask state --- */
     { "glCullFace(",         "glCullFace(mode)",                                         1, { "mode" },
         "GL_BACK, GL_FRONT, GL_FRONT_AND_BACK (which faces glEnable(GL_CULL_FACE) discards)",
@@ -690,6 +696,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_PUSH_MATRIX,                  1, CMD_CAT_TRANSFORM),
     CMD_TYPE_SPEC(CMD_POP_MATRIX,                   1, CMD_CAT_TRANSFORM),
     CMD_TYPE_SPEC(CMD_LOAD_IDENTITY,                1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_MULT_MATRIXF,                 1, CMD_CAT_TRANSFORM),
     CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,               1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,                1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FRONT_FACE,                   1, CMD_CAT_STATE),

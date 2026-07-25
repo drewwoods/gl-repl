@@ -364,6 +364,13 @@ int main(void) {
     editor_feed_line("glPushMatrix();");
     editor_feed_line("glPopMatrix();");
     editor_feed_line("glLoadIdentity();");
+    /* glMultMatrixf names a scratch array; the cells feeding it have to
+     * exist in the document too, or the roundtrip has nothing to carry. */
+    editor_feed_line("A[0] = 1;");
+    editor_feed_line("A[5] = 1;");
+    editor_feed_line("A[10] = 1;");
+    editor_feed_line("A[15] = 1;");
+    editor_feed_line("glMultMatrixf(A);");
 
     /* State/capability commands */
     editor_feed_line("glEnable(GL_DEPTH_TEST);");

@@ -206,6 +206,18 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
         return 1;
 
     ctx->flat_cmds[flat_cmd_idx] = *cmd;
+    /* glMultMatrixf(A) resolves here rather than in the executor: scratch
+     * writes are applied by flatten in stream order (flatten_scratch_assign
+     * calls repl_eval_scratch_set), so the array holds exactly what the
+     * lines above this one put there. Baking the 16 cells onto the flat
+     * command makes it self-contained for every later walker — including
+     * the ones in render3d, which cannot call into the scratch table. */
+    if (cmd->type == CMD_MULT_MATRIXF) {
+        int array_idx = (int)cmd->args[0];
+        for (int k = 0; k < 16 && k < REPL_SCRATCH_ARRAY_LEN; k++)
+            repl_eval_scratch_get(array_idx, k,
+                                  &ctx->flat_cmds[flat_cmd_idx].payload.matrix.m[k]);
+    }
     flat_cmd_set_provenance(&ctx->flat_cmds[flat_cmd_idx],
                             src_cmd_idx, call_src_cmd_idx,
                             root_call_src_cmd_idx, func_scope_mask,

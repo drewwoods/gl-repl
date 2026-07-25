@@ -81,6 +81,7 @@ extern "C" {
     X(glLineWidth)                     \
     X(glLoadIdentity)                  \
     X(glLoadMatrixf)                   \
+    X(glMultMatrixf)                   \
     X(glMaterialf)                     \
     X(glMaterialfv)                    \
     X(glMatrixMode)                    \

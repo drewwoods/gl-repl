@@ -181,6 +181,18 @@ ExportNeeds export_collect_needs(void) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
         if (cmd->type == CMD_LABEL) needs.needs_label = 1;
+        /* glMultMatrixf(A) names its scratch array without subscripting it,
+         * so the "A[" text scan below cannot see it; the command type says
+         * which array exactly, so key off that instead of widening the
+         * scan to a bare `A` token. */
+        if (cmd->type == CMD_MULT_MATRIXF) {
+            switch ((int)cmd->args[0]) {
+            case 0: needs.needs_scratch_a = 1; break;
+            case 1: needs.needs_scratch_b = 1; break;
+            case 2: needs.needs_scratch_c = 1; break;
+            default: break;
+            }
+        }
         const char *src = export_document_text(cmd_idx);
         if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "rand2(")) needs.needs_rand = 1;

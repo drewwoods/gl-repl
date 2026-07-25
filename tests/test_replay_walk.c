@@ -632,6 +632,7 @@ static void test_transform_dispatch_drift_guard(void) {
         GL_STUB_glTranslatef,
         GL_STUB_glScalef,
         GL_STUB_glRotatef,
+        GL_STUB_glMultMatrixf,
     };
     const int n_xform_stubs = (int)(sizeof xform_stubs / sizeof xform_stubs[0]);
 
@@ -645,7 +646,8 @@ static void test_transform_dispatch_drift_guard(void) {
 
         /* Depth pre-loaded so POP_MATRIX takes its non-no-op branch. */
         int depth_a = 1;
-        unsigned long long before_a[6], after_a[6];
+        unsigned long long before_a[sizeof xform_stubs / sizeof xform_stubs[0]];
+        unsigned long long after_a[sizeof xform_stubs / sizeof xform_stubs[0]];
         for (int j = 0; j < n_xform_stubs; j++)
             before_a[j] = gl_stub_counts[xform_stubs[j]];
 
@@ -666,7 +668,8 @@ static void test_transform_dispatch_drift_guard(void) {
         ASSERT_INT(label, ticked_a > 0, pred);
 
         int depth_b = 1;
-        unsigned long long before_b[6], after_b[6];
+        unsigned long long before_b[sizeof xform_stubs / sizeof xform_stubs[0]];
+        unsigned long long after_b[sizeof xform_stubs / sizeof xform_stubs[0]];
         for (int j = 0; j < n_xform_stubs; j++)
             before_b[j] = gl_stub_counts[xform_stubs[j]];
 
