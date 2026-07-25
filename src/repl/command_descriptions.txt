@@ -327,3 +327,7 @@ Applies the glPolygonOffset depth shift to polygons rasterized in GL_POINT mode,
 [capability GL_POINT_SMOOTH]
 title = GL_POINT_SMOOTH
 Requests antialiased point coverage instead of square aliased points. The exact shape and quality depend on the OpenGL implementation.
+
+[capability GL_STENCIL_TEST]
+title = GL_STENCIL_TEST
+Compares each fragment against the stencil buffer before it can update color or depth. glStencilFunc chooses the comparison, glStencilOp chooses how the stored value changes, and glStencilMask limits its writable bits.

@@ -1748,6 +1748,20 @@ int main(void) {
     }
     {
         glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glClear(GL_STENCIL_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClear stencil bit parse ok", ok == 1);
+        ASSERT_TRUE("glClear stencil bit resolves",
+                    ((GLbitfield)cmd.args[0] & GL_STENCIL_BUFFER_BIT) != 0);
+        ASSERT_TRUE("glClear stencil bit table order",
+                    strstr(cmd_text,
+                           "glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         /* A mask is not a quantity: numeric literals (even the right
@@ -1757,7 +1771,6 @@ int main(void) {
             "glClear(16640)",
             "glClear(GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)",
             "glClear(GL_ALL_ATTRIB_BITS)",
-            "glClear(GL_STENCIL_BUFFER_BIT)",
             "glClear(GL_ACCUM_BUFFER_BIT)",
             "glClear(GL_LIGHTING)",
             "glClear(x)",

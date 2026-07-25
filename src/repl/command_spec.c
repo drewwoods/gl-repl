@@ -46,6 +46,7 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL },
     { "GL_POLYGON_OFFSET_LINE",  GL_POLYGON_OFFSET_LINE },
     { "GL_POLYGON_OFFSET_POINT", GL_POLYGON_OFFSET_POINT },
+    { "GL_STENCIL_TEST",         GL_STENCIL_TEST },
     { NULL, 0 }
 };
 
@@ -146,15 +147,15 @@ static const ReplEnumEntry k_clip_planes[] = {
     { NULL, 0 }
 };
 
-/* The buffers glClear() can clear. The REPL renders into a single
- * colour + depth window and owns the frame's own clear, so the accum
- * and stencil bits are deliberately absent: glClear(GL_ACCUM_BUFFER_BIT)
- * would fight the accumulation effects in render.c, and no REPL command
- * writes stencil. Table order is the canonical emission order for the
- * ENUM_BITFIELD slot. */
+/* The buffers glClear() can clear. The REPL owns the frame's own scene
+ * clear; GL_ACCUM_BUFFER_BIT remains absent because it would fight the
+ * accumulation effects in render.c. Stencil is program-owned too, so its
+ * bit is intentionally available alongside color and depth. Table order is
+ * the canonical emission order for the ENUM_BITFIELD slot. */
 static const ReplEnumEntry k_clear_bits[] = {
     { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
     { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    { "GL_STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT },
     { NULL, 0 }
 };
 

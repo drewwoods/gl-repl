@@ -75,7 +75,8 @@ static void test_fresh_context_defaults(void) {
         GL_CLIP_PLANE3, GL_CLIP_PLANE4, GL_CLIP_PLANE5,
         GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST,
         GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3, GL_LIGHTING,
-        GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_NORMALIZE, GL_POINT_SMOOTH
+        GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_NORMALIZE, GL_POINT_SMOOTH,
+        GL_STENCIL_TEST
     };
     static const GLfloat white[4] = { 1, 1, 1, 1 };
     static const GLfloat normal[3] = { 0, 0, 1 };

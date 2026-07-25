@@ -377,6 +377,29 @@ static void test_enable_bit(void) {
     glDisable(GL_DEPTH_TEST);
 }
 
+/* Stencil command state itself joins GL_STENCIL_BUFFER_BIT in Phase 2. The
+ * capability introduced in Phase 1 is deliberately only an enable-state cell:
+ * real GL saves it with GL_ENABLE_BIT, not with the stencil-state group. */
+static void test_stencil_enable_interim_membership(void) {
+    expect_membership("STENCIL enable: glEnable -> ENABLE_BIT only",
+                      CMD_ENABLE, GL_STENCIL_TEST, GL_ENABLE_BIT);
+
+    glDisable(GL_STENCIL_TEST);
+    glPushAttrib(GL_ENABLE_BIT);
+    glEnable(GL_STENCIL_TEST);
+    glPopAttrib();
+    expect_enabled("ENABLE_BIT restores stencil-test enable",
+                   GL_STENCIL_TEST, GL_FALSE);
+
+    glDisable(GL_STENCIL_TEST);
+    glPushAttrib(GL_STENCIL_BUFFER_BIT);
+    glEnable(GL_STENCIL_TEST);
+    glPopAttrib();
+    expect_enabled("STENCIL_BUFFER_BIT leaves stencil-test enable",
+                   GL_STENCIL_TEST, GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+}
+
 /* The GL_FOG enable flag has dual membership: GL_FOG_BIT *and* GL_ENABLE_BIT,
  * matching real GL. This is the behaviour the fog attrib support rests on. */
 static void test_fog_enable_dual_membership(void) {
@@ -439,6 +462,7 @@ int main(int argc, char **argv) {
     test_transform_bit();
     test_color_buffer_bit();
     test_enable_bit();
+    test_stencil_enable_interim_membership();
     test_fog_enable_dual_membership();
     return test_harness_report(&g_harness, "attrib_bits_gl");
 }
