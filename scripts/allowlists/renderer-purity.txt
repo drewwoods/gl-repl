@@ -17,3 +17,4 @@ ui_autocomplete_panel_render
 ui_numeric_swatch_render
 ui_text_panel_render
 ui_tabbed_overlay_render
+ui_buffer_viz_legend_render

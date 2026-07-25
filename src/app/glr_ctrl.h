@@ -2,8 +2,10 @@
 #define GLR_CTRL_H
 
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
+#include "subsystems/buffer_viz/stencil_viz.h"  /* BufferVizStencilHistogram */
 #include "ui/app/gl_state_panel.h"
 #include "ui/app/repl_code_panel.h"
+#include "ui/subsystems/buffer_viz_legend.h"
 
 /* App-frame controller entrypoints. gl_repl.c forwards raw GLUT
  * callbacks here; this module owns frame orchestration, snapshot
@@ -124,6 +126,21 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
  * instead of rebuilding them. Pass NULL from input/hit-test paths, which fall
  * back to the controller's cached snapshot. */
 UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *snap);
+
+/* Per-frame view for the stencil-buffer legend panel. Reads the histogram
+ * the buffer_viz subsystem published from the frame's final capture and
+ * decides which values earn a row. view.visible is 0 when Stencil view is
+ * Off, masked Off by the readback probe, or nothing has been scanned. */
+UiBufferVizLegendView glr_ctrl_build_buffer_viz_legend_view(void);
+
+/* The legend's row-selection policy, split out so it is testable without a
+ * GL capture: fills `view`'s rows / hidden counts / zero + total pixels
+ * from `hist`, keeping the top UI_BUFFER_VIZ_LEGEND_MAX_ROWS values by
+ * pixel count (ascending value breaks a tie). `stencil_mode` is a
+ * BufferVizStencilMode and selects the swatch colours. */
+void glr_ctrl_buffer_viz_legend_select_rows(
+    const BufferVizStencilHistogram *hist, int stencil_mode,
+    UiBufferVizLegendView *view);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);
 int glr_ctrl_code_panel_apply_scroll_follow_for_test(

@@ -116,6 +116,16 @@ void buffer_viz_stencil_map(const unsigned char *stencil, int count,
  * same swatch the overlay used. Writes 3 bytes. */
 void buffer_viz_stencil_palette_rgb(int value, unsigned char *rgb_out);
 
+/* The colour `mode` actually painted `value` with in the most recently
+ * rendered frame, for a legend swatch that samples the viewport rather
+ * than offering a second opinion about it. Writes 3 bytes. Identical to
+ * buffer_viz_stencil_palette_rgb() for PALETTE and SPLIT; RAMP resolves
+ * against that frame's smoothed range, so it is the one mode where the
+ * two disagree. Value 0 has no painted colour (it is transparent) and
+ * falls back to the palette entry. */
+void buffer_viz_stencil_swatch_rgb(int value, BufferVizStencilMode mode,
+                                   unsigned char *rgb_out);
+
 /* Overlay alpha applied to every non-zero pixel (0..255). Exposed so a
  * legend can preview swatches at the same weight the overlay draws. */
 #define BUFFER_VIZ_STENCIL_ALPHA 184

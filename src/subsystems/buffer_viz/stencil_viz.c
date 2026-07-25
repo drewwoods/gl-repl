@@ -115,6 +115,29 @@ void buffer_viz_stencil_palette_rgb(int value, unsigned char *rgb_out) {
     rgb_out[2] = entry[2];
 }
 
+void buffer_viz_stencil_swatch_rgb(int value, BufferVizStencilMode mode,
+                                   unsigned char *rgb_out) {
+    unsigned char v = (unsigned char)(value & 0xFF);
+    unsigned char rgba[4];
+
+    if (!rgb_out)
+        return;
+    /* Route through the same _map() the overlay uses rather than
+     * re-deriving the ramp here: one mapping, so the swatch cannot drift
+     * from the pixels. g_frame_range is the range the last rendered pass
+     * mapped with, which is exactly the frame the published histogram
+     * came from. */
+    if (v == 0 || mode <= BUFFER_VIZ_STENCIL_OFF ||
+        mode >= BUFFER_VIZ_STENCIL_COUNT) {
+        buffer_viz_stencil_palette_rgb(value, rgb_out);
+        return;
+    }
+    buffer_viz_stencil_map(&v, 1, mode, &g_frame_range, rgba);
+    rgb_out[0] = rgba[0];
+    rgb_out[1] = rgba[1];
+    rgb_out[2] = rgba[2];
+}
+
 int buffer_viz_stencil_scan(const unsigned char *stencil, int count,
                             BufferVizStencilHistogram *hist_out,
                             float *lo_out, float *hi_out) {

@@ -851,6 +851,9 @@ TEST_BINS += test_edit_overlays
 TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 TEST_BINS += test_hidden_lines
+# Stencil legend: the controller's row-selection policy plus the panel's
+# pure geometry solve. Links CORE_TEST_OBJS for glr_ctrl's view builder.
+TEST_BINS += test_buffer_viz_legend
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 

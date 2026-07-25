@@ -128,6 +128,10 @@ static ReplGlStateReport g_gl_state_report;
  * has no user source line, or its line has no code-panel row). */
 static int g_gl_state_gutter_labels[REPL_GL_STATE_REPORT_MAX_ROWS];
 static char g_command_description_title[96];
+/* Title text the stencil legend view points at. Built from the config
+ * row's own state names so the panel and the menu never disagree about
+ * what the active mode is called. */
+static char g_buffer_viz_legend_title[48];
 
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
  * The easing itself lives in the overlay layout engine (overlay_layout.c). */
@@ -2335,6 +2339,14 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_CODE_PANEL);
 
     prof_begin(PROF_UI_PANELS);
+    /* Stencil legend first in the panel block: it is scene chrome parked
+     * in a corner, so every popup below draws over it rather than under
+     * it. Drawing here — after render3d_draw_scene returned — is also why
+     * the panel is never clipped by the stencil test it reports on. */
+    {
+        UiBufferVizLegendView legend_view = glr_ctrl_build_buffer_viz_legend_view();
+        ui_buffer_viz_legend_render(&legend_view);
+    }
     /* Autocomplete popup anchors under the editor cursor. When the
      * active input row didn't render this frame (code panel hidden,
      * row scrolled offscreen) cp_out.cursor_valid is 0 and we skip
@@ -2746,6 +2758,94 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *sn
     view.setup_expanded = inspector.setup_expanded;
     view.report = &g_gl_state_report;
     view.source_gutter_labels = g_gl_state_gutter_labels;
+    return view;
+}
+
+void glr_ctrl_buffer_viz_legend_select_rows(
+        const BufferVizStencilHistogram *hist, int stencil_mode,
+        UiBufferVizLegendView *view) {
+    unsigned char taken[256];
+    unsigned int listed_px = 0;
+    int slot;
+
+    if (!view)
+        return;
+    view->row_count = 0;
+    view->hidden_rows = 0;
+    view->hidden_px = 0;
+    view->zero_px = 0;
+    view->total_px = 0;
+    if (!hist || !hist->valid)
+        return;
+
+    view->total_px = (unsigned int)(hist->total_px > 0 ? hist->total_px : 0);
+    view->zero_px = hist->counts[0];
+
+    /* Top-N by pixel count, ties broken by ascending value (the scan
+     * keeps the first — lowest — value at a given count). A linear
+     * re-scan per slot rather than a sort: 8 x 255 comparisons per frame
+     * is cheaper than sorting 256 bins, and it needs no scratch array of
+     * pairs. */
+    memset(taken, 0, sizeof taken);
+    for (slot = 0; slot < UI_BUFFER_VIZ_LEGEND_MAX_ROWS; slot++) {
+        UiBufferVizLegendRow *row;
+        int best = -1;
+        int v;
+
+        for (v = 1; v < 256; v++) {
+            if (taken[v] || hist->counts[v] == 0)
+                continue;
+            if (best < 0 || hist->counts[v] > hist->counts[best])
+                best = v;
+        }
+        if (best < 0)
+            break;
+        taken[best] = 1;
+        row = &view->rows[view->row_count++];
+        row->value = best;
+        row->count = hist->counts[best];
+        buffer_viz_stencil_swatch_rgb(best, (BufferVizStencilMode)stencil_mode,
+                                      row->rgb);
+        listed_px += hist->counts[best];
+    }
+
+    view->hidden_rows = hist->distinct - view->row_count;
+    if (view->hidden_rows < 0)
+        view->hidden_rows = 0;
+    if ((unsigned int)hist->nonzero_px > listed_px)
+        view->hidden_px = (unsigned int)hist->nonzero_px - listed_px;
+}
+
+/* Build the stencil legend's per-frame view. The subsystem publishes raw
+ * per-value counts from the final accumulation pass; which of them are
+ * worth a row is a presentation decision, so it is made here rather than
+ * in the renderer. Invisible whenever the viz is Off (including masked
+ * Off by the capability probe) or no capture has been scanned yet. */
+UiBufferVizLegendView glr_ctrl_build_buffer_viz_legend_view(void) {
+    UiBufferVizLegendView view;
+    UiViewportState vp = ui_state_viewport();
+    const BufferVizStencilHistogram *hist;
+    int mode = g_stencil_readback_supported
+        ? glr_state_presentation().stencil_viz
+        : BUFFER_VIZ_STENCIL_OFF;
+
+    memset(&view, 0, sizeof(view));
+    view.window_w = vp.window_w;
+    view.window_h = vp.window_h;
+    ui_layout_scene_rect(&view.scene_x, &view.scene_y,
+                         &view.scene_w, &view.scene_h);
+    if (mode <= BUFFER_VIZ_STENCIL_OFF || mode >= BUFFER_VIZ_STENCIL_COUNT)
+        return view;
+
+    hist = buffer_viz_stencil_histogram();
+    if (!hist->valid || hist->total_px <= 0)
+        return view;
+
+    snprintf(g_buffer_viz_legend_title, sizeof g_buffer_viz_legend_title,
+             "Stencil: %s", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, mode));
+    view.title = g_buffer_viz_legend_title;
+    glr_ctrl_buffer_viz_legend_select_rows(hist, mode, &view);
+    view.visible = 1;
     return view;
 }
 
