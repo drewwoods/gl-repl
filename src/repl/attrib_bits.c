@@ -35,6 +35,8 @@ enum {
     ITEM_KIND_LINE_STIPPLE,/* (LINE) */
     ITEM_KIND_FRONT_FACE,  /* (POLYGON) */
     ITEM_KIND_CULL_FACE,   /* (POLYGON) */
+    ITEM_KIND_POLYGON_MODE,/* key = face enum            (POLYGON) */
+    ITEM_KIND_POLYGON_OFFSET,/* factor + units           (POLYGON) */
     ITEM_KIND_DEPTH_FUNC,  /* (DEPTH_BUFFER) */
     ITEM_KIND_DEPTH_MASK,  /* (DEPTH_BUFFER) */
     ITEM_KIND_CLEAR_DEPTH, /* (DEPTH_BUFFER) */
@@ -61,6 +63,9 @@ static unsigned cap_group_bit(GLenum cap) {
     case GL_POINT_SMOOTH:
         return GL_POINT_BIT;
     case GL_CULL_FACE:
+    case GL_POLYGON_OFFSET_FILL:
+    case GL_POLYGON_OFFSET_LINE:
+    case GL_POLYGON_OFFSET_POINT:
         return GL_POLYGON_BIT;
     case GL_DEPTH_TEST:
         return GL_DEPTH_BUFFER_BIT;
@@ -95,6 +100,7 @@ static unsigned cell_cover(unsigned item_id) {
     case ITEM_KIND_LINE_WIDTH: case ITEM_KIND_LINE_STIPPLE:
         return GL_LINE_BIT;
     case ITEM_KIND_FRONT_FACE: case ITEM_KIND_CULL_FACE:
+    case ITEM_KIND_POLYGON_MODE: case ITEM_KIND_POLYGON_OFFSET:
         return GL_POLYGON_BIT;
     case ITEM_KIND_DEPTH_FUNC: case ITEM_KIND_DEPTH_MASK:
     case ITEM_KIND_CLEAR_DEPTH:
@@ -136,6 +142,7 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
     case CMD_POINT_SIZE: case CMD_POINT_PARAMETER_FV:
         return GL_POINT_BIT;
     case CMD_CULL_FACE: case CMD_FRONT_FACE:
+    case CMD_POLYGON_MODE: case CMD_POLYGON_OFFSET:
         return GL_POLYGON_BIT;
     case CMD_DEPTH_FUNC: case CMD_DEPTH_MASK: case CMD_CLEAR_DEPTH:
         return GL_DEPTH_BUFFER_BIT;
@@ -341,6 +348,19 @@ int repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
         break;
     case CMD_CULL_FACE:
         n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_CULL_FACE, 0), GL_POLYGON_BIT);
+        break;
+    case CMD_POLYGON_MODE:
+        /* Keyed by face: GL tracks front and back rasterization modes
+         * separately, so glPolygonMode(GL_BACK, ...) does not overwrite the
+         * cell an earlier glPolygonMode(GL_FRONT, ...) wrote. GL_FRONT_AND_BACK
+         * is its own key and covers both by being the later write. */
+        n = emit_one(out, n, MAX,
+                     ITEM_ID(ITEM_KIND_POLYGON_MODE, (GLenum)cmd->args[0]),
+                     GL_POLYGON_BIT);
+        break;
+    case CMD_POLYGON_OFFSET:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_POLYGON_OFFSET, 0),
+                     GL_POLYGON_BIT);
         break;
     case CMD_DEPTH_FUNC:
         n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_DEPTH_FUNC, 0),

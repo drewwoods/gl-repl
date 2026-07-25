@@ -1741,6 +1741,11 @@ static const GlStateCellCase k_gl_state_cell_cases[] = {
       "GL_CW", "GL_CCW" },
     { CMD_CULL_FACE,     1, {(float)GL_FRONT}, {(float)GL_BACK},
       "GL_CULL_FACE_MODE", "GL_FRONT", "GL_BACK" },
+    { CMD_POLYGON_MODE,  2, {(float)GL_FRONT_AND_BACK, (float)GL_LINE},
+      {(float)GL_FRONT_AND_BACK, (float)GL_POINT},
+      "GL_POLYGON_MODE (front)", "GL_LINE", "GL_POINT" },
+    { CMD_POLYGON_OFFSET, 2, {-1, -2}, {3, 4},
+      "GL_POLYGON_OFFSET_FACTOR", "-1", "3" },
     /* GL_LIGHTING_BIT */
     { CMD_SHADE_MODEL,   1, {(float)GL_FLAT}, {(float)GL_SMOOTH},
       "GL_SHADE_MODEL", "GL_FLAT", "GL_SMOOTH" },

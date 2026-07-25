@@ -80,6 +80,14 @@ Defines whether clockwise or counter-clockwise window-space winding identifies a
 title = glCullFace
 Selects front faces, back faces, or both for removal when GL_CULL_FACE is enabled. Face classification comes from glFrontFace.
 
+[command CMD_POLYGON_MODE]
+title = glPolygonMode
+Chooses whether polygons on the selected faces rasterize as filled areas, as their edges, or as their corner points. GL_LINE on GL_FRONT_AND_BACK is a wireframe of the geometry already submitted, with no second set of line primitives to build; selecting only GL_FRONT or only GL_BACK gives the two faces different treatments, which pairs with glCullFace and glFrontFace.
+
+[command CMD_POLYGON_OFFSET]
+title = glPolygonOffset
+Shifts the depth value of polygon fragments before the depth test, by factor times the polygon's depth slope plus units times the smallest resolvable depth difference. It exists for coplanar surfaces: a decal, outline, or wireframe drawn on top of a face has mathematically equal depth, and the resulting z-fighting speckles. A small negative offset such as (-1, -1) pulls the second pass reliably in front. The offset applies only while the matching glEnable(GL_POLYGON_OFFSET_FILL), GL_POLYGON_OFFSET_LINE, or GL_POLYGON_OFFSET_POINT is on.
+
 [command CMD_DEPTH_FUNC]
 title = glDepthFunc
 Chooses the comparison used by the depth test. The default GL_LESS accepts a fragment when its depth is nearer than the stored depth; other modes support equal, reversed, or unconditional tests.
@@ -291,6 +299,18 @@ Uses multisample coverage when the framebuffer has multisample buffers. It reduc
 [capability GL_NORMALIZE]
 title = GL_NORMALIZE
 Renormalizes transformed normals before lighting. It keeps lighting correct after scaling transforms, at the cost of extra per-vertex work.
+
+[capability GL_POLYGON_OFFSET_FILL]
+title = GL_POLYGON_OFFSET_FILL
+Applies the glPolygonOffset depth shift to filled polygons. Enable it around the pass that would otherwise z-fight with a coplanar surface, such as a decal drawn onto a wall.
+
+[capability GL_POLYGON_OFFSET_LINE]
+title = GL_POLYGON_OFFSET_LINE
+Applies the glPolygonOffset depth shift to polygons rasterized in GL_LINE mode. This is the switch a wireframe-over-solid pass needs, since the lines come from polygons in line mode rather than filled ones.
+
+[capability GL_POLYGON_OFFSET_POINT]
+title = GL_POLYGON_OFFSET_POINT
+Applies the glPolygonOffset depth shift to polygons rasterized in GL_POINT mode, the point-mode counterpart of the fill and line variants.
 
 [capability GL_POINT_SMOOTH]
 title = GL_POINT_SMOOTH

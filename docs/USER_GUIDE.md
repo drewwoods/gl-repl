@@ -394,6 +394,10 @@ numeric argument everywhere is a full math expression.
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
 - [`glMultMatrixf(A)`](https://docs.gl/gl2/glMultMatrix) — post-multiply by a
   scratch array read as a 4x4 (see [Arbitrary matrices](#arbitrary-matrices))
+- [`glPolygonMode(face,mode)`](https://docs.gl/gl2/glPolygonMode) — `GL_FILL`,
+  `GL_LINE`, or `GL_POINT` rasterization, per face
+- [`glPolygonOffset(factor,units)`](https://docs.gl/gl2/glPolygonOffset) — depth
+  nudge for coplanar passes; needs `glEnable(GL_POLYGON_OFFSET_FILL)`
 - [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
@@ -554,6 +558,47 @@ bits are not offered: nothing in the REPL writes stencil, and clearing the
 accumulation buffer would fight the accum effects under [Rendering
 quality](#rendering-quality).
 
+### Wireframe & decals — glPolygonMode, glPolygonOffset
+
+`glPolygonMode(face, mode)` picks how polygons rasterize: `GL_FILL` (the
+default), `GL_LINE` for edges only, or `GL_POINT` for their corners. It is a
+wireframe of the geometry you already submitted — no second set of line
+primitives to build, and `face` (`GL_FRONT`, `GL_BACK`, `GL_FRONT_AND_BACK`)
+can give the two sides different treatments:
+
+```c
+glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+glutSolidSphere(1, 24, 16);       // the same sphere, as wireframe
+glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+```
+
+`glPolygonOffset(factor, units)` exists for the pass you draw *on top of*
+another. Two coplanar surfaces have mathematically equal depth, so the depth
+test can't order them and the result speckles — the artefact known as
+z-fighting. The offset shifts polygon depths a hair before the test, and
+negative values pull toward the viewer:
+
+```c
+glEnable(GL_POLYGON_OFFSET_FILL);
+glPolygonOffset(-1, -1);          // pull the decal in front of the wall
+glColor3f(1, 0.4, 0.2);
+glBegin(GL_QUADS); /* … the decal, drawn on the wall's plane … */ glEnd();
+glDisable(GL_POLYGON_OFFSET_FILL);
+```
+
+`factor` scales with the polygon's depth slope (how steeply it recedes) and
+`units` is a fixed multiple of the smallest resolvable depth difference;
+`(-1, -1)` is the conventional starting pair for both. **The offset only
+applies while the matching capability is enabled** — `GL_POLYGON_OFFSET_FILL`
+for filled polygons, `GL_POLYGON_OFFSET_LINE` and `GL_POLYGON_OFFSET_POINT`
+for the other two `glPolygonMode` modes. Setting an offset without enabling
+one of those does nothing at all, which is the usual reason a decal still
+flickers.
+
+The two commands are made for each other: a wireframe drawn over its own solid
+is the same z-fight, so `glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)` plus
+`glEnable(GL_POLYGON_OFFSET_LINE)` is how an outlined-solid pass stays clean.
+
 ### Scoping state with glPushAttrib
 
 `glPushAttrib(mask)` saves a group of GL state; the matching `glPopAttrib()`
@@ -571,7 +616,8 @@ glPopAttrib();              // colour and line width snap back to blue / 1
 
 `mask` names which *groups* of state to save, one or more of `GL_CURRENT_BIT`
 (colour, normal, raster position, edge flag), `GL_POINT_BIT`, `GL_LINE_BIT`,
-`GL_POLYGON_BIT` (cull + winding), `GL_LIGHTING_BIT` (materials, shade model,
+`GL_POLYGON_BIT` (cull + winding + polygon mode/offset), `GL_LIGHTING_BIT`
+(materials, shade model,
 lights), `GL_FOG_BIT` (fog mode / density / start / end / colour),
 `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
 (every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear

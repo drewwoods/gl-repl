@@ -40,6 +40,22 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_MULTISAMPLE",     GL_MULTISAMPLE },
     { "GL_NORMALIZE",       GL_NORMALIZE },
     { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
+    /* The three glPolygonOffset switches — one per glPolygonMode fill mode.
+     * GL_POLYGON_OFFSET_FILL is the one decal passes want; the LINE and
+     * POINT variants offset wireframe and point rasterization of polygons. */
+    { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL },
+    { "GL_POLYGON_OFFSET_LINE",  GL_POLYGON_OFFSET_LINE },
+    { "GL_POLYGON_OFFSET_POINT", GL_POLYGON_OFFSET_POINT },
+    { NULL, 0 }
+};
+
+/* glPolygonMode's mode slot. GL also accepts these on glPolygonMode's face
+ * slot only as GL_FRONT / GL_BACK / GL_FRONT_AND_BACK, which is k_face_types
+ * (shared with glCullFace and the material commands). */
+static const ReplEnumEntry k_polygon_modes[] = {
+    { "GL_FILL",  GL_FILL },
+    { "GL_LINE",  GL_LINE },
+    { "GL_POINT", GL_POINT },
     { NULL, 0 }
 };
 
@@ -365,6 +381,17 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glCullFace(",         "glCullFace(mode)",                                         1, { "mode" },
         "GL_BACK, GL_FRONT, GL_FRONT_AND_BACK (which faces glEnable(GL_CULL_FACE) discards)",
         REPL_HELP_GROUP_DEPTH_MASK },
+    { "glPolygonMode(",      "glPolygonMode(face, mode)",                                2, { "face", "mode" },
+        "GL_FILL, GL_LINE, or GL_POINT rasterization for GL_FRONT / GL_BACK /\n"
+        "GL_FRONT_AND_BACK faces — per-face wireframe without rebuilding the\n"
+        "geometry as lines.",
+        REPL_HELP_GROUP_DEPTH_MASK },
+    { "glPolygonOffset(",    "glPolygonOffset(factor, units)",                           2, { "factor", "units" },
+        "Nudge polygon depth values before the depth test, so coplanar\n"
+        "surfaces stop fighting: draw the decal or outline pass with a small\n"
+        "negative offset (-1, -1) to pull it in front. Needs\n"
+        "glEnable(GL_POLYGON_OFFSET_FILL) (or the _LINE / _POINT variant).",
+        REPL_HELP_GROUP_DEPTH_MASK },
     { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" },
         "GL_CW, GL_CCW", REPL_HELP_GROUP_DEPTH_MASK },
     { "glDepthFunc(",        "glDepthFunc(func)",                                        1, { "func" },
@@ -618,6 +645,9 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glMaterialfv",    CMD_MATERIALFV,    -2, NULL,                        0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
+    { "glPolygonMode",   CMD_POLYGON_MODE,   2, "%sglPolygonMode(%s, %s);",  0,
+        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                  ENUM_SLOT_TOK(k_polygon_modes, "mode: GL_FILL, GL_LINE, GL_POINT") } },
     { "glPushAttrib",    CMD_PUSH_ATTRIB,    1, "%sglPushAttrib(%s);",       0,
         .args = { ENUM_SLOT_BITS_ALL(k_attrib_bits,
                                      "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
@@ -639,6 +669,7 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { "glLineWidth",    CMD_LINE_WIDTH,       1, "glLineWidth(%g);",                "Usage: glLineWidth(width)", 0 },
     { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
     { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
+    { "glPolygonOffset", CMD_POLYGON_OFFSET,  2, "glPolygonOffset(%g, %g);",       "Usage: glPolygonOffset(factor, units)", 0 },
     { "glRasterPos3f",  CMD_RASTER_POS3F,     3, "glRasterPos3f(%g, %g, %g);",      "Usage: glRasterPos3f(x, y, z)", 0 },
     { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
     { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
@@ -701,6 +732,8 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,                1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FRONT_FACE,                   1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_CULL_FACE,                    1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POLYGON_MODE,   "glPolygonMode",   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POLYGON_OFFSET, "glPolygonOffset", 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_DEPTH_FUNC,                   1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FOR_BEGIN,                    1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),

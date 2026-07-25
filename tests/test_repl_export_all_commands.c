@@ -379,6 +379,8 @@ int main(void) {
     editor_feed_line("glFrontFace(GL_CCW);");
     editor_feed_line("glCullFace(GL_BACK);");
     editor_feed_line("glDepthFunc(GL_LEQUAL);");
+    editor_feed_line("glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);");
+    editor_feed_line("glPolygonOffset(-1, -1);");
 
     /* Attribute commands */
     editor_feed_line("glPointSize(5);");

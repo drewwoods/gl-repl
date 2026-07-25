@@ -119,12 +119,22 @@ typedef struct {
     GLenum front_face;
     GLenum cull_face;
     GLenum depth_func;
+    /* Front and back rasterization modes are separate GL state, so
+     * glPolygonMode(GL_FRONT_AND_BACK, ...) writes both cells. */
+    GLenum polygon_mode_front;
+    GLenum polygon_mode_back;
+    float polygon_offset_factor;
+    float polygon_offset_units;
     int front_face_touched;
     int cull_face_touched;
     int depth_func_touched;
+    int polygon_mode_touched;
+    int polygon_offset_touched;
     ReplGlStateChangeSource front_face_source;
     ReplGlStateChangeSource cull_face_source;
     ReplGlStateChangeSource depth_func_source;
+    ReplGlStateChangeSource polygon_mode_source;
+    ReplGlStateChangeSource polygon_offset_source;
 
     ReplGlTrackedMaterialValue
         materials[REPL_GL_STATE_MATERIAL_FACES][REPL_GL_STATE_MATERIAL_PROPS];
@@ -460,6 +470,10 @@ static void gl_state_init(ReplGlTrackedState *s) {
     s->front_face = GL_CCW;
     s->cull_face = GL_BACK;
     s->depth_func = GL_LESS;
+    s->polygon_mode_front = GL_FILL;
+    s->polygon_mode_back = GL_FILL;
+    s->polygon_offset_factor = 0.0f;
+    s->polygon_offset_units = 0.0f;
     gl_state_material_defaults(s);
     s->point_size = 1.0f;
     s->line_width = 1.0f;
@@ -709,6 +723,18 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->cull_face_touched = 1;
         s->cull_face_source = source;
     }
+    if (gl_state_mask_covers(mask, CMD_POLYGON_MODE)) {
+        s->polygon_mode_front = snap->polygon_mode_front;
+        s->polygon_mode_back = snap->polygon_mode_back;
+        s->polygon_mode_touched = 1;
+        s->polygon_mode_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_POLYGON_OFFSET)) {
+        s->polygon_offset_factor = snap->polygon_offset_factor;
+        s->polygon_offset_units = snap->polygon_offset_units;
+        s->polygon_offset_touched = 1;
+        s->polygon_offset_source = source;
+    }
 
     /* --- GL_LIGHTING_BIT --- */
     if (gl_state_mask_covers(mask, CMD_SHADE_MODEL)) {
@@ -934,6 +960,23 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         s->cull_face = (GLenum)cmd->args[0];
         s->cull_face_touched = 1;
         s->cull_face_source = source;
+        break;
+    case CMD_POLYGON_MODE: {
+        GLenum face = (GLenum)cmd->args[0];
+        GLenum mode = (GLenum)cmd->args[1];
+        if (face == GL_FRONT || face == GL_FRONT_AND_BACK)
+            s->polygon_mode_front = mode;
+        if (face == GL_BACK || face == GL_FRONT_AND_BACK)
+            s->polygon_mode_back = mode;
+        s->polygon_mode_touched = 1;
+        s->polygon_mode_source = source;
+        break;
+    }
+    case CMD_POLYGON_OFFSET:
+        s->polygon_offset_factor = cmd->args[0];
+        s->polygon_offset_units = cmd->args[1];
+        s->polygon_offset_touched = 1;
+        s->polygon_offset_source = source;
         break;
     case CMD_DEPTH_FUNC:
         s->depth_func = (GLenum)cmd->args[0];
@@ -1407,6 +1450,22 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         gl_state_report_enum(out, "GL_CULL_FACE_MODE", CMD_CULL_FACE, 0,
                              s->cull_face, GL_BACK);
         gl_state_report_set_last_source(out, s->cull_face_source);
+    }
+    if (s->polygon_mode_touched) {
+        gl_state_report_enum(out, "GL_POLYGON_MODE (front)", CMD_POLYGON_MODE, 1,
+                             s->polygon_mode_front, GL_FILL);
+        gl_state_report_set_last_source(out, s->polygon_mode_source);
+        gl_state_report_enum(out, "GL_POLYGON_MODE (back)", CMD_POLYGON_MODE, 1,
+                             s->polygon_mode_back, GL_FILL);
+        gl_state_report_set_last_source(out, s->polygon_mode_source);
+    }
+    if (s->polygon_offset_touched) {
+        gl_state_report_float(out, "GL_POLYGON_OFFSET_FACTOR",
+                              s->polygon_offset_factor, 0.0f);
+        gl_state_report_set_last_source(out, s->polygon_offset_source);
+        gl_state_report_float(out, "GL_POLYGON_OFFSET_UNITS",
+                              s->polygon_offset_units, 0.0f);
+        gl_state_report_set_last_source(out, s->polygon_offset_source);
     }
     if (s->depth_func_touched) {
         gl_state_report_enum(out, "GL_DEPTH_FUNC", CMD_DEPTH_FUNC, 0,
