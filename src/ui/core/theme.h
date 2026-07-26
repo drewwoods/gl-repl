@@ -59,7 +59,7 @@ typedef enum {
     UI_TOK_DROPDOWN_ITEM_HOVER_BG, /* dropdown/submenu item hover band   */
     UI_TOK_ACCENT_GLOW_BG,         /* HUD / control accent band          */
 
-    /* Alternate accent-derived, used by tour - varies per theme row.    */
+    /* Alternate accent-derived - varies per theme row.    */
     UI_TOK_ACCENT_ALT,            /* alternative accent                  */
     UI_TOK_ACCENT_ALT_DIM,        /* dim rule, e.g. tour HUD border      */
 

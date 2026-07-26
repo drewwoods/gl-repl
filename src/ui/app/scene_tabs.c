@@ -28,15 +28,6 @@ enum {
                          * top isn't clipped by the menu bar */
 };
 
-/* Ephemeral-example-tab identity. Deliberately NOT theme tokens: example
- * tabs must stay an amber/warm family across every scheme so they read
- * as distinct from the accent-colored user-scene tabs. (See theme.h:
- * the "named constant" bucket - fixed, non-theme one-offs.) */
-static const float k_tab_example_fill[4]      = { 0.260f, 0.190f, 0.080f, 1.0f };
-static const float k_tab_example_edge[3]      = { 0.900f, 0.660f, 0.320f };
-static const float k_tab_example_label[3]     = { 0.800f, 0.640f, 0.400f };
-static const float k_tab_example_label_hot[3] = { 1.000f, 0.930f, 0.800f };
-
 /* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
  * the panel is hidden or the derived set is empty). cp_x / cp_w / tab_by /
  * tab_bh are the band's outer rectangle (OpenGL bottom-left y). */
@@ -228,13 +219,13 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
          * the visible-row lockstep; only the drawn tab is inset). */
         float th = (float)(bh - TAB_TOP_GAP);
 
-        /* Active tab: shade the WHOLE tab with a tinted hue (green for
-         * user scenes, amber for the ephemeral example tab) so the
-         * highlight is unmistakably the tab — not a thin rule that
-         * reads as an underline of the menu row directly above. */
+        /* Active tab: shade the WHOLE tab with a tinted hue (primary accent
+         * for user scenes, alternate accent for the built-in example tab) so
+         * the highlight is unmistakably the tab — not a thin rule that reads
+         * as an underline of the menu row directly above. */
         if (active) {
             if (is_example)
-                glColor4fv(k_tab_example_fill);
+                ui_clr_a(UI_TOK_ACCENT_ALT_DIM, 0.55f);
             else
                 ui_clr(UI_TOK_DROPDOWN_ITEM_HOVER_BG);  /* accent selection */
             scene_tabs_fill_round_top((float)x[i], (float)by,
@@ -248,12 +239,12 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
         }
 
         /* Rounded outline on EVERY tab (no bottom edge). The active
-         * tab's outline keys off its shaded hue (a brighter green /
-         * amber); inactive tabs get a neutral edge so they still read
+         * tab's outline keys off its shaded hue (primary / alternate
+         * accent); inactive tabs get a neutral edge so they still read
          * as discrete tabs. */
         if (active) {
             if (is_example)
-                glColor3fv(k_tab_example_edge);
+                ui_clr(UI_TOK_ACCENT_ALT);
             else
                 ui_clr(UI_TOK_ACCENT);              /* accent outline */
         } else {
@@ -263,16 +254,13 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
                                     (float)w[i], th,
                                     (float)TAB_CORNER_R);
 
-        /* Label color. Example tabs keep an amber/warm family vs the
-         * user tabs' neutral so the kinds stay distinguishable even
-         * when no tab is active. */
+        /* Label color. Example tabs use the alternate theme family vs the
+         * user tabs' neutral, keeping the kinds distinguishable even when
+         * no tab is active. */
         if (active || hover == i) {
-            if (is_example)
-                glColor3fv(k_tab_example_label_hot);
-            else
-                ui_clr(UI_TOK_TEXT_ON_HILITE);
+            ui_clr(UI_TOK_TEXT_ON_HILITE);
         } else if (is_example) {
-            glColor3fv(k_tab_example_label);
+            ui_clr(UI_TOK_ACCENT_ALT_DIM);
         } else {
             ui_clr(UI_TOK_TEXT_PRIMARY);
         }
