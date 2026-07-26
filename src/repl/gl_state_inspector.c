@@ -196,7 +196,15 @@ typedef struct {
     ReplGlStateChangeSource color_mask_source;
     ReplGlStateChangeSource edge_flag_source;
 
+    /* glRasterPos latches the current color into GL_CURRENT_RASTER_COLOR as
+     * well as the position, so both cells ride raster_pos_touched/_source: one
+     * command writes them together, and nothing else in the REPL command set
+     * moves either (a later glColor* changes GL_CURRENT_COLOR only).
+     * raster_color_lit records whether GL_LIGHTING was on at the latch, which
+     * decides how the report names the row — see gl_state_append_report(). */
     float raster_pos[4];
+    float raster_color[4];
+    int raster_color_lit;
     int raster_pos_touched;
     ReplGlStateChangeSource raster_pos_source;
 
@@ -519,6 +527,8 @@ static void gl_state_init(ReplGlTrackedState *s) {
     s->color_mask[2] = s->color_mask[3] = 1;
     s->edge_flag = 1;
     s->raster_pos[3] = 1.0f;
+    s->raster_color[0] = s->raster_color[1] = 1.0f;
+    s->raster_color[2] = s->raster_color[3] = 1.0f;
     s->fog_mode = GL_EXP;
     s->fog_density = 1.0f;
     s->fog_start = 0.0f;
@@ -714,6 +724,8 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
     }
     if (gl_state_mask_covers(mask, CMD_RASTER_POS3F)) {
         memcpy(s->raster_pos, snap->raster_pos, sizeof(s->raster_pos));
+        memcpy(s->raster_color, snap->raster_color, sizeof(s->raster_color));
+        s->raster_color_lit = snap->raster_color_lit;
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;
     }
@@ -1135,6 +1147,13 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     case CMD_RASTER_POS3F:
         memcpy(s->raster_pos, cmd->args, 3 * sizeof(float));
         s->raster_pos[3] = 1.0f;
+        /* GL 2.1 2.13: the raster position is processed like a vertex, so the
+         * data associated with it — here GL_CURRENT_RASTER_COLOR — is latched
+         * now and no longer follows GL_CURRENT_COLOR. With lighting on the
+         * latched value is the *lit* color; this fold does not evaluate the
+         * lighting equation, so it records the input and flags it instead. */
+        memcpy(s->raster_color, s->current_color, sizeof(s->raster_color));
+        s->raster_color_lit = gl_state_cap_enabled(s, GL_LIGHTING);
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;
         break;
@@ -1701,6 +1720,18 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     if (s->raster_pos_touched) {
         gl_state_report_vec(out, "GL_CURRENT_RASTER_POSITION (object input)",
                             s->raster_pos, raster_default, 4);
+        gl_state_report_set_last_source(out, s->raster_pos_source);
+        /* Gated on the raster *position* latch, not on the current color:
+         * glRasterPos3f is the only command that writes this cell, so before
+         * the first one the initial (1,1,1,1) says nothing, and after one the
+         * row is what `label(...)` actually draws with. The "(unlit)" name
+         * marks a latch taken under GL_LIGHTING, where GL stored the lit color
+         * and the value here is the color that fed the lighting equation. */
+        gl_state_report_vec(out,
+                            s->raster_color_lit
+                                ? "GL_CURRENT_RASTER_COLOR (unlit input)"
+                                : "GL_CURRENT_RASTER_COLOR",
+                            s->raster_color, color_default, 4);
         gl_state_report_set_last_source(out, s->raster_pos_source);
     }
     for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {

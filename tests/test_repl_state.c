@@ -1544,6 +1544,126 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     }
 }
 
+/* GL_CURRENT_RASTER_COLOR is a latch, not a live alias of the current color:
+ * glRasterPos3f copies the color once and nothing else in the REPL command set
+ * moves the cell. The report is gated on that same latch, so a program with no
+ * glRasterPos3f contributes no row (its initial white would say nothing). */
+static void test_gl_state_report_latches_raster_color(void) {
+    GLCmd cmds[6];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state raster color latch ---\n");
+
+    cmds[0] = gl_state_test_cmd(CMD_COLOR3F, 0);
+    cmds[0].args[0] = 1.0f; cmds[0].args[1] = 0.0f; cmds[0].args[2] = 0.0f;
+    cmds[0].num_args = 3;
+    cmds[1] = gl_state_test_cmd(CMD_RASTER_POS3F, 1);
+    cmds[1].args[0] = 1.0f; cmds[1].args[1] = 2.0f; cmds[1].args[2] = 3.0f;
+    cmds[1].num_args = 3;
+    cmds[2] = gl_state_test_cmd(CMD_COLOR3F, 2);
+    cmds[2].args[0] = 0.0f; cmds[2].args[1] = 1.0f; cmds[2].args[2] = 0.0f;
+    cmds[2].num_args = 3;
+
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 3;
+
+    /* Checkpoint above the glRasterPos3f: the gate keeps both raster rows out
+     * even though a glColor3f has already run. */
+    repl_gl_state_report_at_line(program, 1, &report);
+    ASSERT_TRUE("no raster color row before the first glRasterPos3f",
+                gl_state_test_find_row(&report,
+                                       "GL_CURRENT_RASTER_COLOR") == NULL);
+    ASSERT_TRUE("no raster position row before the first glRasterPos3f",
+                gl_state_test_find_row(
+                    &report,
+                    "GL_CURRENT_RASTER_POSITION (object input)") == NULL);
+
+    /* Below the trailing glColor3f: the raster color still reads the color that
+     * was current at the latch, while GL_CURRENT_COLOR has moved on. */
+    repl_gl_state_report_at_line(program, 3, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
+    ASSERT_TRUE("raster color reported after glRasterPos3f", row != NULL);
+    if (row) {
+        ASSERT_STR("raster color holds the latched color",
+                   row->current, "(1, 0, 0, 1)");
+        ASSERT_STR("raster color default is white",
+                   row->default_value, "(1, 1, 1, 1)");
+        ASSERT_INT("latched red differs from the default",
+                   row->differs_from_default, 1);
+        ASSERT_INT("raster color source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("raster color source is the glRasterPos3f line",
+                   row->source.source_line_idx, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("current color reported", row != NULL);
+    if (row)
+        ASSERT_STR("a later glColor3f moves only the current color",
+                   row->current, "(0, 1, 0, 1)");
+
+    /* Latched under GL_LIGHTING: GL would store the lit color, which this pure
+     * fold does not evaluate, so the row is renamed to say the value is the
+     * lighting input rather than what GL kept. */
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_LIGHTING; cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_COLOR3F, 1);
+    cmds[1].args[0] = 0.25f; cmds[1].args[1] = 0.5f; cmds[1].args[2] = 0.75f;
+    cmds[1].num_args = 3;
+    cmds[2] = gl_state_test_cmd(CMD_RASTER_POS3F, 2);
+    cmds[2].args[0] = 0.0f; cmds[2].args[1] = 0.0f; cmds[2].args[2] = 0.0f;
+    cmds[2].num_args = 3;
+    program.cmd_count = 3;
+    repl_gl_state_report_at_line(program, 3, &report);
+    row = gl_state_test_find_row(&report,
+                                 "GL_CURRENT_RASTER_COLOR (unlit input)");
+    ASSERT_TRUE("lit latch renames the raster color row", row != NULL);
+    if (row)
+        ASSERT_STR("lit latch reports the lighting input",
+                   row->current, "(0.25, 0.5, 0.75, 1)");
+    ASSERT_TRUE("lit latch does not also emit the plain row",
+                gl_state_test_find_row(&report,
+                                       "GL_CURRENT_RASTER_COLOR") == NULL);
+
+    /* GL_CURRENT_BIT covers the latched color, so glPushAttrib/glPopAttrib
+     * scopes it with the position and stamps the pop as its latest source. */
+    cmds[0] = gl_state_test_cmd(CMD_COLOR3F, 0);
+    cmds[0].args[0] = 1.0f; cmds[0].args[1] = 0.0f; cmds[0].args[2] = 0.0f;
+    cmds[0].num_args = 3;
+    cmds[1] = gl_state_test_cmd(CMD_RASTER_POS3F, 1);
+    cmds[1].args[0] = 1.0f; cmds[1].args[1] = 2.0f; cmds[1].args[2] = 3.0f;
+    cmds[1].num_args = 3;
+    cmds[2] = gl_state_test_cmd(CMD_PUSH_ATTRIB, 2);
+    cmds[2].args[0] = (float)GL_CURRENT_BIT; cmds[2].num_args = 1;
+    cmds[3] = gl_state_test_cmd(CMD_COLOR3F, 3);
+    cmds[3].args[0] = 0.0f; cmds[3].args[1] = 0.0f; cmds[3].args[2] = 1.0f;
+    cmds[3].num_args = 3;
+    cmds[4] = gl_state_test_cmd(CMD_RASTER_POS3F, 4);
+    cmds[4].args[0] = 4.0f; cmds[4].args[1] = 5.0f; cmds[4].args[2] = 6.0f;
+    cmds[4].num_args = 3;
+    cmds[5] = gl_state_test_cmd(CMD_POP_ATTRIB, 5);
+    program.cmd_count = 6;
+
+    repl_gl_state_report_at_line(program, 5, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
+    ASSERT_TRUE("scoped raster color reported", row != NULL);
+    if (row)
+        ASSERT_STR("scoped raster color current", row->current,
+                   "(0, 0, 1, 1)");
+
+    repl_gl_state_report_at_line(program, 6, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
+    ASSERT_TRUE("restored raster color reported", row != NULL);
+    if (row) {
+        ASSERT_STR("raster color restored to the pre-push latch",
+                   row->current, "(1, 0, 0, 1)");
+        ASSERT_INT("restored raster color source is the pop line",
+                   row->source.source_line_idx, 5);
+    }
+}
+
 static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     static const ReplExportLightBridge light_bridge = {
         gl_state_test_fill_eye_light
@@ -1832,7 +1952,12 @@ static void test_gl_state_cell_coverage_sweep(void) {
 
     for (ci = 0; ci < n_cases; ci++) {
         const GlStateCellCase *c = &k_gl_state_cell_cases[ci];
-        unsigned bit = repl_attrib_bits_for_type(c->type, (unsigned)c->args_v1[0]);
+        /* Slot 0 is a cap enum only for the enable/disable cases; elsewhere it
+         * is an ordinary parameter the mapping ignores, and it can be negative
+         * (glPolygonOffset), so route the conversion through int — float ->
+         * unsigned of a negative value is undefined and trips UBSan. */
+        unsigned bit = repl_attrib_bits_for_type(c->type,
+                                                 (unsigned)(int)c->args_v1[0]);
         GLCmd cmds[4];
         FlatProgramView program;
         ReplGlStateReport report;
@@ -1917,6 +2042,7 @@ int main(void) {
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();
     test_gl_state_report_attrib_stack_fold();
+    test_gl_state_report_latches_raster_color();
     test_gl_state_report_converts_eye_light_position_to_world();
     test_gl_state_report_partitions_by_author();
     test_gl_state_report_gates_disabled_light_rows();

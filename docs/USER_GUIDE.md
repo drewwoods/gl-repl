@@ -354,6 +354,14 @@ that is, while it is enabled, or if your program set one of its parameters
 itself. Four disabled lights would otherwise contribute twenty rows of
 unreachable state.
 
+`glRasterPos3f` contributes two rows: the position, and the
+`GL_CURRENT_RASTER_COLOR` it latches from the current color at that line — the
+color `label(...)` then draws with, which a later `glColor3f` no longer moves.
+Neither row appears before the first `glRasterPos3f`, since nothing else writes
+those cells. With lighting on OpenGL stores the *lit* color there instead; the
+inspector does not evaluate the lighting equation, so the row is labelled
+`(unlit input)` to say it is showing the color that fed it.
+
 Modelview matrices use four aligned rows. Light positions are shown in both
 world and eye coordinates when available. Use the mouse wheel for a long
 report; click elsewhere or send input to the editor to dismiss it.

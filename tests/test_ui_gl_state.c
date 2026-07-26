@@ -107,6 +107,8 @@ static void test_fresh_context_defaults(void) {
     assert_float_state("default clear color", GL_COLOR_CLEAR_VALUE, zeros, 4);
     assert_float_state("default raster position",
                        GL_CURRENT_RASTER_POSITION, raster_pos, 4);
+    assert_float_state("default raster color",
+                       GL_CURRENT_RASTER_COLOR, white, 4);
     assert_float_state("default light model ambient",
                        GL_LIGHT_MODEL_AMBIENT, ambient, 4);
 
@@ -240,6 +242,37 @@ static void test_gl2d_restores_state(void) {
                 glIsEnabled(GL_LIGHTING) == GL_TRUE);
 }
 
+/* Driver oracle for the GL_CURRENT_RASTER_COLOR model in
+ * gl_state_inspector.c: glRasterPos latches the current color once (a later
+ * glColor no longer moves the cell), and under GL_LIGHTING the driver stores
+ * the *lit* color instead of the color the program set — the case the state
+ * report names "(unlit input)", since the pure fold does not run the lighting
+ * equation. Identity transforms keep (0,0,0) inside the viewport, so the
+ * raster position stays valid and its associated color is well defined. */
+static void test_raster_color_latch(void) {
+    GLfloat col[4];
+
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glRasterPos3f(0.0f, 0.0f, 0.0f);
+    glColor3f(0.0f, 1.0f, 0.0f);
+    glGetFloatv(GL_CURRENT_RASTER_COLOR, col);
+    ASSERT_TRUE("raster color latched at glRasterPos (r)", feq(col[0], 1.0f));
+    ASSERT_TRUE("raster color latched at glRasterPos (g)", feq(col[1], 0.0f));
+    ASSERT_TRUE("raster color latched at glRasterPos (b)", feq(col[2], 0.0f));
+    ASSERT_TRUE("raster color latched at glRasterPos (a)", feq(col[3], 1.0f));
+
+    /* Default material with no light enabled: whatever the lighting equation
+     * yields here, it is not the saturated red the program asked for. */
+    glEnable(GL_LIGHTING);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glRasterPos3f(0.0f, 0.0f, 0.0f);
+    glGetFloatv(GL_CURRENT_RASTER_COLOR, col);
+    ASSERT_TRUE("lit latch stores the lit color, not the program's color",
+                !feq(col[0], 1.0f) || !feq(col[1], 0.0f) || !feq(col[2], 0.0f));
+    glDisable(GL_LIGHTING);
+}
+
 int main(int argc, char **argv) {
 #if defined(__APPLE__) && !defined(FREEGLUT_OSMESA)
     uint32_t display_count = 0;
@@ -261,5 +294,6 @@ int main(int argc, char **argv) {
     printf("--- ui_gl_state tests (real GL context) ---\n");
     test_fresh_context_defaults();
     test_gl2d_restores_state();
+    test_raster_color_latch();
     return test_harness_report(&g_harness, "ui_gl_state");
 }

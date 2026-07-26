@@ -25,7 +25,10 @@
 #define GLSP_PAD_X          10
 #define GLSP_PAD_Y           6
 #define GLSP_COL_GAP_CHARS   2
-#define GLSP_NAME_CHARS_MAX 36
+/* Wide enough for the longest name the report emits — the qualified raster
+ * rows, "GL_CURRENT_RASTER_POSITION (object input)" at 41 cells. The column is
+ * still content-sized, so only a report carrying one of those pays for it. */
+#define GLSP_NAME_CHARS_MAX 41
 #define GLSP_VAL_CHARS_MAX  44
 #define GLSP_SOURCE_CHARS_MAX 18
 #define GLSP_EDGE_MARGIN     8
