@@ -1874,6 +1874,9 @@ int main(void) {
         editor_feed_line("glClearColor(0, 0, 0, 1);");
         editor_feed_line("glClipPlane(GL_CLIP_PLANE0, 1, 0, 0, 0);");
         editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glStencilFunc(GL_EQUAL, 1, 0xFF);");
+        editor_feed_line("glClearStencil(3);");
+        editor_feed_line("glEnable(GL_STENCIL_TEST);");
         const GLCmd *cmds = repl_state_document_cmds();
         ASSERT_TRUE("bits_for_cmd glColor3f = CURRENT",
                     repl_attrib_bits_for_cmd(&cmds[0]) == GL_CURRENT_BIT);
@@ -1895,6 +1898,13 @@ int main(void) {
                     repl_attrib_bits_for_cmd(&cmds[7]) == GL_TRANSFORM_BIT);
         ASSERT_TRUE("bits_for_cmd glVertex3f = 0 (not a setter)",
                     repl_attrib_bits_for_cmd(&cmds[8]) == 0);
+        ASSERT_TRUE("bits_for_cmd glStencilFunc = STENCIL_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[9]) == GL_STENCIL_BUFFER_BIT);
+        ASSERT_TRUE("bits_for_cmd glClearStencil = STENCIL_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[10]) == GL_STENCIL_BUFFER_BIT);
+        ASSERT_TRUE("bits_for_cmd glEnable(GL_STENCIL_TEST) = ENABLE|STENCIL_BUFFER",
+                    repl_attrib_bits_for_cmd(&cmds[11]) ==
+                        (GL_ENABLE_BIT | GL_STENCIL_BUFFER_BIT));
         ASSERT_TRUE("bit_index round-trips CURRENT",
                     repl_attrib_bit_index(GL_CURRENT_BIT) == 0);
         ASSERT_TRUE("bit_index rejects a non-bit", repl_attrib_bit_index(0x1234) == -1);
@@ -2574,6 +2584,7 @@ int main(void) {
             { "glutSolidCone(1, 1, 8, 8);",                                  "glutSolidCone" },
             { "glRasterPos3f(0, 0, 0);",                                     "glRasterPos3f" },
             { "label(\"hi\");",                                              "label" },
+            { "glClearStencil(3);",                                          "glClearStencil" },
             { "glPushAttrib(GL_CURRENT_BIT);",                               "glPushAttrib" },
             { "glPopAttrib();",                                              "glPopAttrib" },
             { "gluBegin(GLU_POLYGON);",                                      "gluTessBeginPolygon" },

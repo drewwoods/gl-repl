@@ -985,7 +985,7 @@ quietly raise it far.
 
 ---
 
-# Phase 2 — attrib bits + GL-state inspector
+# Phase 2 — attrib bits + GL-state inspector  ✅ landed
 
 Gated by the ratchet at `tests/test_repl_state.c:1866-1879`: any `CmdType` with
 non-zero `repl_attrib_bits_for_type()` must have a row in `k_gl_state_cell_cases[]`
@@ -1007,6 +1007,16 @@ deliberately.
   `CMD_STENCIL_FUNC`. Do one of the two deliberately; do not let it default onto
   the std path.
 
+  > **Landed as both, because the value takes an expression.** The clear value is
+  > a *quantity* like the clear colour and clear depth — both of which animate in
+  > this REPL — so making it literal-only would have made it the odd one out in
+  > its own family. It therefore shares `glStencilFunc`'s ref slot verbatim
+  > (extracted as `parse_stencil_quantity_slot()`): expression allowed, literal
+  > out of range rejected, animated value clamped. Accepting an expression is
+  > exactly what makes the flatten arm mandatory rather than optional, so both
+  > post-evaluation sites in `flatten.c` carry a `CMD_CLEAR_STENCIL` arm beside
+  > the `CMD_STENCIL_FUNC` one.
+
   Once it exists, drop the "clear value is fixed at 0" note from
   `docs/USER_GUIDE.md`.
 - `src/repl/attrib_bits.c` — `ITEM_KIND_STENCIL_*` (`:22-45`), `item_group_bit`
@@ -1015,6 +1025,15 @@ deliberately.
 - `GL_STENCIL_BUFFER_BIT` into `k_attrib_bits` (`command_spec.c:143-155`), enabling
   `glPushAttrib(GL_STENCIL_BUFFER_BIT)`; invert `test_repl_core_parse.c:1730`. The
   table requires a single bit < 2²⁴ for float round-trip; `0x00000400` qualifies.
+
+  > **The table is not the only thing sized by that count.** `k_attrib_bits`
+  > order *is* the canonical bit index, and `REPL_ATTRIB_BIT_COUNT`
+  > (`attrib_bits.h`) sizes `k_attrib_bit_colors[]` in
+  > `src/ui/app/repl_code_panel.c` — the per-bit hues for the push-line mask
+  > tokens and the gutter markers. An eleventh bit needs the count bumped and a
+  > hue inserted **at the same index** (stencil sorts between depth and
+  > transform, ascending GL value), or the last group silently loses its colour.
+  > `test_repl_code_panel_document` catches it.
 - `src/repl/gl_state_inspector.c` — fields in `ReplGlTrackedState` (`:73-192`),
   `gl_state_apply_cmd` cases (~`:938`), `gl_state_restore_attrib_groups`
   (`:786-830`), report rows (~`:1412`, ~`:1474`).

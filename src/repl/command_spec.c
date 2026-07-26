@@ -175,6 +175,7 @@ static const ReplEnumEntry k_attrib_bits[] = {
     { "GL_LIGHTING_BIT",     GL_LIGHTING_BIT },
     { "GL_FOG_BIT",          GL_FOG_BIT },
     { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    { "GL_STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT },
     { "GL_TRANSFORM_BIT",    GL_TRANSFORM_BIT },
     { "GL_ENABLE_BIT",       GL_ENABLE_BIT },
     { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
@@ -351,7 +352,8 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glPushAttrib(",       "glPushAttrib(mask)",                                       1, { "mask" },
         "Save a group of state onto the attribute stack; restore with glPopAttrib.\n"
         "mask: GL_CURRENT_BIT, GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_LIGHTING_BIT,\n"
-        "GL_FOG_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
+        "GL_FOG_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT, GL_TRANSFORM_BIT,\n"
+        "GL_ENABLE_BIT, GL_COLOR_BUFFER_BIT,\n"
         "several OR'd with |, or GL_ALL_ATTRIB_BITS for all supported groups.",
         REPL_HELP_GROUP_STATE },
     { "glPopAttrib()",       "glPopAttrib()",                                            0, { NULL },
@@ -425,11 +427,14 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Per-channel color write enable: GL_TRUE / GL_FALSE", REPL_HELP_GROUP_DEPTH_MASK },
     { "glClear(",            "glClear(mask)",                                            1, { "mask" },
         "Clear buffers mid-scene, from the cursor line down\n"
-        "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with |\n"
+        "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT, OR'd with |\n"
         "Colour clears to glClearColor and is confined to the 3D viewport",
         REPL_HELP_GROUP_DEPTH_MASK },
     { "glClearDepth(",       "glClearDepth(depth)",                                      1, { "depth" },
         "Depth value glClear(GL_DEPTH_BUFFER_BIT) writes (0..1, default 1)",
+        REPL_HELP_GROUP_DEPTH_MASK },
+    { "glClearStencil(",     "glClearStencil(value)",                                    1, { "value" },
+        "Stencil value glClear(GL_STENCIL_BUFFER_BIT) writes (0..255, default 0)",
         REPL_HELP_GROUP_DEPTH_MASK },
     /* --- Lighting & materials --- */
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" },
@@ -606,7 +611,15 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
                   ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
     { "glClear",         CMD_CLEAR,          1, "%sglClear(%s);",            0,
         .args = { ENUM_SLOT_BITS(k_clear_bits,
-                                 "mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, or both OR'd with |") } },
+                                 "mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, "
+                                 "GL_STENCIL_BUFFER_BIT, or several OR'd with |") } },
+    /* glClearStencil is parsed by a custom branch (num_args -1) because the
+     * value is an integer in 0..255 that must be truncated and clamped the
+     * way glStencilFunc's ref is — the std float path would let the warm
+     * flatten write a raw evaluated float straight into args[]. */
+    { "glClearStencil",  CMD_CLEAR_STENCIL, -1, NULL,                        0,
+        .args = { { NULL, "value: expression or 0xNN literal in 0..255",
+                    REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
     /* glClipPlane is parsed by a custom branch (num_args -1). args[] is
      * kept only so slot-indexed autocomplete offers the plane tokens;
      * the (GLdouble[]){a, b, c, d} equation is handled by the custom
@@ -674,7 +687,8 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glPushAttrib",    CMD_PUSH_ATTRIB,    1, "%sglPushAttrib(%s);",       0,
         .args = { ENUM_SLOT_BITS_ALL(k_attrib_bits,
                                      "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
-                                     "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_TRANSFORM_BIT, GL_FOG_BIT, "
+                                     "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT, "
+                                     "GL_TRANSFORM_BIT, GL_FOG_BIT, "
                                      "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_ALL_ATTRIB_BITS, "
                                      "or several OR'd with |",
                                      "GL_ALL_ATTRIB_BITS") } },
@@ -803,6 +817,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_BLEND_FUNC,         "glBlendFunc",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        "glClearColor",        1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_DEPTH,        "glClearDepth",        1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_STENCIL,      "glClearStencil",      1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_DEPTH_MASK,         "glDepthMask",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_COLOR_MASK,         "glColorMask",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED(CMD_EDGE_FLAG,              "glEdgeFlag",           1, CMD_CAT_STATE),

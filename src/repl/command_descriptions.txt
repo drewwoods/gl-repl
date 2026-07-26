@@ -104,6 +104,10 @@ Chooses how the stencil buffer changes when the stencil test fails, when stencil
 title = glStencilMask
 Restricts which stencil-buffer bits later fragments may write. Supply a decimal or 0xNN mask from 0 through 255; use 0 to protect an existing mask while drawing geometry through it.
 
+[command CMD_CLEAR_STENCIL]
+title = glClearStencil
+Sets the value glClear(GL_STENCIL_BUFFER_BIT) writes into the stencil buffer, from 0 through 255 (GL starts at 0). The value accepts an expression, so a mask id can animate; a fractional result truncates toward zero the way the exported C does.
+
 [command CMD_GLUT_TORUS]
 title = glutSolidTorus
 Draws a solid torus centered at the origin around the z axis. innerR controls tube radius, outerR controls ring radius, and the two segment counts trade smoothness for geometry cost.

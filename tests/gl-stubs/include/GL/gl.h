@@ -288,6 +288,7 @@ static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { G
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
 static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDepth %g\n", (double)depth); gl_stub_tick(GL_STUB_glClearDepth); }
+static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil %d\n", (int)s); gl_stub_tick(GL_STUB_glClearStencil); }
 /* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so
  * occlusion-style depth reads behave as if every vertex is visible. The fill
  * MUST branch on `type` — a GL_UNSIGNED_BYTE read (stencil) hands us a

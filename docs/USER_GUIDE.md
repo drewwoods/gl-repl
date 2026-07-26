@@ -404,11 +404,12 @@ numeric argument everywhere is a full math expression.
 - [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
-  `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT`,
+  `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`,
+  `GL_STENCIL_BUFFER_BIT`, `GL_TRANSFORM_BIT`,
   `GL_ENABLE_BIT`, `GL_COLOR_BUFFER_BIT`, OR'd with `|`, or
-  `GL_ALL_ATTRIB_BITS` for all ten supported groups. `GL_FOG_BIT` scopes the
-  `glFog*` parameters; the `GL_FOG`
-  enable flag rides both `GL_FOG_BIT` and `GL_ENABLE_BIT`
+  `GL_ALL_ATTRIB_BITS` for all eleven supported groups. `GL_FOG_BIT` scopes the
+  `glFog*` parameters; the `GL_FOG` and `GL_STENCIL_TEST`
+  enable flags ride both their group bit and `GL_ENABLE_BIT`
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
@@ -425,7 +426,8 @@ numeric argument everywhere is a full math expression.
 - [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
 - [`glStencilFunc(func, ref, mask)`](https://docs.gl/gl2/glStencilFunc),
   [`glStencilOp(stencil-fail, depth-fail, depth-pass)`](https://docs.gl/gl2/glStencilOp),
-  [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) — stencil-mask setup
+  [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) — stencil-mask
+  setup, scoped by `GL_STENCIL_BUFFER_BIT` on the attribute stack
 - [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) — each channel GL_TRUE/GL_FALSE or 0/1
 - [`glClear(mask)`](https://docs.gl/gl2/glClear) — clear again part-way down a scene (see Clearing
   mid-scene). `mask` combines `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, and
@@ -435,6 +437,9 @@ numeric argument everywhere is a full math expression.
   (the far plane); a lower value makes the cleared buffer reject geometry
   further away than that depth. Scoped by `GL_DEPTH_BUFFER_BIT` on the
   attribute stack, alongside `glDepthFunc` / `glDepthMask`
+- [`glClearStencil(value)`](https://docs.gl/gl2/glClearStencil) — the value a
+  `GL_STENCIL_BUFFER_BIT` clear writes, 0..255 (GL starts at 0). Takes an
+  expression, truncated toward zero; scoped by `GL_STENCIL_BUFFER_BIT`
 - [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
 - [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
   plane (see Clip planes)
@@ -571,8 +576,8 @@ quality](#rendering-quality).
 
 Stencil commands let a first pass write a byte-sized mask and later geometry
 draw only where that mask passes. Start a frame with
-`glClear(GL_STENCIL_BUFFER_BIT)`; its clear value is fixed at 0. There is no
-`glClearStencil` command yet.
+`glClear(GL_STENCIL_BUFFER_BIT)`, which writes 0 unless `glClearStencil(value)`
+has set a different value (0..255).
 
 `glStencilFunc(func, ref, mask)` compares the incoming reference with the
 stored value while `GL_STENCIL_TEST` is enabled. Both `ref` and `mask` are
@@ -585,6 +590,12 @@ leaves the range is clamped to it rather than rejected.
 `glStencilOp` chooses the actions for stencil failure, depth failure, and a
 full pass; `glStencilMask` limits which stencil bits can be written. Use
 `glStencilMask(0)` to protect a completed mask while later geometry tests it.
+
+All of it — comparison, ops, write mask and clear value — is scoped by
+`GL_STENCIL_BUFFER_BIT` on the attribute stack, so a masked pass can be
+wrapped in `glPushAttrib(GL_STENCIL_BUFFER_BIT)` / `glPopAttrib()` and leave
+nothing behind. The `GL_STENCIL_TEST` enable flag rides that bit *and*
+`GL_ENABLE_BIT`, the same dual membership real GL gives it.
 
 The grid, axes, backdrop and light indicators are drawn with the stencil test
 suspended, so a mask never clips the host's own chrome. Vertex outlines and
@@ -657,10 +668,12 @@ glPopAttrib();              // colour and line width snap back to blue / 1
 `GL_POLYGON_BIT` (cull + winding + polygon mode/offset), `GL_LIGHTING_BIT`
 (materials, shade model,
 lights), `GL_FOG_BIT` (fog mode / density / start / end / colour),
-`GL_DEPTH_BUFFER_BIT`, `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
+`GL_DEPTH_BUFFER_BIT`, `GL_STENCIL_BUFFER_BIT` (stencil func/ref/mask, the
+three `glStencilOp` slots, the write mask and the clear value),
+`GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
 (every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear
-colour, colour mask). The `GL_FOG` enable flag is saved by both `GL_FOG_BIT`
-and `GL_ENABLE_BIT`, matching real GL. Join several with `|` — like `glClear`'s
+colour, colour mask). The `GL_FOG` and `GL_STENCIL_TEST` enable flags are saved
+by both their group bit and `GL_ENABLE_BIT`, matching real GL. Join several with `|` — like `glClear`'s
 mask it is a fixed set of tokens (no expressions), canonicalised to a stable
 order. `GL_ALL_ATTRIB_BITS` is a compact alias for the union of every group the
 REPL can currently change; its scope therefore grows if a later release adds

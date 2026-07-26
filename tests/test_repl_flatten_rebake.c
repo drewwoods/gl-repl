@@ -336,6 +336,40 @@ static void test_dynamic_stencil_ref_rebake(void) {
     ASSERT_INT("stencil ref warm-cache reflatten keeps truncation",
                live_stencil_ref(), c_stencil_ref(0.05f));
 
+    /* glClearStencil rides the same policy through its own fixup arm: the
+     * clear value is the buffer the viz reads, so an unclamped rebake here
+     * would be worse than for ref. */
+    {
+        static const char *const clear_scene[] = {
+            "glClearStencil(t * 100.75 - 1.9);",
+            NULL,
+        };
+        load_scene(clear_scene);
+        repl_state_time_set(0.0f);
+        repl_ensure_flat_program_with_live_vars(0);
+
+        for (int i = 0; i < (int)ARRAY_LEN(values); i++) {
+            const GLCmd *cmds;
+            int found = -1;
+            char label[160];
+
+            repl_state_flat_program_clear_dirty();
+            repl_state_time_set(values[i]);
+            snprintf(label, sizeof(label), "clear stencil %g uses rebake",
+                     values[i]);
+            TEST_ASSERT_INT(&g_harness, label, repl_refresh_flat_program(0),
+                            REPL_FLAT_REFRESH_REBAKE);
+            cmds = repl_state_flat_program_cmds();
+            for (int k = 0; k < repl_state_flat_program_count(); k++)
+                if (cmds[k].type == CMD_CLEAR_STENCIL)
+                    found = (int)cmds[k].args[0];
+            snprintf(label, sizeof(label),
+                     "clear stencil %g matches C GLint truncation and clamp",
+                     values[i]);
+            TEST_ASSERT_INT(&g_harness, label, found, c_stencil_ref(values[i]));
+        }
+    }
+
     /* Local loop variables exercise the normal flatten path rather than the
      * value-only rebake path. Each fractional local reference truncates after
      * substitution, exactly like a predef-backed expression. */

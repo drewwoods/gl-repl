@@ -443,6 +443,12 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
          * glr_ctrl_clear_chrome). */
         glClearDepth((GLclampd)cmd->args[0]);
         return 1;
+    case CMD_CLEAR_STENCIL:
+        /* Already an integer in 0..255: the parser rejects an out-of-range
+         * literal and the flatten fixup clamps an animated one, so this is
+         * the same GLint the exported C computes. */
+        glClearStencil((GLint)cmd->args[0]);
+        return 1;
     case CMD_CLEAR:
         /* args[0] is the resolved GL_*_BUFFER_BIT mask. This IS the
          * frame's clear for the scene rect — nothing clears it on the
@@ -976,6 +982,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:
     case CMD_CLEAR_DEPTH:
+    case CMD_CLEAR_STENCIL:
     case CMD_CLIP_PLANE:
     case CMD_CLEAR:
     case CMD_FOG_I:

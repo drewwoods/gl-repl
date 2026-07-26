@@ -753,6 +753,11 @@ static int flatten_reparse_line(FlattenContext *ctx,
             (void)repl_stencil_clamp_ref(tmp.args[1], &ref);
             tmp.args[1] = (float)ref;
         }
+        if (tmp.type == CMD_CLEAR_STENCIL) {
+            int clear_value;
+            (void)repl_stencil_clamp_ref(tmp.args[0], &clear_value);
+            tmp.args[0] = (float)clear_value;
+        }
         /* has_vars stays the committed value — identical to the text
          * branch's rules for a has_vars source command (kept under local
          * bindings, forced 1 otherwise; it is 1 here either way). */
@@ -1417,6 +1422,11 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
         int ref;
         (void)repl_stencil_clamp_ref(cmd->args[1], &ref);
         cmd->args[1] = (float)ref;
+    }
+    if (cmd->type == CMD_CLEAR_STENCIL) {
+        int clear_value;
+        (void)repl_stencil_clamp_ref(cmd->args[0], &clear_value);
+        cmd->args[0] = (float)clear_value;
     }
     return 1;
 }

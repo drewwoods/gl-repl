@@ -40,6 +40,10 @@ enum {
     ITEM_KIND_DEPTH_FUNC,  /* (DEPTH_BUFFER) */
     ITEM_KIND_DEPTH_MASK,  /* (DEPTH_BUFFER) */
     ITEM_KIND_CLEAR_DEPTH, /* (DEPTH_BUFFER) */
+    ITEM_KIND_STENCIL_FUNC,/* func+ref+mask, one cell    (STENCIL_BUFFER) */
+    ITEM_KIND_STENCIL_OP,  /* the three op slots         (STENCIL_BUFFER) */
+    ITEM_KIND_STENCIL_MASK,/* write mask                 (STENCIL_BUFFER) */
+    ITEM_KIND_CLEAR_STENCIL,/* (STENCIL_BUFFER) */
     ITEM_KIND_BLEND_FUNC,  /* (COLOR_BUFFER) */
     ITEM_KIND_COLOR_MASK,  /* (COLOR_BUFFER) */
     ITEM_KIND_CLEAR_COLOR, /* (COLOR_BUFFER) */
@@ -69,6 +73,8 @@ static unsigned cap_group_bit(GLenum cap) {
         return GL_POLYGON_BIT;
     case GL_DEPTH_TEST:
         return GL_DEPTH_BUFFER_BIT;
+    case GL_STENCIL_TEST:
+        return GL_STENCIL_BUFFER_BIT;
     case GL_FOG:
         return GL_FOG_BIT;
     case GL_BLEND:
@@ -105,6 +111,9 @@ static unsigned cell_cover(unsigned item_id) {
     case ITEM_KIND_DEPTH_FUNC: case ITEM_KIND_DEPTH_MASK:
     case ITEM_KIND_CLEAR_DEPTH:
         return GL_DEPTH_BUFFER_BIT;
+    case ITEM_KIND_STENCIL_FUNC: case ITEM_KIND_STENCIL_OP:
+    case ITEM_KIND_STENCIL_MASK: case ITEM_KIND_CLEAR_STENCIL:
+        return GL_STENCIL_BUFFER_BIT;
     case ITEM_KIND_BLEND_FUNC: case ITEM_KIND_COLOR_MASK:
     case ITEM_KIND_CLEAR_COLOR:
         return GL_COLOR_BUFFER_BIT;
@@ -146,6 +155,9 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
         return GL_POLYGON_BIT;
     case CMD_DEPTH_FUNC: case CMD_DEPTH_MASK: case CMD_CLEAR_DEPTH:
         return GL_DEPTH_BUFFER_BIT;
+    case CMD_STENCIL_FUNC: case CMD_STENCIL_OP: case CMD_STENCIL_MASK:
+    case CMD_CLEAR_STENCIL:
+        return GL_STENCIL_BUFFER_BIT;
     case CMD_BLEND_FUNC: case CMD_COLOR_MASK: case CMD_CLEAR_COLOR:
         return GL_COLOR_BUFFER_BIT;
     case CMD_CLIP_PLANE:
@@ -373,6 +385,25 @@ int repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
     case CMD_CLEAR_DEPTH:
         n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_CLEAR_DEPTH, 0),
                      GL_DEPTH_BUFFER_BIT);
+        break;
+    /* The three stencil setters are separate cells: a glStencilOp does not
+     * supersede an earlier glStencilFunc, and the write mask is independent
+     * of both. All ride GL_STENCIL_BUFFER_BIT. */
+    case CMD_STENCIL_FUNC:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_STENCIL_FUNC, 0),
+                     GL_STENCIL_BUFFER_BIT);
+        break;
+    case CMD_STENCIL_OP:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_STENCIL_OP, 0),
+                     GL_STENCIL_BUFFER_BIT);
+        break;
+    case CMD_STENCIL_MASK:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_STENCIL_MASK, 0),
+                     GL_STENCIL_BUFFER_BIT);
+        break;
+    case CMD_CLEAR_STENCIL:
+        n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_CLEAR_STENCIL, 0),
+                     GL_STENCIL_BUFFER_BIT);
         break;
     case CMD_BLEND_FUNC:
         n = emit_one(out, n, MAX, ITEM_ID(ITEM_KIND_BLEND_FUNC, 0),

@@ -166,6 +166,26 @@ typedef struct {
     int clear_depth_touched;
     ReplGlStateChangeSource clear_depth_source;
 
+    /* Stencil test + write state. func/ref/mask move together (one command
+     * writes all three), the op slots move together, and the write mask and
+     * clear value are independent — matching the attrib_bits cells. */
+    GLenum stencil_func;
+    int stencil_ref;
+    unsigned int stencil_value_mask;
+    GLenum stencil_fail_op;
+    GLenum stencil_depth_fail_op;
+    GLenum stencil_depth_pass_op;
+    unsigned int stencil_write_mask;
+    int clear_stencil;
+    int stencil_func_touched;
+    int stencil_op_touched;
+    int stencil_write_mask_touched;
+    int clear_stencil_touched;
+    ReplGlStateChangeSource stencil_func_source;
+    ReplGlStateChangeSource stencil_op_source;
+    ReplGlStateChangeSource stencil_write_mask_source;
+    ReplGlStateChangeSource clear_stencil_source;
+
     int depth_mask;
     int color_mask[4];
     int edge_flag;
@@ -482,6 +502,18 @@ static void gl_state_init(ReplGlTrackedState *s) {
     s->point_attenuation[0] = 1.0f;
     s->blend_src = GL_ONE;
     s->blend_dst = GL_ZERO;
+    /* GL defaults: always-pass comparison against 0, all bits readable and
+     * writable, keep on every outcome, clear to 0. The masks are reported as
+     * 0xFF rather than GL's all-ones because the REPL surface is 8-bit
+     * (see repl/stencil_limits.h). */
+    s->stencil_func = GL_ALWAYS;
+    s->stencil_ref = 0;
+    s->stencil_value_mask = 0xFFu;
+    s->stencil_fail_op = GL_KEEP;
+    s->stencil_depth_fail_op = GL_KEEP;
+    s->stencil_depth_pass_op = GL_KEEP;
+    s->stencil_write_mask = 0xFFu;
+    s->clear_stencil = 0;
     s->depth_mask = 1;
     s->color_mask[0] = s->color_mask[1] = 1;
     s->color_mask[2] = s->color_mask[3] = 1;
@@ -826,6 +858,34 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
         s->clear_depth_source = source;
     }
 
+    /* --- GL_STENCIL_BUFFER_BIT ---
+     * The GL_STENCIL_TEST enable flag rides GL_ENABLE_BIT|GL_STENCIL_BUFFER_BIT
+     * and is restored above with the other caps. */
+    if (gl_state_mask_covers(mask, CMD_STENCIL_FUNC)) {
+        s->stencil_func = snap->stencil_func;
+        s->stencil_ref = snap->stencil_ref;
+        s->stencil_value_mask = snap->stencil_value_mask;
+        s->stencil_func_touched = 1;
+        s->stencil_func_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_STENCIL_OP)) {
+        s->stencil_fail_op = snap->stencil_fail_op;
+        s->stencil_depth_fail_op = snap->stencil_depth_fail_op;
+        s->stencil_depth_pass_op = snap->stencil_depth_pass_op;
+        s->stencil_op_touched = 1;
+        s->stencil_op_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_STENCIL_MASK)) {
+        s->stencil_write_mask = snap->stencil_write_mask;
+        s->stencil_write_mask_touched = 1;
+        s->stencil_write_mask_source = source;
+    }
+    if (gl_state_mask_covers(mask, CMD_CLEAR_STENCIL)) {
+        s->clear_stencil = snap->clear_stencil;
+        s->clear_stencil_touched = 1;
+        s->clear_stencil_source = source;
+    }
+
     /* --- GL_TRANSFORM_BIT --- */
     if (gl_state_mask_covers(mask, CMD_CLIP_PLANE)) {
         for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
@@ -1032,6 +1092,30 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         s->clear_depth_touched = 1;
         s->clear_depth_source = source;
         break;
+    case CMD_CLEAR_STENCIL:
+        s->clear_stencil = (int)cmd->args[0];
+        s->clear_stencil_touched = 1;
+        s->clear_stencil_source = source;
+        break;
+    case CMD_STENCIL_FUNC:
+        s->stencil_func = (GLenum)cmd->args[0];
+        s->stencil_ref = (int)cmd->args[1];
+        s->stencil_value_mask = (unsigned int)cmd->args[2];
+        s->stencil_func_touched = 1;
+        s->stencil_func_source = source;
+        break;
+    case CMD_STENCIL_OP:
+        s->stencil_fail_op = (GLenum)cmd->args[0];
+        s->stencil_depth_fail_op = (GLenum)cmd->args[1];
+        s->stencil_depth_pass_op = (GLenum)cmd->args[2];
+        s->stencil_op_touched = 1;
+        s->stencil_op_source = source;
+        break;
+    case CMD_STENCIL_MASK:
+        s->stencil_write_mask = (unsigned int)cmd->args[0];
+        s->stencil_write_mask_touched = 1;
+        s->stencil_write_mask_source = source;
+        break;
     case CMD_DEPTH_MASK:
         s->depth_mask = cmd->args[0] != 0.0f;
         s->depth_mask_touched = 1;
@@ -1212,6 +1296,20 @@ static void gl_state_report_int(ReplGlStateReport *out, const char *name,
         return;
     snprintf(row->current, sizeof(row->current), "%d", current);
     snprintf(row->default_value, sizeof(row->default_value), "%d",
+             default_value);
+    row->differs_from_default = current != default_value;
+}
+
+/* Stencil masks read as bit patterns, not counts, so they print the way the
+ * source spells them (0xNN) rather than in decimal. */
+static void gl_state_report_hex_mask(ReplGlStateReport *out, const char *name,
+                                     unsigned int current,
+                                     unsigned int default_value) {
+    ReplGlStateReportRow *row = gl_state_report_row(out, name);
+    if (!row)
+        return;
+    snprintf(row->current, sizeof(row->current), "0x%02X", current);
+    snprintf(row->default_value, sizeof(row->default_value), "0x%02X",
              default_value);
     row->differs_from_default = current != default_value;
 }
@@ -1549,6 +1647,36 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     if (s->depth_mask_touched) {
         gl_state_report_bool(out, "GL_DEPTH_WRITEMASK", s->depth_mask, 1);
         gl_state_report_set_last_source(out, s->depth_mask_source);
+    }
+    if (s->stencil_func_touched) {
+        gl_state_report_enum(out, "GL_STENCIL_FUNC", CMD_STENCIL_FUNC, 0,
+                             s->stencil_func, GL_ALWAYS);
+        gl_state_report_set_last_source(out, s->stencil_func_source);
+        gl_state_report_int(out, "GL_STENCIL_REF", s->stencil_ref, 0);
+        gl_state_report_set_last_source(out, s->stencil_func_source);
+        gl_state_report_hex_mask(out, "GL_STENCIL_VALUE_MASK",
+                                 s->stencil_value_mask, 0xFFu);
+        gl_state_report_set_last_source(out, s->stencil_func_source);
+    }
+    if (s->stencil_op_touched) {
+        gl_state_report_enum(out, "GL_STENCIL_FAIL", CMD_STENCIL_OP, 0,
+                             s->stencil_fail_op, GL_KEEP);
+        gl_state_report_set_last_source(out, s->stencil_op_source);
+        gl_state_report_enum(out, "GL_STENCIL_PASS_DEPTH_FAIL", CMD_STENCIL_OP, 1,
+                             s->stencil_depth_fail_op, GL_KEEP);
+        gl_state_report_set_last_source(out, s->stencil_op_source);
+        gl_state_report_enum(out, "GL_STENCIL_PASS_DEPTH_PASS", CMD_STENCIL_OP, 2,
+                             s->stencil_depth_pass_op, GL_KEEP);
+        gl_state_report_set_last_source(out, s->stencil_op_source);
+    }
+    if (s->stencil_write_mask_touched) {
+        gl_state_report_hex_mask(out, "GL_STENCIL_WRITEMASK",
+                                 s->stencil_write_mask, 0xFFu);
+        gl_state_report_set_last_source(out, s->stencil_write_mask_source);
+    }
+    if (s->clear_stencil_touched) {
+        gl_state_report_int(out, "GL_STENCIL_CLEAR_VALUE", s->clear_stencil, 0);
+        gl_state_report_set_last_source(out, s->clear_stencil_source);
     }
     if (s->color_mask_touched) {
         ReplGlStateReportRow *row = gl_state_report_row(out, "GL_COLOR_WRITEMASK");

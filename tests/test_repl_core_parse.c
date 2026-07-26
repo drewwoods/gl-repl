@@ -1695,6 +1695,49 @@ int main(void) {
         assert_status_contains("glStencilMask range message", "0..255");
     }
     {
+        /* glClearStencil shares the ref slot's policy: an expression (so a
+         * mask id can animate), truncation toward zero, literal range
+         * rejection. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClearStencil parse ok",
+                    parse_cmd_with_text("glClearStencil(3.9)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glClearStencil type", cmd.type == CMD_CLEAR_STENCIL);
+        ASSERT_TRUE("glClearStencil truncates toward zero", (int)cmd.args[0] == 3);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClearStencil hex literal parses",
+                    parse_cmd_with_text("glClearStencil(0x2A)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glClearStencil hex value", (int)cmd.args[0] == 42);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClearStencil over-range literal rejected",
+                    parse_for_test("glClearStencil(256)", &cmd) == 0);
+        assert_status_contains("glClearStencil range message", "0..255");
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClearStencil negative literal rejected",
+                    parse_for_test("glClearStencil(-1)", &cmd) == 0);
+    }
+    {
+        /* Unlike the mask slots, the clear value takes an expression, and a
+         * comma-bearing one survives canonical-text reassembly. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        ExprVar vars[1] = { { "i", 5.0f } };
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glClearStencil expression parses",
+                    parse_cmd_with_text_and_vars("glClearStencil(min(i, 3))",
+                                                 &cmd, cmd_text, sizeof(cmd_text),
+                                                 vars, ARRAY_LEN(vars)) == 1);
+        ASSERT_TRUE("glClearStencil expression is dynamic", cmd.has_vars == 1);
+        ASSERT_TRUE("glClearStencil expression evaluates", (int)cmd.args[0] == 3);
+        ASSERT_TRUE("glClearStencil keeps the expression text intact",
+                    strstr(cmd_text, "glClearStencil(min(i, 3));") != NULL);
+    }
+    {
         /* The mask slot is literal-only by policy (a mask is not a quantity
          * to animate), so a *valid* expression is still a rejection there —
          * unlike the ref slot two blocks up, which takes the same text. */
@@ -1963,7 +2006,8 @@ int main(void) {
                     (GLbitfield)cmd.args[0] ==
                         (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
                          GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
-                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT |
+                         GL_TRANSFORM_BIT |
                          GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
         ASSERT_TRUE("glPushAttrib all alias canonicalized compactly",
                     strstr(cmd_text,
@@ -2016,28 +2060,56 @@ int main(void) {
                          GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT));
     }
     {
-        static const char *k_all_ten =
+        static const char *k_all_bits =
             "glPushAttrib(GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT | "
             "GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT | "
-            "GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
+            "GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | "
+            "GL_TRANSFORM_BIT | GL_ENABLE_BIT | "
             "GL_COLOR_BUFFER_BIT)";
-        static const char *k_all_ten_canonical =
+        static const char *k_all_bits_canonical =
             "glPushAttrib(GL_ALL_ATTRIB_BITS);";
         glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_cmd_with_text(k_all_ten, &cmd,
+        int ok = parse_cmd_with_text(k_all_bits, &cmd,
                                      cmd_text, sizeof(cmd_text));
-        ASSERT_TRUE("glPushAttrib(all ten bits) parse ok", ok == 1);
-        ASSERT_TRUE("glPushAttrib all-ten-bit mask",
+        ASSERT_TRUE("glPushAttrib(every modeled bit) parse ok", ok == 1);
+        ASSERT_TRUE("glPushAttrib every-modeled-bit mask",
                     (GLbitfield)cmd.args[0] ==
                         (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
                          GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
-                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT |
+                         GL_TRANSFORM_BIT |
                          GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
-        ASSERT_TRUE("glPushAttrib all ten bits canonicalize to alias",
-                    strstr(cmd_text, k_all_ten_canonical) != NULL);
+        ASSERT_TRUE("glPushAttrib every modeled bit canonicalizes to alias",
+                    strstr(cmd_text, k_all_bits_canonical) != NULL);
+    }
+    {
+        /* Phase 2 inverted this: the stencil group is modeled now, so the
+         * bit is accepted instead of rejected, and it sorts between depth
+         * and transform (ascending GL value). */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glPushAttrib(GL_STENCIL_BUFFER_BIT) parse ok",
+                    parse_cmd_with_text("glPushAttrib(GL_STENCIL_BUFFER_BIT)",
+                                        &cmd, cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glPushAttrib stencil bit resolves",
+                    (GLbitfield)cmd.args[0] == GL_STENCIL_BUFFER_BIT);
+        ASSERT_TRUE("glPushAttrib stencil bit canonicalized",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_STENCIL_BUFFER_BIT);") != NULL);
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glPushAttrib(depth|stencil) parse ok",
+                    parse_cmd_with_text(
+                        "glPushAttrib(GL_STENCIL_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)",
+                        &cmd, cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glPushAttrib buffer bits emit in table order",
+                    strstr(cmd_text,
+                           "glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);")
+                        != NULL);
     }
     {
         /* Reversed, unspaced input emits in canonical table order (ascending
@@ -2076,7 +2148,6 @@ int main(void) {
         static const char *k_bad[] = {
             "glPushAttrib(1)",
             "glPushAttrib(GL_CURRENT_BIT + GL_LINE_BIT)",
-            "glPushAttrib(GL_STENCIL_BUFFER_BIT)",
             "glPushAttrib(x)",
             "glPushAttrib()",
             "glPushAttrib(GL_CURRENT_BIT | )",

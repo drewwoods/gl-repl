@@ -27,7 +27,7 @@
 #include "repl/command.h"
 
 /* Number of supported GL_*_BIT groups (mirrors k_attrib_bits[]). */
-#define REPL_ATTRIB_BIT_COUNT 10
+#define REPL_ATTRIB_BIT_COUNT 11
 
 /* Depth of the real glPushAttrib/glPopAttrib stack all REPL mirrors keep.
  * Virtual user-source depth is unbounded; only the first frames at this depth

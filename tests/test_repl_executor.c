@@ -328,6 +328,7 @@ static void test_enum_arg_end_to_end_trace(void) {
     editor_feed_line("glStencilFunc(GL_GREATER, 7.9, 0xFE);");
     editor_feed_line("glStencilOp(GL_KEEP, GL_DECR, GL_INCR);");
     editor_feed_line("glStencilMask(0x7F);");
+    editor_feed_line("glClearStencil(9.7);");
     repl_flatten_commands(editor_state_edit_line());
     repl_execute_commands();
 
@@ -390,6 +391,10 @@ static void test_enum_arg_end_to_end_trace(void) {
 
     snprintf(want, sizeof(want), "glStencilMask %u\n", 0x7Fu);
     ASSERT_TRUE("e2e glStencilMask preserves write mask", strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glClearStencil %d\n", 9);
+    ASSERT_TRUE("e2e glClearStencil truncates its value like C does",
+                strstr(buf, want) != NULL);
 }
 
 static void test_execute_edge_cases(void) {

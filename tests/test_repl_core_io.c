@@ -2512,7 +2512,8 @@ int main(void) {
                     (GLbitfield)repl_state_document_cmds()[0].args[0] ==
                         (GL_CURRENT_BIT | GL_POINT_BIT | GL_LINE_BIT |
                          GL_POLYGON_BIT | GL_LIGHTING_BIT | GL_FOG_BIT |
-                         GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT |
+                         GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT |
+                         GL_TRANSFORM_BIT |
                          GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT));
         remove(attrib_all_path);
     }

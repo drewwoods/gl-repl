@@ -377,13 +377,70 @@ static void test_enable_bit(void) {
     glDisable(GL_DEPTH_TEST);
 }
 
-/* Stencil command state itself joins GL_STENCIL_BUFFER_BIT in Phase 2. The
- * capability introduced in Phase 1 is deliberately only an enable-state cell:
- * real GL saves it with GL_ENABLE_BIT, not with the stencil-state group. */
-static void test_stencil_enable_interim_membership(void) {
-    expect_membership("STENCIL enable: glEnable -> ENABLE_BIT only",
-                      CMD_ENABLE, GL_STENCIL_TEST, GL_ENABLE_BIT);
+/* Stencil state is a full attribute group: the three setters plus the clear
+ * value ride GL_STENCIL_BUFFER_BIT, and the capability has the same dual
+ * membership real GL gives it (GL_ENABLE_BIT *and* the group bit). */
+static void test_stencil_buffer_bit(void) {
+    expect_membership("STENCIL: glStencilFunc -> STENCIL_BUFFER_BIT",
+                      CMD_STENCIL_FUNC, 0, GL_STENCIL_BUFFER_BIT);
+    expect_membership("STENCIL: glStencilOp -> STENCIL_BUFFER_BIT",
+                      CMD_STENCIL_OP, 0, GL_STENCIL_BUFFER_BIT);
+    expect_membership("STENCIL: glStencilMask -> STENCIL_BUFFER_BIT",
+                      CMD_STENCIL_MASK, 0, GL_STENCIL_BUFFER_BIT);
+    expect_membership("STENCIL: glClearStencil -> STENCIL_BUFFER_BIT",
+                      CMD_CLEAR_STENCIL, 0, GL_STENCIL_BUFFER_BIT);
+    expect_membership("STENCIL enable: glEnable -> ENABLE|STENCIL_BUFFER",
+                      CMD_ENABLE, GL_STENCIL_TEST,
+                      (unsigned)(GL_ENABLE_BIT | GL_STENCIL_BUFFER_BIT));
 
+    /* Comparison state: func, ref and value mask move together. */
+    glStencilFunc(GL_EQUAL, 1, 0xFF);
+    glPushAttrib(GL_STENCIL_BUFFER_BIT);
+    glStencilFunc(GL_GREATER, 7, 0x0F);
+    glPopAttrib();
+    expect_intv("STENCIL_BUFFER_BIT restores stencil func",
+                GL_STENCIL_FUNC, GL_EQUAL);
+    expect_intv("STENCIL_BUFFER_BIT restores stencil ref", GL_STENCIL_REF, 1);
+    expect_intv("STENCIL_BUFFER_BIT restores stencil value mask",
+                GL_STENCIL_VALUE_MASK, 0xFF);
+
+    glStencilFunc(GL_EQUAL, 1, 0xFF);
+    glPushAttrib(GL_DEPTH_BUFFER_BIT);
+    glStencilFunc(GL_GREATER, 7, 0x0F);
+    glPopAttrib();
+    expect_intv("DEPTH_BUFFER_BIT leaves stencil func",
+                GL_STENCIL_FUNC, GL_GREATER);
+
+    /* Write state: the ops and the write mask. */
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    glStencilMask(0xFF);
+    glPushAttrib(GL_STENCIL_BUFFER_BIT);
+    glStencilOp(GL_INVERT, GL_DECR, GL_INCR);
+    glStencilMask(0x0F);
+    glPopAttrib();
+    expect_intv("STENCIL_BUFFER_BIT restores stencil fail op",
+                GL_STENCIL_FAIL, GL_KEEP);
+    expect_intv("STENCIL_BUFFER_BIT restores depth-pass op",
+                GL_STENCIL_PASS_DEPTH_PASS, GL_REPLACE);
+    expect_intv("STENCIL_BUFFER_BIT restores stencil write mask",
+                GL_STENCIL_WRITEMASK, 0xFF);
+
+    /* Clear value: the counterpart to glClearDepth on DEPTH_BUFFER_BIT. */
+    glClearStencil(3);
+    glPushAttrib(GL_STENCIL_BUFFER_BIT);
+    glClearStencil(7);
+    glPopAttrib();
+    expect_intv("STENCIL_BUFFER_BIT restores stencil clear value",
+                GL_STENCIL_CLEAR_VALUE, 3);
+
+    glClearStencil(3);
+    glPushAttrib(GL_COLOR_BUFFER_BIT);
+    glClearStencil(7);
+    glPopAttrib();
+    expect_intv("COLOR_BUFFER_BIT leaves stencil clear value",
+                GL_STENCIL_CLEAR_VALUE, 7);
+
+    /* The enable flag restores through either of its two bits. */
     glDisable(GL_STENCIL_TEST);
     glPushAttrib(GL_ENABLE_BIT);
     glEnable(GL_STENCIL_TEST);
@@ -395,9 +452,17 @@ static void test_stencil_enable_interim_membership(void) {
     glPushAttrib(GL_STENCIL_BUFFER_BIT);
     glEnable(GL_STENCIL_TEST);
     glPopAttrib();
-    expect_enabled("STENCIL_BUFFER_BIT leaves stencil-test enable",
+    expect_enabled("STENCIL_BUFFER_BIT restores stencil-test enable",
+                   GL_STENCIL_TEST, GL_FALSE);
+
+    glDisable(GL_STENCIL_TEST);
+    glPushAttrib(GL_LINE_BIT);
+    glEnable(GL_STENCIL_TEST);
+    glPopAttrib();
+    expect_enabled("LINE_BIT leaves stencil-test enable",
                    GL_STENCIL_TEST, GL_TRUE);
     glDisable(GL_STENCIL_TEST);
+    glClearStencil(0);
 }
 
 /* The GL_FOG enable flag has dual membership: GL_FOG_BIT *and* GL_ENABLE_BIT,
@@ -462,7 +527,7 @@ int main(int argc, char **argv) {
     test_transform_bit();
     test_color_buffer_bit();
     test_enable_bit();
-    test_stencil_enable_interim_membership();
+    test_stencil_buffer_bit();
     test_fog_enable_dual_membership();
     return test_harness_report(&g_harness, "attrib_bits_gl");
 }

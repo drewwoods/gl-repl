@@ -1777,6 +1777,16 @@ static const GlStateCellCase k_gl_state_cell_cases[] = {
       "GL_TRUE", "GL_FALSE" },
     { CMD_CLEAR_DEPTH,   1, {0.25f}, {0.75f}, "GL_DEPTH_CLEAR_VALUE",
       "0.25", "0.75" },
+    /* GL_STENCIL_BUFFER_BIT */
+    { CMD_STENCIL_FUNC,  3, {(float)GL_EQUAL, 1, 0xFF},
+      {(float)GL_GREATER, 7, 0x0F}, "GL_STENCIL_FUNC",
+      "GL_EQUAL", "GL_GREATER" },
+    { CMD_STENCIL_OP,    3, {(float)GL_KEEP, (float)GL_KEEP, (float)GL_REPLACE},
+      {(float)GL_INVERT, (float)GL_DECR, (float)GL_INCR}, "GL_STENCIL_FAIL",
+      "GL_KEEP", "GL_INVERT" },
+    { CMD_STENCIL_MASK,  1, {0x0F}, {0xFF}, "GL_STENCIL_WRITEMASK",
+      "0x0F", "0xFF" },
+    { CMD_CLEAR_STENCIL, 1, {3}, {7}, "GL_STENCIL_CLEAR_VALUE", "3", "7" },
     /* GL_TRANSFORM_BIT */
     { CMD_CLIP_PLANE,    5, {(float)GL_CLIP_PLANE0, 1, 0, 0, 0.5f},
       {(float)GL_CLIP_PLANE0, 0, 1, 0, -0.5f},

@@ -86,6 +86,7 @@ static const CmdType expected_commands[] = {
     CMD_BLEND_FUNC,
     CMD_CLEAR_COLOR,
     CMD_CLEAR_DEPTH,
+    CMD_CLEAR_STENCIL,
     CMD_DEPTH_MASK,
     CMD_COLOR_MASK,
     CMD_EDGE_FLAG,
@@ -409,6 +410,7 @@ int main(void) {
     editor_feed_line("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
     editor_feed_line("glClearColor(0.2, 0.2, 0.2, 1);");
     editor_feed_line("glClearDepth(0.9);");
+    editor_feed_line("glClearStencil(0x2A);");
     editor_feed_line("glDepthMask(GL_TRUE);");
     editor_feed_line("glEdgeFlag(GL_TRUE);");
     editor_feed_line("glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);");

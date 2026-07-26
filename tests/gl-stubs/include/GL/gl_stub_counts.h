@@ -40,6 +40,7 @@ extern "C" {
     X(glClear)                         \
     X(glClearColor)                    \
     X(glClearDepth)                    \
+    X(glClearStencil)                  \
     X(glClipPlane)                     \
     X(glGetClipPlane)                  \
     X(glColor3f)                       \
