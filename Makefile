@@ -945,6 +945,13 @@ test_glr_init_trace_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_init_trace.o $(OBJDIR)
 test_glr_init_trace_LDLIBS = $(GL_LDFLAGS)
 test_glr_init_trace_RUN ?= $(BINDIR)/test_glr_init_trace
 
+# Pure timer-deadline calculation; keep this focused unit test independent
+# from the controller and rendering stacks.
+test_glr_frame_pacer_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_frame_pacer.o \
+	$(OBJDIR)/src/app/boot/glr_frame_pacer.o
+test_glr_frame_pacer_LDLIBS = -lm
+test_glr_frame_pacer_RUN ?= $(BINDIR)/test_glr_frame_pacer
+
 test_render3d_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_guides.o \
 	$(OBJDIR)/src/render3d/overlays.o \
 	$(OBJDIR)/src/render3d/guides/geometry_guides.o \

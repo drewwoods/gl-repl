@@ -48,6 +48,11 @@ static void test_missed_deadline_resync(void) {
     int delay = glr_frame_pacer_next_delay_ms(&pacer, 1200.0);
     ASSERT_INT("missed deadline clamps to 1ms delay", delay, 1);
     ASSERT_TRUE("deadline resynchronized to now", pacer.next_deadline_ms == 1200.0);
+
+    /* The following callback resumes a normal deadline rather than trying
+     * to catch up the frames missed during the stall. */
+    delay = glr_frame_pacer_next_delay_ms(&pacer, 1201.0);
+    ASSERT_INT("resynchronized pacer resumes 60Hz cadence", delay, 16);
 }
 
 int main(void) {

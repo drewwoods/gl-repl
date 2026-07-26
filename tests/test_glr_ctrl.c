@@ -1,7 +1,6 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "editor/state.h"
 #include "app/glr_camera.h"
-#include "app/boot/glr_frame_pacer.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_defaults.h"
@@ -2458,22 +2457,6 @@ static void test_tick_per_frame_scheduling(void) {
     glr_ctrl_set_tick_per_frame(0);
 }
 
-static void test_frame_pacer_deadlines(void) {
-    GlrFramePacer pacer = GLR_FRAME_PACER_INIT;
-
-    printf("--- glr frame pacer absolute deadlines ---\n");
-    ASSERT_INT("pacer: first exact-60Hz delay rounds to 17ms",
-               glr_frame_pacer_next_delay_ms(&pacer, 1000.0), 17);
-    ASSERT_INT("pacer: second delay corrects integer rounding",
-               glr_frame_pacer_next_delay_ms(&pacer, 1017.0), 16);
-    ASSERT_INT("pacer: third delay stays on absolute deadline",
-               glr_frame_pacer_next_delay_ms(&pacer, 1033.0), 17);
-    ASSERT_INT("pacer: a stall resyncs without a catch-up burst",
-               glr_frame_pacer_next_delay_ms(&pacer, 2000.0), 1);
-    ASSERT_INT("pacer: cadence resumes from the resynced deadline",
-               glr_frame_pacer_next_delay_ms(&pacer, 2001.0), 16);
-}
-
 static void test_view_mode_projection_transition_wiring(void) {
     GlrCameraState cam;
     int projection_settle_ticks =
@@ -4806,7 +4789,6 @@ int main(void) {
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();
     test_tick_per_frame_scheduling();
-    test_frame_pacer_deadlines();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
