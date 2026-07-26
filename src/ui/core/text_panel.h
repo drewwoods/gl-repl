@@ -375,6 +375,14 @@ typedef struct {
 int  ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
                                              int top_chrome_h);
 
+/* Return the pixel baseline y-coordinate of any logical row in snap->rows.
+ * Accounts for wrap, scroll, and top chrome. Writes *out_py and returns 1
+ * when the row is visible; returns 0 when it is scrolled off-screen or the
+ * index is invalid. Pure. */
+int  ui_text_panel_row_y(const UiTextPanelSnapshot *snap,
+                         int row_idx,
+                         int *out_py);
+
 /* Return the pixel baseline y-coordinate of the logical row at
  * input_row_idx (index into snap->rows). Accounts for wrap, scroll,
  * top chrome. Writes *out_py and returns 1 on success; returns 0 if

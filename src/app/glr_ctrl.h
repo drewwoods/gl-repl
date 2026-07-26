@@ -38,12 +38,11 @@ void glr_ctrl_set_accum_passes(int count);
  * swatch click, so a headless capture can't otherwise pose it. */
 void glr_ctrl_open_color_picker(int line);
 
-/* Open the floating OpenGL-state popup anchored to source line `line`
- * with a synthetic anchor position. Startup hook for GLR_OPEN_GL_STATE:
- * the popup only opens via a right-click, so a headless capture can't
- * otherwise pose it. The per-frame view builder closes it again unless
- * the line is a visually blank committed or live editor row. */
-void glr_ctrl_open_gl_state_popup(int line);
+/* Right-click the visible code-panel row for source line `line`, through the
+ * normal pointer/mouse router, to open the floating OpenGL-state popup.
+ * Startup hook for GLR_OPEN_GL_STATE: returns 0 while follow-scroll/layout
+ * has not made the row targetable yet, so the frame hook can retry. */
+int glr_ctrl_open_gl_state_popup(int line);
 
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set

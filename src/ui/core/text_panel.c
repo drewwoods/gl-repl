@@ -1204,14 +1204,13 @@ int ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
     return visible_band_h / LINE_H + 1;
 }
 
-int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
-                              int input_row_idx,
-                              int *out_py) {
+int ui_text_panel_row_y(const UiTextPanelSnapshot *snap,
+                        int row_idx,
+                        int *out_py) {
     TextPanelViewportMetrics metrics;
     int cur;
 
-    if (!snap || !out_py || input_row_idx < 0 ||
-        input_row_idx >= snap->row_count)
+    if (!snap || !out_py || row_idx < 0 || row_idx >= snap->row_count)
         return 0;
 
     metrics = text_panel_viewport_metrics(snap);
@@ -1221,7 +1220,7 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
         int visual_rows = text_panel_row_wrap_count_cached(snap, i);
         if (visual_rows < 1) visual_rows = 1;
 
-        if (i == input_row_idx) {
+        if (i == row_idx) {
             if (cur < snap->scroll ||
                 cur >= snap->scroll + metrics.visible_rows)
                 return 0;
@@ -1231,6 +1230,12 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
         cur += visual_rows;
     }
     return 0;
+}
+
+int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
+                              int input_row_idx,
+                              int *out_py) {
+    return ui_text_panel_row_y(snap, input_row_idx, out_py);
 }
 
 /* Resolve the active-input-row bracket-pair highlight for this frame.

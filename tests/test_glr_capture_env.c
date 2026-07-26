@@ -29,6 +29,7 @@
 #include "app/boot/splash.h"
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_color_picker_bridge.h"
+#include "ui/app/repl_code_panel.h"
 #include "ui/app/state.h"
 
 #include "support/test_harness.h"
@@ -71,13 +72,16 @@ static int seed_accum_passes(int passes) {
  * because their implementation uses internal file-scope static 'done' latches
  * that cannot be reset between tests. */
 static void test_frame_hooks_combined(void) {
+    UiRenderSnapshot snap;
+    UiPointerState pointer;
+    UiHit hit;
     clear_capture_env();
     int initial_view = glr_config_get(GLR_CONFIG_ORTHO_MODE);
 
     /* Set up target state for the four one-shot frame hooks */
     setenv("GLR_VIEW_TOGGLE_AT", "0.0", 1);
     setenv("GLR_OPEN_COLOR_PICKER", "0", 1);
-    setenv("GLR_OPEN_GL_STATE", "1", 1);
+    setenv("GLR_OPEN_GL_STATE", "4", 1);
     setenv("GLR_OPEN_HELP", "2", 1);
 
     glr_capture_env_apply(NULL);
@@ -92,7 +96,18 @@ static void test_frame_hooks_combined(void) {
     ASSERT_TRUE("view mode toggled", glr_config_get(GLR_CONFIG_ORTHO_MODE) != initial_view);
     ASSERT_INT("picker opened", color_picker_active_line(), 0);
     ASSERT_INT("inspector opened", ui_state_gl_state_inspector().visible, 1);
-    ASSERT_INT("inspector line", ui_state_gl_state_inspector().source_line_idx, 1);
+    ASSERT_INT("inspector line", ui_state_gl_state_inspector().source_line_idx, 4);
+    pointer = ui_state_pointer();
+    ASSERT_INT("inspector anchor follows routed pointer x",
+               ui_state_gl_state_inspector().anchor_px, pointer.mouse_x);
+    ASSERT_INT("inspector anchor follows routed pointer y",
+               ui_state_gl_state_inspector().anchor_py, pointer.mouse_y);
+    glr_ctrl_build_ui_snapshot(&snap);
+    hit = ui_repl_code_panel_hit_test(&snap, pointer.mouse_x, pointer.mouse_y);
+    ASSERT_TRUE("routed pointer lands on requested blank row",
+                (hit.kind == UI_HIT_CODE_TEXT ||
+                 hit.kind == UI_HIT_CODE_INSERT_LINE) &&
+                hit.line_idx == 4);
     ASSERT_INT("help opened", ui_state_help().visible, 1);
     ASSERT_INT("help tab", editor_help_session_tab_idx(), 2);
 }
@@ -249,6 +264,7 @@ int main(void) {
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("glEnd();");
+    editor_feed_line("");
 
     /* One-shot frame hook tests must run first */
     test_frame_hooks_combined();

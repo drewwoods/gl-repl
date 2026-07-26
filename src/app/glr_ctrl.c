@@ -3520,16 +3520,29 @@ void glr_ctrl_open_color_picker(int line) {
                        ui_state_viewport().window_h - (sy + sh / 2));
 }
 
-void glr_ctrl_open_gl_state_popup(int line) {
-    int cp_x = 0, cp_w = 0;
-    if (line < 0) return;
-    /* Synthetic anchor for headless capture runs (a real open records the
-     * right-click position): a quarter into the code panel, vertically
-     * centered. The per-frame view builder validates the line and closes
-     * the popup unless it is a visually blank committed or live row. */
-    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
-    ui_state_gl_state_inspector_open(line, cp_x + cp_w / 4,
-                                     ui_state_viewport().window_h / 2);
+int glr_ctrl_open_gl_state_popup(int line) {
+    UiRenderSnapshot snap;
+    int x;
+    int y;
+
+    if (line < 0)
+        return 0;
+
+    /* Resolve through the live code-panel row model, then take the exact
+     * production input path. This keeps capture placement, blank-row
+     * validation, popup toggling, pointer state, and future right-click
+     * behavior identical to a user's click. GLR_EDIT_LINE may have requested
+     * follow-scroll before the main loop; until a rendered frame applies it,
+     * an off-screen row deliberately returns 0 so the capture hook retries. */
+    glr_ctrl_build_ui_snapshot(&snap);
+    if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
+        return 0;
+
+    glr_ctrl_passive_motion(x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    return ui_state_gl_state_inspector().visible &&
+           ui_state_gl_state_inspector().source_line_idx == line;
 }
 
 void glr_ctrl_set_accum_passes(int count) {

@@ -3148,6 +3148,40 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
     return hit;
 }
 
+int ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,
+                                         int source_line_idx,
+                                         int *out_mx,
+                                         int *out_my) {
+    ReplCodePanelBuilder builder;
+    int i;
+    int py;
+
+    if (!snap || source_line_idx < 0 ||
+        !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+
+    for (i = 0; i < builder.row_count; i++) {
+        const UiTextPanelRow *row = &builder.text_snap.rows[i];
+        int target = row->source_line_idx >= 0
+                         ? row->source_line_idx
+                         : row->hit_target_line_idx;
+
+        if (!row->hit_eligible || target != source_line_idx)
+            continue;
+        if (!ui_text_panel_row_y(&builder.text_snap, i, &py))
+            continue;
+
+        if (out_mx)
+            *out_mx = builder.text_snap.cp_x + builder.text_snap.text_x +
+                      FONT_W;
+        if (out_my)
+            *out_my = builder.text_snap.vp_h - py;
+        return 1;
+    }
+    return 0;
+}
+
 int ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
                                    float *out_py) {
     ReplCodePanelBuilder builder;

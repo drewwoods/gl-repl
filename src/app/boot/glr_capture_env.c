@@ -68,18 +68,24 @@ static void maybe_capture_open_color_picker(void) {
 }
 
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_GL_STATE=
- * <line> opens the floating OpenGL-state popup anchored to that source line
- * (0-based; must be a visually blank committed or live editor row — the
- * controller's per-frame view builder closes the popup otherwise). The popup
- * only opens via a right-click, which a headless capture run has no mouse to
- * deliver. */
+ * <line> routes a real synthetic right-click to that visible source row
+ * (0-based; must be a visually blank committed or live editor row). A
+ * headless capture run has no physical mouse to deliver the click. */
 static void maybe_capture_open_gl_state(void) {
     static int done = 0;
+    const char *s;
+
     if (done) return;
-    done = 1;
-    const char *s = getenv("GLR_OPEN_GL_STATE");
-    if (s && *s)
-        glr_ctrl_open_gl_state_popup(atoi(s));
+    s = getenv("GLR_OPEN_GL_STATE");
+    if (!s || !*s) {
+        done = 1;
+        return;
+    }
+    /* GLR_EDIT_LINE follow-scroll lands during the display pass. If the
+     * requested row is initially off-screen, leave the hook pending and try
+     * its real routed right-click again on the next frame. */
+    if (glr_ctrl_open_gl_state_popup(atoi(s)))
+        done = 1;
 }
 
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
@@ -101,8 +107,11 @@ static void maybe_capture_open_help(void) {
 
 void glr_capture_env_frame_hook(void) {
     maybe_capture_view_toggle();
-    maybe_capture_open_color_picker();
     maybe_capture_open_gl_state();
+    /* Keep the picker last: a real code-panel right-click closes it, so when
+     * both capture hooks are requested in one frame the final posed state
+     * should still include the picker requested by the caller. */
+    maybe_capture_open_color_picker();
     maybe_capture_open_help();
 }
 

@@ -98,6 +98,14 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                                   int mx, int my);
 
+/* Resolve a visible source row to a point in its code-text hit area, in GLUT
+ * mouse coordinates (origin top-left). Handles committed, live-input, insert,
+ * and trailing blank rows through the same row model as render/hit-test. */
+int  ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,
+                                          int source_line_idx,
+                                          int *out_mx,
+                                          int *out_my);
+
 int  ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
                                     float *out_py);
 int  ui_repl_code_panel_input_row_has_color_swatch(
