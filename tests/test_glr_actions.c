@@ -1141,7 +1141,7 @@ static void test_msaa_display_label_override(void) {
 }
 
 /* Depth view row: a 4-state cycle (Off / Linear / Scene / Split) bound
- * to plain Ctrl+N, with the @cfg slug auto-derived from the label. */
+ * to Ctrl+Shift+D, with the @cfg slug auto-derived from the label. */
 static void test_depth_viz_row_metadata(void) {
     const GlrConfigItem *item = NULL;
 
@@ -1164,13 +1164,13 @@ static void test_depth_viz_row_metadata(void) {
     ASSERT_STR("state 1", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 1), "Linear");
     ASSERT_STR("state 2", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 2), "Scene");
     ASSERT_STR("state 3", glr_config_state_name(GLR_CONFIG_DEPTH_VIZ, 3), "Split");
-    ASSERT_INT("Depth view binds plain Ctrl+N", item->key_code, KM_KEY(GLR_DEPTH_VIZ));
-    ASSERT_INT("Depth view has no extra modifiers", item->modifiers, 0);
+    ASSERT_INT("Depth view binds Ctrl+Shift+D", item->key_code, KM_KEY(GLR_DEPTH_VIZ));
+    ASSERT_INT("Depth view requires Shift", item->modifiers, GLUT_ACTIVE_SHIFT);
     ASSERT_INT("Depth view is a normal-key binding", item->is_special, 0);
 }
 
-/* Stencil view mirrors depth view's session-scoped config plumbing but has
- * no shortcut yet: the menu row is its only interactive entry point. */
+/* Stencil view mirrors depth view's session-scoped config plumbing and is
+ * bound to Ctrl+Shift+S. */
 static void test_stencil_viz_row_metadata(void) {
     const GlrConfigItem *item = NULL;
 
@@ -1193,8 +1193,10 @@ static void test_stencil_viz_row_metadata(void) {
     ASSERT_STR("stencil state 1", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 1), "Palette");
     ASSERT_STR("stencil state 2", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 2), "Ramp");
     ASSERT_STR("stencil state 3", glr_config_state_name(GLR_CONFIG_STENCIL_VIZ, 3), "Split");
-    ASSERT_INT("Stencil view has no key binding", item->key_code, 0);
-    ASSERT_INT("Stencil view has no modifiers", item->modifiers, 0);
+    ASSERT_INT("Stencil view binds Ctrl+Shift+S", item->key_code,
+               KM_KEY(GLR_STENCIL_VIZ));
+    ASSERT_INT("Stencil view requires Shift", item->modifiers,
+               GLUT_ACTIVE_SHIFT);
     ASSERT_INT("Stencil view is not a special key", item->is_special, 0);
 }
 
@@ -1961,14 +1963,15 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+G consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
     ASSERT_INT("Ctrl+G toggles wireframe", glr_state_presentation().wireframe, 1);
 
-    /* The two Ctrl+Shift toggles fire only with Shift held. (Vertex outlines
-     * moved to Ctrl+Shift+O — covered in test_ascii_shortcut_modifiers.) */
-    g_test_mods = GLUT_ACTIVE_SHIFT;
+    /* Normal vectors moved to plain Ctrl+N. Vertex outlines remains on
+     * Ctrl+Shift+O, covered in test_ascii_shortcut_modifiers. */
+    g_test_mods = 0;
     glr_state_presentation_mut()->show_normal_vectors = 0;
-    ASSERT_INT("Ctrl+Shift+N consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
-    ASSERT_INT("Ctrl+Shift+N toggles normal vectors",
+    ASSERT_INT("Ctrl+N consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
+    ASSERT_INT("Ctrl+N toggles normal vectors",
                glr_state_presentation().show_normal_vectors, 1);
 
+    g_test_mods = GLUT_ACTIVE_SHIFT;
     glr_state_presentation_mut()->show_light_indicators = 0;
     ASSERT_INT("Ctrl+Shift+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
     ASSERT_INT("Ctrl+Shift+L toggles light indicators",
@@ -1979,17 +1982,17 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+Shift+E toggles projection",
                glr_state_presentation().projection_mode, PROJ_ORTHO);
 
-    /* Plain Ctrl+N is the Depth view cycle (Off -> Linear); its
-     * Ctrl+Shift twin above must not alias it. Without Shift the cfg
-     * layer must still NOT claim Ctrl+E/L (they fall through to editor
-     * cursor-end / clear-all). */
-    g_test_mods = 0;
+    /* Ctrl+Shift+D is the Depth view cycle (Off -> Linear). Plain Ctrl+D
+     * remains an editor deletion key. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
     glr_state_presentation_mut()->depth_viz = 0;
-    ASSERT_INT("plain Ctrl+N claimed by cfg (Depth view)",
-               glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
-    ASSERT_INT("plain Ctrl+N cycles depth view",
+    ASSERT_INT("Ctrl+Shift+D claimed by cfg (Depth view)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_D), 1);
+    ASSERT_INT("Ctrl+Shift+D cycles depth view",
                glr_state_presentation().depth_viz, 1);
     glr_state_presentation_mut()->depth_viz = 0;
+    g_test_mods = 0;
+    ASSERT_INT("plain Ctrl+D not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_D), 0);
     ASSERT_INT("plain Ctrl+E not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 0);
     ASSERT_INT("plain Ctrl+L not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 0);
 
@@ -2093,7 +2096,7 @@ static void test_keymap_binding_to_string(void) {
                keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_SPLIT_DECL),
                                         KM_MODS(GLR_SPLIT_DECL), 0),
-               "Ctrl+Shift+S");
+               "Ctrl+Shift+Q");
     ASSERT_STR("format F-key",
                keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_NEXT_EXAMPLE),

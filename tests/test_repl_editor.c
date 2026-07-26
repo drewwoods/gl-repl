@@ -3917,11 +3917,11 @@ int main() {
         editor_handle_key(28, 0, 0);
         assert_status_contains("Ctrl+\\ reformat", "Reformatted");
 
-        /* Ctrl+Shift+D (Dump) */
+        /* Ctrl+Shift+N (Dump) */
         /* We can't easily check stdout, but we trigger the branch. */
         g_mock_modifiers = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
-        glr_ctrl_router_handle_debug_dump_key(4);
-        assert_status_contains("Ctrl+Shift+D dump", "Dumped");
+        glr_ctrl_router_handle_debug_dump_key(14);
+        assert_status_contains("Ctrl+Shift+N dump", "Dumped");
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Ctrl+S (Save) */
