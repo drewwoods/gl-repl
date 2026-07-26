@@ -259,7 +259,21 @@ static void test_example_resolution(void) {
     char *av6[] = { "gl-repl", "--example", "zzz-no-such-example", NULL };
     ASSERT_INT("unknown --example exits", parse_v(&o, &code, av6), 0);
     ASSERT_INT("unknown --example exit code", code, 1);
+
+    /* Substring matching resolves correct example */
+    char sub[4];
+    if (strlen(first) >= 3) {
+        strncpy(sub, first + 1, 2);
+        sub[2] = '\0';
+    } else {
+        strncpy(sub, first, 1);
+        sub[1] = '\0';
+    }
+    char *av7[] = { "gl-repl", "--example", sub, NULL };
+    ASSERT_INT("--example substring proceeds", parse_v(&o, &code, av7), 1);
+    ASSERT_TRUE("substring resolves example index", o.example_index >= 0);
 }
+
 
 static void test_tour_resolution(void) {
     GlrCliOptions o;
@@ -290,7 +304,21 @@ static void test_tour_resolution(void) {
     char *av4[] = { "gl-repl", "--tour", "zzz-no-such-tour", NULL };
     ASSERT_INT("unknown --tour exits", parse_v(&o, &code, av4), 0);
     ASSERT_INT("unknown --tour exit code", code, 1);
+
+    /* Substring matching resolves correct tour */
+    char t_sub[4];
+    if (strlen(first) >= 3) {
+        strncpy(t_sub, first + 1, 2);
+        t_sub[2] = '\0';
+    } else {
+        strncpy(t_sub, first, 1);
+        t_sub[1] = '\0';
+    }
+    char *av5[] = { "gl-repl", "--tour", t_sub, NULL };
+    ASSERT_INT("--tour substring proceeds", parse_v(&o, &code, av5), 1);
+    ASSERT_TRUE("substring resolves tour index", o.tour_index >= 0);
 }
+
 
 static void test_combined_arguments(void) {
     GlrCliOptions o;
@@ -367,6 +395,47 @@ static void test_dump_dispatch(void) {
                run_dumps_capture(&o, buf, sizeof(buf)), 1);
     ASSERT_TRUE("editor dump written",
                 strstr(buf, "REPL Editor Dump") != NULL);
+    o.dump_code = 0;
+
+    /* --dump-flat */
+    o.dump_flat = 1;
+    ASSERT_INT("--dump-flat dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    o.dump_flat = 0;
+
+    /* --flat-histogram */
+    o.dump_flat_histogram = 1;
+    ASSERT_INT("--flat-histogram dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    o.dump_flat_histogram = 0;
+
+    /* --example with dump flag */
+    o.dump_code = 1;
+    o.example_index = 0;
+    ASSERT_INT("--dump-code with --example index dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    o.dump_code = 0;
+    o.example_index = -1;
+}
+
+static void test_prog_name_fallback(void) {
+    GlrCliOptions o;
+    int code = -999;
+    char *av[] = { NULL, "-h", NULL };
+
+    fflush(stdout);
+    int saved_out = dup(fileno(stdout));
+    FILE *r = freopen("/dev/null", "w", stdout);
+    (void)r;
+
+    int rc = glr_cli_parse(2, av, &o, &code);
+
+    dup2(saved_out, fileno(stdout));
+    close(saved_out);
+    clearerr(stdout);
+
+    ASSERT_INT("prog=NULL parse exits", rc, 0);
+    ASSERT_INT("prog=NULL exit code is 0", code, 0);
 }
 
 int main(void) {
@@ -382,6 +451,7 @@ int main(void) {
     test_combined_arguments();
     test_bad_examples_dir();
     test_dump_dispatch();
+    test_prog_name_fallback();
 
     return test_harness_report(&g_harness, "glr_cli");
 }

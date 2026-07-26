@@ -827,7 +827,10 @@ TEST_BINS = \
 	test_glr_cli \
 	test_glr_init_trace \
 	test_glr_tour_snapshot \
-	test_glr_tour_transport
+	test_glr_tour_transport \
+	test_glr_frame_pacer \
+	test_splash
+
 
 TEST_BINS += test_ui
 TEST_BINS += test_ui_text_panel
