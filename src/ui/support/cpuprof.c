@@ -73,6 +73,8 @@ typedef struct {
 #define PROF_BOTTOM_PAD      14
 #define PROF_COL_LABEL_W    150
 #define PROF_COL_VAL_W       72
+/* Minimum gap kept between a clipped label and the CPU value column. */
+#define PROF_COL_GAP          6
 
 /* Visual indentation per nesting level. Labels arrive un-indented; the panel
  * offsets each row by depth * this, so prof_section_info()'s explicit depth is
@@ -86,6 +88,36 @@ STATIC_ASSERT(PROF_SECTION_COUNT <= 64,
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
+
+/* Fit a section label into `max_px`, appending "..." when it has to cut.
+ *
+ * The CPU value is drawn at a fixed column x, so nothing stops an over-long
+ * label from running underneath it — the row just renders two strings on top
+ * of each other. Clipping here makes that structurally impossible for any
+ * label any binary supplies (gl-repl's come from src/app/glr_prof.c, each
+ * demo's from its own driver), rather than relying on every caller to keep
+ * its names short.
+ *
+ * FONT_SMALL is fixed-width, so the pixel budget is a character count.
+ * Returns `src` itself when it already fits, else `buf`. */
+static const char *fit_label(const char *src, int max_px,
+                             char *buf, size_t buf_sz) {
+    int max_chars = max_px / FONT_SMALL_W;
+    size_t len = strlen(src);
+
+    if (max_chars <= 0) return "";
+    if (len <= (size_t)max_chars) return src;
+    if ((size_t)max_chars >= buf_sz) max_chars = (int)buf_sz - 1;
+
+    if (max_chars <= 3) {          /* no room for src + marker: hard cut */
+        memcpy(buf, src, (size_t)max_chars);
+        buf[max_chars] = '\0';
+        return buf;
+    }
+    memcpy(buf, src, (size_t)(max_chars - 3));
+    memcpy(buf + max_chars - 3, "...", 4);
+    return buf;
+}
 
 /* Format µs as "1234 us" or "12.3 ms", whichever is more readable. */
 static void fmt_us(char *buf, int buf_sz, double us) {
@@ -435,7 +467,12 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
                     (view->collapsed_sections & section_bit(s)) != 0);
             }
             label_x += FONT_SMALL_W;
-            gl2d_draw_string((float)label_x, (float)ty, info.label, FONT_SMALL);
+            char label_buf[64];
+            gl2d_draw_string((float)label_x, (float)ty,
+                             fit_label(info.label,
+                                       col_cpu - PROF_COL_GAP - label_x,
+                                       label_buf, sizeof(label_buf)),
+                             FONT_SMALL);
         }
 
         /* CPU / GPU / Max values — all smoothed averages. */

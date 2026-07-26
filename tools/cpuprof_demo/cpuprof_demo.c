@@ -9,15 +9,16 @@
  *
  * What it measures: the same 5 teapots drawn three ways each frame, each way
  * timed as its own profile section so the panel shows them side by side —
- *   - Immediate:           5x glutSolidTeapot (immediate-mode geometry);
- *   - Display list (reuse): a list compiled ONCE at startup, then 5x glCallList;
- *   - Recompile / frame:    glNewList/glEndList every frame (the "compile" span)
- *                           then 5x glCallList of that fresh list.
+ *   - Immediate x5:  5x glutSolidTeapot (immediate-mode geometry);
+ *   - List reuse:    a list compiled ONCE at startup, then 5x glCallList;
+ *   - List rebuild:  glNewList/glEndList every frame (the "compile" span)
+ *                    then 5x glCallList of that fresh list.
  * The "compile" sub-row is the number of interest: it is the per-frame display-
  * list compilation overhead — i.e. what you would pay PER accumulation-buffer
  * AA sample if the scene's list were rebuilt each pass instead of compiled once
- * and reused. "reuse > call" vs "recompile > compile + call" makes the trade
- * legible. 'd' collapses to the three method totals / expands the call+compile
+ * and reused. "List reuse > call" vs "List rebuild > compile + call" makes the
+ * trade legible. (Panel labels stay inside the label column — the renderer
+ * clips anything longer, so a name that overruns reads as "Foo bar b...".) 'd' collapses to the three method totals / expands the call+compile
  * breakdown; clicking the histogram header's [reset] control clears the
  * accumulated distribution, and clicking a histogram legend swatch toggles
  * that series in and out of the plot; 'q' quits.
@@ -87,14 +88,14 @@ static int    g_lists_ready    = 0;
  * depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT are
  * unused: prof_section_info returns {NULL} and the panel omits them. */
 static const ProfSectionInfo k_sections[CP_COUNT] = {
-    [CP_FRAME_TOTAL]       = { "Frame Total",          0, 1 },
-    [CP_IMMEDIATE]         = { "Immediate x5",         0, 0 },
-    [CP_REUSE]             = { "Display list (reuse)",  0, 0 },
-    [CP_REUSE_CALL]        = { "call list x5",         1, 0 },
-    [CP_RECOMPILE]         = { "Recompile / frame",     0, 0 },
-    [CP_RECOMPILE_COMPILE] = { "compile",              1, 0 },
-    [CP_RECOMPILE_CALL]    = { "call list x5",         1, 0 },
-    [CP_PANEL]             = { "Profile Panel",        0, 0 },
+    [CP_FRAME_TOTAL]       = { "Frame Total",   0, 1 },
+    [CP_IMMEDIATE]         = { "Immediate x5",  0, 0 },
+    [CP_REUSE]             = { "List reuse",    0, 0 },
+    [CP_REUSE_CALL]        = { "call list x5",  1, 0 },
+    [CP_RECOMPILE]         = { "List rebuild",  0, 0 },
+    [CP_RECOMPILE_COMPILE] = { "compile",       1, 0 },
+    [CP_RECOMPILE_CALL]    = { "call list x5",  1, 0 },
+    [CP_PANEL]             = { "Profile Panel", 0, 0 },
 };
 
 ProfSectionInfo prof_section_info(ProfSection s) {

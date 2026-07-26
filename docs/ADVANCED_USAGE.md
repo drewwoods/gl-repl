@@ -344,9 +344,18 @@ unloaded machine.
 Each asset is a staged snippet scene with optional `@cfg` headers, a `// camera`
 block, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use
 record mode and keep the last frame, so theme fades and other frame-based
-settling are deterministic. Scene-only shots render at `--window 2400x1600` and
-downscale 50% for 4x supersampling; full-UI and hairline grid/axes shots stay
-1x and use `GLR_ACCUM_PASSES=16` so bitmap text and 1px lines keep full weight.
+settling are deterministic.
+
+Every gl-repl asset renders into the same 1x `--window 1200x800`. There is no
+oversize-and-downscale supersampling path: a native window is clamped to the
+visible screen, so an over-size request comes back the wrong size. Antialiasing
+comes from the context's MSAA, and stills raise `GLR_ACCUM_PASSES` on top of it
+— the scene is re-rendered per pass with a sub-pixel frustum jitter and
+accumulated, which the 2D UI draws *outside* of, so bitmap text stays crisp
+while 3D edges and 1px grid/axes hairlines smooth out at full weight. GIFs keep
+stock MSAA only; raising the pass count would multiply the cost of every
+recorded frame. The `demo-*` stills take none of this: each demo binary opens at
+its own compiled-in size and takes no gl-repl flags.
 
 ### Re-pinning vendored freeglut
 
