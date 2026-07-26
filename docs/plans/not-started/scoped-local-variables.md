@@ -830,10 +830,43 @@ and confirm Ctrl+Z after a local decl restores cleanly.
    gutter in `ind_s` (`reformat.c:213`). The decl formatter needs only the
    local/global prefix choice, not new indent logic.
 
-### Open questions
+### Known liabilities and revisit triggers
 
-None blocking. The one judgement call left for implementation is whether the
-structural-dep rule in Phase 2 proves too coarse in practice — if editing a
-global that feeds a local causes visibly sluggish scrubbing in the converted
-scenes, the alternative is teaching `rebake_one_cmd` to simulate local frames,
-which is a much larger change and should be its own plan.
+None blocking; both are accepted costs with a defined trip-wire, recorded so a
+future maintainer does not have to rediscover the trade-off. [rev 7]
+
+**1. The no-shadowing guard matrix is the maintenance tax.** Rejecting
+shadowing turns "declare a local" into a bidirectional invariant enforced across
+four compile paths (param add, iterator add, global add, local add) plus the
+whole-function capacity expression. Every future binder has to remember it, and
+this is the part of the design most likely to rot.
+
+The alternative is C-style innermost-wins shadowing, which deletes most of the
+matrix. It was rejected for V1 because it changes name resolution for *existing*
+code and because authors already hand-avoid collisions (`drawWhale`'s params are
+"named apart so they don't shadow"). Rev 6 shrank the matrix — the rule now
+constrains local declarations only, and param/iterator-over-global stays legal
+— so the tax is smaller than it first looked.
+
+*Trigger to revisit:* if the guards prove painful to keep correct during
+implementation, or a fifth binder appears, reopen the shadowing decision rather
+than adding a fifth guard. `eval_primary` already resolves innermost-first
+(`eval.c:1227-1243`), so the runtime side would need no change; the cost is
+concentrated in the delete/reference guards and the code-panel highlighter.
+
+**2. Structural deps trade scrub latency for correctness.** Any global feeding a
+local forces a full reflatten instead of a value-only rebake. The converted
+orrery — 16 locals fed by globals inside `planetKepler` — is precisely the scene
+where this would surface.
+
+*Trigger to revisit:* the manual scrub step in Verification is load-bearing, not
+optional. If scrubbing a global that feeds a local is visibly sluggish there,
+the fix is teaching `rebake_one_cmd` to simulate local frames — a much larger
+change that should be its own plan, not a patch to this one.
+
+**Resolved, for the record:** the export zero-fill divergence (REPL reads 0,
+exported C undefined) was flagged as a wart in earlier reviews with the
+literal-zero-initializer fix kept "in the back pocket". Rev 5 took that fix off
+the shelf — it is now the specified behavior (export emits `float a = 0.0f;`,
+import lowers it back) — because `docs/ARCHITECTURE.md:2156` makes behavior
+parity a contract rather than a preference.
