@@ -1,6 +1,36 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 5 after third review)
+## Status — NOT STARTED (2026-07-26, rev 6 after fourth review)
+
+Three findings; one narrows a rule rather than adding code. Items marked
+**[rev 6]**.
+
+- **Storage-kind conversion is rejected while the name is referenced.**
+  Converting `float x;` ↔ `static float x;` invalidates every compiled
+  assignment to that name — existing rows carry `var_idx ==
+  REPL_VAR_IDX_LOCAL`, which after conversion must be a real predef slot.
+  Rev 4 treated this as a relocation problem; it is a correctness problem.
+  Refusing the edit matches the rule already next door (`"variable '%s' is in
+  use, cannot overwrite"`) and needs no transaction machinery. This also adds
+  declaration→declaration replacement to the overwrite-route list: that path
+  exempts an unchanged name as "kept" (`compile.c:865-871`), which is wrong when
+  the storage changed under the same name.
+- **The no-shadowing rule is narrower than rev 5 stated, and must stay that
+  way.** It constrains *local declarations only*. A parameter or loop iterator
+  shadowing a **global** is pre-existing, deliberate behavior —
+  `compile.c:323-326` documents it, and `compile_line_uses_global_ident` returns
+  0 precisely so a shadowed global reads as unreferenced. Adding the "missing"
+  reverse guards would be a behavior change outside this feature's scope and
+  would likely break existing scenes. Added a regression guard instead.
+  Knock-on: rev 4's justification for `static`-inside-a-function claimed the
+  scope difference was "unobservable because shadowing is forbidden" — that was
+  overstated and is corrected; the decision itself stands.
+- **Phase 4 carried contradictory superseded instructions** (bare
+  `float a, b;` next to the zero-initializer requirement; "import needs no
+  change" next to the import-lowering requirement). Rewritten as one
+  authoritative sequence.
+
+## Status — rev 5 after third review
 
 Three blocking findings, all confirmed. Items marked **[rev 5]**.
 
@@ -168,7 +198,7 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
 |---|---|
 | Where may a local be declared | **Anywhere lexically inside a function body**, at any nesting depth; the editor hoists it to the top of that body, exactly as top-level decls hoist to the top of the document today. [rev 4] |
 | Global vs. local | **Keyword-driven.** `static float x;` is always a global, from any cursor position. Plain `float x;` is a local when inside a function, a global at top level (unchanged). [rev 4] |
-| Shadowing | **Rejected.** A local may not reuse a visible param, loop var, outer local, or global name. Authors already hand-avoid this. |
+| Shadowing | **Rejected for local declarations only.** A local may not reuse a visible param, loop var, outer local, or global name. Params and loop iterators shadowing *globals* stays legal — that is pre-existing, deliberate behavior (`compile.c:323-326`) and is not touched. [rev 6] |
 | Writable params / loop vars | **Out of scope.** Keep the `compile.c:1146` guard ("function parameters are constant"). `float tmp; tmp = param;` covers the need. |
 | Example conversion | **3 scenes as proof** in this change: orrery, swaying-grass, whale. |
 
@@ -186,8 +216,10 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   This is C's storage-duration distinction, and it is honest here: a `static`
   in C persists across calls exactly as a predef slot does. The one place C and
   the REPL differ — a C function-static is scoped to the function, ours is
-  document-wide — is unobservable, because shadowing is forbidden, so the name
-  is unique either way.
+  document-wide — is not observable through any *new* construct: a local
+  declaration cannot shadow it, so it stays reachable by that name. It can still
+  be shadowed by a parameter or loop iterator, which is exactly what already
+  happens to globals today (`compile.c:323-326`) and is unchanged. [rev 6]
 - **Declarations may appear at any depth inside the body** and are hoisted to
   the top of that body. [rev 4] `float u;` typed inside a `for` nested in a
   function relocates to the function's declaration prologue, the same way a
@@ -333,13 +365,30 @@ checks `ctx->vars` before the predef table.
   `"declared a, b, c"`; have the local path say `"declared local u in blade"`.
   Combined with the canonical text (`float` vs `static float`) that gives two
   independent confirmations of what the author just got.
-- **Overwrite-in-place applies only when the storage kind is unchanged.**
-  [rev 4] Today a non-insert-mode commit with the cursor on a `CMD_VAR_DECLARE`
-  row replaces that row in place. With two kinds of decl row, retyping a local
-  as `static float x;` (or a global as plain `float x;` from inside a function)
-  changes where the row must *live* — document top vs. function-body top. Those
-  cases must delete-here-and-reinsert rather than replace in place, or the row
-  ends up correctly flagged and wrongly positioned.
+- **Storage-kind conversion: reject when the name is referenced.** [rev 6]
+  Retyping a local as `static float x;` (or a global as plain `float x;` from
+  inside a function) is not just a relocation — it invalidates every *compiled*
+  assignment to that name. Existing `x = …` rows carry
+  `var_idx == REPL_VAR_IDX_LOCAL`, and after conversion to a global they must
+  carry the new predef slot instead; leave them stale and the assignments write
+  to a local that no longer exists. The reverse direction is equally broken.
+
+  Two resolutions were possible — atomically reclassify and rebuild every
+  assignment, or refuse the edit. **Refuse it**: it matches the shape of the
+  rule already next door (`"variable '%s' is in use, cannot overwrite"`,
+  `compile.c:875`), it needs no new transaction machinery, and the author's
+  workaround is one extra step (delete the references, convert, retype them).
+  Converting an *unreferenced* declaration stays legal.
+
+  This also means **declaration→declaration replacement joins the overwrite-route
+  list** in Phase 3. That path currently exempts an unchanged name from the
+  feasibility check as "kept" (`compile.c:865-871`), which is right when only
+  the name set changes and wrong when the *storage* changes under the same name.
+  A kept-but-converted name must run the reference check like a dropped one.
+
+  When conversion is allowed (unreferenced), the row still has to *move* —
+  document top vs. function-body top — so it is a delete-here-and-reinsert, not
+  a replace-in-place. [rev 4]
 - New `validate_local_decl_names()` beside `validate_decl_names`
   (`compile.c:693`). Rejects: duplicate-in-decl; any name visible at that point
   per `collect_visible_vars_in()` (param / loop var / outer local); any name in
@@ -412,6 +461,17 @@ existing locals in scope:
 | Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; a capacity overflow (below) |
 | Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; a capacity overflow (below) |
 | Add a global | `repl_compile_float_decl` global path | a name matching any existing local |
+
+**Scope of the no-shadowing rule.** [rev 6] It constrains *local declarations
+only*. A parameter or loop iterator shadowing a **global** remains legal —
+`compile.c:323-326` documents it as intended (`compile_line_uses_global_ident`
+returns 0 precisely so a shadowed global reads as unreferenced on that line),
+and `validate_decl_names` has never rejected a global that collides with an
+iterator. Adding guards for `static float i;` under an existing `for(i, ...)`,
+or a new `func0(i)` over an existing global `i`, would be a **behavior change
+outside this feature's scope** and would likely break existing scenes. The four
+directions that *do* need guarding are exactly the ones in the table above,
+all of which involve a local on one side.
 | Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function**; a capacity overflow (below) |
 
 **Capacity is a whole-function property, not a per-edit one.** [rev 5] A check
@@ -473,6 +533,7 @@ Two corrections to that table from rev 2: [rev 3]
   | Retype a decl row as an assignment | `repl_compile_var_assign` (`compile.c:1244`) | checks, independently |
   | Retype a decl row as a GL command | `editor_place_parsed_command` (`src/editor/input.c:660`) | **`repl_command_store_replace_one`, no check** |
   | Enter over a decl row | `src/editor/input.c:1017` | **`repl_command_store_replace_one`, no check** |
+  | Retype a decl row as another decl | `repl_compile_float_decl` overwrite branch (`compile.c:865`) | checks *dropped* names only — must also check kept-but-converted ones [rev 6] |
 
   The last two are raw replaces. For a global this is survivable — the predef
   slot outlives the row — but a **local's binding exists only as that prologue
@@ -505,49 +566,48 @@ Two corrections to that table from rev 2: [rev 3]
 
 #### Phase 4 — Export / import
 
-- `src/repl/export_cmd_writer.c:290` — branch on `var_idx == REPL_VAR_IDX_LOCAL`:
-  emit the real C line
-  `  float a, b;` at its body position instead of the `/* @declare */` marker.
-  No shadowing risk, because compile rejects shadowing; and no expression
-  translation is needed, because locals carry no initializer. (Had they kept
-  one, it would have to route through `repl_eval_expr_to_c`, as the
-  `CMD_VAR_ASSIGN` arm at `export_cmd_writer.c:316` does — `ln` → `logf` and so
-  on. That is the V2 tax noted under Non-goals.) [rev 2] Globals keep the
-  marker; the comment there explains why a C local would shadow the file-scope
-  static written by `write_predef_var_globals`.
-- **Export must emit explicit zero-initializers.** [rev 5] The REPL binds every
-  local to `0.0f` on call entry. A bare `float a, b;` in exported C is an
-  uninitialized automatic, so a read-before-write is `0` in the REPL and
-  undefined in the generated file. Rev 3 accepted that as a documented
-  divergence; that was wrong. `docs/ARCHITECTURE.md:2156` states the contract
-  outright — **"Behavior parity is required, not just syntactic round-trip"** —
-  and undefined behavior is precisely the case the REPL cannot reproduce, so
-  "match C" is not even available as a resolution. Emit
-  `  float a = 0.0f, b = 0.0f;`.
-- **Import lowers the generated zero-initializers back to canonical form.**
-  [rev 5] Export writes `float a = 0.0f;`, import strips a *literal-zero*
-  initializer on an in-body float decl and reconstructs `float a;`. That keeps
-  the round-trip idempotent — REPL text `float a;` → C `float a = 0.0f;` → REPL
-  text `float a;` — and avoids the failure mode that sank the alternative:
-  synthesized `a = 0.0f;` statement lines would reimport as real
+- **Export** — `src/repl/export_cmd_writer.c:290`, branch on
+  `var_idx == REPL_VAR_IDX_LOCAL`. A local emits a real C declaration at its
+  body position, **with explicit zero-initializers**:
+  `  float a = 0.0f, b = 0.0f;`. Globals keep the `/* @declare */` marker; the
+  comment there explains why a C local would shadow the file-scope static
+  written by `write_predef_var_globals`.
+
+  The initializers are not cosmetic. The REPL binds every local to `0.0f` on
+  call entry, so a bare `float a, b;` would make a read-before-write `0` in the
+  REPL and undefined in the generated file. `docs/ARCHITECTURE.md:2156` states
+  the contract — **"Behavior parity is required, not just syntactic
+  round-trip"** — and undefined behavior is precisely what the REPL cannot
+  reproduce, so "match C" is not available as a resolution. [rev 5]
+
+  No expression translation is needed, because locals carry no initializer of
+  their own. (Had they kept one it would route through `repl_eval_expr_to_c`, as
+  the `CMD_VAR_ASSIGN` arm at `export_cmd_writer.c:316` does — `ln` → `logf` and
+  so on. That is the V2 tax noted under Non-goals.)
+- **Import** — lower the generated zero-initializer back to canonical form.
+  [rev 5] On an in-body float declaration, strip a *literal-zero* initializer
+  and reconstruct `float a;`. This keeps the round-trip idempotent — REPL text
+  `float a;` → C `float a = 0.0f;` → REPL text `float a;`, with the second
+  round-trip a fixed point — and avoids the failure mode that sank the
+  alternative: synthesized `a = 0.0f;` *statement* lines reimport as real
   `CMD_VAR_ASSIGN` rows, so each round-trip would grow the body by one row per
   local.
 
   Import is the right place for this because it is already a trusted path that
-  bypasses commit handlers for exactly this class of reason (`parse_snippet_declare`,
-  `import.c:733-736`). Strip **only** the exporter's own generated form; a
-  hand-written `float a = 5;` inside a function body must still hit the
-  preflight rejection, so REPL and file semantics stay identical.
-- **Import probably needs no change — verify before touching it.** [rev 2]
-  Exported function-body lines already reach `import_try_function_body`
-  (`import.c:1779`), which routes through `repl_load_apply_line`
-  (`import.c:1819`), ahead of the predef-stash handlers at `import.c:585`/`589`.
-  Likewise `strip_decl_trailing_comments()`
+  bypasses commit handlers for exactly this class of reason
+  (`parse_snippet_declare`, `import.c:733-736`). Strip **only** the exporter's
+  own generated form; a hand-written `float a = 5;` inside a function body must
+  still hit the Phase 1 preflight rejection, so REPL and file semantics stay
+  identical rather than merely compatible.
+- **What import does *not* need.** Exported function-body lines already reach
+  `import_try_function_body` (`import.c:1779`) → `repl_load_apply_line`
+  (`import.c:1819`), ahead of the predef-stash handlers at
+  `import.c:585`/`589`, so `import_parse_predef_decl_common` (`import.c:509`)
+  should not need tightening — verify with the round-trip test before touching
+  it. Likewise `strip_decl_trailing_comments()`
   (`tests/test_repl_core_examples.c:292`) keys on `static float`, so plain local
-  declarations are already excluded. Write the round-trip test first and change
-  `import_parse_predef_decl_common` (`import.c:509`) only if it actually
-  mis-claims an in-body `float x;`. `parse_snippet_declare` (`import.c:607`) is
-  untouched either way — locals never emit that marker.
+  declarations are already excluded. `parse_snippet_declare` (`import.c:607`) is
+  untouched — locals never emit that marker.
 
 #### Phase 5 — Docs and example conversion
 
@@ -710,8 +770,12 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   a function body produces a *global* at the document top, not a local; plain
   `float x;` at top level still produces a global (regression guard on existing
   behavior)
-- **storage-kind change relocates** [rev 4] — retyping a local decl row as
-  `static float x;` must move the row to the document top, not replace in place
+- **storage-kind conversion** [rev 6] — retyping a local decl row as
+  `static float x;` is *rejected* while the name is referenced, and when
+  unreferenced it relocates to the document top rather than replacing in place.
+  Test both the used and unused cases, in both directions (local→global and
+  global→local), and assert no `CMD_VAR_ASSIGN` is left carrying a stale
+  `var_idx`
 - `float x = 1;` inside a function body is rejected [rev 2]
 - `for(i, 0, n) { float i; }` is rejected by the shadowing rule after hoisting
   [rev 4]
@@ -719,6 +783,10 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   locals; the remaining two must still bind
 - **`repl_compile_split_decl` on a local** keeps `var_idx == REPL_VAR_IDX_LOCAL`
   and the local form
+- **a parameter or loop iterator may still shadow a global** [rev 6] — a
+  regression guard on existing behavior, so the new local-shadowing rule is not
+  over-applied: `func0(i)` over an existing global `i`, and `static float i;`
+  added under an existing `for(i, ...)`, must both still be accepted
   [rev 2]
 - delete-guard bounded to the function body; block-batch comment-toggle over a
   body containing a local decl
