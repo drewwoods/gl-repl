@@ -1501,7 +1501,7 @@ $(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS)
 repl_live_demo: FORCE $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
 	ln -sfn $(REPL_LIVE_DEMO_BIN) $@
 
-demos: render3d_demo repl_demo repl_live_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
+demos: render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
 
 .SECONDEXPANSION:
 
