@@ -105,6 +105,74 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
     EM_ASM({
         var wheelCallback = $0;
 
+        /* Wheel damping, mirroring the native freeglut Cocoa backend
+         * (third_party/freeglut/src/cocoa/fg_window_cocoa.m, scrollWheel:).
+         *
+         * glr_ctrl_mousewheel is magnitude-blind: route_wheel applies one
+         * fixed unit (GLR_WHEEL_ZOOM_STEP, or one code-panel line) per call,
+         * so sensitivity is purely the callback rate and all damping must
+         * happen here. Cocoa scales precise (trackpad / Magic Mouse) deltas
+         * by 0.1, accumulates, and emits one callback per whole threshold
+         * unit -- which is why a macOS trackpad gesture, ~60-120 small pixel
+         * events plus a momentum tail, does not fly past the scene natively.
+         *
+         * The DOM has no hasPreciseScrollingDeltas equivalent, and it does
+         * NOT preserve Cocoa's units: Blink reports a real wheel notch on
+         * macOS as deltaMode 0 / deltaY ~100, the same pixel scale as the
+         * trackpad's ~4, where Cocoa would report a non-precise +-1. So the
+         * precise/discrete split has to be inferred per event -- gating on
+         * navigator.platform alone would scale a genuine notch to 10 ticks. */
+        var GLR_WHEEL_NOTCH = 1.0;      /* accumulated units per callback */
+        var GLR_WHEEL_PRECISE_SCALE = 0.1;  /* == Cocoa's precise-delta scale */
+        var GLR_WHEEL_LINES_PER_NOTCH = 3.0;
+        var GLR_WHEEL_NOTCH_PAGES = 3.0;    /* deltaMode 2 is unbounded; cap it */
+        var GLR_WHEEL_MAX_TICKS = 8;    /* per event; Cocoa's while() is unbounded */
+        var glrWheelAccum = 0.0;
+
+        /* Apple platforms are the ones whose native backend damps at all:
+         * X11/Win32 freeglut receive discrete notches (button 4/5 presses)
+         * with no accumulator, so matching native there means one tick per
+         * notch -- exactly what the undamped path already did. Keep the
+         * fallback conservative: unknown platform => previous behavior.
+         * userAgentData.platform is the non-deprecated spelling; navigator
+         * .platform still works everywhere and iPadOS reports "MacIntel",
+         * which is fine (touch scroll wants the same momentum damping). */
+        var glrWheelDampen = (function() {
+            var p = "";
+            try {
+                if (navigator.userAgentData && navigator.userAgentData.platform)
+                    p = navigator.userAgentData.platform;
+            } catch (e) {}
+            if (!p) p = navigator.platform || navigator.userAgent || "";
+            p = p.toLowerCase();
+            return p.indexOf("mac") >= 0 || p.indexOf("iphone") >= 0 ||
+                   p.indexOf("ipad") >= 0;
+        })();
+
+        /* Signed tick count for one event, or null if it carries no whole
+         * notch and must go through the accumulator. */
+        function glrWheelDiscreteTicks(event) {
+            var mode = event.deltaMode;
+            var wd;
+            /* Line / page mode is only ever produced by a discrete wheel
+             * (Firefox reports +-3 lines per notch on a real wheel; its
+             * trackpad path uses pixel mode). */
+            if (mode === 1)
+                return event.deltaY / GLR_WHEEL_LINES_PER_NOTCH;
+            if (mode === 2)
+                return event.deltaY * GLR_WHEEL_NOTCH_PAGES;
+            /* Pixel mode: Blink/WebKit normalize a real wheel notch to a
+             * wheelDeltaY that is an exact multiple of 120, while trackpad
+             * events land on arbitrary (often fractional) values. A fast
+             * trackpad flick can hit deltaY 40 -> wheelDeltaY 120 and be
+             * misread as one notch, which under-scrolls that single event
+             * rather than over-scrolling -- the safe direction. */
+            wd = event.wheelDeltaY;
+            if (typeof wd === 'number' && wd !== 0 && wd % 120 === 0)
+                return -wd / 120;
+            return null;
+        }
+
         /* Plain (no Shift/Alt) Ctrl/Cmd+C/X/V: the browser/OS clipboard owns
          * these on web, not JS GLUT's keyboardFunc route (see below and the
          * getASCIIKey override) -- Ctrl+Shift+C (reset camera) and
@@ -310,11 +378,36 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                 event.preventDefault();
             }, true);
             canvas.addEventListener('wheel', function(event) {
+                var p, ticks, dir, emitted;
                 focusCanvas();
                 event.preventDefault();
                 if (event.deltaY === 0) return;
-                var p = canvasCoords(canvas, event);
-                callWheel(event.deltaY < 0 ? 1 : -1, p[0], p[1]);
+                p = canvasCoords(canvas, event);
+
+                /* direction 1 = scroll up; the router inverts it again in
+                 * glr_ctrl_mousewheel (route_wheel(x, y, -direction)). */
+                if (!glrWheelDampen) {
+                    callWheel(event.deltaY < 0 ? 1 : -1, p[0], p[1]);
+                    return;
+                }
+
+                ticks = glrWheelDiscreteTicks(event);
+                if (ticks === null)
+                    glrWheelAccum += event.deltaY * GLR_WHEEL_PRECISE_SCALE;
+                else
+                    glrWheelAccum += ticks * GLR_WHEEL_NOTCH;
+
+                /* Sub-threshold remainder stays buffered instead of firing a
+                 * full tick -- the whole point of the native accumulator. */
+                emitted = 0;
+                while (Math.abs(glrWheelAccum) >= GLR_WHEEL_NOTCH &&
+                       emitted < GLR_WHEEL_MAX_TICKS) {
+                    dir = glrWheelAccum < 0 ? 1 : -1;
+                    callWheel(dir, p[0], p[1]);
+                    glrWheelAccum += dir * GLR_WHEEL_NOTCH;
+                    emitted++;
+                }
+                if (emitted >= GLR_WHEEL_MAX_TICKS) glrWheelAccum = 0.0;
             }, { capture: true, passive: false });
 
             document.addEventListener('keydown', function(event) {
