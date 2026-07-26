@@ -907,8 +907,9 @@ the bitmap-text call.)
 ### Comments
 
 Type `// text` directly to add a comment line. `Ctrl+/` toggles a comment on
-an existing line. A `// @tune` tag on a `float` declaration marks it as a
-tunable knob (see [Tunable Variables](#tunable-variables--tune)).
+an existing line. Special tags can be added to comments on `float` declarations to control their behavior:
+- A `// @tune` tag marks a variable as a tunable knob (see [Tunable Variables](#tunable-variables--tune)).
+- A `// @config` tag marks an assigned variable as a configuration parameter so that the variable panel doesn't dim its row (see [Config Variables](ADVANCED_USAGE.md#config-variables--config)).
 
 ---
 
