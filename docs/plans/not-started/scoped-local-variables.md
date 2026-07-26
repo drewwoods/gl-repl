@@ -1,12 +1,30 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 6 after fourth review)
+## Status — NOT STARTED (2026-07-26, rev 7 after fifth review)
+
+Three corrections, all incorporated below and marked **[rev 7]** where the
+implementation contract changed:
+
+- **Local→global conversion has explicit cross-storage accounting.** The old
+  local row is excluded from its own collision scan but contributes no old-global
+  slot credit and emits no `UNDECLARE`; every converted name needs a fresh
+  predef slot. A full predef table therefore rejects the conversion before any
+  source mutation.
+- **Global→local conversion is removed from V1.** A global declaration lives at
+  document top, so removing `static` while editing that row still selects the
+  global path. Supporting the reverse would require a new move-into-function
+  operation plus predef teardown and slot rebasing.
+- **The guard inventories and shadowing prose agree again.** The no-shadowing
+  table has four directions, the replacement inventory has five routes, and the
+  Non-goals wording is explicitly limited to local declarations.
+
+## Status — rev 6 after fourth review
 
 Three findings; one narrows a rule rather than adding code. Items marked
 **[rev 6]**.
 
-- **Storage-kind conversion is rejected while the name is referenced.**
-  Converting `float x;` ↔ `static float x;` invalidates every compiled
+- **Local→global storage conversion is rejected while the name is referenced.**
+  Converting `float x;` to `static float x;` invalidates every compiled
   assignment to that name — existing rows carry `var_idx ==
   REPL_VAR_IDX_LOCAL`, which after conversion must be a real predef slot.
   Rev 4 treated this as a relocation problem; it is a correctness problem.
@@ -256,16 +274,16 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   behave; genuine block scope would be a V2.
 - No locals outside a function. `float x;` at top level is a global, as today.
 - No writable function parameters or loop variables.
-- No shadowing.
+- No shadowing by local declarations.
 - No local arrays; `A`/`B`/`C` stay global scratch.
 - No `// @tune` / `// @config` on a local — those need a panel slot, so they are
   rejected.
 - No implicit local creation from an unknown assignment target. `tmp = 5;`
   without a declaration still errors "undeclared variable". [rev 4] With
-  shadowing forbidden there is no way to distinguish "I meant a new local" from
-  "I mistyped the global's name", so implicit creation would turn every typo
-  into a silent new variable. Only the *declaration statement* may appear
-  anywhere; the declaration itself stays explicit.
+  shadowing by local declarations forbidden there is no way to distinguish "I
+  meant a new local" from "I mistyped the global's name", so implicit creation
+  would turn every typo into a silent new variable. Only the *declaration
+  statement* may appear anywhere; the declaration itself stays explicit.
 
 ### Representation
 
@@ -365,13 +383,12 @@ checks `ctx->vars` before the predef table.
   `"declared a, b, c"`; have the local path say `"declared local u in blade"`.
   Combined with the canonical text (`float` vs `static float`) that gives two
   independent confirmations of what the author just got.
-- **Storage-kind conversion: reject when the name is referenced.** [rev 6]
-  Retyping a local as `static float x;` (or a global as plain `float x;` from
-  inside a function) is not just a relocation — it invalidates every *compiled*
-  assignment to that name. Existing `x = …` rows carry
-  `var_idx == REPL_VAR_IDX_LOCAL`, and after conversion to a global they must
-  carry the new predef slot instead; leave them stale and the assignments write
-  to a local that no longer exists. The reverse direction is equally broken.
+- **Local→global storage conversion: reject when the name is referenced.**
+  [rev 6, rev 7] Retyping a local as `static float x;` is not just a relocation
+  — it invalidates every *compiled* assignment to that name. Existing `x = …`
+  rows carry `var_idx == REPL_VAR_IDX_LOCAL`, and after conversion to a global
+  they must carry the new predef slot instead; leave them stale and the
+  assignments write to a local that no longer exists.
 
   Two resolutions were possible — atomically reclassify and rebuild every
   assignment, or refuse the edit. **Refuse it**: it matches the shape of the
@@ -389,6 +406,28 @@ checks `ctx->vars` before the predef table.
   When conversion is allowed (unreferenced), the row still has to *move* —
   document top vs. function-body top — so it is a delete-here-and-reinsert, not
   a replace-in-place. [rev 4]
+
+  This is the only storage conversion reachable through normal editing. [rev 7]
+  Storage is chosen from the declaration row's cursor scope: a global row
+  already lives at document top, so removing `static` there still selects the
+  global path. Global→local conversion would require an explicit
+  move-into-function operation plus a predef `UNDECLARE`/slot-rebase
+  transaction; neither is part of V1.
+
+  The allowed local→global case needs **cross-storage validation**, not the
+  ordinary same-kind overwrite accounting. [rev 7]
+
+  - Exclude the declaration row being converted from the global path's "name
+    matches an existing local" scan; other local declarations with that name
+    still reject the conversion.
+  - Treat the old row as a local, never as an old global. It contributes zero to
+    the predef-slot credit in `validate_decl_names`, emits no `UNDECLARE`, and
+    every new global name emits a `DECLARE`. In particular, the capacity check is
+    `predef.count + parsed.count <= MAX_PREDEF_VARS`, with no subtraction for
+    the removed local row.
+  - Keep the reference check storage-aware: an unchanged textual name is still
+    "removed" from local storage and therefore must be unreferenced before the
+    conversion proceeds.
 - New `validate_local_decl_names()` beside `validate_decl_names`
   (`compile.c:693`). Rejects: duplicate-in-decl; any name visible at that point
   per `collect_visible_vars_in()` (param / loop var / outer local); any name in
@@ -461,6 +500,7 @@ existing locals in scope:
 | Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; a capacity overflow (below) |
 | Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; a capacity overflow (below) |
 | Add a global | `repl_compile_float_decl` global path | a name matching any existing local |
+| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function**; a capacity overflow (below) |
 
 **Scope of the no-shadowing rule.** [rev 6] It constrains *local declarations
 only*. A parameter or loop iterator shadowing a **global** remains legal —
@@ -472,7 +512,6 @@ or a new `func0(i)` over an existing global `i`, would be a **behavior change
 outside this feature's scope** and would likely break existing scenes. The four
 directions that *do* need guarding are exactly the ones in the table above,
 all of which involve a local on one side.
-| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function**; a capacity overflow (below) |
 
 **Capacity is a whole-function property, not a per-edit one.** [rev 5] A check
 of the form `params + locals <= MAX_EXPR_VARS` is insufficient in both
@@ -519,12 +558,13 @@ Two corrections to that table from rev 2: [rev 3]
   *every* reference to a local inside its own body, so the delete guard would
   conclude an in-use local is unreferenced and let it be removed. An "own
   declaration" exception does not fix this; the suppression applies to the
-  reference lines, not the declaration. Because shadowing is forbidden, the
-  local variant can be simpler and stricter: a **raw identifier scan over the
-  function body** (via `repl_eval_source_uses_ident`, comment-aware), excluding
-  the range being changed.
-- **Four overwrite paths, and only one shared guard should exist.** [rev 5]
-  Declaration replacement is reachable four ways, and each currently decides for
+  reference lines, not the declaration. Because local declarations cannot
+  shadow another binding, the local variant can be simpler and stricter: a
+  **raw identifier scan over the function body** (via
+  `repl_eval_source_uses_ident`, comment-aware), excluding the range being
+  changed.
+- **Five overwrite paths, and only one shared guard should exist.** [rev 5, rev 6]
+  Declaration replacement is reachable five ways, and each currently decides for
   itself whether to check references:
 
   | Route | Site | Today |
@@ -539,7 +579,7 @@ Two corrections to that table from rev 2: [rev 3]
   slot outlives the row — but a **local's binding exists only as that prologue
   row**, so removing it leaves every assignment to it resolving against nothing.
   Factor one `compile_decl_replacement_is_allowed(ctx, pos, …)` helper and route
-  all four through it, rather than adding a third and fourth copy of the check.
+  all five through it, rather than adding more independent copies of the check.
   `compile_collect_undeclare_for_range` additionally skips
   `REPL_PREDEF_OP_UNDECLARE` for local decls (no slot to release).
 - **Gate the var-assign rebase on both sides being global slots.** [rev 5]
@@ -770,24 +810,25 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   a function body produces a *global* at the document top, not a local; plain
   `float x;` at top level still produces a global (regression guard on existing
   behavior)
-- **storage-kind conversion** [rev 6] — retyping a local decl row as
+- **local→global storage conversion** [rev 6, rev 7] — retyping a local decl row as
   `static float x;` is *rejected* while the name is referenced, and when
   unreferenced it relocates to the document top rather than replacing in place.
-  Test both the used and unused cases, in both directions (local→global and
-  global→local), and assert no `CMD_VAR_ASSIGN` is left carrying a stale
-  `var_idx`
+  Test the used and unused cases and assert no `CMD_VAR_ASSIGN` is left carrying
+  a stale `var_idx`. At `MAX_PREDEF_VARS`, the same conversion must be rejected
+  before source mutation; the removed local contributes no predef-slot credit.
+  If a different function has a same-name local, conversion must still reject —
+  only the source row being converted is exempt from the local-collision scan.
 - `float x = 1;` inside a function body is rejected [rev 2]
 - `for(i, 0, n) { float i; }` is rejected by the shadowing rule after hoisting
   [rev 4]
 - **declaration prologue tolerance** [rev 2] — comment out the first of three
   locals; the remaining two must still bind
 - **`repl_compile_split_decl` on a local** keeps `var_idx == REPL_VAR_IDX_LOCAL`
-  and the local form
+  and the local form [rev 2]
 - **a parameter or loop iterator may still shadow a global** [rev 6] — a
   regression guard on existing behavior, so the new local-shadowing rule is not
   over-applied: `func0(i)` over an existing global `i`, and `static float i;`
   added under an existing `for(i, ...)`, must both still be accepted
-  [rev 2]
 - delete-guard bounded to the function body; block-batch comment-toggle over a
   body containing a local decl
 - export → reimport round-trip preserving the local and its trailing comment
