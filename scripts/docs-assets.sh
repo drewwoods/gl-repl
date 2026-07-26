@@ -106,7 +106,7 @@ PNG_ASSETS=(
     tune-badges motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
     numeric-stepper gl-state-inspector profile-panels
-    sc-parametric-torus sc-bezier sc-orbit-plot sc-lit-cube sc-function-demo
+    sc-parametric-torus sc-bezier sc-orbit-plot sc-gl-repl-logo sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
 
@@ -1287,8 +1287,11 @@ fi
 if want sc-ringed-planet; then
     gif "$SHOW/ringed-planet.gif" 200 2 20 560 --example "Ringed planet (nebula skies)"
 fi
-if want sc-lit-cube; then
-    still "$SHOW/lit-cube.png" 16 --example "gl-repl logo"
+if want sc-gl-repl-logo; then
+    (
+    WARM=60
+    still "$SHOW/gl-repl-logo.png" 16 --example "gl-repl logo"
+    )
 fi
 
 # Particles & effects.

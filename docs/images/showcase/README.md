@@ -30,7 +30,7 @@ scripts/docs-assets.sh --list             # asset names
 | `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
 | `wave-surface.gif` | `sc-wave-surface` | Animated wave surface (analytic normals) |
 | `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) — replaces the retired "Procedural terrain" |
-| `lit-cube.png` | `sc-lit-cube` | Lit cube |
+| `gl-repl-logo.png` | `sc-gl-repl-logo` | gl-repl Logo |
 | `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |
 | `jellyfish.gif` | `sc-jellyfish` | Jellyfish (glDepthMask translucency) |
 | `function-demo.png` | `sc-function-demo` | Function demo (named func) |

@@ -262,12 +262,12 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td width="33%" align="center">
 
-<!-- images/showcase/lit-cube.png
+<!-- images/showcase/gl-repl-logo.png
      Still. The gl-repl logo scene demonstrates lighting + material basics.
      ./gl-repl --example "gl-repl logo" -->
-<img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
+<img src="images/showcase/gl-repl-logo.png" alt="gl-repl Logo" width="100%">
 
-**[Lit cube](../examples/scenes/glr-logo.glr)**
+**[gl-repl Logo](../examples/scenes/glr-logo.glr)**
 <br><sub>lighting + material basics; compare the [rotating cube](../examples/scenes/rotating-cube.glr)</sub>
 
 </td>
