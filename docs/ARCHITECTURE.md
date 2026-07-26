@@ -746,7 +746,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L117) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L116) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -990,7 +990,7 @@ Runtime shape:
   whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
   is captured on the first frame after `start_tour` (deferred so the Tours-menu
   close path is part of the baseline). Left-Arrow restores that baseline, calls
-  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L80) to re-sync derived chrome + export strings,
+  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L79) to re-sync derived chrome + export strings,
   then fast-executes the prefix `[0, target)` via `ps_finish_event_immediate`
   (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
   turn). The baseline is derived-state-free: the flat program, renderer
@@ -1249,7 +1249,7 @@ values through these seams:
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
 - **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) resets core REPL
-  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L65) resets the editor, UI, and peer
+  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L64) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
   initialization but run the idempotent `glr_ctrl_install_app_services()`
@@ -1400,7 +1400,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L176) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L175) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
@@ -1427,7 +1427,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L117) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L116) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
@@ -1930,7 +1930,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L65)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L64)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
