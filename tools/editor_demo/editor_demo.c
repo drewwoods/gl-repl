@@ -49,6 +49,7 @@
 #include "gl_includes.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define DEMO_WINDOW_W 800
@@ -353,6 +354,34 @@ static void demo_special_func(int key, int x, int y) {
     glutPostRedisplay();
 }
 
+/* Capture hook: GLR_DEMO_TEXT=<path> types the file into the document at
+ * startup, so a headless frame grab shows a populated editor instead of an
+ * empty row. It feeds bytes through the demo's OWN dispatcher rather than
+ * writing EditorState directly — the staged document is therefore the result
+ * of the same key path a user drives, which is the property the demo exists
+ * to show. */
+static void demo_stage_text(void) {
+    const char *path = getenv("GLR_DEMO_TEXT");
+    if (!path || !*path) return;
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "editor_demo: GLR_DEMO_TEXT: cannot open %s\n", path);
+        return;
+    }
+    /* Hold back newlines and emit them only once more text follows, so a
+     * trailing newline doesn't leave the cursor on a stray empty row. */
+    int pending_newlines = 0;
+    int c;
+    while ((c = fgetc(f)) != EOF) {
+        if (c == '\n') { pending_newlines++; continue; }
+        if (c == '\r') continue;
+        for (; pending_newlines > 0; pending_newlines--)
+            demo_input_handle_key('\n', 0, 0);
+        demo_input_handle_key((unsigned char)c, 0, 0);
+    }
+    fclose(f);
+}
+
 static int run_demo(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -360,6 +389,7 @@ static int run_demo(int argc, char **argv) {
     glutCreateWindow("editor_demo");
 
     editor_state_reset();
+    demo_stage_text();
 
     glutDisplayFunc(demo_display_func);
     glutReshapeFunc(demo_reshape_func);

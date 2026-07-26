@@ -2,10 +2,10 @@
 #
 #   source scripts/completions/docs-assets.bash
 #
-# Candidates come from the script's own --list, so the GIF_ASSETS/PNG_ASSETS
-# arrays in docs-assets.sh stay the single source of truth and this file cannot
-# drift. --list exits before the magick/ffmpeg probe, so completion works on a
-# machine without the capture tools installed.
+# Candidates come from the script's own --list, so the GIF_ASSETS / PNG_ASSETS /
+# DEMO_ASSETS arrays in docs-assets.sh stay the single source of truth and this
+# file cannot drift. --list exits before the magick/ffmpeg probe, so completion
+# works on a machine without the capture tools installed.
 #
 # Kept to bash 3.2 syntax (the /bin/bash macOS ships).
 
@@ -22,7 +22,7 @@ _docs_assets_complete() {
     esac
 
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=( $(compgen -W '--gifs --pngs --list -j --jobs -h --help' -- "$cur") )
+        COMPREPLY=( $(compgen -W '--gifs --pngs --demos --list -j --jobs -h --help' -- "$cur") )
         return 0
     fi
 
@@ -34,7 +34,7 @@ _docs_assets_complete() {
             skip=0
         else
             case "$w" in
-                --gifs|--pngs) cats="$cats $w" ;;
+                --gifs|--pngs|--demos) cats="$cats $w" ;;
                 -j|--jobs)     skip=1 ;;
                 -*|"")         ;;
                 *)             typed="$typed$w " ;;

@@ -176,6 +176,20 @@ static void keyboard_func(unsigned char key, int x, int y) {
     glutPostRedisplay();
 }
 
+/* Capture hook: GLR_DEMO_OPEN_PICKER=<shape index> opens the picker on that
+ * shape at startup, so a headless frame grab shows the popup without a
+ * synthetic click. Mirrors the app's GLR_OPEN_COLOR_PICKER=<line>. Names stay
+ * demo_*-prefixed: check-color-picker-demo-isolation greps nm for
+ * repl_/editor_/glr_ symbols. */
+static void demo_stage_open_picker(void) {
+    const char *env = getenv("GLR_DEMO_OPEN_PICKER");
+    if (!env || !*env) return;
+    int idx = atoi(env);
+    if (idx < 0 || idx >= SHAPE_COUNT) return;
+    /* Anchor as a click on the shape row would: vertically centered. */
+    color_picker_start(idx, g_window_h / 2);
+}
+
 int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -184,6 +198,7 @@ int main(int argc, char **argv) {
 
     color_picker_state_reset();
     color_picker_install_host(&g_demo_host);
+    demo_stage_open_picker();
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);

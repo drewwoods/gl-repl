@@ -57,8 +57,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${BIN:-$ROOT/build/release/gl-repl}"
+DEMO_BIN_DIR="${DEMO_BIN_DIR:-$ROOT/build/release}"
 OUT="${OUT:-$ROOT/docs/images}"
 SHOW="$OUT/showcase"
+DEMOS="$OUT/demos"
 
 W=1200          # target width/height of every asset's source window
 H=800
@@ -87,9 +89,15 @@ WARM_FADE=90
 WARM_PLAIN=30
 WARM_SPLASH=190  # currently SPLASH_TOTAL_FRAMES = 150 + 36
 
-# Format categories use public asset names, not output filenames, so they flow
+# Categories use public asset names, not output filenames, so they flow
 # through the same want()/parallel dispatch as explicitly named assets. Put
-# every asset in exactly one format category.
+# every asset in exactly one category.
+#
+# GIF_ASSETS and PNG_ASSETS are the two formats captured from the gl-repl
+# binary. DEMO_ASSETS is a third category rather than more PNGs because it is
+# captured from a DIFFERENT set of binaries — the standalone demos under
+# tools/ — so it needs its own build (`make render3d_demo` etc.) and must not
+# be dragged in by --pngs, which only ever needs `make gl-repl`.
 GIF_ASSETS=(
     view-mode-2d clip-plane-sweep xform-guide replay animated-ring
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
@@ -111,7 +119,15 @@ PNG_ASSETS=(
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
 
-ALL_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}")
+# Standalone-demo stills for tools/README.md. One per windowed demo; repl_demo
+# has none because it is headless in every build (no window, no GL context) —
+# its "screenshot" is the --trace transcript quoted in the README.
+DEMO_ASSETS=(
+    demo-render3d demo-repl-live demo-editor
+    demo-variable-panel demo-color-picker demo-cpuprof demo-memprof
+)
+
+ALL_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}" "${DEMO_ASSETS[@]}")
 
 usage() {
     cat <<'EOF'
@@ -125,23 +141,31 @@ GIFs and profile-panels reflect live rendering performance. Regenerate them on
 an otherwise unloaded machine for representative documentation output.
 
 Options:
-  --gifs             Regenerate all GIF assets.
-  --pngs             Regenerate all PNG assets.
+  --gifs             Regenerate all GIF assets (gl-repl).
+  --pngs             Regenerate all PNG assets (gl-repl).
+  --demos            Regenerate the standalone-demo stills (tools/ binaries).
   --list             List selected asset names and exit (all by default).
   -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
   -h, --help         Show this help and exit.
 
 Environment:
   BIN=<path>         gl-repl binary (default: build/release/gl-repl).
+  DEMO_BIN_DIR=<dir> directory holding the demo binaries (default:
+                     build/release). Only the demo-* assets read it.
   OUT=<path>         output directory (default: docs/images).
   WARM=<frames>      warm-up frame override for captures that don't set their
                      own (see the WARM_* block in the script).
 
+The demo-* assets need their own binaries:
+  make render3d_demo repl_live_demo editor_demo variable_panel_demo \
+       color_picker_demo cpuprof_demo memprof_demo
+
 Examples:
   scripts/docs-assets.sh --gifs
   scripts/docs-assets.sh --pngs -j 4
+  scripts/docs-assets.sh --demos
   scripts/docs-assets.sh --list --gifs
-  scripts/docs-assets.sh hero replay
+  scripts/docs-assets.sh hero replay demo-render3d
 EOF
 }
 
@@ -156,6 +180,7 @@ JOBS=1
 ARGS=()
 SELECT_GIFS=0
 SELECT_PNGS=0
+SELECT_DEMOS=0
 LIST=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -163,6 +188,7 @@ while [[ $# -gt 0 ]]; do
         --list) LIST=1; shift ;;
         --gifs) SELECT_GIFS=1; shift ;;
         --pngs) SELECT_PNGS=1; shift ;;
+        --demos) SELECT_DEMOS=1; shift ;;
         -j|--jobs)
             [[ $# -ge 2 ]] || {
                 echo "docs-assets: option '$1' requires a count (try --help)" >&2
@@ -204,6 +230,9 @@ fi
 if [[ "$SELECT_PNGS" -eq 1 ]]; then
     WANTED+=("${PNG_ASSETS[@]}")
 fi
+if [[ "$SELECT_DEMOS" -eq 1 ]]; then
+    WANTED+=("${DEMO_ASSETS[@]}")
+fi
 if [[ ${#ARGS[@]} -gt 0 ]]; then
     WANTED+=("${ARGS[@]}")
 fi
@@ -230,10 +259,18 @@ for tool in magick ffmpeg; do
     command -v "$tool" >/dev/null || {
         echo "docs-assets: '$tool' not found" >&2; exit 1; }
 done
-[[ -x "$BIN" ]] || {
-    echo "docs-assets: gl-repl binary not found at '$BIN'" >&2
-    echo "             build it first: make gl-repl" >&2
-    exit 1; }
+# gl-repl is required only if something outside the demo category was asked
+# for: `--demos` on a tree with no gl-repl build is a legitimate run.
+NEED_GL_REPL=0
+for a in "${WANTED[@]}"; do
+    contains_asset "$a" "${DEMO_ASSETS[@]}" || { NEED_GL_REPL=1; break; }
+done
+if [[ "$NEED_GL_REPL" -eq 1 ]]; then
+    [[ -x "$BIN" ]] || {
+        echo "docs-assets: gl-repl binary not found at '$BIN'" >&2
+        echo "             build it first: make gl-repl" >&2
+        exit 1; }
+fi
 
 # Parallel mode: re-exec ourselves one asset per process via xargs -P.
 # (Portable to the macOS /bin/bash 3.2 era — no `wait -n`.) Each child
@@ -253,7 +290,7 @@ want() {
 
 WORK="$(mktemp -d /tmp/glr-docs-assets.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$OUT" "$SHOW"
+mkdir -p "$OUT" "$SHOW" "$DEMOS"
 
 # render <frames> <aa> <args...> — run one capture into $FRDIR (fresh per
 # call, so renders never collide), always at the 1x WxH window. aa raises the
@@ -340,6 +377,99 @@ one_shot_still() {
             cat "$log" >&2
             exit 1
         fi
+
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        pid=
+    )
+
+    write_png "$ppm" "$out"
+    echo "docs-assets: wrote $out"
+}
+
+# --- Standalone-demo stills ------------------------------------------------
+#
+# The demos are separate binaries, so they do NOT go through render(): they
+# take none of gl-repl's flags (no --window, no --no-audio, no --accum) and
+# each opens at its own compiled-in window size. What they DO share is the
+# backend, so the same FREEGLUT_CAPTURE_* record mode drives them.
+#
+# Frame budget is not a free knob here. render()-style record mode renders
+# exactly N frames and exits, which needs the demo to keep asking for frames:
+#   - render3d / cpuprof / memprof / variable_panel register glutIdleFunc and
+#     repl_live_demo a glutTimerFunc, so any N works;
+#   - editor_demo and color_picker_demo are event-driven (they redisplay only
+#     on input), so ONLY N=1 terminates. N>1 hangs forever waiting for a
+#     frame nobody will request. Their state is static anyway — one frame is
+#     the whole picture.
+#
+# Startup staging uses each demo's own GLR_DEMO_* capture hook (the demo-side
+# equivalents of the app's GLR_OPEN_COLOR_PICKER / GLR_TYPE_KEYS), so a cold
+# frame grab shows the feature rather than an empty window.
+
+# demo_bin <demo> — resolve a demo binary path, or fail with the build line.
+demo_bin() {
+    local p="$DEMO_BIN_DIR/$1"
+    [[ -x "$p" ]] || {
+        echo "docs-assets: demo binary not found at '$p'" >&2
+        echo "             build it first: make $1" >&2
+        return 1; }
+    echo "$p"
+}
+
+# demo_still <out.png> <demo> <frames> [args...] — record <frames> and keep
+# the LAST. Use frames=1 for the event-driven demos (see above).
+demo_still() {
+    local out=$1 demo=$2 frames=$3; shift 3
+    local bin; bin="$(demo_bin "$demo")" || return 1
+    FRDIR="$WORK/frames-$RANDOM$RANDOM"
+    mkdir -p "$FRDIR"
+    FREEGLUT_CAPTURE_FRAMES=$frames FREEGLUT_CAPTURE_FILE="$FRDIR/f" \
+        "$bin" "$@" >/dev/null 2>&1
+    local last
+    last="$(ls "$FRDIR"/f-*.ppm | tail -1)"
+    write_png "$last" "$out"
+    rm -rf "$FRDIR"
+    echo "docs-assets: wrote $out"
+}
+
+# demo_one_shot_still <out.png> <demo> <warm-seconds> [args...] — run at the
+# live interactive cadence for <warm-seconds> of WALL CLOCK, then take one
+# SIGUSR1 snapshot. Record mode can't serve a demo whose content is a function
+# of real elapsed time: it renders as fast as it can, so N frames pass in
+# almost no wall time. memprof is exactly that case — its ring samples every
+# MEMPROF_PUSH_INTERVAL_S (~5 s) of monotonic time, so a record-mode grab
+# always reads "(collecting samples)" no matter how many frames it renders.
+demo_one_shot_still() {
+    local out=$1 demo=$2 warm=$3; shift 3
+    local bin; bin="$(demo_bin "$demo")" || return 1
+    local prefix="$WORK/demo-one-shot" ppm="$WORK/demo-one-shot-0000.ppm"
+    local log="$WORK/demo-one-shot.log"
+    rm -f "$ppm"
+
+    (
+        local pid i
+        trap '[[ -z "${pid:-}" ]] || kill "$pid" 2>/dev/null || true' EXIT
+        FREEGLUT_CAPTURE_FILE="$prefix" "$bin" "$@" >"$log" 2>&1 &
+        pid=$!
+
+        sleep "$warm"
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "docs-assets: $demo exited before one-shot capture" >&2
+            cat "$log" >&2
+            exit 1
+        fi
+        kill -USR1 "$pid"
+
+        i=0
+        while [[ ! -f "$ppm" && $i -lt 100 ]]; do
+            sleep 0.05
+            i=$((i + 1))
+        done
+        [[ -f "$ppm" ]] || {
+            echo "docs-assets: timed out waiting for $demo one-shot" >&2
+            cat "$log" >&2
+            exit 1; }
 
         kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
@@ -1384,6 +1514,68 @@ fi
 if want sc-feature-export-c; then
     # Stand-in: any full-UI shot shows "it's all code in the panel".
     still "$SHOW/feature-export-c.png" 16 --example "Function demo (named func)"
+fi
+
+# --- Standalone demos (tools/README.md) ------------------------------------
+# One still per windowed demo. repl_demo has no entry: it is headless in every
+# build, so there is no frame to grab — tools/README.md quotes its --trace
+# output instead.
+if want demo-render3d; then
+    demo_still "$DEMOS/render3d.png" render3d_demo 60
+fi
+if want demo-repl-live; then
+    # Scene passed as argv (bypassing the INI): the whale is the bundled scene
+    # with the most declared variables, so the slider panel — the thing this
+    # demo composes onto the pipeline — is full rather than showing just `t`.
+    demo_still "$DEMOS/repl-live.png" repl_live_demo 90 \
+        "$ROOT/tools/repl_live_demo/scenes/whale-full-c.c"
+fi
+if want demo-editor; then
+    # Keep every line inside the panel width: this demo's text_panel clips
+    # long rows rather than wrapping them, and a screenshot should not show
+    # a sentence running off the edge.
+    cat > "$WORK/editor-demo.txt" <<'EOF'
+editor_demo -- generic plain-text editing on src/editor.
+
+No REPL, no app shell. This window is EditorState plus
+ui/core/text_panel, driven by the demo's own dispatcher
+in tools/editor_demo/input.c.
+
+Type to insert. Enter splits the row at the cursor;
+backspace at column 0 merges it back into the line above.
+Arrows, Home and End move within the row. Up and Down
+commit the input row and load the neighbouring one.
+
+The File menu above is the demo's own, not the app's
+menu bar. Ctrl+F opens the find bar. Esc quits.
+EOF
+    ( export GLR_DEMO_TEXT="$WORK/editor-demo.txt"
+    # Event-driven demo: exactly one frame, or the capture never terminates.
+    demo_still "$DEMOS/editor.png" editor_demo 1 )
+fi
+if want demo-variable-panel; then
+    demo_still "$DEMOS/variable-panel.png" variable_panel_demo 60
+fi
+if want demo-color-picker; then
+    # Open on the torus (index 2): the picker anchors at the left edge (the
+    # demo's host bridge reports no code panel), so an active shape further
+    # right stays visible next to the popup that is editing it.
+    ( export GLR_DEMO_OPEN_PICKER=2
+    demo_still "$DEMOS/color-picker.png" color_picker_demo 1 )
+fi
+if want demo-cpuprof; then
+    # Live cadence, not record mode: the panel's content IS per-frame timing,
+    # and record mode's per-frame readback would be measured as app time.
+    demo_one_shot_still "$DEMOS/cpuprof.png" cpuprof_demo 5
+fi
+if want demo-memprof; then
+    # 12 s: memprof pushes a ring sample every ~5 s and defers its baseline to
+    # the first push, so this lands after two samples with the staged blocks
+    # allocated between them — the panel shows a real init/delta pair and the
+    # graph a step. Much later and macOS's memory compressor reclaims the
+    # untouched blocks, walking the delta back toward zero.
+    ( export GLR_DEMO_ALLOC=12
+    demo_one_shot_still "$DEMOS/memprof.png" memprof_demo 12 )
 fi
 
 echo "docs-assets: done."

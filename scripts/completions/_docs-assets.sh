@@ -5,10 +5,10 @@
 #   fpath=(.../scripts/completions $fpath)   # before compinit — autoloaded
 #   source .../scripts/completions/_docs-assets.sh   # any time after compinit
 #
-# Candidates come from the script's own --list, so the GIF_ASSETS/PNG_ASSETS
-# arrays in docs-assets.sh stay the single source of truth and this file cannot
-# drift. --list exits before the magick/ffmpeg probe, so completion works on a
-# machine without the capture tools installed.
+# Candidates come from the script's own --list, so the GIF_ASSETS / PNG_ASSETS /
+# DEMO_ASSETS arrays in docs-assets.sh stay the single source of truth and this
+# file cannot drift. --list exits before the magick/ffmpeg probe, so completion
+# works on a machine without the capture tools installed.
 
 _docs_assets() {
     local context state state_descr line
@@ -16,11 +16,12 @@ _docs_assets() {
 
     # A category flag already on the line narrows the candidate list.
     local -a cats
-    cats=( ${(M)words[2,-1]:#(--gifs|--pngs)} )
+    cats=( ${(M)words[2,-1]:#(--gifs|--pngs|--demos)} )
 
     _arguments -s -S \
         '--gifs[regenerate all GIF assets]' \
         '--pngs[regenerate all PNG assets]' \
+        '--demos[regenerate the standalone-demo stills]' \
         '--list[list selected asset names and exit]' \
         '(-j --jobs)'{-j+,--jobs}'[regenerate up to N assets in parallel]:count:' \
         '(-h --help)'{-h,--help}'[show help and exit]' \

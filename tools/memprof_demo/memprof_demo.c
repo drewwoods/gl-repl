@@ -65,9 +65,49 @@ static void free_all(void) {
     while (g_block_count > 0) free_block();
 }
 
+/* Capture hook: GLR_DEMO_ALLOC=<n> allocates n blocks for a headless frame
+ * grab, standing in for n presses of 'a'. It waits for the first sample push
+ * because memprof defers its baseline to that moment (see memprof_init_at):
+ * allocating before it would fold the blocks INTO the baseline and report a
+ * delta of zero. Firing just after it instead yields a real init/delta pair
+ * and a visible step in the graph. Names stay demo_*-prefixed:
+ * check-memprof-demo-isolation greps nm for repl_/editor_/glr_ symbols. */
+static int g_demo_stage_blocks = 0;   /* 0 = hook off */
+static int g_demo_stage_done   = 0;
+
+static void demo_stage_alloc_init(void) {
+    const char *env = getenv("GLR_DEMO_ALLOC");
+    if (env && *env) g_demo_stage_blocks = atoi(env);
+}
+
+static void demo_stage_alloc_tick(void) {
+    if (g_demo_stage_done || g_demo_stage_blocks <= 0) return;
+    if (memprof_history_count() <= 0) return;   /* baseline not captured yet */
+    for (int i = 0; i < g_demo_stage_blocks; i++) alloc_block();
+    g_demo_stage_done = 1;
+}
+
+/* Keep the staged blocks in the resident working set. A page written once and
+ * never touched again is a candidate for eviction (on macOS the memory
+ * compressor takes it within a few seconds), which walks RSS — the number the
+ * panel plots — back to the baseline and erases the step this hook exists to
+ * stage. One byte per page per frame is ~12k writes for the default 12
+ * blocks. Runs only for hook-staged blocks: interactive 'a' presses keep
+ * their untouched-allocation behaviour. */
+static void demo_stage_keep_warm(void) {
+    if (!g_demo_stage_done) return;
+    for (int b = 0; b < g_block_count; b++) {
+        unsigned char *p = g_blocks[b];
+        size_t off;
+        for (off = 0; off < (size_t)BLOCK_BYTES; off += 4096) p[off]++;
+    }
+}
+
 /* --- GLUT callbacks ------------------------------------------------------ */
 static void display_func(void) {
     memprof_frame_tick();           /* real monotonic clock → truthful X axis */
+    demo_stage_alloc_tick();
+    demo_stage_keep_warm();
 
     glClearColor(0.09f, 0.10f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -141,6 +181,7 @@ int main(int argc, char **argv) {
     glutCreateWindow("memprof_demo");
 
     memprof_init();
+    demo_stage_alloc_init();
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
