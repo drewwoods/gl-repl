@@ -146,7 +146,14 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
     int *out_visible_lines);
-void glr_ctrl_set_accum(int enabled);
+/* Arm or disarm the accumulation-buffer feature gate (GlrRenderState.use_accum;
+ * the effect selector is separate — see CFG_DEFAULT_ACCUM_EFFECT). Takes the
+ * GLR_CLI_ACCUM_* tri-state: 1 forces on, 0 forces off, and a negative value
+ * (AUTO, the default) leaves the decision to the GL-init renderer probe, which
+ * disables accum on renderers that emulate it on the CPU (Mesa). A context
+ * with no accumulation buffer at all (accum_bits == 0) disables it regardless.
+ * Call after glr_ctrl_init_gl() so both probes have run. */
+void glr_ctrl_set_accum(int mode);
 
 /* NULL when the GL context can read the depth buffer back (Depth view
  * works); otherwise a short status-bar reason why it can't — WebGL-specific

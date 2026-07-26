@@ -84,7 +84,8 @@ static void test_defaults(void) {
     ASSERT_INT("flat-histogram off", o.dump_flat_histogram, 0);
     ASSERT_INT("dump-state-layout off", o.dump_state_layout, 0);
     ASSERT_INT("audio on by default", o.no_audio, 0);
-    ASSERT_INT("accum on by default", o.use_accum, 1);
+    /* Neither --accum nor --no-accum: the renderer probe in glr_ctrl decides. */
+    ASSERT_INT("accum auto by default", o.use_accum, GLR_CLI_ACCUM_AUTO);
     ASSERT_INT("detailed-prof off", o.detailed_prof, 0);
     ASSERT_INT("default window width", o.window_w, 1200);
     ASSERT_INT("default window height", o.window_h, 800);
@@ -112,7 +113,21 @@ static void test_boolean_flags(void) {
 
     char *av1[] = { "gl-repl", "--no-accum", NULL };
     ASSERT_INT("--no-accum proceeds", parse_v(&o, &code, av1), 1);
-    ASSERT_INT("--no-accum clears accum", o.use_accum, 0);
+    ASSERT_INT("--no-accum clears accum", o.use_accum, GLR_CLI_ACCUM_OFF);
+
+    /* --accum is the force-on override for renderers the auto probe would
+     * otherwise rule out (Mesa's software accumulation buffer). */
+    char *av1b[] = { "gl-repl", "--accum", NULL };
+    ASSERT_INT("--accum proceeds", parse_v(&o, &code, av1b), 1);
+    ASSERT_INT("--accum forces accum on", o.use_accum, GLR_CLI_ACCUM_ON);
+
+    /* Last flag wins in either order — plain left-to-right assignment. */
+    char *av1c[] = { "gl-repl", "--accum", "--no-accum", NULL };
+    ASSERT_INT("--accum then --no-accum proceeds", parse_v(&o, &code, av1c), 1);
+    ASSERT_INT("last accum flag wins (off)", o.use_accum, GLR_CLI_ACCUM_OFF);
+    char *av1d[] = { "gl-repl", "--no-accum", "--accum", NULL };
+    ASSERT_INT("--no-accum then --accum proceeds", parse_v(&o, &code, av1d), 1);
+    ASSERT_INT("last accum flag wins (on)", o.use_accum, GLR_CLI_ACCUM_ON);
 
     char *av2[] = { "gl-repl", "--no-audio", NULL };
     ASSERT_INT("--no-audio proceeds", parse_v(&o, &code, av2), 1);
@@ -334,7 +349,7 @@ static void test_combined_arguments(void) {
     ASSERT_INT("combined: window height", o.window_h, 600);
     ASSERT_STR("combined: time", o.time_arg, "3");
     /* Untouched fields keep their defaults. */
-    ASSERT_INT("combined: accum still default", o.use_accum, 1);
+    ASSERT_INT("combined: accum still default", o.use_accum, GLR_CLI_ACCUM_AUTO);
     ASSERT_INT("combined: no tour", o.tour_index, -1);
 }
 

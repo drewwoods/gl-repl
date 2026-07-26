@@ -263,7 +263,12 @@ int main(int argc, char **argv) {
     glr_init_trace_detail("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL |
                         GLUT_MULTISAMPLE |
-                        (opts.use_accum ? GLUT_ACCUM : 0));
+                        /* AUTO still asks for the accum visual — whether the
+                         * feature is armed is decided post-init from the
+                         * renderer string (glr_ctrl_set_accum), which needs a
+                         * live context and so cannot run this early. Only an
+                         * explicit --no-accum drops the request. */
+                        (opts.use_accum != GLR_CLI_ACCUM_OFF ? GLUT_ACCUM : 0));
     glutInitWindowSize(opts.window_w, opts.window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
     glr_init_trace("window created");

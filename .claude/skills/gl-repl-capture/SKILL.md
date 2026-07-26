@@ -22,7 +22,10 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 ./gl-repl --time 5         # Initial animation t (also GLR_TIME; --time wins)
 ./gl-repl --example 9 --export-ply out.ply [--export-ply-srgb]
 ./gl-repl --dump-code      # Print loaded buffer; --dump-* family honors --example
-./gl-repl --noaccum        # Disable accumulation buffer (AA + blur)
+./gl-repl --no-accum       # Disable accumulation buffer (AA + blur)
+./gl-repl --accum          # Force it on — required under OSMesa, where the
+                           # auto probe disables software-emulated accum
+
 ./gl-repl --detailed-prof  # Fine-grained init-trace phases (also GLR_DETAILED_PROF)
 ```
 

@@ -205,7 +205,11 @@ run_fail() {
 	kill "$ffpid" 2>/dev/null || true
 	exit 1
 }
-set -- --no-audio --window "$window"
+# --accum: same reasoning as record-gif.sh. This script defaults to the native
+# build (unaffected by the auto probe on a hardware renderer), but --bin can
+# point it at an OSMesa build, where the probe would otherwise drop the accum
+# passes a scene header asked for.
+set -- --no-audio --accum --window "$window"
 [ -n "$example" ] && set -- "$@" --example "$example"
 [ -n "$t0" ]      && set -- "$@" --time "$t0"
 env GLR_TICK_PER_FRAME=1 \

@@ -263,12 +263,16 @@ render() {
     local frames=$1 aa=$2; shift 2
     FRDIR="$WORK/frames-$RANDOM$RANDOM"
     mkdir -p "$FRDIR"
-    local aa_env=()
-    [[ "$aa" != 0 ]] && aa_env=("GLR_ACCUM_PASSES=$aa")
+    local aa_env=() aa_flag=()
+    # --accum overrides the auto probe, which disables accum on renderers
+    # that emulate it in software: an OSMesa capture build is Mesa by
+    # construction, and a still is worth the CPU accumulate.
+    [[ "$aa" != 0 ]] && { aa_env=("GLR_ACCUM_PASSES=$aa"); aa_flag=("--accum"); }
     # ${arr[@]:+...} keeps an empty array safe under `set -u` (bash 3.2).
     env ${aa_env[@]:+"${aa_env[@]}"} \
         FREEGLUT_CAPTURE_FRAMES=$frames FREEGLUT_CAPTURE_FILE="$FRDIR/f" \
         "$BIN" "$@" --window ${W}x${H} --no-audio \
+        ${aa_flag[@]:+"${aa_flag[@]}"} \
         >/dev/null 2>&1
 }
 

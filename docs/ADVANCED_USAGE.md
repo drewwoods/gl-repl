@@ -10,7 +10,7 @@ the language, the panels), see the [User Guide](USER_GUIDE.md).
 ```
 gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
         [--time secs] [--window WxH]
-        [--export-ply out.ply [--export-ply-srgb]] [--no-accum]
+        [--export-ply out.ply [--export-ply-srgb]] [--accum | --no-accum]
         [--assets dir] [--examples-dir dir] [--no-audio]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
@@ -35,6 +35,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. Needs a display. |
 | `--export-ply-srgb` | With the above, decode vertex colors sRGB → linear for color-managed viewers. |
 | `--no-accum` | Disable the accumulation buffer (anti-aliasing + motion blur). |
+| `--accum` | Force the accumulation buffer on. Without either flag the feature auto-disables on renderers that emulate `glAccum` on the CPU — anything reporting Mesa / llvmpipe / softpipe / swrast, where each pass costs a full scene re-render *plus* a host-side read-add-write of the color buffer. Hardware renderers and the web build (gl4es accumulates in a real FBO — see [`packaging/web/patches/gl4es-accum-fbo.patch`](../packaging/web/patches/gl4es-accum-fbo.patch)) stay on by default. Needed for accum-AA captures under the headless OSMesa build, which is Mesa by construction. |
 | `--assets` *dir* | Scan *dir* for `*.mp3` instead of `./assets`. Beats `GLR_ASSETS_DIR`. |
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
 | `--dump-code` | Load the session and print the editor buffer to stdout, then exit. |

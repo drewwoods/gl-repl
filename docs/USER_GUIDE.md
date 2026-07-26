@@ -1465,7 +1465,9 @@ where the rig sits.
   - **Blur Cam** — blurs camera motion only; falls back to AA when still.
   - Passes: 1/2/4/8/12/16. The status bar shows the active mode
     (`AA 1x`, `Blur 16x`). Blur is expensive — every pass is a full scene
-    render. `--noaccum` disables the accumulation buffer entirely.
+    render. `--no-accum` disables the accumulation buffer entirely;
+    `--accum` forces it on where it would otherwise auto-disable (Mesa
+    emulates the accumulation buffer on the CPU).
 
   ![Motion blur on a spinning cube (Blur 16x)](images/motion-blur.png)
 
@@ -1873,7 +1875,8 @@ runs.
 --export-ply-srgb      decode vertex colors sRGB -> linear during PLY export
 --assets <dir>         scan this dir for *.mp3 (also GLR_ASSETS_DIR)
 --no-audio             skip audio init entirely
---noaccum              disable the accumulation buffer (AA + motion blur)
+--no-accum             disable the accumulation buffer (AA + motion blur)
+--accum                force it on (default: off on software-accum renderers)
 --dump-code            print the loaded buffer to stdout
 --flat-histogram       print per-function / per-line flat-command costs
                        (where the 8192 budget goes; works with --example)

@@ -184,7 +184,9 @@ static const char *const k_lang_sections_tail[] = {
     "  Effect: Off / AA / Blur / Blur Cam (motion blur).",
     "  AA on by default; Blur is opt-in. Blur interpolates",
     "  camera motion, else the animation time t; Blur Cam",
-    "  blurs only camera motion (else AA). --noaccum disables.",
+    "  blurs only camera motion (else AA). --no-accum",
+    "  disables; --accum forces it on where a software",
+    "  accumulation buffer (Mesa) auto-disables it.",
     "  Passes (samples): 1/2/4/8/12/16. Status: AA 2x / Blur 8x.",
     "",
     NULL

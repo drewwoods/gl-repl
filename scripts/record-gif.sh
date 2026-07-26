@@ -120,15 +120,21 @@ echo "record-gif: example=$example duration=${duration}s fps=$fps frames=$frames
 
 # Record: the backend captures every frame and exit(0)s after $frames. Branch on
 # --time rather than an array so it stays portable to old bash under `set -u`.
+#
+# --accum overrides gl-repl's auto probe, which disables accum effects on
+# renderers that emulate them in software. This script drives an OSMesa build,
+# which is Mesa by construction, so without the flag a scene that asks for
+# multi-pass accum in its header (e.g. glr-logo's `@cfg accum_passes = 2`)
+# would record without it. Offline recording can afford the CPU accumulate.
 run_fail() { echo "record-gif: gl-repl exited non-zero; log:" >&2; cat "$tmp/run.log" >&2; exit 1; }
 if [ -n "$t0" ]; then
 	GLR_TICK_PER_FRAME=1 \
 		FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
-		"$bin" --example "$example" --time "$t0" --no-audio >"$tmp/run.log" 2>&1 || run_fail
+		"$bin" --example "$example" --time "$t0" --no-audio --accum >"$tmp/run.log" 2>&1 || run_fail
 else
 	GLR_TICK_PER_FRAME=1 \
 		FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
-		"$bin" --example "$example" --no-audio >"$tmp/run.log" 2>&1 || run_fail
+		"$bin" --example "$example" --no-audio --accum >"$tmp/run.log" 2>&1 || run_fail
 fi
 
 got="$(ls "$tmp"/f-*.ppm 2>/dev/null | wc -l | tr -d ' ')"

@@ -23,6 +23,8 @@ static void print_usage(const char *prog) {
             "\n"
             "Options:\n"
             "  -h, --help   Show this help text and exit\n"
+            "  --accum      Force accumulation-buffer effects on even when the\n"
+            "               renderer emulates them in software (Mesa)\n"
             "  --no-accum   Disable accumulation buffer antialiasing\n"
             "  --no-audio   Start without audio (disables music entirely)\n"
             "  --assets <dir>  Music directory to scan for *.mp3 instead of\n"
@@ -195,7 +197,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     int list_tours_flag = 0;
 
     memset(out, 0, sizeof(*out));
-    out->use_accum = 1;
+    out->use_accum = GLR_CLI_ACCUM_AUTO;
     out->window_w = 1200;
     out->window_h = 800;
     out->example_index = -1;
@@ -207,7 +209,9 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             *exit_code = 0;
             return 0;
         } else if (strcmp(argv[i], "--no-accum") == 0)
-            out->use_accum = 0;
+            out->use_accum = GLR_CLI_ACCUM_OFF;
+        else if (strcmp(argv[i], "--accum") == 0)
+            out->use_accum = GLR_CLI_ACCUM_ON;
         else if (strcmp(argv[i], "--no-audio") == 0)
             out->no_audio = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)

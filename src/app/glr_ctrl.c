@@ -1200,6 +1200,68 @@ static int g_depth_readback_supported = 1;
 static int g_stencil_readback_supported = 1;
 static int g_stencil_clear_warning_active = 0;
 
+/* "The context has an accumulation buffer, but it is a CPU emulation" —
+ * probed once in glr_ctrl_init_gl from the renderer string, consumed by
+ * glr_ctrl_set_accum's AUTO mode. Distinct from accum_bits == 0 (no accum
+ * buffer at all): Mesa reports a real width and glAccum genuinely works,
+ * it is just implemented by mapping the color buffer and adding with the
+ * CPU, which costs more per pass than the extra scene render it is
+ * supposed to be smoothing. 0 until detection runs, so paths that never
+ * init GL (tests, render3d_demo, dump-only runs) keep accum armed. */
+static int g_accum_is_software = 0;
+
+/* GL_RENDERER, or a placeholder when the context refuses the query — only
+ * ever used for human-readable diagnostics. */
+static const char *glr_ctrl_gl_renderer_name(void) {
+    const char *renderer = (const char *)glGetString(GL_RENDERER);
+    return (renderer && renderer[0]) ? renderer : "this renderer";
+}
+
+/* Does this context accumulate on the CPU? Mesa is the whole story in
+ * practice: its state tracker implements glAccum by mapping the color
+ * buffer and doing the arithmetic host-side, on every driver it ships —
+ * hardware Intel/AMD/nouveau included, not just llvmpipe/softpipe/swrast.
+ * So the vendor/renderer string, not a capability bit, is the signal. */
+#if defined(__EMSCRIPTEN__)
+/* The web build is deliberately exempt: gl4es has no accumulation buffer to
+ * emulate badly — packaging/web/patches/gl4es-accum-fbo.patch implements
+ * glAccum against a real GPU-side FBO, and the app picks that up through the
+ * accum_bits probe — while the browser's underlying WebGL renderer string
+ * often names Mesa and would misfire the test below. */
+static int glr_ctrl_accum_is_software_renderer(void) { return 0; }
+#else
+/* Case-insensitive substring test (no strcasestr: POSIX-only, and the
+ * project builds -std=c99). */
+static int glr_ctrl_str_contains_ci(const char *hay, const char *needle) {
+    size_t nl;
+    if (!hay || !needle) return 0;
+    nl = strlen(needle);
+    if (nl == 0) return 0;
+    for (; *hay; hay++) {
+        size_t k = 0;
+        while (hay[k] && needle[k] &&
+               tolower((unsigned char)hay[k]) == tolower((unsigned char)needle[k]))
+            k++;
+        if (k == nl) return 1;
+    }
+    return 0;
+}
+
+static int glr_ctrl_accum_is_software_renderer(void) {
+    const char *renderer = (const char *)glGetString(GL_RENDERER);
+    const char *vendor = (const char *)glGetString(GL_VENDOR);
+    static const char *const k_software[] = {
+        "mesa", "llvmpipe", "softpipe", "swrast", "lavapipe"
+    };
+    for (size_t i = 0; i < ARRAY_LEN(k_software); i++) {
+        if (glr_ctrl_str_contains_ci(renderer, k_software[i]) ||
+            glr_ctrl_str_contains_ci(vendor, k_software[i]))
+            return 1;
+    }
+    return 0;
+}
+#endif
+
 void glr_ctrl_set_depth_readback_supported_for_test(int supported) {
     g_depth_readback_supported = supported ? 1 : 0;
 }
@@ -3363,6 +3425,10 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_ACCUM_RED_BITS, &accum_bits);
     (void)glGetError(); /* clear the GL_INVALID_ENUM a GLES context raises */
     glr_state_render_mut()->accum_bits = (int)accum_bits;
+    g_accum_is_software = glr_ctrl_accum_is_software_renderer();
+    glr_ctrl_init_log("accum buffer: %d bits%s", (int)accum_bits,
+                      (accum_bits > 0 && g_accum_is_software)
+                          ? " (software emulation)" : "");
 
     /* Requesting GLUT_STENCIL is not a promise that a native visual actually
      * has stencil planes. Keep the queried width so the stencil visualizer can
@@ -3480,13 +3546,26 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
     }
 }
 
-void glr_ctrl_set_accum(int enabled) {
+void glr_ctrl_set_accum(int mode) {
     GlrRenderState *render = glr_state_render_mut();
+    /* GLR_CLI_ACCUM_AUTO (-1): no explicit --accum / --no-accum, so let the
+     * renderer decide. A software accumulation buffer (Mesa) satisfies every
+     * capability probe and still makes the effect a net loss — each pass is a
+     * full-scene re-render plus a CPU-side read/add/write of the color buffer
+     * — so AUTO leaves it off there and says how to override. */
+    int enabled = (mode != 0);
+    if (mode < 0 && g_accum_is_software) {
+        fprintf(stderr, "accum: %s emulates the accumulation buffer in "
+                        "software; accum effects disabled (--accum forces "
+                        "them on)\n",
+                glr_ctrl_gl_renderer_name());
+        enabled = 0;
+    }
     /* accum_bits == 0 means glr_ctrl_init_gl probed the context and found
-     * no accumulation buffer (the Emscripten/WebGL case): each accum pass
-     * would re-render the scene at full cost while glAccum stays a no-op,
-     * so force the feature off. -1 (never probed: tests, dump-only paths)
-     * leaves the caller's choice untouched. */
+     * no accumulation buffer at all: each accum pass would re-render the
+     * scene at full cost while glAccum stays a no-op, so force the feature
+     * off — this one overrides even an explicit --accum. -1 (never probed:
+     * tests, dump-only paths) leaves the caller's choice untouched. */
     if (enabled && render->accum_bits == 0) {
         fprintf(stderr, "accum: GL context has no accumulation buffer; "
                         "accum effects disabled\n");

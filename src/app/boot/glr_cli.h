@@ -17,6 +17,15 @@
 extern "C" {
 #endif
 
+/* use_accum tri-state. AUTO is the default: main() still asks GLUT for an
+ * accumulation visual, but the controller decides at GL-init time whether to
+ * arm the feature, from the renderer string (Mesa emulates glAccum on the
+ * CPU, so a non-zero GL_ACCUM_RED_BITS there buys nothing but frame time).
+ * ON / OFF are the explicit --accum / --no-accum overrides. */
+#define GLR_CLI_ACCUM_OFF   0
+#define GLR_CLI_ACCUM_ON    1
+#define GLR_CLI_ACCUM_AUTO  (-1)
+
 /* Parsed command-line state. Pointer fields alias into argv (valid for the
  * lifetime of main); the resolved *_index fields are -1 when the matching
  * argument was absent. */
@@ -34,7 +43,7 @@ typedef struct GlrCliOptions {
     int dump_state_layout;         /* --dump-state-layout                       */
 
     int no_audio;                  /* --no-audio                                */
-    int use_accum;                 /* !--no-accum (default 1)                   */
+    int use_accum;                 /* --accum / --no-accum / AUTO (default)     */
     int detailed_prof;             /* --detailed-prof (also GLR_DETAILED_PROF)  */
 
     int window_w;                  /* --window WxH (default 1200)               */
