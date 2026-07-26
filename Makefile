@@ -952,6 +952,14 @@ test_glr_frame_pacer_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_frame_pacer.o \
 test_glr_frame_pacer_LDLIBS = -lm
 test_glr_frame_pacer_RUN ?= $(BINDIR)/test_glr_frame_pacer
 
+# Splash rendering relies only on its theme table and the GL-stub counters.
+test_splash_OBJS = $(OBJDIR)/$(TEST_DIR)/test_splash.o \
+	$(OBJDIR)/src/app/boot/splash.o \
+	$(OBJDIR)/src/ui/core/theme.o \
+	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+test_splash_LDLIBS = -lm
+test_splash_RUN ?= $(BINDIR)/test_splash
+
 test_render3d_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_guides.o \
 	$(OBJDIR)/src/render3d/overlays.o \
 	$(OBJDIR)/src/render3d/guides/geometry_guides.o \
