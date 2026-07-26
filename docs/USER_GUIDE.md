@@ -50,6 +50,7 @@ Run a fresh session, or reload earlier work:
 ./gl-repl                  # fresh session
 ./gl-repl output.c         # reload a saved scene
 ./gl-repl workspace/       # load every *.c in a directory as scenes
+printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 ```
 
 ### The window
@@ -1860,7 +1861,7 @@ runs.
 ## Command-Line Options
 
 ```
-./gl-repl [file.c | workspace-dir]   load a saved scene or a directory of scenes
+./gl-repl [file.c | workspace-dir | -]   load a file, directory, or stdin
 
 --example <name|idx>   start on a built-in example (case-insensitive name or 1-based index)
 --examples-dir <dir>   load examples from <dir>/catalog.ini and <dir>/scenes/

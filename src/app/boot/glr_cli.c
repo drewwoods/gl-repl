@@ -19,7 +19,7 @@ static void print_usage(const char *prog) {
     const char *name = (prog && prog[0]) ? prog : "gl-repl";
 
     fprintf(stdout,
-            "Usage: %s [options] [input.c | workspace]\n"
+            "Usage: %s [options] [input.c | workspace | -]\n"
             "\n"
             "Options:\n"
             "  -h, --help   Show this help text and exit\n"
@@ -95,7 +95,8 @@ static void print_usage(const char *prog) {
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
-            "  workspace/   Optional directory: load every *.c as a user scene\n",
+            "  workspace/   Optional directory: load every *.c as a user scene\n"
+            "  -            Read a saved session or snippet from stdin\n",
             name);
 }
 

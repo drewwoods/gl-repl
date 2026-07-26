@@ -21,7 +21,7 @@ extern "C" {
  * lifetime of main); the resolved *_index fields are -1 when the matching
  * argument was absent. */
 typedef struct GlrCliOptions {
-    const char *input_file;        /* positional saved session / workspace dir */
+    const char *input_file;        /* positional file/workspace, or "-" stdin */
     const char *examples_dir;      /* --examples-dir DIR (loaded during parse)  */
     const char *assets_override;   /* --assets DIR (else GLR_ASSETS_DIR)        */
     const char *time_arg;          /* --time SECS (else GLR_TIME)               */

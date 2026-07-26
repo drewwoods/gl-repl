@@ -88,6 +88,7 @@ make gl-repl
 ./gl-repl                  # fresh session — type GL commands, ; after each
 ./gl-repl --example "Torus knot (animated)"  # or start from a built-in (F12 cycles all 38)
 ./gl-repl output.c         # reload a saved session
+printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 ```
 
 Press **F1** in-app for the full command and key reference. There are

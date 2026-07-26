@@ -2606,19 +2606,13 @@ int repl_export_load_from_lines(const char *const *lines,
                               0, 0, truncated_line, &acc);
 }
 
-int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+/* Parse an already-open seekable stream and take ownership of it. Both named
+ * files and stdin's anonymous spool land here, so marker scans, long-line
+ * handling, diagnostics, and close-error behavior stay identical. */
+static int import_load_seekable_stream(FILE *f, const char *source_name,
+                                       ReplImportResult *result) {
     ImportState state;
     import_begin_load(&state, result);
-
-    FILE *f = fopen(filename, "r");
-    if (!f) {
-        char msg[REPL_STATUS_TEXT_MAX];
-        snprintf(msg, sizeof(msg), "Error: cannot open %s: %s",
-                 filename && filename[0] ? filename : "<file>", strerror(errno));
-        repl_set_status_error(msg);
-        fprintf(stderr, "%s\n", msg);
-        return 0;
-    }
     state.allow_raw_scene = !import_file_has_snippet_marker(f);
     state.has_func_body_markers = import_file_has_func_body_marker(f);
 
@@ -2650,7 +2644,82 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
      * surface I/O failures by itself. Check ferror before closing. */
     int had_read_err = ferror(f);
     int close_failed = fclose(f) != 0;
-    return import_finish_load(&state, result, filename,
+    return import_finish_load(&state, result, source_name,
                               had_read_err, close_failed, truncated_line,
                               &acc);
+}
+
+int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot open %s: %s",
+                 filename && filename[0] ? filename : "<file>", strerror(errno));
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
+        return 0;
+    }
+    return import_load_seekable_stream(f, filename, result);
+}
+
+int repl_export_load_from_stream(FILE *input, const char *source_name,
+                                 ReplImportResult *result) {
+    const char *label = source_name && source_name[0] ? source_name : "<stream>";
+    unsigned char buf[4096];
+    size_t nread;
+    int copy_failed = 0;
+    int saved_errno = 0;
+
+    if (!input) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot read %s: invalid stream", label);
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
+        return 0;
+    }
+
+    /* The importer makes two marker-detection passes before its parsing pass.
+     * Pipes cannot rewind, so spool once to an ISO C anonymous temporary file.
+     * tmpfile() is removed automatically when closed, including on failures. */
+    FILE *spool = tmpfile();
+    if (!spool) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot buffer %s: %s",
+                 label, strerror(errno));
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
+        return 0;
+    }
+
+    while ((nread = fread(buf, 1, sizeof(buf), input)) > 0) {
+        if (fwrite(buf, 1, nread, spool) != nread) {
+            copy_failed = 1;
+            saved_errno = errno;
+            break;
+        }
+    }
+    if (!copy_failed && ferror(input)) {
+        copy_failed = 1;
+        saved_errno = errno;
+    }
+    if (!copy_failed && fflush(spool) != 0) {
+        copy_failed = 1;
+        saved_errno = errno;
+    }
+    if (!copy_failed && fseek(spool, 0, SEEK_SET) != 0) {
+        copy_failed = 1;
+        saved_errno = errno;
+    }
+
+    if (copy_failed) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        fclose(spool);
+        snprintf(msg, sizeof(msg), "Error: cannot buffer %s: %s", label,
+                 saved_errno ? strerror(saved_errno) : "I/O error");
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
+        return 0;
+    }
+
+    return import_load_seekable_stream(spool, label, result);
 }

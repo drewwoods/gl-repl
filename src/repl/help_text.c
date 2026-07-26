@@ -172,6 +172,7 @@ static const char *const k_lang_sections_tail[] = {
     "Save / Load:",
     "  Click Save C or use the File > Save Scene shortcut to export output.c",
     "  Reload a saved file:  ./gl-repl output.c",
+    "  Read a snippet from stdin:  printf 'glutSolidCube(1);\\n' | ./gl-repl -",
     "  (Commands between // Snippet start/end are imported)",
     "",
     "Time variable 't':",

@@ -11,6 +11,7 @@
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -44,12 +45,25 @@ static int activate_empty_transient_after_failed_import(void) {
     return repl_state_document_count();
 }
 
+static int activate_initial_document(const ReplImportResult *import_result) {
+    repl_scenes_activate_loaded_document_slot(import_result->scene_name);
+    scroll_to_display_function();
+    return repl_state_document_count();
+}
+
 int repl_load_initial_commands(const char *import_file) {
     /* Returns the post-load cursor target. Caller (controller above
      * the beta boundary) applies via editor_state_edit_line_set
      * (implemented in phase 3.6.4; see the edit-line-ownership
      * plan doc). */
     if (import_file) {
+        if (strcmp(import_file, "-") == 0) {
+            ReplImportResult import_result;
+            if (repl_export_load_from_stream(stdin, "<stdin>", &import_result))
+                return activate_initial_document(&import_result);
+            return activate_empty_transient_after_failed_import();
+        }
+
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {
             if (repl_load_workspace(import_file) > 0) {
@@ -65,11 +79,8 @@ int repl_load_initial_commands(const char *import_file) {
             }
         } else {
             ReplImportResult import_result;
-            if (repl_export_load_from_file(import_file, &import_result)) {
-                repl_scenes_activate_loaded_document_slot(import_result.scene_name);
-                scroll_to_display_function();
-                return repl_state_document_count();
-            }
+            if (repl_export_load_from_file(import_file, &import_result))
+                return activate_initial_document(&import_result);
         }
         return activate_empty_transient_after_failed_import();
     }

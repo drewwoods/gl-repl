@@ -566,6 +566,59 @@ void test_initial_load_failure_does_not_load_default_example() {
     unlink(path);
 }
 
+void test_initial_load_reads_stdin_pipe() {
+    printf("--- Initial load reads stdin pipe ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    static const char snippet[] =
+        "glColor3f(1, 0.4, 0.8);\n"
+        "glutSolidTorus(0.3, 0.9, 24, 48);\n";
+    int pipe_fds[2] = { -1, -1 };
+    int saved_stdin = -1;
+
+    ASSERT_INT("stdin fixture pipe", pipe(pipe_fds), 0);
+    if (pipe_fds[0] < 0 || pipe_fds[1] < 0)
+        return;
+
+    ssize_t written = write(pipe_fds[1], snippet, sizeof(snippet) - 1);
+    ASSERT_INT("stdin fixture write", (int)written, (int)sizeof(snippet) - 1);
+    close(pipe_fds[1]);
+    pipe_fds[1] = -1;
+
+    saved_stdin = dup(STDIN_FILENO);
+    ASSERT_TRUE("save stdin descriptor", saved_stdin >= 0);
+    if (saved_stdin < 0) {
+        close(pipe_fds[0]);
+        return;
+    }
+
+    int attach_rc = dup2(pipe_fds[0], STDIN_FILENO);
+    ASSERT_INT("attach stdin pipe", attach_rc, STDIN_FILENO);
+    close(pipe_fds[0]);
+    pipe_fds[0] = -1;
+    if (attach_rc < 0) {
+        close(saved_stdin);
+        return;
+    }
+    clearerr(stdin);
+
+    int edit_line = repl_load_initial_commands("-");
+
+    ASSERT_INT("restore stdin descriptor", dup2(saved_stdin, STDIN_FILENO),
+               STDIN_FILENO);
+    close(saved_stdin);
+    clearerr(stdin);
+
+    ASSERT_INT("stdin commands enter document",
+               repl_state_document_count(), 2);
+    ASSERT_INT("stdin load cursor at document end",
+               edit_line, repl_state_document_count());
+    ASSERT_INT("stdin load activates user scene",
+               repl_active_user_scene(), 0);
+    ASSERT_STR("stdin load fallback scene name",
+               repl_user_scene_name(0), "Scene");
+}
+
 void test_scene_text_load_as_new_slot() {
     printf("--- Scene text load as new slot ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1953,6 +2006,7 @@ int main(int argc, char **argv) {
     test_workspace_initial_load_activates_first_slot();
     test_markerless_raw_scene_import();
     test_initial_load_failure_does_not_load_default_example();
+    test_initial_load_reads_stdin_pipe();
     test_scene_text_load_as_new_slot();
     test_workspace_save_slug_collisions();
     test_workspace_save_max_slug_collisions();

@@ -8,7 +8,7 @@ the language, the panels), see the [User Guide](USER_GUIDE.md).
 ## Synopsis
 
 ```
-gl-repl [file.c | workspace/] [--example name|n] [--time secs]
+gl-repl [file.c | workspace/ | -] [--example name|n] [--time secs]
         [--export-ply out.ply [--export-ply-srgb]] [--noaccum]
         [--assets dir] [--no-audio] [--dump-code] [--flat-histogram]
         [--detailed-prof] [--list-examples]
@@ -20,6 +20,7 @@ gl-repl [file.c | workspace/] [--example name|n] [--time secs]
 |---|---|
 | *file*.c | Reload a previously saved session from a single file. |
 | *workspace*/ | Load every `*.c` under the directory as a separate scene. |
+| `-` | Read a saved session or REPL snippet from standard input. Input is buffered to an anonymous temporary file so the normal multi-pass importer is preserved. |
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). |

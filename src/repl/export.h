@@ -275,6 +275,13 @@ typedef struct {
  * directives (if any) are copied into it before return; pass NULL to drop them. */
 int  repl_export_load_from_file(const char *filename, ReplImportResult *result);
 
+/* Import from an arbitrary stream by first copying it to an anonymous,
+ * seekable temporary file, then running the exact same multi-pass parser as
+ * repl_export_load_from_file(). The input stream remains owned by the caller
+ * and is left at EOF. `source_name` is used only for diagnostics. */
+int  repl_export_load_from_stream(FILE *input, const char *source_name,
+                                  ReplImportResult *result);
+
 /* Import an in-memory, NULL-terminated source line array using the same parser
  * as repl_export_load_from_file(). `source_name` is used only for diagnostics.
  * This lets compiled-in/runtime example catalogs carry full exported-C sources
