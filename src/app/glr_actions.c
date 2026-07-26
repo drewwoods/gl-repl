@@ -503,10 +503,8 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Compute profile", .key = GLR_CONFIG_CPU_PROFILE,
       .state_count = PROFILE_PANEL_MODE_COUNT, .state_names = profile_panel_mode_names,
       .key_code = KM_KEY(GLR_CPU_PROFILE), .modifiers = KM_MODS(GLR_CPU_PROFILE) },
-    /* Ctrl+Shift+W mirrors Compute profile's Ctrl+W. The two-pass ascii
-     * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
-     * Shift-requiring rows when Shift is held, so plain Ctrl+W still
-     * routes to Compute profile while Ctrl+Shift+W cycles this row. */
+    /* Ctrl+Shift+W mirrors Compute profile's Ctrl+W. Exact ASCII shortcut
+     * matching keeps Ctrl+W on Compute profile and Ctrl+Shift+W here. */
     { .label = "Memory profile", .key = GLR_CONFIG_MEMORY_PROFILE,
       .state_count = MEMORY_PANEL_MODE_COUNT, .state_names = memory_panel_mode_names,
       .key_code = KM_KEY(GLR_MEMORY_PROFILE), .modifiers = KM_MODS(GLR_MEMORY_PROFILE) },
@@ -1083,15 +1081,6 @@ void glr_cfg_cycle_row(int row, int delta) {
         return;
     }
 
-    if (item->key == GLR_CONFIG_AUTO_TIME) {
-        if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
-            repl_reset_time_to_zero();
-            repl_set_status(repl_state_variables().time_playing ? "Time: reset to 0"
-                                                           : "Time: reset to 0 (paused)");
-            return;
-        }
-    }
-
     /* Depth view needs depth readback (glReadPixels GL_DEPTH_COMPONENT);
      * WebGL forbids it and some contexts fail the init-GL probe. Refuse the
      * interactive cycle with the reason instead of silently cycling a row
@@ -1220,20 +1209,18 @@ void glr_action_help_tab_prev(void) {
     }
 }
 
+void glr_action_reset_time_to_zero(void) {
+    repl_reset_time_to_zero();
+    repl_set_status(repl_state_variables().time_playing ? "Time: reset to 0"
+                                                   : "Time: reset to 0 (paused)");
+}
+
 /* Ctrl+<key> shortcut dispatch. GLUT delivers Ctrl+letter as the same
- * control code with or without Shift, so Shift is read from the live
- * modifier state and matched in two passes:
- *
- *   Pass A (only when Shift is held): prefer a row that *requires*
- *     Shift (modifiers & GLUT_ACTIVE_SHIFT) — e.g. Ctrl+Shift+V/O/C/T.
- *   Pass B (always): fall back to the modifier-agnostic row
- *     (modifiers == 0).
- *
- * So a Shift row shadows the plain row only when Shift is actually
- * down; plain Ctrl+V still falls through to the editor (paste) because
- * no modifiers==0 row claims it. The descriptor table is the single
+ * control code with or without Shift, so keymap_event_is reads the live
+ * modifier state. A config row is an exact binding: extra modifiers never
+ * fall through to a nearby plain row. The descriptor table is the single
  * source of truth — no separate router. */
-static int cfg_match_row(unsigned char key, int want_shift) {
+static int cfg_match_row(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (!item || item->section_header || item->is_special)
@@ -1243,8 +1230,7 @@ static int cfg_match_row(unsigned char key, int want_shift) {
         if ((item->key_code != '`' && (item->key_code <= 0 || item->key_code >= 32)) ||
             item->key_code != key)
             continue;
-        int row_shift = (item->modifiers & GLUT_ACTIVE_SHIFT) != 0;
-        if (row_shift != want_shift)
+        if (!keymap_event_is(key, item->key_code, item->modifiers))
             continue;
         glr_cfg_cycle_row(i, 1);
         return 1;
@@ -1253,10 +1239,7 @@ static int cfg_match_row(unsigned char key, int want_shift) {
 }
 
 int glr_cfg_handle_ascii_shortcut(unsigned char key) {
-    int shift = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
-    if (shift && cfg_match_row(key, 1)) /* pass A: Shift-requiring row */
-        return 1;
-    return cfg_match_row(key, 0);       /* pass B: modifier-agnostic row */
+    return cfg_match_row(key);
 }
 
 int glr_cfg_handle_special_shortcut(int key) {

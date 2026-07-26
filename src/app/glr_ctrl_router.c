@@ -120,6 +120,13 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     return 0;
 }
 
+int glr_ctrl_router_handle_time_reset_key(unsigned char key) {
+    if (!keymap_event_is(key, GLR_TIME_RESET))
+        return 0;
+    glr_action_reset_time_to_zero();
+    return 1;
+}
+
 /* Recovery safeguard: Ctrl+Q, File > Quit, and SIGINT (Ctrl+C), plus
  * Load Workspace (which replaces every in-memory slot), write a recovery
  * copy to a DISTINCT, findable file — never the active scene/workspace. The point
@@ -256,8 +263,8 @@ int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
 
 /* The Ctrl+Shift camera shortcuts (Ctrl+Shift+C reset / +O focus-origin
  * / +V view mode) have no dedicated router: they are ordinary Config
- * rows carrying a GLUT_ACTIVE_SHIFT modifier, dispatched by the
- * two-pass glr_cfg_handle_ascii_shortcut (see glr_actions.c). */
+ * rows carrying a GLUT_ACTIVE_SHIFT modifier, exactly dispatched by
+ * glr_cfg_handle_ascii_shortcut (see glr_actions.c). */
 
 /* ---- Special-key router helpers --------------------------------------- */
 
@@ -1867,6 +1874,7 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_replay_key(key) ||
         glr_ctrl_router_handle_save_key(key) ||
         glr_ctrl_router_handle_debug_dump_key(key) ||
+        glr_ctrl_router_handle_time_reset_key(key) ||
         glr_ctrl_router_handle_accum_samples_key(key) ||
         glr_ctrl_router_handle_code_focus_key(key) ||
         glr_ctrl_router_handle_tutorial_ack_key(key) ||

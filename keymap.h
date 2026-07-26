@@ -90,6 +90,7 @@
 #define GLR_SAVE             KEY_CTRL_S, 0     /* save to output.c */
 #define GLR_QUIT             KEY_CTRL_Q, 0     /* save + quit */
 #define GLR_DEBUG_DUMP       KEY_CTRL_N, GLUT_ACTIVE_SHIFT   /* dump state */
+#define GLR_TIME_RESET       KEY_CTRL_T, GLUT_ACTIVE_SHIFT   /* reset time to 0 */
 #define GLR_CONFIG_MENU      KEY_CTRL_K, GLUT_ACTIVE_SHIFT   /* open Config dropdown */
 #define GLR_ESCAPE           KEY_ESC, 0        /* clear input / close overlay */
 #define GLR_CODE_FOCUS       KEY_CTRL_F, GLUT_ACTIVE_SHIFT  /* pairs w/ Search (plain Ctrl+F) */

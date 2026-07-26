@@ -540,10 +540,9 @@ static void test_config_sections(void) {
                headers + seps + items, CFG_ITEM_COUNT);
 }
 
-/* Two-pass modifier-aware dispatch in glr_cfg_handle_ascii_shortcut:
- * a Shift-requiring row (modifiers & GLUT_ACTIVE_SHIFT) wins only when
- * Shift is held; otherwise the modifiers==0 row matches — and a plain
- * Ctrl key with no modifiers==0 row falls through (returns 0). */
+/* Modifier-aware dispatch in glr_cfg_handle_ascii_shortcut is exact: a
+ * Shift-requiring row only matches with Shift held, and a plain row never
+ * claims the shifted chord. */
 static void test_ascii_shortcut_modifiers(void) {
     glr_ctrl_reset_all();
     editor_input_set_modifier_provider_for_test(test_mods_provider);
@@ -569,6 +568,15 @@ static void test_ascii_shortcut_modifiers(void) {
                 glr_config_get(GLR_CONFIG_VERTEX_OUTLINES) != vo1);
     ASSERT_TRUE("Ctrl+Shift+O did NOT run Focus origin",
                 strcmp(g_last_status, "Camera: focus origin") != 0);
+
+    /* Ctrl+Shift+N belongs to the controller's debug-dump action, not the
+     * plain Ctrl+N Normal vectors config row. The cfg dispatcher therefore
+     * declines it and must leave Normal vectors unchanged. */
+    int nv0 = glr_config_get(GLR_CONFIG_NORMAL_VECTORS);
+    ASSERT_INT("Ctrl+Shift+N declined by cfg",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 0);
+    ASSERT_INT("Ctrl+Shift+N left Normal vectors alone",
+               glr_config_get(GLR_CONFIG_NORMAL_VECTORS), nv0);
 
     /* Ctrl+Shift+V toggles View mode (ordinary cycle row + Shift). */
     int ortho1 = glr_config_get(GLR_CONFIG_ORTHO_MODE);
@@ -597,12 +605,15 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_TRUE("Ctrl+Shift+B toggled Winding",
                 glr_config_get(GLR_CONFIG_WINDING_VIEW) != wv0);
 
-    /* Ctrl+Shift+T resets time. */
+    /* Ctrl+Shift+T is a controller action, not a shifted fallback to the
+     * plain Auto time config row. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
     int t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef var exists", t_idx >= 0);
     g_predef_vars_mut[t_idx].value = 5.0f;
-    ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
+    ASSERT_INT("Ctrl+Shift+T declined by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 0);
+    ASSERT_INT("Ctrl+Shift+T handled by controller",
+               glr_ctrl_router_handle_time_reset_key(KEY_CTRL_T), 1);
     ASSERT_TRUE("Ctrl+Shift+T reset time to 0", fabsf(g_predef_vars[t_idx].value) < 1e-6f);
 
     /* Plain Ctrl+P (no Shift) toggles Polygon highlight. */
@@ -1420,7 +1431,7 @@ static void test_status_set_drops_empty_message(void) {
  *
  *   FOCUS_ORIGIN         → glr_camera_focus_origin (ease target=origin)
  *   RESET_CAMERA         → glr_camera_ease_to_default
- *   AUTO_TIME + Shift    → repl_reset_time_to_zero
+ *   TIME_RESET           → repl_reset_time_to_zero
  *   CODE_PANEL_LAYOUT_HIDDEN → ui_menu_bar_close + color_picker_stop +
  *                              editor_completion_clear (the hidden-only
  *                              branch — the other layouts test pure
@@ -1493,12 +1504,8 @@ static void test_cfg_cycle_reset_camera_eases_to_default(void) {
     ASSERT_TRUE("reset_camera dist reaches default 5", fabsf(cam.dist - 5.0f) < 0.5f);
 }
 
-static void test_cfg_cycle_auto_time_shift_resets_time(void) {
+static void test_time_reset_action(void) {
     glr_ctrl_reset_all();
-
-    int row = find_cfg_row_for_key(GLR_CONFIG_AUTO_TIME);
-    ASSERT_TRUE("found auto_time row", row >= 0);
-    if (row < 0) return;
 
     /* Seed a non-zero t predef-var value so we can observe the reset.
      * (repl_reset_time_to_zero zeros the t predef var, not the
@@ -1510,26 +1517,20 @@ static void test_cfg_cycle_auto_time_shift_resets_time(void) {
     g_predef_vars_mut[t_idx].value = 7.25f;
     int was_playing = repl_state_variables().time_playing;
 
-    /* Shift+cycle: resets time to 0 regardless of play state. Use the
-     * modifier provider seam to make Shift observable to the cfg path. */
-    editor_input_set_modifier_provider_for_test(test_mods_provider);
-    g_test_mods = GLUT_ACTIVE_SHIFT;
-    glr_cfg_cycle_row(row, 1);
-    g_test_mods = 0;
-    editor_input_set_modifier_provider_for_test(NULL);
+    glr_action_reset_time_to_zero();
 
-    ASSERT_TRUE("Shift+auto_time zeros t",
+    ASSERT_TRUE("time reset zeros t",
                 fabsf(g_predef_vars[t_idx].value) < 1e-6f);
     /* time_playing is not changed by the reset path — it just zeroes
      * the clock. Pin the invariant so a refactor that flips play state
      * trips the assert. */
-    ASSERT_INT("Shift+auto_time leaves play state unchanged",
+    ASSERT_INT("time reset leaves play state unchanged",
                repl_state_variables().time_playing, was_playing);
     /* Status reflects the current play state. */
     const char *expected_status = repl_state_variables().time_playing
                                       ? "Time: reset to 0"
                                       : "Time: reset to 0 (paused)";
-    ASSERT_STR("Shift+auto_time status", g_last_status, expected_status);
+    ASSERT_STR("time reset status", g_last_status, expected_status);
 }
 
 static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
@@ -2346,7 +2347,7 @@ int main(void) {
     test_status_set_drops_empty_message();
     test_cfg_cycle_focus_origin_eases_to_origin();
     test_cfg_cycle_reset_camera_eases_to_default();
-    test_cfg_cycle_auto_time_shift_resets_time();
+    test_time_reset_action();
     test_cfg_cycle_panel_hidden_closes_overlays();
     test_vertex_label_modes();
     test_backdrop_grid_pairing_policy();

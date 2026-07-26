@@ -23,10 +23,7 @@ cd "$(git rev-parse --show-toplevel)"
 mode="${1:-check}"
 
 awk -v mode="$mode" '
-    BEGIN {
-        owner["KEY_CTRL_T,GLUT_ACTIVE_SHIFT"] = "(time reset)"
-        n = 1
-    }
+    BEGIN { n = 0 }
     /^[ \t]*#define[ \t]+GLR_[A-Za-z0-9_]+[ \t]/ {
         name = $2
         rest = $0

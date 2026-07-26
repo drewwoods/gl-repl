@@ -1121,7 +1121,7 @@ The overlay toggles annotate geometry scene-wide:
   final unrolled copy, so the highlight, the vertex labels and the cursor guide
   all sit on the copy whose loop-body variable values the **variable panel** is
   showing — and on the last polygon a replay draws.
-- **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
+- **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
@@ -1960,13 +1960,13 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+B | Winding |
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
 | Ctrl+G | Wireframe |
-| Ctrl+N | Depth view (Off / Linear / Scene / Split) |
+| Ctrl+Shift+D | Depth view (Off / Linear / Scene / Split) |
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
 | Ctrl+= / Ctrl+− | Accum passes up/down |
 | Ctrl+Shift+X | Transform guides |
-| Ctrl+Shift+N | Normal vectors |
+| Ctrl+N | Normal vectors |
 | Ctrl+Shift+O | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
@@ -1998,7 +1998,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 |---|---|
 | Ctrl+S | Save scene |
 | Ctrl+Q | Quit (saves recovery file) |
-| Ctrl+Shift+D | Debug state dump |
+| Ctrl+Shift+N | Debug state dump |
 | Ctrl+Shift+A | Play / pause |
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 

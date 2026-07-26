@@ -137,6 +137,7 @@ void glr_action_cursor_blink_reset(void);
 /* Cycle the help overlay tabs. */
 void glr_action_help_tab_next(void);
 void glr_action_help_tab_prev(void);
+void glr_action_reset_time_to_zero(void);
 
 /* Handle an ASCII key shortcut for config cycling. Maps key codes (Ctrl+<key>)
  * to config item indices and applies the cycle. Returns 1 if the key matched
