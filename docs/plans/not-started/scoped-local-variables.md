@@ -409,13 +409,35 @@ the export round-trip):
   temporaries; exercises a local written from inside a `for` body (the
   copy-back path).
 - `examples/scenes/whale-particle-system-lit-model.glr` — `drawWhale()`'s
-  `flukeAng`/`finAng`/`detail`. **`detail` is not a mechanical conversion**
-  [rev 3]: it is declared `static float detail = 30;` (scene line 33) and its
-  first in-body statement is `detail = max(12, floor(detail));` (line 73), which
-  *reads its own prior global value*. As a local starting at 0 that silently
-  becomes `max(12, 0)` = 12 instead of 30, changing the sphere tessellation. The
-  conversion must add an explicit `detail = 30;` seed ahead of it — and this is
-  exactly the class of bug the semantic dump comparison below is meant to catch.
+  `flukeAng` and `finAng` only. **`detail` stays global** — see below.
+
+**Conversion-safety criterion.** [rev 3] A candidate converts mechanically iff,
+within the function, *every read is preceded by a write in the same call*. V1
+locals bind to `0.0f` on entry and take no initializer, so any value that
+reaches the body from outside it is lost. Auditing the 34 candidates for
+read-modify-write turned up exactly two, and they differ:
+
+- **`eAn` (orrery, `planetKepler`) — safe.** Four unrolled Newton-Raphson
+  iterations each read `eAn`, but the body seeds it first with
+  `eAn = mK + eK*sin(mK);`. Every read is preceded by a write. Convert.
+- **`detail` (whale, `drawWhale`) — do not convert.** Its initial value lives in
+  the *declaration* (`static float detail = 30;`, scene line 33), and its first
+  in-body statement reads it: `detail = max(12, floor(detail));` (line 73).
+  Deleting the declaration leaves the read seeing the zero-fill, so the clamp
+  yields 12 instead of 30 and the whale's spheres visibly coarsen.
+
+  Seeding it with `detail = 30;` would fix the number but miss the point:
+  `detail` is a *knob*, not a temporary. It is a predef, so it appears in the
+  variable panel, and the clamp is load-bearing for scrubbing — drag to 8 and it
+  holds at 12; drag to 60 and it stays 60. As a local it leaves the panel,
+  becomes unscrubbable, and the clamp turns into dead code. This is a false
+  positive of the "written and read in exactly one function" classifier, which
+  cannot distinguish a temporary from a persistent knob that happens to be used
+  in one place. The headline count is therefore 33 genuine locals, not 34.
+
+Related evidence for the budget argument, from the same function: the author is
+hand-recycling slots — `// Reuse eAn (done with the eccentric anomaly now) to
+hold the radius r, staying under MAX_PREDEF_VARS.`
 
 Then `make rebuild-golden` (which re-enters the build with `USE_GL_STUBS=1`), or
 per index: `build/release-gl-stubs/test_repl_core_examples --dump-index N >
@@ -482,6 +504,8 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   allow
 - recursion — two frames do not share a local (a `sierpinski`-shaped case)
 - **accumulate across a `for` inside a func** (the `flatten_for_loop` copy-back)
+- **read-before-write in a converted function** [rev 3] — assert a local reads
+  `0` on entry, so the conversion-safety criterion has a regression behind it
 - **rebake routing** [rev 2] — this must change a *live predef value*, not just
   source text, and assert both the returned `ReplFlatRefreshKind` (a full
   reflatten, never a value-only rebake) and the resulting `args[]`. The
