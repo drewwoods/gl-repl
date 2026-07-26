@@ -542,28 +542,21 @@ void test_markerless_raw_scene_import() {
     unlink(path);
 }
 
-void test_initial_load_failure_does_not_load_default_example() {
-    printf("--- Initial load failure does not load default example ---\n");
+void test_initial_missing_file_starts_new_scene() {
+    printf("--- Initial missing file starts new scene ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
 
-    const char *path = "/tmp/repl_initial_load_bad_scene.c";
-    FILE *f = fopen(path, "w");
-    ASSERT_TRUE("bad initial-load fixture fopen", f != NULL);
-    if (f) {
-        fprintf(f, "this is not a repl command;\n");
-        fclose(f);
-    }
-
-    ASSERT_INT("failed initial load returns empty cursor",
-               repl_load_initial_commands(path), 0);
-    ASSERT_INT("failed initial load leaves document empty",
-               repl_state_document_count(), 0);
-    ASSERT_INT("failed initial load has no active user scene",
-               repl_active_user_scene(), -1);
-    ASSERT_INT("failed initial load creates no scene slots",
-               repl_user_scene_count(), 0);
-
+    const char *path = "/tmp/repl_initial_load_missing_scene.c";
     unlink(path);
+
+    ASSERT_INT("missing initial load returns display cursor",
+               repl_load_initial_commands(path), 6);
+    ASSERT_INT("missing initial load seeds display baseline",
+               repl_state_document_count(), 6);
+    ASSERT_INT("missing initial load activates new user scene",
+               repl_active_user_scene(), 0);
+    ASSERT_INT("missing initial load creates a scene slot",
+               repl_user_scene_count(), 1);
 }
 
 void test_initial_load_reads_stdin_pipe() {
@@ -2005,7 +1998,7 @@ int main(int argc, char **argv) {
     test_workspace_round_trip();
     test_workspace_initial_load_activates_first_slot();
     test_markerless_raw_scene_import();
-    test_initial_load_failure_does_not_load_default_example();
+    test_initial_missing_file_starts_new_scene();
     test_initial_load_reads_stdin_pipe();
     test_scene_text_load_as_new_slot();
     test_workspace_save_slug_collisions();

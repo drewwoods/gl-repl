@@ -39,9 +39,12 @@ static void scroll_to_display_function(void) {
     repl_dispatch_scroll_to_line(target);
 }
 
-static int activate_empty_transient_after_failed_import(void) {
-    repl_scenes_enter_transient_scene();
-    repl_scenes_reset_for_transient();
+static int activate_new_scene_after_failed_import(void) {
+    /* A positional file is an explicit request to edit a scene. If it cannot
+     * be loaded, keep that workflow useful by opening the same seeded,
+     * editable user scene as File -> New Scene rather than a detached empty
+     * transient document. */
+    (void)repl_scenes_create_empty_user_scene();
     return repl_state_document_count();
 }
 
@@ -61,7 +64,7 @@ int repl_load_initial_commands(const char *import_file) {
             ReplImportResult import_result;
             if (repl_export_load_from_stream(stdin, "<stdin>", &import_result))
                 return activate_initial_document(&import_result);
-            return activate_empty_transient_after_failed_import();
+            return activate_new_scene_after_failed_import();
         }
 
         struct stat st;
@@ -82,7 +85,7 @@ int repl_load_initial_commands(const char *import_file) {
             if (repl_export_load_from_file(import_file, &import_result))
                 return activate_initial_document(&import_result);
         }
-        return activate_empty_transient_after_failed_import();
+        return activate_new_scene_after_failed_import();
     }
 
     /* Show the startup demo as an example. A user scene is created only when
