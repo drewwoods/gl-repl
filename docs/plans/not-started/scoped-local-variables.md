@@ -1,6 +1,58 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 7 after fifth review)
+## Status — NOT STARTED (2026-07-27, rev 8)
+
+Rev 8 replaces the blanket no-shadowing ban with C's actual rule, on the
+maintainer's observation that the ban was adopted to simplify implementation and
+had not done so. Items marked **[rev 8]**. (Rev 7, below, landed concurrently
+from a fifth review; the two do not overlap except where noted.)
+
+The deciding fact is that our locals **hoist to the function-body top, which is
+the same scope as the parameter list**:
+
+```
+$ gcc -std=c99 -c -xc - <<< 'float f(float x){ float x; return x; }'
+error: redefinition of 'x'
+```
+
+So local-vs-parameter is not shadowing at all — C calls it a redefinition. Every
+*other* direction the plan was rejecting is ordinary, legal C shadowing.
+
+| Direction | Rev 7 | Rev 8 | Why |
+|---|---|---|---|
+| local ↔ parameter | reject | **reject** | same scope — redefinition |
+| local ↔ local, same body | reject | **reject** | same scope — duplicate |
+| local ↔ loop iterator | reject | **allow** | iterator is a nested scope |
+| local ↔ global | reject | **allow** | global is outer; innermost wins |
+| parameter/iterator ↔ global | allow | allow | pre-existing, untouched |
+
+Consequences:
+
+- **Phase 3's guard matrix collapses from four rows to two.** The "add a global"
+  and "add a loop iterator" rows disappear, and with them most of what review 2's
+  finding #3 and review 4's finding #2 were about. This also supersedes rev 7's
+  "the no-shadowing table has four directions" bookkeeping note.
+- **No runtime change.** `eval_primary` (`eval.c:1227-1243`) has always scanned
+  `ctx->vars` innermost-first before falling through to predefs. Innermost-wins
+  is the machinery's natural behavior; the ban was the added constraint, not the
+  permission.
+- **One thing gets harder.** The local delete guard becomes scope-aware instead
+  of a raw identifier scan — it must not count a reference that a nested
+  `for(x, …)` shadows. That is the mirror of `compile_line_uses_global_ident`
+  (`compile.c:327`), so the walk already exists.
+- **One ordering constraint appears.** `flatten_bind_func_locals` must insert
+  locals before the outer-scope copy in `flatten_call`, or a callee's local
+  loses to a same-named local in the calling frame.
+- **Export parity is unaffected** — a local shadowing a file-scope static
+  behaves identically in C and in the REPL, inner wins in both.
+- The `static`-inside-a-function justification is updated once more: a local
+  *can* now shadow such a global, which is precisely C's behavior and therefore
+  still not a divergence.
+
+This retires the plan's stated top maintenance liability; see "Known liabilities
+and revisit triggers".
+
+## Status — rev 7 after fifth review
 
 Three corrections, all incorporated below and marked **[rev 7]** where the
 implementation contract changed:
@@ -14,9 +66,10 @@ implementation contract changed:
   document top, so removing `static` while editing that row still selects the
   global path. Supporting the reverse would require a new move-into-function
   operation plus predef teardown and slot rebasing.
-- **The guard inventories and shadowing prose agree again.** The no-shadowing
-  table has four directions, the replacement inventory has five routes, and the
-  Non-goals wording is explicitly limited to local declarations.
+- **The guard inventories and shadowing prose agree again.** The replacement
+  inventory has five routes, and the Non-goals wording is explicitly limited to
+  local declarations. (The shadowing table's four directions were then reduced
+  to two by rev 8 — see below.)
 
 ## Status — rev 6 after fourth review
 
@@ -33,8 +86,9 @@ Three findings; one narrows a rule rather than adding code. Items marked
   declaration→declaration replacement to the overwrite-route list: that path
   exempts an unchanged name as "kept" (`compile.c:865-871`), which is wrong when
   the storage changed under the same name.
-- **The no-shadowing rule is narrower than rev 5 stated, and must stay that
-  way.** It constrains *local declarations only*. A parameter or loop iterator
+- **The no-shadowing rule is narrower than rev 5 stated.** *(Narrowed further
+  by rev 8, which keeps only the same-scope redefinition cases.)* It constrains
+  *local declarations only*. A parameter or loop iterator
   shadowing a **global** is pre-existing, deliberate behavior —
   `compile.c:323-326` documents it, and `compile_line_uses_global_ident` returns
   0 precisely so a shadowed global reads as unreferenced. Adding the "missing"
@@ -88,9 +142,10 @@ design. Items marked **[rev 4]**.
 - **Declarations hoist from any depth inside a function**, rather than being
   rejected in `for` / `if` bodies. The REPL's existing contract is "declare
   wherever, the editor moves it to the top" — applying that at the top level but
-  not one level down was an arbitrary hole. The no-shadowing rule already
-  produces a clear error for the case depth-rejection was guarding
-  (`for(i,…) { float i; }`).
+  not one level down was an arbitrary hole. (This block claimed the
+  no-shadowing rule would reject `for(i,…) { float i; }`; **rev 8 makes that
+  case legal** — the local hoists to the body top and the iterator shadows it,
+  as in C. The hoisting decision itself is unaffected.)
 - **`static` selects storage and beats cursor position.** `static float x;` is
   always a global, from anywhere — which is also the escape hatch for declaring
   a global without first moving the cursor out of a function. Plain `float x;`
@@ -216,7 +271,7 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
 |---|---|
 | Where may a local be declared | **Anywhere lexically inside a function body**, at any nesting depth; the editor hoists it to the top of that body, exactly as top-level decls hoist to the top of the document today. [rev 4] |
 | Global vs. local | **Keyword-driven.** `static float x;` is always a global, from any cursor position. Plain `float x;` is a local when inside a function, a global at top level (unchanged). [rev 4] |
-| Shadowing | **Rejected for local declarations only.** A local may not reuse a visible param, loop var, outer local, or global name. Params and loop iterators shadowing *globals* stays legal — that is pre-existing, deliberate behavior (`compile.c:323-326`) and is not touched. [rev 6] |
+| Shadowing | **C's rule, not a blanket ban.** [rev 8] A local may not collide with a parameter or another local of the same body — in C those share one scope and it is a *redefinition*, not shadowing (`gcc`: "error: redefinition of 'x'"). Shadowing a global or a loop iterator is legal and behaves as C does, innermost wins. |
 | Writable params / loop vars | **Out of scope.** Keep the `compile.c:1146` guard ("function parameters are constant"). `float tmp; tmp = param;` covers the need. |
 | Example conversion | **3 scenes as proof** in this change: orrery, swaying-grass, whale. |
 
@@ -234,10 +289,10 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   This is C's storage-duration distinction, and it is honest here: a `static`
   in C persists across calls exactly as a predef slot does. The one place C and
   the REPL differ — a C function-static is scoped to the function, ours is
-  document-wide — is not observable through any *new* construct: a local
-  declaration cannot shadow it, so it stays reachable by that name. It can still
-  be shadowed by a parameter or loop iterator, which is exactly what already
-  happens to globals today (`compile.c:323-326`) and is unchanged. [rev 6]
+  document-wide — is not observable, because every construct that can shadow it
+  does so with C's own semantics: a local, a parameter or a loop iterator hides
+  it for exactly the region C would, innermost wins, and it stays reachable
+  everywhere else. [rev 8]
 - **Declarations may appear at any depth inside the body** and are hoisted to
   the top of that body. [rev 4] `float u;` typed inside a `for` nested in a
   function relocates to the function's declaration prologue, the same way a
@@ -245,9 +300,13 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   depth-based rejection: it would break the very C89-flavor analogy that
   motivates hoisting. Every reference therefore follows its declaration, and
   flatten's binding stays a prefix scan.
-- The no-shadowing rule still does the work depth-rejection used to:
-  `for(i, 0, n) { float i; }` hoists `i` into collision with the iterator and
-  is rejected with a clear message.
+- **Name collisions follow C's scope rules.** [rev 8] Because locals hoist to
+  the function-body top, they occupy the same scope as parameters — so a local
+  colliding with a parameter, or with another local of the same body, is a
+  *redefinition* and is rejected. A loop iterator is a nested scope, and globals
+  are outer, so `for(i, 0, n) { float i; }` is legal: the local `i` is visible
+  through the function, the iterator shadows it inside the loop. That is exactly
+  what C does, and exactly what `eval_primary` already does at runtime.
 - Each local binds to `0.0f` on entry to the call, with dep mask 0.
 - Assignment `a = expr;` targets the local when one is visible. Every dep of
   that RHS is reported **structural**. [rev 2]
@@ -274,13 +333,15 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   behave; genuine block scope would be a V2.
 - No locals outside a function. `float x;` at top level is a global, as today.
 - No writable function parameters or loop variables.
-- No shadowing by local declarations.
+- No *redefinition*: a local may not collide with a parameter or another local
+  of the same function body (same scope in C). Shadowing an outer binding — a
+  global or an enclosing loop iterator — is allowed. [rev 8]
 - No local arrays; `A`/`B`/`C` stay global scratch.
 - No `// @tune` / `// @config` on a local — those need a panel slot, so they are
   rejected.
 - No implicit local creation from an unknown assignment target. `tmp = 5;`
   without a declaration still errors "undeclared variable". [rev 4] With
-  shadowing by local declarations forbidden there is no way to distinguish "I
+  redefinition rejected and shadowing allowed there is no way to distinguish "I
   meant a new local" from "I mistyped the global's name", so implicit creation
   would turn every typo into a silent new variable. Only the *declaration
   statement* may appear anywhere; the declaration itself stays explicit.
@@ -429,11 +490,19 @@ checks `ctx->vars` before the predef table.
     "removed" from local storage and therefore must be unreferenced before the
     conversion proceeds.
 - New `validate_local_decl_names()` beside `validate_decl_names`
-  (`compile.c:693`). Rejects: duplicate-in-decl; any name visible at that point
-  per `collect_visible_vars_in()` (param / loop var / outer local); any name in
-  `ctx->predef` (global); reserved idents via `repl_eval_is_reserved_ident()`;
-  bad ident shape or >15 chars; any initializer; and
-  `visible_count + parsed.count > MAX_EXPR_VARS`.
+  (`compile.c:693`). Rejects **same-scope redefinitions only** [rev 8]:
+  duplicate-in-decl; a name matching a **parameter of the enclosing function**;
+  a name matching **another local of the same body**; reserved idents via
+  `repl_eval_is_reserved_ident()`; bad ident shape or >15 chars; any
+  initializer; a `@tune`/`@config` tag; and a capacity overflow.
+
+  It deliberately does **not** reject a name that matches an enclosing loop
+  iterator or a global — those are outer scopes, and shadowing them is legal C
+  that `eval_primary` already resolves correctly. Note this means
+  `collect_visible_vars_in()`'s flat result is not the right input on its own:
+  the validator needs the *kind* tag (PARAM / LOCAL vs LOOP) that Phase 1 is
+  adding anyway, plus the enclosing-function bound, so it can distinguish
+  same-scope from outer-scope matches.
 - `src/repl/visible_vars.{c,h}` — teach `collect_visible_vars_in()` to add local
   decl names to the current `CMD_FUNC_DEF` `ScopeFrame` (value `0.0f`, same as
   params — it is a name scope, not a value scope), and add an optional
@@ -452,6 +521,15 @@ checks `ctx->vars` before the predef table.
   `{name, 0.0f}` with dep mask 0 for each name. No expression evaluation is
   involved, so no new `ReplFlattenExpr` role and no shared decl-line scanner is
   needed — names come straight off `payload.decl.names[]`.
+
+  **Insert them after the parameters but before the outer-scope copy.** [rev 8]
+  `flatten_call` builds `lvars` as params, then copied outer bindings
+  (`flatten.c:472-483`), and `eval_primary` takes the first match — so a callee
+  local appended after the copy would lose to a same-named local from the
+  calling frame. Params and locals cannot collide (Phase 3 rejects that as a
+  redefinition), so their relative order is free; what matters is that both
+  precede the outer copy. This is the one ordering constraint that allowing
+  shadowing introduces.
 - **Define the prologue to tolerate `CMD_COMMENT` and `CMD_EMPTY`**, stopping at
   the first other command type. [rev 2] A strictly contiguous run breaks the
   moment an author comments out the first local: the body becomes
@@ -487,31 +565,36 @@ checks `ctx->vars` before the predef table.
 
 #### Phase 3 — Edit guards and formatting
 
-**The no-shadowing and capacity invariants must be enforced in both
-directions.** [rev 2] Validating only at the point the local is declared leaves
-every later edit free to create the collision the invariant forbids, and flatten
-resolves locals by *name* — so a stale classification means an assignment
-compiled as "local" mutates a same-name iterator or parameter instead. The
-binders have separate compile paths, and each must now also validate against
-existing locals in scope:
+**Redefinition and capacity must be enforced in both directions.** [rev 2,
+narrowed rev 8] Validating only at the point the local is declared leaves later
+edits free to create the collision, and flatten resolves locals by *name* — so a
+stale classification means an assignment compiled as "local" writes to the wrong
+binding. Two binders can create a same-scope collision with a local, and both
+have their own compile path:
 
 | Edit | Path | Must reject |
 |---|---|---|
-| Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; a capacity overflow (below) |
-| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; a capacity overflow (below) |
-| Add a global | `repl_compile_float_decl` global path | a name matching any existing local |
-| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function**; a capacity overflow (below) |
+| Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local of that body (same scope — redefinition); a capacity overflow (below) |
+| Add/rename a local | local path | a name matching a parameter, or another local of the same body; a capacity overflow (below) |
+| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | *nothing new* — a capacity overflow only |
+| Add a global | `repl_compile_float_decl` global path | *nothing new* |
 
-**Scope of the no-shadowing rule.** [rev 6] It constrains *local declarations
-only*. A parameter or loop iterator shadowing a **global** remains legal —
-`compile.c:323-326` documents it as intended (`compile_line_uses_global_ident`
-returns 0 precisely so a shadowed global reads as unreferenced on that line),
-and `validate_decl_names` has never rejected a global that collides with an
-iterator. Adding guards for `static float i;` under an existing `for(i, ...)`,
-or a new `func0(i)` over an existing global `i`, would be a **behavior change
-outside this feature's scope** and would likely break existing scenes. The four
-directions that *do* need guarding are exactly the ones in the table above,
-all of which involve a local on one side.
+**Why only two rows, and why these two.** [rev 8] Locals hoist to the
+function-body top, which is the *same scope* as the parameter list — C treats a
+collision there as a redefinition, not shadowing:
+
+```
+$ gcc -std=c99 -c -xc - <<< 'float f(float x){ float x; return x; }'
+error: redefinition of 'x'
+```
+
+Every other direction is legal C shadowing, so the REPL allows it and resolves
+innermost-first, which is what `eval_primary` (`eval.c:1227-1243`) already does.
+Rev 6 had four bidirectional guards here; three of them banned ordinary
+shadowing for no reason C would recognise, and they were the plan's stated top
+maintenance liability. Dropping them also preserves the pre-existing behavior
+that a parameter or loop iterator may shadow a global (`compile.c:323-326`),
+rather than making this feature quietly change it.
 
 **Capacity is a whole-function property, not a per-edit one.** [rev 5] A check
 of the form `params + locals <= MAX_EXPR_VARS` is insufficient in both
@@ -558,10 +641,16 @@ Two corrections to that table from rev 2: [rev 3]
   *every* reference to a local inside its own body, so the delete guard would
   conclude an in-use local is unreferenced and let it be removed. An "own
   declaration" exception does not fix this; the suppression applies to the
-  reference lines, not the declaration. Because local declarations cannot
-  shadow another binding, the local variant can be simpler and stricter: a
-  **raw identifier scan over the function body** (via
-  `repl_eval_source_uses_ident`, comment-aware), excluding the range being
+  reference lines, not the declaration. The local variant is
+  `compile_line_uses_global_ident`'s **mirror image**: walk the same scope
+  frames and count the line only when the innermost binding of that name *is
+  this local* — a nested `for(x, …)` shadowing it means the line does not
+  reference it. [rev 8] Rev 6 specified a plain raw identifier scan, which was
+  only sound while shadowing was banned; with shadowing allowed it would
+  over-match a shadowed reference and block a legal delete. The walk itself is
+  not new machinery — `compile_line_uses_global_ident` (`compile.c:327`) already
+  does exactly this in the opposite direction. Bound it to the function body,
+  excluding the range being
   changed.
 - **Five overwrite paths, and only one shared guard should exist.** [rev 5, rev 6]
   Declaration replacement is reachable five ways, and each currently decides for
@@ -746,14 +835,21 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
 
 - declare + use a local in a function body; it does **not** appear in
   `g_predef_vars` afterwards
-- shadow rejections: param, loop var, outer local, global — one case each
-- **reverse-direction collisions** [rev 2]: add a global named after an existing
-  local; rename a param onto a local; add a loop iterator named after a visible
-  local; overwrite a local with a later local's name — one case each.
-  Plus [rev 3]: **add/rename a local onto an iterator that already exists later
-  in the function** (the mirror case rev 2 missed), and drive the param case
-  through `repl_compile_func_def_kernel` as the editor does, not just the
-  wrapper
+- **redefinition rejections** [rev 8]: a local colliding with a parameter of the
+  same function, and with another local of the same body — one case each, and
+  the mirror (adding a parameter named after an existing local)
+- **legal shadowing is accepted and resolves innermost-first** [rev 8]: a local
+  shadowing a global, and a loop iterator shadowing a function local; assert the
+  *values*, not just that the commit succeeded — inside the loop the iterator
+  wins, after it the local does
+- **a callee local beats a same-named local in the calling frame** [rev 8] — the
+  `flatten_call` ordering constraint (`lvars`: params, locals, then outer copy)
+- **reverse-direction redefinition** [rev 2, narrowed rev 8]: rename a parameter
+  onto an existing local, and overwrite a local with a later local's name — and
+  drive the parameter case through `repl_compile_func_def_kernel` as the editor
+  does (`commit.c:568`), not just the wrapper. The rev-2/rev-3 cases that added
+  a *global* or a *loop iterator* over a local are now regression guards on the
+  opposite outcome: they must be **accepted**
 - `MAX_EXPR_VARS` overflow at declaration, when parameters are added afterwards,
   and **when a loop iterator is added at the cap** [rev 3] — the last must be
   rejected at compile time, since `flatten_for_loop` would otherwise silently
@@ -819,16 +915,20 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   If a different function has a same-name local, conversion must still reject —
   only the source row being converted is exempt from the local-collision scan.
 - `float x = 1;` inside a function body is rejected [rev 2]
-- `for(i, 0, n) { float i; }` is rejected by the shadowing rule after hoisting
-  [rev 4]
+- `for(i, 0, n) { float i; }` is **accepted** [rev 8] — the local hoists to the
+  body top and the iterator shadows it inside the loop, as in C
 - **declaration prologue tolerance** [rev 2] — comment out the first of three
   locals; the remaining two must still bind
 - **`repl_compile_split_decl` on a local** keeps `var_idx == REPL_VAR_IDX_LOCAL`
   and the local form [rev 2]
 - **a parameter or loop iterator may still shadow a global** [rev 6] — a
-  regression guard on existing behavior, so the new local-shadowing rule is not
-  over-applied: `func0(i)` over an existing global `i`, and `static float i;`
-  added under an existing `for(i, ...)`, must both still be accepted
+  regression guard on existing behavior: `func0(i)` over an existing global `i`,
+  and `static float i;` added under an existing `for(i, ...)`, must both still
+  be accepted
+- **delete a local that is referenced only under a shadowing iterator** [rev 8]
+  — `float x;` in a body whose sole textual `x` sits inside `for(x, …)` is
+  *not* referenced and must delete cleanly; the raw-scan version rev 6
+  specified would have blocked it
 - delete-guard bounded to the function body; block-batch comment-toggle over a
   body containing a local decl
 - export → reimport round-trip preserving the local and its trailing comment
@@ -876,24 +976,21 @@ and confirm Ctrl+Z after a local decl restores cleanly.
 None blocking; both are accepted costs with a defined trip-wire, recorded so a
 future maintainer does not have to rediscover the trade-off. [rev 7]
 
-**1. The no-shadowing guard matrix is the maintenance tax.** Rejecting
-shadowing turns "declare a local" into a bidirectional invariant enforced across
-four compile paths (param add, iterator add, global add, local add) plus the
-whole-function capacity expression. Every future binder has to remember it, and
-this is the part of the design most likely to rot.
+**1. ~~The no-shadowing guard matrix is the maintenance tax.~~ Resolved in
+rev 8.** Earlier revisions banned shadowing outright, which turned "declare a
+local" into a bidirectional invariant across four compile paths and was named by
+review as the design's top maintenance liability and the part most likely to
+rot. Rev 7 replaced the ban with C's own rule: same-scope collisions (local vs.
+parameter, local vs. local) are *redefinitions* and are rejected; everything
+else is ordinary shadowing and is allowed, resolved innermost-first.
 
-The alternative is C-style innermost-wins shadowing, which deletes most of the
-matrix. It was rejected for V1 because it changes name resolution for *existing*
-code and because authors already hand-avoid collisions (`drawWhale`'s params are
-"named apart so they don't shadow"). Rev 6 shrank the matrix — the rule now
-constrains local declarations only, and param/iterator-over-global stays legal
-— so the tax is smaller than it first looked.
-
-*Trigger to revisit:* if the guards prove painful to keep correct during
-implementation, or a fifth binder appears, reopen the shadowing decision rather
-than adding a fifth guard. `eval_primary` already resolves innermost-first
-(`eval.c:1227-1243`), so the runtime side would need no change; the cost is
-concentrated in the delete/reference guards and the code-panel highlighter.
+That collapsed four guards to two, deleted the "add a global" and "add a loop
+iterator" rows entirely, and needed no runtime change — `eval_primary`
+(`eval.c:1227-1243`) has always resolved innermost-first, so the ban was the
+added constraint, not the permission. The one cost is that the local delete
+guard became scope-aware rather than a raw identifier scan; it is the mirror of
+`compile_line_uses_global_ident` (`compile.c:327`), which already does that walk
+in the opposite direction.
 
 **2. Structural deps trade scrub latency for correctness.** Any global feeding a
 local forces a full reflatten instead of a value-only rebake. The converted
