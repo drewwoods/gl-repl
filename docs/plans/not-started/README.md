@@ -12,7 +12,7 @@ begun. They move to `plans/active/` once implementation starts.
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
-| `scoped-local-variables.md` | Scoped local variable reassignment |
+| `scoped-local-variables.md` | Function-scoped local variables (`float x;` inside a funcN body) |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
 | `streamed-numeric-input.md` | Framed stdin float groups consumed by a baked `input` expression atom |
 | `winding-texture-mode.md` | Winding view: add "Color + Texture" mode (FRONT/BACK textures, eye-linear texgen) |
