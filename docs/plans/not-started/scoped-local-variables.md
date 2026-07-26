@@ -1,6 +1,29 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 3 after second review)
+## Status — NOT STARTED (2026-07-26, rev 4)
+
+Rev 4 settles two UX questions raised by the maintainer, and both simplify the
+design. Items marked **[rev 4]**.
+
+- **Declarations hoist from any depth inside a function**, rather than being
+  rejected in `for` / `if` bodies. The REPL's existing contract is "declare
+  wherever, the editor moves it to the top" — applying that at the top level but
+  not one level down was an arbitrary hole. The no-shadowing rule already
+  produces a clear error for the case depth-rejection was guarding
+  (`for(i,…) { float i; }`).
+- **`static` selects storage and beats cursor position.** `static float x;` is
+  always a global, from anywhere — which is also the escape hatch for declaring
+  a global without first moving the cursor out of a function. Plain `float x;`
+  is a local inside a function, a global at top level. This *shrinks* the parser
+  preflight rev 3 specified, since `static` stops being a rejection.
+
+Consequence worth flagging to reviewers: rev 3 accepted a finding that the
+locality test must use `compile_nearest_open_block_head_at` and explicitly *not*
+an enclosing-function search. That was right for the old reject-in-`for`/`if`
+policy and is now inverted — resolving through a nested block to the owning
+function is the required behavior. See Phase 1.
+
+## Status — rev 3 after second review
 
 Rev 3 incorporates a second review (four blocking findings plus four
 corrections, all confirmed). One changed the representation, the rest tightened
@@ -108,7 +131,8 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
 
 | Question | Decision |
 |---|---|
-| Where may a local be declared | **Function bodies only.** All 34 observed cases are function-body temporaries. `for` / `if` bodies reject with a clear message. |
+| Where may a local be declared | **Anywhere lexically inside a function body**, at any nesting depth; the editor hoists it to the top of that body, exactly as top-level decls hoist to the top of the document today. [rev 4] |
+| Global vs. local | **Keyword-driven.** `static float x;` is always a global, from any cursor position. Plain `float x;` is a local when inside a function, a global at top level (unchanged). [rev 4] |
 | Shadowing | **Rejected.** A local may not reuse a visible param, loop var, outer local, or global name. Authors already hand-avoid this. |
 | Writable params / loop vars | **Out of scope.** Keep the `compile.c:1146` guard ("function parameters are constant"). `float tmp; tmp = param;` covers the need. |
 | Example conversion | **3 scenes as proof** in this change: orrery, swaying-grass, whale. |
@@ -117,11 +141,28 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
 
 - `float a, b;` inside a function body declares function-scoped locals.
   **No initializer** — see Non-goals and the rev-2 status note.
-- Declaring is only legal when the **nearest open block is the `CMD_FUNC_DEF`
-  itself**, not merely when some enclosing function exists. [rev 2]
-- Locals **hoist to the top of the function body**, mirroring the existing rule
-  that top-level decls hoist to the top of non-decl code. Every reference
-  therefore follows its declaration, and flatten's binding is a prefix scan.
+- **The `static` keyword selects storage, and it wins over cursor position.**
+  [rev 4] `static float x;` is a global wherever it is typed, including from
+  inside a function body — which is also the escape hatch for declaring a global
+  without moving the cursor out of the function first. Plain `float x;` is a
+  local when there is an enclosing function and a global otherwise, so existing
+  top-level behavior is unchanged.
+
+  This is C's storage-duration distinction, and it is honest here: a `static`
+  in C persists across calls exactly as a predef slot does. The one place C and
+  the REPL differ — a C function-static is scoped to the function, ours is
+  document-wide — is unobservable, because shadowing is forbidden, so the name
+  is unique either way.
+- **Declarations may appear at any depth inside the body** and are hoisted to
+  the top of that body. [rev 4] `float u;` typed inside a `for` nested in a
+  function relocates to the function's declaration prologue, the same way a
+  top-level `float x;` relocates to the top of the document today. There is no
+  depth-based rejection: it would break the very C89-flavor analogy that
+  motivates hoisting. Every reference therefore follows its declaration, and
+  flatten's binding stays a prefix scan.
+- The no-shadowing rule still does the work depth-rejection used to:
+  `for(i, 0, n) { float i; }` hoists `i` into collision with the iterator and
+  is rejected with a clear message.
 - Each local binds to `0.0f` on entry to the call, with dep mask 0.
 - Assignment `a = expr;` targets the local when one is visible. Every dep of
   that RHS is reported **structural**. [rev 2]
@@ -141,13 +182,23 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   sequentially against params plus earlier names, re-evaluating per call in
   flatten, and routing them through `repl_eval_expr_to_c` on export — a V2 in
   its own right. [rev 2]
-- No local declarations in `for` or `if` bodies (V2 candidate).
+- No **block**-scoped locals. A declaration inside a `for` or `if` is hoisted to
+  the enclosing *function's* prologue and lives for the whole call — it is not
+  scoped to the block it was typed in, and it is not re-initialized per
+  iteration. [rev 4] This matches C89 and matches how top-level decls already
+  behave; genuine block scope would be a V2.
+- No locals outside a function. `float x;` at top level is a global, as today.
 - No writable function parameters or loop variables.
 - No shadowing.
 - No local arrays; `A`/`B`/`C` stay global scratch.
 - No `// @tune` / `// @config` on a local — those need a panel slot, so they are
   rejected.
-- No implicit local creation from an unknown assignment target.
+- No implicit local creation from an unknown assignment target. `tmp = 5;`
+  without a declaration still errors "undeclared variable". [rev 4] With
+  shadowing forbidden there is no way to distinguish "I meant a new local" from
+  "I mistyped the global's name", so implicit creation would turn every typo
+  into a silent new variable. Only the *declaration statement* may appear
+  anywhere; the declaration itself stays explicit.
 
 ### Representation
 
@@ -161,11 +212,11 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
   can carry the flag at zero cost — and it reads consistently with
   `CMD_VAR_ASSIGN` using the same sentinel for a local target.
 - **Canonical text distinguishes them, matching C:** `  static float a, b = 2;`
-  for a global (unchanged), `<indent>float a, b;` for a local (no `static`, and
-  no initializer — V1 locals have none). `static float`
-  typed inside a function body is rejected — "static declarations must be at the
-  top level" — rather than silently meaning a third thing. This also makes the
-  export/import round-trip fall out for free.
+  for a global (unchanged), `<indent>float a, b;` for a local (no `static`, no
+  initializer, indent from the body's block depth). Because the keyword is also
+  what the *author* types to choose storage [rev 4], canonical text and intent
+  agree by construction — and the export/import round-trip falls out for free,
+  since the same keyword carries the meaning in generated C.
 - `CMD_VAR_ASSIGN` targeting a local carries `var_idx = REPL_VAR_IDX_LOCAL (-1)`
   and emits no `REPL_PREDEF_OP_SET_VALUE`. The target name comes from
   `repl_extract_assignment_parts()` (`src/repl/text_helpers.h:96`), which flatten
@@ -190,41 +241,69 @@ checks `ctx->vars` before the predef table.
 
 - `src/repl/command.h` — add `payload.decl.is_local`; define
   `REPL_VAR_IDX_LOCAL`.
-- `src/repl/compile.c:826` `repl_compile_float_decl` — **decide locality before
-  parsing**, because the parser's initializer handling differs (locals reject
-  them outright). [rev 2] Use the existing
-  `compile_nearest_open_block_head_at(ctx, insert_pos, &type)`
-  (`compile.c:215`) — it returns both the block index and its `CmdType` in one
-  call, which is exactly the "direct function body only" test *and* supplies the
-  body bound for the reference scan in Phase 3. Do **not** use an
-  enclosing-function search: that still resolves to the function from inside a
-  nested `for`/`if`, silently taking the local path where the plan says reject.
-  - no open block → existing global path, untouched.
-  - open block is `CMD_FUNC_DEF` → local path: `decl_pos` = first non-decl row
-    after the func header; `build_decl_predef_ops` emits nothing; canonical text
-    has no `static`, and `format_decl_text` (`compile.c:739`) grows a
-    local/global prefix switch (it needs no initializer handling, since locals
-    have none).
-  - open block is `CMD_FOR_BEGIN` / `CMD_IF_BEGIN` → reject.
+- `src/repl/compile.c:826` `repl_compile_float_decl` — **decide storage before
+  parsing**, because the two paths validate initializers differently. [rev 2]
+  The decision is a two-step, in this order [rev 4]:
+
+  1. **Lexical: did the user type `static`?** `repl_scan_decl_float_prefix`
+     (`text_helpers.c:247`) already recognizes the optional prefix but discards
+     the fact; have it report it. `static` present → global path, existing
+     behavior, works from any cursor position.
+  2. **Otherwise, is there an enclosing function?** Walk the `ScopeFrame` stack
+     to the innermost open `CMD_FUNC_DEF` — the walk already in
+     `compile_name_is_active_func_param` (`compile.c:265`), which Phase 1 is
+     folding into kind-tagged `collect_visible_vars_in()` anyway, so this
+     converges rather than adding a fourth scope walker. Found → local path;
+     not found → global path.
+
+  Rev 2 said to use `compile_nearest_open_block_head_at` (`compile.c:215`) and
+  explicitly *not* an enclosing-function search. That was correct for the old
+  "reject in `for`/`if` bodies" policy and is now wrong: with hoist-from-any-depth,
+  resolving through a nested `for`/`if` to the owning function is exactly the
+  required behavior. [rev 4] The nearest-open-block helper is still useful — it
+  keeps a stack of all open block indices, so the innermost `CMD_FUNC_DEF` can
+  be read off it directly, and the same index feeds
+  `compile_scope_find_block_end` for the body bound the Phase 3 reference scan
+  needs.
+
+  On the local path: `decl_pos` = first non-decl row after the func header
+  (mirroring the global rule, which skips only `CMD_VAR_DECLARE` rows);
+  `build_decl_predef_ops` emits nothing; canonical text drops `static`; and
+  `format_decl_text` (`compile.c:739`) grows a local/global prefix switch plus a
+  depth-aware indent. It needs no initializer handling — locals have none.
 - **The parser needs a locality-aware preflight, because it currently rejects
   the local cases before any local diagnostic can run.** [rev 3]
-  `parse_float_name_list` (`compile.c:573`) strips the optional `static` prefix
-  without reporting whether the user typed it, and validates initializer
-  identifiers against predefs only (`compile.c:654`) — so `float x = param;`
-  dies with "unknown identifier 'param'" before `validate_local_decl_names()`
-  can emit the promised initializer message. Add a lexical preflight (or a
-  `FloatDeclParse` mode flag) that, on the local path, rejects **before**
-  initializer validation and evaluation:
-  - a `static` prefix → "local declarations cannot be static"
+  `parse_float_name_list` (`compile.c:573`) validates initializer identifiers
+  against predefs only (`compile.c:654`), so `float x = param;` dies with
+  "unknown identifier 'param'" before `validate_local_decl_names()` can emit the
+  promised initializer message. Add a lexical preflight (or a `FloatDeclParse`
+  mode flag) that, on the local path, rejects **before** initializer validation
+  and evaluation:
   - any top-level `=` → "local declarations cannot have an initializer — assign
     on the next line"
   - a `// @tune` / `// @config` tag → "@tune/@config require a global
-    declaration" (these need a variable-panel slot, which locals do not have —
-    this is the enforcement point the earlier revision promised but never
+    declaration — use `static float`" (these need a variable-panel slot, which
+    locals do not have; this is the enforcement point rev 2 promised but never
     located)
+
+  `static` is no longer a rejection here — it selects the global path in step 1
+  above, so the preflight got *smaller* under the rev-4 rule. [rev 4]
 
   Test with `float x = param;`, not only `float x = 1;` — they fail in different
   places today.
+- **Make the storage choice visible in the status line.** [rev 4] Storage now
+  depends on cursor position for the plain-`float` case, which is invisible
+  state. `build_decl_commit_message` (`compile.c:815`) already produces
+  `"declared a, b, c"`; have the local path say `"declared local u in blade"`.
+  Combined with the canonical text (`float` vs `static float`) that gives two
+  independent confirmations of what the author just got.
+- **Overwrite-in-place applies only when the storage kind is unchanged.**
+  [rev 4] Today a non-insert-mode commit with the cursor on a `CMD_VAR_DECLARE`
+  row replaces that row in place. With two kinds of decl row, retyping a local
+  as `static float x;` (or a global as plain `float x;` from inside a function)
+  changes where the row must *live* — document top vs. function-body top. Those
+  cases must delete-here-and-reinsert rather than replace in place, or the row
+  ends up correctly flagged and wrongly positioned.
 - New `validate_local_decl_names()` beside `validate_decl_names`
   (`compile.c:693`). Rejects: duplicate-in-decl; any name visible at that point
   per `collect_visible_vars_in()` (param / loop var / outer local); any name in
@@ -515,11 +594,23 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   drawIt() { float x; x = radius; glVertex3f(x, 0, 0); }
   ```
   Move the `radius` slider; the emitted vertex must track it.
-- a local decl in a `for` / `if` body is rejected — **including when the cursor
-  sits in a `for` nested inside a function**, which is the case an
-  enclosing-function search gets wrong [rev 2]
-- `static float` inside a function body is rejected; `float x = 1;` inside a
-  function body is rejected [rev 2]
+- **hoisting from depth** [rev 4] — `float u;` typed inside a `for`, and inside
+  an `if`, both nested in a function, relocate to that function's prologue and
+  bind correctly at call time. (Rev 2 had the inverse test here, asserting
+  rejection; the rev-4 policy replaces it.)
+- **cursor adjustment on hoist** [rev 4] — after the relocation the edit line
+  still points at the row the author was typing on, for both the local case
+  (row moves up within the body) and `static` from inside a function (row moves
+  to the document top)
+- **keyword selects storage** [rev 4] — `static float x;` with the cursor inside
+  a function body produces a *global* at the document top, not a local; plain
+  `float x;` at top level still produces a global (regression guard on existing
+  behavior)
+- **storage-kind change relocates** [rev 4] — retyping a local decl row as
+  `static float x;` must move the row to the document top, not replace in place
+- `float x = 1;` inside a function body is rejected [rev 2]
+- `for(i, 0, n) { float i; }` is rejected by the shadowing rule after hoisting
+  [rev 4]
 - **declaration prologue tolerance** [rev 2] — comment out the first of three
   locals; the remaining two must still bind
 - **`repl_compile_split_decl` on a local** keeps `is_local` and the local form
