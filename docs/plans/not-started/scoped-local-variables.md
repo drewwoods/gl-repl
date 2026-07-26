@@ -1,8 +1,27 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 2 after review)
+## Status — NOT STARTED (2026-07-26, rev 3 after second review)
 
-Rev 2 incorporates an external review that found seven material issues, all
+Rev 3 incorporates a second review (four blocking findings plus four
+corrections, all confirmed). One changed the representation, the rest tightened
+under-specified guards; items are marked **[rev 3]** in place. Headlines:
+
+- **`is_local` moves onto `var_idx`, not into the payload union.** Measured,
+  the decl arm dominates the union exactly, so a new `int` would have grown
+  every command in the source array, flat array, undo rings and scene snapshots.
+- **The declaration parser needs a locality-aware preflight.** `float x = param;`
+  currently dies on unknown-identifier validation before any local diagnostic can
+  run, and the parser discards whether the user typed `static`.
+- **The local reference scan cannot reuse `compile_line_uses_global_ident`**,
+  which by design suppresses exactly the references the guard needs to see — and
+  there is a *second* decl-overwrite cascade in `repl_compile_var_assign`.
+- **Reverse-shadowing must also cover the loop-iterator capacity cap**, which
+  silently drops an outer binding rather than erroring.
+- **Exported locals are uninitialized C automatics** while the REPL zero-fills.
+  Accepted as a documented divergence (the language is C-like, and C's rule is
+  the right one for exported code); rejected alternatives recorded in Phase 4.
+
+Rev 2 incorporated a first review that found seven material issues, all
 confirmed against the tree. Two changed the design rather than the wording:
 
 - **Locals take no initializer in V1.** `format_decl_text` (`compile.c:753`)
@@ -132,10 +151,18 @@ functions involved return coordinate triples (`px/py/pz`, `x/y`), so a scalar
 
 ### Representation
 
-- `payload.decl.is_local` — new int on the decl struct
-  (`src/repl/command.h:139-142`). The union is keyed on `type` and has room.
+- **Mark a local decl with `var_idx = REPL_VAR_IDX_LOCAL` on the decl row.**
+  [rev 3] Not a new union field: measured, `sizeof(GLCmd) = 208`,
+  `sizeof(payload) = 132`, `sizeof(payload.decl) = 132` — the decl arm dominates
+  the union exactly (`8 × 16` names + `int count`, no slack), so an added `int`
+  grows *every* command by 4 bytes across the source array, the flat array, the
+  32-slot undo rings and every scene snapshot. `var_idx` is already documented as
+  "Zero / unused for every other CmdType" (`command.h:120-123`), so a decl row
+  can carry the flag at zero cost — and it reads consistently with
+  `CMD_VAR_ASSIGN` using the same sentinel for a local target.
 - **Canonical text distinguishes them, matching C:** `  static float a, b = 2;`
-  for a global (unchanged), `<indent>float a, b = 2;` for a local. `static float`
+  for a global (unchanged), `<indent>float a, b;` for a local (no `static`, and
+  no initializer — V1 locals have none). `static float`
   typed inside a function body is rejected — "static declarations must be at the
   top level" — rather than silently meaning a third thing. This also makes the
   export/import round-trip fall out for free.
@@ -179,6 +206,25 @@ checks `ctx->vars` before the predef table.
     local/global prefix switch (it needs no initializer handling, since locals
     have none).
   - open block is `CMD_FOR_BEGIN` / `CMD_IF_BEGIN` → reject.
+- **The parser needs a locality-aware preflight, because it currently rejects
+  the local cases before any local diagnostic can run.** [rev 3]
+  `parse_float_name_list` (`compile.c:573`) strips the optional `static` prefix
+  without reporting whether the user typed it, and validates initializer
+  identifiers against predefs only (`compile.c:654`) — so `float x = param;`
+  dies with "unknown identifier 'param'" before `validate_local_decl_names()`
+  can emit the promised initializer message. Add a lexical preflight (or a
+  `FloatDeclParse` mode flag) that, on the local path, rejects **before**
+  initializer validation and evaluation:
+  - a `static` prefix → "local declarations cannot be static"
+  - any top-level `=` → "local declarations cannot have an initializer — assign
+    on the next line"
+  - a `// @tune` / `// @config` tag → "@tune/@config require a global
+    declaration" (these need a variable-panel slot, which locals do not have —
+    this is the enforcement point the earlier revision promised but never
+    located)
+
+  Test with `float x = param;`, not only `float x = 1;` — they fail in different
+  places today.
 - New `validate_local_decl_names()` beside `validate_decl_names`
   (`compile.c:693`). Rejects: duplicate-in-decl; any name visible at that point
   per `collect_visible_vars_in()` (param / loop var / outer local); any name in
@@ -248,23 +294,48 @@ existing locals in scope:
 
 | Edit | Path | Must reject |
 |---|---|---|
-| Add/rename a function parameter | `repl_compile_func_def` (`compile.c:2364`) | a name matching a local in that body; `params + locals > MAX_EXPR_VARS` |
-| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local |
+| Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; `params + locals > MAX_EXPR_VARS` |
+| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; **`visible_count + 1 > MAX_EXPR_VARS`** |
 | Add a global | `repl_compile_float_decl` global path | a name matching any existing local |
-| Overwrite a local decl row | local path | a name matching a *later* local in the same body |
+| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function** |
+
+Two corrections to that table from rev 2: [rev 3]
+
+- **Validation must live in `repl_compile_func_def_kernel`, not the
+  `repl_compile_func_def` wrapper** — the editor calls the kernel directly
+  (`src/editor/commit.c:568`), so checks placed only on the wrapper are bypassed
+  on the interactive path.
+- **The loop-iterator capacity guard is not optional.** `flatten_for_loop`
+  prepends the iterator and then copies outer bindings under
+  `for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)` (`flatten.c:347-351`) —
+  at the cap it **silently drops** an outer variable, which with locals in the
+  array means a live local vanishes mid-body and reads as 0. Reject at compile
+  time instead.
 
 - `repl_compile_split_decl` (`compile.c:921`) must preserve `is_local` and emit
   the local form. [rev 2] It currently re-parses through
   `parse_float_name_list` and rebuilds every row through the global
   `static float` formatter, so Ctrl+Shift+S on a local would silently convert it
   to a global. Needs an explicit test.
-- `compile_name_is_still_referenced` (`compile.c:352`) walks the whole document.
-  Add a body-bounded variant for locals, and make sure
-  `compile_line_uses_global_ident`'s shadow check (`compile.c:327`) does not
-  treat the local's own decl as a shadowing binder.
-- `compile_collect_undeclare_for_range` (`compile.c:1413`) must skip local decls
-  when emitting `REPL_PREDEF_OP_UNDECLARE` (no slot to release) while still
-  running the bounded reference check.
+- **The local reference scan must not reuse `compile_line_uses_global_ident`.**
+  [rev 3] That helper deliberately returns 0 whenever the name is visible as a
+  local (`compile.c:342`) — its whole job is "does this line reference the
+  *global*". Once `collect_visible_vars_in()` reports locals, it would suppress
+  *every* reference to a local inside its own body, so the delete guard would
+  conclude an in-use local is unreferenced and let it be removed. An "own
+  declaration" exception does not fix this; the suppression applies to the
+  reference lines, not the declaration. Because shadowing is forbidden, the
+  local variant can be simpler and stricter: a **raw identifier scan over the
+  function body** (via `repl_eval_source_uses_ident`, comment-aware), excluding
+  the range being changed.
+- **Two overwrite paths, not one.** [rev 3] `compile_collect_undeclare_for_range`
+  (`compile.c:1413`) must skip local decls when emitting
+  `REPL_PREDEF_OP_UNDECLARE` (no slot to release) while still running the
+  bounded reference check — **and `repl_compile_var_assign` has its own
+  independent decl-overwrite cascade** (`compile.c:1244`) that calls
+  `compile_name_is_still_referenced` directly. Editing a local declaration row
+  into an assignment goes through that second path and is missed if only the
+  first is updated. Needs an explicit "overwrite a used local" test.
 - **`tests/test_repl_editor.c:3410-3423` documents that a `CMD_VAR_DECLARE`
   inside a block "cannot arise through normal user input", and the block-batch
   comment-toggle path (`compile.c:1614`) is untested for that reason. This
@@ -287,6 +358,22 @@ existing locals in scope:
   on. That is the V2 tax noted under Non-goals.) [rev 2] Globals keep the
   marker; the comment there explains why a C local would shadow the file-scope
   static written by `write_predef_var_globals`.
+- **Accepted divergence: read-before-assign.** [rev 3] The REPL binds every
+  local to `0.0f` on call entry; `float a, b;` in exported C is an
+  uninitialized automatic, so the same read is undefined there. This is
+  deliberate — the language is C-like, and C's rule is the one exported code
+  should follow. Document it in `docs/USER_GUIDE.md` next to the local-decl
+  syntax: *assign before you read; the REPL happens to zero-fill, exported C
+  does not.*
+
+  The two ways to close the gap were both rejected for V1. Emitting synthesized
+  `a = 0.0f;` lines after the declaration round-trips as ordinary assignments,
+  but reimport turns them into real `CMD_VAR_ASSIGN` rows, so the next export
+  emits them *again* — the body grows by one row per round-trip. Emitting
+  `float a = 0.0f;` would require the local path to accept a literal-zero
+  initializer as a no-op and strip it from canonical text, which is a small but
+  real special case in the parser preflight above. If a future reviewer wants
+  the divergence closed, the literal-zero variant is the cheaper of the two.
 - **Import probably needs no change — verify before touching it.** [rev 2]
   Exported function-body lines already reach `import_try_function_body`
   (`import.c:1779`), which routes through `repl_load_apply_line`
@@ -322,7 +409,13 @@ the export round-trip):
   temporaries; exercises a local written from inside a `for` body (the
   copy-back path).
 - `examples/scenes/whale-particle-system-lit-model.glr` — `drawWhale()`'s
-  `flukeAng`/`finAng`/`detail`.
+  `flukeAng`/`finAng`/`detail`. **`detail` is not a mechanical conversion**
+  [rev 3]: it is declared `static float detail = 30;` (scene line 33) and its
+  first in-body statement is `detail = max(12, floor(detail));` (line 73), which
+  *reads its own prior global value*. As a local starting at 0 that silently
+  becomes `max(12, 0)` = 12 instead of 30, changing the sphere tessellation. The
+  conversion must add an explicit `detail = 30;` seed ahead of it — and this is
+  exactly the class of bug the semantic dump comparison below is meant to catch.
 
 Then `make rebuild-golden` (which re-enters the build with `USE_GL_STUBS=1`), or
 per index: `build/release-gl-stubs/test_repl_core_examples --dump-index N >
@@ -344,10 +437,12 @@ could change undetected) and *unnecessary* (moving declarations shifts
 
 Use a semantic comparator instead:
 
-- Extend `glr_debug_dump_flat_commands_sync` to print `args[0..num_args)` plus
-  the owned payload (`payload.matrix.m[]` for `CMD_MULT_MATRIXF`,
-  `payload.label.fmt` for `CMD_LABEL`). This is a strict improvement to a debug
-  dump and is useful well beyond this work.
+- Extend `glr_debug_dump_flat_commands_sync` to print `num_args` and
+  `args[0..num_args)` plus the owned payload (`payload.matrix.m[]` for
+  `CMD_MULT_MATRIXF`, `payload.label.fmt` for `CMD_LABEL`). **Print floats with
+  `%a`** (or raw bits) [rev 3] — a decimal rendering can hide a difference below
+  its precision, which defeats the point of a byte-exact comparison. This is a
+  strict improvement to a debug dump and is useful well beyond this work.
 - Compare with provenance and storage metadata filtered out: drop
   `src_cmd_idx` / `call_src_cmd_idx` / `root_call_src_cmd_idx` / `var_idx`, and
   skip `CMD_VAR_ASSIGN` and `CMD_VAR_DECLARE` rows entirely (their storage
@@ -368,9 +463,23 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
 - shadow rejections: param, loop var, outer local, global — one case each
 - **reverse-direction collisions** [rev 2]: add a global named after an existing
   local; rename a param onto a local; add a loop iterator named after a visible
-  local; overwrite a local with a later local's name — one case each
-- `MAX_EXPR_VARS` overflow, both at declaration and when parameters are added
-  afterwards
+  local; overwrite a local with a later local's name — one case each.
+  Plus [rev 3]: **add/rename a local onto an iterator that already exists later
+  in the function** (the mirror case rev 2 missed), and drive the param case
+  through `repl_compile_func_def_kernel` as the editor does, not just the
+  wrapper
+- `MAX_EXPR_VARS` overflow at declaration, when parameters are added afterwards,
+  and **when a loop iterator is added at the cap** [rev 3] — the last must be
+  rejected at compile time, since `flatten_for_loop` would otherwise silently
+  drop an outer local (`flatten.c:347-351`)
+- **`float x = param;` inside a function body is rejected with the initializer
+  message, not an unknown-identifier error** [rev 3]
+- **`// @tune` on a local declaration is rejected** [rev 3]
+- **overwrite a *used* local decl row into an assignment** [rev 3] — exercises
+  `repl_compile_var_assign`'s independent cascade (`compile.c:1244`)
+- **delete a local that is referenced later in the same body must be rejected**
+  [rev 3] — the case a reused `compile_line_uses_global_ident` would wrongly
+  allow
 - recursion — two frames do not share a local (a `sierpinski`-shaped case)
 - **accumulate across a `for` inside a func** (the `flatten_for_loop` copy-back)
 - **rebake routing** [rev 2] — this must change a *live predef value*, not just
@@ -412,9 +521,10 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
 ```
 
 Manual: launch `./gl-repl`, open a converted scene, confirm the variable panel
-shows only the remaining globals (no Kepler scratch), edit a local's initializer
-and confirm the scene responds, and confirm Ctrl+Z after a local decl restores
-cleanly.
+shows only the remaining globals (no Kepler scratch), scrub a *global* that
+feeds a local and confirm the scene tracks it (this is the structural-dep path
+from Phase 2, and the place a rebake regression would show as a frozen scene),
+and confirm Ctrl+Z after a local decl restores cleanly.
 
 ### Resolved by review (rev 2)
 
