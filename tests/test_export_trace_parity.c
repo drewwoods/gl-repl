@@ -153,6 +153,30 @@ static const char *prog_label_rasterpos[] = {
     NULL
 };
 
+static const char *prog_stencil_mask[] = {
+    /* The two-pass masking shape, and the only place the exported C of a
+     * stencil scene is compiled at all: it proves the export writer emits
+     * every stencil call (and that the prologue still compiles with them
+     * present). Note this compares call *counts*, not argument values —
+     * the ref-truncation parity is pinned by value in
+     * test_repl_flatten_rebake.c and test_repl_export_all_commands.c. */
+    "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);",
+    "glEnable(GL_STENCIL_TEST);",
+    "glStencilFunc(GL_ALWAYS, 1, 0xFF);",
+    "glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);",
+    "glStencilMask(0xFF);",
+    "glBegin(GL_TRIANGLES);",
+    "glVertex3f(0, 0, 0);",
+    "glVertex3f(1, 0, 0);",
+    "glVertex3f(0, 1, 0);",
+    "glEnd();",
+    "glStencilMask(0x00);",
+    "glStencilFunc(GL_EQUAL, 1, 0xFF);",
+    "glutSolidCube(1);",
+    "glDisable(GL_STENCIL_TEST);",
+    NULL
+};
+
 static const TraceProgram g_curated[] = {
     { "triangle",            prog_triangle,        NULL },
     { "loop_in_begin",       prog_loop_in_begin,   NULL },
@@ -161,6 +185,7 @@ static const TraceProgram g_curated[] = {
     { "glut_cube",           prog_glut_cube,       NULL },
     { "function_call",       prog_function_call,   NULL },
     { "label_rasterpos",     prog_label_rasterpos, NULL },
+    { "stencil_mask",        prog_stencil_mask,    NULL },
 };
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
 

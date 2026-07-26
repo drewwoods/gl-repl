@@ -917,8 +917,9 @@ harmless, but dedupe it in passing while you are in the file.
   explicitly wrote 0 (§1.5); and the palette **repeats every 16 values**, which is
   why rows print numbers (§1.5, §1.8). Add a note that replay fades can
   contribute legend rows during a fade (§1.5).
-- `CLAUDE.md` **and** `AGENTS.md` — the Supported Commands block is duplicated
-  verbatim across both; add the three commands to each.
+- `CLAUDE.md` — add the three commands to the Supported Commands block.
+  (`AGENTS.md` is a **symlink** to `CLAUDE.md`, not a duplicate copy; one edit
+  covers both. The earlier draft of this plan claimed otherwise.)
 - `docs/MODULES.md` — the `src/subsystems/buffer_viz/` rows and the new
   `buffer_viz_` prefix boundary note (Phase 0), plus the
   `src/ui/subsystems/buffer_viz_legend.c` row.
@@ -957,6 +958,18 @@ harmless, but dedupe it in passing while you are in the file.
   itself untested): fractional, negative, `> 255`, loop-variable, predef-var,
   survives a warm-cache reflatten, and an exported-C comparison confirming
   truncation matches C's float→`GLint` conversion.
+
+  > Landed as a **value-level** comparison (`test_repl_flatten_rebake.c`'s
+  > `c_stencil_ref()` oracle plus the export-text assertion in
+  > `test_repl_export_all_commands.c`), not through
+  > `test_export_trace_parity`: that harness compares per-symbol *call
+  > counts*, never argument values, so it structurally cannot see a
+  > truncation difference. It carries a `stencil_mask` curated program
+  > anyway — the one place exported stencil C is compiled at all.
+  >
+  > Note the resulting divergence, which is intended: an out-of-range
+  > *animated* `ref` is clamped REPL-side but passed raw by the exported C.
+  > The rendered results still agree because GL clamps `ref` itself.
 - **Host-pass suite** (§1.6): grid/axes unaffected by an active stencil test;
   polygon outlines *are* affected; cursor highlight is not; an overlay redraw
   leaves the stencil buffer byte-identical (no writes leaked through an inherited

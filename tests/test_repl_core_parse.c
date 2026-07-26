@@ -85,6 +85,26 @@ static int parse_for_test_with_vars(const char *line, GLCmd *cmd,
     return ok;
 }
 
+/* Vars *and* canonical text: the pair the stencil expression slot needs,
+ * since a paren-naive arg split fails at text reassembly, not at parse. */
+static int parse_cmd_with_text_and_vars(const char *line, GLCmd *cmd,
+                                        char *text_out, int text_sz,
+                                        ExprVar *vars, int num_vars) {
+    ReplParseContext ctx = {
+        .source_line_idx = 0,
+        .vars = vars, .num_vars = num_vars,
+    };
+    ReplParsedLine pl;
+    int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
+
+    if (cmd) *cmd = pl.cmd;
+    if (text_out && text_sz > 0) {
+        strncpy(text_out, pl.text, (size_t)(text_sz - 1));
+        text_out[text_sz - 1] = '\0';
+    }
+    return ok;
+}
+
 static void test_flat_stencil_clear_predicate(void) {
     GLCmd cmds[3];
 
@@ -1632,17 +1652,25 @@ int main(void) {
                     strstr(cmd_text, "0x2A") != NULL);
     }
     {
+        /* i = 5 so min(i, 3) is 3 — a value the zero-initialized command
+         * cannot produce by accident. A paren-naive split would hand the
+         * ref slot "min(i" and fail before evaluating anything, and would
+         * reassemble the canonical text wrong even if it did. */
         glr_ctrl_reset_all();
         GLCmd cmd;
-        ExprVar vars[1] = { { "i", 0.0f } };
+        char cmd_text[MAX_LINE_LEN] = "";
+        ExprVar vars[1] = { { "i", 5.0f } };
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test_with_vars(
+        int ok = parse_cmd_with_text_and_vars(
             "glStencilFunc(GL_EQUAL, min(i, 3), 0xFF)", &cmd,
-            vars, ARRAY_LEN(vars));
+            cmd_text, sizeof(cmd_text), vars, ARRAY_LEN(vars));
         ASSERT_TRUE("glStencilFunc paren-aware ref expression parses", ok == 1);
         ASSERT_TRUE("glStencilFunc expression retains dynamic flag", cmd.has_vars == 1);
-        ASSERT_TRUE("glStencilFunc expression retains the default value",
-                    (int)cmd.args[1] == 0);
+        ASSERT_TRUE("glStencilFunc expression evaluates against live vars",
+                    (int)cmd.args[1] == 3);
+        ASSERT_TRUE("glStencilFunc keeps a comma-bearing ref expression intact",
+                    strstr(cmd_text,
+                           "glStencilFunc(GL_EQUAL, min(i, 3), 0xFF);") != NULL);
     }
     {
         glr_ctrl_reset_all();
@@ -1658,10 +1686,31 @@ int main(void) {
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("glStencilFunc negative constant ref rejected",
                     parse_for_test("glStencilFunc(GL_EQUAL, -0.1, 0xFF)", &cmd) == 0);
+        assert_status_contains("glStencilFunc negative ref message", "0..255");
         ASSERT_TRUE("glStencilFunc oversized mask rejected",
                     parse_for_test("glStencilFunc(GL_EQUAL, 1, 256)", &cmd) == 0);
+        assert_status_contains("glStencilFunc mask range message", "0..255");
         ASSERT_TRUE("glStencilMask negative mask rejected",
                     parse_for_test("glStencilMask(-1)", &cmd) == 0);
+        assert_status_contains("glStencilMask range message", "0..255");
+    }
+    {
+        /* The mask slot is literal-only by policy (a mask is not a quantity
+         * to animate), so a *valid* expression is still a rejection there —
+         * unlike the ref slot two blocks up, which takes the same text. */
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        ExprVar vars[1] = { { "i", 1.0f } };
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glStencilFunc rejects an expression in the mask slot",
+                    parse_for_test_with_vars("glStencilFunc(GL_EQUAL, 1, i)",
+                                             &cmd, vars, ARRAY_LEN(vars)) == 0);
+        assert_status_contains("glStencilFunc mask literal message", "literal");
+        ASSERT_TRUE("glStencilMask rejects an expression",
+                    parse_for_test_with_vars("glStencilMask(i + 1)",
+                                             &cmd, vars, ARRAY_LEN(vars)) == 0);
+        ASSERT_TRUE("glStencilMask rejects a predef variable",
+                    parse_for_test("glStencilMask(t)", &cmd) == 0);
     }
     {
         glr_ctrl_reset_all();

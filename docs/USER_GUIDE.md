@@ -412,8 +412,9 @@ numeric argument everywhere is a full math expression.
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
-    `GL_LINE_STIPPLE`, `GL_MULTISAMPLE`, `GL_STENCIL_TEST`, `GL_LIGHT0..GL_LIGHT3`,
-    `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
+    `GL_LINE_STIPPLE`, `GL_MULTISAMPLE`, `GL_STENCIL_TEST`,
+    `GL_POLYGON_OFFSET_FILL`, `GL_POLYGON_OFFSET_LINE`, `GL_POLYGON_OFFSET_POINT`,
+    `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
 - [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
@@ -574,18 +575,26 @@ draw only where that mask passes. Start a frame with
 `glClearStencil` command yet.
 
 `glStencilFunc(func, ref, mask)` compares the incoming reference with the
-stored value while `GL_STENCIL_TEST` is enabled. `ref` may be an expression;
-`ref` and the decimal-or-hexadecimal `mask` are restricted to 0 through 255.
-Fractional references truncate toward zero before GL receives them.
+stored value while `GL_STENCIL_TEST` is enabled. Both `ref` and `mask` are
+restricted to 0 through 255 and accept decimal or `0xNN`, but they differ in
+kind: `ref` is a full expression, so it can animate, while `mask` must be a
+literal — a mask names bits, not a quantity to sweep. Fractional references
+truncate toward zero before GL receives them, and an animated `ref` that
+leaves the range is clamped to it rather than rejected.
+
 `glStencilOp` chooses the actions for stencil failure, depth failure, and a
 full pass; `glStencilMask` limits which stencil bits can be written. Use
 `glStencilMask(0)` to protect a completed mask while later geometry tests it.
 
-The **Stencil view** menu visualizes zero versus non-zero values, not write
-history: it cannot distinguish an untouched pixel, a clear to zero, and an
-explicit write of zero. Its Palette mode intentionally repeats every 16 values;
-the legend prints numeric values to disambiguate matching swatches. Replay
-fades can add values to that legend while a fade is active.
+The grid, axes, backdrop and light indicators are drawn with the stencil test
+suspended, so a mask never clips the host's own chrome. Vertex outlines and
+points *do* follow it — they report what your geometry did, and an outline
+around masked-away geometry would be a lie — but they never write stencil, so
+turning them on cannot disturb a mask a later pass depends on.
+
+A mask is invisible in the rendered frame, so there is a viewer for it:
+[Stencil view](#stencil-view), under [Seeing What You're
+Doing](#seeing-what-youre-doing).
 
 ### Wireframe & decals — glPolygonMode, glPolygonOffset
 
@@ -1287,6 +1296,51 @@ depth image is taken from the final accumulation pass, so AA and motion
 blur keep working in Split's normal half. On the web build the row is
 inert — WebGL cannot read the depth buffer back.
 
+### Stencil view
+
+**Stencil view** cycles **Off / Palette / Ramp / Split** — a false-color
+overlay of the stencil buffer, with a legend in the scene rect's top-left
+corner. It is the companion to [Stencil masks](#stencil-masks): a mask changes
+what draws without ever showing itself, so this is the only way to see what
+your mask pass actually wrote.
+
+Zero is fully transparent, which makes the overlay sparse — the ordinary
+render shows through everywhere the buffer is 0, and only stenciled pixels
+take a color. **Palette** gives each value a fixed swatch, **Ramp** normalizes
+the non-zero values to a smoothed min/max, and **Split** restricts the overlay
+to the right half. Vertex outlines, points and guides draw *over* the overlay,
+so you can read the viz and the geometry together.
+
+Four things are worth knowing before you trust what you see:
+
+- It shows **zero versus non-zero, not write history**. An untouched pixel, a
+  clear to zero, and an explicit `GL_ZERO` write are all byte 0, and all
+  invisible. That is a property of the buffer, not of the viewer.
+- The palette **repeats every 16 values** (1 and 17 share a swatch), which is
+  why every legend row prints its numeric value. The legend lists the biggest
+  rows by pixel count — up to eight, plus a `+N more` row when there are more
+  — and always keeps the background and total rows.
+- Nothing clears the scene rect for you, so a program that omits
+  `GL_STENCIL_BUFFER_BIT` from its `glClear` accumulates stencil across
+  frames. With the view on, the status line points that out once per program
+  change: *Stencil view: program never clears GL_STENCIL_BUFFER_BIT*.
+- **Replay fades** re-execute old state commands before the snapshot is taken,
+  so legend rows can appear during a fade that match no visible geometry.
+
+With Depth view on at the same time, depth wins wherever it paints: it
+replaces the whole rect after the stencil overlay composites, so the stencil
+overlay survives only in the live half of depth's Split. That falls out of the
+compositing order and is left that way deliberately — a menu row that silently
+switched another one off would be the worse surprise.
+
+The overlay needs a stencil readback, which the web build cannot do; there the
+row refuses with *Stencil view unavailable: WebGL context can't read the
+stencil buffer (works in the native build)*, and a native context that granted
+no stencil planes refuses the same way. The commands themselves work
+everywhere — only the visualization is native/OSMesa-only. A scene whose
+`@cfg` header carries `stencil_view` loads its stored value regardless, so
+files round-trip unchanged between machines.
+
 ### The Config menu
 
 Everything above — and the stage dressing below — has a home menu. Open the
@@ -1301,7 +1355,7 @@ taller than the window):
 - **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
   Light indicators
 - **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
-- **GEOMETRY** — Wireframe, Winding, Auto-normals
+- **GEOMETRY** — Wireframe, Winding, Depth view, Stencil view, Auto-normals
 - **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
   Vertex outline style, Normal vectors, Polygon highlight, Transform guides
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
