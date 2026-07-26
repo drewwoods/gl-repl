@@ -1079,9 +1079,11 @@ TEST_BINS_ORDERED = \
 	$(foreach test,$(TEST_SLOW_FIRST),$(filter $(test),$(TEST_BINS))) \
 	$(filter-out $(TEST_SLOW_FIRST),$(TEST_BINS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS_ORDERED),'$(test):::$($(test)_RUN)')
+RUN_TEST_TARGETS = $(addprefix run-,$(TEST_BINS))
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
 TEST_JOBS ?=
+TEST_ARGS ?=
 
 ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS) $(BENCH_OBJS))
 
@@ -1939,7 +1941,16 @@ check: ## Run all checks.
 # and sanitizer targets. Calling `make test` without it delegates to
 # test-stubs (including its static checks) rather than maintaining a separate
 # real-GL, context-free test suite.
+#
+# GNU make treats tokens after its own `--` as additional goals, not recipe
+# arguments.  TEST_ARGS is therefore the pass-through for these single-test
+# runners: `make run-test_repl_core_examples TEST_ARGS='--dump-index 2'`.
 ifeq ($(USE_GL_STUBS),1)
+$(RUN_TEST_TARGETS): run-%: %
+	@REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	$($*_RUN) $(TEST_ARGS)
+
 test: $(TEST_BINS) ## Run the stubbed automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
@@ -1953,12 +1964,17 @@ test-detailed: $(TEST_BINS) ## Run the stubbed test suite with verbose example e
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 else
+$(RUN_TEST_TARGETS):
+	+$(MAKE) --no-print-directory $@ USE_GL_STUBS=1
+
 test: ## Run the full headless test gate (checks plus GL stubs).
 	$(MAKE) --no-print-directory test-stubs
 
 test-detailed: ## Run stubbed tests with verbose example export/compile logging.
 	$(MAKE) --no-print-directory test-detailed USE_GL_STUBS=1
 endif
+
+.PHONY: $(RUN_TEST_TARGETS)
 
 # Like individual test aliases, rebuild-golden must enter the stubbed build
 # before resolving BINDIR.  Otherwise its prerequisite builds
@@ -2393,7 +2409,9 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 entirely in src/app/glr_audio.c.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
-	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"
+	@printf "Individual tests can be built with make test_eval, or built and run with\n"
+	@printf "                 make run-test_eval. Pass arguments with TEST_ARGS, e.g.\n"
+	@printf "                 make run-test_repl_core_examples TEST_ARGS='--show-mismatch'.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 -include $(DEPS)

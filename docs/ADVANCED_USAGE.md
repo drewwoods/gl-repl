@@ -99,6 +99,7 @@ These are make variables or script/test env vars. Pass make variables as
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
 | `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
 | `TEST_JOBS` | Makefile, `scripts/run-tests.sh`. | Limits parallel test binaries; empty/`0` means unbounded parallel runner behavior. |
+| `TEST_ARGS` | Makefile `run-test_*` targets. | Extra arguments passed to one test binary, e.g. `make run-test_repl_core_examples TEST_ARGS='--show-mismatch'`. |
 | `TEST_LOG_DIR` | `scripts/run-tests.sh`. | Directory for per-test logs; default `build/test-logs/run-<pid>`. |
 | `NO_COLOR` | Test runners. | Disables ANSI color output. |
 | `FORCE_COLOR`, `CLICOLOR_FORCE` | Test runners. | Forces ANSI color output when `NO_COLOR` is unset. |
