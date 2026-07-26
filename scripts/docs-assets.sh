@@ -85,6 +85,7 @@ WARM_EXAMPLE=180
 # settle immediately; 30 frames keeps t small but past startup.
 WARM_FADE=90
 WARM_PLAIN=30
+WARM_SPLASH=190  # currently SPLASH_TOTAL_FRAMES = 150 + 36
 
 # Format categories use public asset names, not output filenames, so they flow
 # through the same want()/parallel dispatch as explicitly named assets. Put
@@ -1121,16 +1122,19 @@ if want transform-stress; then
 fi
 
 if want variable-panel || want tune-badges; then
+    (
+    WARM=$WARM_SPLASH
     still "$WORK/variable-panel.png" 16 "$(stage_tune)"
     if want variable-panel; then
         cp "$WORK/variable-panel.png" "$OUT/variable-panel.png"
         echo "docs-assets: wrote $OUT/variable-panel.png"
     fi
     if want tune-badges; then
-        magick "$WORK/variable-panel.png" -crop 260x180+940+680 +repage \
+        magick "$WORK/variable-panel.png" -crop 265x122+935+653 +repage \
             "$OUT/tune-badges.png"
         echo "docs-assets: wrote $OUT/tune-badges.png"
     fi
+    )
 fi
 
 if want motion-blur; then
