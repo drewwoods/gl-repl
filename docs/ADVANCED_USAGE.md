@@ -8,10 +8,13 @@ the language, the panels), see the [User Guide](USER_GUIDE.md).
 ## Synopsis
 
 ```
-gl-repl [file.c | workspace/ | -] [--example name|n] [--time secs]
-        [--export-ply out.ply [--export-ply-srgb]] [--noaccum]
-        [--assets dir] [--no-audio] [--dump-code] [--flat-histogram]
-        [--detailed-prof] [--list-examples]
+gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
+        [--time secs] [--window WxH]
+        [--export-ply out.ply [--export-ply-srgb]] [--no-accum]
+        [--assets dir] [--examples-dir dir] [--no-audio]
+        [--dump-code] [--dump-flat] [--flat-histogram]
+        [--dump-state-layout] [--detailed-prof]
+        [--list-examples] [--list-tours]
 ```
 
 ## Options
@@ -21,17 +24,29 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--time secs]
 | *file*.c | Reload a previously saved session from a single file. |
 | *workspace*/ | Load every `*.c` under the directory as a separate scene. |
 | `-` | Read a saved session or REPL snippet from standard input. Input is buffered to an anonymous temporary file so the normal multi-pass importer is preserved. |
+| `-h`, `--help` | Print the full flag + environment reference and exit. |
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
-| `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). |
-| `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. |
+| `--examples-dir` *dir* | Load `catalog.ini` + `scenes/` from *dir* at runtime instead of the compiled-in examples. |
+| `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
+| `--list-tours` | Print the built-in guided tours and exit. |
+| `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |
+| `--window` *WxH* | Initial window size (default 1200x800). |
+| `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. Needs a display. |
 | `--export-ply-srgb` | With the above, decode vertex colors sRGB → linear for color-managed viewers. |
-| `--noaccum` | Disable the accumulation buffer (anti-aliasing + motion blur). |
+| `--no-accum` | Disable the accumulation buffer (anti-aliasing + motion blur). |
 | `--assets` *dir* | Scan *dir* for `*.mp3` instead of `./assets`. Beats `GLR_ASSETS_DIR`. |
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
-| `--dump-code` | Print the loaded buffer to stdout. |
+| `--dump-code` | Load the session and print the editor buffer to stdout, then exit. |
+| `--dump-flat` | Load the session and print the flattened command list, then exit. |
 | `--flat-histogram` | Print per-function / per-line flat-command budget costs. Honors `--example`. |
-| `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). |
+| `--dump-state-layout` | Print the `ReplRuntimeState` field layout and exit. |
+| `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). Also via `GLR_DETAILED_PROF`. |
+
+Unrecognized flags are not rejected — the first non-option argument is taken as
+the input file, so a typo lands as `Error: cannot open --typo`. `--help` is the
+authoritative list; the completions in
+[Shell completion](#shell-completion) offer exactly these flags.
 
 ## Shell completion
 
