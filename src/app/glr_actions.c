@@ -466,7 +466,8 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = ARRAY_LEN(depth_viz_names), .state_names = depth_viz_names,
       .key_code = KM_KEY(GLR_DEPTH_VIZ), .modifiers = KM_MODS(GLR_DEPTH_VIZ) },
     { .label = "Stencil view", .key = GLR_CONFIG_STENCIL_VIZ,
-      .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names },
+      .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names,
+      .key_code = KM_KEY(GLR_STENCIL_VIZ), .modifiers = KM_MODS(GLR_STENCIL_VIZ) },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 

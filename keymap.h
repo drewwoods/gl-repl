@@ -119,7 +119,8 @@
 #define GLR_VERTEX_POINTS    KEY_CTRL_P, GLUT_ACTIVE_SHIFT
 #define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
-#define GLR_SPLIT_DECL       KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
+#define GLR_STENCIL_VIZ      KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
+#define GLR_SPLIT_DECL       KEY_CTRL_Q, GLUT_ACTIVE_SHIFT
 #define GLR_AUTO_TIME        KEY_CTRL_T, 0
 #define GLR_WINDING_VIEW     KEY_CTRL_B, GLUT_ACTIVE_SHIFT
 #define GLR_MSAA             KEY_CTRL_U, 0
