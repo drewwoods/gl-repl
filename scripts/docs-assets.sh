@@ -1114,7 +1114,10 @@ if want glu-tess; then
 fi
 
 if want glow-sprites; then
+    (
+    WARM=12
     still "$OUT/glow-sprites.png" 16 --example "$EX_GLOW" --time 2
+    )
 fi
 
 if want transform-stress; then
