@@ -89,7 +89,7 @@
 /* ---- App action bindings (normal keyboard callback) ------------------ */
 #define GLR_SAVE             KEY_CTRL_S, 0     /* save to output.c */
 #define GLR_QUIT             KEY_CTRL_Q, 0     /* save + quit */
-#define GLR_DEBUG_DUMP       KEY_CTRL_D, GLUT_ACTIVE_SHIFT   /* dump state */
+#define GLR_DEBUG_DUMP       KEY_CTRL_N, GLUT_ACTIVE_SHIFT   /* dump state */
 #define GLR_CONFIG_MENU      KEY_CTRL_K, GLUT_ACTIVE_SHIFT   /* open Config dropdown */
 #define GLR_ESCAPE           KEY_ESC, 0        /* clear input / close overlay */
 #define GLR_CODE_FOCUS       KEY_CTRL_F, GLUT_ACTIVE_SHIFT  /* pairs w/ Search (plain Ctrl+F) */
@@ -111,8 +111,8 @@
 #define GLR_WIREFRAME        KEY_CTRL_G, 0
 #define GLR_GRID_MAJOR       KEY_CTRL_G, GLUT_ACTIVE_SHIFT
 #define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
-#define GLR_DEPTH_VIZ        KEY_CTRL_N, 0  /* cycle Depth view; pairs w/ Normal vectors */
-#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Depth view */
+#define GLR_DEPTH_VIZ        KEY_CTRL_D, GLUT_ACTIVE_SHIFT  /* plain Ctrl+D = Delete line */
+#define GLR_NORMAL_VECTORS   KEY_CTRL_N, 0
 #define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
 #define GLR_VERTEX_OUTLINES  KEY_CTRL_O, GLUT_ACTIVE_SHIFT
 #define GLR_POLY_HIGHLIGHT   KEY_CTRL_P, 0
