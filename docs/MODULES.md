@@ -238,6 +238,11 @@ lists to make the layer boundaries observable.
   config, import, layout, and tutorial lifecycle dependencies out of the demo's linked binary. See
   [`ARCHITECTURE.md`](ARCHITECTURE.md#decoupling-and-link-boundaries) for
   the detailed dependency table and guard list.
+  It is **headless in every build** — no window, no GL context. That is
+  deliberate and is what makes it the *tighter* of the two REPL proofs:
+  `REPL_DEMO_DEP_SRCS` contains no `src/ui/` TU at all, so a pipeline TU that
+  grew a dependency on (say) `ui/core/theme.c` fails this link while still
+  passing `repl_live_demo`'s. Rendering belongs to `repl_live_demo` below.
 - **`make repl_live_demo`** ([`tools/repl_live_demo/repl_live_demo.c`](../tools/repl_live_demo/repl_live_demo.c)) — the
   *composition* counterpart to `repl_demo`: a one-file host controller that
   wires the REPL pipeline **and** the variable-panel peer together under a real
@@ -291,10 +296,9 @@ Run `./repl_demo` for a parse/flatten summary of the built-in samples;
 Run `./repl_demo --trace` for the representative non-editor REPL pipeline
 walkthrough: text → compile → apply → source program → flatten → animated
 `has_vars` re-evaluation.
-Build with real GL (`make repl_demo`) and run `./repl_demo --render`
-for an actual GLUT window that cycles the samples interactively. Render
-mode shares the parse/flatten/execute path with the headless mode; the
-only added surface is GLUT bootstrap and a fixed orbit camera.
+`repl_demo` is headless in every build — it opens no window and creates no
+GL context. To watch the same pipeline drive real geometry, use
+`repl_live_demo`, which owns the windowed side of this story.
 `editor_demo` runs as a link-only smoke test under `USE_GL_STUBS=1`; the
 real-GL build opens a minimal text-editor window driven through
 `edit_op_type_char` / `edit_op_backspace` and cursor moves within the

@@ -886,7 +886,7 @@ flowchart LR
     subgraph frame_stage["Stage 4: frame loop"]
         tick["t changes<br/>0.00 → 0.25 → 0.50 → 0.75"]
         rebake["reflatten re-bakes has_vars args<br/>r and t live, i frozen"]
-        exec["repl_execute_program<br/>GL stubs in --trace; real GL in --render 4"]
+        exec["repl_execute_program<br/>GL stubs in --trace; real GL in the app / repl_live_demo"]
         ring["rotating 6-point ring"]
     end
 
@@ -989,9 +989,11 @@ t=0.50   glVertex3f(  0.719,   1.316,   0.000)
 ```
 
 In the live app [`executor.c`](executor.c) walks this flat program emitting the GL
-calls (§5.3); `./repl_demo --render` then `4` shows the same program
-rendered as a rotating ring against a real GL context — same parse →
-flatten → execute path, only a GLUT window added.
+calls (§5.3). `repl_demo` itself never does: it is headless in every build,
+and stage 4 above reads the *baked* flat args rather than executing. To see
+the same parse → flatten → execute path drive a real GL context outside the
+app, run [`repl_live_demo`](../../tools/repl_live_demo/README.md) — same pipeline, plus a
+GLUT window, a file watcher, and the variable panel.
 
 The demo deliberately leaves the host-effects bridge (§7) mostly unset:
 status messages no-op, the cursor is a file-local int. That's the proof

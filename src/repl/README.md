@@ -52,21 +52,26 @@ with no editor, controller, or UI in the link set. It is the load-bearing
 proof that the language pipeline stands on its own.
 
 ```bash
-make repl_demo                  # real GL (--render opens a window)
+make repl_demo USE_GL_STUBS=1   # headless build (no GL dev libs needed) — start here
 ./repl_demo                     # print parse + flatten summaries for samples 1-3
 ./repl_demo --execute           # also run repl_execute_program() against GL stubs
 ./repl_demo --trace             # narrated end-to-end walkthrough of every stage
-./repl_demo --render            # real GL window; keys 1/2/3/4 switch sample, space pauses, q quits
-make repl_demo USE_GL_STUBS=1   # headless build (no GL dev libs needed)
 ```
+
+It opens **no window and creates no GL context** — that is the whole point:
+its link set contains no `src/ui/` at all, which is what makes it the tighter
+isolation proof. Its windowed counterpart is
+[`tools/repl_live_demo/`](../../tools/repl_live_demo/README.md), which wires the same
+pipeline to a real GL window, an external editor, and the variable panel.
+(`make repl_demo` with real GL libs still builds and `--trace` still works;
+the executor call is skipped with a warning, since there is no context.)
 
 **Start with `--trace`.** It loads one representative program through the
 *real* non-editor compile→apply path (`repl_load_apply_line`) and narrates
 every stage the backend runs — text → compile → apply → source program →
 flatten (with provenance + local-var snapshots) → per-frame re-evaluation.
 It's the executable companion to [`ARCHITECTURE.md` §11](ARCHITECTURE.md),
-which walks the same output prose-side. Render sample 4 draws the same
-program as a rotating ring.
+which walks the same output prose-side.
 
 The demo is representative of the **language pipeline**, not of the whole
 application. `--trace` is the broadest sample because it exercises the

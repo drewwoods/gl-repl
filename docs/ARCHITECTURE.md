@@ -1192,7 +1192,11 @@ boundary and routes host interactions through explicit, neutral seams.
 
 [`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) is the negative boundary proof. Its
 default samples run parse → command store → flatten → execute without the app
-controller, editor, UI renderers, or app-owned visual state.
+controller, editor, UI renderers, or app-owned visual state. It is headless in
+every build — no window, no GL context — which is what keeps `src/ui/` out of
+its link set entirely and makes it a strictly tighter proof than
+`repl_live_demo` (which links `ui/core/theme.c` + the variable-panel renderer).
+Windowed REPL-pipeline demonstration is `repl_live_demo`'s job.
 
 `./repl_demo --trace` loads code through the non-editor
 `repl_load_apply_line` transaction, parses and flattens it, and prints evaluated

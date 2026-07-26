@@ -2039,8 +2039,9 @@ else
 	GLR_AUDIO_NO_DEVICE=1 $(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
 endif
 
-test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
+test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, repl_live_demo, render3d_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory repl_live_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1

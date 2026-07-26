@@ -32,6 +32,12 @@
  *     feature/decouple-repl-from-gl-repl-alt.md and
  *     feature/source-document-port.md.
  *
+ * Headless by design: this demo opens no window and creates no GL context.
+ * Its windowed counterpart is tools/repl_live_demo/, which wires the same
+ * pipeline to a real GL window, an external editor, and the variable panel.
+ * Keeping the two apart is the point — repl_demo's link set contains no
+ * src/ui/ at all, which is what makes it the tighter isolation proof.
+ *
  * Run:
  *   make repl_demo USE_GL_STUBS=1
  *   ./repl_demo                  # default: print summary for all samples
@@ -64,7 +70,7 @@
 #include "repl/state_owners.h"
 #include "source_document.h"      /* source_document_load_lines / _insert_line / _clear / _view */
 
-#include "gl_includes.h"          /* GLUT bootstrap for --render mode */
+#include "gl_includes.h"          /* GL enum constants (GL_POINTS) for hand-built cmds */
 
 #include <stdio.h>
 #include <string.h>
@@ -131,7 +137,7 @@ static const char *const SAMPLE_TRIANGLE[] = {
     NULL,
 };
 
-/* Trace program (--trace mode and render sample 4): one small program that
+/* Trace program (--trace mode): one small program that
  * exercises the whole pipeline. Unlike samples 1-3, every line here is
  * driven through repl_load_apply_line() — the real non-editor compile+apply
  * path — so nothing is hand-constructed:
@@ -356,12 +362,15 @@ static void seed_variable_driven_program(void) {
 }
 
 /* Real-GL builds (GL_STUBS not defined) emit live OpenGL calls from
- * repl_execute_program. The headless samples below never bootstrap a
- * GL context — that's the --render mode's job — so invoking the
- * executor here would segfault. The stubs build (USE_GL_STUBS=1)
- * defines GL_STUBS and turns every GL call into a no-op, so the
- * headless path is safe there. Print a one-shot warning and skip the
- * executor call in real-GL builds; the print summaries still run. */
+ * repl_execute_program. This demo is headless by design — it never
+ * bootstraps a GL context — so invoking the executor here would
+ * segfault. The stubs build (USE_GL_STUBS=1) defines GL_STUBS and turns
+ * every GL call into a no-op, so the executor path is safe there. Print
+ * a one-shot warning and skip the executor call in real-GL builds; the
+ * print summaries and --trace still run.
+ *
+ * To watch the pipeline drive real geometry, use repl_live_demo — the
+ * composition demo that owns the windowed side of this story. */
 static int headless_executor_safe(void) {
 #ifdef GL_STUBS
     return 1;
@@ -370,8 +379,8 @@ static int headless_executor_safe(void) {
     if (!warned) {
         fprintf(stderr,
                 "repl_demo: skipping repl_execute_program — no GL context.\n"
-                "  Use --render to bootstrap GLUT, or rebuild with"
-                " USE_GL_STUBS=1 for the headless executor path.\n");
+                "  Rebuild with USE_GL_STUBS=1 for the headless executor"
+                " path, or run repl_live_demo to render for real.\n");
         warned = 1;
     }
     return 0;
@@ -432,189 +441,6 @@ static void execute_against_stubs(void) {
     repl_execute_program(&opts);
     printf("  executed %d flat cmd(s) against GL stubs\n", opts.flat_cmd_count);
 }
-
-/* --- Render mode (--render flag) -------------------------------------- *
- *
- * Drives the REPL pipeline against a real GL context. Same parse +
- * flatten + execute path as the headless mode; the only added surface
- * is the GLUT bootstrap (window, callbacks) and a fixed orbit camera.
- * The negative-isolation contract still holds: `nm repl_demo` shows
- * zero editor / glr_ctrl / ui_* / replay_ui_ symbols.
- *
- * Keys:  1 / 2 / 3 / 4  switch sample
- *        space          pause/resume animation (samples 3 and 4)
- *        Esc / q    quit
- *
- * Build:  make repl_demo                  (real GL, --render works)
- *         make repl_demo USE_GL_STUBS=1   (headless, --render is a no-op)
- */
-
-#ifndef GL_STUBS
-
-#define DEMO_WINDOW_W 800
-#define DEMO_WINDOW_H 600
-
-static int   g_render_sample = 1;     /* 1, 2, 3, 4 */
-static float g_render_t      = 0.0f;
-static int   g_render_paused = 0;
-
-static void render_install_point_parameter_proc(void) {
-#if defined(__APPLE__) && defined(USE_GLUT)
-    repl_executor_install_point_parameter_proc(&glPointParameterfv);
-    repl_executor_set_point_parameter_supported(1);
-#else
-    ReplExecutorPointParameterProc proc =
-        (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfv");
-    if (!proc)
-        proc = (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfvARB");
-    if (!proc)
-        proc = (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfvEXT");
-    repl_executor_install_point_parameter_proc(proc);
-    repl_executor_set_point_parameter_supported(proc != NULL);
-#endif
-}
-
-/* Load whichever sample is currently selected into REPL state. */
-static void render_load_current_sample(void) {
-    repl_state_reset_program();
-    switch (g_render_sample) {
-    case 1:
-        load_text_lines(SAMPLE_TRIANGLE);
-        break;
-    case 2:
-        seed_for_loop_program();
-        break;
-    case 3:
-        seed_variable_driven_program();
-        break;
-    case 4: {
-        /* The --trace program, loaded the real way: every line through
-         * repl_load_apply_line (compile + apply), no hand-construction. */
-        source_document_clear();
-        repl_dispatch_edit_line_set(0);
-        int el = 0;
-        for (int i = 0; SAMPLE_TRACE[i]; i++) {
-            char err[REPL_STATUS_TEXT_MAX] = "";
-            if (!repl_load_apply_line(SAMPLE_TRACE[i], err, sizeof(err), &el))
-                fprintf(stderr, "[render] sample 4 line %d: %s\n",
-                        i, err[0] ? err : "(rejected)");
-        }
-        repl_state_mark_source_dirty();
-        break;
-    }
-    default:
-        break;
-    }
-    repl_state_mark_flat_dirty();
-}
-
-static void render_apply_camera(void) {
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(45.0, (double)DEMO_WINDOW_W / (double)DEMO_WINDOW_H, 0.1, 50.0);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    /* Fixed orbit camera: eye 4 units back and 3 up, looking at origin. */
-    gluLookAt(0.0, 3.0, 4.0,   /* eye */
-              0.0, 0.0, 0.0,   /* center */
-              0.0, 1.0, 0.0);  /* up */
-}
-
-static void render_display_func(void) {
-    glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    render_apply_camera();
-
-    /* For the animated samples (3 = single point, 4 = ring), push the
-     * live `t` into the predef table so has_vars re-evaluation animates. */
-    if (g_render_sample >= 3) {
-        int t_idx = repl_eval_find_predef_var_idx("t");
-        if (t_idx >= 0)
-            g_predef_vars_mut[t_idx].value = g_render_t;
-        repl_state_mark_flat_dirty();
-    }
-    repl_flatten_commands(repl_dispatch_edit_line_get());
-
-    ReplExecutionOptions opts = {
-        .flat_cmd_count = repl_state_flat_program_count(),
-        .program        = repl_state_flat_program_view(),
-        .text           = source_document_view(),
-    };
-    repl_execute_program(&opts);
-
-    glutSwapBuffers();
-}
-
-static void render_reshape_func(int w, int h) {
-    glViewport(0, 0, w, h);
-    /* Keep the perspective math simple: ignore the new size and use the
-     * compile-time aspect. The minimal demo doesn't need responsive
-     * layout. */
-    glutPostRedisplay();
-}
-
-static void render_idle_func(void) {
-    if (!g_render_paused && g_render_sample >= 3)
-        g_render_t += 0.016f;
-    glutPostRedisplay();
-}
-
-static void render_keyboard_func(unsigned char key, int x, int y) {
-    (void)x; (void)y;
-    switch (key) {
-    case 27: case 'q': case 'Q':
-        exit(0);
-    case '1': case '2': case '3': case '4':
-        g_render_sample = key - '0';
-        render_load_current_sample();
-        printf("[render] sample = %d\n", g_render_sample);
-        break;
-    case ' ':
-        g_render_paused = !g_render_paused;
-        printf("[render] %s\n", g_render_paused ? "paused" : "resumed");
-        break;
-    default:
-        return;
-    }
-    glutPostRedisplay();
-}
-
-static int run_render_mode(int argc, char **argv) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-    glutInitWindowSize(DEMO_WINDOW_W, DEMO_WINDOW_H);
-    glutCreateWindow("repl_demo (real GL)");
-    render_install_point_parameter_proc();
-
-    glEnable(GL_DEPTH_TEST);
-
-    /* Install the host-effects sink (same reason as main(), but
-     * render mode bypasses main()'s install above). */
-    repl_install_host_effects(&g_demo_host_effects);
-
-    render_load_current_sample();
-
-    glutDisplayFunc(render_display_func);
-    glutReshapeFunc(render_reshape_func);
-    glutIdleFunc(render_idle_func);
-    glutKeyboardFunc(render_keyboard_func);
-
-    printf("[render] keys: 1/2/3/4 switch sample, space pause, q/Esc quit\n");
-    glutMainLoop();
-    return 0;
-}
-
-#else  /* GL_STUBS */
-
-static int run_render_mode(int argc, char **argv) {
-    (void)argc; (void)argv;
-    fprintf(stderr,
-        "repl_demo: --render needs a real GL build. Rebuild without\n"
-        "  USE_GL_STUBS=1 (i.e. `make repl_demo`) and try again.\n");
-    return 1;
-}
-
-#endif /* GL_STUBS */
 
 /* --- Pipeline trace (--trace) ---------------------------------------- *
  *
@@ -777,7 +603,8 @@ static int run_trace_mode(void) {
         }
     }
     puts("\nSame source, four values of t, four different baked positions: the ring");
-    puts("rotates. Run `./repl_demo --render` and press 4 to watch it live.");
+    puts("rotates. Run `./repl_live_demo` to watch this same pipeline drive a");
+    puts("real GL window from a scene file you edit externally.");
     return 0;
 }
 
@@ -785,11 +612,12 @@ static int run_trace_mode(void) {
 
 static void print_help(const char *prog) {
     printf(
-"Usage: %s [--execute | --trace | --render] [-h|--help]\n"
+"Usage: %s [--execute | --trace] [-h|--help]\n"
 "\n"
-"Standalone REPL pipeline demo. Drives parse -> command store -> flatten\n"
-"-> execute on hard-coded static-text samples, without linking the editor\n"
-"input dispatch, the controller, or the UI.\n"
+"Standalone, headless REPL pipeline demo. Drives parse -> command store ->\n"
+"flatten -> execute on hard-coded static-text samples, without linking the\n"
+"editor input dispatch, the controller, or the UI. It opens no window: to\n"
+"see the same pipeline drive real geometry, run repl_live_demo.\n"
 "\n"
 "Modes:\n"
 "  (no flag)   Print parse/flatten summaries for samples 1-3 and show the\n"
@@ -802,14 +630,7 @@ static void print_help(const char *prog) {
 "              snapshots) -> per-frame re-evaluation. The best starting\n"
 "              point for understanding the backend; pairs with\n"
 "              src/repl/ARCHITECTURE.md.\n"
-"  --render    Real GL: open a GLUT window and render the active sample.\n"
-"              Requires a non-stubs build (see Build below).\n"
 "  -h, --help  Print this help and exit.\n"
-"\n"
-"Render-mode keys:\n"
-"  1 / 2 / 3 / 4  Switch sample (1 triangle, 2 for-loop, 3 point, 4 ring)\n"
-"  space          Pause/resume animation (samples 3 and 4)\n"
-"  q, Esc         Quit\n"
 "\n"
 "Samples:\n"
 "  1  Plain commands: parses a hand-typed glBegin/glColor/glVertex/glEnd\n"
@@ -824,25 +645,24 @@ static void print_help(const char *prog) {
 "     the live g_predef_vars table.\n"
 "  4  Trace program (see --trace): a var decl, an assignment, a typed\n"
 "     for-loop, and a has_vars ring body, loaded through the real\n"
-"     non-editor compile+apply path (repl_load_apply_line). Renders a\n"
+"     non-editor compile+apply path (repl_load_apply_line). Describes a\n"
 "     rotating 6-point ring.\n"
 "\n"
 "Build:\n"
-"  make repl_demo                  Real GL; --render works.\n"
-"  make repl_demo USE_GL_STUBS=1   Headless; --render prints a helpful\n"
-"                                  error and exits.\n",
+"  make repl_demo USE_GL_STUBS=1   Headless; the executor runs against the\n"
+"                                  GL stubs. The recommended build.\n"
+"  make repl_demo                  Real GL libs; the summaries and --trace\n"
+"                                  still work, but the executor call is\n"
+"                                  skipped (no GL context is ever created).\n",
         prog);
 }
 
 int main(int argc, char **argv) {
     int run_execute = 0;
-    int run_render  = 0;
     int run_trace   = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--execute") == 0)
             run_execute = 1;
-        else if (strcmp(argv[i], "--render") == 0)
-            run_render = 1;
         else if (strcmp(argv[i], "--trace") == 0)
             run_trace = 1;
         else if (strcmp(argv[i], "-h") == 0
@@ -855,9 +675,6 @@ int main(int argc, char **argv) {
             return 2;
         }
     }
-
-    if (run_render)
-        return run_render_mode(argc, argv);
 
     if (run_trace)
         return run_trace_mode();
