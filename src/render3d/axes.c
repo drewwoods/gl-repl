@@ -59,14 +59,14 @@ typedef struct AxesDrawContext {
     float xn_alpha;
 } AxesDrawContext;
 
-/* AXES_THEME_NEON is intentionally NOT in g_axes_theme_specs[] below.
- * The static spec carries one flat axis/label color per axis; NEON is a
- * per-frame procedural look (a wide dim halo pass + a narrow bright core
- * pass + glowing tip dots, every channel modulated by the breathing
- * `glow` term) that a single Render3dRgba triplet cannot express. It is
- * handled inline in render3d_axes_render's switch; only its axis length is
- * a plain constant. */
+/* AXES_THEME_NEON and AXES_THEME_FOUNTAIN are intentionally NOT in
+ * g_axes_theme_specs[] below. The static spec carries one flat axis/label
+ * color per axis; NEON and FOUNTAIN are per-frame procedural looks that a
+ * single Render3dRgba triplet cannot express. They are handled inline in
+ * render3d_axes_render's switch; only their axis lengths are plain
+ * constants. */
 #define AXES_NEON_LEN 2.5f
+#define AXES_FOUNTAIN_LEN 2.5f
 
 static void render3d_axes_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -195,6 +195,19 @@ static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
             {0.92f, 0.42f, 0.34f, 1.0f},
             {0.46f, 0.90f, 0.46f, 1.0f},
             {0.42f, 0.56f, 0.95f, 1.0f},
+        },
+    },
+    [AXES_THEME_ARROW] = {
+        .len = 2.5f,
+        .axis = {
+            {0.92f, 0.22f, 0.22f, 1.0f},
+            {0.22f, 0.92f, 0.22f, 1.0f},
+            {0.22f, 0.22f, 0.92f, 1.0f},
+        },
+        .label = {
+            {0.95f, 0.35f, 0.35f, 1.0f},
+            {0.35f, 0.95f, 0.35f, 1.0f},
+            {0.35f, 0.35f, 0.95f, 1.0f},
         },
     },
 };
@@ -506,6 +519,231 @@ static void render3d_axes_render_ruler_theme(const AxesDrawContext *ctx) {
     draw_axis_label_triplet(ctx, len, 0.15f, spec->label, "XYZ", 1);
 }
 
+/* -- Arrow theme: solid axis shafts with 3D arrowhead cones.
+ * The shaft fades from full color at the origin to ~0.55 alpha at the tip,
+ * so the cone reads as the bright focal point.  Cones are drawn as a
+ * GL_TRIANGLE_FAN (cheaper than glutSolidCone and avoids lighting state). */
+
+#define ARROW_CONE_RADIUS 0.06f
+#define ARROW_CONE_HEIGHT 0.22f
+#define ARROW_CONE_SLICES 12
+
+/* Draw a single cone arrowhead at the tip of an axis.
+ * axis_idx: 0=X, 1=Y, 2=Z.  Rotates the fan to point along the axis. */
+static void draw_axis_cone(const AxesDrawContext *ctx, int axis_idx,
+                           float len, Render3dRgba color) {
+    glPushMatrix();
+    switch (axis_idx) {
+    case RENDER3D_AXIS_X:
+        glTranslatef(len, 0.0f, 0.0f);
+        glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
+        break;
+    case RENDER3D_AXIS_Y:
+        glTranslatef(0.0f, len, 0.0f);
+        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+        break;
+    case RENDER3D_AXIS_Z:
+        glTranslatef(0.0f, 0.0f, len);
+        /* identity rotation — fan already points along +Z */
+        break;
+    }
+    /* Cone tip (apex) */
+    axes_color(ctx, color.r, color.g, color.b, color.a);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(0.0f, 0.0f, ARROW_CONE_HEIGHT);
+    /* Base circle */
+    axes_color(ctx, color.r * 0.7f, color.g * 0.7f, color.b * 0.7f,
+               color.a * 0.85f);
+    for (int i = ARROW_CONE_SLICES; i >= 0; i--) {
+        float angle = (float)i * 2.0f * (float)M_PI / (float)ARROW_CONE_SLICES;
+        glVertex3f(cosf(angle) * ARROW_CONE_RADIUS,
+                   sinf(angle) * ARROW_CONE_RADIUS, 0.0f);
+    }
+    glEnd();
+    glPopMatrix();
+}
+
+static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_ARROW);
+    float len = spec->len;
+
+    /* Gradient shafts: full color at origin, faded toward the tip */
+    float tip_alpha = 0.55f;
+    glLineWidth(2.5f);
+    glBegin(GL_LINES);
+    for (int a = 0; a < 3; a++) {
+        Render3dRgba c = spec->axis[a];
+        axes_color(ctx, c.r, c.g, c.b, c.a);
+        glVertex3f(a == 0 ? 0.0f : 0.0f,
+                   a == 1 ? 0.0f : 0.0f,
+                   a == 2 ? 0.0f : 0.0f);
+        axes_color(ctx, c.r, c.g, c.b, c.a * tip_alpha);
+        glVertex3f(a == 0 ? len : 0.0f,
+                   a == 1 ? len : 0.0f,
+                   a == 2 ? len : 0.0f);
+    }
+    glEnd();
+    glLineWidth(1.0f);
+
+    /* 3D arrowhead cones at each tip */
+    for (int a = 0; a < 3; a++) {
+        draw_axis_cone(ctx, a, len, spec->axis[a]);
+    }
+
+    /* Origin dot */
+    glPointSize(4.0f);
+    glBegin(GL_POINTS);
+    axes_color(ctx, 0.92f, 0.92f, 0.92f, 0.70f);
+    glVertex3f(0, 0, 0);
+    glEnd();
+    glPointSize(1.0f);
+
+    draw_axis_label_triplet(ctx, len, 0.25f, spec->label, "XYZ", 1);
+}
+
+/* -- Fountain theme: particle-stream coordinate axes.
+ * Each axis gets a dim solid line and a stream of small electron-like
+ * particles emitting from the origin, alpha-fading toward the tip,
+ * then respawning.  A leader particle drives the phase; the rest use
+ * golden-ratio offsets for stateless, evenly-spaced distribution.
+ * Faint orbital rings at each axis midpoint complete the Bohr look.
+ * Procedural (per-frame positions driven by anim_time), so like NEON
+ * it stays out of the spec table. */
+
+#define FOUNTAIN_ORBIT_RADIUS 0.12f
+#define FOUNTAIN_RING_SEGMENTS 24
+
+static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
+                                           float anim_time, float breath) {
+    float len = AXES_FOUNTAIN_LEN;
+    float glow = 0.6f + breath * 0.4f;
+
+    /* Dim axis lines */
+    Render3dRgba dim_axes[3] = {
+        rgba(0.85f, 0.25f, 0.25f, 0.22f),
+        rgba(0.25f, 0.85f, 0.25f, 0.22f),
+        rgba(0.25f, 0.25f, 0.85f, 0.22f),
+    };
+    draw_axis_line_triplet(ctx, len, 1.2f, dim_axes, 1);
+
+    /* Particle stream: many small electrons emit from origin along each
+     * axis, fading out toward the tip, then respawn.  One leader particle
+     * sets the base phase; the rest use golden-ratio offsets so the
+     * distribution is even and deterministic (no state needed).
+     * Each particle gets a pseudo-random angular offset, orbit radius,
+     * and rotation speed via a cheap hash so they scatter like dust
+     * rather than marching single-file. */
+    #define FOUNTAIN_PARTICLE_COUNT 150
+    #define FOUNTAIN_PARTICLE_SPEED 0.10f          /* axis-lengths per second */
+    #define FOUNTAIN_PHI            0.6180339887f  /* 1/φ — golden ratio fract */
+    #define FOUNTAIN_WOBBLE_RADIUS  0.05f          /* base orbital wobble amp  */
+    #define FOUNTAIN_WOBBLE_RATE    2.0f           /* base rad/s around axis   */
+    #define FOUNTAIN_BASE_ALPHA     0.6f           /* alpha at origin (t=0)    */
+
+    float leader_t = fmodf(anim_time * FOUNTAIN_PARTICLE_SPEED, 1.0f);
+
+    /* Per-axis bright colors */
+    float cr[3] = { 1.0f,  0.45f, 0.45f };
+    float cg[3] = { 0.45f, 1.0f,  0.45f };
+    float cb[3] = { 0.45f, 0.45f, 1.0f  };
+
+    glPointSize(2.0f);
+    glBegin(GL_POINTS);
+    for (int axis = 0; axis < 3; axis++) {
+        /* Phase offset per axis so the three streams don't sync */
+        float axis_phase = (float)axis * 0.333f;
+        for (int p = 0; p < FOUNTAIN_PARTICLE_COUNT; p++) {
+            /* Deterministic position along the axis [0..1) */
+            float t = fmodf(leader_t + (float)p * FOUNTAIN_PHI + axis_phase, 1.0f);
+            float along = t * len;
+
+            /* Alpha: FOUNTAIN_BASE_ALPHA at origin, fading to 0 at the tip */
+            float alpha = FOUNTAIN_BASE_ALPHA * (1.0f - t) * glow;
+            if (alpha < 0.01f) continue;
+
+            /* Cheap deterministic hashes per (axis, particle) — two
+             * independent channels for angle/radius and direction/rate. */
+            float seed  = (float)(axis * 73 + p * 137 + 5) * 43758.5453f;
+            float seed2 = (float)(axis * 53 + p * 97 + 11) * 27183.8141f;
+            float hash  = sinf(seed);
+            float hash2 = sinf(seed2);
+
+            /* Per-particle random angle, radius, direction, and speed so
+             * the stream looks like scattered dust, not ants in a row. */
+            float angle_offset = hash * (float)M_PI * 2.0f;
+            float radius_scale = 0.6f + (hash * hash) * 0.8f; /* 0.6..1.4 */
+            float direction    = (hash2 > 0.0f) ? 1.0f : -1.0f; /* CW or CCW */
+            float speed_scale  = 0.3f + (cosf(seed2) * 0.5f + 0.5f) * 1.4f; /* 0.3..1.7 */
+
+            float wobble_angle = angle_offset
+                                 + anim_time * FOUNTAIN_WOBBLE_RATE * speed_scale * direction;
+            float r = FOUNTAIN_WOBBLE_RADIUS * radius_scale * t;
+            float wx = cosf(wobble_angle) * r;
+            float wy = sinf(wobble_angle) * r;
+
+            axes_color(ctx, cr[axis], cg[axis], cb[axis], alpha);
+            switch (axis) {
+            case 0: glVertex3f(along, wx, wy);  break; /* X: wobble in YZ */
+            case 1: glVertex3f(wx, along, wy);  break; /* Y: wobble in XZ */
+            case 2: glVertex3f(wx, wy, along);  break; /* Z: wobble in XY */
+            }
+        }
+    }
+    glEnd();
+    glPointSize(1.0f);
+
+    /* Orbital rings at midpoint of each axis (perpendicular to axis) */
+    float mid = len * 0.5f;
+    float ring_alpha = 0.18f + breath * 0.10f;
+    glLineWidth(1.0f);
+
+    /* X-axis ring: circle in YZ plane at x=mid */
+    glBegin(GL_LINE_LOOP);
+    axes_color(ctx, 0.90f, 0.30f, 0.30f, ring_alpha);
+    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
+        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
+        glVertex3f(mid, cosf(a) * FOUNTAIN_ORBIT_RADIUS,
+                        sinf(a) * FOUNTAIN_ORBIT_RADIUS);
+    }
+    glEnd();
+
+    /* Y-axis ring: circle in XZ plane at y=mid */
+    glBegin(GL_LINE_LOOP);
+    axes_color(ctx, 0.30f, 0.90f, 0.30f, ring_alpha);
+    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
+        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
+        glVertex3f(cosf(a) * FOUNTAIN_ORBIT_RADIUS, mid,
+                   sinf(a) * FOUNTAIN_ORBIT_RADIUS);
+    }
+    glEnd();
+
+    /* Z-axis ring: circle in XY plane at z=mid */
+    glBegin(GL_LINE_LOOP);
+    axes_color(ctx, 0.30f, 0.30f, 0.90f, ring_alpha);
+    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
+        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
+        glVertex3f(cosf(a) * FOUNTAIN_ORBIT_RADIUS,
+                   sinf(a) * FOUNTAIN_ORBIT_RADIUS, mid);
+    }
+    glEnd();
+
+    /* Nucleus dot at origin */
+    glPointSize(5.0f);
+    glBegin(GL_POINTS);
+    axes_color(ctx, 0.95f, 0.92f, 0.80f, 0.6f + breath * 0.3f);
+    glVertex3f(0, 0, 0);
+    glEnd();
+    glPointSize(1.0f);
+
+    /* Labels */
+    Render3dRgba lbl[3] = {
+        rgba(0.85f, 0.35f, 0.35f, 1.0f),
+        rgba(0.35f, 0.85f, 0.35f, 1.0f),
+        rgba(0.35f, 0.35f, 0.85f, 1.0f),
+    };
+    draw_axis_label_triplet(ctx, len, 0.15f, lbl, "XYZ", 1);
+}
+
 void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
     const Render3dRenderConfig *config = &frame_ctx->config;
     Render3dAxesTheme axes_theme = (Render3dAxesTheme)config->axes_theme;
@@ -547,6 +785,8 @@ void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
     case AXES_THEME_COMPASS: render3d_axes_render_compass_theme(&ctx);          break;
     case AXES_THEME_GIZMO:   render3d_axes_render_gizmo_theme(&ctx, config, as); break;
     case AXES_THEME_RULER:   render3d_axes_render_ruler_theme(&ctx);            break;
+    case AXES_THEME_ARROW:   render3d_axes_render_arrow_theme(&ctx);            break;
+    case AXES_THEME_FOUNTAIN:    render3d_axes_render_fountain_theme(&ctx, config->anim_time, breath); break;
     default:                                                                 break;
     }
 

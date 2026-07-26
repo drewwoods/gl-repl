@@ -48,7 +48,9 @@ typedef enum {
     X(NEON, "Neon")        \
     X(COMPASS, "Compass")  \
     X(GIZMO, "Gizmo")      \
-    X(RULER, "Ruler")
+    X(RULER, "Ruler")      \
+    X(ARROW, "Arrow")      \
+    X(FOUNTAIN, "Fountain")
 
 #define AXES_THEME_ENUM_ENTRY(name, str) AXES_THEME_##name,
 #define AXES_THEME_NAME_ENTRY(name, str) [AXES_THEME_##name] = str,
