@@ -879,16 +879,25 @@ Ten function slots are available. Recursion works when paired with an
 
 ### Conditionals
 
+Both simple `if` blocks and multi-branch `if` / `else if` / `else` chains are supported:
+
 ```c
-if(t > 1) {
-    glColor3f(1, 0, 0);
+if(t > 2) {
+    glColor3f(1, 0, 0);      // Red if t > 2
+} else if(t > 1) {
+    glColor3f(0, 1, 0);      // Green if 1 < t <= 2
+} else {
+    glColor3f(0, 0, 1);      // Blue otherwise
 }
 ```
+
+Note that the `} else if(...) {` and `} else {` lines must be formatted with the closing brace `}` and the opening brace `{` on the same line as the keyword(s) (separated optionally by whitespace).
 
 ### Labels & goto (experimental, top-level only)
 
 ```c
-:loop                    // declare a jump target (colon syntax)
+loop:                    // declare a jump target
+:loop                    // alternative syntax, colon first
 goto loop                // jump back; pair with if(...) to exit
 ```
 
