@@ -34,6 +34,11 @@
  * Their exact-value twins (the "(eye)" light position, the unqualified raster
  * color) are compared.
  *
+ * "GL_CLIP_PLANEn_EQUATION (object)" is the third qualified row and the one
+ * case where the difference itself is checkable: GL stores the equation
+ * transformed into eye coordinates at call time, so the row is compared through
+ * that transform rather than for equality. See diff_clip_plane_row.
+ *
  * In GL_TEST_BINS / `make gl-tests` (needs a real context; a display, or
  * FREEGLUT_OSMESA=1 headless) — NOT in `make test` / `make test-stubs`.
  */
@@ -475,6 +480,59 @@ static void diff_matrix_row(void) {
     }
 }
 
+/* Clip planes are the one cell where the fold and GL deliberately hold
+ * *different* numbers, so plain equality is the wrong comparison.
+ *
+ * glClipPlane transforms the equation into eye coordinates at call time: as a
+ * row vector, p' = p M^-1 with M the modelview current at the call (GL 2.1
+ * §2.12), and glGetClipPlane reads that stored eye-space plane back. The fold
+ * keeps the object-space input it was handed — the row says "(object)" for
+ * exactly this reason — because the modelview it would need is the one at the
+ * call, which is the fold's own composed matrix rather than anything GL will
+ * tell it.
+ *
+ * So the differential is the *relationship*: GL's stored plane must be the
+ * fold's row carried through that transform. For a pure translation
+ * M^-1 = T(-t), which collapses p M^-1 to
+ *
+ *     (a, b, c, d - (a*tx + b*ty + c*tz))
+ *
+ * — a closed form, so the test needs no general 4x4 inverse of its own to
+ * check against (which would just be a second copy of the code under test).
+ * An identity modelview reduces it to equality, which is the plain case. */
+static void diff_clip_plane_row(int plane, float tx, float ty, float tz) {
+    char name[REPL_GL_STATE_NAME_MAX];
+    const ReplGlStateReportRow *row;
+    GLdouble driver[4] = { 0, 0, 0, 0 };
+    float object[4] = { 0, 0, 0, 0 };
+    float expected[4];
+    char label[192];
+    int parsed, i;
+
+    snprintf(name, sizeof(name), "GL_CLIP_PLANE%d_EQUATION (object)", plane);
+    row = diff_require_row(name);
+    if (!row)
+        return;
+    parsed = diff_parse_vec(row->current, object, 4);
+    snprintf(label, sizeof(label), "%s: 4 components parsed", name);
+    ASSERT_TRUE(label, parsed == 4);
+    if (parsed != 4)
+        return;
+
+    glGetClipPlane((GLenum)(GL_CLIP_PLANE0 + plane), driver);
+    expected[0] = object[0];
+    expected[1] = object[1];
+    expected[2] = object[2];
+    expected[3] = object[3] -
+                  (object[0] * tx + object[1] * ty + object[2] * tz);
+    for (i = 0; i < 4; i++) {
+        snprintf(label, sizeof(label),
+                 "%s[%d]: fold %g through the call's modelview == driver %g",
+                 name, i, (double)expected[i], driver[i]);
+        ASSERT_TRUE(label, feq(expected[i], (float)driver[i], DIFF_EPSILON));
+    }
+}
+
 /* --- cases -------------------------------------------------------------- */
 
 /* 1. The generated prologue alone. Nothing user-authored, so every row here is
@@ -611,6 +669,51 @@ static void test_diff_raster_color_latch(void) {
                 diff_row("GL_CURRENT_RASTER_COLOR (unlit input)") == NULL);
 }
 
+/* 6. Clip planes, in both directions of the "(object)" label (see
+ * diff_clip_plane_row): under the identity modelview the generated prologue
+ * leaves behind, the fold's object-space equation IS what GL stores, so the row
+ * compares directly; under a user transform the two must differ by exactly that
+ * transform. The second half is what would catch the fold either transforming
+ * the equation itself or being handed an already-transformed one. */
+static void test_diff_clip_planes(void) {
+    GLCmd cmds[4];
+    int n = 0;
+
+    /* Two planes, first and last slot, to pin the GL_CLIP_PLANE0 + n indexing
+     * on both sides. */
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_CLIP_PLANE0); n++;
+    cmds[n] = diff_cmd(CMD_CLIP_PLANE, n, 5, (double)GL_CLIP_PLANE0,
+                       0.0, 1.0, 0.0, -0.5); n++;
+    cmds[n] = diff_cmd(CMD_CLIP_PLANE, n, 5, (double)GL_CLIP_PLANE5,
+                       1.0, 0.0, 0.0, 0.25); n++;
+
+    diff_case("inspector vs driver: clip planes under identity", cmds, n, n);
+    diff_cap_row("GL_CLIP_PLANE0", GL_CLIP_PLANE0);
+    diff_clip_plane_row(0, 0.0f, 0.0f, 0.0f);
+    diff_clip_plane_row(5, 0.0f, 0.0f, 0.0f);
+
+    n = 0;
+    cmds[n] = diff_cmd(CMD_TRANSLATE3F, n, 3, 0.5, -1.5, 2.0); n++;
+    cmds[n] = diff_cmd(CMD_CLIP_PLANE, n, 5, (double)GL_CLIP_PLANE1,
+                       0.0, 1.0, 0.0, -0.5); n++;
+    /* A second plane whose every coefficient contributes to the transformed
+     * distance term, so a dropped or misordered component cannot cancel. */
+    cmds[n] = diff_cmd(CMD_CLIP_PLANE, n, 5, (double)GL_CLIP_PLANE2,
+                       0.25, -0.5, 0.75, 1.0); n++;
+
+    diff_case("inspector vs driver: clip planes under a translate", cmds, n, n);
+    diff_clip_plane_row(1, 0.5f, -1.5f, 2.0f);
+    diff_clip_plane_row(2, 0.5f, -1.5f, 2.0f);
+    /* The fold's row is the object-space input, so it must NOT have moved with
+     * the modelview — the property the closed-form check above rests on. */
+    {
+        const ReplGlStateReportRow *row =
+            diff_row("GL_CLIP_PLANE1_EQUATION (object)");
+        ASSERT_TRUE("clip plane row stays in object coordinates",
+                    row && strcmp(row->current, "(0, 1, 0, -0.5)") == 0);
+    }
+}
+
 int main(int argc, char **argv) {
 #if defined(__APPLE__) && !defined(FREEGLUT_OSMESA)
     uint32_t display_count = 0;
@@ -638,6 +741,7 @@ int main(int argc, char **argv) {
     test_diff_transform_fold();
     test_diff_attrib_group_scoping();
     test_diff_raster_color_latch();
+    test_diff_clip_planes();
     diff_close_cursor();
     repl_executor_destroy_resources();
     return test_harness_report(&g_harness, "gl_state_inspector_gl");
