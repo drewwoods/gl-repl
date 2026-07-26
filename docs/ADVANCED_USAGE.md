@@ -263,6 +263,30 @@ scripts/docs-assets.sh hero replay  # regenerate selected assets
 scripts/docs-assets.sh --help       # full CLI reference
 ```
 
+Shell completion for the flags and the ~60 asset names lives in
+`scripts/completions/`. Both files derive their candidates from the script's own
+`--list`, so they track the asset arrays automatically and never need editing
+when an asset is added:
+
+```bash
+# bash — source it (a shell rc, or per-session)
+source scripts/completions/docs-assets.bash
+```
+
+```zsh
+# zsh — either put the directory on fpath before compinit…
+fpath=("$PWD/scripts/completions" $fpath)
+autoload -Uz compinit && compinit
+
+# …or just source the file any time after compinit has run
+source scripts/completions/_docs-assets.sh
+```
+
+Completion narrows to the category already on the line (`--gifs sc-<Tab>` offers
+only GIF assets) and drops names already typed. `--list` returns without
+touching `magick`/`ffmpeg`, so completion works even where the capture tools
+aren't installed.
+
 GIF generation uses `GLR_TICK_PER_FRAME`, so machine load changes generation
 time without dropping animation states. The `profile-panels` screenshot still
 reflects live rendering performance and should be regenerated on an otherwise
