@@ -33,6 +33,46 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--time secs]
 | `--flat-histogram` | Print per-function / per-line flat-command budget costs. Honors `--example`. |
 | `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). |
 
+## Shell completion
+
+`scripts/completions/` carries bash and zsh completions for `gl-repl` and for
+`scripts/docs-assets.sh`. Nothing needs generating or regenerating: the
+candidate lists come from the commands' own `--list-examples`, `--list-tours`
+and `--list` output, so the example/tour catalogs and the doc-asset arrays stay
+the single source of truth. All three list paths print and exit before any GL,
+window, audio, or `magick`/`ffmpeg` work, so completion is instant and works on
+a headless machine with no capture tools installed.
+
+```bash
+# bash — source what you want (a shell rc, or per-session)
+source scripts/completions/gl-repl.bash
+source scripts/completions/docs-assets.bash
+```
+
+```zsh
+# zsh — either put the directory on fpath before compinit…
+fpath=("$PWD/scripts/completions" $fpath)
+autoload -Uz compinit && compinit
+
+# …or just source the files any time after compinit has run
+source scripts/completions/_gl-repl
+source scripts/completions/_docs-assets.sh
+```
+
+`gl-repl` completes every flag, example and tour names for `--example` /
+`--tour`, directories for `--examples-dir` / `--assets`, `*.ply` for
+`--export-ply`, common sizes for `--window`, and `*.c` scenes or a workspace
+directory positionally. Catalog names contain spaces and parentheses; they come
+back correctly escaped (or bare inside an open quote), so
+`--example Par<Tab>` yields a single usable argument.
+
+`docs-assets.sh` completes its flags and asset names, narrows to the category
+already on the line (`--gifs sc-<Tab>` offers only GIF assets), drops names
+already typed, and offers nothing for the `--jobs` count.
+
+The completions are registered on the command's basename, so `gl-repl`,
+`./gl-repl` and `build/release/gl-repl` all complete.
+
 ## Environment variables
 
 The project uses environment variables in three places: runtime `gl-repl`
@@ -264,29 +304,8 @@ scripts/docs-assets.sh hero replay  # regenerate selected assets
 scripts/docs-assets.sh --help       # full CLI reference
 ```
 
-Shell completion for the flags and the ~60 asset names lives in
-`scripts/completions/`. Both files derive their candidates from the script's own
-`--list`, so they track the asset arrays automatically and never need editing
-when an asset is added:
-
-```bash
-# bash — source it (a shell rc, or per-session)
-source scripts/completions/docs-assets.bash
-```
-
-```zsh
-# zsh — either put the directory on fpath before compinit…
-fpath=("$PWD/scripts/completions" $fpath)
-autoload -Uz compinit && compinit
-
-# …or just source the file any time after compinit has run
-source scripts/completions/_docs-assets.sh
-```
-
-Completion narrows to the category already on the line (`--gifs sc-<Tab>` offers
-only GIF assets) and drops names already typed. `--list` returns without
-touching `magick`/`ffmpeg`, so completion works even where the capture tools
-aren't installed.
+Tab-completion for the flags and the ~60 asset names ships in
+`scripts/completions/` — see [Shell completion](#shell-completion).
 
 GIF generation uses `GLR_TICK_PER_FRAME`, so machine load changes generation
 time without dropping animation states. The `profile-panels` screenshot still

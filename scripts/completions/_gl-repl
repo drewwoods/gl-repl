@@ -1,0 +1,67 @@
+#compdef gl-repl
+# zsh completion for gl-repl
+#
+# Works either way round:
+#   fpath=(.../scripts/completions $fpath)   # before compinit — autoloaded
+#   source .../scripts/completions/_gl-repl  # any time after compinit
+#
+# Example and tour names come from the binary's own --list-examples /
+# --list-tours, so the catalogs stay the single source of truth. Both list
+# paths print and exit before any GL, window, or audio init, so completion is
+# instant and works headless.
+
+# Catalog lines are "%4d  <name>"; the numbered-line match drops the header.
+_gl_repl_catalog() {
+    ${words[1]} $1 2>/dev/null | sed -n 's/^ *[0-9][0-9]*  //p'
+}
+
+_gl_repl() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -s -S \
+        '(-h --help)'{-h,--help}'[show help and exit]' \
+        '--example[start with a built-in example]:example:->examples' \
+        '--tour[play a guided tour on launch]:tour:->tours' \
+        '--list-examples[print the built-in examples and exit]' \
+        '--list-tours[print the built-in guided tours and exit]' \
+        '--examples-dir[load catalog.ini + scenes/ from a directory]:dir:_files -/' \
+        '--assets[override the assets directory]:dir:_files -/' \
+        '--export-ply[export scene geometry to PLY and exit]:ply file:_files -g "*.ply"' \
+        '--export-ply-srgb[convert vertex colors to sRGB on PLY export]' \
+        '--time[initial animation time t, in seconds]:seconds:' \
+        '--window[initial window size]:WxH:(1200x800 1600x1000 2400x1600)' \
+        '--no-accum[disable accumulation-buffer effects]' \
+        '--no-audio[skip audio init]' \
+        '--dump-code[print the loaded program and exit]' \
+        '--dump-flat[print the flattened program and exit]' \
+        '--flat-histogram[print flat-command statistics and exit]' \
+        '--dump-state-layout[print the state layout and exit]' \
+        '--detailed-prof[enable detailed profiling sections]' \
+        '*:scene file or workspace dir:_files -g "*.c"'
+
+    case $state in
+        examples)
+            local -a examples
+            examples=( ${(f)"$(_gl_repl_catalog --list-examples)"} )
+            _describe -t examples example examples
+            ;;
+        tours)
+            local -a tours
+            tours=( ${(f)"$(_gl_repl_catalog --list-tours)"} )
+            _describe -t tours tour tours
+            ;;
+    esac
+}
+
+# Autoloaded via fpath + the #compdef line above: compinit binds the file to the
+# command and expects running it to *do* the completion.
+# Sourced from a shell rc instead: nothing has bound anything, so register.
+if [[ ${zsh_eval_context[-1]} == loadautofunc ]]; then
+    _gl_repl "$@"
+elif (( $+functions[compdef] )); then
+    compdef _gl_repl gl-repl
+else
+    print -u2 "_gl-repl: run compinit before sourcing this file"
+    return 1
+fi
