@@ -1544,9 +1544,18 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 # are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
 # never build or run them. Run locally with a display via `make gl-tests`.
 GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl \
-	test_tour_overlay_feedback
+	test_tour_overlay_feedback test_gl_state_inspector_gl
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+# Differential oracle: drives one GLCmd program through both the real executor
+# (against a live context) and the pure gl_state_inspector fold, then compares
+# each report row with glGet*. Needs the executor + generated-setup enumeration,
+# so it links CORE_TEST_OBJS against real GL like the tour feedback test.
+$(BINDIR)/test_gl_state_inspector_gl: \
+	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 

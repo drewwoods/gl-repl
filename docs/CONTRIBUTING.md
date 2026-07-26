@@ -30,7 +30,13 @@ has a versioned name. `test-msan` also sets `GLR_AUDIO_NO_DEVICE=1` so
 the audio tests exercise the engine without opening host audio backends.
 `make test BUILD=release` is the fast release-mode run. `make gl-repl` is the
 production OpenGL compile/link smoke check, while `make gl-tests` runs the
-small set of tests that require an actual GL context.
+small set of tests that require an actual GL context. Two of those are
+differential oracles against the driver rather than regression tests:
+`test_attrib_bits_gl` (does `attrib_bits.c`'s cell→bit table match what
+`glPushAttrib`/`glPopAttrib` really save?) and `test_gl_state_inspector_gl`
+(drive one program through both the executor and the pure
+`gl_state_inspector` fold, then diff every reported row against `glGet*`).
+Reach for that pattern whenever a pure module re-implements GL semantics.
 
 `make web` (or `scripts/build-web.sh` for a cold start with no emsdk
 sourced yet) builds the Emscripten/wasm browser target; see

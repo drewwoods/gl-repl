@@ -73,10 +73,11 @@ static void test_fresh_context_defaults(void) {
         GL_BLEND,
         GL_CLIP_PLANE0, GL_CLIP_PLANE1, GL_CLIP_PLANE2,
         GL_CLIP_PLANE3, GL_CLIP_PLANE4, GL_CLIP_PLANE5,
-        GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST,
+        GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST, GL_FOG,
         GL_LIGHT0, GL_LIGHT1, GL_LIGHT2, GL_LIGHT3, GL_LIGHTING,
         GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_NORMALIZE, GL_POINT_SMOOTH,
-        GL_STENCIL_TEST
+        GL_POLYGON_OFFSET_FILL, GL_POLYGON_OFFSET_LINE,
+        GL_POLYGON_OFFSET_POINT, GL_STENCIL_TEST
     };
     static const GLfloat white[4] = { 1, 1, 1, 1 };
     static const GLfloat normal[3] = { 0, 0, 1 };
@@ -94,6 +95,7 @@ static void test_fresh_context_defaults(void) {
     static const GLfloat zeros[4] = { 0, 0, 0, 0 };
     static const GLfloat raster_pos[4] = { 0, 0, 0, 1 };
     GLint iv;
+    GLint iv2[2];
     GLboolean bv[4];
     GLdouble clip[4];
     char label[128];
@@ -144,6 +146,33 @@ static void test_fresh_context_defaults(void) {
     ASSERT_TRUE("default line stipple repeat", iv == 1);
     glGetIntegerv(GL_LINE_STIPPLE_PATTERN, &iv);
     ASSERT_TRUE("default line stipple pattern", iv == 0xFFFF);
+    /* glPolygonMode reads back as a two-element front/back pair, which the
+     * report splits into its "(front)" / "(back)" rows. */
+    glGetIntegerv(GL_POLYGON_MODE, iv2);
+    ASSERT_TRUE("default polygon mode front", iv2[0] == GL_FILL);
+    ASSERT_TRUE("default polygon mode back", iv2[1] == GL_FILL);
+    glGetIntegerv(GL_STENCIL_FUNC, &iv);
+    ASSERT_TRUE("default stencil func", iv == GL_ALWAYS);
+    glGetIntegerv(GL_STENCIL_REF, &iv);
+    ASSERT_TRUE("default stencil ref", iv == 0);
+    glGetIntegerv(GL_STENCIL_FAIL, &iv);
+    ASSERT_TRUE("default stencil fail op", iv == GL_KEEP);
+    glGetIntegerv(GL_STENCIL_PASS_DEPTH_FAIL, &iv);
+    ASSERT_TRUE("default stencil depth-fail op", iv == GL_KEEP);
+    glGetIntegerv(GL_STENCIL_PASS_DEPTH_PASS, &iv);
+    ASSERT_TRUE("default stencil depth-pass op", iv == GL_KEEP);
+    glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &iv);
+    ASSERT_TRUE("default stencil clear value", iv == 0);
+    /* GL's initial stencil masks are all ones over the buffer's full width;
+     * the report narrows them to 0xFF because the REPL's stencil surface is
+     * 8-bit (repl/stencil_limits.h). Assert the property the narrowing rests
+     * on — every low bit set — not GL's raw width. */
+    glGetIntegerv(GL_STENCIL_VALUE_MASK, &iv);
+    ASSERT_TRUE("default stencil value mask covers the REPL's 8 bits",
+                ((unsigned)iv & 0xFFu) == 0xFFu);
+    glGetIntegerv(GL_STENCIL_WRITEMASK, &iv);
+    ASSERT_TRUE("default stencil write mask covers the REPL's 8 bits",
+                ((unsigned)iv & 0xFFu) == 0xFFu);
 
     glGetBooleanv(GL_LIGHT_MODEL_LOCAL_VIEWER, bv);
     ASSERT_TRUE("default light model local viewer", bv[0] == GL_FALSE);
@@ -160,9 +189,22 @@ static void test_fresh_context_defaults(void) {
 
     {
         static const GLfloat one[1] = { 1 };
+        static const GLfloat zero[1] = { 0 };
         assert_float_state("default point size", GL_POINT_SIZE, one, 1);
         assert_float_state("default line width", GL_LINE_WIDTH, one, 1);
+        assert_float_state("default depth clear value",
+                           GL_DEPTH_CLEAR_VALUE, one, 1);
+        assert_float_state("default polygon offset factor",
+                           GL_POLYGON_OFFSET_FACTOR, zero, 1);
+        assert_float_state("default polygon offset units",
+                           GL_POLYGON_OFFSET_UNITS, zero, 1);
+        assert_float_state("default fog density", GL_FOG_DENSITY, one, 1);
+        assert_float_state("default fog start", GL_FOG_START, zero, 1);
+        assert_float_state("default fog end", GL_FOG_END, one, 1);
     }
+    assert_float_state("default fog color", GL_FOG_COLOR, zeros, 4);
+    glGetIntegerv(GL_FOG_MODE, &iv);
+    ASSERT_TRUE("default fog mode", iv == GL_EXP);
     assert_material_state("front ambient", GL_FRONT, GL_AMBIENT, ambient, 4);
     assert_material_state("back ambient", GL_BACK, GL_AMBIENT, ambient, 4);
     assert_material_state("front diffuse", GL_FRONT, GL_DIFFUSE, diffuse, 4);
