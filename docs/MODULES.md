@@ -289,7 +289,8 @@ that prove a renderer or helper links without its usual host —
 of `render3d_demo` whose reloadable half lives in
 [`tools/render3d-elements/`](../tools/render3d-elements/README.md). Per-demo
 key/CLI detail belongs in the demo's own source header or `README.md`, not
-here.
+here; [`tools/README.md`](../tools/README.md) indexes every binary in that
+directory and points each one at its module doc.
 
 Run `./repl_demo` for a parse/flatten summary of the built-in samples;
 `./repl_demo --execute` also runs the flat program against GL stubs.

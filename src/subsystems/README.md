@@ -68,12 +68,30 @@ For subsystems like `variable_panel`, `variable_panel_set_visible` is the canoni
 
 ## How it is exercised
 
-These are app features rather than reusable libraries, so there is no
-standalone `subsystems_demo`. They are exercised through the full app and
-by the focused unit tests under `tests/` (e.g. `test_repl_replay`,
+These are app features rather than one reusable library, so there is no
+single `subsystems_demo`. Most peers are exercised through the full app and
+the focused unit tests under `tests/` (e.g. `test_repl_replay`,
 `test_repl_var_drag`, `test_tutorial_runner`). Their *rendering* is done
 by feature-UI in `src/ui/subsystems/` ([`replay_hud.c`](../ui/subsystems/replay_hud.c), [`color_picker.c`](../ui/subsystems/color_picker.c),
 [`variable_panel.c`](../ui/subsystems/variable_panel.c)) reading the per-frame snapshot.
+
+Two peers do have a standalone driver, and those are the ones whose host
+seam is a **narrow installable interface** rather than the snapshot:
+
+- **`make variable_panel_demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) —
+  drives the peer over an in-memory `VariablePanelValueSource` and a
+  hand-built `UiVariablePanelView`, so neither the REPL eval table nor
+  [`UiRenderSnapshot`](../ui/app/snapshot.h#L71) is in the link set.
+- **`make color_picker_demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) —
+  drives the peer over a [`ColorPickerHostBridge`](color_picker/color_picker_state.h#L116)
+  backed by a plain color array, standing in for the REPL document + commit
+  pipeline the app wires up.
+
+Both are guarded by `check-subsystem-demo-isolation.sh` (via
+`make check-state-ownership`): the Makefile dep list, the demo's own
+includes, and an `nm` sweep must all stay free of `src/app`, `src/ui/app`,
+`src/repl`, and `src/editor`. If a peer ever reaches for the controller,
+its demo stops linking. Index of every demo: [`tools/README.md`](../../tools/README.md).
 
 ## In the REPL app
 

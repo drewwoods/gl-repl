@@ -14,6 +14,33 @@ their respective layers.
   `prof_accum_end`, `prof_end`, `prof_frame_tick`, etc. Used by every
   layer that wants to measure work; the UI panel that visualises it
   lives at [`src/ui/support/cpuprof.c`](../ui/support/cpuprof.c).
+- `src/support/gpuprof.{c,h}` — the asynchronous twin: GL timer queries
+  bracketing the same `ProfSection` ids, so the panel can show GPU time
+  next to CPU time. Deliberately a GL-free TU at the API level.
+- `src/support/memprof.{c,h}` — process memory sampling (current signal,
+  ring of historical samples, pure byte formatter). Mirrors cpuprof's
+  conventions; panel at [`src/ui/support/memprof.c`](../ui/support/memprof.c).
+- `src/support/mesh_ply.{c,h}` — pure PLY writer over a GL feedback
+  (`GL_3D_COLOR`) float stream: inverts the ortho/viewport transform back
+  to world space, fan-triangulates, optionally welds.
+
+## How it is exercised
+
+The profiling helpers each have a standalone driver under `tools/`, which
+is what keeps them linkable with no owner layer:
+
+- **`make cpuprof_demo`** ([`tools/cpuprof_demo/`](../../tools/cpuprof_demo/)) —
+  a display-list micro-benchmark: the same teapots drawn immediate,
+  from a reused list, and from a per-frame recompiled list, each timed as
+  its own section.
+- **`make memprof_demo`** ([`tools/memprof_demo/`](../../tools/memprof_demo/)) —
+  the live memory panel with keys to allocate and free, so the signal and
+  graph respond on demand.
+
+Both link only the sampler here + its `src/ui/support/` panel + `ui/core`
+theme, enforced by `check-subsystem-demo-isolation.sh` under
+`make check-state-ownership`. `mesh_ply` has no demo; it is covered by the
+PLY export tests. Index of every demo: [`tools/README.md`](../../tools/README.md).
 
 ## Why a dedicated directory
 
