@@ -1,6 +1,38 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-26, rev 4)
+## Status — NOT STARTED (2026-07-26, rev 5 after third review)
+
+Three blocking findings, all confirmed. Items marked **[rev 5]**.
+
+- **Export emits explicit zero-initializers; the accepted divergence is
+  withdrawn.** Rev 3 documented "REPL reads 0, exported C is undefined" as a
+  deliberate C-like choice. That violates a stated contract —
+  `docs/ARCHITECTURE.md:2156`: *"Behavior parity is required, not just syntactic
+  round-trip."* Undefined behavior is also the one case the REPL cannot
+  reproduce, so "match C" was never actually available. Export writes
+  `float a = 0.0f;`; import lowers that literal-zero form back to `float a;`,
+  keeping the round-trip idempotent.
+- **Capacity is a whole-function property.** `params + locals <= MAX_EXPR_VARS`
+  is wrong in both directions: `flatten_for_loop` prepends an iterator per
+  nesting level and drops the last binding at the cap, so what must fit is
+  `params + locals + max nested-loop depth`. Rev 4 guarded only the "add a loop"
+  edit; adding a param or a local when a loop already exists overflows the same
+  way.
+- **There are four declaration-overwrite routes, not two.** Beyond the range
+  mutation and `repl_compile_var_assign` cascades, `editor_place_parsed_command`
+  (`input.c:660`) and the Enter path (`input.c:1017`) both call
+  `repl_command_store_replace_one` with no reference check at all. Survivable
+  for a global (the predef slot outlives the row); fatal for a local, whose
+  binding *is* the prologue row. One shared guard, four callers. Related: the
+  var-assign slot rebase must run only when both sides are global predef slots,
+  or it rejects the legitimate local-overwrite case.
+
+Also corrected: the local marker is `var_idx == REPL_VAR_IDX_LOCAL` throughout
+(Phase 1 and four later bullets still said `payload.decl.is_local`), and the
+motivation table now reads 33 locals / 106 globals to match the conversion
+audit's reclassification of `detail`.
+
+## Status — rev 4
 
 Rev 4 settles two UX questions raised by the maintainer, and both simplify the
 design. Items marked **[rev 4]**.
@@ -29,7 +61,7 @@ Rev 3 incorporates a second review (four blocking findings plus four
 corrections, all confirmed). One changed the representation, the rest tightened
 under-specified guards; items are marked **[rev 3]** in place. Headlines:
 
-- **`is_local` moves onto `var_idx`, not into the payload union.** Measured,
+- **The local marker lives on `var_idx`, not in the payload union.** Measured,
   the decl arm dominates the union exactly, so a new `int` would have grown
   every command in the source array, flat array, undo rings and scene snapshots.
 - **The declaration parser needs a locality-aware preflight.** `float x = param;`
@@ -40,9 +72,10 @@ under-specified guards; items are marked **[rev 3]** in place. Headlines:
   there is a *second* decl-overwrite cascade in `repl_compile_var_assign`.
 - **Reverse-shadowing must also cover the loop-iterator capacity cap**, which
   silently drops an outer binding rather than erroring.
-- **Exported locals are uninitialized C automatics** while the REPL zero-fills.
-  Accepted as a documented divergence (the language is C-like, and C's rule is
-  the right one for exported code); rejected alternatives recorded in Phase 4.
+- ~~**Exported locals are uninitialized C automatics** while the REPL
+  zero-fills. Accepted as a documented divergence.~~ **Superseded by rev 5** —
+  this violated the export behavior-parity contract; export now emits explicit
+  zero-initializers.
 
 Rev 2 incorporated a first review that found seven material issues, all
 confirmed against the tree. Two changed the design rather than the wording:
@@ -52,7 +85,7 @@ confirmed against the tree. Two changed the design rather than the wording:
   `parse_float_name_list` (`compile.c:654`) validates initializer identifiers
   against predefs only and evaluates immediately. So `float tmp = param;` cannot
   work through the existing path no matter how locality is detected, and
-  `float a = PI*2;` would reach flatten as the constant `6.28319`. All 34
+  `float a = PI*2;` would reach flatten as the constant `6.28319`. All
   motivating cases are already declare-then-assign, because a global decl's
   initializer cannot reference parameters today either — so dropping
   initializers costs the corpus nothing and removes an entire phase of parse,
@@ -100,13 +133,15 @@ written and read:
 
 | Category | Count |
 |---|---|
-| Top-level scratch / tunable (genuine globals) | 105 |
+| Top-level scratch / tunable (genuine globals) | 106 |
 | Const tunables (`@tune`, never reassigned) | 63 |
-| **Written and read inside exactly one func — wants a local** | **34** |
+| **Written and read inside exactly one func — wants a local** | **33** |
 | Written in a func, read by the caller — wants a return value | 9 |
 | Mixed | 9 |
 
-34 of 220 declared names exist only because the language has no local storage.
+33 of 220 declared names exist only because the language has no local storage.
+(The raw classifier said 34; `detail` was reclassified to a global by the
+conversion audit below — it is a scrubbable knob, not a temporary. [rev 5])
 The cost is concrete, not cosmetic:
 
 - **Budget pressure.** `examples/scenes/orrery-labels-track-3d-orbits.glr`
@@ -239,8 +274,9 @@ checks `ctx->vars` before the predef table.
 
 #### Phase 1 — Representation and declaration compile
 
-- `src/repl/command.h` — add `payload.decl.is_local`; define
-  `REPL_VAR_IDX_LOCAL`.
+- `src/repl/command.h` — define `REPL_VAR_IDX_LOCAL` (-1). A decl row is local
+  iff `var_idx == REPL_VAR_IDX_LOCAL`; **no new payload field** (see
+  Representation for the measurement). [rev 5]
 - `src/repl/compile.c:826` `repl_compile_float_decl` — **decide storage before
   parsing**, because the two paths validate initializers differently. [rev 2]
   The decision is a two-step, in this order [rev 4]:
@@ -373,10 +409,29 @@ existing locals in scope:
 
 | Edit | Path | Must reject |
 |---|---|---|
-| Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; `params + locals > MAX_EXPR_VARS` |
-| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; **`visible_count + 1 > MAX_EXPR_VARS`** |
+| Add/rename a function parameter | **`repl_compile_func_def_kernel`** | a name matching a local in that body; a capacity overflow (below) |
+| Add a loop iterator inside a func body | `repl_compile_for_loop_kernel` (`compile.c:2453`) | a name matching a visible local; a capacity overflow (below) |
 | Add a global | `repl_compile_float_decl` global path | a name matching any existing local |
-| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function** |
+| Add/rename a local | local path | a name matching a *later* local in the same body, **or an existing loop iterator later in the function**; a capacity overflow (below) |
+
+**Capacity is a whole-function property, not a per-edit one.** [rev 5] A check
+of the form `params + locals <= MAX_EXPR_VARS` is insufficient in both
+directions, because `flatten_for_loop` prepends its iterator to a *fresh* scope
+array and copies outer bindings under `lnv < MAX_EXPR_VARS`
+(`flatten.c:347-351`), silently dropping the last one at the cap. The quantity
+that must fit is the **peak** scope size anywhere in the body:
+
+```
+params + locals + max nested-loop depth  <=  MAX_EXPR_VARS
+```
+
+`if` blocks contribute nothing (they share the caller's array) and calls open a
+fresh frame, so loop nesting is the only multiplier. Every one of the three
+edits above can push this over: rev 4 caught only "add a loop when locals
+already fill the scope", but adding a parameter or a local when a loop already
+exists later in the body overflows identically. Compute the max nested-loop
+depth over the function body once and validate all three edits against the same
+expression.
 
 Two corrections to that table from rev 2: [rev 3]
 
@@ -391,7 +446,8 @@ Two corrections to that table from rev 2: [rev 3]
   array means a live local vanishes mid-body and reads as 0. Reject at compile
   time instead.
 
-- `repl_compile_split_decl` (`compile.c:921`) must preserve `is_local` and emit
+- `repl_compile_split_decl` (`compile.c:921`) must preserve `var_idx ==
+  REPL_VAR_IDX_LOCAL` on every emitted row and emit
   the local form. [rev 2] It currently re-parses through
   `parse_float_name_list` and rebuilds every row through the global
   `static float` formatter, so Ctrl+Shift+S on a local would silently convert it
@@ -407,14 +463,34 @@ Two corrections to that table from rev 2: [rev 3]
   local variant can be simpler and stricter: a **raw identifier scan over the
   function body** (via `repl_eval_source_uses_ident`, comment-aware), excluding
   the range being changed.
-- **Two overwrite paths, not one.** [rev 3] `compile_collect_undeclare_for_range`
-  (`compile.c:1413`) must skip local decls when emitting
-  `REPL_PREDEF_OP_UNDECLARE` (no slot to release) while still running the
-  bounded reference check — **and `repl_compile_var_assign` has its own
-  independent decl-overwrite cascade** (`compile.c:1244`) that calls
-  `compile_name_is_still_referenced` directly. Editing a local declaration row
-  into an assignment goes through that second path and is missed if only the
-  first is updated. Needs an explicit "overwrite a used local" test.
+- **Four overwrite paths, and only one shared guard should exist.** [rev 5]
+  Declaration replacement is reachable four ways, and each currently decides for
+  itself whether to check references:
+
+  | Route | Site | Today |
+  |---|---|---|
+  | Range delete / comment-toggle | `compile_collect_undeclare_for_range` (`compile.c:1413`) | checks |
+  | Retype a decl row as an assignment | `repl_compile_var_assign` (`compile.c:1244`) | checks, independently |
+  | Retype a decl row as a GL command | `editor_place_parsed_command` (`src/editor/input.c:660`) | **`repl_command_store_replace_one`, no check** |
+  | Enter over a decl row | `src/editor/input.c:1017` | **`repl_command_store_replace_one`, no check** |
+
+  The last two are raw replaces. For a global this is survivable — the predef
+  slot outlives the row — but a **local's binding exists only as that prologue
+  row**, so removing it leaves every assignment to it resolving against nothing.
+  Factor one `compile_decl_replacement_is_allowed(ctx, pos, …)` helper and route
+  all four through it, rather than adding a third and fourth copy of the check.
+  `compile_collect_undeclare_for_range` additionally skips
+  `REPL_PREDEF_OP_UNDECLARE` for local decls (no slot to release).
+- **Gate the var-assign rebase on both sides being global slots.** [rev 5]
+  `repl_compile_var_assign` runs
+  `compile_rebase_var_assign_slot_after_undeclares` whenever it overwrites a
+  decl row (`compile.c:1260`). A local-target assignment carries
+  `var_idx == REPL_VAR_IDX_LOCAL` (-1), which that helper reads as failure, so
+  the *legitimate* case — overwriting an unused local decl with an assignment to
+  another local — would be rejected with "cannot overwrite declaration of 'x'
+  with assignment". Rebase exists to fix up predef slot indices after
+  undeclares; run it only when the removed declaration and the assignment target
+  are both global. Test the success path, not just the rejection.
 - **`tests/test_repl_editor.c:3410-3423` documents that a `CMD_VAR_DECLARE`
   inside a block "cannot arise through normal user input", and the block-batch
   comment-toggle path (`compile.c:1614`) is untested for that reason. This
@@ -423,12 +499,14 @@ Two corrections to that table from rev 2: [rev 3]
   `src/repl/source_scope.c:459`); moving a local out of its function would
   silently change its meaning.
 - `src/repl/reformat.c:348` `case CMD_VAR_DECLARE:` hardcodes depth-0 indent and
-  always emits `static float`. Must honor `is_local` (plain `float`, indent from
+  always emits `static float`. Must honor `var_idx == REPL_VAR_IDX_LOCAL` (plain
+  `float`, indent from
   `repl_source_scope_block_depth_at`).
 
 #### Phase 4 — Export / import
 
-- `src/repl/export_cmd_writer.c:290` — branch on `is_local`: emit the real C line
+- `src/repl/export_cmd_writer.c:290` — branch on `var_idx == REPL_VAR_IDX_LOCAL`:
+  emit the real C line
   `  float a, b;` at its body position instead of the `/* @declare */` marker.
   No shadowing risk, because compile rejects shadowing; and no expression
   translation is needed, because locals carry no initializer. (Had they kept
@@ -437,22 +515,29 @@ Two corrections to that table from rev 2: [rev 3]
   on. That is the V2 tax noted under Non-goals.) [rev 2] Globals keep the
   marker; the comment there explains why a C local would shadow the file-scope
   static written by `write_predef_var_globals`.
-- **Accepted divergence: read-before-assign.** [rev 3] The REPL binds every
-  local to `0.0f` on call entry; `float a, b;` in exported C is an
-  uninitialized automatic, so the same read is undefined there. This is
-  deliberate — the language is C-like, and C's rule is the one exported code
-  should follow. Document it in `docs/USER_GUIDE.md` next to the local-decl
-  syntax: *assign before you read; the REPL happens to zero-fill, exported C
-  does not.*
+- **Export must emit explicit zero-initializers.** [rev 5] The REPL binds every
+  local to `0.0f` on call entry. A bare `float a, b;` in exported C is an
+  uninitialized automatic, so a read-before-write is `0` in the REPL and
+  undefined in the generated file. Rev 3 accepted that as a documented
+  divergence; that was wrong. `docs/ARCHITECTURE.md:2156` states the contract
+  outright — **"Behavior parity is required, not just syntactic round-trip"** —
+  and undefined behavior is precisely the case the REPL cannot reproduce, so
+  "match C" is not even available as a resolution. Emit
+  `  float a = 0.0f, b = 0.0f;`.
+- **Import lowers the generated zero-initializers back to canonical form.**
+  [rev 5] Export writes `float a = 0.0f;`, import strips a *literal-zero*
+  initializer on an in-body float decl and reconstructs `float a;`. That keeps
+  the round-trip idempotent — REPL text `float a;` → C `float a = 0.0f;` → REPL
+  text `float a;` — and avoids the failure mode that sank the alternative:
+  synthesized `a = 0.0f;` statement lines would reimport as real
+  `CMD_VAR_ASSIGN` rows, so each round-trip would grow the body by one row per
+  local.
 
-  The two ways to close the gap were both rejected for V1. Emitting synthesized
-  `a = 0.0f;` lines after the declaration round-trips as ordinary assignments,
-  but reimport turns them into real `CMD_VAR_ASSIGN` rows, so the next export
-  emits them *again* — the body grows by one row per round-trip. Emitting
-  `float a = 0.0f;` would require the local path to accept a literal-zero
-  initializer as a no-op and strip it from canonical text, which is a small but
-  real special case in the parser preflight above. If a future reviewer wants
-  the divergence closed, the literal-zero variant is the cheaper of the two.
+  Import is the right place for this because it is already a trusted path that
+  bypasses commit handlers for exactly this class of reason (`parse_snippet_declare`,
+  `import.c:733-736`). Strip **only** the exporter's own generated form; a
+  hand-written `float a = 5;` inside a function body must still hit the
+  preflight rejection, so REPL and file semantics stay identical.
 - **Import probably needs no change — verify before touching it.** [rev 2]
   Exported function-body lines already reach `import_try_function_body`
   (`import.c:1779`), which routes through `repl_load_apply_line`
@@ -578,6 +663,25 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
 - **`// @tune` on a local declaration is rejected** [rev 3]
 - **overwrite a *used* local decl row into an assignment** [rev 3] — exercises
   `repl_compile_var_assign`'s independent cascade (`compile.c:1244`)
+- **overwrite an *unused* local decl row with an assignment to another local**
+  [rev 5] — the success counterpart; guards against the slot rebase
+  (`compile.c:1260`) reading `REPL_VAR_IDX_LOCAL` as failure and rejecting a
+  legal edit
+- **overwrite a used local decl row with a GL command, and with Enter** [rev 5]
+  — the two raw-replace routes (`input.c:660`, `input.c:1017`); both must be
+  rejected by the shared guard
+- **whole-function capacity** [rev 5] — with a loop already present later in the
+  body, adding one more parameter, and separately one more local, must each be
+  rejected rather than silently dropping a binding at flatten time
+- **export parity: read before write** [rev 5] — a function that reads a local
+  before assigning it must produce identical output from the REPL and from the
+  exported C (this is the test the withdrawn divergence would have made
+  impossible)
+- **export/import idempotence for locals** [rev 5] — `float a;` exports as
+  `float a = 0.0f;` and reimports as `float a;`; a second round-trip is a
+  fixed point, and the function body does not grow
+- **a hand-written `float a = 5;` inside an imported function body is still
+  rejected** [rev 5] — import lowers only the exporter's literal-zero form
 - **delete a local that is referenced later in the same body must be rejected**
   [rev 3] — the case a reused `compile_line_uses_global_ident` would wrongly
   allow
@@ -613,7 +717,8 @@ New tests (extend `tests/test_repl_compile.c`, `test_repl_core_commit.c`,
   [rev 4]
 - **declaration prologue tolerance** [rev 2] — comment out the first of three
   locals; the remaining two must still bind
-- **`repl_compile_split_decl` on a local** keeps `is_local` and the local form
+- **`repl_compile_split_decl` on a local** keeps `var_idx == REPL_VAR_IDX_LOCAL`
+  and the local form
   [rev 2]
 - delete-guard bounded to the function body; block-batch comment-toggle over a
   body containing a local decl
