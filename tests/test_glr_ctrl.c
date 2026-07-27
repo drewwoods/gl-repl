@@ -4301,6 +4301,15 @@ static void test_mouse_routing_and_hit_testing(void) {
     ASSERT_INT("pin button hit consumed", rc, 1);
     ASSERT_INT("replay state toggled to PLAYING", replay_state_view().state, REPLAY_PLAYING);
 
+    /* Clicking the pinned Replay button after playback completes dismisses
+     * the Done state instead of restarting the replay. */
+    replay_state_mut()->active = 1;
+    replay_state_mut()->state = REPLAY_DONE;
+    rc = route_pin_button_hit(&hit);
+    ASSERT_INT("Done pin button hit consumed", rc, 1);
+    ASSERT_TRUE("Done pin button stops replay", !replay_state_view().active);
+    ASSERT_INT("Done pin button enters OFF", replay_state_view().state, REPLAY_OFF);
+
     // Test route_pin_button_hit for view mode swatch toggle
     hit.kind = UI_HIT_PIN_BUTTON;
     hit.item_idx = UI_MENU_BAR_PIN_VIEW_MODE;

@@ -172,9 +172,8 @@ int    replay_focus_anchor_flat_idx(void);
  * the main replay state machine in replay.c.
  */
 
-/* Toggle replay state on a Replay-pin button click: starts replay
- * when stopped, pauses when playing, resumes when paused, restarts
- * from the beginning when DONE. */
+/* Handle a Replay-pin button click: starts replay when stopped, pauses when
+ * playing, resumes when paused, and stops replay when the button shows DONE. */
 void replay_handle_pin_clicked(void);
 
 
