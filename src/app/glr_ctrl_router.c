@@ -12,7 +12,7 @@
  */
 #include "app/glr_ctrl.h"
 #include "app/glr_ctrl_export.h"
-#include "app/glr_mesh_export.h"     /* glr_export_mesh_ply (F11) */
+
 #include "app/glr_ctrl_replay_annotations.h"
 #include "app/glr_pointer_script.h"
 #include "subsystems/replay/replay_render.h"
@@ -469,9 +469,39 @@ int glr_ctrl_router_handle_scene_cycle_special(int key) {
     return 0;
 }
 
-int glr_ctrl_router_handle_export_special(int key) {
-    if (keymap_event_is(key, GLR_EXPORT_PLY)) {
-        glr_export_mesh_ply(repl_active_scene_export_path("ply"), 0);
+static void cycle_tutorial_dir(int direction) {
+    int count = repl_tutorial_count();
+    if (count <= 0) return;
+
+    glr_ctrl_reset_transients();
+    editor_undo_note_wholesale_replacement();
+
+    int active_idx = tutorial_active() ? tutorial_state_view().tutorial_idx : -1;
+    int next_idx = 0;
+    if (active_idx >= 0) {
+        next_idx = (active_idx + direction + count) % count;
+    } else {
+        next_idx = (direction > 0) ? 0 : count - 1;
+    }
+
+    tutorial_start(next_idx);
+}
+
+void glr_ctrl_tutorial_cycle_next(void) {
+    cycle_tutorial_dir(1);
+}
+
+void glr_ctrl_tutorial_cycle_prev(void) {
+    cycle_tutorial_dir(-1);
+}
+
+int glr_ctrl_router_handle_tutorial_cycle_special(int key) {
+    if (keymap_event_is(key, GLR_NEXT_TUTORIAL)) {
+        glr_ctrl_tutorial_cycle_next();
+        return 1;
+    }
+    if (keymap_event_is(key, GLR_PREV_TUTORIAL)) {
+        glr_ctrl_tutorial_cycle_prev();
         return 1;
     }
     return 0;
@@ -1927,7 +1957,7 @@ static void special_dispatch(int key, int x, int y) {
         glr_ctrl_router_handle_help_scroll_special(key) ||
         glr_ctrl_router_handle_help_toggle_special(key) ||
         glr_ctrl_router_handle_scene_cycle_special(key) ||
-        glr_ctrl_router_handle_export_special(key))
+        glr_ctrl_router_handle_tutorial_cycle_special(key))
         return;
 
     glr_ctrl_router_dismiss_gl_state_for_editor_input();

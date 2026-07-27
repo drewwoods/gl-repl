@@ -383,7 +383,7 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * items to tutorial_start directly), so the top-level rows
          * here are tag rows (inert hover-only) plus the trailing
          * Restart/Exit actions — mirroring Scene's tag-row pattern. */
-        return tag_count + (active ? GLR_TUTORIAL_FIXED_COUNT : 0);
+        return tag_count + (active ? GLR_TUTORIAL_FIXED_COUNT_ACTIVE : GLR_TUTORIAL_FIXED_COUNT_INACTIVE);
     }
     case MENU_TOURS:
         return glr_tours_count();
@@ -463,11 +463,15 @@ static const char *menu_item_label(int menu_id, int i) {
             int tag_idx = repl_tutorial_visible_tag_at(i);
             return repl_tutorial_tag_label(tag_idx);
         }
-        if (!tutorial_active())
-            return NULL;
-        if (i == tag_count + GLR_TUTORIAL_OFF_SEP)     return "---";
-        if (i == tag_count + GLR_TUTORIAL_OFF_RESTART) return "Restart Tutorial";
-        if (i == tag_count + GLR_TUTORIAL_OFF_EXIT)    return "Exit Tutorial";
+        int active = tutorial_active();
+        if (i == tag_count + GLR_TUTORIAL_OFF_SEP_TOP) return "---";
+        if (i == tag_count + GLR_TUTORIAL_OFF_NEXT)    return "Next";
+        if (i == tag_count + GLR_TUTORIAL_OFF_PREV)    return "Previous";
+        if (active) {
+            if (i == tag_count + GLR_TUTORIAL_OFF_SEP_MID) return "---";
+            if (i == tag_count + GLR_TUTORIAL_OFF_RESTART) return "Restart Tutorial";
+            if (i == tag_count + GLR_TUTORIAL_OFF_EXIT)    return "Exit Tutorial";
+        }
         return NULL;
     }
     if (menu_id == MENU_TOURS)
@@ -531,8 +535,18 @@ static const char *menu_item_shortcut(int menu_id, int i) {
                                             KM_MODS(GLR_PREV_EXAMPLE), 1);
         return NULL;
     }
-    if (menu_id == MENU_TUTORIALS)
+    if (menu_id == MENU_TUTORIALS) {
+        int tag_count = repl_tutorial_visible_tag_count();
+        if (i == tag_count + GLR_TUTORIAL_OFF_NEXT)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_NEXT_TUTORIAL),
+                                            KM_MODS(GLR_NEXT_TUTORIAL), 1);
+        if (i == tag_count + GLR_TUTORIAL_OFF_PREV)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_PREV_TUTORIAL),
+                                            KM_MODS(GLR_PREV_TUTORIAL), 1);
         return NULL;
+    }
     if (menu_id == MENU_AUDIO) {
         int group_count = audio_visible_group_count();
         if (i == group_count + GLR_AUDIO_OFF_PLAY)

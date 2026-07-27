@@ -992,7 +992,7 @@ static void test_complete_and_menu_actions(void) {
     tutorial_advance_after_successful_commit();
     tag_count = repl_tutorial_visible_tag_count();
     ASSERT_TRUE("restart menu item restarts tutorial",
-                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tag_count + 1) == 1);
+                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tag_count + GLR_TUTORIAL_OFF_RESTART) == 1);
     ASSERT_INT("restart resets step", tutorial_state_view().step, 0);
 
     while (tutorial_active()) {
@@ -1011,7 +1011,7 @@ static void test_complete_and_menu_actions(void) {
     ASSERT_TRUE("exit menu item accepted when inactive",
                 glr_action_menu_item_activate(
                     GLR_MENU_TUTORIALS,
-                    repl_tutorial_visible_tag_count() + 2) == 1);
+                    repl_tutorial_visible_tag_count() + GLR_TUTORIAL_OFF_EXIT) == 1);
 }
 
 static void test_start_leaves_unsaved_buffer_transient(void) {

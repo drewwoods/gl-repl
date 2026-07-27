@@ -1405,18 +1405,31 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
          *              dispatches directly to tutorial_start, NOT
          *              through this function).
          *   [t]        "---" (chrome row, filtered before activation).
-         *   [t+1]      "Restart Tutorial" (only when tutorial_active).
-         *   [t+2]      "Exit Tutorial"    (only when tutorial_active). */
+         *   [t+1]      "Next" (via F11).
+         *   [t+2]      "Previous" (via Shift+F11).
+         *   If active:
+         *     [t+3]      "---" (chrome row, filtered before activation).
+         *     [t+4]      "Restart Tutorial".
+         *     [t+5]      "Exit Tutorial". */
         int tag_count = repl_tutorial_visible_tag_count();
         if (item_idx < tag_count)
             return 0;   /* tag row → keep menu open, no action */
-        if (tutorial_active() && item_idx == tag_count + GLR_TUTORIAL_OFF_RESTART) {
+        int active = tutorial_active();
+        if (item_idx == tag_count + GLR_TUTORIAL_OFF_NEXT) {
+            glr_ctrl_tutorial_cycle_next();
+            return 1;
+        }
+        if (item_idx == tag_count + GLR_TUTORIAL_OFF_PREV) {
+            glr_ctrl_tutorial_cycle_prev();
+            return 1;
+        }
+        if (active && item_idx == tag_count + GLR_TUTORIAL_OFF_RESTART) {
             TutorialRuntimeState tutorial = tutorial_state_view();
             if (tutorial.tutorial_idx >= 0)
                 tutorial_start(tutorial.tutorial_idx);
             return 1;
         }
-        if (tutorial_active() && item_idx == tag_count + GLR_TUTORIAL_OFF_EXIT) {
+        if (active && item_idx == tag_count + GLR_TUTORIAL_OFF_EXIT) {
             tutorial_stop();
             return 1;
         }

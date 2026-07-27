@@ -53,17 +53,7 @@ enum {
 };
 
 /* Scene menu is a selector with two navigation actions: "### EXAMPLES" +
- * example tag rows, then a "---" divider bracketing the "Next" / "Previous"
- * cycle actions (the F12 / Shift+F12 example-or-scene cycle) on both sides,
- * then "### MY SCENES" + user-scene rows. Both headers are always present
- * (fixed layout). Offsets are relative to the end of the examples tag block
- * (e = repl_example_visible_tag_count()): the top divider sits at e + SEP_TOP,
- * "Next" at e + NEXT, "Previous" at e + PREV, the bottom divider at
- * e + SEP_BOT, the second header at e + HDR, and the first user scene at
- * e + SCENES. Lookup uses glr_scene_menu_slot_for_dense_index() to map dense
- * display index to the actual user scene slot. Other scene *actions*
- * (save/load/rename) live in the File menu; Next/Previous are the exception
- * because they cycle the example/scene selection itself. */
+ * tag names + Next/Previous + "### MY SCENES" + user scenes. */
 enum {
     GLR_SCENE_OFF_SEP_TOP  = 1,   /* "---" at e + 1 */
     GLR_SCENE_OFF_NEXT     = 2,   /* "Next" (F12) at e + 2 */
@@ -74,16 +64,24 @@ enum {
     GLR_SCENE_FIXED_COUNT  = 6    /* 2 headers + 2 dividers + Next + Previous */
 };
 
-/* Tutorials menu layout when tutorial is active:
+/* Tutorials menu layout:
  *   [0..t-1]                 tag names (t = repl_tutorial_visible_tag_count())
- *   [t + TUTORIAL_OFF_SEP]   "---" separator row
- *   [t + TUTORIAL_OFF_RESTART] "Restart Tutorial" action
- *   [t + TUTORIAL_OFF_EXIT]  "Exit Tutorial" action */
+ *   [t + TUTORIAL_OFF_SEP_TOP] "---" separator row
+ *   [t + TUTORIAL_OFF_NEXT]  "Next" action (F11)
+ *   [t + TUTORIAL_OFF_PREV]  "Previous" action (Shift+F11)
+ *   If active:
+ *     [t + TUTORIAL_OFF_SEP_MID] "---" separator row
+ *     [t + TUTORIAL_OFF_RESTART] "Restart Tutorial" action
+ *     [t + TUTORIAL_OFF_EXIT]  "Exit Tutorial" action */
 enum {
-    GLR_TUTORIAL_OFF_SEP     = 0,
-    GLR_TUTORIAL_OFF_RESTART = 1,
-    GLR_TUTORIAL_OFF_EXIT    = 2,
-    GLR_TUTORIAL_FIXED_COUNT = 3
+    GLR_TUTORIAL_OFF_SEP_TOP           = 0,
+    GLR_TUTORIAL_OFF_NEXT              = 1,
+    GLR_TUTORIAL_OFF_PREV              = 2,
+    GLR_TUTORIAL_OFF_SEP_MID           = 3,
+    GLR_TUTORIAL_OFF_RESTART           = 4,
+    GLR_TUTORIAL_OFF_EXIT              = 5,
+    GLR_TUTORIAL_FIXED_COUNT_ACTIVE    = 6,
+    GLR_TUTORIAL_FIXED_COUNT_INACTIVE  = 3
 };
 
 /* Audio menu layout:

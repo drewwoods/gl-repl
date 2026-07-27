@@ -255,7 +255,7 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
  * typed `n = 10;` advances it. */
 static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_REQUIRE_VAR(NULL,
-        "// the triangle's size; the slider will grow it",
+        "// @config the triangle's size; the slider will grow it",
         "n", 1.0f),
     STEP_APPEND(NULL,
         "// Open a triangle batch.",

@@ -731,7 +731,7 @@ static void test_tutorial_start_applies_cfg(void) {
 
 /* Phase B: top-level MENU_TUTORIALS rows behave like Scene tag rows —
  * clicking a tag row is inert (returns 0, keeps menu open), and Restart /
- * Exit work via their new positions (tag_count + 1 / + 2). Activation
+ * Exit work via their positions (tag_count + GLR_TUTORIAL_OFF_*). Activation
  * of an actual tutorial flows through route_submenu_item_hit (not this
  * function); the dispatch contract here only covers tag rows + the
  * trailing Restart/Exit. */
@@ -757,17 +757,32 @@ static void test_tutorial_menu_dispatch(void) {
     ASSERT_INT("tutorial active for restart/exit checks",
                tutorial_active(), 1);
 
-    /* Restart at tag_count + 1: re-enters step 0. */
+    /* Next at tag_count + GLR_TUTORIAL_OFF_NEXT: cycles tutorial. */
+    int active_before = tutorial_state_view().tutorial_idx;
+    ASSERT_INT("Next row handled",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
+                                             tag_count + GLR_TUTORIAL_OFF_NEXT), 1);
+    ASSERT_INT("Next row cycles to next tutorial",
+               tutorial_state_view().tutorial_idx, (active_before + 1) % repl_tutorial_count());
+
+    /* Previous at tag_count + GLR_TUTORIAL_OFF_PREV: cycles tutorial. */
+    ASSERT_INT("Previous row handled",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
+                                             tag_count + GLR_TUTORIAL_OFF_PREV), 1);
+    ASSERT_INT("Previous row cycles to previous tutorial",
+               tutorial_state_view().tutorial_idx, active_before);
+
+    /* Restart at tag_count + GLR_TUTORIAL_OFF_RESTART: re-enters step 0. */
     ASSERT_INT("Restart row handled",
                glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
-                                             tag_count + 1), 1);
+                                             tag_count + GLR_TUTORIAL_OFF_RESTART), 1);
     ASSERT_INT("Restart returns step to 0",
                tutorial_state_view().step, 0);
 
-    /* Exit at tag_count + 2: ends the tutorial. */
+    /* Exit at tag_count + GLR_TUTORIAL_OFF_EXIT: ends the tutorial. */
     ASSERT_INT("Exit row handled",
                glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
-                                             tag_count + 2), 1);
+                                             tag_count + GLR_TUTORIAL_OFF_EXIT), 1);
     ASSERT_INT("Exit ends the tutorial",
                tutorial_active(), 0);
 }

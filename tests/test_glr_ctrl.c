@@ -4484,9 +4484,20 @@ static void test_special_key_shortcuts(void) {
         g_simulated_mods = 0;
     }
 
-    /* 6. Export special (F11) */
-    rc = glr_ctrl_router_handle_export_special(GLUT_KEY_F11);
-    ASSERT_INT("export special handled", rc, 1);
+    /* 6. Tutorial cycle special (F11) */
+    int tutorials = repl_tutorial_count();
+    if (tutorials > 1) {
+        tutorial_start(0);
+        g_simulated_mods = 0;
+        rc = glr_ctrl_router_handle_tutorial_cycle_special(GLUT_KEY_F11);
+        ASSERT_INT("tutorial cycle next handled", rc, 1);
+        ASSERT_INT("cycled to tutorial 1", tutorial_state_view().tutorial_idx, 1);
+        g_simulated_mods = GLUT_ACTIVE_SHIFT;
+        rc = glr_ctrl_router_handle_tutorial_cycle_special(GLUT_KEY_F11);
+        ASSERT_INT("tutorial cycle prev handled", rc, 1);
+        ASSERT_INT("cycled back to tutorial 0", tutorial_state_view().tutorial_idx, 0);
+        g_simulated_mods = 0;
+    }
 
     editor_input_set_modifier_provider_for_test(NULL);
 }
