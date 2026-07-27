@@ -182,4 +182,29 @@ int  repl_expr_cache_line_find(const ReplExprCache *cache, int line_idx,
 int  repl_expr_cache_line_role_count(const ReplExprCache *cache, int line_idx,
                                      ReplExprRole role);
 
+/* ---- Per-line assignment-LHS memo --------------------------------------- */
+/*
+ * The destination name of `x = expr` is a pure function of the row's text,
+ * and flatten re-derives it on every visit of every assignment (a persisted
+ * var_idx must not be able to defeat a later legal shadow — see
+ * flatten_resolve_assign_target). Memoising it here buys that back for free:
+ * the memo inherits this cache's single invalidation seam, and
+ * repl_state_mark_source_dirty's contract is that every source mutation goes
+ * through it.
+ *
+ * Deliberately independent of the line's program state. The LHS is well
+ * defined on an EMPTY line (first visit), on a FAILED one, and on a line
+ * whose RHS never compiled — none of which the program index can represent.
+ * The memo also stores "this row has no scalar assignment target" so a
+ * non-assignment row is parsed at most once.
+ *
+ * Get returns 1 (memoised, name copied to `out`), 0 (memoised as "no LHS",
+ * `out` emptied), or -1 (not memoised — the caller must derive and set it).
+ * Set with lhs == NULL or "" records the "no LHS" verdict. Storage failure
+ * is silent: the line stays unmemoised and the caller keeps deriving it. */
+int  repl_expr_cache_line_lhs_get(const ReplExprCache *cache, int line_idx,
+                                  char *out, int out_sz);
+void repl_expr_cache_line_lhs_set(ReplExprCache *cache, int line_idx,
+                                  const char *lhs);
+
 #endif /* REPL_EXPR_PROGRAM_H */

@@ -1,13 +1,15 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–5 landed
+## Status — IN PROGRESS (2026-07-27): Phases 1–5 landed, fixes 1–2 landed
 
 Phases 1 (declaration compile), 2 (flatten), 3 (edit guards), 4
 (export/import) and 5 (docs + example conversion) are implemented and tested.
 **Locals work end to end, the edit surface is closed, scenes using them
 round-trip through the file format, and three built-in examples are converted.**
-What remains before this plan moves to `done/` is the manual scrub check
-recorded under Verification.
+Fixes 1 and 2 below — the "make the var_assign tax pay-for-use" pair — are
+also landed; see the subsection under them for what they measured. What remains
+before this plan moves to `done/` is the manual scrub check recorded under
+Verification, and fix 3, which belongs in its own plan.
 
 ### Phase 5 — docs and example conversion (done)
 
@@ -258,6 +260,65 @@ converted scenes, since it applies whether or not the frame has locals.
   the same argument that forces ordinal identity below), but fix 3's recorded
   target ordinal is exactly the cacheable form of that resolution.
 
+#### Fixes 1 + 2 as landed
+
+Both went in as one change, as recommended. Two things came out differently
+from the sketch above, and both are improvements on it:
+
+**The flag rides on `FlattenContext`, not on the parameter list.** Threading it
+beside `var_kinds` would have added four lines to `flatten_range`, which is
+audit Tier C and size-capped (`check-tier-c-function-size` fails on growth).
+`ctx->frame_has_locals` is set by `flatten_call` from the count
+`flatten_bind_func_locals` appended, and **saved and restored around the
+callee's body** — the caller's remaining commands are expanded after the call
+returns and must see the caller's frame. That restore is the whole risk of the
+context-field form, so it has its own regression
+(`test_frame_locality_survives_a_nested_call`): a caller with a local, a
+callee with none, and an assignment to the caller's local *after* the call.
+
+**The debug/release split moved off the decision.** Gating the whole
+resolution on the build would have meant the suite — which runs in a debug
+build — never exercised the fast path that ships. So both builds take the same
+branch, and `GLR_DEBUG_CHECKS` (config.h; the Makefile defines it for debug /
+sanitizer / coverage) instead runs the resolution *on the skipped path* purely
+for its diagnostics: the unreachable PARAM/LOOP target, plus a new check that
+`frame_has_locals` has not drifted from the frame it summarises. Dropping the
+restore makes that second check fire and abort the flatten, which is how the
+regression above fails loudly rather than by a wrong number.
+
+Fix 2 landed as `repl_expr_cache_line_lhs_get/_set` on `ReplExprCache`
+(tri-state per line: unknown / no-LHS / interned name), reached through
+`repl_flatten_expr_assign_lhs()`. Names are interned in the existing symbol
+arena and **copied out**, never returned by pointer — the arena reallocs as
+later lines compile. `force_text` skips the memo so the differential reference
+stays independent of the cache it is there to check. Staleness is covered by
+`test_assignment_target_follows_an_edited_lhs`, which retargets an assignment
+by editing the row; a memo that survived invalidation keeps writing the old
+local (verified by mutating `repl_expr_cache_invalidate` to leave the memo
+alone — 26 assertions fail, including that one).
+
+Measured on the **mac-mini** (min of three 8-iteration runs; the mean on this
+box is as noisy as the plan already records, so these are minima):
+
+| case | pre | post | Δ |
+|---|---|---|---|
+| `flatten_examples` (whole 38-scene corpus) | 18.01 ms | 15.46 | **−14%** |
+| `flatten_grass` | 22.72 ms | 21.22 | −6.6% |
+| `flatten_orrery` | 8.79 ms | 8.51 | −3.2% |
+| `phase_grass_var_assign` | 11.47 ms | 9.85 | **−14%** |
+| `phase_orrery_var_assign` | 2.31 ms | 1.76 | **−24%** |
+| `refresh_grass` | 46.32 ms | 42.78 | −7.6% |
+| `feed_examples`, `parse_lines` | — | — | ±0% |
+
+The corpus row is fix 1 doing what it was predicted to do: −14% across 38
+scenes, nearly all of them unconverted. The per-scene rows for the two
+converted scenes are fix 2, and land where the sketch guessed — "roughly half
+the tax back" — with grass's var_assign phase giving back 1.6 µs of the 2.7 µs
+the conversion added. `refresh_slider` and `flatten_refresh` report byte-identical
+routes and flat counts on both binaries, so nothing about the dependency
+classification moved. The Emscripten measurement fix 2 deserves has not been
+taken yet.
+
 #### Which cost actually hurts, and what would fix it
 
 The two costs above are separable, and for the worst-affected scene they are not
@@ -394,10 +455,10 @@ first place — so fix 2's saving survives fix 3 rather than being absorbed by i
 
 #### Recommended order
 
-1. **Fixes 1 + 2 as one "make the tax pay-for-use" change.** Independent of each
-   other, small, and each already has its correctness argument written above.
-   This targets the machinery tax and closes the "not pay-for-what-you-use"
-   finding.
+1. ~~**Fixes 1 + 2 as one "make the tax pay-for-use" change.**~~ **Landed** —
+   see "Fixes 1 + 2 as landed" above. Independent of each other, small, and
+   each already had its correctness argument written above. This targeted the
+   machinery tax and closes the "not pay-for-what-you-use" finding.
 2. **Fix 3 as its own plan**, targeting the route regression, with the
    Emscripten measurement as its motivating number.
 

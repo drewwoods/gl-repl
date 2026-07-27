@@ -617,6 +617,26 @@ predef path. When the resolved target is a local, the RHS dependencies are
 reported **structural** (§3.4), so any predef change that can reach a local
 forces a full reflatten rather than a value-only rebake.
 
+Both halves of that resolution are made pay-for-use, because it runs per
+assignment per visit — grass pays it 3645 times per flatten:
+
+- **The scan runs only inside a frame that binds a local.** `flatten_call` is
+  the only place a LOCAL binding enters a frame, so it computes
+  `ctx->frame_has_locals` once and saves/restores it around the callee's body;
+  loops and if-blocks inherit it (they add LOOP bindings and nothing else).
+  With no LOCAL in the array the resolution provably yields "no scoped match",
+  so the persisted `var_idx` is already the answer. Release and debug take the
+  same branch — `GLR_DEBUG_CHECKS` builds additionally run the full resolution
+  on the skipped path to keep looking for the unreachable PARAM/LOOP target and
+  for a `frame_has_locals` that has drifted from the frame it summarises.
+- **The LHS name itself is memoised per source row** on the expression cache
+  (`repl_expr_cache_line_lhs_*`), since it is a pure function of the row's text
+  and inherits that cache's single invalidation seam
+  (`repl_state_mark_source_dirty`). The memo is deliberately independent of the
+  row's program state — the name is well defined on a cold, failed, or
+  never-compiled row — and the `force_reparse` differential reference never
+  reads it.
+
 #### Disabling the expression cache
 
 There are three intentional disable/reference modes:

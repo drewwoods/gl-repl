@@ -161,6 +161,13 @@ RELEASE_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O2
 
+# Defence-in-depth checks that are unreachable by contract but sit on a hot
+# path (config.h GLR_DEBUG_CHECKS). On in every non-release configuration —
+# the test suite runs in a debug build, so the checks keep their coverage
+# exactly where a contract violation would be caught. Diagnostics only:
+# results must not differ between the two builds.
+DEBUG_CHECK_CFLAGS = -DGLR_DEBUG_CHECKS=1
+
 ifeq ($(NOSAN),1)
 NO_SAN := 1
 endif
@@ -172,11 +179,13 @@ ifeq ($(NO_SAN),1)
 DEBUG_SAN_SUFFIX = -nosan
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
+	$(DEBUG_CHECK_CFLAGS) \
 	-O0
 else ifeq ($(SAN),memory)
 DEBUG_SAN_SUFFIX = -msan
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
+	$(DEBUG_CHECK_CFLAGS) \
 	-O1 \
 	-fsanitize=memory -fsanitize-memory-track-origins=2 \
 	-fno-omit-frame-pointer \
@@ -187,6 +196,7 @@ $(error unsupported SAN=$(SAN); use SAN=address, SAN=memory, or NO_SAN=1)
 else
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
+	$(DEBUG_CHECK_CFLAGS) \
 	-O0 \
 	-fsanitize=address -fno-omit-frame-pointer \
 	-fsanitize=undefined -fno-sanitize-recover=undefined
@@ -194,6 +204,7 @@ endif
 
 COVERAGE_CFLAGS = \
 	$(COMMON_CFLAGS) \
+	$(DEBUG_CHECK_CFLAGS) \
 	-O0 \
 	--coverage -fprofile-arcs -ftest-coverage
 

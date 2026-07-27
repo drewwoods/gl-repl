@@ -113,6 +113,18 @@ typedef struct {
      * The expansion walk sees semantic roles/values, never cache entries or
      * program handles. */
     ReplFlattenExprEngine expr;
+    /* 1 while expanding inside a call frame that bound at least one
+     * function-scoped local — a summary of the active `var_kinds` array, not
+     * independent state. Assignment target resolution is the only reader
+     * (flatten_var_assign); flatten_call is the only writer, because it is
+     * the only place a REPL_VISIBLE_VAR_LOCAL binding enters a frame. Loops
+     * prepend a LOOP iterator and if-blocks share the caller's array, so
+     * neither changes it; a nested call saves, sets and restores it around
+     * the callee's body, which is what makes this a per-frame property
+     * rather than a sticky flag. It rides on the context because
+     * flatten_range is size-capped (check-tier-c-function-size) and cannot
+     * take another parameter. */
+    int frame_has_locals;
     int call_depth;
     int abort;
     int visit_budget;
@@ -248,7 +260,10 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
  *
  * `var_deps` is non-const because a local assignment writes its slot;
  * flatten_for_loop then copies the outer entries back out of its
- * per-iteration array. */
+ * per-iteration array.
+ *
+ * Whether the frame holds a LOCAL binding rides on ctx->frame_has_locals,
+ * not on this parameter list (flatten_range is size-capped). */
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx,
                           ExprVar *vars, ReplExprDepMask *var_deps,
@@ -365,6 +380,8 @@ static void flatten_for_loop(FlattenContext *ctx,
                 lvars[lnv++] = vars[v];
                 outer_n++;
             }
+        /* The iterator is a LOOP binding and the outer entries keep their
+         * kinds, so ctx->frame_has_locals carries through unchanged. */
         flatten_range(ctx, i + 1, loop_end, lvars, ldeps, lkinds, lnv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
@@ -563,8 +580,15 @@ static void flatten_call(FlattenContext *ctx,
          * caller value the callee is entitled to receive. Params and
          * locals cannot collide: that is a same-scope redefinition, and
          * compile rejects it. */
+        int params_end = lnv;
         flatten_bind_func_locals(ctx, k + 1, body_end,
                                  lvars, ldeps, lkinds, &lnv);
+        /* The one place a LOCAL binding enters a frame, so the one place
+         * ctx->frame_has_locals is computed. Saved and restored around the
+         * body: the caller's remaining commands are expanded after this
+         * call returns and must see the caller's frame, not the callee's. */
+        int caller_has_locals = ctx->frame_has_locals;
+        ctx->frame_has_locals = (lnv > params_end);
 
         unsigned int nested_func_mask = func_scope_mask;
         if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
@@ -576,6 +600,7 @@ static void flatten_call(FlattenContext *ctx,
         flatten_range(ctx, k + 1, body_end, lvars, ldeps, lkinds, lnv,
                       i, nested_root_call, nested_func_mask);
         if (ctx->call_depth > 0) ctx->call_depth--;
+        ctx->frame_has_locals = caller_has_locals;
     } while (0);
 }
 
@@ -958,24 +983,32 @@ static int flatten_reparse_line(FlattenContext *ctx,
  * `var_idx` is a commit-time storage *hint*, not the lexical authority: a
  * later legal edit — inserting a local over an existing global — must
  * retarget older assignment rows without rewriting every one of them. So
- * the LHS is re-derived from source text and resolved here on every visit.
+ * the LHS is re-derived and resolved here on every visit — from the memo on
+ * the engine, which turns "re-derived" into a copy of an already-parsed
+ * name.
  *
  * `*unwritable_out` reports a first match that is a PARAM or LOOP. Commit
  * and the reverse binder guards are supposed to make that state
  * unreachable; flatten refuses to mutate the binding regardless.
  *
+ * `lhs_out` receives the extracted name (empty when there is none), so the
+ * diagnostic path does not re-parse the line.
+ *
  * Only meaningful inside a frame, so nv == 0 (the whole top level) costs
  * nothing. */
-static int flatten_resolve_assign_target(const char *src_text,
+static int flatten_resolve_assign_target(ReplFlattenExprEngine *engine,
+                                         int line_idx, const char *src_text,
                                          const ExprVar *vars,
                                          const ReplVisibleVarKind *var_kinds,
-                                         int nv, int *unwritable_out) {
-    char lhs[REPL_PREDEF_NAME_MAX] = "";
+                                         int nv, int *unwritable_out,
+                                         char *lhs_out, int lhs_out_sz) {
+    const char *lhs = lhs_out;
 
     *unwritable_out = 0;
-    if (nv <= 0 || !vars ||
-        !repl_extract_assignment_parts(src_text ? src_text : "",
-                                       lhs, sizeof(lhs), NULL, 0))
+    if (!repl_flatten_expr_assign_lhs(engine, line_idx, src_text,
+                                      lhs_out, lhs_out_sz))
+        return -1;
+    if (nv <= 0 || !vars)
         return -1;
 
     for (int v = 0; v < nv; v++) {
@@ -1020,8 +1053,39 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     int warm = repl_flatten_expr_line_ready(&ctx->expr, i);
     const char *src_text = flatten_src_text(ctx->text, i);
     int unwritable = 0;
-    int local_slot = flatten_resolve_assign_target(src_text, vars, var_kinds,
-                                                   nv, &unwritable);
+    char lhs[REPL_PREDEF_NAME_MAX] = "";
+    /* Pay for the lexical re-derivation only where it can change the answer.
+     * A frame with no LOCAL binding provably resolves to -1: the scan
+     * refuses a PARAM or LOOP match and there is nothing else in the array
+     * to hit, so the persisted var_idx is authoritative. Both builds take
+     * this same decision — the skip is never conditional on the build, or
+     * the suite would not be testing what ships.
+     *
+     * What the skipped call still produced is diagnostics, and those are
+     * worth keeping where they can be seen: GLR_DEBUG_CHECKS (debug /
+     * sanitizer / coverage) runs the resolution anyway to look for a
+     * PARAM/LOOP target — defence-in-depth against a bypass of commit's
+     * reverse-binder guards — and to catch a ctx->frame_has_locals that has
+     * drifted out of step with the frame it summarises. Neither is a
+     * reachable state; both would otherwise fail silently. */
+    int local_slot = -1;
+    if (ctx->frame_has_locals) {
+        local_slot = flatten_resolve_assign_target(&ctx->expr, i, src_text,
+                                                   vars, var_kinds, nv,
+                                                   &unwritable,
+                                                   lhs, (int)sizeof(lhs));
+    } else if (GLR_DEBUG_CHECKS) {
+        int checked = flatten_resolve_assign_target(&ctx->expr, i, src_text,
+                                                    vars, var_kinds, nv,
+                                                    &unwritable,
+                                                    lhs, (int)sizeof(lhs));
+        if (checked >= 0) {
+            prof_accum_end(PROF_FLATTEN_VAR_ASSIGN);
+            flatten_fail(ctx, "internal: assignment resolved to a local in a "
+                              "frame reported to have none");
+            return 0;
+        }
+    }
     float prev_local_value = local_slot >= 0 ? vars[local_slot].value : 0.0f;
     /* A local's value lives in a per-call frame that rebake_one_cmd cannot
      * reconstruct: it evaluates each command against a *frozen*
@@ -1036,10 +1100,7 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     int structural = (local_slot >= 0);
 
     if (unwritable) {
-        char lhs[REPL_PREDEF_NAME_MAX] = "";
         char msg[REPL_DIAG_TEXT_MAX];
-        repl_extract_assignment_parts(src_text ? src_text : "",
-                                      lhs, sizeof(lhs), NULL, 0);
         snprintf(msg, sizeof(msg),
                  "cannot assign to '%s' here - it is a parameter or loop variable",
                  lhs);

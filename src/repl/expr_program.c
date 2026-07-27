@@ -80,8 +80,16 @@ typedef struct {
  * held between line_begin and line_finish. */
 #define EXPR_LINE_BUILDING 3
 
+/* Assignment-LHS memo states (ExprLineEntry.lhs_state). Zero must mean
+ * "unknown" — invalidation resets the line table with memset. */
+#define EXPR_LHS_UNKNOWN 0
+#define EXPR_LHS_NONE    1
+#define EXPR_LHS_NAME    2
+
 typedef struct {
     unsigned char state;
+    unsigned char lhs_state;
+    int           lhs_sym;      /* EXPR_LHS_NAME: symbol arena offset */
     int           first_ref;
     int           ref_count;
 } ExprLineEntry;
@@ -932,4 +940,53 @@ int repl_expr_cache_line_role_count(const ReplExprCache *cache, int line_idx,
             n++;
     }
     return n;
+}
+
+/* ---- Per-line assignment-LHS memo --------------------------------------- */
+
+int repl_expr_cache_line_lhs_get(const ReplExprCache *cache, int line_idx,
+                                 char *out, int out_sz) {
+    ExprLineEntry *entry =
+        cache_line_entry((ReplExprCache *)cache, line_idx, 0);
+
+    if (out && out_sz > 0)
+        out[0] = '\0';
+    if (!entry || entry->lhs_state == EXPR_LHS_UNKNOWN)
+        return -1;
+    if (entry->lhs_state == EXPR_LHS_NONE)
+        return 0;
+    /* Names live in the symbol arena, which reallocs as later lines compile;
+     * hand back a copy rather than a pointer that a subsequent build could
+     * dangle. */
+    if (out && out_sz > 0) {
+        const char *name = cache->syms + entry->lhs_sym;
+        int n = (int)strlen(name);
+        if (n > out_sz - 1)
+            n = out_sz - 1;
+        memcpy(out, name, (size_t)n);
+        out[n] = '\0';
+    }
+    return 1;
+}
+
+void repl_expr_cache_line_lhs_set(ReplExprCache *cache, int line_idx,
+                                  const char *lhs) {
+    ExprLineEntry *entry;
+    int sym;
+
+    if (!cache)
+        return;
+    entry = cache_line_entry(cache, line_idx, 1);
+    if (!entry)
+        return;
+    if (!lhs || !lhs[0]) {
+        entry->lhs_state = EXPR_LHS_NONE;
+        entry->lhs_sym = -1;
+        return;
+    }
+    sym = cache_intern_symbol(cache, lhs);
+    if (sym < 0)
+        return;      /* out of budget: stay unmemoised, keep deriving */
+    entry->lhs_sym = sym;
+    entry->lhs_state = EXPR_LHS_NAME;
 }

@@ -1150,6 +1150,84 @@ static void test_undo_after_local_decl_restores_cleanly(void) {
                  nth_cmd_arg0(CMD_VERTEX3F, 0), 2.0f);
 }
 
+/* ---- Assignment-target resolution fast path -------------------------- */
+
+/* Flatten resolves an assignment's destination lexically only inside a frame
+ * that actually binds a local; elsewhere the persisted var_idx is
+ * authoritative and the walk skips the re-derivation. That makes "does this
+ * frame have locals" a per-frame property, and a nested call is where a
+ * sticky one would show: the caller's frame resumes after the callee's
+ * returns, and every assignment in the remainder of the caller's body must
+ * still be seen as local-targeted. A callee frame that leaks its own answer
+ * back to the caller sends `u = u + 2` to a predef slot instead. */
+static void test_frame_locality_survives_a_nested_call(void) {
+    printf("--- frame locality survives a nested call ---\n");
+    const char *lines[] = {
+        "static float g;",
+        "glBegin(GL_POINTS);",
+        /* Callee: parameters only, so its frame binds no local. */
+        "func1(q) {",
+        "g = q;",
+        "}",
+        "func0(p) {",
+        "float u;",
+        "u = p;",
+        "func1(7);",
+        "u = u + 2;",
+        "glVertex3f(u, 0, 0);",
+        "}",
+        "func0(1);",
+        "glEnd();",
+    };
+    load_scene(lines, 14);
+
+    ASSERT_FLOAT("the callee wrote the global",  predef_value("g"), 7.0f);
+    ASSERT_FLOAT("the assignment after the call still targets the local",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 3.0f);
+    ASSERT_INT("and is emitted as a local write",
+               nth_cmd_var_idx(CMD_VAR_ASSIGN, 2), REPL_VAR_IDX_LOCAL);
+    ASSERT_INT("while the callee's assignment is not",
+               nth_cmd_var_idx(CMD_VAR_ASSIGN, 1),
+               repl_eval_find_predef_var_idx("g"));
+}
+
+/* The destination name is memoised per source row (it is a pure function of
+ * the row's text) and the memo hangs off the compiled-expression cache,
+ * whose single invalidation seam is repl_state_mark_source_dirty. Retargeting
+ * an assignment by editing the row is the edit that proves the memo is not
+ * outliving the text it was derived from: a stale entry keeps writing the
+ * old local and the new one stays at 0. */
+static void test_assignment_target_follows_an_edited_lhs(void) {
+    printf("--- an edited LHS retargets the assignment ---\n");
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float a;",
+        "float b;",
+        "a = r * 3;",
+        "glVertex3f(a, b, 0);",
+        "}",
+        "func0(2);",
+        "glEnd();",
+    };
+
+    /* Function definitions hoist to the top: rows are 0 head, 1 float a,
+     * 2 float b, 3 the assignment. */
+    load_scene(lines, 9);
+    ASSERT_FLOAT("baseline writes a", nth_cmd_arg_n(CMD_VERTEX3F, 0, 0), 6.0f);
+    ASSERT_FLOAT("and leaves b at zero",
+                 nth_cmd_arg_n(CMD_VERTEX3F, 0, 1), 0.0f);
+    ASSERT_INT("row 3 is the assignment",
+               repl_state_document_cmds()[3].type, CMD_VAR_ASSIGN);
+
+    ASSERT_INT("retargeting the assignment commits",
+               commit_line_at("b = r * 3;", 3, 0), 1);
+    repl_flatten_commands(0);
+    ASSERT_FLOAT("a is back to zero", nth_cmd_arg_n(CMD_VERTEX3F, 0, 0), 0.0f);
+    ASSERT_FLOAT("and b now carries the value",
+                 nth_cmd_arg_n(CMD_VERTEX3F, 0, 1), 6.0f);
+}
+
 int main(void) {
     test_local_is_per_invocation();
     test_local_reads_zero_before_write();
@@ -1172,6 +1250,8 @@ int main(void) {
     test_export_does_not_truncate_long_decl_comment();
     test_export_hoists_locals_for_c89();
     test_undo_after_local_decl_restores_cleanly();
+    test_frame_locality_survives_a_nested_call();
+    test_assignment_target_follows_an_edited_lhs();
 
     return test_harness_report(&g_harness, "test_repl_locals");
 }

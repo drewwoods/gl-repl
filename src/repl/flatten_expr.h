@@ -53,6 +53,15 @@ int  repl_flatten_expr_compile_active_list(ReplFlattenExprEngine *engine,
 
 int repl_flatten_expr_role_count(const ReplFlattenExprEngine *engine,
                                  int line_idx, ReplExprRole role);
+
+/* Assignment destination name for a source line, memoised per line in the
+ * cache (repl_expr_cache_line_lhs_*). Returns 1 with `out` filled when the
+ * row is a scalar assignment, 0 when it is not (`out` emptied). Derives and
+ * memoises on the first visit; without a cache — and on the force_text
+ * differential path, which stays independent of it by construction — every
+ * visit derives. */
+int repl_flatten_expr_assign_lhs(ReplFlattenExprEngine *engine, int line_idx,
+                                 const char *src_text, char *out, int out_sz);
 ReplFlattenExprValue repl_flatten_expr_eval(
     const ReplFlattenExprEngine *engine, int line_idx,
     ReplExprRole role, int ordinal,

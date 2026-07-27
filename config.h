@@ -28,6 +28,21 @@
  * has the GLUT headers expands it. */
 #include "keymap.h"
 
+/* ---- Build configuration ----------------------------------------------- */
+
+/* 1 in the debug / sanitizer / coverage builds (the Makefile defines it on
+ * the command line), 0 in release. Gates defence-in-depth checks that are
+ * unreachable by contract but sit on a hot path: the test suite runs in a
+ * debug build, so the check keeps its coverage where a violation would be
+ * caught, and release stops paying for it.
+ *
+ * Never gate *behavior* on this — only diagnostics. Two builds that compute
+ * different results is a bug factory; a release build that skips a check
+ * whose outcome is provably "no finding" is not. */
+#ifndef GLR_DEBUG_CHECKS
+#define GLR_DEBUG_CHECKS 0
+#endif
+
 /* ---- Shared UI primitives --------------------------------------------- */
 
 /* Shared GLUT bitmap fonts. The fixed-width fonts have compile-time metrics

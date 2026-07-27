@@ -5,6 +5,7 @@
 
 #include "repl/command.h"      /* REPL_MATRIX_CELL_COUNT */
 #include "repl/flatten_expr.h"
+#include "repl/text_helpers.h" /* repl_extract_assignment_parts */
 
 static int capture_expr(void *user_data, ReplExprRole role, int ordinal,
                         const char *begin, const char *end) {
@@ -143,6 +144,34 @@ int repl_flatten_expr_role_count(const ReplFlattenExprEngine *engine,
     if (!repl_flatten_expr_line_ready(engine, line_idx))
         return 0;
     return repl_expr_cache_line_role_count(engine->cache, line_idx, role);
+}
+
+int repl_flatten_expr_assign_lhs(ReplFlattenExprEngine *engine, int line_idx,
+                                 const char *src_text, char *out, int out_sz) {
+    int found;
+
+    if (!out || out_sz <= 0)
+        return 0;
+    out[0] = '\0';
+    /* Not keyed on line state: the LHS is a property of the row's text, so
+     * it is equally valid before the line's expressions have compiled and
+     * after they failed to. */
+    if (engine && engine->cache && !engine->force_text) {
+        int memo = repl_expr_cache_line_lhs_get(engine->cache, line_idx,
+                                                out, out_sz);
+        if (memo >= 0)
+            return memo;
+        found = repl_extract_assignment_parts(src_text ? src_text : "",
+                                              out, out_sz, NULL, 0);
+        repl_expr_cache_line_lhs_set(engine->cache, line_idx,
+                                     found ? out : NULL);
+    } else {
+        found = repl_extract_assignment_parts(src_text ? src_text : "",
+                                              out, out_sz, NULL, 0);
+    }
+    if (!found)
+        out[0] = '\0';
+    return found ? 1 : 0;
 }
 
 ReplFlattenExprValue repl_flatten_expr_eval(
