@@ -19,6 +19,7 @@
 #include "repl/tutorials.h"
 #include "repl/export.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */
+#include "keymap.h"
 
 
 
@@ -1130,7 +1131,14 @@ static TutorialStepResult tutorial_enter_step(int step) {
          * kept (see tutorial_end_keep_view); status set BEFORE ending so
          * it survives. (Keyed on the step lookup, not a NULL comment —
          * comment-less COMMAND steps legitimately have no comment.) */
-        repl_set_status("Tutorial complete");
+        char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+        char status_msg[REPL_STATUS_TEXT_MAX];
+        keymap_binding_to_string(shortcut, sizeof(shortcut),
+                                 KM_KEY(GLR_NEXT_TUTORIAL),
+                                 KM_MODS(GLR_NEXT_TUTORIAL), 1);
+        snprintf(status_msg, sizeof(status_msg),
+                 "Tutorial complete - press %s to advance or edit to continue", shortcut);
+        repl_set_status(status_msg);
         tutorial_end_keep_view();
         repl_dispatch_completion_update();
         return TUTORIAL_STEP_TERMINAL;

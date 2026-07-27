@@ -65,6 +65,15 @@ static void get_expected_hint(int tutorial_idx, int step, int total, int is_comm
     }
 }
 
+static void get_expected_completion_status(char *out, size_t out_size) {
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    keymap_binding_to_string(shortcut, sizeof(shortcut),
+                             KM_KEY(GLR_NEXT_TUTORIAL),
+                             KM_MODS(GLR_NEXT_TUTORIAL), 1);
+    snprintf(out, out_size,
+             "Tutorial complete - press %s to advance or edit to continue", shortcut);
+}
+
 static const char *trim_leading_ws(const char *text) {
     while (text && *text == ' ')
         text++;
@@ -245,8 +254,10 @@ static void test_color_transform_walkthrough(void) {
     }
 
     ASSERT_TRUE("color-transform tutorial completed", !tutorial_active());
+    char expected_comp[256];
+    get_expected_completion_status(expected_comp, sizeof(expected_comp));
     ASSERT_STR("color-transform completion status",
-               status_text(), "Tutorial complete");
+               status_text(), expected_comp);
 }
 
 static void test_runner_match_and_advance(void) {
@@ -1029,7 +1040,9 @@ static void test_complete_and_menu_actions(void) {
         tutorial_advance_after_successful_commit();
     }
 
-    ASSERT_STR("completion status set", status_text(), "Tutorial complete");
+    char expected_comp[256];
+    get_expected_completion_status(expected_comp, sizeof(expected_comp));
+    ASSERT_STR("completion status set", status_text(), expected_comp);
 
     /* After completion no tutorial is active, so the trailing Restart/Exit
      * rows don't exist. The MENU_TUTORIALS activation handler still has a
@@ -1877,8 +1890,10 @@ static void test_phase4_full_walk_places_setup_before_batch(void) {
     }
 
     ASSERT_TRUE("tutorial completed", !tutorial_active());
+    char expected_comp[256];
+    get_expected_completion_status(expected_comp, sizeof(expected_comp));
     ASSERT_STR("tutorial completion status",
-               status_text(), "Tutorial complete");
+               status_text(), expected_comp);
 
     /* Now scan the document and assert the glEnable line sits at a
      * lower index than the glBegin line — the whole point of the
