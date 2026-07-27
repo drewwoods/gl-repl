@@ -14,7 +14,8 @@ recorded under Verification.
 **The semantic comparator landed first**, because the conversions had to be
 provable rather than eyeballed. `glr_debug_dump_flat_commands_sync` now prints
 `var_idx`, `num_args`, `args[0..num_args)` and the payload member the type owns
-(`payload.matrix.m[]`, `payload.label.fmt`, `payload.decl.names[]`), with every
+(`payload.matrix.m[]`, `payload.label.fmt`, `payload.decl.names[]`, and the
+flat-local replay value in `payload.assign.prev_local_value`), with every
 float as `%a`. That last part is the point: a decimal rendering can hide a
 difference below its own precision, which would defeat a dump used to prove two
 programs flatten to the same executable stream.
@@ -72,7 +73,7 @@ Docs: `docs/USER_GUIDE.md` (a `#### Function-scoped locals` subsection under
 `CLAUDE.md`, and the `gl-repl-scene-authoring` skill (language block, Math,
 Budgets).
 
-#### One defect found by the conversion, and one cost measured
+#### Two defects found by the conversion, and one cost measured
 
 **`rebake_one_cmd` re-applied local assignments** — a Phase 2 bug the corpus
 differential could not see until a shipped example had locals in it.
@@ -91,6 +92,17 @@ full-flatten value, and there is no predef slot to write either way.
 Regression: `test_rebake_leaves_local_assignments_alone` in
 `tests/test_repl_flatten_rebake.c`, written first and verified to fail without
 the fix (`16` where the full flatten says `8`).
+
+**Replay expanded a self-referential local assignment from its post-write
+snapshot.** Even with the baked `args[0]` fixed, the inline replay comment built
+`u = u * 2` from the assignment row's effective locals, where `u` is already
+the result. A real `4 * 2 = 8` therefore displayed as `8 * 2 = 16`. The full
+flatten now records the resolved local target's pre-write value in
+`payload.assign.prev_local_value`; replay substitutes that value for the target
+on this RHS only and keeps the baked `args[0]` as the authoritative result. The
+field occupies the existing `GLCmd` payload union, so it adds no command-size
+cost. Regression coverage in `test_repl_core_commit.c` checks both a first
+local assignment and a following self-referential assignment.
 
 **The structural-dep cost now has numbers.** A new `bench_repl --only
 refresh_slider` case measures the other half of live editing — one

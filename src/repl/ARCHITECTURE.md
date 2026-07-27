@@ -214,7 +214,7 @@ typedef struct {
     int      valid;            // deleted commands stay allocated but skipped
     int      is_auto;          // synthesized (e.g. auto-normal)
     int      has_vars;         // expr references vars → must re-evaluate from text
-    union { … } payload;       // tagged on type: decl names / label fmt
+    union { … } payload;       // tagged on type: decl / assign / label / matrix
     // provenance — see 3.3
     int      src_cmd_idx, call_src_cmd_idx, root_call_src_cmd_idx;
     unsigned func_scope_mask;
@@ -231,8 +231,11 @@ Two design notes worth internalizing:
   float32 losslessly. The *absence* of the field is the
   compiler-enforced invariant — no grep guard needed.
 - **`payload` is a tagged union** keyed on `type`: `payload.decl` for
-  `CMD_VAR_DECLARE`, `payload.label` for `CMD_LABEL`, zeroed for
-  everything else. This saves ~64 bytes/command vs. side-by-side fields.
+  `CMD_VAR_DECLARE`, `payload.assign` for `CMD_VAR_ASSIGN`, `payload.label`
+  for `CMD_LABEL`, and `payload.matrix` for `CMD_MULT_MATRIXF`; it is zeroed
+  for everything else. The assignment arm preserves a flat local target's
+  pre-write value for replay expansion because the regular local snapshot is
+  post-write. The union saves ~64 bytes/command vs. side-by-side fields.
 
 [`CmdType`](command.h#L44) ordering is **append-stable**: switch dispatch in [`executor.c`](executor.c),
 [`flatten.c`](flatten.c), [`parser.c`](parser.c), and [`replay_annotations.c`](../subsystems/replay/replay_annotations.c) keys on these values,

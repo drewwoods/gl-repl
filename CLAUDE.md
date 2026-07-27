@@ -327,8 +327,11 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
   nowhere: `flatten_bind_func_locals` re-derives them from
   `payload.decl.names[]` per call.
-- [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type` (`payload.decl.*`,
-  `payload.label.fmt`); other types must not read it.
+- [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type`
+  (`payload.decl.*`, `payload.assign.prev_local_value`, `payload.label.fmt`,
+  `payload.matrix.m[]`); other types must not read it. A flat local assignment
+  captures its pre-write target value in the assignment arm because the
+  ordinary `FlatCmdLocalVars` snapshot is post-write.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L557) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.

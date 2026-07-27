@@ -110,6 +110,10 @@ static int flat_cmd_equal(const GLCmd *a, const GLCmd *b) {
     if (a->type == CMD_LABEL &&
         strcmp(a->payload.label.fmt, b->payload.label.fmt) != 0)
         return 0;
+    if (a->type == CMD_VAR_ASSIGN &&
+        memcmp(&a->payload.assign, &b->payload.assign,
+               sizeof(a->payload.assign)) != 0)
+        return 0;
     return 1;
 }
 

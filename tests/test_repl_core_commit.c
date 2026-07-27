@@ -1481,6 +1481,44 @@ int main(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
+
+        editor_feed_line("func0(seed) {");
+        editor_feed_line("float local;");
+        editor_feed_line("local = seed + 1;");
+        editor_feed_line("local = local * 2;");
+        editor_feed_line("glVertex3f(local, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("func0(3);");
+        replay_start();
+        replay_state = REPLAY_PAUSED;
+
+        replay_pc = 2;
+        replay_src_line = 2;
+        ASSERT_TRUE("local replay first assignment text",
+                    replay_code_panel_get_command_display_text(source_document_view(), 2,
+                                                               display, sizeof(display)));
+        ASSERT_STR("local replay first assignment expansion",
+                   display,
+                   "    local = seed + 1; // local = 3 + 1 = 4");
+
+        replay_pc = 3;
+        replay_src_line = 3;
+        ASSERT_TRUE("local replay self assignment text",
+                    replay_code_panel_get_command_display_text(source_document_view(), 3,
+                                                               display, sizeof(display)));
+        ASSERT_STR("local replay self assignment uses pre-write value",
+                   display,
+                   "    local = local * 2; // local = 4 * 2 = 8");
+
+        replay_active = 0;
+        replay_state = REPLAY_OFF;
+        replay_src_line = -1;
+        replay_pc = 0;
+    }
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    {
+        char display[MAX_INPUT_LEN];
         int i_idx = predef_idx("i");
         int j_idx = predef_idx("j");
 

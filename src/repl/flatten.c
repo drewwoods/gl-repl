@@ -1022,6 +1022,7 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     int unwritable = 0;
     int local_slot = flatten_resolve_assign_target(src_text, vars, var_kinds,
                                                    nv, &unwritable);
+    float prev_local_value = local_slot >= 0 ? vars[local_slot].value : 0.0f;
     /* A local's value lives in a per-call frame that rebake_one_cmd cannot
      * reconstruct: it evaluates each command against a *frozen*
      * FlatCmdLocalVars snapshot and writes back only through predef slots,
@@ -1110,6 +1111,7 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
         /* Normalize the emitted target to whatever actually got written,
          * so the flat stream never carries a stale storage claim. */
         tmp.var_idx = (local_slot >= 0) ? REPL_VAR_IDX_LOCAL : var_idx;
+        tmp.payload.assign.prev_local_value = prev_local_value;
         tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
         repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
@@ -1572,13 +1574,13 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
     /* Literal-form glMultMatrixf: the cells are the command, and they live
      * in the payload rather than args[]. */
     if (flatten_cmd_has_matrix_slots(cmd)) {
-        for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++) {
+        for (int cell = 0; cell < REPL_MATRIX_CELL_COUNT; cell++) {
             float v = 0.0f;
             if (repl_flatten_expr_rebake_eval(
-                    o->expr_cache, line, REPL_EXPR_ROLE_CMD_ARG, k,
+                    o->expr_cache, line, REPL_EXPR_ROLE_CMD_ARG, cell,
                     locals ? locals->vars : NULL,
                     locals ? locals->num_vars : 0, &v))
-                cmd->payload.matrix.m[k] = v;
+                cmd->payload.matrix.m[cell] = v;
         }
         return 1;
     }

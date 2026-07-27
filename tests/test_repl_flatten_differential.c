@@ -129,6 +129,10 @@ static int flat_cmd_equal(const GLCmd *a, const GLCmd *b) {
     if (a->type == CMD_VAR_DECLARE &&
         memcmp(&a->payload.decl, &b->payload.decl, sizeof(a->payload.decl)) != 0)
         return 0;
+    if (a->type == CMD_VAR_ASSIGN &&
+        memcmp(&a->payload.assign, &b->payload.assign,
+               sizeof(a->payload.assign)) != 0)
+        return 0;
     if (a->type == CMD_MULT_MATRIXF &&
         memcmp(&a->payload.matrix, &b->payload.matrix,
                sizeof(a->payload.matrix)) != 0)

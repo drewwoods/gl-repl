@@ -88,6 +88,11 @@ static void debug_dump_flat_args(FILE *dst, const GLCmd *cmd) {
                     cmd->payload.decl.names[name_idx]);
         fprintf(dst, "]");
         break;
+    case CMD_VAR_ASSIGN:
+        if (cmd->var_idx == REPL_VAR_IDX_LOCAL)
+            fprintf(dst, " prev_local=%a",
+                    (double)cmd->payload.assign.prev_local_value);
+        break;
     default:
         break;
     }

@@ -144,6 +144,7 @@ typedef struct {
      *
      * Active member is keyed by `type`:
      *   CMD_VAR_DECLARE  -> payload.decl
+     *   CMD_VAR_ASSIGN   -> payload.assign
      *   CMD_LABEL        -> payload.label
      *   CMD_MULT_MATRIXF -> payload.matrix
      *   anything else    -> zeroed; do not read.
@@ -154,6 +155,14 @@ typedef struct {
             char names[MAX_NAMES_PER_DECL][16];
             int  count;             /* Number of names in a CMD_VAR_DECLARE line */
         } decl;
+        struct {
+            /* Flat local assignments snapshot locals after the write so
+             * later commands see the new value. Replay needs the target's
+             * value before the write to expand a self-referential RHS.
+             * Meaningful only when var_idx == REPL_VAR_IDX_LOCAL; source
+             * assignments and flat predef assignments leave it zero. */
+            float prev_local_value;
+        } assign;
         struct {
             char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
         } label;

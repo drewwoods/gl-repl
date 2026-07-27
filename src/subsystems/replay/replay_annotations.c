@@ -800,11 +800,26 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
             return 0;
 
         {
-            float value = repl_state_flat_program_cmds()[flat_idx].args[0];
+            const GLCmd *flat_cmd = &repl_state_flat_program_cmds()[flat_idx];
+            int local_target = flat_cmd->var_idx == REPL_VAR_IDX_LOCAL;
+            float value = flat_cmd->args[0];
+
+            if (local_target) {
+                int target_idx = visible_var_index(visible_vars, nv, name);
+                if (target_idx < 0)
+                    return 0;
+                /* FlatCmdLocalVars is deliberately post-write: downstream
+                 * commands must observe this assignment. Substitute the
+                 * target's captured pre-write value for this RHS only. */
+                visible_vars[target_idx].value =
+                    flat_cmd->payload.assign.prev_local_value;
+            }
             subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
                                NULL, 0, visible_vars, nv);
-            replay_eval_expr_with_state(flat_idx, rhs, &predef, scratch_vals,
-                                        &value);
+            if (!local_target) {
+                replay_eval_expr_with_state(flat_idx, rhs, &predef,
+                                            scratch_vals, &value);
+            }
 
             if (rhs_subst[0] &&
                 strcmp(skip_leading_ws(rhs_subst), skip_leading_ws(rhs)) != 0 &&
