@@ -502,6 +502,19 @@ static void diff_stencil_mask_row(const char *name, GLenum pname) {
                            ((unsigned long)driver & 0xFFul));
 }
 
+static void diff_hex16_row(const char *name, GLenum pname) {
+    const ReplGlStateReportRow *row = diff_require_row(name);
+    GLint driver = 0;
+    char label[192];
+    if (!row)
+        return;
+    glGetIntegerv(pname, &driver);
+    snprintf(label, sizeof(label), "%s: fold %s == driver 0x%04X",
+             name, row->current, (unsigned)driver & 0xFFFFu);
+    ASSERT_TRUE(label, strtoul(row->current, NULL, 16) ==
+                           ((unsigned long)driver & 0xFFFFul));
+}
+
 static void diff_color_mask_row(void) {
     const ReplGlStateReportRow *row =
         diff_require_row("GL_COLOR_WRITEMASK");
@@ -716,6 +729,29 @@ static void diff_material_row(const char *name, GLenum face, GLenum pname,
     }
 }
 
+static void diff_light_row(const char *name, GLenum light, GLenum pname,
+                           int count) {
+    const ReplGlStateReportRow *row = diff_require_row(name);
+    GLfloat driver[4] = { 0, 0, 0, 0 };
+    float reported[4];
+    char label[192];
+    int i;
+
+    if (!row)
+        return;
+    glGetLightfv(light, pname, driver);
+    if (diff_parse_vec(row->current, reported, count) != count) {
+        snprintf(label, sizeof(label), "%s: %d components parsed", name, count);
+        ASSERT_TRUE(label, 0);
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        snprintf(label, sizeof(label), "%s[%d]: fold %g == driver %g", name, i,
+                 (double)reported[i], (double)driver[i]);
+        ASSERT_TRUE(label, feq(reported[i], driver[i], DIFF_EPSILON));
+    }
+}
+
 /* --- cases -------------------------------------------------------------- */
 
 /* 1. The generated prologue alone. Nothing user-authored, so every row here is
@@ -737,7 +773,7 @@ static void test_diff_generated_prologue(void) {
 /* 2. A sweep of plain state writes: one row per cell, all read back from the
  * driver the executor just wrote to. */
 static void test_diff_user_state_writes(void) {
-    GLCmd cmds[13];
+    GLCmd cmds[26];
     int n = 0;
 
     cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 0.25, 0.5, 0.75, 0.5); n++;
@@ -758,6 +794,18 @@ static void test_diff_user_state_writes(void) {
     cmds[n] = diff_cmd(CMD_STENCIL_MASK, n, 1, 15.0); n++;
     cmds[n] = diff_cmd(CMD_COLOR_MASK, n, 4, 1.0, 0.0, 1.0, 0.0); n++;
     cmds[n] = diff_cmd(CMD_DEPTH_MASK, n, 1, 0.0); n++;
+    cmds[n] = diff_cmd(CMD_CULL_FACE, n, 1, (double)GL_FRONT); n++;
+    cmds[n] = diff_cmd(CMD_LINE_STIPPLE, n, 2, 2.0, (double)0x0F0F); n++;
+    cmds[n] = diff_cmd(CMD_EDGE_FLAG, n, 1, (double)GL_FALSE); n++;
+    cmds[n] = diff_cmd(CMD_STENCIL_OP, n, 3, (double)GL_KEEP, (double)GL_REPLACE, (double)GL_INCR); n++;
+    cmds[n] = diff_cmd(CMD_CLEAR_COLOR, n, 4, 0.1, 0.2, 0.3, 0.4); n++;
+    cmds[n] = diff_cmd(CMD_CLEAR_DEPTH, n, 1, 0.5); n++;
+    cmds[n] = diff_cmd(CMD_CLEAR_STENCIL, n, 1, 5.0); n++;
+    cmds[n] = diff_cmd(CMD_FOG_I, n, 2, (double)GL_FOG_MODE, (double)GL_LINEAR); n++;
+    cmds[n] = diff_cmd(CMD_FOG_F, n, 2, (double)GL_FOG_DENSITY, 0.75); n++;
+    cmds[n] = diff_cmd(CMD_FOG_F, n, 2, (double)GL_FOG_START, 2.0); n++;
+    cmds[n] = diff_cmd(CMD_FOG_F, n, 2, (double)GL_FOG_END, 8.0); n++;
+    cmds[n] = diff_cmd(CMD_FOG_FV, n, 5, (double)GL_FOG_COLOR, 0.2, 0.4, 0.6, 1.0); n++;
 
     diff_case("inspector vs driver: user state writes", cmds, n, n);
 
@@ -778,6 +826,22 @@ static void test_diff_user_state_writes(void) {
     diff_stencil_mask_row("GL_STENCIL_WRITEMASK", GL_STENCIL_WRITEMASK);
     diff_color_mask_row();
     diff_bool_row("GL_DEPTH_WRITEMASK", GL_DEPTH_WRITEMASK);
+
+    diff_enum_row("GL_CULL_FACE_MODE", GL_CULL_FACE_MODE);
+    diff_int_row("GL_LINE_STIPPLE_REPEAT", GL_LINE_STIPPLE_REPEAT);
+    diff_hex16_row("GL_LINE_STIPPLE_PATTERN", GL_LINE_STIPPLE_PATTERN);
+    diff_bool_row("GL_EDGE_FLAG", GL_EDGE_FLAG);
+    diff_enum_row("GL_STENCIL_FAIL", GL_STENCIL_FAIL);
+    diff_enum_row("GL_STENCIL_PASS_DEPTH_FAIL", GL_STENCIL_PASS_DEPTH_FAIL);
+    diff_enum_row("GL_STENCIL_PASS_DEPTH_PASS", GL_STENCIL_PASS_DEPTH_PASS);
+    diff_vec_row("GL_COLOR_CLEAR_VALUE", GL_COLOR_CLEAR_VALUE, 4);
+    diff_float_row("GL_DEPTH_CLEAR_VALUE", GL_DEPTH_CLEAR_VALUE);
+    diff_int_row("GL_STENCIL_CLEAR_VALUE", GL_STENCIL_CLEAR_VALUE);
+    diff_enum_row("GL_FOG_MODE", GL_FOG_MODE);
+    diff_float_row("GL_FOG_DENSITY", GL_FOG_DENSITY);
+    diff_float_row("GL_FOG_START", GL_FOG_START);
+    diff_float_row("GL_FOG_END", GL_FOG_END);
+    diff_vec_row("GL_FOG_COLOR", GL_FOG_COLOR, 4);
 }
 
 /* 3. The transform fold: gl_state_inspector.c composes its own 4x4 matrices,
@@ -1049,6 +1113,28 @@ static void test_diff_materials(void) {
     diff_enum_row("GL_COLOR_MATERIAL_PARAMETER", GL_COLOR_MATERIAL_PARAMETER);
 }
 
+static void test_diff_lights(void) {
+    GLCmd cmds[2];
+    int n = 0;
+
+    /* Enabling the lights makes them "interesting" so the fold reports them.
+     * Their values come from the generated prologue (the light bridge). */
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT0); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT1); n++;
+
+    diff_case("inspector vs driver: per-light parameters", cmds, n, n);
+
+    diff_light_row("GL_LIGHT0_AMBIENT", GL_LIGHT0, GL_AMBIENT, 4);
+    diff_light_row("GL_LIGHT0_DIFFUSE", GL_LIGHT0, GL_DIFFUSE, 4);
+    diff_light_row("GL_LIGHT0_SPECULAR", GL_LIGHT0, GL_SPECULAR, 4);
+    diff_light_row("GL_LIGHT0_POSITION (eye)", GL_LIGHT0, GL_POSITION, 4);
+
+    diff_light_row("GL_LIGHT1_AMBIENT", GL_LIGHT1, GL_AMBIENT, 4);
+    diff_light_row("GL_LIGHT1_DIFFUSE", GL_LIGHT1, GL_DIFFUSE, 4);
+    diff_light_row("GL_LIGHT1_SPECULAR", GL_LIGHT1, GL_SPECULAR, 4);
+    diff_light_row("GL_LIGHT1_POSITION (eye)", GL_LIGHT1, GL_POSITION, 4);
+}
+
 /* 7. Clip planes, in both directions of the "(object)" label (see
  * diff_clip_plane_row): under the identity modelview the generated prologue
  * leaves behind, the fold's object-space equation IS what GL stores, so the row
@@ -1130,6 +1216,7 @@ int main(int argc, char **argv) {
     test_diff_raster_color_latch();
     test_diff_lit_raster_color();
     test_diff_materials();
+    test_diff_lights();
     test_diff_clip_planes();
     diff_close_cursor();
     repl_executor_destroy_resources();
