@@ -816,7 +816,7 @@ static void bench_flatten_refresh(int iters) {
 /* The `t` cases above measure the animation clock. This one measures the
  * other live-edit motion: dragging one global's slider. It is the trip-wire
  * for the structural-dependency rule in
- * docs/plans/active/scoped-local-variables.md — a global that feeds a
+ * docs/plans/done/scoped-local-variables.md — a global that feeds a
  * function-scoped local reports its deps structurally, so scrubbing it takes a
  * full flatten where an all-global scene would have rebaked in place. The
  * printed route is the part to watch; the timing says what that costs. */

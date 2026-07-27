@@ -11,8 +11,8 @@ begun. They move to `plans/active/` once implementation starts.
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
+| `local-aware-rebake.md` | Carry function-scoped locals through a value-only rebake, so a global feeding a local stops forcing a full flatten |
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
-| `scoped-local-variables.md` | Function-scoped local variables (`float x;` inside a funcN body) |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
 | `streamed-numeric-input.md` | Framed stdin float groups consumed by a baked `input` expression atom |
 | `winding-texture-mode.md` | Winding view: add "Color + Texture" mode (FRONT/BACK textures, eye-linear texgen) |

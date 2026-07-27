@@ -70,7 +70,7 @@
 # source commands that replace the former hidden init material state.
 #
 # 2026-07-27: input_c bumped +1 for repl_compile_decl_replacement_allowed
-# (docs/plans/active/scoped-local-variables.md, phase 3). input.c has two
+# (docs/plans/done/scoped-local-variables.md, phase 3). input.c has two
 # raw-replace routes -- editor_place_parsed_command's replace branch and
 # Enter over an existing row -- that reach repl_command_store_replace_one
 # with no feasibility check in front of them. That was survivable while

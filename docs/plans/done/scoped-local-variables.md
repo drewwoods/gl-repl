@@ -1,15 +1,28 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–5 landed, fixes 1–2 landed
+## Status — LANDED (2026-07-27)
 
 Phases 1 (declaration compile), 2 (flatten), 3 (edit guards), 4
 (export/import) and 5 (docs + example conversion) are implemented and tested.
 **Locals work end to end, the edit surface is closed, scenes using them
 round-trip through the file format, and three built-in examples are converted.**
-Fixes 1 and 2 below — the "make the var_assign tax pay-for-use" pair — are
-also landed; see the subsection under them for what they measured. What remains
-before this plan moves to `done/` is the manual scrub check recorded under
-Verification, and fix 3, which belongs in its own plan.
+Fixes 1 and 2 — the "make the var_assign tax pay-for-use" pair — landed with
+them; see "Fixes 1 + 2 as landed" for what they measured.
+
+Two things left this plan rather than blocking it:
+
+- **Fix 3** (teaching `rebake_one_cmd` to simulate local frames, so a global
+  feeding a local can rebake instead of forcing a full flatten) moved to
+  [`docs/plans/not-started/local-aware-rebake.md`](../not-started/local-aware-rebake.md).
+  Its design sketch below is retained as the record of how it was derived; the
+  new plan is the authority and should be edited there, not here.
+- **The manual scrub check** under Verification — launch `./gl-repl`, open a
+  converted scene, drag a *global* that feeds a local and watch the scene track
+  it — **was never performed.** Everything around it is automated (the route
+  classification is pinned by `bench_repl --only refresh_slider`, the variable
+  panel was verified headlessly, Ctrl+Z became a test), but the "eyes on the
+  rendered scene following the slider" step is not, and archiving this plan
+  does not make it done.
 
 ### Phase 5 — docs and example conversion (done)
 
@@ -352,7 +365,16 @@ grass scene shows why it is worth doing rather than being an abstract nicety:
 *none* of its locals affect the flat topology. `wind`/`wave`/`bend`/`u`/`cx`/… are
 pure value dataflow. They are classified structural only because rebake cannot
 carry a local's value forward through frozen snapshots — not because anything
-about the program's shape depends on them. Sketch:
+about the program's shape depends on them.
+
+> **Fix 3 now lives in
+> [`docs/plans/not-started/local-aware-rebake.md`](../not-started/local-aware-rebake.md).**
+> The sketch below is the record of how the design was derived under this
+> plan's measurements; the separate plan is the authority and carries the
+> regression matrix, the sequencing, and the acceptance instrument. Edit it
+> there.
+
+Sketch:
 
 **Carry locals by a stable function-local ordinal, never by scope-array slot.**
 This is the part a first sketch gets wrong. `flatten_for_loop`
@@ -446,7 +468,8 @@ exists to distinguish, not only the production grass scene:
 That is a self-contained design, but it changes the snapshot layout and its
 documented immutability, flatten's emit path, the whole rebake walk, and a
 dependency classification three phases of this plan reasoned about. It belongs
-in its own plan.
+in its own plan — and is now in one:
+[`docs/plans/not-started/local-aware-rebake.md`](../not-started/local-aware-rebake.md).
 
 **Sequencing: land fix 2 first regardless.** Recording the target ordinal makes
 the cached LHS non-prerequisite, but the *full* flatten still runs
@@ -459,8 +482,10 @@ first place — so fix 2's saving survives fix 3 rather than being absorbed by i
    see "Fixes 1 + 2 as landed" above. Independent of each other, small, and
    each already had its correctness argument written above. This targeted the
    machinery tax and closes the "not pay-for-what-you-use" finding.
-2. **Fix 3 as its own plan**, targeting the route regression, with the
-   Emscripten measurement as its motivating number.
+2. ~~**Fix 3 as its own plan**~~ — **split out** to
+   [`docs/plans/not-started/local-aware-rebake.md`](../not-started/local-aware-rebake.md),
+   targeting the route regression, with the Emscripten measurement as its
+   motivating number.
 
 Keeping the two apart is the point: fixes 1–2 barely move grass, because its hot
 bodies genuinely do have locals, and fix 3 is the only one that recovers the
@@ -1814,12 +1839,14 @@ full-flattened.
 is 1.6 ms in a 16.7 ms frame, which is why this was not escalated during
 Phase 5 — but Emscripten is a supported target and sits at ~4×, so fix 3
 (teaching `rebake_one_cmd` to simulate local frames, sketched in full under
-Phase 5) is a *when*, not an *if*. It is its own plan, not a patch to this one.
+Phase 5) is a *when*, not an *if*. It is its own plan, not a patch to this one:
+[`docs/plans/not-started/local-aware-rebake.md`](../not-started/local-aware-rebake.md).
 The manual scrub step in Verification also remains load-bearing rather than
 optional: it is the check that the scene visibly tracks the slider, which the
-benchmark cannot make. (Note such a rewrite must also replace the Phase 5 skip
-in `rebake_one_cmd`: today a local assignment is deliberately *not*
-re-evaluated, because its frozen snapshot is post-write.)
+benchmark cannot make — and it has not been performed. (Note such a rewrite
+must also replace the Phase 5 skip in `rebake_one_cmd`: today a local
+assignment is deliberately *not* re-evaluated, because its frozen snapshot is
+post-write.)
 
 **Resolved, for the record:** the export zero-fill divergence (REPL reads 0,
 exported C undefined) was flagged as a wart in earlier reviews with the
