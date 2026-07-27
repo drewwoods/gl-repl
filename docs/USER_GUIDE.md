@@ -8,6 +8,15 @@ step-by-step, and export as a standalone C program.
 
 ![gl-repl rendering the Whale example](images/hero.png)
 
+**The code is the interface.** By design, you shape the scene by editing
+commands — there is no click-to-select, drag-a-vertex, or gizmo-in-the-scene
+editing. Mouse input inside the 3D viewport moves the *camera* and nothing
+else (orbit, pan, zoom), so you can never nudge your geometry by accident
+while looking around, and the code panel always says exactly what the scene
+is. Everything else you can point at — menus, the code panel, the variable
+panel sliders, the status bar — lives in the 2D chrome around the viewport,
+and the edits it makes show up as text in your program.
+
 This guide follows the shape of a session: you [start the app](#getting-started),
 get your bearings from the [built-in examples](#built-in-examples) and guided
 [tutorials](#tutorials), then [write some code](#writing-code) in
@@ -1110,6 +1119,11 @@ you meet them: camera first, then the cursor-following guides, then the
 scene-wide diagnostics and looks.
 
 ### Camera & views
+
+Mouse input in the viewport is *camera-only* — there is nothing to click on
+in the scene, and no drag can change your geometry. To move a vertex, edit
+its `glVertex3f` line (or the variable feeding it); see
+[Adjusting values without retyping](#adjusting-values-without-retyping).
 
 | Input | Action |
 |---|---|
