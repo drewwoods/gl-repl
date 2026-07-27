@@ -38,12 +38,21 @@ typedef enum {
     REPL_SCENE_LOAD_ERR_NO_SLOT     /* slots full and no workspace bound to evict to */
 } ReplSceneLoadStatus;
 
-/* Called before any mutation: if an example is currently viewed (no
- * active user scene), allocate a scene slot, copy the current editor
- * state into it, and inherit the example's name (de-duplicated).
+/* Called before any mutation: if the live document is a promotable
+ * TRANSIENT one (no active user scene), allocate a scene slot, copy the
+ * current editor state into it, and inherit the origin's name
+ * (de-duplicated). Two origins qualify:
+ *   - a built-in example being viewed (active_example_idx >= 0);
+ *   - the retained result of a completed or stopped tutorial
+ *     (tutorial_origin_idx >= 0). An ACTIVE tutorial never qualifies.
+ * For a tutorial origin the slot captures the lesson's view first, then
+ * tutorial teardown restores the user's pre-tutorial global settings and the
+ * slot's per-scene cfg subset is re-applied to the live view.
  * Returns the promoted slot index, or -1 if promotion was a no-op or
- * rejected. */
-int  repl_promote_example_if_needed(void);
+ * rejected. A rejection (all slots full, no workspace to evict into) leaves
+ * the origin — and any pending tutorial baseline — intact, so the next edit
+ * retries and still captures everything typed in between. */
+int  repl_promote_transient_if_needed(void);
 
 /* Persist the currently-active user scene back to its slot before
  * loading a different scene/example. No-op when no slot is active. */

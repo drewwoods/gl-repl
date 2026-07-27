@@ -17,7 +17,7 @@
 #include "repl/state_notify.h"
 #include "repl/command.h"
 #include "repl/eval.h"
-#include "repl/scenes.h"         /* repl_promote_example_if_needed */
+#include "repl/scenes.h"         /* repl_promote_transient_if_needed */
 #include "repl/state_views.h"
 #include "repl/util.h"           /* repl_copy_string_fits */
 #include "subsystems/tutorial/tutorial_state.h"
@@ -232,11 +232,14 @@ int editor_undo_can_redo(void) {
 }
 
 void editor_undo_push_snapshot(void) {
-    /* First mutation on a loaded example auto-promotes to a user scene,
-     * inheriting the example's name. The snapshot captures the post-promotion
-     * state so Undo rewinds to the unedited example reference still visible in
-     * the Scene menu. */
-    repl_promote_example_if_needed();
+    /* First mutation on a promotable TRANSIENT document auto-promotes it to a
+     * user scene, inheriting the origin's name — a loaded example, or the
+     * retained result of a completed/stopped tutorial. (An ACTIVE tutorial is
+     * never promotable: its own step commits arrive here, and promoting would
+     * tear the lesson down at step 0.) The snapshot captures the
+     * post-promotion state so Undo rewinds to the unedited reference still
+     * visible in the Scene menu. */
+    repl_promote_transient_if_needed();
 
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;

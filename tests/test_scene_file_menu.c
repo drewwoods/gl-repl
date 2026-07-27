@@ -40,7 +40,7 @@ static void reset_fixture(void) {
 /* Occupy + activate one user slot the way the editor tests do. */
 static int seed_user_scene(void) {
     repl_load_example(0);
-    repl_promote_example_if_needed();
+    repl_promote_transient_if_needed();
     return repl_active_user_scene();
 }
 

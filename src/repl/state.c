@@ -53,7 +53,8 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     s->render.clear_color[3] = 1.0f;
 
     /* --- scene_runtime --- */
-    s->scene_runtime.active_example_idx = -1;
+    s->scene_runtime.active_example_idx  = -1;
+    s->scene_runtime.tutorial_origin_idx = -1;
 
     /* --- import_export: default render-state + cam lines --- */
     snprintf(s->import_export.render_state_lines[0], RENDER_STATE_LINE_LEN,
@@ -471,12 +472,20 @@ int repl_state_active_example_idx(void) {
     return g_repl_state.scene_runtime.active_example_idx;
 }
 
+int repl_state_tutorial_origin_idx(void) {
+    return g_repl_state.scene_runtime.tutorial_origin_idx;
+}
+
 const char *repl_state_workspace_dir(void) {
     return g_repl_state.scene_runtime.workspace_dir;
 }
 
 void repl_state_scenes_set_active_example_idx(int idx) {
     g_repl_state.scene_runtime.active_example_idx = idx;
+}
+
+void repl_state_scenes_set_tutorial_origin_idx(int idx) {
+    g_repl_state.scene_runtime.tutorial_origin_idx = idx;
 }
 
 ReplImportExportView repl_state_import_export(void) {

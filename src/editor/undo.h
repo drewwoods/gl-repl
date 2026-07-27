@@ -23,12 +23,15 @@
  * snapshot and move current state to redo. Ctrl+Y calls editor_undo_do_redo()
  * to restore a redo snapshot and move current state back to undo.
  *
- * Example auto-promotion hook: editor_undo_push_snapshot() is the entrypoint
- * where repl_promote_example_if_needed() fires. If the user is editing a
- * built-in example, a fresh user scene slot is allocated, the current state
- * is copied into it, the slot is named (derived from the example name, with
+ * Transient auto-promotion hook: editor_undo_push_snapshot() is the entrypoint
+ * where repl_promote_transient_if_needed() fires. If the user is editing a
+ * built-in example — or the document a completed/stopped tutorial left behind
+ * — a fresh user scene slot is allocated, the current state is copied into it,
+ * the slot is named (derived from the example / tutorial name, with
  * de-duplication), and control flow returns — the user continues editing
  * without interruption. Subsequent mutations accumulate into the user scene.
+ * An ACTIVE tutorial is deliberately not promotable: its own step commits
+ * come through here, and promoting would end the lesson at step 0.
  *
  * Ring state capture: editor_undo_ring_state_capture() and
  * editor_undo_ring_state_restore() allow tests and tools to query/restore the

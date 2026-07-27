@@ -601,7 +601,7 @@ static int load_example(int idx) {
 
     /* Preserve the active user scene, if any, before overwriting live state
      * with an example. Browsing examples does not create a user-scene slot;
-     * editing an example promotes it later through repl_promote_example_if_needed. */
+     * editing an example promotes it later through repl_promote_transient_if_needed. */
     repl_scenes_save_active_scene_if_any();
     /* Snapshot the user's pre-example presentation cfg so the next
      * transition out of example state can roll back any in-example

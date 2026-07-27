@@ -48,7 +48,7 @@ static void reset_fixture(void) {
  * way the editor tests do. */
 static void seed_user_scene(void) {
     repl_load_example(0);
-    repl_promote_example_if_needed();
+    repl_promote_transient_if_needed();
 }
 
 /* Band outer rect, computed exactly as scene_tabs_rects() does. */

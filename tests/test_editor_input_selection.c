@@ -546,7 +546,7 @@ int main(void) {
     {
         /* Loaded example + first source-mutating edit normally promotes
          * the example into a fresh user-scene slot via
-         * repl_promote_example_if_needed inside editor_undo_push_snapshot.
+         * repl_promote_transient_if_needed inside editor_undo_push_snapshot.
          * Partial-line cut/paste must not trigger that hook: it edits
          * only the input buffer, never a source command, and the undo
          * model can't restore the input anyway. Regression for the

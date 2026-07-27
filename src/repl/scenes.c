@@ -5,6 +5,7 @@
 #include "repl/scene_snapshot.h"
 #include "repl/workspace_io.h"
 #include "repl/examples.h"
+#include "repl/tutorials.h"       /* repl_tutorial_name for post-tutorial promotion */
 #include "repl/eval.h"
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +26,11 @@
 #include <sys/types.h>
 
 #define g_example_idx            (repl_state_active_example_idx())
+/* Post-tutorial promotion marker — the tutorial twin of g_example_idx.
+ * >= 0 only while the live transient document is the retained result of a
+ * COMPLETED or STOPPED tutorial; an active tutorial keeps it at -1 so its own
+ * step commits can't promote. See ReplSceneRuntimeState.tutorial_origin_idx. */
+#define g_tutorial_origin_idx    (repl_state_tutorial_origin_idx())
 #define g_workspace_dir          (repl_state_workspace_dir())
 #define g_workspace_dir_writable (repl_state_scenes_writable()->workspace_dir)
 
@@ -220,6 +226,7 @@ static void load_scene_from_slot(int idx) {
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
     repl_state_scenes_set_active_example_idx(-1);
+    repl_state_scenes_set_tutorial_origin_idx(-1);
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded scene: %s", s->name);
     repl_set_status(msg);
@@ -241,6 +248,11 @@ void repl_scenes_enter_transient_scene(void) {
     g_camera_comment_line_writable[0] = '\0';
     g_active_user_scene = -1;
     repl_state_scenes_set_active_example_idx(-1);
+    /* Unconditional: entering a transient buffer supersedes any retained
+     * post-tutorial document. The tutorial-start path runs through here and
+     * does NOT re-establish the marker — only the runner's end-of-lesson path
+     * does — so a tutorial stays unpromotable for as long as it is active. */
+    repl_state_scenes_set_tutorial_origin_idx(-1);
 }
 
 void repl_scenes_reset_for_transient(void) {
@@ -744,6 +756,7 @@ int repl_scenes_create_empty_user_scene(void) {
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
+    repl_state_scenes_set_tutorial_origin_idx(-1);
 
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "New scene: %s", unique);
@@ -826,6 +839,7 @@ static int repl_load_scene_via_loader(SceneSlotLoader loader,
      * there and scene tabs reflect the new active. */
     g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
+    repl_state_scenes_set_tutorial_origin_idx(-1);
     if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;
     return slot;
 }
@@ -962,7 +976,7 @@ static int evict_scene_to_workspace(int slot) {
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint_writable = g_user_scenes[slot].name;
-    /* LRU eviction runs as a side effect of repl_promote_example_if_needed
+    /* LRU eviction runs as a side effect of repl_promote_transient_if_needed
      * (called from editor_undo_push_snapshot). The user isn't actively
      * saving here, so the layout struct is unavailable — pass NULL and
      * accept the 800x600 fallback in the exported display(). */
@@ -991,41 +1005,112 @@ static int pick_lru_user_scene_slot(void) {
     return best;
 }
 
-int repl_promote_example_if_needed(void) {
-    if (g_active_user_scene >= 0) return -1;
-    if (g_example_idx < 0)        return -1;
-
+/* Obtain a slot for a promotion: a free one, else the LRU victim flushed to
+ * the bound workspace directory. Returns -1 when neither is available (every
+ * slot occupied and no workspace bound / no eligible victim / the eviction
+ * write failed), leaving the catalog untouched. Deliberately runs BEFORE any
+ * origin clearing or tutorial teardown so a failed reservation is fully
+ * retryable on the next edit. */
+static int reserve_slot_for_promotion(void) {
     int slot = find_free_user_scene_slot();
-    if (slot < 0) {
-        if (g_workspace_dir[0]) {
-            int victim = pick_lru_user_scene_slot();
-            if (victim >= 0) {
-                SceneSnapshot *stash = scene_snapshot_scratch_alloc();
-                if (stash) {
-                    stash_live_state(stash);
-                    int ok = evict_scene_to_workspace(victim);
-                    restore_live_from_stash(stash);
-                    scene_snapshot_scratch_free(stash);
-                    if (ok)
-                        slot = victim;
-                }
-            }
-        }
-        if (slot < 0) {
-            repl_set_status_error("All user scene slots full -- save workspace to free a slot");
-            return -1;
-        }
+    if (slot >= 0)
+        return slot;
+    if (!g_workspace_dir[0])
+        return -1;
+
+    int victim = pick_lru_user_scene_slot();
+    if (victim < 0)
+        return -1;
+
+    /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
+     * stash/restore around it so the caller's document survives the flush. */
+    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
+    if (!stash)
+        return -1;
+    stash_live_state(stash);
+    int ok = evict_scene_to_workspace(victim);
+    restore_live_from_stash(stash);
+    scene_snapshot_scratch_free(stash);
+    return ok ? victim : -1;
+}
+
+/* Push just the per-scene cfg subset of `slot` back onto the live view.
+ * Used after a post-tutorial promotion, where tutorial teardown has already
+ * restored the user's pre-tutorial values wholesale: the promoted slot owns
+ * the tutorial-mutated per-scene settings, so the live view must follow the
+ * new scene, while any slug the tutorial touched from OUTSIDE the bridge's
+ * scene subset (a global / tutorial-only setting) stays restored — it isn't
+ * in the bag, so this pass cannot re-assert it.
+ *
+ * Deliberately NOT a full scene_snapshot_apply_live: promotion runs inside an
+ * editor commit transaction, and a full apply would rewrite the document,
+ * predefs, camera, and cursor out from under it. Only cfg needs replaying. */
+static void apply_scene_cfg_from_slot(int slot) {
+    const ReplConfigBridge *bridge = repl_config_bridge();
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used ||
+        !bridge || !bridge->apply)
+        return;
+    bridge->apply(&g_user_scenes[slot].snapshot.cfg);
+}
+
+typedef enum {
+    PROMOTE_ORIGIN_EXAMPLE = 0,
+    PROMOTE_ORIGIN_TUTORIAL
+} PromoteOriginKind;
+
+int repl_promote_transient_if_needed(void) {
+    PromoteOriginKind origin_kind;
+    const char *origin_name;
+    char unique[USER_SCENE_NAME_MAX];
+    char msg[REPL_DIAG_TEXT_MAX];
+    int slot;
+
+    if (g_active_user_scene >= 0) return -1;
+
+    /* Two promotable transient origins. Example wins when both are somehow
+     * set: an example load tears the tutorial down (clearing the marker), so
+     * the overlap can't legitimately occur. */
+    if (g_example_idx >= 0) {
+        origin_kind = PROMOTE_ORIGIN_EXAMPLE;
+        origin_name = repl_example_name(g_example_idx);
+    } else if (g_tutorial_origin_idx >= 0) {
+        origin_kind = PROMOTE_ORIGIN_TUTORIAL;
+        origin_name = repl_tutorial_name(g_tutorial_origin_idx);
+    } else {
+        return -1;
     }
 
-    const char *example_name = repl_example_name(g_example_idx);
-    char unique[USER_SCENE_NAME_MAX];
+    slot = reserve_slot_for_promotion();
+    if (slot < 0) {
+        /* Origin and (for a tutorial) the pending cfg baseline are left
+         * untouched, so the next edit retries and captures everything typed
+         * into the transient document in the meantime. */
+        repl_set_status_error("All user scene slots full -- save workspace to free a slot");
+        return -1;
+    }
+
     derive_unique_scene_name(unique, sizeof(unique),
-                             example_name ? example_name : "Scene", -1);
+                             origin_name ? origin_name : "Scene", -1);
+    /* Capture the live document AND the tutorial-mutated cfg into the slot
+     * BEFORE any teardown: teardown is what restores the pre-tutorial
+     * baseline, and the promoted scene is supposed to own the lesson's view. */
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
+
+    if (origin_kind == PROMOTE_ORIGIN_TUTORIAL) {
+        /* Flush the pending baseline now that the slot holds the view:
+         * global / tutorial-only slugs go back to their pre-tutorial values,
+         * and the marker is cleared. */
+        repl_dispatch_tutorial_teardown();
+        /* Then re-assert only the per-scene subset the new scene owns, so the
+         * live view keeps matching the slot the user just landed in. */
+        apply_scene_cfg_from_slot(slot);
+    }
+
     g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
+    repl_state_scenes_set_tutorial_origin_idx(-1);
 
-    char msg[REPL_DIAG_TEXT_MAX];
+    /* Published last: the teardown above can emit status of its own. */
     snprintf(msg, sizeof(msg), "Promoted to scene: %s", unique);
     repl_set_status(msg);
     return slot;
@@ -1112,6 +1197,7 @@ void repl_scenes_capture_pre_example_cfg_if_entering(void) {
 
 void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
+    repl_state_scenes_set_tutorial_origin_idx(-1);
 }
 
 void repl_scenes_activate_loaded_document_slot(const char *scene_name_hint) {
@@ -1125,11 +1211,13 @@ void repl_scenes_activate_loaded_document_slot(const char *scene_name_hint) {
     save_scene_to_slot(0, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = 0;
     repl_state_scenes_set_active_example_idx(-1);
+    repl_state_scenes_set_tutorial_origin_idx(-1);
 }
 
 void repl_scenes_reset(void) {
     memset(g_user_scenes, 0, sizeof(g_user_scenes));
     g_active_user_scene = -1;
+    repl_state_scenes_set_tutorial_origin_idx(-1);
     g_user_scene_tick = 0;
     /* Per-slot cfg snapshots + example-sandbox cfg are file-static
      * here (since 7d). Resetting the slot lifecycle drives the cfg

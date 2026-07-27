@@ -761,7 +761,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L118): per-light state + clear
   color) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L162), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
   `flat_program_count`, …)
@@ -1252,7 +1252,7 @@ values through these seams:
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L140) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L64) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -1934,7 +1934,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L135) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L64)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L140) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L64)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
@@ -2341,6 +2341,46 @@ always restored *before* anything stashes it as a pre-workspace or
 per-scene snapshot. The internal-failure paths in `tutorial_enter_step`
 still call [`tutorial_teardown()`](../src/subsystems/tutorial/tutorial.h#L75) directly: a lesson that broke mid-step
 has no view worth keeping.
+
+**Post-tutorial scene promotion.** The retained document has no scene
+identity — neither an active user scene nor an active example — so without
+help the undo hook's promotion pass would decline it and the next scene
+switch would silently discard whatever the learner typed after the lesson.
+`tutorial_end_keep_view()` therefore also stamps a **tutorial origin** onto
+scene runtime state (`ReplSceneRuntimeState.tutorial_origin_idx`, the twin
+of `active_example_idx`), and `repl_promote_transient_if_needed()`
+recognises it as a second promotable origin alongside a loaded example.
+Both end paths — natural completion and `tutorial_stop()` — produce a
+promotable document.
+
+The marker is set at the *end*, never at `tutorial_start`: tutorial step
+commits run through `editor_undo_push_snapshot()`, so an origin present
+during the lesson would promote — and tear the lesson down — on step 0. An
+active tutorial always reads -1. Every wholesale replacement clears it
+(`tutorial_teardown` unconditionally, plus each scene-state transition in
+[`src/repl/scenes.c`](../src/repl/scenes.c) defensively), so an unedited
+post-tutorial document is simply discarded and the pre-tutorial cfg comes
+back.
+
+Promotion order is load-bearing when the origin is a tutorial:
+
+1. reserve a slot (free slot, else LRU eviction to the bound workspace) —
+   nothing else has happened yet, so a slots-full rejection leaves the
+   origin *and* the pending baseline intact and the next edit retries,
+   capturing everything typed in the meantime;
+2. `save_scene_to_slot()` captures the live document **and the
+   tutorial-mutated cfg**, because the promoted scene is meant to own the
+   lesson's view;
+3. *then* `repl_dispatch_tutorial_teardown()` flushes the pending baseline,
+   handing global / tutorial-only slugs back to their pre-tutorial values;
+4. `apply_scene_cfg_from_slot()` re-asserts only the promoted slot's
+   per-scene cfg subset, so the live view keeps matching the new scene.
+
+A full `scene_snapshot_apply_live` is deliberately *not* used in step 4:
+promotion runs inside an editor commit transaction, and only cfg needs
+replaying. The marker rides `ReplCheckpointState.scene_runtime`, so a tour
+baseline captured on a retained post-tutorial document restores the origin
+and the pending cfg baseline (carried on `TutorialRuntimeState`) together.
 
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits

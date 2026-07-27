@@ -122,9 +122,24 @@ typedef struct {
 
 
 /* Scene/workspace bookkeeping kept with the REPL runtime: which built-in example
- * is active, and the bound workspace directory used by scene save/load. */
+ * is active, whether the live document is a retained post-tutorial result, and
+ * the bound workspace directory used by scene save/load.
+ *
+ * `tutorial_origin_idx` is the tutorial twin of `active_example_idx` — the
+ * marker that makes the first subsequent edit auto-promote the transient
+ * document into a user-scene slot:
+ *   -1     the live document did not come out of a completed/stopped tutorial;
+ *   >= 0   the transient live document is the retained result of that tutorial.
+ * It deliberately describes an *inactive post-tutorial* document, not the
+ * running tutorial (which is `TutorialRuntimeState.tutorial_idx`): an ACTIVE
+ * tutorial always leaves this at -1, because tutorial commands flow through
+ * editor_undo_push_snapshot() and would otherwise promote — and tear the
+ * tutorial down — on step 0. Only the runner's end-of-lesson path
+ * (tutorial_end_keep_view in src/subsystems/tutorial/tutorial_runner.c)
+ * establishes it. */
 typedef struct {
     int  active_example_idx;
+    int  tutorial_origin_idx;
     char workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplSceneRuntimeState;
 
@@ -185,6 +200,7 @@ ReplVariableView repl_state_variables(void);
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 int                       repl_state_active_example_idx(void);
+int                       repl_state_tutorial_origin_idx(void);
 const char               *repl_state_workspace_dir(void);
 
 ReplImportExportView repl_state_import_export(void);

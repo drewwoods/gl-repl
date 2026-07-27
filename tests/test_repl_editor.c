@@ -26,7 +26,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/examples.h"     /* repl_example_count */
-#include "repl/scenes.h"       /* repl_promote_example_if_needed */
+#include "repl/scenes.h"       /* repl_promote_transient_if_needed */
 #include "repl/util.h"         /* repl_format_fits / repl_copy_string_fits */
 #include "repl/export.h"
 #include "repl/source_scope.h"
@@ -691,7 +691,7 @@ int main() {
     {
         glr_ctrl_reset_all();
         repl_load_example(0);
-        int slot = repl_promote_example_if_needed();
+        int slot = repl_promote_transient_if_needed();
         ASSERT_TRUE("rename route setup slot", slot >= 0);
         ASSERT_INT("rename route begin", editor_inline_rename_begin(slot), 1);
 
@@ -748,7 +748,7 @@ int main() {
     {
         glr_ctrl_reset_all();
         repl_load_example(0);
-        int slot = repl_promote_example_if_needed();
+        int slot = repl_promote_transient_if_needed();
         ASSERT_TRUE("rename special route setup slot", slot >= 0);
         ASSERT_INT("rename special route begin", editor_inline_rename_begin(slot), 1);
 
@@ -3633,7 +3633,7 @@ int main() {
             repl_load_example(0);
 
             /* Promote to user scene */
-            int slot = repl_promote_example_if_needed();
+            int slot = repl_promote_transient_if_needed();
             ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
 
             /* Cycle from user scene 0 -> should go to example 0 */

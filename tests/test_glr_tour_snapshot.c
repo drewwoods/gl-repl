@@ -18,7 +18,10 @@
 #include "repl/state_owners.h"
 #include "repl/scenes.h"
 #include "repl/eval.h"
+#include "repl/example_loader.h"
 #include "repl/pipeline.h"
+#include "repl/tutorials.h"
+#include "subsystems/tutorial/tutorial.h"
 #include "editor/state.h"
 #include "editor/input.h"
 #include "editor/undo.h"
@@ -228,11 +231,61 @@ static void test_capture_does_not_flush_active_scene(void) {
     glr_tour_snapshot_destroy(snap);
 }
 
+/* A tour captured while a RETAINED POST-TUTORIAL document is live must
+ * restore both halves of that identity together: the scene-runtime origin
+ * marker (which rides the ReplCheckpointState) and the tutorial runtime's
+ * pending cfg baseline (which rides TutorialRuntimeState). Restoring one
+ * without the other yields either a document that can no longer promote, or
+ * one that promotes with no baseline left to hand the globals back. */
+static void test_post_tutorial_origin_round_trip(void) {
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("catalog has at least one tutorial", repl_tutorial_count() > 0);
+    if (repl_tutorial_count() <= 0)
+        return;
+
+    tutorial_start(0);
+    ASSERT_TRUE("tutorial active after start", tutorial_active());
+    tutorial_stop();
+    ASSERT_TRUE("tutorial inactive after stop", !tutorial_active());
+    ASSERT_INT("post-tutorial origin established",
+               repl_state_scenes().tutorial_origin_idx, 0);
+    ASSERT_TRUE("cfg baseline pending", tutorial_state_view().baseline_valid);
+
+    GlrTourSnapshot *snap = glr_tour_snapshot_capture();
+    ASSERT_TRUE("capture non-NULL", snap != NULL);
+    if (!snap) return;
+
+    /* Mutate away — a wholesale replacement discards both halves. */
+    repl_load_example(0);
+    ASSERT_INT("origin cleared before restore",
+               repl_state_scenes().tutorial_origin_idx, -1);
+    ASSERT_TRUE("baseline flushed before restore",
+                !tutorial_state_view().baseline_valid);
+
+    ASSERT_INT("restore succeeds", glr_tour_snapshot_restore(snap), 1);
+    ASSERT_INT("origin restored", repl_state_scenes().tutorial_origin_idx, 0);
+    ASSERT_TRUE("baseline restored alongside the origin",
+                tutorial_state_view().baseline_valid);
+    ASSERT_INT("restored document is still transient", repl_active_user_scene(), -1);
+    ASSERT_INT("no example active after restore",
+               repl_state_scenes().active_example_idx, -1);
+
+    /* The restored document is promotable again, which is the whole point of
+     * carrying the marker through the snapshot. */
+    ASSERT_TRUE("restored post-tutorial document promotes",
+                repl_promote_transient_if_needed() >= 0);
+    ASSERT_INT("promotion clears the restored origin",
+               repl_state_scenes().tutorial_origin_idx, -1);
+
+    glr_tour_snapshot_destroy(snap);
+}
+
 int main(void) {
     printf("--- glr_tour_snapshot tests ---\n");
     test_snapshot_round_trip();
     test_null_restore_is_noop();
     test_capture_does_not_flush_active_scene();
+    test_post_tutorial_origin_round_trip();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

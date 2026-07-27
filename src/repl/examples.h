@@ -26,7 +26,7 @@
  * transitions.
  *
  * User scene system integration: When a user edits an example, the first mutation
- * triggers repl_promote_example_if_needed(), which allocates a fresh user scene,
+ * triggers repl_promote_transient_if_needed(), which allocates a fresh user scene,
  * copies the current state into it (inheriting the example's name with
  * de-duplication), and marks that slot as active. Subsequent mutations accumulate
  * into the user scene; the example remains unchanged. Switching away from the

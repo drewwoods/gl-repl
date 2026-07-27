@@ -12,6 +12,7 @@
 #include "repl/example_loader.h" /* repl_example_consume_camera_header (setup scaffold) */
 #include "repl/load.h"
 #include "repl/scenes.h"
+#include "repl/state_owners.h"  /* repl_state_scenes_set_tutorial_origin_idx */
 #include "repl/state_views.h"
 #include "repl/text_helpers.h"  /* repl_extract_label_name (setup goto-label anchors) */
 #include "source_document.h"    /* live line text for setup goto-label resolution */
@@ -817,6 +818,15 @@ void tutorial_start(int idx) {
 }
 
 void tutorial_teardown(void) {
+    /* Drop the post-tutorial promotion marker unconditionally, ahead of
+     * the early-out. Teardown is the flush every wholesale document
+     * replacement funnels through (scene / example / workspace load,
+     * reset-all, the next tutorial_start, and the promotion transaction
+     * itself once it has captured the live document), so the retained
+     * post-tutorial identity dies here in every one of those cases.
+     * Unconditional because the marker must never outlive the baseline it
+     * travels with — see ReplSceneRuntimeState.tutorial_origin_idx. */
+    repl_state_scenes_set_tutorial_origin_idx(-1);
     /* Also runs with no active tutorial when a finished one left a
      * pending baseline (tutorial_end_keep_view) — this is the flush. */
     if (!tutorial_active() && !tutorial_state_view().baseline_valid)
@@ -842,13 +852,27 @@ void tutorial_teardown(void) {
  * `tutorial_state_reset_except_baseline` clears `active` along with the
  * rest of the runtime state, so the tutorial is fully over either way.
  * A naturally completed tutorial retains its index so F11 can advance from
- * that lesson; an explicit exit remains an unselected tutorial. */
+ * that lesson; an explicit exit remains an unselected tutorial.
+ *
+ * This is also the ONLY place a post-tutorial scene origin is established.
+ * The retained document has neither an active user scene nor an active
+ * example, so without a marker the undo hook's promotion pass would decline
+ * it and the user's post-tutorial edits would be discarded by the next scene
+ * switch. Recording the index here — rather than at tutorial_start — is what
+ * keeps an ACTIVE tutorial unpromotable: its own step commits run through
+ * editor_undo_push_snapshot() and would otherwise promote (and tear down the
+ * lesson) on step 0. The marker travels with the pending cfg baseline: both
+ * are cleared together by tutorial_teardown(). */
 static void tutorial_end_keep_view(int keep_tutorial_idx) {
     int tutorial_idx = tutorial_state_view().tutorial_idx;
 
     if (!tutorial_active())
         return;
     tutorial_state_mut()->active = 0;
+    /* Capture the origin before the reset clears `tutorial_idx`; both
+     * completion and tutorial_stop() land here, so a stopped lesson leaves
+     * an equally promotable document. */
+    repl_state_scenes_set_tutorial_origin_idx(tutorial_idx);
     tutorial_state_reset_except_baseline();
     if (keep_tutorial_idx)
         tutorial_state_mut()->tutorial_idx = tutorial_idx;

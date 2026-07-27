@@ -18,7 +18,7 @@
 #include "editor/input.h"
 #include "repl/command.h"
 #include "repl/eval.h"
-#include "repl/scenes.h"       /* repl_scenes_* / repl_promote_example_if_needed */
+#include "repl/scenes.h"       /* repl_scenes_* / repl_promote_transient_if_needed */
 #include "app/glr_debug.h"
 #include "repl/time.h"
 #include "subsystems/replay/replay.h"
@@ -317,7 +317,7 @@ void test_user_scene_promote_on_edit() {
 
     /* Any mutation while viewing the example promotes it.  We drive
      * promotion directly rather than synthesize a keypress. */
-    int slot = repl_promote_example_if_needed();
+    int slot = repl_promote_transient_if_needed();
     ASSERT_INT("promoted into slot 0", slot, 0);
     ASSERT_INT("active user scene == 0 after promotion",
                repl_active_user_scene(), 0);
@@ -331,7 +331,7 @@ void test_user_scene_promote_on_edit() {
 
     /* Second call is a no-op (already on a user scene). */
     ASSERT_INT("second promote returns -1",
-               repl_promote_example_if_needed(), -1);
+               repl_promote_transient_if_needed(), -1);
 
     /* Loading a second distinct example and promoting should land in a
      * new slot with a different name. */
@@ -339,7 +339,7 @@ void test_user_scene_promote_on_edit() {
         repl_load_example(1);
         ASSERT_INT("active user scene cleared after example load",
                    repl_active_user_scene(), -1);
-        int slot2 = repl_promote_example_if_needed();
+        int slot2 = repl_promote_transient_if_needed();
         ASSERT_INT("second promotion into slot 1", slot2, 1);
     }
 }
@@ -355,11 +355,11 @@ void test_user_scene_promote_name_dedup() {
     if (!ex_name) return;
 
     repl_load_example(0);
-    int s1 = repl_promote_example_if_needed();
+    int s1 = repl_promote_transient_if_needed();
     ASSERT_TRUE("first promotion succeeded", s1 >= 0);
 
     repl_load_example(0);
-    int s2 = repl_promote_example_if_needed();
+    int s2 = repl_promote_transient_if_needed();
     ASSERT_TRUE("second promotion succeeded", s2 >= 0);
 
     const char *n1 = repl_user_scene_name(s1);
@@ -380,7 +380,7 @@ void test_workspace_round_trip() {
     ASSERT_INT("base user scene slot", base_scene, 0);
     editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
-    int p1 = repl_promote_example_if_needed();
+    int p1 = repl_promote_transient_if_needed();
     ASSERT_TRUE("first promotion ok", p1 >= 0 && p1 != base_scene);
 
     /* Load a known example by name (Animated ring) so this test
@@ -399,7 +399,7 @@ void test_workspace_round_trip() {
     /* Capture the loaded command count so the round-trip assertion
      * below tracks the scene source instead of a stale literal. */
     int ring_cmd_count = repl_state_document_count();
-    int p2 = repl_promote_example_if_needed();
+    int p2 = repl_promote_transient_if_needed();
     ASSERT_TRUE("second promotion ok", p2 >= 0 && p2 != p1 && p2 != base_scene);
 
     int slots_before = repl_user_scene_count();
@@ -417,7 +417,7 @@ void test_workspace_round_trip() {
     ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
 
     repl_load_example(0);
-    int preexisting = repl_promote_example_if_needed();
+    int preexisting = repl_promote_transient_if_needed();
     ASSERT_TRUE("preexisting scene promoted", preexisting >= 0);
 
     int loaded = repl_load_workspace(dir);
@@ -473,7 +473,7 @@ void test_workspace_initial_load_activates_first_slot() {
     if (repl_example_count() < 1) return;
     editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
-    int p1 = repl_promote_example_if_needed();
+    int p1 = repl_promote_transient_if_needed();
     ASSERT_TRUE("first promotion ok", p1 >= 0);
 
     char dir[256];
@@ -668,11 +668,11 @@ void test_workspace_save_slug_collisions() {
                repl_scenes_create_empty_user_scene(), 0);
 
     repl_load_example(0);
-    int promoted = repl_promote_example_if_needed();
+    int promoted = repl_promote_transient_if_needed();
     ASSERT_TRUE("promotion succeeded", promoted >= 0 && promoted != 0);
 
     repl_load_example(1);
-    int promoted2 = repl_promote_example_if_needed();
+    int promoted2 = repl_promote_transient_if_needed();
     ASSERT_TRUE("second promotion succeeded",
                 promoted2 >= 0 && promoted2 != promoted && promoted2 != 0);
 
@@ -738,12 +738,12 @@ void test_workspace_save_max_slug_collisions() {
                repl_scenes_create_empty_user_scene(), 0);
 
     repl_load_example(0);
-    int promoted = repl_promote_example_if_needed();
+    int promoted = repl_promote_transient_if_needed();
     ASSERT_TRUE("max-slug promotion succeeded",
                 promoted >= 0 && promoted != 0);
 
     repl_load_example(1);
-    int promoted2 = repl_promote_example_if_needed();
+    int promoted2 = repl_promote_transient_if_needed();
     ASSERT_TRUE("max-slug second promotion succeeded",
                 promoted2 >= 0 && promoted2 != promoted && promoted2 != 0);
 
@@ -923,7 +923,7 @@ void test_user_scene_preserves_scratch_state(void) {
     repl_load_example(0);
     ASSERT_INT("scratch scene saved in slot 0", repl_user_scene_slot_used(0), 1);
 
-    ASSERT_INT("promotion creates slot 1", repl_promote_example_if_needed(), 1);
+    ASSERT_INT("promotion creates slot 1", repl_promote_transient_if_needed(), 1);
     editor_feed_line("A[0] = 5;");
 
     {
@@ -946,14 +946,14 @@ void test_user_scene_promote_all_slots_full() {
     /* Fill all user-scene slots via repeated promotion. */
     for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
-        repl_promote_example_if_needed();
+        repl_promote_transient_if_needed();
     }
     int occupied = repl_user_scene_count();
     ASSERT_INT("all slots occupied", occupied, MAX_USER_SCENES);
 
     /* Next promotion from an example should be refused (pre-LRU). */
     repl_load_example(0);
-    int rejected = repl_promote_example_if_needed();
+    int rejected = repl_promote_transient_if_needed();
     ASSERT_INT("promotion rejected when full", rejected, -1);
     ASSERT_INT("active user scene still -1", repl_active_user_scene(), -1);
 }
@@ -970,7 +970,7 @@ void test_user_scene_promote_lru_evict() {
     /* Fill all user-scene slots via repeated promotion. */
     for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
-        repl_promote_example_if_needed();
+        repl_promote_transient_if_needed();
     }
     ASSERT_INT("all slots occupied", repl_user_scene_count(), MAX_USER_SCENES);
 
@@ -982,7 +982,7 @@ void test_user_scene_promote_lru_evict() {
     /* Ninth promotion should succeed now that a workspace dir is set:
      * slot 0 (oldest inactive scene) is flushed to disk and reused. */
     repl_load_example(0);
-    int promoted = repl_promote_example_if_needed();
+    int promoted = repl_promote_transient_if_needed();
     ASSERT_INT("promotion reuses evicted slot", promoted, 0);
     ASSERT_INT("active user scene is slot 0", repl_active_user_scene(), 0);
     ASSERT_INT("slot count unchanged after eviction",
@@ -1052,7 +1052,7 @@ void test_user_scene_load_scratch_alloc_lifecycle(void) {
     repl_set_workspace_dir(dir);
     for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
-        repl_promote_example_if_needed();
+        repl_promote_transient_if_needed();
     }
     ASSERT_INT("scratch test: all slots occupied",
                repl_user_scene_count(), MAX_USER_SCENES);
@@ -1095,7 +1095,7 @@ void test_user_scene_rename_flow() {
     if (repl_example_count() < 1) return;
 
     repl_load_example(0);
-    int slot = repl_promote_example_if_needed();
+    int slot = repl_promote_transient_if_needed();
     ASSERT_TRUE("promoted on edit", slot >= 0);
 
     /* Begin rename. */
@@ -1318,7 +1318,7 @@ void test_inline_file_prompt_flow() {
         glr_ctrl_reset_all(); declare_test_vars();
         if (repl_example_count() > 0) {
             repl_load_example(0);
-            (void)repl_promote_example_if_needed();
+            (void)repl_promote_transient_if_needed();
         }
         int existing_count_before = repl_user_scene_count();
         int prev_active = repl_active_user_scene();
@@ -1380,7 +1380,7 @@ void test_inline_file_prompt_flow() {
                 if (repl_user_scene_count() >= MAX_USER_SCENES) break;
                 repl_load_example(0);
                 editor_feed_line("glVertex3f(0,0,0);");  /* mutate to force promote */
-                repl_promote_example_if_needed();
+                repl_promote_transient_if_needed();
             }
             int filled_count = repl_user_scene_count();
             ASSERT_TRUE("workspace filled to capacity (or close)",
@@ -1434,7 +1434,7 @@ void test_inline_file_prompt_flow() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() > 0) {
         repl_load_example(0);
-        int rename_slot = repl_promote_example_if_needed();
+        int rename_slot = repl_promote_transient_if_needed();
         if (rename_slot >= 0) {
             ASSERT_INT("rename begins",
                        editor_inline_rename_begin(rename_slot), 1);

@@ -116,6 +116,11 @@ ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);
 ReplSceneRuntimeState       *repl_state_scenes_writable(void);
 void                         repl_state_scenes_set_active_example_idx(int idx);
+/* Owner setter for the post-tutorial promotion marker (see the field docs on
+ * ReplSceneRuntimeState). Set to the finished/stopped tutorial's index by
+ * the tutorial runner when a lesson ends; cleared to -1 by tutorial teardown,
+ * by every wholesale scene replacement, and by a successful promotion. */
+void                         repl_state_scenes_set_tutorial_origin_idx(int idx);
 
 ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);

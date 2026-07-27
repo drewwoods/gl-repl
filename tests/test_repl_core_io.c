@@ -1782,7 +1782,7 @@ int main(void) {
         repl_set_workspace_dir(prev_workspace);
         repl_load_example(0);
         ASSERT_TRUE("promotion for failing workspace save",
-                    repl_promote_example_if_needed() >= 0);
+                    repl_promote_transient_if_needed() >= 0);
 
         ASSERT_INT("workspace save surfaces export failure",
                    repl_save_workspace(bad_workspace, NULL), -1);
@@ -2452,7 +2452,7 @@ int main(void) {
 
         /* Named active user scene (promote an example, then rename). */
         repl_load_example(0);
-        int slot = repl_promote_example_if_needed();
+        int slot = repl_promote_transient_if_needed();
         ASSERT_INT("promoted to active user scene", repl_active_user_scene(), slot);
         repl_user_scene_rename(slot, "My PLY Scene");   /* slug -> my_ply_scene */
 

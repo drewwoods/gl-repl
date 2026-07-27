@@ -13,6 +13,7 @@
 #include "keys.h"
 #include <stdio.h>
 #include "repl/example_loader.h"
+#include "repl/examples.h"        /* repl_example_name for the promotion regression */
 #include "repl/cfg_baseline.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
@@ -4235,6 +4236,362 @@ static void test_require_var_shadow_suffix_synthesizes_assignment(void) {
                ghost, expect_assign);
 }
 
+/* --- post-tutorial scene promotion --------------------------------------
+ *
+ * A tutorial runs in a transient scene with no persistent identity. When it
+ * ends (completed or stopped) the learner stays in the generated document, so
+ * tutorial_end_keep_view stamps a tutorial ORIGIN onto scene runtime state and
+ * the first subsequent edit promotes that document into a user-scene slot —
+ * exactly the way editing a built-in example does. The tests below pin the
+ * lifecycle: active tutorials never promote, both end paths establish the
+ * origin, the promoted slot owns the lesson's per-scene view while global
+ * settings revert, a slots-full rejection stays retryable, and an unedited
+ * result is discarded by the next wholesale replacement. */
+
+static int post_tutorial_origin(void) {
+    return repl_state_scenes().tutorial_origin_idx;
+}
+
+/* Walk `idx` from tutorial_start to completion through the real editor /
+ * controller routes. Returns 1 when the tutorial ran out of steps. */
+static int walk_tutorial_to_completion(int idx) {
+    int total;
+
+    if (idx < 0) return 0;
+    tutorial_start(idx);
+    if (!tutorial_active()) return 0;
+    total = repl_tutorial_step_count(idx);
+    for (int guard = 0; guard <= total && tutorial_active(); guard++) {
+        if (!phase_c_complete_current_step())
+            return 0;
+    }
+    return !tutorial_active();
+}
+
+/* A user edit on the retained document: the ';' commit route, which is what
+ * reaches editor_undo_push_snapshot -> repl_promote_transient_if_needed. */
+static void commit_free_form_line(const char *text) {
+    set_input_text(text);
+    editor_handle_key(';', 0, 0);
+}
+
+/* 1. An ACTIVE tutorial must not promote. Its own step commits run through
+ *    editor_undo_push_snapshot; a marker set at tutorial_start would allocate
+ *    a slot on step 0 and tear the lesson down mid-flight. */
+static void test_active_tutorial_does_not_promote(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active after start", tutorial_active());
+    ASSERT_INT("no tutorial origin while active", post_tutorial_origin(), -1);
+
+    int step = tutorial_state_view().step;
+    ASSERT_TRUE("first step completes", phase_c_complete_current_step());
+    ASSERT_TRUE("tutorial still active after its first step", tutorial_active());
+    ASSERT_INT("tutorial advanced", tutorial_state_view().step, step + 1);
+    ASSERT_INT("still no tutorial origin after a step commit",
+               post_tutorial_origin(), -1);
+    ASSERT_INT("tutorial commands allocate no user-scene slot",
+               repl_user_scene_count(), 0);
+    ASSERT_INT("no scene became active", repl_active_user_scene(), -1);
+}
+
+/* 2. Completion establishes the origin (and leaves the cfg baseline pending
+ *    so promotion can still hand the globals back). */
+static void test_completion_establishes_tutorial_origin(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx));
+    ASSERT_TRUE("tutorial inactive after completion", !tutorial_active());
+    ASSERT_TRUE("cfg baseline still pending after completion",
+                tutorial_state_view().baseline_valid);
+    ASSERT_INT("origin names the completed tutorial", post_tutorial_origin(), idx);
+    ASSERT_INT("viewing the result allocates no slot", repl_user_scene_count(), 0);
+}
+
+/* 3. Stopping mid-tutorial establishes the origin too — a partially built
+ *    document is just as worth keeping as a finished one. */
+static void test_stop_establishes_tutorial_origin(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    ASSERT_TRUE("first step completes", phase_c_complete_current_step());
+    ASSERT_TRUE("still mid-tutorial", tutorial_active());
+
+    tutorial_stop();
+    ASSERT_TRUE("tutorial inactive after stop", !tutorial_active());
+    ASSERT_INT("origin names the stopped tutorial", post_tutorial_origin(), idx);
+    ASSERT_TRUE("cfg baseline still pending after stop",
+                tutorial_state_view().baseline_valid);
+}
+
+/* 4. A tutorial that never starts leaves no origin behind.
+ *
+ *    tutorial_start writes the marker nowhere — only tutorial_end_keep_view
+ *    does — so every failure path inside start (catalog validation, cfg-slug
+ *    validation, and the scene-prelude load, which unwinds via
+ *    tutorial_baseline_restore + tutorial_state_reset) shares this outcome by
+ *    construction. The prelude-load failure itself has no runtime injection
+ *    point (the catalog is static and the transient scene is freshly reset
+ *    before it runs), so the reachable rejections stand in for it here.
+ *
+ *    The second half pins the complementary case: a rejected start must not
+ *    DISCARD an existing post-tutorial origin either, because it replaced
+ *    nothing — the retained document is still there and still promotable. */
+static void test_failed_tutorial_start_leaves_no_origin(void) {
+    reset_fixture();
+
+    tutorial_start(repl_tutorial_count() + 50);
+    ASSERT_TRUE("out-of-range start does not activate", !tutorial_active());
+    ASSERT_INT("rejected start leaves no origin", post_tutorial_origin(), -1);
+    ASSERT_TRUE("rejected start leaves no stale baseline",
+                !tutorial_state_view().baseline_valid);
+    ASSERT_INT("rejected start allocates no slot", repl_user_scene_count(), 0);
+
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx));
+    ASSERT_INT("origin established", post_tutorial_origin(), idx);
+
+    tutorial_start(-1);
+    ASSERT_TRUE("rejected restart does not activate", !tutorial_active());
+    ASSERT_INT("rejected start preserves the retained document's origin",
+               post_tutorial_origin(), idx);
+}
+
+/* 5. The first post-tutorial edit promotes exactly once, under the tutorial's
+ *    display name, and clears both transient origins. */
+static void test_post_tutorial_edit_promotes_once(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx));
+    ASSERT_INT("no slot before the first edit", repl_user_scene_count(), 0);
+
+    commit_free_form_line("glColor3f(0.9, 0.4, 0.2)");
+    ASSERT_INT("first edit promotes into one slot", repl_user_scene_count(), 1);
+    int slot = repl_active_user_scene();
+    ASSERT_TRUE("promoted slot is active", slot >= 0);
+    ASSERT_STR("promoted scene inherits the tutorial name",
+               repl_user_scene_name(slot), repl_tutorial_name(idx));
+    ASSERT_INT("example origin cleared", repl_state_scenes().active_example_idx, -1);
+    ASSERT_INT("tutorial origin cleared", post_tutorial_origin(), -1);
+    ASSERT_TRUE("pending baseline flushed by the promotion teardown",
+                !tutorial_state_view().baseline_valid);
+
+    commit_free_form_line("glColor3f(0.2, 0.5, 0.8)");
+    ASSERT_INT("later edits accumulate into the same slot",
+               repl_user_scene_count(), 1);
+    ASSERT_INT("active slot unchanged by later edits",
+               repl_active_user_scene(), slot);
+}
+
+/* 6. Configuration semantics: the promoted scene owns the tutorial-mutated
+ *    PER-SCENE cfg, while tutorial-only / global slugs go back to their
+ *    pre-tutorial values.
+ *
+ *    Feature Tour's own SET/REQUIRE slugs (grid, vertex_outlines) are all in
+ *    the bridge's scene subset, so no shipped tutorial exercises the global
+ *    half on its own. The test synthesizes one by adding `msaa` — a rendering
+ *    toggle deliberately outside cfg_key_in_scene_subset() — to the live
+ *    tutorial's restore baseline and then mutating it, which is exactly the
+ *    shape a future tutorial with a global SET step would produce. */
+static void test_promotion_keeps_scene_cfg_and_restores_globals(void) {
+    reset_fixture();
+    ASSERT_TRUE("msaa is a known cfg slug", repl_cfg_known("msaa"));
+
+    /* Pre-tutorial: grid OFF (per-scene), msaa off (global). */
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    glr_config_set(GLR_CONFIG_MSAA, 0);
+    ASSERT_INT("baseline grid OFF", repl_cfg_get_int("grid", -1), 0);
+    ASSERT_INT("baseline msaa off", repl_cfg_get_int("msaa", -1), 0);
+
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked Feature Tour into REQUIRE", idx >= 0);
+    if (idx < 0) return;
+
+    /* Stand in for a tutorial SET step on a global slug: record the user's
+     * value in the live restore baseline, then have the lesson change it. */
+    repl_config_bag_set_int(&tutorial_state_mut()->baseline_bag, "msaa", 0);
+    repl_cfg_set_int("msaa", 1);
+
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);  /* advances REQUIRE -> SET */
+    ASSERT_INT("grid is RADAR mid-tutorial",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
+    ASSERT_INT("msaa is on mid-tutorial", repl_cfg_get_int("msaa", -1), 1);
+
+    tutorial_stop();
+    ASSERT_INT("stop keeps the lesson's view", repl_cfg_get_int("grid", -1),
+               GRID_THEME_RADAR);
+    ASSERT_INT("stop establishes the origin", post_tutorial_origin(), idx);
+
+    commit_free_form_line("glColor3f(0.3, 0.7, 0.5)");
+    int slot = repl_active_user_scene();
+    ASSERT_TRUE("post-tutorial edit promoted", slot >= 0);
+    if (slot < 0) return;
+
+    ASSERT_INT("live view keeps the tutorial's per-scene grid",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
+    ASSERT_INT("global slug restored to its pre-tutorial value",
+               repl_cfg_get_int("msaa", -1), 0);
+
+    /* The promoted slot must own that grid theme, not merely inherit it from
+     * live state: park on another scene, change grid, and load the slot back. */
+    ASSERT_TRUE("second scene created", repl_scenes_create_empty_user_scene() >= 0);
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    ASSERT_INT("grid changed away from the promoted value",
+               repl_cfg_get_int("grid", -1), 0);
+    ASSERT_TRUE("promoted slot reloads", repl_load_user_scene_idx(slot) == 1);
+    ASSERT_INT("promoted scene's per-scene cfg round-trips",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
+}
+
+/* 7. A slots-full rejection is retryable: the origin and the pending baseline
+ *    survive, the edit still lands in the transient document, and a later
+ *    edit — once a slot can be freed — captures everything typed in between. */
+static void test_slots_full_promotion_is_retryable(void) {
+    char temp_dir[] = "/tmp/test_tutorial_promote.XXXXXX";
+
+    reset_fixture();
+    repl_set_workspace_dir(NULL);   /* no workspace => no LRU eviction */
+    for (int i = 0; i < MAX_USER_SCENES; i++)
+        (void)repl_scenes_create_empty_user_scene();
+    ASSERT_INT("every user-scene slot occupied",
+               repl_user_scene_count(), MAX_USER_SCENES);
+
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx));
+    ASSERT_INT("origin established", post_tutorial_origin(), idx);
+
+    int doc_before = repl_state_document_count();
+    commit_free_form_line("glColor3f(0.1, 0.2, 0.3)");
+    ASSERT_INT("promotion did not allocate a slot",
+               repl_user_scene_count(), MAX_USER_SCENES);
+    ASSERT_INT("no scene became active", repl_active_user_scene(), -1);
+    ASSERT_INT("origin survives the rejection", post_tutorial_origin(), idx);
+    ASSERT_TRUE("pending baseline survives the rejection",
+                tutorial_state_view().baseline_valid);
+    ASSERT_INT("the edit itself still landed",
+               repl_state_document_count(), doc_before + 1);
+
+    /* Accumulate one more line while still transient. */
+    commit_free_form_line("glColor3f(0.4, 0.5, 0.6)");
+    ASSERT_INT("second transient edit landed too",
+               repl_state_document_count(), doc_before + 2);
+    ASSERT_INT("still unpromoted", repl_active_user_scene(), -1);
+
+    /* Bind a workspace so LRU eviction can free a slot, then edit again. */
+    char *made_dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("mkdtemp promotion-retry workspace", made_dir != NULL);
+    if (!made_dir) return;
+    repl_set_workspace_dir(made_dir);
+
+    commit_free_form_line("glColor3f(0.7, 0.8, 0.9)");
+    int slot = repl_active_user_scene();
+    ASSERT_TRUE("retry promotes once a slot can be freed", slot >= 0);
+    ASSERT_INT("origin cleared by the successful retry",
+               post_tutorial_origin(), -1);
+    if (slot >= 0) {
+        ASSERT_STR("retried promotion still uses the tutorial name",
+                   repl_user_scene_name(slot), repl_tutorial_name(idx));
+        /* The promoted document must carry every line typed while the
+         * promotion was failing, not just the one that finally succeeded. */
+        ASSERT_INT("promoted document kept the intervening transient edits",
+                   repl_state_document_count(), doc_before + 3);
+    }
+
+    repl_set_workspace_dir(NULL);
+}
+
+/* 8. Wholesale replacement discards an UNEDITED post-tutorial result: no slot
+ *    is allocated, the origin is cleared, and the user's pre-tutorial cfg
+ *    comes back. Uses an empty workspace load for the cfg half (that path has
+ *    no competing cfg apply of its own), then an example load to pin that the
+ *    origin-clearing is not workspace-specific. */
+static void test_wholesale_replacement_discards_unedited_result(void) {
+    char temp_dir[] = "/tmp/test_tutorial_discard.XXXXXX";
+
+    reset_fixture();
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    int grid_baseline = repl_cfg_get_int("grid", -1);
+    ASSERT_INT("baseline grid OFF", grid_baseline, 0);
+
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked Feature Tour into REQUIRE", idx >= 0);
+    if (idx < 0) return;
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);  /* advances REQUIRE -> SET */
+    ASSERT_INT("grid mutated mid-tutorial", repl_cfg_get_int("grid", -1),
+               GRID_THEME_RADAR);
+    tutorial_stop();
+    ASSERT_INT("origin established by stop", post_tutorial_origin(), idx);
+    ASSERT_INT("no slot allocated by merely viewing the result",
+               repl_user_scene_count(), 0);
+
+    char *made_dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("mkdtemp discard-test workspace", made_dir != NULL);
+    if (!made_dir) return;
+    (void)repl_load_workspace(made_dir);
+
+    ASSERT_INT("unedited post-tutorial document promoted nothing",
+               repl_user_scene_count(), 0);
+    ASSERT_INT("origin cleared by the replacement", post_tutorial_origin(), -1);
+    ASSERT_TRUE("pending baseline flushed",
+                !tutorial_state_view().baseline_valid);
+    ASSERT_INT("pre-tutorial grid restored", repl_cfg_get_int("grid", -1),
+               grid_baseline);
+    rmdir(made_dir);
+
+    /* Same discard, via the example-load replacement path. */
+    reset_fixture();
+    int idx2 = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx2 >= 0);
+    if (idx2 < 0) return;
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx2));
+    ASSERT_INT("origin established", post_tutorial_origin(), idx2);
+    repl_load_example(0);
+    ASSERT_INT("example load promoted nothing", repl_user_scene_count(), 0);
+    ASSERT_INT("example load cleared the origin", post_tutorial_origin(), -1);
+    ASSERT_INT("example is the active origin now",
+               repl_state_scenes().active_example_idx, 0);
+}
+
+/* 10. Example auto-promotion is unchanged by the tutorial-origin branch:
+ *     same naming, same single-slot allocation, and the tutorial marker stays
+ *     -1 throughout (an example is not a tutorial result). */
+static void test_example_promotion_regression(void) {
+    reset_fixture();
+    repl_load_example(0);
+    ASSERT_INT("example active", repl_state_scenes().active_example_idx, 0);
+    ASSERT_INT("no tutorial origin for an example", post_tutorial_origin(), -1);
+    ASSERT_INT("viewing an example allocates no slot", repl_user_scene_count(), 0);
+
+    commit_free_form_line("glColor3f(0.5, 0.5, 0.5)");
+    int slot = repl_active_user_scene();
+    ASSERT_TRUE("example edit promotes", slot >= 0);
+    ASSERT_INT("exactly one slot allocated", repl_user_scene_count(), 1);
+    ASSERT_STR("promoted scene inherits the example name",
+               repl_user_scene_name(slot), repl_example_name(0));
+    ASSERT_INT("example origin cleared", repl_state_scenes().active_example_idx, -1);
+    ASSERT_INT("tutorial origin still -1", post_tutorial_origin(), -1);
+
+    commit_free_form_line("glColor3f(0.25, 0.25, 0.25)");
+    ASSERT_INT("later edits reuse the promoted slot", repl_user_scene_count(), 1);
+}
+
 int main(void) {
     tutorial_state_init_explicit();
     test_feature_tour_grid_steps_use_symbolic_names();
@@ -4357,5 +4714,15 @@ int main(void) {
     test_expected_shape_classifier();
     test_validate_accepts_balanced_block_steps();
     test_validate_block_step_rules();
+    /* Post-tutorial scene promotion lifecycle. */
+    test_active_tutorial_does_not_promote();
+    test_completion_establishes_tutorial_origin();
+    test_stop_establishes_tutorial_origin();
+    test_failed_tutorial_start_leaves_no_origin();
+    test_post_tutorial_edit_promotes_once();
+    test_promotion_keeps_scene_cfg_and_restores_globals();
+    test_slots_full_promotion_is_retryable();
+    test_wholesale_replacement_discards_unedited_result();
+    test_example_promotion_regression();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }

@@ -363,10 +363,19 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
 
 Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 ([`src/repl/scenes.c`](src/repl/scenes.c)); no automatic startup scene.
-Editing an example auto-promotes it into a fresh slot — the hook is
-[`editor_undo_push_snapshot()`](src/editor/undo.h#L123) → [`repl_promote_example_if_needed()`](src/repl/scenes.h#L46) before
-every mutation. LRU eviction to `<workspace_dir>/<slug>.c` only when a
-workspace is bound (else promotion is rejected with a status message).
+Editing a **transient** document auto-promotes it into a fresh slot — the
+hook is [`editor_undo_push_snapshot()`](src/editor/undo.h#L126) →
+[`repl_promote_transient_if_needed()`](src/repl/scenes.h#L55) before every
+mutation. Two promotable origins: a loaded example (`active_example_idx`)
+and the document a **completed or stopped tutorial** left behind
+(`tutorial_origin_idx`, stamped by `tutorial_end_keep_view`, never while a
+tutorial is active). LRU eviction to `<workspace_dir>/<slug>.c` only when a
+workspace is bound (else promotion is rejected with a status message —
+and, for a tutorial origin, is retried on the next edit with the origin and
+pending cfg baseline left intact). A tutorial promotion captures the
+lesson's view into the slot *before* tutorial teardown restores the
+pre-tutorial globals, then re-applies the slot's per-scene cfg subset; see
+`docs/ARCHITECTURE.md` "Post-tutorial scene promotion".
 F12 cycles examples → user scenes → back. Inline rename filters
 path-unsafe chars. Workspace round-trips via `@scene-name` /
 `@workspace-dir` headers.
@@ -409,7 +418,7 @@ which legitimately change between commands after local assignments.
 ### Undo
 
 32-slot global rings (not per-scene). **Any wholesale replacement of the
-live document must call [`editor_undo_clear()`](src/editor/undo.h#L145) first** or post-switch Ctrl+Z
+live document must call [`editor_undo_clear()`](src/editor/undo.h#L148) first** or post-switch Ctrl+Z
 restores the previous scene into the new one (call sites:
 `glr_ctrl_reset_all`, F12 cycle, load-example/scene/workspace actions in
 [`glr_actions.c`](src/app/glr_actions.c)). Push clears the redo stack; push is also the
@@ -460,7 +469,7 @@ Carry-overs the loader would otherwise drop: predef *values* (by name, plus
 the `rename_from`/`rename_to` pair) and `is_auto` on auto-normal rows (by
 row position; a substitution never changes the row count). One undo
 snapshot per replace; the ring is rewound via
-[`editor_undo_ring_state_restore()`](src/editor/undo.h#L116) when the
+[`editor_undo_ring_state_restore()`](src/editor/undo.h#L119) when the
 rebuild fails, so a rejected replace leaves no trace.
 
 Replace-current addresses its match by **occurrence ordinal within the row**,
