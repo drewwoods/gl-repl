@@ -107,8 +107,12 @@ int write_fog_fv_as_c89(FILE *f, const char *source_text);
 int write_mult_matrixf_as_c89(FILE *f, const char *source_text);
 int find_export_block_end(int begin_idx);
 int export_uses_tess_commands(void);
+/* `hoist_local_decls` emits every function-scoped declaration in the range
+ * ahead of the rest, in source order, so the generated body stays C89
+ * (no declaration after a statement). Set it for function bodies; the
+ * display() body has no locals to hoist. */
 void write_render_body_range_as_c(FILE *f, int start, int end_idx,
-                                  int skip_func_defs);
+                                  int skip_func_defs, int hoist_local_decls);
 
 int export_has_persistent_predef_vars(void);
 void write_predef_var_globals(FILE *f);

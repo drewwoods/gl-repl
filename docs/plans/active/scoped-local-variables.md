@@ -1,6 +1,6 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–4 landed
+## Status — IN PROGRESS (2026-07-27): Phases 1–4 landed, review fixes applied
 
 Phases 1 (declaration compile), 2 (flatten), 3 (edit guards) and 4
 (export/import) are implemented and tested. **Locals work end to end, the edit
@@ -40,6 +40,51 @@ hand-edited non-zero initializer still being rejected. Plus a `func_locals`
 program in `tests/test_export_trace_parity.c` — the only place the generated
 declaration is actually handed to `cc`, so it is what proves the emitted C
 compiles and runs.
+
+### Review fixes (2026-07-27, after phases 1-4)
+
+A read-only review of the four phase commits found four defects, plus one
+this branch's own fix exposed. Each has a regression test written *before*
+the fix and verified to fail without it (`tests/test_repl_locals.c`).
+
+- **Locals bound only when the declarations formed a leading prologue run.**
+  `flatten_bind_func_locals()` stopped at the first non-declaration. Commit
+  hoists declarations to the body top, but nothing keeps them there: an
+  insert-mode commit drops a statement ahead of them, and replacing an
+  unused leading declaration does the same. Every local after that point
+  silently stopped binding — its readers resolved to a same-named global or
+  failed to reparse and vanished from the flat stream, with no diagnostic.
+  Fix: scan the whole body, skipping nested function bodies. That also puts
+  flatten back in step with `collect_visible_vars_in()`, which already binds
+  a declaration wherever in the body it appears.
+- **The delete guard treated a loop iterator as bound across its own
+  header.** `compile_line_uses_local_ident()` resolved at `line_idx + 1`, so
+  in `for(x, 0, x + 1)` the bound's read of the *outer* `x` looked shadowed.
+  Compile and flatten both evaluate those bounds in the enclosing scope
+  before the iterator exists, so an outer local read only there was reported
+  unreferenced and could be deleted — after which the bound resolved to a
+  shadowed global and the loop ran a different number of times. Fix: a
+  for-header is scanned past the iterator's declaring token and resolved
+  against the scope *outside* the loop; a function header declares only and
+  is not scanned at all.
+- **Import lowered partially initialized declarations.**
+  `import_make_repl_local_decl()` required one initializer and checked only
+  those present, so `float a = 0.0f, b;` — which the exporter never writes —
+  became `float a, b;`, turning an indeterminate C automatic into a
+  deterministic REPL zero. Fix: every declarator must carry its own
+  literal-zero initializer.
+- **Export truncated long declaration comments.** The source row can already
+  run to `MAX_LINE_LEN` and the emitted row adds `" = 0.0f"` per name, so a
+  same-sized buffer silently dropped the trailing comment. Fix: an
+  expansion-sized buffer, a `STATIC_ASSERT` pinning the arithmetic, and a
+  checked final format.
+- **[found while fixing the first] Exported bodies could be C99-only.**
+  Binding out-of-prologue locals correctly means a declaration can follow a
+  statement, which C89 forbids — and this exporter targets C89 (it already
+  hoists for-loop variables into a scope brace for the same reason).
+  `write_render_body_range_as_c()` gained a `hoist_local_decls` flag that
+  emits declarations first, in source order; verified with
+  `gcc -std=c89 -pedantic-errors`.
 
 ### Phase 3 — edit guards (done)
 

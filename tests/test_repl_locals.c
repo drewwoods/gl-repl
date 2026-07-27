@@ -69,6 +69,19 @@ static float nth_cmd_arg0(CmdType type, int n) {
     return -99999.0f;
 }
 
+/* args[arg] of the `n`-th emitted command of `type`. */
+static float nth_cmd_arg_n(CmdType type, int n, int arg) {
+    FlatProgramView v = repl_flat_program_view_live();
+    int seen = 0;
+    for (int i = 0; i < v.cmd_count; i++) {
+        if (v.cmds[i].type != type)
+            continue;
+        if (seen++ == n)
+            return v.cmds[i].args[arg];
+    }
+    return -99999.0f;
+}
+
 static int count_cmds(CmdType type) {
     FlatProgramView v = repl_flat_program_view_live();
     int n = 0;
@@ -675,6 +688,303 @@ static void test_import_lowers_only_the_generated_zero(void) {
                count_decl_rows(), 0);
 }
 
+/* ---- Review regressions --------------------------------------------- */
+
+/* Commit `text` with the cursor on source row `edit_line`. `insert` picks
+ * insert mode (place before the row) or overwrite mode (replace it). */
+static int commit_line_at(const char *text, int edit_line, int insert) {
+    editor_state_edit_line_set(edit_line);
+    editor_insert_mode_set(insert);
+    return editor_feed_line(text);
+}
+
+/* Commit hoists declarations to the body top, but nothing keeps them
+ * there. Two ordinary edits push a statement ahead of a local, and a
+ * binding that depended on the declarations forming a leading run would
+ * silently stop resolving — the reads would fall through to a global of
+ * the same name, or to nothing, with no diagnostic. */
+static void test_locals_bind_regardless_of_row_order(void) {
+    printf("--- locals bind regardless of row order ---\n");
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float a;",
+        "float b;",
+        "a = r;",
+        "b = r * 2;",
+        "glVertex3f(a, b, 0);",
+        "}",
+        "func0(3);",
+        "glEnd();",
+    };
+
+    /* Function definitions hoist to the document top, so the body is
+     * rows 1..: 0 head, 1 float a, 2 float b, 3 a = r, ... */
+    load_scene(lines, 10);
+    ASSERT_INT("row 1 is the first local", first_local_decl_row(), 1);
+    ASSERT_FLOAT("baseline binds a", nth_cmd_arg0(CMD_VERTEX3F, 0), 3.0f);
+
+    /* Insert a statement between the two declarations. */
+    ASSERT_INT("inserting a statement mid-prologue commits",
+               commit_line_at("glColor3f(1, 0, 0);", 2, 1), 1);
+    ASSERT_INT("the statement landed between the declarations",
+               repl_state_document_cmds()[2].type, CMD_COLOR3F);
+    ASSERT_INT("and the second declaration follows it",
+               repl_state_document_cmds()[3].type, CMD_VAR_DECLARE);
+    repl_flatten_commands(0);
+    ASSERT_INT("both vertices survive", count_cmds(CMD_VERTEX3F), 1);
+    ASSERT_FLOAT("the local before the statement still binds",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 3.0f);
+    ASSERT_TRUE("the local after the statement still binds",
+                nth_cmd_arg_n(CMD_VERTEX3F, 0, 1) == 6.0f);
+
+    /* Replace an unused leading declaration with a statement — allowed,
+     * since nothing reads it, and it leaves the survivor out of the
+     * prologue. */
+    const char *lines2[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float unused;",
+        "float b;",
+        "b = r * 2;",
+        "glVertex3f(b, 0, 0);",
+        "}",
+        "func0(3);",
+        "glEnd();",
+    };
+    load_scene(lines2, 9);
+    ASSERT_INT("row 1 is the unused declaration",
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
+    ASSERT_INT("replacing the unused leading declaration commits",
+               commit_line_at("glColor3f(1, 0, 0);", 1, 0), 1);
+    ASSERT_INT("row 1 is now a statement",
+               repl_state_document_cmds()[1].type, CMD_COLOR3F);
+    ASSERT_INT("row 2 is still the surviving declaration",
+               repl_state_document_cmds()[2].type, CMD_VAR_DECLARE);
+    repl_flatten_commands(0);
+    ASSERT_FLOAT("the surviving local still binds",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 6.0f);
+}
+
+/* A for-header's bounds are evaluated in the enclosing scope, before the
+ * iterator exists — `for(x, 0, x + 1)` reads the *outer* x. A delete
+ * guard that treats the iterator as bound across the whole header line
+ * calls that outer local unreferenced and lets it be deleted; the bound
+ * then resolves to the shadowed global instead and the loop silently
+ * runs a different number of times. */
+static void test_delete_guard_sees_locals_in_loop_bounds(void) {
+    printf("--- delete guard sees locals in loop bounds ---\n");
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    const char *lines[] = {
+        "static float x = 5;",
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float x;",
+        "for(x, 0, x + 1) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "func0(1);",
+        "glEnd();",
+    };
+    load_scene(lines, 10);
+
+    ASSERT_INT("row 2 is the local declaration",
+               repl_state_document_cmds()[2].type, CMD_VAR_DECLARE);
+    ASSERT_INT("it is the local, not the global",
+               repl_state_document_cmds()[2].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_INT("row 3 is the loop header",
+               repl_state_document_cmds()[3].type, CMD_FOR_BEGIN);
+    /* The bound reads the local (0), not the global (5): one iteration.
+     * That is the whole point — the local is live, and its only reader is
+     * the loop bound. */
+    ASSERT_INT("the bound reads the local: one iteration",
+               count_cmds(CMD_VERTEX3F), 1);
+
+    ctx = repl_compile_context_from_live(2);
+    ASSERT_INT("deleting a local read only by a loop bound is rejected",
+               repl_compile_delete_range(2, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("delete rejection says why",
+                strstr(err, "still referenced") != NULL);
+
+    /* The complementary case must stay deletable: a local whose only
+     * textual occurrence is the iterator's own declaring token, with a
+     * bound that reads nothing. */
+    const char *lines2[] = {
+        "func0(r) {",
+        "float x;",
+        "for(x, 0, 3) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "func0(1);",
+    };
+    load_scene(lines2, 7);
+    ASSERT_INT("row 1 is the shadowed local",
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
+    ctx = repl_compile_context_from_live(1);
+    ASSERT_INT("a local shadowed by an iterator that does not read it "
+               "still deletes",
+               repl_compile_delete_range(1, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_OK);
+}
+
+/* Import lowers only the exporter's own form. `float a = 0.0f, b;` is
+ * never generated: in C, `b` is indeterminate, so silently lowering it
+ * would turn undefined behavior into a deterministic REPL zero. */
+static void test_import_rejects_partially_initialized_decl(void) {
+    printf("--- import rejects a partially initialized declaration ---\n");
+    const char *path = "/tmp/repl_locals_partial_init.c";
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float a;",
+        "float b;",
+        "a = r;",
+        "glVertex3f(a, b, 0);",
+        "}",
+        "func0(3);",
+        "glEnd();",
+    };
+    static char text[1 << 16];
+    char *at;
+    FILE *f;
+
+    load_scene(lines, 9);
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path, text, sizeof(text)));
+
+    /* Hand-edit the first declaration into a form the exporter never
+     * writes: one declarator initialized, one not. The replacement is
+     * length-preserving so the surrounding file is untouched. */
+    at = strstr(text, "float a = 0.0f;");
+    ASSERT_TRUE("found the first declaration", at != NULL);
+    if (at)
+        memcpy(at, "float a=0.0f,q;", strlen("float a=0.0f,q;"));
+    f = fopen(path, "wb");
+    ASSERT_TRUE("rewrote the file", f != NULL);
+    if (f) {
+        fwrite(text, 1, strlen(text), f);
+        fclose(f);
+    }
+
+    glr_ctrl_reset_all();
+    repl_export_load_from_file(path, NULL);
+    /* `float b = 0.0f;` still lowers; the mixed line must not, so it
+     * reaches the declaration preflight and is rejected there. */
+    ASSERT_INT("a partially initialized declaration is not lowered",
+               count_decl_rows(), 1);
+}
+
+/* A declaration line can already sit near MAX_LINE_LEN. Export widens it
+ * by strlen(" = 0.0f") per name, so building into a same-sized buffer
+ * silently truncates — and what falls off the end is the trailing
+ * comment. The fixture asserts its own premise: the committed row fits,
+ * and the widened row would not have. */
+static void test_export_does_not_truncate_long_decl_comment(void) {
+    printf("--- export does not truncate a long declaration comment ---\n");
+    const char *path = "/tmp/repl_locals_long_decl.c";
+    static char text[1 << 16];
+    char decl[MAX_LINE_LEN];
+    const char *marker = "TAILMARKER";
+    const int widen_per_name = (int)strlen(" = 0.0f");
+    /* Long enough that widening overflows MAX_LINE_LEN, short enough that
+     * format_decl_text's own MAX_LINE_LEN buffer does not truncate the
+     * committed row. Both halves are asserted below. */
+    const int target_len = MAX_LINE_LEN - 24;
+    int committed_len;
+    int off;
+
+    off = snprintf(decl, sizeof(decl), "float");
+    for (int i = 0; i < MAX_NAMES_PER_DECL; i++)
+        off += snprintf(decl + off, sizeof(decl) - (size_t)off,
+                        "%s nnnnnnnnnnnn%d", i ? "," : "", i);
+    off += snprintf(decl + off, sizeof(decl) - (size_t)off, "; // ");
+    while (off < target_len - (int)strlen(marker))
+        decl[off++] = 'x';
+    snprintf(decl + off, sizeof(decl) - (size_t)off, "%s", marker);
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line(decl);
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func0(1);");
+    ASSERT_INT("the long declaration committed", count_decl_rows(), 1);
+
+    committed_len = (int)strlen(first_local_decl_line());
+    ASSERT_TRUE("premise: the committed row was not itself truncated",
+                committed_len < MAX_LINE_LEN - 1 &&
+                strstr(first_local_decl_line(), marker) != NULL);
+    ASSERT_TRUE("premise: widening it would overflow a MAX_LINE_LEN buffer",
+                committed_len + MAX_NAMES_PER_DECL * widen_per_name >
+                    MAX_LINE_LEN - 1);
+
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path, text, sizeof(text)));
+    ASSERT_TRUE("every name kept its zero initializer",
+                strstr(text, "nnnnnnnnnnnn7 = 0.0f") != NULL);
+    ASSERT_TRUE("the trailing comment was not truncated away",
+                strstr(text, marker) != NULL);
+}
+
+/* The exporter targets C89 — it hoists for-loop variables into a scope
+ * brace for exactly this reason. A local declaration can legitimately sit
+ * after a statement in the body (commit hoists, but ordinary insert-mode
+ * editing can push a statement ahead of one), so the exported function
+ * body has to hoist them too or the generated file is C99-only. */
+static void test_export_hoists_locals_for_c89(void) {
+    printf("--- export hoists locals to the top of the function body ---\n");
+    const char *path = "/tmp/repl_locals_c89.c";
+    static char text[1 << 16];
+    const char *body;
+    const char *decl_b;
+    const char *stmt;
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float a;",
+        "float b;",
+        "a = r;",
+        "b = r * 2;",
+        "glVertex3f(a, b, 0);",
+        "}",
+        "func0(3);",
+        "glEnd();",
+    };
+    load_scene(lines, 10);
+
+    /* Push a statement between the two declarations. */
+    ASSERT_INT("inserting a statement mid-prologue commits",
+               commit_line_at("glColor3f(1, 0, 0);", 2, 1), 1);
+    ASSERT_INT("the source row order really is decl, statement, decl",
+               repl_state_document_cmds()[2].type, CMD_COLOR3F);
+    ASSERT_INT("with a declaration after it",
+               repl_state_document_cmds()[3].type, CMD_VAR_DECLARE);
+
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path, text, sizeof(text)));
+
+    body = strstr(text, "static void func0(");
+    ASSERT_TRUE("found the exported function", body != NULL);
+    if (!body)
+        return;
+    decl_b = strstr(body, "float b = 0.0f;");
+    stmt = strstr(body, "glColor3f");
+    ASSERT_TRUE("both the declaration and the statement were emitted",
+                decl_b != NULL && stmt != NULL);
+    ASSERT_TRUE("the declaration precedes the statement in the emitted body",
+                decl_b != NULL && stmt != NULL && decl_b < stmt);
+}
+
 int main(void) {
     test_local_is_per_invocation();
     test_local_reads_zero_before_write();
@@ -689,6 +999,11 @@ int main(void) {
     test_local_export_import_round_trip();
     test_export_parity_read_before_write();
     test_import_lowers_only_the_generated_zero();
+    test_locals_bind_regardless_of_row_order();
+    test_delete_guard_sees_locals_in_loop_bounds();
+    test_import_rejects_partially_initialized_decl();
+    test_export_does_not_truncate_long_decl_comment();
+    test_export_hoists_locals_for_c89();
 
     return test_harness_report(&g_harness, "test_repl_locals");
 }

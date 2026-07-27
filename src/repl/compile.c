@@ -508,6 +508,19 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
     return 0;
 }
 
+/* Text of a for-header after the iterator's name token — i.e. the bound
+ * expressions. "" when the header is malformed. */
+static const char *compile_for_header_bounds(const char *line) {
+    const char *p = line ? strchr(line, '(') : NULL;
+
+    if (!p)
+        return "";
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    return p;
+}
+
 /* Mirror image of compile_line_uses_global_ident: does this line read the
  * *local* `name` of the enclosing function?
  *
@@ -517,12 +530,27 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
  * body. So the question is inverted: resolve innermost-first and count the
  * line only when the winner is a LOCAL. A nested `for(x, ...)` shadowing it
  * means the line does not reference the local at all, and a legal delete
- * must not be blocked by it. */
+ * must not be blocked by it.
+ *
+ * Binder lines are not scanned as ordinary text, because a binder's own
+ * line is not uniformly inside its own scope:
+ *
+ *   - A function header is all declarations; it reads nothing.
+ *   - A for-header's *bounds* are evaluated in the enclosing scope, before
+ *     the iterator exists — `for(x, 0, x + 1)` reads the outer `x`, which
+ *     compile and flatten both honor. Treating the iterator as bound
+ *     across the whole header would call that outer local unreferenced and
+ *     let it be deleted, and the bound would then silently resolve to a
+ *     shadowed global, changing the iteration count. So the iterator's own
+ *     declaring token is skipped and the rest resolves against the scope
+ *     *outside* the loop. */
 static int compile_line_uses_local_ident(const ReplCompileContext *ctx,
                                          int line_idx,
                                          const char *name) {
     const char *line;
+    const char *scan;
     CompileScopeBindings bind;
+    int scope_pos;
     int slot;
 
     if (!ctx || !name || !name[0] ||
@@ -530,12 +558,26 @@ static int compile_line_uses_local_ident(const ReplCompileContext *ctx,
         return 0;
 
     line = source_text_line(ctx->text, line_idx);
-    if (!line || !repl_eval_source_uses_ident(line, name))
+    if (!line)
         return 0;
 
-    /* line_idx + 1 for the same reason the global scan uses it: a binder
-     * line binds its own name for its own text. */
-    compile_collect_bindings(ctx, line_idx + 1, &bind);
+    if (ctx->document_cmds[line_idx].type == CMD_FUNC_DEF)
+        return 0;
+
+    if (ctx->document_cmds[line_idx].type == CMD_FOR_BEGIN) {
+        scan = compile_for_header_bounds(line);
+        scope_pos = line_idx;
+    } else {
+        /* line_idx + 1 for the same reason the global scan uses it: an
+         * ordinary body line sits inside every scope open above it. */
+        scan = line;
+        scope_pos = line_idx + 1;
+    }
+
+    if (!repl_eval_source_uses_ident(scan, name))
+        return 0;
+
+    compile_collect_bindings(ctx, scope_pos, &bind);
     slot = compile_bindings_find(&bind, name);
     return slot >= 0 && bind.kinds[slot] == REPL_VISIBLE_VAR_LOCAL;
 }

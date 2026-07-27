@@ -1603,12 +1603,15 @@ static int import_span_is_literal_zero(const char *s, const char *end) {
  * round-trip a fixed point instead of growing the body by one row per
  * local per pass.
  *
- * Only a literal zero is lowered, and only when at least one initializer
- * is present. A hand-written `float a = 5;` inside a function body still
- * reaches the declaration preflight and is rejected there, so REPL and
- * file semantics stay identical rather than merely compatible.
- * `static float` is never touched — that is a global, and the prologue's
- * own handler owns it. */
+ * Only a literal zero is lowered, and *every* declarator must carry one.
+ * A hand-written `float a = 5;` inside a function body still reaches the
+ * declaration preflight and is rejected there, so REPL and file semantics
+ * stay identical rather than merely compatible — and the partially
+ * initialized `float a = 0.0f, b;`, which the exporter never writes, is
+ * left alone for the same reason: `b` is indeterminate in C, and lowering
+ * it would quietly promise a deterministic REPL zero the source file does
+ * not have. `static float` is never touched — that is a global, and the
+ * prologue's own handler owns it. */
 static int import_make_repl_local_decl(const char *line, char *out,
                                        int out_sz) {
     const char *p;
@@ -1617,6 +1620,7 @@ static int import_make_repl_local_decl(const char *line, char *out,
     const char *tail;
     int has_static = 0;
     int indent = 0;
+    int names = 0;
     int inits = 0;
     int off;
 
@@ -1639,6 +1643,7 @@ static int import_make_repl_local_decl(const char *line, char *out,
         if (!isalpha((unsigned char)*p) && *p != '_')
             return 0;
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        names++;
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == '=') {
             const char *value = ++p;
@@ -1653,7 +1658,9 @@ static int import_make_repl_local_decl(const char *line, char *out,
         p++;
     }
     while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != ';' || inits == 0)
+    /* Every declarator, or none of them: a mixed line is not the
+     * exporter's output and must not be rewritten. */
+    if (*p != ';' || names == 0 || inits != names)
         return 0;
 
     if (indent >= out_sz - 1)

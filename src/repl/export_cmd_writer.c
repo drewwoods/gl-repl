@@ -1,5 +1,6 @@
 #include "repl/export_internal.h"
 #include "repl/text_helpers.h"
+#include "repl/util.h"          /* repl_format_fits */
 
 /* Emit a CMD_FOR_BEGIN as C89: a marker-tagged scope brace + hoisted
  * `float i;` decl (C89 has no for-init declarations; the markers let
@@ -301,10 +302,20 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
              * one thing the REPL cannot reproduce — so "match C" was never
              * available as a resolution. Import lowers this form back to
              * `float a;`, which keeps the round-trip idempotent. */
-            char line[MAX_LINE_LEN];
+            /* The emitted line is *wider than its source*: the source row
+             * can already run to MAX_LINE_LEN, and each name grows by
+             * strlen(" = 0.0f"). Building into a MAX_LINE_LEN buffer would
+             * silently truncate, and what falls off the end is the
+             * trailing comment. The static assert keeps that arithmetic
+             * honest if either limit moves. */
+            char line[MAX_LINE_LEN * 2];
             const char *comment = source_text ? strstr(source_text, "//") : NULL;
             int indent = 0;
             int off;
+
+            STATIC_ASSERT(MAX_LINE_LEN + MAX_NAMES_PER_DECL * 7 + 2 <=
+                              MAX_LINE_LEN * 2,
+                          "local decl export buffer must fit the widened line");
 
             while (source_text[indent] &&
                    isspace((unsigned char)source_text[indent]))
@@ -319,8 +330,13 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 off += snprintf(line + off, sizeof(line) - (size_t)off,
                                 "%s%s = 0.0f", di ? ", " : "",
                                 cmd->payload.decl.names[di]);
-            snprintf(line + off, sizeof(line) - (size_t)off, ";%s%s",
-                     comment ? " " : "", comment ? comment : "");
+            if (!repl_format_fits(line + off, sizeof(line) - (size_t)off,
+                                  ";%s%s", comment ? " " : "",
+                                  comment ? comment : "")) {
+                /* Unreachable given the assert above; refuse to emit a
+                 * half-written declaration rather than truncate one. */
+                snprintf(line + off, sizeof(line) - (size_t)off, ";");
+            }
             export_write_c89_line(f, line);
             break;
         }
@@ -500,13 +516,51 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
     }
 }
 
+/* True when this row is a function-scoped declaration the caller is
+ * hoisting to the top of the emitted body. */
+static int export_row_is_hoisted_local(int cmd_idx, int hoist_local_decls) {
+    const GLCmd *cmd;
+
+    if (!hoist_local_decls || cmd_idx < 0 ||
+        cmd_idx >= repl_state_document_count())
+        return 0;
+    cmd = &repl_state_document_cmds()[cmd_idx];
+    return cmd->valid && cmd->type == CMD_VAR_DECLARE &&
+           cmd->var_idx == REPL_VAR_IDX_LOCAL;
+}
+
 void write_render_body_range_as_c(FILE *f, int start, int end_idx,
-                                  int skip_func_defs) {
+                                  int skip_func_defs, int hoist_local_decls) {
     int for_depth = 0;
     int tess_depth = 0;
 
+    /* C89 has no declaration-after-statement, and this exporter targets
+     * C89 — it already hoists for-loop variables into a scope brace for
+     * the same reason. A local declaration is normally the body's first
+     * row, but nothing keeps it there: ordinary insert-mode editing can
+     * push a statement ahead of one, and flatten binds it wherever it
+     * lands. So the emitted body puts every declaration first, in source
+     * order, and the main pass below skips them. Semantics are unchanged:
+     * a local has no initializer to reorder, and the REPL binds them all
+     * at call entry anyway. */
+    if (hoist_local_decls) {
+        for (int cmd_idx = start;
+             cmd_idx >= 0 && cmd_idx < end_idx &&
+             cmd_idx < repl_state_document_count(); cmd_idx++) {
+            if (repl_state_document_cmds()[cmd_idx].type == CMD_FUNC_DEF) {
+                cmd_idx = find_export_block_end(cmd_idx);
+                continue;
+            }
+            if (!export_row_is_hoisted_local(cmd_idx, hoist_local_decls))
+                continue;
+            write_canonical_cmd_as_c(f, &repl_state_document_cmds()[cmd_idx],
+                                     cmd_idx, 0, &tess_depth);
+        }
+    }
+
     for (int cmd_idx = start; cmd_idx < end_idx && cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds()[cmd_idx].valid) continue;
+        if (export_row_is_hoisted_local(cmd_idx, hoist_local_decls)) continue;
         if (skip_func_defs &&
             (repl_state_document_cmds()[cmd_idx].type == CMD_COMMENT ||
              repl_state_document_cmds()[cmd_idx].type == CMD_EMPTY)) {

@@ -385,24 +385,38 @@ static void flatten_for_loop(FlattenContext *ctx,
 /* Append a callee's declaration prologue to its fresh call frame, each
  * local bound to 0.0f with dep mask 0.
  *
- * The prologue tolerates CMD_COMMENT and CMD_EMPTY and stops at the first
- * other command type. A strictly contiguous run would break the moment an
- * author commented out the first local — the body would begin
- * `CMD_COMMENT, CMD_VAR_DECLARE, ...` and every later local would silently
- * stop binding — and it is also what lets a grouping comment sit between
- * declaration rows. */
+ * The *whole body* is scanned, not a leading prologue run. Commit hoists
+ * declarations to the body top, but nothing keeps them there: an insert
+ * in the middle of the prologue drops a statement ahead of them, and
+ * replacing an unused leading declaration does the same. A scan that
+ * stopped at the first non-declaration would silently unbind every local
+ * after that point — its readers would then resolve to a same-named
+ * global, or fail to reparse and vanish from the flat stream, with no
+ * diagnostic anywhere. Row position is a formatting convention; the
+ * binding must not depend on it.
+ *
+ * This also keeps flatten in step with compile: collect_visible_vars_in()
+ * already binds a local declaration into the enclosing CMD_FUNC_DEF frame
+ * wherever in the body it appears, so a prologue-only scan here made the
+ * two disagree about what is in scope.
+ *
+ * Nested function bodies are a different lexical scope and are skipped
+ * whole. The cost is one cheap type-check pass over the body per call,
+ * against a flatten_range walk of the same rows that reparses and
+ * evaluates every one of them. */
 static void flatten_bind_func_locals(FlattenContext *ctx,
                                      int body_start, int body_end,
                                      ExprVar *lvars, ReplExprDepMask *ldeps,
                                      ReplVisibleVarKind *lkinds, int *lnv) {
-    for (int j = body_start; j < body_end && j < ctx->source_count; j++) {
+    for (int j = body_start;
+         j >= 0 && j < body_end && j < ctx->source_count; j++) {
         const GLCmd *decl = &ctx->source_cmds[j];
-        if (!decl->valid || decl->type == CMD_COMMENT ||
-            decl->type == CMD_EMPTY)
+        if (decl->type == CMD_FUNC_DEF) {
+            j = flatten_repl_source_scope_find_block_end(ctx, j);
             continue;
-        if (decl->type != CMD_VAR_DECLARE)
-            break;
-        if (decl->var_idx != REPL_VAR_IDX_LOCAL)
+        }
+        if (!decl->valid || decl->type != CMD_VAR_DECLARE ||
+            decl->var_idx != REPL_VAR_IDX_LOCAL)
             continue;
         for (int n = 0; n < decl->payload.decl.count &&
                         *lnv < MAX_EXPR_VARS; n++) {

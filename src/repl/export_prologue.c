@@ -234,7 +234,7 @@ void write_render_helper_as_c(FILE *f, const char *name) {
     fprintf(f, "\n/* User scene commands captured from gl-repl. */\n");
     fprintf(f, "static void %s(void) {\n", name);
     fprintf(f, "  /* Snippet start */\n");
-    write_render_body_range_as_c(f, 0, repl_state_document_count(), 1);
+    write_render_body_range_as_c(f, 0, repl_state_document_count(), 1, 0);
     int bb = 0;
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (repl_state_document_cmds()[cmd_idx].valid && repl_state_document_cmds()[cmd_idx].type == CMD_BEGIN) bb++;
@@ -312,7 +312,7 @@ void write_func_defs_as_c(FILE *f) {
             else       snprintf(fn_name, sizeof(fn_name), "func%d", fn);
             fprintf(f, "\nstatic void %s(void) {\n", fn_name);
         }
-        write_render_body_range_as_c(f, cmd_idx + 1, fe, 0);
+        write_render_body_range_as_c(f, cmd_idx + 1, fe, 0, 1);
         fprintf(f, "}\n");
     }
 }
