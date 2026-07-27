@@ -834,6 +834,59 @@ static void test_delete_guard_sees_locals_in_loop_bounds(void) {
                REPL_COMPILE_OK);
 }
 
+/* The same binder-line rule applies to globals. A loop iterator shadows a
+ * same-named global only in the loop body; its start/end/step expressions
+ * still read the enclosing scope. The global delete walk must therefore
+ * inspect the bounds before deciding that the iterator hides the name. */
+static void test_delete_guard_sees_globals_in_loop_bounds(void) {
+    printf("--- delete guard sees globals in loop bounds ---\n");
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    const char *lines[] = {
+        "static float x = 5;",
+        "func0(r) {",
+        "for(x, 0, x + 1) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "func0(1);",
+    };
+    load_scene(lines, 7);
+
+    ASSERT_INT("row 0 is the global declaration",
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+    ASSERT_TRUE("it owns a predef slot",
+                repl_state_document_cmds()[0].var_idx >= 0);
+    ASSERT_INT("the bound reads the global: six iterations",
+               count_cmds(CMD_VERTEX3F), 6);
+
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("deleting a global read only by a loop bound is rejected",
+               repl_compile_delete_range(0, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("global delete rejection says why",
+                strstr(err, "still referenced") != NULL);
+
+    /* The iterator token and its body uses are not global reads. */
+    const char *lines2[] = {
+        "static float x = 5;",
+        "func0(r) {",
+        "for(x, 0, 3) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "func0(1);",
+    };
+    load_scene(lines2, 7);
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("a global only shadowed by the iterator still deletes",
+               repl_compile_delete_range(0, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_OK);
+}
+
 /* Import lowers only the exporter's own form. `float a = 0.0f, b;` is
  * never generated: in C, `b` is indeterminate, so silently lowering it
  * would turn undefined behavior into a deterministic REPL zero. */
@@ -880,6 +933,48 @@ static void test_import_rejects_partially_initialized_decl(void) {
      * reaches the declaration preflight and is rejected there. */
     ASSERT_INT("a partially initialized declaration is not lowered",
                count_decl_rows(), 1);
+}
+
+/* A comma promises another declarator. The exporter's generated form never
+ * ends its list with one, and invalid C such as `float a = 0.0f,;` must pass
+ * through untouched so the ordinary declaration preflight rejects it. */
+static void test_import_rejects_trailing_comma_decl(void) {
+    printf("--- import rejects a trailing-comma declaration ---\n");
+    const char *path = "/tmp/repl_locals_trailing_comma.c";
+    const char *lines[] = {
+        "func0(r) {",
+        "float a;",
+        "a = r;",
+        "glVertex3f(a, 0, 0);",
+        "}",
+        "func0(3);",
+    };
+    static char text[1 << 16];
+    char *at;
+    FILE *f;
+
+    load_scene(lines, 6);
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path, text, sizeof(text)));
+
+    /* Length-preserving replacement: leave the rest of the generated file
+     * at exactly the same offsets while creating the malformed list. */
+    at = strstr(text, "float a = 0.0f;");
+    ASSERT_TRUE("found the generated declaration", at != NULL);
+    if (at)
+        memcpy(at, "float a=0.0f, ;", strlen("float a=0.0f, ;"));
+    f = fopen(path, "wb");
+    ASSERT_TRUE("rewrote the file", f != NULL);
+    if (f) {
+        fwrite(text, 1, strlen(text), f);
+        fclose(f);
+    }
+
+    glr_ctrl_reset_all();
+    repl_export_load_from_file(path, NULL);
+    ASSERT_INT("a trailing-comma declaration is not lowered",
+               count_decl_rows(), 0);
 }
 
 /* A declaration line can already sit near MAX_LINE_LEN. Export widens it
@@ -1001,7 +1096,9 @@ int main(void) {
     test_import_lowers_only_the_generated_zero();
     test_locals_bind_regardless_of_row_order();
     test_delete_guard_sees_locals_in_loop_bounds();
+    test_delete_guard_sees_globals_in_loop_bounds();
     test_import_rejects_partially_initialized_decl();
+    test_import_rejects_trailing_comma_decl();
     test_export_does_not_truncate_long_decl_comment();
     test_export_hoists_locals_for_c89();
 

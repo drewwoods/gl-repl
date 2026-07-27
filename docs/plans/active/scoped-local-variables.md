@@ -66,13 +66,17 @@ the fix and verified to fail without it (`tests/test_repl_locals.c`).
   shadowed global and the loop ran a different number of times. Fix: a
   for-header is scanned past the iterator's declaring token and resolved
   against the scope *outside* the loop; a function header declares only and
-  is not scanned at all.
+  is not scanned at all. A follow-up review found the parallel global delete
+  walk still using the old whole-line rule, so both storage kinds now share
+  one binder-aware source-row selector.
 - **Import lowered partially initialized declarations.**
   `import_make_repl_local_decl()` required one initializer and checked only
   those present, so `float a = 0.0f, b;` — which the exporter never writes —
   became `float a, b;`, turning an indeterminate C automatic into a
   deterministic REPL zero. Fix: every declarator must carry its own
-  literal-zero initializer.
+  literal-zero initializer. A follow-up regression also closed the malformed
+  trailing-comma form (`float a = 0.0f,;`): a comma must be followed by
+  another declarator, rather than silently repairing invalid C to `float a;`.
 - **Export truncated long declaration comments.** The source row can already
   run to `MAX_LINE_LEN` and the emitted row adds `" = 0.0f"` per name, so a
   same-sized buffer silently dropped the trailing comment. Fix: an

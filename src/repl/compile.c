@@ -463,27 +463,62 @@ static int compile_binder_captures_assignment(const ReplCompileContext *ctx,
     return 0;
 }
 
-/* A same-name local (function param / for-loop var) shadows a global on
- * that entire source line, including the binder line itself. Use
- * collect_visible_vars(line_idx + 1) so `func0(x) {` and `for(x, ...) {`
- * treat `x` as already bound for the current-line reference scan. */
+/* Text of a for-header after the iterator's name token — i.e. the bound
+ * expressions. "" when the header is malformed. */
+static const char *compile_for_header_bounds(const char *line) {
+    const char *p = line ? strchr(line, '(') : NULL;
+
+    if (!p)
+        return "";
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    return p;
+}
+
+/* Select the part of a source row that can read enclosing bindings, plus
+ * the position at which those bindings must be resolved.
+ *
+ * A function header only declares parameters. A for-header is split: its
+ * iterator token declares a nested binding, but its bounds are evaluated in
+ * the enclosing scope before that binding exists. Every other row resolves
+ * after the block heads above it have opened. Both the global and local
+ * reference guards use this helper so binder-line shadowing cannot drift. */
+static const char *compile_line_reference_scan(
+        const ReplCompileContext *ctx, int line_idx, int *scope_pos) {
+    const char *line = source_text_line(ctx->text, line_idx);
+
+    if (scope_pos)
+        *scope_pos = line_idx + 1;
+    if (!line || ctx->document_cmds[line_idx].type == CMD_FUNC_DEF)
+        return "";
+    if (ctx->document_cmds[line_idx].type == CMD_FOR_BEGIN) {
+        if (scope_pos)
+            *scope_pos = line_idx;
+        return compile_for_header_bounds(line);
+    }
+    return line;
+}
+
+/* Does this row read the global `name` after applying lexical shadowing? */
 static int compile_line_uses_global_ident(const ReplCompileContext *ctx,
                                           int line_idx,
                                           const char *name) {
-    const char *line;
+    const char *scan;
     ExprVar visible_vars[MAX_EXPR_VARS];
+    int scope_pos;
     int visible_nv;
 
     if (!ctx || !name || !name[0] ||
         line_idx < 0 || line_idx >= ctx->document_count)
         return 0;
 
-    line = source_text_line(ctx->text, line_idx);
-    if (!line || !repl_eval_source_uses_ident(line, name))
+    scan = compile_line_reference_scan(ctx, line_idx, &scope_pos);
+    if (!repl_eval_source_uses_ident(scan, name))
         return 0;
 
     visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
-                                         ctx->document_count, line_idx + 1,
+                                         ctx->document_count, scope_pos,
                                          visible_vars, MAX_EXPR_VARS, NULL, NULL);
     for (int var_idx = 0; var_idx < visible_nv; var_idx++) {
         if (strcmp(visible_vars[var_idx].name, name) == 0)
@@ -506,19 +541,6 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
             return 1;
     }
     return 0;
-}
-
-/* Text of a for-header after the iterator's name token — i.e. the bound
- * expressions. "" when the header is malformed. */
-static const char *compile_for_header_bounds(const char *line) {
-    const char *p = line ? strchr(line, '(') : NULL;
-
-    if (!p)
-        return "";
-    p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-    return p;
 }
 
 /* Mirror image of compile_line_uses_global_ident: does this line read the
@@ -547,7 +569,6 @@ static const char *compile_for_header_bounds(const char *line) {
 static int compile_line_uses_local_ident(const ReplCompileContext *ctx,
                                          int line_idx,
                                          const char *name) {
-    const char *line;
     const char *scan;
     CompileScopeBindings bind;
     int scope_pos;
@@ -557,23 +578,7 @@ static int compile_line_uses_local_ident(const ReplCompileContext *ctx,
         line_idx < 0 || line_idx >= ctx->document_count)
         return 0;
 
-    line = source_text_line(ctx->text, line_idx);
-    if (!line)
-        return 0;
-
-    if (ctx->document_cmds[line_idx].type == CMD_FUNC_DEF)
-        return 0;
-
-    if (ctx->document_cmds[line_idx].type == CMD_FOR_BEGIN) {
-        scan = compile_for_header_bounds(line);
-        scope_pos = line_idx;
-    } else {
-        /* line_idx + 1 for the same reason the global scan uses it: an
-         * ordinary body line sits inside every scope open above it. */
-        scan = line;
-        scope_pos = line_idx + 1;
-    }
-
+    scan = compile_line_reference_scan(ctx, line_idx, &scope_pos);
     if (!repl_eval_source_uses_ident(scan, name))
         return 0;
 

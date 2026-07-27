@@ -1656,6 +1656,12 @@ static int import_make_repl_local_decl(const char *line, char *out,
         if (*p != ',')
             break;
         p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        /* A comma is a separator, not an optional terminator. Accepting
+         * `float a = 0.0f,;` would silently repair invalid C into a valid
+         * REPL local even though the exporter can never produce that form. */
+        if (*p == ';' || *p == '\0')
+            return 0;
     }
     while (*p && isspace((unsigned char)*p)) p++;
     /* Every declarator, or none of them: a mixed line is not the
