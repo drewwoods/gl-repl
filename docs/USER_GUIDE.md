@@ -1621,7 +1621,7 @@ the REPL. Two rules keep the round trip clean:
 
 ### Mesh export (PLY)
 
-**F11** (File → Export .ply) captures the current scene as an ASCII PLY mesh
+**File → Export .ply** captures the current scene as an ASCII PLY mesh
 named after the active scene — `glVertex` polygons, GLU-tessellated shapes,
 and GLUT solids all export through one GL feedback pass. Authored per-vertex
 normals are preserved; the rest are synthesized and smoothed. Line
@@ -1986,7 +1986,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
 | F2–F10 | Config cycles (Shift steps backward) — see [The Config menu](#the-config-menu) |
-| F11 | Export .ply |
+| F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |
 | ` | Variable panel |
@@ -2015,4 +2015,4 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 
 > **macOS note:** Cmd+letter works the same as Ctrl+letter. F11 may be
-> claimed by the system's "Show Desktop" — use File → Export .ply instead.
+> claimed by the system's "Show Desktop" — use the Tutorials menu instead.

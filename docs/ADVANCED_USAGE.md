@@ -398,7 +398,7 @@ tracks belong in the per-user music folder or a directory passed with
 
 ## Mesh export (PLY)
 
-Press **F11** (or **File → Export .ply**) to capture the current scene as an
+Use **File → Export .ply** to capture the current scene as an
 ASCII PLY mesh, named after the active scene (like Save Scene). The geometry
 — your `glVertex` polygons, GLU-tessellated shapes, and the GLUT solids
 (teapot/sphere/cube/cone/torus) — is captured through a single

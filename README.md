@@ -45,7 +45,7 @@ glEnd();
 | **Scope GL state visibly** | `glPushAttrib(mask)` and `glPopAttrib()` save and restore the ten state groups the REPL can change. Use `GL_ALL_ATTRIB_BITS` for all of them; cursor highlights show which setters a push saves or a pop reverts. |
 | **Replay your draws** | `Ctrl+R` steps through the command stream; watch the scene assemble call by call, loop variables substituted live in the code panel. |
 | **Live values** | Every `float` gets a slider, every number an inline stepper, every color a swatch with a picker. Drag, and the scene follows. |
-| **Sketch here, ship as C** | `Ctrl+S` exports a standalone, compilable GLUT/OpenGL program that round-trips back into the REPL. `F11` exports the geometry as a PLY mesh. |
+| **Sketch here, ship as C** | `Ctrl+S` exports a standalone, compilable GLUT/OpenGL program that round-trips back into the REPL. `File → Export .ply` exports the geometry as a PLY mesh. |
 
 <br>
 

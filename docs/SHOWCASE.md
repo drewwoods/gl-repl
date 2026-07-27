@@ -590,7 +590,7 @@ The REPL isn't only a renderer — these are worth a GIF of the *interaction*:
      ./gl-repl --example "Parametric torus (nested for)" --export-ply torus.ply -->
 <img src="images/showcase/feature-ply.png" alt="The parametric torus — exports cleanly to .ply" width="100%">
 
-**`F11` — `.ply` export**
+**`.ply` export**
 <br><sub>take the geometry anywhere</sub>
 
 </td>

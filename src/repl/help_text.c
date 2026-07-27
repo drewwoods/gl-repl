@@ -524,6 +524,12 @@ const ReplHelpContent *repl_help_text_build(void) {
         nk = key_emit_binding(nk, "", GLUT_KEY_F1 + fn - 1, 0, 1, "", label);
     }
 
+    /* F11 / Shift+F11 - not in g_cfg_items */
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_TUTORIAL), KM_MODS(GLR_NEXT_TUTORIAL), 1, "",
+                          "Next tutorial");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_TUTORIAL), KM_MODS(GLR_PREV_TUTORIAL), 1, "",
+                          "Previous tutorial");
+
     /* F12 / Shift+F12 - not in g_cfg_items */
     nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1, "",
                           "Next example / scene");
