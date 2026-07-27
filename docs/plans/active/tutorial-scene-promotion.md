@@ -1,125 +1,318 @@
-# Tutorial Scene Promotion: Treat Tutorials Like Examples
+# Tutorial Scene Promotion: Treat Post-Tutorial Documents Like Examples
 
-Tutorials currently use a **transient scene** buffer that has no identity. Both `g_active_user_scene` and `g_example_idx` are `-1`, so the undo hook's `repl_promote_example_if_needed()` never fires. When the user finishes a tutorial (or stops mid-tutorial) and continues editing, then later switches to another scene/example, their modifications are silently discarded.
+Tutorials use a **transient scene** buffer with no persistent scene identity. After a tutorial completes or is stopped, the user remains in the generated document and can continue editing it. Because both `g_active_user_scene` and `g_example_idx` are `-1`, the undo hook's `repl_promote_example_if_needed()` does not promote that document. If the user later switches to another scene or example, those edits are silently discarded.
 
-The fix mirrors the existing example-promotion model: give the post-tutorial document a "tutorial origin" identity so the promotion machinery detects it and auto-promotes to a user scene slot on first edit.
+The fix mirrors the existing example-promotion model, but only after the tutorial has ended: give the post-tutorial document a **tutorial origin** identity so the first subsequent edit promotes it into a user-scene slot. Active tutorial steps must remain transient and must never trigger promotion.
+
+## Design Invariants
+
+1. An active tutorial never has a tutorial-origin marker and cannot auto-promote.
+2. `tutorial_end_keep_view()` establishes the marker for the finished or stopped tutorial document.
+3. Promotion captures the live tutorial document and its tutorial-mutated per-scene configuration **before** restoring the pre-tutorial baseline.
+4. After capture, tutorial teardown restores global/tutorial-only configuration; the promoted slot's per-scene configuration is then reapplied to the live view.
+5. A failed promotion leaves the tutorial origin and pending baseline intact so a later edit can retry.
+6. Any wholesale document replacement clears the tutorial origin and flushes the pending tutorial baseline.
 
 ## Proposed Changes
 
-### Scene State: Track Tutorial Origin
+### Scene State: Track Post-Tutorial Origin
 
 #### [MODIFY] [state_views.h](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/state_views.h)
 
-Add an `active_tutorial_idx` field to `ReplSceneRuntimeState`, parallel to `active_example_idx`. Value is `-1` when no tutorial is active/completed; `>= 0` records which tutorial the current transient document originated from.
+Add `tutorial_origin_idx` to `ReplSceneRuntimeState`, parallel to `active_example_idx`:
+
+- `-1`: the live document did not originate from a completed/stopped tutorial.
+- `>= 0`: the transient live document is the retained result of that tutorial.
+
+Use `tutorial_origin_idx`, not `active_tutorial_idx`: the marker deliberately describes an **inactive post-tutorial document**, not the currently running tutorial.
 
 #### [MODIFY] [state.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/state.c)
 
-- Initialize `active_tutorial_idx = -1` in `repl_state_init()`.
-- Add accessor `repl_state_active_tutorial_idx()` and setter `repl_state_scenes_set_active_tutorial_idx()`.
+- Initialize `tutorial_origin_idx = -1` in `repl_state_apply_sentinels()` so reset/default state is unambiguous.
+- Add read accessor `repl_state_tutorial_origin_idx()`.
+- Add owner setter `repl_state_scenes_set_tutorial_origin_idx()`.
+
+Because `ReplCheckpointState` already carries `scene_runtime`, ordinary REPL/tour checkpoint capture and restore include this field automatically.
 
 #### [MODIFY] [state_owners.h](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/state_owners.h)
 
-Declare the new setter `repl_state_scenes_set_active_tutorial_idx()`.
+Declare `repl_state_scenes_set_tutorial_origin_idx()`.
 
 ---
 
-### Tutorial Runner: Set the Tutorial Origin Marker
+### Tutorial Runner: Establish Origin Only When the Tutorial Ends
 
 #### [MODIFY] [tutorial_runner.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/subsystems/tutorial/tutorial_runner.c)
 
-- **`tutorial_start()`**: After `repl_scenes_enter_transient_scene()`, set `repl_state_scenes_set_active_tutorial_idx(idx)` so the transient buffer carries the tutorial's identity.
-- **`tutorial_end_keep_view()`**: The tutorial-origin marker stays set — this is the key difference from examples. The document is now a post-tutorial transient scene with a tutorial-origin identity that the promotion hook can detect.
-- **`tutorial_teardown()`**: Clear `repl_state_scenes_set_active_tutorial_idx(-1)` so a full teardown (example load, reset-all, new tutorial) correctly removes the origin marker.
+#### `tutorial_start()`
+
+Do **not** set the tutorial-origin marker here. Tutorial commands pass through `editor_undo_push_snapshot()`, so setting the marker at start would promote on the first tutorial command and could teardown the tutorial while it is still running.
+
+The existing startup order remains correct:
+
+1. `tutorial_teardown()` flushes any predecessor tutorial/post-tutorial state.
+2. `repl_scenes_enter_transient_scene()` clears all scene origins.
+3. The tutorial prelude loads and the tutorial becomes active.
+
+A prelude-load failure therefore leaves no tutorial origin.
+
+#### `tutorial_end_keep_view()`
+
+Before `tutorial_state_reset_except_baseline()` clears the active tutorial index, copy that index into the scene-runtime marker:
+
+```c
+int origin_idx = tutorial_state_view().tutorial_idx;
+tutorial_state_mut()->active = 0;
+repl_state_scenes_set_tutorial_origin_idx(origin_idx);
+tutorial_state_reset_except_baseline();
+```
+
+This path is shared by normal completion and `tutorial_stop()`, so both produce a promotable post-tutorial document while retaining the pending cfg baseline.
+
+#### `tutorial_teardown()`
+
+After restoring/clearing the baseline and resetting tutorial runtime state, clear `tutorial_origin_idx = -1`. This covers:
+
+- switching to an example or user scene;
+- reset-all;
+- starting another tutorial;
+- discarding an unedited post-tutorial document;
+- successful tutorial promotion after the live document has already been captured.
 
 ---
 
-### Promotion Hook: Extend to Tutorials
+### Promotion Hook: Extend Promotion to Tutorial Origins
 
 #### [MODIFY] [scenes.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/scenes.c)
 
-Extend `repl_promote_example_if_needed()` (or rename to something like `repl_promote_transient_if_needed` and add a compatibility `#define`/wrapper) to also promote when a tutorial-origin is set. The logic:
+Rename `repl_promote_example_if_needed()` to `repl_promote_transient_if_needed()` if practical, retaining a compatibility wrapper only if needed by existing callers/tests. The hook now recognizes two origin kinds:
+
+- built-in example: `g_example_idx >= 0`;
+- completed/stopped tutorial: `g_tutorial_origin_idx >= 0`.
+
+Add a convenience alias alongside `g_example_idx`:
 
 ```c
-int repl_promote_example_if_needed(void) {
-    if (g_active_user_scene >= 0) return -1;
+#define g_tutorial_origin_idx (repl_state_tutorial_origin_idx())
+```
 
-    const char *origin_name = NULL;
-    if (g_example_idx >= 0)
-        origin_name = repl_example_name(g_example_idx);
-    else if (g_tutorial_idx >= 0)
-        origin_name = repl_tutorial_name(g_tutorial_idx);
-    else
+An active tutorial never reaches the tutorial-origin branch because its marker remains `-1` until `tutorial_end_keep_view()`.
+
+#### Promotion transaction
+
+Use this ordering:
+
+```c
+int repl_promote_transient_if_needed(void) {
+    if (g_active_user_scene >= 0)
         return -1;
 
-    // ... existing slot-finding + LRU eviction ...
+    enum OriginKind origin_kind;
+    const char *origin_name;
 
-    // derive unique name from origin_name
-    // save_scene_to_slot(...)
-    // set g_active_user_scene, clear both g_example_idx and g_tutorial_idx
+    if (g_example_idx >= 0) {
+        origin_kind = ORIGIN_EXAMPLE;
+        origin_name = repl_example_name(g_example_idx);
+    } else if (g_tutorial_origin_idx >= 0) {
+        origin_kind = ORIGIN_TUTORIAL;
+        origin_name = repl_tutorial_name(g_tutorial_origin_idx);
+    } else {
+        return -1;
+    }
+
+    /* Reserve a free slot or complete LRU eviction first. */
+    int slot = reserve_slot_for_promotion();
+    if (slot < 0)
+        return -1;  /* preserve origin + pending baseline for retry */
+
+    char unique[USER_SCENE_NAME_MAX];
+    derive_unique_scene_name(unique, sizeof(unique),
+                             origin_name ? origin_name : "Scene", -1);
+
+    /* Capture the live post-tutorial document and tutorial-mutated cfg. */
+    save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
+
+    if (origin_kind == ORIGIN_TUTORIAL) {
+        /* Restore and clear the complete pre-tutorial baseline only after
+         * the promoted slot has captured the tutorial view. */
+        repl_dispatch_tutorial_teardown();
+
+        /* Teardown restores global and per-scene slugs to their pre-tutorial
+         * values. Reapply only the promoted slot's per-scene cfg subset so
+         * the live view continues to match the newly-created scene while
+         * tutorial-only/global settings stay restored. */
+        apply_scene_cfg_from_slot(slot);
+    }
+
+    g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
-    repl_state_scenes_set_active_tutorial_idx(-1);
-    ...
+    repl_state_scenes_set_tutorial_origin_idx(-1);
+
+    /* Publish the existing promotion status. */
+    return slot;
 }
 ```
 
-Add a convenience `#define g_tutorial_idx (repl_state_active_tutorial_idx())` alongside the existing `g_example_idx` alias.
+The exact slot-reservation code can remain the existing free-slot/LRU logic. The important rule is that no tutorial teardown or origin clearing occurs until a slot has been successfully obtained and `save_scene_to_slot()` has captured the live document.
 
-Also clear `active_tutorial_idx` in `repl_scenes_enter_transient_scene()` — the marker must only be set when entering from a tutorial, not from any arbitrary transient path (the tutorial runner sets it explicitly after the enter-transient call).
+#### Per-scene cfg reapply helper
+
+Add a small file-local helper such as:
+
+```c
+static void apply_scene_cfg_from_slot(int slot) {
+    const ReplConfigBridge *bridge = repl_config_bridge();
+    if (slot < 0 || slot >= MAX_USER_SCENES ||
+        !g_user_scenes[slot].used || !bridge || !bridge->apply)
+        return;
+    bridge->apply(&g_user_scenes[slot].snapshot.cfg);
+}
+```
+
+Do not reload the full `SceneSnapshot` during promotion. A full apply would unnecessarily rewrite document, predefs, camera/editor cursor policy, and other live state while promotion is running inside an editor commit transaction. Only cfg needs reapplication after teardown.
+
+#### Failed promotion semantics
+
+When every user-scene slot is full and no workspace-backed eviction is possible:
+
+- leave `tutorial_origin_idx` unchanged;
+- leave the pending tutorial baseline valid;
+- report the existing slots-full status;
+- allow the edit to proceed in the transient document;
+- retry promotion on the next edit.
+
+If a slot later becomes available, that retry captures all edits accumulated in the transient document.
 
 ---
 
-### Teardown Paths: Clear Tutorial Origin
+### Scene Transition Paths: Clear Tutorial Origin
 
 #### [MODIFY] [scenes.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/scenes.c)
 
-In `repl_scenes_enter_transient_scene()`, also clear `active_tutorial_idx = -1`. (The tutorial runner in `tutorial_start()` then immediately re-sets it for the new tutorial — the clear-then-set order is correct.)
+Clear `tutorial_origin_idx = -1` whenever a scene transition supersedes the post-tutorial document:
 
-In `load_scene_from_slot()` and `repl_scenes_mark_example_active()`, clear `active_tutorial_idx = -1` since loading a scene or example supersedes any tutorial origin.
+- `repl_scenes_enter_transient_scene()`;
+- `load_scene_from_slot()`;
+- `repl_scenes_mark_example_active()`;
+- explicit loaded-document/user-scene activation;
+- `repl_scenes_reset()` / reset-all paths.
 
----
+Most replacement paths already dispatch `tutorial_teardown()`, which clears the marker and restores the baseline. Clearing at the scene-state boundary as well keeps the origin invariant local and defensive.
 
-### Scene Snapshot: Include Tutorial Origin
-
-#### [MODIFY] [scenes.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/scenes.c)
-
-The `ReplScenesSnapshot` struct and its `capture()`/`restore()` functions (used by tour baselines) don't need to track `active_tutorial_idx` — it lives in `ReplSceneRuntimeState` which is already part of `ReplState`. If the tour snapshot explicitly needs it, we can add it, but `ReplState`'s init/reset already covers the field.
-
----
-
-### Baseline Restore on Promotion
-
-#### [MODIFY] [tutorial_runner.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/subsystems/tutorial/tutorial_runner.c)
-
-When the tutorial completes (`tutorial_end_keep_view()`), the cfg baseline bag stays pending. When the user later edits and auto-promotes, the promotion path must flush the pending baseline so the promoted scene carries the tutorial-mutated cfg. The existing `tutorial_teardown()` call in `repl_load_user_scene_idx()` handles this — it already runs `tutorial_baseline_restore()`. Since promotion goes through `editor_undo_push_snapshot() → repl_promote_example_if_needed()`, the teardown doesn't run at that point. We need to call `repl_dispatch_tutorial_teardown()` during tutorial promotion so the baseline is flushed before the slot snapshot captures live cfg. This is added inside `repl_promote_example_if_needed()` for the tutorial path.
+`repl_scenes_enter_transient_scene()` must clear the marker unconditionally. Unlike the previous design, `tutorial_start()` does not immediately set it again; only `tutorial_end_keep_view()` establishes a new origin.
 
 ---
 
-### F12 Cycling: Include Post-Tutorial Transient in Cycle
+### Scene and Tour Snapshots
 
-#### [MODIFY] [glr_ctrl_router.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/app/glr_ctrl_router.c)
+#### [VERIFY] [scenes.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/repl/scenes.c)
 
-The existing `cycle_example_or_user_scene_dir()` handles three states: active user scene, active example, and "neither" (wraps to first example or user scene). The "neither" state now includes post-tutorial transient scenes. Currently the F12 path already handles this gracefully — when both `active_scene` and `g_example_idx` are `-1`, it wraps around to examples or user scenes. No change needed here since the transient-to-promoted promotion happens on edit, and F12 always calls `editor_undo_note_wholesale_replacement()` first.
+`ReplScenesSnapshot` does not need a new field: it owns the user-scene catalog, active user-scene slot, LRU tick, and pre-example cfg. The tutorial-origin marker lives in `ReplSceneRuntimeState`.
 
-However, we should ensure that switching away via F12 from a never-edited post-tutorial transient document triggers `tutorial_teardown()` so the cfg baseline is restored. The `repl_load_example()` path already calls `repl_dispatch_tutorial_teardown()`. The `repl_load_user_scene_idx()` path also already calls it. So this is covered.
+#### [VERIFY] [glr_tour_snapshot.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/app/glr_tour_snapshot.c)
 
-## Open Questions
+The tour snapshot already captures both:
+
+- `ReplCheckpointState`, including `scene_runtime.tutorial_origin_idx`;
+- `TutorialRuntimeState`, including the pending cfg baseline.
+
+Add a round-trip test to ensure a retained post-tutorial document restores both pieces together.
+
+---
+
+### F12 Cycling and Wholesale Replacement
+
+#### [VERIFY] [glr_ctrl_router.c](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl/src/app/glr_ctrl_router.c)
+
+No routing change should be required. A post-tutorial transient document has neither an active user scene nor an active example, so the existing “neither” branch wraps to examples or user scenes.
+
+F12 performs a wholesale replacement rather than an edit, so it must not call the promotion hook. The destination load path already calls tutorial teardown:
+
+- example load restores the pending tutorial baseline before applying example presentation state;
+- user-scene load restores it before applying the destination scene snapshot.
+
+Thus an unedited post-tutorial document is discarded, its origin is cleared, and the user's pre-tutorial configuration is restored.
+
+---
+
+## Decisions
 
 > [!NOTE]
-> **Naming the promoted scene**: When an example promotes, it takes the example's display name (e.g., "Torus"). For tutorials, should the promoted scene be named after the tutorial (e.g., "Color & Transform") or should it include a "Tutorial:" prefix? I'll use the tutorial's display name directly (matching how examples work) unless you prefer otherwise.
+> **Naming the promoted scene:** use the tutorial's display name directly, matching example promotion. Existing unique-name suffixing handles collisions.
 
 > [!NOTE]
-> **Promotion timing**: The plan promotes on **first post-tutorial edit** (same as examples). An alternative would be to promote immediately when the tutorial completes or is stopped. The lazy approach (promote-on-edit) is simpler, avoids allocating slots for tutorials the user abandons without editing, and is consistent with examples. I'll go with promote-on-edit.
+> **Promotion timing:** promote on the first edit **after** tutorial completion or stop. Do not allocate a user-scene slot merely for viewing or abandoning a tutorial result.
+
+> [!NOTE]
+> **Configuration semantics:** the promoted scene owns the tutorial-mutated per-scene configuration. Tutorial-only/global settings are restored to their pre-tutorial values during promotion.
 
 ## Verification Plan
 
 ### Automated Tests
-- `make test-stubs` — ensures no compilation errors with GL stubs.
-- `make check-c99` — C99 compliance.
-- `make check-state-ownership` — guard suite passes.
+
+Add focused tests for the lifecycle rather than relying only on broad build checks:
+
+1. **Active tutorial does not promote**
+   - Start a tutorial and commit its first expected command.
+   - Verify no user-scene slot was created and `tutorial_origin_idx == -1`.
+   - Verify the tutorial remains active and advances normally.
+
+2. **Completion establishes origin**
+   - Complete a tutorial.
+   - Verify the tutorial is inactive, the baseline remains valid, and `tutorial_origin_idx` names the completed tutorial.
+
+3. **Stop establishes origin**
+   - Stop mid-tutorial.
+   - Verify the retained document has the stopped tutorial's origin.
+
+4. **Prelude failure leaves no origin**
+   - Force tutorial prelude loading to fail.
+   - Verify `tutorial_origin_idx == -1` and no stale baseline remains.
+
+5. **First post-tutorial edit promotes once**
+   - Complete/stop a tutorial, then perform an edit.
+   - Verify one user-scene slot is created with the tutorial display name.
+   - Verify both example and tutorial origins are cleared.
+   - Verify later edits do not allocate additional slots.
+
+6. **Promotion preserves configuration correctly**
+   - Begin with distinguishable pre-tutorial values for a per-scene slug and a global/tutorial-only slug such as `view_mode`.
+   - Have the tutorial change both.
+   - Promote after completion.
+   - Verify the saved scene and live view retain the tutorial value for the per-scene slug.
+   - Verify the global/tutorial-only slug returns to its pre-tutorial value.
+   - Reload the promoted scene and verify its per-scene cfg round-trips.
+
+7. **Slots-full failure is retryable**
+   - Fill all user-scene slots without a workspace.
+   - Complete a tutorial and edit.
+   - Verify promotion fails but the tutorial origin and pending baseline remain.
+   - Free a slot and edit again.
+   - Verify promotion succeeds and captures the intervening transient edits.
+
+8. **Wholesale replacement discards unedited result**
+   - Complete a tutorial, then load an example or user scene without editing.
+   - Verify no promotion occurs, origin/baseline are cleared, and pre-tutorial cfg is restored.
+
+9. **Tour snapshot round-trip**
+   - Capture while a post-tutorial transient document and pending baseline exist.
+   - Mutate away from it, restore the tour snapshot, and verify origin plus baseline are restored consistently.
+
+10. **Example promotion regression**
+    - Load and edit an example.
+    - Verify its existing promotion, naming, undo, LRU, and cfg behavior is unchanged.
+
+Run the relevant suites and guards:
+
+- `make test-stubs`
+- `make check-c99`
+- `make check-state-ownership`
 
 ### Manual Verification
-1. Start a tutorial, complete it, edit the result → verify promotion status message appears and the scene shows up in the tab strip.
-2. Start a tutorial, stop mid-way, edit → verify promotion.
-3. Start a tutorial, complete it, F12 to another example → verify tutorial cfg baseline is restored and the post-tutorial transient document is discarded (not promoted because there was no edit).
-4. Start a tutorial, complete it, edit, F12 away → verify promoted scene persists and can be F12'd back to.
-5. Regression: loading examples still auto-promotes correctly.
+
+1. Complete a tutorial and edit the result: promotion status appears and the scene is added to the tab strip.
+2. Stop a tutorial mid-way and edit: the retained partial document promotes.
+3. Complete a tutorial and press F12 without editing: the document is discarded and the original configuration returns.
+4. Complete a tutorial, edit, then F12 away and back: the promoted scene persists with the tutorial view.
+5. Fill all slots without a workspace, edit a completed tutorial, free a slot, then edit again: the second edit successfully promotes the accumulated document.
+6. Load and edit a built-in example: existing example auto-promotion remains unchanged.
