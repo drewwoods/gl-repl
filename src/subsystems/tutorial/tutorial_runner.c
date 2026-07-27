@@ -166,10 +166,14 @@ static int tutorial_append_locked_line(int line_idx) {
 
 static void get_tutorial_prefix(char *out, size_t out_size) {
     TutorialRuntimeState state = tutorial_state_view();
-    const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
-    int curr = state.active ? state.tutorial_idx + 1 : 0;
-    int total = repl_tutorial_count();
-    snprintf(out, out_size, "%s Tutorial [%d/%d]: ", name, curr, total);
+    if (state.active && state.step == 0) {
+        const char *name = repl_tutorial_name(state.tutorial_idx);
+        int curr = state.tutorial_idx + 1;
+        int total = repl_tutorial_count();
+        snprintf(out, out_size, "%s Tutorial [%d/%d]: ", name, curr, total);
+    } else {
+        out[0] = '\0';
+    }
 }
 
 static void format_step_entry_hint(int step, int total,

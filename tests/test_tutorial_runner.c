@@ -55,13 +55,21 @@ static const char *status_text(void) {
 }
 
 static void get_expected_hint(int tutorial_idx, int step, int total, int is_commit, char *out, size_t out_size) {
-    const char *name = repl_tutorial_name(tutorial_idx);
-    int curr = tutorial_idx + 1;
-    int tot_tuts = repl_tutorial_count();
-    if (is_commit) {
-        snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - press Enter or ';' to commit", name, curr, tot_tuts, step, total);
+    if (step == 1) {
+        const char *name = repl_tutorial_name(tutorial_idx);
+        int curr = tutorial_idx + 1;
+        int tot_tuts = repl_tutorial_count();
+        if (is_commit) {
+            snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - press Enter or ';' to commit", name, curr, tot_tuts, step, total);
+        } else {
+            snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - type the command or press Tab to autocomplete", name, curr, tot_tuts, step, total);
+        }
     } else {
-        snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - type the command or press Tab to autocomplete", name, curr, tot_tuts, step, total);
+        if (is_commit) {
+            snprintf(out, out_size, "step %d/%d - press Enter or ';' to commit", step, total);
+        } else {
+            snprintf(out, out_size, "step %d/%d - type the command or press Tab to autocomplete", step, total);
+        }
     }
 }
 
@@ -3352,10 +3360,8 @@ static void test_commit_blocked_with_hint_during_set_step(void) {
 
     ASSERT_INT("step unchanged after rejected SET commit",
                tutorial_state_view().step, step_before);
-    char expected_status[256];
-    snprintf(expected_status, sizeof(expected_status), "%s Tutorial [%d/%d]: Press Enter / Tab / Space to continue", repl_tutorial_name(idx), idx + 1, repl_tutorial_count());
     ASSERT_STR("SET hint shown (not the cursor-position hint)",
-               status_text(), expected_status);
+               status_text(), "Press Enter / Tab / Space to continue");
 }
 
 /* Load-bearing regression: workspace load during an active tutorial must
