@@ -12,35 +12,50 @@
 
 #include "c_compat.h"   /* STATIC_ASSERT for the tag-label table */
 
-#define STEP_APPEND(label, c, e) \
-    { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
+#define STEP_APPEND(step_label, c, e) \
+    { .label = (step_label), .comment = (c), .expected = (e), \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_COMMAND, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Comment-less append COMMAND step: commits `e` with no locked
  * instruction row above it — the autocomplete ghost and status hint
  * still teach the command. Use for runs of related commands where a
  * narration comment per line would just be noise. */
-#define STEP_CMD(label, e) \
-    { (label), NULL, (e), TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
+#define STEP_CMD(step_label, e) \
+    { .label = (step_label), .comment = NULL, .expected = (e), \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_COMMAND, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Comment-only step: reveal the instruction comment, wait for an ack
  * key (Enter/Tab/Space), advance. SET's showcase flow without the cfg
  * write — narration between commands with no GL call to type. */
 #define STEP_NOTE(c) \
-    { NULL, (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_NOTE, NULL, 0, NULL, NULL, 0.0f }
+    { .label = NULL, .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_NOTE, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
-#define STEP_AT(label, c, e, target) \
-    { (label), (c), (e), TUTORIAL_STEP_LABEL, (target), \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
+#define STEP_AT(step_label, c, e, target) \
+    { .label = (step_label), .comment = (c), .expected = (e), \
+      .placement = TUTORIAL_STEP_LABEL, .target_label = (target), \
+      .kind = TUTORIAL_STEP_KIND_COMMAND, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
  * effect, show a "press Enter to continue" prompt, advance on ack key.
  * `expected` is NULL — there is no command to type. */
-#define STEP_SET(label, c, slug, val) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_SET, (slug), (val), NULL, NULL, 0.0f }
+#define STEP_SET(step_label, c, slug, val) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_SET, .cfg_slug = (slug), \
+      .cfg_value = (val), .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Symbolic-value variant of STEP_SET. The runner passes `val_name`
  * (e.g. "GRID_THEME_RADAR") through the controller-installed bridge's
@@ -48,42 +63,61 @@
  * rather than encoding a magic number. `cfg_value` stays 0 here as
  * the back-compat fallback in case a future caller resolves the name
  * and writes the int back. */
-#define STEP_SET_SYM(label, c, slug, val_name) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_SET, (slug), 0, (val_name), NULL, 0.0f }
+#define STEP_SET_SYM(step_label, c, slug, val_name) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_SET, .cfg_slug = (slug), \
+      .cfg_value = 0, .cfg_value_name = (val_name), .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Check step: advance when the user themselves makes cfg_slug == cfg_value
  * (via F-key/menu/etc.). Auto-advances if already satisfied on entry.
  * `expected` is NULL. */
-#define STEP_REQUIRE(label, c, slug, val) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL, NULL, 0.0f }
+#define STEP_REQUIRE(step_label, c, slug, val) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_REQUIRE, .cfg_slug = (slug), \
+      .cfg_value = (val), .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
-#define STEP_REQUIRE_KEY(label, c, slug, val, key_code, mods, is_special) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL, NULL, 0.0f, \
-      (key_code), (mods), (is_special) }
+#define STEP_REQUIRE_KEY(step_label, c, slug, val, key_code, mods, is_special) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_REQUIRE, .cfg_slug = (slug), \
+      .cfg_value = (val), .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f, .comment_binding_key = (key_code), \
+      .comment_binding_mods = (mods), .comment_binding_is_special = (is_special) }
 
 /* Symbolic-value variant of STEP_REQUIRE. The runner resolves
  * `val_name` to int via the bridge's resolve_text at compare time. */
-#define STEP_REQUIRE_SYM(label, c, slug, val_name) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), 0, (val_name), NULL, 0.0f }
+#define STEP_REQUIRE_SYM(step_label, c, slug, val_name) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_REQUIRE, .cfg_slug = (slug), \
+      .cfg_value = 0, .cfg_value_name = (val_name), .var_name = NULL, \
+      .var_target = 0.0f }
 
 /* Predef-var check step: advance when the named predefined variable's
  * live value matches `target` within TUTORIAL_VAR_EPS. Either a typed
  * `name = expr;` commit or a variable-panel slider drag satisfies it.
  * Auto-advances if already satisfied on entry. `expected` is NULL. */
-#define STEP_REQUIRE_VAR(label, c, var, target) \
-    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, (var), (target) }
+#define STEP_REQUIRE_VAR(step_label, c, var, target) \
+    { .label = (step_label), .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_REQUIRE_VAR, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = (var), \
+      .var_target = (target) }
 
 /* Sentinel: comment AND expected both NULL (repl_tutorial_step_is_sentinel).
  * Every real step carries at least one of the two — SET/REQUIRE/NOTE have
  * NULL `expected` but a comment; comment-less COMMAND steps have NULL
  * `comment` but an expected. */
-#define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL, \
-                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
+#define STEP_SENTINEL \
+    { .label = NULL, .comment = NULL, .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_COMMAND, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
 
 static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
