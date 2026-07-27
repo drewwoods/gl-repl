@@ -1130,12 +1130,57 @@ static void test_tour_hud_compact_expand_hit_routing(void) {
     glr_pointer_script_stop();
 }
 
+/* Sweep both sides of a divider edge one pixel past the grab band and
+ * assert the click classification and the hover-cursor predicate agree at
+ * every pixel. The regression this pins: the code panel's statusbar strip
+ * runs along the same edge as the divider in the default TOP layout (and
+ * across it in LEFT), so classifying the strip first left the band's
+ * panel-interior half hitting the statusbar — the resize cursor appeared
+ * over ~3px that started no drag, and the effective grab area collapsed to
+ * the outermost pixel or two.
+ *
+ * `vertical` selects the sweep axis; `edge` is the divider coordinate on
+ * that axis (window x, or GL bottom-left y); `fixed` is the other axis's
+ * coordinate (window x, or GL y). */
+static void assert_divider_band_agrees(const char *label, int vertical,
+                                       int edge, int fixed) {
+    int win_h = ui_state_viewport().window_h;
+    int d;
+
+    for (d = -(UI_PANEL_DIVIDER_GRAB_PX + 1);
+         d <= UI_PANEL_DIVIDER_GRAB_PX + 1; d++) {
+        int in_band = (d >= -UI_PANEL_DIVIDER_GRAB_PX &&
+                       d <= UI_PANEL_DIVIDER_GRAB_PX);
+        int mx = vertical ? edge + d : fixed;
+        int my = vertical ? win_h - fixed : win_h - (edge + d);
+        UiHit hit = ui_panels_hit_test_current_snapshot(mx, my, 0);
+        int is_divider = (hit.kind == UI_HIT_PANEL_DIVIDER);
+        char msg[128];
+
+        snprintf(msg, sizeof(msg), "%s: hit at edge%+d", label, d);
+        ASSERT_TRUE(msg, is_divider == in_band);
+
+        snprintf(msg, sizeof(msg), "%s: hover matches hit at edge%+d",
+                 label, d);
+        ASSERT_TRUE(msg,
+                    (editor_input_point_on_code_panel_divider(mx, my) != 0)
+                        == is_divider);
+    }
+}
+
 /* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the
  * code-panel splitter strip. */
 static void test_ui_panels_hit_test_panel_divider(void) {
     glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     ui_state_code_panel_mut()->panel_frac = 0.5f;
+    /* The editor's hover predicate reads the layout through the
+     * controller's provider hook, installed by glr_ctrl_init in
+     * production — which this harness skips. Without it every layout
+     * below would read as LEFT. Uninstalled again at the end so the
+     * rest of the suite keeps the harness default. */
+    editor_input_set_code_panel_layout_provider(
+        glr_ctrl_code_panel_layout_provider);
 
     /* LEFT layout: divider sits at x = panel_w. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
@@ -1144,6 +1189,9 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     UiHit h_left = ui_panels_hit_test_current_snapshot(cp_x + cp_w, cp_y + 20, 0);
     ASSERT_TRUE("LEFT divider hit kind",
                 h_left.kind == UI_HIT_PANEL_DIVIDER);
+    /* gl_y = 20 puts the sweep inside the statusbar strip, which spans the
+     * full panel width and so crosses the divider column. */
+    assert_divider_band_agrees("LEFT", 1, cp_x + cp_w, cp_y + 20);
 
     /* TOP layout: divider sits at gl_y = cp_y. The hit is at
      * my == window_h - cp_y. */
@@ -1153,6 +1201,8 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     UiHit h_top = ui_panels_hit_test_current_snapshot(cp_x + 100, my_top, 0);
     ASSERT_TRUE("TOP divider hit kind",
                 h_top.kind == UI_HIT_PANEL_DIVIDER);
+    /* The statusbar strip sits directly above this edge. */
+    assert_divider_band_agrees("TOP", 0, cp_y, cp_x + 100);
 
     /* BOTTOM layout: divider sits at gl_y = cp_y + cp_h. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
@@ -1161,6 +1211,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     UiHit h_bot = ui_panels_hit_test_current_snapshot(cp_x + 100, my_bot, 0);
     ASSERT_TRUE("BOTTOM divider hit kind",
                 h_bot.kind == UI_HIT_PANEL_DIVIDER);
+    assert_divider_band_agrees("BOTTOM", 0, cp_y + cp_h, cp_x + 100);
 
     /* HIDDEN layout: no divider. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
@@ -1169,6 +1220,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
                 h_hidden.kind != UI_HIT_PANEL_DIVIDER);
 
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    editor_input_set_code_panel_layout_provider(NULL);
 }
 
 /* Compute the GLUT-space (mx, my) for the first code-panel text row

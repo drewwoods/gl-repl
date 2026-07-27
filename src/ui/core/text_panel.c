@@ -1036,22 +1036,24 @@ static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap,
     glDisable(GL_BLEND);
 }
 
-static int text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
-                                       int mx, int gl_y) {
-    if (!snap)
+int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
+                                   int mx, int gl_y) {
+    const int pad = UI_PANEL_DIVIDER_GRAB_PX;
+
+    if (!snap || snap->cp_w <= 0 || snap->cp_h <= 0)
         return 0;
 
     if (snap->cp_w < snap->vp_w) {
         int div_x = snap->cp_x + snap->cp_w;
-        return mx >= div_x - 3 && mx <= div_x + 3;
+        return mx >= div_x - pad && mx <= div_x + pad;
     }
 
     if (snap->cp_y <= 0) {
         int div_y = snap->cp_y + snap->cp_h;
-        return gl_y >= div_y - 3 && gl_y <= div_y + 3;
+        return gl_y >= div_y - pad && gl_y <= div_y + pad;
     }
 
-    return gl_y >= snap->cp_y - 3 && gl_y <= snap->cp_y + 3;
+    return gl_y >= snap->cp_y - pad && gl_y <= snap->cp_y + pad;
 }
 
 static void text_panel_draw_chrome(const UiTextPanelSnapshot *snap) {
@@ -1400,7 +1402,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
 
     gl_y = snap->vp_h - my;
 
-    if (text_panel_point_on_divider(snap, mx, gl_y)) {
+    if (ui_text_panel_point_on_divider(snap, mx, gl_y)) {
         h.kind = UI_HIT_PANEL_DIVIDER;
         h.local_x = (float)mx;
         h.local_y = (float)gl_y;

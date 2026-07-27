@@ -3116,11 +3116,31 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
         repl_code_panel_build_rows(&builder);
     }
 
-    /* The statusbar is chrome layered over the bottom of the generic
-     * text panel. Classify it first: with enough document/header rows,
-     * the text-panel walk can otherwise map this strip to its last
-     * visible row and steal toolbar clicks. */
     gl_y = builder.text_snap.vp_h - my;
+
+    /* The resize divider outranks every panel-interior surface, because
+     * in the TOP layout (the default) it runs along the panel's bottom
+     * edge — exactly where the statusbar strip sits — and in the LEFT
+     * layout the strip spans the divider column. Classified after the
+     * strip, the inner half of the grab band belongs to the statusbar
+     * and the drag only starts on the scene-side pixels, while the hover
+     * cursor (derived straight from divider geometry) already reads as
+     * resizable across the whole band. Only the outermost
+     * UI_PANEL_DIVIDER_GRAB_PX of chrome is given up, which costs the
+     * statusbar keycaps nothing: their boxes start UI_PANEL_DIVIDER_GRAB_PX
+     * in from the strip edge. */
+    if (ui_text_panel_point_on_divider(&builder.text_snap, mx, gl_y)) {
+        UiHit divider_hit = ui_hit_none();
+        divider_hit.kind = UI_HIT_PANEL_DIVIDER;
+        divider_hit.local_x = (float)mx;
+        divider_hit.local_y = (float)gl_y;
+        return divider_hit;
+    }
+
+    /* The statusbar is chrome layered over the bottom of the generic
+     * text panel. Classify it before the text rows: with enough
+     * document/header rows, the text-panel walk can otherwise map this
+     * strip to its last visible row and steal toolbar clicks. */
     if (repl_code_panel_point_in_rect(mx, gl_y,
                                       builder.text_snap.cp_x,
                                       builder.text_snap.cp_y,

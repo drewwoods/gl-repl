@@ -13,6 +13,14 @@
 #define CODE_MARGIN_X   10
 #define CODE_MARGIN_Y   8
 
+/* Half-width of the code-panel resize divider's grab band, in pixels: the
+ * band spans [edge - N, edge + N] around the 1px divider line. Single
+ * source of truth — the hover cursor (editor_input_point_on_code_panel_divider)
+ * and the click classification (ui_text_panel_point_on_divider) must agree
+ * pixel-for-pixel, or the resize cursor appears over pixels that don't
+ * start a drag. */
+#define UI_PANEL_DIVIDER_GRAB_PX 3
+
 /* Left inset from a menu/dropdown/overlay chrome edge to its row text. */
 #define MENU_TEXT_INSET_X 14
 

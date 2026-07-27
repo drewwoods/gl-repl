@@ -409,6 +409,17 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my);
 
+/* Non-zero when (mx, gl_y) — window x, OpenGL bottom-left y — falls in the
+ * resize divider's grab band: within UI_PANEL_DIVIDER_GRAB_PX of whichever
+ * panel edge borders the scene (right edge when the panel is narrower than
+ * the viewport, else top edge when it sits at the window bottom, else its
+ * bottom edge). Exposed so an adapter that layers its own chrome over that
+ * edge — a statusbar strip along the panel's scene-facing side, say — can
+ * classify the divider *before* the chrome and keep the grab band whole.
+ * Pure. */
+int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
+                                   int mx, int gl_y);
+
 int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
                                     int line_y,
                                     int *out_sx, int *out_sy, int *out_sw);

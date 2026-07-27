@@ -66,6 +66,7 @@
 #include "repl/util.h"           /* repl_format_fits / repl_copy_string_fits */
 #include "ui/app/layout.h"
 #include "ui/app/state.h"
+#include "ui/core/metrics.h"   /* UI_PANEL_DIVIDER_GRAB_PX */
 
 #include "config.h"            /* REPL_INDENT_TEXT_MAX */
 
@@ -86,7 +87,6 @@
 
 /* Code-panel input metrics local to the editor dispatcher. */
 #define CP_PAGE_SCROLL_ROWS 5
-#define CP_DIVIDER_HOVER_PX 3
 
 /* Forward declarations. */
 static void keyboard_func(unsigned char key, int x, int y);
@@ -2084,7 +2084,10 @@ int editor_input_point_on_code_panel_divider(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = ui_state_viewport().window_h - y;
     int layout = editor_input_code_panel_layout();
-    int pad = CP_DIVIDER_HOVER_PX;
+    /* Same band the click classification uses (ui_text_panel_point_on_divider
+     * via the code-panel adapter) — the cursor must promise exactly the
+     * pixels that start a drag. */
+    int pad = UI_PANEL_DIVIDER_GRAB_PX;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;

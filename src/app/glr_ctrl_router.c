@@ -2224,16 +2224,23 @@ static void passive_motion_dispatch(int x, int y) {
      * paused and no timer-driven frame is forthcoming. */
     editor_request_redraw();
     EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
-    /* An open menu dropdown/flyout can extend past the code-panel edge and
-     * cover the resize divider (e.g. the Config "All" flyout in a narrow
-     * split). A click there hits the menu, not the divider — ui_panels_hit_test
-     * checks ui_menu_bar_hit_test before the code panel — so the divider's
-     * resize cursor must not appear over it. When the menu owns this pixel,
-     * override the editor's hover cursor back to inherit. */
+    /* The editor derives the resize cursor from divider geometry alone, but
+     * a surface painted over that pixel — an open menu dropdown/flyout
+     * extending past the code-panel edge, a floating overlay, the modal help
+     * panel — owns the click, because ui_panels_hit_test classifies those
+     * ahead of the code panel. Confirm the pixel really routes to the divider
+     * before promising a drag; otherwise fall back to inherit. Only runs while
+     * the pointer is inside the grab band, so the snapshot build stays off the
+     * general passive-motion path. */
     if (editor_effects.set_cursor &&
-        editor_effects.cursor != GLUT_CURSOR_INHERIT &&
-        ui_menu_bar_hit_test(x, y).kind != UI_HIT_NONE)
-        editor_effects.cursor = GLUT_CURSOR_INHERIT;
+        editor_effects.cursor != GLUT_CURSOR_INHERIT) {
+        UiRenderSnapshot ui_snap;
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        if (ui_panels_hit_test(&ui_snap, x, y,
+                               repl_eval_predef_view().count).kind
+                != UI_HIT_PANEL_DIVIDER)
+            editor_effects.cursor = GLUT_CURSOR_INHERIT;
+    }
     editor_merge_input_effects(editor_effects);
     ui_menu_bar_update_pointer_hover(x, y, repl_state_variables().anim_time);
 }
