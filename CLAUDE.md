@@ -313,18 +313,41 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
 
 ### Float declarations (`CMD_VAR_DECLARE`)
 
+- **Storage is keyword-first, cursor-second.** `static float x;` is a global
+  from any cursor position; plain `float x;` is a **function-scoped local**
+  when there is an enclosing `CMD_FUNC_DEF` and a global at top level. A local
+  row is marked `var_idx == REPL_VAR_IDX_LOCAL` (no payload field — the decl
+  arm already dominates the union) and emits no predef op.
 - New decls insert at the **top of non-decl code** regardless of cursor (so
-  every reference follows its declaration); editing an existing decl
-  overwrites in place (carried-over names are exempt from the dup check).
+  every reference follows its declaration) — top of the *document* for a
+  global, top of the enclosing *function body* for a local, hoisting from any
+  nesting depth; editing an existing decl overwrites in place (carried-over
+  names are exempt from the dup check).
 - No-op in executor/flatten — registration happens at commit time via
-  [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319).
+  [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
+  nowhere: `flatten_bind_func_locals` re-derives them from
+  `payload.decl.names[]` per call.
 - [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
 - Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L557) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing
-  the commit handler. `MAX_PREDEF_VARS` = 32 (1 reserved for `t`).
+  the commit handler. `MAX_PREDEF_VARS` = 32 (1 reserved for `t`). A local
+  exports as a real C automatic with **explicit zero initializers**
+  (`float a = 0.0f, b = 0.0f;`) — behavior parity, not syntax: the REPL binds
+  locals to 0 on call entry and C would leave them indeterminate. Import lowers
+  exactly that literal-zero form back to `float a, b;` and nothing else, so a
+  hand-written `float a = 5;` in a body still hits the no-initializer rejection.
+- Locals follow **C's scope rules, not a shadowing ban**: colliding with a
+  parameter or another local of the same body is a redefinition (rejected);
+  shadowing a global or an enclosing loop iterator is legal, innermost wins.
+  PARAM/LOOP bindings stay unwritable, so a binder edit that would *capture* an
+  existing assignment is rejected (`compile_binder_captures_assignment`).
+  Capacity is whole-function: `params + locals + deepest loop nesting <=
+  MAX_EXPR_VARS` (`compile_func_scope_peak`). Any dep feeding a local
+  assignment is reported **structural** — frozen `FlatCmdLocalVars` snapshots
+  make a value-only rebake unable to propagate a local forward.
 
 ### User scenes & auto-promotion
 
@@ -476,6 +499,8 @@ label("fmt", ...)              (bitmap text; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 :name / goto name              (goto labels — not label())
 float name[, ...];    var = expr;    A[i] = expr;    // comment
+static float name[, ...];      (global from anywhere; plain `float` inside a
+                                function body is a function-scoped local)
 ```
 
 Exact signatures, arg policies, and the math/expression language: skill
@@ -502,7 +527,8 @@ total); `lerp` is deliberately unclamped. `clamp`/`lerp`/`smoothstep`/`sign`
 have no libm twin, so export emits a `repl_*f` helper per used one
 (`write_shape_helpers`) — keep those bodies identical to [`eval.c`](src/repl/eval.c)'s. Constants
 `PI`, `TAU`, `e`. Only `t` is predefined; others need `float name;`
-(`MAX_PREDEF_VARS` = 32, 31 user slots).
+(`MAX_PREDEF_VARS` = 32, 31 user slots — function-scoped locals consume none
+of them; they live in the `MAX_EXPR_VARS` = 32 per-call scope array instead).
 Scratch arrays `A`/`B`/`C[16]` are fixed globals — those names, plus `t`, `PI`,
 `TAU`, `float`, `var`, reject a declaration.
 

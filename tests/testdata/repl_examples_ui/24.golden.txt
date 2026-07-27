@@ -103,13 +103,15 @@ void display(void) {
   static float bladeCount = 135; // @tune
   static float field = 3.65; // half-width @tune
   static float x, z, h, w, angle, phase, flex;
-  static float wind, wave, bend, u, cx, cz, halfW, shade;
 
   // Seed-slot convention: the caller (below) owns rand slots 0-6 for a
   // blade's placement/size/angle/phase/flex; blade() uses slots 11+ for
   // its own jitter/tint so the two RNG streams stay independent. (rand2
   // is just 2*rand-1, so a shared slot would correlate flex with jitter.)
+  // Every value blade() derives is a function-scoped local: plain `float`
+  // inside the body, one fresh set per call, no variable-panel slot.
   blade(seed, x0, z0, height, width, ang, ph, stiffness) {
+    float wind, wave, bend, u, cx, cz, halfW, shade;
     wind = 0.55 + 0.25*sin(t*0.23);
     wave = sin(t*2.2 + ph + x0*0.35 + z0*0.20) + 0.35*sin(t*4.9 + ph*1.7);
     bend = (0.65 + 0.35*sin(t*0.75))*wave*stiffness*height*0.26;

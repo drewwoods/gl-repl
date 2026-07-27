@@ -1508,6 +1508,17 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
 
     if (cmd->type == CMD_VAR_ASSIGN) {
         float value = cmd->args[0];
+        /* A local-target assignment is already at its full-flatten value and
+         * must be left alone. Re-evaluating it here would be wrong, not
+         * merely redundant: `locals` is the snapshot taken *after* the write
+         * (flatten_var_assign updates the frame before appending), so a
+         * self-referential row like `u = orbitR*sin(u)` would apply itself a
+         * second time. Skipping is also provably lossless — every dep of a
+         * local's RHS is reported structural, so a changed input routes to a
+         * full flatten and never reaches this walk. There is nothing to write
+         * back either: a local has no predef slot. */
+        if (cmd->var_idx == REPL_VAR_IDX_LOCAL)
+            return 1;
         if (cmd->has_vars)
             ok = repl_flatten_expr_rebake_eval(
                 o->expr_cache, line, REPL_EXPR_ROLE_ASSIGN_RHS, 0,

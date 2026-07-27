@@ -44,6 +44,55 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
+/* Argument half of a flat-dump row: `num_args`, the live `args[]`, and
+ * the payload member this command type owns (reading an inactive union
+ * member would be undefined, so the switch is not a convenience).
+ *
+ * Floats print as `%a`, not `%g`. The dump's job here is to let two
+ * flattenings of the same program be compared byte for byte — refactors
+ * that move a value between storage kinds must not move the value — and
+ * a decimal rendering can hide a difference below its own precision,
+ * which would defeat exactly that use. Provenance and storage metadata
+ * (`src_cmd_idx`, `call_src_cmd_idx`, `root_call_src_cmd_idx`,
+ * `var_idx`) legitimately shift under such a refactor; filter those
+ * columns out rather than expecting an empty raw diff. */
+static void debug_dump_flat_args(FILE *dst, const GLCmd *cmd) {
+    int arg_count = cmd->num_args;
+    const int arg_cap = (int)(sizeof(cmd->args) / sizeof(cmd->args[0]));
+
+    if (arg_count < 0) arg_count = 0;
+    if (arg_count > arg_cap) arg_count = arg_cap;
+
+    fprintf(dst, "args=%d[", arg_count);
+    for (int arg_idx = 0; arg_idx < arg_count; arg_idx++)
+        fprintf(dst, "%s%a", arg_idx ? ", " : "",
+                (double)cmd->args[arg_idx]);
+    fprintf(dst, "]");
+
+    switch (cmd->type) {
+    case CMD_MULT_MATRIXF:
+        fprintf(dst, " m[");
+        for (int cell = 0; cell < REPL_MATRIX_CELL_COUNT; cell++)
+            fprintf(dst, "%s%a", cell ? ", " : "",
+                    (double)cmd->payload.matrix.m[cell]);
+        fprintf(dst, "]");
+        break;
+    case CMD_LABEL:
+        fprintf(dst, " fmt=\"%s\"", cmd->payload.label.fmt);
+        break;
+    case CMD_VAR_DECLARE:
+        fprintf(dst, " decl[");
+        for (int name_idx = 0; name_idx < cmd->payload.decl.count &&
+                               name_idx < MAX_NAMES_PER_DECL; name_idx++)
+            fprintf(dst, "%s%s", name_idx ? ", " : "",
+                    cmd->payload.decl.names[name_idx]);
+        fprintf(dst, "]");
+        break;
+    default:
+        break;
+    }
+}
+
 void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
@@ -64,11 +113,13 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
         const GLCmd *cmd = &flat_cmds[flat_idx];
         const char *line_text = source_text_line(text, cmd->src_cmd_idx);
         fprintf(dst,
-                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
+                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d var_idx=%d func_scope=0x%08x | ",
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->src_cmd_idx, cmd->call_src_cmd_idx,
-                cmd->root_call_src_cmd_idx, cmd->func_scope_mask,
-                line_text ? line_text : "");
+                cmd->root_call_src_cmd_idx, cmd->var_idx,
+                cmd->func_scope_mask);
+        debug_dump_flat_args(dst, cmd);
+        fprintf(dst, " | %s\n", line_text ? line_text : "");
     }
     fprintf(dst, "=== End REPL Flattened Commands Dump ===\n");
     fflush(dst);

@@ -17,10 +17,12 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-static float th, u, px, py, pz, orbitR; // shared orbit scratch
+static float px, py, pz; // planet position - the caller hangs a label off it
+static float orbitR; // log-compressed orbit radius, shared by the draw funcs
 static float ASTEROIDS = 280; // @tune
 
 orbitRings(Drel, node, incl) {
+  float th, u;
   orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
   glBegin(GL_LINE_LOOP);
     for(i, 0, 96) {
@@ -36,16 +38,17 @@ orbitRings(Drel, node, incl) {
 // (Rrel). The display applies documented compression for orbit distance and
 // sphere size only.
 // px/py/pz stay set after the call so the caller can hang a label off the
-// body (th/u are internal scratch and get clobbered mid-function, so don't
-// rely on them). t=0 is year 2000.0 (J2000 alignment).
+// body. th/u are function-scoped locals (plain `float` inside the body, no
+// `static`), so they are private to one call and cost no variable-panel
+// slot. t=0 is year 2000.0 (J2000 alignment).
 static float EARTH_R = 0.17; // @tune
 static float EARTH_RATE = 0.85; // @tune
 static float ORB_BASE = 0.00; // @tune
 static float ORB_SCALE = 10.00; // @tune
-static float aK, eK, iK, lK, pK, nK, mK, eAn;
-static float xh, yh, x1, y1, z1;
-static float yr, leap, doy, mon, day; // year/month/day readout scratch
+static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
+static float astAng; // asteroid belt orbit angle
 planet(Drel, Yrel, phase, node, incl, Rrel, cr, cg, cb) {
+  float th, u;
   orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
   th = phase + t*EARTH_RATE/Yrel;
   u = th - node;
@@ -63,6 +66,9 @@ planet(Drel, Yrel, phase, node, incl, Rrel, cr, cg, cb) {
   glDisable(GL_LIGHTING);
 }
 planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot, Rrel, cr, cg, cb) {
+  float th, u;
+  float aK, eK, iK, lK, pK, nK, mK, eAn;
+  float xh, yh, x1, y1, z1;
   th = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
   aK = a0 + adot*th;
   eK = e0 + edot*th;
@@ -84,12 +90,13 @@ planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, node
 
   // 2. Compute heliocentric distance (vector length is invariant under 3D
   // rotations). Reuse eAn (done with the eccentric anomaly now) to hold the
-  // radius r, staying under MAX_PREDEF_VARS.
+  // radius r, staying inside this function's MAX_EXPR_VARS scope (16
+  // parameters + 15 locals = 31 of 32).
   eAn = sqrt(xh*xh + yh*yh);
   orbitR = ORB_BASE + ORB_SCALE*log(1 + eAn);
 
   // 3. Decompose 3D rotation: Step A: Rotate in orbital plane by argument of perihelion (u = pK - nK)
-  // to align position relative to the ascending node line. Reuse aK, eK as xo, yo to stay under MAX_PREDEF_VARS.
+  // to align position relative to the ascending node line. Reuse aK, eK as xo, yo to stay inside the scope cap.
   u = pK - nK;
   aK = xh*cos(u) - yh*sin(u);
   eK = xh*sin(u) + yh*cos(u);
@@ -316,10 +323,10 @@ label("Neptune");
 // (leap years included via the 4/100/400 rule), so the readout tracks a true
 // calendar to the day. The if/else-if chain peels off whole months; flatten
 // evaluates it each frame, emitting only the live branch. t=0 is 2000-1-1.
-th = 2000 + t*EARTH_RATE/TAU;            // decimal year
-yr = floor(th);                          // integer year
+decYr = 2000 + t*EARTH_RATE/TAU;         // decimal year
+yr = floor(decYr);                       // integer year
 leap = (fmod(yr, 4) == 0 && fmod(yr, 100) != 0) || fmod(yr, 400) == 0; // 1 in leap years
-doy = floor((th - yr)*(365 + leap));     // day of year, 0-based
+doy = floor((decYr - yr)*(365 + leap));  // day of year, 0-based
 if(doy < 31) {
   mon = 1;
   day = doy + 1;
@@ -372,9 +379,9 @@ glEnable(GL_POINT_SMOOTH);
 glPointSize(2.0);
 glBegin(GL_POINTS);
   for(i, 0, ASTEROIDS) {
-    u = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
+    astAng = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
     glColor3f((0.45 + 0.5*rand(i, 3))*0.55, (0.45 + 0.5*rand(i, 3))*0.48, (0.45 + 0.5*rand(i, 3))*0.4);
-    glVertex3f((ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*cos(u), rand2(i, 4)*0.35, (ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*sin(u));
+    glVertex3f((ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*cos(astAng), rand2(i, 4)*0.35, (ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*sin(astAng));
   }
 glEnd();
 

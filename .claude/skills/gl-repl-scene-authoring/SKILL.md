@@ -43,7 +43,9 @@ func0..func9(params) { body }  (parens required; NAME(params) aliases a slot)
 if(expr) { body }
 :name / name:  and  goto name  (goto labels — colon syntax, not label())
 // comment
-float name[, name2, ...];      (declaration)
+float name[, name2, ...];      (declaration; inside a func body this is a
+                                function-scoped local — see ## Math)
+static float name[, ...];      (always a global, from any cursor position)
 var = expr;   A[i] = expr;     (scratch arrays A/B/C, index 0..15)
 ```
 
@@ -67,15 +69,29 @@ budget.
 Only `t` is predefined; everything else needs `float name;`. `t` starts at 0 and
 advances 1/60 s per simulation tick while playing.
 
+**Storage is keyword-first, cursor-second.** `static float x;` is a global
+wherever it is typed. Plain `float x;` is a global at top level and a
+**function-scoped local** inside a function body — fresh per call (so recursion
+is safe), zero on entry, no initializer allowed (`float x = 1;` in a body is
+rejected — assign on the next line), no predef slot, no variable-panel row, and
+therefore no `@tune`/`@config`. Declare temporaries this way by default; keep a
+global only for a value the *caller* reads back or a knob you want to scrub.
+Locals hoist to the top of their function body (from any nesting depth) exactly
+as top-level decls hoist to the document top. Naming follows C: a local may not
+collide with a parameter or another local of the same body (redefinition), but
+may shadow a global or be shadowed by a loop iterator, innermost-first.
+
 Decl-line tags: `// @tune` (tunable knob badge + exported-C controls),
 `// @config` (keeps a source-assigned var bright in the panel); both round-trip
-via `@declare`.
+via `@declare`. Both need a panel row, so both require `static float`.
 
 Scratch arrays `A`/`B`/`C[16]`: fixed globals, indices truncated with `(int)`,
-must stay 0..15.
+must stay 0..15. No local arrays.
 
 `MAX_PREDEF_VARS` = 32 (31 user slots); a full table rejects with
-"variable table full (max 32)".
+"variable table full (max 32)". Locals draw on a separate per-call budget:
+`params + locals + deepest loop nesting <= MAX_EXPR_VARS` (32) *per function*,
+rejected with "function scope full".
 
 **Reserved names** — `A`, `B`, `C`, `t`, `PI`, `TAU`, `float`, `var` all reject
 a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
@@ -165,9 +181,17 @@ inserting is not.
 | `MAX_EDITOR_COMMANDS` | 1024 | source lines |
 | `MAX_FLATTEN_VISIT_BUDGET` | 200000 | flatten visit budget |
 | `MAX_FLATTEN_CALL_DEPTH` | 64 | func recursion depth |
+| `MAX_PREDEF_VARS` | 32 | global decls, 1 reserved for `t` |
+| `MAX_EXPR_VARS` | 32 | per-function `params + locals + deepest loop nesting` |
 
 Hoist loop-invariant assignments out of `for` bodies — they multiply against the
 flat cap, not the source cap.
+
+The two variable caps are independent, which is the lever when a scene runs out
+of declarations: move a function's temporaries to plain `float` locals and they
+stop costing predef slots entirely (the *Orrery* scene went 29 globals → 16 this
+way). A function with many parameters is where the *other* cap bites first —
+`planetKepler()` there sits at 16 params + 15 locals = 31 of 32.
 
 ## Authoring gotchas
 

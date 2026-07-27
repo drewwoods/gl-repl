@@ -161,7 +161,7 @@ at build time, like the example catalog.
 | [`apply.c`](apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
 | [`command_store.c`](command_store.c) / `.h` | Low-level [`GLCmd`](command.h#L121) array mechanics (insert/replace/delete/load) |
 | [`load.c`](load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
-| [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
+| [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Ordered lexical scope collection — loop iterators, function parameters and function-scoped locals, each tagged with its [`ReplVisibleVarKind`](visible_vars.h#L20); parse/extract/canonical-text helpers |
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |

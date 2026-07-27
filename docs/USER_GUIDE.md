@@ -777,6 +777,10 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
 - Variables persist across commits and are saved/loaded with the scene.
 - Initializers are allowed: `float n = 1;`.
 
+That is what `float` means at the top level. Typed *inside* a function body it
+declares something narrower — a value private to one call, costing no slot from
+the 31: see [Function-scoped locals](#function-scoped-locals).
+
 ### Scratch arrays
 
 `A[16]`, `B[16]`, and `C[16]` are three fixed global arrays for loop and
@@ -889,6 +893,55 @@ drawCube();
 
 Ten function slots are available. Recursion works when paired with an
 `if(...)` guard — see the *Recursive triangle tree* example.
+
+#### Function-scoped locals
+
+A `float` declaration *inside* a function body declares a **local**: it belongs
+to that function, gets a fresh binding on every call, and takes none of the 31
+program-wide variable slots and no variable-panel row.
+
+```c
+blade(x0, z0, height) {
+    float bend, u;                    // one fresh pair per call
+    bend = sin(t*2.2 + x0)*height*0.26;
+    for(s, 0, 6) {
+        u = s/4;
+        glVertex3f(x0 + bend*u*u, height*u, z0);
+    }
+}
+```
+
+- **`static` chooses storage, and it beats where the cursor is.**
+  `static float x;` is program-wide wherever you type it — including from
+  inside a function body, which is how you declare one without leaving the
+  function first. Plain `float x;` is a local inside a function and
+  program-wide at the top level, so existing scenes behave exactly as before.
+- Every local starts at `0` on entry to the call, and takes **no initializer**.
+  `float x = 1;` inside a body is rejected: declare it, then assign on the next
+  line.
+- Locals hoist to the top of the *function body* the same way top-level
+  declarations hoist to the top of the *program*, so you can type one at the
+  moment you realize you need it — including inside a `for` or an `if` nested in
+  the body. It lives for the whole call either way: it is not scoped to the
+  block you typed it in, and it is not reset per iteration.
+- Recursion is safe. Two frames of the same function never share a local, which
+  is what a program-wide scratch variable could never manage.
+- **Names follow C's scope rules.** A local may not collide with a parameter of
+  the same function, or with another local of the same body — those share one
+  scope, and C calls that a redefinition rather than shadowing. Shadowing an
+  *outer* name is fine and resolves innermost-first: a local may shadow a
+  program-wide variable, and a loop iterator may shadow a local for the length
+  of its loop. Parameters and loop iterators stay read-only either way.
+- `// @tune` and `// @config` need a variable-panel row, so they require a
+  program-wide declaration (`static float`).
+- A function's parameters, its locals and its deepest loop nesting share one
+  32-binding frame: `params + locals + deepest loop nesting <= 32`.
+
+A local is not a return value — the caller cannot read it. When the caller does
+need a result, keep that one variable program-wide and let the function write
+it. The *Orrery* example does exactly that: `px/py/pz` stay program-wide so the
+caller can hang a label off the body it just drew, while the fifteen Kepler
+intermediates that used to crowd the variable panel are now locals.
 
 ### Conditionals
 
@@ -1663,6 +1716,11 @@ on that line is tagged:
 ```c
 float amp = 1, freq = 2; // @tune
 ```
+
+A knob needs a variable-panel row to live in, so the tag requires a
+program-wide declaration. Inside a function body, write `static float amp = 1;
+// @tune` — a [function-scoped local](#function-scoped-locals) has no panel row
+and rejects the tag.
 
 Tagged variables are still normal REPL variables while you are authoring. In
 the variable panel, tagged rows get an accent mark so you can see which

@@ -271,6 +271,27 @@ static const char *const k_scene_constant_resets[] = {
     NULL,
 };
 
+/* A function-scoped local is the one assignment target rebake must NOT
+ * re-evaluate. Its FlatCmdLocalVars snapshot is taken *after* the write, so
+ * re-running a self-referential row like `u = u * 2` against it would apply
+ * the row twice. Nothing here makes the local's value stale: `u` depends only
+ * on a constant argument, while `t` reaches an ordinary vertex, so a `t`
+ * change is value-only and takes the rebake route past the local rows. */
+static const char *const k_scene_local_self_ref[] = {
+    "float k = 3;",
+    "spoke(seed) {",
+    "float u;",
+    "u = seed + 1;",
+    "u = u * 2;",
+    "glVertex3f(u, 0, 0);",
+    "}",
+    "glBegin(GL_LINES);",
+    "spoke(k);",
+    "glVertex3f(k*t, 1, 0);",
+    "glEnd();",
+    NULL,
+};
+
 /* A stencil reference is an expression slot, not an enum or a pre-truncated
  * parser literal. It must be clamped after every evaluation, including the
  * fast rebake path. */
@@ -411,6 +432,12 @@ static void test_rebake_replays_constant_assignment_resets(void) {
                               0.0f, 2.0f);
 }
 
+static void test_rebake_leaves_local_assignments_alone(void) {
+    printf("--- rebake: local-target assignments are not re-evaluated ---\n");
+    check_rebake_matches_full("local self-reference",
+                              k_scene_local_self_ref, 0.5f, 1.25f);
+}
+
 /* A structural change must refuse the value-only rebake route: changing a
  * loop-bound variable marks the program fully dirty, not args-dirty, so the
  * frame gate re-flattens. */
@@ -531,8 +558,18 @@ static void assert_real_scene_time_route(const char *display_name,
 
 static void test_real_scene_time_routes(void) {
     printf("--- refresh: real-scene t routes ---\n");
-    assert_real_scene_time_route("Swaying grass field (rand + t)",
+    /* Wave is the production value-only case: `t` reaches vertex arguments
+     * and nothing else, so the existing flat topology is reusable. */
+    assert_real_scene_time_route("Animated wave surface (analytic normals)",
                                  REPL_FLAT_REFRESH_REBAKE);
+    /* Grass used to rebake here. Its blade() temporaries are function-scoped
+     * locals now, and `t` feeds them — every dep of a local's RHS is
+     * structural because a rebake cannot carry a local's new value into the
+     * frozen snapshots of the commands after it. Full flatten is the correct
+     * route, and the measured cost on this scene is ~1.14 ms -> ~1.59 ms per
+     * refresh (bench_repl --only flatten_refresh). */
+    assert_real_scene_time_route("Swaying grass field (rand + t)",
+                                 REPL_FLAT_REFRESH_FULL);
     assert_real_scene_time_route("Orrery (labels track 3D orbits)",
                                  REPL_FLAT_REFRESH_FULL);
     assert_real_scene_time_route("Whale (particle system + lit model)",
@@ -677,6 +714,7 @@ int main(void) {
     test_rebake_assignment_scene();
     test_rebake_scratch_scene();
     test_rebake_replays_constant_assignment_resets();
+    test_rebake_leaves_local_assignments_alone();
     test_dynamic_stencil_ref_rebake();
     test_structural_change_takes_full_flatten();
     test_not_ok_routes_to_full_flatten();

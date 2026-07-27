@@ -1,13 +1,138 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–4 landed, review fixes applied
+## Status — IN PROGRESS (2026-07-27): Phases 1–5 landed
 
-Phases 1 (declaration compile), 2 (flatten), 3 (edit guards) and 4
-(export/import) are implemented and tested. **Locals work end to end, the edit
-surface is closed, and scenes using them round-trip through the file format.**
-Phase 5 remains — docs and the three example conversions, with the manual
-scrub check. No example scene is converted yet, so nothing in the corpus
-depends on the feature.
+Phases 1 (declaration compile), 2 (flatten), 3 (edit guards), 4
+(export/import) and 5 (docs + example conversion) are implemented and tested.
+**Locals work end to end, the edit surface is closed, scenes using them
+round-trip through the file format, and three built-in examples are converted.**
+What remains before this plan moves to `done/` is the manual scrub check
+recorded under Verification.
+
+### Phase 5 — docs and example conversion (done)
+
+**The semantic comparator landed first**, because the conversions had to be
+provable rather than eyeballed. `glr_debug_dump_flat_commands_sync` now prints
+`var_idx`, `num_args`, `args[0..num_args)` and the payload member the type owns
+(`payload.matrix.m[]`, `payload.label.fmt`, `payload.decl.names[]`), with every
+float as `%a`. That last part is the point: a decimal rendering can hide a
+difference below its own precision, which would defeat a dump used to prove two
+programs flatten to the same executable stream.
+
+The conversions were verified with `--examples-dir` (which reads scenes from
+disk, so a working copy needs no rebuild) against pre-conversion baselines:
+
+```sh
+gl-repl --examples-dir "$dir" --example "$idx" --dump-flat 2>/dev/null |
+  grep -v 'CMD_VAR_ASSIGN\|CMD_VAR_DECLARE\|num_flat_cmds=' |
+  sed -e 's/^ *[0-9]* | //' \
+      -e 's/src_idx=-*[0-9]* call_src_idx=-*[0-9]* root_call_src_idx=-*[0-9]* var_idx=-*[0-9]* //' \
+      -e 's/\] | .*$/]/'
+```
+
+Run for all three scenes at `t = 0` **and** at `t = 3.7` (injected as a leading
+`t = 3.7;` row in a scratch copy of `examples/`, which is also the proof the
+animated path is being compared — the whale goes 90 → 340 executable rows).
+All six comparisons came back byte-identical: 2715 rows (grass), 1937 (orrery),
+90/340 (whale).
+
+Conversions:
+
+- **`swaying-grass-field-rand-t.glr`** — `blade()`'s eight temporaries
+  (`wind wave bend u cx cz halfW shade`). 17 globals → 9. Exercises the
+  `flatten_for_loop` copy-back: five of the eight are written inside the `for`
+  body.
+- **`orrery-labels-track-3d-orbits.glr`** — the 13 Kepler intermediates plus
+  `th`/`u` in all three functions. **29 globals → 16.** `px/py/pz` stay global
+  (the caller hangs a label off them — the return-value case this feature does
+  not address), and so does `orbitR`: making it a fourth per-function local
+  would pin `planetKepler` at exactly 32 of `MAX_EXPR_VARS` with no headroom,
+  where 16 params + 15 locals = 31 leaves one. The scene's two "staying under
+  MAX_PREDEF_VARS" comments now name the scope cap, which is the constraint that
+  actually still binds there.
+  The top-level `th`/`u` had to survive as globals — the calendar readout and
+  the asteroid belt use them outside any function — and were renamed `decYr` /
+  `astAng` rather than left to be shadowed by the new locals. Shadowing would
+  have been legal, but two unrelated meanings under one name is not what an
+  example should teach.
+- **`whale-particle-system-lit-model.glr`** — `flukeAng`/`finAng` only,
+  23 globals → 21. `detail` stays global for the reason recorded below: it is a
+  scrubbable knob whose value must survive between frames for its own clamp to
+  hold, not a temporary.
+
+Goldens 24/27/28 regenerated (`make rebuild-golden`); no other golden moved.
+`test_repl_core_examples` (5619 assertions) covers what matters most here — it
+exports every example, compiles it with `cc`, and reimports it — so the
+generated `float th = 0.0f, u = 0.0f;` prologues are compiled, not just
+inspected.
+
+Docs: `docs/USER_GUIDE.md` (a `#### Function-scoped locals` subsection under
+`### Functions`, plus the `### Variables` and `@tune` cross-references),
+`src/repl/ARCHITECTURE.md` §3.4 / §5.2 / §8, `src/repl/README.md` file map,
+`CLAUDE.md`, and the `gl-repl-scene-authoring` skill (language block, Math,
+Budgets).
+
+#### One defect found by the conversion, and one cost measured
+
+**`rebake_one_cmd` re-applied local assignments** — a Phase 2 bug the corpus
+differential could not see until a shipped example had locals in it.
+`flatten_var_assign` writes the frame slot *before* appending the command, so
+the row's `FlatCmdLocalVars` snapshot holds the value **after** the write. Rebake
+then re-evaluated the RHS against that snapshot, so a self-referential row
+(`u = orbitR*sin(u)`, `eAn = eAn + …`) applied itself a second time and left a
+wrong `args[0]` — visible in the code panel and replay annotations, and a
+straight violation of the "rebake output == full flatten output" contract.
+
+The fix is to skip local-target assignments in `rebake_one_cmd` entirely. That
+is lossless, not a papering-over: every dep of a local's RHS is reported
+structural, so a *changed* input routes to a full flatten and never reaches this
+walk — which means a local reached by rebake is provably already at its
+full-flatten value, and there is no predef slot to write either way.
+Regression: `test_rebake_leaves_local_assignments_alone` in
+`tests/test_repl_flatten_rebake.c`, written first and verified to fail without
+the fix (`16` where the full flatten says `8`).
+
+**The structural-dep cost now has numbers.** A new `bench_repl --only
+refresh_slider` case measures the other half of live editing — one
+variable-panel drag step through `repl_refresh_flat_program` — because the `t`
+cases could not see it, and scrubbing a global that feeds a local is precisely
+the trip-wire recorded under Known liabilities. Minimum per-refresh time on the
+mac-mini (the mean is far too noisy on this box to quote; `min` is stable to
+~2%):
+
+| refresh | pre | post | Δ | route |
+|---|---|---|---|---|
+| grass, `t` | 1142 µs | 1593 µs | +40% | **rebake → full** |
+| orrery, `ORB_SCALE` slider | 306 µs | 541 µs | +77% | **rebake → full** |
+| grass, `field` slider | 1188 µs | 1456 µs | +23% | full → full |
+| orrery, `EARTH_RATE` slider | 478 µs | 538 µs | +13% | full → full |
+| orrery, `t` | 519 µs | 536 µs | +3% | full → full |
+| wave, `t` | 218 µs | 215 µs | — | rebake → rebake |
+
+Two separable effects, and the second one was not predicted:
+
+1. **Route changes**, the cost the plan already expected. Grass's `t` and the
+   orrery's `ORB_SCALE` both stopped rebaking. `ORB_SCALE` is the more
+   interesting one: it only ever writes the *global* `orbitR`, but
+   `planet()`'s local `th` reads `orbitR`, so the mask propagates and the whole
+   chain turns structural. Reaching a local transitively is enough.
+   (`EARTH_RATE` was *already* structural before the conversion — it feeds the
+   date if-chain, and a selected condition is a structural dep — which is why
+   converting it changed the route for nothing.)
+2. **The full flatten itself got 3–23% slower** where the route did not change.
+   That is the per-call `flatten_bind_func_locals` body scan plus a scope array
+   that roughly doubles in size, and `eval_primary` searches it linearly before
+   falling through to predefs — so every *global* reference inside a converted
+   body now walks past every local first. Grass shows it worst (8 params → 8
+   params + 8 locals, in a body evaluated 135 × 6 times). This is the identifier
+   lookup that `docs/USER_GUIDE.md`'s interpreter-speed footnote already names
+   as low-hanging fruit ("a series of string compares where a trie would do").
+
+The worst case measured is 1.6 ms of a 16.7 ms frame, so this is accepted, not
+escalated to the simulate-local-frames-in-rebake rewrite.
+`test_real_scene_time_routes` records grass's new route with the measurement in
+a comment, and gained the *Animated wave surface* scene so a production REBAKE
+case is still covered.
 
 ### Phase 4 — export / import (done)
 
@@ -1311,13 +1436,24 @@ identifier scan; it is the mirror of `compile_line_uses_global_ident`
 
 **2. Structural deps trade scrub latency for correctness.** Any global feeding a
 local forces a full reflatten instead of a value-only rebake. The converted
-orrery — 16 locals fed by globals inside `planetKepler` — is precisely the scene
+orrery — 15 locals fed by globals inside `planetKepler` — is precisely the scene
 where this would surface.
+
+*Measured after the Phase 5 conversions* (table in the Phase 5 section, via the
+new `bench_repl --only refresh_slider`): worst route change is the orrery's
+`ORB_SCALE` slider at 306 → 541 µs, worst absolute is grass at 1.6 ms. Two
+findings worth carrying forward — a global that reaches a local only
+*transitively* (through another global) turns structural too, and the full
+flatten itself slows 3–23% from the larger linear-searched scope array,
+independent of any route change.
 
 *Trigger to revisit:* the manual scrub step in Verification is load-bearing, not
 optional. If scrubbing a global that feeds a local is visibly sluggish there,
 the fix is teaching `rebake_one_cmd` to simulate local frames — a much larger
-change that should be its own plan, not a patch to this one.
+change that should be its own plan, not a patch to this one. (Note that such a
+rewrite must also replace the Phase 5 skip in `rebake_one_cmd`: today a local
+assignment is deliberately *not* re-evaluated, because its frozen snapshot is
+post-write.)
 
 **Resolved, for the record:** the export zero-fill divergence (REPL reads 0,
 exported C undefined) was flagged as a wart in earlier reviews with the

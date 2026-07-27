@@ -281,8 +281,8 @@ surfaces it on the CLI.
 
 ### 3.4 Per-flat-command local variable snapshots
 
-Loop counters and function parameters don't exist in the source
-command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
+Loop counters, function parameters and function-scoped locals don't exist in
+the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
 ([`repl_state_flat_program_local_vars()`](state_views.h#L165)):
 
@@ -299,6 +299,13 @@ frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
 (§5.3). The stored snapshot array serves consumers that must reconstruct a
 flat command's scope after the fact — replay's value-tracing annotations
 read it to display per-instance bindings.
+
+The snapshot is *frozen* at emit time, and that is what makes function-local
+dataflow structural rather than value-only: `rebake_one_cmd` re-evaluates an
+assignment against the snapshot it captured and has no way to thread a local's
+new value into the snapshots of the commands after it. So every dependency
+feeding an assignment whose resolved target is a local is reported structural
+(§5.2), forcing a full reflatten instead of an in-place rebake.
 
 ### 3.5 The dirty flags and value-change routing
 
@@ -498,9 +505,17 @@ takes the edit-line by reference.
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
-  the body each iteration with the loop var bound;
+  the body each iteration with the loop var bound. The iterator is prepended to
+  a *fresh* scope array per nesting level, and the outer entries are copied back
+  out after each pass — without that, a local accumulated inside the loop would
+  reset every iteration;
 - **function calls** (`CMD_CALL`) inline the matching `CMD_FUNC_DEF`
-  body, binding actual args to parameter names;
+  body into a **lexical** frame: the callee's parameters bound to the actual
+  args (evaluated in the caller, before the frame exists), then the callee's own
+  `float` declarations at `0.0f`. Nothing of the caller's scope is copied in —
+  a caller local must not hide a global the callee reads, which is what the
+  exported C would do — and the frame is never copied back, so recursion is
+  isolated by construction;
 - **if-blocks** evaluate the `if` condition, then same-depth
   `CMD_ELSE_IF` separators in source order, then the optional
   `CMD_ELSE`, emitting only the first selected arm.
@@ -581,6 +596,17 @@ constant assignments: although a constant assignment's own baked arg does not
 change, its write may reset the input to a later self-referential assignment.
 Any failed partial rebake restores predef/scratch state and full-flattens before
 the refresh boundary returns.
+
+A scalar assignment resolves its target *lexically* on every flatten visit
+rather than trusting the `var_idx` frozen onto the source command at commit
+time. `var_idx` is a storage hint, not the authority: inserting a legal local
+over an existing global has to retarget older assignment rows without rewriting
+them. The first name match in the ordered scope array decides — LOCAL writes the
+frame slot and its dep mask, PARAM or LOOP fails the flatten defensively (the
+edit guards exist to keep that state unreachable), and no scoped match keeps the
+predef path. When the resolved target is a local, the RHS dependencies are
+reported **structural** (§3.4), so any predef change that can reach a local
+forces a full reflatten rather than a value-only rebake.
 
 #### Disabling the expression cache
 
@@ -735,11 +761,39 @@ rationale is in [`eval.h`](eval.h)):
   slots remain; the float-decl compiler rejects declarations that would
   exceed the 32-slot table with "variable table full (max 32)".
 - **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
-  parse (visible loop iterators + function params). Predefined globals are
+  parse: visible loop iterators, function parameters, and function-scoped
+  locals. Predefined globals are
   supplied separately through [`ReplPredefView`](eval.h#L179) / [`ExprCtx`](eval.h#L143), so a full predef
   table does not consume expression-local slots.
   [`collect_visible_vars_in()`](visible_vars.h#L33) ([`visible_vars.c`](visible_vars.c)) builds this per parse;
   it reads no live state, so compile passes its context's document view.
+
+**Function-scoped locals.** A `float x;` declaration *inside* a function body
+declares a local rather than a predef. The `CMD_VAR_DECLARE` row carries
+`var_idx == REPL_VAR_IDX_LOCAL`, `build_decl_predef_ops` emits nothing, and the
+binding exists only for the duration of one flattened call — so the variable
+panel, `@tune` knobs, the replay baseline, the export prologue and the
+slot-shift cascade, all keyed on predef slots, never see it. `static float x;`
+selects the global path from *any* cursor position, so the keyword rather than
+the cursor chooses storage, and canonical text (`float` vs `static float`)
+records the choice.
+
+The three binder kinds ride the ordered scope array as a parallel
+[`ReplVisibleVarKind`](visible_vars.h#L20) array — LOOP, PARAM, LOCAL. That tag
+is not a diagnostic detail: a scalar assignment resolves its target against the
+same array and only a LOCAL is writable, which is what keeps a parameter or a
+loop iterator constant even when it shadows a writable outer binding.
+
+Name collisions follow C rather than a blanket ban. Locals hoist to the
+function-body top, the same scope as the parameter list, so a local colliding
+with a parameter or with another local of that body is a *redefinition* and is
+rejected; shadowing an outer binding — a global, or an enclosing loop iterator —
+is legal and resolves innermost-first, which [`eval_primary`](eval.c) already
+does by searching `ctx->vars` before the predef table. Capacity is a
+whole-function property, `params + locals + deepest loop nesting <=
+MAX_EXPR_VARS` (`compile_func_scope_peak` in [`compile.c`](compile.c)), because
+`flatten_for_loop` prepends its iterator to a fresh scope array per nesting
+level and would otherwise drop an outer binding at the cap.
 
 **Scratch arrays** `A`/`B`/`C` (`REPL_SCRATCH_ARRAY_COUNT ×
 REPL_SCRATCH_ARRAY_LEN` = 3×8 floats) are fixed global runtime storage

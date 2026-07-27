@@ -774,6 +774,106 @@ static void bench_flatten_refresh(int iters) {
     }
 }
 
+/* ---- bench: refresh boundary on a variable-panel scrub ----------------- */
+
+/* The `t` cases above measure the animation clock. This one measures the
+ * other live-edit motion: dragging one global's slider. It is the trip-wire
+ * for the structural-dependency rule in
+ * docs/plans/active/scoped-local-variables.md — a global that feeds a
+ * function-scoped local reports its deps structurally, so scrubbing it takes a
+ * full flatten where an all-global scene would have rebaked in place. The
+ * printed route is the part to watch; the timing says what that costs. */
+static BenchResult bench_refresh_slider_one(const char *name,
+                                            int example_idx,
+                                            const char *var_name, int iters) {
+    enum { INNER = 32 };
+    BenchResult r = { .name = name, .unit = "refreshes", .min_sec = 1e18 };
+    BenchBaseline base;
+    ReplFlatRefreshKind expected;
+    ReplExprDepMask bit;
+    int structural, slot;
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    slot = repl_eval_find_predef_var_idx(var_name);
+    if (slot < 0 || slot >= MAX_PREDEF_VARS) {
+        fprintf(stderr, "ERROR: %s has no '%s' slot\n", name, var_name);
+        g_case_missing = 1;
+        return r;
+    }
+    bit = (ReplExprDepMask)1u << slot;
+    structural = (repl_state_flat_program_structural_dep_mask() & bit) != 0;
+    if (structural)
+        expected = REPL_FLAT_REFRESH_FULL;
+    else if ((repl_state_flat_program_value_dep_mask() & bit) &&
+             repl_state_flat_program_rebake_ok())
+        expected = REPL_FLAT_REFRESH_REBAKE;
+    else {
+        fprintf(stderr, "ERROR: %s does not depend on '%s'\n", name, var_name);
+        g_case_missing = 1;
+        return r;
+    }
+
+    for (int it = 0; it < iters; it++) {
+        double sample = 0.0;
+        for (int k = 0; k < INNER; k++) {
+            ReplFlatRefreshKind kind;
+            baseline_restore(&base);
+            /* One drag step: nudge the value, then refresh exactly as the
+             * panel's motion handler does. */
+            g_predef_vars_mut[slot].value =
+                base.predef[slot] * (1.0f + 0.01f * (float)((k & 7) + 1));
+            repl_state_notify_predef_value_changed(slot);
+            double t0 = now_seconds();
+            kind = repl_refresh_flat_program(editor_state_edit_line());
+            sample += now_seconds() - t0;
+            if (kind != expected) {
+                fprintf(stderr,
+                        "ERROR: %s expected refresh route %d, got %d\n",
+                        name, (int)expected, (int)kind);
+                g_case_missing = 1;
+                baseline_restore(&base);
+                return r;
+            }
+        }
+        if (sample < r.min_sec) r.min_sec = sample;
+        r.total_sec += sample;
+        r.ops += INNER;
+        r.iters++;
+    }
+    baseline_restore(&base);
+    if (!g_csv)
+        fprintf(stderr, "  (%s: flat_cmds=%d, var=%s, route=%s%s)\n",
+                name, repl_state_flat_program_count(), var_name,
+                expected == REPL_FLAT_REFRESH_REBAKE ? "rebake" : "full",
+                structural ? ", structural" : "");
+    return r;
+}
+
+static void bench_refresh_slider(int iters) {
+    static const struct {
+        const char *row; const char *display; const char *var;
+    } cases[] = {
+        /* EARTH_RATE feeds planetKepler()'s local `th`; ORB_SCALE feeds the
+         * global `orbitR` and nothing local. Same scene, both sides of the
+         * structural rule. */
+        { "slider_orrery_local", "Orrery (labels track 3D orbits)",
+          "EARTH_RATE" },
+        { "slider_orrery_global", "Orrery (labels track 3D orbits)",
+          "ORB_SCALE" },
+        { "slider_grass", "Swaying grass field (rand + t)", "field" },
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int idx = example_index_by_name(cases[i].display);
+        if (idx >= 0)
+            report(bench_refresh_slider_one(cases[i].row, idx, cases[i].var,
+                                            iters));
+    }
+}
+
 /* ---- bench: dynamic-topology full flatten (Whale) ---------------------- */
 
 /* Whale's droplets are gated by per-particle `if((t - spawnDelay) > 0 && ...)`
@@ -1820,6 +1920,8 @@ static void usage(const char *prog) {
         "    flatten_corpus    full flatten of every built-in, one row per index\n"
         "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
         "    flatten_refresh   production t refresh of Grass/Orrery/Wave (route shown)\n"
+        "    refresh_slider    production refresh for one variable-panel drag step\n"
+        "                      (route shown; the structural-dep trip-wire)\n"
         "    flatten_whale     dynamic-topology full flatten across a t grid\n"
         "    slider_drag       100-motion variable-panel drag + release persist\n"
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
@@ -1946,6 +2048,8 @@ int main(int argc, char **argv) {
         bench_flatten_phases(iters);
     if (wants(only, "flatten_refresh"))
         bench_flatten_refresh(iters);
+    if (wants(only, "refresh_slider"))
+        bench_refresh_slider(iters);
     if (wants(only, "flatten_whale"))
         bench_flatten_whale(iters);
     if (wants(only, "slider_drag"))
