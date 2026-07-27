@@ -18,11 +18,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "keymap.h"
+#include "keys.h"
 #include "app/glr_ctrl.h"
 #include "editor/commit.h"
 #include "editor/input.h"
 #include "editor/state.h"
-#include "editor/undo.h"
 #include "repl/command.h"
 #include "repl/compile.h"
 #include "repl/eval.h"
@@ -1098,7 +1099,14 @@ static void test_export_hoists_locals_for_c89(void) {
  * prologue row, so an undo that put the row back without also restoring the
  * bodies that read it — or that left a stray predef slot behind, as it would
  * if the local had been mis-filed as a global — would leave the scene
- * referencing a name nothing declares. */
+ * referencing a name nothing declares.
+ *
+ * Both halves go through the *interactive* key routes on purpose. Committing
+ * with `editor_feed_line` and pushing the snapshot by hand would pass even if
+ * the `;` route stopped pushing one at all (`input.c`'s
+ * `editor_undo_push_snapshot()` before `editor_try_commit_any()`), and undoing
+ * with a direct `editor_undo_pop_snapshot()` would not cover the Ctrl+Z
+ * dispatch. */
 static void test_undo_after_local_decl_restores_cleanly(void) {
     static const char *const scene[] = {
         "func0(s) {",
@@ -1115,18 +1123,22 @@ static void test_undo_after_local_decl_restores_cleanly(void) {
     ASSERT_FLOAT("baseline vertex reads the parameter",
                  nth_cmd_arg0(CMD_VERTEX3F, 0), 2.0f);
 
-    /* Declare a local on the interactive path, which is what pushes the undo
-     * snapshot (editor_feed_line is the loader and does not). */
+    /* Type the declaration inside the body and commit it with `;` — the route
+     * that owns the undo push. The interactive buffer carries no trailing
+     * semicolon, matching the real key path. */
     editor_state_edit_line_set(1);
-    editor_undo_push_snapshot();
-    editor_feed_line("float u;");
+    editor_input_set_text("float u");
+    (void)editor_handle_key(';', 0, 0);
     repl_flatten_commands(0);
     ASSERT_INT("local decl added one row",
                repl_state_document_count(), before_count + 1);
+    ASSERT_INT("the committed row is a declaration",
+               count_source_cmds(CMD_VAR_DECLARE), 1);
     ASSERT_INT("a local consumes no predef slot",
                g_num_predef_vars, before_predefs);
 
-    editor_undo_pop_snapshot();
+    /* Ctrl+Z arrives as 'Z' & 0x1F on the editor's ASCII route. */
+    (void)editor_handle_key(KM_KEY(GLR_UNDO), 0, 0);
     repl_flatten_commands(0);
     ASSERT_INT("undo restores the row count",
                repl_state_document_count(), before_count);

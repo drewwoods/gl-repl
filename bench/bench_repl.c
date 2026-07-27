@@ -857,12 +857,25 @@ static void bench_refresh_slider(int iters) {
     static const struct {
         const char *row; const char *display; const char *var;
     } cases[] = {
-        /* EARTH_RATE feeds planetKepler()'s local `th`; ORB_SCALE feeds the
-         * global `orbitR` and nothing local. Same scene, both sides of the
-         * structural rule. */
+        /* Both sides of the routing rule, and the first row is the one that
+         * keeps this honest: without a case that still REBAKEs, an
+         * "everything became structural" regression would leave every route
+         * assertion satisfied, because the expected route is derived from the
+         * same dep masks the benchmark is exercising.
+         *
+         * Wave's `amp` scales already-emitted vertex/normal/colour arguments
+         * through global scratch only — no local, no loop bound, no condition
+         * — so it is genuinely value-only.
+         *
+         * The two orrery rows are both structural, for different reasons worth
+         * keeping visible: EARTH_RATE feeds planetKepler()'s local `th`
+         * *directly*, while ORB_SCALE reaches planet()'s local `th` only
+         * transitively, by way of the global `orbitR` that `th` reads. */
+        { "slider_wave_value", "Animated wave surface (analytic normals)",
+          "amp" },
         { "slider_orrery_local", "Orrery (labels track 3D orbits)",
           "EARTH_RATE" },
-        { "slider_orrery_global", "Orrery (labels track 3D orbits)",
+        { "slider_orrery_transitive", "Orrery (labels track 3D orbits)",
           "ORB_SCALE" },
         { "slider_grass", "Swaying grass field (rand + t)", "field" },
     };

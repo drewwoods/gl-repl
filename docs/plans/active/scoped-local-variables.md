@@ -96,7 +96,11 @@ the fix (`16` where the full flatten says `8`).
 refresh_slider` case measures the other half of live editing — one
 variable-panel drag step through `repl_refresh_flat_program` — because the `t`
 cases could not see it, and scrubbing a global that feeds a local is precisely
-the trip-wire recorded under Known liabilities. Minimum per-refresh time on the
+the trip-wire recorded under Known liabilities. It carries four (scene,
+variable) pairs, one of which (wave / `amp`) must still route REBAKE: without a
+value-only case the benchmark would accept an "everything became structural"
+regression, since it derives each expected route from the same dep masks it is
+exercising. Minimum per-refresh time on the
 mac-mini (the mean is far too noisy on this box to quote; `min` is stable to
 ~2%):
 
@@ -178,7 +182,8 @@ The cause is rev 9's lexical LHS re-derivation. `flatten_var_assign` now calls
 visit, and that runs `repl_extract_assignment_parts()` — a text parse of the
 source line — plus an O(nv) scope scan. Its only early-out is `nv <= 0`, which
 is false for any assignment inside a function body or a loop. Grass pays it
-3645 times per flatten (135 calls × 27 assignments), ~7 ns each.
+3645 times per flatten (135 calls × 27 assignments): (1481 − 1209) µs / 3645 ≈
+**75 ns** per visit.
 
 This is *required for correctness* as written — a persisted `var_idx` must not
 be able to defeat a later legal shadow — but it is not required unconditionally.
@@ -233,32 +238,65 @@ pure value dataflow. They are classified structural only because rebake cannot
 carry a local's value forward through frozen snapshots — not because anything
 about the program's shape depends on them. Sketch:
 
-- `FlatCmdLocalVars` gains a `uint32_t local_mask` (MAX_EXPR_VARS is 32, so one
-  word covers it) and an `int frame_seq`. Both are per flat command, so ~64 KB
-  over the whole program — noise against the 5.3 MB the snapshots already cost.
-- The rebake walk keeps a carried frame *per call depth*
-  (`[MAX_FLATTEN_CALL_DEPTH][MAX_EXPR_VARS]`, 8 KB). At each command it takes
-  the snapshot — whose param and loop-iterator values are structural and
-  therefore still correct — and overwrites only the `local_mask` entries from
-  the carried frame. A local-target assignment then writes the carried frame
-  instead of being skipped (see the Phase 5 fix).
-- `flatten_var_assign` reports local RHS deps as **value**, and grass rebakes
-  again.
+**Carry locals by a stable function-local ordinal, never by scope-array slot.**
+This is the part a first sketch gets wrong. `flatten_for_loop`
+(`flatten.c:349`) prepends its iterator at index 0 and shifts every parameter
+and local up one *per nesting level*, so the slot a given local occupies differs
+between a command outside the loop and one inside it. An index-for-index overlay
+would therefore corrupt exactly the converted grass case, whose locals are read
+both before and inside `for(s, 0, 6)`. The identity has to be the local's
+ordinal in its function's declaration prologue — the order
+`flatten_bind_func_locals` appends them in, which is stable across loop depth —
+with the per-command sidecar recording, for each snapshot slot, which
+function-local ordinal (if any) it holds.
 
-The non-obvious part is frame entry, which is what resets locals to 0 for the
-next call. `call_depth` alone will not do it: 135 successive `blade()` calls
+**The assignment target needs its own recorded ordinal.** Every local
+assignment carries the same `REPL_VAR_IDX_LOCAL` sentinel, so rebake cannot tell
+*which* carried local a row writes. Either the sidecar records the resolved
+target ordinal per flat command, or rebake has to recover the LHS by name — which
+makes the cached-LHS follow-up above a prerequisite rather than an independent
+optimisation. Recording the ordinal is the better trade: it is computed anyway
+by the full flatten that produced the row.
+
+**The sidecar must become mutable, and rebake must write it.** Today
+`FlatCmdLocalVars` is exposed `const` and `flatten.h`'s rebake contract states
+outright that "local snapshots … are never touched", which is what makes the
+current skip safe. Local-aware rebake has to break that promise deliberately:
+`replay_annotations.c` reads those values directly to render per-instance
+bindings, so a rebake that fixed only `args[]` would render correctly while the
+replay HUD and code panel still showed locals from the previous full flatten.
+Each command's stored snapshot must end up holding its *effective* locals —
+post-write for a local assignment, matching what a full flatten leaves there.
+`tests/test_repl_flatten_rebake.c` already compares `FlatCmdLocalVars` via
+`flat_locals_equal`, so the differential that would catch this exists; the work
+is to keep it, not to add it.
+
+**Frame entry, and the off-by-one in the depth array.** Resetting locals to 0
+for the next call cannot key off `call_depth`: 135 successive `blade()` calls
 share both `call_depth` and `call_src_cmd_idx`, and while grass happens to
 return to depth 0 between them, `for(i, 0, 10) { blade(i); }` with nothing else
 in the body does not. `root_call_src_cmd_idx` does not separate them either.
-Hence `frame_seq`: a counter `flatten_call` bumps on entry and stamps on every
-command it emits. Rebake keeps `carried_seq[depth]` beside the carried frames
-and zeroes a depth's locals only when the seq *for that depth* changes — which
-resets repeated sibling calls correctly while leaving a caller's locals intact
-when a nested call returns.
+Hence a `frame_seq` bumped on call entry and stamped on every command emitted in
+that frame — which means **flatten needs a per-depth active-sequence table too**,
+not one scalar: `flatten_range` emits the caller's remaining commands after a
+nested call returns, and those must carry the caller's seq, not the callee's.
+Rebake keeps `carried_seq[depth]` beside the carried frames and zeroes a depth's
+locals only when the seq *for that depth* changes, which resets sibling calls
+while leaving a caller's locals intact across a nested return.
 
-That is a self-contained design, but it touches the snapshot layout, flatten's
-emit path and the whole rebake walk, and it flips a dependency classification
-that three phases of this plan reasoned about. It belongs in its own plan.
+Size the depth-indexed arrays `MAX_FLATTEN_CALL_DEPTH + 1`, or index them
+`depth - 1`. `flatten_call` checks `call_depth >= max_call_depth` *before*
+incrementing (`flatten.c:440`), so a command emitted at the limit carries
+`call_depth == MAX_FLATTEN_CALL_DEPTH`; a literal `[MAX_FLATTEN_CALL_DEPTH]`
+array indexed by that value overruns.
+
+With those in place, `flatten_var_assign` reports local RHS deps as **value**
+instead of structural, and grass rebakes again.
+
+That is a self-contained design, but it changes the snapshot layout and its
+documented immutability, flatten's emit path, the whole rebake walk, and a
+dependency classification three phases of this plan reasoned about. It belongs
+in its own plan.
 
 ### Phase 4 — export / import (done)
 
@@ -1519,6 +1557,23 @@ shows only the remaining globals (no Kepler scratch), scrub a *global* that
 feeds a local and confirm the scene tracks it (this is the structural-dep path
 from Phase 2, and the place a rebake regression would show as a frozen scene),
 and confirm Ctrl+Z after a local decl restores cleanly.
+
+Status of these after Phase 5:
+
+- **Variable panel — done**, headlessly: a captured frame of the orrery lists
+  `t` plus exactly the 16 remaining globals, no Kepler scratch and no `th`/`u`.
+- **Ctrl+Z — automated**, as `test_undo_after_local_decl_restores_cleanly` in
+  `tests/test_repl_locals.c`. It drives the *interactive* routes on both halves
+  — `editor_input_set_text()` + `editor_handle_key(';')` to commit, then
+  `editor_handle_key(KM_KEY(GLR_UNDO))` — and was verified to fail (2
+  assertions) when `input.c`'s pre-commit `editor_undo_push_snapshot()` is
+  removed. An earlier version of this test used `editor_feed_line` with a
+  hand-pushed snapshot and would have passed against that regression.
+- **Scrub — still manual.** `bench_repl --only refresh_slider` measures the cost
+  and asserts the route for four (scene, variable) pairs including one that must
+  still REBAKE, but a benchmark derives its expected route from the same dep
+  masks it exercises, so it is evidence about *cost*, not about the scene
+  visibly tracking the slider. That last part wants eyes on it.
 
 ### Resolved by review (rev 2)
 
