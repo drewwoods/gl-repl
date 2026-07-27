@@ -1495,8 +1495,8 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * (themes.h); out-of-range guards to NORMAL. */
     static const float k_grid_brightness_factors[GRID_BRIGHTNESS_COUNT] = {
         [GRID_BRIGHTNESS_DIM]    = 0.6f,
-        [GRID_BRIGHTNESS_NORMAL] = 1.5f,
-        [GRID_BRIGHTNESS_BRIGHT] = 2.8f,
+        [GRID_BRIGHTNESS_NORMAL] = 1.2f,
+        [GRID_BRIGHTNESS_BRIGHT] = 2.5f,
         [GRID_BRIGHTNESS_BOLD]   = 4.0f,
     };
     int br_i = presentation.grid_brightness_idx;
