@@ -2180,7 +2180,11 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     L.has_unbal = snap->unbalanced_count > 0;
     if (L.has_unbal) {
         tx += STATUSBAR_SEP_W;
-        snprintf(L.unbal, sizeof L.unbal, "%d unbalanced", snap->unbalanced_count);
+        if (snap->unbalanced_warning[0] != '\0')
+            snprintf(L.unbal, sizeof L.unbal, "%s", snap->unbalanced_warning);
+        else
+            snprintf(L.unbal, sizeof L.unbal, "%d unbalanced",
+                     snap->unbalanced_count);
         L.unbal_w = (int)strlen(L.unbal) * FONT_SMALL_W;
         tx += L.unbal_w;
     } else {

@@ -1690,6 +1690,48 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
     out->count = n;
 }
 
+static const char *glr_ctrl_unbalanced_warning_for_type(CmdType type) {
+    switch (type) {
+    case CMD_BEGIN:        return "missing glEnd";
+    case CMD_PUSH_MATRIX:  return "missing glPopMatrix";
+    case CMD_PUSH_ATTRIB:  return "missing glPopAttrib";
+    case CMD_END:          return "unmatched glEnd";
+    case CMD_POP_MATRIX:   return "unmatched glPopMatrix";
+    case CMD_POP_ATTRIB:   return "unmatched glPopAttrib";
+    default:               return NULL;
+    }
+}
+
+static void glr_ctrl_fill_unbalanced_warning(UiRenderSnapshot *snap,
+                                              const int *lines,
+                                              int count) {
+    const GLCmd *cmds;
+    const char *detail;
+
+    if (!snap || count <= 0)
+        return;
+
+    if (count != 1) {
+        snprintf(snap->unbalanced_warning,
+                 sizeof snap->unbalanced_warning,
+                 "%d unbalanced", count);
+        return;
+    }
+
+    cmds = repl_state_document_cmds();
+    detail = (lines && lines[0] >= 0 && lines[0] < repl_state_document_count() &&
+              cmds)
+                 ? glr_ctrl_unbalanced_warning_for_type(cmds[lines[0]].type)
+                 : NULL;
+    if (detail)
+        snprintf(snap->unbalanced_warning,
+                 sizeof snap->unbalanced_warning, "%s", detail);
+    else
+        snprintf(snap->unbalanced_warning,
+                 sizeof snap->unbalanced_warning,
+                 "%d unbalanced", count);
+}
+
 static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     EditorInputView in;
     int edit_line;
@@ -1828,6 +1870,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         int unbalanced[MAX_HIGHLIGHTS];
         snap->unbalanced_count =
             repl_source_scope_collect_unbalanced(unbalanced, MAX_HIGHLIGHTS);
+        glr_ctrl_fill_unbalanced_warning(snap, unbalanced,
+                                          snap->unbalanced_count);
     }
     snap->search         = *editor_state_search();
     snap->autocomplete   = *editor_state_autocomplete();

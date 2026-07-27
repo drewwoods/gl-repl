@@ -135,6 +135,11 @@ typedef struct UiRenderSnapshot {
      * glPushMatrix/glBegin openers + orphan glPopMatrix/glEnd closers).
      * Shown as a warning segment in the editor statusbar; 0 = balanced. */
     int                         unbalanced_count;
+    /* Resolved statusbar warning. For exactly one unbalanced command this
+     * names the missing counterpart (or the unmatched orphan closer); for
+     * multiple commands the controller fills the legacy "%d unbalanced"
+     * form. Empty when unbalanced_count is zero. */
+    char                        unbalanced_warning[32];
     float                       anim_time;
 
     /* User scenes */

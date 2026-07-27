@@ -1707,11 +1707,32 @@ int main() {
                    repl_state_document_cmds_mut()[insert_idx2].type, CMD_EMPTY);
     }
 
-    /* 12e. The editor statusbar surfaces a count of structurally
-     * unbalanced bracket commands via snap.unbalanced_count (an unmatched
-     * glPushMatrix + an unmatched glBegin -> 2; balanced -> 0). */
+    /* 12e. The editor statusbar names a single missing stack closer and
+     * falls back to a count when more than one bracket command is
+     * unbalanced. */
     {
         UiRenderSnapshot snap;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("single missing glEnd count", snap.unbalanced_count, 1);
+        ASSERT_STR("single missing glEnd warning", snap.unbalanced_warning,
+                   "missing glEnd");
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glPushMatrix();");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("single missing glPopMatrix count", snap.unbalanced_count, 1);
+        ASSERT_STR("single missing glPopMatrix warning", snap.unbalanced_warning,
+                   "missing glPopMatrix");
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glPushAttrib(GL_CURRENT_BIT);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("single missing glPopAttrib count", snap.unbalanced_count, 1);
+        ASSERT_STR("single missing glPopAttrib warning", snap.unbalanced_warning,
+                   "missing glPopAttrib");
 
         glr_ctrl_reset_all();
         editor_feed_line("glPushMatrix();");
@@ -1720,11 +1741,15 @@ int main() {
         editor_feed_line("glVertex3f(0, 0, 0);");
         glr_ctrl_build_ui_snapshot(&snap);
         ASSERT_INT("statusbar counts 2 unbalanced", snap.unbalanced_count, 2);
+        ASSERT_STR("statusbar uses count for multiple unbalanced",
+                   snap.unbalanced_warning, "2 unbalanced");
 
         editor_feed_line("glEnd();");
         editor_feed_line("glPopMatrix();");
         glr_ctrl_build_ui_snapshot(&snap);
         ASSERT_INT("statusbar count clears when balanced", snap.unbalanced_count, 0);
+        ASSERT_STR("statusbar warning clears when balanced",
+                   snap.unbalanced_warning, "");
     }
 
     /* 13. editor_try_commit_assign_variable - inserting mode (inserts before cursor) */
