@@ -31,6 +31,20 @@ struct UiCodePanelOutput;
  * exposed so tests can assert classification independently of rendering.
  * ---------------------------------------------------------------------- */
 
+#define SYNTAX_HIGHLIGHT_LIST(X) \
+    X(OFF, "Off") \
+    X(ON, "On") \
+    X(ON_SHADOW, "On+Shadow")
+
+#define SYNTAX_HIGHLIGHT_NAME_ENTRY(name, str) [SYNTAX_HIGHLIGHT_##name] = str,
+
+typedef enum SyntaxHighlightMode {
+#define SYNTAX_HIGHLIGHT_ENUM_ENTRY(name, str) SYNTAX_HIGHLIGHT_##name,
+    SYNTAX_HIGHLIGHT_LIST(SYNTAX_HIGHLIGHT_ENUM_ENTRY)
+#undef SYNTAX_HIGHLIGHT_ENUM_ENTRY
+    SYNTAX_HIGHLIGHT_COUNT
+} SyntaxHighlightMode;
+
 typedef enum {
     REPL_SYNTAX_LITERAL = 0,   /* numeric literal or quoted string run */
     REPL_SYNTAX_CONSTANT,      /* PI, TAU, or a GL_* enum constant */

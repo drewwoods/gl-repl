@@ -464,6 +464,7 @@ which choice it selects:
 | `view_mode` | `RENDER3D_VIEW_3D` `RENDER3D_VIEW_2D` (perspective vs. 2D ortho) |
 | `vertex_labels` | `OVERLAY_VERTEX_LABEL_OFF` `_INDEX` `_INDEX_POS` `_INDEX_WORLD` `_INDEX_WORLD_FINE` |
 | `vertex_outline_style` | `VERTEX_OUTLINE_STYLE_DEFAULT` `_BOLD` `_INVERTED` `_BOLD_INVERTED` |
+| `syntax_highlight` | `SYNTAX_HIGHLIGHT_OFF` `_ON` `_ON_SHADOW` |
 
 **Integer slugs** carry a plain index: the toggles `wireframe`,
 `normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`, `camera_rotate`, `variable_panel`

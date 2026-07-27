@@ -56,6 +56,7 @@
 #include "render3d/projection_mode.h"   /* RENDER3D_PROJ_LIST — derives the projection cfg symbols */
 #include "render3d/lights.h"           /* render3d_lights_apply_theme, render3d_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
+#include "ui/app/repl_code_panel.h"
 
 #if defined(__APPLE__)
 extern FILE *popen(const char *command, const char *mode);
@@ -281,7 +282,9 @@ static void glr_action_load_scene_from_clipboard(void) {
  *   1 = On   - playing, preserving the current loop mode
  * Old 4-state ini values (1/2/3) are all remapped to On in
  * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
-static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
+static const char *syntax_hl_names[SYNTAX_HIGHLIGHT_COUNT] = {
+    SYNTAX_HIGHLIGHT_LIST(SYNTAX_HIGHLIGHT_NAME_ENTRY)
+};
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *projection_names[] = { "Perspective", "Ortho" };
 static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" };
@@ -513,7 +516,7 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_CODE_PANEL), .modifiers = KM_MODS(GLR_CODE_PANEL) },
     { .label = "Wrap at commas", .key = GLR_CONFIG_WRAP_AT_COMMA, .state_count = 2 },
     { .label = "Syntax highlight", .key = GLR_CONFIG_SYNTAX_HIGHLIGHT,
-      .state_count = ARRAY_LEN(syntax_hl_names), .state_names = syntax_hl_names,
+      .state_count = SYNTAX_HIGHLIGHT_COUNT, .state_names = syntax_hl_names,
       .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL) },
     { .label = "Paren match", .key = GLR_CONFIG_PAREN_MATCH, .state_count = 2 },
     { .label = "Paren scope", .key = GLR_CONFIG_PAREN_SCOPE, .state_count = 2 },
@@ -719,6 +722,11 @@ static const char *cfg_vertex_outline_style_symbols[VERTEX_OUTLINE_STYLE_COUNT] 
     VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY)
 #undef VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY
 };
+static const char *cfg_syntax_highlight_symbols[SYNTAX_HIGHLIGHT_COUNT] = {
+#define SYNTAX_HIGHLIGHT_SYMBOL_ENTRY(name, str) [SYNTAX_HIGHLIGHT_##name] = "SYNTAX_HIGHLIGHT_" #name,
+    SYNTAX_HIGHLIGHT_LIST(SYNTAX_HIGHLIGHT_SYMBOL_ENTRY)
+#undef SYNTAX_HIGHLIGHT_SYMBOL_ENTRY
+};
 static const char *cfg_post_fx_scope_symbols[GLR_POST_FX_SCOPE_COUNT] = {
 #define POST_FX_SCOPE_SYMBOL_ENTRY(suffix, name_str, symbol_str) [GLR_POST_FX_SCOPE_##suffix] = symbol_str,
     POST_FX_SCOPE_LIST(POST_FX_SCOPE_SYMBOL_ENTRY)
@@ -786,6 +794,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "vertex_outline_style") == 0) {
         *count = VERTEX_OUTLINE_STYLE_COUNT;
         return cfg_vertex_outline_style_symbols;
+    }
+    if (strcmp(slug, "syntax_highlight") == 0) {
+        *count = SYNTAX_HIGHLIGHT_COUNT;
+        return cfg_syntax_highlight_symbols;
     }
     if (strcmp(slug, "post_fx_scope") == 0) {
         *count = GLR_POST_FX_SCOPE_COUNT;

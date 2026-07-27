@@ -1772,6 +1772,11 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                                       "VERTEX_OUTLINE_STYLE_BOLD_INVERTED", &out));
     ASSERT_INT("  -> VERTEX_OUTLINE_STYLE_BOLD_INVERTED", out,
                VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
+    ASSERT_TRUE("resolve syntax_highlight: SYNTAX_HIGHLIGHT_ON_SHADOW",
+                repl_cfg_resolve_text("syntax_highlight",
+                                      "SYNTAX_HIGHLIGHT_ON_SHADOW", &out));
+    ASSERT_INT("  -> SYNTAX_HIGHLIGHT_ON_SHADOW", out,
+               SYNTAX_HIGHLIGHT_ON_SHADOW);
 
     /* Unknown name on a known slug must fail (don't fall back to
      * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
@@ -1795,6 +1800,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_INT("set_text vertex_labels -> presentation.show_vertex_labels",
                glr_state_presentation().show_vertex_labels,
                OVERLAY_VERTEX_LABEL_INDEX_POS);
+    repl_cfg_set_text("syntax_highlight", "SYNTAX_HIGHLIGHT_OFF");
+    ASSERT_INT("set_text syntax_highlight -> presentation.syntax_highlight",
+               glr_state_presentation().syntax_highlight,
+               SYNTAX_HIGHLIGHT_OFF);
 
     /* Legacy integer-form @cfg lines must still load — the apply
      * path tries resolve_text first, then falls back to strtol.
@@ -1823,9 +1832,13 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
     glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_AT_VERTEX;
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
+    glr_config_set(GLR_CONFIG_SYNTAX_HIGHLIGHT, SYNTAX_HIGHLIGHT_ON_SHADOW);
     ASSERT_INT("vertex_outline_style set/get",
                glr_config_get(GLR_CONFIG_VERTEX_OUTLINE_STYLE),
                VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
+    ASSERT_INT("syntax_highlight set/get",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT),
+               SYNTAX_HIGHLIGHT_ON_SHADOW);
 
     ReplConfigBag bag;
     repl_config_bag_clear(&bag);
@@ -1839,6 +1852,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all vertex_outline_style is symbolic",
                repl_config_bag_get(&bag, "vertex_outline_style"),
                "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");
+    ASSERT_STR("fill_all syntax_highlight is symbolic",
+               repl_config_bag_get(&bag, "syntax_highlight"),
+               "SYNTAX_HIGHLIGHT_ON_SHADOW");
     ASSERT_TRUE("fill_all includes hidden audio cfg",
                 repl_config_bag_get(&bag, "audio") != NULL);
     ASSERT_INT("hidden audio cfg slug remains known",
