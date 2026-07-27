@@ -1204,6 +1204,41 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     /* The statusbar strip sits directly above this edge. */
     assert_divider_band_agrees("TOP", 0, cp_y, cp_x + 100);
 
+    /* ...and its keycaps outrank the divider inside their own boxes. The
+     * chips are drawn UI_PANEL_DIVIDER_GRAB_PX in from the strip edge, so
+     * their bottom row lands on the band's inner edge: the divider must not
+     * shave a row off the toolbar buttons, and must still own the panel edge
+     * itself in the same column. */
+    {
+        UiRenderSnapshot status_snap;
+        int win_h = ui_state_viewport().window_h;
+        int chip_mx = -1;
+        int mx;
+
+        make_test_ui_snapshot(&status_snap);
+        for (mx = cp_x; mx < cp_x + cp_w; mx++) {
+            if (ui_panels_hit_test(&status_snap, mx,
+                                   win_h - (cp_y + STATUSBAR_H / 2), 0).kind
+                    == UI_HIT_CODE_COPY) {
+                chip_mx = mx;
+                break;
+            }
+        }
+        ASSERT_TRUE("TOP: copy keycap column found", chip_mx >= 0);
+        if (chip_mx >= 0) {
+            ASSERT_INT("TOP: copy keycap keeps its bottom row",
+                       ui_panels_hit_test(&status_snap, chip_mx,
+                                          win_h - (cp_y +
+                                                   UI_PANEL_DIVIDER_GRAB_PX),
+                                          0).kind,
+                       UI_HIT_CODE_COPY);
+            ASSERT_INT("TOP: divider owns the panel edge under a keycap",
+                       ui_panels_hit_test(&status_snap, chip_mx,
+                                          win_h - cp_y, 0).kind,
+                       UI_HIT_PANEL_DIVIDER);
+        }
+    }
+
     /* BOTTOM layout: divider sits at gl_y = cp_y + cp_h. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);

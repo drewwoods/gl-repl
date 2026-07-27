@@ -191,7 +191,10 @@ void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)sn
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiProfilePanelView *view) { (void)view; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
-void test_glutSetCursor(int cursor) { (void)cursor; }
+/* Last cursor the controller pushed to the host. -1 until something sets
+ * one, so a test can tell "asked for inherit" from "never asked". */
+static int g_last_set_cursor = -1;
+void test_glutSetCursor(int cursor) { g_last_set_cursor = cursor; }
 int test_glr_export_mesh_ply(const char *path, int srgb_decode) {
     (void)path; (void)srgb_decode;
     return 0;
@@ -1509,6 +1512,89 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_INT("right-click non-empty line does not open report",
                ui_state_gl_state_inspector().visible, 0);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+}
+
+/* The resize cursor must promise exactly what a press delivers. A panel
+ * painted in front of the divider owns the pixel — the OpenGL-state popup is
+ * classified ahead of the canonical hit-test in mouse_dispatch, so a press
+ * there never reaches the divider — and the hover treatment, which the editor
+ * derives from divider geometry alone, has to yield to it. */
+static void test_divider_hover_yields_to_front_panel(void) {
+    UiHit hit;
+    UiGlStatePanelView view;
+    int x = -1, y = -1;
+    int cp_x, cp_y, cp_w, cp_h;
+    int win_h, div_x, my;
+    int covered_my = -1;
+    int clear_my = -1;
+
+    printf("--- imrepl_ctrl divider hover yields to a front panel ---\n");
+
+    /* The report opens on a blank row only, so anchor it on the trailing
+     * uncommitted one (same fixture as the live-row report test). */
+    prepare_code_panel_mouse_fixture();
+    editor_navigate_to_line(repl_state_document_count());
+    ASSERT_TRUE("found a blank row to anchor the state popup",
+                find_hit_point_in_code_panel(UI_HIT_CODE_INSERT_LINE,
+                                             &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("state popup open over the panel",
+               ui_state_gl_state_inspector().visible, 1);
+#ifdef GL_STUBS
+    glr_ctrl_display_frame();
+#endif
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    win_h = ui_state_viewport().window_h;
+    div_x = cp_x + cp_w;   /* LEFT layout: the divider is this column */
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
+    ASSERT_INT("popup view visible for the hover test", view.visible, 1);
+
+    /* One divider pixel the popup covers and one it doesn't. The clear one
+     * is confirmed against the canonical hit-test so the comparison is
+     * "front panel or not", not "some other surface owns it anyway". */
+    for (my = 0; my < win_h && (covered_my < 0 || clear_my < 0); my++) {
+        if (ui_gl_state_panel_hit_test(&view, div_x, my)) {
+            if (covered_my < 0)
+                covered_my = my;
+        } else if (clear_my < 0) {
+            UiRenderSnapshot snap;
+            glr_ctrl_build_ui_snapshot(&snap);
+            if (ui_panels_hit_test(&snap, div_x, my,
+                                   repl_eval_predef_view().count).kind
+                    == UI_HIT_PANEL_DIVIDER)
+                clear_my = my;
+        }
+    }
+    ASSERT_TRUE("popup covers part of the divider column", covered_my >= 0);
+    ASSERT_TRUE("divider column has an uncovered stretch", clear_my >= 0);
+
+    g_last_set_cursor = -1;
+    glr_ctrl_passive_motion(div_x, clear_my);
+    ASSERT_INT("resize cursor on the open divider",
+               g_last_set_cursor, GLUT_CURSOR_LEFT_RIGHT);
+
+    g_last_set_cursor = -1;
+    glr_ctrl_passive_motion(div_x, covered_my);
+    ASSERT_INT("no resize cursor where a panel covers the divider",
+               g_last_set_cursor, GLUT_CURSOR_INHERIT);
+
+    /* ...and that is what the press does, too. */
+    ui_state_code_panel_mut()->resizing_panel = 0;
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, div_x, covered_my);
+    ASSERT_INT("press on the covering panel starts no resize",
+               ui_state_code_panel().resizing_panel, 0);
+    ASSERT_INT("press on the covering panel keeps it open",
+               ui_state_gl_state_inspector().visible, 1);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, div_x, covered_my);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, div_x, clear_my);
+    ASSERT_INT("press on the open divider starts the resize",
+               ui_state_code_panel().resizing_panel, 1);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, div_x, clear_my);
+    ASSERT_INT("release ends the resize",
+               ui_state_code_panel().resizing_panel, 0);
 }
 
 static void test_right_click_uncommitted_empty_line_opens_gl_state_report(void) {
@@ -4818,6 +4904,7 @@ int main(void) {
     test_right_click_code_panel_does_not_start_camera_pan();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
+    test_divider_hover_yields_to_front_panel();
     test_right_click_uncommitted_empty_line_opens_gl_state_report();
     test_gl_state_popup_scroll_geometry();
     test_gl_state_popup_modelview_uses_four_lines();

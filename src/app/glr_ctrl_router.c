@@ -1738,23 +1738,35 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     return consumed;
 }
 
+/* Would a left press at (x, y) route to `kind`? Two layers answer ahead of
+ * the canonical hit-test in mouse_dispatch, and neither is reachable through
+ * it: the above-gl-state overlay pass (telemetry panels, status surfaces,
+ * variable panel, an open dropdown) and the floating OpenGL-state popup's own
+ * surface. Anything that has to promise what a click will do — the GLUT host's
+ * tour-HUD intercept, the divider's hover cursor — must consult that same
+ * order, or it speaks for pixels another panel already owns.
+ *
+ * `kind` is an int because UiHit.kind is: the core kinds and the app-band
+ * extensions in ui/app/hit.h live in separate enums. */
+static int router_press_routes_to(int x, int y, int kind) {
+    UiRenderSnapshot snap;
+    int variable_count = repl_eval_predef_view().count;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    if (ui_panels_hit_test_above_gl_state(&snap, x, y, variable_count).kind
+            != UI_HIT_NONE)
+        return 0;
+    if (glr_ctrl_router_point_in_gl_state_popup(x, y))
+        return 0;
+    return ui_panels_hit_test(&snap, x, y, variable_count).kind == kind;
+}
+
 /* The GLUT host asks before its generic "real click cancels the tour"
  * intercept. Reuse canonical z-order classification rather than merely
  * checking the HUD rectangle: a menu or later floating overlay painted over
  * the same pixels must keep ownership and must not masquerade as a HUD click. */
 int glr_ctrl_router_point_on_tour_hud(int x, int y) {
-    UiRenderSnapshot snap;
-    UiHit hit;
-
-    glr_ctrl_build_ui_snapshot(&snap);
-    hit = ui_panels_hit_test_above_gl_state(
-        &snap, x, y, repl_eval_predef_view().count);
-    if (hit.kind != UI_HIT_NONE)
-        return 0;
-    if (glr_ctrl_router_point_in_gl_state_popup(x, y))
-        return 0;
-    hit = ui_panels_hit_test(&snap, x, y, repl_eval_predef_view().count);
-    return hit.kind == UI_HIT_TOUR_HUD;
+    return router_press_routes_to(x, y, UI_HIT_TOUR_HUD);
 }
 
 int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
@@ -2225,22 +2237,17 @@ static void passive_motion_dispatch(int x, int y) {
     editor_request_redraw();
     EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
     /* The editor derives the resize cursor from divider geometry alone, but
-     * a surface painted over that pixel — an open menu dropdown/flyout
-     * extending past the code-panel edge, a floating overlay, the modal help
-     * panel — owns the click, because ui_panels_hit_test classifies those
-     * ahead of the code panel. Confirm the pixel really routes to the divider
-     * before promising a drag; otherwise fall back to inherit. Only runs while
-     * the pointer is inside the grab band, so the snapshot build stays off the
-     * general passive-motion path. */
+     * anything painted over that pixel owns the click: an open menu
+     * dropdown/flyout extending past the code-panel edge, the floating
+     * OpenGL-state popup, a telemetry/variable panel, the modal help overlay.
+     * Confirm the pixel really routes to the divider before promising a drag;
+     * otherwise fall back to inherit. Only runs while the pointer is inside
+     * the grab band, so the snapshot build stays off the general
+     * passive-motion path. */
     if (editor_effects.set_cursor &&
-        editor_effects.cursor != GLUT_CURSOR_INHERIT) {
-        UiRenderSnapshot ui_snap;
-        glr_ctrl_build_ui_snapshot(&ui_snap);
-        if (ui_panels_hit_test(&ui_snap, x, y,
-                               repl_eval_predef_view().count).kind
-                != UI_HIT_PANEL_DIVIDER)
-            editor_effects.cursor = GLUT_CURSOR_INHERIT;
-    }
+        editor_effects.cursor != GLUT_CURSOR_INHERIT &&
+        !router_press_routes_to(x, y, UI_HIT_PANEL_DIVIDER))
+        editor_effects.cursor = GLUT_CURSOR_INHERIT;
     editor_merge_input_effects(editor_effects);
     ui_menu_bar_update_pointer_hover(x, y, repl_state_variables().anim_time);
 }

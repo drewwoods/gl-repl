@@ -3118,40 +3118,54 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
 
     gl_y = builder.text_snap.vp_h - my;
 
-    /* The resize divider outranks every panel-interior surface, because
-     * in the TOP layout (the default) it runs along the panel's bottom
-     * edge — exactly where the statusbar strip sits — and in the LEFT
-     * layout the strip spans the divider column. Classified after the
-     * strip, the inner half of the grab band belongs to the statusbar
-     * and the drag only starts on the scene-side pixels, while the hover
-     * cursor (derived straight from divider geometry) already reads as
-     * resizable across the whole band. Only the outermost
-     * UI_PANEL_DIVIDER_GRAB_PX of chrome is given up, which costs the
-     * statusbar keycaps nothing: their boxes start UI_PANEL_DIVIDER_GRAB_PX
-     * in from the strip edge. */
-    if (ui_text_panel_point_on_divider(&builder.text_snap, mx, gl_y)) {
-        UiHit divider_hit = ui_hit_none();
-        divider_hit.kind = UI_HIT_PANEL_DIVIDER;
-        divider_hit.local_x = (float)mx;
-        divider_hit.local_y = (float)gl_y;
-        return divider_hit;
-    }
+    /* Statusbar strip vs. resize divider. In the TOP layout (the default)
+     * the divider runs along the panel's bottom edge — exactly where the
+     * strip sits — and in LEFT the full-width strip crosses the divider
+     * column, so the two overlap and the order between them decides who
+     * gets the grab band's panel-interior half. Three tiers:
+     *
+     *  1. An actionable keycap (undo/redo/copy/cut/paste/trash/focus/help)
+     *     keeps every pixel of its drawn box. Their boxes start exactly
+     *     UI_PANEL_DIVIDER_GRAB_PX in from the strip edge, so tier 2 would
+     *     otherwise shave off their bottom row.
+     *  2. The divider, ahead of the inert strip. Classified after it, the
+     *     band's inner half belonged to the statusbar and the drag only
+     *     started on the scene-side pixels — while the hover cursor, derived
+     *     straight from divider geometry, promised the whole band.
+     *  3. The rest of the strip, which consumes its clicks as chrome.
+     *
+     * The strip still has to beat the text rows below (tier 3 included):
+     * with enough document/header rows the text-panel walk maps this strip
+     * to its last visible row and steals toolbar clicks. */
+    {
+        int in_statusbar =
+            repl_code_panel_point_in_rect(mx, gl_y,
+                                          builder.text_snap.cp_x,
+                                          builder.text_snap.cp_y,
+                                          builder.text_snap.cp_w,
+                                          builder.text_snap.cp_h) &&
+            gl_y > builder.text_snap.cp_y &&
+            gl_y < builder.text_snap.cp_y + STATUSBAR_H;
+        int statusbar_kind = in_statusbar
+            ? repl_code_panel_statusbar_hit_kind(snap, &builder.text_snap,
+                                                 mx, gl_y)
+            : UI_HIT_NONE;
 
-    /* The statusbar is chrome layered over the bottom of the generic
-     * text panel. Classify it before the text rows: with enough
-     * document/header rows, the text-panel walk can otherwise map this
-     * strip to its last visible row and steal toolbar clicks. */
-    if (repl_code_panel_point_in_rect(mx, gl_y,
-                                      builder.text_snap.cp_x,
-                                      builder.text_snap.cp_y,
-                                      builder.text_snap.cp_w,
-                                      builder.text_snap.cp_h) &&
-        gl_y > builder.text_snap.cp_y &&
-        gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
-        return repl_code_panel_make_local_hit(
-            &builder.text_snap, mx, gl_y,
-            repl_code_panel_statusbar_hit_kind(snap, &builder.text_snap,
-                                               mx, gl_y));
+        if (in_statusbar && statusbar_kind != UI_HIT_CODE_PANEL_CHROME)
+            return repl_code_panel_make_local_hit(&builder.text_snap, mx,
+                                                  gl_y, statusbar_kind);
+
+        if (ui_text_panel_point_on_divider(&builder.text_snap, mx, gl_y)) {
+            UiHit divider_hit = ui_hit_none();
+            divider_hit.kind = UI_HIT_PANEL_DIVIDER;
+            divider_hit.local_x = (float)mx;
+            divider_hit.local_y = (float)gl_y;
+            return divider_hit;
+        }
+
+        if (in_statusbar)
+            return repl_code_panel_make_local_hit(&builder.text_snap, mx,
+                                                  gl_y, statusbar_kind);
     }
 
     hit = ui_text_panel_hit_test(&builder.text_snap, mx, my);
