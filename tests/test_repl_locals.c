@@ -26,6 +26,8 @@
 #include "repl/compile.h"
 #include "repl/eval.h"
 #include "repl/executor.h"
+#include "repl/export.h"
+#include "repl/util.h"
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
 #include "repl/state.h"
@@ -40,6 +42,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT(label, got, exp) TEST_ASSERT_INT(&g_harness, label, got, exp)
 #define ASSERT_FLOAT(label, got, exp) \
     TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-4f)
+#define ASSERT_STR(label, got, exp) TEST_ASSERT_STR(&g_harness, label, got, exp)
 
 /* Feed `lines` into a fresh scene through the commit pipeline, then run a
  * full flatten so the flat stream describes exactly this program. */
@@ -479,6 +482,199 @@ static void test_global_feeding_a_local_is_structural(void) {
                  nth_cmd_arg0(CMD_VERTEX3F, 0), 6.0f);
 }
 
+/* ---- Export / import (phase 4) --------------------------------------- */
+
+/* Read a whole file into `buf`. Returns 1 on success. */
+static int slurp(const char *path, char *buf, size_t buf_sz) {
+    FILE *f = fopen(path, "rb");
+    size_t n;
+
+    if (!f)
+        return 0;
+    n = fread(buf, 1, buf_sz - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    return 1;
+}
+
+/* Index of the first function-scoped declaration row, or -1. */
+static int first_local_decl_row(void) {
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *c = &repl_state_document_cmds()[i];
+        if (c->type == CMD_VAR_DECLARE && c->var_idx == REPL_VAR_IDX_LOCAL)
+            return i;
+    }
+    return -1;
+}
+
+/* Its canonical source line, or "". */
+static const char *first_local_decl_line(void) {
+    int row = first_local_decl_row();
+    const char *line = row >= 0
+                     ? source_text_line(source_document_view(), row) : NULL;
+    return line ? line : "";
+}
+
+static int count_decl_rows(void) {
+    int n = 0;
+    for (int i = 0; i < repl_state_document_count(); i++)
+        if (repl_state_document_cmds()[i].type == CMD_VAR_DECLARE)
+            n++;
+    return n;
+}
+
+static const char *const k_local_scene[] = {
+    "static float amp = 2;",
+    "glBegin(GL_POINTS);",
+    "func0(k) {",
+    "float ang; // swing phase",
+    "float rad;",
+    "ang = k;",
+    "rad = amp;",
+    "glVertex3f(rad, ang, 0);",
+    "}",
+    "func0(3);",
+    "glEnd();",
+};
+
+/* A local exports as a real C automatic at its body position, carrying an
+ * explicit zero initializer, and reimports as canonical REPL text. The
+ * initializer is the behavior-parity fix: the REPL binds every local to
+ * 0.0f on call entry, so a bare `float a;` in the generated file would be
+ * undefined where the REPL reads 0. */
+static void test_local_export_import_round_trip(void) {
+    printf("--- local export/import round trip ---\n");
+    const char *path1 = "/tmp/repl_locals_roundtrip_1.c";
+    const char *path2 = "/tmp/repl_locals_roundtrip_2.c";
+    static char text[1 << 16];
+    char first_pass[MAX_LINE_LEN];
+
+    load_scene(k_local_scene, (int)(sizeof(k_local_scene) / sizeof(k_local_scene[0])));
+    ASSERT_INT("two locals before export", count_decl_rows(), 3);
+
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path1, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path1, text, sizeof(text)));
+    ASSERT_TRUE("the local is a real C declaration with a zero initializer",
+                strstr(text, "float ang = 0.0f") != NULL);
+    ASSERT_TRUE("so is the second one",
+                strstr(text, "float rad = 0.0f") != NULL);
+    ASSERT_TRUE("its trailing comment survives as a C89 block comment",
+                strstr(text, "/* swing phase */") != NULL);
+    ASSERT_TRUE("the global still uses the @declare marker",
+                strstr(text, "@declare amp") != NULL);
+    ASSERT_TRUE("and the global is still a file-scope static",
+                strstr(text, "static float amp") != NULL);
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("reimport succeeds", repl_export_load_from_file(path1, NULL), 1);
+    ASSERT_INT("the local count is unchanged", count_decl_rows(), 3);
+    ASSERT_TRUE("a function-scoped declaration came back",
+                first_local_decl_row() >= 0);
+    repl_copy_string_fits(first_pass, sizeof(first_pass), first_local_decl_line());
+    ASSERT_TRUE("the reimported local dropped the generated initializer",
+                strstr(first_pass, "= 0") == NULL);
+    ASSERT_TRUE("and is plain `float`, not `static float`",
+                strstr(first_pass, "float ang") != NULL &&
+                strstr(first_pass, "static") == NULL);
+    ASSERT_TRUE("its trailing comment survived the round trip",
+                strstr(first_pass, "swing phase") != NULL);
+
+    /* Second round-trip is a fixed point: the body must not grow by a row
+     * per local, which is what a synthesized `a = 0.0f;` statement would
+     * have cost. */
+    int rows_after_first = repl_state_document_count();
+    ASSERT_INT("re-export succeeds",
+               repl_export_save_output(path2, source_document_view(), NULL), 1);
+    glr_ctrl_reset_all();
+    ASSERT_INT("re-import succeeds", repl_export_load_from_file(path2, NULL), 1);
+    ASSERT_INT("the document did not grow", repl_state_document_count(),
+               rows_after_first);
+    ASSERT_STR("and the declaration text is a fixed point",
+               first_local_decl_line(), first_pass);
+}
+
+/* Behavior parity, not just syntactic round-trip: a function that reads a
+ * local before writing it must compute the same thing after the
+ * round-trip as it did before. */
+static void test_export_parity_read_before_write(void) {
+    printf("--- export parity: read before write ---\n");
+    const char *path = "/tmp/repl_locals_parity.c";
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float u;",
+        "glVertex3f(u, 0, 0);",
+        "u = r;",
+        "glVertex3f(u, 0, 0);",
+        "}",
+        "func0(7);",
+        "glEnd();",
+    };
+    load_scene(lines, 9);
+
+    ASSERT_FLOAT("before export: the unwritten read is 0",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 0.0f);
+    ASSERT_FLOAT("before export: the written read is 7",
+                 nth_cmd_arg0(CMD_VERTEX3F, 1), 7.0f);
+
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    glr_ctrl_reset_all();
+    ASSERT_INT("reimport succeeds", repl_export_load_from_file(path, NULL), 1);
+    repl_flatten_commands(0);
+
+    ASSERT_FLOAT("after round trip: the unwritten read is still 0",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 0.0f);
+    ASSERT_FLOAT("after round trip: the written read is still 7",
+                 nth_cmd_arg0(CMD_VERTEX3F, 1), 7.0f);
+}
+
+/* Import lowers only the exporter's own literal-zero form. A hand-written
+ * non-zero initializer inside a function body must still hit the Phase 1
+ * preflight rejection, so REPL and file semantics stay identical rather
+ * than merely compatible. */
+static void test_import_lowers_only_the_generated_zero(void) {
+    printf("--- import lowers only the generated zero ---\n");
+    const char *path = "/tmp/repl_locals_handwritten.c";
+    const char *lines[] = {
+        "glBegin(GL_POINTS);",
+        "func0(r) {",
+        "float u;",
+        "u = r;",
+        "glVertex3f(u, 0, 0);",
+        "}",
+        "func0(3);",
+        "glEnd();",
+    };
+    static char text[1 << 16];
+    FILE *f;
+
+    load_scene(lines, 8);
+    ASSERT_INT("export succeeds",
+               repl_export_save_output(path, source_document_view(), NULL), 1);
+    ASSERT_TRUE("exported file is readable", slurp(path, text, sizeof(text)));
+
+    /* Hand-edit the generated file: a non-zero initializer on the local. */
+    {
+        char *at = strstr(text, "float u = 0.0f");
+        ASSERT_TRUE("found the generated declaration", at != NULL);
+        if (at)
+            memcpy(at, "float u = 5.0f", strlen("float u = 5.0f"));
+    }
+    f = fopen(path, "wb");
+    ASSERT_TRUE("rewrote the file", f != NULL);
+    if (f) {
+        fwrite(text, 1, strlen(text), f);
+        fclose(f);
+    }
+
+    glr_ctrl_reset_all();
+    repl_export_load_from_file(path, NULL);
+    ASSERT_INT("the hand-written initializer produced no local declaration",
+               count_decl_rows(), 0);
+}
+
 int main(void) {
     test_local_is_per_invocation();
     test_local_reads_zero_before_write();
@@ -490,6 +686,9 @@ int main(void) {
     test_prologue_tolerates_a_commented_decl();
     test_new_local_retargets_older_global_assignment();
     test_global_feeding_a_local_is_structural();
+    test_local_export_import_round_trip();
+    test_export_parity_read_before_write();
+    test_import_lowers_only_the_generated_zero();
 
     return test_harness_report(&g_harness, "test_repl_locals");
 }

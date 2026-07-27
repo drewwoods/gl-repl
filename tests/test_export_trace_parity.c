@@ -177,6 +177,26 @@ static const char *prog_stencil_mask[] = {
     NULL
 };
 
+static const char *prog_func_locals[] = {
+    /* Function-scoped locals. This is the only place the generated
+     * `float u = 0.0f;` declaration is actually handed to cc, so it is
+     * what proves the export writer emits compilable C for them. The
+     * read-before-write on the first vertex is deliberate: it is the case
+     * the zero initializer exists for — bare `float u;` would be
+     * undefined there, while the REPL binds it to 0. */
+    "glBegin(GL_TRIANGLES);",
+    "func0(k) {",
+    "float u;",
+    "glVertex3f(u, 0, 0);",
+    "u = k;",
+    "glVertex3f(u, 0, 0);",
+    "}",
+    "func0(1);",
+    "func0(2);",
+    "glEnd();",
+    NULL
+};
+
 static const TraceProgram g_curated[] = {
     { "triangle",            prog_triangle,        NULL },
     { "loop_in_begin",       prog_loop_in_begin,   NULL },
@@ -186,6 +206,7 @@ static const TraceProgram g_curated[] = {
     { "function_call",       prog_function_call,   NULL },
     { "label_rasterpos",     prog_label_rasterpos, NULL },
     { "stencil_mask",        prog_stencil_mask,    NULL },
+    { "func_locals",         prog_func_locals,     NULL },
 };
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
 

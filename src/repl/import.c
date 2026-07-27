@@ -1570,12 +1570,135 @@ static void import_state_init(ImportState *s) {
     }
 }
 
+/* Is the span [s, end) exactly a literal zero, in any spelling the
+ * exporter or a hand-written C file might use (0, 0.0, .0, 0.0f)? */
+static int import_span_is_literal_zero(const char *s, const char *end) {
+    char buf[64];
+    char *stop = NULL;
+    int n;
+
+    while (s < end && isspace((unsigned char)*s)) s++;
+    while (end > s && isspace((unsigned char)end[-1])) end--;
+    n = (int)(end - s);
+    if (n <= 0 || n >= (int)sizeof(buf))
+        return 0;
+    memcpy(buf, s, (size_t)n);
+    buf[n] = '\0';
+    if (buf[n - 1] == 'f' || buf[n - 1] == 'F')
+        buf[--n] = '\0';
+    if (n == 0)
+        return 0;
+    return strtod(buf, &stop) == 0.0 && stop && *stop == '\0';
+}
+
+/* Lower the exporter's generated local declaration back to canonical REPL
+ * text: `float a = 0.0f, b = 0.0f;` -> `float a, b;`.
+ *
+ * The exporter writes those initializers because the REPL binds every
+ * local to 0.0f on call entry, so a bare C `float a;` would be undefined
+ * where the REPL reads 0 (see write_canonical_cmd_as_c). Import is the
+ * right place to undo it — it is already the trusted path that bypasses
+ * commit handlers for exactly this class of reason — and *lowering*
+ * rather than synthesizing an `a = 0.0f;` statement is what keeps the
+ * round-trip a fixed point instead of growing the body by one row per
+ * local per pass.
+ *
+ * Only a literal zero is lowered, and only when at least one initializer
+ * is present. A hand-written `float a = 5;` inside a function body still
+ * reaches the declaration preflight and is rejected there, so REPL and
+ * file semantics stay identical rather than merely compatible.
+ * `static float` is never touched — that is a global, and the prologue's
+ * own handler owns it. */
+static int import_make_repl_local_decl(const char *line, char *out,
+                                       int out_sz) {
+    const char *p;
+    const char *names_start;
+    const char *semi;
+    const char *tail;
+    int has_static = 0;
+    int indent = 0;
+    int inits = 0;
+    int off;
+
+    if (!line || !out || out_sz <= 0)
+        return 0;
+    while (line[indent] && isspace((unsigned char)line[indent]))
+        indent++;
+    p = repl_scan_decl_float_prefix(line, &has_static);
+    if (!p || has_static)
+        return 0;
+    names_start = p;
+
+    /* Validate the whole list before emitting anything: one non-zero or
+     * non-literal initializer means this is not the exporter's form and
+     * the line must pass through untouched. */
+    for (;;) {
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || *p == '\0')
+            break;
+        if (!isalpha((unsigned char)*p) && *p != '_')
+            return 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '=') {
+            const char *value = ++p;
+            while (*p && *p != ',' && *p != ';') p++;
+            if (!import_span_is_literal_zero(value, p))
+                return 0;
+            inits++;
+        }
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != ',')
+            break;
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ';' || inits == 0)
+        return 0;
+
+    if (indent >= out_sz - 1)
+        return 0;
+    memset(out, ' ', (size_t)indent);
+    off = indent;
+    off += snprintf(out + off, (size_t)(out_sz - off), "float ");
+
+    p = names_start;
+    for (int first = 1; off < out_sz - 1; first = 0) {
+        const char *name_start;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == ';' || *p == '\0')
+            break;
+        name_start = p;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        if (!first)
+            off += snprintf(out + off, (size_t)(out_sz - off), ", ");
+        if (off < out_sz - 1)
+            off += snprintf(out + off, (size_t)(out_sz - off), "%.*s",
+                            (int)(p - name_start), name_start);
+        while (*p && *p != ',' && *p != ';') p++;
+        if (*p != ',')
+            break;
+        p++;
+    }
+    if (off >= out_sz - 1)
+        return 0;
+
+    /* Everything past the terminator (a trailing comment) rides along. */
+    semi = strchr(names_start, ';');
+    tail = semi ? semi + 1 : "";
+    while (*tail && isspace((unsigned char)*tail)) tail++;
+    snprintf(out + off, (size_t)(out_sz - off), ";%s%s",
+             *tail ? " " : "", tail);
+    return 1;
+}
+
 static void import_translate_repl_line(const char *line,
                                        char *repl_line,
                                        int repl_line_sz) {
     if (import_make_repl_for_header(line, repl_line, repl_line_sz))
         return;
-    if (import_make_repl_tess_line(line, repl_line, repl_line_sz) ||
+    if (import_make_repl_local_decl(line, repl_line, repl_line_sz) ||
+        import_make_repl_tess_line(line, repl_line, repl_line_sz) ||
         import_make_repl_materialfv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_point_parameter_line(line, repl_line, repl_line_sz) ||
         import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||

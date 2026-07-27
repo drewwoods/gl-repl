@@ -1,14 +1,45 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–3 landed
+## Status — IN PROGRESS (2026-07-27): Phases 1–4 landed
 
-Phases 1 (declaration compile), 2 (flatten) and 3 (edit guards) are
-implemented and tested. **Locals work end to end and the edit surface is
-closed**: declare one inside a function body, assign it, read it, recurse,
-accumulate across a loop, and no later binder or overwrite edit can leave a
-reference dangling. Phases 4–5 remain — export/import, docs, and the example
-conversions. No example scene is converted yet, so nothing in the corpus
+Phases 1 (declaration compile), 2 (flatten), 3 (edit guards) and 4
+(export/import) are implemented and tested. **Locals work end to end, the edit
+surface is closed, and scenes using them round-trip through the file format.**
+Phase 5 remains — docs and the three example conversions, with the manual
+scrub check. No example scene is converted yet, so nothing in the corpus
 depends on the feature.
+
+### Phase 4 — export / import (done)
+
+- **Export** (`write_canonical_cmd_as_c`) branches on `REPL_VAR_IDX_LOCAL` and
+  writes a real C automatic at the body position with explicit zero
+  initializers — `    float ang = 0.0f, rad = 0.0f;` — preserving the row's
+  indent and trailing comment (which `export_write_c89_line` converts to a
+  block comment). Globals keep the `/* @declare */` marker and their
+  file-scope static.
+- **Import** gained `import_make_repl_local_decl()` in the
+  `import_translate_repl_line` chain, lowering that form back to
+  `float ang, rad;`. It requires *no* `static`, at least one initializer, and
+  every present initializer to be a literal zero (`0`, `0.0`, `.0`, `0.0f` —
+  `import_span_is_literal_zero`). A hand-written `float a = 5;` in a body
+  therefore still reaches the Phase 1 preflight and is rejected, so REPL and
+  file semantics stay identical rather than merely compatible. The
+  exporter's `float A[16], B[16], C[16];` scratch line does not match (the
+  subscript ends the name list before any terminator).
+
+The plan's prediction held: **no other import change was needed.** Exported
+body lines already reach `import_try_function_body` → `repl_load_apply_line`
+ahead of the predef-stash handlers, so `import_parse_predef_decl_common` and
+`parse_snippet_declare` are untouched.
+
+Tests: three cases in `tests/test_repl_locals.c` — the round trip (export
+shape, reimport to canonical text, and a *second* round trip proving a fixed
+point with no row growth, which is what sank the synthesized-`a = 0.0f;`
+alternative); read-before-write value parity across the round trip; and a
+hand-edited non-zero initializer still being rejected. Plus a `func_locals`
+program in `tests/test_export_trace_parity.c` — the only place the generated
+declaration is actually handed to `cc`, so it is what proves the emitted C
+compiles and runs.
 
 ### Phase 3 — edit guards (done)
 

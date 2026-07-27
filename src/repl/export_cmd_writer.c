@@ -288,6 +288,42 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         export_write_c89_line(f, source_text);
         break;
     case CMD_VAR_DECLARE: {
+        if (cmd->var_idx == REPL_VAR_IDX_LOCAL) {
+            /* A function-scoped local is a real C automatic written at its
+             * body position — there is no file-scope static for it to
+             * shadow, so no marker is needed.
+             *
+             * The zero-initializers are not cosmetic. The REPL binds every
+             * local to 0.0f on call entry, so a bare `float a, b;` would
+             * read 0 in the REPL and be *undefined* in the generated file.
+             * docs/ARCHITECTURE.md makes behavior parity a contract rather
+             * than a preference, and undefined behavior is precisely the
+             * one thing the REPL cannot reproduce — so "match C" was never
+             * available as a resolution. Import lowers this form back to
+             * `float a;`, which keeps the round-trip idempotent. */
+            char line[MAX_LINE_LEN];
+            const char *comment = source_text ? strstr(source_text, "//") : NULL;
+            int indent = 0;
+            int off;
+
+            while (source_text[indent] &&
+                   isspace((unsigned char)source_text[indent]))
+                indent++;
+            if (indent > (int)sizeof(line) - 1)
+                indent = (int)sizeof(line) - 1;
+            memset(line, ' ', (size_t)indent);
+            off = indent;
+            off += snprintf(line + off, sizeof(line) - (size_t)off, "float ");
+            for (int di = 0; di < cmd->payload.decl.count &&
+                             off < (int)sizeof(line) - 8; di++)
+                off += snprintf(line + off, sizeof(line) - (size_t)off,
+                                "%s%s = 0.0f", di ? ", " : "",
+                                cmd->payload.decl.names[di]);
+            snprintf(line + off, sizeof(line) - (size_t)off, ";%s%s",
+                     comment ? " " : "", comment ? comment : "");
+            export_write_c89_line(f, line);
+            break;
+        }
         /* Variables are emitted as file-scope statics by write_predef_var_globals().
          * We cannot write a local float declaration here because it would shadow
          * the file-scope global.  Instead, emit a special REPL marker comment so
