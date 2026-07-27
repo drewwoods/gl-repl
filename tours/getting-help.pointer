@@ -1,0 +1,59 @@
+# Getting Help - the two help surfaces: the F1 overlay (four tabs, clicked
+# through one by one) and the per-command help card a right-click opens on a
+# code-panel row.
+#
+# Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
+# helptab: resolves only while the overlay is up, and code: only while the
+# row is on screen - so the ordering below is load-bearing: open the overlay
+# before aiming at a tab, and commit the command before right-clicking it.
+
+move scene:0.55,0.30
+echo scene:0.25,0.76 24 3.4 Stuck? Help is always one key away.
+pause 3.4
+echo scene:0.25,0.76 24 3.0 F1 opens the help overlay.
+skey f1
+pause 2.4
+echo scene:0.25,0.76 24 3.4 Overview: what every panel is for.
+pause 3.4
+echo scene:0.25,0.76 24 3.2 Click a tab to switch reference.
+glide helptab:commands 1.0
+ring helptab:commands 1.0
+click                        # Commands tab
+pause 2.2
+echo scene:0.25,0.76 24 3.4 Commands: every GL call, with its args.
+wheel 4                      # scroll down through the command list
+pause 1.6
+wheel -4
+pause 1.2
+glide helptab:keys 0.9
+click                        # Keys tab
+pause 2.0
+echo scene:0.25,0.76 24 3.4 Keys: the full keyboard and mouse map.
+pause 3.4
+glide helptab:about 0.9
+click                        # About tab
+pause 2.0
+echo scene:0.25,0.76 24 3.0 About: what this build is made of.
+pause 3.0
+glide helptab:overview 0.9
+click                        # back to Overview
+pause 1.6
+echo scene:0.25,0.76 24 3.0 Esc (or F1) closes the overlay.
+key \e
+pause 2.0
+echo scene:0.25,0.76 24 3.6 Help also comes per command. Watch.
+pause 3.6
+key@16 glColor3f(1, 0.55, 0.2)
+key ;                        # commit the line into the code panel
+pause 1.4
+echo scene:0.25,0.76 24 3.4 Right-click any command in the panel.
+glide code:glcolor3f 1.2
+ring code:glcolor3f 1.2
+rightclick                   # opens that command's help card
+pause 4.5
+echo scene:0.25,0.76 24 3.4 A card explains that exact call.
+pause 3.4
+echo scene:0.25,0.76 24 3.0 Click the code panel to dismiss it.
+click code:glcolor3f
+pause 1.6
+echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!

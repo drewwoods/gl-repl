@@ -59,6 +59,12 @@ typedef struct {
 /* Largest valid scroll offset for the active tab (0 when content fits). */
 int ui_tabbed_overlay_max_scroll(const UiOverlayState *in);
 
+/* Center of tab `tab_idx` in GLUT mouse space (origin top-left) — the
+ * inverse of the tab branch of the hit-test, so a scripted click aimed here
+ * lands on exactly that tab. Returns 0 when hidden or out of range. */
+int ui_tabbed_overlay_tab_point(const UiOverlayState *in, int tab_idx,
+                                int *mx, int *my);
+
 /* Classify a GLUT-space mouse point (top-left origin) against the
  * overlay. Returns OUTSIDE when not visible or off the panel. */
 UiOverlayHit ui_tabbed_overlay_hit_test(const UiOverlayState *in,

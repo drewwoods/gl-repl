@@ -96,6 +96,17 @@ UiOverlayHit ui_tabbed_overlay_hit_test(const UiOverlayState *in,
     return hit;
 }
 
+int ui_tabbed_overlay_tab_point(const UiOverlayState *in, int tab_idx,
+                                int *mx, int *my) {
+    OverlayGeom g;
+    if (!in || !in->visible) return 0;
+    if (!overlay_compute_geom(in, &g)) return 0;
+    if (tab_idx < 0 || tab_idx >= g.num_tabs || g.tab_w <= 0) return 0;
+    if (mx) *mx = g.hx + tab_idx * g.tab_w + g.tab_w / 2;
+    if (my) *my = in->viewport_h - (g.tab_y + g.tab_bar_h / 2);
+    return 1;
+}
+
 void ui_tabbed_overlay_render(const UiOverlayState *in) {
     if (!in || !in->visible) return;
     if (!in->content || in->content->tab_count <= 0) return;

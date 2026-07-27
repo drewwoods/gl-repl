@@ -14,6 +14,11 @@
 #include "ui/app/state.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
+#include "ui/core/tabbed_overlay.h"
+#include "ui/app/repl_code_panel.h"
+#include "editor/help_session.h"
+#include "editor/input.h"
+#include "editor/state.h"
 #include "support/test_harness.h"
 #include <ui/core/gl_2d.h>
 #ifdef GL_STUBS
@@ -1352,6 +1357,68 @@ static void test_symbolic_targets_resolve_to_hits(void) {
     }
 }
 
+/* helptab: and code: resolve against transient surfaces — the modal help
+ * overlay and the code panel's visible rows — so both must fail closed when
+ * the surface is absent and land on the real hit-test when it is up. */
+static void test_help_and_code_targets_resolve_to_hits(void) {
+    int mx = -1, my = -1;
+
+    reset_menu_bar_fixture(1200, 800);
+    ui_state_code_panel_mut()->panel_frac = 0.42f;
+
+    ASSERT_TRUE("helptab: fails with the overlay closed",
+                !glr_pointer_script_resolve_target("helptab:commands",
+                                                   &mx, &my));
+    glr_ctrl_toggle_help();
+    ASSERT_TRUE("helptab:commands resolves with the overlay open",
+                glr_pointer_script_resolve_target("helptab:commands",
+                                                  &mx, &my));
+    {
+        UiOverlayState st = {
+            0, editor_help_session_view().tab_idx,
+            editor_help_session_view().scroll,
+            ui_state_viewport().window_w, ui_state_viewport().window_h,
+            glr_ctrl_help_overlay_content()
+        };
+        UiOverlayHit hit;
+        st.visible = 1;
+        hit = ui_tabbed_overlay_hit_test(&st, mx, my);
+        ASSERT_INT_EQ("helptab:commands lands on a tab", (int)hit.kind,
+                      (int)UI_OVERLAY_HIT_TAB);
+        ASSERT_STR_EQ("…and it is the Commands tab",
+                      hit.kind == UI_OVERLAY_HIT_TAB
+                          ? st.content->tabs[hit.tab].label : "(none)",
+                      "Commands");
+    }
+    ASSERT_TRUE("unknown tab label fails",
+                !glr_pointer_script_resolve_target("helptab:bogus",
+                                                   &mx, &my));
+    glr_ctrl_close_help();
+
+    ASSERT_TRUE("code: fails with an empty document",
+                !glr_pointer_script_resolve_target("code:glcolor3f",
+                                                   &mx, &my));
+    editor_feed_line("glColor3f(1, 0.5, 0.2);");
+    ASSERT_TRUE("code:glcolor3f resolves once the row exists",
+                glr_pointer_script_resolve_target("code:glcolor3f",
+                                                  &mx, &my));
+    {
+        UiRenderSnapshot snap;
+        UiHit hit;
+        glr_ctrl_build_ui_snapshot(&snap);
+        hit = ui_repl_code_panel_hit_test(&snap, mx, my);
+        ASSERT_INT_EQ("code: point is a code-text hit", (int)hit.kind,
+                      (int)UI_HIT_CODE_TEXT);
+        ASSERT_STR_EQ("…on the glColor3f row",
+                      hit.kind == UI_HIT_CODE_TEXT
+                          ? editor_buffer_line(hit.line_idx) : "(none)",
+                      "  glColor3f(1, 0.5, 0.2);");   /* canonical indent */
+    }
+    ASSERT_TRUE("unmatched command text fails",
+                !glr_pointer_script_resolve_target("code:glbogusf",
+                                                   &mx, &my));
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
@@ -1365,6 +1432,7 @@ int main(void) {
     test_config_all_flyout_scroll();
     test_config_short_flyout_consumes_but_no_scroll();
     test_symbolic_targets_resolve_to_hits();
+    test_help_and_code_targets_resolve_to_hits();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();

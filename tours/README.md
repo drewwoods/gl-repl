@@ -142,6 +142,8 @@ top-left), or one of these symbolic tokens:
 | `pin:<label>` | A pinned menu-bar control: `search`, `view`, or `replay`. |
 | `scene:<x>,<y>` | A fraction of the live scene viewport, measured from its top-left. For example, `scene:0.5,0.5` is its center. |
 | `shell:<label>` | An Emscripten browser-shell control outside the canvas. Currently `shell:new` targets the top **New** button. |
+| `helptab:<label>` | A tab of the F1 help overlay: `overview`, `commands`, `keys`, `about`. Only resolves while the overlay is open. |
+| `code:<label>` or `code:<n>` | A code-panel row — the first *visible* row whose canonical text the label prefixes (`code:glcolor3f`), or a 0-based source line (`code:3`). Only resolves for a row currently scrolled into view. |
 
 Labels use a case-insensitive normalized prefix match. In target labels, `_`
 matches a space, so `sub:3d:torus_knot` can match **Torus knot (animated)**.

@@ -340,6 +340,66 @@ int glr_ctrl_router_handle_help_click(int button, int state, int x, int y) {
     return 1;                            /* modal: swallow body clicks */
 }
 
+/* Normalized prefix match for pointer-script target labels, same rule as
+ * menu_bar's: case-insensitive, '_' in the needle stands in for ' ' (script
+ * targets are single tokens). */
+static int glr_ctrl_target_label_matches(const char *label,
+                                         const char *needle) {
+    if (!label || !needle || !*needle)
+        return 0;
+    while (*needle) {
+        char n = (char)tolower((unsigned char)*needle);
+        char l = (char)tolower((unsigned char)*label);
+        if (n == '_') n = ' ';
+        if (n != l)
+            return 0;
+        needle++;
+        label++;
+    }
+    return 1;
+}
+
+int glr_ctrl_help_tab_point(const char *label, int *mx, int *my) {
+    UiOverlayState st = glr_ctrl_help_overlay_state();
+    if (!st.visible || !st.content)
+        return 0;
+    for (int i = 0; i < st.content->tab_count; i++) {
+        if (!glr_ctrl_target_label_matches(st.content->tabs[i].label, label))
+            continue;
+        return ui_tabbed_overlay_tab_point(&st, i, mx, my);
+    }
+    return 0;
+}
+
+int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
+    UiRenderSnapshot snap;
+    int count = repl_state_document_count();
+
+    if (!spec || !*spec || count <= 0)
+        return 0;
+    glr_ctrl_build_ui_snapshot(&snap);
+
+    if (spec[0] >= '0' && spec[0] <= '9') {
+        int line = atoi(spec);
+        if (line >= count)
+            return 0;
+        return ui_repl_code_panel_source_line_point(&snap, line, mx, my);
+    }
+
+    /* Text targets take the first *visible* match: a long document repeats a
+     * command many times, and only an on-screen row can be clicked. */
+    for (int i = 0; i < count; i++) {
+        const char *text = editor_buffer_line(i);
+        while (text && (*text == ' ' || *text == '\t'))
+            text++;
+        if (!glr_ctrl_target_label_matches(text, spec))
+            continue;
+        if (ui_repl_code_panel_source_line_point(&snap, i, mx, my))
+            return 1;
+    }
+    return 0;
+}
+
 int glr_ctrl_router_handle_help_tab_special(int key) {
     if (!ui_state_help().visible)
         return 0;

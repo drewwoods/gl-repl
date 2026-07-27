@@ -312,7 +312,7 @@ static int ps_parse_mods(const char *tok) {
 static const char *ps_scan_point(const char *args, PsEvent *ev) {
     static const char *const k_prefixes[] = {
         "menu:", "item:", "subenter:", "sub:", "pin:", "shell:",
-        "scene:"
+        "scene:", "helptab:", "code:"
     };
     int n = 0;
 
@@ -748,6 +748,10 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my) {
         return 0;
 #endif
     }
+    if (strncmp(target, "helptab:", 8) == 0)
+        return glr_ctrl_help_tab_point(target + 8, mx, my);
+    if (strncmp(target, "code:", 5) == 0)
+        return glr_ctrl_code_line_point(target + 5, mx, my);
     if (strncmp(target, "item:", 5) == 0)
         return ui_menu_bar_target_open_row(target + 5, mx, my);
     if (strncmp(target, "subenter:", 9) == 0)

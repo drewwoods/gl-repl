@@ -213,6 +213,9 @@ hands control back by itself).
 - *Editing Basics* — creates a fresh scene and types a spinning triangle
   plus a torus, line by line, showing commits and the autocomplete ghost.
 - *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
+- *Getting Help* — opens the F1 overlay and clicks through its Overview /
+  Commands / Keys / About tabs, then right-clicks a command in the code panel
+  to pop that command's own help card.
 
 Tours aim at named UI elements (menus, rows, buttons) resolved against the
 live layout as they play, so they work at any window size. Each action starts
