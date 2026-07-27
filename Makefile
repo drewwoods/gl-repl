@@ -145,8 +145,29 @@ endif
 # on macOS. -Werror=implicit-function-declaration makes any future
 # such hidden-symbol regression a hard compile error instead of a
 # silent pointer-truncation crash.
+
+# Debug info, deliberately not a blanket -ggdb -g3. Emscripten is the reason:
+# emcc keeps DWARF inside the .wasm and, when it is present, falls back to
+# "limited binaryen optimizations" at link. Measured on the shipped page:
+# index.wasm went 5.44 MB -> 1.82 MB, i.e. 3.6 MB the browser no longer has
+# to fetch and compile before the first frame. Runtime throughput was
+# unaffected either way (bench_repl, within noise over three rounds), so this
+# is a payload/startup fix and not a speed one -- don't expect it to move the
+# CPU numbers.
+#
+# Native builds keep full DWARF: there it costs nothing at run time and it
+# is what makes a crash report or an Instruments trace readable. Only the
+# WEB=1 release link drops it.
+#
+# Deferred $(if ...) rather than a parse-time ifeq because BUILD is selected
+# further down this file. Override to force either way, e.g.
+# `make web DEBUG_INFO_CFLAGS=-g2` when you need named frames in a browser
+# profile, or `make gl-repl DEBUG_INFO_CFLAGS=-g0` for a lean native binary.
+DEBUG_INFO_CFLAGS ?= \
+	$(if $(and $(filter 1,$(WEB)),$(filter release,$(BUILD))),-g0,-ggdb -g3)
+
 COMMON_CFLAGS = \
-	-Wall -ggdb -g3 \
+	-Wall $(DEBUG_INFO_CFLAGS) \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c99 -D_GNU_SOURCE -Werror=implicit-function-declaration \
 	-DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
@@ -352,14 +373,35 @@ GL_HEADER_CFLAGS = \
 # this build only -- miniaudio's WebAudio backend needs EM_ASM, a gnu-mode
 # extension. The native -std=c99 check-c99 ratchet never sees WEB=1 objects.
 
-GL_LDFLAGS = \
-	packaging/web/gl4es_bootstrap.c $(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a \
-	$(FREEGLUT_STATIC_LIB) --shell-file packaging/web/shell.html \
+# The wasm GL stack and the runtime sizing, split out from GL_LDFLAGS so the
+# benchmark link (BENCH_WEB_LDFLAGS, below) can reuse them without inheriting
+# the app-page glue.
+WEB_GL_ARCHIVES = \
+	$(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a $(FREEGLUT_STATIC_LIB)
+WEB_RUNTIME_LDFLAGS = \
 	-sUSE_WEBGL2=1 -sFULL_ES2=1 -sINITIAL_MEMORY=805306368 \
-	-sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864 \
+	-sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864
+
+GL_LDFLAGS = \
+	packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES) \
+	--shell-file packaging/web/shell.html \
+	$(WEB_RUNTIME_LDFLAGS) \
 	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_cfg_share_text,_glr_web_apply_cfg_text,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text,_glr_audio_web_manifest_begin,_glr_audio_web_manifest_add,_glr_audio_web_manifest_finish \
 	-sEXPORTED_RUNTIME_METHODS=ccall,FS
 GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
+
+# Link set for `make bench-web`: the same wasm GL stack, minus everything
+# that only means something on the app page. Three deliberate differences:
+#
+#   - no packaging/web/gl4es_bootstrap.c. Its constructor calls
+#     document.querySelector, which throws before main() ever runs outside a
+#     browser. The benchmark emits no GL, so it needs none of that glue.
+#   - no --shell-file / -sEXPORTED_FUNCTIONS. There is no HTML page and no JS
+#     caller here, and the glr_web_* symbols aren't even in this link.
+#   - -sEXIT_RUNTIME=1, so main()'s return value reaches node as an exit
+#     status. That is what lets bench-web fail a run loudly.
+BENCH_WEB_LDFLAGS = \
+	$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -sEXIT_RUNTIME=1
 endif
 
 ifeq ($(BUILD),coverage)
@@ -386,6 +428,9 @@ endif
 	bench-glut-bitmap-apple \
 	bench-glut-bitmap-build \
 	bench-glut-bitmap-freeglut \
+	bench-web \
+	bench-web-csv \
+	require-emcc \
 	callgraph-files \
 	callgraph-graphviz \
 	callgraph-html \
@@ -910,6 +955,12 @@ endef
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
 $(foreach bin,$(BENCH_BINS),$(eval $(call bench_binary,$(bin))))
 
+# WEB=1: benchmarks link the wasm GL stack without the app-page glue, so they
+# can run headless under node. See BENCH_WEB_LDFLAGS and `make bench-web`.
+ifeq ($(WEB),1)
+$(foreach bin,$(BENCH_BINS),$(eval $(bin)_LDLIBS = $$(BENCH_WEB_LDFLAGS)))
+endif
+
 test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/src/repl/eval.o
 test_eval_LDLIBS = -lm -lpthread
 test_eval_RUN = $(BINDIR)/test_eval --run-tests
@@ -1184,7 +1235,10 @@ gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flag
 
 sample: gl-repl ## Alias for the main gl-repl sample binary.
 
-web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/build-web.sh for a cold start).
+# Shared by `web` and `bench-web`. A prerequisite rather than a copy of the
+# check in each recipe -- the advice is long enough that two copies would
+# drift apart.
+require-emcc:
 	@command -v emcc >/dev/null 2>&1 || { \
 		echo "ERROR: emcc not found on PATH."; \
 		echo ""; \
@@ -1199,6 +1253,8 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 		echo "     Defaults to ~/src/emsdk; override with EMSDK=<path>."; \
 		exit 1; \
 	}
+
+web: require-emcc ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/build-web.sh for a cold start).
 	scripts/web-deps.sh
 	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
 	bash scripts/web-audio-assets.sh "$(WEB_MUSIC_SRC_DIR)" "$(WEB_BINDIR)/assets"
@@ -2165,6 +2221,45 @@ bench: $(BENCH_BINS) ## Build and run the REPL runtime benchmarks.
 bench-csv: $(BENCH_BINS) ## Run benchmarks with --csv output (machine readable).
 	@for b in $(BENCH_BINS); do \
 		$(BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
+	done
+
+# The same benchmarks compiled to wasm and run under node, because wasm is
+# not a constant multiple of native: measured against this machine's native
+# release build, per-op cost ran 1.2x on replay_long but 2.2x on
+# normalize_large_doc, so the native run reorders which paths look expensive
+# on the web. Numbers are only comparable web-to-web -- see the caveats in
+# bench/bench_repl.c's header comment before diffing them against `make bench`.
+#
+# This measures the C pipeline only. It does not, and cannot, see the
+# gl4es -> WebGL2 -> browser-GL cost that the app pays for real draw calls:
+# node has no GPU, and fade_batches (the one sub-benchmark that emits GL)
+# skips itself here. A regression that lives in the draw path will not show
+# up in these numbers.
+bench-web: require-emcc ## Build and run the REPL runtime benchmarks as wasm under node (web-side CPU cost only; needs emcc + node).
+	@command -v node >/dev/null 2>&1 || { \
+		echo "ERROR: node not found on PATH -- bench-web runs the wasm build headless under node."; \
+		exit 1; \
+	}
+	scripts/web-deps.sh
+	@for b in $(BENCH_BINS); do \
+		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b || exit $$?; \
+	done
+	@for b in $(BENCH_BINS); do \
+		echo "==> $$b (wasm/node) $(BENCH_ARGS)"; \
+		node $(WEB_BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
+	done
+
+bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machine readable).
+	@command -v node >/dev/null 2>&1 || { \
+		echo "ERROR: node not found on PATH -- bench-web runs the wasm build headless under node."; \
+		exit 1; \
+	}
+	@scripts/web-deps.sh >/dev/null
+	@for b in $(BENCH_BINS); do \
+		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b >/dev/null || exit $$?; \
+	done
+	@for b in $(BENCH_BINS); do \
+		node $(WEB_BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
 	done
 
 # count lines: $(SRCS) $(HDRS)

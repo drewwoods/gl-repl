@@ -14,6 +14,27 @@
  * have somewhere to emit to; without a current context those calls are
  * undefined behaviour rather than measurable work.
  *
+ * `make bench-web` builds this same file to wasm and runs it under node,
+ * because wasm cost is not a fixed multiple of native cost: measured against
+ * one machine's native release build, per-op cost came out ~1.2x on
+ * replay_long but ~2.2x on normalize_large_doc, which is enough to reorder
+ * what looks expensive. Three things to know before reading those numbers:
+ *
+ *   - They are comparable web-to-web only. The web build compiles the reduced
+ *     examples/catalog-emscripten.ini (31 examples vs 38), so every
+ *     example-driven row - parse_lines and feed_examples totals, and the
+ *     flatten_corpus_NN indices - is measuring a different corpus than the
+ *     native run. The synthetic-document rows (source_scope_*,
+ *     normalize_large_doc, reformat_large_doc, replay_long) build their own
+ *     input and are the ones that cross-compare honestly.
+ *   - fade_batches does not run. node has no GPU and no WebGL context, so the
+ *     one sub-benchmark that emits real draw calls skips itself. Nothing here
+ *     sees the gl4es -> WebGL2 -> browser-GL cost of the actual draw path.
+ *   - Rows that emit GL incidentally (replay_long) still link real gl4es, so
+ *     they carry its client-side work against no live context, where the
+ *     native build with no context is closer to a no-op. Treat that row's
+ *     web/native ratio with more suspicion than the pure-CPU ones.
+ *
  * Sub-benchmarks (names match the `--only` filter strings and the printed
  * labels):
  *   parse_lines       - repl_parse_command on every example line
@@ -96,6 +117,10 @@
 #include <string.h>
 #include <sys/utsname.h>          /* uname() for the machine-id CSV preamble */
 #include <time.h>
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>           /* host identification for the CSV preamble */
+#endif
 
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -192,7 +217,14 @@ static int g_case_missing = 0;
 
 /* Resolve a benchmark case by its exact catalog display name. Indices are
  * deliberately not hard-coded: the catalog is reordered whenever an example
- * is added. */
+ * is added.
+ *
+ * Absence is a hard error natively (that is the whole point of g_case_missing
+ * — a renamed built-in must fail `make bench`, not quietly drop a row), but a
+ * skip under Emscripten. The web build compiles examples/catalog-emscripten.ini,
+ * a deliberate subset: Orrery and Whale are simply not in it, so several named
+ * cases cannot resolve there no matter how healthy the catalog is. `make bench`
+ * still runs against the full catalog, so a real rename is still caught. */
 static int example_index_by_name(const char *display_name) {
     int n = repl_example_count();
     for (int i = 0; i < n; i++) {
@@ -200,8 +232,13 @@ static int example_index_by_name(const char *display_name) {
         if (name && strcmp(name, display_name) == 0)
             return i;
     }
+#if defined(__EMSCRIPTEN__)
+    fprintf(stderr, "SKIP: \"%s\" is not in the web example catalog\n",
+            display_name);
+#else
     fprintf(stderr, "ERROR: benchmark case not found: \"%s\"\n", display_name);
     g_case_missing = 1;
+#endif
     return -1;
 }
 
@@ -1918,9 +1955,25 @@ static void print_csv_header(void) {
 /* Identify the host so a captured baseline CSV records where its numbers
  * came from (timings are only comparable on the same machine). In CSV mode
  * the line is `#`-prefixed so it precedes the header as a skippable comment;
- * in human mode it is a plain banner line. */
+ * in human mode it is a plain banner line.
+ *
+ * uname() is useless for this under Emscripten: it answers
+ * "emscripten Emscripten <ver> wasm32" on every machine, so every web
+ * baseline would claim the same host. Ask the JS runtime instead, and tag
+ * the line `wasm/` so a web row can never be mistaken for a native one. */
 static void print_machine_info(void) {
     const char *prefix = g_csv ? "# " : "";
+#if defined(__EMSCRIPTEN__)
+    const char *host = emscripten_run_script_string(
+        "(function(){"
+        "try{var os=require('os');"
+        "return os.hostname()+' '+process.platform+' '+os.release()+' '+"
+        "os.arch()+' node-'+process.versions.node+' v8-'+process.versions.v8;}"
+        "catch(e){"
+        "return (typeof navigator!=='undefined'&&navigator.userAgent)||"
+        "'unknown-js-host';}})()");
+    printf("%smachine: wasm/%s\n", prefix, host ? host : "unknown");
+#else
     struct utsname u;
     if (uname(&u) == 0) {
         printf("%smachine: %s %s %s %s\n", prefix,
@@ -1928,6 +1981,7 @@ static void print_machine_info(void) {
     } else {
         printf("%smachine: unknown\n", prefix);
     }
+#endif
 }
 
 static void usage(const char *prog) {
@@ -1989,9 +2043,20 @@ static int wants(const char *filter, const char *name) {
  * On macOS, preflight CoreGraphics and skip this GL-only case when no
  * active display exists; Cocoa freeglut otherwise traps while querying
  * its empty screen list. Other window backends retain their native
- * no-display error, which is the cue to re-run with USE_GL_STUBS=1. */
+ * no-display error, which is the cue to re-run with USE_GL_STUBS=1.
+ *
+ * Under Emscripten (`make bench-web`) there is no context to make current:
+ * the run is headless under node, and Emscripten's JS GLUT reaches straight
+ * for `document` inside glutInit, which throws. Skip before that happens.
+ * Getting a real number here needs the wasm build driven in a browser
+ * against a live WebGL2 canvas, which is a different harness. */
 static int bench_gl_context_init(int *argc, char **argv) {
-#ifndef GL_STUBS
+#if defined(__EMSCRIPTEN__)
+    (void)argc; (void)argv;
+    fprintf(stderr,
+            "bench_repl: no GL context under node; skipping fade_batches\n");
+    return 0;
+#elif !defined(GL_STUBS)
     static int glut_inited = 0;
     if (glut_inited) return 1;
 #ifdef __APPLE__

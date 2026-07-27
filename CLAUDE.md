@@ -98,6 +98,13 @@ gitignored, survives `make clean`).
   (sources emsdk itself; checkout via `EMSDK`, default `~/src/emsdk`).
   `make web-serve` serves at `http://localhost:8000/`. gl4es → WebGL2;
   deps fetched by `scripts/web-deps.sh` into gitignored `third_party/web/`.
+  Release web links with `-g0` (`DEBUG_INFO_CFLAGS`) — DWARF in the `.wasm`
+  costs 3x payload and blocks binaryen opts for no runtime gain.
+  `make bench-web` runs `bench_repl` as wasm under node: wasm cost is **not**
+  a fixed multiple of native (1.2x–2.2x per-op across sub-benchmarks), so
+  `make bench` alone mis-ranks web hot spots. CPU pipeline only — no GPU
+  under node, so `fade_batches` skips and the gl4es→WebGL2 draw cost is
+  invisible. See `packaging/web/README.md`.
 - **Sanitizers**: test targets default `BUILD=debug` = ASan + UBSan
   (`-fno-sanitize-recover`). `make debug-msan`/`test-msan` = MSan + origin
   tracking (Clang; test run sets `GLR_AUDIO_NO_DEVICE=1`). `NO_SAN=1`

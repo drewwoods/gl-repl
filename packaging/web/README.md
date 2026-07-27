@@ -96,6 +96,29 @@ See the repo root `CLAUDE.md` "Web build (Emscripten)" section:
 `scripts/build-web.sh` (cold start, no emsdk in the shell) or `make web` /
 `make web-serve` (emsdk already activated).
 
+The release web link builds with `-g0` (`DEBUG_INFO_CFLAGS`, see
+`docs/ADVANCED_USAGE.md`), unlike every native build. emcc stores DWARF inside
+the `.wasm` and falls back to limited binaryen optimizations while it is
+there: 5.4 MB vs 1.8 MB of `index.wasm` for no measurable runtime difference,
+so it is purely a fetch-and-compile cost. Pass
+`make web DEBUG_INFO_CFLAGS=-g2` when a browser profile needs named frames.
+
+## Benchmarking the web build
+
+`make bench-web` compiles `bench/bench_repl.c` to wasm and runs it headless
+under node. It exists because wasm cost is not a fixed multiple of native
+cost — measured per-op ratios ran from ~1.2x to ~2.2x across sub-benchmarks,
+which is enough to reorder what looks expensive — so `make bench` alone can
+point at the wrong hot spot for this target.
+
+It measures the C pipeline only. node has no GPU and no WebGL context, so
+`fade_batches` skips itself and nothing here observes the
+gl4es -> WebGL2 -> browser-GL cost of real draw calls. A regression in the
+draw path needs an in-browser harness instead; note that `scripts/web-serve.py`
+sends no COOP/COEP headers, so a page it serves has `performance.now()`
+clamped to 100 µs and cannot resolve sub-100 µs work. Read the header comment
+in `bench/bench_repl.c` before comparing web numbers against native ones.
+
 ## Headless verification
 
 The 40MB+ `.wasm`/`.data` payload makes `--screenshot`-style headless capture
