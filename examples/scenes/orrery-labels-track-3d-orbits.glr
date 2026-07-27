@@ -19,7 +19,7 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float px, py, pz; // planet position - the caller hangs a label off it
 static float orbitR; // log-compressed orbit radius, shared by the draw funcs
-static float ASTEROIDS = 280; // @tune
+static float ASTEROIDS = 140; // @tune
 
 orbitRings(Drel, node, incl) {
   float th, u;
@@ -375,8 +375,8 @@ label("Date %f-%f-%f", yr, mon, day);
 // log-distance scale as the planets. Drawn as small unlit points, depth-tested
 // so the planets pass in front of and behind the band.
 glDisable(GL_LIGHTING);
-glEnable(GL_POINT_SMOOTH);
-glPointSize(2.0);
+//glEnable(GL_POINT_SMOOTH);
+glPointSize(8.0);
 glBegin(GL_POINTS);
   for(i, 0, ASTEROIDS) {
     astAng = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
