@@ -785,11 +785,13 @@ static void bench_flatten_refresh(int iters) {
  * printed route is the part to watch; the timing says what that costs. */
 static BenchResult bench_refresh_slider_one(const char *name,
                                             int example_idx,
-                                            const char *var_name, int iters) {
+                                            const char *var_name,
+                                            ReplFlatRefreshKind expected,
+                                            int iters) {
     enum { INNER = 32 };
     BenchResult r = { .name = name, .unit = "refreshes", .min_sec = 1e18 };
     BenchBaseline base;
-    ReplFlatRefreshKind expected;
+    ReplFlatRefreshKind classified;
     ReplExprDepMask bit;
     int structural, slot;
 
@@ -807,12 +809,19 @@ static BenchResult bench_refresh_slider_one(const char *name,
     bit = (ReplExprDepMask)1u << slot;
     structural = (repl_state_flat_program_structural_dep_mask() & bit) != 0;
     if (structural)
-        expected = REPL_FLAT_REFRESH_FULL;
+        classified = REPL_FLAT_REFRESH_FULL;
     else if ((repl_state_flat_program_value_dep_mask() & bit) &&
              repl_state_flat_program_rebake_ok())
-        expected = REPL_FLAT_REFRESH_REBAKE;
+        classified = REPL_FLAT_REFRESH_REBAKE;
     else {
         fprintf(stderr, "ERROR: %s does not depend on '%s'\n", name, var_name);
+        g_case_missing = 1;
+        return r;
+    }
+    if (classified != expected) {
+        fprintf(stderr,
+                "ERROR: %s expected dependency route %d, classified as %d\n",
+                name, (int)expected, (int)classified);
         g_case_missing = 1;
         return r;
     }
@@ -855,13 +864,15 @@ static BenchResult bench_refresh_slider_one(const char *name,
 
 static void bench_refresh_slider(int iters) {
     static const struct {
-        const char *row; const char *display; const char *var;
+        const char *row;
+        const char *display;
+        const char *var;
+        ReplFlatRefreshKind expected;
     } cases[] = {
         /* Both sides of the routing rule, and the first row is the one that
          * keeps this honest: without a case that still REBAKEs, an
          * "everything became structural" regression would leave every route
-         * assertion satisfied, because the expected route is derived from the
-         * same dep masks the benchmark is exercising.
+         * assertion satisfied because every pinned expectation would be FULL.
          *
          * Wave's `amp` scales already-emitted vertex/normal/colour arguments
          * through global scratch only — no local, no loop bound, no condition
@@ -872,18 +883,19 @@ static void bench_refresh_slider(int iters) {
          * *directly*, while ORB_SCALE reaches planet()'s local `th` only
          * transitively, by way of the global `orbitR` that `th` reads. */
         { "slider_wave_value", "Animated wave surface (analytic normals)",
-          "amp" },
+          "amp", REPL_FLAT_REFRESH_REBAKE },
         { "slider_orrery_local", "Orrery (labels track 3D orbits)",
-          "EARTH_RATE" },
+          "EARTH_RATE", REPL_FLAT_REFRESH_FULL },
         { "slider_orrery_transitive", "Orrery (labels track 3D orbits)",
-          "ORB_SCALE" },
-        { "slider_grass", "Swaying grass field (rand + t)", "field" },
+          "ORB_SCALE", REPL_FLAT_REFRESH_FULL },
+        { "slider_grass", "Swaying grass field (rand + t)", "field",
+          REPL_FLAT_REFRESH_FULL },
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         int idx = example_index_by_name(cases[i].display);
         if (idx >= 0)
             report(bench_refresh_slider_one(cases[i].row, idx, cases[i].var,
-                                            iters));
+                                            cases[i].expected, iters));
     }
 }
 

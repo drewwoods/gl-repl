@@ -99,8 +99,8 @@ cases could not see it, and scrubbing a global that feeds a local is precisely
 the trip-wire recorded under Known liabilities. It carries four (scene,
 variable) pairs, one of which (wave / `amp`) must still route REBAKE: without a
 value-only case the benchmark would accept an "everything became structural"
-regression, since it derives each expected route from the same dep masks it is
-exercising. Minimum per-refresh time on the
+regression because every pinned expectation would be FULL. Minimum per-refresh
+time on the
 mac-mini (the mean is far too noisy on this box to quote; `min` is stable to
 ~2%):
 
@@ -268,8 +268,11 @@ replay HUD and code panel still showed locals from the previous full flatten.
 Each command's stored snapshot must end up holding its *effective* locals —
 post-write for a local assignment, matching what a full flatten leaves there.
 `tests/test_repl_flatten_rebake.c` already compares `FlatCmdLocalVars` via
-`flat_locals_equal`, so the differential that would catch this exists; the work
-is to keep it, not to add it.
+`flat_locals_equal`, so the value differential that would catch stale replay
+snapshots exists. The follow-up must extend that helper to compare every new
+sidecar field too — slot-to-local ordinals, local-assignment target ordinal and
+`frame_seq` — and run two consecutive rebakes before the full-flatten reference,
+so metadata damage that is latent until the next walk cannot pass.
 
 **Frame entry, and the off-by-one in the depth array.** Resetting locals to 0
 for the next call cannot key off `call_depth`: 135 successive `blade()` calls
@@ -292,6 +295,21 @@ array indexed by that value overruns.
 
 With those in place, `flatten_var_assign` reports local RHS deps as **value**
 instead of structural, and grass rebakes again.
+
+The regression matrix for that change must cover the frame shapes the metadata
+exists to distinguish, not only the production grass scene:
+
+- a local read and written both outside and inside nested loops, where iterator
+  prepending shifts its scope-array slot;
+- repeated calls from one call site inside a loop, proving each sibling frame
+  starts at zero;
+- a nested call followed by another caller-local read/write, proving return
+  restores the caller's active sequence;
+- recursion, proving equal function-local ordinals at different call depths do
+  not alias;
+- the maximum permitted call depth, exercising the depth-array boundary; and
+- two successive value-only rebakes followed by a full-flatten differential,
+  comparing commands, local values and all sidecar metadata after each walk.
 
 That is a self-contained design, but it changes the snapshot layout and its
 documented immutability, flatten's emit path, the whole rebake walk, and a
@@ -1552,11 +1570,10 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
   git pull --ff-only origin main && make check-c99 && make test-stubs'
 ```
 
-Manual: launch `./gl-repl`, open a converted scene, confirm the variable panel
-shows only the remaining globals (no Kepler scratch), scrub a *global* that
-feeds a local and confirm the scene tracks it (this is the structural-dep path
-from Phase 2, and the place a rebake regression would show as a frozen scene),
-and confirm Ctrl+Z after a local decl restores cleanly.
+Manual remaining: launch `./gl-repl`, open a converted scene, scrub a *global*
+that feeds a local and confirm the scene tracks it. This is the structural-dep
+path from Phase 2, and the place a rebake regression would show as a frozen
+scene.
 
 Status of these after Phase 5:
 
@@ -1570,10 +1587,10 @@ Status of these after Phase 5:
   removed. An earlier version of this test used `editor_feed_line` with a
   hand-pushed snapshot and would have passed against that regression.
 - **Scrub — still manual.** `bench_repl --only refresh_slider` measures the cost
-  and asserts the route for four (scene, variable) pairs including one that must
-  still REBAKE, but a benchmark derives its expected route from the same dep
-  masks it exercises, so it is evidence about *cost*, not about the scene
-  visibly tracking the slider. That last part wants eyes on it.
+  and asserts four explicitly pinned (scene, variable, route) cases, including
+  wave / `amp` as REBAKE. That guards dependency classification and refresh
+  dispatch, but not the rendered scene visibly tracking the slider; the last
+  part still wants eyes on it.
 
 ### Resolved by review (rev 2)
 
