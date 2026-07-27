@@ -91,13 +91,13 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
         "glBegin(GL_TRIANGLES)"),
     STEP_APPEND(NULL,
         "// Place the first vertex near the top; this becomes the triangle tip.",
-        "glVertex3f(0, 2, 0)"),
+        "glVertex2f(0, 2)"),
     STEP_APPEND(NULL,
         "// Add the lower-left corner so the triangle has width.",
-        "glVertex3f(-2, -2, 0)"),
+        "glVertex2f(-2, -2)"),
     STEP_APPEND(NULL,
         "// Add the lower-right corner; three vertices complete one triangle.",
-        "glVertex3f(2, -2, 0)"),
+        "glVertex2f(2, -2)"),
     STEP_APPEND(NULL,
         "// Close the batch and the filled triangle appears in the scene.",
         "glEnd()"),
@@ -174,6 +174,9 @@ static const TutorialStep g_tutorial_depth_triangle_steps[] = {
  * foreshortening or accidental orbit. */
 static const char *const g_tutorial_first_triangle_cfg[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
+    "// @cfg vertex_labels = 4",
+    "// @cfg grid_brightness = GRID_BRIGHTNESS_DIM",
+    "// @cfg grid = GRID_THEME_PLANES",
     NULL,
 };
 
