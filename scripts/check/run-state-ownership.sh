@@ -401,10 +401,31 @@ dispatch_queue() {
     fi
     [ "$jobs" -ge 1 ] 2>/dev/null || jobs=1
 
-    local dir
+    local dir progress_pid= cleaned=0
     dir=$(mktemp -d "${TMPDIR:-/tmp}/state-ownership.XXXXXX")
-    # shellcheck disable=SC2064
-    trap "rm -rf '$dir'" EXIT
+
+    cleanup() {
+        [ "$cleaned" -eq 1 ] && return 0
+        cleaned=1
+        if [ -t 2 ] && [ -n "${progress_pid:-}" ]; then
+            printf '\r\033[K' >&2
+        fi
+        if [ -n "${progress_pid:-}" ]; then
+            kill "$progress_pid" 2>/dev/null || true
+        fi
+        local pids
+        pids=$(jobs -p 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            kill $pids 2>/dev/null || true
+        fi
+        if [ -n "${dir:-}" ] && [ -d "$dir" ]; then
+            rm -rf "$dir"
+        fi
+    }
+    trap 'cleanup; exit 130' INT
+    trap 'cleanup; exit 143' TERM
+    trap 'cleanup; exit 129' HUP
+    trap 'cleanup' EXIT
 
     # FIFO semaphore: bash 3.2 has no `wait -n`, so bound concurrency with a
     # token bucket. Seed $jobs tokens; each worker acquires one before it runs
@@ -422,10 +443,10 @@ dispatch_queue() {
     # ticker that reports how many checks have completed (one .rc file each) on a
     # single self-erasing line. Skipped when stderr is not a tty so piped/CI logs
     # stay byte-identical to the serial run.
-    local progress_pid=
     if [ -t 2 ] && [ "$n" -gt 1 ]; then
         (
             while :; do
+                [ -d "$dir" ] || break
                 # Count completed checks by their .rc files. A glob loop (not
                 # `ls`) stays safe under set -e/pipefail when none exist yet: the
                 # unmatched pattern is skipped by the -e test rather than erroring.
