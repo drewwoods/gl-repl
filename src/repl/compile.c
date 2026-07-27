@@ -323,6 +323,54 @@ static int compile_bindings_find(const CompileScopeBindings *b,
     return -1;
 }
 
+/* Parameters + locals of the function opened at `func_idx`; 0 at document
+ * top level. Collected at the closing brace, where the frame is still
+ * open, so it covers the whole body regardless of where the caller is. */
+static int compile_func_binder_count(const ReplCompileContext *ctx,
+                                     int func_idx) {
+    ExprVar vars[MAX_EXPR_VARS];
+
+    if (!ctx || func_idx < 0 || func_idx >= ctx->document_count)
+        return 0;
+    return collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                   ctx->document_count,
+                                   compile_scope_find_block_end(ctx, func_idx),
+                                   vars, MAX_EXPR_VARS, NULL, NULL);
+}
+
+/* Open for-loop nesting at `pos`: how many CMD_FOR_BEGIN blocks enclose
+ * it. Each level costs one scope-array slot, because flatten_for_loop
+ * prepends its iterator to a fresh array per level. */
+static int compile_open_loop_depth_at(const ReplCompileContext *ctx, int pos) {
+    CmdType stack[REPL_MAX_BLOCK_NEST_DEPTH];
+    int depth = 0;
+    int loops = 0;
+
+    if (!ctx || !ctx->document_cmds)
+        return 0;
+    if (pos > ctx->document_count)
+        pos = ctx->document_count;
+
+    for (int i = 0; i < pos; i++) {
+        CmdType t = ctx->document_cmds[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH)
+                stack[depth] = t;
+            depth++;
+            if (t == CMD_FOR_BEGIN)
+                loops++;
+        } else if (repl_cmd_is_block_end(t)) {
+            if (depth > 0) {
+                depth--;
+                if (depth < REPL_MAX_BLOCK_NEST_DEPTH &&
+                    stack[depth] == CMD_FOR_BEGIN)
+                    loops--;
+            }
+        }
+    }
+    return loops;
+}
+
 /* Peak scope-array occupancy anywhere in the function body opened at
  * `func_idx`: its parameters, plus its locals, plus the deepest for-loop
  * nesting in the body. flatten_for_loop prepends an iterator to a fresh
@@ -331,21 +379,13 @@ static int compile_bindings_find(const CompileScopeBindings *b,
  * is the quantity that must fit MAX_EXPR_VARS. */
 static int compile_func_scope_peak(const ReplCompileContext *ctx,
                                    int func_idx) {
-    ExprVar vars[MAX_EXPR_VARS];
     int body_end;
-    int binder_count;
     int depth = 0, max_depth = 0;
 
     if (!ctx || func_idx < 0 || func_idx >= ctx->document_count)
         return 0;
 
     body_end = compile_scope_find_block_end(ctx, func_idx);
-    /* Collected at the closing brace: the frame is still open there, so
-     * this is every parameter and every local of the whole body. */
-    binder_count = collect_visible_vars_in(ctx->text, ctx->document_cmds,
-                                           ctx->document_count, body_end,
-                                           vars, MAX_EXPR_VARS, NULL, NULL);
-
     for (int i = func_idx + 1; i < body_end && i < ctx->document_count; i++) {
         CmdType t = ctx->document_cmds[i].type;
         if (t == CMD_FOR_BEGIN) {
@@ -357,7 +397,70 @@ static int compile_func_scope_peak(const ReplCompileContext *ctx,
                 depth--;
         }
     }
-    return binder_count + max_depth;
+    return compile_func_binder_count(ctx, func_idx) + max_depth;
+}
+
+/* Would binding `name` over [body_start, body_end) capture an existing
+ * scalar assignment — turning a row that currently writes a global or an
+ * outer local into a write to a new parameter or loop iterator, which are
+ * not writable?
+ *
+ * Shadowing itself stays legal; this is a target-legality check, not a
+ * return to the blanket name-collision ban. Nested same-name binders are
+ * respected exactly as normal resolution does — a `for(name, ...)` inside
+ * the body already owns the assignments it encloses — and a nested
+ * function body is a different lexical scope, so it is skipped whole. */
+static int compile_binder_captures_assignment(const ReplCompileContext *ctx,
+                                              int body_start, int body_end,
+                                              const char *name) {
+    int depth = 0;          /* block nesting relative to body_start */
+    int shadow_depth = -1;  /* depth at which a nested same-name binder opened */
+
+    if (!ctx || !ctx->document_cmds || !name || !name[0])
+        return 0;
+    if (body_end > ctx->document_count)
+        body_end = ctx->document_count;
+
+    for (int i = body_start; i >= 0 && i < body_end; i++) {
+        const GLCmd *cmd = &ctx->document_cmds[i];
+        CmdType t = cmd->type;
+        const char *line;
+
+        if (t == CMD_FUNC_DEF) {
+            i = compile_scope_find_block_end(ctx, i);
+            continue;
+        }
+        if (repl_cmd_is_block_head(t)) {
+            depth++;
+            if (shadow_depth < 0 && t == CMD_FOR_BEGIN) {
+                char vn[REPL_PREDEF_NAME_MAX];
+                line = source_text_line(ctx->text, i);
+                repl_extract_for_var_name(line ? line : "", vn, sizeof(vn));
+                if (strcmp(vn, name) == 0)
+                    shadow_depth = depth;
+            }
+            continue;
+        }
+        if (repl_cmd_is_block_end(t)) {
+            if (shadow_depth == depth)
+                shadow_depth = -1;
+            if (depth > 0)
+                depth--;
+            continue;
+        }
+        if (shadow_depth >= 0 || t != CMD_VAR_ASSIGN)
+            continue;
+
+        {
+            char lhs[REPL_PREDEF_NAME_MAX] = "";
+            line = source_text_line(ctx->text, i);
+            if (repl_extract_assignment_parts(line ? line : "",
+                                              lhs, sizeof(lhs), NULL, 0) &&
+                strcmp(lhs, name) == 0)
+                return 1;
+        }
+    }
+    return 0;
 }
 
 /* A same-name local (function param / for-loop var) shadows a global on
@@ -458,6 +561,62 @@ static int compile_local_name_is_still_referenced(const ReplCompileContext *ctx,
             return 1;
     }
     return 0;
+}
+
+/* Storage-aware "is this declared name still read?" predicate — the one
+ * place that decides which of the two reference walks applies.
+ *
+ * The declaration row's own storage picks the walk, and it has to: the
+ * global scan answers "does this line read the *global* of that name" and
+ * so reports 0 for every read of a local, while the local scan bounded to
+ * a function body would miss a global's readers entirely. Rows in
+ * [skip_start, skip_end) are the ones being replaced. */
+static int compile_decl_name_is_referenced(const ReplCompileContext *ctx,
+                                           int decl_idx, const char *name,
+                                           int skip_start, int skip_end) {
+    if (!ctx || decl_idx < 0 || decl_idx >= ctx->document_count)
+        return 0;
+    if (ctx->document_cmds[decl_idx].var_idx == REPL_VAR_IDX_LOCAL)
+        return compile_local_name_is_still_referenced(
+            ctx, name, compile_enclosing_func_at(ctx, decl_idx),
+            skip_start, skip_end);
+    return compile_name_is_still_referenced(ctx, name, skip_start, skip_end);
+}
+
+int repl_compile_decl_replacement_allowed(const ReplCompileContext *ctx,
+                                          int pos,
+                                          const char *const *kept_names,
+                                          int kept_count,
+                                          char *err, int err_size) {
+    const GLCmd *decl;
+
+    if (err && err_size > 0)
+        err[0] = '\0';
+    if (!ctx || !ctx->document_cmds || pos < 0 || pos >= ctx->document_count)
+        return 1;
+    decl = &ctx->document_cmds[pos];
+    if (!decl->valid || decl->type != CMD_VAR_DECLARE)
+        return 1;
+
+    for (int d = 0; d < decl->payload.decl.count; d++) {
+        const char *nm = decl->payload.decl.names[d];
+        int kept = 0;
+        for (int k = 0; k < kept_count; k++) {
+            if (kept_names && kept_names[k] &&
+                strcmp(kept_names[k], nm) == 0) {
+                kept = 1;
+                break;
+            }
+        }
+        if (kept)
+            continue;
+        if (compile_decl_name_is_referenced(ctx, pos, nm, pos, pos + 1)) {
+            compile_set_err(err, err_size,
+                            "variable '%s' is in use, cannot overwrite", nm);
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static void compile_copy_leading_ws(const char *text, char *out, int out_sz) {
@@ -1071,24 +1230,17 @@ static ReplCompileResult compile_float_decl_local(const ReplCompileContext *ctx,
     if (r != REPL_COMPILE_OK)
         return r;
 
-    /* Overwrite-feasibility, in local terms: a dropped name must not
-     * still be read in the body. Unlike a global, there is no predef slot
-     * to outlive the row, so removing it would leave the reads bound to
+    /* Overwrite-feasibility, in local terms: a dropped name must not still
+     * be read in the body. Unlike a global, there is no predef slot to
+     * outlive the row, so removing it would leave the reads bound to
      * nothing. */
     if (old_decl) {
-        for (int d = 0; d < old_decl->payload.decl.count; d++) {
-            const char *nm = old_decl->payload.decl.names[d];
-            int kept = 0;
-            for (int v = 0; v < parsed->count; v++) {
-                if (strcmp(parsed->names[v], nm) == 0) { kept = 1; break; }
-            }
-            if (kept) continue;
-            if (compile_local_name_is_still_referenced(ctx, nm, func_idx,
-                                                       insert_idx,
-                                                       insert_idx + 1))
-                return compile_set_err(err, err_size,
-                    "variable '%s' is in use, cannot overwrite", nm);
-        }
+        const char *kept[MAX_NAMES_PER_DECL];
+        for (int v = 0; v < parsed->count && v < MAX_NAMES_PER_DECL; v++)
+            kept[v] = parsed->names[v];
+        if (!repl_compile_decl_replacement_allowed(ctx, insert_idx, kept,
+                                                   parsed->count, err, err_size))
+            return REPL_COMPILE_ERROR;
     }
 
     memset(&cmd, 0, sizeof(cmd));
@@ -1210,33 +1362,21 @@ ReplCompileResult repl_compile_float_decl(const char *input,
      * elsewhere in the document. Replacement is rejected outright
      * rather than auto-deleting the references. */
     if (old_global) {
-        for (int d = 0; d < old_decl->payload.decl.count; d++) {
-            const char *nm = old_decl->payload.decl.names[d];
-            int kept = 0;
-            for (int v = 0; v < parsed.count; v++) {
-                if (strcmp(parsed.names[v], nm) == 0) { kept = 1; break; }
-            }
-            if (kept) continue;
-            if (compile_name_is_still_referenced(ctx, nm, insert_idx,
-                                                 insert_idx + 1))
-                return compile_set_err(err, err_size,
-                    "variable '%s' is in use, cannot overwrite", nm);
-        }
+        const char *kept[MAX_NAMES_PER_DECL];
+        for (int v = 0; v < parsed.count && v < MAX_NAMES_PER_DECL; v++)
+            kept[v] = parsed.names[v];
+        if (!repl_compile_decl_replacement_allowed(ctx, insert_idx, kept,
+                                                   parsed.count, err, err_size))
+            return REPL_COMPILE_ERROR;
     } else if (old_is_local) {
-        /* Storage-aware, so an *unchanged* name is checked too: it is
-         * still being removed from local storage, and every compiled
-         * assignment to it carries REPL_VAR_IDX_LOCAL. Refusing the edit
-         * is the resolution — same shape as the rule next door, and no
-         * reclassify-every-assignment transaction to get wrong. */
-        for (int d = 0; d < old_decl->payload.decl.count; d++) {
-            const char *nm = old_decl->payload.decl.names[d];
-            if (compile_local_name_is_still_referenced(ctx, nm,
-                                                       cursor_func_idx,
-                                                       insert_idx,
-                                                       insert_idx + 1))
-                return compile_set_err(err, err_size,
-                    "variable '%s' is in use, cannot overwrite", nm);
-        }
+        /* No exemptions: an *unchanged* name is still being removed from
+         * local storage, and every compiled assignment to it carries
+         * REPL_VAR_IDX_LOCAL. Refusing the edit is the resolution — same
+         * shape as the rule next door, and no reclassify-every-assignment
+         * transaction to get wrong. */
+        if (!repl_compile_decl_replacement_allowed(ctx, insert_idx, NULL, 0,
+                                                   err, err_size))
+            return REPL_COMPILE_ERROR;
     }
 
     /* Build the GLCmd that backs the source row. */
@@ -1644,25 +1784,19 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     int old_decl_is_local = overwriting_decl &&
                             old_decl->var_idx == REPL_VAR_IDX_LOCAL;
     if (overwriting_decl) {
-        int decl_func_idx = old_decl_is_local
-                                ? compile_enclosing_func_at(ctx, insert_idx) : -1;
-        for (int decl_idx = 0; decl_idx < old_decl->payload.decl.count; decl_idx++) {
-            const char *nm = old_decl->payload.decl.names[decl_idx];
-            int in_use = old_decl_is_local
-                ? compile_local_name_is_still_referenced(ctx, nm, decl_func_idx,
-                                                         insert_idx, insert_idx + 1)
-                : compile_name_is_still_referenced(ctx, nm, insert_idx,
-                                                   insert_idx + 1);
-            if (in_use)
-                return compile_set_err(err, err_size,
-                    "variable '%s' is in use, cannot overwrite", nm);
-            /* A local has no predef slot to release. */
-            if (old_decl_is_local)
-                continue;
+        /* Every declared name goes away here, so nothing is exempt. */
+        if (!repl_compile_decl_replacement_allowed(ctx, insert_idx, NULL, 0,
+                                                   err, err_size))
+            return REPL_COMPILE_ERROR;
+        /* A local has no predef slot to release. */
+        for (int decl_idx = 0;
+             !old_decl_is_local && decl_idx < old_decl->payload.decl.count;
+             decl_idx++) {
             if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
             out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
             repl_copy_string_fits(out->predef_ops[op_count].name,
-                                  sizeof(out->predef_ops[op_count].name), nm);
+                                  sizeof(out->predef_ops[op_count].name),
+                                  old_decl->payload.decl.names[decl_idx]);
             op_count++;
         }
     }
@@ -1839,15 +1973,14 @@ static ReplCompileResult compile_collect_undeclare_for_range(
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
-        int is_local = (cmd->var_idx == REPL_VAR_IDX_LOCAL);
-        int func_idx = is_local ? compile_enclosing_func_at(ctx, i) : -1;
         for (int d = 0; d < cmd->payload.decl.count; d++) {
             const char *nm = cmd->payload.decl.names[d];
-            int in_use = is_local
-                ? compile_local_name_is_still_referenced(ctx, nm, func_idx,
-                                                         range_start, range_end)
-                : compile_name_is_still_referenced(ctx, nm, range_start, range_end);
-            if (in_use)
+            /* The shared predicate, not the shared error emitter: this
+             * route's diagnostic carries an action verb ("delete" /
+             * "comment out") the replacement routes have no equivalent
+             * for. */
+            if (compile_decl_name_is_referenced(ctx, i, nm,
+                                                range_start, range_end))
                 return compile_set_err(err, err_size,
                                        "Cannot %s '%s': still referenced",
                                        action_verb, nm);
@@ -2818,6 +2951,66 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
+    /* Reverse binder guards, for a header rewrite over an existing body.
+     * Validating only where the local is declared would leave a later
+     * header edit free to create a same-scope redefinition, to overflow
+     * the frame, or to capture a write — so the parameter list is checked
+     * against the body that is already there. This lives in the kernel and
+     * not the wrapper because the editor calls the kernel directly
+     * (src/editor/commit.c), so a check on the wrapper alone is bypassed
+     * on the interactive path. */
+    if (allow_overwrite_at_pos >= 0 &&
+        allow_overwrite_at_pos < ctx->document_count) {
+        int body_end = compile_scope_find_block_end(ctx, allow_overwrite_at_pos);
+        int old_params = ctx->document_cmds[allow_overwrite_at_pos].num_args;
+        int peak = compile_func_scope_peak(ctx, allow_overwrite_at_pos);
+        CompileScopeBindings bind;
+
+        compile_collect_bindings(ctx, body_end, &bind);
+        for (int p = 0; p < out->param_count; p++) {
+            const char *pn = out->param_names[p];
+            int bad = 0;
+
+            /* A local hoists to the body top, the same scope as the
+             * parameter list — C calls that a redefinition, not
+             * shadowing. Only LOCAL matches count: the PARAM entries in
+             * `bind` are the old parameters this edit is replacing. */
+            for (int b = 0; b < bind.count && !bad; b++) {
+                if (bind.kinds[b] == REPL_VISIBLE_VAR_LOCAL &&
+                    strcmp(bind.vars[b].name, pn) == 0) {
+                    compile_set_err(err, err_size,
+                        "'%s' is already declared in this function", pn);
+                    bad = 1;
+                }
+            }
+            /* Shadowing does not make a parameter writable, so an
+             * assignment the new parameter would capture has to block the
+             * edit — otherwise the row silently becomes a write to a
+             * constant binding. */
+            if (!bad &&
+                compile_binder_captures_assignment(ctx,
+                                                   allow_overwrite_at_pos + 1,
+                                                   body_end, pn)) {
+                compile_set_err(err, err_size,
+                    "parameter '%s' would capture an assignment in the body - "
+                    "function parameters are constant", pn);
+                bad = 1;
+            }
+            if (bad) {
+                out->alias_op.slot = -1;
+                out->alias_op.name[0] = '\0';
+                return REPL_COMPILE_ERROR;
+            }
+        }
+        if (peak - old_params + out->param_count > MAX_EXPR_VARS) {
+            out->alias_op.slot = -1;
+            out->alias_op.name[0] = '\0';
+            return compile_set_err(err, err_size,
+                "function scope full (max %d parameters + locals + loop depth)",
+                MAX_EXPR_VARS);
+        }
+    }
+
     out->pos = compile_insert_pos(ctx);
 
     compile_scope_cmd_indent(ctx, out->pos, out->indent, sizeof(out->indent));
@@ -2900,6 +3093,37 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
         snprintf(err, (size_t)err_size,
                  "for syntax: for(var, start, end[, step]) body;");
         return REPL_COMPILE_ERROR;
+    }
+
+    /* Reverse binder guards, the loop-header twin of the func-def
+     * kernel's. Capacity first: flatten_for_loop prepends this iterator to
+     * a *fresh* scope array and copies the outer bindings under
+     * `lnv < MAX_EXPR_VARS`, silently dropping the last one at the cap —
+     * with locals in that array, a live local would vanish mid-body and
+     * read as 0. Reject at compile time instead. */
+    {
+        int enclosing_func = compile_enclosing_func_at(ctx, out->pos);
+        int scope_after = compile_func_binder_count(ctx, enclosing_func) +
+                          compile_open_loop_depth_at(ctx, out->pos) + 1;
+        int rewriting_header = (!ctx->insert_mode &&
+                                out->pos < ctx->document_count &&
+                                ctx->document_cmds[out->pos].type == CMD_FOR_BEGIN);
+
+        if (scope_after > MAX_EXPR_VARS)
+            return compile_set_err(err, err_size,
+                "function scope full (max %d parameters + locals + loop depth)",
+                MAX_EXPR_VARS);
+        /* Renaming `for(i, ...)` to `for(x, ...)` over a body that
+         * assigns an outer `x` must not turn that row into a write to the
+         * iterator. Only a header rewrite can do this: a newly inserted
+         * loop has no body yet. */
+        if (rewriting_header &&
+            compile_binder_captures_assignment(
+                ctx, out->pos + 1, compile_scope_find_block_end(ctx, out->pos),
+                out->var_name))
+            return compile_set_err(err, err_size,
+                "loop variable '%s' would capture an assignment in the loop body - "
+                "loop variables are constant", out->var_name);
     }
 
     compile_scope_cmd_indent(ctx, out->pos, out->indent, sizeof(out->indent));

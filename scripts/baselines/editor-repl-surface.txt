@@ -69,8 +69,19 @@
 # undo transaction, then asks the REPL loader to restore the five ordinary
 # source commands that replace the former hidden init material state.
 #
+# 2026-07-27: input_c bumped +1 for repl_compile_decl_replacement_allowed
+# (docs/plans/active/scoped-local-variables.md, phase 3). input.c has two
+# raw-replace routes -- editor_place_parsed_command's replace branch and
+# Enter over an existing row -- that reach repl_command_store_replace_one
+# with no feasibility check in front of them. That was survivable while
+# every declaration was a global, whose predef slot outlives the row; a
+# function-scoped local's binding *is* its prologue row, so an unchecked
+# replace leaves every assignment to that name resolving against nothing.
+# The guard is the shared one all five declaration-replacement routes now
+# call, so this admits one symbol rather than duplicating the check.
+#
 # Ratchet down as migrations land. The plan target
 # (docs/plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 26
+input_c: 27
 commit_c: 29

@@ -1,12 +1,59 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phases 1–2 landed
+## Status — IN PROGRESS (2026-07-27): Phases 1–3 landed
 
-Phases 1 (declaration compile) and 2 (flatten) are implemented and tested.
-**Locals now work end to end**: declare one inside a function body, assign it,
-read it, recurse, accumulate across a loop. Phases 3–5 remain — the reverse
-binder guards, export/import, docs, and the example conversions. No example
-scene is converted yet, so nothing in the corpus depends on the feature.
+Phases 1 (declaration compile), 2 (flatten) and 3 (edit guards) are
+implemented and tested. **Locals work end to end and the edit surface is
+closed**: declare one inside a function body, assign it, read it, recurse,
+accumulate across a loop, and no later binder or overwrite edit can leave a
+reference dangling. Phases 4–5 remain — export/import, docs, and the example
+conversions. No example scene is converted yet, so nothing in the corpus
+depends on the feature.
+
+### Phase 3 — edit guards (done)
+
+Reverse binder guards, both in the *kernels* (the editor calls those directly,
+so a check on the wrapper alone is bypassed on the interactive path):
+
+- `repl_compile_func_def_kernel`, on a header rewrite: a parameter colliding
+  with a **local of that body** is a redefinition and is rejected; a parameter
+  that would **capture a body assignment** is rejected; and the post-edit
+  frame must still fit (`peak - old_params + new_params <= MAX_EXPR_VARS`).
+- `repl_compile_for_loop_kernel`: `binders + open-loop-depth + 1 <=
+  MAX_EXPR_VARS` for any new or rewritten loop, and a header rename that would
+  capture an assignment in the loop body is rejected.
+
+`compile_binder_captures_assignment()` is the shared walk. It respects nested
+same-name binders exactly as resolution does — a `for(name, ...)` inside the
+body already owns what it encloses — and skips nested function bodies whole.
+This is a **target-legality** guard, not a return to the blanket
+name-collision ban: shadowing that captures nothing is accepted, with explicit
+regression tests for a parameter shadowing a global, a global declared under
+an iterator, and an iterator shadowing a local it does not write.
+
+Declaration-replacement is now one guard, `repl_compile_decl_replacement_allowed()`,
+behind all five routes. The two that previously checked *nothing* —
+`editor_place_parsed_command`'s replace branch and Enter over a row — go
+through `editor_replace_row_allowed()` in input.c; `EditorPlaceResult` gained
+`EDITOR_PLACE_REJECTED` and all four call sites handle it. A negative check
+confirms both routes fail without the guard rather than passing vacuously.
+`compile_collect_undeclare_for_range` shares the *predicate*
+(`compile_decl_name_is_referenced`, which picks the walk from the row's own
+storage) but keeps its own action-verb diagnostic.
+
+**One baseline moved:** `scripts/baselines/editor-repl-surface.txt` input_c
+26 → 27, for `repl_compile_decl_replacement_allowed`. The rationale is
+recorded in that file — the guard is shared rather than duplicated, so it
+admits one symbol instead of open-coding the check twice.
+
+Tests (in `tests/test_repl_compile.c`): parameter-onto-local redefinition,
+parameter and loop-iterator assignment capture, three accepted-shadowing
+regression guards, capacity via a later parameter add and via a nested loop at
+the cap, both raw-replace routes, the var-assign cascade in both directions
+(including the success case the ungated slot rebase would have rejected),
+block-batch comment-toggle over a body containing a local decl — the path
+`tests/test_repl_editor.c` documented as unreachable — and the delete guard
+being bounded to its own function body.
 
 ### Phase 2 — flatten (done)
 
@@ -78,15 +125,10 @@ they close and leaving them for later would have been a live bug in between:
 `repl_compile_split_decl` (also listed under Phase 3) preserves the marker
 too — it re-parses the row, so it could not be left for later either.
 
-### What Phase 3 still owns
-
 The scope-aware local reference scan Phase 3 specifies
 (`compile_line_uses_local_ident`, the mirror of
-`compile_line_uses_global_ident`) exists and is already used by the delete and
-overwrite guards. What Phase 3 still owns: the reverse binder guards on
-`repl_compile_func_def_kernel` / `repl_compile_for_loop_kernel`, and routing
-the two raw-replace overwrite routes (`input.c:660`, `input.c:1017`) through a
-shared `compile_decl_replacement_is_allowed`.
+`compile_line_uses_global_ident`) landed here too, because the delete and
+overwrite guards needed it immediately.
 
 ## Status — rev 9 (plan as reviewed, 2026-07-27)
 

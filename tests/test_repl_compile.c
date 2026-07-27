@@ -1955,6 +1955,380 @@ static void test_local_decl_capacity_is_whole_function(void) {
                 strstr(err, "function scope full") != NULL);
 }
 
+/* ---- Reverse binder guards + overwrite routes (phase 3) -------------- */
+
+/* Rewrite the function header at `row` the way the editor does: through
+ * the kernel, with allow_overwrite_at_pos set. A check placed on the
+ * repl_compile_func_def wrapper alone would be bypassed here, because
+ * src/editor/commit.c calls the kernel directly. */
+static ReplCompileResult recompile_func_header(const char *header, int row,
+                                               char *err, int err_size) {
+    ReplFuncDefKernel kernel;
+    ReplCompileContext ctx;
+
+    editor_state_edit_line_set(row);
+    editor_insert_mode_set(0);
+    set_input(header);
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    err[0] = '\0';
+    return repl_compile_func_def_kernel(header, &ctx, row, &kernel,
+                                        err, err_size);
+}
+
+/* Compile a for-loop header at `row`, likewise through the kernel.
+ * insert_mode 0 rewrites the header there; 1 opens a new loop. */
+static ReplCompileResult compile_for_header_at(const char *header, int row,
+                                               int insert_mode,
+                                               char *err, int err_size) {
+    ReplForLoopKernel kernel;
+    ReplCompileContext ctx;
+
+    editor_state_edit_line_set(row);
+    editor_insert_mode_set(insert_mode);
+    set_input(header);
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    err[0] = '\0';
+    return repl_compile_for_loop_kernel(header, &ctx, &kernel, err, err_size);
+}
+
+/* A parameter and a local of the same body share one scope, so a header
+ * edit colliding with an existing local is a redefinition — the mirror of
+ * the rule Phase 1 enforces when the local is declared. */
+static void test_param_rename_onto_local_is_rejected(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("float u;");
+    editor_feed_line("glVertex3f(u, 0, 0);");
+    editor_feed_line("}");
+
+    ASSERT_INT("renaming a parameter onto an existing local is rejected",
+               recompile_func_header("func0(u) {", 0, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("reported as a redefinition in this function",
+                strstr(err, "already declared in this function") != NULL);
+}
+
+/* Shadowing does not make a parameter writable. Adding one over a body
+ * assignment that currently writes a global would silently turn that row
+ * into a write to a constant binding, so the header edit is refused. */
+static void test_param_capturing_an_assignment_is_rejected(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("static float x;");
+    editor_feed_line("func0(r) {");
+    editor_feed_line("x = 5;");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+
+    ASSERT_INT("row 1 is the function header",
+               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+    ASSERT_INT("a parameter that would capture a body assignment is rejected",
+               recompile_func_header("func0(x) {", 1, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("the diagnostic names the capture and the rule",
+                strstr(err, "would capture an assignment") != NULL &&
+                strstr(err, "function parameters are constant") != NULL);
+    ASSERT_INT("the header is unchanged",
+               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+}
+
+/* The loop-header twin: renaming `for(i, ...)` to `for(x, ...)` over a
+ * body that accumulates into an outer local `x` must not turn that row
+ * into a write to the iterator. */
+static void test_loop_rename_capturing_an_assignment_is_rejected(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("float x;");
+    editor_feed_line("x = 1;");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("x = x + 1;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+
+    ASSERT_INT("row 3 is the loop header",
+               repl_state_document_cmds_mut()[3].type, CMD_FOR_BEGIN);
+    ASSERT_INT("renaming the iterator over a captured assignment is rejected",
+               compile_for_header_at("for(x, 0, 3) {", 3, 0, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("the diagnostic names the capture and the rule",
+                strstr(err, "would capture an assignment") != NULL &&
+                strstr(err, "loop variables are constant") != NULL);
+    ASSERT_INT("the loop header is unchanged",
+               repl_state_document_cmds_mut()[3].type, CMD_FOR_BEGIN);
+}
+
+/* Ordinary shadowing stays legal. This feature must not quietly ban what
+ * the language already allowed, nor what C allows. */
+static void test_shadowing_without_capture_is_accepted(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    /* A parameter may shadow a global — pre-existing behavior. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("static float i;");
+    editor_feed_line("func0(r) {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("a parameter may still shadow a global",
+               recompile_func_header("func0(i) {", 1, err, sizeof(err)),
+               REPL_COMPILE_OK);
+
+    /* A global may be declared under an existing loop iterator. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("a global may still be declared under a loop iterator",
+               commit_decl_at("static float i;", 1, err, sizeof(err)), 1);
+
+    /* A loop iterator may shadow a function local it does not write. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("float x;");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    ASSERT_INT("row 2 is the loop header",
+               repl_state_document_cmds_mut()[2].type, CMD_FOR_BEGIN);
+    ASSERT_INT("an iterator may shadow a local it does not write",
+               compile_for_header_at("for(x, 0, 3) {", 2, 0, err, sizeof(err)),
+               REPL_COMPILE_OK);
+}
+
+/* One parameter, one loop, thirty locals: peak scope occupancy is exactly
+ * MAX_EXPR_VARS (1 + 30 + 1). Leaves the document at that saturation
+ * point for the two capacity cases below. */
+static void seed_saturated_func(void) {
+    static const char *const decls[] = {
+        "float a1, a2, a3, a4, a5, a6, a7, a8;",
+        "float b1, b2, b3, b4, b5, b6, b7, b8;",
+        "float c1, c2, c3, c4, c5, c6, c7, c8;",
+        "float d1, d2, d3, d4, d5, d6;",
+    };
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    for (int i = 0; i < 4; i++)
+        ASSERT_INT("saturating decl commits",
+                   commit_decl_at(decls[i], repl_state_document_count() - 1,
+                                  err, sizeof(err)), 1);
+}
+
+/* Capacity is a whole-function property, so every binder edit is measured
+ * against the same expression — not just the one that declares a local. */
+static void test_capacity_blocks_later_binder_edits(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    int loop_row = -1;
+
+    seed_saturated_func();
+    ASSERT_INT("one more parameter overflows the frame",
+               recompile_func_header("func0(r, s) {", 0, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("capacity rejection names the scope budget",
+                strstr(err, "function scope full") != NULL);
+    ASSERT_INT("renaming a parameter without adding one still fits",
+               recompile_func_header("func0(q) {", 0, err, sizeof(err)),
+               REPL_COMPILE_OK);
+
+    /* A nested loop adds a level the outer bindings must survive:
+     * flatten_for_loop would otherwise drop the last one at the cap and a
+     * live local would read 0 mid-body. */
+    seed_saturated_func();
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN) {
+            loop_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found the existing loop", loop_row >= 0);
+    ASSERT_INT("a nested loop at the cap is rejected at compile time",
+               compile_for_header_at("for(j, 0, 2) {", loop_row + 1, 1,
+                                     err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("capacity rejection names the scope budget",
+                strstr(err, "function scope full") != NULL);
+}
+
+/* func0(a) { float u; u = a; glVertex3f(u, 0, 0); } — rows 0 head,
+ * 1 decl, 2 assign, 3 vertex, 4 close. `u` is read, so row 1 cannot be
+ * replaced. */
+static void seed_func_with_used_local(void) {
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(a) {");
+    editor_feed_line("float u;");
+    editor_feed_line("u = a;");
+    editor_feed_line("glVertex3f(u, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("row 1 is the local declaration",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+}
+
+/* All five declaration-replacement routes share one guard. These are the
+ * two that had no check at all: a local's binding *is* its prologue row,
+ * so a raw replace would leave its readers bound to nothing. */
+static void test_raw_replace_routes_respect_the_guard(void) {
+    /* Route: retype the decl row as a GL command. */
+    seed_func_with_used_local();
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+    ASSERT_INT("overwriting a used local decl with a GL command is refused",
+               editor_feed_line("glVertex3f(9, 0, 0);"), 0);
+    ASSERT_INT("the declaration row survives",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+
+    /* Route: Enter over the decl row. */
+    seed_func_with_used_local();
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+    set_input("glVertex3f(9, 0, 0);");
+    editor_handle_key('\r', 0, 0);
+    ASSERT_INT("Enter over a used local decl leaves it in place",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+    ASSERT_INT("and it is still the same local declaration",
+               repl_state_document_cmds_mut()[1].var_idx, REPL_VAR_IDX_LOCAL);
+}
+
+/* The var-assign cascade: refuse when a dropped name is read, allow when
+ * it is not. The success half is the one that would regress silently —
+ * the slot rebase reads REPL_VAR_IDX_LOCAL as failure, so running it
+ * ungated rejects a perfectly legal edit. */
+static void test_overwrite_local_decl_with_assignment(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    /* Refused: row 2 declares `used`, which rows 3 and 4 read. The
+     * assignment's own target `lead` is declared on row 1, so it resolves
+     * — the rejection is the overwrite guard's, not a lookup failure. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(a) {");
+    editor_feed_line("float lead;");
+    editor_feed_line("float used;");
+    editor_feed_line("used = a;");
+    editor_feed_line("glVertex3f(used, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("row 2 is the second local declaration",
+               repl_state_document_cmds_mut()[2].type, CMD_VAR_DECLARE);
+
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(0);
+    set_input("lead = 9");
+    ctx = repl_compile_context_from_live(2);
+    ASSERT_INT("overwriting a used local decl with an assignment is refused",
+               repl_compile_var_assign("lead = 9", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("refusal names the in-use variable",
+                strstr(err, "'used' is in use") != NULL);
+
+    /* Allowed: row 2 declares `spare`, which nothing reads. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(a) {");
+    editor_feed_line("float u;");
+    editor_feed_line("float spare;");
+    editor_feed_line("u = a;");
+    editor_feed_line("glVertex3f(u, 0, 0);");
+    editor_feed_line("}");
+
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(0);
+    set_input("u = 9");
+    ctx = repl_compile_context_from_live(2);
+    ASSERT_INT("overwriting an unused local decl with an assignment is allowed",
+               repl_compile_var_assign("u = 9", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("the assignment targets the local, not a predef slot",
+               change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_INT("and stages no predef op", change.predef_op_count, 0);
+    ASSERT_INT("it applies", editor_commit_apply_external_change(&change, 0, 0), 1);
+}
+
+/* A CMD_VAR_DECLARE inside a block could not arise through normal user
+ * input before this feature, so the block-batch comment-toggle path had
+ * no coverage for it. It can now. */
+static void test_block_comment_toggle_over_a_local_decl(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_func_with_used_local();
+
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("commenting out the whole function compiles",
+               repl_compile_toggle_comment(0, "// ", &ctx, &change,
+                                           err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_TRUE("it is a block batch, not a single row", change.count > 1);
+    ASSERT_INT("no UNDECLARE is emitted for the local in the body",
+               change.predef_op_count, 0);
+    ASSERT_INT("it applies", editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("the declaration row is now a comment",
+               repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+}
+
+/* The local delete guard is bounded to its own function body: a same-name
+ * local in another function is a different variable and must not block
+ * the delete. */
+static void test_local_delete_guard_is_bounded_to_its_body(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+    int func1_row = -1;
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(a) {");
+    editor_feed_line("float u;");
+    editor_feed_line("u = a;");
+    editor_feed_line("glVertex3f(u, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func1(b) {");
+    editor_feed_line("float u;");
+    editor_feed_line("glVertex3f(2, 0, 0);");
+    editor_feed_line("}");
+
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        if (c->type == CMD_FUNC_DEF && (int)c->args[0] == 1) {
+            func1_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found func1", func1_row >= 0);
+    ASSERT_INT("func1's local sits right after its header",
+               repl_state_document_cmds_mut()[func1_row + 1].type,
+               CMD_VAR_DECLARE);
+
+    ctx = repl_compile_context_from_live(func1_row + 1);
+    ASSERT_INT("deleting func1's unreferenced local is allowed even though "
+               "func0 reads a local of the same name",
+               repl_compile_delete_range(func1_row + 1, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("and emits no UNDECLARE", change.predef_op_count, 0);
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_float_decl_trailing_comment_no_semicolon();
@@ -2009,6 +2383,15 @@ int main(void) {
     test_delete_local_decl_spares_same_named_global();
     test_local_delete_guard_is_scope_aware();
     test_local_decl_capacity_is_whole_function();
+    test_param_rename_onto_local_is_rejected();
+    test_param_capturing_an_assignment_is_rejected();
+    test_loop_rename_capturing_an_assignment_is_rejected();
+    test_shadowing_without_capture_is_accepted();
+    test_capacity_blocks_later_binder_edits();
+    test_raw_replace_routes_respect_the_guard();
+    test_overwrite_local_decl_with_assignment();
+    test_block_comment_toggle_over_a_local_decl();
+    test_local_delete_guard_is_bounded_to_its_body();
 
     /* [P1] regression: alias registration must roll back on parse
      * failure. Pre-fix, repl_compile_func_def called

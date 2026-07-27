@@ -419,7 +419,7 @@ tests and the demo can compile-and-inspect without ever mutating state.
 
 ### 4.3 The compile dispatcher and handler order
 
-[`repl_compile_dispatch()`](compile.h#L263) walks per-kind validators in **canonical
+[`repl_compile_dispatch()`](compile.h#L286) walks per-kind validators in **canonical
 order** and returns the first non-`NO_CHANGE` result:
 
 ```

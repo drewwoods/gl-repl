@@ -648,8 +648,22 @@ typedef enum {
     EDITOR_PLACE_INSERTED,    /* inserted at insert_idx in insert mode; edit_line+1 */
     EDITOR_PLACE_REPLACED,    /* replaced at insert_idx; edit_line+1 */
     EDITOR_PLACE_APPENDED,    /* inserted at doc_count; edit_line = new doc_count */
-    EDITOR_PLACE_BUFFER_FULL  /* command-store capacity exceeded; no mutation */
+    EDITOR_PLACE_BUFFER_FULL, /* command-store capacity exceeded; no mutation */
+    EDITOR_PLACE_REJECTED     /* replacing a still-referenced declaration row */
 } EditorPlaceResult;
+
+/* Is replacing the source row at `pos` allowed? This is a raw replace —
+ * it goes straight to the command store, with none of the compile path's
+ * feasibility checks in front of it — so the one guard that must not be
+ * skipped is asked for explicitly. For a global the row is survivable
+ * collateral (the predef slot outlives it), but a function-scoped local's
+ * binding *is* its prologue row: drop it and every assignment to that name
+ * resolves against nothing. */
+static int editor_replace_row_allowed(int pos, char *err, int err_size) {
+    ReplCompileContext ctx = repl_compile_context_from_live(pos);
+    return repl_compile_decl_replacement_allowed(&ctx, pos, NULL, 0,
+                                                 err, err_size);
+}
 
 /* Commit-site shared tail: place a parsed command into the source document
  * using the right insert/replace/append op based on mode + cursor, and
@@ -669,6 +683,11 @@ static EditorPlaceResult editor_place_parsed_command(int insert_idx,
         return EDITOR_PLACE_INSERTED;
     }
     if (insert_idx < repl_state_document_count()) {
+        char err[REPL_STATUS_TEXT_MAX] = "";
+        if (!editor_replace_row_allowed(insert_idx, err, sizeof(err))) {
+            repl_set_status(err[0] ? err : "Cannot overwrite declaration");
+            return EDITOR_PLACE_REJECTED;
+        }
         if (repl_command_store_replace_one(&store, insert_idx, cmd))
             editor_buffer_replace_line(insert_idx, cmd_text);
         editor_state_edit_line_set(insert_idx + 1);
@@ -971,6 +990,11 @@ static CommitResult commit_current_input(int enter_mode,
                     repl_set_status("Command buffer full!");
                     return COMMIT_REJECTED;
                 }
+                if (res == EDITOR_PLACE_REJECTED) {
+                    /* status already carries the reason */
+                    warn_if_scope_truncated(vis_total);
+                    return COMMIT_REJECTED;
+                }
                 editor_input_clear();
                 repl_set_status("Inserted");
                 warn_if_scope_truncated(vis_total);
@@ -1014,6 +1038,14 @@ static CommitResult commit_current_input(int enter_mode,
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
                 int replace_idx = editor_state_edit_line();
+                char err[REPL_STATUS_TEXT_MAX] = "";
+                /* Same raw-replace hazard as editor_place_parsed_command's
+                 * replace branch: Enter over a declaration row would drop
+                 * a local's only binding. */
+                if (!editor_replace_row_allowed(replace_idx, err, sizeof(err))) {
+                    repl_set_status(err[0] ? err : "Cannot overwrite declaration");
+                    return COMMIT_REJECTED;
+                }
                 if (repl_command_store_replace_one(&store, replace_idx, &cmd))
                     editor_buffer_replace_line(replace_idx, cmd_text);
             } else {
@@ -1066,6 +1098,8 @@ static CommitResult commit_current_input(int enter_mode,
                 repl_set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
+            if (res == EDITOR_PLACE_REJECTED)
+                return COMMIT_REJECTED;
             editor_input_clear();
             editor_pending_newline_clear();
             repl_set_status("OK");
@@ -1648,10 +1682,12 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         repl_set_status("OK");
                         editor_input_clear();
                         editor_pending_newline_clear();
-                    } else {
-                        /* EDITOR_PLACE_BUFFER_FULL */
+                    } else if (res == EDITOR_PLACE_BUFFER_FULL) {
                         repl_set_status("Command buffer full!");
                     }
+                    /* EDITOR_PLACE_REJECTED: the guard already published
+                     * the reason, and the input stays as typed so the
+                     * author can retarget the edit. */
                 }
                 warn_if_scope_truncated(vis_total);
             }
@@ -1781,7 +1817,8 @@ int editor_feed_line(const char *line) {
         if (parsed) {
             EditorPlaceResult res =
                 editor_place_parsed_command(insert_idx, &cmd, cmd_text);
-            if (res != EDITOR_PLACE_BUFFER_FULL)
+            if (res != EDITOR_PLACE_BUFFER_FULL &&
+                res != EDITOR_PLACE_REJECTED)
                 handled = 1;
         }
         editor_input_clear();

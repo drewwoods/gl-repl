@@ -320,7 +320,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319).
 - [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type` (`payload.decl.*`,
   `payload.label.fmt`); other types must not read it.
-- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534) which
+- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L557) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing

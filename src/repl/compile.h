@@ -209,6 +209,29 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
  * tests) read the cursor and pass it in. */
 ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
 
+/* Shared feasibility guard for every route that replaces a declaration
+ * row. Returns 1 when replacing the row at `pos` is allowed, 0 when a name
+ * it declares is still referenced (err receives the diagnostic). A `pos`
+ * that is not a live CMD_VAR_DECLARE is trivially allowed.
+ *
+ * Declaration replacement is reachable five ways — range delete /
+ * comment-toggle, retyping the row as an assignment, as a GL command, as
+ * another declaration, and Enter over it — and each used to decide for
+ * itself whether to check. Two of them checked nothing at all. That is
+ * survivable for a global, whose predef slot outlives the row, but a
+ * **local's binding exists only as that prologue row**: remove it and
+ * every assignment to it resolves against nothing.
+ *
+ * `kept_names` lists names that survive the replacement and are therefore
+ * exempt. Pass kept_count 0 for the routes that drop every name — and note
+ * that a name kept *textually* while its storage changes is not kept:
+ * local→global conversion must run the check on it like a dropped one. */
+int repl_compile_decl_replacement_allowed(const ReplCompileContext *ctx,
+                                          int pos,
+                                          const char *const *kept_names,
+                                          int kept_count,
+                                          char *err, int err_size);
+
 /* Compile a `float name[, name2 ...][ = expr];` declaration into a
  * ReplCompiledChange describing the source change + predef ops.
  * Pure: never mutates state, never calls set_status. Returns
