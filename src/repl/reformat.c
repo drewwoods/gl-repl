@@ -67,9 +67,10 @@ static int reformat_append_span(char *dst, int dst_sz, int *off,
  * the parsed payload.decl names, dropping initializer text). */
 static int reformat_var_decl_text(const char *orig_text,
                                   const char *indent,
+                                  int is_local,
                                   char *out, int out_sz) {
     char buf[MAX_LINE_LEN] = "";
-    const char *p = repl_scan_decl_float_prefix(orig_text ? orig_text : "");
+    const char *p = repl_scan_decl_float_prefix(orig_text ? orig_text : "", NULL);
     int decl_count = 0;
     int off = 0;
 
@@ -78,7 +79,10 @@ static int reformat_var_decl_text(const char *orig_text,
 
     if (!reformat_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
         return 0;
-    if (!reformat_append_text(buf, sizeof(buf), &off, "static float "))
+    /* The keyword is storage, not decoration — re-emitting `static` over a
+     * function-scoped row would silently promote it to a global. */
+    if (!reformat_append_text(buf, sizeof(buf), &off,
+                              is_local ? "float " : "static float "))
         return 0;
 
     while (*p) {
@@ -346,9 +350,11 @@ void repl_reformat_program(void) {
             break;
         }
         case CMD_VAR_DECLARE: {
-            if (!reformat_var_decl_text(orig_text, ind_s,
+            int is_local = (orig.var_idx == REPL_VAR_IDX_LOCAL);
+            if (!reformat_var_decl_text(orig_text, ind_s, is_local,
                                         fmt_text, sizeof(fmt_text))) {
-                int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
+                int off = snprintf(fmt_text, sizeof(fmt_text), "%s%sfloat ",
+                                   ind_s, is_local ? "" : "static ");
                 for (int decl_idx = 0;
                      decl_idx < orig.payload.decl.count && off < (int)sizeof(fmt_text) - 4;
                      decl_idx++) {

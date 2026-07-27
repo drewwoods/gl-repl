@@ -262,62 +262,102 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     return REPL_COMPILE_ERROR;
 }
 
-static int compile_name_is_active_func_param(const ReplCompileContext *ctx,
-                                             int pos,
-                                             const char *name) {
-    typedef struct {
-        CmdType type;
-        char params[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
-        int param_count;
-    } ScopeFrame;
-
-    ScopeFrame frames[64] = {0};
+/* Source index of the innermost open CMD_FUNC_DEF at `pos`, or -1 at
+ * document top level. Resolves *through* a nested for/if — a declaration
+ * typed one level down still belongs to the owning function, which is what
+ * makes hoist-from-any-depth work. */
+static int compile_enclosing_func_at(const ReplCompileContext *ctx, int pos) {
+    int stack[REPL_MAX_BLOCK_NEST_DEPTH];
     int depth = 0;
 
-    if (!ctx || !ctx->document_cmds || !name || !name[0])
-        return 0;
+    if (!ctx || !ctx->document_cmds)
+        return -1;
+    if (pos < 0)
+        pos = 0;
+    if (pos > ctx->document_count)
+        pos = ctx->document_count;
 
-    for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < ctx->document_count; cmd_idx++) {
-        CmdType type = ctx->document_cmds[cmd_idx].type;
-
-        if (repl_cmd_is_block_head(type)) {
-            if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
-                break;
-
-            frames[depth].type = type;
-            frames[depth].param_count = 0;
-
-            if (type == CMD_FUNC_DEF) {
-                int parsed_fn = -1;
-                int param_count = 0;
-                const char *func_text = source_text_line(ctx->text, cmd_idx);
-
-                if (parse_repl_func_signature(func_text ? func_text : "",
-                                              &parsed_fn,
-                                              frames[depth].params,
-                                              MAX_EXPR_VARS,
-                                              &param_count)) {
-                    frames[depth].param_count = param_count;
-                }
-            }
-
-            depth++;
-        } else if (repl_cmd_is_block_end(type)) {
+    for (int i = 0; i < pos; i++) {
+        CmdType t = ctx->document_cmds[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH)
+                stack[depth++] = i;
+        } else if (repl_cmd_is_block_end(t)) {
             if (depth > 0)
                 depth--;
         }
     }
+    for (int d = depth - 1; d >= 0; d--) {
+        if (ctx->document_cmds[stack[d]].type == CMD_FUNC_DEF)
+            return stack[d];
+    }
+    return -1;
+}
 
-    for (int depth_idx = depth - 1; depth_idx >= 0; depth_idx--) {
-        if (frames[depth_idx].type != CMD_FUNC_DEF)
-            continue;
-        for (int param_idx = 0; param_idx < frames[depth_idx].param_count; param_idx++) {
-            if (strcmp(frames[depth_idx].params[param_idx], name) == 0)
-                return 1;
+/* Ordered lexical bindings visible at `pos`, with their kinds. One
+ * wrapper so the resolvers below cannot drift on which document view or
+ * ordering they collect against. */
+typedef struct {
+    ExprVar            vars[MAX_EXPR_VARS];
+    ReplVisibleVarKind kinds[MAX_EXPR_VARS];
+    int                count;
+} CompileScopeBindings;
+
+static void compile_collect_bindings(const ReplCompileContext *ctx, int pos,
+                                     CompileScopeBindings *out) {
+    out->count = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                         ctx->document_count, pos,
+                                         out->vars, MAX_EXPR_VARS, NULL,
+                                         out->kinds);
+}
+
+/* Innermost binding of `name`, or -1. The *first* match decides — a
+ * matching PARAM or LOOP is never skipped in search of an outer LOCAL,
+ * which is how eval_primary and flatten resolve reads. */
+static int compile_bindings_find(const CompileScopeBindings *b,
+                                 const char *name) {
+    for (int i = 0; i < b->count; i++) {
+        if (strcmp(b->vars[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+/* Peak scope-array occupancy anywhere in the function body opened at
+ * `func_idx`: its parameters, plus its locals, plus the deepest for-loop
+ * nesting in the body. flatten_for_loop prepends an iterator to a fresh
+ * array per level and silently drops the last outer binding at the cap,
+ * so loop depth is a real multiplier and this — not `params + locals` —
+ * is the quantity that must fit MAX_EXPR_VARS. */
+static int compile_func_scope_peak(const ReplCompileContext *ctx,
+                                   int func_idx) {
+    ExprVar vars[MAX_EXPR_VARS];
+    int body_end;
+    int binder_count;
+    int depth = 0, max_depth = 0;
+
+    if (!ctx || func_idx < 0 || func_idx >= ctx->document_count)
+        return 0;
+
+    body_end = compile_scope_find_block_end(ctx, func_idx);
+    /* Collected at the closing brace: the frame is still open there, so
+     * this is every parameter and every local of the whole body. */
+    binder_count = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                           ctx->document_count, body_end,
+                                           vars, MAX_EXPR_VARS, NULL, NULL);
+
+    for (int i = func_idx + 1; i < body_end && i < ctx->document_count; i++) {
+        CmdType t = ctx->document_cmds[i].type;
+        if (t == CMD_FOR_BEGIN) {
+            depth++;
+            if (depth > max_depth)
+                max_depth = depth;
+        } else if (t == CMD_FOR_END) {
+            if (depth > 0)
+                depth--;
         }
     }
-
-    return 0;
+    return binder_count + max_depth;
 }
 
 /* A same-name local (function param / for-loop var) shadows a global on
@@ -341,7 +381,7 @@ static int compile_line_uses_global_ident(const ReplCompileContext *ctx,
 
     visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
                                          ctx->document_count, line_idx + 1,
-                                         visible_vars, MAX_EXPR_VARS, NULL);
+                                         visible_vars, MAX_EXPR_VARS, NULL, NULL);
     for (int var_idx = 0; var_idx < visible_nv; var_idx++) {
         if (strcmp(visible_vars[var_idx].name, name) == 0)
             return 0;
@@ -360,6 +400,61 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
         if (cmd_idx >= skip_start && cmd_idx < skip_end)
             continue;
         if (compile_line_uses_global_ident(ctx, cmd_idx, name))
+            return 1;
+    }
+    return 0;
+}
+
+/* Mirror image of compile_line_uses_global_ident: does this line read the
+ * *local* `name` of the enclosing function?
+ *
+ * The global helper cannot be reused here — it deliberately answers 0 the
+ * moment the name is bound in an enclosing scope, which since locals joined
+ * collect_visible_vars_in() is every reference to a local inside its own
+ * body. So the question is inverted: resolve innermost-first and count the
+ * line only when the winner is a LOCAL. A nested `for(x, ...)` shadowing it
+ * means the line does not reference the local at all, and a legal delete
+ * must not be blocked by it. */
+static int compile_line_uses_local_ident(const ReplCompileContext *ctx,
+                                         int line_idx,
+                                         const char *name) {
+    const char *line;
+    CompileScopeBindings bind;
+    int slot;
+
+    if (!ctx || !name || !name[0] ||
+        line_idx < 0 || line_idx >= ctx->document_count)
+        return 0;
+
+    line = source_text_line(ctx->text, line_idx);
+    if (!line || !repl_eval_source_uses_ident(line, name))
+        return 0;
+
+    /* line_idx + 1 for the same reason the global scan uses it: a binder
+     * line binds its own name for its own text. */
+    compile_collect_bindings(ctx, line_idx + 1, &bind);
+    slot = compile_bindings_find(&bind, name);
+    return slot >= 0 && bind.kinds[slot] == REPL_VISIBLE_VAR_LOCAL;
+}
+
+/* Is the local `name` still read anywhere in the function body
+ * (func_idx, body_end), ignoring the rows in [skip_start, skip_end)? */
+static int compile_local_name_is_still_referenced(const ReplCompileContext *ctx,
+                                                  const char *name,
+                                                  int func_idx,
+                                                  int skip_start,
+                                                  int skip_end) {
+    int body_end;
+
+    if (!ctx || !name || !name[0] || func_idx < 0)
+        return 0;
+
+    body_end = compile_scope_find_block_end(ctx, func_idx);
+    for (int cmd_idx = func_idx + 1;
+         cmd_idx < body_end && cmd_idx < ctx->document_count; cmd_idx++) {
+        if (cmd_idx >= skip_start && cmd_idx < skip_end)
+            continue;
+        if (compile_line_uses_local_ident(ctx, cmd_idx, name))
             return 1;
     }
     return 0;
@@ -463,7 +558,7 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
 
     line = orig_text ? orig_text : "";
     compile_copy_leading_ws(line, indent, sizeof(indent));
-    scan = repl_scan_decl_float_prefix(line + strlen(indent));
+    scan = repl_scan_decl_float_prefix(line + strlen(indent), NULL);
     if (!scan)
         return 0;
     while (*scan && isspace((unsigned char)*scan))
@@ -559,6 +654,7 @@ typedef struct {
     float init_vals[MAX_NAMES_PER_DECL];
     int   has_init[MAX_NAMES_PER_DECL];
     int   count;
+    int   is_local;   /* function-scoped: no predef slot, no initializer */
     char  decl_comment[MAX_LINE_LEN];
 } FloatDeclParse;
 
@@ -569,16 +665,26 @@ typedef struct {
  *      doesn't start with the `float` keyword (caller falls through
  *      to the next handler).
  *   REPL_COMPILE_ERROR with err filled                  on a real
- *      syntax error inside an otherwise float-shaped line. */
+ *      syntax error inside an otherwise float-shaped line.
+ *
+ * `local_mode` is a locality-aware preflight, not a post-hoc check. The
+ * global path validates initializer identifiers against the predef table
+ * and evaluates them here, so `float x = param;` inside a function body
+ * would die with "unknown identifier 'param'" long before any local
+ * diagnostic could run. In local mode the initializer is rejected on
+ * sight instead, and so is a variable-panel tag (a local has no slot to
+ * hang one on). */
 static ReplCompileResult parse_float_name_list(const char *input,
                                                FloatDeclParse *parsed,
                                                int *recognized,
                                                ReplPredefView predef,
+                                               int local_mode,
                                                char *err, int err_size) {
     *recognized = 0;
     memset(parsed, 0, sizeof(*parsed));
+    parsed->is_local = local_mode ? 1 : 0;
 
-    const char *p = repl_scan_decl_float_prefix(input ? input : "");
+    const char *p = repl_scan_decl_float_prefix(input ? input : "", NULL);
     if (!p)
         return REPL_COMPILE_OK;
     *recognized = 1;
@@ -626,6 +732,9 @@ static ReplCompileResult parse_float_name_list(const char *input,
          * a literal `=` followed by `=` is not a decl initializer. */
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == '=' && p[1] != '=') {
+            if (local_mode)
+                return compile_set_err(err, err_size,
+                    "local declarations cannot have an initializer - assign on the next line");
             p++;
             while (*p && isspace((unsigned char)*p)) p++;
             if (*p == '\0' || *p == ';' || *p == ',')
@@ -679,6 +788,13 @@ static ReplCompileResult parse_float_name_list(const char *input,
     if (p[0] == '/' && p[1] == '/')
         snprintf(parsed->decl_comment, sizeof(parsed->decl_comment), " %s", p);
 
+    /* @tune / @config drive the variable panel, which is keyed on predef
+     * slots. A local has none, so the tag would be silently inert. */
+    if (local_mode && (strstr(parsed->decl_comment, "@tune") ||
+                       strstr(parsed->decl_comment, "@config")))
+        return compile_set_err(err, err_size,
+            "@tune/@config require a global declaration - use 'static float'");
+
     return REPL_COMPILE_OK;
 }
 
@@ -730,16 +846,84 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
     return REPL_COMPILE_OK;
 }
 
-/* Format the decl into source text. Decls always live at depth 0,
- * so the indent is the project's standard 2-space gutter. The
- * `static` keyword is canonical: predef vars are file-scope statics
- * that retain their values across frames (the exporter emits them
- * as `static float ...` in the generated C file), and surfacing the
- * keyword in the code panel makes that lifetime obvious. */
+/* Same-scope redefinition check for a function-scoped declaration.
+ *
+ * This is C's rule, not a blanket no-shadowing ban. Locals hoist to the
+ * function-body top, which is the *same* scope as the parameter list, so a
+ * collision with a parameter or with another local of the body is a
+ * redefinition and is rejected. A loop iterator is a nested scope and
+ * globals are outer, so those collisions are ordinary legal shadowing:
+ * `for(i, 0, n) { float i; }` compiles, and resolution is innermost-first.
+ *
+ * `bind` must be collected over the whole enclosing body (so a local
+ * declared *after* the row being edited still counts), with `old_decl`
+ * naming the row being replaced — its own names are not collisions with
+ * itself. `scope_peak` is the post-edit peak from compile_func_scope_peak
+ * minus this row's contribution. */
+static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
+                                                   const GLCmd *old_decl,
+                                                   const CompileScopeBindings *bind,
+                                                   int scope_peak,
+                                                   char *err, int err_size) {
+    for (int var_idx = 0; var_idx < parsed->count; var_idx++) {
+        const char *nm = parsed->names[var_idx];
+
+        for (int prev = 0; prev < var_idx; prev++) {
+            if (strcmp(nm, parsed->names[prev]) == 0)
+                return compile_set_err(err, err_size,
+                    "duplicate name '%s' in declaration", nm);
+        }
+        if (repl_eval_is_reserved_ident(nm))
+            return compile_set_err(err, err_size, "'%s' is reserved", nm);
+        if (!(isalpha((unsigned char)nm[0]) || nm[0] == '_'))
+            return compile_set_err(err, err_size, "invalid identifier '%s'", nm);
+
+        for (int b = 0; b < bind->count; b++) {
+            if (bind->kinds[b] == REPL_VISIBLE_VAR_LOOP)
+                continue;   /* nested scope - shadowing it is legal C */
+            if (strcmp(bind->vars[b].name, nm) != 0)
+                continue;
+            if (old_decl) {
+                int in_old_decl = 0;
+                for (int d = 0; d < old_decl->payload.decl.count; d++) {
+                    if (strcmp(old_decl->payload.decl.names[d], nm) == 0) {
+                        in_old_decl = 1;
+                        break;
+                    }
+                }
+                if (in_old_decl)
+                    continue;   /* this row's own binding, being rewritten */
+            }
+            return compile_set_err(err, err_size,
+                bind->kinds[b] == REPL_VISIBLE_VAR_PARAM
+                    ? "'%s' is already a parameter of this function"
+                    : "'%s' is already declared in this function",
+                nm);
+        }
+    }
+
+    if (scope_peak + parsed->count > MAX_EXPR_VARS)
+        return compile_set_err(err, err_size,
+            "function scope full (max %d parameters + locals + loop depth)",
+            MAX_EXPR_VARS);
+
+    return REPL_COMPILE_OK;
+}
+
+/* Format the decl into source text. The storage keyword is canonical and
+ * mirrors what the author typed: a global predef var is a file-scope
+ * static that retains its value across frames (the exporter emits it as
+ * `static float ...`), while a local is a plain C automatic living for
+ * one call. Surfacing the keyword in the code panel makes that lifetime
+ * difference — and which storage the commit actually chose — obvious.
+ * `indent` is the row's gutter: depth 0 for a global, the enclosing
+ * function body's depth for a local. */
 static void format_decl_text(const FloatDeclParse *parsed,
+                             const char *indent,
                              char *out, int out_sz) {
-    const char indent[] = "  ";
-    int off = snprintf(out, (size_t)out_sz, "%sstatic float ", indent);
+    int off = snprintf(out, (size_t)out_sz, "%s%sfloat ",
+                       indent ? indent : "  ",
+                       parsed->is_local ? "" : "static ");
     for (int var_idx = 0;
          var_idx < parsed->count && off < out_sz - 4;
          var_idx++) {
@@ -811,16 +995,144 @@ static void build_decl_predef_ops(const FloatDeclParse *parsed,
     out->predef_op_count = op_count;
 }
 
-/* Compose "declared a, b, c" for the status banner. */
+/* Compose "declared a, b, c" — or "declared local a, b in blade" — for
+ * the status banner. Storage depends on cursor position for the plain
+ * `float` case, which is otherwise invisible state; naming it here gives
+ * the author a second confirmation alongside the canonical text. */
 static void build_decl_commit_message(const FloatDeclParse *parsed,
+                                      const char *func_name,
                                       char *msg, int msg_sz) {
-    int off = snprintf(msg, (size_t)msg_sz, "declared ");
+    int off = snprintf(msg, (size_t)msg_sz, "declared %s",
+                       parsed->is_local ? "local " : "");
     for (int v = 0; v < parsed->count && off < msg_sz - 4; v++) {
         if (v > 0)
             off += snprintf(msg + off, (size_t)(msg_sz - off), ", ");
         off += snprintf(msg + off, (size_t)(msg_sz - off), "%s",
                         parsed->names[v]);
     }
+    if (parsed->is_local && func_name && func_name[0] && off < msg_sz - 4)
+        snprintf(msg + off, (size_t)(msg_sz - off), " in %s", func_name);
+}
+
+/* funcN / alias name of the header at `func_idx`, for the status banner. */
+static void compile_func_display_name(const ReplCompileContext *ctx,
+                                      int func_idx, char *out, int out_sz) {
+    const char *p;
+    char ident[REPL_FUNC_NAME_MAX];
+    int fn = -1;
+
+    if (!out || out_sz <= 0)
+        return;
+    out[0] = '\0';
+    if (!ctx || func_idx < 0 || func_idx >= ctx->document_count)
+        return;
+
+    p = source_text_line(ctx->text, func_idx);
+    if (!p)
+        return;
+    switch (repl_scan_func_name_token(&p, &fn, ident)) {
+    case 1: snprintf(out, (size_t)out_sz, "func%d", fn); break;
+    case 2: repl_copy_string_fits(out, (size_t)out_sz, ident); break;
+    default: break;
+    }
+}
+
+/* The local arm of repl_compile_float_decl: a declaration inside a
+ * function body. It emits no predef ops at all — the prologue row *is*
+ * the binding, which is why deleting it is guarded like a live variable
+ * and why the row carries REPL_VAR_IDX_LOCAL rather than a slot.
+ *
+ * `old_decl` is the local decl row being rewritten in place, or NULL. */
+static ReplCompileResult compile_float_decl_local(const ReplCompileContext *ctx,
+                                                  const FloatDeclParse *parsed,
+                                                  int func_idx, int insert_idx,
+                                                  const GLCmd *old_decl,
+                                                  ReplCompiledChange *out,
+                                                  char *err, int err_size) {
+    CompileScopeBindings bind;
+    char indent[REPL_INDENT_TEXT_MAX];
+    char func_name[REPL_FUNC_NAME_MAX];
+    char decl_text[MAX_LINE_LEN];
+    GLCmd cmd;
+    int body_end = compile_scope_find_block_end(ctx, func_idx);
+    int scope_peak = compile_func_scope_peak(ctx, func_idx);
+    int decl_pos;
+    ReplCompileResult r;
+
+    /* Collected at the closing brace, not at the cursor: a local declared
+     * *after* the row being edited is still in the same scope, and a
+     * same-scope redefinition has to be caught from either direction. */
+    compile_collect_bindings(ctx, body_end, &bind);
+    if (old_decl)
+        scope_peak -= old_decl->payload.decl.count;
+
+    r = validate_local_decl_names(parsed, old_decl, &bind, scope_peak,
+                                  err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
+
+    /* Overwrite-feasibility, in local terms: a dropped name must not
+     * still be read in the body. Unlike a global, there is no predef slot
+     * to outlive the row, so removing it would leave the reads bound to
+     * nothing. */
+    if (old_decl) {
+        for (int d = 0; d < old_decl->payload.decl.count; d++) {
+            const char *nm = old_decl->payload.decl.names[d];
+            int kept = 0;
+            for (int v = 0; v < parsed->count; v++) {
+                if (strcmp(parsed->names[v], nm) == 0) { kept = 1; break; }
+            }
+            if (kept) continue;
+            if (compile_local_name_is_still_referenced(ctx, nm, func_idx,
+                                                       insert_idx,
+                                                       insert_idx + 1))
+                return compile_set_err(err, err_size,
+                    "variable '%s' is in use, cannot overwrite", nm);
+        }
+    }
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type    = CMD_VAR_DECLARE;
+    cmd.valid   = 1;
+    cmd.var_idx = REPL_VAR_IDX_LOCAL;
+    cmd.payload.decl.count = parsed->count;
+    for (int v = 0; v < parsed->count; v++) {
+        if (!repl_copy_string_fits(cmd.payload.decl.names[v],
+                                   sizeof(cmd.payload.decl.names[v]),
+                                   parsed->names[v]))
+            return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
+    }
+
+    /* This body's declaration prologue, mirroring the global rule (which
+     * skips only CMD_VAR_DECLARE rows). Hoisting here — from whatever
+     * for/if the author typed in — is what keeps every reference strictly
+     * after its declaration, so flatten's binding stays a prefix scan. */
+    decl_pos = func_idx + 1;
+    while (decl_pos < body_end && decl_pos < ctx->document_count &&
+           ctx->document_cmds[decl_pos].type == CMD_VAR_DECLARE)
+        decl_pos++;
+
+    if (old_decl) {
+        out->kind  = REPL_COMPILED_REPLACE_ONE;
+        out->pos   = insert_idx;
+        out->count = 1;
+        out->adjust_edit_line = 0;
+    } else {
+        out->kind  = REPL_COMPILED_INSERT_ONE;
+        out->pos   = decl_pos;
+        out->count = 1;
+        out->adjust_edit_line = 1;  /* REPL_COMMAND_STORE_ADJUST_EDIT_LINE */
+    }
+    out->cmds[0] = cmd;
+
+    compile_scope_cmd_indent(ctx, out->pos, indent, sizeof(indent));
+    format_decl_text(parsed, indent, decl_text, (int)sizeof(decl_text));
+    repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
+
+    compile_func_display_name(ctx, func_idx, func_name, (int)sizeof(func_name));
+    build_decl_commit_message(parsed, func_name, out->commit_message,
+                              (int)sizeof(out->commit_message));
+    return REPL_COMPILE_OK;
 }
 
 ReplCompileResult repl_compile_float_decl(const char *input,
@@ -832,11 +1144,29 @@ ReplCompileResult repl_compile_float_decl(const char *input,
 
     repl_compiled_change_init(out);
 
+    /* Storage is decided *before* parsing, because the two paths validate
+     * initializers differently — the global path evaluates them against
+     * the predef table, which would reject `float x = param;` with an
+     * unknown-identifier error before the local diagnostic could run.
+     * Two steps, in order:
+     *   1. `static` typed  -> global, from any cursor position (also the
+     *      escape hatch for declaring a global from inside a function);
+     *   2. otherwise, an enclosing function -> local; top level -> global. */
+    int has_static = 0;
+    if (!repl_scan_decl_float_prefix(input ? input : "", &has_static)) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int insert_idx = compile_insert_pos(ctx);
+    int cursor_func_idx = compile_enclosing_func_at(ctx, insert_idx);
+    int func_idx = has_static ? -1 : cursor_func_idx;
+
     FloatDeclParse parsed;
     int recognized = 0;
     ReplCompileResult r =
         parse_float_name_list(input, &parsed, &recognized, ctx->predef,
-                              err, err_size);
+                              func_idx >= 0, err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
     if (!recognized) {
@@ -849,20 +1179,37 @@ ReplCompileResult repl_compile_float_decl(const char *input,
      * references appear strictly after their declaration. Editing
      * an existing CMD_VAR_DECLARE row is the only case that
      * replaces in-place. */
-    int insert_idx = compile_insert_pos(ctx);
     int overwriting_decl = (!ctx->insert_mode &&
                             insert_idx < ctx->document_count &&
                             ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE);
     const GLCmd *old_decl = overwriting_decl ? &ctx->document_cmds[insert_idx] : NULL;
+    int old_is_local = old_decl && old_decl->var_idx == REPL_VAR_IDX_LOCAL;
 
-    r = validate_decl_names(&parsed, old_decl, ctx->predef, err, err_size);
+    if (func_idx >= 0) {
+        if (old_decl && !old_is_local)
+            return compile_set_err(err, err_size,
+                "cannot convert a global declaration to a local - delete it, "
+                "then retype it inside the function");
+        return compile_float_decl_local(ctx, &parsed, func_idx, insert_idx,
+                                        old_decl, out, err, err_size);
+    }
+
+    /* Global path. A local row being retyped as `static float` is a
+     * *storage conversion*, not an ordinary overwrite: it credits no old
+     * predef slot (there was none), emits no UNDECLARE, and every name
+     * needs a fresh slot — so a full table rejects it before any source
+     * mutation. old_global is NULL in that case precisely to get that
+     * accounting. */
+    const GLCmd *old_global = old_is_local ? NULL : old_decl;
+
+    r = validate_decl_names(&parsed, old_global, ctx->predef, err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
 
     /* Overwrite-feasibility: removed names must not be referenced
      * elsewhere in the document. Replacement is rejected outright
      * rather than auto-deleting the references. */
-    if (overwriting_decl) {
+    if (old_global) {
         for (int d = 0; d < old_decl->payload.decl.count; d++) {
             const char *nm = old_decl->payload.decl.names[d];
             int kept = 0;
@@ -872,6 +1219,21 @@ ReplCompileResult repl_compile_float_decl(const char *input,
             if (kept) continue;
             if (compile_name_is_still_referenced(ctx, nm, insert_idx,
                                                  insert_idx + 1))
+                return compile_set_err(err, err_size,
+                    "variable '%s' is in use, cannot overwrite", nm);
+        }
+    } else if (old_is_local) {
+        /* Storage-aware, so an *unchanged* name is checked too: it is
+         * still being removed from local storage, and every compiled
+         * assignment to it carries REPL_VAR_IDX_LOCAL. Refusing the edit
+         * is the resolution — same shape as the rule next door, and no
+         * reclassify-every-assignment transaction to get wrong. */
+        for (int d = 0; d < old_decl->payload.decl.count; d++) {
+            const char *nm = old_decl->payload.decl.names[d];
+            if (compile_local_name_is_still_referenced(ctx, nm,
+                                                       cursor_func_idx,
+                                                       insert_idx,
+                                                       insert_idx + 1))
                 return compile_set_err(err, err_size,
                     "variable '%s' is in use, cannot overwrite", nm);
         }
@@ -895,11 +1257,22 @@ ReplCompileResult repl_compile_float_decl(const char *input,
            ctx->document_cmds[decl_pos].type == CMD_VAR_DECLARE)
         decl_pos++;
 
-    if (overwriting_decl) {
+    if (old_global) {
         out->kind  = REPL_COMPILED_REPLACE_ONE;
         out->pos   = insert_idx;
         out->count = 1;
         out->adjust_edit_line = 0;
+    } else if (old_is_local) {
+        /* The row has to move — local storage lives at the function-body
+         * top, global storage at the document top — so this is a
+         * delete-here-and-reinsert, not a replace-in-place. `pos` is in
+         * post-delete coordinates (compile.h convention). */
+        out->kind         = REPL_COMPILED_INSERT_ONE;
+        out->delete_pos   = insert_idx;
+        out->delete_count = 1;
+        out->pos          = (insert_idx < decl_pos) ? decl_pos - 1 : decl_pos;
+        out->count        = 1;
+        out->adjust_edit_line = 1;
     } else {
         out->kind  = REPL_COMPILED_INSERT_ONE;
         out->pos   = decl_pos;
@@ -909,11 +1282,11 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     out->cmds[0] = cmd;
 
     char decl_text[MAX_LINE_LEN];
-    format_decl_text(&parsed, decl_text, (int)sizeof(decl_text));
+    format_decl_text(&parsed, "  ", decl_text, (int)sizeof(decl_text));
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
 
-    build_decl_predef_ops(&parsed, old_decl, ctx->predef, out);
-    build_decl_commit_message(&parsed, out->commit_message,
+    build_decl_predef_ops(&parsed, old_global, ctx->predef, out);
+    build_decl_commit_message(&parsed, NULL, out->commit_message,
                               (int)sizeof(out->commit_message));
     return REPL_COMPILE_OK;
 }
@@ -938,11 +1311,13 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
      * (commit already evaluated any init expression), so re-parsing and
      * re-emitting is lossless. */
     const char *line = source_text_line(ctx->text, line_idx);
+    int is_local = (ctx->document_cmds[line_idx].var_idx == REPL_VAR_IDX_LOCAL);
+    char indent[REPL_INDENT_TEXT_MAX];
     FloatDeclParse parsed;
     int recognized = 0;
     ReplCompileResult r =
         parse_float_name_list(line ? line : "", &parsed, &recognized,
-                              ctx->predef, err, err_size);
+                              ctx->predef, is_local, err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
     if (!recognized || parsed.count < 2) {
@@ -954,11 +1329,16 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
         return compile_set_err(err, err_size,
             "too many names to split (%d > %d)", parsed.count, MAX_COMMIT_CMDS);
 
+    /* Storage survives the split: every emitted row keeps the source
+     * row's kind, so splitting a local does not silently promote it to a
+     * document-top global. */
+    compile_scope_cmd_indent(ctx, line_idx, indent, sizeof(indent));
     for (int i = 0; i < parsed.count; i++) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         cmd.type  = CMD_VAR_DECLARE;
         cmd.valid = 1;
+        cmd.var_idx = is_local ? REPL_VAR_IDX_LOCAL : 0;
         cmd.payload.decl.count = 1;
         repl_copy_string_fits(cmd.payload.decl.names[0],
                               sizeof(cmd.payload.decl.names[0]),
@@ -972,6 +1352,7 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
         FloatDeclParse one;
         memset(&one, 0, sizeof(one));
         one.count = 1;
+        one.is_local = is_local;
         repl_copy_string_fits(one.names[0], sizeof(one.names[0]),
                               parsed.names[i]);
         one.has_init[0]  = parsed.has_init[i];
@@ -979,7 +1360,7 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
         if (i == 0)
             repl_copy_string_fits(one.decl_comment, sizeof(one.decl_comment),
                                   parsed.decl_comment);
-        format_decl_text(&one, out->text[i], (int)sizeof(out->text[i]));
+        format_decl_text(&one, indent, out->text[i], (int)sizeof(out->text[i]));
     }
 
     /* Replace the one decl line in place: delete it, then insert the N
@@ -1078,10 +1459,10 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     int insert_idx = compile_insert_pos(ctx);
 
-    ExprVar vis[MAX_EXPR_VARS];
-    int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
-                                        ctx->document_count, insert_idx,
-                                        vis, MAX_EXPR_VARS, NULL);
+    CompileScopeBindings bind;
+    compile_collect_bindings(ctx, insert_idx, &bind);
+    ExprVar *vis = bind.vars;
+    int vis_n = bind.count;
     char verr[REPL_DIAG_TEXT_MAX];
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
@@ -1143,16 +1524,32 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         snprintf(out->commit_message, sizeof(out->commit_message),
                  "%s[%d] = %g", name, elem_idx, (double)val);
     } else {
-        if (compile_name_is_active_func_param(ctx, insert_idx, name))
+        /* Lexical target resolution. The innermost binding decides, and a
+         * matching PARAM/LOOP is never skipped in search of an outer
+         * LOCAL — a shadowed outer binding is simply not reachable from
+         * here, exactly as in C. Only when nothing scoped matches does
+         * the target fall through to a predef slot. */
+        int bind_slot = compile_bindings_find(&bind, name);
+        int var_idx;
+
+        if (bind_slot >= 0 && bind.kinds[bind_slot] == REPL_VISIBLE_VAR_PARAM)
             return compile_set_err(err, err_size,
                                    "cannot assign to function parameter '%s' - function parameters are constant",
                                    name);
-
-        int var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
-                                                       ctx->predef.count, name);
-        if (var_idx < 0)
+        if (bind_slot >= 0 && bind.kinds[bind_slot] == REPL_VISIBLE_VAR_LOOP)
             return compile_set_err(err, err_size,
-                "undeclared variable '%s' - use 'float %s;' first", name, name);
+                                   "cannot assign to loop variable '%s' - loop variables are constant",
+                                   name);
+
+        if (bind_slot >= 0) {
+            var_idx = REPL_VAR_IDX_LOCAL;
+        } else {
+            var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
+                                                       ctx->predef.count, name);
+            if (var_idx < 0)
+                return compile_set_err(err, err_size,
+                    "undeclared variable '%s' - use 'float %s;' first", name, name);
+        }
 
         if (!repl_eval_validate_expression_idents(
                 &(ReplExprIdentValidationConfig){
@@ -1175,10 +1572,13 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         cmd.valid    = 1;
         cmd.args[0]  = val;
         cmd.num_args = 1;       /* args[0] holds the assigned value */
-        cmd.var_idx  = var_idx; /* predef slot the executor will write */
+        cmd.var_idx  = var_idx; /* predef slot the executor will write, or
+                                 * REPL_VAR_IDX_LOCAL for a scoped target */
         cmd.has_vars = has_rhs_vars;
 
-        if (out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+        /* A local has no slot to set: its value exists only inside a call
+         * frame, so flatten writes it and the executor skips the row. */
+        if (var_idx >= 0 && out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
             out->predef_ops[out->predef_op_count].kind = REPL_PREDEF_OP_SET_VALUE;
             repl_copy_string_fits(out->predef_ops[out->predef_op_count].name,
                                   sizeof(out->predef_ops[out->predef_op_count].name), name);
@@ -1241,13 +1641,24 @@ ReplCompileResult repl_compile_var_assign(const char *input,
      * queued undeclares remove lower predef slots, rebase the staged
      * CMD_VAR_ASSIGN slot to the post-undeclare index before publish. */
     int op_count = out->predef_op_count;
+    int old_decl_is_local = overwriting_decl &&
+                            old_decl->var_idx == REPL_VAR_IDX_LOCAL;
     if (overwriting_decl) {
+        int decl_func_idx = old_decl_is_local
+                                ? compile_enclosing_func_at(ctx, insert_idx) : -1;
         for (int decl_idx = 0; decl_idx < old_decl->payload.decl.count; decl_idx++) {
             const char *nm = old_decl->payload.decl.names[decl_idx];
-            if (compile_name_is_still_referenced(ctx, nm, insert_idx,
-                                                 insert_idx + 1))
+            int in_use = old_decl_is_local
+                ? compile_local_name_is_still_referenced(ctx, nm, decl_func_idx,
+                                                         insert_idx, insert_idx + 1)
+                : compile_name_is_still_referenced(ctx, nm, insert_idx,
+                                                   insert_idx + 1);
+            if (in_use)
                 return compile_set_err(err, err_size,
                     "variable '%s' is in use, cannot overwrite", nm);
+            /* A local has no predef slot to release. */
+            if (old_decl_is_local)
+                continue;
             if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
             out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
             repl_copy_string_fits(out->predef_ops[op_count].name,
@@ -1256,8 +1667,14 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
+    /* Rebase exists to fix up predef slot indices after undeclares, so it
+     * runs only when *both* sides are global. A local-target assignment
+     * carries REPL_VAR_IDX_LOCAL (-1), which the helper reads as failure —
+     * ungated, it would reject the legitimate "overwrite an unused local
+     * decl with an assignment to another local" edit. */
     out->predef_op_count = op_count;
-    if (cmd.type == CMD_VAR_ASSIGN && overwriting_decl) {
+    if (cmd.type == CMD_VAR_ASSIGN && overwriting_decl &&
+        cmd.var_idx >= 0 && !old_decl_is_local) {
         int rebased_slot = compile_rebase_var_assign_slot_after_undeclares(
             name, cmd.var_idx, out, ctx->predef);
         if (rebased_slot < 0)
@@ -1415,23 +1832,35 @@ static ReplCompileResult compile_collect_undeclare_for_range(
         int range_start, int range_end,
         const char *action_verb,
         ReplCompiledChange *out, char *err, int err_size) {
-    /* Reference scan. */
+    /* Reference scan. Storage-aware in both directions: a local's reads
+     * are invisible to the global scan (it answers "does this line read
+     * the *global* of that name"), and asking the local scan about a
+     * global would be equally wrong. */
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
+        int is_local = (cmd->var_idx == REPL_VAR_IDX_LOCAL);
+        int func_idx = is_local ? compile_enclosing_func_at(ctx, i) : -1;
         for (int d = 0; d < cmd->payload.decl.count; d++) {
             const char *nm = cmd->payload.decl.names[d];
-            if (compile_name_is_still_referenced(ctx, nm, range_start, range_end))
+            int in_use = is_local
+                ? compile_local_name_is_still_referenced(ctx, nm, func_idx,
+                                                         range_start, range_end)
+                : compile_name_is_still_referenced(ctx, nm, range_start, range_end);
+            if (in_use)
                 return compile_set_err(err, err_size,
                                        "Cannot %s '%s': still referenced",
                                        action_verb, nm);
         }
     }
 
-    /* Append UNDECLARE ops for every declared name in the range. */
+    /* Append UNDECLARE ops for every declared name in the range. Locals
+     * are skipped: there is no predef slot behind them, and undeclaring
+     * by name would release a same-named global instead. */
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
+        if (cmd->var_idx == REPL_VAR_IDX_LOCAL) continue;
         for (int d = 0; d < cmd->payload.decl.count; d++) {
             if (out->predef_op_count >= MAX_PREDEF_OPS_PER_COMMIT)
                 return compile_set_err(err, err_size,
@@ -1666,7 +2095,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
             ExprVar vis[MAX_EXPR_VARS];
             int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
                                                 ctx->document_count, line_idx,
-                                                vis, MAX_EXPR_VARS, NULL);
+                                                vis, MAX_EXPR_VARS, NULL, NULL);
             int preserve_expr = input_has_any_visible_vars(stripped,
                                                            vis_n > 0 ? vis : NULL,
                                                            vis_n);
@@ -1982,7 +2411,7 @@ ReplCompileResult repl_compile_if_branch_kernel(const char *input,
         int visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
                                                  ctx->document_count, out->pos,
                                                  visible_vars, MAX_EXPR_VARS,
-                                                 NULL);
+                                                 NULL, NULL);
         char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(
                 &(ReplExprIdentValidationConfig){
@@ -2143,7 +2572,7 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
     ExprVar visible_vars[MAX_EXPR_VARS];
     int visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
                                              ctx->document_count, out->pos,
-                                             visible_vars, MAX_EXPR_VARS, NULL);
+                                             visible_vars, MAX_EXPR_VARS, NULL, NULL);
 
     /* Skip past `if` to the opening `(`. */
     while (*p && *p != '(') p++;
@@ -2452,7 +2881,7 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
 
     out->visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
                                               ctx->document_count, out->pos,
-                                              out->visible_vars, MAX_EXPR_VARS, NULL);
+                                              out->visible_vars, MAX_EXPR_VARS, NULL, NULL);
 
     if (!repl_eval_parse_for_header(
             &(ReplForHeaderParseConfig){

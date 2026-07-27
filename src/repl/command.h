@@ -107,6 +107,17 @@ typedef enum {
     CMD_TYPE_COUNT
 } CmdType;
 
+/* Sentinel `var_idx` for function-scoped storage — no predef slot.
+ *
+ * On a CMD_VAR_DECLARE row it marks the declaration itself as a local
+ * (the row *is* the binding; there is nothing in g_predef_vars to
+ * release). On a CMD_VAR_ASSIGN it marks a target that flatten resolves
+ * lexically against the live scope array instead of a predef slot, which
+ * is why the executor's `var_idx >= 0` guard makes such a row a no-op.
+ * -1 is already the "no slot" answer from repl_eval_find_predef_var_idx_in,
+ * so the two agree by construction. */
+#define REPL_VAR_IDX_LOCAL (-1)
+
 typedef struct {
     CmdType  type;
     /* No `mode` field: every enum-backed command (table-driven *and*
@@ -120,6 +131,9 @@ typedef struct {
     int      var_idx;               /* Predef-var slot for CMD_VAR_ASSIGN
                                      * (the executor / flatten / core read this
                                      * to apply the value held in args[0]).
+                                     * REPL_VAR_IDX_LOCAL marks a function-scoped
+                                     * target (CMD_VAR_ASSIGN) or a function-scoped
+                                     * declaration row (CMD_VAR_DECLARE); see below.
                                      * Zero / unused for every other CmdType. */
     int      valid;                 /* Deleted commands remain allocated but skipped */
     int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */

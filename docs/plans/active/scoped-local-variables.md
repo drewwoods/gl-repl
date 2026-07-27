@@ -1,6 +1,57 @@
 ## Function-Scoped Local Variables
 
-## Status — NOT STARTED (2026-07-27, rev 9)
+## Status — IN PROGRESS (2026-07-27): Phase 1 landed
+
+Phase 1 (representation + declaration compile) is implemented and tested;
+Phases 2–5 are untouched. **Until Phase 2 lands, a local is a compile-time
+construct only** — `flatten_var_assign`'s existing `var_idx >= 0` guards make a
+local-target assignment a no-op, and a local read resolves to nothing, so a
+converted scene would render wrong. Do not convert any example scene before
+Phase 2.
+
+What Phase 1 delivered, against the plan below:
+
+- `REPL_VAR_IDX_LOCAL` on `src/repl/command.h`; `repl_scan_decl_float_prefix`
+  now reports whether `static` was typed.
+- `collect_visible_vars_in()` binds local decl names into the innermost
+  enclosing `CMD_FUNC_DEF` frame and takes the optional `ReplVisibleVarKind
+  *kinds_out`. `compile_name_is_active_func_param` is gone, folded into that
+  kind-tagged collection as planned.
+- `repl_compile_float_decl` decides storage before parsing (`static` →
+  global; enclosing function → local), with `compile_float_decl_local` as the
+  local arm, `validate_local_decl_names`, the locality-aware parser preflight
+  (initializer + `@tune`/`@config`), the `"declared local u in blade"` banner,
+  and the local→global conversion (rejected while referenced; a
+  delete-and-reinsert when not).
+- `repl_compile_var_assign` resolves the LHS lexically through the ordered
+  binding list, emits `REPL_VAR_IDX_LOCAL` with no predef op for a LOCAL
+  target, adds the "loop variables are constant" diagnostic, and gates the
+  slot rebase on both sides being global.
+- `compile_func_scope_peak()` implements the whole-function capacity rule
+  (`params + locals + max nested-loop depth <= MAX_EXPR_VARS`). It is written
+  to be reused by the Phase 3 parameter and loop-header edits.
+
+**Two Phase 3 items were pulled forward**, because Phase 1 opens the hazard
+they close and leaving them for later would have been a live bug in between:
+
+- `compile_collect_undeclare_for_range` skips `REPL_PREDEF_OP_UNDECLARE` for
+  local decl rows and uses the local reference scan. Ungated, deleting a local
+  would have undeclared a *same-named global* by name.
+- `reformat.c`'s `CMD_VAR_DECLARE` case honors the storage marker instead of
+  always re-emitting `static float` at depth 0.
+
+`repl_compile_split_decl` (also listed under Phase 3) preserves the marker
+too — it re-parses the row, so it could not be left for later either.
+
+The scope-aware local reference scan Phase 3 specifies
+(`compile_line_uses_local_ident`, the mirror of
+`compile_line_uses_global_ident`) exists and is already used by the delete and
+overwrite guards. What Phase 3 still owns: the reverse binder guards on
+`repl_compile_func_def_kernel` / `repl_compile_for_loop_kernel`, and routing
+the two raw-replace overwrite routes (`input.c:660`, `input.c:1017`) through a
+shared `compile_decl_replacement_is_allowed`.
+
+## Status — rev 9 (plan as reviewed, 2026-07-27)
 
 Rev 9 repairs four consequences exposed by rev 8's shadowing rule. Items marked
 **[rev 9]**:

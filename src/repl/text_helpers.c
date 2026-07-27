@@ -244,12 +244,16 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
     return 1;
 }
 
-const char *repl_scan_decl_float_prefix(const char *p) {
+const char *repl_scan_decl_float_prefix(const char *p, int *has_static) {
+    if (has_static)
+        *has_static = 0;
     if (!p)
         return NULL;
     while (*p && isspace((unsigned char)*p)) p++;
     /* Optional canonical `static ` prefix (see format_decl_text). */
     if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        if (has_static)
+            *has_static = 1;
         p += 6;
         while (*p && isspace((unsigned char)*p)) p++;
     }

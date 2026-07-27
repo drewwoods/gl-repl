@@ -1284,7 +1284,7 @@ int editor_commit_apply_swatch_change(int edit_line, int direction, float scale)
             num_vis_vars =
                 collect_visible_vars_in(ctx.text, ctx.document_cmds,
                                         ctx.document_count, edit_line,
-                                        vis_vars, MAX_EXPR_VARS, NULL);
+                                        vis_vars, MAX_EXPR_VARS, NULL, NULL);
             ReplParseContext parse_ctx = {
                 .source_line_idx = edit_line,
                 .vars = vis_vars,

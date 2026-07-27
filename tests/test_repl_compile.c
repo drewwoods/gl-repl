@@ -1523,6 +1523,438 @@ static void test_if_block_condition_eval_uses_context_predef(void) {
                  kernel.ib.args[0], 3.0f, 1e-6f);
 }
 
+/* ---- Function-scoped locals (scoped-local-variables, phase 1) ------- */
+
+/* Commit `text` as a declaration with the cursor on source row
+ * `edit_line`, overwrite mode. Returns 1 if compile + apply both
+ * succeeded, 0 if compile rejected it (err receives the diagnostic). */
+static int commit_decl_at(const char *text, int edit_line,
+                          char *err, int err_size) {
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    editor_state_edit_line_set(edit_line);
+    editor_insert_mode_set(0);
+    set_input(text);
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    if (err && err_size > 0) err[0] = '\0';
+    if (repl_compile_float_decl(text, &ctx, &change, err, err_size)
+            != REPL_COMPILE_OK)
+        return 0;
+    return editor_commit_apply_external_change(&change, 0, 0);
+}
+
+/* func0(r) { glVertex3f(r, 0, 0); } — rows 0..2, cursor left on row 1. */
+static void seed_one_func(void) {
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+}
+
+/* A plain `float` inside a function body declares a local: it takes no
+ * predef slot, carries the REPL_VAR_IDX_LOCAL marker, drops `static`
+ * from its canonical text, and hoists to the top of that body. */
+static void test_local_decl_inside_func(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_one_func();
+
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+    set_input("float u;");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("local decl compiles",
+               repl_compile_float_decl("float u;", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("local decl inserts", change.kind, REPL_COMPILED_INSERT_ONE);
+    ASSERT_INT("local decl lands at the body top", change.pos, 1);
+    ASSERT_INT("local decl emits no predef ops", change.predef_op_count, 0);
+    ASSERT_INT("local decl row is marked local",
+               change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_STR("local decl text drops static and indents to the body",
+               change.text[0], "    float u;");
+    ASSERT_STR("local decl commit message names the storage and function",
+               change.commit_message, "declared local u in func0");
+
+    ASSERT_INT("local decl applies",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("local takes no predef slot", repl_eval_find_predef_var_idx("u"), -1);
+    ASSERT_INT("local decl row is a CMD_VAR_DECLARE",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+}
+
+/* `static` selects storage and beats cursor position: typed from inside a
+ * function body it still produces a document-top global. */
+static void test_static_keyword_selects_global_from_inside_func(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_one_func();
+
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+    set_input("static float g;");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("static decl from inside a func compiles",
+               repl_compile_float_decl("static float g;", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("static decl lands at the document top", change.pos, 0);
+    ASSERT_INT("static decl row is global", change.cmds[0].var_idx, 0);
+    ASSERT_STR("static decl keeps the keyword", change.text[0], "  static float g;");
+    ASSERT_INT("static decl applies",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_TRUE("static decl from inside a func takes a predef slot",
+                repl_eval_find_predef_var_idx("g") >= 0);
+}
+
+/* Locals take no initializer in V1. Both spellings must produce the
+ * initializer diagnostic — `= param` used to die on unknown-identifier
+ * validation before any local diagnostic could run. */
+static void test_local_decl_rejects_initializer(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    seed_one_func();
+    ASSERT_INT("local decl with literal initializer is rejected",
+               commit_decl_at("float u = 1;", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("literal initializer diagnostic names the rule",
+                strstr(err, "cannot have an initializer") != NULL);
+
+    seed_one_func();
+    ASSERT_INT("local decl initialized from a parameter is rejected",
+               commit_decl_at("float u = r;", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("parameter initializer gets the initializer diagnostic, "
+                "not unknown-identifier",
+                strstr(err, "cannot have an initializer") != NULL);
+}
+
+/* @tune / @config need a variable-panel slot, which a local does not have. */
+static void test_local_decl_rejects_tune_tag(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    seed_one_func();
+    ASSERT_INT("@tune on a local is rejected",
+               commit_decl_at("float u; // @tune", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("@tune diagnostic points at static float",
+                strstr(err, "static float") != NULL);
+}
+
+/* Same scope in C, so these are redefinitions rather than shadowing. */
+static void test_local_decl_rejects_same_scope_redefinition(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    seed_one_func();
+    ASSERT_INT("a local colliding with a parameter is rejected",
+               commit_decl_at("float r;", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("parameter collision is reported as such",
+                strstr(err, "already a parameter") != NULL);
+
+    seed_one_func();
+    ASSERT_INT("first local commits", commit_decl_at("float u;", 1, err, sizeof(err)), 1);
+    ASSERT_INT("a second local of the same name is rejected",
+               commit_decl_at("float u;", 2, err, sizeof(err)), 0);
+    ASSERT_TRUE("duplicate local is reported as such",
+                strstr(err, "already declared in this function") != NULL);
+}
+
+/* Outer scopes may be shadowed — that is ordinary C, and eval_primary
+ * already resolves innermost-first. */
+static void test_local_decl_allows_shadowing_outer_scopes(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("static float x;");
+    editor_feed_line("func0(r) {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("a local may shadow a global",
+               commit_decl_at("float x;", 2, err, sizeof(err)), 1);
+    ASSERT_TRUE("the shadowed global keeps its slot",
+                repl_eval_find_predef_var_idx("x") >= 0);
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    ASSERT_INT("a local may share a name with a loop iterator",
+               commit_decl_at("float i;", 2, err, sizeof(err)), 1);
+    ASSERT_INT("the local hoists to the function-body top, above the loop",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+    ASSERT_INT("the hoisted row is a local",
+               repl_state_document_cmds_mut()[1].var_idx, REPL_VAR_IDX_LOCAL);
+}
+
+/* A declaration typed at depth relocates to the owning function's
+ * prologue, exactly as a top-level decl relocates to the document top. */
+static void test_local_decl_hoists_from_nested_block(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+
+    ASSERT_INT("a decl typed inside a nested for commits",
+               commit_decl_at("float u;", 2, err, sizeof(err)), 1);
+    ASSERT_INT("it hoists to the function prologue, not the loop body",
+               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+    ASSERT_STR("and takes the body's indent",
+               editor_buffer_line(1), "    float u;");
+    ASSERT_INT("the loop header follows it",
+               repl_state_document_cmds_mut()[2].type, CMD_FOR_BEGIN);
+}
+
+/* Assignment resolves lexically: a local target carries the sentinel and
+ * stages no predef op; PARAM and LOOP stay unwritable even when an outer
+ * binding of the same name exists. */
+static void test_var_assign_resolves_scoped_targets(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_one_func();
+    ASSERT_INT("local decl commits", commit_decl_at("float u;", 1, err, sizeof(err)), 1);
+
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(1);
+    set_input("u = 2");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("assignment to a local compiles",
+               repl_compile_var_assign("u = 2", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("assignment to a local carries the local sentinel",
+               change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_INT("assignment to a local stages no predef op",
+               change.predef_op_count, 0);
+
+    /* A loop iterator is not writable, even with an outer local of the
+     * same name — the innermost binding decides. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(x, 0, 3) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    ASSERT_INT("outer local x commits", commit_decl_at("float x;", 4, err, sizeof(err)), 1);
+
+    editor_state_edit_line_set(3);
+    editor_insert_mode_set(1);
+    set_input("x = 2");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("assigning the shadowing loop iterator is rejected",
+               repl_compile_var_assign("x = 2", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("loop-iterator assignment names the rule",
+                strstr(err, "loop variables are constant") != NULL);
+}
+
+/* Retyping a local as `static float` is a storage conversion: refused
+ * while the name is read, and a move (not a replace-in-place) when it
+ * is not. */
+static void test_local_to_global_conversion(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    /* Referenced: rejected. */
+    seed_one_func();
+    ASSERT_INT("local decl commits", commit_decl_at("float u;", 1, err, sizeof(err)), 1);
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(1);
+    set_input("u = 2");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("assignment to the local compiles",
+               repl_compile_var_assign("u = 2", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("assignment applies",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+
+    ASSERT_INT("converting a referenced local is rejected",
+               commit_decl_at("static float u;", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("conversion rejection reuses the in-use wording",
+                strstr(err, "is in use, cannot overwrite") != NULL);
+    ASSERT_INT("the rejected conversion left no predef slot",
+               repl_eval_find_predef_var_idx("u"), -1);
+
+    /* Unreferenced: allowed, and the row moves to the document top. */
+    seed_one_func();
+    ASSERT_INT("local decl commits", commit_decl_at("float u;", 1, err, sizeof(err)), 1);
+    ASSERT_INT("converting an unreferenced local succeeds",
+               commit_decl_at("static float u;", 1, err, sizeof(err)), 1);
+    ASSERT_INT("the converted row moved to the document top",
+               repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+    ASSERT_INT("the converted row is global",
+               repl_state_document_cmds_mut()[0].var_idx, 0);
+    ASSERT_STR("the converted row is re-emitted in global form",
+               editor_buffer_line(0), "  static float u;");
+    ASSERT_TRUE("the converted name now holds a predef slot",
+                repl_eval_find_predef_var_idx("u") >= 0);
+    ASSERT_INT("the function header follows it",
+               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+
+    /* A same-name global is a duplicate in the same namespace, so it
+     * still blocks the conversion. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("static float u;");
+    editor_feed_line("func0(r) {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("shadowing local commits", commit_decl_at("float u;", 2, err, sizeof(err)), 1);
+    ASSERT_INT("converting onto an existing global is rejected",
+               commit_decl_at("static float u;", 2, err, sizeof(err)), 0);
+    ASSERT_TRUE("duplicate-global wording",
+                strstr(err, "already declared") != NULL);
+}
+
+/* Splitting a local must not silently promote it to a document-top
+ * global: repl_compile_split_decl re-parses the row and rebuilds every
+ * emitted line. */
+static void test_split_decl_on_local_keeps_storage(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_one_func();
+    ASSERT_INT("two-name local commits",
+               commit_decl_at("float u, v;", 1, err, sizeof(err)), 1);
+
+    ctx = repl_compile_context_from_live(1);
+    ASSERT_INT("split compiles",
+               repl_compile_split_decl(&ctx, 1, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("split emits two rows", change.count, 2);
+    ASSERT_INT("split keeps row 0 local", change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_INT("split keeps row 1 local", change.cmds[1].var_idx, REPL_VAR_IDX_LOCAL);
+    ASSERT_STR("split re-emits the local form", change.text[0], "    float u;");
+    ASSERT_STR("split re-emits the local form", change.text[1], "    float v;");
+}
+
+/* Deleting a local decl releases no predef slot — undeclaring by name
+ * would have taken a same-named global with it. */
+static void test_delete_local_decl_spares_same_named_global(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("static float u;");
+    editor_feed_line("func0(r) {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("shadowing local commits", commit_decl_at("float u;", 2, err, sizeof(err)), 1);
+
+    ctx = repl_compile_context_from_live(2);
+    ASSERT_INT("deleting the local row compiles",
+               repl_compile_delete_range(2, 1, &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("deleting a local emits no UNDECLARE", change.predef_op_count, 0);
+    ASSERT_INT("delete applies",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_TRUE("the same-named global survives",
+                repl_eval_find_predef_var_idx("u") >= 0);
+}
+
+/* A local that is still read cannot be deleted; one whose only textual
+ * occurrence sits under a shadowing iterator is not a reference at all. */
+static void test_local_delete_guard_is_scope_aware(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    seed_one_func();
+    ASSERT_INT("local decl commits", commit_decl_at("float u;", 1, err, sizeof(err)), 1);
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(1);
+    set_input("u = 2");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("assignment to the local compiles",
+               repl_compile_var_assign("u = 2", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("assignment applies",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+
+    ctx = repl_compile_context_from_live(1);
+    ASSERT_INT("deleting a referenced local is rejected",
+               repl_compile_delete_range(1, 1, &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("delete rejection says why",
+                strstr(err, "still referenced") != NULL);
+
+    /* Sole textual `x` lives under `for(x, ...)`, which shadows the
+     * local — so the local is unreferenced and deletes cleanly. */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(x, 0, 3) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    ASSERT_INT("shadowed local commits", commit_decl_at("float x;", 4, err, sizeof(err)), 1);
+
+    ctx = repl_compile_context_from_live(1);
+    ASSERT_INT("a local read only under a shadowing iterator deletes",
+               repl_compile_delete_range(1, 1, &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+}
+
+/* Capacity is a whole-function property: parameters + locals + the
+ * deepest loop nesting must fit MAX_EXPR_VARS, because flatten_for_loop
+ * prepends an iterator to a fresh array and drops the last outer binding
+ * at the cap rather than erroring. */
+static void test_local_decl_capacity_is_whole_function(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    int tail;
+
+    /* One parameter, one loop level: 30 locals fit exactly (1 + 30 + 1). */
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("func0(r) {");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+
+    tail = repl_state_document_count() - 1;
+    ASSERT_INT("locals 1-8 commit",
+               commit_decl_at("float a1, a2, a3, a4, a5, a6, a7, a8;",
+                              tail, err, sizeof(err)), 1);
+    tail = repl_state_document_count() - 1;
+    ASSERT_INT("locals 9-16 commit",
+               commit_decl_at("float b1, b2, b3, b4, b5, b6, b7, b8;",
+                              tail, err, sizeof(err)), 1);
+    tail = repl_state_document_count() - 1;
+    ASSERT_INT("locals 17-24 commit",
+               commit_decl_at("float c1, c2, c3, c4, c5, c6, c7, c8;",
+                              tail, err, sizeof(err)), 1);
+    tail = repl_state_document_count() - 1;
+    ASSERT_INT("locals 25-30 commit",
+               commit_decl_at("float d1, d2, d3, d4, d5, d6;",
+                              tail, err, sizeof(err)), 1);
+
+    tail = repl_state_document_count() - 1;
+    ASSERT_INT("the local that would overflow the loop-inflated scope "
+               "is rejected",
+               commit_decl_at("float d7;", tail, err, sizeof(err)), 0);
+    ASSERT_TRUE("capacity rejection names the scope budget",
+                strstr(err, "function scope full") != NULL);
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_float_decl_trailing_comment_no_semicolon();
@@ -1564,6 +1996,19 @@ int main(void) {
     test_func_def_after_blank_separated_decls();
     test_func_def_resume_publish_consumed_by_close_brace();
     test_if_block_condition_eval_uses_context_predef();
+    test_local_decl_inside_func();
+    test_static_keyword_selects_global_from_inside_func();
+    test_local_decl_rejects_initializer();
+    test_local_decl_rejects_tune_tag();
+    test_local_decl_rejects_same_scope_redefinition();
+    test_local_decl_allows_shadowing_outer_scopes();
+    test_local_decl_hoists_from_nested_block();
+    test_var_assign_resolves_scoped_targets();
+    test_local_to_global_conversion();
+    test_split_decl_on_local_keeps_storage();
+    test_delete_local_decl_spares_same_named_global();
+    test_local_delete_guard_is_scope_aware();
+    test_local_decl_capacity_is_whole_function();
 
     /* [P1] regression: alias registration must roll back on parse
      * failure. Pre-fix, repl_compile_func_def called
