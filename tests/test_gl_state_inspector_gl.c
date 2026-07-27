@@ -113,10 +113,9 @@ static int feq(float a, float b, float epsilon) {
  *      complete workaround: the cell then matches the vertex exactly.
  *      There is no portable assertion to make, so that case is skipped here and
  *      says so out loud rather than being quietly dropped.
- *   2. The latched color is clamped to [0, 1]. Mesa stores what was latched,
- *      unclamped. GL 2.1 does not settle this one, so the fold follows Mesa
- *      (which also keeps the row consistent with the panel's GL_CURRENT_COLOR)
- *      and the case accepts either answer, reporting which arrived. */
+ *
+ * (A third driver settled the clamping question that used to live here: see
+ * diff_driver_is_mesa.) */
 static int diff_driver_is_apple_legacy(void) {
     const char *vendor = (const char *)glGetString(GL_VENDOR);
     return vendor && strstr(vendor, "Apple") != NULL;
@@ -137,10 +136,17 @@ static int diff_driver_is_apple_legacy(void) {
  *      (0.212361, 0.180281, 0.158201) where normalizing first gives
  *      (0.699445, 0.559124, 0.428803).
  *
- * Cases resting on either are skipped there. Both deviations need a non-identity
- * modelview, which is why the directional-light and local-viewer cases below
- * pass on Mesa unchanged: with w = 0 the vertex position drops out of the light
- * vector, and those cases leave the modelview alone. */
+ *   3. It stores the unlit latch *unclamped*. Apple and NVIDIA 595.84 both
+ *      clamp to [0, 1], and the spec agrees — the raster color is a vertex's
+ *      associated color, and RGBA vertex colors are clamped before use (GL 2.1
+ *      2.7; compatibility CLAMP_VERTEX_COLOR defaults to TRUE). This was left
+ *      open while only two drivers had been measured and they disagreed; the
+ *      third broke the tie, so the fold clamps and Mesa is the outlier.
+ *
+ * Cases resting on any of these are skipped there. Deviations 1 and 2 need a
+ * non-identity modelview, which is why the directional-light and local-viewer
+ * cases below pass on Mesa unchanged: with w = 0 the vertex position drops out
+ * of the light vector, and those cases leave the modelview alone. */
 static int diff_driver_is_mesa(void) {
     const char *renderer = (const char *)glGetString(GL_RENDERER);
     const char *version = (const char *)glGetString(GL_VERSION);
@@ -660,40 +666,6 @@ static void diff_require_valid_raster_pos(const char *case_name) {
     ASSERT_TRUE(label, valid == GL_TRUE);
 }
 
-/* The one row where the two drivers disagree (see diff_driver_is_apple_legacy):
- * accept the fold's value either verbatim or clamped, and report which the
- * driver chose. Pinning "one of exactly these two" still catches a third
- * behavior, which is what a regression here would look like. */
-static void diff_raster_color_raw_or_clamped(void) {
-    const ReplGlStateReportRow *row =
-        diff_require_row("GL_CURRENT_RASTER_COLOR");
-    GLfloat driver[4];
-    float reported[4];
-    int raw_match = 1, clamped_match = 1;
-    int i;
-
-    if (!row)
-        return;
-    if (diff_parse_vec(row->current, reported, 4) != 4) {
-        ASSERT_TRUE("out-of-range raster color: 4 components parsed", 0);
-        return;
-    }
-    glGetFloatv(GL_CURRENT_RASTER_COLOR, driver);
-    for (i = 0; i < 4; i++) {
-        float clamped = reported[i] < 0.0f ? 0.0f
-                                           : (reported[i] > 1.0f ? 1.0f
-                                                                 : reported[i]);
-        if (!feq(reported[i], driver[i], DIFF_EPSILON))
-            raw_match = 0;
-        if (!feq(clamped, driver[i], DIFF_EPSILON))
-            clamped_match = 0;
-    }
-    printf("    (out-of-range latch: driver stores it %s)\n",
-           raw_match ? "unclamped, like the fold"
-                     : (clamped_match ? "clamped to [0,1]" : "some third way"));
-    ASSERT_TRUE("out-of-range raster color is stored raw or clamped, "
-                "nothing else", raw_match || clamped_match);
-}
 
 /* Material rows, read back with glGetMaterialfv. Both drivers agree here, so
  * these need no gating: what the fold has to get right is that the material
@@ -1067,15 +1039,23 @@ static void test_diff_lit_raster_color(void) {
         diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
     }
 
-    /* (h) Out-of-range color with lighting off: the drivers disagree on whether
-     * the latched value is clamped, so this accepts either and names which. */
-    n = 0;
-    cmds[n] = diff_cmd(CMD_DISABLE, n, 1, (double)GL_LIGHTING); n++;
-    cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 1.5, -0.5, 0.25, 1.0); n++;
-    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
-    diff_case("lit raster color: out-of-range latch", cmds, n, n);
-    diff_require_valid_raster_pos("out-of-range latch");
-    diff_raster_color_raw_or_clamped();
+    /* (h) Out-of-range color with lighting off: the latch clamps to [0,1], the
+     * same as the lit path. Apple and NVIDIA agree; Mesa keeps the raw value,
+     * so it is skipped there rather than weakening the assertion for everyone. */
+    if (diff_driver_is_mesa()) {
+        diff_skip("out-of-range latch",
+                  "Mesa stores it unclamped; Apple and NVIDIA clamp");
+    } else {
+        n = 0;
+        cmds[n] = diff_cmd(CMD_DISABLE, n, 1, (double)GL_LIGHTING); n++;
+        cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 1.5, -0.5, 0.25, 1.0); n++;
+        cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+        diff_case("lit raster color: out-of-range latch", cmds, n, n);
+        diff_require_valid_raster_pos("out-of-range latch");
+        diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+        /* The current color is not clamped: nothing has consumed it yet. */
+        diff_vec_row("GL_CURRENT_COLOR", GL_CURRENT_COLOR, 4);
+    }
 }
 
 /* 7. Materials, including the one ordering that bites: GL_COLOR_MATERIAL makes

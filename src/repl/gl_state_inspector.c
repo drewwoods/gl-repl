@@ -1311,7 +1311,16 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
                                  eye_pos);
             gl_state_lit_color(s, eye_pos, s->raster_color);
         } else {
-            memcpy(s->raster_color, s->current_color, sizeof(s->raster_color));
+            /* Clamped like the lit path: the raster color is a vertex's
+             * associated color, and RGBA vertex colors are clamped to [0,1]
+             * before use (GL 2.1 2.7; the compatibility CLAMP_VERTEX_COLOR
+             * defaults to TRUE). Measured on three drivers — Apple M2 and
+             * NVIDIA 595.84 store the clamped value, Mesa 25.2.8 keeps the raw
+             * one; the panel follows the majority and the spec. GL_CURRENT_COLOR
+             * stays unclamped, which is right: nothing has used it yet. */
+            int ch;
+            for (ch = 0; ch < 4; ch++)
+                s->raster_color[ch] = gl_state_clamp01(s->current_color[ch]);
         }
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;

@@ -1646,6 +1646,31 @@ static void test_gl_state_report_latches_raster_color(void) {
         ASSERT_STR("current color is untouched by lighting", row->current,
                    "(0.25, 0.5, 0.75, 1)");
 
+    /* The latch clamps to [0,1] — the raster color is a vertex's associated
+     * color, and RGBA vertex colors are clamped before use — while
+     * GL_CURRENT_COLOR keeps the raw value, because nothing has consumed it
+     * yet. Apple and NVIDIA store the clamped value, Mesa does not; the
+     * cross-driver evidence lives in tests/test_gl_state_inspector_gl.c. */
+    cmds[0] = gl_state_test_cmd(CMD_COLOR4F, 0);
+    cmds[0].args[0] = 1.5f; cmds[0].args[1] = -0.5f;
+    cmds[0].args[2] = 0.25f; cmds[0].args[3] = 1.0f;
+    cmds[0].num_args = 4;
+    cmds[1] = gl_state_test_cmd(CMD_RASTER_POS3F, 1);
+    cmds[1].args[0] = 0.0f; cmds[1].args[1] = 0.0f; cmds[1].args[2] = 0.0f;
+    cmds[1].num_args = 3;
+    program.cmd_count = 2;
+    repl_gl_state_report_at_line(program, 2, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
+    ASSERT_TRUE("out-of-range latch reported", row != NULL);
+    if (row)
+        ASSERT_STR("out-of-range color latches clamped", row->current,
+                   "(1, 0, 0.25, 1)");
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("current color reported next to it", row != NULL);
+    if (row)
+        ASSERT_STR("current color keeps the raw value", row->current,
+                   "(1.5, -0.5, 0.25, 1)");
+
     /* GL_CURRENT_BIT covers the latched color, so glPushAttrib/glPopAttrib
      * scopes it with the position and stamps the pop as its latest source. */
     cmds[0] = gl_state_test_cmd(CMD_COLOR3F, 0);
