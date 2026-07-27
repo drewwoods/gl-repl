@@ -41,7 +41,7 @@
 /* @cfg auto_normals = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg camera_rotate = 0 */
-/* @cfg vertex_labels = 1 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */

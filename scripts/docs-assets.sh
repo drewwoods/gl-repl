@@ -574,7 +574,7 @@ EOF
 }
 
 stage_overlays() { stage overlays <<'EOF'
-/* @cfg vertex_labels = 2 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX_POS */
 /* @cfg normal_vectors = 1 */
 /* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 1 */
@@ -601,7 +601,7 @@ EOF
 # the highlight/labels to just that quad, not the whole shared block.
 stage_single_polygon() { stage single_polygon <<'EOF'
 /* @cfg poly_highlight = 1 */
-/* @cfg vertex_labels = 1 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_SINGLE_POLYGON */
 /* @cfg grid = GRID_THEME_OFF */
 // Snippet start

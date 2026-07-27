@@ -640,8 +640,8 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
  *
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
- * light_theme / view_mode / overlay_scope / vertex_outline_style). Other enum-shaped slugs
- * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
+ * light_theme / view_mode / overlay_scope / vertex_labels / vertex_outline_style).
+ * Other enum-shaped slugs — replay, code_panel_layout, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
  * support for one of those slugs.
@@ -709,6 +709,11 @@ static const char *cfg_overlay_scope_symbols[OVERLAY_SCOPE_COUNT] = {
     OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_SYMBOL_ENTRY)
 #undef OVERLAY_SCOPE_SYMBOL_ENTRY
 };
+static const char *cfg_vertex_label_symbols[OVERLAY_VERTEX_LABEL_COUNT] = {
+#define OVERLAY_VERTEX_LABEL_SYMBOL_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_##name] = "OVERLAY_VERTEX_LABEL_" #name,
+    OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_SYMBOL_ENTRY)
+#undef OVERLAY_VERTEX_LABEL_SYMBOL_ENTRY
+};
 static const char *cfg_vertex_outline_style_symbols[VERTEX_OUTLINE_STYLE_COUNT] = {
 #define VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY(name, str) [VERTEX_OUTLINE_STYLE_##name] = "VERTEX_OUTLINE_STYLE_" #name,
     VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY)
@@ -773,6 +778,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "label_highlight_scope") == 0 || strcmp(slug, "label_scope") == 0 || strcmp(slug, "overlay_scope") == 0) {
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
+    }
+    if (strcmp(slug, "vertex_labels") == 0) {
+        *count = OVERLAY_VERTEX_LABEL_COUNT;
+        return cfg_vertex_label_symbols;
     }
     if (strcmp(slug, "vertex_outline_style") == 0) {
         *count = VERTEX_OUTLINE_STYLE_COUNT;

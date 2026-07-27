@@ -1711,7 +1711,7 @@ static void test_backdrop_grid_pairing_policy(void) {
 
 /* Audit #41: the cfg bridge accepts symbolic value names so catalogs
  * can write "@cfg grid = GRID_THEME_RADAR" instead of a magic integer.
- * Pin each scene-enum slug end-to-end (resolve_text + apply via
+ * Pin enum-valued slugs end-to-end (resolve_text + apply via
  * repl_cfg_set_text), plus the legacy integer path that still has
  * to round-trip from older saved files. */
 static void test_cfg_bridge_resolves_symbolic_names(void) {
@@ -1762,6 +1762,11 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                 repl_cfg_resolve_text("label_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy label_scope", out,
                OVERLAY_SCOPE_ALL_INSTANCES);
+    ASSERT_TRUE("resolve vertex_labels: OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE",
+                repl_cfg_resolve_text("vertex_labels",
+                                      "OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE", &out));
+    ASSERT_INT("  -> OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE", out,
+               OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE);
     ASSERT_TRUE("resolve vertex_outline_style: VERTEX_OUTLINE_STYLE_BOLD_INVERTED",
                 repl_cfg_resolve_text("vertex_outline_style",
                                       "VERTEX_OUTLINE_STYLE_BOLD_INVERTED", &out));
@@ -1786,6 +1791,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     repl_cfg_set_text("backdrop", "RENDER3D_BACKDROP_STARS");
     ASSERT_INT("set_text backdrop -> presentation.backdrop_mode",
                glr_state_presentation().backdrop_mode, RENDER3D_BACKDROP_STARS);
+    repl_cfg_set_text("vertex_labels", "OVERLAY_VERTEX_LABEL_INDEX_POS");
+    ASSERT_INT("set_text vertex_labels -> presentation.show_vertex_labels",
+               glr_state_presentation().show_vertex_labels,
+               OVERLAY_VERTEX_LABEL_INDEX_POS);
 
     /* Legacy integer-form @cfg lines must still load — the apply
      * path tries resolve_text first, then falls back to strtol.

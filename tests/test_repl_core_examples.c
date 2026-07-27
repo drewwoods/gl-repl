@@ -1411,13 +1411,14 @@ static void test_example_subheading_metadata(void) {
  * Precedence chain under test: example `@cfg` > tag default > global
  * default. */
 /* Audit #41: example catalogs must use symbolic value names for
- * scene-enum slugs (grid, axes, backdrop) so reordering the matching
- * enum in src/scene/themes.h can't silently shift an example to a
- * different theme. Scan every example's leading metadata block; any
- * `@cfg <slug> = <val>` that targets a scene-enum slug must have a
+ * enum-valued slugs so reordering the matching enum can't silently shift
+ * an example to a different choice. Scan every example's leading metadata block; any
+ * `@cfg <slug> = <val>` that targets an enum-valued slug must have a
  * non-digit value (i.e., a symbolic name, not a raw integer). */
 static void test_example_cfg_uses_symbolic_names(void) {
-    static const char *const enum_slugs[] = { "grid", "axes", "backdrop" };
+    static const char *const enum_slugs[] = {
+        "grid", "axes", "backdrop", "grid_brightness", "vertex_labels"
+    };
     int n = repl_example_count();
     for (int i = 0; i < n; i++) {
         const char *const *lines = repl_example_lines(i);

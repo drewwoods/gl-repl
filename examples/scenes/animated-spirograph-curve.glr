@@ -2,7 +2,7 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg poly_highlight = 0
-// @cfg vertex_labels = 0
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // camera
 glTranslatef(0.0f, 0.0f, -4.50f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);

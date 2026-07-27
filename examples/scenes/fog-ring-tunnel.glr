@@ -1,7 +1,7 @@
 // @cfg grid = GRID_THEME_OFF
 // @cfg axes = AXES_THEME_OFF
 // @cfg backdrop = RENDER3D_BACKDROP_OFF
-// @cfg vertex_labels = 0
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 // @cfg variable_panel = 1

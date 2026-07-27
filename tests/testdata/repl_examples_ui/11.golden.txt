@@ -26,7 +26,7 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = 0 */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = 1 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_points = 1 */
 /* @cfg vertex_outlines = 1 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */

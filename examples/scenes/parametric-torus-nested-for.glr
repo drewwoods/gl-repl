@@ -1,4 +1,4 @@
-// @cfg vertex_labels = 0
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // camera
 glTranslatef(0.0f, 0.0f, -8.00f);
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);

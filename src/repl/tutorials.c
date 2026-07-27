@@ -174,7 +174,7 @@ static const TutorialStep g_tutorial_depth_triangle_steps[] = {
  * foreshortening or accidental orbit. */
 static const char *const g_tutorial_first_triangle_cfg[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
-    "// @cfg vertex_labels = 4",
+    "// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE",
     "// @cfg grid_brightness = GRID_BRIGHTNESS_DIM",
     "// @cfg grid = GRID_THEME_PLANES",
     NULL,
