@@ -301,7 +301,7 @@ static UiVariablePanelView build_panel_view(void) {
     v.visible  = g_panel_on && variable_panel_visible();
     v.window_w = g_window_w;
     v.window_h = g_window_h;
-    ui_variable_panel_size(g_row_count, &pw, &ph);
+    ui_variable_panel_size(g_row_count, v.collapsed, &pw, &ph);
     v.panel_x = g_window_w - pw - 8;
     v.panel_y = 8;
     v.vars            = g_rows;
