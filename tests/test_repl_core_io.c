@@ -2813,6 +2813,43 @@ static void test_import_robustness(void) {
     ASSERT_INT("blank line inside snippet survives",
                repl_state_document_cmds()[1].type, CMD_EMPTY);
 
+    /* 10. Raw scene files (no snippet markers) with static float declarations
+     * and initializers (e.g. `static float bright = 1.0; // @tune ...`).
+     * Pre-fix, import_handle_stash_predef_decl stashed the value line and returned
+     * 1 without checking allow_raw_scene, causing the document row CMD_VAR_DECLARE to be dropped.
+     * With fix, it returns 0 for raw scenes so the line falls through to raw scene handler. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// @cfg grid = GRID_THEME_OFF\n");
+    fprintf(f, "static float bright = 1.0; // @tune overall lantern intensity\n");
+    fprintf(f, "static float spread = 12;\n");
+    fprintf(f, "static float rise = 0.55;\n");
+    fprintf(f, "glVertex3f(bright, spread, rise);\n");
+    fclose(f);
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("load raw scene file with static float decls",
+                repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("raw scene static float command count",
+               repl_state_document_count(), 4);
+    ASSERT_INT("raw scene cmd 0 is VAR_DECLARE",
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+    ASSERT_INT("raw scene cmd 1 is VAR_DECLARE",
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
+    ASSERT_INT("raw scene cmd 2 is VAR_DECLARE",
+               repl_state_document_cmds()[2].type, CMD_VAR_DECLARE);
+    ASSERT_INT("raw scene cmd 3 is VERTEX3F",
+               repl_state_document_cmds()[3].type, CMD_VERTEX3F);
+    {
+        int bright_idx = repl_eval_find_predef_var_idx("bright");
+        ASSERT_TRUE("static float bright declared and initialized",
+                    bright_idx >= 0 && fabsf(g_predef_vars[bright_idx].value - 1.0f) < 1e-6f);
+        int spread_idx = repl_eval_find_predef_var_idx("spread");
+        ASSERT_TRUE("static float spread declared and initialized",
+                    spread_idx >= 0 && fabsf(g_predef_vars[spread_idx].value - 12.0f) < 1e-6f);
+        int rise_idx = repl_eval_find_predef_var_idx("rise");
+        ASSERT_TRUE("static float rise declared and initialized",
+                    rise_idx >= 0 && fabsf(g_predef_vars[rise_idx].value - 0.55f) < 1e-6f);
+    }
+
     remove(test_path);
 }
 

@@ -2133,6 +2133,12 @@ static int import_handle_predef_decl(ImportState *s, const char *p,
 static int import_handle_stash_predef_decl(ImportState *s, const char *p,
                                            const char *raw) {
     (void)raw;
+    /* Only exported-C files split a decl into a file-scope value line plus a
+     * snippet `@declare` marker. A markerless file is plain REPL source: its
+     * `static float x = 1;` line IS the document row, so it must fall through
+     * to the raw-scene-body handler instead of being consumed for its value. */
+    if (s->allow_raw_scene)
+        return 0;
     return import_try_stash_predef_decl(s, p);
 }
 
