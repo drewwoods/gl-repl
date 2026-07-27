@@ -99,12 +99,20 @@ static int feq(float a, float b, float epsilon) {
 /* Apple's legacy GL deviates on GL_CURRENT_RASTER_COLOR in two ways, both
  * measured against Mesa 25.2.8 (Intel ADL-N), which agrees with this fold:
  *
- *   1. glColorMaterial is ignored when the raster color is latched. With
- *      GL_COLOR_MATERIAL on and the material tracking glColor, Apple stores
- *      (0, 0, 0, 1) — as if lighting ran against a zeroed material — where Mesa
- *      stores the color-tracked result the equation calls for. There is no
- *      portable assertion to make, so that case is skipped here and says so out
- *      loud rather than being quietly dropped.
+ *   1. When GL_COLOR_MATERIAL is enabled at the glRasterPos call, the material
+ *      components it tracks are lit as ZERO. Isolated by sweeping the state
+ *      around the call: with GL_AMBIENT_AND_DIFFUSE both terms vanish and the
+ *      cell reads (0,0,0,1); with GL_DIFFUSE alone only the diffuse term goes,
+ *      leaving exactly the ambient sum (0.060, 0.064, 0.068). It does not depend
+ *      on the face, nor on whether a glColor was ever issued (setting the
+ *      material with glMaterialfv while the cap is on zeroes it just the same),
+ *      and ordinary *vertex* lighting under identical state is correct — a
+ *      GL_3D_COLOR feedback vertex comes back at the value the equation calls
+ *      for. So the fault is confined to the raster-position path, and
+ *      glDisable(GL_COLOR_MATERIAL) immediately before glRasterPos is a
+ *      complete workaround: the cell then matches the vertex exactly.
+ *      There is no portable assertion to make, so that case is skipped here and
+ *      says so out loud rather than being quietly dropped.
  *   2. The latched color is clamped to [0, 1]. Mesa stores what was latched,
  *      unclamped. GL 2.1 does not settle this one, so the fold follows Mesa
  *      (which also keeps the row consistent with the panel's GL_CURRENT_COLOR)
@@ -674,6 +682,40 @@ static void diff_raster_color_raw_or_clamped(void) {
                 "nothing else", raw_match || clamped_match);
 }
 
+/* Material rows, read back with glGetMaterialfv. Both drivers agree here, so
+ * these need no gating: what the fold has to get right is that the material
+ * tracks the current color from the moment GL_COLOR_MATERIAL is enabled — not
+ * only on the glColor calls that follow it. */
+static void diff_material_row(const char *name, GLenum face, GLenum pname,
+                              int count) {
+    const ReplGlStateReportRow *row = diff_require_row(name);
+    GLfloat driver[4];
+    float reported[4];
+    char label[192];
+    int i;
+
+    if (!row)
+        return;
+    glGetMaterialfv(face, pname, driver);
+    if (count == 1) {
+        snprintf(label, sizeof(label), "%s: fold %s == driver %g", name,
+                 row->current, (double)driver[0]);
+        ASSERT_TRUE(label, feq((float)atof(row->current), driver[0],
+                               DIFF_EPSILON));
+        return;
+    }
+    if (diff_parse_vec(row->current, reported, count) != count) {
+        snprintf(label, sizeof(label), "%s: %d components parsed", name, count);
+        ASSERT_TRUE(label, 0);
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        snprintf(label, sizeof(label), "%s[%d]: fold %g == driver %g", name, i,
+                 (double)reported[i], (double)driver[i]);
+        ASSERT_TRUE(label, feq(reported[i], driver[i], DIFF_EPSILON));
+    }
+}
+
 /* --- cases -------------------------------------------------------------- */
 
 /* 1. The generated prologue alone. Nothing user-authored, so every row here is
@@ -972,6 +1014,41 @@ static void test_diff_lit_raster_color(void) {
     diff_raster_color_raw_or_clamped();
 }
 
+/* 7. Materials, including the one ordering that bites: GL_COLOR_MATERIAL makes
+ * the tracked components follow the current color from the moment it is
+ * ENABLED, not just on later glColor calls. Both drivers report the tracked
+ * value here even though the glColor came first, so this is portable — and it is
+ * the case that would catch the fold deferring the tracking to the next glColor.
+ * (The lit raster color under the same state is Apple's broken path; the
+ * material cells themselves are fine there.) */
+static void test_diff_materials(void) {
+    GLCmd cmds[8];
+    int n = 0;
+
+    cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 0.25, 0.7, 1.0, 0.5); n++;
+    cmds[n] = diff_cmd(CMD_COLOR_MATERIAL, n, 2, (double)GL_FRONT,
+                       (double)GL_AMBIENT_AND_DIFFUSE); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_COLOR_MATERIAL); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_SPECULAR, 0.6, 0.5, 0.4, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_EMISSION, 0.05, 0.06, 0.07, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALF, n, 3, (double)GL_FRONT,
+                       (double)GL_SHININESS, 24.0); n++;
+
+    diff_case("inspector vs driver: materials + color-material tracking",
+              cmds, n, n);
+
+    diff_material_row("GL_FRONT_MATERIAL_AMBIENT", GL_FRONT, GL_AMBIENT, 4);
+    diff_material_row("GL_FRONT_MATERIAL_DIFFUSE", GL_FRONT, GL_DIFFUSE, 4);
+    diff_material_row("GL_FRONT_MATERIAL_SPECULAR", GL_FRONT, GL_SPECULAR, 4);
+    diff_material_row("GL_FRONT_MATERIAL_EMISSION", GL_FRONT, GL_EMISSION, 4);
+    diff_material_row("GL_FRONT_MATERIAL_SHININESS", GL_FRONT, GL_SHININESS, 1);
+    diff_cap_row("GL_COLOR_MATERIAL", GL_COLOR_MATERIAL);
+    diff_enum_row("GL_COLOR_MATERIAL_FACE", GL_COLOR_MATERIAL_FACE);
+    diff_enum_row("GL_COLOR_MATERIAL_PARAMETER", GL_COLOR_MATERIAL_PARAMETER);
+}
+
 /* 7. Clip planes, in both directions of the "(object)" label (see
  * diff_clip_plane_row): under the identity modelview the generated prologue
  * leaves behind, the fold's object-space equation IS what GL stores, so the row
@@ -1052,6 +1129,7 @@ int main(int argc, char **argv) {
     test_diff_attrib_group_scoping();
     test_diff_raster_color_latch();
     test_diff_lit_raster_color();
+    test_diff_materials();
     test_diff_clip_planes();
     diff_close_cursor();
     repl_executor_destroy_resources();
