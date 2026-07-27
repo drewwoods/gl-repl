@@ -476,7 +476,10 @@ static void cycle_tutorial_dir(int direction) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
 
-    int active_idx = tutorial_active() ? tutorial_state_view().tutorial_idx : -1;
+    /* A completed tutorial is inactive but retains its index so F11 can
+     * continue to the following lesson. Explicit exits and fresh state use
+     * the default -1 index and retain the first/last tutorial behavior. */
+    int active_idx = tutorial_state_view().tutorial_idx;
     int next_idx = 0;
     if (active_idx >= 0) {
         next_idx = (active_idx + direction + count) % count;

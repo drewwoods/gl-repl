@@ -840,12 +840,18 @@ void tutorial_teardown(void) {
  * a tutorial that broke mid-step has no view worth keeping.
  *
  * `tutorial_state_reset_except_baseline` clears `active` along with the
- * rest of the runtime state, so the tutorial is fully over either way. */
-static void tutorial_end_keep_view(void) {
+ * rest of the runtime state, so the tutorial is fully over either way.
+ * A naturally completed tutorial retains its index so F11 can advance from
+ * that lesson; an explicit exit remains an unselected tutorial. */
+static void tutorial_end_keep_view(int keep_tutorial_idx) {
+    int tutorial_idx = tutorial_state_view().tutorial_idx;
+
     if (!tutorial_active())
         return;
     tutorial_state_mut()->active = 0;
     tutorial_state_reset_except_baseline();
+    if (keep_tutorial_idx)
+        tutorial_state_mut()->tutorial_idx = tutorial_idx;
 }
 
 void tutorial_stop(void) {
@@ -854,7 +860,7 @@ void tutorial_stop(void) {
 
     /* Set status before ending so it is visible to the user. */
     repl_set_status("Tutorial exited");
-    tutorial_end_keep_view();
+    tutorial_end_keep_view(0);
     repl_dispatch_completion_update();
 }
 
@@ -1143,7 +1149,7 @@ static TutorialStepResult tutorial_enter_step(int step) {
         snprintf(status_msg, sizeof(status_msg),
                  "Tutorial complete - press %s to advance or edit to continue", shortcut);
         repl_set_status(status_msg);
-        tutorial_end_keep_view();
+        tutorial_end_keep_view(1);
         repl_dispatch_completion_update();
         return TUTORIAL_STEP_TERMINAL;
     }

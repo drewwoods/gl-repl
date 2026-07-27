@@ -4496,6 +4496,25 @@ static void test_special_key_shortcuts(void) {
         rc = glr_ctrl_router_handle_tutorial_cycle_special(GLUT_KEY_F11);
         ASSERT_INT("tutorial cycle prev handled", rc, 1);
         ASSERT_INT("cycled back to tutorial 0", tutorial_state_view().tutorial_idx, 0);
+
+        /* Completion leaves the tutorial inactive, but F11 must still start
+         * at the lesson after the one just completed rather than lesson 0. */
+        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
+            TutorialMatchResult match;
+            const char *expected = tutorial_current_expected_text();
+            ASSERT_TRUE("completed-cycle tutorial step has expected input",
+                        expected != NULL);
+            ASSERT_TRUE("completed-cycle tutorial step matches",
+                        tutorial_handle_commit_attempt(expected, &match));
+            tutorial_advance_after_successful_commit();
+        }
+        ASSERT_INT("tutorial inactive after completion", tutorial_active(), 0);
+        ASSERT_INT("completed tutorial index retained", tutorial_state_view().tutorial_idx, 0);
+        g_simulated_mods = 0;
+        rc = glr_ctrl_router_handle_tutorial_cycle_special(GLUT_KEY_F11);
+        ASSERT_INT("tutorial cycle after completion handled", rc, 1);
+        ASSERT_INT("completion advances to tutorial 1",
+                   tutorial_state_view().tutorial_idx, 1);
         g_simulated_mods = 0;
     }
 

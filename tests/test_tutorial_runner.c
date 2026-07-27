@@ -262,6 +262,8 @@ static void test_color_transform_walkthrough(void) {
     }
 
     ASSERT_TRUE("color-transform tutorial completed", !tutorial_active());
+    ASSERT_INT("completed tutorial retains its index for F11 cycling",
+               tutorial_state_view().tutorial_idx, 1);
     char expected_comp[256];
     get_expected_completion_status(expected_comp, sizeof(expected_comp));
     ASSERT_STR("color-transform completion status",
@@ -1130,8 +1132,8 @@ static void test_catalog_cfg_lines(void) {
                         cfg[0] != NULL &&
                         strstr(cfg[0], "view_mode") != NULL &&
                         strstr(cfg[0], "RENDER3D_VIEW_2D") != NULL);
-            ASSERT_TRUE("First Triangle cfg is NULL-terminated after 1 line",
-                        cfg[1] == NULL);
+            ASSERT_TRUE("First Triangle cfg is NULL-terminated after 4 line",
+                        cfg[4] == NULL);
         }
     }
 
