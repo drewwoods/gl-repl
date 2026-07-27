@@ -163,22 +163,28 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
-static void format_step_entry_hint(int step, int total,
-                                   char *out, size_t out_size) {
+static void get_tutorial_prefix(char *out, size_t out_size) {
     TutorialRuntimeState state = tutorial_state_view();
     const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
+    snprintf(out, out_size, "%s Tutorial: ", name);
+}
+
+static void format_step_entry_hint(int step, int total,
+                                   char *out, size_t out_size) {
+    char prefix[TUTORIAL_STATUS_MAX];
+    get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(out, out_size,
-             "%s Tutorial: step %d/%d - type the command or press Tab to autocomplete",
-             name, step + 1, total);
+             "%sstep %d/%d - type the command or press Tab to autocomplete",
+             prefix, step + 1, total);
 }
 
 static void format_step_commit_hint(int step, int total,
                                     char *out, size_t out_size) {
-    TutorialRuntimeState state = tutorial_state_view();
-    const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
+    char prefix[TUTORIAL_STATUS_MAX];
+    get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(out, out_size,
-             "%s Tutorial: step %d/%d - press Enter or ';' to commit",
-             name, step + 1, total);
+             "%sstep %d/%d - press Enter or ';' to commit",
+             prefix, step + 1, total);
 }
 
 /* Status emitted on COMMAND-step entry. The trailing affordance hint
@@ -336,20 +342,28 @@ static void tutorial_advance_step(TutorialRuntimeState *state) {
 }
 
 static void tutorial_set_status_ack_set(void) {
-    repl_set_status("Press Enter / Tab / Space to continue");
+    char prefix[TUTORIAL_STATUS_MAX];
+    char msg[TUTORIAL_STATUS_MAX];
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    snprintf(msg, sizeof(msg), "%sPress Enter / Tab / Space to continue", prefix);
+    repl_set_status(msg);
 }
 
 static void tutorial_set_status_require(const char *slug, int target) {
+    char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
-    snprintf(msg, sizeof msg, "Set %s = %d to continue", slug ? slug : "?", target);
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    snprintf(msg, sizeof(msg), "%sSet %s = %d to continue", prefix, slug ? slug : "?", target);
     repl_set_status(msg);
 }
 
 static void tutorial_set_status_require_var(const char *name, float target) {
+    char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
-    snprintf(msg, sizeof msg,
-             "Set %s = %g (type %s = ...; or drag the slider) to continue",
-             name ? name : "?", (double)target, name ? name : "?");
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    snprintf(msg, sizeof(msg),
+             "%sSet %s = %g (type %s = ...; or drag the slider) to continue",
+             prefix, name ? name : "?", (double)target, name ? name : "?");
     repl_set_status(msg);
 }
 
@@ -359,10 +373,12 @@ static void tutorial_set_status_require_var(const char *name, float target) {
  * ghost (see tutorial_shadow_suffix), so the status only names the
  * affordance: type it, or Tab to autocomplete the ghost. */
 static void tutorial_set_status_declare_var(const char *name) {
+    char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
-    snprintf(msg, sizeof msg,
-             "Declare %s: type the line shown (or press Tab) to continue",
-             name ? name : "?");
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    snprintf(msg, sizeof(msg),
+             "%sDeclare %s: type the line shown (or press Tab) to continue",
+             prefix, name ? name : "?");
     repl_set_status(msg);
 }
 

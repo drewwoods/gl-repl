@@ -3045,8 +3045,10 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
                tutorial_state_view().step, 0);
     ASSERT_INT("document unchanged after rejected commit",
                repl_state_document_count(), 3);
+    char expected_status[256];
+    snprintf(expected_status, sizeof(expected_status), "%s Tutorial: Press Enter / Tab / Space to continue", repl_tutorial_name(idx));
     ASSERT_STR("ack hint shown for NOTE",
-               status_text(), "Press Enter / Tab / Space to continue");
+               status_text(), expected_status);
 
     /* Non-ack keys are not consumed by the ack router. */
     ASSERT_INT("non-ack key not consumed", tutorial_handle_ack_key('x'), 0);
@@ -3333,8 +3335,10 @@ static void test_commit_blocked_with_hint_during_set_step(void) {
 
     ASSERT_INT("step unchanged after rejected SET commit",
                tutorial_state_view().step, step_before);
+    char expected_status[256];
+    snprintf(expected_status, sizeof(expected_status), "%s Tutorial: Press Enter / Tab / Space to continue", repl_tutorial_name(idx));
     ASSERT_STR("SET hint shown (not the cursor-position hint)",
-               status_text(), "Press Enter / Tab / Space to continue");
+               status_text(), expected_status);
 }
 
 /* Load-bearing regression: workspace load during an active tutorial must
