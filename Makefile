@@ -665,6 +665,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/flatten_query.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
+                     src/repl/keymap_format.c \
                      src/repl/load.c \
                      src/repl/normalize.c \
                      src/repl/parser.c \
@@ -677,6 +678,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/state.c \
                      src/repl/text_helpers.c \
                      src/repl/time.c \
+                     src/repl/tutorials.c \
                      src/repl/visible_vars.c \
                      src/repl/workspace_io.c \
                      tools/repl_demo/source_document.c \
