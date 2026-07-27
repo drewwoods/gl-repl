@@ -41,48 +41,43 @@ typedef struct {
 
 static OverlayLayoutState g_ovl;  /* zero-init: never ticked, band 0 */
 
-UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
-                                           int var_collapsed,
-                                           int profile_mode,
-                                           unsigned long long profile_collapsed_sections,
-                                           int memory_mode,
-                                           int band_h) {
+UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args) {
     UiOverlayLayoutIn in;
     ui_layout_scene_rect(&in.render3d_x, &in.render3d_y, &in.render3d_w, &in.render3d_h);
     in.bottom_inset = STATUSBAR_H;
-    in.band_h       = band_h;
+    in.band_h       = args.band_h;
     in.prefer_top_on_overflow =
         ui_layout_code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP;
 
-    in.panels[UI_OVERLAY_PANEL_VARIABLE].visible = (var_visible != 0);
-    ui_variable_panel_size(var_count, var_collapsed,
+    in.panels[UI_OVERLAY_PANEL_VARIABLE].visible = (args.var_visible != 0);
+    ui_variable_panel_size(args.var_count, args.var_collapsed,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].w,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].h);
 
     /* The FPS plot rides every non-OFF Compute-profile level; the full
      * collapsible section listing joins from SECTIONS up. */
     in.panels[UI_OVERLAY_PANEL_FPS].visible =
-        (profile_mode != PROFILE_PANEL_OFF);
+        (args.profile_mode != PROFILE_PANEL_OFF);
     in.panels[UI_OVERLAY_PANEL_FPS].w = ui_fps_panel_width();
     in.panels[UI_OVERLAY_PANEL_FPS].h = ui_fps_panel_height();
 
     in.panels[UI_OVERLAY_PANEL_PROFILE].visible =
-        (profile_mode == PROFILE_PANEL_SECTIONS ||
-         profile_mode == PROFILE_PANEL_HISTOGRAM);
+        (args.profile_mode == PROFILE_PANEL_SECTIONS ||
+         args.profile_mode == PROFILE_PANEL_HISTOGRAM);
     in.panels[UI_OVERLAY_PANEL_PROFILE].w = ui_profile_panel_width();
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
         ui_profile_panel_height_collapsed(
-            (UiProfilePanelMode)profile_mode,
-            (UiProfileCollapseMask)profile_collapsed_sections);
+            (UiProfilePanelMode)args.profile_mode,
+            (UiProfileCollapseMask)args.profile_collapsed_sections);
 
     /* Histogram is the final, deliberately expensive profile surface. */
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible =
-        (profile_mode == PROFILE_PANEL_HISTOGRAM);
+        (args.profile_mode == PROFILE_PANEL_HISTOGRAM);
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].w = ui_histogram_panel_width();
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].h = ui_histogram_panel_height();
 
     in.panels[UI_OVERLAY_PANEL_MEMORY].visible =
-        (memory_mode != MEMORY_PANEL_OFF);
+        (args.memory_mode != MEMORY_PANEL_OFF);
     in.panels[UI_OVERLAY_PANEL_MEMORY].w = ui_memory_panel_width();
     in.panels[UI_OVERLAY_PANEL_MEMORY].h = ui_memory_panel_height();
     return in;

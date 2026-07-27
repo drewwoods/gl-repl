@@ -2035,13 +2035,15 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
  * so render and hit paths agree with the eased positions. */
 static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
         const UiRenderSnapshot *snap) {
-    return ui_overlay_layout_inputs(snap->variable_panel.visible,
-                                    snap->variable_panel_vars.count,
-                                    snap->variable_panel.collapsed,
-                                    snap->profile_panel.mode,
-                                    snap->profile_panel.collapsed_sections,
-                                    snap->memory_panel.mode,
-                                    ui_overlay_layout_last_band_h());
+    return ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .var_visible                = snap->variable_panel.visible,
+        .var_count                  = snap->variable_panel_vars.count,
+        .var_collapsed              = snap->variable_panel.collapsed,
+        .profile_mode               = snap->profile_panel.mode,
+        .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
+        .memory_mode                = snap->memory_panel.mode,
+        .band_h                     = ui_overlay_layout_last_band_h(),
+    });
 }
 
 /* Resolve the memory panel's overlay-layout slot into the narrow view the
@@ -3789,14 +3791,15 @@ void glr_ctrl_tick(void) {
         int band_h = replay_active()
                    ? REPLAY_HUD_BOTTOM_Y + GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX
                    : 0;
-        UiOverlayLayoutIn in = ui_overlay_layout_inputs(
-            variable_panel_visible(),
-            repl_eval_predef_view().count,
-            variable_panel_collapsed(),
-            ui_state_profile_panel().mode,
-            ui_state_profile_panel().collapsed_sections,
-            ui_state_memory_panel().mode,
-            band_h);
+        UiOverlayLayoutIn in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .var_visible                = variable_panel_visible(),
+            .var_count                  = repl_eval_predef_view().count,
+            .var_collapsed              = variable_panel_collapsed(),
+            .profile_mode               = ui_state_profile_panel().mode,
+            .profile_collapsed_sections = ui_state_profile_panel().collapsed_sections,
+            .memory_mode                = ui_state_memory_panel().mode,
+            .band_h                     = band_h,
+        });
         ui_overlay_layout_tick(&in);
     }
 

@@ -721,14 +721,15 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
     if (win_w <= 0 || win_h <= 0)
         return hit;
 
-    layout_in = ui_overlay_layout_inputs(
-        snap->variable_panel.visible,
-        snap->variable_panel_vars.count,
-        snap->variable_panel.collapsed,
-        snap->profile_panel.mode,
-        snap->profile_panel.collapsed_sections,
-        snap->memory_panel.mode,
-        ui_overlay_layout_last_band_h());
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .var_visible                = snap->variable_panel.visible,
+        .var_count                  = snap->variable_panel_vars.count,
+        .var_collapsed              = snap->variable_panel.collapsed,
+        .profile_mode               = snap->profile_panel.mode,
+        .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
+        .memory_mode                = snap->memory_panel.mode,
+        .band_h                     = ui_overlay_layout_last_band_h(),
+    });
 
     /* Reverse of the render order after ui_gl_state_panel_render(). Modal
      * help is intentionally handled by the controller before this pass; the
@@ -895,14 +896,15 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
 
     {
         UiProfilePanelView profile_view;
-        UiOverlayLayoutIn layout_in = ui_overlay_layout_inputs(
-            snap->variable_panel.visible,
-            snap->variable_panel_vars.count,
-            snap->variable_panel.collapsed,
-            snap->profile_panel.mode,
-            snap->profile_panel.collapsed_sections,
-            snap->memory_panel.mode,
-            ui_overlay_layout_last_band_h());
+        UiOverlayLayoutIn layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .var_visible                = snap->variable_panel.visible,
+            .var_count                  = snap->variable_panel_vars.count,
+            .var_collapsed              = snap->variable_panel.collapsed,
+            .profile_mode               = snap->profile_panel.mode,
+            .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
+            .memory_mode                = snap->memory_panel.mode,
+            .band_h                     = ui_overlay_layout_last_band_h(),
+        });
         int toggle_target;
 
         profile_view.window_w = win_w;

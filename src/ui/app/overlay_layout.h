@@ -52,6 +52,18 @@ typedef struct {
     UiOverlayPanelReq panels[UI_OVERLAY_PANEL_COUNT];
 } UiOverlayLayoutIn;
 
+/* Struct arguments for ui_overlay_layout_inputs. Enables designated
+ * initializers at call sites. Unspecified fields zero-initialize. */
+typedef struct {
+    int var_visible;
+    int var_count;
+    int var_collapsed;
+    int profile_mode;
+    unsigned long long profile_collapsed_sections;
+    int memory_mode;
+    int band_h;
+} UiOverlayLayoutInputs;
+
 /* Collect solver inputs from the live layout (scene rect, status bar,
  * code-panel side) plus the caller-supplied panel states. `var_collapsed`
  * is the variable panel's own title-bar-only fold (mouse-only toggle, no
@@ -62,12 +74,7 @@ typedef struct {
  * queries. `band_h` is the replay-HUD reservation — the controller
  * computes it per tick; other callers forward
  * ui_overlay_layout_last_band_h(). */
-UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
-                                           int var_collapsed,
-                                           int profile_mode,
-                                           unsigned long long profile_collapsed_sections,
-                                           int memory_mode,
-                                           int band_h);
+UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args);
 
 /* The band height most recently passed to ui_overlay_layout_tick(); 0
  * before the first tick. Lets view builders reuse the controller's replay

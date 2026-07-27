@@ -263,9 +263,11 @@ static void test_front_overlay_hit_surfaces(void) {
 
     prepare_overlay_hit_snap(&snap);
     snap.profile_panel.mode = PROFILE_PANEL_SECTIONS;
-    layout_in = ui_overlay_layout_inputs(
-        0, 0, 0, snap.profile_panel.mode,
-        snap.profile_panel.collapsed_sections, MEMORY_PANEL_OFF, 0);
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .profile_mode               = snap.profile_panel.mode,
+        .profile_collapsed_sections = snap.profile_panel.collapsed_sections,
+        .memory_mode                = MEMORY_PANEL_OFF,
+    });
     ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_PROFILE,
                                 &px, &py);
     hit = ui_panels_hit_test_above_gl_state(
@@ -276,8 +278,10 @@ static void test_front_overlay_hit_surfaces(void) {
 
     prepare_overlay_hit_snap(&snap);
     snap.profile_panel.mode = PROFILE_PANEL_HISTOGRAM;
-    layout_in = ui_overlay_layout_inputs(
-        0, 0, 0, snap.profile_panel.mode, 0, MEMORY_PANEL_OFF, 0);
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .profile_mode = snap.profile_panel.mode,
+        .memory_mode  = MEMORY_PANEL_OFF,
+    });
     ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_HISTOGRAM,
                                 &px, &py);
     hit = ui_panels_hit_test_above_gl_state(
@@ -298,8 +302,10 @@ static void test_front_overlay_hit_surfaces(void) {
 
     prepare_overlay_hit_snap(&snap);
     snap.profile_panel.mode = PROFILE_PANEL_FPS;
-    layout_in = ui_overlay_layout_inputs(
-        0, 0, 0, snap.profile_panel.mode, 0, MEMORY_PANEL_OFF, 0);
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .profile_mode = snap.profile_panel.mode,
+        .memory_mode  = MEMORY_PANEL_OFF,
+    });
     ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_FPS,
                                 &px, &py);
     hit = ui_panels_hit_test_above_gl_state(
@@ -310,8 +316,10 @@ static void test_front_overlay_hit_surfaces(void) {
 
     prepare_overlay_hit_snap(&snap);
     snap.memory_panel.mode = MEMORY_PANEL_ON;
-    layout_in = ui_overlay_layout_inputs(
-        0, 0, 0, PROFILE_PANEL_OFF, 0, snap.memory_panel.mode, 0);
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .profile_mode = PROFILE_PANEL_OFF,
+        .memory_mode  = snap.memory_panel.mode,
+    });
     ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_MEMORY,
                                 &px, &py);
     hit = ui_panels_hit_test_above_gl_state(

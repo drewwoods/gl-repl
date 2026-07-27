@@ -25,14 +25,15 @@ UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap) {
     v.window_w       = snap->viewport.window_w;
     v.window_h       = snap->viewport.window_h;
     {
-        UiOverlayLayoutIn in = ui_overlay_layout_inputs(
-            snap->variable_panel.visible,
-            snap->variable_panel_vars.count,
-            snap->variable_panel.collapsed,
-            snap->profile_panel.mode,
-            snap->profile_panel.collapsed_sections,
-            snap->memory_panel.mode,
-            ui_overlay_layout_last_band_h());
+        UiOverlayLayoutIn in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .var_visible                = snap->variable_panel.visible,
+            .var_count                  = snap->variable_panel_vars.count,
+            .var_collapsed              = snap->variable_panel.collapsed,
+            .profile_mode               = snap->profile_panel.mode,
+            .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
+            .memory_mode                = snap->memory_panel.mode,
+            .band_h                     = ui_overlay_layout_last_band_h(),
+        });
         ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_VARIABLE,
                                     &v.panel_x, &v.panel_y);
     }
@@ -51,14 +52,15 @@ UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
     v.window_w       = vp.window_w;
     v.window_h       = vp.window_h;
     {
-        UiOverlayLayoutIn in = ui_overlay_layout_inputs(
-            variable_panel_visible(),
-            var_count,
-            variable_panel_collapsed(),
-            ui_state_profile_panel().mode,
-            ui_state_profile_panel().collapsed_sections,
-            ui_state_memory_panel().mode,
-            ui_overlay_layout_last_band_h());
+        UiOverlayLayoutIn in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .var_visible                = variable_panel_visible(),
+            .var_count                  = var_count,
+            .var_collapsed              = variable_panel_collapsed(),
+            .profile_mode               = ui_state_profile_panel().mode,
+            .profile_collapsed_sections = ui_state_profile_panel().collapsed_sections,
+            .memory_mode                = ui_state_memory_panel().mode,
+            .band_h                     = ui_overlay_layout_last_band_h(),
+        });
         ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_VARIABLE,
                                     &v.panel_x, &v.panel_y);
     }

@@ -56,14 +56,18 @@ static int rects_overlap(int ax, int ay, int aw, int ah,
 int main(void) {
     /* --- Compute-profile modes add exactly one surface per step. --- */
     {
-        UiOverlayLayoutIn off = ui_overlay_layout_inputs(
-            0, 0, 0, PROFILE_PANEL_OFF, 0, 0, 0);
-        UiOverlayLayoutIn fps = ui_overlay_layout_inputs(
-            0, 0, 0, PROFILE_PANEL_FPS, 0, 0, 0);
-        UiOverlayLayoutIn sections = ui_overlay_layout_inputs(
-            0, 0, 0, PROFILE_PANEL_SECTIONS, 0, 0, 0);
-        UiOverlayLayoutIn histogram = ui_overlay_layout_inputs(
-            0, 0, 0, PROFILE_PANEL_HISTOGRAM, 0, 0, 0);
+        UiOverlayLayoutIn off = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .profile_mode = PROFILE_PANEL_OFF,
+        });
+        UiOverlayLayoutIn fps = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .profile_mode = PROFILE_PANEL_FPS,
+        });
+        UiOverlayLayoutIn sections = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .profile_mode = PROFILE_PANEL_SECTIONS,
+        });
+        UiOverlayLayoutIn histogram = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .profile_mode = PROFILE_PANEL_HISTOGRAM,
+        });
 
         AI("profile off hides FPS", off.panels[UI_OVERLAY_PANEL_FPS].visible, 0);
         AI("profile off hides listing",
