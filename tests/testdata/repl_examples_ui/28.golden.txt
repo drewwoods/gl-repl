@@ -102,7 +102,7 @@ void display(void) {
 --- source ---
   static float px, py, pz; // planet position - the caller hangs a label off it
   static float orbitR; // log-compressed orbit radius, shared by the draw funcs
-  static float ASTEROIDS = 280; // @tune
+  static float ASTEROIDS = 140; // @tune
   static float EARTH_R = 0.17; // @tune
   static float EARTH_RATE = 0.85; // @tune
   static float ORB_BASE = 0; // @tune
@@ -465,8 +465,8 @@ void display(void) {
   // log-distance scale as the planets. Drawn as small unlit points, depth-tested
   // so the planets pass in front of and behind the band.
   glDisable(GL_LIGHTING);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(2);
+  //glEnable(GL_POINT_SMOOTH)
+  glPointSize(8);
   glBegin(GL_POINTS);
     for(i, 0, ASTEROIDS) {
       astAng = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
