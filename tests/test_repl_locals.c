@@ -22,6 +22,7 @@
 #include "editor/commit.h"
 #include "editor/input.h"
 #include "editor/state.h"
+#include "editor/undo.h"
 #include "repl/command.h"
 #include "repl/compile.h"
 #include "repl/eval.h"
@@ -101,6 +102,17 @@ static int nth_cmd_var_idx(CmdType type, int n) {
             return v.cmds[i].var_idx;
     }
     return -99999;
+}
+
+/* Rows of `type` in the committed *source* document (not the flat stream) —
+ * declarations never reach the flat program, so count_cmds cannot see them. */
+static int count_source_cmds(CmdType type) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int n = 0;
+    for (int i = 0; i < repl_state_document_count(); i++)
+        if (cmds[i].valid && cmds[i].type == type)
+            n++;
+    return n;
 }
 
 static float predef_value(const char *name) {
@@ -1080,6 +1092,52 @@ static void test_export_hoists_locals_for_c89(void) {
                 decl_b != NULL && stmt != NULL && decl_b < stmt);
 }
 
+/* Ctrl+Z after declaring a local restores the document cleanly. This was the
+ * last manual step in the plan's Verification list; it is a regression test
+ * because the hazard is structural, not visual. A local's binding *is* its
+ * prologue row, so an undo that put the row back without also restoring the
+ * bodies that read it — or that left a stray predef slot behind, as it would
+ * if the local had been mis-filed as a global — would leave the scene
+ * referencing a name nothing declares. */
+static void test_undo_after_local_decl_restores_cleanly(void) {
+    static const char *const scene[] = {
+        "func0(s) {",
+        "glVertex3f(s, 0, 0);",
+        "}",
+        "func0(2);",
+    };
+    int before_count, before_predefs;
+
+    printf("--- undo after a local declaration restores cleanly ---\n");
+    load_scene(scene, 4);
+    before_count = repl_state_document_count();
+    before_predefs = g_num_predef_vars;
+    ASSERT_FLOAT("baseline vertex reads the parameter",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 2.0f);
+
+    /* Declare a local on the interactive path, which is what pushes the undo
+     * snapshot (editor_feed_line is the loader and does not). */
+    editor_state_edit_line_set(1);
+    editor_undo_push_snapshot();
+    editor_feed_line("float u;");
+    repl_flatten_commands(0);
+    ASSERT_INT("local decl added one row",
+               repl_state_document_count(), before_count + 1);
+    ASSERT_INT("a local consumes no predef slot",
+               g_num_predef_vars, before_predefs);
+
+    editor_undo_pop_snapshot();
+    repl_flatten_commands(0);
+    ASSERT_INT("undo restores the row count",
+               repl_state_document_count(), before_count);
+    ASSERT_INT("undo leaves no stray predef slot",
+               g_num_predef_vars, before_predefs);
+    ASSERT_INT("no declaration row survives the undo",
+               count_source_cmds(CMD_VAR_DECLARE), 0);
+    ASSERT_FLOAT("the function still flattens and reads its parameter",
+                 nth_cmd_arg0(CMD_VERTEX3F, 0), 2.0f);
+}
+
 int main(void) {
     test_local_is_per_invocation();
     test_local_reads_zero_before_write();
@@ -1101,6 +1159,7 @@ int main(void) {
     test_import_rejects_trailing_comma_decl();
     test_export_does_not_truncate_long_decl_comment();
     test_export_hoists_locals_for_c89();
+    test_undo_after_local_decl_restores_cleanly();
 
     return test_harness_report(&g_harness, "test_repl_locals");
 }

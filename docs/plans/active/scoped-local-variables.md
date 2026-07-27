@@ -134,6 +134,59 @@ escalated to the simulate-local-frames-in-rebake rewrite.
 a comment, and gained the *Animated wave surface* scene so a production REBAKE
 case is still covered.
 
+#### The feature is not pay-for-what-you-use
+
+Both measurements above conflate two things: the conversions, and the machinery.
+Separating them needs the *same program* run against two binaries, so: one
+worktree at `eaefae16` (the commit before Phase 1) and one at Phase 5 with the
+three scene files reverted to their pre-conversion text. Identical corpus
+(`total_lines=3354` on both), `USE_GL_STUBS=1`, minimum of 4×8 iterations:
+
+| case | pre-Phase-1 | Phase 5 | Δ |
+|---|---|---|---|
+| `parse_lines` | 0.047 µs/line | 0.048 | +0.6% |
+| `feed_examples` | 0.244 µs/line | 0.244 | +0.1% |
+| `slider_drag` (4 rows) | 0.72–1.63 µs | 0.71–1.63 | ±0% |
+| `flatten_orrery` | 51.7 µs | 58.3 | **+12.7%** |
+| `flatten_grass` | 123.2 µs | 148.8 | **+20.7%** |
+| `refresh_orrery` (full route) | 51.5 µs | 58.3 | **+13.3%** |
+| `refresh_grass` (rebake route) | 92.1 µs | 88.6 | −3.7% |
+| `refresh_wave` (rebake route) | 26.6 µs | 26.8 | +0.8% |
+
+So: **the compile path is free, the rebake path is free, and the full flatten is
+12–21% slower for every program — whether or not it declares a single local.**
+
+`flatten_phases` localises it to one place, and it is not the local binding:
+
+| phase | pre | post | Δ |
+|---|---|---|---|
+| grass reparse | 51.8 µs | 47.8 | −7.7% |
+| grass **var_assign** | 47.9 µs | 73.6 | **+53.6%** |
+| grass remainder | 23.5 µs | 24.2 | +3.1% |
+| orrery **var_assign** | 9.6 µs | 16.5 | **+72.2%** |
+
+The cause is rev 9's lexical LHS re-derivation. `flatten_var_assign` now calls
+`flatten_resolve_assign_target()` on **every** scalar assignment on **every**
+visit, and that runs `repl_extract_assignment_parts()` — a text parse of the
+source line — plus an O(nv) scope scan. Its only early-out is `nv <= 0`, which
+is false for any assignment inside a function body or a loop. Grass pays it
+3645 times per flatten (135 calls × 27 assignments), ~7 ns each.
+
+This is *required for correctness* as written — a persisted `var_idx` must not
+be able to defeat a later legal shadow — but it is not required unconditionally.
+Two ways to make it pay-for-use, neither attempted here because both are their
+own change with their own correctness argument:
+
+- **Skip when the frame holds no LOCAL binding.** With no local in scope the
+  resolution cannot return one, so the persisted `var_idx` is authoritative.
+  A `has_locals` flag threaded from `flatten_bind_func_locals` makes this O(1).
+  The catch is that the same call also produces the defensive PARAM/LOOP
+  `unwritable` diagnostic, which would need to survive the skip.
+- **Cache the extracted LHS per source line.** The LHS is a pure function of the
+  source text, and source mutation already invalidates the expression cache at a
+  single seam (`repl_state_mark_source_dirty()`), so `ctx->expr` is the natural
+  home. This removes the text parse and leaves only the scope scan.
+
 ### Phase 4 — export / import (done)
 
 - **Export** (`write_canonical_cmd_as_c`) branches on `REPL_VAR_IDX_LOCAL` and
@@ -1412,8 +1465,17 @@ and confirm Ctrl+Z after a local decl restores cleanly.
 
 ### Known liabilities and revisit triggers
 
-None blocking; both are accepted costs with a defined trip-wire, recorded so a
+None blocking; all are accepted costs with a defined trip-wire, recorded so a
 future maintainer does not have to rediscover the trade-off. [rev 7]
+
+**0. The full flatten is 12–21% slower for programs that use no locals.**
+Measured in Phase 5 (table above): `flatten_var_assign` grew 54–72% because
+rev 9's lexical LHS re-derivation re-parses every assignment's source text on
+every visit. The compile path, the rebake path and slider drags are unaffected.
+
+*Trigger to revisit:* any flatten-cost work at all — this is now the largest
+single line item in that profile, and two concrete pay-for-use fixes are written
+up in the Phase 5 section.
 
 **1. ~~The no-shadowing guard matrix is the maintenance tax.~~ Resolved in
 rev 8.** Earlier revisions banned shadowing outright, which turned "declare a
