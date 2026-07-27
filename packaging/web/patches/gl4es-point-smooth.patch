@@ -1,0 +1,127 @@
+Implement GL_POINT_SMOOTH in gl4es's GLES2 fixed-pipeline emulator.
+
+gl4es tracked GL_POINT_SMOOTH but never acted on it. The enable round-tripped
+through glPushAttrib/glPopAttrib (stack.c), answered glIsEnabled (enable.c),
+and stored its hint (hint.c) -- but nothing consumed it, as the "todo: do
+somthing with fpe?" comment above the enable.c proxy admits. Points therefore
+rasterized as hard squares under WebGL regardless of the enable, since GLES2
+has no point-antialiasing state of its own.
+
+That breaks any scene drawing round sprites with large glPointSize: gl-repl's
+glow-point examples (glow-sprites-blend-point-attenuation, lantern_festival,
+jellyfish-gldepthmask-translucency, teapot-carousel, orrery-labels,
+dusk-lighthouse-atoll) all enable GL_POINT_SMOOTH and render square blocks in
+the Emscripten build while looking correct natively. gl-repl's own chrome hits
+it too -- grid points, vertex overlays, guide handles and backdrop stars all
+enable GL_POINT_SMOOTH from C.
+
+Add a point_smooth bit to fpe_state_t so smooth and non-smooth points get
+distinct cached programs, feed it from the enable.c proxy, and clamp it to 0
+when not drawing points (mirroring the existing pointsprite clamping) so the
+shader cache doesn't fragment on irrelevant state. In the generated fragment
+shader, derive coverage from gl_PointCoord -- available for point primitives
+independently of point-sprite enable -- discarding outside the unit radius and
+folding a smoothstep edge into alpha.
+
+The coverage multiply is emitted after the alpha test, matching desktop GL
+where point antialiasing coverage applies at the blend stage rather than to
+the value the alpha test sees. The edge feather is a fixed 0.85..1.0 of the
+point radius: fwidth() would track the true pixel footprint but needs
+OES_standard_derivatives, which the GLES2 profile can't assume.
+
+Only the fixed-pipeline generator (fpe_FragmentShader) is patched;
+fpe_CustomFragmentShader, used for ARB program conversion, is left alone.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+--- a/src/gl/fpe.h
++++ b/src/gl/fpe.h
+@@ -205,6 +205,7 @@
+     unsigned int light_separate:1;       // light separate specular color
+     unsigned int light_localviewer:1;    // light local viewer
+     unsigned int point:1;                // point rendering
++    unsigned int point_smooth:1;         // GL_POINT_SMOOTH: round, antialiased points
+     unsigned int pointsprite:1;          // point sprite rendering
+     unsigned int pointsprite_coord:1;    // point sprite coord replace
+     unsigned int pointsprite_upper:1;    // if coord is upper left and not lower left
+--- a/src/gl/fpe.c
++++ b/src/gl/fpe.c
+@@ -135,8 +135,10 @@
+         dest->fogsource = 0;
+         dest->fogdist = 0;
+     }
+-    if(!dest->point)
++    if(!dest->point) {
+         dest->pointsprite = 0;
++        dest->point_smooth = 0;
++    }
+     if(!dest->pointsprite) {
+         dest->pointsprite_upper = 0;
+         dest->pointsprite_coord = 0;
+@@ -242,8 +244,10 @@
+         dest->fogsource = 0;
+         dest->fogdist = 0;
+     }
+-    if(!fixed || !dest->point)
++    if(!fixed || !dest->point) {
+         dest->pointsprite = 0;
++        dest->point_smooth = 0;
++    }
+     if(!fixed || !dest->pointsprite) {
+         dest->pointsprite_upper = 0;
+         dest->pointsprite_coord = 0;
+--- a/src/gl/enable.c
++++ b/src/gl/enable.c
+@@ -162,7 +162,7 @@
+         proxy_GOFPE(GL_SAMPLE_COVERAGE, sample_coverage, );
+         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_COVERAGE, sample_alpha_to_coverage, );
+         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_ONE, sample_alpha_to_one, );
+-        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, );
++        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, glstate->fpe_state->point_smooth=enable);
+         proxy_GOFPE(GL_LINE_SMOOTH, line_smooth, );
+ 
+         proxy_GO(GL_POLYGON_OFFSET_FILL, polyfill_offset);
+--- a/src/gl/fpe_shader.c
++++ b/src/gl/fpe_shader.c
+@@ -834,6 +834,7 @@
+     int fogdist = state->fogdist;
+     int planes = state->plane;
+     int point = state->point;
++    int point_smooth = state->point_smooth && state->point;
+     int pointsprite = state->pointsprite;
+     int pointsprite_coord = state->pointsprite_coord;
+     int pointsprite_upper = state->pointsprite_upper;
+@@ -958,6 +959,22 @@
+             }
+         }
+         ShadAppend(")<0.) discard;\n");
++    }
++
++    //*** Point Smooth: round out the square point raster, with a soft edge.
++    // Desktop GL_POINT_SMOOTH is coverage-based antialiasing; GLES2/WebGL has
++    // no equivalent, so derive coverage from gl_PointCoord (always available
++    // for point primitives, independent of point sprite enable) and fold it
++    // into alpha below, after the alpha test.
++    if(point_smooth) {
++        if(comments)
++            ShadAppend("// Point Smooth\n");
++        ShadAppend("mediump float _gl4es_PointCov = 1.0;\n");
++        ShadAppend("{\n");
++        ShadAppend("mediump float _gl4es_pd = length(gl_PointCoord - vec2(0.5)) * 2.0;\n");
++        ShadAppend("if(_gl4es_pd > 1.0) discard;\n");
++        ShadAppend("_gl4es_PointCov = 1.0 - smoothstep(0.85, 1.0, _gl4es_pd);\n");
++        ShadAppend("}\n");
+     }
+ 
+     //*** initial color
+@@ -1342,6 +1359,11 @@
+         }
+     }
+ 
++    //*** Point Smooth coverage, folded into alpha after the alpha test to
++    // match GL, where point antialiasing coverage applies at the blend stage.
++    if(point_smooth)
++        ShadAppend("fColor.a *= _gl4es_PointCov;\n");
++
+     //*** Add secondary color
+     if(light_separate || secondary) {
+         if(comments) {
