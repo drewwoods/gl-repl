@@ -142,28 +142,36 @@ worktree at `eaefae16` (the commit before Phase 1) and one at Phase 5 with the
 three scene files reverted to their pre-conversion text. Identical corpus
 (`total_lines=3354` on both), `USE_GL_STUBS=1`, minimum of 4×8 iterations:
 
-| case | pre-Phase-1 | Phase 5 | Δ |
+Numbers below are from **gracemont** (Linux, gcc 14.2) rather than the mac-mini:
+the mac's mean was too noisy to quote and even its minima moved several percent
+between runs, while gracemont holds 0.3–0.6% on the rows that matter. Per-op
+figures are `min_sec × iters / ops` — the best iteration's per-operation time.
+The mac-mini agrees directionally on everything below, with a *larger* machinery
+tax (+13% orrery / +21% grass full flatten), so that part is toolchain-sensitive
+while the route behaviour is not.
+
+| case | A: pre-Phase-1 | B: Phase 5 | Δ |
 |---|---|---|---|
-| `parse_lines` | 0.047 µs/line | 0.048 | +0.6% |
-| `feed_examples` | 0.244 µs/line | 0.244 | +0.1% |
-| `slider_drag` (4 rows) | 0.72–1.63 µs | 0.71–1.63 | ±0% |
-| `flatten_orrery` | 51.7 µs | 58.3 | **+12.7%** |
-| `flatten_grass` | 123.2 µs | 148.8 | **+20.7%** |
-| `refresh_orrery` (full route) | 51.5 µs | 58.3 | **+13.3%** |
-| `refresh_grass` (rebake route) | 92.1 µs | 88.6 | −3.7% |
-| `refresh_wave` (rebake route) | 26.6 µs | 26.8 | +0.8% |
+| `parse_lines` | 0.74 µs/line | 0.74 | ±0% |
+| `feed_examples` | 4.94 µs/line | 4.81 | −3% |
+| `slider_value_motion` | 13.2 µs | 13.3 | ±0% |
+| `refresh_wave` (rebake route) | 577 µs | 578 | ±0% |
+| `refresh_grass` (rebake route) | 2007 µs | 1947 | −3% |
+| `flatten_orrery` (full flatten) | 1155 µs | 1215 | **+5%** |
+| `flatten_grass` (full flatten) | 2702 µs | 2959 | **+10%** |
 
 So: **the compile path is free, the rebake path is free, and the full flatten is
-12–21% slower for every program — whether or not it declares a single local.**
+5–10% slower here (13–21% on macOS) for every program — whether or not it
+declares a single local.**
 
 `flatten_phases` localises it to one place, and it is not the local binding:
 
-| phase | pre | post | Δ |
+| phase | A: pre-Phase-1 | B: Phase 5 | Δ |
 |---|---|---|---|
-| grass reparse | 51.8 µs | 47.8 | −7.7% |
-| grass **var_assign** | 47.9 µs | 73.6 | **+53.6%** |
-| grass remainder | 23.5 µs | 24.2 | +3.1% |
-| orrery **var_assign** | 9.6 µs | 16.5 | **+72.2%** |
+| grass reparse | 1077 µs | 1042 | −3% |
+| grass **var_assign** | 1209 µs | 1481 | **+23%** |
+| grass remainder | 411 µs | 421 | +2% |
+| orrery **var_assign** | 264 µs | 340 | **+29%** |
 
 The cause is rev 9's lexical LHS re-derivation. `flatten_var_assign` now calls
 `flatten_resolve_assign_target()` on **every** scalar assignment on **every**
@@ -185,7 +193,72 @@ own change with their own correctness argument:
 - **Cache the extracted LHS per source line.** The LHS is a pure function of the
   source text, and source mutation already invalidates the expression cache at a
   single seam (`repl_state_mark_source_dirty()`), so `ctx->expr` is the natural
-  home. This removes the text parse and leaves only the scope scan.
+  home. This removes the text parse and leaves only the scope scan. Note this
+  one should pay off *disproportionately* under Emscripten, where per-character
+  text scanning is relatively more expensive than in native code — measure it
+  there before sizing it from the native number.
+
+#### Which cost actually hurts, and what would fix it
+
+The two costs above are separable, and for the worst-affected scene they are not
+the same size. Grass's per-frame `t` refresh, decomposed across three builds
+(A = pre-Phase-1 machinery + old scenes, B = Phase 5 machinery + old scenes,
+C = Phase 5 machinery + converted scenes):
+
+| grass, gracemont | A | B | C |
+|---|---|---|---|
+| `refresh_grass` route | rebake | rebake | **full** |
+| `refresh_grass` | 2007 µs | 1947 µs | **3468 µs (1.73×)** |
+| `flatten_grass` (full flatten in all three) | 2702 µs | 2959 µs | 3463 µs |
+| `refresh_orrery` | 1134 µs | 1215 µs | 1277 µs (1.13×) |
+
+**The route change is the regression; the var_assign tax is not.** Of grass's
++1461 µs, the rebake→full switch accounts for ~1521 µs (B's rebake 1947 → C's
+full 3468); the var_assign tax is ~272 µs *of the full flatten*, i.e. ~8% of C.
+Removing the tax entirely would take grass from 1.73× to roughly 1.6× — better,
+but it does not address what actually happened. The orrery and whale barely move
+because they already full-flattened on `t` before the conversion; grass is the
+only converted scene that lost a rebake route.
+
+The gap is much wider in the web build: the maintainer measures grass at
+~1.2 ms → ~5 ms (≈4×) under Emscripten against ≈2× native, which is consistent
+with rebake being mostly compiled-program evaluation while a full flatten does
+text parsing, and wasm penalising the latter harder.
+
+So the fix that would recover grass is the **third** one, the
+`rebake_one_cmd`-simulates-local-frames item under Known liabilities — and the
+grass scene shows why it is worth doing rather than being an abstract nicety:
+*none* of its locals affect the flat topology. `wind`/`wave`/`bend`/`u`/`cx`/… are
+pure value dataflow. They are classified structural only because rebake cannot
+carry a local's value forward through frozen snapshots — not because anything
+about the program's shape depends on them. Sketch:
+
+- `FlatCmdLocalVars` gains a `uint32_t local_mask` (MAX_EXPR_VARS is 32, so one
+  word covers it) and an `int frame_seq`. Both are per flat command, so ~64 KB
+  over the whole program — noise against the 5.3 MB the snapshots already cost.
+- The rebake walk keeps a carried frame *per call depth*
+  (`[MAX_FLATTEN_CALL_DEPTH][MAX_EXPR_VARS]`, 8 KB). At each command it takes
+  the snapshot — whose param and loop-iterator values are structural and
+  therefore still correct — and overwrites only the `local_mask` entries from
+  the carried frame. A local-target assignment then writes the carried frame
+  instead of being skipped (see the Phase 5 fix).
+- `flatten_var_assign` reports local RHS deps as **value**, and grass rebakes
+  again.
+
+The non-obvious part is frame entry, which is what resets locals to 0 for the
+next call. `call_depth` alone will not do it: 135 successive `blade()` calls
+share both `call_depth` and `call_src_cmd_idx`, and while grass happens to
+return to depth 0 between them, `for(i, 0, 10) { blade(i); }` with nothing else
+in the body does not. `root_call_src_cmd_idx` does not separate them either.
+Hence `frame_seq`: a counter `flatten_call` bumps on entry and stamps on every
+command it emits. Rebake keeps `carried_seq[depth]` beside the carried frames
+and zeroes a depth's locals only when the seq *for that depth* changes — which
+resets repeated sibling calls correctly while leaving a caller's locals intact
+when a nested call returns.
+
+That is a self-contained design, but it touches the snapshot layout, flatten's
+emit path and the whole rebake walk, and it flips a dependency classification
+that three phases of this plan reasoned about. It belongs in its own plan.
 
 ### Phase 4 — export / import (done)
 
@@ -1468,14 +1541,16 @@ and confirm Ctrl+Z after a local decl restores cleanly.
 None blocking; all are accepted costs with a defined trip-wire, recorded so a
 future maintainer does not have to rediscover the trade-off. [rev 7]
 
-**0. The full flatten is 12–21% slower for programs that use no locals.**
-Measured in Phase 5 (table above): `flatten_var_assign` grew 54–72% because
-rev 9's lexical LHS re-derivation re-parses every assignment's source text on
-every visit. The compile path, the rebake path and slider drags are unaffected.
+**0. The full flatten is 5–21% slower for programs that use no locals.**
+Measured in Phase 5 (tables above): `flatten_var_assign` grew 23–29% on Linux
+and 54–74% on macOS, because rev 9's lexical LHS re-derivation re-parses every
+assignment's source text on every visit. The compile path, the rebake path and
+slider drags are unaffected.
 
 *Trigger to revisit:* any flatten-cost work at all — this is now the largest
 single line item in that profile, and two concrete pay-for-use fixes are written
-up in the Phase 5 section.
+up in the Phase 5 section. Note it is **not** what made grass slow; see the
+decomposition there before spending effort on it for that reason.
 
 **1. ~~The no-shadowing guard matrix is the maintenance tax.~~ Resolved in
 rev 8.** Earlier revisions banned shadowing outright, which turned "declare a
@@ -1501,13 +1576,14 @@ local forces a full reflatten instead of a value-only rebake. The converted
 orrery — 15 locals fed by globals inside `planetKepler` — is precisely the scene
 where this would surface.
 
-*Measured after the Phase 5 conversions* (table in the Phase 5 section, via the
-new `bench_repl --only refresh_slider`): worst route change is the orrery's
-`ORB_SCALE` slider at 306 → 541 µs, worst absolute is grass at 1.6 ms. Two
-findings worth carrying forward — a global that reaches a local only
-*transitively* (through another global) turns structural too, and the full
-flatten itself slows 3–23% from the larger linear-searched scope array,
-independent of any route change.
+*Measured after the Phase 5 conversions* (tables in the Phase 5 section, via the
+new `bench_repl --only refresh_slider`): the worst case is grass's per-frame `t`
+refresh at 1.73× (gracemont) / ≈2× (mac-mini) / ≈4× (Emscripten, ~1.2 → ~5 ms),
+all of it the rebake→full route change. Two findings worth carrying forward — a
+global that reaches a local only *transitively*, through another global, turns
+structural too (the orrery's `ORB_SCALE` does), and the cost is concentrated in
+scenes that were rebaking before, so it is invisible on scenes that already
+full-flattened.
 
 *Trigger to revisit:* the manual scrub step in Verification is load-bearing, not
 optional. If scrubbing a global that feeds a local is visibly sluggish there,
