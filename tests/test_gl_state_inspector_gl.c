@@ -29,10 +29,11 @@
  *   - "GL_CURRENT_RASTER_POSITION (object input)" — GL stores window
  *     coordinates; the fold reports the untransformed input.
  *   - "GL_LIGHTn_POSITION (world)" — derived by inverting the modelview.
- *   - "GL_CURRENT_RASTER_COLOR (unlit input)" — under lighting GL stores the
- *     lit color; the fold reports what fed the lighting equation.
- * Their exact-value twins (the "(eye)" light position, the unqualified raster
- * color) are compared.
+ * Their exact-value twins (the "(eye)" light position) are compared.
+ *
+ * GL_CURRENT_RASTER_COLOR *is* compared, including under GL_LIGHTING: the fold
+ * evaluates the lighting equation for that cell (gl_state_lit_color), so the
+ * lighting cases are the only check that it evaluates it the way a driver does.
  *
  * "GL_CLIP_PLANEn_EQUATION (object)" is the third qualified row and the one
  * case where the difference itself is checkable: GL stores the equation
@@ -47,6 +48,7 @@
 #include "repl/init_state.h"
 #include "repl/executor.h"
 #include "repl/command_spec.h"
+#include "repl/export.h"   /* light bridge: the generated setup's light values */
 #include "support/test_harness.h"
 
 #include <stdarg.h>
@@ -91,6 +93,94 @@ static int feq(float a, float b, float epsilon) {
     float d = a - b;
     return (d < 0 ? -d : d) <= epsilon;
 }
+
+/* --- driver-specific known deviations ------------------------------------ */
+
+/* Apple's legacy GL deviates on GL_CURRENT_RASTER_COLOR in two ways, both
+ * measured against Mesa 25.2.8 (Intel ADL-N), which agrees with this fold:
+ *
+ *   1. glColorMaterial is ignored when the raster color is latched. With
+ *      GL_COLOR_MATERIAL on and the material tracking glColor, Apple stores
+ *      (0, 0, 0, 1) — as if lighting ran against a zeroed material — where Mesa
+ *      stores the color-tracked result the equation calls for. There is no
+ *      portable assertion to make, so that case is skipped here and says so out
+ *      loud rather than being quietly dropped.
+ *   2. The latched color is clamped to [0, 1]. Mesa stores what was latched,
+ *      unclamped. GL 2.1 does not settle this one, so the fold follows Mesa
+ *      (which also keeps the row consistent with the panel's GL_CURRENT_COLOR)
+ *      and the case accepts either answer, reporting which arrived. */
+static int diff_driver_is_apple_legacy(void) {
+    const char *vendor = (const char *)glGetString(GL_VENDOR);
+    return vendor && strstr(vendor, "Apple") != NULL;
+}
+
+/* Mesa deviates on the same cell in two *different* places — measured on Mesa
+ * 25.2.8 / Intel ADL-N against Apple's legacy GL, which agrees with this fold
+ * and with the GL 2.1 text on both. Each was pinned by solving for the model
+ * that reproduces the driver's numbers exactly, not by inspection:
+ *
+ *   1. The raster position is lit from its *object-space* position, so the
+ *      vector to a positional light is wrong whenever the modelview at the call
+ *      is not the identity (the normal is transformed correctly). Measured
+ *      n·L = 0.897580, which is what the untransformed position gives; the
+ *      eye-space position gives 0.743409, the value Apple stores.
+ *   2. GL_NORMALIZE is ignored for that path: under a scale(4) modelview Mesa
+ *      lights the raw quarter-length inverse-transposed normal and stores
+ *      (0.212361, 0.180281, 0.158201) where normalizing first gives
+ *      (0.699445, 0.559124, 0.428803).
+ *
+ * Cases resting on either are skipped there. Both deviations need a non-identity
+ * modelview, which is why the directional-light and local-viewer cases below
+ * pass on Mesa unchanged: with w = 0 the vertex position drops out of the light
+ * vector, and those cases leave the modelview alone. */
+static int diff_driver_is_mesa(void) {
+    const char *renderer = (const char *)glGetString(GL_RENDERER);
+    const char *version = (const char *)glGetString(GL_VERSION);
+    return (renderer && strstr(renderer, "Mesa") != NULL) ||
+           (version && strstr(version, "Mesa") != NULL);
+}
+
+/* Skips print, so a driver-specific gap can never pass for coverage. */
+static void diff_skip(const char *what, const char *why) {
+    printf("    (skipped: %s — %s)\n", what, why);
+}
+
+/* --- generated-setup light values ---------------------------------------- */
+
+/* With no light bridge installed the generated setup emits zeroed lights, so
+ * every diffuse and specular term below would multiply by zero and the lighting
+ * cases would "pass" while testing nothing. These values give the terms weight.
+ * Both sides read them through the same enumerator, so the two baselines shift
+ * together. Slot 0 is positional (w = 1) and slot 1 directional (w = 0), which
+ * are the two branches of the light-vector computation. Positions are flagged
+ * eye-space so they are emitted at identity modelview and stored verbatim. */
+static void diff_fill_light_slot(int slot, ReplExportLightInfo *out) {
+    memset(out, 0, sizeof(*out));
+    out->pos_is_eye_space = 1;
+    if (slot == 0) {
+        out->pos[0] = 0.4f; out->pos[1] = 0.8f;
+        out->pos[2] = 1.2f; out->pos[3] = 1.0f;
+        out->ambient[0] = 0.10f; out->ambient[1] = 0.12f;
+        out->ambient[2] = 0.14f; out->ambient[3] = 1.0f;
+        out->diffuse[0] = 0.90f; out->diffuse[1] = 0.70f;
+        out->diffuse[2] = 0.50f; out->diffuse[3] = 1.0f;
+        out->specular[0] = 0.80f; out->specular[1] = 0.85f;
+        out->specular[2] = 0.90f; out->specular[3] = 1.0f;
+    } else if (slot == 1) {
+        out->pos[0] = 0.0f; out->pos[1] = 0.6f;
+        out->pos[2] = 0.8f; out->pos[3] = 0.0f;
+        out->ambient[0] = 0.05f; out->ambient[1] = 0.05f;
+        out->ambient[2] = 0.05f; out->ambient[3] = 1.0f;
+        out->diffuse[0] = 0.30f; out->diffuse[1] = 0.40f;
+        out->diffuse[2] = 0.50f; out->diffuse[3] = 1.0f;
+        out->specular[0] = 0.25f; out->specular[1] = 0.25f;
+        out->specular[2] = 0.25f; out->specular[3] = 1.0f;
+    }
+}
+
+static const ReplExportLightBridge k_diff_light_bridge = {
+    diff_fill_light_slot
+};
 
 /* --- building test programs --------------------------------------------- */
 
@@ -533,6 +623,57 @@ static void diff_clip_plane_row(int plane, float tx, float ty, float tz) {
     }
 }
 
+/* GL leaves the current raster color and position *undefined* when the raster
+ * position is clipped away (GL 2.1 2.13); both drivers tested leave the cell at
+ * its (1,1,1,1) default instead of latching anything. The fold cannot know
+ * that — it tracks the modelview but never the projection — so it reports the
+ * value a valid position would have latched. Every lighting case therefore keeps
+ * its point inside the clip volume, and this asserts it, so a case that later
+ * drifts outside fails on the reason instead of on a baffling color mismatch. */
+static void diff_require_valid_raster_pos(const char *case_name) {
+    GLboolean valid = GL_FALSE;
+    char label[192];
+    glGetBooleanv(GL_CURRENT_RASTER_POSITION_VALID, &valid);
+    snprintf(label, sizeof(label), "%s: raster position inside the clip volume",
+             case_name);
+    ASSERT_TRUE(label, valid == GL_TRUE);
+}
+
+/* The one row where the two drivers disagree (see diff_driver_is_apple_legacy):
+ * accept the fold's value either verbatim or clamped, and report which the
+ * driver chose. Pinning "one of exactly these two" still catches a third
+ * behavior, which is what a regression here would look like. */
+static void diff_raster_color_raw_or_clamped(void) {
+    const ReplGlStateReportRow *row =
+        diff_require_row("GL_CURRENT_RASTER_COLOR");
+    GLfloat driver[4];
+    float reported[4];
+    int raw_match = 1, clamped_match = 1;
+    int i;
+
+    if (!row)
+        return;
+    if (diff_parse_vec(row->current, reported, 4) != 4) {
+        ASSERT_TRUE("out-of-range raster color: 4 components parsed", 0);
+        return;
+    }
+    glGetFloatv(GL_CURRENT_RASTER_COLOR, driver);
+    for (i = 0; i < 4; i++) {
+        float clamped = reported[i] < 0.0f ? 0.0f
+                                           : (reported[i] > 1.0f ? 1.0f
+                                                                 : reported[i]);
+        if (!feq(reported[i], driver[i], DIFF_EPSILON))
+            raw_match = 0;
+        if (!feq(clamped, driver[i], DIFF_EPSILON))
+            clamped_match = 0;
+    }
+    printf("    (out-of-range latch: driver stores it %s)\n",
+           raw_match ? "unclamped, like the fold"
+                     : (clamped_match ? "clamped to [0,1]" : "some third way"));
+    ASSERT_TRUE("out-of-range raster color is stored raw or clamped, "
+                "nothing else", raw_match || clamped_match);
+}
+
 /* --- cases -------------------------------------------------------------- */
 
 /* 1. The generated prologue alone. Nothing user-authored, so every row here is
@@ -663,13 +804,175 @@ static void test_diff_raster_color_latch(void) {
 
     diff_case("inspector vs driver: raster color latch", cmds, n, n);
 
+    diff_require_valid_raster_pos("raster color latch");
     diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
     diff_vec_row("GL_CURRENT_COLOR", GL_CURRENT_COLOR, 4);
-    ASSERT_TRUE("lit-input row absent with lighting off",
-                diff_row("GL_CURRENT_RASTER_COLOR (unlit input)") == NULL);
 }
 
-/* 6. Clip planes, in both directions of the "(object)" label (see
+/* 6. The lit raster color, one case per branch of gl_state_lit_color(). The
+ * fold evaluates GL's lighting equation to fill this cell, so a driver is the
+ * only thing that can say whether it evaluates it correctly; every case here
+ * enables GL_LIGHTING and compares the row against GL_CURRENT_RASTER_COLOR.
+ *
+ * Materials are set explicitly rather than inherited, so each case leans on one
+ * term and no expected value depends on the generated setup's light-model
+ * ambient constant. Raster positions stay well inside the clip volume (the
+ * projection is identity here) because a clipped position makes GL's stored
+ * color undefined — asserted per case, see diff_require_valid_raster_pos. */
+static void test_diff_lit_raster_color(void) {
+    GLCmd cmds[12];
+    int n;
+
+    /* (a) Emission + scene ambient: no light enabled, so the per-light sum is
+     * empty and the whole value comes from the material. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_EMISSION, 0.5, 0.25, 0.125, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_COLOR3F, n, 3, 1.0, 0.0, 0.0); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+    diff_case("lit raster color: emission + scene ambient", cmds, n, n);
+    diff_require_valid_raster_pos("emission + scene ambient");
+    diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+    /* The current color is untouched by lighting: the two rows must differ, or
+     * this case would also pass with the fold just copying glColor3f. */
+    diff_vec_row("GL_CURRENT_COLOR", GL_CURRENT_COLOR, 4);
+    {
+        const ReplGlStateReportRow *lit = diff_row("GL_CURRENT_RASTER_COLOR");
+        const ReplGlStateReportRow *cur = diff_row("GL_CURRENT_COLOR");
+        ASSERT_TRUE("lit raster color is not the current color",
+                    lit && cur && strcmp(lit->current, cur->current) != 0);
+    }
+
+    /* (b) Diffuse from a positional light (slot 0, w = 1), with a normal that
+     * has to be carried into eye space by a rotated + translated modelview —
+     * the inverse-transpose path. */
+    if (diff_driver_is_mesa()) {
+        diff_skip("diffuse under a transformed modelview",
+                  "Mesa lights the raster position in object space");
+    } else {
+        n = 0;
+        cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+        cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT0); n++;
+        cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                           (double)GL_DIFFUSE, 0.8, 0.6, 0.4, 0.75); n++;
+        cmds[n] = diff_cmd(CMD_ROTATEF, n, 4, 40.0, 0.0, 1.0, 0.0); n++;
+        cmds[n] = diff_cmd(CMD_TRANSLATE3F, n, 3, 0.2, 0.3, -0.4); n++;
+        cmds[n] = diff_cmd(CMD_NORMAL3F, n, 3, 0.0, 0.7071, 0.7071); n++;
+        cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.1, 0.2, 0.1); n++;
+        diff_case("lit raster color: diffuse + transformed normal", cmds, n, n);
+        diff_require_valid_raster_pos("diffuse + transformed normal");
+        diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+    }
+
+    /* (c) Diffuse from the directional light (slot 1, w = 0), where the stored
+     * position is the direction to the light rather than a point. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT1); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_DIFFUSE, 0.9, 0.8, 0.7, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_NORMAL3F, n, 3, 0.0, 0.5, 0.866); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.1, -0.2, 0.3); n++;
+    diff_case("lit raster color: directional light", cmds, n, n);
+    diff_require_valid_raster_pos("directional light");
+    diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+
+    /* (d) Specular: shininess plus a local viewer, which swings the half vector
+     * from the default +z round to "towards the eye at the origin". Both lights
+     * on, so the per-light sum accumulates rather than being one term. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT0); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT1); n++;
+    cmds[n] = diff_cmd(CMD_LIGHT_MODEL_I, n, 2,
+                       (double)GL_LIGHT_MODEL_LOCAL_VIEWER, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_SPECULAR, 0.6, 0.6, 0.5, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALF, n, 3, (double)GL_FRONT,
+                       (double)GL_SHININESS, 12.0); n++;
+    cmds[n] = diff_cmd(CMD_NORMAL3F, n, 3, 0.0, 0.0, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, -0.5); n++;
+    diff_case("lit raster color: specular + local viewer", cmds, n, n);
+    diff_require_valid_raster_pos("specular + local viewer");
+    diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+
+    /* (e) Saturation: emission past 1.0 must come back clamped, which is the
+     * one clamp GL does specify for the lit color. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_EMISSION, 1.75, 0.5, -0.25, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+    diff_case("lit raster color: saturated emission", cmds, n, n);
+    diff_require_valid_raster_pos("saturated emission");
+    diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+
+    /* (f) GL_NORMALIZE against a scaled modelview: with the switch off GL lights
+     * an unnormalized normal and the fold must not tidy that up; with it on,
+     * both normalize. The difference between the two halves is the whole reason
+     * the cap is tracked, so both are compared. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT0); n++;
+    cmds[n] = diff_cmd(CMD_MATERIALFV, n, 6, (double)GL_FRONT,
+                       (double)GL_DIFFUSE, 0.9, 0.9, 0.9, 1.0); n++;
+    /* Scale up, so the inverse transpose *shrinks* the normal to a quarter
+     * length: both halves then land in range and differ by an exact factor,
+     * where scaling down saturates the normalized half at (1,1,1) and hides
+     * which model produced it. */
+    cmds[n] = diff_cmd(CMD_SCALEF, n, 3, 4.0, 4.0, 4.0); n++;
+    cmds[n] = diff_cmd(CMD_NORMAL3F, n, 3, 0.0, 0.0, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+    cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_NORMALIZE); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+    diff_case("lit raster color: unnormalized normal", cmds, n, 6);
+    diff_require_valid_raster_pos("unnormalized normal");
+    diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+    if (diff_driver_is_mesa()) {
+        diff_skip("GL_NORMALIZE half", "Mesa ignores it when lighting the "
+                                       "raster position");
+    } else {
+        diff_case("lit raster color: GL_NORMALIZE", cmds, n, n);
+        diff_require_valid_raster_pos("GL_NORMALIZE");
+        diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+    }
+
+    /* (g) glColorMaterial: the material tracks glColor, so the latched value
+     * follows the program's color *through* the lighting equation instead of
+     * being copied from it. Apple's legacy GL gets this wrong (it stores
+     * (0,0,0,1) as if the material were zeroed), so there the case is skipped
+     * loudly rather than asserted — see diff_driver_is_apple_legacy. */
+    if (diff_driver_is_apple_legacy()) {
+        diff_skip("color-material raster latch",
+                  "Apple stores (0,0,0,1) here; Mesa agrees with the fold");
+    } else {
+        n = 0;
+        cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHTING); n++;
+        cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_LIGHT0); n++;
+        cmds[n] = diff_cmd(CMD_ENABLE, n, 1, (double)GL_COLOR_MATERIAL); n++;
+        cmds[n] = diff_cmd(CMD_COLOR_MATERIAL, n, 2, (double)GL_FRONT,
+                           (double)GL_AMBIENT_AND_DIFFUSE); n++;
+        cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 0.3, 0.6, 0.9, 0.5); n++;
+        cmds[n] = diff_cmd(CMD_NORMAL3F, n, 3, 0.0, 0.0, 1.0); n++;
+        cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+        diff_case("lit raster color: color material", cmds, n, n);
+        diff_require_valid_raster_pos("color material");
+        diff_vec_row("GL_CURRENT_RASTER_COLOR", GL_CURRENT_RASTER_COLOR, 4);
+    }
+
+    /* (h) Out-of-range color with lighting off: the drivers disagree on whether
+     * the latched value is clamped, so this accepts either and names which. */
+    n = 0;
+    cmds[n] = diff_cmd(CMD_DISABLE, n, 1, (double)GL_LIGHTING); n++;
+    cmds[n] = diff_cmd(CMD_COLOR4F, n, 4, 1.5, -0.5, 0.25, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_RASTER_POS3F, n, 3, 0.0, 0.0, 0.0); n++;
+    diff_case("lit raster color: out-of-range latch", cmds, n, n);
+    diff_require_valid_raster_pos("out-of-range latch");
+    diff_raster_color_raw_or_clamped();
+}
+
+/* 7. Clip planes, in both directions of the "(object)" label (see
  * diff_clip_plane_row): under the identity modelview the generated prologue
  * leaves behind, the fold's object-space equation IS what GL stores, so the row
  * compares directly; under a user transform the two must differ by exactly that
@@ -734,13 +1037,21 @@ int main(int argc, char **argv) {
         return 0;  /* opt-in target: absence of a display is not a failure */
     }
     repl_executor_init_resources();
+    repl_export_install_light_bridge(&k_diff_light_bridge);
 
+    /* Name the driver: this test's whole premise is that GL is the authority,
+     * so when a row disagrees the first question is always "which
+     * implementation said so". */
     printf("--- gl_state_inspector differential (real GL context) ---\n");
+    printf("    GL_VENDOR   %s\n", (const char *)glGetString(GL_VENDOR));
+    printf("    GL_RENDERER %s\n", (const char *)glGetString(GL_RENDERER));
+    printf("    GL_VERSION  %s\n", (const char *)glGetString(GL_VERSION));
     test_diff_generated_prologue();
     test_diff_user_state_writes();
     test_diff_transform_fold();
     test_diff_attrib_group_scoping();
     test_diff_raster_color_latch();
+    test_diff_lit_raster_color();
     test_diff_clip_planes();
     diff_close_cursor();
     repl_executor_destroy_resources();

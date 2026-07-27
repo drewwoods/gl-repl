@@ -1604,28 +1604,47 @@ static void test_gl_state_report_latches_raster_color(void) {
         ASSERT_STR("a later glColor3f moves only the current color",
                    row->current, "(0, 1, 0, 1)");
 
-    /* Latched under GL_LIGHTING: GL would store the lit color, which this pure
-     * fold does not evaluate, so the row is renamed to say the value is the
-     * lighting input rather than what GL kept. */
+    /* Latched under GL_LIGHTING: GL stores the *lit* color, and the fold
+     * evaluates the lighting equation to match (gl_state_lit_color). Emission
+     * carries the whole value here — material ambient is zeroed and no light is
+     * enabled — so the expectation stays independent of the generated setup's
+     * light-model ambient constant, and alpha comes from the diffuse material
+     * exactly as GL takes it. The equation itself is checked against real
+     * drivers in tests/test_gl_state_inspector_gl.c; this pins the plumbing:
+     * lighting on means the row stops echoing glColor3f. */
     cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
     cmds[0].args[0] = (float)GL_LIGHTING; cmds[0].num_args = 1;
-    cmds[1] = gl_state_test_cmd(CMD_COLOR3F, 1);
-    cmds[1].args[0] = 0.25f; cmds[1].args[1] = 0.5f; cmds[1].args[2] = 0.75f;
-    cmds[1].num_args = 3;
-    cmds[2] = gl_state_test_cmd(CMD_RASTER_POS3F, 2);
-    cmds[2].args[0] = 0.0f; cmds[2].args[1] = 0.0f; cmds[2].args[2] = 0.0f;
-    cmds[2].num_args = 3;
-    program.cmd_count = 3;
-    repl_gl_state_report_at_line(program, 3, &report);
-    row = gl_state_test_find_row(&report,
-                                 "GL_CURRENT_RASTER_COLOR (unlit input)");
-    ASSERT_TRUE("lit latch renames the raster color row", row != NULL);
+    cmds[1] = gl_state_test_cmd(CMD_MATERIALFV, 1);
+    cmds[1].args[0] = (float)GL_FRONT; cmds[1].args[1] = (float)GL_AMBIENT;
+    cmds[1].args[2] = 0.0f; cmds[1].args[3] = 0.0f;
+    cmds[1].args[4] = 0.0f; cmds[1].args[5] = 1.0f;
+    cmds[1].num_args = 6;
+    cmds[2] = gl_state_test_cmd(CMD_MATERIALFV, 2);
+    cmds[2].args[0] = (float)GL_FRONT; cmds[2].args[1] = (float)GL_EMISSION;
+    cmds[2].args[2] = 0.5f; cmds[2].args[3] = 0.25f;
+    cmds[2].args[4] = 0.125f; cmds[2].args[5] = 1.0f;
+    cmds[2].num_args = 6;
+    cmds[3] = gl_state_test_cmd(CMD_COLOR3F, 3);
+    cmds[3].args[0] = 0.25f; cmds[3].args[1] = 0.5f; cmds[3].args[2] = 0.75f;
+    cmds[3].num_args = 3;
+    cmds[4] = gl_state_test_cmd(CMD_RASTER_POS3F, 4);
+    cmds[4].args[0] = 0.0f; cmds[4].args[1] = 0.0f; cmds[4].args[2] = 0.0f;
+    cmds[4].num_args = 3;
+    program.cmd_count = 5;
+    repl_gl_state_report_at_line(program, 5, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
+    ASSERT_TRUE("lit latch still reports one raster color row", row != NULL);
+    if (row) {
+        ASSERT_STR("lit latch reports the lit color, not the current color",
+                   row->current, "(0.5, 0.25, 0.125, 1)");
+        ASSERT_INT("lit latch source is the glRasterPos3f line",
+                   row->source.source_line_idx, 4);
+    }
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("current color still reported alongside", row != NULL);
     if (row)
-        ASSERT_STR("lit latch reports the lighting input",
-                   row->current, "(0.25, 0.5, 0.75, 1)");
-    ASSERT_TRUE("lit latch does not also emit the plain row",
-                gl_state_test_find_row(&report,
-                                       "GL_CURRENT_RASTER_COLOR") == NULL);
+        ASSERT_STR("current color is untouched by lighting", row->current,
+                   "(0.25, 0.5, 0.75, 1)");
 
     /* GL_CURRENT_BIT covers the latched color, so glPushAttrib/glPopAttrib
      * scopes it with the position and stamps the pop as its latest source. */

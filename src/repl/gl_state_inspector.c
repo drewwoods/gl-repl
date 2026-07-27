@@ -196,15 +196,14 @@ typedef struct {
     ReplGlStateChangeSource color_mask_source;
     ReplGlStateChangeSource edge_flag_source;
 
-    /* glRasterPos latches the current color into GL_CURRENT_RASTER_COLOR as
-     * well as the position, so both cells ride raster_pos_touched/_source: one
-     * command writes them together, and nothing else in the REPL command set
-     * moves either (a later glColor* changes GL_CURRENT_COLOR only).
-     * raster_color_lit records whether GL_LIGHTING was on at the latch, which
-     * decides how the report names the row — see gl_state_append_report(). */
+    /* glRasterPos latches GL_CURRENT_RASTER_COLOR as well as the position, so
+     * both cells ride raster_pos_touched/_source: one command writes them
+     * together, and nothing else in the REPL command set moves either (a later
+     * glColor* changes GL_CURRENT_COLOR only). The latched value is the current
+     * color, or the lit color when GL_LIGHTING is on — see
+     * gl_state_lit_color(). */
     float raster_pos[4];
     float raster_color[4];
-    int raster_color_lit;
     int raster_pos_touched;
     ReplGlStateChangeSource raster_pos_source;
 
@@ -643,6 +642,160 @@ static void gl_state_apply_color_material(
                           s->current_color, 4, source);
 }
 
+/* --- Fixed-function lighting (OpenGL 2.1 section 2.14.1) -------------------
+ *
+ * Evaluated for exactly one reported cell: GL_CURRENT_RASTER_COLOR, which
+ * glRasterPos latches from the *lit* color when GL_LIGHTING is on. Vertex
+ * colors need no equivalent — they are not state, so the report never quotes
+ * one.
+ *
+ * What the REPL and the generated setup can reach bounds what has to be
+ * modelled here. No command writes GL_CONSTANT / LINEAR / QUADRATIC_ATTENUATION
+ * or GL_SPOT_CUTOFF / _DIRECTION / _EXPONENT, so the distance-attenuation and
+ * spotlight factors keep GL's defaults of 1; and a raster position is a point,
+ * where two-sided lighting does not apply (it distinguishes the faces of
+ * polygons), so the front material is the one that lights it. Should a
+ * spotlight or attenuation setter ever join the command set, this is where it
+ * lands — the two factors are the multiplicand of the per-light sum below.
+ *
+ * The rest is the equation as specified: emission plus scene ambient, then per
+ * enabled light an ambient, a diffuse and a Blinn specular term, honouring the
+ * local-viewer half vector, GL_NORMALIZE, and glColorMaterial-tracked materials
+ * (already folded into materials[] at glColor time). Verified against a real
+ * driver in tests/test_gl_state_inspector_gl.c — the only reason this is worth
+ * having rather than guessing. */
+static float gl_state_vec3_dot(const float a[3], const float b[3]) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+static void gl_state_vec3_normalize(float v[3]) {
+    float len = sqrtf(gl_state_vec3_dot(v, v));
+    if (len <= 1e-20f)
+        return;
+    v[0] /= len;
+    v[1] /= len;
+    v[2] /= len;
+}
+
+/* Current normal into eye space: GL multiplies by the inverse transpose of the
+ * modelview, then normalizes only if GL_NORMALIZE is enabled. A scaled
+ * modelview with the switch off skews lighting in GL too, so normalizing here
+ * on our own initiative would model a driver nobody has. A singular modelview
+ * leaves the normal alone; GL's own result is undefined there. */
+static void gl_state_normal_to_eye(const ReplGlTrackedState *s, float out[3]) {
+    float inverse[16];
+    int row, col;
+
+    if (!gl_state_mat_inverse(s->matrix_stack[s->matrix_top], inverse)) {
+        memcpy(out, s->current_normal, 3 * sizeof(float));
+    } else {
+        /* Column-major: element (r, c) of the inverse is inverse[c * 4 + r],
+         * so its transpose reads inverse[r * 4 + c]. */
+        for (row = 0; row < 3; row++) {
+            float sum = 0.0f;
+            for (col = 0; col < 3; col++)
+                sum += inverse[row * 4 + col] * s->current_normal[col];
+            out[row] = sum;
+        }
+    }
+    if (gl_state_cap_enabled_const(s, GL_NORMALIZE))
+        gl_state_vec3_normalize(out);
+}
+
+static float gl_state_clamp01(float v) {
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+static void gl_state_lit_color(const ReplGlTrackedState *s,
+                               const float eye_pos[4], float out[4]) {
+    const ReplGlTrackedMaterialValue *mat = s->materials[0];  /* front face */
+    const float *m_ambient  = mat[REPL_GL_MAT_AMBIENT].value;
+    const float *m_diffuse  = mat[REPL_GL_MAT_DIFFUSE].value;
+    const float *m_specular = mat[REPL_GL_MAT_SPECULAR].value;
+    const float *m_emission = mat[REPL_GL_MAT_EMISSION].value;
+    float shininess = mat[REPL_GL_MAT_SHININESS].value[0];
+    float normal[3];
+    float vertex[3];
+    float to_eye[3];
+    int slot, ch;
+
+    gl_state_normal_to_eye(s, normal);
+    vertex[0] = eye_pos[0];
+    vertex[1] = eye_pos[1];
+    vertex[2] = eye_pos[2];
+    if (eye_pos[3] != 0.0f && eye_pos[3] != 1.0f) {
+        vertex[0] /= eye_pos[3];
+        vertex[1] /= eye_pos[3];
+        vertex[2] /= eye_pos[3];
+    }
+
+    /* Infinite viewer (the default) puts the eye direction at +z; a local
+     * viewer aims it at the eye, which sits at the eye-space origin. */
+    if (s->light_model_local_viewer) {
+        to_eye[0] = -vertex[0];
+        to_eye[1] = -vertex[1];
+        to_eye[2] = -vertex[2];
+        gl_state_vec3_normalize(to_eye);
+    } else {
+        to_eye[0] = to_eye[1] = 0.0f;
+        to_eye[2] = 1.0f;
+    }
+
+    for (ch = 0; ch < 3; ch++)
+        out[ch] = m_emission[ch] + m_ambient[ch] * s->light_model_ambient[ch];
+    /* GL takes the vertex alpha from the diffuse material, not from the sum. */
+    out[3] = m_diffuse[3];
+
+    for (slot = 0; slot < REPL_LIGHT_SLOT_COUNT; slot++) {
+        const ReplGlTrackedLight *light = &s->lights[slot];
+        float to_light[3];
+        float n_dot_l;
+
+        if (!gl_state_cap_enabled_const(s, (GLenum)(GL_LIGHT0 + slot)))
+            continue;
+        /* Light positions are tracked in eye coordinates (GL transforms them
+         * at glLight* time), so no further transform here. w == 0 is the
+         * directional case: the position *is* the direction to the light. */
+        if (light->position[3] == 0.0f) {
+            to_light[0] = light->position[0];
+            to_light[1] = light->position[1];
+            to_light[2] = light->position[2];
+        } else {
+            to_light[0] = light->position[0] / light->position[3] - vertex[0];
+            to_light[1] = light->position[1] / light->position[3] - vertex[1];
+            to_light[2] = light->position[2] / light->position[3] - vertex[2];
+        }
+        gl_state_vec3_normalize(to_light);
+        n_dot_l = gl_state_vec3_dot(normal, to_light);
+
+        for (ch = 0; ch < 3; ch++)
+            out[ch] += m_ambient[ch] * light->ambient[ch];
+        if (n_dot_l <= 0.0f)
+            continue;  /* facing away: no diffuse, and specular is gated on it */
+        for (ch = 0; ch < 3; ch++)
+            out[ch] += n_dot_l * m_diffuse[ch] * light->diffuse[ch];
+        {
+            float half[3];
+            float n_dot_h;
+            half[0] = to_light[0] + to_eye[0];
+            half[1] = to_light[1] + to_eye[1];
+            half[2] = to_light[2] + to_eye[2];
+            gl_state_vec3_normalize(half);
+            n_dot_h = gl_state_vec3_dot(normal, half);
+            if (n_dot_h > 0.0f) {
+                float spec = powf(n_dot_h, shininess);
+                for (ch = 0; ch < 3; ch++)
+                    out[ch] += spec * m_specular[ch] * light->specular[ch];
+            }
+        }
+    }
+
+    for (ch = 0; ch < 4; ch++)
+        out[ch] = gl_state_clamp01(out[ch]);
+}
+
 static int gl_state_execution_anchor(const GLCmd *cmd) {
     if (cmd->root_call_src_cmd_idx >= 0)
         return cmd->root_call_src_cmd_idx;
@@ -725,7 +878,6 @@ static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
     if (gl_state_mask_covers(mask, CMD_RASTER_POS3F)) {
         memcpy(s->raster_pos, snap->raster_pos, sizeof(s->raster_pos));
         memcpy(s->raster_color, snap->raster_color, sizeof(s->raster_color));
-        s->raster_color_lit = snap->raster_color_lit;
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;
     }
@@ -1149,11 +1301,18 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         s->raster_pos[3] = 1.0f;
         /* GL 2.1 2.13: the raster position is processed like a vertex, so the
          * data associated with it — here GL_CURRENT_RASTER_COLOR — is latched
-         * now and no longer follows GL_CURRENT_COLOR. With lighting on the
-         * latched value is the *lit* color; this fold does not evaluate the
-         * lighting equation, so it records the input and flags it instead. */
-        memcpy(s->raster_color, s->current_color, sizeof(s->raster_color));
-        s->raster_color_lit = gl_state_cap_enabled(s, GL_LIGHTING);
+         * now and no longer follows GL_CURRENT_COLOR. Lighting applies exactly
+         * as it would to a vertex, which is why the fold evaluates it
+         * (gl_state_lit_color) instead of quoting the current color and hoping:
+         * with GL_LIGHTING on those two are rarely the same number. */
+        if (gl_state_cap_enabled(s, GL_LIGHTING)) {
+            float eye_pos[4];
+            gl_state_mat_vec_mul(s->matrix_stack[s->matrix_top], s->raster_pos,
+                                 eye_pos);
+            gl_state_lit_color(s, eye_pos, s->raster_color);
+        } else {
+            memcpy(s->raster_color, s->current_color, sizeof(s->raster_color));
+        }
         s->raster_pos_touched = 1;
         s->raster_pos_source = source;
         break;
@@ -1724,13 +1883,10 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         /* Gated on the raster *position* latch, not on the current color:
          * glRasterPos3f is the only command that writes this cell, so before
          * the first one the initial (1,1,1,1) says nothing, and after one the
-         * row is what `label(...)` actually draws with. The "(unlit)" name
-         * marks a latch taken under GL_LIGHTING, where GL stored the lit color
-         * and the value here is the color that fed the lighting equation. */
-        gl_state_report_vec(out,
-                            s->raster_color_lit
-                                ? "GL_CURRENT_RASTER_COLOR (unlit input)"
-                                : "GL_CURRENT_RASTER_COLOR",
+         * row is what `label(...)` actually draws with — the lit color when
+         * lighting is on, which is the number a program's own glColor3f will
+         * not tell you. */
+        gl_state_report_vec(out, "GL_CURRENT_RASTER_COLOR",
                             s->raster_color, color_default, 4);
         gl_state_report_set_last_source(out, s->raster_pos_source);
     }

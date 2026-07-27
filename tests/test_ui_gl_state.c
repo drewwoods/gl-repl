@@ -287,10 +287,12 @@ static void test_gl2d_restores_state(void) {
 /* Driver oracle for the GL_CURRENT_RASTER_COLOR model in
  * gl_state_inspector.c: glRasterPos latches the current color once (a later
  * glColor no longer moves the cell), and under GL_LIGHTING the driver stores
- * the *lit* color instead of the color the program set — the case the state
- * report names "(unlit input)", since the pure fold does not run the lighting
- * equation. Identity transforms keep (0,0,0) inside the viewport, so the
- * raster position stays valid and its associated color is well defined. */
+ * the *lit* color instead of the color the program set — which is why the fold
+ * evaluates the lighting equation for that cell. Whether it evaluates it the way
+ * a driver does is the differential in test_gl_state_inspector_gl.c; this only
+ * pins the latch semantics the model rests on. Identity transforms keep (0,0,0)
+ * inside the viewport, so the raster position stays valid and its associated
+ * color is well defined. */
 static void test_raster_color_latch(void) {
     GLfloat col[4];
 

@@ -358,9 +358,13 @@ unreachable state.
 `GL_CURRENT_RASTER_COLOR` it latches from the current color at that line — the
 color `label(...)` then draws with, which a later `glColor3f` no longer moves.
 Neither row appears before the first `glRasterPos3f`, since nothing else writes
-those cells. With lighting on OpenGL stores the *lit* color there instead; the
-inspector does not evaluate the lighting equation, so the row is labelled
-`(unlit input)` to say it is showing the color that fed it.
+those cells. With lighting on, OpenGL lights the raster position like a vertex
+and stores that result, so the inspector evaluates the lighting equation for
+this row — with `glEnable(GL_LIGHTING)` the value it shows is the lit color your
+text will actually be drawn in, which is generally *not* the `glColor3f` above
+it. (Two caveats it cannot show: a raster position clipped outside the view
+leaves the value undefined in OpenGL, and some drivers compute this cell
+incorrectly — see `tests/test_gl_state_inspector_gl.c` for the two that do.)
 
 Modelview matrices use four aligned rows. Light positions are shown in both
 world and eye coordinates when available. Use the mouse wheel for a long
