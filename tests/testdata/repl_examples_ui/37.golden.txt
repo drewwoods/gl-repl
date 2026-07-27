@@ -104,6 +104,19 @@ void display(void) {
 --- source ---
   static float spin; // @tune  mask rotation, degrees
 
+  // The window. Drawn twice - once as a stamp, once as an outline - so it
+  // lives in a func and both passes are guaranteed to agree.
+  maskWindow() {
+    glPushMatrix();
+      glRotatef(spin, 0, 0, 1);
+      glBegin(GL_QUADS);
+        glVertex3f(-0.75, -0.75, 0);
+        glVertex3f(0.75, -0.75, 0);
+        glVertex3f(0.75, 0.75, 0);
+        glVertex3f(-0.75, 0.75, 0);
+      glEnd();
+    glPopMatrix();
+  }
 
   // Stencil masking, minimum viable. Three passes over one shape:
   //   1. stamp it into the stencil buffer only - no color, no depth
@@ -124,20 +137,6 @@ void display(void) {
   glEnable(GL_STENCIL_TEST);
 
   spin = t * 20;
-
-  // The window. Drawn twice - once as a stamp, once as an outline - so it
-  // lives in a func and both passes are guaranteed to agree.
-  maskWindow() {
-    glPushMatrix();
-      glRotatef(spin, 0, 0, 1);
-      glBegin(GL_QUADS);
-        glVertex3f(-0.75, -0.75, 0);
-        glVertex3f(0.75, -0.75, 0);
-        glVertex3f(0.75, 0.75, 0);
-        glVertex3f(-0.75, 0.75, 0);
-      glEnd();
-    glPopMatrix();
-  }
 
   // --- Pass 1: stamp -------------------------------------------------
   // Writes are off for color and depth, so the quad leaves no trace in

@@ -472,7 +472,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-stencil-mask -->
 <img src="images/showcase/stencil-mask.gif" alt="A rotating stencil window revealing a teapot" width="100%">
 
-**[Stencil mask window](../examples/scenes/stencil_mask_window_glstencilop.c)**
+**[Stencil mask window](../examples/scenes/stencil_mask_window_glstencilop.glr)**
 <br><sub>three passes with `glStencilFunc`, `glStencilMask`, and `glStencilOp`</sub>
 
 </td>
@@ -524,7 +524,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-pulse-bars -->
 <img src="images/showcase/pulse-bars.gif" alt="A pulse moving through a row of easing bars" width="100%">
 
-**[Pulse bars (easing)](../examples/scenes/pulse_bars_easing.c)**
+**[Pulse bars (easing)](../examples/scenes/pulse_bars_easing.glr)**
 <br><sub>a sine-driven bar pulse with `smoothstep` falloff and `lerp`d height</sub>
 
 </td>
