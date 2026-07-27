@@ -301,6 +301,7 @@ static UiVariablePanelView build_panel_view(void) {
     v.visible  = g_panel_on && variable_panel_visible();
     v.window_w = g_window_w;
     v.window_h = g_window_h;
+    v.collapsed = variable_panel_collapsed();
     ui_variable_panel_size(g_row_count, v.collapsed, &pw, &ph);
     v.panel_x = g_window_w - pw - 8;
     v.panel_y = 8;
@@ -625,6 +626,11 @@ static void mouse_func(int button, int state, int x, int y) {
                 int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
                 variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
                 g_slider_drag = 1;
+                return;
+            } else if (hit.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE &&
+                       button == GLUT_LEFT_BUTTON) {
+                variable_panel_toggle_collapsed();
+                glutPostRedisplay();
                 return;
             }
         }
