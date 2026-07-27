@@ -42,6 +42,7 @@ typedef struct {
 static OverlayLayoutState g_ovl;  /* zero-init: never ticked, band 0 */
 
 UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
+                                           int var_collapsed,
                                            int profile_mode,
                                            unsigned long long profile_collapsed_sections,
                                            int memory_mode,
@@ -54,7 +55,7 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
         ui_layout_code_panel_layout_mode() == CODE_PANEL_LAYOUT_TOP;
 
     in.panels[UI_OVERLAY_PANEL_VARIABLE].visible = (var_visible != 0);
-    ui_variable_panel_size(var_count,
+    ui_variable_panel_size(var_count, var_collapsed,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].w,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].h);
 

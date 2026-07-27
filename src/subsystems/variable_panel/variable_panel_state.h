@@ -25,6 +25,8 @@
 
 typedef struct {
     int   visible;
+    int   collapsed; /* 1 = only the title bar is shown (mouse-only toggle,
+                      * no keymap slot) */
 } VariablePanelViewState;
 
 /* Snapshot-side view of the slider-drag transaction. Lets the renderer
@@ -82,6 +84,13 @@ VariablePanelDragState *variable_panel_drag_mut(void);
 /* Convenience wrappers. */
 int  variable_panel_visible(void);
 void variable_panel_set_visible(int visible);
+
+/* Collapse state: 1 = only the title bar renders (rows and drag hit-testing
+ * are unavailable while collapsed). Mouse-only — toggled by clicking the
+ * title bar's chip, no keymap binding. */
+int  variable_panel_collapsed(void);
+void variable_panel_set_collapsed(int collapsed);
+void variable_panel_toggle_collapsed(void);
 
 /* --- Drag transaction handler API ---
  *

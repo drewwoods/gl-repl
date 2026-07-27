@@ -118,10 +118,24 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_HANDLE_PAD_BOTTOM 4      /* bottom padding of handle from row bounds */
 #define VAR_NAME_MAX_PIXELS ((VAR_PANEL_W) / (VAR_NAME_COL_WIDTH_DENOM))
 #define VAR_NAME_MAX_CHARS  ((VAR_NAME_MAX_PIXELS) / (FONT_SMALL_W))
+/* Collapse chip: right-aligned "[-]"/"[+]" in the title bar, mirroring the
+ * gl-state popup's details chip and the tour HUD's collapse affordance. */
+#define VAR_COLLAPSE_CHIP_CHARS 3
+/* Title text sits this far below the panel's padded top edge — it is the
+ * *baseline* offset, since gl2d_draw_string rasters from the baseline. */
+#define VAR_TITLE_BASELINE_PAD 4
+/* Baseline-relative glyph box of FONT_SMALL (8x13): descent below, the rest
+ * above. The chip hit cell is derived from this, not from VAR_TITLE_H — the
+ * nominal title row extends well below the drawn glyphs, and sizing the cell
+ * to the row put the clickable area under the visible "[-]". */
+#define VAR_FONT_SMALL_DESCENT 2
+/* Clickable slop around the chip's glyph box. */
+#define VAR_COLLAPSE_CHIP_SLOP 3
 
-/* Panel size for a row count (clamped). Pure; no view needed. */
-void ui_variable_panel_size(int var_count, int *pw, int *ph) {
-    int count = clamp_var_count(var_count);
+/* Panel size for a row count (clamped) and collapse state. Pure; no view
+ * needed. Collapsed drops the row area entirely, leaving just the title. */
+void ui_variable_panel_size(int var_count, int collapsed, int *pw, int *ph) {
+    int count = collapsed ? 0 : clamp_var_count(var_count);
     if (pw) *pw = VAR_PANEL_W;
     if (ph) *ph = VAR_TITLE_H + count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
 }
@@ -132,14 +146,15 @@ void ui_variable_panel_rect(const UiVariablePanelView *view,
                             int *px, int *py, int *pw, int *ph) {
     if (px) *px = view->panel_x;
     if (py) *py = view->panel_y;
-    ui_variable_panel_size(view->var_count, pw, ph);
+    ui_variable_panel_size(view->var_count, view->collapsed, pw, ph);
 }
 
-/* Return 1 if window coord (gx, gy) is in the panel; sets *out_row. */
+/* Return 1 if window coord (gx, gy) is in the panel; sets *out_row.
+ * Collapsed panels have no rows to hit. */
 int ui_variable_panel_hit_row(const UiVariablePanelView *view,
                               int gx, int gy, int *out_row) {
     int px, py, pw, ph;
-    int count = clamp_var_count(view->var_count);
+    int count = view->collapsed ? 0 : clamp_var_count(view->var_count);
     ui_variable_panel_rect(view, &px, &py, &pw, &ph);
     int ry = view->window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
@@ -150,16 +165,57 @@ int ui_variable_panel_hit_row(const UiVariablePanelView *view,
     return 1;
 }
 
+/* Title-text baseline (window coords, y-up) for a resolved panel rect.
+ * Shared by the title string, the chip string, and the chip hit cell. */
+static int var_panel_title_baseline(int py, int ph) {
+    return py + ph - VAR_PANEL_PAD - VAR_TITLE_BASELINE_PAD;
+}
+
+/* Collapse/expand chip cell (window coords, y-up), right-aligned on the
+ * title row and vertically bounded by the chip's glyph box plus slop.
+ * Shared by the hit-test and the renderer so they always agree. */
+static void var_panel_collapse_chip_rect(const UiVariablePanelView *view,
+                                         int *x0, int *x1, int *y0, int *y1) {
+    int px, py, pw, ph, baseline;
+    ui_variable_panel_rect(view, &px, &py, &pw, &ph);
+    baseline = var_panel_title_baseline(py, ph);
+    *x1 = px + pw - VAR_PANEL_PAD;
+    *x0 = *x1 - VAR_COLLAPSE_CHIP_CHARS * FONT_SMALL_W;
+    *y0 = baseline - VAR_FONT_SMALL_DESCENT - VAR_COLLAPSE_CHIP_SLOP;
+    *y1 = baseline + (FONT_SMALL_H - VAR_FONT_SMALL_DESCENT) +
+          VAR_COLLAPSE_CHIP_SLOP;
+    /* Never let the cell reach past the panel border — clicks outside the
+     * panel belong to whatever overlay is there, not to the chip. */
+    if (*y1 > py + ph) *y1 = py + ph;
+}
+
+int ui_variable_panel_hit_test_collapse_toggle(const UiVariablePanelView *view,
+                                               int mx, int my) {
+    int x0, x1, y0, y1, y_up;
+    if (!view->visible || view->window_h <= 0) return 0;
+    var_panel_collapse_chip_rect(view, &x0, &x1, &y0, &y1);
+    y_up = view->window_h - my;
+    return mx >= x0 && mx <= x1 && y_up >= y0 && y_up <= y1;
+}
+
 UiHit ui_variable_panel_hit_test(const UiVariablePanelView *view, int mx, int my) {
     UiHit h = ui_hit_none();
     if (!view->visible) return h;
     if (view->window_h <= 0) return h;
-    int row = -1;
-    if (!ui_variable_panel_hit_row(view, mx, my, &row)) return h;
 
     int px, py, pw, ph;
     ui_variable_panel_rect(view, &px, &py, &pw, &ph);
     int gl_y = view->window_h - my;
+
+    if (ui_variable_panel_hit_test_collapse_toggle(view, mx, my)) {
+        h.kind = UI_HIT_VARIABLE_COLLAPSE_TOGGLE;
+        h.local_x = (float)(mx - px);
+        h.local_y = (float)(gl_y - py);
+        return h;
+    }
+
+    int row = -1;
+    if (!ui_variable_panel_hit_row(view, mx, my, &row)) return h;
 
     h.kind = UI_HIT_VARIABLE_SLIDER;
     h.item_idx = row;
@@ -172,7 +228,7 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
     if (!view->visible) return;
 
     const UiVariable *vars = view->vars;
-    int var_count = vars ? clamp_var_count(view->var_count) : 0;
+    int var_count = (vars && !view->collapsed) ? clamp_var_count(view->var_count) : 0;
 
     int px, py, pw, ph;
     ui_variable_panel_rect(view, &px, &py, &pw, &ph);
@@ -186,10 +242,26 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
                      UI_TOK_SUNKEN, 0.88f, UI_TOK_BORDER, 0.75f);
 
     /* Title */
+    int title_baseline = var_panel_title_baseline(py, ph);
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    gl2d_draw_string((float)(px + VAR_PANEL_PAD),
-                (float)(py + ph - VAR_PANEL_PAD - 4),
+    gl2d_draw_string((float)(px + VAR_PANEL_PAD), (float)title_baseline,
                 "Variables (declared)", FONT_SMALL);
+
+    /* Collapse/expand chip: "[-]" collapses to just this title bar, "[+]"
+     * restores the slider rows. Mouse-only — there is no keymap slot for it. */
+    {
+        int chip_x0, chip_x1, chip_y0, chip_y1;
+        var_panel_collapse_chip_rect(view, &chip_x0, &chip_x1, &chip_y0, &chip_y1);
+        ui_clr(UI_TOK_TEXT_SECTION);
+        gl2d_draw_string((float)chip_x0, (float)title_baseline,
+                         view->collapsed ? "[+]" : "[-]", FONT_SMALL);
+    }
+
+    if (view->collapsed) {
+        glDisable(GL_BLEND);
+        gl2d_end();
+        return;
+    }
 
     /* Column offsets within the panel - sized for multi-char var names */
     int max_name_len = 1;

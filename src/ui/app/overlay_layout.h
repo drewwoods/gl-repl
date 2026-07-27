@@ -53,14 +53,17 @@ typedef struct {
 } UiOverlayLayoutIn;
 
 /* Collect solver inputs from the live layout (scene rect, status bar,
- * code-panel side) plus the caller-supplied panel states. `profile_mode` /
- * `memory_mode` take UiProfilePanelMode / UiMemoryPanelMode values (passed
- * as int so this header stays include-free); `profile_collapsed_sections`
- * is the DETAILS-tree presentation bitmask. Panel sizes are resolved via
- * the panels' own size queries. `band_h` is the replay-HUD reservation —
- * the controller computes it per tick; other callers forward
+ * code-panel side) plus the caller-supplied panel states. `var_collapsed`
+ * is the variable panel's own title-bar-only fold (mouse-only toggle, no
+ * keymap slot). `profile_mode` / `memory_mode` take UiProfilePanelMode /
+ * UiMemoryPanelMode values (passed as int so this header stays
+ * include-free); `profile_collapsed_sections` is the DETAILS-tree
+ * presentation bitmask. Panel sizes are resolved via the panels' own size
+ * queries. `band_h` is the replay-HUD reservation — the controller
+ * computes it per tick; other callers forward
  * ui_overlay_layout_last_band_h(). */
 UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
+                                           int var_collapsed,
                                            int profile_mode,
                                            unsigned long long profile_collapsed_sections,
                                            int memory_mode,

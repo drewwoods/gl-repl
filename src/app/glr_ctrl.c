@@ -2037,6 +2037,7 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
         const UiRenderSnapshot *snap) {
     return ui_overlay_layout_inputs(snap->variable_panel.visible,
                                     snap->variable_panel_vars.count,
+                                    snap->variable_panel.collapsed,
                                     snap->profile_panel.mode,
                                     snap->profile_panel.collapsed_sections,
                                     snap->memory_panel.mode,
@@ -3791,6 +3792,7 @@ void glr_ctrl_tick(void) {
         UiOverlayLayoutIn in = ui_overlay_layout_inputs(
             variable_panel_visible(),
             repl_eval_predef_view().count,
+            variable_panel_collapsed(),
             ui_state_profile_panel().mode,
             ui_state_profile_panel().collapsed_sections,
             ui_state_memory_panel().mode,

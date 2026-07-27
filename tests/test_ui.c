@@ -948,6 +948,26 @@ static void test_ui_variable_panel_hit_test(void) {
     /* Click outside the panel rect -> NONE. */
     UiHit h_out = vp_hit_test(1, 0, 0);
     ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
+
+    /* The collapse chip's hit cell must cover the glyphs that are actually
+     * drawn — the top text row of the panel, right-aligned — and not the
+     * empty lower part of the nominal title band. Sizing the cell to
+     * VAR_TITLE_H once put the clickable area below the visible "[-]". */
+    int chip_mx = px + pw - 10;               /* inside the 3-char chip column */
+    int glyph_my = ui_state_viewport().window_h - (py + ph - 8);
+    UiHit h_chip = vp_hit_test(1, chip_mx, glyph_my);
+    ASSERT_TRUE("chip glyph row hits collapse toggle",
+                h_chip.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE);
+
+    int below_my = ui_state_viewport().window_h - (py + ph - 24);
+    UiHit h_below = vp_hit_test(1, chip_mx, below_my);
+    ASSERT_TRUE("below the chip glyphs is not the toggle",
+                h_below.kind != UI_HIT_VARIABLE_COLLAPSE_TOGGLE);
+
+    /* Left of the chip column, on the title text itself, is not the toggle. */
+    UiHit h_title = vp_hit_test(1, px + 10, glyph_my);
+    ASSERT_TRUE("title text is not the toggle",
+                h_title.kind != UI_HIT_VARIABLE_COLLAPSE_TOGGLE);
 }
 
 /* Verify ui_panels_hit_test routes to the floating-overlay

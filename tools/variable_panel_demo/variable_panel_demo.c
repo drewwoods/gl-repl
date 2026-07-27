@@ -69,6 +69,7 @@ static UiVariablePanelView demo_build_view(void) {
     }
     UiVariablePanelView v;
     v.visible        = variable_panel_visible();
+    v.collapsed      = variable_panel_collapsed();
     v.window_w       = g_window_w;
     v.window_h       = g_window_h;
     /* Standalone placement: pin to the window's bottom-right. The full app
@@ -77,7 +78,7 @@ static UiVariablePanelView demo_build_view(void) {
      * position either way. */
     {
         int pw, ph;
-        ui_variable_panel_size(DEMO_VAR_COUNT, &pw, &ph);
+        ui_variable_panel_size(DEMO_VAR_COUNT, v.collapsed, &pw, &ph);
         v.panel_x = g_window_w - pw - 8;
         v.panel_y = 8;
     }
@@ -154,6 +155,9 @@ static void mouse_func(int button, int state, int x, int y) {
         if (hit.kind == UI_HIT_VARIABLE_SLIDER) {
             int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
             variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
+        } else if (hit.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE &&
+                  button == GLUT_LEFT_BUTTON) {
+            variable_panel_toggle_collapsed();
         }
     } else if (state == GLUT_UP) {
         variable_panel_handle_drag_reset();

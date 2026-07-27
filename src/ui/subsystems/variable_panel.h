@@ -19,11 +19,12 @@
 #include "config.h"     /* MAX_PREDEF_VARS */
 #include "ui/core/hit.h"
 
-/* Hit kind this renderer emits. Owned here (not in ui/app/hit.h) as a fixed
- * offset off UI_HIT_CORE_COUNT, in a reserved subsystem range clear of
- * ui/app/hit.h's contiguous app kinds, so the renderer names it without
+/* Hit kinds this renderer emits. Owned here (not in ui/app/hit.h) as fixed
+ * offsets off UI_HIT_CORE_COUNT, in a reserved subsystem range clear of
+ * ui/app/hit.h's contiguous app kinds, so the renderer names them without
  * depending on ui/app. UiHit.kind is an int, so the ranges coexist. */
 enum { UI_HIT_VARIABLE_SLIDER = UI_HIT_CORE_COUNT + 64 };
+enum { UI_HIT_VARIABLE_COLLAPSE_TOGGLE = UI_HIT_CORE_COUNT + 67 };
 
 /* Max slider rows the panel will draw. Mirrors the predefined-variable
  * table size from the global REPL variable-table contract. */
@@ -61,6 +62,8 @@ typedef struct {
     int   drag_active_var;     /* row being dragged, -1 when idle */
     int   drag_coarse;         /* 1 = coarse (right-click) drag (only meaningful
                                 * when dragging) */
+    int   collapsed;           /* 1 = only the title bar is shown; slider rows
+                                * and the value/track columns are hidden */
 } UiVariablePanelView;
 
 /* Render the variable panel with all declared variables and current values.
@@ -68,9 +71,11 @@ typedef struct {
  * skipped). Called once per frame if the variable panel is enabled. */
 void ui_variable_panel_render(const UiVariablePanelView *view);
 
-/* Panel size for a declared-variable count (clamped to the row cap). Pure;
- * the app's overlay layout engine uses it to size the panel's stack slot. */
-void ui_variable_panel_size(int var_count, int *pw, int *ph);
+/* Panel size for a declared-variable count (clamped to the row cap) and
+ * collapse state. Pure; the app's overlay layout engine uses it to size the
+ * panel's stack slot. Collapsed drops the row area entirely, leaving just
+ * the title bar. */
+void ui_variable_panel_size(int var_count, int collapsed, int *pw, int *ph);
 
 /* Query the variable panel's bounding rectangle (window/screen coordinates).
  * Position comes from the view's resolved panel_x/panel_y; size from the
@@ -88,5 +93,13 @@ int  ui_variable_panel_hit_row(const UiVariablePanelView *view,
  * UI_HIT_VARIABLE_SLIDER (item_idx = row) on a slider row; UI_HIT_NONE if the
  * panel is hidden or the pointer is outside it. Reads only; never mutates. */
 UiHit ui_variable_panel_hit_test(const UiVariablePanelView *view, int mx, int my);
+
+/* Pure hit-test for the title bar's collapse/expand chip. Returns 1 (and
+ * classifies the click as UI_HIT_VARIABLE_COLLAPSE_TOGGLE through
+ * ui_variable_panel_hit_test) when (mx, my) lands on the chip; 0 otherwise.
+ * Exposed separately so callers that already resolved a view can probe the
+ * chip without redoing ui_variable_panel_hit_test's full dispatch. */
+int  ui_variable_panel_hit_test_collapse_toggle(const UiVariablePanelView *view,
+                                                int mx, int my);
 
 #endif /* UI_VARIABLE_PANEL_H */

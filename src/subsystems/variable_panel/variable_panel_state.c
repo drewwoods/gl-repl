@@ -54,6 +54,18 @@ void variable_panel_set_visible(int visible) {
     g_variable_panel.view.visible = visible ? 1 : 0;
 }
 
+int variable_panel_collapsed(void) {
+    return g_variable_panel.view.collapsed;
+}
+
+void variable_panel_set_collapsed(int collapsed) {
+    g_variable_panel.view.collapsed = collapsed ? 1 : 0;
+}
+
+void variable_panel_toggle_collapsed(void) {
+    g_variable_panel.view.collapsed = !g_variable_panel.view.collapsed;
+}
+
 /* Drag transaction handlers. The pure-pass-through query / handler
  * wrappers (variable_panel_drag_active / _active_var / _coarse /
  * variable_panel_handle_drag_begin / _motion / _reset) live in

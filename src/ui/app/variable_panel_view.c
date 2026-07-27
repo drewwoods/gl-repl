@@ -21,12 +21,14 @@ STATIC_ASSERT(UI_VARIABLE_PANEL_MAX_ROWS == MAX_PREDEF_VARS,
 UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap) {
     UiVariablePanelView v;
     v.visible        = snap->variable_panel.visible;
+    v.collapsed      = snap->variable_panel.collapsed;
     v.window_w       = snap->viewport.window_w;
     v.window_h       = snap->viewport.window_h;
     {
         UiOverlayLayoutIn in = ui_overlay_layout_inputs(
             snap->variable_panel.visible,
             snap->variable_panel_vars.count,
+            snap->variable_panel.collapsed,
             snap->profile_panel.mode,
             snap->profile_panel.collapsed_sections,
             snap->memory_panel.mode,
@@ -45,12 +47,14 @@ UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
     UiVariablePanelView v;
     UiViewportState vp = ui_state_viewport();
     v.visible        = variable_panel_visible();
+    v.collapsed      = variable_panel_collapsed();
     v.window_w       = vp.window_w;
     v.window_h       = vp.window_h;
     {
         UiOverlayLayoutIn in = ui_overlay_layout_inputs(
             variable_panel_visible(),
             var_count,
+            variable_panel_collapsed(),
             ui_state_profile_panel().mode,
             ui_state_profile_panel().collapsed_sections,
             ui_state_memory_panel().mode,
