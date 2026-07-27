@@ -493,6 +493,16 @@ static void import_cam_parser_reset(void) {
         bridge->reset_import();
 }
 
+/* Let the bridge promote a fully-parsed `// camera` block to the scene's
+ * camera default. Import writes camera state line by line into live state;
+ * without this a loaded file's authored pose would be forgotten the moment
+ * the user asked to reset the camera. */
+static void import_cam_adopt_scene_default(void) {
+    const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
+    if (bridge && bridge->adopt_import_scene_default)
+        bridge->adopt_import_scene_default();
+}
+
 static int import_parse_cam_line(const char *text) {
     const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
     if (!bridge || !bridge->try_consume_import_line)
@@ -2678,6 +2688,7 @@ static int import_finish_load(ImportState *state,
     }
 
     if (state->loaded > 0) {
+        import_cam_adopt_scene_default();
         repl_source_scope_depth_cache_invalidate();
         repl_reformat_program();
         /* Publish the post-import cursor to the host. Without this,

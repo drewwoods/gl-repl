@@ -763,7 +763,7 @@ scroll-to-line, tutorial teardown, edit-line get/set, cursor parking,
 completion clear/update, input read, and time-playing toggle.
 
 The export path uses the same pattern with dedicated bridges
-([`ReplExportLightBridge`](export.h#L169), cfg/camera bridges) so [`export.c`](export.c) can emit
+([`ReplExportLightBridge`](export.h#L175), cfg/camera bridges) so [`export.c`](export.c) can emit
 live light/config/camera state without including any render3d or app
 header — verified by `check-repl-export-via-bridge`.
 

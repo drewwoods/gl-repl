@@ -100,6 +100,12 @@ typedef struct {
     int  (*try_consume_import_line)(const char *line);
     /* Reset import-side parser state at the start of each load. */
     void (*reset_import)(void);
+    /* Called once at the end of a successful import: if the load
+     * streamed a complete camera block, the bridge adopts the
+     * resulting pose as the scene's camera default (what a "reset
+     * camera" action returns to). A no-op when no complete block was
+     * seen, so a header-less file keeps the host's global defaults. */
+    void (*adopt_import_scene_default)(void);
     /* Apply a validated example camera block. This is separate from
      * import-line consumption so app bridges can animate example
      * switches while save/workspace imports still restore immediately. */

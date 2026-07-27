@@ -183,6 +183,22 @@ static void cam_reset_import(void) {
     g_cam_parse_state = 0;
 }
 
+/* End-of-import hook: a file whose `// camera` block was fully consumed
+ * has an authored pose, so that pose — not the built-in defaults — is
+ * what "Reset camera" should return to. Example loads get this from
+ * apply_example_block; file loads stream the same four lines through
+ * try_consume_import_line, which writes live state directly and would
+ * otherwise leave no scene default behind. Gated on a complete block
+ * (state 4) so a partial or absent header keeps the global defaults. */
+static void cam_adopt_import_scene_default(void) {
+    GlrCameraState live;
+
+    if (g_cam_parse_state < 4)
+        return;
+    glr_camera_capture(&live);
+    glr_camera_set_scene_default(&live);
+}
+
 static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
     if (!block || !block->present)
         return 0;
@@ -256,6 +272,7 @@ static const ReplExportCameraBridge g_glr_export_camera_bridge = {
     .fill_save_preamble         = cam_format_save_preamble,
     .try_consume_import_line    = cam_try_consume_import_line,
     .reset_import               = cam_reset_import,
+    .adopt_import_scene_default = cam_adopt_import_scene_default,
     .apply_example_block        = cam_apply_example_block,
     .apply_capture_block_snap   = cam_apply_capture_block_snap,
 };

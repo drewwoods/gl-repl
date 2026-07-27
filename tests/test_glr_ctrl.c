@@ -2947,6 +2947,72 @@ static void test_view_mode_restore_honors_pending_camera_reset(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+/* A file loaded from disk carries its authored `// camera` block just like a
+ * built-in example does, so "Reset camera" (Ctrl+Shift+C) must return to that
+ * pose — not to the global built-in defaults. Import streams the block through
+ * the camera bridge line by line; the end-of-import hook is what turns the
+ * result into the scene default. */
+static void test_import_camera_block_becomes_scene_default(void) {
+    static const char *const k_lines[] = {
+        "// camera",
+        "glTranslatef(0.0f, 0.0f, -15.0f);",
+        "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);",
+        "glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);",
+        "glTranslatef(-1.0f, -2.0f, -3.0f);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glColor3f(1.0f, 0.0f, 0.0f);",
+        NULL
+    };
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl imported camera block is the reset target ---\n");
+    glr_ctrl_reset_all();
+
+    ASSERT_INT("scene file imports",
+               repl_export_load_from_lines(k_lines, "cam-default.glr", NULL), 1);
+
+    /* Fly somewhere else, then reset. */
+    glr_camera_set(45.0f, 90.0f, 12.0f, 7.0f, -2.0f, 3.0f, 0.0f);
+    glr_camera_ease_to_default();
+    for (int i = 0; i < 600 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+
+    cam = glr_camera();
+    ASSERT_TRUE("reset returns to the file's rx", fabsf(cam.rx - 26.0f) < 0.05f);
+    ASSERT_TRUE("reset returns to the file's ry", fabsf(cam.ry + 20.0f) < 0.05f);
+    ASSERT_TRUE("reset returns to the file's dist", fabsf(cam.dist - 15.0f) < 0.05f);
+    ASSERT_TRUE("reset returns to the file's tx", fabsf(cam.tx - 1.0f) < 0.05f);
+    ASSERT_TRUE("reset returns to the file's ty", fabsf(cam.ty - 2.0f) < 0.05f);
+    ASSERT_TRUE("reset returns to the file's tz", fabsf(cam.tz - 3.0f) < 0.05f);
+}
+
+/* A file with no `// camera` header has no authored pose, so reset must keep
+ * using the built-in defaults. */
+static void test_import_without_camera_block_keeps_global_default(void) {
+    static const char *const k_lines[] = {
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glColor3f(0.0f, 1.0f, 0.0f);",
+        NULL
+    };
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl header-less import keeps global camera default ---\n");
+    glr_ctrl_reset_all();
+
+    ASSERT_INT("header-less scene imports",
+               repl_export_load_from_lines(k_lines, "no-cam.glr", NULL), 1);
+
+    glr_camera_set(45.0f, 90.0f, 12.0f, 7.0f, -2.0f, 3.0f, 0.0f);
+    glr_camera_ease_to_default();
+    for (int i = 0; i < 600 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+
+    cam = glr_camera();
+    ASSERT_TRUE("reset falls back to default rx", fabsf(cam.rx - 20.0f) < 0.05f);
+    ASSERT_TRUE("reset falls back to default ry", fabsf(cam.ry - 30.0f) < 0.05f);
+    ASSERT_TRUE("reset falls back to default dist", fabsf(cam.dist - 5.0f) < 0.05f);
+}
+
 /* Cycling 2D-example -> 3D-example-A -> 3D-example-B fast: example A
  * starts a 2D->3D projection blend; example B loads mid-blend. The
  * saved-3D snapshot (consumed by start_camera_to_3d when the blend ends)
@@ -4921,6 +4987,8 @@ int main(void) {
     test_projection_toggle_free_camera();
     test_view_mode_2d_honors_pending_camera_ease();
     test_view_mode_restore_honors_pending_camera_reset();
+    test_import_camera_block_becomes_scene_default();
+    test_import_without_camera_block_keeps_global_default();
     test_view_mode_3d_restore_tracks_example_loaded_midblend();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();

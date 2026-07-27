@@ -1458,6 +1458,9 @@ taller than the window):
 - **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
   Light indicators
 - **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
+  (returns to the scene's authored `// camera` pose — from a built-in example
+  or a loaded file — and to the built-in defaults only when the scene has no
+  camera header)
 - **GEOMETRY** — Wireframe, Winding, Depth view, Stencil view, Auto-normals
 - **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
   Vertex outline style, Normal vectors, Polygon highlight, Transform guides
