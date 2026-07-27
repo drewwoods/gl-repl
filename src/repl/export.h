@@ -254,6 +254,16 @@ int repl_export_save_output(const char *filename, SourceTextView text,
  * ReplExportLayout passed through to the exporter as opaque integers. */
 void repl_save_default_output(const ReplExportLayout *layout);
 
+/* Write the scene as a `.glr` source file — the authoring format built-in
+ * examples ship in (see src/repl/export_glr.c), not a compilable C program.
+ * Content is the non-default `@cfg` rows, the `// camera` block, and the
+ * document text; nothing else. Symmetric with the example loader, so the
+ * output can be dropped into examples/scenes/ and referenced from
+ * examples/catalog.ini as-is. Returns 1 on success, 0 on write failure
+ * (status message set either way). No ReplExportLayout: the format carries
+ * no viewport-dependent scaffold. */
+int repl_export_save_glr(const char *filename, SourceTextView text);
+
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);
 

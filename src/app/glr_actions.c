@@ -15,6 +15,7 @@
 #include "app/glr_ctrl_export.h"
 #include "app/glr_mesh_export.h"     /* glr_export_mesh_ply (File -> Export .ply) */
 #include "app/glr_state.h"           /* presentation/render storage */
+#include "app/glr_defaults.h"        /* CFG_DEFAULT_* (scene-subset baseline) */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
@@ -566,6 +567,56 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     }
 }
 
+/* Default value of every cfg_key_in_scene_subset() key — the baseline
+ * glr_ctrl_reset_example_chrome() lands on before a scene's own leading
+ * `@cfg` is applied. Values come from the CFG_DEFAULT_* macros in
+ * glr_defaults.h (the single source of truth), never from literals, so a
+ * default change moves both the reset and this table together.
+ *
+ * Keep it complete against cfg_key_in_scene_subset(): a missing row makes
+ * the .glr writer emit that slug unconditionally rather than only when it
+ * differs, which is degraded output, not a crash.
+ * test_glr_actions.c pins the coverage. */
+typedef struct {
+    GlrConfigKey key;
+    int          value;
+} GlrCfgSceneDefault;
+
+static const GlrCfgSceneDefault k_cfg_scene_defaults[] = {
+    { GLR_CONFIG_WIREFRAME,            CFG_DEFAULT_WIREFRAME },
+    { GLR_CONFIG_GRID_THEME,           CFG_DEFAULT_GRID_THEME },
+    { GLR_CONFIG_GRID_MAJOR,           CFG_DEFAULT_GRID_MAJOR_IDX },
+    { GLR_CONFIG_GRID_EXTENT,          CFG_DEFAULT_GRID_EXTENT_IDX },
+    { GLR_CONFIG_GRID_BRIGHTNESS,      CFG_DEFAULT_GRID_BRIGHTNESS_IDX },
+    { GLR_CONFIG_AXES_THEME,           CFG_DEFAULT_AXES_THEME },
+    { GLR_CONFIG_VERTEX_LABELS,        CFG_DEFAULT_VERTEX_LABELS },
+    { GLR_CONFIG_OVERLAY_SCOPE,        CFG_DEFAULT_OVERLAY_SCOPE },
+    { GLR_CONFIG_NORMAL_VECTORS,       CFG_DEFAULT_NORMAL_VECTORS },
+    { GLR_CONFIG_VERTEX_OUTLINES,      CFG_DEFAULT_VERTEX_OUTLINES },
+    { GLR_CONFIG_VERTEX_OUTLINE_STYLE, CFG_DEFAULT_VERTEX_OUTLINE_STYLE },
+    { GLR_CONFIG_VERTEX_POINTS,        CFG_DEFAULT_VERTEX_POINTS },
+    { GLR_CONFIG_POLY_HIGHLIGHT,       CFG_DEFAULT_HIGHLIGHT_POLY },
+    { GLR_CONFIG_XFORM_GUIDE_MODE,     CFG_DEFAULT_XFORM_GUIDE_MODE },
+    { GLR_CONFIG_LIGHT_INDICATORS,     CFG_DEFAULT_LIGHT_INDICATORS },
+    { GLR_CONFIG_LIGHT_THEME,          CFG_DEFAULT_LIGHT_THEME },
+    { GLR_CONFIG_BACKDROP,             CFG_DEFAULT_BACKDROP_MODE },
+    { GLR_CONFIG_ORTHO_MODE,           CFG_DEFAULT_ORTHO_MODE },
+    { GLR_CONFIG_PROJECTION,           CFG_DEFAULT_PROJECTION },
+    { GLR_CONFIG_CAMERA_ROTATE,        CFG_DEFAULT_CAMERA_ROTATE },
+    { GLR_CONFIG_VARIABLE_PANEL,       CFG_DEFAULT_VARIABLE_PANEL },
+};
+
+static int cfg_scene_default_for_key(GlrConfigKey key, int *out_value) {
+    for (int i = 0; i < (int)ARRAY_LEN(k_cfg_scene_defaults); i++) {
+        if (k_cfg_scene_defaults[i].key != key)
+            continue;
+        if (out_value)
+            *out_value = k_cfg_scene_defaults[i].value;
+        return 1;
+    }
+    return 0;
+}
+
 static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
                                                   char *slug_buf,
                                                   size_t slug_buf_sz) {
@@ -909,6 +960,26 @@ static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
     }
 }
 
+/* Same rows, same order as glr_export_cfg_fill_scene_subset, but carrying
+ * each slug's default instead of its live value. A subset key with no
+ * k_cfg_scene_defaults row is simply absent from the bag; the .glr writer
+ * then treats it as "no known default" and emits it. */
+static void glr_export_cfg_fill_scene_defaults(ReplConfigBag *cfg) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        int def_value = 0;
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        if (!cfg_key_in_scene_subset(item->key))                  continue;
+        if (!cfg_scene_default_for_key(item->key, &def_value))    continue;
+        char val_str[REPL_CFG_VALUE_MAX];
+        glr_export_cfg_value_to_string(glr_config_item_slug(item), def_value,
+                                       val_str, sizeof(val_str));
+        repl_config_bag_set(cfg, glr_config_item_slug(item), val_str);
+    }
+}
+
 static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     if (!cfg) return;
     for (int idx = 0; idx < cfg->count; idx++) {
@@ -971,6 +1042,7 @@ static int glr_export_cfg_slug_is_scene_subset(const char *slug) {
 const ReplConfigBridge g_glr_export_cfg_bridge = {
     .fill_all          = glr_export_cfg_fill_all,
     .fill_scene_subset = glr_export_cfg_fill_scene_subset,
+    .fill_scene_defaults = glr_export_cfg_fill_scene_defaults,
     .apply             = glr_export_cfg_apply,
     .get_int           = glr_export_cfg_get_int,
     .is_known          = glr_export_cfg_is_known,
@@ -1321,6 +1393,14 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             repl_save_active_scene(&layout);
             return 1;
         }
+        case GLR_FILE_ITEM_SAVE_GLR:
+            /* Same target directory and base name as Save Scene / Export
+             * .ply, just the authoring format — a .glr you can drop into
+             * examples/scenes/ instead of a standalone C program. */
+            bind_app_workspace_for_scene_save_if_needed();
+            repl_export_save_glr(repl_active_scene_export_path("glr"),
+                                 source_document_view());
+            return 1;
         case GLR_FILE_ITEM_LOAD_SCENE:
             editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
             return 1;

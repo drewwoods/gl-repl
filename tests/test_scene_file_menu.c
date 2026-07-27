@@ -10,7 +10,10 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_ctrl_export.h"
 #include "app/glr_actions.h"
+#include "app/glr_config.h"
+#include "app/glr_defaults.h"
 #include "app/glr_paths.h"
+#include "source_document.h"
 #include "editor/inline_rename.h"
 #include "repl/example_loader.h"
 #include "repl/export.h"
@@ -134,6 +137,184 @@ static void test_save_scene_uses_scene_name(void) {
         fclose(f);
 
     unlink(path);
+    repl_set_workspace_dir(NULL);
+    rmdir(dir);
+}
+
+/* Slurp a whole file; caller frees. NULL if it can't be opened. */
+static char *read_file_text(const char *path) {
+    FILE *f = fopen(path, "r");
+    char *buf;
+    long len;
+    size_t got;
+
+    if (!f)
+        return NULL;
+    fseek(f, 0, SEEK_END);
+    len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (len < 0) {
+        fclose(f);
+        return NULL;
+    }
+    buf = malloc((size_t)len + 1);
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+    got = fread(buf, 1, (size_t)len, f);
+    buf[got] = '\0';
+    fclose(f);
+    return buf;
+}
+
+/* Stage an active named scene in `dir` with one presentation cfg pushed off
+ * its default (axes) and one left at it (grid extent), then run
+ * File -> Save Scene as .glr. Returns the written path in `out_path`. */
+static void save_glr_fixture(const char *dir, char *out_path, size_t out_sz) {
+    reset_fixture();
+    (void)seed_user_scene();
+    repl_user_scene_rename(repl_active_user_scene(), "Unit Save Glr");
+    repl_set_workspace_dir(dir);
+
+    glr_config_set(GLR_CONFIG_AXES_THEME, CFG_DEFAULT_AXES_THEME + 1);
+    glr_config_set(GLR_CONFIG_GRID_EXTENT, CFG_DEFAULT_GRID_EXTENT_IDX);
+
+    ASSERT_INT_EQ("Save Scene as .glr handled",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_SAVE_GLR), 1);
+    snprintf(out_path, out_sz, "%s/unit_save_glr.glr", dir);
+}
+
+/* Save Scene as .glr writes the authoring format built-in examples ship in:
+ * only the @cfg rows that differ from the presentation defaults, the
+ * `// camera` block, and the document at column 0. None of the standalone-C
+ * scaffold repl_export_save_output emits. */
+static void test_save_glr_writes_scene_source(void) {
+    char tmpl[] = "/tmp/glr_scene_glr_XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    char path[512];
+    char *text;
+
+    ASSERT_TRUE("mkdtemp", dir != NULL);
+    if (!dir)
+        return;
+
+    save_glr_fixture(dir, path, sizeof(path));
+    text = read_file_text(path);
+    ASSERT_TRUE("Save .glr wrote <workspace>/<slug>.glr", text != NULL);
+    if (!text) {
+        repl_set_workspace_dir(NULL);
+        rmdir(dir);
+        return;
+    }
+
+    ASSERT_TRUE("Save .glr emits the off-default cfg row",
+                strstr(text, "// @cfg axes = ") != NULL);
+    ASSERT_TRUE("Save .glr omits a cfg row left at its default",
+                strstr(text, "// @cfg grid_extent") == NULL);
+    {
+        /* The seeded example carries its own authored heading, which the
+         * writer preserves; a scene without one gets a plain "// camera". */
+        const char *marker = strstr(text, "Camera");
+        if (!marker)
+            marker = strstr(text, "camera");
+        ASSERT_TRUE("Save .glr emits a camera marker comment", marker != NULL);
+        ASSERT_TRUE("Save .glr emits camera transforms at column 0 under it",
+                    marker && strstr(marker, "\nglTranslatef(") != NULL);
+    }
+    ASSERT_TRUE("Save .glr emits no C scaffold",
+                strstr(text, "#include") == NULL &&
+                strstr(text, "void display(") == NULL &&
+                strstr(text, "glutMainLoop") == NULL);
+    ASSERT_TRUE("Save .glr emits no workspace metadata directives",
+                strstr(text, "@scene-name") == NULL &&
+                strstr(text, "@workspace-dir") == NULL);
+
+    free(text);
+    unlink(path);
+    repl_set_workspace_dir(NULL);
+    rmdir(dir);
+}
+
+/* The written file is a loadable example: run it back through the runtime
+ * examples-dir catalog and the document plus the off-default cfg return
+ * unchanged. This is the property the format exists for — a scene saved
+ * here can be dropped into examples/scenes/ as-is. */
+static void test_save_glr_round_trips_through_example_loader(void) {
+    char tmpl[] = "/tmp/glr_scene_rt_XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    char scenes_dir[512];
+    char catalog_path[512];
+    char glr_path[512];
+    char catalog_text[512];
+    char err[512];
+    /* Bounded copy of the pre-save document. Sized for a seeded example,
+     * not MAX_EDITOR_COMMANDS — a full-capacity buffer here would be a
+     * quarter-megabyte of stack. */
+    enum { SAVED_LINE_CAP = 128 };
+    char saved_lines[SAVED_LINE_CAP][MAX_LINE_LEN];
+    FILE *cat;
+    int saved_count;
+
+    ASSERT_TRUE("mkdtemp", dir != NULL);
+    if (!dir)
+        return;
+
+    snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", dir);
+    ASSERT_INT_EQ("round-trip scenes mkdir", mkdir(scenes_dir, 0700), 0);
+
+    save_glr_fixture(scenes_dir, glr_path, sizeof(glr_path));
+
+    saved_count = repl_state_document_count();
+    ASSERT_TRUE("round-trip source has commands",
+                saved_count > 0 && saved_count <= SAVED_LINE_CAP);
+    if (saved_count > SAVED_LINE_CAP)
+        saved_count = SAVED_LINE_CAP;
+    for (int i = 0; i < saved_count; i++) {
+        const char *line = source_text_line(source_document_view(), i);
+        snprintf(saved_lines[i], sizeof(saved_lines[i]), "%s",
+                 line ? line : "");
+    }
+
+    snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini", dir);
+    snprintf(catalog_text, sizeof(catalog_text),
+             "[unit-save-glr]\n"
+             "file = scenes/unit_save_glr.glr\n"
+             "name = Unit Save Glr\n"
+             "tags = 3D, Polygons\n"
+             "group = Runtime\n");
+    cat = fopen(catalog_path, "w");
+    ASSERT_TRUE("round-trip catalog written", cat != NULL);
+    if (cat) {
+        fputs(catalog_text, cat);
+        fclose(cat);
+    }
+
+    err[0] = '\0';
+    ASSERT_TRUE("round-trip catalog loads",
+                repl_examples_load_dir(dir, err, sizeof(err)));
+    ASSERT_INT_EQ("round-trip catalog holds one example",
+                  repl_example_count(), 1);
+
+    reset_fixture();
+    repl_load_example(0);
+
+    ASSERT_INT_EQ("round-trip restores the command count",
+                  repl_state_document_count(), saved_count);
+    for (int i = 0; i < saved_count && i < repl_state_document_count(); i++) {
+        const char *line = source_text_line(source_document_view(), i);
+        char label[64];
+        snprintf(label, sizeof(label), "round-trip line %d matches", i);
+        ASSERT_TRUE(label, line && strcmp(line, saved_lines[i]) == 0);
+    }
+    ASSERT_INT_EQ("round-trip reapplies the off-default cfg",
+                  glr_config_get(GLR_CONFIG_AXES_THEME),
+                  CFG_DEFAULT_AXES_THEME + 1);
+
+    unlink(glr_path);
+    unlink(catalog_path);
+    rmdir(scenes_dir);
     repl_set_workspace_dir(NULL);
     rmdir(dir);
 }
@@ -277,5 +458,8 @@ int main(void) {
     test_app_save_falls_back_to_user_workspace();
     test_rename_scene_guard();
     test_scene_menu_is_selector();
+    test_save_glr_writes_scene_source();
+    /* Last: it swaps the process-wide example catalog for a runtime one. */
+    test_save_glr_round_trips_through_example_loader();
     return test_harness_report(&g_harness, "scene_file_menu");
 }

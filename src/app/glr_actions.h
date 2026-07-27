@@ -39,6 +39,7 @@ typedef enum {
 enum {
     GLR_FILE_ITEM_NEW_SCENE = 0,
     GLR_FILE_ITEM_SAVE_SCENE,        /* Ctrl+S */
+    GLR_FILE_ITEM_SAVE_GLR,          /* Scene as authoring-format .glr source */
     GLR_FILE_ITEM_LOAD_SCENE,        /* Prompt for a .c scene path */
     GLR_FILE_ITEM_LOAD_CLIPBOARD,    /* macOS: load scene text from NSPasteboard via pbpaste */
     GLR_FILE_ITEM_RENAME_SCENE,

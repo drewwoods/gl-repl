@@ -51,6 +51,12 @@ typedef struct {
     void (*fill_all)(ReplConfigBag *cfg);
     /* Fill bag with the per-scene-snapshot subset for repl_scenes. */
     void (*fill_scene_subset)(ReplConfigBag *cfg);
+    /* Fill bag with the *default* value of every `fill_scene_subset` slug —
+     * the baseline an example load resets to before applying the scene's
+     * own leading `@cfg`. Same keys, same order as fill_scene_subset, so a
+     * writer can diff the two bags positionally or by slug. Used by the
+     * .glr scene writer to emit only the rows that actually differ. */
+    void (*fill_scene_defaults)(ReplConfigBag *cfg);
     /* Apply bag values to live state. The same apply works for both
      * full-set and scene-subset bags (it iterates whatever's there). */
     void (*apply)(const ReplConfigBag *cfg);

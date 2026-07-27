@@ -170,6 +170,14 @@ build/release-gl-stubs/test_repl_core_examples --dump-index N \
 Live iteration without regenerating: `./gl-repl --examples-dir examples
 --example <name-or-idx>`.
 
+**Authoring in the app**: pose/tune a scene interactively, then
+**File → Save Scene as .glr** writes `<workspace>/<scene-slug>.glr` in exactly
+this format — only the `@cfg` rows that differ from `CFG_DEFAULT_*`, the
+`// camera` block, and the document. Copy it into `examples/scenes/`, add the
+catalog row, done. (Writer: `src/repl/export_glr.c`, symmetric with
+`example_loader.c`.) It does *not* carry `@cfg` slugs outside the per-scene
+presentation subset — those never applied on load anyway.
+
 **Index-keyed goldens shift when you insert mid-catalog.** Appending is cheap;
 inserting is not.
 

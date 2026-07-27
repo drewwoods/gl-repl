@@ -657,6 +657,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/export.c \
                      src/repl/export_cmd_writer.c \
                      src/repl/export_display.c \
+                     src/repl/export_glr.c \
                      src/repl/export_prologue.c \
                      src/repl/export_setup.c \
                      src/repl/expr_program.c \

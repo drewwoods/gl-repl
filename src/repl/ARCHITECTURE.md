@@ -1146,6 +1146,7 @@ grouping is the mental model.)
 [`export_prologue.c`](export_prologue.c) (globals/predef prologue) ·
 [`export_display.c`](export_display.c) (the `display()` body) ·
 [`export_cmd_writer.c`](export_cmd_writer.c) (per-command C emission) ·
+[`export_glr.c`](export_glr.c) (the `.glr` authoring format — no C scaffold) ·
 [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h),
 [`export_format_shared.h`](export_format_shared.h)
 

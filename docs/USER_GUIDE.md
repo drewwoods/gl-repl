@@ -1600,6 +1600,7 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 |---|---|
 | File → New Scene | Start a fresh scene |
 | File → Save Scene (Ctrl+S) | Export the active scene as standalone C |
+| File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
 | File → Load Scene | Load a `.c` file into a new scene slot |
 | File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
 | File → Save Workspace | Write every open scene as `<name>.c` in a directory |
@@ -1671,6 +1672,35 @@ the REPL. Two rules keep the round trip clean:
 > editing the file (`MAX_EDITOR_COMMANDS` is the separate source-line cap).
 > Expect proportionally more per-frame work: the flattened program
 > re-executes every frame.
+
+### Scene export (`.glr`)
+
+**File → Save Scene as .glr** writes the same file shape the built-in
+examples ship in — no C scaffold at all:
+
+```
+// @cfg grid = GRID_THEME_OFF          <- only the settings that differ
+// @cfg projection = PROJ_ORTHO           from the presentation defaults
+// camera
+glTranslatef(0.0000f, 0.0000f, -6.5000f);
+glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);
+glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0000f, 0.0000f, 0.0000f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+...your commands, verbatim...
+```
+
+It goes to the same place Save Scene does — `<workspace>/<scene-slug>.glr` —
+and is the format to reach for when you are **authoring or modifying an
+example** rather than exporting a program: drop the file into
+`examples/scenes/`, add a section to `examples/catalog.ini`, and it loads as
+a built-in. Runtime example directories (`--examples-dir`) take it as-is too.
+
+Two things the format deliberately drops, because the example loader ignores
+them anyway: `@cfg` rows outside the per-scene presentation subset (`msaa`,
+`accum_passes`, replay/panel settings — those stay session state), and the
+`@scene-name` / `@workspace-dir` bookkeeping that `catalog.ini` supplies
+instead. For a file that carries *everything* back, use Save Scene.
 
 ### Mesh export (PLY)
 

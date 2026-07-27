@@ -183,6 +183,7 @@ at build time, like the example catalog.
 | **Persistence (save/load)** | |
 | [`export.c`](export.c), [`import.c`](import.c) | Writer half (file emit, header refresh) and reader half (import state machine) |
 | [`export_setup.c`](export_setup.c), [`export_prologue.c`](export_prologue.c), [`export_display.c`](export_display.c), [`export_cmd_writer.c`](export_cmd_writer.c) | C boilerplate, globals/predef prologue, `display()` body, per-command C emission |
+| [`export_glr.c`](export_glr.c) | `.glr` scene writer — the authoring format (non-default `@cfg` + `// camera` + document text), symmetric with [`example_loader.c`](example_loader.c) |
 | [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h), [`export_format_shared.h`](export_format_shared.h) | Export/import API and shared state-text dimensions |
 | **Scenes & workspaces** | |
 | [`scenes.c`](scenes.c) / `.h`, [`scene_snapshot.c`](scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
