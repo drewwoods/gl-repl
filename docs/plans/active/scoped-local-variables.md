@@ -187,21 +187,52 @@ is false for any assignment inside a function body or a loop. Grass pays it
 
 This is *required for correctness* as written — a persisted `var_idx` must not
 be able to defeat a later legal shadow — but it is not required unconditionally.
-Two ways to make it pay-for-use, neither attempted here because both are their
-own change with their own correctness argument:
+Two ways to make it pay-for-use. They are independent, each carries a
+one-paragraph correctness argument, and together they are one small change:
 
-- **Skip when the frame holds no LOCAL binding.** With no local in scope the
-  resolution cannot return one, so the persisted `var_idx` is authoritative.
-  A `has_locals` flag threaded from `flatten_bind_func_locals` makes this O(1).
-  The catch is that the same call also produces the defensive PARAM/LOOP
-  `unwritable` diagnostic, which would need to survive the skip.
-- **Cache the extracted LHS per source line.** The LHS is a pure function of the
-  source text, and source mutation already invalidates the expression cache at a
-  single seam (`repl_state_mark_source_dirty()`), so `ctx->expr` is the natural
-  home. This removes the text parse and leaves only the scope scan. Note this
-  one should pay off *disproportionately* under Emscripten, where per-character
-  text scanning is relatively more expensive than in native code — measure it
-  there before sizing it from the native number.
+**Fix 1 — skip when the frame holds no LOCAL binding.** With no local in scope
+the resolution provably returns −1, so the persisted `var_idx` is authoritative.
+
+- *Be precise about what this buys.* It restores the pay-for-what-you-use
+  property for **unconverted** programs — the ±0% corpus rows above — and does
+  essentially nothing for the converted scenes. Grass's 3645 hot visits are all
+  inside `blade()`, whose frame holds eight locals, so `has_locals` is true
+  exactly where the tax was measured. This is the answer to the section heading,
+  not a grass fix.
+- *Thread the flag, don't recompute it.* Compute it once in `flatten_call`,
+  where `flatten_bind_func_locals` fills the frame, and carry it beside
+  `var_kinds`. `flatten_for_loop` only ever prepends a LOOP binding, so the flag
+  stays valid across loop nesting and must not be recomputed per iteration.
+- *The lost defensive diagnostic.* The skip also skips the PARAM/LOOP
+  `unwritable` check, which `flatten.c:963` already documents as
+  defence-in-depth against a bypass of the Phase 3 reverse-binder guards rather
+  than a reachable state. Rather than contorting the fast path to preserve it,
+  keep the full resolution unconditionally in debug/sanitizer builds — which is
+  where the test suite runs, so the guards keep their regression coverage — and
+  skip only in release.
+
+**Fix 2 — cache the extracted LHS per source line.** This is the one that helps
+converted scenes, since it applies whether or not the frame has locals.
+
+- *Invalidation is free.* The LHS is a pure function of the row text, and
+  `repl_state_mark_source_dirty()` (`state.c:341`) already calls
+  `repl_expr_cache_invalidate()` as one of the caches it drops — its own comment
+  makes "every source mutation goes through here" the contract. A per-line LHS
+  field on `ReplExprCache` inherits that for nothing.
+- *Cache it independently of the line's program state.* The line can be
+  cold/building on the first visit (the `!warm` branch), and the `force_reparse`
+  differential path translates only the RHS, so raw-text LHS extraction is valid
+  — and cacheable — under both.
+- *Size it honestly.* The 75 ns covers the parse **plus** the O(nv) scan, and
+  with nv = 16 in grass's frame the strcmp scan is not negligible. Expect
+  roughly half the tax back natively: grass 1.73× → ~1.66×. That is precisely
+  why this cannot be the headline fix. Under Emscripten it should pay off
+  disproportionately — per-character scanning is where wasm loses hardest — so
+  measure it there rather than extrapolating from the native number.
+- *It converges with fix 3 rather than being subsumed.* The resolved *slot*
+  can never be cached (loop-iterator prepending shifts slots per nesting level —
+  the same argument that forces ordinal identity below), but fix 3's recorded
+  target ordinal is exactly the cacheable form of that resolution.
 
 #### Which cost actually hurts, and what would fix it
 
@@ -296,6 +327,18 @@ array indexed by that value overruns.
 With those in place, `flatten_var_assign` reports local RHS deps as **value**
 instead of structural, and grass rebakes again.
 
+**`rand`/`rand2` in a local's RHS needs no new rule — but the new plan should
+say so explicitly.** Value-routing those assignments means rebake re-evaluates
+them, and grass is literally the `rand + t` scene
+(`cx = x0 + 0.08*rand2(seed, 11)*u + …`). It is safe: `expr_rand01`
+(`eval.c:1125`) is a pure hash of `(seed, iter)` with no stream state, so
+re-evaluation is idempotent. Nor is there an existing rule to match — nothing is
+pinned or forced structural for `rand` today, and a *global* assignment with
+`rand` in its RHS already rebakes, which is exactly what pre-conversion grass
+did on every `t` change. Locals inherit that unchanged. The one requirement is
+one the design already carries: when a `rand` seed is itself a local, the
+carried frame must be updated in stream order before the row that reads it.
+
 The regression matrix for that change must cover the frame shapes the metadata
 exists to distinguish, not only the production grass scene:
 
@@ -308,13 +351,37 @@ exists to distinguish, not only the production grass scene:
 - recursion, proving equal function-local ordinals at different call depths do
   not alias;
 - the maximum permitted call depth, exercising the depth-array boundary; and
+- a `rand`/`rand2` seed that is itself a local, proving the carried frame is
+  updated in stream order before the row that reads it; and
 - two successive value-only rebakes followed by a full-flatten differential,
   comparing commands, local values and all sidecar metadata after each walk.
+  The *second* rebake is the load-bearing one — a single pass hides latent
+  metadata damage that only shows when the next walk consumes it.
 
 That is a self-contained design, but it changes the snapshot layout and its
 documented immutability, flatten's emit path, the whole rebake walk, and a
 dependency classification three phases of this plan reasoned about. It belongs
 in its own plan.
+
+**Sequencing: land fix 2 first regardless.** Recording the target ordinal makes
+the cached LHS non-prerequisite, but the *full* flatten still runs
+`flatten_resolve_assign_target` on every visit to produce those ordinals in the
+first place — so fix 2's saving survives fix 3 rather than being absorbed by it.
+
+#### Recommended order
+
+1. **Fixes 1 + 2 as one "make the tax pay-for-use" change.** Independent of each
+   other, small, and each already has its correctness argument written above.
+   This targets the machinery tax and closes the "not pay-for-what-you-use"
+   finding.
+2. **Fix 3 as its own plan**, targeting the route regression, with the
+   Emscripten measurement as its motivating number.
+
+Keeping the two apart is the point: fixes 1–2 barely move grass, because its hot
+bodies genuinely do have locals, and fix 3 is the only one that recovers the
+route. Not escalating fix 3 now is defensible on the native number — 1.6 ms
+worst case in a 16.7 ms frame — but the web build is a supported target
+(`make web`, `packaging/web/`), and at ~4× there it is a *when*, not an *if*.
 
 ### Phase 4 — export / import (done)
 
@@ -1620,9 +1687,10 @@ assignment's source text on every visit. The compile path, the rebake path and
 slider drags are unaffected.
 
 *Trigger to revisit:* any flatten-cost work at all — this is now the largest
-single line item in that profile, and two concrete pay-for-use fixes are written
-up in the Phase 5 section. Note it is **not** what made grass slow; see the
-decomposition there before spending effort on it for that reason.
+single line item in that profile. Fixes 1 and 2 in the Phase 5 section are the
+scoped answer, and "Recommended order" there says to land them together as one
+change. Note this is **not** what made grass slow; see the decomposition before
+spending effort on it for that reason.
 
 **1. ~~The no-shadowing guard matrix is the maintenance tax.~~ Resolved in
 rev 8.** Earlier revisions banned shadowing outright, which turned "declare a
@@ -1657,13 +1725,16 @@ structural too (the orrery's `ORB_SCALE` does), and the cost is concentrated in
 scenes that were rebaking before, so it is invisible on scenes that already
 full-flattened.
 
-*Trigger to revisit:* the manual scrub step in Verification is load-bearing, not
-optional. If scrubbing a global that feeds a local is visibly sluggish there,
-the fix is teaching `rebake_one_cmd` to simulate local frames — a much larger
-change that should be its own plan, not a patch to this one. (Note that such a
-rewrite must also replace the Phase 5 skip in `rebake_one_cmd`: today a local
-assignment is deliberately *not* re-evaluated, because its frozen snapshot is
-post-write.)
+*Trigger to revisit:* **the web build already trips it.** The native worst case
+is 1.6 ms in a 16.7 ms frame, which is why this was not escalated during
+Phase 5 — but Emscripten is a supported target and sits at ~4×, so fix 3
+(teaching `rebake_one_cmd` to simulate local frames, sketched in full under
+Phase 5) is a *when*, not an *if*. It is its own plan, not a patch to this one.
+The manual scrub step in Verification also remains load-bearing rather than
+optional: it is the check that the scene visibly tracks the slider, which the
+benchmark cannot make. (Note such a rewrite must also replace the Phase 5 skip
+in `rebake_one_cmd`: today a local assignment is deliberately *not*
+re-evaluated, because its frozen snapshot is post-write.)
 
 **Resolved, for the record:** the export zero-fill divergence (REPL reads 0,
 exported C undefined) was flagged as a wart in earlier reviews with the
