@@ -163,28 +163,22 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
-/* The two COMMAND-step status hint variants share a "Tutorial: step "
- * prefix; the controller's per-frame tick uses that prefix as a
- * sentinel to recognise "this status is ours and may be refreshed."
- * Both variants are taught to the user passively — the entry variant
- * names the affordances (type vs. Tab), the commit variant names the
- * keys that commit a fully-typed line. */
-#define TUTORIAL_STATUS_PREFIX "Tutorial: step "
-
 static void format_step_entry_hint(int step, int total,
                                    char *out, size_t out_size) {
+    TutorialRuntimeState state = tutorial_state_view();
+    const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
     snprintf(out, out_size,
-             TUTORIAL_STATUS_PREFIX
-             "%d/%d - type the command or press Tab to autocomplete",
-             step + 1, total);
+             "%s Tutorial: step %d/%d - type the command or press Tab to autocomplete",
+             name, step + 1, total);
 }
 
 static void format_step_commit_hint(int step, int total,
                                     char *out, size_t out_size) {
+    TutorialRuntimeState state = tutorial_state_view();
+    const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
     snprintf(out, out_size,
-             TUTORIAL_STATUS_PREFIX
-             "%d/%d - press Enter or ';' to commit",
-             step + 1, total);
+             "%s Tutorial: step %d/%d - press Enter or ';' to commit",
+             name, step + 1, total);
 }
 
 /* Status emitted on COMMAND-step entry. The trailing affordance hint
@@ -947,8 +941,12 @@ int tutorial_status_hint(char *out, size_t out_size) {
 int tutorial_status_is_hint(const char *text) {
     if (!text)
         return 0;
-    return strncmp(text, TUTORIAL_STATUS_PREFIX,
-                   sizeof TUTORIAL_STATUS_PREFIX - 1) == 0;
+    if (!tutorial_active())
+        return 0;
+    char prefix[REPL_STATUS_TEXT_MAX];
+    snprintf(prefix, sizeof(prefix), "%s Tutorial: step ",
+             repl_tutorial_name(tutorial_state_view().tutorial_idx));
+    return strncmp(text, prefix, strlen(prefix)) == 0;
 }
 
 static TutorialStepResult tutorial_enter_step_command(int idx, int step, int commit_line, TutorialRuntimeState *state) {

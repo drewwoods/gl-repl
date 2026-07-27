@@ -54,6 +54,15 @@ static const char *status_text(void) {
     return ui_state_status_mut()->text;
 }
 
+static void get_expected_hint(int tutorial_idx, int step, int total, int is_commit, char *out, size_t out_size) {
+    const char *name = repl_tutorial_name(tutorial_idx);
+    if (is_commit) {
+        snprintf(out, out_size, "%s Tutorial: step %d/%d - press Enter or ';' to commit", name, step, total);
+    } else {
+        snprintf(out, out_size, "%s Tutorial: step %d/%d - type the command or press Tab to autocomplete", name, step, total);
+    }
+}
+
 static const char *trim_leading_ws(const char *text) {
     while (text && *text == ' ')
         text++;
@@ -219,9 +228,11 @@ static void test_color_transform_walkthrough(void) {
     ASSERT_TRUE("color-transform tutorial active", tutorial_active());
     ASSERT_INT("color-transform tutorial idx",
                tutorial_state_view().tutorial_idx, 1);
+    char expected_status[256];
+    get_expected_hint(1, 1, 11, 0, expected_status, sizeof(expected_status));
     ASSERT_STR("color-transform start status",
                status_text(),
-               "Tutorial: step 1/11 - type the command or press Tab to autocomplete");
+               expected_status);
 
     total_steps = repl_tutorial_step_count(1);
     for (idx = 0; idx < total_steps; idx++) {
@@ -520,24 +531,28 @@ static void test_shadow_text_clears_on_exit(void) {
 }
 
 static void test_tutorial_start_sets_step_progress_status(void) {
+    char expected_status[256];
     reset_fixture();
     tutorial_start(0);
+    get_expected_hint(0, 1, 5, 0, expected_status, sizeof(expected_status));
     ASSERT_STR("start sets step 1 status",
                status_text(),
-               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+               expected_status);
 }
 
 static void test_tutorial_advance_updates_step_progress_status(void) {
     const char *expected;
+    char expected_status[256];
 
     reset_fixture();
     tutorial_start(0);
     expected = tutorial_current_expected_text();
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
+    get_expected_hint(0, 2, 5, 0, expected_status, sizeof(expected_status));
     ASSERT_STR("advance sets step 2 status",
                status_text(),
-               "Tutorial: step 2/5 - type the command or press Tab to autocomplete");
+               expected_status);
 }
 
 /* tutorial_status_hint computes which COMMAND-step hint variant the
@@ -550,7 +565,12 @@ static void test_tutorial_advance_updates_step_progress_status(void) {
  * status writes. */
 static void test_tutorial_status_hint_variants(void) {
     char buf[REPL_STATUS_TEXT_MAX];
+    char expected_entry[256];
+    char expected_commit[256];
     int got;
+
+    get_expected_hint(0, 1, 5, 0, expected_entry, sizeof(expected_entry));
+    get_expected_hint(0, 1, 5, 1, expected_commit, sizeof(expected_commit));
 
     /* Inactive: returns 0 with empty out. */
     reset_fixture();
@@ -565,7 +585,7 @@ static void test_tutorial_status_hint_variants(void) {
     ASSERT_INT("COMMAND entry returns 1", got, 1);
     ASSERT_STR("COMMAND entry uses 'type or Tab' variant",
                buf,
-               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+               expected_entry);
 
     /* COMMAND step, full match on expected line: commit reminder. */
     set_input_text(tutorial_current_expected_text());
@@ -573,17 +593,15 @@ static void test_tutorial_status_hint_variants(void) {
     ASSERT_INT("COMMAND match returns 1", got, 1);
     ASSERT_STR("COMMAND match uses commit reminder",
                buf,
-               "Tutorial: step 1/5 - press Enter or ';' to commit");
+               expected_commit);
 
     /* tutorial_status_is_hint recognises the prefix on either variant
      * and rejects unrelated text. */
     ASSERT_INT("entry hint recognised",
-               tutorial_status_is_hint(
-                   "Tutorial: step 1/5 - type the command or press Tab to autocomplete"),
+               tutorial_status_is_hint(expected_entry),
                1);
     ASSERT_INT("commit hint recognised",
-               tutorial_status_is_hint(
-                   "Tutorial: step 1/5 - press Enter or ';' to commit"),
+               tutorial_status_is_hint(expected_commit),
                1);
     ASSERT_INT("non-tutorial status not recognised",
                tutorial_status_is_hint("Saved to output.c"),
@@ -600,6 +618,11 @@ static void test_tutorial_status_hint_variants(void) {
  * commit line; here we exercise it directly. */
 static void test_tutorial_refresh_input_hint_on_full_match(void) {
     const char *expected;
+    char expected_entry[256];
+    char expected_commit[256];
+
+    get_expected_hint(0, 1, 5, 0, expected_entry, sizeof(expected_entry));
+    get_expected_hint(0, 1, 5, 1, expected_commit, sizeof(expected_commit));
 
     /* Active: empty input is a no-op (status keeps the entry hint). */
     reset_fixture();
@@ -607,7 +630,7 @@ static void test_tutorial_refresh_input_hint_on_full_match(void) {
     tutorial_refresh_input_hint("");
     ASSERT_STR("empty input does not overwrite entry status",
                status_text(),
-               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+               expected_entry);
 
     /* Active: a strict prefix of expected is also a no-op. */
     expected = tutorial_current_expected_text();
@@ -616,14 +639,14 @@ static void test_tutorial_refresh_input_hint_on_full_match(void) {
     tutorial_refresh_input_hint("glBeg");
     ASSERT_STR("partial input does not overwrite entry status",
                status_text(),
-               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+               expected_entry);
 
     /* Active: full match refreshes status with the commit reminder. */
     set_input_text(expected);
     tutorial_refresh_input_hint(expected);
     ASSERT_STR("full match sets commit reminder",
                status_text(),
-               "Tutorial: step 1/5 - press Enter or ';' to commit");
+               expected_commit);
 
     /* Inactive: never writes. Park a sentinel status, exit the tutorial,
      * and confirm the call leaves it intact. */
@@ -775,13 +798,15 @@ static void test_navigation_advances_on_matching_input(void) {
     set_input_text(expected);
     editor_navigate_to_line(3);
 
+    char expected_status[256];
     doc = source_document_view();
     ASSERT_INT("navigation advance committed user line + next instruction",
                doc.line_count, 7);
     ASSERT_INT("step advanced via navigation", tutorial_state_view().step, 2);
+    get_expected_hint(0, 3, 5, 0, expected_status, sizeof(expected_status));
     ASSERT_STR("navigation advance sets step 3 status",
                status_text(),
-               "Tutorial: step 3/5 - type the command or press Tab to autocomplete");
+               expected_status);
 }
 
 static void test_enter_on_locked_line_shows_position_hint(void) {
