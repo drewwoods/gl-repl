@@ -166,7 +166,9 @@ static int tutorial_append_locked_line(int line_idx) {
 static void get_tutorial_prefix(char *out, size_t out_size) {
     TutorialRuntimeState state = tutorial_state_view();
     const char *name = state.active ? repl_tutorial_name(state.tutorial_idx) : "Tutorial";
-    snprintf(out, out_size, "%s Tutorial: ", name);
+    int curr = state.active ? state.tutorial_idx + 1 : 0;
+    int total = repl_tutorial_count();
+    snprintf(out, out_size, "%s Tutorial [%d/%d]: ", name, curr, total);
 }
 
 static void format_step_entry_hint(int step, int total,
@@ -960,9 +962,10 @@ int tutorial_status_is_hint(const char *text) {
     if (!tutorial_active())
         return 0;
     char prefix[REPL_STATUS_TEXT_MAX];
-    snprintf(prefix, sizeof(prefix), "%s Tutorial: step ",
-             repl_tutorial_name(tutorial_state_view().tutorial_idx));
-    return strncmp(text, prefix, strlen(prefix)) == 0;
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    char full_prefix[REPL_STATUS_TEXT_MAX + 8];
+    snprintf(full_prefix, sizeof(full_prefix), "%sstep ", prefix);
+    return strncmp(text, full_prefix, strlen(full_prefix)) == 0;
 }
 
 static TutorialStepResult tutorial_enter_step_command(int idx, int step, int commit_line, TutorialRuntimeState *state) {

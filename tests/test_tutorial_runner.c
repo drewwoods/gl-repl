@@ -56,10 +56,12 @@ static const char *status_text(void) {
 
 static void get_expected_hint(int tutorial_idx, int step, int total, int is_commit, char *out, size_t out_size) {
     const char *name = repl_tutorial_name(tutorial_idx);
+    int curr = tutorial_idx + 1;
+    int tot_tuts = repl_tutorial_count();
     if (is_commit) {
-        snprintf(out, out_size, "%s Tutorial: step %d/%d - press Enter or ';' to commit", name, step, total);
+        snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - press Enter or ';' to commit", name, curr, tot_tuts, step, total);
     } else {
-        snprintf(out, out_size, "%s Tutorial: step %d/%d - type the command or press Tab to autocomplete", name, step, total);
+        snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - type the command or press Tab to autocomplete", name, curr, tot_tuts, step, total);
     }
 }
 
@@ -3046,7 +3048,7 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
     ASSERT_INT("document unchanged after rejected commit",
                repl_state_document_count(), 3);
     char expected_status[256];
-    snprintf(expected_status, sizeof(expected_status), "%s Tutorial: Press Enter / Tab / Space to continue", repl_tutorial_name(idx));
+    snprintf(expected_status, sizeof(expected_status), "%s Tutorial [%d/%d]: Press Enter / Tab / Space to continue", repl_tutorial_name(idx), idx + 1, repl_tutorial_count());
     ASSERT_STR("ack hint shown for NOTE",
                status_text(), expected_status);
 
@@ -3336,7 +3338,7 @@ static void test_commit_blocked_with_hint_during_set_step(void) {
     ASSERT_INT("step unchanged after rejected SET commit",
                tutorial_state_view().step, step_before);
     char expected_status[256];
-    snprintf(expected_status, sizeof(expected_status), "%s Tutorial: Press Enter / Tab / Space to continue", repl_tutorial_name(idx));
+    snprintf(expected_status, sizeof(expected_status), "%s Tutorial [%d/%d]: Press Enter / Tab / Space to continue", repl_tutorial_name(idx), idx + 1, repl_tutorial_count());
     ASSERT_STR("SET hint shown (not the cursor-position hint)",
                status_text(), expected_status);
 }
