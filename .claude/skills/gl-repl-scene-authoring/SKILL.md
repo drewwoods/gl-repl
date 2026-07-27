@@ -1,6 +1,6 @@
 ---
 name: gl-repl-scene-authoring
-description: Write or edit gl-repl scenes and built-in examples — the full REPL command/expression language reference, per-command parser policies, @cfg + camera headers, the presentation-reset rule, size budgets, and the four files examples must be edited together with. Use when asked to write a scene, add or modify a built-in example, author a .c scene file, or when touching examples.c / example_loader.c.
+description: Write or edit gl-repl scenes and built-in examples — the full REPL command/expression language reference, per-command parser policies, @cfg + camera headers, the presentation-reset rule, size budgets, and the full set of files (catalog, goldens, docs, showcase media) an example must be edited together with. Use when asked to write a scene, add or modify a built-in example, author a .c scene file, or when touching examples.c / example_loader.c.
 ---
 
 # Scene & example authoring
@@ -153,19 +153,39 @@ never edit it. Adding or renaming one means touching all of:
 
 - `examples/scenes/<slug>.glr` (or `.c`) — the scene itself
 - `examples/catalog.ini` — section id, `file`, `name`, `tags`, `group`
+- `examples/catalog-emscripten.ini` — the **separate, trimmed** web catalog
+  (`WEB=1` swaps `EXAMPLES_CATALOG` to it in the Makefile). Nothing
+  cross-checks the two, so a scene added only to `catalog.ini` silently never
+  ships in `make web`. Omit a scene here on purpose only if it is too heavy or
+  unsupported in the browser — and say so.
 - `tests/testdata/repl_examples_ui/NN.golden.txt` — the 0-based index golden
 - `docs/USER_GUIDE.md` — the numbered example list *and* the count claim
 - `README.md` — two count claims
+- `docs/SHOWCASE.md` — a gallery tile: link to the scene file **plus** a local
+  PNG/GIF that exists. `make check-user-guide-examples` fails without both.
+- `scripts/docs-assets.sh` — the recipe that *produces* that media: an
+  `sc-<slug>` entry in `GIF_ASSETS` (or `PNG_ASSETS`) and the matching
+  `if want sc-<slug>; then ...` block, keyed by `--example "<name>"`, never by
+  index. Then run `scripts/docs-assets.sh sc-<slug>` to write the file. This
+  drives the **native** build (`make gl-repl`) and briefly opens a real
+  window — that is the intended path; OSMesa is not needed and renders the
+  grid/themes worse.
 
 Details in `examples/README.md`. Checks and regeneration:
 
 ```bash
 make check-examples-catalog        # catalog/scene structure
-make check-user-guide-examples     # count + name drift across docs
+make check-user-guide-examples     # count + name drift across docs + showcase
+make rebuild-golden                # regen ALL goldens (correct, ordinary path)
 make test_repl_core_examples       # focused suite (load, export, reimport)
-build/release-gl-stubs/test_repl_core_examples --dump-index N \
-    > tests/testdata/repl_examples_ui/NN.golden.txt   # regen one golden
 ```
+
+**Use `make rebuild-golden`** — it enters the stubbed build before resolving
+`BINDIR`, so the binary that regenerates is the binary that validates. Hand-
+rolling `<bindir>/test_repl_core_examples --dump-index N > ...NN.golden.txt`
+regenerates one fixture but silently picks the wrong build config (a stale or
+release binary regenerating fixtures a debug binary then checks) — the classic
+"test passes, `git diff` shows nothing" trap.
 
 Live iteration without regenerating: `./gl-repl --examples-dir examples
 --example <name-or-idx>`.
@@ -207,7 +227,15 @@ way). A function with many parameters is where the *other* cap bites first —
   parse time and one that flattens per-frame can disagree; verify the animated
   path, not just the `t = 0` frame.
 - **Palette**: use accent anchors or expressions, not raw literals invented per
-  scene (`accent_palette.h`, `make check-palette`).
+  scene (`accent_palette.h`, `make check-palette`). Only *pure-literal* color
+  triples are checked, and `scripts/baselines/palette-coverage.txt` is
+  remove-only — a **new** scene must be authored on-palette, so budget for
+  retinting a scene drafted off-palette. The house idiom for off-anchor tints
+  is an anchor scaled by a factor (`0.92*ink`) or a lerp between two anchors,
+  not a fresh literal.
+- **Formatting**: `make check-formatted` (via `scripts/format_scenes.py
+  --write`) owns scene indentation — run it before wiring a scene into the
+  catalog.
 - **Eased example cameras** need ~240-frame captures to settle.
 
 ## Visual check

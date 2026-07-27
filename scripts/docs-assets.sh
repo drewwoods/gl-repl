@@ -103,7 +103,7 @@ GIF_ASSETS=(
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
-    sc-whale sc-stress-test sc-aurora-observatory
+    sc-whale sc-stress-test sc-lantern-festival sc-aurora-observatory
     sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars sc-stencil-mask
     sc-feature-time
 )
@@ -1470,6 +1470,12 @@ fi
 if want sc-stress-test; then
     gif "$SHOW/stress-test.gif" 240 2 22 560 \
         --example "Dusk lighthouse atoll (stress test)"
+fi
+if want sc-lantern-festival; then
+    # The lanterns rise on a 15-unit wrap, so a 240-frame clip catches the
+    # flock mid-ascent with reflections and glints already running.
+    gif "$SHOW/lantern-festival.gif" 240 2 22 560 \
+        --example "Lantern festival (additive glow + reflections)"
 fi
 if want sc-aurora-observatory; then
     # Post-warm clip spans t in [3, 6.3]: one coral beacon blink (period

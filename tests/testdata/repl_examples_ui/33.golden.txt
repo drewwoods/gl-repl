@@ -9,7 +9,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
@@ -17,7 +17,7 @@
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_2D */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -26,12 +26,12 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = 0 */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
-/* @cfg vertex_points = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 0 */
+/* @cfg polygon_highlight = 1 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -89,10 +89,9 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -8.5000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -5.5000f);
+  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- render_state ---
@@ -100,73 +99,36 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float rate = 45; // compare steps per second @tune
-  static float hold = 1.5; // seconds to rest on the sorted bars @tune
-  static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
-  static float tmp; // swap scratch
-  static float x, h, s; // bar center x, bar height, palette mix
-  static float cur; // bar index under the compare marker
+  static float p, d, s, h;
+
+  // --- Render State -------------------
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-  glClearColor(0.05, 0.06, 0.08, 1);
-  // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
-  // loops below are the classic compare-and-swap, but each compare only
-  // runs once enough time has passed (its overall index p*15 + j must stay
-  // under steps). Every frame re-seeds and re-sorts from scratch, so the
-  // bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
-  // time slider or replay to scrub the sort.
-  glDisable(GL_LIGHTING);
-  glEnable(GL_DEPTH_TEST);
-  period = 225/rate + hold;
-  cycle = floor(t/period);
-  steps = fmod(t, period)*rate;
-  // A fresh deterministic shuffle each cycle
-  for(i, 0, 16) {
-    A[i] = rand(i, cycle);
-  }
-  // Pass p bubbles the largest unsorted value to the right
-  for(p, 0, 15) {
-    for(j, 0, 15) {
-      if(p*15 + j < steps && A[j] > A[j+1]) {
-        tmp = A[j];
-        A[j] = A[j+1];
-        A[j+1] = tmp;
-      }
-    }
-  }
-  // Bars: height and color both follow the value, so sorted reads as a
-  // staircase with a smooth left-to-right gradient
-  glBegin(GL_QUADS);
-    for(i, 0, 16) {
-      s = A[i];
-      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-      x = (i - 7.5)*0.42;
-      h = 0.3 + 2.4*s;
-      glVertex3f(x - 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5 + h, 0);
-      glVertex3f(x - 0.15, -1.5 + h, 0);
-    }
-  glEnd();
-  if(steps < 225) {
-    // Two dots mark the pair the sort is comparing right now
-    cur = fmod(floor(steps), 15);
-    glPointSize(7);
-    glColor3f(1, 0.85, 0.15);
-    glBegin(GL_POINTS);
-      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
-      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
-    glEnd();
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("pass %f of 15", floor(steps/15) + 1);
-  } else {
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("sorted");
+  // the sine's own cosine falloff eases each turnaround, so the pulse reverses
+  // the moment it reaches a rail -- no hold. Wrap this in
+  // smoothstep(-1, 1, k * sin(...)) with k > 1 to buy a dwell at the ends.
+  p = 3 * sin(1.2 * t);
+
+  for(i, -3, 4) {
+    d = i - p;
+    // s eases from 1 at the pulse to 0 two units away
+    s = 1 - smoothstep(0, 2, abs(d));
+    h = lerp(0.3, 1.15, s);
+    glPushMatrix();
+      glTranslatef(i, 0, 0);
+      // bars lean away from the pulse, hardest a bar-width off center and
+      // upright right under it; clamp bounds the lean to the falloff radius,
+      // where s has already faded to 0
+      glRotatef(-27 * s * clamp(d, -2, 2), 0, 0, 1);
+      glColor3f(lerp(0.2, 1, s), lerp(0.25, 0.55, s), lerp(0.9, 0.25, s));
+      glTranslatef(0, h / 2, 0);
+      glScalef(0.55, h, 0.55);
+      glutSolidCube(1);
+    glPopMatrix();
   }

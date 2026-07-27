@@ -9,13 +9,13 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid = GRID_THEME_CLASSIC */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
@@ -88,64 +88,98 @@ void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
+  // Eye-space light positions, set before the camera transform.
+  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
   // camera
-  glTranslatef(0.0000f, 0.0000f, -1.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);
+  glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+  glTranslatef(-0.0000f, -0.5000f, -0.0000f);
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float density = 0.055; // @tune
-  static float twist = 1.2; // @tune
-  static float ringZ; // eye-space distance of the current ring
-  static float bendX; // tunnel centerline x at this depth
-  static float bendY; // tunnel centerline y at this depth
+  static float d; // sliding cut offset for the animated cutaway
 
-  // Fog fades geometry toward the fog color with eye-space distance.
-  // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
-  // exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
-  // glFogf(GL_FOG_START, ...) and glFogf(GL_FOG_END, ...) distances.
-  // Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
-  // the background, which is what hides each ring's respawn at the far
-  // end of this endless tunnel. Drag `density` to thicken or clear it.
-  // The tunnel snakes: each ring's center sits on a fixed curve
-  // (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
-  // face along the curve's tangent, so rings sweep around the bends as
-  // they approach. Drag `twist` to straighten or sharpen the curve.
+  // Clip planes carve new shapes out of stock solids. glClipPlane sets a
+  // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
+  // discards everything else. The equation is captured in the modelview
+  // frame current AT THE CALL, so transforms placed before glClipPlane
+  // position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
+  // Tip: park the cursor on a glClipPlane line to see its plane guide.
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glClearColor(0.05, 0.06, 0.08, 1);
+  glClearColor(0.04, 0.05, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_FOG);
-  glFogi(GL_FOG_MODE, GL_EXP2);
-  glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
-  glFogf(GL_FOG_DENSITY, density);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_NORMALIZE);
+  glShadeModel(GL_SMOOTH);
+  // Clipping opens each solid up, so light the exposed inside faces too:
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
 
-  for(i, 0, 12) {
-    ringZ = 37 - fmod(3 * t + 3 * i, 37);
-    bendX = twist * sin(0.24 * ringZ);
-    bendY = 0.7 * twist * (cos(0.31 * ringZ) - 1);
-    glPushMatrix();
-      glTranslatef(bendX, bendY, 0 - ringZ);
-      glRotatef(0 - 14 * twist * cos(0.24 * ringZ), 0, 1, 0);
-      glRotatef(0 - 12 * twist * sin(0.31 * ringZ), 1, 0, 0);
-      glRotatef(8 * ringZ, 0, 0, 1);
-      if(fmod(i, 3) < 1) {
-        glColor3f(0.1, 0.95, 0.85);
-      } else if(fmod(i, 3) < 2) {
-        glColor3f(0.15, 0.55, 1);
-      } else {
-        glColor3f(0.95, 0.25, 1);
-      }
-      glutSolidTorus(0.09, 1.7, 10, 28);
-    glPopMatrix();
-  }
+  // --- Material Colors ----------------
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE); // dark inner core
+  glColor3f(0.05, 0.06, 0.08);
+  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE); // outer color set by glColor3f calls below
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+
+
+  // 1) Dome - one plane. (0, 1, 0, 0) keeps y >= 0: the sphere's top
+  // half. The plane rides the translated frame, so it cuts through the
+  // sphere's own equator, not the world origin.
+  glPushMatrix();
+    glTranslatef(-2.9, 0.75, 0);
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0});
+    glEnable(GL_CLIP_PLANE0);
+    glColor3f(0.95, 0.55, 0.3);
+    glutSolidSphere(1.15, 28, 20);
+    glDisable(GL_CLIP_PLANE0);
+  glPopMatrix();
+
+  // 2) Wedge - two planes. Each plane keeps half the sphere; rotating
+  // the frame 120 degrees between the two calls overlaps the kept halves
+  // into a 120-degree orange slice. The slow spin carries the flat cut
+  // faces around so you can see both of them.
+  glPushMatrix();
+    glTranslatef(0, 0.75, 0);
+    glRotatef(20*t, 0, 1, 0);
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 0, 1, 0});
+    glEnable(GL_CLIP_PLANE0);
+    glRotatef(120, 0, 1, 0);
+    glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 0, -1, 0});
+    glEnable(GL_CLIP_PLANE1);
+    glRotatef(-120, 0, 1, 0); // back to the wedge's frame before drawing
+    glColor3f(0.4, 0.82, 0.5);
+    glutSolidSphere(1.15, 28, 20);
+    glDisable(GL_CLIP_PLANE0);
+    glDisable(GL_CLIP_PLANE1);
+  glPopMatrix();
+
+  // 3) Cutaway - coefficients can animate. {-1, 0, -0.7, d} keeps x <= d,
+  // so sweeping d slides the plane through the torus and exposes the
+  // tube's circular cross-sections.
+  d = 1.5*sin(0.7*t);
+  glPushMatrix();
+    glTranslatef(2.9, 0.75, 0);
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, -0.7, d});
+    glEnable(GL_CLIP_PLANE0);
+    glColor3f(0.42, 0.62, 0.95);
+    glutSolidTorus(0.42, 0.85, 20, 28);
+    glDisable(GL_CLIP_PLANE0);
+  glPopMatrix();
+
+  // Captions (lighting off so the text color is not shaded)
+  glDisable(GL_LIGHTING);
+  glColor3f(0.78, 0.82, 0.9);
+  glRasterPos3f(-3.6, -0.85, 0);
+  label("1 plane: dome");
+  glRasterPos3f(-0.85, -0.85, 0);
+  label("2 planes: wedge");
+  glRasterPos3f(2, -0.85, 0);
+  label("3 animated: cutaway");

@@ -423,7 +423,17 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>transform stacks + chasing glow points</sub>
 
 </td>
-<td width="33%"></td>
+<td width="33%" align="center">
+
+<!-- images/showcase/lantern-festival.gif — docs-assets.sh sc-lantern-festival
+     Intent: additive glow read against its own reflection — the flock
+     burns over a translucent water plane that mirrors it. -->
+<img src="images/showcase/lantern-festival.gif" alt="Lantern festival — paper lanterns rising over reflecting water" width="100%">
+
+**[Lantern festival](../examples/scenes/lantern_festival.glr)**
+<br><sub>additive glow + mirrored reflections</sub>
+
+</td>
 </tr>
 </table>
 
