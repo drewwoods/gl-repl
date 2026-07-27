@@ -1,13 +1,48 @@
 ## Function-Scoped Local Variables
 
-## Status — IN PROGRESS (2026-07-27): Phase 1 landed
+## Status — IN PROGRESS (2026-07-27): Phases 1–2 landed
 
-Phase 1 (representation + declaration compile) is implemented and tested;
-Phases 2–5 are untouched. **Until Phase 2 lands, a local is a compile-time
-construct only** — `flatten_var_assign`'s existing `var_idx >= 0` guards make a
-local-target assignment a no-op, and a local read resolves to nothing, so a
-converted scene would render wrong. Do not convert any example scene before
-Phase 2.
+Phases 1 (declaration compile) and 2 (flatten) are implemented and tested.
+**Locals now work end to end**: declare one inside a function body, assign it,
+read it, recurse, accumulate across a loop. Phases 3–5 remain — the reverse
+binder guards, export/import, docs, and the example conversions. No example
+scene is converted yet, so nothing in the corpus depends on the feature.
+
+### Phase 2 — flatten (done)
+
+- `flatten_bind_func_locals()` appends the callee's declaration prologue to its
+  frame, each local at `0.0f` with dep mask 0 and kind LOCAL; parameters are
+  tagged PARAM. The prologue tolerates `CMD_COMMENT` / `CMD_EMPTY` and stops at
+  the first other command type.
+- **The caller outer-scope copy in `flatten_call` is deleted.** Frames are now
+  lexical: parameters then the callee's own locals, nothing of the caller's.
+- `flatten_for_loop` tags its iterator LOOP, carries the outer kinds into the
+  per-iteration array, and **copies the outer entries back** — without which a
+  local accumulated inside a loop resets every pass.
+- `flatten_var_assign` re-derives the LHS from source and resolves it against
+  the live frame on every visit, so the persisted `var_idx` cannot defeat a
+  later legal shadow. LOCAL writes the frame slot and its dep mask and reports
+  the RHS **structurally**; a PARAM/LOOP first match fails flatten rather than
+  mutating an unwritable binding; no scoped match keeps the predef path. The
+  emitted flat command's `var_idx` is normalized to whatever was actually
+  written.
+- `flatten_range` gained the parallel `var_kinds` parameter and lost `const` on
+  `var_deps`; it stays at 91/91 lines against the tier-C ratchet.
+- `src/repl/executor.c` needed no change, as predicted.
+
+Tests: `tests/test_repl_locals.c` (new binary, 46 assertions) — per-invocation
+binding, read-before-write reads 0, local shadows a global, loop iterator
+shadows a local, lexical call frames in both directions, recursion, loop
+accumulation, prologue comment tolerance, a new local retargeting an older
+global assignment, and structural routing for a global feeding a local.
+
+One assertion worth recording because it reads as a surprise: a global feeding
+a local lands in **both** the structural and the value mask (the vertex reads
+the local, whose mask is the assignment's RHS). That is correct — routing
+consults the structural mask first, so the change still forces a full
+reflatten.
+
+### Phase 1 — declaration compile (done)
 
 What Phase 1 delivered, against the plan below:
 
@@ -42,6 +77,8 @@ they close and leaving them for later would have been a live bug in between:
 
 `repl_compile_split_decl` (also listed under Phase 3) preserves the marker
 too — it re-parses the row, so it could not be left for later either.
+
+### What Phase 3 still owns
 
 The scope-aware local reference scan Phase 3 specifies
 (`compile_line_uses_local_ident`, the mirror of

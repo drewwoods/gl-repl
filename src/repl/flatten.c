@@ -20,6 +20,7 @@
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
+#include "repl/visible_vars.h"    /* ReplVisibleVarKind - the shared binding tag */
 #include "support/cpuprof.h"   /* PROF_FLATTEN_* sub-phase timing */
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
@@ -238,17 +239,27 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
     return 1;
 }
 
+/* The scope array is threaded as three parallel arrays plus a count:
+ * `vars` (name + value), `var_deps` (dep mask per binding) and `var_kinds`
+ * (what binds it). The kinds are not diagnostics — assignment resolves its
+ * target against this array and only a LOCAL is writable, so the tag is
+ * what keeps a parameter or a loop iterator constant even when it shadows
+ * a writable outer binding. `var_kinds` may be NULL only when nv == 0.
+ *
+ * `var_deps` is non-const because a local assignment writes its slot;
+ * flatten_for_loop then copies the outer entries back out of its
+ * per-iteration array. */
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx,
-                          ExprVar *vars, const ReplExprDepMask *var_deps,
-                          int nv,
+                          ExprVar *vars, ReplExprDepMask *var_deps,
+                          const ReplVisibleVarKind *var_kinds, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask);
 
 static void flatten_for_loop(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
-                             ExprVar *vars, const ReplExprDepMask *var_deps,
-                             int nv,
+                             ExprVar *vars, ReplExprDepMask *var_deps,
+                             const ReplVisibleVarKind *var_kinds, int nv,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int loop_end) {
@@ -337,21 +348,71 @@ static void flatten_for_loop(FlattenContext *ctx,
         if (ctx->abort) return;
         ExprVar lvars[MAX_EXPR_VARS];
         ReplExprDepMask ldeps[MAX_EXPR_VARS];
+        ReplVisibleVarKind lkinds[MAX_EXPR_VARS];
         int lnv = 0;
+        int outer_n = 0;
         repl_copy_string_fits(lvars[lnv].name,
                               sizeof(lvars[lnv].name),
                               var_name);
         lvars[lnv].value = val;
         ldeps[lnv] = header_deps;
+        lkinds[lnv] = REPL_VISIBLE_VAR_LOOP;
         lnv++;
         if (vars)
             for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++) {
                 ldeps[lnv] = var_deps ? var_deps[v] : 0;
+                lkinds[lnv] = var_kinds ? var_kinds[v] : REPL_VISIBLE_VAR_LOOP;
                 lvars[lnv++] = vars[v];
+                outer_n++;
             }
-        flatten_range(ctx, i + 1, loop_end, lvars, ldeps, lnv,
+        flatten_range(ctx, i + 1, loop_end, lvars, ldeps, lkinds, lnv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
+        /* Copy the outer bindings back. `lvars` is rebuilt per iteration,
+         * so without this `float acc; acc = 0; for(i,0,n){ acc = acc+i; }`
+         * would silently reset every pass. Index 0 is the iterator, which
+         * does not survive the body. flatten_if_block needs no equivalent
+         * (it shares the caller's arrays) and flatten_call deliberately
+         * does not copy back — a callee frame is not the caller's. */
+        for (int v = 0; v < outer_n; v++) {
+            vars[v] = lvars[1 + v];
+            if (var_deps)
+                var_deps[v] = ldeps[1 + v];
+        }
+    }
+}
+
+/* Append a callee's declaration prologue to its fresh call frame, each
+ * local bound to 0.0f with dep mask 0.
+ *
+ * The prologue tolerates CMD_COMMENT and CMD_EMPTY and stops at the first
+ * other command type. A strictly contiguous run would break the moment an
+ * author commented out the first local — the body would begin
+ * `CMD_COMMENT, CMD_VAR_DECLARE, ...` and every later local would silently
+ * stop binding — and it is also what lets a grouping comment sit between
+ * declaration rows. */
+static void flatten_bind_func_locals(FlattenContext *ctx,
+                                     int body_start, int body_end,
+                                     ExprVar *lvars, ReplExprDepMask *ldeps,
+                                     ReplVisibleVarKind *lkinds, int *lnv) {
+    for (int j = body_start; j < body_end && j < ctx->source_count; j++) {
+        const GLCmd *decl = &ctx->source_cmds[j];
+        if (!decl->valid || decl->type == CMD_COMMENT ||
+            decl->type == CMD_EMPTY)
+            continue;
+        if (decl->type != CMD_VAR_DECLARE)
+            break;
+        if (decl->var_idx != REPL_VAR_IDX_LOCAL)
+            continue;
+        for (int n = 0; n < decl->payload.decl.count &&
+                        *lnv < MAX_EXPR_VARS; n++) {
+            repl_copy_string_fits(lvars[*lnv].name, sizeof(lvars[*lnv].name),
+                                  decl->payload.decl.names[n]);
+            lvars[*lnv].value = 0.0f;
+            ldeps[*lnv] = 0;
+            lkinds[*lnv] = REPL_VISIBLE_VAR_LOCAL;
+            (*lnv)++;
+        }
     }
 }
 
@@ -468,6 +529,7 @@ static void flatten_call(FlattenContext *ctx,
 
         ExprVar lvars[MAX_EXPR_VARS];
         ReplExprDepMask ldeps[MAX_EXPR_VARS];
+        ReplVisibleVarKind lkinds[MAX_EXPR_VARS];
         int lnv = 0;
         for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
             repl_copy_string_fits(lvars[lnv].name,
@@ -475,12 +537,20 @@ static void flatten_call(FlattenContext *ctx,
                                   param_names[p]);
             lvars[lnv].value = arg_vals[p];
             ldeps[lnv] = arg_deps[p];   /* params inherit their arg's mask */
+            lkinds[lnv] = REPL_VISIBLE_VAR_PARAM;
             lnv++;
         }
-        for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++) {
-            ldeps[lnv] = var_deps ? var_deps[v] : 0;
-            lvars[lnv++] = vars[v];
-        }
+        /* Scope is lexical, not dynamic: the frame is the callee's
+         * parameters followed by the callee's own locals, and nothing of
+         * the caller's. Copying caller bindings in would let a caller
+         * local hide a global the callee reads — eval_primary searches
+         * this array before the predef table — while the exported C reads
+         * the global. The call arguments have already captured every
+         * caller value the callee is entitled to receive. Params and
+         * locals cannot collide: that is a same-scope redefinition, and
+         * compile rejects it. */
+        flatten_bind_func_locals(ctx, k + 1, body_end,
+                                 lvars, ldeps, lkinds, &lnv);
 
         unsigned int nested_func_mask = func_scope_mask;
         if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
@@ -489,7 +559,7 @@ static void flatten_call(FlattenContext *ctx,
                              ? root_call_src_cmd_idx : i;
 
         ctx->call_depth++;
-        flatten_range(ctx, k + 1, body_end, lvars, ldeps, lnv,
+        flatten_range(ctx, k + 1, body_end, lvars, ldeps, lkinds, lnv,
                       i, nested_root_call, nested_func_mask);
         if (ctx->call_depth > 0) ctx->call_depth--;
     } while (0);
@@ -554,10 +624,12 @@ static float flatten_eval_if_line(FlattenContext *ctx,
     }
 }
 
+/* An if-block shares the caller's scope arrays outright — no fresh frame,
+ * so no copy-back and no kind rewriting; it only forwards them. */
 static void flatten_if_block(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
-                             ExprVar *vars, const ReplExprDepMask *var_deps,
-                             int nv,
+                             ExprVar *vars, ReplExprDepMask *var_deps,
+                             const ReplVisibleVarKind *var_kinds, int nv,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int if_end) {
@@ -566,7 +638,7 @@ static void flatten_if_block(FlattenContext *ctx,
     float cond = flatten_eval_if_line(ctx, src_cmd, i, vars, var_deps, nv);
 
     if (cond != 0.0f) {
-        flatten_range(ctx, arm_start, arm_end, vars, var_deps, nv,
+        flatten_range(ctx, arm_start, arm_end, vars, var_deps, var_kinds, nv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
         return;
@@ -581,14 +653,14 @@ static void flatten_if_block(FlattenContext *ctx,
                                         var_deps, nv);
             if (cond != 0.0f) {
                 flatten_range(ctx, branch_idx + 1, next_arm_end, vars,
-                              var_deps, nv,
+                              var_deps, var_kinds, nv,
                               call_src_cmd_idx, root_call_src_cmd_idx,
                               func_scope_mask);
                 return;
             }
         } else if (branch->type == CMD_ELSE) {
             flatten_range(ctx, branch_idx + 1, next_arm_end, vars, var_deps,
-                          nv,
+                          var_kinds, nv,
                           call_src_cmd_idx, root_call_src_cmd_idx,
                           func_scope_mask);
             return;
@@ -865,9 +937,57 @@ static int flatten_reparse_line(FlattenContext *ctx,
  * success (caller advances), 0 if the flat buffer overflowed (caller aborts).
  * Extracted out of flatten_range so the PROF_FLATTEN_ASSIGN probe is one
  * begin/accum_end pair per call and flatten_range stays under its size cap. */
+/* Resolve a scalar assignment's destination against the live frame.
+ *
+ * Returns the scope-array slot for a function-scoped target, or -1 when the
+ * target is the predef slot the source command carries. The persisted
+ * `var_idx` is a commit-time storage *hint*, not the lexical authority: a
+ * later legal edit — inserting a local over an existing global — must
+ * retarget older assignment rows without rewriting every one of them. So
+ * the LHS is re-derived from source text and resolved here on every visit.
+ *
+ * `*unwritable_out` reports a first match that is a PARAM or LOOP. Commit
+ * and the reverse binder guards are supposed to make that state
+ * unreachable; flatten refuses to mutate the binding regardless.
+ *
+ * Only meaningful inside a frame, so nv == 0 (the whole top level) costs
+ * nothing. */
+static int flatten_resolve_assign_target(const char *src_text,
+                                         const ExprVar *vars,
+                                         const ReplVisibleVarKind *var_kinds,
+                                         int nv, int *unwritable_out) {
+    char lhs[REPL_PREDEF_NAME_MAX] = "";
+
+    *unwritable_out = 0;
+    if (nv <= 0 || !vars ||
+        !repl_extract_assignment_parts(src_text ? src_text : "",
+                                       lhs, sizeof(lhs), NULL, 0))
+        return -1;
+
+    for (int v = 0; v < nv; v++) {
+        if (strcmp(vars[v].name, lhs) != 0)
+            continue;
+        /* First match decides — never skip a matching PARAM/LOOP looking
+         * for an outer LOCAL, or a shadowed binding would become
+         * assignable. */
+        if (var_kinds && var_kinds[v] != REPL_VISIBLE_VAR_LOCAL) {
+            *unwritable_out = 1;
+            return -1;
+        }
+        return v;
+    }
+    return -1;
+}
+
+/* CMD_VAR_ASSIGN: re-evaluate the RHS against current bindings, update the
+ * predefined-var slot, and append the resolved assignment. Returns 1 on
+ * success (caller advances), 0 if the flat buffer overflowed (caller aborts).
+ * Extracted out of flatten_range so the PROF_FLATTEN_ASSIGN probe is one
+ * begin/accum_end pair per call and flatten_range stays under its size cap. */
 static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
                               ExprVar *vars,
-                              const ReplExprDepMask *var_deps, int nv,
+                              ReplExprDepMask *var_deps,
+                              const ReplVisibleVarKind *var_kinds, int nv,
                               int call_src_cmd_idx,
                               int root_call_src_cmd_idx,
                               unsigned int func_scope_mask) {
@@ -885,13 +1005,40 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     ReplExprDepMask rhs_deps = 0;
     int warm = repl_flatten_expr_line_ready(&ctx->expr, i);
     const char *src_text = flatten_src_text(ctx->text, i);
+    int unwritable = 0;
+    int local_slot = flatten_resolve_assign_target(src_text, vars, var_kinds,
+                                                   nv, &unwritable);
+    /* A local's value lives in a per-call frame that rebake_one_cmd cannot
+     * reconstruct: it evaluates each command against a *frozen*
+     * FlatCmdLocalVars snapshot and writes back only through predef slots,
+     * so nothing would carry a local's new value into later commands'
+     * snapshots. Reporting the RHS structurally forces a full reflatten
+     * instead of a value-only rebake. Assignment is the only way a value
+     * enters a local (locals take no initializer), so this one call covers
+     * the whole dataflow. Keyed on the *resolved* target, not the persisted
+     * var_idx, so a pre-existing global assignment retargeted by a newly
+     * inserted local takes the structural path too. */
+    int structural = (local_slot >= 0);
+
+    if (unwritable) {
+        char lhs[REPL_PREDEF_NAME_MAX] = "";
+        char msg[REPL_DIAG_TEXT_MAX];
+        repl_extract_assignment_parts(src_text ? src_text : "",
+                                      lhs, sizeof(lhs), NULL, 0);
+        snprintf(msg, sizeof(msg),
+                 "cannot assign to '%s' here - it is a parameter or loop variable",
+                 lhs);
+        prof_accum_end(PROF_FLATTEN_VAR_ASSIGN);
+        flatten_fail(ctx, msg);
+        return 0;
+    }
 
     if (warm) {
         /* Warm path. A READY line without an RHS program mirrors the text
          * branch's extract-failure case: keep the baked args[0]. */
         ReplFlattenExprValue v = repl_flatten_expr_eval(
             &ctx->expr, i, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
-            vars, var_deps, nv, /*structural=*/0);
+            vars, var_deps, nv, structural);
         if (v.found) {
             value = v.value;
             rhs_deps = v.deps;
@@ -930,15 +1077,25 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
         rhs_deps = repl_flatten_expr_deps(
             &ctx->expr, i, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
             vars, var_deps, nv,
-            /*structural=*/0, /*missing_ok=*/1);
-    if (var_idx >= 0 && var_idx < g_num_predef_vars)
-        g_predef_vars_mut[var_idx].value = value;
-    if (var_idx >= 0 && var_idx < MAX_PREDEF_VARS)
-        repl_flatten_expr_set_predef_deps(&ctx->expr, var_idx, rhs_deps);
-    repl_flatten_expr_note_value(&ctx->expr, rhs_deps);
+            structural, /*missing_ok=*/1);
+    if (local_slot >= 0) {
+        vars[local_slot].value = value;
+        if (var_deps)
+            var_deps[local_slot] = rhs_deps;
+        repl_flatten_expr_note_structural(&ctx->expr, rhs_deps);
+    } else {
+        if (var_idx >= 0 && var_idx < g_num_predef_vars)
+            g_predef_vars_mut[var_idx].value = value;
+        if (var_idx >= 0 && var_idx < MAX_PREDEF_VARS)
+            repl_flatten_expr_set_predef_deps(&ctx->expr, var_idx, rhs_deps);
+        repl_flatten_expr_note_value(&ctx->expr, rhs_deps);
+    }
     {
         GLCmd tmp = *src_cmd;
         tmp.args[0] = value;
+        /* Normalize the emitted target to whatever actually got written,
+         * so the flat stream never carries a stale storage claim. */
+        tmp.var_idx = (local_slot >= 0) ? REPL_VAR_IDX_LOCAL : var_idx;
         tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
         repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
@@ -1075,8 +1232,8 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
  * each binding's predef dependency mask for phase-3 dep propagation. */
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx,
-                          ExprVar *vars, const ReplExprDepMask *var_deps,
-                          int nv,
+                          ExprVar *vars, ReplExprDepMask *var_deps,
+                          const ReplVisibleVarKind *var_kinds, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask) {
     int i = start;
@@ -1092,7 +1249,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (src_cmd->type == CMD_FOR_BEGIN) {
             int loop_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            flatten_for_loop(ctx, src_cmd, i, vars, var_deps, nv,
+            flatten_for_loop(ctx, src_cmd, i, vars, var_deps, var_kinds, nv,
                              call_src_cmd_idx, root_call_src_cmd_idx,
                              func_scope_mask, loop_end);
             i = (loop_end < ctx->source_count) ? loop_end + 1 : ctx->source_count;
@@ -1117,7 +1274,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (src_cmd->type == CMD_IF_BEGIN) {
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            flatten_if_block(ctx, src_cmd, i, vars, var_deps, nv,
+            flatten_if_block(ctx, src_cmd, i, vars, var_deps, var_kinds, nv,
                              call_src_cmd_idx, root_call_src_cmd_idx,
                              func_scope_mask, if_end);
             i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
@@ -1140,9 +1297,9 @@ static void flatten_range(FlattenContext *ctx,
 
         /* Variable assignments: update predefined var and pass through */
         if (src_cmd->type == CMD_VAR_ASSIGN) {
-            if (!flatten_var_assign(ctx, src_cmd, i, vars, var_deps, nv,
-                                    call_src_cmd_idx, root_call_src_cmd_idx,
-                                    func_scope_mask))
+            if (!flatten_var_assign(ctx, src_cmd, i, vars, var_deps,
+                                    var_kinds, nv, call_src_cmd_idx,
+                                    root_call_src_cmd_idx, func_scope_mask))
                 return;
             i++;
             continue;
@@ -1269,7 +1426,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
         prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
     }
-    flatten_range(&ctx, 0, ctx.source_count, NULL, NULL, 0, -1, -1, 0);
+    flatten_range(&ctx, 0, ctx.source_count, NULL, NULL, NULL, 0, -1, -1, 0);
     if (!g_flat_refresh_profile_frame.active) {
         prof_accum_commit(PROF_FLATTEN_REPARSE);
         prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
