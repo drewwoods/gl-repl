@@ -394,6 +394,10 @@ State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L126); pla
 [`replay_exec_limit()`](src/subsystems/replay/replay.h#L79); fade-batch ring renders old geometry in a blended
 pass. Fade replays skip `CMD_CLEAR`, and clamps never cut below the
 program's leading `glClear` (`replay_frame_setup_limit`).
+Assignment annotations associate prior rows with the current invocation by
+stable flat provenance (`func_scope_mask`, `call_depth`, immediate/root call
+sites) and backward execution order — never by `FlatCmdLocalVars` values,
+which legitimately change between commands after local assignments.
 
 ### Undo
 

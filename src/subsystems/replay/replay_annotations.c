@@ -358,29 +358,27 @@ static int visible_var_index(const ExprVar *vars, int num_vars, const char *name
 }
 
 static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
-    const FlatCmdLocalVars *flat_vars;
-    const FlatCmdLocalVars *cur_vars;
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
+    const GLCmd *candidate;
+    const GLCmd *current;
 
     if (flat_idx < 0 || current_flat_idx < 0)
         return 1;
 
-    if (flat_cmds[flat_idx].func_scope_mask !=
-        flat_cmds[current_flat_idx].func_scope_mask)
-        return 0;
+    candidate = &flat_cmds[flat_idx];
+    current = &flat_cmds[current_flat_idx];
 
-    flat_vars = &repl_state_flat_program_local_vars()[flat_idx];
-    cur_vars = &repl_state_flat_program_local_vars()[current_flat_idx];
-
-    for (int i = 0; i < flat_vars->num_vars; i++) {
-        int ci = visible_var_index(cur_vars->vars, cur_vars->num_vars,
-                                   flat_vars->vars[i].name);
-        if (ci >= 0 &&
-            fabsf(flat_vars->vars[i].value - cur_vars->vars[ci].value) > 1e-6f)
-            return 0;
-    }
-
-    return 1;
+    /* Match the invocation's stable provenance, never its mutable local
+     * values. Local snapshots are effective state at each command, so two
+     * rows in the same call are expected to differ after an assignment.
+     * Temporal disambiguation for repeated calls at one source site comes
+     * from find_replay_assignment_flat_cmd's backward scan: the nearest
+     * matching execution is the current invocation once that row has run,
+     * and the previous invocation before it has. */
+    return candidate->func_scope_mask == current->func_scope_mask &&
+           candidate->call_depth == current->call_depth &&
+           candidate->call_src_cmd_idx == current->call_src_cmd_idx &&
+           candidate->root_call_src_cmd_idx == current->root_call_src_cmd_idx;
 }
 
 static int find_replay_assignment_flat_cmd(int src_line) {

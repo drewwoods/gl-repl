@@ -73,7 +73,7 @@ Docs: `docs/USER_GUIDE.md` (a `#### Function-scoped locals` subsection under
 `CLAUDE.md`, and the `gl-repl-scene-authoring` skill (language block, Math,
 Budgets).
 
-#### Two defects found by the conversion, and one cost measured
+#### Three defects found by the conversion, and one cost measured
 
 **`rebake_one_cmd` re-applied local assignments** — a Phase 2 bug the corpus
 differential could not see until a shipped example had locals in it.
@@ -103,6 +103,18 @@ on this RHS only and keeps the baked `args[0]` as the authoritative result. The
 field occupies the existing `GLCmd` payload union, so it adds no command-size
 cost. Regression coverage in `test_repl_core_commit.c` checks both a first
 local assignment and a following self-referential assignment.
+
+**Replay treated mutable local values as invocation identity.** Its fallback
+for finding an earlier assignment required every overlapping
+`FlatCmdLocalVars` value to equal the current command's snapshot. That is false
+by construction after a local write, so advancing to the geometry in
+`planet()` made earlier `th` and `u` expansions disappear even though replay
+was still in the same call. Occurrence matching now uses the flat commands'
+stable provenance (`func_scope_mask`, `call_depth`, immediate call site and
+root call site); a backward scan supplies temporal identity for repeated calls
+at one site. Local values remain substitution data, never context identity.
+The regression pauses after the assignment chain and also checks a second
+invocation with different parameters.
 
 **The structural-dep cost now has numbers.** A new `bench_repl --only
 refresh_slider` case measures the other half of live editing — one

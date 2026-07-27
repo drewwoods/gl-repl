@@ -303,6 +303,12 @@ frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
 flat command's scope after the fact — replay's value-tracing annotations
 read it to display per-instance bindings.
 
+Replay associates an earlier assignment with the active invocation using
+stable flat-command provenance (`func_scope_mask`, `call_depth`, immediate and
+root call sites) plus nearest-earlier execution order. It must never compare
+`FlatCmdLocalVars` values for that match: those values are effective command
+state and therefore change after every local assignment within one invocation.
+
 The snapshot is *frozen* at emit time, and that is what makes function-local
 dataflow structural rather than value-only: `rebake_one_cmd` re-evaluates an
 assignment against the snapshot it captured and has no way to thread a local's
