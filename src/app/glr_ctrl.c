@@ -2085,6 +2085,12 @@ static UiHistogramPanelView glr_ctrl_build_histogram_panel_view(
     v.window_h = snap->viewport.window_h;
     v.visible  = (snap->profile_panel.mode == PROFILE_PANEL_HISTOGRAM);
     v.hidden_series = snap->profile_panel.hidden_histogram_series;
+    /* Hovering a legend entry pops that series' running statistics. The
+     * pointer is snapshot state, so this needs nothing from the input path
+     * beyond the passive-motion redraw the other hover treatments already
+     * rely on. */
+    v.pointer_x = snap->pointer.mouse_x;
+    v.pointer_y = snap->pointer.mouse_y;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_HISTOGRAM,
                                 &v.panel_x, &v.panel_y);

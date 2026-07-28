@@ -145,12 +145,27 @@ int  ui_fps_panel_height(void);
  * is left), but keeps its legend slot — rendered as a hollow swatch — so the
  * layout, and therefore the legend hit-test, never shifts as series come and
  * go. With every series hidden the plot draws empty and says so; the legend
- * still renders, since it is the only way back. */
+ * still renders, since it is the only way back.
+ *
+ * pointer_x/pointer_y are the last known pointer position in GLUT window
+ * coordinates (y down). Resting the pointer on a legend entry pops that
+ * series' running statistics — count, min/mean/max, total and standard
+ * deviation — over the plot: the shape of a distribution is what the graph is
+ * for, but reading a number off a log-log plot with a dozen series on it is
+ * not, and the section listing beside it only carries one smoothed EMA. The
+ * hovered series is resolved by ui_histogram_panel_hit_test(), so the region
+ * that shows a series' numbers is exactly the region that toggles it.
+ *
+ * Since the tooltip keys off the same rectangle as the click, a view left
+ * zero-initialized reports a pointer at the window's top-left corner, which is
+ * outside any panel the overlay layout places. Set a negative coordinate to
+ * suppress the tooltip outright. */
 typedef struct {
     int window_w, window_h;
     int visible;            /* profile mode is PROFILE_PANEL_HISTOGRAM */
     int panel_x, panel_y;   /* resolved position, controller-baked */
     unsigned long long hidden_series;  /* bit per ProfSection: omit from the plot */
+    int pointer_x, pointer_y;  /* GLUT window coords (y down); <0 = no hover */
 } UiHistogramPanelView;
 
 void ui_histogram_panel_render(const UiHistogramPanelView *view);

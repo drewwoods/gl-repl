@@ -134,8 +134,47 @@ int prof_section_histogram(ProfSection s,
                            int max_bins);
 int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins);
 
-/* Zero every section histogram and the frame-time histogram, so the next
- * samples start a fresh distribution. Call when the measured workload is
+/* --- Running statistics, one set per histogram ---
+ *
+ * Maintained from the same samples that feed the bins, over the same
+ * cumulative window (prof_histogram_reset() clears both together), so the
+ * numbers always describe exactly the distribution being drawn.
+ *
+ * They are accumulated from the raw microsecond values, not read back out of
+ * the bins: the bins quantize to ~1.36% and fold their two outer bins into
+ * open-ended underflow/overflow buckets, so a bin-derived min/max/mean would
+ * be approximate at best and simply wrong at the edges. A sub-microsecond
+ * section reports its true mean here while sitting entirely in bin 0.
+ *
+ * variance_us2 / stddev_us are the *sample* statistics (the n-1 divisor):
+ * these are an ongoing sample of a process that keeps running, not a closed
+ * population. Both are 0 until the second sample arrives.
+ *
+ * mean/variance use Welford's online update rather than accumulating a sum of
+ * squares — over a long run sum_us^2 dwarfs the spread, and the textbook
+ * E[x^2] - E[x]^2 form cancels away the significant digits that carry it
+ * (a section that runs 16 ms every frame for an hour would report a negative
+ * variance). sum_us is kept as its own plain running total, which is exact
+ * enough for a total and is the one figure that cannot be recovered from the
+ * others.
+ *
+ * Getters return 1 and fill *out on success; 0 (leaving *out untouched) for a
+ * bad section index or a NULL out. With no samples yet, every field is 0. */
+typedef struct {
+    unsigned long long count;      /* samples recorded since the last reset */
+    double min_us, max_us;         /* extremes of the raw samples           */
+    double sum_us;                 /* running total (all time in section)   */
+    double mean_us;
+    double variance_us2;           /* sample variance, in us^2              */
+    double stddev_us;              /* sqrt(variance_us2), in us             */
+} ProfHistogramStats;
+
+int prof_section_stats(ProfSection s, ProfHistogramStats *out);
+int prof_frame_time_stats(ProfHistogramStats *out);
+
+/* Zero every section histogram and the frame-time histogram — bins and
+ * running statistics alike — so the next samples start a fresh distribution.
+ * Call when the measured workload is
  * replaced wholesale (loading a different example / scene) — the old shape
  * describes different geometry, and its startup outliers would otherwise sit
  * in the bins forever. Leaves the EMAs, staleness and FPS history alone:

@@ -127,6 +127,20 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
+/* Same, over the full range a histogram statistic can span. The panel's other
+ * readouts are per-frame times that stop at a few ms, but the hover tooltip
+ * also reports a running total, which passes a second within a minute of
+ * profiling — and a sub-millisecond mean or standard deviation, where fmt_us()'s
+ * whole microseconds would round the interesting digit away. */
+static void fmt_us_wide(char *buf, int buf_sz, double us) {
+    if (us < 1000.0)
+        snprintf(buf, (size_t)buf_sz, "%.1f us", us);
+    else if (us < 1000000.0)
+        snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
+    else
+        snprintf(buf, (size_t)buf_sz, "%.2f s", us / 1000000.0);
+}
+
 /* Same, for a value that is exactly a power of ten (the histogram's decade
  * ticks). The mantissa fmt_us() prints is all zeroes there, and those four
  * characters are what pushed "1.00 ms" into the axis' high bound and got the
@@ -807,6 +821,15 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
  * the top of each decade compresses to a smear rather than a readable scale. */
 #define HIST_TICK_MIN_GAP   3.0f
 
+/* Hover readout over a legend entry: one title row plus one row per statistic,
+ * laid out as a key column and a value column. The key column is sized for the
+ * longest key ("stddev"); FONT_SMALL is fixed-width, so these are character
+ * counts turned into pixels at draw time. */
+#define HIST_TIP_ROW_H      12
+#define HIST_TIP_PAD         6
+#define HIST_TIP_KEY_CHARS   7   /* "stddev" + a space */
+#define HIST_TIP_GAP         8   /* pointer-to-box offset */
+
 /* Upper bound on the plot's pixel width, so the per-column envelopes below can
  * be plain stack arrays. */
 #define HIST_MAX_COLS  512
@@ -829,6 +852,20 @@ static int hist_series_count(void) {
             series_count++;
     }
     return series_count;
+}
+
+/* A series' position in catalog order among the visible set — the index its
+ * identity color is generated from. The legend and the two bar passes walk the
+ * whole catalog and count as they go; the hover tooltip needs one series'
+ * ordinal on its own, so it recomputes it the same way rather than colouring
+ * its title differently from the swatch it is describing. */
+static int hist_series_ordinal(ProfSection s) {
+    int ordinal = 0;
+    for (int section_idx = 0; section_idx < (int)s; section_idx++) {
+        if (hist_series_visible((ProfSection)section_idx))
+            ordinal++;
+    }
+    return ordinal;
 }
 
 /* The set actually drawn: in the catalog and not toggled off. The x axis, the
@@ -1087,6 +1124,125 @@ static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
     }
 }
 
+/* Hover readout for one series: the running statistics support/cpuprof keeps
+ * alongside the bins, for the legend entry the pointer is resting on.
+ *
+ * The graph answers "what shape is this section's distribution"; these are the
+ * numbers behind it, which no amount of squinting at a log-log plot recovers —
+ * and the section listing next door has only a single smoothed EMA. min/max in
+ * particular are the raw extremes, not bin edges, so they stay exact in the
+ * open-ended first and last bins where the plot itself cannot be.
+ *
+ * The hovered series comes from the click hit-test, so what a hover explains is
+ * exactly what a click toggles. Drawn last, over everything, and clamped into
+ * the window: the legend sits at the panel's bottom edge, which for the
+ * bottom-most panel in the overlay stack is close to the screen edge. */
+static void hist_draw_stats_tooltip(const UiHistogramPanelView *view,
+                                    ProfSection s) {
+    ProfHistogramStats stats;
+    char rows[6][2][24];
+    int  row_count = 0;
+    int  i;
+    int  key_w, val_w = 0, title_w, box_w, box_h;
+    int  box_x, box_y;
+    int  gl_y = view->window_h - view->pointer_y;
+    const char *label = prof_section_info(s).label;
+
+    if (!prof_section_stats(s, &stats)) return;
+
+    /* An unsampled series still gets a box: the alternative is a hover that
+     * silently does nothing on exactly the sections a reader is most likely to
+     * be asking about (the ones with no bars). */
+    if (stats.count == 0) {
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "count");
+        snprintf(rows[row_count][1], sizeof(rows[0][1]), "%s", "0");
+        row_count++;
+    } else {
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "count");
+        snprintf(rows[row_count][1], sizeof(rows[0][1]), "%llu", stats.count);
+        row_count++;
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "min");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.min_us);
+        row_count++;
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "mean");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.mean_us);
+        row_count++;
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "max");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.max_us);
+        row_count++;
+        /* The standard deviation, not the variance the sampler stores: same
+         * statistic, but in microseconds, so it sits on the same scale as the
+         * three rows above it instead of in unreadable us^2. */
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "stddev");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]),
+                    stats.stddev_us);
+        row_count++;
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "total");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.sum_us);
+        row_count++;
+    }
+
+    key_w = HIST_TIP_KEY_CHARS * FONT_SMALL_W;
+    for (i = 0; i < row_count; i++) {
+        int w = (int)strlen(rows[i][1]) * FONT_SMALL_W;
+        if (w > val_w) val_w = w;
+    }
+    title_w = (int)strlen(label) * FONT_SMALL_W;
+    box_w   = key_w + val_w;
+    if (title_w > box_w) box_w = title_w;
+    box_w += 2 * HIST_TIP_PAD;
+    box_h = (row_count + 1) * HIST_TIP_ROW_H + 2 * HIST_TIP_PAD;
+
+    /* Above-right of the pointer by default; flip below if that would leave
+     * the window, then clamp both axes so the box is always fully readable. */
+    box_x = view->pointer_x + HIST_TIP_GAP;
+    box_y = gl_y + HIST_TIP_GAP;
+    if (box_y + box_h > view->window_h)
+        box_y = gl_y - HIST_TIP_GAP - box_h;
+    if (box_x + box_w > view->window_w) box_x = view->window_w - box_w - 2;
+    if (box_x < 2) box_x = 2;
+    if (box_y + box_h > view->window_h) box_y = view->window_h - box_h - 2;
+    if (box_y < 2) box_y = 2;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_panel_frame((float)box_x, (float)box_y, (float)box_w, (float)box_h,
+                     UI_TOK_RAISED, 0.96f, UI_TOK_BORDER, 0.95f);
+    glDisable(GL_BLEND);
+
+    {
+        int tx = box_x + HIST_TIP_PAD;
+        int ty = box_y + box_h - HIST_TIP_PAD - HIST_TIP_ROW_H + 2;
+
+        /* Title in the series' own plot color, so the box names its series the
+         * same way the legend swatch does. */
+        {
+            float rgb[3];
+            hist_series_color(hist_series_ordinal(s), rgb);
+            glColor3fv(rgb);
+            gl2d_draw_string((float)tx, (float)ty, label, FONT_SMALL);
+        }
+        for (i = 0; i < row_count; i++) {
+            ty -= HIST_TIP_ROW_H;
+            ui_clr(UI_TOK_TEXT_MUTED);
+            gl2d_draw_string((float)tx, (float)ty, rows[i][0], FONT_SMALL);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+            gl2d_draw_string((float)(tx + key_w), (float)ty, rows[i][1],
+                             FONT_SMALL);
+        }
+    }
+}
+
+/* The series the pointer is resting on, or -1. Deliberately the click
+ * hit-test: the hover region and the toggle region are the same rectangle by
+ * construction, so they can never drift apart. */
+static int hist_hover_section(const UiHistogramPanelView *view) {
+    int hit;
+    if (view->pointer_x < 0 || view->pointer_y < 0) return -1;
+    hit = ui_histogram_panel_hit_test(view, view->pointer_x, view->pointer_y);
+    return (hit >= 0) ? hit : -1;
+}
+
 void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     if (!view || !view->visible) return;
 
@@ -1100,6 +1256,9 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     int have_data = ui_histogram_axis_range(view->hidden_series,
                                             &lo_bin, &hi_bin);
     int any_shown = 0;
+    /* Resolved once, up front: the tooltip draws last on every path out of
+     * this function, including the two empty ones. */
+    int hover_section = hist_hover_section(view);
 
     /* Tallest single bin of any one series — the log-y ceiling. Per series,
      * not the summed height across series: each series is drawn against this
@@ -1183,6 +1342,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                          (float)plot_y + (float)plot_h * 0.5f,
                          empty, FONT_SMALL);
         hist_draw_legend(view, legend_rows, series_samples);
+        if (hover_section >= 0)
+            hist_draw_stats_tooltip(view, (ProfSection)hover_section);
         gl2d_end();
         return;
     }
@@ -1403,6 +1564,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     }
 
     hist_draw_legend(view, legend_rows, series_samples);
+    if (hover_section >= 0)
+        hist_draw_stats_tooltip(view, (ProfSection)hover_section);
 
     gl2d_end();
 }

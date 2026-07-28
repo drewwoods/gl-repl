@@ -74,7 +74,9 @@ static UiProfilePanelMode g_mode = PROFILE_PANEL_HISTOGRAM;
 /* Last-rendered histogram-panel layout, so the mouse callback can hit-test the
  * header's [reset] control against exactly where it was drawn (the controller
  * pattern: view built in display_func, consumed by the input path). */
-static UiHistogramPanelView g_hist_view;
+/* Pointer starts off-window (negative = no hover) until the first motion
+ * event, so the legend tooltip stays down before the mouse has been moved. */
+static UiHistogramPanelView g_hist_view = { 0, 0, 0, 0, 0, 0ULL, -1, -1 };
 
 /* Display lists: one compiled once and reused across frames, one rebuilt every
  * frame. Created lazily on the first display callback (needs a live context). */
@@ -248,6 +250,14 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 }
 
+/* Track the pointer so the histogram legend's hover statistics work here too —
+ * the same view field the gl-repl controller fills from its UI snapshot. */
+static void passive_motion_func(int x, int y) {
+    g_hist_view.pointer_x = x;
+    g_hist_view.pointer_y = y;
+    glutPostRedisplay();
+}
+
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x; (void)y;
     switch (key) {
@@ -271,11 +281,12 @@ int main(int argc, char **argv) {
     glutReshapeFunc(reshape_func);
     glutKeyboardFunc(keyboard_func);
     glutMouseFunc(mouse_func);
+    glutPassiveMotionFunc(passive_motion_func);
     glutIdleFunc(idle_func);
 
     printf("cpuprof_demo: immediate vs display-list reuse vs recompile/frame\n");
     printf("  d=toggle sections/histogram   r=reset histogram"
-           "   click legend=toggle series   q=quit\n");
+           "   click legend=toggle series   hover legend=stats   q=quit\n");
     glutMainLoop();
     return 0;
 }

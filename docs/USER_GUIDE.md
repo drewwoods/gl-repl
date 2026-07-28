@@ -1932,16 +1932,26 @@ Three floating panels work together:
   timing distribution on one graph. Both axes are logarithmic: microsecond
   sections and a 100 ms stall fit on the same plot, so a rare spike shows
   up as a small bump far to the right instead of vanishing into an average.
-  Each section keeps its listing color; the legend below maps them.
+  Each section keeps its listing color; the legend below maps them. Click a
+  legend entry to drop that series from the plot (and from both axes, so
+  hiding the fast sections zooms in on what is left); click it again to bring
+  it back. **Rest the pointer on a legend entry** and that series' numbers pop
+  up over the plot — sample count, fastest, mean and slowest sample, standard
+  deviation, and the total time spent in the section. Those are exact,
+  measured values rather than anything read back off the plot, so they stay
+  meaningful for a section too fast to separate from the axis' left edge.
 - **The FPS plot** (bottom-right) graphs frame rate over the last 10
   seconds, minute, and 10 minutes as three overlaid series, with the
   current rate in the corner.
 
 Histogram mode is the tool for *hitches*: a scene that averages 60 fps but
 stutters once a second shows a clean main hump plus a second bump at the
-stall duration — and the bump's color names the section responsible. The
-histograms accumulate from load (they reset when you switch examples), so
-leave the panel up while you reproduce the hiccup.
+stall duration — and the bump's color names the section responsible. Hovering
+that section's legend entry puts a number on the stall: the max is how bad the
+worst one got, and the gap between mean and max is how much of an outlier it
+is. The histograms and their statistics accumulate from load together (both
+reset when you switch examples, or on the panel's `[reset]` control), so leave
+the panel up while you reproduce the hiccup.
 
 GPU timing needs timer-query support (GL 3.3 / `ARB_timer_query`, or the
 `EXT_timer_query` fallback); `GLR_NO_GPU_PROF=1` disables it explicitly, and

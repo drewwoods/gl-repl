@@ -324,6 +324,186 @@ static void test_cpuprof_histogram_reset(void) {
     prof_test_reset();
 }
 
+/* The running statistics kept beside each histogram. Fed a known sample set,
+ * every figure must come out exactly — these are what the legend hover reports,
+ * and an approximate mean is worse than none. */
+static void test_cpuprof_histogram_stats(void) {
+    ProfHistogramStats st;
+    /* Deliberately spread over three decades so no two samples share a bin:
+     * sum 11110, mean 2222, squared deviations summing to 44323680 — sample
+     * variance 11080920 us^2 over the n-1 divisor, stddev ~3328.8 us. */
+    static const double dur_us[] = { 10.0, 100.0, 1000.0, 2000.0, 8000.0 };
+    double now = 1000.0;
+
+    prof_test_reset();
+    ASSERT_INT_EQ("stats resolve before any sample",
+                  prof_section_stats(PROF_FLATTEN, &st), 1);
+    ASSERT_INT_EQ("an unsampled section has no samples", (int)st.count, 0);
+    ASSERT_TRUE("an unsampled section reports zeroed statistics",
+                st.min_us == 0.0 && st.max_us == 0.0 && st.sum_us == 0.0 &&
+                st.mean_us == 0.0 && st.variance_us2 == 0.0 &&
+                st.stddev_us == 0.0);
+
+    for (int i = 0; i < 5; i++) {
+        prof_test_set_now_us(now);
+        prof_begin(PROF_FLATTEN);
+        now += dur_us[i];
+        prof_test_set_now_us(now);
+        prof_end(PROF_FLATTEN);
+        now += 100000.0;
+    }
+
+    prof_section_stats(PROF_FLATTEN, &st);
+    ASSERT_INT_EQ("every sample is counted", (int)st.count, 5);
+    ASSERT_TRUE("min is the fastest sample",  st.min_us == 10.0);
+    ASSERT_TRUE("max is the slowest sample",  st.max_us == 8000.0);
+    ASSERT_TRUE("sum totals every sample",    st.sum_us == 11110.0);
+    ASSERT_TRUE("mean is sum over count",     st.mean_us == 11110.0 / 5.0);
+    ASSERT_TRUE("variance uses the n-1 divisor",
+                st.variance_us2 > 11080919.0 && st.variance_us2 < 11080921.0);
+    ASSERT_TRUE("stddev is the root of the variance",
+                st.stddev_us > 3328.7 && st.stddev_us < 3328.9);
+
+    /* One sample has no spread to estimate — the n-1 divisor is undefined
+     * there, and reporting a 0 beats reporting a division by zero. */
+    prof_test_reset();
+    prof_test_set_now_us(0.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(500.0);
+    prof_end(PROF_FLATTEN);
+    prof_section_stats(PROF_FLATTEN, &st);
+    ASSERT_INT_EQ("a lone sample counts once", (int)st.count, 1);
+    ASSERT_TRUE("a lone sample has a mean but no variance",
+                st.mean_us == 500.0 && st.variance_us2 == 0.0 &&
+                st.stddev_us == 0.0);
+    ASSERT_TRUE("a lone sample is its own min and max",
+                st.min_us == 500.0 && st.max_us == 500.0);
+
+    ASSERT_INT_EQ("invalid section stats rejected",
+                  prof_section_stats((ProfSection)-1, &st), 0);
+    ASSERT_INT_EQ("NULL out rejected", prof_section_stats(PROF_FLATTEN, 0), 0);
+    prof_test_reset();
+}
+
+/* The bins quantize to ~1.36% and fold their outer two into open-ended
+ * underflow/overflow buckets. The statistics take the raw values instead, so
+ * they stay exact exactly where a bin-derived readout could not be: below 1 us,
+ * where every sample shares bin 0. */
+static void test_cpuprof_histogram_stats_beat_the_bins(void) {
+    ProfHistogramStats st;
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    static const double dur_us[] = { 0.2, 0.4, 0.6 };
+    double now = 0.0;
+
+    prof_test_reset();
+    for (int i = 0; i < 3; i++) {
+        prof_test_set_now_us(now);
+        prof_begin(PROF_REFORMAT);
+        now += dur_us[i];
+        prof_test_set_now_us(now);
+        prof_end(PROF_REFORMAT);
+        now += 1000.0;
+    }
+
+    prof_section_histogram(PROF_REFORMAT, bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("every sub-us sample shares the underflow bin",
+                  (int)bins[0], 3);
+    prof_section_stats(PROF_REFORMAT, &st);
+    ASSERT_INT_EQ("sub-us samples are counted", (int)st.count, 3);
+    ASSERT_TRUE("sub-us min survives the bin floor",
+                st.min_us > 0.19 && st.min_us < 0.21);
+    ASSERT_TRUE("sub-us max survives the bin floor",
+                st.max_us > 0.59 && st.max_us < 0.61);
+    ASSERT_TRUE("sub-us mean survives the bin floor",
+                st.mean_us > 0.39 && st.mean_us < 0.41);
+    prof_test_reset();
+}
+
+/* The stats track whatever feeds the bins: the accumulated total (once per
+ * commit, not once per pass) for accum sections, and the frame-tick delta for
+ * the frame-time histogram. */
+static void test_cpuprof_histogram_stats_alternate_feeds(void) {
+    ProfHistogramStats st;
+
+    prof_test_reset();
+    prof_accum_reset(PROF_RENDER3D_SETUP);
+    prof_test_set_now_us(1000.0);
+    prof_begin(PROF_RENDER3D_SETUP);
+    prof_test_set_now_us(11000.0);
+    prof_accum_end(PROF_RENDER3D_SETUP);
+    prof_test_set_now_us(20000.0);
+    prof_begin(PROF_RENDER3D_SETUP);
+    prof_test_set_now_us(50000.0);
+    prof_accum_end(PROF_RENDER3D_SETUP);
+    prof_accum_commit(PROF_RENDER3D_SETUP);
+
+    prof_section_stats(PROF_RENDER3D_SETUP, &st);
+    ASSERT_INT_EQ("a multi-pass accum commit is one sample", (int)st.count, 1);
+    ASSERT_TRUE("the accum sample is the summed total", st.sum_us == 40000.0);
+
+    prof_accum_commit(PROF_RENDER3D_SETUP);
+    prof_section_stats(PROF_RENDER3D_SETUP, &st);
+    ASSERT_INT_EQ("a duplicate commit adds no sample", (int)st.count, 1);
+
+    prof_test_reset();
+    prof_test_set_now_us(1000.0);
+    prof_frame_tick();
+    prof_test_set_now_us(18000.0);
+    prof_frame_tick();
+    prof_test_set_now_us(38000.0);
+    prof_frame_tick();
+
+    prof_frame_time_stats(&st);
+    ASSERT_INT_EQ("frame stats count the inter-tick deltas", (int)st.count, 2);
+    ASSERT_TRUE("frame stats span the two deltas",
+                st.min_us == 17000.0 && st.max_us == 20000.0);
+    ASSERT_TRUE("frame stats total the wall time", st.sum_us == 37000.0);
+    ASSERT_INT_EQ("NULL frame-stats out rejected", prof_frame_time_stats(0), 0);
+    prof_test_reset();
+}
+
+/* The statistics are cumulative in the same way the bins are, so they clear on
+ * the same reset — a stale min from a previous example describes geometry that
+ * is no longer on screen. */
+static void test_cpuprof_histogram_stats_reset(void) {
+    ProfHistogramStats st;
+
+    prof_test_reset();
+    prof_test_set_now_us(1000.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(51000.0);
+    prof_end(PROF_FLATTEN);
+    prof_frame_tick();
+    prof_test_set_now_us(68000.0);
+    prof_frame_tick();
+
+    prof_section_stats(PROF_FLATTEN, &st);
+    ASSERT_INT_EQ("section stats have a sample before reset", (int)st.count, 1);
+    prof_frame_time_stats(&st);
+    ASSERT_INT_EQ("frame stats have a sample before reset", (int)st.count, 1);
+
+    prof_histogram_reset();
+
+    prof_section_stats(PROF_FLATTEN, &st);
+    ASSERT_INT_EQ("reset clears the section stats", (int)st.count, 0);
+    ASSERT_TRUE("reset clears the section extremes",
+                st.min_us == 0.0 && st.max_us == 0.0 && st.sum_us == 0.0);
+    prof_frame_time_stats(&st);
+    ASSERT_INT_EQ("reset clears the frame stats", (int)st.count, 0);
+
+    /* The next sample starts a fresh distribution rather than extending the
+     * old one — a 50 ms max must not survive as the new min. */
+    prof_test_set_now_us(100000.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(120000.0);
+    prof_end(PROF_FLATTEN);
+    prof_section_stats(PROF_FLATTEN, &st);
+    ASSERT_INT_EQ("post-reset stats hold only the new sample", (int)st.count, 1);
+    ASSERT_TRUE("post-reset min is the new sample, not the old one",
+                st.min_us == 20000.0);
+    prof_test_reset();
+}
+
 /* The log bin layout: constant *relative* width, underflow/overflow clamps,
  * and edges that agree with the mapping. This is what lets a 3 us section and
  * a 30 ms one both be measured precisely. */
@@ -820,6 +1000,186 @@ static void test_histogram_render_with_samples(void) {
     prof_test_reset();
 }
 
+/* Hovering a legend entry pops that series' statistics over the plot. The
+ * hover region is the click region, so the box that explains a series is
+ * anchored to the same cell that toggles it. */
+static void test_histogram_legend_hover_stats(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10,
+        .hidden_series = 0ULL, .pointer_x = -1, .pointer_y = -1
+    };
+    int legend_rows = 0, series = 0;
+    int hover_mx, hover_my, hovered;
+    unsigned long long no_hover_text, hover_text;
+
+    prof_test_reset();
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        if (prof_section_info((ProfSection)s).depth == 0 &&
+            prof_section_info((ProfSection)s).label &&
+            prof_section_info((ProfSection)s).label[0])
+            series++;
+    legend_rows = (series + 2 - 1) / 2;
+    hover_mx = view.panel_x + 11;
+    hover_my = view.window_h
+             - (view.panel_y + 8 + (legend_rows - 1) * 12 + 6);
+    hovered = ui_histogram_panel_hit_test(&view, hover_mx, hover_my);
+    ASSERT_TRUE("the hover point is a legend cell", hovered >= 0);
+
+    /* Feed the series the cell actually resolves to, so the box carries the
+     * full statistic set rather than the unsampled short form. */
+    for (int i = 0; i < 30; i++) {
+        prof_test_set_now_us((double)i * 100000.0);
+        prof_begin((ProfSection)hovered);
+        prof_test_set_now_us((double)i * 100000.0 + 16000.0);
+        prof_end((ProfSection)hovered);
+    }
+
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    no_hover_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    view.pointer_x = hover_mx;
+    view.pointer_y = hover_my;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    hover_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    /* A title row plus six statistic rows, each a key and a value: the box is
+     * unmistakable against the panel's own label count. */
+    ASSERT_TRUE("hovering a legend entry draws the statistics box",
+                hover_text >= no_hover_text + 13);
+
+    /* Off the legend, and off the panel entirely, nothing pops. */
+    view.pointer_x = view.panel_x + 11;
+    view.pointer_y = view.window_h - (view.panel_y + ui_histogram_panel_height() / 2);
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    ASSERT_INT_EQ("hovering the plot body draws no statistics box",
+                  (int)gl_stub_counts[GL_STUB_glutBitmapString],
+                  (int)no_hover_text);
+
+    view.pointer_x = -1;
+    view.pointer_y = -1;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    ASSERT_INT_EQ("a negative pointer suppresses the statistics box",
+                  (int)gl_stub_counts[GL_STUB_glutBitmapString],
+                  (int)no_hover_text);
+    prof_test_reset();
+}
+
+/* Two states where the plot has nothing to draw but the hover must still
+ * answer: a series with no samples at all, and a series the user toggled off.
+ * Both are exactly when a reader is most likely to be asking what the series
+ * did. */
+static void test_histogram_legend_hover_without_bars(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10,
+        .hidden_series = 0ULL, .pointer_x = -1, .pointer_y = -1
+    };
+    int legend_rows = 0, series = 0;
+    int hover_mx, hover_my, hovered;
+    unsigned long long base_text, hover_text;
+
+    prof_test_reset();
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        if (prof_section_info((ProfSection)s).depth == 0 &&
+            prof_section_info((ProfSection)s).label &&
+            prof_section_info((ProfSection)s).label[0])
+            series++;
+    legend_rows = (series + 2 - 1) / 2;
+    hover_mx = view.panel_x + 11;
+    hover_my = view.window_h
+             - (view.panel_y + 8 + (legend_rows - 1) * 12 + 6);
+    hovered = ui_histogram_panel_hit_test(&view, hover_mx, hover_my);
+    ASSERT_TRUE("the hover point resolves a series", hovered >= 0);
+
+    /* Nothing sampled anywhere: the panel is on its "(collecting)" path. */
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    base_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    view.pointer_x = hover_mx;
+    view.pointer_y = hover_my;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    hover_text = gl_stub_counts[GL_STUB_glutBitmapString];
+    ASSERT_TRUE("an unsampled series still reports a count of zero",
+                hover_text > base_text);
+
+    /* Hidden series: dropped from the plot, but the hover still explains it. */
+    prof_test_reset();
+    for (int i = 0; i < 30; i++) {
+        prof_test_set_now_us((double)i * 100000.0);
+        prof_begin((ProfSection)hovered);
+        prof_test_set_now_us((double)i * 100000.0 + 16000.0);
+        prof_end((ProfSection)hovered);
+    }
+    view.hidden_series = ui_histogram_panel_toggle_series(0ULL, hovered);
+    view.pointer_x = -1;
+    view.pointer_y = -1;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    base_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    view.pointer_x = hover_mx;
+    view.pointer_y = hover_my;
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    ASSERT_TRUE("a hidden series still reports its statistics",
+                gl_stub_counts[GL_STUB_glutBitmapString] > base_text);
+    prof_test_reset();
+}
+
+/* The box is clamped into the window. The legend sits at the panel's bottom
+ * edge, so a panel parked at the window's bottom-right corner is the case that
+ * would otherwise push the box off-screen — where it is drawn but unreadable. */
+static void test_histogram_legend_hover_clamps_to_window(void) {
+    UiHistogramPanelView view;
+    int legend_rows = 0, series = 0;
+    unsigned long long corner_text, mid_text;
+
+    prof_test_reset();
+    for (int s = 0; s < PROF_SECTION_COUNT; s++)
+        if (prof_section_info((ProfSection)s).depth == 0 &&
+            prof_section_info((ProfSection)s).label &&
+            prof_section_info((ProfSection)s).label[0])
+            series++;
+    legend_rows = (series + 2 - 1) / 2;
+
+    memset(&view, 0, sizeof(view));
+    view.window_w = 800;
+    view.window_h = 600;
+    view.visible  = 1;
+    view.panel_x  = view.window_w - ui_histogram_panel_width();
+    view.panel_y  = 0;
+    view.pointer_x = view.panel_x + 11;
+    view.pointer_y = view.window_h
+                   - (view.panel_y + 8 + (legend_rows - 1) * 12 + 6);
+    ASSERT_TRUE("the corner hover point is a legend cell",
+                ui_histogram_panel_hit_test(&view, view.pointer_x,
+                                            view.pointer_y) >= 0);
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    corner_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    view.panel_x = 10;
+    view.panel_y = 200;
+    view.pointer_x = view.panel_x + 11;
+    view.pointer_y = view.window_h
+                   - (view.panel_y + 8 + (legend_rows - 1) * 12 + 6);
+    gl_stub_counts_reset();
+    ui_histogram_panel_render(&view);
+    mid_text = gl_stub_counts[GL_STUB_glutBitmapString];
+
+    /* Clamping moves the box; it never drops rows from it. */
+    ASSERT_INT_EQ("a corner panel draws the same statistics box",
+                  (int)corner_text, (int)mid_text);
+    prof_test_reset();
+}
+
 static void test_cpuprof_render_off(void) {
     UiProfilePanelView view = {
         .window_w = 800,
@@ -896,6 +1256,10 @@ int main(void) {
     test_cpuprof_current_fps_averages_intervals();
     test_cpuprof_histogram_32_bit_bins();
     test_cpuprof_histogram_reset();
+    test_cpuprof_histogram_stats();
+    test_cpuprof_histogram_stats_beat_the_bins();
+    test_cpuprof_histogram_stats_alternate_feeds();
+    test_cpuprof_histogram_stats_reset();
     test_cpuprof_log_bin_layout();
     test_histogram_axis_range();
     test_histogram_axis_covers_cheap_and_slow();
@@ -909,6 +1273,9 @@ int main(void) {
     test_histogram_render_hidden();
     test_histogram_render_empty();
     test_histogram_render_with_samples();
+    test_histogram_legend_hover_stats();
+    test_histogram_legend_hover_without_bars();
+    test_histogram_legend_hover_clamps_to_window();
     prof_test_reset();
     test_cpuprof_render_off();
     test_cpuprof_render_sections();
