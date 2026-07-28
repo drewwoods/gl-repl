@@ -1491,7 +1491,7 @@ demos: $(DEMO_TARGETS) ## Build all demos.
 define built_binary
 $(BINDIR)/$(1): $$($(1)_OBJS)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
+	$$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 $(subst _,-,$(1)): $$(BINDIR)/$(1)
 endef
@@ -1504,7 +1504,7 @@ endef
 define built_test_binary
 $(BINDIR)/$(1): $$($(1)_OBJS)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
+	$$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 ifeq ($$(USE_GL_STUBS),1)
 $(subst _,-,$(1)): $$(BINDIR)/$(1)
@@ -1526,7 +1526,7 @@ GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_g
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_LDFLAGS) -o $@
 
 # Differential oracle: drives one GLCmd program through both the real executor
 # (against a live context) and the pure gl_state_inspector fold, then compares
@@ -1535,7 +1535,7 @@ $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
 $(BINDIR)/test_gl_state_inspector_gl: \
 	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
 
 # Captures the controlled-tour overlay + HUD passes with GL_FEEDBACK and asserts
 # on the drawn geometry (ring suppression on seek, HUD containment). Needs the
@@ -1543,7 +1543,7 @@ $(BINDIR)/test_gl_state_inspector_gl: \
 # test but against a real GL context.
 $(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
 
 # Real-GL oracle: proves the attrib_bits.c cell->bit table matches what the
 # driver's glPushAttrib/glPopAttrib actually save/restore. Links the pure
@@ -1552,7 +1552,9 @@ $(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_fe
 $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
+		$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o \
+		$(GL_LDFLAGS) -o $@
 
 # Drives scene_grid_render(GRID_THEME_OCEAN) with cam_world_y < 0 and
 # nv_fog_distance_supported = 1, then glReadPixels and checks corner
@@ -1560,7 +1562,8 @@ $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 # drivers that advertise GL_NV_fog_distance.
 $(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o \
+		$(OBJDIR)/src/render3d/grid.o $(GL_LDFLAGS) -o $@
 
 gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests (needs a display; excluded from `make test`).
 	@for b in $(addprefix $(BINDIR)/,$(GL_TEST_BINS)); do \
@@ -1608,6 +1611,8 @@ MAINTENANCE_TARGETS = \
 # an order-only `|` would build the lib first but skip the relink, stranding
 # the binary on a stale archive after a re-vendor. Skipped under `make glut` (FREEGLUT_VENDOR=0)
 # and on the default Linux path / GL stubs (FREEGLUT_LIB is empty there too).
+# Link recipes must use their declared object lists rather than `$^`, otherwise
+# this prerequisite duplicates the archive already supplied by GL_LDFLAGS.
 # Vendored freeglut is built on macOS (Cocoa or OSMesa), on Linux for the
 # OSMesa backend (FREEGLUT_OSMESA=1), and for the Emscripten/wasm web target
 # (WEB=1, all platforms -- see FREEGLUT_BUILD/FREEGLUT_STATIC_LIB up top);
