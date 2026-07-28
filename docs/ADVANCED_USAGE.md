@@ -59,6 +59,16 @@ the single source of truth. All three list paths print and exit before any GL,
 window, audio, or `magick`/`ffmpeg` work, so completion is instant and works on
 a headless machine with no capture tools installed.
 
+To add both zsh completions to `~/.zshrc` (without duplicating them on later
+runs):
+
+```bash
+make install-completions
+```
+
+The generated block uses absolute paths to this checkout. Set `ZSHRC=path` to
+install into a different startup file.
+
 ```bash
 # bash — source what you want (a shell rc, or per-session)
 source scripts/completions/gl-repl.bash

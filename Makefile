@@ -19,6 +19,8 @@ SRC_DIR := $(abspath src)
 GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
+ZSHRC ?= $(HOME)/.zshrc
+ZSH_COMPLETIONS_DIR := $(PROJECT_ROOT)/scripts/completions
 
 # Parallel builds by default, but not too aggressively
 ifeq ($(filter -j%,$(MAKEFLAGS)),)
@@ -513,6 +515,7 @@ endif
 	glut \
 	help \
 	help-details \
+	install-completions \
 	install-hooks \
 	lines \
 	lines-test \
@@ -2144,6 +2147,23 @@ test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
 	@echo "git core.hooksPath -> .githooks (pre-push: check-trailing-whitespace + test-stubs + git lfs pre-push)"
+
+install-completions: ## Add the bundled zsh completions to ~/.zshrc (idempotent; override ZSHRC to choose another file).
+	@touch "$(ZSHRC)"
+	@if grep -Fqx '# >>> gl-repl completions >>>' "$(ZSHRC)"; then \
+		echo "gl-repl completions already installed in $(ZSHRC)"; \
+	else \
+		printf '%s\n' \
+			'' \
+			'# >>> gl-repl completions >>>' \
+			'if (( ! $${+functions[compdef]} )); then' \
+			'  autoload -Uz compinit && compinit' \
+			'fi' \
+			'source "$(ZSH_COMPLETIONS_DIR)/_gl-repl"' \
+			'source "$(ZSH_COMPLETIONS_DIR)/_docs-assets.sh"' \
+			'# <<< gl-repl completions <<<' >> "$(ZSHRC)"; \
+		echo "installed gl-repl completions in $(ZSHRC)"; \
+	fi
 
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive
