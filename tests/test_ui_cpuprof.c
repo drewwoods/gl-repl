@@ -23,15 +23,15 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
 /* The bins are log-spaced, so tests ask the profiler where a duration lands
- * rather than reimplementing the mapping. prof_histogram_bin_for_us is tested
+ * rather than reimplementing the mapping. histogram_bin_for_us is tested
  * directly in test_cpuprof_log_bin_layout. */
 static int hist_bin_for_us(double us) {
-    return prof_histogram_bin_for_us(us);
+    return histogram_bin_for_us(us);
 }
 
-static int hist_sum(const ProfHistogramBin *bins) {
+static int hist_sum(const HistogramBin *bins) {
     int total = 0;
-    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++)
+    for (int i = 0; i < HISTOGRAM_BIN_COUNT; i++)
         total += (int)bins[i];
     return total;
 }
@@ -157,7 +157,7 @@ static void test_gpu_section_policy(void) {
 }
 
 static void test_cpuprof_section_histogram_direct(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
 
     prof_test_reset();
     prof_test_set_now_us(1000.0);
@@ -167,20 +167,20 @@ static void test_cpuprof_section_histogram_direct(void) {
 
     ASSERT_INT_EQ("section histogram copies full bin count",
                   prof_section_histogram(PROF_FLATTEN, bins,
-                                         PROF_HISTOGRAM_BIN_COUNT),
-                  PROF_HISTOGRAM_BIN_COUNT);
+                                         HISTOGRAM_BIN_COUNT),
+                  HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("50ms section sample lands in its log bin",
                   bins[hist_bin_for_us(50000.0)], 1);
     ASSERT_INT_EQ("direct section histogram has one sample",
                   hist_sum(bins), 1);
     ASSERT_INT_EQ("invalid section histogram rejected",
                   prof_section_histogram((ProfSection)-1, bins,
-                                         PROF_HISTOGRAM_BIN_COUNT),
+                                         HISTOGRAM_BIN_COUNT),
                   0);
 }
 
 static void test_cpuprof_section_histogram_accum_commit(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
 
     prof_test_reset();
     prof_accum_reset(PROF_RENDER3D_SETUP);
@@ -198,7 +198,7 @@ static void test_cpuprof_section_histogram_accum_commit(void) {
     prof_accum_commit(PROF_RENDER3D_SETUP);
 
     prof_section_histogram(PROF_RENDER3D_SETUP, bins,
-                           PROF_HISTOGRAM_BIN_COUNT);
+                           HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("accum commit records summed 40ms sample",
                   bins[hist_bin_for_us(40000.0)], 1);
     ASSERT_INT_EQ("accum section histogram records one committed sample",
@@ -206,21 +206,21 @@ static void test_cpuprof_section_histogram_accum_commit(void) {
 
     prof_accum_commit(PROF_RENDER3D_SETUP);
     prof_section_histogram(PROF_RENDER3D_SETUP, bins,
-                           PROF_HISTOGRAM_BIN_COUNT);
+                           HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("duplicate accum commit does not duplicate histogram sample",
                   hist_sum(bins), 1);
 
     prof_accum_reset(PROF_RENDER3D_SETUP);
     prof_accum_commit(PROF_RENDER3D_SETUP);
     prof_section_histogram(PROF_RENDER3D_SETUP, bins,
-                           PROF_HISTOGRAM_BIN_COUNT);
+                           HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("empty accum commit does not add zero histogram sample",
                   hist_sum(bins), 1);
 }
 
 static void test_cpuprof_frame_time_histogram(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
-    ProfHistogramBin small[4];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
+    HistogramBin small[4];
 
     prof_test_reset();
     prof_test_set_now_us(1000.0);
@@ -230,8 +230,8 @@ static void test_cpuprof_frame_time_histogram(void) {
 
     ASSERT_INT_EQ("frame histogram copies full bin count",
                   prof_frame_time_histogram(bins,
-                                            PROF_HISTOGRAM_BIN_COUNT),
-                  PROF_HISTOGRAM_BIN_COUNT);
+                                            HISTOGRAM_BIN_COUNT),
+                  HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("17ms frame sample lands in its log bin",
                   bins[hist_bin_for_us(17000.0)], 1);
     ASSERT_INT_EQ("frame histogram has one sample",
@@ -261,7 +261,7 @@ static void test_cpuprof_current_fps_averages_intervals(void) {
 }
 
 static void test_cpuprof_histogram_32_bit_bins(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
 
     prof_test_reset();
     prof_test_set_now_us(0.0);
@@ -271,13 +271,13 @@ static void test_cpuprof_histogram_32_bit_bins(void) {
     }
 
     prof_section_histogram(PROF_REFORMAT, bins,
-                           PROF_HISTOGRAM_BIN_COUNT);
+                           HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("histogram bin does not saturate at 16-bit max and reaches 70000",
                   (int)bins[0], 70000);
 }
 
 static void test_cpuprof_histogram_reset(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
 
     prof_test_reset();
     prof_test_set_now_us(1000.0);
@@ -288,19 +288,19 @@ static void test_cpuprof_histogram_reset(void) {
     prof_test_set_now_us(68000.0);
     prof_frame_tick();
 
-    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_FLATTEN, bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("section histogram has a sample before reset",
                   hist_sum(bins), 1);
-    prof_frame_time_histogram(bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_frame_time_histogram(bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("frame histogram has a sample before reset",
                   hist_sum(bins), 1);
 
     double avg_before = prof_section_avg_us(PROF_FLATTEN);
     prof_histogram_reset();
 
-    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_FLATTEN, bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("reset clears the section histogram", hist_sum(bins), 0);
-    prof_frame_time_histogram(bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_frame_time_histogram(bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("reset clears the frame-time histogram", hist_sum(bins), 0);
 
     /* Only the cumulative data is dropped: the EMAs and staleness re-converge
@@ -316,7 +316,7 @@ static void test_cpuprof_histogram_reset(void) {
     prof_begin(PROF_FLATTEN);
     prof_test_set_now_us(100000.0 + 20000.0);
     prof_end(PROF_FLATTEN);
-    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_FLATTEN, bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("post-reset sample lands in its own bin",
                   bins[hist_bin_for_us(20000.0)], 1);
     ASSERT_INT_EQ("post-reset histogram holds only the new sample",
@@ -328,7 +328,7 @@ static void test_cpuprof_histogram_reset(void) {
  * every figure must come out exactly — these are what the legend hover reports,
  * and an approximate mean is worse than none. */
 static void test_cpuprof_histogram_stats(void) {
-    ProfHistogramStats st;
+    HistogramStats st;
     /* Deliberately spread over three decades so no two samples share a bin:
      * sum 11110, mean 2222, squared deviations summing to 44323680 — sample
      * variance 11080920 us^2 over the n-1 divisor, stddev ~3328.8 us. */
@@ -390,8 +390,8 @@ static void test_cpuprof_histogram_stats(void) {
  * they stay exact exactly where a bin-derived readout could not be: below 1 us,
  * where every sample shares bin 0. */
 static void test_cpuprof_histogram_stats_beat_the_bins(void) {
-    ProfHistogramStats st;
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramStats st;
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
     static const double dur_us[] = { 0.2, 0.4, 0.6 };
     double now = 0.0;
 
@@ -405,7 +405,7 @@ static void test_cpuprof_histogram_stats_beat_the_bins(void) {
         now += 1000.0;
     }
 
-    prof_section_histogram(PROF_REFORMAT, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_REFORMAT, bins, HISTOGRAM_BIN_COUNT);
     ASSERT_INT_EQ("every sub-us sample shares the underflow bin",
                   (int)bins[0], 3);
     prof_section_stats(PROF_REFORMAT, &st);
@@ -423,7 +423,7 @@ static void test_cpuprof_histogram_stats_beat_the_bins(void) {
  * commit, not once per pass) for accum sections, and the frame-tick delta for
  * the frame-time histogram. */
 static void test_cpuprof_histogram_stats_alternate_feeds(void) {
-    ProfHistogramStats st;
+    HistogramStats st;
 
     prof_test_reset();
     prof_accum_reset(PROF_RENDER3D_SETUP);
@@ -466,7 +466,7 @@ static void test_cpuprof_histogram_stats_alternate_feeds(void) {
  * the same reset — a stale min from a previous example describes geometry that
  * is no longer on screen. */
 static void test_cpuprof_histogram_stats_reset(void) {
-    ProfHistogramStats st;
+    HistogramStats st;
 
     prof_test_reset();
     prof_test_set_now_us(1000.0);
@@ -509,25 +509,25 @@ static void test_cpuprof_histogram_stats_reset(void) {
  * a 30 ms one both be measured precisely. */
 static void test_cpuprof_log_bin_layout(void) {
     ASSERT_INT_EQ("zero lands in the underflow bin",
-                  prof_histogram_bin_for_us(0.0), 0);
+                  histogram_bin_for_us(0.0), 0);
     ASSERT_INT_EQ("a negative duration lands in the underflow bin",
-                  prof_histogram_bin_for_us(-5.0), 0);
+                  histogram_bin_for_us(-5.0), 0);
     ASSERT_INT_EQ("sub-minimum durations land in the underflow bin",
-                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MIN_US * 0.25), 0);
+                  histogram_bin_for_us(HISTOGRAM_MIN_US * 0.25), 0);
     ASSERT_INT_EQ("the minimum itself is the underflow bin's lower edge",
-                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MIN_US), 0);
+                  histogram_bin_for_us(HISTOGRAM_MIN_US), 0);
     ASSERT_INT_EQ("the maximum lands in the overflow bin",
-                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MAX_US),
-                  PROF_HISTOGRAM_BIN_COUNT - 1);
+                  histogram_bin_for_us(HISTOGRAM_MAX_US),
+                  HISTOGRAM_BIN_COUNT - 1);
     ASSERT_INT_EQ("beyond the maximum stays in the overflow bin",
-                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MAX_US * 1000.0),
-                  PROF_HISTOGRAM_BIN_COUNT - 1);
+                  histogram_bin_for_us(HISTOGRAM_MAX_US * 1000.0),
+                  HISTOGRAM_BIN_COUNT - 1);
 
     /* Monotonic, and each decade is the same number of bins apart. */
-    int b_1us   = prof_histogram_bin_for_us(1.0);
-    int b_10us  = prof_histogram_bin_for_us(10.0);
-    int b_100us = prof_histogram_bin_for_us(100.0);
-    int b_1ms   = prof_histogram_bin_for_us(1000.0);
+    int b_1us   = histogram_bin_for_us(1.0);
+    int b_10us  = histogram_bin_for_us(10.0);
+    int b_100us = histogram_bin_for_us(100.0);
+    int b_1ms   = histogram_bin_for_us(1000.0);
     ASSERT_TRUE("bins increase with duration",
                 b_1us < b_10us && b_10us < b_100us && b_100us < b_1ms);
     /* A decade is 1024/6 = 170.67 bins, so consecutive decades differ by one
@@ -539,19 +539,19 @@ static void test_cpuprof_log_bin_layout(void) {
 
     /* The sub-100us sections a linear layout could not tell apart. */
     ASSERT_TRUE("3us and 30us occupy different bins",
-                prof_histogram_bin_for_us(3.0) != prof_histogram_bin_for_us(30.0));
+                histogram_bin_for_us(3.0) != histogram_bin_for_us(30.0));
     ASSERT_TRUE("6us and 128us occupy different bins",
-                prof_histogram_bin_for_us(6.0) != prof_histogram_bin_for_us(128.0));
+                histogram_bin_for_us(6.0) != histogram_bin_for_us(128.0));
 
     /* Edges are consistent with the mapping. */
-    for (int b = 1; b < PROF_HISTOGRAM_BIN_COUNT - 1; b += 97) {
-        double lo = prof_histogram_bin_lo_us(b);
-        double hi = prof_histogram_bin_hi_us(b);
+    for (int b = 1; b < HISTOGRAM_BIN_COUNT - 1; b += 97) {
+        double lo = histogram_bin_lo_us(b);
+        double hi = histogram_bin_hi_us(b);
         ASSERT_TRUE("bin edges ascend", hi > lo);
         ASSERT_INT_EQ("a bin's lower edge maps back to that bin",
-                      prof_histogram_bin_for_us(lo), b);
+                      histogram_bin_for_us(lo), b);
         ASSERT_INT_EQ("a bin's upper edge maps to the next bin",
-                      prof_histogram_bin_for_us(hi), b + 1);
+                      histogram_bin_for_us(hi), b + 1);
     }
 }
 
@@ -577,10 +577,10 @@ static void test_histogram_axis_range(void) {
                   ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("axis spans at least the minimum width", hi - lo + 1 >= 64);
     ASSERT_TRUE("axis stays inside the bin range",
-                lo >= 0 && hi <= PROF_HISTOGRAM_BIN_COUNT - 1);
+                lo >= 0 && hi <= HISTOGRAM_BIN_COUNT - 1);
     ASSERT_TRUE("axis contains the 2ms samples",
-                prof_histogram_bin_for_us(2000.0) >= lo &&
-                prof_histogram_bin_for_us(2000.0) <= hi);
+                histogram_bin_for_us(2000.0) >= lo &&
+                histogram_bin_for_us(2000.0) <= hi);
     int hi_before = hi;
 
     /* Add one 200 ms stall: the axis must grow to include it, and by far less
@@ -594,14 +594,14 @@ static void test_histogram_axis_range(void) {
     ASSERT_INT_EQ("axis still resolves",
                   ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("the outlier is on-axis, not trimmed",
-                hi >= prof_histogram_bin_for_us(200000.0));
+                hi >= histogram_bin_for_us(200000.0));
 
     /* The whole point of log bins: a 100x-slower outlier pushes the axis out
      * by ~two decades' worth of bins, not by 100x its width. On the old linear
      * bins the same sample multiplied the axis span by ~100 and squashed the
      * 2 ms bulk into the leftmost pixel. */
-    int decade_bins = prof_histogram_bin_for_us(100.0)
-                    - prof_histogram_bin_for_us(10.0);
+    int decade_bins = histogram_bin_for_us(100.0)
+                    - histogram_bin_for_us(10.0);
     int span_before = hi_before - lo_before + 1;
     int span_after  = hi - lo + 1;
     ASSERT_TRUE("the outlier widens the axis", span_after > span_before);
@@ -630,12 +630,12 @@ static void test_histogram_axis_covers_cheap_and_slow(void) {
 
     ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(0ULL, &lo, &hi), 1);
     ASSERT_TRUE("axis reaches the 6us section",
-                prof_histogram_bin_for_us(6.0) >= lo);
+                histogram_bin_for_us(6.0) >= lo);
     ASSERT_TRUE("axis reaches the 2ms section",
-                prof_histogram_bin_for_us(2000.0) <= hi);
+                histogram_bin_for_us(2000.0) <= hi);
     ASSERT_TRUE("the two sections are distinguishable on the axis",
-                prof_histogram_bin_for_us(2000.0)
-                    - prof_histogram_bin_for_us(6.0) > 8);
+                histogram_bin_for_us(2000.0)
+                    - histogram_bin_for_us(6.0) > 8);
     prof_test_reset();
 }
 
@@ -871,10 +871,10 @@ static void test_histogram_axis_follows_hidden_series(void) {
                   ui_histogram_axis_range(hide_fast, &lo, &hi), 1);
     ASSERT_TRUE("hiding the fast series lifts the lower bound", lo > lo_all);
     ASSERT_TRUE("the hidden series' bin is off-axis",
-                lo > prof_histogram_bin_for_us(0.4));
+                lo > histogram_bin_for_us(0.4));
     ASSERT_TRUE("the 2ms samples are still on-axis",
-                prof_histogram_bin_for_us(2000.0) >= lo &&
-                prof_histogram_bin_for_us(2000.0) <= hi);
+                histogram_bin_for_us(2000.0) >= lo &&
+                histogram_bin_for_us(2000.0) <= hi);
     ASSERT_TRUE("the surviving distribution gets a narrower axis",
                 hi - lo < hi_all - lo_all);
 

@@ -70,6 +70,11 @@
  *                       path that calls normalize once per row)
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
+ *   cpuprof_sample    - the profiler's own per-frame cost: bin lookup, full
+ *                       histogram record (rotating + dependency-chained),
+ *                       live prof_begin/prof_end pair, frame tick, and the
+ *                       legend-hover stats readback. The only row here that
+ *                       measures instrumentation rather than product work.
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
@@ -110,6 +115,7 @@
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "support/cpuprof.h"     /* PROF_FLATTEN_* phase readback */
+#include "support/histogram.h"   /* sampler-overhead rows */
 #include "app/glr_ctrl.h"
 
 #include <stdio.h>
@@ -1945,6 +1951,287 @@ static BenchResult bench_reformat_large_doc(int iters) {
     return r;
 }
 
+/* ---- bench: cpuprof instrumentation overhead --------------------------- */
+
+/* What the profiler costs the frame it is measuring. Every other row in this
+ * file measures work the app exists to do; these measure the tax on doing it,
+ * so they are read against PROF_SECTION_COUNT rather than against each other:
+ * a frame that samples every section pays the per-sample cost that many times,
+ * plus one frame tick.
+ *
+ * The rows decompose one sample deliberately, because "prof_end got more
+ * expensive" is only actionable if you can see which part:
+ *
+ *   cpuprof_bin_for_us    the log10 bin lookup alone. This is the bin half of
+ *                         a record, and so also the shape of the whole record
+ *                         before the running statistics were added.
+ *   cpuprof_record        the whole record path — bin lookup, bin increment,
+ *                         min/max/sum and the Welford mean/m2 update — with no
+ *                         clock read, EMA or staleness, rotating across all
+ *                         PROF_SECTION_COUNT histograms the way a frame does.
+ *                         Minus the row above, this is what the statistics
+ *                         cost per sample. The per-frame figure builds on it.
+ *   cpuprof_record_chained the same call hammering one histogram, so Welford's
+ *                         serial dependency stalls instead of resolving
+ *                         between frames. Worst case, not the app's.
+ *   cpuprof_sample_live   prof_begin/prof_end on the real clock: what a
+ *                         section actually pays in a frame, bookkeeping plus
+ *                         two mach_absolute_time/clock_gettime reads. The
+ *                         denominator for whether the delta above matters.
+ *   cpuprof_frame_tick    prof_frame_tick(): the PROF_SECTION_COUNT staleness
+ *                         sweep, the frame-time histogram record, and the
+ *                         three FPS windows. Once per frame, not per section.
+ *   cpuprof_stats_read    prof_section_stats() readback — the legend-hover
+ *                         path, at most once per frame per hovered series.
+ *
+ * The first two rows call src/support/histogram.c directly rather than going
+ * through prof_end(), because the clock read prof_end() wraps them in is both
+ * the largest term in a live sample and the noisiest: it is platform overhead
+ * nobody here can change, and on a loaded machine it comfortably hides a few
+ * nanoseconds of arithmetic beside it.
+ *
+ * Not covered: the hover box's text drawing (src/ui/support/cpuprof.c). That
+ * is GL/text work in the UI layer, it only runs while the pointer is over the
+ * legend, and this binary has no UI objects linked. */
+
+/* Elapsed times in us, spanning what the real sections cover: sub-microsecond
+ * helpers through a 100 ms whole-frame stall. Spread on purpose — the bin
+ * lookup is a log10 and the stats update carries two comparisons, so a table
+ * of one repeated value would measure a perfectly predicted branch pattern
+ * that no real section produces. */
+static const double k_prof_sample_us[] = {
+    0.05, 0.3, 0.8, 2.7, 5.1, 9.4, 41.0, 63.0,
+    118.0, 250.0, 780.0, 1350.0, 3200.0, 16700.0, 22000.0, 104000.0
+};
+static const int k_prof_sample_n =
+    (int)(sizeof(k_prof_sample_us) / sizeof(k_prof_sample_us[0]));
+
+/* Samples per timed iteration. Large enough that one iteration is milliseconds
+ * rather than a handful of clock ticks — a single sample is tens of
+ * nanoseconds, well under the resolution of the benchmark's own clock. */
+enum { PROF_BENCH_INNER = 20000 };
+
+/* The section these rows drive. Any index works (the timer is an array), but
+ * PROF_FRAME_TOTAL is instrumented only from the display callback, which this
+ * binary never runs, so no other row's numbers pass through it. Each case
+ * still calls prof_test_reset() when done. */
+#define PROF_BENCH_SECTION PROF_FRAME_TOTAL
+
+static BenchResult bench_cpuprof_bin_for_us(int iters) {
+    BenchResult r = { .name = "cpuprof_bin_for_us", .unit = "samples",
+                      .min_sec = 1e18 };
+    long long sink = 0;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++)
+            sink += histogram_bin_for_us(
+                        k_prof_sample_us[k % k_prof_sample_n]);
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (cpuprof_bin_for_us: bin checksum=%lld)\n", sink);
+    return r;
+}
+
+/* Private histograms, not the profiler's: these rows are about
+ * histogram_record() itself, and a private accumulator keeps them from
+ * perturbing (or being perturbed by) whatever the profiler has been sampling.
+ * One per section, because how many distinct histograms are in flight is the
+ * single biggest term in this function's cost — see below. */
+static Histogram g_bench_hist[PROF_SECTION_COUNT];
+
+/* Two rows for one function, because histogram_record() costs two very
+ * different things depending on how far apart consecutive samples into the
+ * *same* histogram are, and only one of those is what the app pays.
+ *
+ * Welford's update is a loop-carried dependency: mean is loaded, fed through
+ * fsub -> fdiv -> fadd, and stored, and the next sample into that histogram
+ * cannot start until it lands. Back-to-back on one histogram that chain is
+ * ~26 cycles and it stalls; measured on an M2, it is long enough to hide the
+ * entire bin path (log10, scale, bin store) underneath it — deleting the bin
+ * division outright changes the row by nothing at all.
+ *
+ * The app never sees that. A frame walks PROF_SECTION_COUNT *different*
+ * sections, and the next sample into any one of them is a frame away, so every
+ * chain has long since resolved. Rotating across the sections reproduces that
+ * and is the row to read for per-frame cost; the chained row is the worst case,
+ * kept because it is the one that moves if the statistics update ever grows a
+ * longer serial dependency. */
+static BenchResult bench_cpuprof_record_rotating(int iters) {
+    BenchResult r = { .name = "cpuprof_record", .unit = "samples",
+                      .min_sec = 1e18 };
+    for (int it = 0; it < iters; it++) {
+        for (int s = 0; s < PROF_SECTION_COUNT; s++)
+            histogram_clear(&g_bench_hist[s]);
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++)
+            histogram_record(&g_bench_hist[k % PROF_SECTION_COUNT],
+                             k_prof_sample_us[k % k_prof_sample_n]);
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    return r;
+}
+
+static BenchResult bench_cpuprof_record_chained(int iters) {
+    BenchResult r = { .name = "cpuprof_record_chained", .unit = "samples",
+                      .min_sec = 1e18 };
+    for (int it = 0; it < iters; it++) {
+        /* Bins saturate at UINT32_MAX while the statistics keep accumulating,
+         * so a long enough run would quietly start timing a cheaper path.
+         * Clearing per iteration keeps every iteration the same workload. */
+        histogram_clear(&g_bench_hist[0]);
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++)
+            histogram_record(&g_bench_hist[0],
+                             k_prof_sample_us[k % k_prof_sample_n]);
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    return r;
+}
+
+static BenchResult bench_cpuprof_sample_live(int iters) {
+    BenchResult r = { .name = "cpuprof_sample_live", .unit = "samples",
+                      .min_sec = 1e18 };
+    prof_test_reset();   /* real clock: no pinned value left over */
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++) {
+            prof_begin(PROF_BENCH_SECTION);
+            prof_end(PROF_BENCH_SECTION);
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    /* An empty body samples near 0 us, which the bin lookup short-circuits on
+     * (`!(us > MIN_US)` returns bin 0 without the log10) — so this row is the
+     * clock read plus the *cheapest* bin path, and undercounts a real section
+     * by the log10 that cpuprof_bin_for_us prices separately. Report what the
+     * samples actually looked like so that reading is checkable. */
+    if (!g_csv) {
+        HistogramStats st;
+        if (prof_section_stats(PROF_BENCH_SECTION, &st))
+            fprintf(stderr,
+                    "  (cpuprof_sample_live: n=%llu, min=%.3f us, "
+                    "mean=%.3f us, max=%.3f us)\n",
+                    st.count, st.min_us, st.mean_us, st.max_us);
+    }
+    prof_test_reset();
+    return r;
+}
+
+static BenchResult bench_cpuprof_frame_tick(int iters) {
+    BenchResult r = { .name = "cpuprof_frame_tick", .unit = "ticks",
+                      .min_sec = 1e18 };
+    /* Pinned and advancing a frame at a time: on the real clock these ticks
+     * would land microseconds apart, so the FPS buckets would never close and
+     * the frame-time histogram would see one bin. */
+    double now = 1.0e9;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++) {
+            prof_test_set_now_us(now);
+            prof_frame_tick();
+            now += 16666.0;
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    prof_test_reset();
+    return r;
+}
+
+static BenchResult bench_cpuprof_stats_read(int iters) {
+    BenchResult r = { .name = "cpuprof_stats_read", .unit = "reads",
+                      .min_sec = 1e18 };
+    double sink = 0.0;
+    HistogramStats st;
+
+    /* Read a populated histogram: the getter is branch-per-count, so an
+     * all-zero one is not the case the hover box hits. */
+    prof_test_reset();
+    prof_test_set_now_us(1.0e9);
+    prof_begin(PROF_BENCH_SECTION);
+    prof_test_set_now_us(1.0e9 + 5000.0);
+    prof_end(PROF_BENCH_SECTION);
+    prof_test_clear_now_us();
+
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < PROF_BENCH_INNER; k++) {
+            if (prof_section_stats(PROF_BENCH_SECTION, &st))
+                sink += st.stddev_us + st.mean_us;
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += PROF_BENCH_INNER;
+        r.iters++;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (cpuprof_stats_read: checksum=%.3f)\n", sink);
+    prof_test_reset();
+    return r;
+}
+
+/* Fastest observed per-op cost, in nanoseconds. The minimum rather than the
+ * mean, for the reason spelled out at corpus_case_cmp_slower_first(): benchmark
+ * noise is one-sided, and at tens of nanoseconds per op a single descheduled
+ * iteration moves the mean by more than the whole quantity being measured. */
+static double prof_bench_min_ns(BenchResult r) {
+    return (r.iters > 0) ? r.min_sec * 1e9 / (double)PROF_BENCH_INNER : 0.0;
+}
+
+static void bench_cpuprof_sample(int iters) {
+    BenchResult bins, record, live, tick;
+
+    bins   = bench_cpuprof_bin_for_us(iters);        report(bins);
+    record = bench_cpuprof_record_rotating(iters);   report(record);
+    report(bench_cpuprof_record_chained(iters));
+    live   = bench_cpuprof_sample_live(iters);       report(live);
+    tick   = bench_cpuprof_frame_tick(iters);        report(tick);
+    report(bench_cpuprof_stats_read(iters));
+
+    /* The two numbers these rows exist to produce, in ns because a per-op
+     * column in us reads as a wall of zeroes at this scale. Human mode only —
+     * CSV keeps its fixed columns, and every term below is derivable from
+     * them. */
+    if (!g_csv) {
+        double bins_ns   = prof_bench_min_ns(bins);
+        double record_ns = prof_bench_min_ns(record);
+        double live_ns   = prof_bench_min_ns(live);
+        double stats_ns  = record_ns - bins_ns;
+        double frame_us  = (live_ns * (double)PROF_SECTION_COUNT
+                            + prof_bench_min_ns(tick)) / 1000.0;
+
+        printf("  # cpuprof: rotating record %.1f ns/sample = %.1f bins + "
+               "%.1f stats; live begin/end pair %.1f ns\n",
+               record_ns, bins_ns, stats_ns, live_ns);
+        printf("  # cpuprof: %d sections + 1 tick = %.2f us/frame "
+               "(%.3f%% of 16.67 ms), of which stats %.2f us\n",
+               (int)PROF_SECTION_COUNT, frame_us,
+               frame_us / 16666.0 * 100.0,
+               stats_ns * (double)PROF_SECTION_COUNT / 1000.0);
+    }
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
@@ -2012,6 +2299,10 @@ static void usage(const char *prog) {
         "    replay_long       synthetic 600-iter for-loop replay\n"
         "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
         "    replay_anchor     per-frame replay_focus_anchor_flat_idx() at the tail\n"
+        "    cpuprof_sample    profiler instrumentation cost: bin lookup, full\n"
+        "                      histogram record (rotating across sections, and\n"
+        "                      dependency-chained on one), live begin/end pair,\n"
+        "                      frame tick, stats readback\n"
         "    fade_batches      replay fade-batch rendering with late old_pcs\n",
         prog);
 }
@@ -2164,6 +2455,10 @@ int main(int argc, char **argv) {
         report(bench_replay_focus(iters));
     if (wants(only, "replay_anchor"))
         report(bench_replay_anchor(iters));
+    /* After the rows that read prof_section_last_us (flatten_phases): these
+     * cases drive the timer directly and call prof_test_reset() when done. */
+    if (wants(only, "cpuprof_sample"))
+        bench_cpuprof_sample(iters);
 
     // GL benchmarks
     if (wants(only, "fade_batches")) {

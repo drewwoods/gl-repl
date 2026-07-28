@@ -496,14 +496,14 @@ GENERATED_COMMAND_DESCRIPTIONS_INC = build/generated/repl_command_descriptions_d
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
 RENDER3D_HDRS = $(filter src/render3d/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/histogram.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone render3d_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c \
+RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c src/support/histogram.c \
                       tests/gl-stubs/gl_stub_counts.c
 
 # Object list for the standalone repl_demo (the inverse of render3d_demo:
@@ -525,7 +525,7 @@ RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c \
 # feature/decouple-repl-from-gl-repl-alt.md and
 # feature/source-document-port.md.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
-				     src/support/cpuprof.c \
+				     src/support/cpuprof.c src/support/histogram.c \
                      src/subsystems/replay/replay.c \
                      src/subsystems/replay/replay_fade.c \
                      src/subsystems/replay/replay_input.c \
@@ -604,7 +604,7 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/ui/core/text_panel.c \
                        src/ui/core/text_search.c \
                        src/ui/core/theme.c \
-				      src/support/cpuprof.c \
+				      src/support/cpuprof.c src/support/histogram.c \
                        tests/gl-stubs/gl_stub_counts.c
 
 # Object list for the standalone memprof_demo (isolation demo #4). Proves
@@ -626,7 +626,7 @@ MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
 # support/cpuprof.c is the already-pure wall-time sampler; support/gpuprof.c
 # is its GL-free GPU twin (the panel reads it; never initialized here, so
 # the GPU column stays "--").
-CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c \
+CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c src/support/histogram.c \
                         src/support/gpuprof.c \
                         src/ui/support/cpuprof.c \
                         src/ui/core/theme.c \
@@ -942,6 +942,7 @@ test_render3d_transition_RUN ?= $(BINDIR)/test_render3d_transition
 test_render3d_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_render.o \
 	$(RENDER3D_OBJS) \
 	$(OBJDIR)/src/support/cpuprof.o \
+	$(OBJDIR)/src/support/histogram.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_render3d_render_LDLIBS = $(GL_LDFLAGS)
 test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
@@ -962,6 +963,7 @@ BUFFER_VIZ_TEST_OBJS = \
 	$(OBJDIR)/src/render3d/postprocess_filter.o \
 	$(OBJDIR)/src/render3d/postprocess_surface.o \
 	$(OBJDIR)/src/support/cpuprof.o \
+	$(OBJDIR)/src/support/histogram.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 
 test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
@@ -993,6 +995,7 @@ test_glr_camera_RUN ?= $(BINDIR)/test_glr_camera
 test_ui_cpuprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_cpuprof.o \
 	$(OBJDIR)/src/app/glr_prof.o \
 	$(OBJDIR)/src/support/cpuprof.o \
+	$(OBJDIR)/src/support/histogram.o \
 	$(OBJDIR)/src/support/gpuprof.o \
 	$(OBJDIR)/src/ui/support/cpuprof.o \
 	$(OBJDIR)/src/ui/core/theme.o \
@@ -1014,6 +1017,7 @@ test_ui_text_panel_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_text_panel.o \
 	$(OBJDIR)/src/ui/core/text_search.o \
 	$(OBJDIR)/src/ui/core/theme.o \
 	$(OBJDIR)/src/support/cpuprof.o \
+	$(OBJDIR)/src/support/histogram.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_ui_text_panel_LDLIBS = $(GL_LDFLAGS)
 test_ui_text_panel_RUN ?= $(BINDIR)/test_ui_text_panel

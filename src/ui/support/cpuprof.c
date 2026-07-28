@@ -994,14 +994,14 @@ unsigned long long ui_histogram_panel_toggle_series(
 
 int ui_histogram_axis_range(unsigned long long hidden_series,
                             int *lo_bin, int *hi_bin) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
-    int lo = PROF_HISTOGRAM_BIN_COUNT, hi = -1;
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
+    int lo = HISTOGRAM_BIN_COUNT, hi = -1;
 
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
         if (!hist_series_plotted(s, hidden_series)) continue;
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
-        for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+        prof_section_histogram(s, bins, HISTOGRAM_BIN_COUNT);
+        for (int bin_idx = 0; bin_idx < HISTOGRAM_BIN_COUNT; bin_idx++) {
             if (!bins[bin_idx]) continue;
             if (bin_idx < lo) lo = bin_idx;
             if (bin_idx > hi) hi = bin_idx;
@@ -1017,9 +1017,9 @@ int ui_histogram_axis_range(unsigned long long hidden_series,
         lo -= grow;
         hi += grow;
         if (lo < 0) { hi -= lo; lo = 0; }
-        if (hi > PROF_HISTOGRAM_BIN_COUNT - 1) {
-            lo -= hi - (PROF_HISTOGRAM_BIN_COUNT - 1);
-            hi  = PROF_HISTOGRAM_BIN_COUNT - 1;
+        if (hi > HISTOGRAM_BIN_COUNT - 1) {
+            lo -= hi - (HISTOGRAM_BIN_COUNT - 1);
+            hi  = HISTOGRAM_BIN_COUNT - 1;
             if (lo < 0) lo = 0;
         }
     }
@@ -1043,7 +1043,7 @@ static float ui_pixel_center(float v) {
  * drawn range (the caller draws nothing). */
 static int hist_time_to_x(double us, int lo_bin, int hi_bin,
                           int plot_x, int plot_w, float *out_x) {
-    int b = prof_histogram_bin_for_us(us);
+    int b = histogram_bin_for_us(us);
     if (b <= lo_bin || b >= hi_bin) return 0;
     *out_x = ui_pixel_center((float)plot_x
                              + (float)plot_w * (float)(b - lo_bin)
@@ -1057,10 +1057,10 @@ static int hist_time_to_x(double us, int lo_bin, int hi_bin,
  * on the same "samples in a bin" scale as the y axis and the peak. */
 static void hist_series_columns(ProfSection s, int lo_bin, int hi_bin,
                                 int cols, unsigned int *out) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int span = hi_bin - lo_bin + 1;
 
-    prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(s, bins, HISTOGRAM_BIN_COUNT);
     for (int col = 0; col < cols; col++) out[col] = 0;
     for (int bin_idx = lo_bin; bin_idx <= hi_bin; bin_idx++) {
         if (!bins[bin_idx]) continue;
@@ -1139,7 +1139,7 @@ static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
  * bottom-most panel in the overlay stack is close to the screen edge. */
 static void hist_draw_stats_tooltip(const UiHistogramPanelView *view,
                                     ProfSection s) {
-    ProfHistogramStats stats;
+    HistogramStats stats;
     char rows[6][2][24];
     int  row_count = 0;
     int  i;
@@ -1250,7 +1250,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     int panel_x = view->panel_x;
     int panel_y = view->panel_y;
 
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int lo_bin = 0, hi_bin = 0;
     /* The axis spans the plotted series only — hiding a series narrows it. */
     int have_data = ui_histogram_axis_range(view->hidden_series,
@@ -1275,8 +1275,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         if (!hist_series_visible(s)) continue;
         hidden = (view->hidden_series & section_bit(s)) != 0;
         if (!hidden) any_shown = 1;
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
-        for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+        prof_section_histogram(s, bins, HISTOGRAM_BIN_COUNT);
+        for (int bin_idx = 0; bin_idx < HISTOGRAM_BIN_COUNT; bin_idx++) {
             /* series_samples feeds the legend's has-data styling for every
              * series; the y ceiling excludes hidden ones, so hiding a
              * dominant distribution lets the rest grow off the baseline. */
@@ -1373,7 +1373,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     /* Time (x) gridlines: one per decade boundary inside the drawn range. The
      * axis is linear in bin index, and bins are log-spaced, so decades land at
      * even pixel intervals. */
-    for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+    for (double dec = HISTOGRAM_MIN_US; dec <= HISTOGRAM_MAX_US;
          dec *= 10.0) {
         float gx;
         if (!hist_time_to_x(dec, lo_bin, hi_bin, plot_x, plot_w, &gx)) continue;
@@ -1462,7 +1462,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         float last_x = -HIST_TICK_MIN_GAP;
         ui_clr_a(UI_TOK_TEXT_MUTED, major ? 0.95f : 0.65f);
         glBegin(GL_LINES);
-        for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+        for (double dec = HISTOGRAM_MIN_US; dec <= HISTOGRAM_MAX_US;
              dec *= 10.0) {
             for (int mult = major ? 1 : 2; mult <= (major ? 1 : 9); mult++) {
                 float gx;
@@ -1498,7 +1498,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         int  label_y = plot_y - HIST_XAXIS_H + 2 + HIST_XAXIS_LABEL_H;
         char lab[24];
 
-        for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+        for (double dec = HISTOGRAM_MIN_US; dec <= HISTOGRAM_MAX_US;
              dec *= 10.0) {
             float gxf;
             if (!hist_time_to_x(dec, lo_bin, hi_bin, plot_x, plot_w, &gxf))
@@ -1529,8 +1529,8 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         int  rule_y  = range_y + 4;
         char lo_lab[24], hi_lab[24];
 
-        fmt_us(lo_lab, (int)sizeof(lo_lab), prof_histogram_bin_lo_us(lo_bin));
-        fmt_us(hi_lab, (int)sizeof(hi_lab), prof_histogram_bin_hi_us(hi_bin));
+        fmt_us(lo_lab, (int)sizeof(lo_lab), histogram_bin_lo_us(lo_bin));
+        fmt_us(hi_lab, (int)sizeof(hi_lab), histogram_bin_hi_us(hi_bin));
 
         int lo_w = (int)strlen(lo_lab) * FONT_SMALL_W;
         int hi_w = (int)strlen(hi_lab) * FONT_SMALL_W;

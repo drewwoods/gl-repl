@@ -32,7 +32,8 @@
 #ifndef UI_CPUPROF_H
 #define UI_CPUPROF_H
 
-#include "support/cpuprof.h"   /* ProfHistogramBin, PROF_HISTOGRAM_BIN_COUNT */
+#include "support/cpuprof.h"     /* ProfSection, prof_section_* readback */
+#include "support/histogram.h"   /* HistogramBin, HISTOGRAM_BIN_COUNT */
 
 /* Compute-profile surfaces (Ctrl+W cycle). Each level adds one floating panel:
  * FPS shows the frame-rate graph, SECTIONS adds the full collapsible timing

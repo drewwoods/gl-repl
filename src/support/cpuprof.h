@@ -21,6 +21,7 @@
 #define CPUPROF_H
 
 #include <stdint.h>
+#include "support/histogram.h"
 
 /* Fallback catalog: active only when prof_sections.h was not force-included
  * (PROF_SECTIONS_PROVIDED unset). Keeps the generic timer self-contained. */
@@ -94,83 +95,25 @@ int    prof_section_is_stale(ProfSection s);
 
 /* --- Fixed timing histograms ---
  *
- * Each histogram is 1024 bins spaced *logarithmically* over 1 us .. 1 s, so
- * every bin is the same constant ratio (~1.36%) wide rather than the same
- * number of microseconds. Bin counts are 32-bit and saturate at UINT32_MAX.
- *
- * Log spacing, not linear, because the sections being timed span four or five
- * decades at once: a whole frame runs in milliseconds while the cheap sections
- * around it run in microseconds. Linear bins wide enough to reach a 100 ms
- * stall (~100 us each) drop every sub-100 us section into bin 0, where they
- * are mutually indistinguishable and no plot can pull them apart. Constant
- * *relative* resolution measures a 3 us section as precisely as a 30 ms one,
- * and demotes an outlier from "blows out the whole scale" to "one more bin".
- *
- * Bin 0 also absorbs the underflow (samples below 1 us, i.e. the sections that
- * are effectively free); the last bin also absorbs the overflow (>= 1 s).
+ * One Histogram per section plus one for frame time. The distribution itself —
+ * log-spaced bins, running statistics, and the reasoning behind both — belongs
+ * to src/support/histogram.h; what lives here is only *when* a sample is fed.
  *
  * Section histograms are fed when a section publishes a sample:
  * prof_end() for direct sections and prof_accum_commit() for accumulated
  * sections. The frame-time histogram is fed by prof_frame_tick() using the
  * wall-clock delta between frame ticks, so it captures overall frame cadence
- * rather than just display-callback body time. */
-#define PROF_HISTOGRAM_BIN_COUNT 1024
-#define PROF_HISTOGRAM_MIN_US    1.0        /* bin 0's nominal lower edge */
-#define PROF_HISTOGRAM_MAX_US    1000000.0  /* last bin's upper edge (1 s) */
-#define PROF_HISTOGRAM_DECADES   6.0        /* log10(MAX_US / MIN_US)      */
-typedef uint32_t ProfHistogramBin;
-
-/* Bin containing `us`, clamped into [0, PROF_HISTOGRAM_BIN_COUNT - 1]. */
-int prof_histogram_bin_for_us(double us);
-
-/* The bin's time bounds in us: [lo, hi). bin 0's true lower bound is 0 and
- * the last bin's true upper bound is infinite (see the underflow/overflow
- * note above); these report the nominal log-spaced edges. */
-double prof_histogram_bin_lo_us(int bin);
-double prof_histogram_bin_hi_us(int bin);
-
+ * rather than just display-callback body time.
+ *
+ * The getters return the number of bins written / 1 on success, and 0 (leaving
+ * *out untouched) for a bad section index or a NULL out. */
 int prof_section_histogram(ProfSection s,
-                           ProfHistogramBin *out,
+                           HistogramBin *out,
                            int max_bins);
-int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins);
+int prof_frame_time_histogram(HistogramBin *out, int max_bins);
 
-/* --- Running statistics, one set per histogram ---
- *
- * Maintained from the same samples that feed the bins, over the same
- * cumulative window (prof_histogram_reset() clears both together), so the
- * numbers always describe exactly the distribution being drawn.
- *
- * They are accumulated from the raw microsecond values, not read back out of
- * the bins: the bins quantize to ~1.36% and fold their two outer bins into
- * open-ended underflow/overflow buckets, so a bin-derived min/max/mean would
- * be approximate at best and simply wrong at the edges. A sub-microsecond
- * section reports its true mean here while sitting entirely in bin 0.
- *
- * variance_us2 / stddev_us are the *sample* statistics (the n-1 divisor):
- * these are an ongoing sample of a process that keeps running, not a closed
- * population. Both are 0 until the second sample arrives.
- *
- * mean/variance use Welford's online update rather than accumulating a sum of
- * squares — over a long run sum_us^2 dwarfs the spread, and the textbook
- * E[x^2] - E[x]^2 form cancels away the significant digits that carry it
- * (a section that runs 16 ms every frame for an hour would report a negative
- * variance). sum_us is kept as its own plain running total, which is exact
- * enough for a total and is the one figure that cannot be recovered from the
- * others.
- *
- * Getters return 1 and fill *out on success; 0 (leaving *out untouched) for a
- * bad section index or a NULL out. With no samples yet, every field is 0. */
-typedef struct {
-    unsigned long long count;      /* samples recorded since the last reset */
-    double min_us, max_us;         /* extremes of the raw samples           */
-    double sum_us;                 /* running total (all time in section)   */
-    double mean_us;
-    double variance_us2;           /* sample variance, in us^2              */
-    double stddev_us;              /* sqrt(variance_us2), in us             */
-} ProfHistogramStats;
-
-int prof_section_stats(ProfSection s, ProfHistogramStats *out);
-int prof_frame_time_stats(ProfHistogramStats *out);
+int prof_section_stats(ProfSection s, HistogramStats *out);
+int prof_frame_time_stats(HistogramStats *out);
 
 /* Zero every section histogram and the frame-time histogram — bins and
  * running statistics alike — so the next samples start a fresh distribution.

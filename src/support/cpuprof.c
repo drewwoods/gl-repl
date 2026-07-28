@@ -34,23 +34,11 @@ static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_accum_sampled[PROF_SECTION_COUNT]; /* accum_end ran since reset */
-/* One histogram: the bins plus the running statistics over the same samples.
- * Kept in one struct so a sample can never land in the bins without also
- * updating the stats, and so a reset clears both by construction.
- *
- * `mean`/`m2` are Welford's online accumulators (m2 = sum of squared deviations
- * from the running mean); `sum` is a separate plain total. See the ProfHistogram
- * Stats block in cpuprof.h for why the sum-of-squares shortcut is not used. */
-typedef struct {
-    ProfHistogramBin   bins[PROF_HISTOGRAM_BIN_COUNT];
-    unsigned long long count;
-    double             min_us, max_us;
-    double             sum;
-    double             mean;
-    double             m2;
-} ProfHistogram;
-
-static ProfHistogram g_prof_hist[PROF_SECTION_COUNT];
+/* One Histogram per section: the bins plus the running statistics over the
+ * same samples, kept together by src/support/histogram.c so a sample can never
+ * land in the bins without also updating the statistics, and so a clear resets
+ * both by construction. */
+static Histogram g_prof_hist[PROF_SECTION_COUNT];
 static int    g_prof_initialized = 0;
 
 static ProfSectionHookFn g_prof_begin_hook = 0;
@@ -78,7 +66,7 @@ typedef struct {
 static ProfFpsWindow g_fps_win[PROF_FPS_WIN_COUNT];
 static double g_fps_last_tick_us = 0.0;
 static double g_fps_interval_ema_us = 0.0;
-static ProfHistogram g_frame_time_hist;
+static Histogram g_frame_time_hist;
 
 static int g_prof_test_now_enabled = 0;
 static double g_prof_test_now_us = 0.0;
@@ -112,90 +100,6 @@ static double prof_now_us(void) {
     if (g_prof_test_now_enabled)
         return g_prof_test_now_us;
     return prof_platform_now_us();
-}
-
-/* Decades per bin. The whole log-bin layout derives from this one constant. */
-#define PROF_HIST_DECADES_PER_BIN \
-    (PROF_HISTOGRAM_DECADES / (double)PROF_HISTOGRAM_BIN_COUNT)
-
-int prof_histogram_bin_for_us(double us) {
-    /* Underflow (including zero and the negative that a non-monotonic clock
-     * could hand us) folds into bin 0; overflow into the last bin. */
-    if (!(us > PROF_HISTOGRAM_MIN_US)) return 0;
-    if (us >= PROF_HISTOGRAM_MAX_US) return PROF_HISTOGRAM_BIN_COUNT - 1;
-
-    /* The epsilon makes a bin's exact lower edge land in that bin rather than
-     * the one below: prof_histogram_bin_lo_us() reaches the edge through
-     * pow(), and log10(pow(10, x)) comes back a hair under x, so the floor
-     * would drop it. 1e-9 decades is ~1e-9 of a bin — far below any real
-     * timing resolution — so it can only ever fix that boundary. */
-    int bin = (int)(log10(us / PROF_HISTOGRAM_MIN_US)
-                    / PROF_HIST_DECADES_PER_BIN + 1e-9);
-    if (bin < 0) bin = 0;
-    if (bin > PROF_HISTOGRAM_BIN_COUNT - 1) bin = PROF_HISTOGRAM_BIN_COUNT - 1;
-    return bin;
-}
-
-double prof_histogram_bin_lo_us(int bin) {
-    if (bin <= 0) return PROF_HISTOGRAM_MIN_US;
-    if (bin > PROF_HISTOGRAM_BIN_COUNT - 1) bin = PROF_HISTOGRAM_BIN_COUNT - 1;
-    return PROF_HISTOGRAM_MIN_US
-         * pow(10.0, (double)bin * PROF_HIST_DECADES_PER_BIN);
-}
-
-double prof_histogram_bin_hi_us(int bin) {
-    if (bin < 0) bin = 0;
-    if (bin >= PROF_HISTOGRAM_BIN_COUNT - 1) return PROF_HISTOGRAM_MAX_US;
-    return prof_histogram_bin_lo_us(bin + 1);
-}
-
-static void prof_histogram_record(ProfHistogram *h, double elapsed_us) {
-    int bin = prof_histogram_bin_for_us(elapsed_us);
-    double delta, delta2;
-
-    if (h->bins[bin] < UINT32_MAX)
-        h->bins[bin]++;
-
-    /* Stats take the raw value, so they stay exact where the bins do not: at
-     * the two open-ended edge bins, and below the ~1.36% bin width. The bin
-     * saturation above deliberately does not gate this — a saturated bin stops
-     * counting, the distribution's statistics should not. */
-    if (h->count == 0 || elapsed_us < h->min_us) h->min_us = elapsed_us;
-    if (h->count == 0 || elapsed_us > h->max_us) h->max_us = elapsed_us;
-    h->sum += elapsed_us;
-    h->count++;
-
-    delta   = elapsed_us - h->mean;
-    h->mean += delta / (double)h->count;
-    delta2  = elapsed_us - h->mean;   /* deviation from the *updated* mean */
-    h->m2  += delta * delta2;
-}
-
-static void prof_histogram_clear(ProfHistogram *h) {
-    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
-        h->bins[bin_idx] = 0;
-    h->count  = 0;
-    h->min_us = 0.0;
-    h->max_us = 0.0;
-    h->sum    = 0.0;
-    h->mean   = 0.0;
-    h->m2     = 0.0;
-}
-
-static void prof_histogram_read_stats(const ProfHistogram *h,
-                                      ProfHistogramStats *out) {
-    out->count        = h->count;
-    out->min_us       = h->min_us;
-    out->max_us       = h->max_us;
-    out->sum_us       = h->sum;
-    out->mean_us      = (h->count > 0) ? h->mean : 0.0;
-    /* n-1 divisor: an ongoing sample of a running process, not a population.
-     * m2 is a sum of squares and so cannot go negative, but a long run of
-     * identical samples can leave it at -0.0; max() keeps sqrt() honest. */
-    out->variance_us2 = (h->count > 1)
-                      ? ((h->m2 > 0.0) ? h->m2 / (double)(h->count - 1) : 0.0)
-                      : 0.0;
-    out->stddev_us    = sqrt(out->variance_us2);
 }
 
 static void init_if_needed(void) {
@@ -240,7 +144,7 @@ void prof_end(ProfSection s) {
 
     g_prof_last_us[s] = elapsed;
     g_prof_stale[s]   = 0;
-    prof_histogram_record(&g_prof_hist[s], elapsed);
+    histogram_record(&g_prof_hist[s], elapsed);
 
     if (g_prof_avg_us[s] == 0.0)
         g_prof_avg_us[s] = elapsed;  /* seed with first sample */
@@ -273,7 +177,7 @@ void prof_accum_commit(ProfSection s) {
     double total = g_prof_accum_pending[s];
     g_prof_last_us[s] = total;
     if (g_prof_accum_sampled[s]) {
-        prof_histogram_record(&g_prof_hist[s], total);
+        histogram_record(&g_prof_hist[s], total);
         g_prof_accum_sampled[s] = 0;
     }
     if (g_prof_avg_us[s] == 0.0)
@@ -298,7 +202,7 @@ void prof_frame_tick(void) {
     if (g_fps_last_tick_us > 0.0) {
         double dt = now - g_fps_last_tick_us;
         if (dt > 0.0) {
-            prof_histogram_record(&g_frame_time_hist, dt);
+            histogram_record(&g_frame_time_hist, dt);
             /* Smooth elapsed time, then invert it. Averaging per-frame
              * reciprocals (EMA(1 / dt)) biases FPS upward whenever callback
              * spacing is uneven; 1 / EMA(dt) tracks the actual callback
@@ -366,45 +270,33 @@ int prof_section_is_stale(ProfSection s) {
 }
 
 int prof_section_histogram(ProfSection s,
-                           ProfHistogramBin *out,
+                           HistogramBin *out,
                            int max_bins) {
-    if (s < 0 || s >= PROF_SECTION_COUNT || !out || max_bins <= 0)
-        return 0;
-    int n = max_bins < PROF_HISTOGRAM_BIN_COUNT
-          ? max_bins
-          : PROF_HISTOGRAM_BIN_COUNT;
-    for (int i = 0; i < n; i++)
-        out[i] = g_prof_hist[s].bins[i];
-    return n;
+    if (s < 0 || s >= PROF_SECTION_COUNT) return 0;
+    return histogram_bins(&g_prof_hist[s], out, max_bins);
 }
 
-int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins) {
-    if (!out || max_bins <= 0) return 0;
-    int n = max_bins < PROF_HISTOGRAM_BIN_COUNT
-          ? max_bins
-          : PROF_HISTOGRAM_BIN_COUNT;
-    for (int i = 0; i < n; i++)
-        out[i] = g_frame_time_hist.bins[i];
-    return n;
+int prof_frame_time_histogram(HistogramBin *out, int max_bins) {
+    return histogram_bins(&g_frame_time_hist, out, max_bins);
 }
 
-int prof_section_stats(ProfSection s, ProfHistogramStats *out) {
+int prof_section_stats(ProfSection s, HistogramStats *out) {
     if (s < 0 || s >= PROF_SECTION_COUNT || !out) return 0;
-    prof_histogram_read_stats(&g_prof_hist[s], out);
+    histogram_read_stats(&g_prof_hist[s], out);
     return 1;
 }
 
-int prof_frame_time_stats(ProfHistogramStats *out) {
+int prof_frame_time_stats(HistogramStats *out) {
     if (!out) return 0;
-    prof_histogram_read_stats(&g_frame_time_hist, out);
+    histogram_read_stats(&g_frame_time_hist, out);
     return 1;
 }
 
 void prof_histogram_reset(void) {
     init_if_needed();
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++)
-        prof_histogram_clear(&g_prof_hist[section_idx]);
-    prof_histogram_clear(&g_frame_time_hist);
+        histogram_clear(&g_prof_hist[section_idx]);
+    histogram_clear(&g_frame_time_hist);
 }
 
 void prof_test_reset(void) {
@@ -415,7 +307,7 @@ void prof_test_reset(void) {
         g_prof_stale[section_idx]         = PROF_STALE_FRAMES;
         g_prof_accum_pending[section_idx] = 0.0;
         g_prof_accum_sampled[section_idx] = 0;
-        prof_histogram_clear(&g_prof_hist[section_idx]);
+        histogram_clear(&g_prof_hist[section_idx]);
     }
     for (int win_idx = 0; win_idx < PROF_FPS_WIN_COUNT; win_idx++) {
         g_fps_win[win_idx].head = 0;
@@ -425,7 +317,7 @@ void prof_test_reset(void) {
         for (int sample_idx = 0; sample_idx < PROF_FPS_HISTORY_CAP; sample_idx++)
             g_fps_win[win_idx].ring[sample_idx] = 0.0f;
     }
-    prof_histogram_clear(&g_frame_time_hist);
+    histogram_clear(&g_frame_time_hist);
     g_fps_last_tick_us = 0.0;
     g_fps_interval_ema_us = 0.0;
     g_prof_initialized = 0;

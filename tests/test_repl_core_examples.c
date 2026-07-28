@@ -1450,7 +1450,7 @@ static void test_example_cfg_uses_symbolic_names(void) {
  * startup outliers) into the new one. repl_load_example is the chokepoint
  * every path funnels through — menu, F12 cycle, --example, bootstrap. */
 static void test_example_load_resets_histograms(void) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int total;
 
     ASSERT_TRUE("catalog has at least one example", repl_example_count() > 0);
@@ -1462,16 +1462,16 @@ static void test_example_load_resets_histograms(void) {
     prof_end(PROF_FLATTEN);
     prof_test_clear_now_us();
 
-    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_FLATTEN, bins, HISTOGRAM_BIN_COUNT);
     total = 0;
-    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
+    for (int i = 0; i < HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
     ASSERT_TRUE("histogram holds the pre-switch sample", total == 1);
 
     ASSERT_TRUE("example loads", repl_load_example(0) > 0);
 
-    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    prof_section_histogram(PROF_FLATTEN, bins, HISTOGRAM_BIN_COUNT);
     total = 0;
-    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
+    for (int i = 0; i < HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
     ASSERT_TRUE("example load clears the stale histogram", total == 0);
 
     prof_test_reset();

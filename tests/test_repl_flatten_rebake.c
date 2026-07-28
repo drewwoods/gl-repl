@@ -581,11 +581,11 @@ static void test_real_scene_time_routes(void) {
 }
 
 static int profile_histogram_samples(ProfSection section) {
-    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int total = 0;
 
-    prof_section_histogram(section, bins, PROF_HISTOGRAM_BIN_COUNT);
-    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++)
+    prof_section_histogram(section, bins, HISTOGRAM_BIN_COUNT);
+    for (int i = 0; i < HISTOGRAM_BIN_COUNT; i++)
         total += (int)bins[i];
     return total;
 }
