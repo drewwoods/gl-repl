@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "subsystems/assign_plot/assign_plot.h"
 #include "editor/undo.h"
 #include "repl/example_loader.h"
 #include "repl/export.h"
@@ -1244,6 +1245,72 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
     ASSERT_FLOAT("right-click editor leaves camera tz", after.tz, before.tz);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
+}
+
+/* Right-clicking an assignment row opens its value plot. Before this branch
+ * existed the row fell into route_right_code_panel_hit's inert `else` (there
+ * is no authored description record for either assignment type), so the
+ * gesture did nothing at all. */
+static void test_right_click_assignment_opens_value_plot(void) {
+    UiHit hit;
+    int x = -1;
+    int y = -1;
+
+    printf("--- imrepl_ctrl right-click assignment value plot ---\n");
+
+    glr_ctrl_reset_all();
+    assign_plot_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_menu_bar_close();
+    ui_state_help_mut()->visible = 0;
+    variable_panel_set_visible(0);
+
+    editor_feed_line("float angle;");
+    editor_feed_line("angle = t * 30;");
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_navigate_to_line(0);
+
+    ASSERT_TRUE("found the assignment row", find_code_text_hit_for_line(1, &hit, &x, &y));
+    ASSERT_INT("plot starts closed", assign_plot_is_open(), 0);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-click on an assignment opens the plot",
+               assign_plot_is_open(), 1);
+    ASSERT_INT("targeting the clicked row", assign_plot_source_line(), 1);
+    ASSERT_INT("and it closes the description card",
+               ui_state_command_description().visible, 0);
+    ASSERT_INT("and the state inspector",
+               ui_state_gl_state_inspector().visible, 0);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    /* The panel title is rebuilt from the live row each frame. */
+    {
+        UiRenderSnapshot snap;
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_STR("title is the row's left-hand side",
+                   snap.assign_plot_title, "angle");
+        ASSERT_INT("snapshot carries the open flag", snap.assign_plot.open, 1);
+    }
+
+    /* Right-clicking the same row again closes it. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-clicking the same row closes the plot",
+               assign_plot_is_open(), 0);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    /* A GL command row opens its description card, not a plot. */
+    ASSERT_TRUE("found the glVertex3f row",
+                find_code_text_hit_for_line(2, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("a GL command row opens no plot", assign_plot_is_open(), 0);
+    ASSERT_INT("it opens the description instead",
+               ui_state_command_description().visible, 1);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ui_state_command_description_close();
+    assign_plot_reset_all();
 }
 
 static void test_right_click_gl_command_description_popup(void) {
@@ -4968,6 +5035,7 @@ int main(void) {
     test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
+    test_right_click_assignment_opens_value_plot();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_divider_hover_yields_to_front_panel();

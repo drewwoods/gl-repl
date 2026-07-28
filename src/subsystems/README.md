@@ -81,7 +81,7 @@ seam is a **narrow installable interface** rather than the snapshot:
 - **`make variable-panel-demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) —
   drives the peer over an in-memory `VariablePanelValueSource` and a
   hand-built `UiVariablePanelView`, so neither the REPL eval table nor
-  [`UiRenderSnapshot`](../ui/app/snapshot.h#L71) is in the link set.
+  [`UiRenderSnapshot`](../ui/app/snapshot.h#L72) is in the link set.
 - **`make color-picker-demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) —
   drives the peer over a [`ColorPickerHostBridge`](color_picker/color_picker_state.h#L116)
   backed by a plain color array, standing in for the REPL document + commit

@@ -68,6 +68,7 @@
 #include "repl/source_scope.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
+#include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -79,6 +80,7 @@
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
+#include "ui/support/assign_plot.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
@@ -1274,9 +1276,36 @@ static int glr_ctrl_router_hit_is_blank_gl_state_anchor(const UiHit *hit) {
     return cmd && cmd->type == CMD_EMPTY;
 }
 
-/* Right-click over a committed GL-family command opens its authored help card;
- * glEnable/glDisable resolve that card by capability argument. A visually
- * empty committed or live input row toggles the OpenGL-state inspector. Every
+/* UI_HIT_ASSIGN_PLOT_*: the assignment plot's three mouse-only controls.
+ * Left-press cycles the capture rate forward, right-press backward — the same
+ * idiom the config flyout rows use, and the only control path this panel has
+ * (deliberately: a capture rate belongs to one plot, not to the keymap). */
+static int route_assign_plot_close_hit(void) {
+    assign_plot_close();
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_assign_plot_rate_hit(int dir) {
+    char msg[REPL_STATUS_TEXT_MAX];
+    assign_plot_cycle_rate(dir);
+    snprintf(msg, sizeof(msg), "assignment plot: capture %s",
+             ui_assign_plot_rate_label(assign_plot_view().rate));
+    ui_state_status_set(msg);
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_assign_plot_reset_hit(void) {
+    assign_plot_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+/* Right-click over an assignment row toggles that row's value plot; over a
+ * committed GL-family command it opens the authored help card (glEnable /
+ * glDisable resolve that card by capability argument); over a visually empty
+ * committed or live input row it toggles the OpenGL-state inspector. Every
  * other chrome right-click is consumed inert so it never forwards to the
  * scene camera, where right-drag starts pan. */
 static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
@@ -1293,6 +1322,14 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
             ui_state_gl_state_inspector_close();
         else
             ui_state_gl_state_inspector_open(hit->line_idx, x, y);
+    } else if (cmd && (cmd->type == CMD_VAR_ASSIGN ||
+                       cmd->type == CMD_SCRATCH_ASSIGN)) {
+        /* Ahead of the description lookup because neither assignment type has
+         * an authored description record — without this branch the row falls
+         * into the inert `else` below and right-click does nothing at all. */
+        ui_state_gl_state_inspector_close();
+        ui_state_command_description_close();
+        assign_plot_toggle(hit->line_idx);
     } else if (cmd && repl_command_description_lookup(cmd, &description)) {
         ui_state_gl_state_inspector_close();
         ui_state_command_description_open(hit->line_idx, x, y);
@@ -1369,6 +1406,10 @@ static void route_right_press(int x, int y) {
                 GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y))
             return;
         break;                    /* row rect disagreement: inert */
+    case UI_HIT_ASSIGN_PLOT_RATE:
+        /* Backward through the rate cycle, matching the Config flyout. */
+        route_assign_plot_rate_hit(-1);
+        return;
     case UI_HIT_SCENE:
     case UI_HIT_NONE:
         glr_ctrl_router_handle_camera_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN,
@@ -1749,6 +1790,12 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_histogram_reset_hit(); break;
     case UI_HIT_HISTOGRAM_SERIES_TOGGLE:
         consumed = route_histogram_series_toggle_hit(&hit); break;
+    case UI_HIT_ASSIGN_PLOT_CLOSE:
+        consumed = route_assign_plot_close_hit(); break;
+    case UI_HIT_ASSIGN_PLOT_RATE:
+        consumed = route_assign_plot_rate_hit(1); break;
+    case UI_HIT_ASSIGN_PLOT_RESET:
+        consumed = route_assign_plot_reset_hit(); break;
     case UI_HIT_OVERLAY_CHROME:
         consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:

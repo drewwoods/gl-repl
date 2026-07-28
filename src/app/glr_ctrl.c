@@ -90,6 +90,7 @@
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/app/overlay_layout.h"
+#include "ui/support/assign_plot.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
@@ -103,6 +104,7 @@
 #include "ui/app/variable_panel_view.h"
 #include "app/glr_color_picker_bridge.h"
 #include "app/glr_ctrl_internal.h"
+#include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -1838,6 +1840,37 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
     return 0;
 }
 
+/* Label for the assignment plot: the left-hand side of the targeted row, as
+ * the user wrote it ("angle", "A[i]"). Derived from the editor buffer rather
+ * than from the GLCmd because per-line canonical text lives there and nowhere
+ * else — and because re-deriving it every frame means an edited row retitles
+ * its plot instead of stranding the label it opened with.
+ *
+ * `line_idx` is -1 when nothing is plotted, in which case the title is empty
+ * and the panel is not drawn anyway. */
+static void glr_ctrl_assign_plot_title(int line_idx, char *out, size_t out_sz) {
+    const char *text;
+    const char *eq;
+    size_t len;
+
+    if (!out || out_sz == 0) return;
+    out[0] = '\0';
+    if (line_idx < 0) return;
+
+    text = editor_buffer_line(line_idx);
+    if (!text) return;
+
+    /* First '=' ends the target. An assignment's LHS is a name or a subscript,
+     * so there is no earlier '=' to trip over. */
+    eq = strchr(text, '=');
+    len = eq ? (size_t)(eq - text) : strlen(text);
+    while (len > 0 && (text[len - 1] == ' ' || text[len - 1] == '\t')) len--;
+    while (len > 0 && (text[0] == ' ' || text[0] == '\t')) { text++; len--; }
+    if (len >= out_sz) len = out_sz - 1;
+    memcpy(out, text, len);
+    out[len] = '\0';
+}
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
@@ -1861,6 +1894,10 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag.coarse     = variable_panel_drag_coarse();
     snap->profile_panel  = ui_state_profile_panel();
     snap->memory_panel   = ui_state_memory_panel();
+    snap->assign_plot    = assign_plot_view();
+    glr_ctrl_assign_plot_title(snap->assign_plot.source_line_idx,
+                               snap->assign_plot_title,
+                               sizeof(snap->assign_plot_title));
     snap->status         = ui_state_status();
     snap->status_history = ui_state_status_history();
     /* Count of structurally unbalanced bracket commands, surfaced as a
@@ -2042,8 +2079,26 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
         .profile_mode               = snap->profile_panel.mode,
         .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
         .memory_mode                = snap->memory_panel.mode,
+        .assign_plot_visible        = snap->assign_plot.open,
         .band_h                     = ui_overlay_layout_last_band_h(),
     });
+}
+
+/* Assignment-value plot: same overlay-layout slot resolution as the other
+ * floating panels. Visibility is the capture side's own open flag — this
+ * panel has no config key, because it is opened by right-clicking a row. */
+static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
+        const UiRenderSnapshot *snap) {
+    UiAssignPlotPanelView v;
+    v.window_w = snap->viewport.window_w;
+    v.window_h = snap->viewport.window_h;
+    v.visible  = snap->assign_plot.open;
+    v.title    = snap->assign_plot_title;
+    v.plot     = snap->assign_plot;
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_ASSIGN_PLOT,
+                                &v.panel_x, &v.panel_y);
+    return v;
 }
 
 /* Resolve the memory panel's overlay-layout slot into the narrow view the
@@ -2270,6 +2325,26 @@ void glr_ctrl_display_frame(void) {
             flat_program = repl_state_flat_program_view();
             num_flat_cmds = flat_program.cmd_count;
         }
+    }
+
+    /* Assignment-value capture, immediately after the flat program is current
+     * and before anything narrows it (replay clamps the executed count, but
+     * the plot wants the whole frame).
+     *
+     * PROF_ASSIGN_PLOT accumulates across this scan and the panel draw far
+     * below, because the two phases sit at opposite ends of the frame and no
+     * single begin/end could bracket both. Gated on the panel being open so a
+     * closed plot leaves all three rows stale ("--") rather than reporting a
+     * truthful-but-noisy zero every frame. */
+    if (assign_plot_is_open()) {
+        prof_accum_reset(PROF_ASSIGN_PLOT);
+        prof_begin(PROF_ASSIGN_PLOT);
+        prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
+        /* GLUT_ELAPSED_TIME is milliseconds since glutInit and monotonic,
+         * which is all the 1 Hz gate needs — no second clock to keep. */
+        assign_plot_capture((double)glutGet(GLUT_ELAPSED_TIME) * 1000.0);
+        prof_end(PROF_ASSIGN_PLOT_CAPTURE);
+        prof_accum_end(PROF_ASSIGN_PLOT);
     }
 
     /* Stencil is deliberately not host-cleared: the program's own
@@ -2525,6 +2600,21 @@ void glr_ctrl_display_frame(void) {
         ui_memory_panel_render(&mem_view);
     }
     prof_end(PROF_MEMORY_PANEL);
+
+    /* Assignment-value plot. Closes the accum bracket opened around the
+     * capture earlier in the frame, so PROF_ASSIGN_PLOT reports what the whole
+     * feature costs rather than just its draw. The `open` guard has to match
+     * the one at the capture site: committing an accumulator that was never
+     * reset this frame would report the previous plot's time forever. */
+    if (ui_snap.assign_plot.open) {
+        UiAssignPlotPanelView plot_view = glr_ctrl_build_assign_plot_view(&ui_snap);
+        prof_begin(PROF_ASSIGN_PLOT);
+        prof_begin(PROF_ASSIGN_PLOT_PANEL);
+        ui_assign_plot_panel_render(&plot_view);
+        prof_end(PROF_ASSIGN_PLOT_PANEL);
+        prof_accum_end(PROF_ASSIGN_PLOT);
+        prof_accum_commit(PROF_ASSIGN_PLOT);
+    }
 
     /* Compositor post-process: the whole-frame filter runs over the
      * entire composited image (3D scene + every 2D UI layer) now that
@@ -3676,6 +3766,29 @@ int glr_ctrl_open_gl_state_popup(int line) {
            ui_state_gl_state_inspector().source_line_idx == line;
 }
 
+int glr_ctrl_open_assign_plot(int line) {
+    UiRenderSnapshot snap;
+    int x;
+    int y;
+
+    if (line < 0)
+        return 0;
+
+    /* Same shape as glr_ctrl_open_gl_state_popup: resolve the row through the
+     * live code-panel model, then take the real right-click path, so a capture
+     * run exercises exactly the routing a user's click does — including the
+     * "row is not an assignment" rejection. Returns 0 for an off-screen row so
+     * the capture hook retries after follow-scroll lands. */
+    glr_ctrl_build_ui_snapshot(&snap);
+    if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
+        return 0;
+
+    glr_ctrl_passive_motion(x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    return assign_plot_is_open() && assign_plot_source_line() == line;
+}
+
 void glr_ctrl_set_accum_passes(int count) {
     static const int steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
     for (int i = 0; i < (int)ARRAY_LEN(steps); i++) {
@@ -3803,6 +3916,7 @@ void glr_ctrl_tick(void) {
             .profile_mode               = ui_state_profile_panel().mode,
             .profile_collapsed_sections = ui_state_profile_panel().collapsed_sections,
             .memory_mode                = ui_state_memory_panel().mode,
+            .assign_plot_visible        = assign_plot_is_open(),
             .band_h                     = band_h,
         });
         ui_overlay_layout_tick(&in);

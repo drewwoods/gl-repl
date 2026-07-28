@@ -88,6 +88,24 @@ static void maybe_capture_open_gl_state(void) {
         done = 1;
 }
 
+/* Capture affordance, sibling of GLR_OPEN_GL_STATE: GLR_OPEN_ASSIGN_PLOT=
+ * <line> routes a real synthetic right-click to that source row, which must
+ * be an assignment, opening its value plot. Same retry-until-on-screen shape
+ * as the state popup above. */
+static void maybe_capture_open_assign_plot(void) {
+    static int done = 0;
+    const char *s;
+
+    if (done) return;
+    s = getenv("GLR_OPEN_ASSIGN_PLOT");
+    if (!s || !*s) {
+        done = 1;
+        return;
+    }
+    if (glr_ctrl_open_assign_plot(atoi(s)))
+        done = 1;
+}
+
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
  * opens the F1 help overlay on the given tab index (0-based, clamped by
  * the tab-advance action) on the first displayed frame. The overlay
@@ -108,6 +126,7 @@ static void maybe_capture_open_help(void) {
 void glr_capture_env_frame_hook(void) {
     maybe_capture_view_toggle();
     maybe_capture_open_gl_state();
+    maybe_capture_open_assign_plot();
     /* Keep the picker last: a real code-panel right-click closes it, so when
      * both capture hooks are requested in one frame the final posed state
      * should still include the picker requested by the caller. */

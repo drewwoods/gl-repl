@@ -42,7 +42,6 @@ double histogram_bin_hi_us(int bin) {
 
 void histogram_record(Histogram *h, double elapsed_us) {
     int bin;
-    double delta, delta2;
 
     if (!h) return;
     bin = histogram_bin_for_us(elapsed_us);
@@ -54,27 +53,14 @@ void histogram_record(Histogram *h, double elapsed_us) {
      * at the two open-ended edge bins, and below the ~1.36% bin width. The bin
      * saturation above deliberately does not gate this — a saturated bin stops
      * counting, the distribution's statistics should not. */
-    if (h->count == 0 || elapsed_us < h->min_us) h->min_us = elapsed_us;
-    if (h->count == 0 || elapsed_us > h->max_us) h->max_us = elapsed_us;
-    h->sum += elapsed_us;
-    h->count++;
-
-    delta   = elapsed_us - h->mean;
-    h->mean += delta / (double)h->count;
-    delta2  = elapsed_us - h->mean;   /* deviation from the *updated* mean */
-    h->m2  += delta * delta2;
+    runstats_record(&h->stats, elapsed_us);
 }
 
 void histogram_clear(Histogram *h) {
     if (!h) return;
     for (int bin_idx = 0; bin_idx < HISTOGRAM_BIN_COUNT; bin_idx++)
         h->bins[bin_idx] = 0;
-    h->count  = 0;
-    h->min_us = 0.0;
-    h->max_us = 0.0;
-    h->sum    = 0.0;
-    h->mean   = 0.0;
-    h->m2     = 0.0;
+    runstats_clear(&h->stats);
 }
 
 int histogram_bins(const Histogram *h, HistogramBin *out, int max_bins) {
@@ -86,17 +72,16 @@ int histogram_bins(const Histogram *h, HistogramBin *out, int max_bins) {
 }
 
 void histogram_read_stats(const Histogram *h, HistogramStats *out) {
+    RunStatsSummary summary;
+
     if (!h || !out) return;
-    out->count        = h->count;
-    out->min_us       = h->min_us;
-    out->max_us       = h->max_us;
-    out->sum_us       = h->sum;
-    out->mean_us      = (h->count > 0) ? h->mean : 0.0;
-    /* n-1 divisor: an ongoing sample of a running process, not a population.
-     * m2 is a sum of squares and so cannot go negative, but a long run of
-     * identical samples can leave it at -0.0; max() keeps sqrt() honest. */
-    out->variance_us2 = (h->count > 1)
-                      ? ((h->m2 > 0.0) ? h->m2 / (double)(h->count - 1) : 0.0)
-                      : 0.0;
-    out->stddev_us    = sqrt(out->variance_us2);
+    runstats_read(&h->stats, &summary);
+    /* Same numbers, renamed into the duration vocabulary this module speaks. */
+    out->count        = summary.count;
+    out->min_us       = summary.min;
+    out->max_us       = summary.max;
+    out->sum_us       = summary.sum;
+    out->mean_us      = summary.mean;
+    out->variance_us2 = summary.variance;
+    out->stddev_us    = summary.stddev;
 }

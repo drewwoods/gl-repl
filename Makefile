@@ -496,14 +496,14 @@ GENERATED_COMMAND_DESCRIPTIONS_INC = build/generated/repl_command_descriptions_d
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
 RENDER3D_HDRS = $(filter src/render3d/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/histogram.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/histogram.c src/support/runstats.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone render3d_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c src/support/histogram.c \
+RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                       tests/gl-stubs/gl_stub_counts.c
 
 # Object list for the standalone repl_demo (the inverse of render3d_demo:
@@ -525,7 +525,7 @@ RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c src/support/hist
 # feature/decouple-repl-from-gl-repl-alt.md and
 # feature/source-document-port.md.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
-				     src/support/cpuprof.c src/support/histogram.c \
+				     src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                      src/subsystems/replay/replay.c \
                      src/subsystems/replay/replay_fade.c \
                      src/subsystems/replay/replay_input.c \
@@ -604,7 +604,7 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/ui/core/text_panel.c \
                        src/ui/core/text_search.c \
                        src/ui/core/theme.c \
-				      src/support/cpuprof.c src/support/histogram.c \
+				      src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                        tests/gl-stubs/gl_stub_counts.c
 
 # Object list for the standalone memprof_demo (isolation demo #4). Proves
@@ -626,7 +626,7 @@ MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
 # support/cpuprof.c is the already-pure wall-time sampler; support/gpuprof.c
 # is its GL-free GPU twin (the panel reads it; never initialized here, so
 # the GPU column stays "--").
-CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c src/support/histogram.c \
+CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                         src/support/gpuprof.c \
                         src/ui/support/cpuprof.c \
                         src/ui/core/theme.c \
@@ -807,8 +807,12 @@ TEST_BINS += test_hidden_lines
 # Stencil legend: the controller's row-selection policy plus the panel's
 # pure geometry solve. Links CORE_TEST_OBJS for glr_ctrl's view builder.
 TEST_BINS += test_buffer_viz_legend
+# Assignment-value plot: the capture engine (core test — it drives the REPL
+# pipeline) and the panel renderer (GL stubs, explicit object list below).
+TEST_BINS += test_assign_plot
+TEST_BINS += test_ui_assign_plot
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -948,6 +952,7 @@ test_render3d_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_render.o \
 	$(RENDER3D_OBJS) \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/src/support/histogram.o \
+	$(OBJDIR)/src/support/runstats.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_render3d_render_LDLIBS = $(GL_LDFLAGS)
 test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
@@ -969,6 +974,7 @@ BUFFER_VIZ_TEST_OBJS = \
 	$(OBJDIR)/src/render3d/postprocess_surface.o \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/src/support/histogram.o \
+	$(OBJDIR)/src/support/runstats.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 
 test_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_depth_viz.o \
@@ -1001,12 +1007,25 @@ test_ui_cpuprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_cpuprof.o \
 	$(OBJDIR)/src/app/glr_prof.o \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/src/support/histogram.o \
+	$(OBJDIR)/src/support/runstats.o \
 	$(OBJDIR)/src/support/gpuprof.o \
 	$(OBJDIR)/src/ui/support/cpuprof.o \
 	$(OBJDIR)/src/ui/core/theme.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_ui_cpuprof_LDLIBS = $(GL_LDFLAGS)
 test_ui_cpuprof_RUN ?= $(BINDIR)/test_ui_cpuprof
+
+# No assign_plot.o here on purpose: the panel renderer consumes AssignPlotView
+# as data and calls nothing on the capture subsystem, so the test builds views
+# by hand. If this list ever needs the subsystem object, the renderer has
+# grown a dependency it should not have.
+test_ui_assign_plot_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_assign_plot.o \
+	$(OBJDIR)/src/support/runstats.o \
+	$(OBJDIR)/src/ui/support/assign_plot.o \
+	$(OBJDIR)/src/ui/core/theme.o \
+	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+test_ui_assign_plot_LDLIBS = $(GL_LDFLAGS)
+test_ui_assign_plot_RUN ?= $(BINDIR)/test_ui_assign_plot
 
 test_ui_memprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_memprof.o \
 	$(OBJDIR)/src/support/memprof.o \
@@ -1023,6 +1042,7 @@ test_ui_text_panel_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_text_panel.o \
 	$(OBJDIR)/src/ui/core/theme.o \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/src/support/histogram.o \
+	$(OBJDIR)/src/support/runstats.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_ui_text_panel_LDLIBS = $(GL_LDFLAGS)
 test_ui_text_panel_RUN ?= $(BINDIR)/test_ui_text_panel

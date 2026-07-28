@@ -79,6 +79,7 @@ static void print_usage(const char *prog) {
             "               editable color command). Poses the picker for\n"
             "               captures - it otherwise needs a swatch click.\n"
             "  GLR_OPEN_GL_STATE=<n>  Open the floating OpenGL-state popup\n"
+            "  GLR_OPEN_ASSIGN_PLOT=<n>  Open an assignment row's value plot\n"
             "               anchored to source line n (0-based; the line\n"
             "               must be a visually blank editor row). Poses the\n"
             "               popup for captures - it otherwise needs a\n"

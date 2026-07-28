@@ -93,6 +93,9 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    1, 0 },
     [PROF_PROFILE_PANEL_HISTOGRAM]           = { "histograms",      1, 0 },
     [PROF_MEMORY_PANEL]                      = { "Memory Panel",    0, 0 },
+    [PROF_ASSIGN_PLOT]                       = { "Assign Plot",     0, 0 },
+    [PROF_ASSIGN_PLOT_CAPTURE]               = { "capture",         1, 0 },
+    [PROF_ASSIGN_PLOT_PANEL]                 = { "panel",           1, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_FRAME_TOTAL]                       = { "Frame Total",     0, 1 },
@@ -146,6 +149,11 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * owns the GPU query so the overlay does not nest timer queries while it
      * is rendering the profiler's own measurements. */
     [PROF_MEMORY_PANEL]                      = 1,
+    /* Only the assignment plot's panel leaf draws. Its parent spans the
+     * flat-program scan as well — pure CPU, and accumulated across two
+     * separate points in the frame — so a query there would bracket work
+     * that issues no GL at all. */
+    [PROF_ASSIGN_PLOT_PANEL]                 = 1,
     [PROF_COMPOSITOR]                        = 1,
     [PROF_FRAME_TOTAL]                       = 1,
 };

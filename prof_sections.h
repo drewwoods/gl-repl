@@ -99,6 +99,15 @@ typedef enum {
     PROF_PROFILE_PANEL_SECTIONS,  /* ui_profile_panel_render() */
     PROF_PROFILE_PANEL_HISTOGRAM, /* ui_histogram_panel_render() */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
+    /* Assignment-value plot. Its two phases sit at opposite ends of the frame
+     * — the flat-program scan right after the flatten refresh, the panel draw
+     * with the other overlays — so the parent is accumulated across both via
+     * prof_accum_* rather than bracketed by a single begin/end. All three rows
+     * stay stale while no assignment row is plotted, which is the honest
+     * reading: the feature costs nothing when it is closed. */
+    PROF_ASSIGN_PLOT,           /* capture + panel, accumulated */
+    PROF_ASSIGN_PLOT_CAPTURE,   /* assign_plot_capture() flat-program scan */
+    PROF_ASSIGN_PLOT_PANEL,     /* ui_assign_plot_panel_render() */
     PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() — whole-frame
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */

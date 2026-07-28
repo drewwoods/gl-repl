@@ -260,7 +260,8 @@ parameter hint after the open paren names that definition's parameters.
 
 Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
 (**Ctrl+Z / Ctrl+Y**) work like a normal editor. Right-click a GL command for
-a short description. **Ctrl+D** deletes the current line or selection;
+a short description, or an assignment for [a plot of its
+values](#plotting-an-assignments-values). **Ctrl+D** deletes the current line or selection;
 **Ctrl+L** clears the scene and restores the [five editable display
 defaults](#display-default-commands).
 
@@ -338,6 +339,62 @@ panel. Click it to open the floating picker:
   the built-in examples, named after the active palette in
   [`accent_palette.h`](../accent_palette.h)), and **Harmony**.
 - Changes write back to the source line in real time.
+
+### Plotting an assignment's values
+
+Right-click a `var = expr;` (or `A[i] = expr;`) row to plot what it actually
+computed. This is a debugging tool: the point is a feel for the numbers, not
+sample-accurate capture. It is off until you ask for it, and costs nothing
+while closed.
+
+**The X axis follows the row.** A row inside a `for` loop runs many times per
+frame, so X is the execution number within one frame — the whole sweep of
+values the loop produced, in order.
+
+![Assignment value plot on a loop row: X is the execution index within one frame](images/assign-plot.png)
+
+Above, the plotted `wave = ...` row runs 160 times per frame, and the panel's
+trace is the same shape the loop is drawing in the scene — read off the
+variable rather than off the geometry.
+
+A top-level row runs exactly once per frame, which would be a single point;
+there X becomes successive captures instead, giving you the value drifting over
+time.
+
+![The same panel on a once-per-frame row: X becomes successive captures](images/assign-plot-frames.png)
+
+The caption under the plot always says which one you are looking at, along with
+the executions found this frame and the total number of samples behind the
+statistics.
+
+**Y is linear and signed, and does not force a zero baseline.** A variable
+oscillating between 100 and 101 shows its shape rather than flattening against
+the top of a 0–101 axis. When the range does cross zero, the zero line is drawn
+brighter, because a sign change is usually what you are hunting for.
+
+Under the plot: **min**, **max**, **mean** and **sd** (sample standard
+deviation). These are fed from every captured value. When a frame produces more
+executions than the plot has columns, the *curve* is decimated into min/max
+bands — the shape and the extremes survive, individual samples do not — but the
+statistics never are.
+
+Everything is driven by the mouse, from the panel itself:
+
+| Control | Action |
+|---|---|
+| `[x]` | Close the plot (right-clicking the plotted row again does the same) |
+| `[1 Hz]` | Cycle the capture rate: **once** → **1 Hz** → **frame**. Right-click cycles backward |
+| `[reset]` | Drop the collected samples and statistics, keeping the row and rate |
+
+**once** freezes after a single capture — useful for pinning down one frame
+while you edit around it. **1 Hz** (the default) is the low-cost live view.
+**frame** captures every frame, for watching a value respond to a drag.
+Changing the rate clears the window, since it redefines what the numbers cover.
+
+Right-clicking a different assignment retargets the panel; there is one plot at
+a time. Editing the plotted row re-titles the panel and keeps plotting it;
+deleting it, or replacing it with something that is not an assignment, closes
+the panel rather than silently plotting its neighbour.
 
 ### Inspecting OpenGL state
 
@@ -2079,6 +2136,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
 | Right-click GL command | Show a short description of that command |
+| Right-click `var = expr;` | Toggle the [assignment value plot](#plotting-an-assignments-values) for that row |
 | Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point |
 | Esc | Clear input / close overlay |
 

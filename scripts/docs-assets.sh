@@ -115,6 +115,7 @@ PNG_ASSETS=(
     tune-badges motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
     numeric-stepper gl-state-inspector profile-panels
+    assign-plot assign-plot-frames
     sc-parametric-torus sc-bezier sc-orbit-plot sc-gl-repl-logo sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
@@ -1041,6 +1042,60 @@ glutSolidSphere(radius, 32, 16);
 EOF
 }
 
+# Assignment value plot, exec-index axis: the `wave = ...` row inside the loop
+# runs once per iteration, so one captured frame carries the whole sweep. The
+# row index the GLR_OPEN_ASSIGN_PLOT hook targets is counted AFTER the @cfg
+# headers and the snippet markers are stripped, same as GLR_EDIT_LINE.
+stage_assign_plot() { stage assign_plot <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_labels = 0 */
+/* @cfg auto_normals = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+float wave;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glColor3f(0.35, 0.8, 1);
+glBegin(GL_LINE_STRIP);
+for(i, 0, 160) {
+wave = sin(i * 0.08 + t) * 0.7 * cos(i * 0.013);
+glVertex3f(i * 0.0125 - 1, wave, 0);
+}
+glEnd();
+// Snippet end
+EOF
+}
+
+# Same panel on its other X axis: a top-level row runs exactly once per frame,
+# so the plot becomes a time series over successive captures. That needs real
+# elapsed seconds rather than a single frame, which is what the long WARM at
+# the call site buys — record mode still advances GLUT_ELAPSED_TIME by wall
+# clock, so the default 1 Hz capture rate ticks while the frames are written.
+stage_assign_plot_frames() { stage assign_plot_frames <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_labels = 0 */
+/* @cfg auto_normals = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+float angle;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+angle = sin(t * 0.9) * 40;
+glRotatef(angle, 0.2, 1, 0);
+glColor3f(0.95, 0.6, 0.25);
+glutSolidTeapot(0.6);
+// Snippet end
+EOF
+}
+
 # OpenGL state inspector: the blank row after the authored state changes is
 # line 9 after @cfg headers/snippet markers are stripped and the authored
 # light position is lifted into generated display setup. The GLR_OPEN_GL_STATE
@@ -1337,6 +1392,34 @@ if want gl-state-inspector; then
     ( export GLR_EDIT_LINE=9 GLR_OPEN_GL_STATE=9
       still "$OUT/gl-state-inspector.png" 16 \
           "$(stage_gl_state_inspector)" )
+fi
+
+# Right-click an assignment row to plot its values. Index 5 is the `wave = ...`
+# assignment inside the loop (0-based, counted after the @cfg headers and the
+# snippet markers are stripped); the panel lands in the floating overlay column.
+# WARM outlasts the splash (WARM_SPLASH) rather than taking the house-default
+# 30: this panel lands bottom-right, exactly where the splash strip dims the
+# frame, and the min/max/mean/sd rows the shot exists to show are unreadable
+# underneath it.
+if want assign-plot; then
+    ( WARM=$((WARM_SPLASH + 30))
+      export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5
+      still "$OUT/assign-plot.png" 16 "$(stage_assign_plot)" )
+fi
+
+# The frames axis needs several capture *instants*, not one frame: the 1 Hz
+# capture rate is gated on wall clock, not on frame count, so what this asset
+# needs is ~20 s of elapsed time. WARM is therefore a frame budget standing in
+# for a duration — which means, like profile-panels, the sample count in the
+# shot reflects the machine that generated it. Regenerate on an otherwise idle
+# one, and expect n= to move. 600 frames also clears the splash, which would
+# otherwise dim the bottom-right corner this panel occupies.
+# Index 6 is the `angle = ...` row (0-based, after headers and markers are
+# stripped) — the four glEnable rows above it are part of the scene.
+if want assign-plot-frames; then
+    ( WARM=600
+      export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6
+      still "$OUT/assign-plot-frames.png" 16 "$(stage_assign_plot_frames)" )
 fi
 
 # Profile panels reflect live performance, so generate this on an otherwise

@@ -34,6 +34,8 @@
 
 #include <stdint.h>
 
+#include "support/runstats.h"
+
 #define HISTOGRAM_BIN_COUNT 1024
 #define HISTOGRAM_MIN_US    1.0        /* bin 0's nominal lower edge   */
 #define HISTOGRAM_MAX_US    1000000.0  /* last bin's upper edge (1 s)  */
@@ -46,14 +48,12 @@ typedef uint32_t HistogramBin;
  * cpuprof.c has one per section, statically. Zero-initialize (static storage or
  * histogram_clear) before the first record. */
 typedef struct {
-    HistogramBin       bins[HISTOGRAM_BIN_COUNT];
-    unsigned long long count;
-    double             min_us, max_us;
-    double             sum;
-    /* Welford's online accumulators: mean, and m2 = sum of squared deviations
-     * from the running mean. See the HistogramStats block below for why. */
-    double             mean;
-    double             m2;
+    HistogramBin bins[HISTOGRAM_BIN_COUNT];
+    /* The numbers half, delegated to support/runstats.h so the two live in one
+     * place: the assignment-value plot needs the same running statistics over
+     * values these bins could never hold. See the HistogramStats block below
+     * for why the statistics are kept alongside the bins at all. */
+    RunStats     stats;
 } Histogram;
 
 /* --- Running statistics ---

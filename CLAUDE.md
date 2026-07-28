@@ -266,7 +266,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L182) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L188) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
@@ -431,6 +431,18 @@ the render always walks the flat program (`replay_walk_user_vertices`, with
 `ctx.stop_flag` for early-out) and overrides `vertex_args`/`normal_args`
 from the flat cmd at the cursor. Vertex-arg slot parsing uses
 `repl_scan_next_arg_delim` (nested parens).
+
+### Assignment value plot
+
+Right-click a `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` row → floating plot of
+that row's values (`src/subsystems/assign_plot/` capture,
+`src/ui/support/assign_plot.c` panel). **No executor hook**: flatten already
+bakes each execution's value into `args[0]` (`args[2]` for scratch), so capture
+is a flat-program scan that early-outs when closed. `PROF_ASSIGN_PLOT` spans
+both phases via `prof_accum_*` (the scan and the draw sit at opposite ends of
+the frame); the reset and the commit are both gated on the panel being open, so
+never reset one without the other. Controls are mouse-only (no keymap slot, no
+`GlrConfigKey`, so no `@cfg`/golden churn).
 
 ### Autocomplete / search
 

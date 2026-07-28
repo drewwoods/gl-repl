@@ -44,6 +44,12 @@ void glr_ctrl_open_color_picker(int line);
  * has not made the row targetable yet, so the frame hook can retry. */
 int glr_ctrl_open_gl_state_popup(int line);
 
+/* Sibling affordance for the assignment-value plot: route a real synthetic
+ * right-click to `line`, which must be a visible `var = expr;` or `A[i] =
+ * expr;` row. Returns 1 once the plot is open on that row, 0 if the row is
+ * off-screen (caller should retry next frame) or is not an assignment. */
+int glr_ctrl_open_assign_plot(int line);
+
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
  * in declaration order; if two entries target the same GlrConfigKey for

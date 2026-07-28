@@ -9,6 +9,7 @@
  * the solver is pinned independently of panel size formulas.
  */
 #include "ui/app/overlay_layout.h"
+#include "ui/support/assign_plot.h"
 #include "ui/support/cpuprof.h"
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -45,6 +46,8 @@ static UiOverlayLayoutIn base_inputs(void) {
         (UiOverlayPanelReq){ 0, 384, 230 };  /* hidden in the base shape */
     in.panels[UI_OVERLAY_PANEL_MEMORY] =
         (UiOverlayPanelReq){ 1, 220, 150 };
+    in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT] =
+        (UiOverlayPanelReq){ 0, 250, 160 };  /* hidden in the base shape */
     return in;
 }
 
@@ -91,6 +94,49 @@ int main(void) {
            histogram.panels[UI_OVERLAY_PANEL_PROFILE].visible, 1);
         AI("Histogram mode shows histogram",
            histogram.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible, 1);
+        AI("no profile mode implies an assignment plot",
+           histogram.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].visible, 0);
+    }
+
+    /* --- The assignment plot is driven by its own flag, not a profile
+           mode, and sits directly above the variable panel. --- */
+    {
+        UiOverlayLayoutIn shown = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .assign_plot_visible = 1,
+        });
+        AI("assign_plot_visible shows the panel",
+           shown.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].visible, 1);
+        AI("and it carries the renderer's own size",
+           shown.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w,
+           ui_assign_plot_panel_width());
+        AI("profile surfaces stay off",
+           shown.panels[UI_OVERLAY_PANEL_PROFILE].visible, 0);
+    }
+
+    {
+        UiOverlayLayoutIn in = base_inputs();
+        in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].visible = 1;
+        int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
+        ui_overlay_layout_solve(&in, x, y);
+        AI("assign plot sits directly above the variable panel",
+           y[UI_OVERLAY_PANEL_ASSIGN_PLOT], (22 + BASE_Y) + 92 + STACK_GAP);
+        AI("and pushes the profile listing up by its height",
+           y[UI_OVERLAY_PANEL_PROFILE],
+           (22 + BASE_Y) + 92 + STACK_GAP + 160 + STACK_GAP);
+        AI("right-aligned like the rest of the column",
+           x[UI_OVERLAY_PANEL_ASSIGN_PLOT], 300 + 700 - RIGHT_MARGIN - 250);
+        for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
+            for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
+                if (!in.panels[a].visible || !in.panels[b].visible)
+                    continue;
+                char label[64];
+                snprintf(label, sizeof(label),
+                         "assign plot: no overlap %d vs %d", a, b);
+                AI(label,
+                   rects_overlap(x[a], y[a], in.panels[a].w, in.panels[a].h,
+                                 x[b], y[b], in.panels[b].w, in.panels[b].h),
+                   0);
+            }
     }
 
     /* --- Solo variable panel: the historical bottom-right anchor. --- */

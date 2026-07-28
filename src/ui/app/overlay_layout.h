@@ -33,6 +33,7 @@ typedef enum {
     UI_OVERLAY_PANEL_PROFILE,       /* compute-profile section listing */
     UI_OVERLAY_PANEL_HISTOGRAM,     /* compute-profile section histograms */
     UI_OVERLAY_PANEL_MEMORY,        /* memory (RSS) panel */
+    UI_OVERLAY_PANEL_ASSIGN_PLOT,   /* right-clicked assignment's value plot */
     UI_OVERLAY_PANEL_COUNT
 } UiOverlayPanelId;
 
@@ -63,6 +64,7 @@ typedef struct {
     int profile_mode;
     ProfSectionSet profile_collapsed_sections;
     int memory_mode;
+    int assign_plot_visible;
     int band_h;
 } UiOverlayLayoutInputs;
 

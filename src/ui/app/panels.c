@@ -18,6 +18,7 @@
 #include "ui/core/theme.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
+#include "ui/support/assign_plot.h"
 #include "ui/support/cpuprof.h"
 
 #include <math.h>
@@ -703,6 +704,7 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
                                         int mx, int my,
                                         int variable_count) {
     static const UiOverlayPanelId k_reverse_render_order[] = {
+        UI_OVERLAY_PANEL_ASSIGN_PLOT,
         UI_OVERLAY_PANEL_MEMORY,
         UI_OVERLAY_PANEL_HISTOGRAM,
         UI_OVERLAY_PANEL_PROFILE,
@@ -728,6 +730,7 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
         .profile_mode               = snap->profile_panel.mode,
         .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
         .memory_mode                = snap->memory_panel.mode,
+        .assign_plot_visible        = snap->assign_plot.open,
         .band_h                     = ui_overlay_layout_last_band_h(),
     });
 
@@ -758,6 +761,28 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
             if (toggle_target != UI_PROFILE_PANEL_HIT_NONE) {
                 hit.kind = UI_HIT_PROFILE_SECTION_TOGGLE;
                 hit.item_idx = toggle_target;
+                hit.local_x = (float)(mx - px);
+                hit.local_y = (float)(win_h - my - py);
+                return hit;
+            }
+        }
+        if (id == UI_OVERLAY_PANEL_ASSIGN_PLOT) {
+            UiAssignPlotPanelView plot_view;
+            int plot_hit;
+            plot_view.window_w = win_w;
+            plot_view.window_h = win_h;
+            plot_view.visible  = panel->visible;
+            plot_view.panel_x  = px;
+            plot_view.panel_y  = py;
+            plot_view.title    = snap->assign_plot_title;
+            plot_view.plot     = snap->assign_plot;
+            plot_hit = ui_assign_plot_panel_hit_test(&plot_view, mx, my);
+            if (plot_hit != UI_ASSIGN_PLOT_HIT_NONE) {
+                hit.kind = (plot_hit == UI_ASSIGN_PLOT_HIT_CLOSE)
+                             ? UI_HIT_ASSIGN_PLOT_CLOSE
+                         : (plot_hit == UI_ASSIGN_PLOT_HIT_RATE)
+                             ? UI_HIT_ASSIGN_PLOT_RATE
+                             : UI_HIT_ASSIGN_PLOT_RESET;
                 hit.local_x = (float)(mx - px);
                 hit.local_y = (float)(win_h - my - py);
                 return hit;

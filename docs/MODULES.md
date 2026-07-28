@@ -123,7 +123,7 @@ Consequences:
   editor text and REPL command state. A failed validation updates
   neither. Undo restores both sides together.
 - **UI is view + hit-test, not a controller.** Renderers consume
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L51) and return.
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L72). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L51) and return.
   `glr_ctrl` dispatches based on `UiHit.kind`. There is no central
   dispatch enum; the editor and the peer subsystems are each their
   own controller.
@@ -149,6 +149,7 @@ Subsystems](#peer-subsystems-and-neutral-support) and
 | [`UiState`](../src/ui/app/state.h#L20) | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | [`Render3dState`](../src/render3d/render.h#L97) | Per-renderer 3D stage state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
 | [`VariablePanelState`](../src/subsystems/variable_panel/variable_panel_state.h#L65) (peer) | Variable-panel visibility flag + slider drag transaction (var_idx, coarse, start_value, start_x, value_changed, final_value) | Editor text behavior, REPL grammar |
+| `AssignPlotView` ([`src/subsystems/assign_plot/assign_plot.h`](../src/subsystems/assign_plot/assign_plot.h)) (peer) | Which assignment row is plotted, capture rate (once / 1 Hz / frame), which X axis is in force, the decimated plot columns, and the running min/max/mean/stddev | Panel geometry and placement (UI), the flat program itself (REPL) |
 | [`ReplayRuntimeState`](../src/subsystems/replay/replay_state.h#L83) (peer) | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args, normal display, focused-vertex label | Editor text behavior, REPL grammar |
 | [`EditorHelpSession`](../src/editor/help_session.h#L16) (peer) | Help-overlay session state: tab_idx, scroll. Visibility flag stays on `UiState.help` as chrome | Help content (provided by content provider) |
 | `color_picker` (peer, `g_cp_*` statics) | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit; surfaced to renderers by value as [`ColorPickerView`](../src/subsystems/color_picker/color_picker_state.h#L47). The one tier with no single state struct — its state lives in file-private `g_cp_*` statics rather than a named type | Picker rendering / hit-test (lives on [`src/ui/subsystems/color_picker.c`](../src/ui/subsystems/color_picker.c)) |
@@ -275,7 +276,7 @@ lists to make the layer boundaries observable.
   / search/theme helpers, [`src/support/cpuprof.c`](../src/support/cpuprof.c). It deliberately does
   **not** link `src/ui/app`: the demo proves the editor model can render
   through generic UI primitives without the REPL code-panel adapter,
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L72), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
   shim-free: edit-line ownership lives in
   `EditorState.document.edit_line_idx`, and the demo's input dispatcher
   reaches edit-line through `editor_state_edit_line` / `_set` like the
@@ -316,6 +317,7 @@ handlers — they just log) plus Quit.
 | `render3d_*` | 3D rendering, camera/view transforms, world decorators, 3D overlays. Camera input routes through `glr_ctrl` to render3d/viewport controller |
 | `glr_*` | Application controller/composition layer: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status. Intended to be a router/coordinator; currently still carries too much mixed app policy, so new behavior should move toward the owning layer when possible |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
+| `assign_plot_*` | Peer subsystem: the right-clicked assignment row being value-plotted, its capture rate, its plot buffer and its running statistics. Owns its own state |
 | `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
 | `buffer_viz_*` | Peer subsystem: framebuffer inspection — reads a GL buffer back and composites a false-colour view of it. Owns the readback caches, the conversion math, and the EMA range smoothing; owns **no** policy — the mode for a frame arrives from the controller through render3d's neutral buffer hooks. Types are `BufferViz*`, enumerators `BUFFER_VIZ_*`. The boundary against `render3d_*` is the point of the prefix: render3d draws the *scene*, buffer_viz reports on the *buffers the scene wrote*, and render3d must not learn which is which (`check-render3d-no-upper-layers`) |
 | `support` / `prof` | Neutral utilities with no ownership of REPL/editor/render3d/UI/app state |
@@ -462,7 +464,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state, owned by the app layer rather than [`ReplRuntimeState`](../src/repl/state.h#L18); reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `src/app/glr_pointer_script` | Scripted synthetic pointer/keyboard engine. Two run kinds: env-driven capture (`GLR_POINTER_SCRIPT`, video recording; untimed-completion or absolute-timestamp, never canceled, no HUD) and menu-started **controlled tours** (untimed only; `glr_pointer_script_start_tour`) with a virtual clock, a `0.25×`–`16×` speed ladder, play/pause, immediate single-step, backstep (one whole-app baseline + prefix replay via `glr_tour_snapshot`), a persistent Done state, and the [`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L124) HUD feed. Transport input arrives through `glr_pointer_script_handle_tour_key` / `_handle_tour_special` — the module owns which keys are transport, so the host only has to dispatch to it first. Symbolic point targets (`menu:`/`item:`/`sub:`/`pin:`/`scene:` resolved against live app layout, plus web-only `shell:` DOM controls) and the cursor/ripple/ring/caption overlay |
-| `src/app/glr_tour_snapshot` | Whole-app tour-rewind baseline: composes the focused per-owner captures (repl checkpoint, editor session, undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/help-session by-value states, and the camera / view-transition / menu-bar / color-picker / overlay-layout runtime snapshots) into one opaque, heap-allocated `GlrTourSnapshot`. Excludes derived state (flat program, renderer resources, controller frame caches); restore leaves the flat program dirty. [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L79) re-syncs derived chrome + export strings afterward |
+| `src/app/glr_tour_snapshot` | Whole-app tour-rewind baseline: composes the focused per-owner captures (repl checkpoint, editor session, undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/help-session by-value states, and the camera / view-transition / menu-bar / color-picker / overlay-layout runtime snapshots) into one opaque, heap-allocated `GlrTourSnapshot`. Excludes derived state (flat program, renderer resources, controller frame caches); restore leaves the flat program dirty. [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L85) re-syncs derived chrome + export strings afterward |
 | `src/app/glr_tours` | Built-in guided-tour catalog behind the Tours menu — file-backed like the example scenes (`tours/*.pointer` plus native `catalog.ini` / web `catalog-emscripten.ini`, compiled in by `scripts/gen_tours.py`), played as controlled tours via `glr_pointer_script_start_tour` (name + `.pointer` filename passed for the HUD) and authored with symbolic targets so they play at any window size; a mouse click/wheel or any non-transport key cancels (intercepted in `gl_repl`'s GLUT callbacks, which offer each key to the transport handlers first) |
 | `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D stage + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files |
@@ -551,6 +553,7 @@ controllers; UI may render them; their input routes to them through
 
 | Module | Role |
 |--------|------|
+| `assign_plot` | Peer subsystem: assignment-value capture. Scans the live flat program for the targeted source row and folds every execution's baked value into a min/max column buffer plus a `RunStats`. Needs no executor hook — flatten already materializes one flat command per execution with the value in `args[0]` (`args[2]` for a scratch assign). Returns on its first line when nothing is targeted, so a closed panel costs nothing |
 | `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single [`VariablePanelState`](../src/subsystems/variable_panel/variable_panel_state.h#L65). Storage lives in [`src/subsystems/variable_panel/variable_panel_state.c`](../src/subsystems/variable_panel/variable_panel_state.c). |
 | `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback; the source-line rewrite happens once on mouse-up, not per motion). Reads/writes through [`variable_panel_drag_mut()`](../src/subsystems/variable_panel/variable_panel_state.h#L82) |
 | `replay_state` | Peer subsystem: owns [`ReplayRuntimeState`](../src/subsystems/replay/replay_state.h#L83) storage in [`src/subsystems/replay/replay_state.c`](../src/subsystems/replay/replay_state.c). Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus [`replay_state_view()`](../src/subsystems/replay/replay_state.h#L126) for the per-frame snapshot fill |
@@ -642,7 +645,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | Module | Role |
 |--------|------|
 | `ui_state` | Owns [`UiState`](../src/ui/app/state.h#L20): viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` and are re-exported by `repl_state_views` where a view facade needs them |
-| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), the read-only bundle passed to every UI renderer |
+| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L72), the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L51), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L51); `glr_ctrl` dispatches on it |
 | `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L51) |
@@ -650,8 +653,8 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`), plus `_opts` twins that take the whole-word flag — the short names keep plain-substring behavior for the editor-demo twin. REPL/editor-free; used by `editor_search` |
 | `ui_theme` ([`src/ui/core/theme.c`](../src/ui/core/theme.c)) | Single source of truth for 2D chrome color: semantic `ui_clr(UI_TOK_*)` tokens resolved against one active theme row, so a runtime theme switch updates one storage site instead of one copy per TU. Computed/data palettes (HSV math, syntax categories, the FPS gauge) deliberately stay outside it |
 | `ui_color_swatch` / `ui_numeric_swatch` / `ui_view_mode_swatch` | Inline code-panel affordances: the color square on an editable color line (reads the app-owned [`UiTransformer`](../src/ui/app/editor.h), which is why it sits in `ui/app` and not the picker peer), the stateless numeric stepper the controller re-derives each frame, and the animated 2D/3D toggle cell driven by the controller's projection blend. Render + hit-test only |
-| `ui_variable_panel_view` ([`src/ui/app/variable_panel_view.c`](../src/ui/app/variable_panel_view.c)) | Bakes scene rect / statusbar inset / panel-at-top into the dependency-light [`UiVariablePanelView`](../src/ui/subsystems/variable_panel.h#L56), so the variable-panel renderer never touches [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), `ui/app/layout`, or `ui/app/state` and stays linkable from `{ui/core, config}` alone — the 2D analogue of `glr_ctrl` building [`Render3dRenderConfig`](../src/render3d/render_types.h#L140) |
-| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L71), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
+| `ui_variable_panel_view` ([`src/ui/app/variable_panel_view.c`](../src/ui/app/variable_panel_view.c)) | Bakes scene rect / statusbar inset / panel-at-top into the dependency-light [`UiVariablePanelView`](../src/ui/subsystems/variable_panel.h#L56), so the variable-panel renderer never touches [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L72), `ui/app/layout`, or `ui/app/state` and stays linkable from `{ui/core, config}` alone — the 2D analogue of `glr_ctrl` building [`Render3dRenderConfig`](../src/render3d/render_types.h#L140) |
+| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L72), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure 3D viewport / code-panel rectangle geometry |
 | `ui_overlay_layout` ([`src/ui/app/overlay_layout.c`](../src/ui/app/overlay_layout.c)) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on. View builders read resolved positions; unticked queries fall back to pure solve targets |
 | `ui_text_layout` ([`src/ui/core/text_layout.c`](../src/ui/core/text_layout.c)) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / [`CodeLayout`](../src/ui/core/text_layout.h#L57) / [`CodeWrapIter`](../src/ui/core/text_layout.h#L70) convention |
@@ -666,6 +669,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_gl_state_panel` | Floating four-column OpenGL-state popup table (state/current/default/latest source, plus pure hit-test + scroll geometry) over the controller-built view of `repl_gl_state_inspector`'s report. Two independent folds: the header chip adds the default/source columns, the title-row chip adds the generated-setup rows the report partitions off (`user_row_count`), which stay folded by default |
 | `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c); CPU/GPU/Max columns, GPU fed by [`src/support/gpuprof.c`](../src/support/gpuprof.c) timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at [`src/ui/support/memprof.c`](../src/ui/support/memprof.c)) |
+| `ui_assign_plot_panel` | Assignment-value plot renderer (lives at [`src/ui/support/assign_plot.c`](../src/ui/support/assign_plot.c)). Linear, signed Y with no forced zero baseline — the opposite call from the log-spaced section histogram next door, because assignment values are unitless and a variable living in [100, 101] still has to show its shape. Three mouse-only controls: close, capture-rate chip, reset |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed / normals); audited by `check-replay-ui-isolation` |
 | `tour_hud` | **Feature-UI** (controlled tours): collapsible top-of-scene transport HUD. Compact mode shows name + expand affordance; expanded mode adds state / speed / step / source line + progress + controls. Reads only `snap->tour` ([`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L124)) under the `tour_ui_*` prefix and returns `UI_HIT_TOUR_HUD`; the controller routes that passive hit to transport-owned expand/collapse state. Separate from the bottom `replay_ui_hud` so both can show at once |
 
@@ -691,8 +695,9 @@ Files that do not belong in this layer:
 | `src/repl/import` | Reverses the exporter line-by-line, feeding geometry through [`editor_feed_line()`](../src/editor/input.h#L188). The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim between the two TUs on purpose |
 | `src/app/glr_mesh_export` + `src/support/mesh_ply` | PLY mesh export (File → Export .ply). `glr_mesh_export` (app, GL-coupled) runs the flat program in one `glRenderMode(GL_FEEDBACK)` pass under a fixed ortho transform; `mesh_ply` (pure, no-GL, neutral tier) parses the feedback stream → world coords → welded triangle mesh → ASCII PLY. Single capture path covers user geometry, GLU tess, and the GLUT solids |
 | `repl_cfg_baseline` | Neutral cfg bag/bridge and `// @cfg <slug>` parser: owns [`ReplConfigBag`](../src/repl/cfg_baseline.h#L34), [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49), and `repl_config_extract_slug` for export/import, scene snapshots, and tutorial baselines |
-| `src/support/cpuprof` | Project-wide CPU timing instrumentation; neutral utility consumed by app, UI support panels, demos, and tests. Owns *when* a sample is taken and one [`Histogram`](../src/support/histogram.h#L48) per section (plus one for frame time); the distribution itself belongs to `src/support/histogram` |
-| `src/support/histogram` | One log-spaced duration histogram: the ~1.36%-wide bins over 1 us .. 1 s and the running statistics (count / min / max / sum / Welford mean+variance) accumulated from the same raw microsecond samples, so bins and numbers can never describe different windows. No notion of a section or a frame — `cpuprof` supplies both. Benchmarked by `bench_repl --only cpuprof_sample` |
+| `src/support/cpuprof` | Project-wide CPU timing instrumentation; neutral utility consumed by app, UI support panels, demos, and tests. Owns *when* a sample is taken and one [`Histogram`](../src/support/histogram.h#L50) per section (plus one for frame time); the distribution itself belongs to `src/support/histogram` |
+| `src/support/histogram` | One log-spaced duration histogram: the ~1.36%-wide bins over 1 us .. 1 s plus a [`RunStats`](../src/support/runstats.h#L28) fed from the same raw microsecond samples, so bins and numbers can never describe different windows. No notion of a section or a frame — `cpuprof` supplies both. Benchmarked by `bench_repl --only cpuprof_sample` |
+| `src/support/runstats` | The numbers half of a distribution on its own: count / min / max / sum / Welford mean+variance over *unconstrained* doubles. Split out of `histogram` because the assignment-value plot needs the same statistics over signed, unitless values that no positive log-spaced bin range could hold |
 | `src/support/gpuprof` | Neutral GPU timer-query helper; app injects live GL timer-query function pointers after capability detection |
 | `src/support/memprof` | Neutral memory RSS sampling helper used by the memory HUD |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
@@ -735,7 +740,7 @@ flowchart TB
 
     editor["<b>2. Editor</b><br/>input · edit_ops · commit · state · undo · clipboard ·<br/>search · replace · completion · reformat ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
 
-    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · buffer_viz · camera<br/>(each owns its own state)"]
+    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · buffer_viz · assign_plot · camera<br/>(each owns its own state)"]
 
     repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>parser · normalize · compile · apply · load · replace ·<br/>source_scope · command_spec · attrib_bits · command_store ·<br/>flatten · flatten_expr · flatten_query · expr_program ·<br/>executor · eval · gl_state_inspector · bootstrap · host_effects"]
 
@@ -743,7 +748,7 @@ flowchart TB
 
     srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
 
-    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · repl_code_panel ·<br/>layout · overlay_layout · autocomplete_panel · gl_state_panel ·<br/>command_description_panel · color/numeric/view_mode swatches ·<br/>variable_panel_view<br/><b>ui/subsystems:</b> color_picker · variable_panel ·<br/>replay_hud · tour_hud · buffer_viz_legend<br/><b>ui/support:</b> cpuprof · memprof panels<br/>(snapshots in, UiHit out — never mutates)"]
+    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · repl_code_panel ·<br/>layout · overlay_layout · autocomplete_panel · gl_state_panel ·<br/>command_description_panel · color/numeric/view_mode swatches ·<br/>variable_panel_view<br/><b>ui/subsystems:</b> color_picker · variable_panel ·<br/>replay_hud · tour_hud · buffer_viz_legend<br/><b>ui/support:</b> cpuprof · memprof · assign_plot panels<br/>(snapshots in, UiHit out — never mutates)"]
 
     render3d["<b>4. 3D rendering (render3d)</b><br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter ·<br/>postprocess_surface · guides · render3d_transition"]
 
@@ -877,6 +882,7 @@ flowchart LR
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>visibility + drag transaction"]
+        aplot["src/subsystems/assign_plot/assign_plot.c<br/>assignment value capture"]
         replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_render.c + replay_state.c<br/>+ replay_annotations.c<br/>state machine · fades · fade GL render · walkers · annotations"]
         cpicker["src/subsystems/color_picker/color_picker_state.c<br/>HSV/alpha state · lifecycle · writeback"]
         tutorial_sys["src/subsystems/tutorial/tutorial_runner.c + tutorial_animation.c + tutorial_match.c<br/>+ src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · matching · fade timing"]
@@ -919,6 +925,7 @@ flowchart LR
         uiac["src/ui/app/autocomplete_panel.c<br/>completion popup"]
         uiprof["src/ui/support/cpuprof.c<br/>CPU/GPU timing HUD"]
         uimem["src/ui/support/memprof.c<br/>memory HUD"]
+        uiplot["src/ui/support/assign_plot.c<br/>assignment value plot"]
         uirhud["src/ui/subsystems/replay_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/app/layout.c<br/>rect geometry"]
         uicplay["src/ui/core/text_layout.c<br/>wrap iterator"]

@@ -27,6 +27,7 @@
 #include "subsystems/replay/replay_state.h"
 #include "app/glr_pointer_script.h"          /* GlrTourPlaybackView */
 #include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
+#include "ui/support/assign_plot.h"        /* AssignPlotView / title cap */
 
 #include "ui/app/state_types.h"
 
@@ -78,6 +79,12 @@ typedef struct UiRenderSnapshot {
     UiVariableDragView          variable_drag;
     UiProfilePanelState       profile_panel;
     UiMemoryPanelState        memory_panel;
+    /* Assignment-value plot. `assign_plot.cols` points at the capture
+     * subsystem's own buffer for the frame; the title is copied because it is
+     * re-derived from the live source row each frame (so editing the row
+     * retitles the panel instead of stranding a stale label). */
+    AssignPlotView            assign_plot;
+    char                      assign_plot_title[UI_ASSIGN_PLOT_TITLE_MAX];
     UiStatusState             status;
     UiStatusHistory           status_history;
     EditorSearchState             search;
