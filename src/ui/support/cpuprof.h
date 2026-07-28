@@ -51,10 +51,10 @@ typedef enum {
  * for side-by-side layout. */
 #define PROFILE_PANEL_W  384
 
-/* Session-only presentation state for the section tree. One bit per
- * ProfSection marks a branch whose descendants are hidden; profiling itself
- * continues unchanged while a branch is collapsed. */
-typedef unsigned long long UiProfileCollapseMask;
+/* Session-only presentation state for the section tree. A section-set entry
+ * marks a branch whose descendants are hidden; profiling itself continues
+ * unchanged while a branch is collapsed. */
+typedef ProfSectionSet UiProfileCollapseMask;
 
 enum {
     UI_PROFILE_PANEL_HIT_NONE = -1,
@@ -138,7 +138,7 @@ int  ui_fps_panel_height(void);
  * they get a row of their own rather than reading as mispositioned ticks —
  * and off the tick row they can no longer crowd out a decade label.
  *
- * hidden_series is a session-only mask (one bit per ProfSection, same shape as
+ * hidden_series is a session-only set (one entry per ProfSection, same shape as
  * the profile panel's collapsed_sections) of series the user has toggled off
  * by clicking their legend swatch. A hidden series is dropped from the plot,
  * from the y-scale (so hiding a dominant distribution lets the rest grow) and
@@ -165,7 +165,7 @@ typedef struct {
     int window_w, window_h;
     int visible;            /* profile mode is PROFILE_PANEL_HISTOGRAM */
     int panel_x, panel_y;   /* resolved position, controller-baked */
-    unsigned long long hidden_series;  /* bit per ProfSection: omit from the plot */
+    ProfSectionSet hidden_series;  /* ProfSections omitted from the plot */
     int pointer_x, pointer_y;  /* GLUT window coords (y down); <0 = no hover */
 } UiHistogramPanelView;
 
@@ -195,8 +195,8 @@ int  ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
  * UiProfilePanelState.hidden_histogram_series for a non-negative
  * ui_histogram_panel_hit_test() result. Out-of-range or non-plotted section
  * indices leave the mask unchanged. */
-unsigned long long ui_histogram_panel_toggle_series(
-    unsigned long long hidden_series, int section_idx);
+ProfSectionSet ui_histogram_panel_toggle_series(
+    ProfSectionSet hidden_series, int section_idx);
 
 /* The panel's x-axis policy, exposed for tests.
  *
@@ -219,7 +219,7 @@ unsigned long long ui_histogram_panel_toggle_series(
  * Reads the live histograms rather than taking them as arguments, so it is not
  * pure; it is separated out because the range policy is the panel's one piece
  * of non-obvious logic. */
-int ui_histogram_axis_range(unsigned long long hidden_series,
+int ui_histogram_axis_range(ProfSectionSet hidden_series,
                             int *lo_bin, int *hi_bin);
 
 #endif /* UI_CPUPROF_H */

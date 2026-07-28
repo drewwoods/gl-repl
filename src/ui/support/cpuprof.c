@@ -82,9 +82,6 @@ typedef struct {
  * FONT_SMALL is fixed-width, so 2 cell widths reads as the prior 2-space step. */
 #define PROF_INDENT_W       (FONT_SMALL_W * 2)
 
-STATIC_ASSERT(PROF_SECTION_COUNT <= 64,
-              "profile collapse mask must fit 64 bits");
-
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
@@ -233,10 +230,6 @@ static int section_has_label(ProfSection s) {
     return info.label != NULL && info.label[0] != '\0';
 }
 
-static UiProfileCollapseMask section_bit(ProfSection s) {
-    return ((UiProfileCollapseMask)1) << (unsigned int)s;
-}
-
 /* Catalog order plus depth defines the tree: a branch owns the contiguous
  * following run of rows with greater depth. */
 static int section_has_children(ProfSection s) {
@@ -284,7 +277,7 @@ static int section_visibility(UiProfileCollapseMask collapsed_sections,
 
         row_visible = (collapsed_depth < 0);
         if (row_visible && section_has_children(s) &&
-            (collapsed_sections & section_bit(s)) != 0)
+            prof_section_set_contains(&collapsed_sections, s))
             collapsed_depth = info.depth;
 
         visible[section_idx] = (unsigned char)row_visible;
@@ -295,30 +288,31 @@ static int section_visibility(UiProfileCollapseMask collapsed_sections,
 }
 
 static UiProfileCollapseMask branch_mask(void) {
-    UiProfileCollapseMask mask = 0;
+    UiProfileCollapseMask mask = prof_section_set_empty();
     int section_idx;
     for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
         if (section_has_children(s))
-            mask |= section_bit(s);
+            prof_section_set_add(&mask, s);
     }
     return mask;
 }
 
 static UiProfileCollapseMask root_branch_mask(void) {
-    UiProfileCollapseMask mask = 0;
+    UiProfileCollapseMask mask = prof_section_set_empty();
     int section_idx;
     for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
         if (section_has_children(s) && prof_section_info(s).depth == 0)
-            mask |= section_bit(s);
+            prof_section_set_add(&mask, s);
     }
     return mask;
 }
 
 static int tree_is_collapsed(UiProfileCollapseMask collapsed_sections) {
     UiProfileCollapseMask roots = root_branch_mask();
-    return roots != 0 && (collapsed_sections & roots) == roots;
+    return !prof_section_set_is_empty(&roots) &&
+           prof_section_set_contains_all(&collapsed_sections, &roots);
 }
 
 UiProfileCollapseMask ui_profile_panel_toggle_mask(
@@ -326,12 +320,16 @@ UiProfileCollapseMask ui_profile_panel_toggle_mask(
     if (toggle_target == UI_PROFILE_PANEL_TOGGLE_ALL) {
         UiProfileCollapseMask all = branch_mask();
         if (tree_is_collapsed(collapsed_sections))
-            return collapsed_sections & ~all;
-        return collapsed_sections | all;
+            prof_section_set_remove_all(&collapsed_sections, &all);
+        else
+            prof_section_set_union_into(&collapsed_sections, &all);
+        return collapsed_sections;
     }
     if (toggle_target >= 0 && toggle_target < PROF_SECTION_COUNT &&
-        section_has_children((ProfSection)toggle_target))
-        return collapsed_sections ^ section_bit((ProfSection)toggle_target);
+        section_has_children((ProfSection)toggle_target)) {
+        prof_section_set_toggle(&collapsed_sections,
+                                (ProfSection)toggle_target);
+    }
     return collapsed_sections;
 }
 
@@ -344,7 +342,7 @@ UiProfileCollapseMask ui_profile_panel_toggle_mask(
  * controller needs this (via ui_profile_panel_height) to resolve the stacked
  * anchor; the renderer uses it to size the frame. */
 int ui_profile_panel_height(UiProfilePanelMode mode) {
-    return ui_profile_panel_height_collapsed(mode, 0);
+    return ui_profile_panel_height_collapsed(mode, prof_section_set_empty());
 }
 
 int ui_profile_panel_height_collapsed(
@@ -478,7 +476,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             if (section_has_children(s)) {
                 draw_disclosure_bitmap(
                     (float)label_x, (float)ty,
-                    (view->collapsed_sections & section_bit(s)) != 0);
+                    prof_section_set_contains(&view->collapsed_sections, s));
             }
             label_x += FONT_SMALL_W;
             char label_buf[64];
@@ -873,8 +871,9 @@ static int hist_series_ordinal(ProfSection s) {
  * stretch the axis, or hiding the sub-microsecond sections would leave the
  * plot pinned at 1 us with the surviving millisecond hump squeezed into the
  * right-hand sliver. */
-static int hist_series_plotted(ProfSection s, unsigned long long hidden) {
-    return hist_series_visible(s) && (hidden & section_bit(s)) == 0;
+static int hist_series_plotted(ProfSection s, const ProfSectionSet *hidden) {
+    return hist_series_visible(s) &&
+           !prof_section_set_contains(hidden, s);
 }
 
 /* Series identity colors — the same fixed data-viz exclusion as the FPS
@@ -983,23 +982,23 @@ int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
     return UI_HISTOGRAM_PANEL_HIT_NONE;
 }
 
-unsigned long long ui_histogram_panel_toggle_series(
-        unsigned long long hidden_series, int section_idx) {
+ProfSectionSet ui_histogram_panel_toggle_series(
+        ProfSectionSet hidden_series, int section_idx) {
     if (section_idx < 0 || section_idx >= PROF_SECTION_COUNT ||
         !hist_series_visible((ProfSection)section_idx))
         return hidden_series;
-    return hidden_series ^
-           (unsigned long long)section_bit((ProfSection)section_idx);
+    prof_section_set_toggle(&hidden_series, (ProfSection)section_idx);
+    return hidden_series;
 }
 
-int ui_histogram_axis_range(unsigned long long hidden_series,
+int ui_histogram_axis_range(ProfSectionSet hidden_series,
                             int *lo_bin, int *hi_bin) {
     HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int lo = HISTOGRAM_BIN_COUNT, hi = -1;
 
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
-        if (!hist_series_plotted(s, hidden_series)) continue;
+        if (!hist_series_plotted(s, &hidden_series)) continue;
         prof_section_histogram(s, bins, HISTOGRAM_BIN_COUNT);
         for (int bin_idx = 0; bin_idx < HISTOGRAM_BIN_COUNT; bin_idx++) {
             if (!bins[bin_idx]) continue;
@@ -1094,7 +1093,7 @@ static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
         hist_series_color(ordinal++, rgb);
 
         unsigned long samples = series_samples[section_idx];
-        if ((view->hidden_series & section_bit(s)) != 0) {
+        if (prof_section_set_contains(&view->hidden_series, s)) {
             /* Toggled off: a hollow outline in the series color keeps the
              * swatch's identity while reading as "not plotted", and the
              * label recedes to muted. */
@@ -1273,7 +1272,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         ProfSection s = (ProfSection)section_idx;
         int hidden;
         if (!hist_series_visible(s)) continue;
-        hidden = (view->hidden_series & section_bit(s)) != 0;
+        hidden = prof_section_set_contains(&view->hidden_series, s);
         if (!hidden) any_shown = 1;
         prof_section_histogram(s, bins, HISTOGRAM_BIN_COUNT);
         for (int bin_idx = 0; bin_idx < HISTOGRAM_BIN_COUNT; bin_idx++) {
@@ -1393,7 +1392,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
         float col[3];
         hist_series_color(ordinal++, col);   /* advance for stable colors */
-        if ((view->hidden_series & section_bit(s)) != 0) continue;
+        if (prof_section_set_contains(&view->hidden_series, s)) continue;
         hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
         glColor4f(col[0], col[1], col[2], 0.30f);
@@ -1423,7 +1422,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
         float col[3];
         hist_series_color(ordinal++, col);   /* advance for stable colors */
-        if ((view->hidden_series & section_bit(s)) != 0) continue;
+        if (prof_section_set_contains(&view->hidden_series, s)) continue;
         hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
         /* Staircase with equal-height runs collapsed. A per-column strip would

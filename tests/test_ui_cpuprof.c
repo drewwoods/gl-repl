@@ -47,7 +47,7 @@ static void test_cpuprof_metrics(void) {
 }
 
 static void test_cpuprof_section_collapse(void) {
-    UiProfileCollapseMask collapsed = 0;
+    UiProfileCollapseMask collapsed = prof_section_set_empty();
     int expanded_h = ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                        collapsed);
 
@@ -57,14 +57,15 @@ static void test_cpuprof_section_collapse(void) {
                       PROFILE_PANEL_SECTIONS, collapsed),
                   16 * 16);
     ASSERT_TRUE("collapsed branch bit is retained",
-                collapsed != 0);
+                !prof_section_set_is_empty(&collapsed));
 
     collapsed = ui_profile_panel_toggle_mask(collapsed, PROF_CODE_PANEL);
     ASSERT_INT_EQ("toggling a branch again restores full height",
                   ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                     collapsed),
                   expanded_h);
-    ASSERT_TRUE("second branch toggle clears its bit", collapsed == 0);
+    ASSERT_TRUE("second branch toggle clears its bit",
+                prof_section_set_is_empty(&collapsed));
 
     collapsed = ui_profile_panel_toggle_mask(collapsed,
                                               UI_PROFILE_PANEL_TOGGLE_ALL);
@@ -73,10 +74,12 @@ static void test_cpuprof_section_collapse(void) {
                                                   collapsed) < expanded_h);
     collapsed = ui_profile_panel_toggle_mask(collapsed,
                                               UI_PROFILE_PANEL_TOGGLE_ALL);
-    ASSERT_TRUE("expand all clears branch mask", collapsed == 0);
+    ASSERT_TRUE("expand all clears branch mask",
+                prof_section_set_is_empty(&collapsed));
 
     /* Both section-bearing modes render the same collapsible listing. */
-    collapsed = ui_profile_panel_toggle_mask(0, PROF_RENDER3D);
+    collapsed = ui_profile_panel_toggle_mask(prof_section_set_empty(),
+                                              PROF_RENDER3D);
     ASSERT_TRUE("sections height honors collapsed branches",
                 ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                   collapsed) < expanded_h);
@@ -92,7 +95,7 @@ static void test_cpuprof_section_hit_test(void) {
         .window_w = 800,
         .window_h = 600,
         .mode = PROFILE_PANEL_SECTIONS,
-        .collapsed_sections = 0,
+        .collapsed_sections = { { 0 } },
         .panel_x = 10,
         .panel_y = 10
     };
@@ -563,7 +566,7 @@ static void test_histogram_axis_range(void) {
 
     prof_test_reset();
     ASSERT_INT_EQ("no samples means no axis",
-                  ui_histogram_axis_range(0ULL, &lo, &hi), 0);
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 0);
 
     /* One section around 2 ms. */
     prof_test_reset();
@@ -574,7 +577,7 @@ static void test_histogram_axis_range(void) {
         prof_end(PROF_FRAME_TOTAL);
     }
     ASSERT_INT_EQ("a populated series yields an axis",
-                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 1);
     ASSERT_TRUE("axis spans at least the minimum width", hi - lo + 1 >= 64);
     ASSERT_TRUE("axis stays inside the bin range",
                 lo >= 0 && hi <= HISTOGRAM_BIN_COUNT - 1);
@@ -592,7 +595,7 @@ static void test_histogram_axis_range(void) {
 
     int lo_before = lo;
     ASSERT_INT_EQ("axis still resolves",
-                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 1);
     ASSERT_TRUE("the outlier is on-axis, not trimmed",
                 hi >= histogram_bin_for_us(200000.0));
 
@@ -628,7 +631,8 @@ static void test_histogram_axis_covers_cheap_and_slow(void) {
         prof_end(PROF_FRAME_TOTAL);
     }
 
-    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+    ASSERT_INT_EQ("axis resolves",
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 1);
     ASSERT_TRUE("axis reaches the 6us section",
                 histogram_bin_for_us(6.0) >= lo);
     ASSERT_TRUE("axis reaches the 2ms section",
@@ -671,7 +675,8 @@ static void test_histogram_silhouette_collapses_flat_runs(void) {
     }
 
     int lo = 0, hi = 0;
-    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+    ASSERT_INT_EQ("axis resolves",
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 1);
     ASSERT_TRUE("axis is wide enough for the collapse to matter",
                 hi - lo + 1 > 200);
 
@@ -755,7 +760,7 @@ static void test_histogram_legend_toggle(void) {
     int tx = view.panel_x + 8;
     int series_before = 0;
     int hit_section;
-    unsigned long long mask;
+    ProfSectionSet mask;
 
     /* Count plotted (depth-0) series to size the legend, matching the panel. */
     for (int s = 0; s < PROF_SECTION_COUNT; s++)
@@ -781,15 +786,20 @@ static void test_histogram_legend_toggle(void) {
                   prof_section_info((ProfSection)hit_section).depth, 0);
 
     /* Pure transition: flip on, flip off, and reject junk indices. */
-    mask = ui_histogram_panel_toggle_series(0ULL, hit_section);
-    ASSERT_TRUE("toggle sets the series bit", mask != 0ULL);
-    ASSERT_INT_EQ("double toggle clears the bit",
-                  (int)ui_histogram_panel_toggle_series(mask, hit_section), 0);
-    ASSERT_INT_EQ("out-of-range index leaves the mask untouched",
-                  (int)ui_histogram_panel_toggle_series(0ULL, -1), 0);
-    ASSERT_INT_EQ("non-plotted section leaves the mask untouched",
-                  (int)ui_histogram_panel_toggle_series(0ULL,
-                       PROF_SECTION_COUNT + 5), 0);
+    mask = ui_histogram_panel_toggle_series(prof_section_set_empty(),
+                                            hit_section);
+    ASSERT_TRUE("toggle sets the series bit",
+                prof_section_set_contains(&mask, (ProfSection)hit_section));
+    mask = ui_histogram_panel_toggle_series(mask, hit_section);
+    ASSERT_TRUE("double toggle clears the bit",
+                prof_section_set_is_empty(&mask));
+    mask = ui_histogram_panel_toggle_series(prof_section_set_empty(), -1);
+    ASSERT_TRUE("out-of-range index leaves the mask untouched",
+                prof_section_set_is_empty(&mask));
+    mask = ui_histogram_panel_toggle_series(
+        prof_section_set_empty(), PROF_SECTION_COUNT + 5);
+    ASSERT_TRUE("non-plotted section leaves the mask untouched",
+                prof_section_set_is_empty(&mask));
 }
 
 /* Hiding a populated series must remove its bars from the plot: with one of two
@@ -812,13 +822,14 @@ static void test_histogram_hidden_series_drops_bars(void) {
         prof_end(PROF_FLATTEN);
     }
 
-    view.hidden_series = 0;
+    view.hidden_series = prof_section_set_empty();
     gl_stub_counts_reset();
     ui_histogram_panel_render(&view);
     unsigned long long shown_verts = gl_stub_counts[GL_STUB_glVertex2f];
 
     view.hidden_series =
-        ui_histogram_panel_toggle_series(0ULL, (int)PROF_FRAME_TOTAL);
+        ui_histogram_panel_toggle_series(prof_section_set_empty(),
+                                         (int)PROF_FRAME_TOTAL);
     gl_stub_counts_reset();
     ui_histogram_panel_render(&view);
     unsigned long long hidden_verts = gl_stub_counts[GL_STUB_glVertex2f];
@@ -831,8 +842,8 @@ static void test_histogram_hidden_series_drops_bars(void) {
 }
 
 /* Every plotted (depth-0) series toggled off. */
-static unsigned long long hist_all_series_hidden(void) {
-    unsigned long long mask = 0ULL;
+static ProfSectionSet hist_all_series_hidden(void) {
+    ProfSectionSet mask = prof_section_set_empty();
     for (int s = 0; s < PROF_SECTION_COUNT; s++)
         mask = ui_histogram_panel_toggle_series(mask, s);
     return mask;
@@ -845,7 +856,7 @@ static unsigned long long hist_all_series_hidden(void) {
 static void test_histogram_axis_follows_hidden_series(void) {
     int lo = -1, hi = -1;
     int lo_all, hi_all;
-    unsigned long long hide_fast;
+    ProfSectionSet hide_fast;
 
     prof_test_reset();
     for (int i = 0; i < 40; i++) {
@@ -861,12 +872,13 @@ static void test_histogram_axis_follows_hidden_series(void) {
     }
 
     ASSERT_INT_EQ("axis resolves with both series shown",
-                  ui_histogram_axis_range(0ULL, &lo, &hi), 1);
+                  ui_histogram_axis_range(prof_section_set_empty(), &lo, &hi), 1);
     lo_all = lo;
     hi_all = hi;
     ASSERT_INT_EQ("the sub-us series pins the lower bound at bin 0", lo_all, 0);
 
-    hide_fast = ui_histogram_panel_toggle_series(0ULL, (int)PROF_FRAME_RESTORE);
+    hide_fast = ui_histogram_panel_toggle_series(
+        prof_section_set_empty(), (int)PROF_FRAME_RESTORE);
     ASSERT_INT_EQ("axis still resolves with the fast series hidden",
                   ui_histogram_axis_range(hide_fast, &lo, &hi), 1);
     ASSERT_TRUE("hiding the fast series lifts the lower bound", lo > lo_all);
@@ -904,7 +916,8 @@ static void test_histogram_all_hidden_keeps_legend(void) {
     }
 
     view.hidden_series = hist_all_series_hidden();
-    ASSERT_TRUE("every plotted series is hidden", view.hidden_series != 0ULL);
+    ASSERT_TRUE("every plotted series is hidden",
+                !prof_section_set_is_empty(&view.hidden_series));
 
     gl_stub_counts_reset();
     ui_histogram_panel_render(&view);
@@ -929,10 +942,13 @@ static void test_histogram_all_hidden_keeps_legend(void) {
     }
     ASSERT_TRUE("a legend cell still hit-tests while all series are hidden",
                 hit_section >= 0);
-    ASSERT_TRUE("toggling it clears that series' bit",
-                ui_histogram_panel_toggle_series(view.hidden_series,
-                                                 hit_section)
-                    < view.hidden_series);
+    {
+        ProfSectionSet restored = ui_histogram_panel_toggle_series(
+            view.hidden_series, hit_section);
+        ASSERT_TRUE("toggling it clears that series' bit",
+                    !prof_section_set_contains(
+                        &restored, (ProfSection)hit_section));
+    }
     prof_test_reset();
 }
 
@@ -1007,7 +1023,7 @@ static void test_histogram_legend_hover_stats(void) {
     UiHistogramPanelView view = {
         .window_w = 800, .window_h = 600,
         .visible = 1, .panel_x = 10, .panel_y = 10,
-        .hidden_series = 0ULL, .pointer_x = -1, .pointer_y = -1
+        .hidden_series = { { 0 } }, .pointer_x = -1, .pointer_y = -1
     };
     int legend_rows = 0, series = 0;
     int hover_mx, hover_my, hovered;
@@ -1077,7 +1093,7 @@ static void test_histogram_legend_hover_without_bars(void) {
     UiHistogramPanelView view = {
         .window_w = 800, .window_h = 600,
         .visible = 1, .panel_x = 10, .panel_y = 10,
-        .hidden_series = 0ULL, .pointer_x = -1, .pointer_y = -1
+        .hidden_series = { { 0 } }, .pointer_x = -1, .pointer_y = -1
     };
     int legend_rows = 0, series = 0;
     int hover_mx, hover_my, hovered;
@@ -1117,7 +1133,8 @@ static void test_histogram_legend_hover_without_bars(void) {
         prof_test_set_now_us((double)i * 100000.0 + 16000.0);
         prof_end((ProfSection)hovered);
     }
-    view.hidden_series = ui_histogram_panel_toggle_series(0ULL, hovered);
+    view.hidden_series = ui_histogram_panel_toggle_series(
+        prof_section_set_empty(), hovered);
     view.pointer_x = -1;
     view.pointer_y = -1;
     gl_stub_counts_reset();

@@ -2068,8 +2068,7 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.mode     = (UiProfilePanelMode)snap->profile_panel.mode;
-    v.collapsed_sections =
-        (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
+    v.collapsed_sections = snap->profile_panel.collapsed_sections;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_PROFILE,
                                 &v.panel_x, &v.panel_y);

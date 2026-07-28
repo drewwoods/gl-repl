@@ -25,6 +25,8 @@
 #ifndef UI_APP_OVERLAY_LAYOUT_H
 #define UI_APP_OVERLAY_LAYOUT_H
 
+#include "support/cpuprof.h" /* ProfSectionSet */
+
 typedef enum {
     UI_OVERLAY_PANEL_VARIABLE = 0,  /* variable slider panel (stack bottom) */
     UI_OVERLAY_PANEL_FPS,           /* FPS plot panel (Compute profile level 1) */
@@ -59,7 +61,7 @@ typedef struct {
     int var_count;
     int var_collapsed;
     int profile_mode;
-    unsigned long long profile_collapsed_sections;
+    ProfSectionSet profile_collapsed_sections;
     int memory_mode;
     int band_h;
 } UiOverlayLayoutInputs;
@@ -68,9 +70,9 @@ typedef struct {
  * code-panel side) plus the caller-supplied panel states. `var_collapsed`
  * is the variable panel's own title-bar-only fold (mouse-only toggle, no
  * keymap slot). `profile_mode` / `memory_mode` take UiProfilePanelMode /
- * UiMemoryPanelMode values (passed as int so this header stays
- * include-free); `profile_collapsed_sections` is the DETAILS-tree
- * presentation bitmask. Panel sizes are resolved via the panels' own size
+ * UiMemoryPanelMode values (passed as int to avoid their UI headers);
+ * `profile_collapsed_sections` is the DETAILS-tree presentation set.
+ * Panel sizes are resolved via the panels' own size
  * queries. `band_h` is the replay-HUD reservation — the controller
  * computes it per tick; other callers forward
  * ui_overlay_layout_last_band_h(). */

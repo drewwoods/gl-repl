@@ -887,6 +887,11 @@ test_gpuprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_gpuprof.o
 test_gpuprof_LDLIBS = -lm
 test_gpuprof_RUN ?= $(BINDIR)/test_gpuprof
 
+# Exercise gpuprof's multiword ProfSectionSet with a synthetic 67-section
+# catalog. The production catalog remains the force-include everywhere else.
+$(OBJDIR)/$(TEST_DIR)/test_gpuprof.o: OBJ_CFLAGS := \
+	$(subst -include prof_sections.h,-include tests/support/prof_sections_wide.h,$(OBJ_CFLAGS))
+
 test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/core/text_layout.o
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout

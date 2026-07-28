@@ -751,7 +751,7 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
             profile_view.window_h = win_h;
             profile_view.mode = (UiProfilePanelMode)snap->profile_panel.mode;
             profile_view.collapsed_sections =
-                (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
+                snap->profile_panel.collapsed_sections;
             profile_view.panel_x = px;
             profile_view.panel_y = py;
             toggle_target = ui_profile_panel_hit_test(&profile_view, mx, my);
@@ -911,7 +911,7 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         profile_view.window_h = win_h;
         profile_view.mode = (UiProfilePanelMode)snap->profile_panel.mode;
         profile_view.collapsed_sections =
-            (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
+            snap->profile_panel.collapsed_sections;
         ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_PROFILE,
                                     &profile_view.panel_x,
                                     &profile_view.panel_y);

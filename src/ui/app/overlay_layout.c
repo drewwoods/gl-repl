@@ -68,7 +68,7 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args) {
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
         ui_profile_panel_height_collapsed(
             (UiProfilePanelMode)args.profile_mode,
-            (UiProfileCollapseMask)args.profile_collapsed_sections);
+            args.profile_collapsed_sections);
 
     /* Histogram is the final, deliberately expensive profile surface. */
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible =

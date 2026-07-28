@@ -30,6 +30,114 @@ typedef int ProfSection;
 enum { PROF_SECTION_COUNT = 1 };
 #endif
 
+/* A catalog-sized set of ProfSection indices.
+ *
+ * ProfSection itself is an ordinal used to index the profiler's per-section
+ * arrays.  Places that need a set of those ordinals (GPU segments, collapsed
+ * profile branches, hidden histogram series) use this multiword value rather
+ * than treating the enum as a native-word bitmask.  The representation grows
+ * automatically when the host catalog crosses a 64-section boundary. */
+enum {
+    PROF_SECTION_SET_WORD_BITS = 64,
+    PROF_SECTION_SET_WORD_COUNT =
+        (PROF_SECTION_COUNT + PROF_SECTION_SET_WORD_BITS - 1) /
+        PROF_SECTION_SET_WORD_BITS
+};
+
+typedef struct {
+    uint64_t words[PROF_SECTION_SET_WORD_COUNT];
+} ProfSectionSet;
+
+static inline ProfSectionSet prof_section_set_empty(void) {
+    ProfSectionSet set = { { 0 } };
+    return set;
+}
+
+static inline int prof_section_set_is_empty(const ProfSectionSet *set) {
+    int word_idx;
+    if (!set) return 1;
+    for (word_idx = 0; word_idx < PROF_SECTION_SET_WORD_COUNT; word_idx++)
+        if (set->words[word_idx] != 0)
+            return 0;
+    return 1;
+}
+
+static inline int prof_section_set_contains(const ProfSectionSet *set,
+                                            ProfSection section) {
+    unsigned int section_idx;
+    unsigned int word_idx;
+    unsigned int bit_idx;
+    if (!set || section < 0 || section >= PROF_SECTION_COUNT)
+        return 0;
+    section_idx = (unsigned int)section;
+    word_idx = section_idx / PROF_SECTION_SET_WORD_BITS;
+    bit_idx = section_idx % PROF_SECTION_SET_WORD_BITS;
+    return (set->words[word_idx] & (UINT64_C(1) << bit_idx)) != 0;
+}
+
+static inline void prof_section_set_add(ProfSectionSet *set,
+                                        ProfSection section) {
+    unsigned int section_idx;
+    unsigned int word_idx;
+    unsigned int bit_idx;
+    if (!set || section < 0 || section >= PROF_SECTION_COUNT)
+        return;
+    section_idx = (unsigned int)section;
+    word_idx = section_idx / PROF_SECTION_SET_WORD_BITS;
+    bit_idx = section_idx % PROF_SECTION_SET_WORD_BITS;
+    set->words[word_idx] |= UINT64_C(1) << bit_idx;
+}
+
+static inline void prof_section_set_toggle(ProfSectionSet *set,
+                                           ProfSection section) {
+    unsigned int section_idx;
+    unsigned int word_idx;
+    unsigned int bit_idx;
+    if (!set || section < 0 || section >= PROF_SECTION_COUNT)
+        return;
+    section_idx = (unsigned int)section;
+    word_idx = section_idx / PROF_SECTION_SET_WORD_BITS;
+    bit_idx = section_idx % PROF_SECTION_SET_WORD_BITS;
+    set->words[word_idx] ^= UINT64_C(1) << bit_idx;
+}
+
+static inline void prof_section_set_union_into(ProfSectionSet *set,
+                                               const ProfSectionSet *other) {
+    int word_idx;
+    if (!set || !other) return;
+    for (word_idx = 0; word_idx < PROF_SECTION_SET_WORD_COUNT; word_idx++)
+        set->words[word_idx] |= other->words[word_idx];
+}
+
+static inline void prof_section_set_remove_all(ProfSectionSet *set,
+                                               const ProfSectionSet *removed) {
+    int word_idx;
+    if (!set || !removed) return;
+    for (word_idx = 0; word_idx < PROF_SECTION_SET_WORD_COUNT; word_idx++)
+        set->words[word_idx] &= ~removed->words[word_idx];
+}
+
+static inline int prof_section_set_contains_all(
+        const ProfSectionSet *set, const ProfSectionSet *required) {
+    int word_idx;
+    if (!set || !required) return 0;
+    for (word_idx = 0; word_idx < PROF_SECTION_SET_WORD_COUNT; word_idx++)
+        if ((set->words[word_idx] & required->words[word_idx]) !=
+            required->words[word_idx])
+            return 0;
+    return 1;
+}
+
+static inline int prof_section_set_equal(const ProfSectionSet *a,
+                                         const ProfSectionSet *b) {
+    int word_idx;
+    if (!a || !b) return a == b;
+    for (word_idx = 0; word_idx < PROF_SECTION_SET_WORD_COUNT; word_idx++)
+        if (a->words[word_idx] != b->words[word_idx])
+            return 0;
+    return 1;
+}
+
 /* Per-section display metadata, supplied by the app (not the generic timer).
  *  label    — bare section name for the HUD (no indentation baked in).
  *  depth    — nesting level (0 = top-level); the single source of truth for

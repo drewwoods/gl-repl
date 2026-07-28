@@ -76,7 +76,10 @@ static UiProfilePanelMode g_mode = PROFILE_PANEL_HISTOGRAM;
  * pattern: view built in display_func, consumed by the input path). */
 /* Pointer starts off-window (negative = no hover) until the first motion
  * event, so the legend tooltip stays down before the mouse has been moved. */
-static UiHistogramPanelView g_hist_view = { 0, 0, 0, 0, 0, 0ULL, -1, -1 };
+static UiHistogramPanelView g_hist_view = {
+    .pointer_x = -1,
+    .pointer_y = -1
+};
 
 /* Display lists: one compiled once and reused across frames, one rebuilt every
  * frame. Created lazily on the first display callback (needs a live context). */
@@ -200,7 +203,7 @@ static void display_func(void) {
     view.window_w = g_window_w;
     view.window_h = g_window_h;
     view.mode     = g_mode;
-    view.collapsed_sections = 0;
+    view.collapsed_sections = prof_section_set_empty();
     view.panel_x  = g_window_w - ui_profile_panel_width()      - 16;
     view.panel_y  = g_window_h - ui_profile_panel_height(g_mode) - 16;
     ui_profile_panel_render(&view);

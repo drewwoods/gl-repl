@@ -129,6 +129,7 @@ static void reset_and_init_timestamps(void) {
 /* The two sections used throughout; arbitrary distinct catalog ids. */
 static const ProfSection SEC_A = (ProfSection)1;
 static const ProfSection SEC_B = (ProfSection)2;
+static const ProfSection SEC_HIGH = PROF_TEST_HIGH;
 
 /* ========================================================================= */
 /* Tests                                                                      */
@@ -179,6 +180,31 @@ static void test_nested_sections_credit_inclusive_time(void) {
                 gpu_prof_section_avg_us(SEC_A), 0.6);
     ASSERT_INT_EQ("untouched section has no data",
                   gpu_prof_section_has_data((ProfSection)3), 0);
+}
+
+static void test_nested_section_above_63(void) {
+    reset_and_init();
+
+    /* Same inclusive shape as A > B, but the child lives in word 1 of the
+     * catalog-sized section set. */
+    gpu_prof_frame_begin();
+    gpu_prof_begin(SEC_A);
+    gpu_prof_begin(SEC_HIGH);
+    gpu_prof_end(SEC_HIGH);
+    gpu_prof_end(SEC_A);
+
+    g_fake_result_ns[g_fake_begin_order[0]] = 1000;
+    g_fake_result_ns[g_fake_begin_order[1]] = 2000;
+    g_fake_result_ns[g_fake_begin_order[2]] = 3000;
+    g_fake_available = 1;
+    gpu_prof_frame_begin();
+
+    ASSERT_NEAR("low-word parent receives all nested intervals",
+                gpu_prof_section_last_us(SEC_A), 6.0);
+    ASSERT_NEAR("high-word child receives its interval",
+                gpu_prof_section_last_us(SEC_HIGH), 2.0);
+    ASSERT_INT_EQ("high-word child publishes data",
+                  gpu_prof_section_has_data(SEC_HIGH), 1);
 }
 
 static void test_repeated_brackets_accumulate(void) {
@@ -364,6 +390,7 @@ int main(void) {
     printf("--- gpuprof tests ---\n");
     test_disabled_without_init();
     test_nested_sections_credit_inclusive_time();
+    test_nested_section_above_63();
     test_repeated_brackets_accumulate();
     test_delayed_results_and_ring_exhaustion();
     test_segment_overflow_discards_frame();

@@ -7,7 +7,7 @@
  * time — but prof sections do nest (PROF_RENDER3D wraps _FILL, _HELPERS,
  * ...). So begin/end never map 1:1 onto queries; instead each transition
  * is a boundary, slicing the frame into non-overlapping *segments*. Every
- * segment records the bitmask of sections open while it ran; at harvest a
+ * segment records the set of sections open while it ran; at harvest a
  * segment's nanoseconds are credited to each open section, which
  * reconstructs correct inclusive times for arbitrary nesting. A side
  * benefit: multiple begin/end pairs per frame (accumulation-AA passes,
@@ -15,10 +15,10 @@
  *
  * The same segment structure backs both measurement modes:
  *   - elapsed mode: each segment is one TIME_ELAPSED query (end the
- *     running query at a boundary, start the next); seg_mask[i] is the
- *     mask while query i ran.
+ *     running query at a boundary, start the next); seg_sections[i] is the
+ *     set while query i ran.
  *   - timestamp mode: each boundary is one glQueryCounter(GL_TIMESTAMP)
- *     marker; seg_mask[i] is the mask of the interval STARTING at marker
+ *     marker; seg_sections[i] is the set of the interval STARTING at marker
  *     i (0 between top-level runs = uncredited gap), and interval i's
  *     time is ts[i+1] - ts[i]. Consecutive deltas tile the GPU timeline,
  *     so timestamp-mode sums are additive (see gpuprof.h NOTE).
@@ -71,18 +71,15 @@
 #define GPU_PROF_GL_TIME_ELAPSED_EXT        0x88BFu
 #define GPU_PROF_GL_TIMESTAMP               0x8E28u
 
-/* Segment masks are one bit per section. */
-STATIC_ASSERT(PROF_SECTION_COUNT <= 64, "section mask must fit 64 bits");
-
 /* ========================================================================= */
 /* State                                                                      */
 /* ========================================================================= */
 
 typedef struct {
-    unsigned   query_ids[GPU_PROF_MAX_SEGMENTS];
-    GpuProfU64 seg_mask[GPU_PROF_MAX_SEGMENTS]; /* sections open per segment */
-    int        seg_count;
-    int        overflowed;   /* segment/depth budget blown or unbalanced -> discard */
+    unsigned       query_ids[GPU_PROF_MAX_SEGMENTS];
+    ProfSectionSet seg_sections[GPU_PROF_MAX_SEGMENTS]; /* open per segment */
+    int            seg_count;
+    int            overflowed; /* segment/depth budget blown/unbalanced -> discard */
 } GpuProfFrameSlot;
 
 static GpuProfGlFns     g_gpu_fns;
@@ -96,7 +93,7 @@ static int              g_gpu_cur_slot  = -1; /* this frame's slot, -1 = unsampl
 
 static int              g_gpu_stack[GPU_PROF_MAX_DEPTH];
 static int              g_gpu_depth = 0;      /* logical depth; may exceed MAX */
-static GpuProfU64       g_gpu_cur_mask = 0;
+static ProfSectionSet   g_gpu_cur_sections;
 static int              g_gpu_query_active = 0;
 
 static double           g_gpu_last_us[PROF_SECTION_COUNT];
@@ -115,7 +112,7 @@ static void gpu_reset_stats(void) {
     }
 }
 
-/* Open a new elapsed-mode segment under the current section mask (ends
+/* Open a new elapsed-mode segment under the current section set (ends
  * none — callers have already ended any running query). */
 static void gpu_start_segment(GpuProfFrameSlot *slot) {
     if (slot->seg_count >= GPU_PROF_MAX_SEGMENTS) {
@@ -123,7 +120,7 @@ static void gpu_start_segment(GpuProfFrameSlot *slot) {
         return;
     }
     int seg_idx = slot->seg_count++;
-    slot->seg_mask[seg_idx] = g_gpu_cur_mask;
+    slot->seg_sections[seg_idx] = g_gpu_cur_sections;
     g_gpu_fns.begin_query(GPU_PROF_GL_TIME_ELAPSED_EXT, slot->query_ids[seg_idx]);
     g_gpu_query_active = 1;
 }
@@ -137,7 +134,7 @@ static void gpu_ts_mark(GpuProfFrameSlot *slot) {
         return;
     }
     int seg_idx = slot->seg_count++;
-    slot->seg_mask[seg_idx] = g_gpu_cur_mask;
+    slot->seg_sections[seg_idx] = g_gpu_cur_sections;
     g_gpu_fns.query_counter(slot->query_ids[seg_idx], GPU_PROF_GL_TIMESTAMP);
 }
 
@@ -158,21 +155,21 @@ static void gpu_feed_sample(int section_idx, double us) {
                                   + (1.0 - GPU_PROF_EMA_ALPHA) * g_gpu_avg_us[section_idx];
 }
 
-static void gpu_credit_interval(double *total_us, GpuProfU64 mask,
+static void gpu_credit_interval(double *total_us,
+                                const ProfSectionSet *sections,
                                 GpuProfU64 ns) {
-    for (int bit = 0; mask != 0; bit++, mask >>= 1) {
-        if (mask & 1ull)
-            total_us[bit] += (double)ns / 1000.0;
-    }
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++)
+        if (prof_section_set_contains(sections, (ProfSection)section_idx))
+            total_us[section_idx] += (double)ns / 1000.0;
 }
 
 /* Read a completed slot's results and credit each segment's time to all
  * sections that were open while it ran. Elapsed mode: per-segment query
  * results. Timestamp mode: deltas between consecutive markers, crediting
- * the mask of the interval that started at the earlier marker. */
+ * the set of the interval that started at the earlier marker. */
 static void gpu_harvest_slot(const GpuProfFrameSlot *slot) {
     double total_us[PROF_SECTION_COUNT];
-    GpuProfU64 opened = 0;
+    ProfSectionSet opened = prof_section_set_empty();
 
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++)
         total_us[section_idx] = 0.0;
@@ -186,10 +183,10 @@ static void gpu_harvest_slot(const GpuProfFrameSlot *slot) {
             GpuProfU64 cur_ts = prev_ts;
             g_gpu_fns.get_query_ui64v(slot->query_ids[seg_idx],
                                       GPU_PROF_GL_QUERY_RESULT, &cur_ts);
-            GpuProfU64 mask = slot->seg_mask[seg_idx - 1];
-            if (mask != 0) {
-                opened |= mask;
-                gpu_credit_interval(total_us, mask,
+            const ProfSectionSet *sections = &slot->seg_sections[seg_idx - 1];
+            if (!prof_section_set_is_empty(sections)) {
+                prof_section_set_union_into(&opened, sections);
+                gpu_credit_interval(total_us, sections,
                                     cur_ts > prev_ts ? cur_ts - prev_ts : 0);
             }
             prev_ts = cur_ts;
@@ -199,13 +196,14 @@ static void gpu_harvest_slot(const GpuProfFrameSlot *slot) {
             GpuProfU64 ns = 0;
             g_gpu_fns.get_query_ui64v(slot->query_ids[seg_idx],
                                       GPU_PROF_GL_QUERY_RESULT, &ns);
-            opened |= slot->seg_mask[seg_idx];
-            gpu_credit_interval(total_us, slot->seg_mask[seg_idx], ns);
+            prof_section_set_union_into(&opened,
+                                        &slot->seg_sections[seg_idx]);
+            gpu_credit_interval(total_us, &slot->seg_sections[seg_idx], ns);
         }
     }
 
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        if ((opened >> section_idx) & 1ull)
+        if (prof_section_set_contains(&opened, (ProfSection)section_idx))
             gpu_feed_sample(section_idx, total_us[section_idx]);
     }
 }
@@ -233,7 +231,7 @@ int gpu_prof_init(const GpuProfGlFns *fns) {
     g_gpu_fifo_len  = 0;
     g_gpu_cur_slot  = -1;
     g_gpu_depth     = 0;
-    g_gpu_cur_mask  = 0;
+    g_gpu_cur_sections = prof_section_set_empty();
     g_gpu_query_active = 0;
     g_gpu_enabled = 1;
     return 1;
@@ -248,7 +246,7 @@ void gpu_prof_shutdown(void) {
     g_gpu_fifo_len = 0;
     g_gpu_cur_slot = -1;
     g_gpu_depth    = 0;
-    g_gpu_cur_mask = 0;
+    g_gpu_cur_sections = prof_section_set_empty();
     g_gpu_enabled  = 0;
     g_gpu_use_timestamps = 0;
 }
@@ -271,7 +269,7 @@ void gpu_prof_frame_begin(void) {
         if (g_gpu_depth != 0)
             g_gpu_slots[g_gpu_cur_slot].overflowed = 1;
         g_gpu_depth    = 0;
-        g_gpu_cur_mask = 0;
+        g_gpu_cur_sections = prof_section_set_empty();
         g_gpu_fifo_len++;
         g_gpu_cur_slot = -1;
     }
@@ -316,7 +314,7 @@ void gpu_prof_begin(ProfSection s) {
     gpu_end_active_query();
     if (g_gpu_depth < GPU_PROF_MAX_DEPTH) {
         g_gpu_stack[g_gpu_depth] = (int)s;
-        g_gpu_cur_mask |= 1ull << s;
+        prof_section_set_add(&g_gpu_cur_sections, s);
     } else {
         slot->overflowed = 1;  /* deeper than tracked; keep depth balanced */
     }
@@ -342,9 +340,10 @@ void gpu_prof_end(ProfSection s) {
             if (g_gpu_stack[unwind_idx] == (int)s)
                 g_gpu_depth = unwind_idx;
         }
-        g_gpu_cur_mask = 0;
+        g_gpu_cur_sections = prof_section_set_empty();
         for (int stack_idx = 0; stack_idx < g_gpu_depth; stack_idx++)
-            g_gpu_cur_mask |= 1ull << g_gpu_stack[stack_idx];
+            prof_section_set_add(
+                &g_gpu_cur_sections, (ProfSection)g_gpu_stack[stack_idx]);
     }
     if (g_gpu_use_timestamps)
         gpu_ts_mark(&g_gpu_slots[g_gpu_cur_slot]);  /* closes the interval

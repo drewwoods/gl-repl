@@ -61,7 +61,13 @@ static UiHit vp_hit_test(int count, int mx, int my) {
 /* CPU profile panel view at a fixed anchor (the tests only count GL calls,
  * which the panel emits unconditionally when mode != OFF). */
 static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
-    UiProfilePanelView v = { 800, 600, mode, 0, 100, 400 };
+    UiProfilePanelView v = {
+        .window_w = 800,
+        .window_h = 600,
+        .mode = mode,
+        .panel_x = 100,
+        .panel_y = 400
+    };
     return v;
 }
 
@@ -217,14 +223,16 @@ static void test_help_overlay(void) {
 
 static void test_profile_panel(void) {
     UiProfileCollapseMask all_collapsed = ui_profile_panel_toggle_mask(
-        0, UI_PROFILE_PANEL_TOGGLE_ALL);
+        prof_section_set_empty(), UI_PROFILE_PANEL_TOGGLE_ALL);
+    UiProfilePanelState panel = ui_state_profile_panel();
 
     printf("Testing Profile Panel...\n");
-    ASSERT_TRUE("profile tree has collapsible branches", all_collapsed != 0);
+    ASSERT_TRUE("profile tree has collapsible branches",
+                !prof_section_set_is_empty(&all_collapsed));
     ASSERT_TRUE("profile tree starts with every branch collapsed",
-                (UiProfileCollapseMask)
-                    ui_state_profile_panel().collapsed_sections ==
-                all_collapsed);
+                prof_section_set_equal(
+                    &panel.collapsed_sections,
+                    &all_collapsed));
     gl_stub_counts_reset();
 
     { UiProfilePanelView v = pp_view(PROFILE_PANEL_OFF); ui_profile_panel_render(&v); }

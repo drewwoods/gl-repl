@@ -54,8 +54,8 @@ void ui_state_reset(void) {
      * that currently have children. User toggles remain untouched until the
      * next full UI reset. */
     g_ui_state.profile_panel.collapsed_sections =
-        (unsigned long long)ui_profile_panel_toggle_mask(
-            0, UI_PROFILE_PANEL_TOGGLE_ALL);
+        ui_profile_panel_toggle_mask(
+            prof_section_set_empty(), UI_PROFILE_PANEL_TOGGLE_ALL);
 }
 
 UiStatusState ui_state_status(void) {

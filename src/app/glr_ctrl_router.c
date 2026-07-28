@@ -1621,7 +1621,7 @@ static int route_variable_panel_collapse_toggle_hit(void) {
 static int route_profile_section_toggle_hit(const UiHit *hit) {
     UiProfilePanelState *panel = ui_state_profile_panel_mut();
     panel->collapsed_sections = ui_profile_panel_toggle_mask(
-        (UiProfileCollapseMask)panel->collapsed_sections, hit->item_idx);
+        panel->collapsed_sections, hit->item_idx);
     editor_request_redraw();
     return 1;
 }

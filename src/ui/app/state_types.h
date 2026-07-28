@@ -11,6 +11,7 @@
 #define UI_STATE_TYPES_H
 
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
+#include "support/cpuprof.h" /* ProfSectionSet */
 
 /* How long a status-bar message stays visible, in frames (~60 fps, so
  * 360 is roughly 6 s). The banner telescopes out of / back into the
@@ -85,11 +86,11 @@ typedef struct {
 
 typedef struct {
     int mode;
-    unsigned long long collapsed_sections;
-    /* Session-only mask (one bit per ProfSection) of histogram series the user
+    ProfSectionSet collapsed_sections;
+    /* Session-only set of histogram series the user
      * toggled off by clicking their legend swatch. Presentation-only, like
      * collapsed_sections; profiling itself is unaffected. */
-    unsigned long long hidden_histogram_series;
+    ProfSectionSet hidden_histogram_series;
 } UiProfilePanelState;
 
 typedef struct {
