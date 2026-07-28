@@ -304,7 +304,7 @@ static UiVariablePanelView build_panel_view(void) {
     v.collapsed = variable_panel_collapsed();
     ui_variable_panel_size(g_row_count, v.collapsed, &pw, &ph);
     v.panel_x = g_window_w - pw - 8;
-    v.panel_y = 8;
+    v.panel_y = 25;
     v.vars            = g_rows;
     v.var_count       = g_row_count;
     v.drag_active_var = variable_panel_drag_active_var();
