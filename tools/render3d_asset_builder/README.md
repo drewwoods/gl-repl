@@ -1,18 +1,18 @@
 # Render3D asset builder (REPL scenes)
 
 This tool collects REPL-language recreations and experiments for Render3D
-elements such as grids and backdrops. Its runtime example catalog is under
-`src/`, separate from the application's built-in examples. The Ember grid is
-the first entry; add future scenes under `src/scenes/` and register them in
-`src/catalog.ini`.
+elements such as grids and backdrops. Its runtime example catalog is in this
+directory, separate from the application's built-in examples. The Ember grid is
+the first entry; add future scenes under `scenes/` and register them in
+`catalog.ini`.
 
 The far grid expands to more than the normal 8192 flat-command budget.  Build
-a one-off binary in its own build directory, then pass `src` to
+a one-off binary in its own build directory, then pass `.` to
 `--examples-dir`:
 
 ```sh
 make -C ../.. render-3d-asset-builder
-../../render-3d-asset-builder --examples-dir src --example "Ember grid" --no-audio
+../../render-3d-asset-builder --examples-dir . --example "Ember grid" --no-audio
 ```
 
 Run those commands from `tools/render3d_asset_builder/`. `make render-3d-asset-builder`
