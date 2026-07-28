@@ -926,7 +926,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
+ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render-3d-asset-builder
 
 .PHONY: sample $(ROOT_BIN_LINKS) render3d-hot render3d-hot-lib $(TEST_BINS) $(BENCH_BINS)
 
@@ -1238,6 +1238,10 @@ gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flag
 
 sample: gl-repl ## Alias for the main gl-repl sample binary.
 
+render-3d-asset-builder: FORCE ## Build separate render-3d-asset-builder binary with high flat-command capacity.
+	$(MAKE) BUILD=render3d_asset_builder SAMPLE_BIN=build/render3d_asset_builder/render-3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render-3d-asset-builder
+	ln -sfn build/render3d_asset_builder/render-3d-asset-builder $@
+
 # Shared by `web` and `bench-web`. A prerequisite rather than a copy of the
 # check in each recipe -- the advice is long enough that two copies would
 # drift apart.
@@ -1461,7 +1465,7 @@ $(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB
 	$(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) \
 		-o $@ $< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS)
 
-render3d-hot: FORCE $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
+render3d_hot_demo render3d-hot: FORCE $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
 	ln -sfn $(RENDER3D_HOT_DEMO_BIN) render3d_hot_demo
 
 HOT_DEPS = $(RENDER3D_HOT_OBJS:.o=.d) $(RENDER3D_HOT_DEMO_BIN).d

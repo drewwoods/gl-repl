@@ -32,6 +32,7 @@ bench_repl
 /variable_panel_demo
 /color_picker_demo
 /cpuprof_demo
+/render-3d-asset-builder
 .cache/
 compile_commands.json
 coverage.lcov

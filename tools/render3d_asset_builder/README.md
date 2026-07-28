@@ -1,4 +1,4 @@
-# Render3D elements (REPL scenes)
+# Render3D asset builder (REPL scenes)
 
 This tool collects REPL-language recreations and experiments for Render3D
 elements such as grids and backdrops. Its runtime example catalog is under
@@ -11,12 +11,12 @@ a one-off binary in its own build directory, then pass `src` to
 `--examples-dir`:
 
 ```sh
-make -C ../.. gl-repl BUILD=render3d-elements CFLAGS=-DMAX_FLAT_COMMANDS=32768
-../../gl-repl --examples-dir src --example "Ember grid" --no-audio
+make -C ../.. render-3d-asset-builder
+../../render-3d-asset-builder --examples-dir src --example "Ember grid" --no-audio
 ```
 
-Run those commands from `tools/render3d-elements/`. `BUILD=render3d-elements`
-keeps the larger-capacity objects under `build/render3d-elements/`; it does
+Run those commands from `tools/render3d_asset_builder/`. `make render-3d-asset-builder`
+keeps the larger-capacity objects under `build/render3d_asset_builder/`; it does
 not change the project-wide default in [`config.h`](../../config.h).
 
 On startup, allow roughly 60 warm-up frames for the application's default XZ

@@ -287,7 +287,7 @@ that prove a renderer or helper links without its usual host —
 `make color_picker_demo`, `variable_panel_demo`, `cpuprof_demo`,
 `memprof_demo` — plus `make render3d-hot`, the dlopen live-reload variant
 of `render3d_demo` whose reloadable half lives in
-[`tools/render3d-elements/`](../tools/render3d-elements/README.md). Per-demo
+[`tools/render3d_asset_builder/`](../tools/render3d_asset_builder/README.md). Per-demo
 key/CLI detail belongs in the demo's own source header or `README.md`, not
 here; [`tools/README.md`](../tools/README.md) indexes every binary in that
 directory and points each one at its module doc.

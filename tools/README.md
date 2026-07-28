@@ -34,7 +34,7 @@ The four that define a layer by exclusion. All build `USE_GL_STUBS=1`-clean.
 Drives [`src/render3d/`](../src/render3d/) with a non-REPL geometry callback
 and its own camera + HUD shell. The grid, axes, backdrop, lights and overlays
 in that frame are the same code the app runs — proof they carry no REPL
-dependency. [`render3d-elements/`](render3d-elements/README.md) holds the
+dependency. [`render3d_asset_builder/`](render3d_asset_builder/README.md) holds the
 reloadable half of `make render3d-hot`, the dlopen live-reload variant
 ([`hot reload`](../src/render3d/README.md#hot-reload-make-render3d-hot)).
 
@@ -107,7 +107,7 @@ includes, and an `nm` sweep for `repl_`/`editor_`/`glr_` symbols).
 
 ## Other
 
-- [`render3d-elements/`](render3d-elements/README.md) — REPL-language
+- [`render3d_asset_builder/`](render3d_asset_builder/README.md) — REPL-language
   recreations of render3d elements (grids, backdrops) with their own example
   catalog; needs a raised flat-command budget.
 - [`capacity_matrix.c`](capacity_matrix.c) — `make capacity-matrix`; prints the
