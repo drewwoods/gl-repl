@@ -1,0 +1,116 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg polygon_highlight = 0
+// camera
+glTranslatef(0.0000f, 0.0000f, -6.9800f);
+glRotatef(32.0000f, 1.0f, 0.0f, 0.0f);
+glRotatef(-45.4524f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0081f, -0.0000f, 0.0459f);
+static float particleSpeed = 0.15; // particle stream speed @tune
+static float phi = 0.618034; // golden ratio fraction @tune
+static float particles = 100; // particles per axis @tune
+static float length = 6; // axie length @tune
+
+
+drawParticles() {
+  float pt, pAlong, pAlpha, seed, seed2, hash, hash2, hash3;
+  float angleOff, radiusScale, dir, speedScale, wobbleAngle, pr, wx, wy;
+
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    for(axis, 0, 3) {
+      for(p, 0, particles) {
+        pt = fmod(t*particleSpeed + p*phi, 1.0);
+        pAlong = pt * length;
+        pAlpha = 0.75 * (1.0 - pt);
+
+        hash2 = rand2(axis*particles + p, 2);
+        hash3 = rand2(axis*particles + p, 1);
+
+        angleOff = hash3 * PI * 2.0;
+        radiusScale = 0.6 + (hash3*hash3)*0.8;
+        if(hash2 > 0) {
+          dir = 1.0;
+        } else {
+          dir = -1.0;
+        }
+        speedScale = 0.3 + (cos(seed2)*0.5 + 0.5)*1.4;
+
+        wobbleAngle = angleOff + t*2.0*speedScale*dir;
+        pr = 0.08 * radiusScale * pt;
+        wx = cos(wobbleAngle)*pr;
+        wy = sin(wobbleAngle)*pr;
+
+        if(axis == 0) {
+          glColor4f(0.95, 0.45, 0.45, pAlpha);
+          glVertex3f(pAlong, wx, wy);
+        }
+        if(axis == 1) {
+          glColor4f(0.45, 0.95, 0.45, pAlpha);
+          glVertex3f(wx, pAlong, wy);
+        }
+        if(axis == 2) {
+          glColor4f(0.45, 0.45, 0.95, pAlpha);
+          glVertex3f(wx, wy, pAlong);
+        }
+      }
+    }
+  glEnd();
+  glPointSize(1);
+}
+
+drawRings() {
+  float mid, ringAlpha, ringA;
+  mid = 3.0;
+  ringAlpha = 0.25 + sin(t*2.0)*0.10;
+  glLineWidth(1);
+
+  glBegin(GL_LINE_LOOP);
+    glColor4f(0.95, 0.40, 0.40, ringAlpha);
+    for(i, 0, 24) {
+      ringA = i * TAU / 24.0;
+      glVertex3f(mid, cos(ringA)*0.18, sin(ringA)*0.18);
+    }
+  glEnd();
+
+  glBegin(GL_LINE_LOOP);
+    glColor4f(0.40, 0.95, 0.50, ringAlpha);
+    for(i, 0, 24) {
+      ringA = i * TAU / 24.0;
+      glVertex3f(cos(ringA)*0.18, mid, sin(ringA)*0.18);
+    }
+  glEnd();
+
+  glBegin(GL_LINE_LOOP);
+    glColor4f(0.40, 0.45, 0.95, ringAlpha);
+    for(i, 0, 24) {
+      ringA = i * TAU / 24.0;
+      glVertex3f(cos(ringA)*0.18, sin(ringA)*0.18, mid);
+    }
+  glEnd();
+
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    glColor4f(0.95, 0.95, 0.85, 0.8);
+    glVertex3f(0, 0, 0);
+  glEnd();
+  glPointSize(1);
+}
+
+glClearColor(0.005, 0.015, 0.03, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glDisable(GL_LIGHTING);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glEnable(GL_LINE_SMOOTH);
+glDepthMask(GL_FALSE);
+
+drawParticles();
+drawRings();
+
+glDepthMask(GL_TRUE);
+glDisable(GL_BLEND);
