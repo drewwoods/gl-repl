@@ -587,11 +587,11 @@ HDRS = \
 	source_document.h
 
 ifeq ($(WEB),1)
-EXAMPLES_CATALOG = examples/catalog-emscripten.ini
+EXAMPLES_CATALOG ?= examples/catalog-emscripten.ini
 else
-EXAMPLES_CATALOG = examples/catalog.ini
+EXAMPLES_CATALOG ?= examples/catalog.ini
 endif
-EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
+EXAMPLE_SCENE_SRCS = $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.glr) $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
 ifeq ($(WEB),1)
 TOURS_CATALOG = tours/catalog-emscripten.ini
@@ -926,7 +926,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render-3d-asset-builder
+ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render3d-asset-builder
 
 .PHONY: sample $(ROOT_BIN_LINKS) render3d-hot render3d-hot-lib $(TEST_BINS) $(BENCH_BINS)
 
@@ -1238,9 +1238,9 @@ gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flag
 
 sample: gl-repl ## Alias for the main gl-repl sample binary.
 
-render-3d-asset-builder: FORCE ## Build separate render-3d-asset-builder binary with high flat-command capacity.
-	$(MAKE) BUILD=render3d_asset_builder SAMPLE_BIN=build/render3d_asset_builder/render-3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render-3d-asset-builder
-	ln -sfn build/render3d_asset_builder/render-3d-asset-builder $@
+render3d-asset-builder: FORCE ## Build separate render3d-asset-builder binary with high flat-command capacity and asset catalog.
+	$(MAKE) BUILD=render3d_asset_builder EXAMPLES_CATALOG=tools/render3d_asset_builder/catalog.ini SAMPLE_BIN=build/render3d_asset_builder/render3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render3d-asset-builder
+	ln -sfn build/render3d_asset_builder/render3d-asset-builder $@
 
 # Shared by `web` and `bench-web`. A prerequisite rather than a copy of the
 # check in each recipe -- the advice is long enough that two copies would
