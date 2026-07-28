@@ -166,7 +166,7 @@ endif
 # `make web DEBUG_INFO_CFLAGS=-g2` when you need named frames in a browser
 # profile, or `make gl-repl DEBUG_INFO_CFLAGS=-g0` for a lean native binary.
 DEBUG_INFO_CFLAGS ?= \
-	$(if $(and $(filter 1,$(WEB)),$(filter release,$(BUILD))),-g0,-ggdb -g3)
+	$(if $(or $(filter quick,$(BUILD)),$(and $(filter 1,$(WEB)),$(filter release,$(BUILD)))),-g0,-ggdb -g3)
 
 COMMON_CFLAGS = \
 	-Wall $(DEBUG_INFO_CFLAGS) \
@@ -231,6 +231,10 @@ COVERAGE_CFLAGS = \
 	-O0 \
 	--coverage -fprofile-arcs -ftest-coverage
 
+QUICK_CFLAGS = \
+	$(COMMON_CFLAGS) \
+	-O0
+
 # Test runners build & run under the debug sanitizer build
 # (AddressSanitizer + UBSan by default, or MemorySanitizer with SAN=memory);
 # gl-repl, bench and the demos stay release. The public `test` target enters
@@ -253,6 +257,8 @@ ifeq ($(BUILD),debug)
 BUILD_CFLAGS = $(DEBUG_CFLAGS)
 else ifeq ($(BUILD),coverage)
 BUILD_CFLAGS = $(COVERAGE_CFLAGS)
+else ifeq ($(BUILD),quick)
+BUILD_CFLAGS = $(QUICK_CFLAGS)
 else
 BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
@@ -2529,6 +2535,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "Build modes:\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
 	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
+	@printf "  quick:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(QUICK_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test (or test-stubs); ordinary individual tests use stubs automatically.\n"

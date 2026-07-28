@@ -109,8 +109,7 @@ gitignored, survives `make clean`).
   (`-fno-sanitize-recover`). `make debug-msan`/`test-msan` = MSan + origin
   tracking (Clang; test run sets `GLR_AUDIO_NO_DEVICE=1`). `NO_SAN=1`
   disables debug sanitizers. `gl-repl`/`bench`/demos stay `BUILD=release`;
-  an explicit `BUILD=...` always wins (`make coverage`, `make test
-  BUILD=release`).
+  an explicit `BUILD=...` variable always wins (`make test BUILD=coverage`, `make test BUILD=quick`, `make test BUILD=release`).
 
 ### C99 standard
 
