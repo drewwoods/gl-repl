@@ -1136,7 +1136,7 @@ endif
 
 $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) -o $@
 
 gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
@@ -1292,7 +1292,7 @@ RENDER3D_DEMO_OBJS = $(OBJDIR)/tools/render3d_demo/render3d_demo.o \
 
 $(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 render3d-demo: $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
 	ln -sfn $(RENDER3D_DEMO_BIN) render3d_demo
@@ -1350,7 +1350,7 @@ $(HOT_OBJDIR)/%.o: %.c
 
 $(RENDER3D_HOT_LIB): $(RENDER3D_HOT_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(HOT_SHARED_LDFLAGS) -fPIC -o $@ $(RENDER3D_HOT_OBJS) -lm
+	$(CC) $(HOT_SHARED_LDFLAGS) -fPIC $(RENDER3D_HOT_OBJS) -lm -o $@
 
 render3d-hot-lib: $(RENDER3D_HOT_LIB) ## Rebuild just the reloadable render3d shared library (invoked by the running hot host).
 
@@ -1366,7 +1366,7 @@ RENDER3D_HOT_DEMO_CFLAGS = -DRENDER3D_HOT_RELOAD=1 \
 $(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) \
-		-o $@ $< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS)
+		$< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS) -o $@
 
 render3d-hot: $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
 	ln -sfn $(RENDER3D_HOT_DEMO_BIN) render3d_hot_demo
@@ -1382,7 +1382,7 @@ REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
 
 $(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(REPL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 repl-demo: $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 	ln -sfn $(REPL_DEMO_BIN) repl_demo
@@ -1407,7 +1407,7 @@ EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
 
 $(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 editor-demo: $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
 	ln -sfn $(EDITOR_DEMO_BIN) editor_demo
@@ -1420,7 +1420,7 @@ MEMPROF_DEMO_OBJS = $(OBJDIR)/tools/memprof_demo/memprof_demo.o \
 
 $(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 memprof-demo: $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
 	ln -sfn $(MEMPROF_DEMO_BIN) memprof_demo
@@ -1433,7 +1433,7 @@ CPUPROF_DEMO_OBJS = $(OBJDIR)/tools/cpuprof_demo/cpuprof_demo.o \
 
 $(CPUPROF_DEMO_BIN): $(CPUPROF_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 cpuprof-demo: $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
 	ln -sfn $(CPUPROF_DEMO_BIN) cpuprof_demo
@@ -1446,7 +1446,7 @@ VARIABLE_PANEL_DEMO_OBJS = $(OBJDIR)/tools/variable_panel_demo/variable_panel_de
 
 $(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 variable-panel-demo: $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
 	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) variable_panel_demo
@@ -1459,7 +1459,7 @@ COLOR_PICKER_DEMO_OBJS = $(OBJDIR)/tools/color_picker_demo/color_picker_demo.o \
 
 $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 color-picker-demo: $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) color_picker_demo
@@ -1474,7 +1474,7 @@ REPL_LIVE_DEMO_OBJS = $(OBJDIR)/tools/repl_live_demo/repl_live_demo.o \
 
 $(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 repl-live-demo: $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
 	ln -sfn $(REPL_LIVE_DEMO_BIN) repl_live_demo
@@ -1491,7 +1491,7 @@ demos: $(DEMO_TARGETS) ## Build all demos.
 define built_binary
 $(BINDIR)/$(1): $$($(1)_OBJS)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
+	$$(CC) $$(OBJ_CFLAGS) $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 $(subst _,-,$(1)): $$(BINDIR)/$(1)
 endef
@@ -1504,7 +1504,7 @@ endef
 define built_test_binary
 $(BINDIR)/$(1): $$($(1)_OBJS)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
+	$$(CC) $$(OBJ_CFLAGS) $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 ifeq ($$(USE_GL_STUBS),1)
 $(subst _,-,$(1)): $$(BINDIR)/$(1)
@@ -1526,7 +1526,7 @@ GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_g
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
 
 # Differential oracle: drives one GLCmd program through both the real executor
 # (against a live context) and the pure gl_state_inspector fold, then compares
@@ -1535,7 +1535,7 @@ $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
 $(BINDIR)/test_gl_state_inspector_gl: \
 	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
 
 # Captures the controlled-tour overlay + HUD passes with GL_FEEDBACK and asserts
 # on the drawn geometry (ring suppression on seek, HUD containment). Needs the
@@ -1543,7 +1543,7 @@ $(BINDIR)/test_gl_state_inspector_gl: \
 # test but against a real GL context.
 $(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
 
 # Real-GL oracle: proves the attrib_bits.c cell->bit table matches what the
 # driver's glPushAttrib/glPopAttrib actually save/restore. Links the pure
@@ -1552,7 +1552,7 @@ $(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_fe
 $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
 
 # Drives scene_grid_render(GRID_THEME_OCEAN) with cam_world_y < 0 and
 # nv_fog_distance_supported = 1, then glReadPixels and checks corner
@@ -1560,7 +1560,7 @@ $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 # drivers that advertise GL_NV_fog_distance.
 $(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) $^ $(GL_LDFLAGS) -o $@
 
 gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests (needs a display; excluded from `make test`).
 	@for b in $(addprefix $(BINDIR)/,$(GL_TEST_BINS)); do \
@@ -2081,16 +2081,16 @@ $(GLUT_BITMAP_APPLE_BIN): $(GLUT_BITMAP_BENCH_SRC)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
 	  -arch $(GLUT_BITMAP_BENCH_ARCH) \
 	  -DGL_SILENCE_DEPRECATION -DGLUT_BITMAP_BENCH_APPLE \
-	  -o $@ $< -framework OpenGL -framework GLUT
+	  $< -framework OpenGL -framework GLUT -o $@
 
 $(GLUT_BITMAP_FREEGLUT_BIN): $(GLUT_BITMAP_BENCH_SRC) glut-bitmap-freeglut-lib
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
 	  -arch $(GLUT_BITMAP_BENCH_ARCH) \
 	  -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
-	  -I$(GLUT_BITMAP_FREEGLUT_SRC)/include -o $@ $< \
+	  -I$(GLUT_BITMAP_FREEGLUT_SRC)/include $< \
 	  $(GLUT_BITMAP_FREEGLUT_LIB) -lm -framework IOKit -framework Cocoa \
-	  -framework OpenGL -framework CoreVideo
+	  -framework OpenGL -framework CoreVideo -o $@
 
 bench-glut-bitmap-build: $(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_FREEGLUT_BIN) ## Build the isolated Apple GLUT/freeglut bitmap-font benchmarks.
 
@@ -2113,7 +2113,7 @@ bench-glut-bitmap-build bench-glut-bitmap-apple bench-glut-bitmap-freeglut bench
 endif
 
 capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
-	@$(CC) $(COMMON_CFLAGS) -o build/capacity_matrix tools/capacity_matrix.c
+	@$(CC) $(COMMON_CFLAGS) tools/capacity_matrix.c -o build/capacity_matrix
 	@./build/capacity_matrix
 
 bench: $(BENCH_TARGET_NAMES) ## Build and run the REPL runtime benchmarks.
