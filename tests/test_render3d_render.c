@@ -1653,7 +1653,7 @@ int main(int argc, char **argv) {
 
 #ifndef GL_STUBS
     printf("--- GL-emitting scene smoke checks skipped in real-GL test build ---\n");
-    printf("Run `make test_scene_render USE_GL_STUBS=1` for no-op GL path coverage.\n");
+    printf("Run `make test-render3d-render` for no-op GL path coverage.\n");
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

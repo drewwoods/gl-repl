@@ -52,7 +52,7 @@ with no editor, controller, or UI in the link set. It is the load-bearing
 proof that the language pipeline stands on its own.
 
 ```bash
-make repl_demo USE_GL_STUBS=1   # headless build (no GL dev libs needed) — start here
+make repl-demo USE_GL_STUBS=1   # headless build (no GL dev libs needed) — start here
 ./repl_demo                     # print parse + flatten summaries for samples 1-3
 ./repl_demo --execute           # also run repl_execute_program() against GL stubs
 ./repl_demo --trace             # narrated end-to-end walkthrough of every stage
@@ -63,7 +63,7 @@ its link set contains no `src/ui/` at all, which is what makes it the tighter
 isolation proof. Its windowed counterpart is
 [`tools/repl_live_demo/`](../../tools/repl_live_demo/README.md), which wires the same
 pipeline to a real GL window, an external editor, and the variable panel.
-(`make repl_demo` with real GL libs still builds and `--trace` still works;
+(`make repl-demo` with real GL libs still builds and `--trace` still works;
 the executor call is skipped with a warning, since there is no context.)
 
 **Start with `--trace`.** It loads one representative program through the

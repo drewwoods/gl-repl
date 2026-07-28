@@ -418,128 +418,9 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-.PHONY: \
-	all \
-	app \
-	release \
-	release-build \
-	release-upload \
-	release-config \
-	fetch-music \
-	icon-regen \
-	icon-cube \
-	icon-cube-strong \
-	audit-editor-ownership \
-	bench \
-	bench-csv \
-	bench-glut-bitmap \
-	bench-glut-bitmap-apple \
-	bench-glut-bitmap-build \
-	bench-glut-bitmap-freeglut \
-	bench-web \
-	bench-web-csv \
-	require-emcc \
-	callgraph-files \
-	callgraph-graphviz \
-	callgraph-html \
-	callgraph-profile \
-	callgraph-static \
-	callgraph-static-entry \
-	check \
-	check-app-boot-band \
-	check-c99 \
-	check-color-picker-ui-isolation \
-	check-controller-boundaries \
-	check-doc-links \
-	check-domain-owner-encapsulation \
-	check-command-descriptions \
-	check-duplicate-api-decls \
-	check-edit-ops-pure \
-	check-editor-ownership-budget \
-	check-editor-repl-surface \
-	check-examples-catalog \
-	check-tours-catalog \
-	check-formatted \
-	check-gl-boundaries \
-	check-glr-ctrl-not-editor-mirror \
-	check-glr-state-no-repl-mutators \
-	check-layer-coupling \
-	check-module-prefixes \
-	check-no-facade-include-in-views \
-	check-no-feed-line-in-pipeline \
-	check-no-load-line-to-input-in-pipeline \
-	check-no-raw-undo-clear \
-	check-no-repl-commit \
-	check-no-repl-editor-input-shim \
-	check-no-set-status-in-compile-apply \
-	check-no-set-status-in-repl-parser \
-	check-no-store-text-api \
-	check-no-test-default-output \
-	check-no-write-through-view \
-	check-public-api-usage \
-	check-public-state-no-writable-pointers \
-	check-pure-render3d-no-repl-state \
-	check-repl-demo-no-editor \
-	check-repl-demo-stubs-shrinking \
-	check-repl-export-no-ui-layout \
-	check-repl-export-via-bridge \
-	check-repl-no-mut-reads \
-	check-repl-no-direct-buffer-read \
-	check-repl-no-direct-editor \
-	check-repl-no-direct-tutorial-runner \
-	check-repl-scenes-cfg-clear-paired \
-	check-repl-state-no-glr-state \
-	check-renderer-no-direct-mutators \
-	check-replay-forwarders \
-	check-replay-ui-isolation \
-	check-runtime-state-value-fields \
-	check-render3d-no-repl-state-mut \
-	check-source-document-port-owners \
-	check-state-boundaries \
-	check-state-c-shrinking \
-	check-state-ownership \
-	check-tier-c-function-size \
-	check-trailing-whitespace \
-	check-state-read-getters-return-values \
-	check-ui-no-export-resolver \
-	check-ui-no-repl-state-mut \
-	check-ui-no-repl-state-read \
-	check-ui-panels-no-mutators \
-	check-ui-text-panel-pure \
-	check-ui-renderer-takes-view \
-	check-ui-returns-hits-only \
-	check-variable-panel-forwarders \
-	check-views-by-value-snapshot \
-	check-views-flat-types \
-	check-views-no-owners \
-	clean \
-	coverage \
-	debug \
-	debug-msan \
-	demos \
-	fix-doc-links \
-	glut \
-	help \
-	help-details \
-	install-completions \
-	install-hooks \
-	lines \
-	lines-test \
-	gl-repl \
-	test \
-	test-detailed \
-	rebuild-golden \
-	test-asan-ubsan \
-	test-full \
-	test-msan \
-	test-stubs \
-	web \
-	web-serve \
-	FORCE
+all: gl-repl
 
-all: gl-repl install-hooks
-
-# Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
+# Used by generated files that must always refresh their checked output.
 FORCE:
 
 SUPPORT_SRCS = $(wildcard src/support/*.c)
@@ -937,7 +818,17 @@ BENCH_BINS = bench_repl
 
 ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render3d-asset-builder
 
-.PHONY: sample $(ROOT_BIN_LINKS) render3d-hot render3d-hot-lib $(TEST_BINS) $(BENCH_BINS)
+HEADLESS_DEMO_TARGETS = \
+	render3d-demo \
+	repl-demo \
+	repl-live-demo \
+	editor-demo \
+	memprof-demo \
+	cpuprof-demo \
+	variable-panel-demo \
+	color-picker-demo
+
+DEMO_TARGETS = $(HEADLESS_DEMO_TARGETS) render3d-hot
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
 ifeq ($(WEB),1)
@@ -1169,7 +1060,9 @@ TEST_BINS_ORDERED = \
 	$(foreach test,$(TEST_SLOW_FIRST),$(filter $(test),$(TEST_BINS))) \
 	$(filter-out $(TEST_SLOW_FIRST),$(TEST_BINS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS_ORDERED),'$(test):::$($(test)_RUN)')
-RUN_TEST_TARGETS = $(addprefix run-,$(TEST_BINS))
+TEST_TARGET_NAMES = $(subst _,-,$(TEST_BINS))
+RUN_TEST_TARGETS = $(addprefix run-,$(TEST_TARGET_NAMES))
+BENCH_TARGET_NAMES = $(subst _,-,$(BENCH_BINS))
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
 TEST_JOBS ?=
@@ -1227,7 +1120,6 @@ $(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 
 freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
 	rm -rf $(FREEGLUT_BUILD)
-.PHONY: freeglut-clean
 
 # WEB=1: shell.html, gl4es_bootstrap.c, and the static archives are
 # link-time inputs (not objects in $(SAMPLE_OBJS) -- see GL_LDFLAGS above),
@@ -1242,12 +1134,10 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
-gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
+gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
-sample: gl-repl ## Alias for the main gl-repl sample binary.
-
-render3d-asset-builder: FORCE ## Build separate render3d-asset-builder binary with high flat-command capacity and asset catalog.
+render3d-asset-builder: ## Build separate render3d-asset-builder binary with high flat-command capacity and asset catalog.
 	$(MAKE) BUILD=render3d_asset_builder EXAMPLES_CATALOG=tools/render3d_asset_builder/catalog.ini SAMPLE_BIN=build/render3d_asset_builder/render3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render3d-asset-builder
 	ln -sfn build/render3d_asset_builder/render3d-asset-builder $@
 
@@ -1400,8 +1290,8 @@ $(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS)
 
-render3d_demo: FORCE $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
-	ln -sfn $(RENDER3D_DEMO_BIN) $@
+render3d-demo: $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
+	ln -sfn $(RENDER3D_DEMO_BIN) render3d_demo
 
 # --- Hot-reloadable render3d demo ------------------------------------------
 # `make render3d-hot` builds the same teapot harness, but the reloadable
@@ -1474,7 +1364,7 @@ $(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB
 	$(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) \
 		-o $@ $< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS)
 
-render3d_hot_demo render3d-hot: FORCE $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
+render3d-hot: $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
 	ln -sfn $(RENDER3D_HOT_DEMO_BIN) render3d_hot_demo
 
 HOT_DEPS = $(RENDER3D_HOT_OBJS:.o=.d) $(RENDER3D_HOT_DEMO_BIN).d
@@ -1490,8 +1380,8 @@ $(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_DEMO_OBJS) $(GL_LDFLAGS)
 
-repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
-	ln -sfn $(REPL_DEMO_BIN) $@
+repl-demo: $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
+	ln -sfn $(REPL_DEMO_BIN) repl_demo
 
 # Standalone generic text editor demo. Inverse of repl_demo: proves
 # that the editor data model (src/editor/state.c) and the generic
@@ -1515,8 +1405,8 @@ $(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS)
 
-editor_demo: FORCE $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
-	ln -sfn $(EDITOR_DEMO_BIN) $@
+editor-demo: $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
+	ln -sfn $(EDITOR_DEMO_BIN) editor_demo
 
 # Standalone memory-profiling demo (isolation demo #4). Drives the
 # memprof sampler + overlay panel from {support, ui/support, ui/core}
@@ -1528,8 +1418,8 @@ $(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS)
 
-memprof_demo: FORCE $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
-	ln -sfn $(MEMPROF_DEMO_BIN) $@
+memprof-demo: $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
+	ln -sfn $(MEMPROF_DEMO_BIN) memprof_demo
 
 # Standalone CPU-profiling demo (isolation demo #7). Twin of memprof_demo:
 # a spinning teapot bracketed by prof sections + the live CPU profile panel,
@@ -1541,8 +1431,8 @@ $(CPUPROF_DEMO_BIN): $(CPUPROF_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS)
 
-cpuprof_demo: FORCE $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
-	ln -sfn $(CPUPROF_DEMO_BIN) $@
+cpuprof-demo: $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
+	ln -sfn $(CPUPROF_DEMO_BIN) cpuprof_demo
 
 # Standalone variable-panel demo (isolation demo #5). Drives the variable
 # slider panel + drag math from {subsystems, ui/subsystems, ui/core} with no
@@ -1554,8 +1444,8 @@ $(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS)
 
-variable_panel_demo: FORCE $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
-	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) $@
+variable-panel-demo: $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
+	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) variable_panel_demo
 
 # Standalone color-picker demo (isolation demo #6). Drives the floating color
 # picker over a row of GLUT shapes from {subsystems, ui/subsystems, ui/core}
@@ -1567,8 +1457,8 @@ $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS)
 
-color_picker_demo: FORCE $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
-	ln -sfn $(COLOR_PICKER_DEMO_BIN) $@
+color-picker-demo: $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
+	ln -sfn $(COLOR_PICKER_DEMO_BIN) color_picker_demo
 
 # Standalone live REPL demo (composition proof). Bootstraps the REPL pipeline +
 # the variable-panel peer from a one-file controller: imports scene .c files
@@ -1582,10 +1472,10 @@ $(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS)
 
-repl_live_demo: FORCE $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
-	ln -sfn $(REPL_LIVE_DEMO_BIN) $@
+repl-live-demo: $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
+	ln -sfn $(REPL_LIVE_DEMO_BIN) repl_live_demo
 
-demos: render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
+demos: $(DEMO_TARGETS) ## Build all demos.
 
 .SECONDEXPANSION:
 
@@ -1599,11 +1489,11 @@ $(BINDIR)/$(1): $$($(1)_OBJS)
 	@mkdir -p $$(dir $$@)
 	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
 
-$(1): $$(BINDIR)/$(1)
+$(subst _,-,$(1)): $$(BINDIR)/$(1)
 endef
 
 # Ordinary tests are always built against the no-op GL/GLU/GLUT stubs.  Keep
-# their public aliases self-contained too: `make test_glr_ctrl` must not
+# their public aliases self-contained too: `make test-glr-ctrl` must not
 # accidentally select the native GL link path just because it bypasses
 # `make test`.  Tests that need a real context are listed separately in
 # GL_TEST_BINS and run only through `make gl-tests`.
@@ -1613,9 +1503,9 @@ $(BINDIR)/$(1): $$($(1)_OBJS)
 	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
 
 ifeq ($$(USE_GL_STUBS),1)
-$(1): $$(BINDIR)/$(1)
+$(subst _,-,$(1)): $$(BINDIR)/$(1)
 else
-$(1):
+$(subst _,-,$(1)):
 	+$$(MAKE) --no-print-directory $$@ USE_GL_STUBS=1
 endif
 endef
@@ -1673,7 +1563,34 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 	  printf '$(CYAN)==> %s$(NC)\n' "$$b"; "$$b" || exit $$?; \
 	done
 
-.PHONY: gl-tests $(GL_TEST_BINS)
+# Public targets use kebab-case. Binary names retain their existing underscores,
+# so the demo targets above create links with the names users execute.
+BUILD_TARGETS = \
+	all gl-repl app demos $(DEMO_TARGETS) render3d-asset-builder \
+	web web-serve glut debug debug-msan
+
+PACKAGE_TARGETS = \
+	release release-build release-upload release-config fetch-music \
+	icon-regen icon-cube icon-cube-strong
+
+TEST_TARGETS = \
+	test test-detailed test-stubs test-asan-ubsan test-msan test-full \
+	rebuild-golden internal-test-suite internal-test-case \
+	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS)
+
+BENCH_TARGETS = \
+	bench bench-csv bench-web bench-web-csv $(BENCH_TARGET_NAMES) \
+	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
+	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib
+
+MAINTENANCE_TARGETS = \
+	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
+	keymap-list palette-list capacity-matrix lines lines-test coverage analyze \
+	clean distclean freeglut-clean install-hooks install-completions \
+	render3d-hot-lib require-emcc \
+	callgraph-static callgraph-static-entry callgraph-profile \
+	callgraph-graphviz callgraph-html callgraph-files \
+	help help-details FORCE
 
 # The vendored static freeglut (macOS) is a build-time artifact, so every binary
 # whose link line embeds its archive path through $(GL_LDFLAGS) must order-only
@@ -1759,12 +1676,8 @@ check-runtime-state-value-fields: ## Verify ReplRuntimeState owns values, not po
 check-views-flat-types: ## Verify view/state snapshot structs avoid mutable pointer fields.
 	@bash scripts/check/check-views-flat.sh scripts/baselines/views-flat-violations.txt
 
-check-public-state-no-writable-pointers: check-views-flat-types ## Alias for the public state/view writable pointer check.
-
 check-views-by-value-snapshot: ## Ratchet pointer-return snapshot accessors down over time.
 	@bash scripts/check/check-views-by-value-snapshot.sh scripts/baselines/by-value-snapshot-pointer-returns.txt
-
-check-state-read-getters-return-values: check-views-by-value-snapshot ## Verify read getters return values or read-only views.
 
 check-ui-renderer-takes-view: ## Verify audited UI renderers use canonical snapshot signatures.
 	@bash scripts/check/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
@@ -2024,6 +1937,7 @@ CHECK_TARGETS = \
 	check-examples-catalog \
 	check-tours-catalog \
 	check-command-descriptions \
+	check-stroke-fonts \
 	check-formatted \
 	check-gl-boundaries \
 	check-layer-coupling \
@@ -2040,115 +1954,69 @@ check: ## Run all checks.
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
 
-# `make test` is deliberately the portable, headless test contract. The
-# no-op GL stubs exercise all ordinary tests without a display or GL dev
-# packages; the production GL compile/link smoke is `make gl-repl`, and the
-# small real-context regression set remains opt-in as `make gl-tests`.
-#
-# Keep the USE_GL_STUBS=1 branch as the runner used by test-stubs, coverage,
-# and sanitizer targets. Calling `make test` without it delegates to
-# test-stubs (including its static checks) rather than maintaining a separate
-# real-GL, context-free test suite.
-#
-# GNU make treats tokens after its own `--` as additional goals, not recipe
-# arguments.  TEST_ARGS is therefore the pass-through for these single-test
-# runners: `make run-test_repl_core_examples TEST_ARGS='--dump-index 2'`.
-ifeq ($(USE_GL_STUBS),1)
-$(RUN_TEST_TARGETS): run-%: %
-	@REPL_EXPORT_CC="$(CC)" \
-	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
-	$($*_RUN) $(TEST_ARGS)
-
-test: $(TEST_BINS) ## Run the stubbed automated test suite.
-	@REPL_EXPORT_CC="$(CC)" \
-	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
-	TEST_JOBS="$(TEST_JOBS)" \
-	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
-
-test-detailed: $(TEST_BINS) ## Run the stubbed test suite with verbose example export/compile logging.
-	@REPL_EXPORT_CC="$(CC)" \
-	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
-	REPL_EXPORT_VERBOSE=1 \
-	TEST_JOBS="$(TEST_JOBS)" \
-	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
-else
-$(RUN_TEST_TARGETS):
-	+$(MAKE) --no-print-directory $@ USE_GL_STUBS=1
-
+# `make test` is the portable, headless contract: one check gate followed by
+# the ordinary suite against the no-op GL stubs. Real-context tests remain
+# opt-in through `make gl-tests`.
 test: ## Run the full headless test gate (checks plus GL stubs).
-	$(MAKE) --no-print-directory test-stubs
+	+$(MAKE) --no-print-directory test-stubs
 
-test-detailed: ## Run stubbed tests with verbose example export/compile logging.
-	$(MAKE) --no-print-directory test-detailed USE_GL_STUBS=1
-endif
+test-detailed: ## Run the stubbed suite with verbose example export/compile logging.
+	+$(MAKE) --no-print-directory internal-test-suite \
+		USE_GL_STUBS=1 BUILD=$(BUILD) TEST_VERBOSE=1
 
-.PHONY: $(RUN_TEST_TARGETS)
+internal-test-suite: $(addprefix $(BINDIR)/,$(TEST_BINS))
+	@REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
+	REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	TEST_JOBS="$(TEST_JOBS)" \
+	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-# Like individual test aliases, rebuild-golden must enter the stubbed build
-# before resolving BINDIR.  Otherwise its prerequisite builds
-# *-gl-stubs/test_repl_core_examples while the recipe tries to run the native
-# build path (and, with BUILD=debug, can also select the wrong configuration).
-ifeq ($(USE_GL_STUBS),1)
-rebuild-golden: test_repl_core_examples ## Rebuild all the golden examples from test_repl_core_examples.
+# GNU make treats tokens after its own `--` as more goals. TEST_ARGS is the
+# pass-through for single-test runners, for example:
+# `make run-test-repl-core-examples TEST_ARGS='--dump-index 2'`.
+$(RUN_TEST_TARGETS): run-%:
+	+$(MAKE) --no-print-directory internal-test-case \
+		USE_GL_STUBS=1 TEST_CASE=$(subst -,_,$*)
+
+internal-test-case: $$(BINDIR)/$$(TEST_CASE)
+	@REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	$($(TEST_CASE)_RUN) $(TEST_ARGS)
+
+rebuild-golden: ## Rebuild all golden examples from test_repl_core_examples.
+	+$(MAKE) --no-print-directory internal-rebuild-golden USE_GL_STUBS=1
+
+internal-rebuild-golden: $(BINDIR)/test_repl_core_examples
 	@$(BINDIR)/test_repl_core_examples --update-golden
-else
-rebuild-golden: ## Rebuild all the golden examples from test_repl_core_examples.
-	+$(MAKE) --no-print-directory $@ USE_GL_STUBS=1
-endif
 
-
-# Run these from the recipe instead of declaring them as prerequisites: the
-# default -j build would fan them out and wait for concurrent checks after one
-# has already failed.
-TEST_STUBS_PRECHECKS = \
-	check-doc-links \
-	check-user-guide-keymap \
-	check-user-guide-examples \
-	check-trailing-whitespace \
-	check-examples-catalog \
-	check-tours-catalog \
-	check-stroke-fonts \
-	check-formatted \
-	check-gl-boundaries \
-	check-layer-coupling \
-	check-state-ownership
-
-test-stubs: NO_SAN ?= 1
-
-test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
-	@set -e; \
-	for target in $(TEST_STUBS_PRECHECKS); do \
-		$(MAKE) --no-print-directory $$target; \
-	done
-	$(MAKE) test USE_GL_STUBS=1 NO_SAN=$(NO_SAN)
+test-stubs: check ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+	+$(MAKE) --no-print-directory internal-test-suite \
+		USE_GL_STUBS=1 BUILD=$(BUILD) \
+		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
 
 test-asan-ubsan: ## Build and run the stubbed test suite under AddressSanitizer + UBSan (forces sanitizers on regardless of environment).
-	$(MAKE) --no-print-directory test USE_GL_STUBS=1 BUILD=debug SAN=address NO_SAN=0
+	+$(MAKE) --no-print-directory internal-test-suite \
+		USE_GL_STUBS=1 BUILD=debug SAN=address NO_SAN=0
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.
 ifeq ($(UNAME_S),Darwin)
 	@printf "WARNING: MemorySanitizer is not supported on macOS (Darwin). Skipping test-msan.\n" >&2
 else
-	GLR_AUDIO_NO_DEVICE=1 $(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
+	GLR_AUDIO_NO_DEVICE=1 $(MAKE) internal-test-suite \
+		USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
 endif
 
-test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, repl_live_demo, render3d_demo, editor_demo.
-	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory repl_live_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory render3d_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory check
-	$(MAKE) --no-print-directory test-stubs NO_SAN=0
-	$(MAKE) --no-print-directory test-msan
-	$(MAKE) --no-print-directory gl-repl
-	$(MAKE) --no-print-directory gl-tests
-	$(MAKE) --no-print-directory bench
-	$(MAKE) --no-print-directory clean
-	$(MAKE) --no-print-directory glut
+test-full: ## Run the full build, test, sanitizer, benchmark, and real-GL gate.
+	@set -e; for target in $(HEADLESS_DEMO_TARGETS); do \
+		$(MAKE) --no-print-directory $$target USE_GL_STUBS=1; \
+	done
+	+$(MAKE) --no-print-directory test-stubs NO_SAN=0
+	+$(MAKE) --no-print-directory test-msan
+	+$(MAKE) --no-print-directory gl-repl
+	+$(MAKE) --no-print-directory gl-tests
+	+$(MAKE) --no-print-directory bench
+	+$(MAKE) --no-print-directory clean
+	+$(MAKE) --no-print-directory glut
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
@@ -2195,7 +2063,6 @@ GLUT_BITMAP_BENCH_ARGS ?=
 GLUT_BITMAP_BENCH_ARCH ?= $(shell uname -m)
 
 ifeq ($(UNAME_S),Darwin)
-.PHONY: glut-bitmap-freeglut-lib
 glut-bitmap-freeglut-lib:
 	@mkdir -p $(GLUT_BITMAP_FREEGLUT_BUILD)
 	cmake -S $(GLUT_BITMAP_FREEGLUT_SRC) -B $(GLUT_BITMAP_FREEGLUT_BUILD) \
@@ -2245,13 +2112,13 @@ capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, curr
 	@$(CC) $(COMMON_CFLAGS) -o build/capacity_matrix tools/capacity_matrix.c
 	@./build/capacity_matrix
 
-bench: $(BENCH_BINS) ## Build and run the REPL runtime benchmarks.
+bench: $(BENCH_TARGET_NAMES) ## Build and run the REPL runtime benchmarks.
 	@for b in $(BENCH_BINS); do \
 		echo "==> $$b $(BENCH_ARGS)"; \
 		$(BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
 	done
 
-bench-csv: $(BENCH_BINS) ## Run benchmarks with --csv output (machine readable).
+bench-csv: $(BENCH_TARGET_NAMES) ## Run benchmarks with --csv output (machine readable).
 	@for b in $(BENCH_BINS); do \
 		$(BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
 	done
@@ -2375,7 +2242,7 @@ endif
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
-	$(MAKE) test BUILD=coverage TEST_JOBS=1 USE_GL_STUBS=1
+	$(MAKE) internal-test-suite BUILD=coverage TEST_JOBS=1 USE_GL_STUBS=1
 	mkdir -p build/coverage-gl-stubs
 	lcov --capture \
 		--directory build/coverage-gl-stubs \
@@ -2421,8 +2288,7 @@ clean: ## Remove built binaries and object files.
 		dist \
 		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
-really-clean: clean freeglut-clean ## clean + drop the vendored freeglut CMake build (also clears its stale SDK/framework cache).
-.PHONY: really-clean
+distclean: clean freeglut-clean ## Remove all build outputs, including the vendored freeglut build.
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) all \
@@ -2564,8 +2430,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
-	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$$(MSAN_CC).\n"
-	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$$(MSAN_CC).\n"
+	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
+	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
 	@printf "                 NO_SAN=1 (or NOSAN=1) disables debug-build sanitizers.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
@@ -2575,9 +2441,16 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 entirely in src/app/glr_audio.c.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
-	@printf "Individual tests can be built with make test_eval, or built and run with\n"
-	@printf "                 make run-test_eval. Pass arguments with TEST_ARGS, e.g.\n"
-	@printf "                 make run-test_repl_core_examples TEST_ARGS='--show-mismatch'.\n\n"
+	@printf "Individual tests can be built with make test-eval, or built and run with\n"
+	@printf "                 make run-test-eval. Pass arguments with TEST_ARGS, e.g.\n"
+	@printf "                 make run-test-repl-core-examples TEST_ARGS='--show-mismatch'.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+
+# Keep procedural targets phony without maintaining a second copy of every
+# check-* rule. The Makefile already uses this source-driven approach for help.
+CHECK_PHONY_TARGETS := $(sort $(shell awk -F: '/^check-[[:alnum:]_.-]+:/ {print $$1}' $(firstword $(MAKEFILE_LIST))))
+
+.PHONY: $(BUILD_TARGETS) $(PACKAGE_TARGETS) $(TEST_TARGETS) \
+	$(BENCH_TARGETS) $(MAINTENANCE_TARGETS) $(CHECK_PHONY_TARGETS)
 
 -include $(DEPS)

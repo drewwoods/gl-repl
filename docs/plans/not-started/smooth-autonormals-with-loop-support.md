@@ -28,7 +28,7 @@ Implement smooth autonormals as a post-flatten, CPU-side geometry pass. Do not u
 ## Tests
 - Add focused smooth-normal tests for triangle strips, quad strips, duplicate torus-style seam vertices, crease cutoff behavior, degenerate triangles, and explicit user normals.
 - Add export tests asserting loops are preserved and generated C contains the smooth helper/capture pass rather than fully flattened vertices.
-- Run `make test_repl_autonormal`, `make test_repl_core_io`, `make test`, and `make sample USE_GL_STUBS=1`.
+- Run `make test-repl-autonormal`, `make test-repl-core-io`, `make test`, and `make gl-repl USE_GL_STUBS=1`.
 
 ## Assumptions
 - Smooth autonormals are a rendering/export helper, not source rewriting.
@@ -39,7 +39,7 @@ Implement smooth autonormals as a post-flatten, CPU-side geometry pass. Do not u
 - User asked whether `ARCHITECTURE.md` suggests autonormals could be generated for vertices defined in a `for` loop, specifically `g_example_torus` and `g_example_waves`.
 - Finding: current frame order rebuilds autonormals before flattening, then rebuilds the flat program. The architecture says flattened commands are where loops are expanded, functions are inlined, conditionals are resolved, and provenance is retained.
 - Finding: current `recompute_autonormals()` operates on source commands and explicitly skips `CMD_FOR_BEGIN`, `CMD_FUNC_DEF`, and `CMD_IF_BEGIN` blocks. It only sees source-level `glBegin`/`glVertex3f` runs, so it cannot generate normals for loop-expanded vertices.
-- Finding: tests currently lock in this skip behavior. `make test_repl_autonormal` and `./test_repl_autonormal` passed with `39/39`.
+- Finding: tests currently lock in this skip behavior. `make test-repl-autonormal` and `./test_repl_autonormal` passed with `39/39`.
 - Conclusion: loop-aware autonormals should run after flattening, because the evaluated loop vertices exist only in the flat stream.
 - Caveat: `g_example_waves` already has explicit analytic normals, which are better than face-derived normals. `g_example_torus` is the stronger target for generated smooth normals.
 - User asked about feasibility of normal smoothing by identifying adjacent polygons through duplicate `glVertex3f` matches with thresholds, and noted the export challenge: normals need to be computed inside or alongside the original loops, not from a permanently flattened copy.

@@ -78,11 +78,11 @@ by feature-UI in `src/ui/subsystems/` ([`replay_hud.c`](../ui/subsystems/replay_
 Two peers do have a standalone driver, and those are the ones whose host
 seam is a **narrow installable interface** rather than the snapshot:
 
-- **`make variable_panel_demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) —
+- **`make variable-panel-demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) —
   drives the peer over an in-memory `VariablePanelValueSource` and a
   hand-built `UiVariablePanelView`, so neither the REPL eval table nor
   [`UiRenderSnapshot`](../ui/app/snapshot.h#L71) is in the link set.
-- **`make color_picker_demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) —
+- **`make color-picker-demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) —
   drives the peer over a [`ColorPickerHostBridge`](color_picker/color_picker_state.h#L116)
   backed by a plain color array, standing in for the REPL document + commit
   pipeline the app wires up.

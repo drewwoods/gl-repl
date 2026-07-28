@@ -82,10 +82,10 @@ Implement `return expr;` inside REPL functions and make every user function conc
   - Exported recursive and mutually recursive scalar functions compile under the normal test/export path.
 
 - Run focused and full checks:
-  - `make test_eval`
-  - `make test_repl_core_parse`
-  - `make test_repl_core_commit`
-  - `make test_repl_core_io`
+  - `make test-eval`
+  - `make test-repl-core-parse`
+  - `make test-repl-core-commit`
+  - `make test-repl-core-io`
   - `make test`
   - `make test-stubs`
   - `make check-c99`

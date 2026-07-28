@@ -908,14 +908,14 @@ ownership naming.
 Run at minimum:
 
 ```bash
-make test_eval
-make test_repl_flatten_differential
-make test_repl_flatten_deps
-make test_repl_flatten_rebake
-make test_repl_core_parse
-make test_repl_core_commit
-make test_repl_core_io
-make test_glr_cli
+make test-eval
+make test-repl-flatten-differential
+make test-repl-flatten-deps
+make test-repl-flatten-rebake
+make test-repl-core-parse
+make test-repl-core-commit
+make test-repl-core-io
+make test-glr-cli
 make test
 make test-stubs
 make gl-repl USE_GL_STUBS=1

@@ -30,10 +30,10 @@
  * src/ui/app. check-repl-live-demo-no-editor enforces the editor exclusion.
  *
  * Run:
- *   make repl_live_demo && ./repl_live_demo            # default INI
+ *   make repl-live-demo && ./repl_live_demo            # default INI
  *   ./repl_live_demo path/to/config.ini                # explicit INI
  *   ./repl_live_demo scene_a.c scene_b.c               # bypass the INI
- *   make repl_live_demo USE_GL_STUBS=1                 # headless link/isolation
+ *   make repl-live-demo USE_GL_STUBS=1                 # headless link/isolation
  */
 #include "gl_includes.h"
 

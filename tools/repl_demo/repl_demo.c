@@ -39,7 +39,7 @@
  * src/ui/ at all, which is what makes it the tighter isolation proof.
  *
  * Run:
- *   make repl_demo USE_GL_STUBS=1
+ *   make repl-demo USE_GL_STUBS=1
  *   ./repl_demo                  # default: print summary for all samples
  *   ./repl_demo --execute        # also call repl_execute_program()
  *   ./repl_demo --trace          # narrated end-to-end pipeline walkthrough
@@ -649,9 +649,9 @@ static void print_help(const char *prog) {
 "     rotating 6-point ring.\n"
 "\n"
 "Build:\n"
-"  make repl_demo USE_GL_STUBS=1   Headless; the executor runs against the\n"
+"  make repl-demo USE_GL_STUBS=1   Headless; the executor runs against the\n"
 "                                  GL stubs. The recommended build.\n"
-"  make repl_demo                  Real GL libs; the summaries and --trace\n"
+"  make repl-demo                  Real GL libs; the summaries and --trace\n"
 "                                  still work, but the executor call is\n"
 "                                  skipped (no GL context is ever created).\n",
         prog);

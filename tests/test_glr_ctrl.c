@@ -4084,7 +4084,7 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     printf("--- auxiliary scene pass side effects (#2 P1 review) ---\n");
 
 #ifndef GL_STUBS
-    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for scene-pass adapter coverage.\n");
+    printf("Run `make test-glr-ctrl` for scene-pass adapter coverage.\n");
     return;
 #endif
 
@@ -4212,7 +4212,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
     printf("--- wireframe renderer ignores user draw state ---\n");
 
 #ifndef GL_STUBS
-    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for wireframe renderer coverage.\n");
+    printf("Run `make test-glr-ctrl` for wireframe renderer coverage.\n");
     return;
 #else
     glr_ctrl_reset_all();
@@ -4776,7 +4776,7 @@ static void test_app_lifecycle_bootstrap_shutdown(void) {
 
 static void test_init_gl_requires_loaded_point_parameter_proc(void) {
 #ifndef GL_STUBS
-    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for init_gl point-parameter loader coverage.\n");
+    printf("Run `make test-glr-ctrl` for init_gl point-parameter loader coverage.\n");
     return;
 #endif
     g_test_point_parameter_loader_calls = 0;

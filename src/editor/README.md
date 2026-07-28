@@ -43,8 +43,8 @@ code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L71), [`
 part of the full app composition, not the generic editor proof.
 
 ```bash
-make editor_demo                # real GL: opens a minimal text-editor window
-make editor_demo USE_GL_STUBS=1 # headless link-only smoke test (no GL dev libs)
+make editor-demo                # real GL: opens a minimal text-editor window
+make editor-demo USE_GL_STUBS=1 # headless link-only smoke test (no GL dev libs)
 ```
 
 In the real-GL window: typing inserts characters via `edit_op_type_char`,

@@ -25,6 +25,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 binary="${1:-repl_demo}"
 dep_var="${2:-REPL_DEMO_DEP_SRCS}"
+build_target="${binary//_/-}"
 
 # --- Check 1: Makefile <dep_var> --------------------------------------------
 bad_srcs="$(awk -v var="$dep_var" '
@@ -45,7 +46,7 @@ fi
 
 # --- Check 2: nm <binary> ---------------------------------------------------
 if [ ! -x "$binary" ]; then
-  echo "repl-demo-no-editor SKIP ($binary not built; run \`make $binary USE_GL_STUBS=1\` first)"
+  echo "repl-demo-no-editor SKIP ($binary not built; run \`make $build_target USE_GL_STUBS=1\` first)"
   exit 0
 fi
 

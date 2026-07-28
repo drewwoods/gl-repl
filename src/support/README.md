@@ -29,11 +29,11 @@ their respective layers.
 The profiling helpers each have a standalone driver under `tools/`, which
 is what keeps them linkable with no owner layer:
 
-- **`make cpuprof_demo`** ([`tools/cpuprof_demo/`](../../tools/cpuprof_demo/)) —
+- **`make cpuprof-demo`** ([`tools/cpuprof_demo/`](../../tools/cpuprof_demo/)) —
   a display-list micro-benchmark: the same teapots drawn immediate,
   from a reused list, and from a per-frame recompiled list, each timed as
   its own section.
-- **`make memprof_demo`** ([`tools/memprof_demo/`](../../tools/memprof_demo/)) —
+- **`make memprof-demo`** ([`tools/memprof_demo/`](../../tools/memprof_demo/)) —
   the live memory panel with keys to allocate and free, so the signal and
   graph respond on demand.
 

@@ -34,8 +34,8 @@
  * still open".
  *
  * Run:
- *   make editor_demo USE_GL_STUBS=1   # link check only (no GL needed)
- *   make editor_demo                  # real GL build; opens a window
+ *   make editor-demo USE_GL_STUBS=1   # link check only (no GL needed)
+ *   make editor-demo                  # real GL build; opens a window
  *   ./editor_demo
  */
 

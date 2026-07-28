@@ -184,8 +184,8 @@ real integration task.
 
 Possible approaches:
 
-1. `bear -- make sample`
-2. `intercept-build make sample`
+1. `bear -- make gl-repl`
+2. `intercept-build make gl-repl`
 3. generate the compile database directly from `Makefile` variables
 
 Recommendation: start with `bear` or `intercept-build`. Generating the database

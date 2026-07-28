@@ -292,7 +292,7 @@ While here: `src/app/glr_prof.c:26` claims `PROF_RENDER3D_LAST` aliases
 
 ## 0.6 Phase 0 exit criteria
 
-`make test`, `make test_depth_viz`, `make check-state-ownership`, and a
+`make test`, `make test-depth-viz`, `make check-state-ownership`, and a
 **before/after OSMesa capture of the same scene in all four depth modes that is
 byte-identical**. If the captures differ, the refactor is wrong.
 
@@ -1078,10 +1078,10 @@ build — a different posture from Phase 1, and why they are last.
 
 ```bash
 make gl-repl && make test          # ASan + UBSan
-make test_depth_viz                # Phase 0 regression proof
-make test_stencil_viz              # Phase 1 pure-core proof
-make test_repl_core_parse
-make test_repl_core_examples       # after `make rebuild-golden`
+make test-depth-viz                # Phase 0 regression proof
+make test-stencil-viz              # Phase 1 pure-core proof
+make test-repl-core-parse
+make test-repl-core-examples       # after `make rebuild-golden`
 make check-command-descriptions    # hard-fails on a missing catalog entry
 make check-c99
 make check-state-ownership         # full guard suite incl. render3d/ui purity

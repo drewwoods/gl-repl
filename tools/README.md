@@ -119,8 +119,8 @@ includes, and an `nm` sweep for `repl_`/`editor_`/`glr_` symbols).
 ## Build
 
 ```bash
-make repl_demo USE_GL_STUBS=1   # any demo, headless — no GL dev libs needed
-make render3d_demo              # real GL, opens a window
+make repl-demo USE_GL_STUBS=1   # any demo, headless — no GL dev libs needed
+make render3d-demo              # real GL, opens a window
 make check-state-ownership      # runs every demo isolation guard
 ```
 
@@ -131,8 +131,8 @@ object list.
 ## Regenerating the screenshots
 
 ```bash
-make render3d_demo repl_live_demo editor_demo variable_panel_demo \
-     color_picker_demo cpuprof_demo memprof_demo
+make render3d-demo repl-live-demo editor-demo variable-panel-demo \
+     color-picker-demo cpuprof-demo memprof-demo
 scripts/docs-assets.sh --demos          # or one: demo-render3d, demo-memprof, …
 ```
 

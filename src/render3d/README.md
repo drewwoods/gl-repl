@@ -46,7 +46,7 @@ this module with a **non-REPL** geometry callback — a single
 `glutSolidTeapot` — wrapped in a small interactive shell.
 
 ```bash
-make render3d_demo     # opens a window: "render3d teapot demo"
+make render3d-demo     # opens a window: "render3d teapot demo"
 ./render3d_demo        # drag = orbit/pan, wheel = zoom, ? = on-screen controls
 ```
 

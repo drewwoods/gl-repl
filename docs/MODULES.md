@@ -216,10 +216,10 @@ lists to make the layer boundaries observable.
 > not quietly import `glr_ctrl`, `glr_actions`, `glr_config`, or other app
 > composition code to make a boundary problem disappear.
 
-- **`make render3d_demo`** ([`tools/render3d_demo/render3d_demo.c`](../tools/render3d_demo/render3d_demo.c)) — drives
+- **`make render3d-demo`** ([`tools/render3d_demo/render3d_demo.c`](../tools/render3d_demo/render3d_demo.c)) — drives
   `src/render3d/` with a non-REPL geometry callback. Proves `render3d_*`
   has no hard dependency on the REPL editor / controller / UI.
-- **`make repl_demo`** ([`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c)) — drives the
+- **`make repl-demo`** ([`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c)) — drives the
   REPL pipeline from static text. The default samples cover
   parse → command store → flatten → execute; `./repl_demo --trace`
   drives the broader non-editor load transaction
@@ -243,7 +243,7 @@ lists to make the layer boundaries observable.
   `REPL_DEMO_DEP_SRCS` contains no `src/ui/` TU at all, so a pipeline TU that
   grew a dependency on (say) `ui/core/theme.c` fails this link while still
   passing `repl_live_demo`'s. Rendering belongs to `repl_live_demo` below.
-- **`make repl_live_demo`** ([`tools/repl_live_demo/repl_live_demo.c`](../tools/repl_live_demo/repl_live_demo.c)) — the
+- **`make repl-live-demo`** ([`tools/repl_live_demo/repl_live_demo.c`](../tools/repl_live_demo/repl_live_demo.c)) — the
   *composition* counterpart to `repl_demo`: a one-file host controller that
   wires the REPL pipeline **and** the variable-panel peer together under a real
   external-editor workflow. It imports scene `.c` files (edited in vim, watched
@@ -257,7 +257,7 @@ lists to make the layer boundaries observable.
   guard) enforces the editor exclusion. The `USE_GL_STUBS=1` build runs the
   import path in `main()` and exits, doubling as a headless "does this scene
   parse?" checker.
-- **`make editor_demo`** (`tools/editor_demo/`) — a generic
+- **`make editor-demo`** (`tools/editor_demo/`) — a generic
   plain-text editor demo driven by its *own* input dispatcher
   ([`tools/editor_demo/input.c`](../tools/editor_demo/input.c)) and its *own* File menu
   ([`tools/editor_demo/menu.c`](../tools/editor_demo/menu.c)). [`src/editor/input.c`](../src/editor/input.c) is the **REPL editor's
@@ -284,8 +284,8 @@ lists to make the layer boundaries observable.
 The four boundary demos above all default to `USE_GL_STUBS=1`-friendly
 object lists. `tools/` also holds a set of smaller single-module demos
 that prove a renderer or helper links without its usual host —
-`make color_picker_demo`, `variable_panel_demo`, `cpuprof_demo`,
-`memprof_demo` — plus `make render3d-hot`, the dlopen live-reload variant
+`make color-picker-demo`, `variable-panel-demo`, `cpuprof-demo`,
+`memprof-demo` — plus `make render3d-hot`, the dlopen live-reload variant
 of `render3d_demo` whose reloadable half lives in
 [`tools/render3d_asset_builder/`](../tools/render3d_asset_builder/README.md). Per-demo
 key/CLI detail belongs in the demo's own source header or `README.md`, not

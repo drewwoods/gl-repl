@@ -908,7 +908,7 @@ and narrates every stage, so you can watch the backend run with no
 editor, controller, or UI in the link set.
 
 ```bash
-make repl_demo USE_GL_STUBS=1   # headless; no GL dev libs needed
+make repl-demo USE_GL_STUBS=1   # headless; no GL dev libs needed
 ./repl_demo --trace
 ```
 

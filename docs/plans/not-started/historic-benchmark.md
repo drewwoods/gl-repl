@@ -98,7 +98,7 @@ The sampler rewrites the file sorted by (`date_epoch` ascending, `bench_name` as
 The sampler invokes `build-historical.sh --at <sha> bench_repl USE_GL_STUBS=1` strictly to *build* the historical bench binary; it discards that command's stdout (the build script prints `build-historical: ...` diagnostic lines there). Then it computes the worktree path the same way the script does — `.compat-scratch/worktrees/<short-12-sha>/` (the formula at `scripts/build-historical.sh:218-219`) — and `popen`s the binary directly with `--csv --iters N`. That stream is pure CSV and parses with `fgets` + a column scanner.
 
 Why this matters:
-- `make bench` is a *runner* target that prints its own `REPL benchmarks (iters=...)` header before the CSV body — using it would force CSV-shape filtering on every line. Going via `make bench_repl` plus direct exec gives us a clean stream.
+- `make bench` is a *runner* target that prints its own `REPL benchmarks (iters=...)` header before the CSV body — using it would force CSV-shape filtering on every line. Going via `make bench-repl` plus direct exec gives us a clean stream.
 - `--csv` is a recent addition to `bench_repl.c`. Old SHAs may lack it (`getopt` rejects, exit non-zero or empty stdout). The sampler detects this and writes `<sha> csv unsupported` to `trend_broken.txt` rather than spinning forever.
 - **Binary location varies across SHAs.** The modern Makefile puts the output at `build/$(BUILD)$(if USE_GL_STUBS,-gl-stubs)/bench_repl` (Makefile:588-589 — `OBJDIR == BINDIR`, no `bin/` subdir). Older SHAs used `build/bench_repl` or root-level `bench_repl`. The sampler probes for the binary in this fallback order, taking the first that is executable:
    1. `<worktree>/build/release-gl-stubs/bench_repl`  *(modern default with USE_GL_STUBS=1)*
@@ -115,7 +115,7 @@ Why this matters:
 
 ### Historical-build caveats — required patches and skip rules
 
-Older SHAs cannot be built with a plain `make bench_repl` checkout, for three independent reasons. The sampler must apply or detect each before invoking the historical build. **Always consult `git log -p bench/bench_repl.c` (and the pre-2026-05 root-level `bench_repl.c` for the older history segment) when extending the skip / patch policy — that history is the source of truth for which SHAs need which treatment.**
+Older SHAs cannot be built with a plain `make bench-repl` checkout, for three independent reasons. The sampler must apply or detect each before invoking the historical build. **Always consult `git log -p bench/bench_repl.c` (and the pre-2026-05 root-level `bench_repl.c` for the older history segment) when extending the skip / patch policy — that history is the source of truth for which SHAs need which treatment.**
 
 **1. `scripts/build-historical.sh` is mandatory, not optional.**
 
@@ -330,7 +330,7 @@ Reused without modification: `scripts/build-historical.sh`, `bench/bench_repl.c`
 
 End-to-end smoke (macOS host with real GL):
 
-1. `make bench_trend_sample bench_trend_view test_bench_trend_sample` — all three build clean under `-std=c99`; the unit-test target runs and passes.
+1. `make bench-trend-sample bench-trend-view test-bench-trend-sample` — all three build clean under `-std=c99`; the unit-test target runs and passes.
 2. `./bench_trend_sample --min-gap-commits 50 --inflection-pct 15` — populates `bench/trend_results.csv` for the recent history in a few minutes (each SHA: ~5 s build + ~6 s bench).
 3. `./bench_trend_view` — window opens with one colored line strip per discovered `bench_name` (seven at time of writing).
 4. Press `t` then `s` — X-axis swaps between dates and SHA indices; curve shape preserved.

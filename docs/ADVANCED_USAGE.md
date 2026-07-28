@@ -168,7 +168,7 @@ These are make variables or script/test env vars. Pass make variables as
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
 | `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
 | `TEST_JOBS` | Makefile, `scripts/run-tests.sh`. | Limits parallel test binaries; empty/`0` means unbounded parallel runner behavior. |
-| `TEST_ARGS` | Makefile `run-test_*` targets. | Extra arguments passed to one test binary, e.g. `make run-test_repl_core_examples TEST_ARGS='--show-mismatch'`. |
+| `TEST_ARGS` | Makefile `run-test-*` targets. | Extra arguments passed to one test binary, e.g. `make run-test-repl-core-examples TEST_ARGS='--show-mismatch'`. |
 | `TEST_LOG_DIR` | `scripts/run-tests.sh`. | Directory for per-test logs; default `build/test-logs/run-<pid>`. |
 | `NO_COLOR` | Test runners. | Disables ANSI color output. |
 | `FORCE_COLOR`, `CLICOLOR_FORCE` | Test runners. | Forces ANSI color output when `NO_COLOR` is unset. |
@@ -339,8 +339,8 @@ scripts/docs-assets.sh --help       # full CLI reference
 The `demo-*` assets are the screenshots in [`tools/README.md`](../tools/README.md),
 captured from the standalone demo binaries rather than from `gl-repl` — they are
 their own category so `--pngs` still needs only `make gl-repl`. Build the demos
-first (`make render3d_demo repl_live_demo editor_demo variable_panel_demo
-color_picker_demo cpuprof_demo memprof_demo`); `DEMO_BIN_DIR` overrides where
+first (`make render3d-demo repl-live-demo editor-demo variable-panel-demo
+color-picker-demo cpuprof-demo memprof-demo`); `DEMO_BIN_DIR` overrides where
 the script looks for them. Demos with nothing on screen cold are staged through
 the `GLR_DEMO_*` hooks above.
 

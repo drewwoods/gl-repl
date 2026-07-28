@@ -175,9 +175,9 @@ always-on `[init +N.NNNs] <phase>` stderr trace runs in `main()`.
 
 ```bash
 make test                  # All tests
-make test_eval             # Expression evaluator
-make test_format           # Indentation/formatting
-make test_repl_core_parse | test_repl_core_format | test_repl_core_commit | test_repl_core_io
+make test-eval             # Expression evaluator
+make test-format           # Indentation/formatting
+make test-repl-core-parse test-repl-core-format test-repl-core-commit test-repl-core-io
 ```
 
 Test sources under `tests/`, shared helpers `tests/support/`; binaries land

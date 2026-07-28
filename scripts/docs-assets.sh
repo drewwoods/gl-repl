@@ -96,7 +96,7 @@ WARM_SPLASH=190  # currently SPLASH_TOTAL_FRAMES = 150 + 36
 # GIF_ASSETS and PNG_ASSETS are the two formats captured from the gl-repl
 # binary. DEMO_ASSETS is a third category rather than more PNGs because it is
 # captured from a DIFFERENT set of binaries — the standalone demos under
-# tools/ — so it needs its own build (`make render3d_demo` etc.) and must not
+# tools/ — so it needs its own build (`make render3d-demo` etc.) and must not
 # be dragged in by --pngs, which only ever needs `make gl-repl`.
 GIF_ASSETS=(
     view-mode-2d clip-plane-sweep xform-guide replay animated-ring
@@ -157,8 +157,8 @@ Environment:
                      own (see the WARM_* block in the script).
 
 The demo-* assets need their own binaries:
-  make render3d_demo repl_live_demo editor_demo variable_panel_demo \
-       color_picker_demo cpuprof_demo memprof_demo
+  make render3d-demo repl-live-demo editor-demo variable-panel-demo \
+       color-picker-demo cpuprof-demo memprof-demo
 
 Examples:
   scripts/docs-assets.sh --gifs

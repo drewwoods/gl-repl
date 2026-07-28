@@ -21,13 +21,13 @@ editor exclusion).
 ## Build & run
 
 ```bash
-make repl_live_demo            # real GL
+make repl-live-demo            # real GL
 ./repl_live_demo               # default INI (repl_live_demo.ini, or the bundled
                                # tools/repl_live_demo/repl_live_demo.ini)
 ./repl_live_demo my.ini        # explicit INI
 ./repl_live_demo a.c b.c       # use these scene files directly (bypass the INI)
 
-make repl_live_demo USE_GL_STUBS=1   # headless build; runs the import path in
+make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
                                      # main() and prints diagnostics, then exits
                                      # (handy as a scene "does it parse?" check)
 ```

@@ -106,7 +106,7 @@
  * so config.h stays clear of UI types per the dependency note above):
  *   0 green  1 warm  2 cyan  3 amber  4 violet  5 mono  6 neon  7 azure
  * Overridable from the build, e.g.
- * `make sample CPPFLAGS=-DUI_THEME_DEFAULT=1`. theme.h STATIC_ASSERTs
+ * `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`. theme.h STATIC_ASSERTs
  * the value is in range against the UiTheme enum. */
 #ifndef UI_THEME_DEFAULT
 #define UI_THEME_DEFAULT 0
