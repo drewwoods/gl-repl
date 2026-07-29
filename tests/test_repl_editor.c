@@ -2480,6 +2480,98 @@ int main() {
         assert_status_contains("decl per-line overflow: status max", "max 8");
     }
 
+    /* 39a. Formatted-width limit rejects atomically.
+     *
+     * The canonical row format_decl_text emits is *wider than the line the
+     * author typed*: `static ` is prepended, `", "` replaces `","`, and each
+     * initializer is re-rendered via `%g` (which can outgrow its source
+     * literal). At the name cap with cap-length names and wide-magnitude
+     * initializers the row exceeds MAX_LINE_LEN even though the input fits.
+     *
+     * Pre-fix this was a stack-buffer-overflow, not a rejection:
+     * format_decl_text accumulated `off += snprintf(...)`, so `off` walked
+     * past the buffer and the final `snprintf(out + off, out_sz - off, ";%s")`
+     * computed a huge size_t and wrote out of bounds (ASan:
+     * stack-buffer-overflow at compile.c format_decl_text). Test 39 covers the
+     * name *count* cap and test_repl_locals.c's long-decl case covers width
+     * just under the buffer — neither combines the two maxima, which is why
+     * the whole ASan suite stayed green.
+     *
+     * Widths are derived, not hardcoded, so the test tracks the limits. */
+    {
+        char input[MAX_LINE_LEN];
+        int off;
+        /* Twelve chars is the widest `%g` rendering of a float ("-1.23457e-38"
+         * and friends), and it is its own shortest source spelling — so the
+         * input stays under MAX_LINE_LEN while the formatted row blows past. */
+        const char *wide_val = "-1.23457e-38";
+
+        glr_ctrl_reset_all();
+        off = snprintf(input, sizeof(input), "float ");
+        for (int i = 0; i < MAX_NAMES_PER_DECL; i++) {
+            char name[REPL_PREDEF_NAME_MAX];
+            memset(name, (char)('a' + i), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            off += snprintf(input + off, sizeof(input) - (size_t)off,
+                            "%s%s=%s", i ? "," : "", name, wide_val);
+        }
+        ASSERT_TRUE("decl width overflow: premise: the input line itself fits",
+                    off < MAX_LINE_LEN - 1);
+
+        set_editor_input(input);
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+
+        int result = editor_try_commit_float_decl();
+
+        ASSERT_INT("decl width overflow: handler consumed input", result, 1);
+        ASSERT_INT("decl width overflow: no cmd added",
+                   repl_state_document_count(), 0);
+        ASSERT_INT("decl width overflow: only t registered",
+                   g_num_predef_vars, 1);
+        for (int i = 0; i < MAX_NAMES_PER_DECL; i++) {
+            char name[REPL_PREDEF_NAME_MAX];
+            char label[128];
+            memset(name, (char)('a' + i), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            snprintf(label, sizeof(label),
+                     "decl width overflow: %s not registered", name);
+            ASSERT_TRUE(label, repl_eval_find_predef_var_idx(name) < 0);
+        }
+        assert_status_contains("decl width overflow: status names the reason",
+                               "too long for one line");
+    }
+
+    /* 39b. Negative control for 39a: the same name count and name width with
+     * *narrow* initializers still fits, so the width check must not have
+     * turned into a blanket rejection of wide-but-legal declarations. */
+    {
+        char input[MAX_LINE_LEN];
+        int off;
+
+        glr_ctrl_reset_all();
+        off = snprintf(input, sizeof(input), "float ");
+        for (int i = 0; i < MAX_NAMES_PER_DECL; i++) {
+            char name[REPL_PREDEF_NAME_MAX];
+            memset(name, (char)('a' + i), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            off += snprintf(input + off, sizeof(input) - (size_t)off,
+                            "%s%s=1", i ? "," : "", name);
+        }
+        (void)off;
+
+        set_editor_input(input);
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+
+        ASSERT_INT("decl width control: handler consumed input",
+                   editor_try_commit_float_decl(), 1);
+        ASSERT_INT("decl width control: the decl committed",
+                   repl_state_document_count(), 1);
+        ASSERT_INT("decl width control: every name registered",
+                   g_num_predef_vars, 1 + MAX_NAMES_PER_DECL);
+    }
+
     /* 40. Total variable table limit rejects atomically */
     {
         glr_ctrl_reset_all();

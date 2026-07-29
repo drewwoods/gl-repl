@@ -2227,6 +2227,64 @@ int main(void) {
                     strstr(cap, "Warning:") == NULL);
         ASSERT_TRUE("clean import summary shows no warning count",
                     strstr(cap, "warnings)") == NULL);
+
+        /* (c) the reconstructed decl row is *wider than the marker it came
+         * from*: parse_snippet_declare adds `, ` separators and re-renders
+         * each stashed value from the float (up to
+         * REPL_SOURCE_FLOAT_TEXT_MAX - 1 chars — the value below has a
+         * 31-digit exact fixed-point spelling), none of which the
+         * `// @declare a b c` line paid for. At the name cap with cap-length
+         * names the row exceeds MAX_LINE_LEN even though every input line fits.
+         *
+         * Pre-fix this was an out-of-bounds write, not a warning:
+         * `off += snprintf(...)` walked past decl_line[MAX_LINE_LEN] and the
+         * next call's `sizeof(decl_line) - off` underflowed into a huge
+         * size_t (UBSan: index 268 out of bounds for type 'char[256]' at
+         * import.c parse_snippet_declare). Case (a) covers an over-long
+         * *name* and case (b) a clean row — neither reaches the width limit,
+         * which is why the ASan/UBSan suite stayed green.
+         *
+         * The names stay registered afterwards, and that is correct: the
+         * file-scope `static float` stash pass registered them (import.c's
+         * import_parse_predef_decl_common), not this directive, and the
+         * rollback only undoes what the directive itself declared. What must
+         * not happen is a *row* landing in the document — a clipped row would
+         * drop a name or a @tune tag while claiming to be canonical text. */
+        {
+            /* Exact decimal expansion of a float, so it round-trips and
+             * re-renders at full width rather than collapsing to `1e+38`. */
+            const char *wide_val = "-209078223667764055498404397056.0f";
+            char src[4096];
+            char names[MAX_NAMES_PER_DECL][REPL_PREDEF_NAME_MAX];
+            int off = 0;
+
+            for (int i = 0; i < MAX_NAMES_PER_DECL; i++) {
+                memset(names[i], (char)('a' + i), sizeof(names[i]) - 1);
+                names[i][sizeof(names[i]) - 1] = '\0';
+                off += snprintf(src + off, sizeof(src) - (size_t)off,
+                                "static float %s = %s;\n", names[i], wide_val);
+            }
+            off += snprintf(src + off, sizeof(src) - (size_t)off,
+                            "// Snippet start\n// @declare");
+            for (int i = 0; i < MAX_NAMES_PER_DECL; i++)
+                off += snprintf(src + off, sizeof(src) - (size_t)off,
+                                " %s", names[i]);
+            snprintf(src + off, sizeof(src) - (size_t)off,
+                     "\nglVertex3f(0, 0, 0);\n// Snippet end\n");
+
+            glr_ctrl_reset_all();
+            int rc_c = import_with_captured_stderr(src, cap, sizeof(cap));
+            ASSERT_TRUE("wide @declare import still succeeds", rc_c == 1);
+            ASSERT_TRUE("wide @declare warns instead of overflowing",
+                        strstr(cap, "does not fit") != NULL);
+
+            int decl_rows = 0;
+            for (int i = 0; i < repl_state_document_count(); i++) {
+                const GLCmd *c = &repl_state_document_cmds()[i];
+                if (c->valid && c->type == CMD_VAR_DECLARE) decl_rows++;
+            }
+            ASSERT_INT("wide @declare committed no decl row", decl_rows, 0);
+        }
     }
 
     /* Regression for #83 in docs/plans/done/src-repl-code-smell-audit-2.md:

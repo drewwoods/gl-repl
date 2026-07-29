@@ -44,7 +44,7 @@
 #include "repl/text_helpers.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
-#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
+#include "repl/util.h"            /* repl_format_fits / _copy_string_fits / _append_clamped */
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
 
@@ -644,8 +644,17 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     char decl_line[MAX_LINE_LEN];
     /* Canonical form matches format_decl_text: `  static float ...`.
      * The exporter writes file-scope `static float` lines anyway, so
-     * the keyword here reinforces that lifetime in the code panel. */
-    int off = snprintf(decl_line, sizeof(decl_line), "  static float");
+     * the keyword here reinforces that lifetime in the code panel.
+     *
+     * The reconstruction is *wider than the marker it came from*: names get
+     * `, ` separators and each stashed value is re-rendered from the float
+     * (up to REPL_SOURCE_FLOAT_TEXT_MAX - 1 chars, e.g. a 31-digit
+     * fixed-point spelling), none of which the `// @declare a b c` line paid
+     * for. Appends go through repl_append_clamped and never `off += snprintf`
+     * — see src/repl/util.h for why the raw idiom writes out of bounds. */
+    int truncated = 0;
+    int off = repl_append_clamped(decl_line, sizeof(decl_line), 0, &truncated,
+                                  "  static float");
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;
@@ -710,13 +719,13 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
             if (s) s->warnings++;
             continue;
         }
-        off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
-                        count == 0 ? " %.*s" : ", %.*s", len, start);
+        off = repl_append_clamped(decl_line, sizeof(decl_line), off, &truncated,
+                                  count == 0 ? " %.*s" : ", %.*s", len, start);
         if (has_stashed_val) {
             char vbuf[32];
             import_format_decl_float(vbuf, sizeof(vbuf), stashed_val);
-            off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
-                            " = %s", vbuf);
+            off = repl_append_clamped(decl_line, sizeof(decl_line), off,
+                                      &truncated, " = %s", vbuf);
         }
         count++;
     }
@@ -732,13 +741,30 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     {
         int has_tune = declare_args_have_tag(args, "@tune", 5);
         int has_config = declare_args_have_tag(args, "@config", 7);
-        off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
+        off = repl_append_clamped(decl_line, sizeof(decl_line), off, &truncated,
+                                  ";");
+        /* Last append: the offset is not carried further, only `truncated`. */
         if (has_tune || has_config)
-            off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
-                            " //%s%s",
-                            has_tune ? " @tune" : "",
-                            has_config ? " @config" : "");
+            repl_append_clamped(decl_line, sizeof(decl_line), off,
+                                &truncated, " //%s%s",
+                                has_tune ? " @tune" : "",
+                                has_config ? " @config" : "");
     }
+
+    /* A clipped row is unusable: a dropped name stays registered in the predef
+     * table while vanishing from the document, and a dropped @tune/@config tag
+     * silently changes what the variable panel shows. Roll the registrations
+     * back and drop the directive, mirroring the insert-failure paths below. */
+    if (truncated) {
+        import_state_warn(s,
+                          "@%s line does not fit in %d chars once formatted; "
+                          "dropped",
+                          REPL_SNIPPET_DIRECTIVE_DECLARE, MAX_LINE_LEN - 1);
+        for (int i = 0; i < new_count; i++)
+            repl_eval_undeclare_predef_var(newly_declared[i]);
+        return 1;
+    }
+
     cmd.payload.decl.count = count;
 
     /* Insert the command directly, bypassing editor_try_commit_float_decl so we

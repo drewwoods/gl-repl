@@ -54,7 +54,7 @@
 #include "repl/visible_vars.h"
 #include "repl/source_scope.h"   /* ReplSourceScopeView queries */
 #include "repl/state_owners.h"
-#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
+#include "repl/util.h"            /* repl_format_fits / _copy_string_fits / _append_clamped */
 
 #include "config.h"              /* REPL_INDENT_TEXT_MAX */
 
@@ -1123,25 +1123,47 @@ static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
  * one call. Surfacing the keyword in the code panel makes that lifetime
  * difference — and which storage the commit actually chose — obvious.
  * `indent` is the row's gutter: depth 0 for a global, the enclosing
- * function body's depth for a local. */
-static void format_decl_text(const FloatDeclParse *parsed,
-                             const char *indent,
-                             char *out, int out_sz) {
-    int off = snprintf(out, (size_t)out_sz, "%s%sfloat ",
-                       indent ? indent : "  ",
-                       parsed->is_local ? "" : "static ");
-    for (int var_idx = 0;
-         var_idx < parsed->count && off < out_sz - 4;
-         var_idx++) {
+ * function body's depth for a local.
+ *
+ * Returns 0 when the *name list* did not fit, in which case the caller must
+ * reject the line rather than commit a partial row: a dropped name stays
+ * registered in the predef table while vanishing from the source text, which
+ * is the desync the p83 regression in tests/test_repl_core_io.c guards. A
+ * clipped trailing comment is not a failure — it costs no state — so it does
+ * not feed the flag.
+ *
+ * The row can be *wider than the line the author typed*: `static ` is added,
+ * `", "` replaces `","`, and each `= %g` re-render can outgrow its source
+ * literal (`1e30` -> `1e+30`). Appends therefore go through
+ * repl_append_clamped and never `off += snprintf` — see src/repl/util.h for
+ * why the raw idiom writes out of bounds. */
+static int format_decl_text(const FloatDeclParse *parsed,
+                            const char *indent,
+                            char *out, int out_sz) {
+    int names_truncated = 0;
+    int off;
+
+    if (!out || out_sz <= 0)
+        return 0;
+    out[0] = '\0';
+
+    off = repl_append_clamped(out, (size_t)out_sz, 0, &names_truncated,
+                              "%s%sfloat ", indent ? indent : "  ",
+                              parsed->is_local ? "" : "static ");
+    for (int var_idx = 0; var_idx < parsed->count; var_idx++) {
         if (var_idx > 0)
-            off += snprintf(out + off, (size_t)(out_sz - off), ", ");
-        off += snprintf(out + off, (size_t)(out_sz - off), "%s",
-                        parsed->names[var_idx]);
+            off = repl_append_clamped(out, (size_t)out_sz, off,
+                                      &names_truncated, ", ");
+        off = repl_append_clamped(out, (size_t)out_sz, off, &names_truncated,
+                                  "%s", parsed->names[var_idx]);
         if (parsed->has_init[var_idx])
-            off += snprintf(out + off, (size_t)(out_sz - off),
-                            " = %g", parsed->init_vals[var_idx]);
+            off = repl_append_clamped(out, (size_t)out_sz, off,
+                                      &names_truncated, " = %g",
+                                      parsed->init_vals[var_idx]);
     }
-    snprintf(out + off, (size_t)(out_sz - off), ";%s", parsed->decl_comment);
+    repl_append_clamped(out, (size_t)out_sz, off, NULL, ";%s",
+                        parsed->decl_comment);
+    return !names_truncated;
 }
 
 /* Build the predef-op plan for the decl change. Three cases per
@@ -1325,7 +1347,10 @@ static ReplCompileResult compile_float_decl_local(const ReplCompileContext *ctx,
     out->cmds[0] = cmd;
 
     compile_scope_cmd_indent(ctx, out->pos, indent, sizeof(indent));
-    format_decl_text(parsed, indent, decl_text, (int)sizeof(decl_text));
+    if (!format_decl_text(parsed, indent, decl_text, (int)sizeof(decl_text)))
+        return compile_set_err(err, err_size,
+            "declaration too long for one line (max %d chars once formatted); "
+            "split across lines", MAX_LINE_LEN - 1);
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
 
     compile_func_display_name(ctx, func_idx, func_name, (int)sizeof(func_name));
@@ -1469,7 +1494,12 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     out->cmds[0] = cmd;
 
     char decl_text[MAX_LINE_LEN];
-    format_decl_text(&parsed, "  ", decl_text, (int)sizeof(decl_text));
+    /* Before build_decl_predef_ops, so a rejected line registers nothing —
+     * same atomicity as the "too many names" path above. */
+    if (!format_decl_text(&parsed, "  ", decl_text, (int)sizeof(decl_text)))
+        return compile_set_err(err, err_size,
+            "declaration too long for one line (max %d chars once formatted); "
+            "split across lines", MAX_LINE_LEN - 1);
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
 
     build_decl_predef_ops(&parsed, old_global, ctx->predef, out);
@@ -1547,7 +1577,13 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
         if (i == 0)
             repl_copy_string_fits(one.decl_comment, sizeof(one.decl_comment),
                                   parsed.decl_comment);
-        format_decl_text(&one, indent, out->text[i], (int)sizeof(out->text[i]));
+        /* A single-name view cannot overflow the name list today, but the
+         * check keeps the contract honest if the name/line limits move. */
+        if (!format_decl_text(&one, indent, out->text[i],
+                              (int)sizeof(out->text[i])))
+            return compile_set_err(err, err_size,
+                "declaration too long for one line (max %d chars once "
+                "formatted)", MAX_LINE_LEN - 1);
     }
 
     /* Replace the one decl line in place: delete it, then insert the N
