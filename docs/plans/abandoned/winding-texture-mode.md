@@ -1,6 +1,16 @@
 # Winding view: add a "Color + Texture" mode (design brief)
 
-Status: **not started**. Design decided; parked here until implemented.
+## Status — ABANDONED (2026-07-29)
+
+Not implemented and not planned. `GLR_CONFIG_WINDING_VIEW` stays the shipped
+2-state Off/Color toggle (`src/app/glr_actions.c`, `.state_count = 2`); nothing
+in the tree references a texture mode.
+
+Kept for the design content, not the schedule: the two-pass-cull vs. single-pass
+multitexture-combiner comparison below (including a working reference
+implementation of the rejected combiner) is the reusable part if a textured
+face-orientation mode is ever revisited. The open questions at the end were
+never resolved. Move back to `not-started/` if it is.
 
 ## Context
 

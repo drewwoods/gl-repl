@@ -112,8 +112,10 @@ historical context and are not in the table below.
 | `rethinking-flattening-behaviour.md` | 2026-07-25 | Superseded by the dependency-aware evaluation design in `flatten-performance-without-vm.md`. |
 | `bounded-global-arrays.md` | 2026-07-25 | Superseded by fixed scratch arrays `A`/`B`/`C` and per-seed/iter deterministic `rand()`. |
 | `tutorial-replay-system.md` | 2026-07-25 | Superseded by the walkthrough-style tutorial runner and Tutorials menu. |
+| `stencil-buffer-support.md` | 2026-07-27 | Stencil support in three landed phases: `src/subsystems/buffer_viz/` extracted behind three neutral render3d hooks (depth-viz relocated), `glStencilFunc`/`glStencilOp`/`glStencilMask` + `GL_STENCIL_TEST` + `GL_STENCIL_BUFFER_BIT`, sparse stencil visualization with legend panel and capability gate, host-pass stencil policy, then attrib group + GL-state inspector + `glClearStencil`. Phase 3 (`*Separate`) deliberately not pursued — see the plan's status header. |
 | `scoped-local-variables.md` | 2026-07-27 | Function-scoped locals (`float x;` inside a funcN body): lexical call frames, scope-aware edit guards, C-automatic export/import round-trip, three converted examples, and the pay-for-use assignment-target resolution. Follow-up split out as `not-started/local-aware-rebake.md`. |
 | `tutorial-scene-promotion.md` | 2026-07-27 | Post-tutorial documents promote like examples: `tutorial_origin_idx` marker set at lesson end, `repl_promote_example_if_needed` → `repl_promote_transient_if_needed` with capture-before-teardown ordering and per-scene cfg reapply, retryable slots-full rejection. |
+| `assignment-value-plot.md` | 2026-07-28 | Right-click a `var = expr;` / `A[i] = expr;` row for a floating plot of that row's values: flat-program scan with no executor hook, neutral `src/support/runstats.c` (histogram delegates to it), `src/subsystems/assign_plot/` capture engine, 250px panel in the overlay column, mouse-only rate chip so nothing lands in the `@cfg` surface. |
 
-Plans not in this directory are active, partial, not-started, not-landed, or
-external; see the sibling subdirectories.
+Plans not in this directory are active, partial, not-started, not-landed,
+abandoned, or external; see the sibling subdirectories.

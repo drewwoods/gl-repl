@@ -1,5 +1,25 @@
 # Stencil buffer support + `buffer_viz` subsystem
 
+## Status — LANDED, Phases 0–2 (2026-07-25 … 2026-07-27)
+
+- **Phase 0 — buffer_viz extraction:** landed. `14fbc58b` replaced the hardcoded
+  depth-viz call sites with the three neutral render3d hooks; `8b9f8c3c`
+  relocated depth-viz into `src/subsystems/buffer_viz/`.
+- **Phase 1 — commands, clear bit, visualization, host-pass policy:** landed
+  across `146f105b` … `65c53027` (context/probe, `glStencilFunc`/`Op`/`Mask`,
+  clear bit + missing-clear detection, `stencil_viz`, host-pass stencil policy,
+  config row + capability gate, legend panel, GL stubs, docs, showcase example).
+  Shortcut later reassigned in `db677a6f`.
+- **Phase 2 — attrib group, GL-state inspector, `glClearStencil`:** landed in
+  `3167b36c`; inspector coverage expanded in `4f4597fc` / `4cb4e707`.
+- **Phase 3 — `glStencilFuncSeparate` / `glStencilOpSeparate`: not
+  implemented.** Neither entry point appears in the tree. It was scoped last on
+  purpose (GL 2.0 procs, `glutExtensionSupported` gating, uncertain gl4es
+  support), and nothing since has needed per-face stencil. The Phase 3 section
+  below stays as the design of record: if it is ever revived, its first step is
+  building an `ENUM_THEN_INTS` slot kind and migrating `glStencilFunc` /
+  `glStencilMask` onto it rather than adding a third hand-written parser branch.
+
 ## Context
 
 The REPL exposes depth, blend, cull, fog and clip-plane state but no stencil at

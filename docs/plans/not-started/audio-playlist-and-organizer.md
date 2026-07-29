@@ -1,5 +1,28 @@
 # Audio Menu: Playlist Browser, Play/Remove, and Tag Organization
 
+## Status — PARTLY OVERTAKEN (2026-07-29 audit)
+
+`done/audio-menu.md` (landed 2026-07-06) shipped the browser half of this plan
+independently, so the Context section below is stale where it says there is no
+playlist UI and no play-track-N API. Already in `main`: the top-level **Audio**
+menu (`GLR_MENU_AUDIO`) with a `CatalogFlyoutOps` provider, tracks grouped into
+flyouts, the playing track highlighted with live `m:ss / m:ss`, and
+`glr_audio_track_count` / `_track_display_name` / `_track_group` /
+`_current_index` / `_play_track_index`.
+
+What is still unbuilt, and all this plan is now for:
+
+- **Right-click removal** — no `glr_audio_remove_track()`; §1's removal
+  semantics (index shifting, removing the current track, `g_load_cancelled`
+  during `g_loading`) are untouched and remain the substantive design content.
+- **Tag organization** — grouping is by *source* (`Assets` / `Bundled` /
+  `My Music` / `Default`), not user tags. No `tags.txt` parsing anywhere in the
+  tree, no `All` / `Untagged` synthetic groups.
+- `glr_audio_track_path()` — not added; the menu reads display names instead.
+
+Re-scope against the shipped menu before implementing; do not re-derive the
+accessors that already exist.
+
 ## Context
 
 The REPL plays background music from a playlist built at startup

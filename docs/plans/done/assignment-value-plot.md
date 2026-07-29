@@ -1,10 +1,8 @@
 # Assignment value plot (right-click a `var = expr;` row)
 
-**Status: complete** (2026-07-28) — implemented, tested, documented.
-Kept here for the design rationale; move to `docs/plans/done/` when that
-directory convention is next tidied.
-
-Progress is tracked in the "Implementation log" section at the bottom.
+**Status: complete** (2026-07-28) — implemented, tested, documented; landed in
+`7580a9a8`. Archived here for the design rationale; the as-built result and the
+deltas from the approved plan are in the "Implementation log" at the bottom.
 
 ## Context
 
