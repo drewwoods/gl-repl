@@ -98,6 +98,10 @@ WARM_SPLASH=190  # currently SPLASH_TOTAL_FRAMES = 150 + 36
 # captured from a DIFFERENT set of binaries — the standalone demos under
 # tools/ — so it needs its own build (`make render3d-demo` etc.) and must not
 # be dragged in by --pngs, which only ever needs `make gl-repl`.
+#
+# The two export-c-* PNGs are the exception inside PNG_ASSETS: they still need
+# only `make gl-repl` (--pngs stays honest), but the binary they photograph is
+# compiled on the fly from what Ctrl+S writes — see "Exported-C stills" below.
 GIF_ASSETS=(
     view-mode-2d clip-plane-sweep xform-guide replay animated-ring
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
@@ -112,7 +116,8 @@ PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
     winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
-    tune-badges motion-blur xform-guide-still single-polygon-scope
+    tune-badges export-c-grass export-c-knobs
+    motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
     numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-frames
@@ -1327,6 +1332,137 @@ if want variable-panel || want tune-badges; then
         echo "docs-assets: wrote $OUT/tune-badges.png"
     fi
     )
+fi
+
+# --- Exported-C stills -----------------------------------------------------
+#
+# The only two assets that photograph a COMPILED EXPORT rather than the app.
+# The whole point of the section in USER_GUIDE.md is that Ctrl+S emits a real
+# program, so a gl-repl screenshot cannot make the claim: these run the export
+# through `cc` and capture the resulting binary's own window (no code panel,
+# no grid, no menu bar — just the scene and the generated @tune HUD).
+#
+# The pipeline is: GLR_TYPE_KEYS=Ctrl+S on the grass example writes output.c ->
+# sed the two @tune initializers (exactly what q/a and w/s do at runtime) and
+# the window size -> cc -> FREEGLUT_CAPTURE_FRAMES. Nothing else in the export
+# is touched, so what the stills show is the generator's own output.
+#
+# Capture needs the record mode, which lives in the VENDORED freeglut — so the
+# export links against third_party/freeglut's static archive rather than the
+# system GLUT the doc's build line uses. Same C, different -l.
+EXPORT_C_SCENE="Swaying grass field (rand + t)"
+EXPORT_C_DIR="$WORK/export-c"
+EXPORT_C_A="$ROOT/third_party/freeglut/build/lib/libglut.a"
+
+# export_c_source — drive Ctrl+S on EXPORT_C_SCENE and echo the standalone C
+# it writes. Save Scene on an example (no workspace bound) targets ./output.c,
+# so the app runs in its own cwd. FREEGLUT_CAPTURE_FRAMES is just the exit
+# path: the keystroke lands on frame 1 and the frames are thrown away.
+export_c_source() {
+    rm -rf "$EXPORT_C_DIR"; mkdir -p "$EXPORT_C_DIR"
+    ( cd "$EXPORT_C_DIR" &&
+      GLR_NO_SPLASH=1 GLR_TYPE_KEYS=$'\023' \
+      FREEGLUT_CAPTURE_FRAMES=2 FREEGLUT_CAPTURE_FILE="$EXPORT_C_DIR/save" \
+          "$BIN" --example "$EXPORT_C_SCENE" --no-audio >/dev/null 2>&1 )
+    [[ -f "$EXPORT_C_DIR/output.c" ]] || {
+        echo "docs-assets: Ctrl+S wrote no output.c for '$EXPORT_C_SCENE'" >&2
+        return 1; }
+    echo "$EXPORT_C_DIR/output.c"
+}
+
+# export_c_build <out-bin> <src.c> <blades> <field> <WxH> [q-presses] — knob
+# values + window size are the only edits. -w because the export targets C89
+# against macOS's deprecated-since-10.14 GL headers: hundreds of warnings,
+# zero news.
+#
+# q-presses drives the FIRST @tune knob through the export's own keyboard()
+# handler before the main loop, so a still can show a knob that has actually
+# been turned rather than one whose initializer we rewrote. The keystrokes
+# route through the generated tuning_step() ladder exactly as a held key does
+# — glutGetModifiers() outside an input callback warns and reports no
+# modifiers, which is the unmodified (x1) step we want anyway.
+export_c_build() {
+    local bin_out=$1 src=$2 blades=$3 half_width=$4 size=$5 presses=${6:-0}
+    local patched="$EXPORT_C_DIR/$(basename "$bin_out").c"
+    local libs press_edit=()
+    [[ -f "$EXPORT_C_A" ]] || {
+        echo "docs-assets: vendored freeglut archive not built: $EXPORT_C_A" >&2
+        echo "             build it first: make gl-repl" >&2
+        return 1; }
+    if [[ "$(uname -s)" == Darwin ]]; then
+        libs="-framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo"
+    else
+        libs="-lGL -lGLU -lX11"
+    fi
+    [[ "$presses" == 0 ]] || press_edit=(-e \
+        "s/  glutTimerFunc(16, tick, 0);/  { int i; for (i = 0; i < $presses; i++) keyboard('q', 0, 0); }\\
+  glutTimerFunc(16, tick, 0);/")
+    sed -e "s/^static float bladeCount = .*/static float bladeCount = $blades;/" \
+        -e "s/^static float field = .*/static float field = $half_width;/" \
+        -e "s/glutInitWindowSize([0-9]*, [0-9]*);/glutInitWindowSize(${size%x*}, ${size#*x});/" \
+        ${press_edit[@]:+"${press_edit[@]}"} \
+        "$src" > "$patched"
+    cc -std=c89 -O2 -w -DGL_SILENCE_DEPRECATION -o "$bin_out" "$patched" \
+        -I"$ROOT/third_party/freeglut/include" "$EXPORT_C_A" \
+        -lm -lpthread $libs
+}
+
+# export_c_frame <bin> <frames> — record <frames>, echo the LAST ppm. The
+# export advances t on a 60 Hz glutTimerFunc, so the frame count is also the
+# settle: 90 frames ≈ 1.5 s of sway, past the upright t = 0 pose.
+#
+# Unlike render(), the frame dir is FIXED (recreated per call, dropped with
+# $WORK) rather than $RANDOM: callers read this through $( ), and a subshell
+# can echo a path back but cannot hand out a variable to clean up later.
+export_c_frame() {
+    local bin=$1 frames=$2 dir="$WORK/export-c-frames"
+    rm -rf "$dir"; mkdir -p "$dir"
+    FREEGLUT_CAPTURE_FRAMES=$frames FREEGLUT_CAPTURE_FILE="$dir/f" \
+        "$bin" >/dev/null 2>&1
+    ls "$dir"/f-*.ppm | tail -1
+}
+
+if want export-c-grass || want export-c-knobs; then
+    EXPORT_C_SRC="$(export_c_source)"
+fi
+
+# 9600 blades over a wider field. In the REPL this scene is ALREADY at the
+# ceiling — 135 blades flatten to 8113 of 8192 commands (60 per blade), and
+# 137 blades flatten to nothing at all. The exported `for` loop has no such
+# budget, which is the entire point of the shot. 9600 (not 10000) keeps the
+# HUD's %.4g on a plain integer instead of 1e+04.
+#
+# The export has no accum-AA hook, so this one supersamples the old-fashioned
+# way: render at 1.5x and let the downscale do the antialiasing. 1800x1200 is
+# also the largest 3:2 window that fits on a 2560x1440 display — a native
+# window is clamped to the visible screen and comes back the wrong size.
+if want export-c-grass; then
+    export_c_build "$EXPORT_C_DIR/grass-dense" "$EXPORT_C_SRC" 9600 4.5 1800x1200
+    write_png "$(export_c_frame "$EXPORT_C_DIR/grass-dense" 90)" \
+        "$OUT/export-c-grass.png" -resize ${W}x${H}
+    echo "docs-assets: wrote $OUT/export-c-grass.png"
+fi
+
+# The first @tune knob, before and after. Both panels are the SAME binary at
+# the same exported bladeCount = 135; the right one has had `q` pressed 177
+# times through the export's own keyboard handler (see export_c_build). The
+# tuning_step ladder puts that at exactly 1200: 5 per press up to 1000, then
+# 50 per press above it. The generated HUD labels both panels for us, so this
+# montage needs no font.
+#
+# Captured 1:1 at WxH and NOT downscaled: the HUD is GLUT_BITMAP_9_BY_15, and
+# any resample turns 9px glyphs to mush. Crop is the left half at full height
+# — the HUD is anchored to the top edge, the grass to the bottom.
+if want export-c-knobs; then
+    for presses in 0 177; do
+        export_c_build "$EXPORT_C_DIR/grass-q$presses" "$EXPORT_C_SRC" \
+            135 3.65 ${W}x${H} "$presses"
+        magick "$(export_c_frame "$EXPORT_C_DIR/grass-q$presses" 90)" \
+            -crop $((W / 2))x${H}+0+0 +repage "$WORK/knob-q$presses.png"
+    done
+    montage1x2 "$WORK/knobs.png" "$WORK/knob-q0.png" "$WORK/knob-q177.png"
+    write_png "$WORK/knobs.png" "$OUT/export-c-knobs.png"
+    echo "docs-assets: wrote $OUT/export-c-knobs.png"
 fi
 
 if want motion-blur; then

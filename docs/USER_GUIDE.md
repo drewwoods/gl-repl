@@ -1713,6 +1713,29 @@ variables, settings, camera, scene name, and `// @tune` tags intact.
 
 `Ctrl+Q` quits and saves a recovery copy to a temp file.
 
+#### What the export is free of
+
+The exported program is not a screen recording of the REPL — it is your scene
+with the interpreter removed. No code panel, no grid, no menu bar, and (the
+part that matters most) **no flat-command budget**: your `for` loops stay
+loops instead of being unrolled into the 8192-command flat program.
+
+The *Swaying grass field* example is the clearest case, because in the REPL it
+is already pressed right up against that ceiling. Each blade costs 60 flat
+commands, so its 135 blades flatten to **8113 of 8192** — set `bladeCount` to
+137 and the program exceeds the budget and stops rendering entirely. Exported,
+`bladeCount` is nothing but a loop bound:
+
+![The exported grass program at 9600 blades, with its generated @tune HUD in the corner](images/export-c-grass.png)
+
+That is the same scene, exported and compiled with nothing changed but two
+numbers, both raised past anything the REPL can flatten — 9600 blades (71×
+the example's count, some 576k flat commands' worth) over a wider field.
+Those extra
+9465 blades cost about 2.4 ms of draw time per frame, well inside a 60 fps
+budget, because a compiled loop has no per-frame flatten to pay for. See
+[Performance & Scope](#performance--scope) for the workflow that implies.
+
 ### Editing exported code & reimporting
 
 The exported file is meant to be worked on. You can extend it by hand in C
@@ -1842,6 +1865,15 @@ When you save/export C, each tagged variable becomes a keyboard knob in the
 standalone program. The generated program also draws a small HUD listing each
 knob, its current value, and its keys.
 
+![The exported grass program's knob HUD: bladeCount as exported, and after holding q](images/export-c-knobs.png)
+
+Both halves are the same corner of the same export — the *Swaying grass
+field* scene, whose two `// @tune` rows become the HUD's two lines. Left is
+the value the scene was exported with; right is 177 `q` presses later, which
+the step ladder below puts at exactly 1200. The knob writes the same global
+the `for` loop reads, so the field thickens as the key repeats — no edit, no
+recompile.
+
 Knobs are assigned in declaration order:
 
 | Knob | Raise | Lower |
@@ -1943,7 +1975,9 @@ workflow for pushing limits is:
    or by editing the C directly.
 
 A scene that drops frames in the REPL at 500 particles will typically run
-thousands in the export without effort.
+thousands in the export without effort — the *Swaying grass field* example
+goes from a flatten-capped 135 blades to 9600, shown under
+[What the export is free of](#what-the-export-is-free-of).
 
 That division of labor is by design: the REPL is a **launchpad, debugging
 aid, and educational environment** — a place to see immediate-mode GL
