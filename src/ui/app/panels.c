@@ -723,6 +723,13 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
     if (win_w <= 0 || win_h <= 0)
         return hit;
 
+    /* The message history is the final composited popup layer. Claim its
+     * button/list before the telemetry surfaces below, exactly mirroring the
+     * render order in glr_ctrl_display_frame(). */
+    hit = status_surface_hit_test(snap, mx, my);
+    if (hit.kind != UI_HIT_NONE)
+        return hit;
+
     layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
         .var_visible                = snap->variable_panel.visible,
         .var_count                  = snap->variable_panel_vars.count,
@@ -817,10 +824,6 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
             return overlay_chrome_hit(mx, my, win_h, px, py);
     }
 
-    hit = status_surface_hit_test(snap, mx, my);
-    if (hit.kind != UI_HIT_NONE)
-        return hit;
-
     {
         UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
         int vx, vy, vw, vh;
@@ -911,8 +914,8 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
             return tab_hit;
     }
 
-    /* The messages overlay paints after the floating variable panel, so its
-     * button and open-list pixels must claim the overlap first. */
+    /* The messages overlay is the final floating UI layer, so its button and
+     * open-list pixels claim overlaps before telemetry and variable panels. */
     {
         UiHit msg_hit = status_history_hit_test(snap, mx, my);
         if (msg_hit.kind != UI_HIT_NONE)

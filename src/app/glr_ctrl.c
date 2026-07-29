@@ -2558,7 +2558,6 @@ void glr_ctrl_display_frame(void) {
         UiVariablePanelView var_view = ui_app_variable_panel_view(&ui_snap);
         ui_variable_panel_render(&var_view);
     }
-    ui_panels_render_scene_status(&ui_snap);
     {
         UiOverlayState help_overlay = {
             .visible    = ui_snap.help.visible,
@@ -2615,6 +2614,13 @@ void glr_ctrl_display_frame(void) {
         prof_accum_end(PROF_ASSIGN_PLOT);
         prof_accum_commit(PROF_ASSIGN_PLOT);
     }
+
+    /* The status-history list is anchored to the bell, but is still a popup:
+     * paint it after every floating telemetry surface so its rows remain
+     * readable and own their overlapping pixels. The variable panel was
+     * already below this layer; this extends that established ordering to the
+     * CPU/memory panels and assignment-value plot. */
+    ui_panels_render_scene_status(&ui_snap);
 
     /* Compositor post-process: the whole-frame filter runs over the
      * entire composited image (3D scene + every 2D UI layer) now that

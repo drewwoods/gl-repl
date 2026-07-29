@@ -338,6 +338,40 @@ static void test_front_overlay_hit_surfaces(void) {
                   hit.kind, UI_HIT_OVERLAY_CHROME);
 }
 
+/* The messages list is painted after every floating telemetry surface. Keep
+ * the hit-test order in lockstep so a click on visible list text cannot reach
+ * a CPU-profile or assignment-plot panel beneath it. */
+static void test_status_history_over_telemetry(void) {
+    UiRenderSnapshot snap;
+    UiHit hit;
+    int bx, by, bw, bh;
+    int mx, my;
+
+    prepare_overlay_hit_snap(&snap);
+    snap.status_history.count = 1;
+    snap.status_history.open = 1;
+    ASSERT_TRUE("status history button exists above telemetry",
+                ui_panels_status_history_button_rect(&snap,
+                                                     &bx, &by, &bw, &bh));
+
+    /* The list grows upward from the bell. This point sits in the first list
+     * row and in the bottom-most telemetry panel, which is where the two
+     * surfaces naturally overlap. */
+    mx = bx + bw / 2;
+    my = snap.viewport.window_h - (by + bh + 8);
+
+    snap.assign_plot.open = 1;
+    hit = ui_panels_hit_test_above_gl_state(&snap, mx, my, 0);
+    ASSERT_INT_EQ("history list wins over assignment plot",
+                  hit.kind, UI_HIT_STATUS_HISTORY);
+
+    snap.assign_plot.open = 0;
+    snap.profile_panel.mode = PROFILE_PANEL_FPS;
+    hit = ui_panels_hit_test_above_gl_state(&snap, mx, my, 0);
+    ASSERT_INT_EQ("history list wins over CPU profile panel",
+                  hit.kind, UI_HIT_STATUS_HISTORY);
+}
+
 int main(void) {
     printf("--- ui_panels tests ---\n");
 
@@ -348,6 +382,7 @@ int main(void) {
     test_scene_status_error_banner();
     test_scene_status_no_render_when_inactive();
     test_front_overlay_hit_surfaces();
+    test_status_history_over_telemetry();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_panels");
