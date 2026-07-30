@@ -2509,6 +2509,33 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 		GL_LDFLAGS="$(GLUT_GL_LDFLAGS)" \
 		FREEGLUT_VENDOR=0
 
+# glprobe ---------------------------------------------------------------------
+# Link the GL_FEEDBACK geometry probe (tools/glprobe/) into a standalone
+# fixed-function sample -- one of the loose .c files at the repo root, or any
+# other single-TU GLUT program. The sample opts in by including "glprobe.h" and
+# calling glprobe_diagnose(); this target only supplies the flags.
+#
+#   make glprobe SAMPLE=flame-torch.c                     # native window
+#   make glprobe SAMPLE=flame-torch.c FREEGLUT_OSMESA=1   # headless, capturable
+#
+# The headless form additionally requires the sample to include
+# tools/glprobe/glprobe_glut.h instead of its own #ifdef __APPLE__ GLUT block;
+# see tools/glprobe/README.md. Binary lands at build/glprobe/<basename>.
+GLPROBE_SRCS = tools/glprobe/glprobe.c src/support/mesh_ply.c
+GLPROBE_BIN  = build/glprobe/$(basename $(notdir $(SAMPLE)))
+
+.PHONY: glprobe
+glprobe: ## Build a standalone GL sample with the GL_FEEDBACK geometry probe (SAMPLE=<file.c>).
+	@test -n "$(SAMPLE)" || { \
+		echo "$(RED)usage: make glprobe SAMPLE=<sample.c> [FREEGLUT_OSMESA=1]$(NC)"; \
+		exit 1; }
+	@test -f "$(SAMPLE)" || { echo "$(RED)no such sample: $(SAMPLE)$(NC)"; exit 1; }
+	@mkdir -p build/glprobe
+	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations $(GL_HEADER_CFLAGS) \
+		-Itools/glprobe -Isrc \
+		-o $(GLPROBE_BIN) $(SAMPLE) $(GLPROBE_SRCS) $(GLUT_GL_LDFLAGS)
+	@echo "$(GREEN)built $(GLPROBE_BIN)$(NC)"
+
 # Call graph generation targets -----------------------------------------------
 
 callgraph-static: ## Generate static call graph using cflow -> Mermaid diagram.
