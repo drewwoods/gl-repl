@@ -1715,20 +1715,27 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
 static void glr_ctrl_refresh_window_title(void) {
     static char pushed[GLR_WINDOW_TITLE_MAX];
     char title[GLR_WINDOW_TITLE_MAX];
-    char scene_part[USER_SCENE_NAME_MAX + 4];
+    char scene_part[USER_SCENE_NAME_MAX + 16];
     const char *workspace = glr_workspaces_active_name();
     const char *scene = NULL;
+    const char *scene_label = "";
+    int in_tutorial = tutorial_active();
     int slot = repl_active_user_scene();
     int example_idx = repl_state_scenes().active_example_idx;
 
-    if (slot >= 0)
+    if (in_tutorial) {
+        scene = repl_tutorial_name(tutorial_state_view().tutorial_idx);
+        scene_label = "Tutorial: ";
+    } else if (slot >= 0) {
         scene = repl_user_scene_name(slot);
-    else if (example_idx >= 0)
+    } else if (example_idx >= 0) {
         scene = repl_example_name(example_idx);
+        scene_label = "Example: ";
+    }
 
     scene_part[0] = '\0';
     if (scene && scene[0])
-        snprintf(scene_part, sizeof(scene_part), " / %s", scene);
+        snprintf(scene_part, sizeof(scene_part), " / %s%s", scene_label, scene);
     snprintf(title, sizeof(title), "%s - %s%s", GLR_WINDOW_TITLE_BASE,
              workspace[0] ? workspace : "(no workspace)", scene_part);
 
