@@ -1289,6 +1289,7 @@ RELEASE_ENV = \
 	$(if $(REPO),REPO='$(REPO)') \
 	$(if $(PIN),PIN='$(PIN)') \
 	$(if $(REMOTE_BRANCH),REMOTE_BRANCH='$(REMOTE_BRANCH)') \
+	$(if $(NOTES),NOTES='$(NOTES)') \
 	$(if $(MACOS_MODE),MACOS_MODE='$(MACOS_MODE)') \
 	$(if $(MACOS_HOST),MACOS_HOST='$(MACOS_HOST)') \
 	$(if $(MACOS_PATH),MACOS_PATH='$(MACOS_PATH)') \

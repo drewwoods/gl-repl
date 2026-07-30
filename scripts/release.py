@@ -38,7 +38,7 @@ MODES = ["skip", "local", "remote"]
 # ini (it is derived per-release); the rest persist.
 DEFAULTS = {
     "release": {"repo": "drewwoods/gl-repl", "tag": "", "pin": "",
-                "music_src_dir": "", "remote_branch": "main"},
+                "music_src_dir": "", "remote_branch": "main", "notes": ""},
     "macos":   {"mode": "local", "host": "", "path": ""},
     "linux":   {"mode": "remote", "host": "gracemont",
                 "path": "~/code/openGL/samples/gen-ai/gl-repl"},
@@ -78,6 +78,7 @@ def _apply_env(cfg):
         "TAG": ("release", "tag"), "REPO": ("release", "repo"),
         "PIN": ("release", "pin"),
         "MUSIC_SRC_DIR": ("release", "music_src_dir"),
+        "NOTES": ("release", "notes"),
         "REMOTE_BRANCH": ("release", "remote_branch"),
         "MACOS_MODE": ("macos", "mode"), "MACOS_HOST": ("macos", "host"),
         "MACOS_PATH": ("macos", "path"),
@@ -167,6 +168,54 @@ def music_dir(cfg):
     if fav.is_dir() and any(p.suffix.lower() == ".mp3" for p in fav.iterdir()):
         return "assets/favorite"
     return "assets"
+
+
+NOTES_DIR = ROOT / "packaging" / "release"
+NOTES_AUTO = "(auto)"
+NOTES_NONE = "(none)"
+
+
+def notes_choices():
+    """Menu options for the release-notes row: auto, none, then every
+    packaging/release/*.md (README is the convention doc, not notes)."""
+    files = []
+    if NOTES_DIR.is_dir():
+        files = sorted(p.name for p in NOTES_DIR.glob("*.md")
+                       if p.name.lower() != "readme.md")
+    return [NOTES_AUTO, NOTES_NONE] + files
+
+
+def notes_file(cfg, tag):
+    """Resolve the configured notes selection to a path, or None for "no body"
+    (gh then keeps its one-line placeholder). Blank/auto looks for
+    packaging/release/<tag>.md and quietly falls back to None."""
+    v = cfg["release"]["notes"].strip()
+    if v in ("", NOTES_AUTO):
+        p = NOTES_DIR / f"{tag}.md"
+        return p if p.is_file() else None
+    if v == NOTES_NONE:
+        return None
+    # A bare name is relative to packaging/release/; anything with a separator
+    # is a path the caller chose, so honor it as given.
+    p = Path(v) if os.sep in v else NOTES_DIR / v
+    if not p.is_absolute():
+        p = ROOT / p
+    if not p.is_file():
+        die(f"release notes not found: {p}\n"
+            f"       available: {', '.join(notes_choices())}")
+    return p
+
+
+def cycle_pick_value(cfg, r, step):
+    """Advance a dynamic-option menu row. Options are re-read on every press so
+    a notes file added mid-session shows up without a restart. The auto
+    sentinel persists as blank, keeping .release.ini clean. Module-level (not a
+    menu closure) so it is testable without curses."""
+    opts = r["opts"]()
+    cur = cfg[r["sec"]][r["key"]].strip() or NOTES_AUTO
+    i = opts.index(cur) if cur in opts else 0
+    new = opts[(i + step) % len(opts)]
+    cfg[r["sec"]][r["key"]] = "" if new == NOTES_AUTO else new
 
 
 # --- shell helpers -----------------------------------------------------------
@@ -433,21 +482,30 @@ def do_upload(cfg, tag, target):
     if not artifacts:
         die(f"no artifacts in dist/{tag}/ — run 'make release-build' first.")
     repo = cfg["release"]["repo"]
+    notes = notes_file(cfg, tag)   # resolve before any upload work
     exists = subprocess.run(["gh", "release", "view", tag, "--repo", repo],
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL).returncode == 0
     if exists:
         # Existing tag wins — its commit is fixed, so --target would be ignored.
         say(f"release {tag} exists on {repo} — uploading (clobber)")
+        if notes:
+            say(f"updating notes from {notes.relative_to(ROOT)}")
+            run(["gh", "release", "edit", tag, "--repo", repo,
+                 "--notes-file", str(notes)])
     else:
         # New tag: pin it to the exact commit the artifacts were built from, so
         # publishing the draft creates the tag there (not at default-branch HEAD).
         say(f"creating draft release {tag} on {repo} @ {target[:12]}")
+        if notes:
+            say(f"notes from {notes.relative_to(ROOT)}")
+            body = ["--notes-file", str(notes)]
+        else:
+            body = ["--notes", f"gl-repl {tag} — macOS .app and Linux binary, "
+                               "music pack bundled."]
         try:
             run(["gh", "release", "create", tag, "--repo", repo, "--title", tag,
-                 "--target", target, "--notes",
-                 f"gl-repl {tag} — macOS .app and Linux binary, music pack bundled.",
-                 "--draft"])
+                 "--target", target, "--draft", *body])
         except subprocess.CalledProcessError:
             die(f"could not create release at {target[:12]} — is that commit "
                 f"pushed to {repo}? (GitHub can only tag a commit it has.)")
@@ -505,6 +563,9 @@ def run_menu(cfg, allow_build=True):
         {"t": "text", "sec": "release", "key": "repo", "label": "GitHub repo"},
         {"t": "text", "sec": "release", "key": "music_src_dir",
          "label": "Music source", "hint": "blank = auto (favorite/assets)"},
+        {"t": "pick", "sec": "release", "key": "notes",
+         "label": "Release notes", "opts": notes_choices,
+         "hint": "packaging/release/ — auto = <tag>.md"},
         {"t": "sep"},
         {"t": "action", "key": "save", "label": "Save config to .release.ini"},
     ]
@@ -523,6 +584,9 @@ def run_menu(cfg, allow_build=True):
             pass
         sel = 0  # index into `selectable`
         flash = ""
+
+        def cycle_pick(r, step):
+            cycle_pick_value(cfg, r, step)
         while True:
             stdscr.erase()
             h, w = stdscr.getmaxyx()
@@ -540,12 +604,16 @@ def run_menu(cfg, allow_build=True):
                 if r["t"] == "sep":
                     continue
                 is_sel = selectable[sel] == r_i
-                if r["t"] in ("choice", "text"):
+                if r["t"] in ("choice", "text", "pick"):
                     val = cfg[r["sec"]][r["key"]]
                     if r["t"] == "choice":
                         shown = "  ".join(
                             f"[{o}]" if o == val else f" {o} " for o in MODES)
                         line = f"{r['label']:<18} {shown}"
+                    elif r["t"] == "pick":
+                        # One value at a time: the option list is unbounded
+                        # (any number of notes files), so it can't render inline.
+                        line = f"{r['label']:<18} [{val.strip() or NOTES_AUTO}]"
                     else:
                         disp = val if val else "(auto)" if "blank" in r.get("hint", "") or r["key"] == "music_src_dir" else "(unset)"
                         line = f"{r['label']:<18} {disp}"
@@ -575,10 +643,14 @@ def run_menu(cfg, allow_build=True):
                 cur = MODES.index(cfg[r["sec"]][r["key"]]) if cfg[r["sec"]][r["key"]] in MODES else 0
                 step = 1 if ch == curses.KEY_RIGHT else -1
                 cfg[r["sec"]][r["key"]] = MODES[(cur + step) % len(MODES)]
+            elif ch in (curses.KEY_LEFT, curses.KEY_RIGHT) and r["t"] == "pick":
+                cycle_pick(r, 1 if ch == curses.KEY_RIGHT else -1)
             elif ch in (curses.KEY_ENTER, 10, 13):
                 if r["t"] == "choice":
                     cur = MODES.index(cfg[r["sec"]][r["key"]]) if cfg[r["sec"]][r["key"]] in MODES else 0
                     cfg[r["sec"]][r["key"]] = MODES[(cur + 1) % len(MODES)]
+                elif r["t"] == "pick":
+                    cycle_pick(r, 1)
                 elif r["t"] == "text":
                     new = _edit_field(stdscr, r["label"], cfg[r["sec"]][r["key"]])
                     if new is not None:

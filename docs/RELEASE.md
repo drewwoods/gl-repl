@@ -76,9 +76,18 @@ confirmation prompt**, uploads them to a GitHub release. Orchestrated by
   (= mode `skip`) are read from the environment.
 
 - **Release notes** live in [`packaging/release/<tag>.md`](../packaging/release/README.md)
-  and are **not** applied automatically — `do_upload` creates the draft with a
-  one-line placeholder, so attach the real body with
-  `gh release edit <tag> --repo <repo> --notes-file packaging/release/<tag>.md`.
+  and are applied by the upload step. The menu's **Release notes** row cycles
+  (◄/►) through `(auto)`, `(none)`, and every `packaging/release/*.md`
+  (`README.md` excluded — it is the convention doc); the list is re-read on each
+  press, so a file added mid-session appears without a restart. `(auto)` — the
+  persisted default, stored blank — uses `packaging/release/<tag>.md` when it
+  exists and otherwise falls back to gh's one-line placeholder, so tagging a
+  release with no notes file still works. `(none)` forces the placeholder.
+  Override per-run with `NOTES=<file>` (bare name = relative to
+  `packaging/release/`; a path with a separator is honored as given, and a
+  missing file aborts before anything uploads). Creating a release passes
+  `--notes-file`; re-uploading to an existing one runs `gh release edit
+  --notes-file` first, so notes stay in sync on a re-run.
   Every set of notes needs the macOS Gatekeeper walkthrough: ad-hoc signing
   means each download hits the "unidentified developer" prompt.
 
