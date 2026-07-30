@@ -20,6 +20,7 @@
 #include "editor/input.h"
 #include "editor/search.h"
 #include "keys.h"
+#include "app/glr_prof.h"    /* glr_prof_section_is_gpu (summary-row policy) */
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "ui/core/metrics.h"
 #include "support/test_harness.h"
@@ -483,20 +484,20 @@ static void test_reshape_clamps_height(void) {
 
 /* Regression test for the profile-coverage bug: a frame should land
  * profile samples in every major section, and the sum of major
- * sections should approximate PROF_FRAME_TOTAL (no section big
+ * sections should approximate PROF_FRAME_WORK (no section big
  * enough to matter goes unprofiled). The test drives
  * glr_ctrl_display_frame() and inspects the profile state.
  *
  * The "all major sections non-stale" half is deterministic. The
  * "sum approximately equals total" half uses a generous lower bound
- * (50% of PROF_FRAME_TOTAL) to avoid flake from OS scheduling noise
+ * (50% of PROF_FRAME_WORK) to avoid flake from OS scheduling noise
  * — any future regression that drops a major section entirely will
  * blow the lower bound. A tighter upper bound is not asserted
  * because per-section start/end overhead can stack to a real but
  * harmless gap.
  *
  * Even with the loose bound a single frame can be unlucky (a
- * scheduler preemption inside PROF_FRAME_TOTAL but outside every
+ * scheduler preemption inside PROF_FRAME_WORK but outside every
  * subsection inflates the denominator alone), so the ratio halves
  * are best-of-PROFILE_COVERAGE_ATTEMPTS: retry only while a bound is
  * unmet, and assert against the best measurement. A real regression
@@ -520,17 +521,23 @@ static void test_display_frame_profile_coverage(void) {
 
     /* Drive one frame after marking both dirty so PROF_AUTONORMAL
      * and PROF_FLATTEN both run. The fixture also leaves replay
-     * active so PROF_REPLAY_HUD lands. The frame_begin/_end pair is the
-     * host's PROF_FRAME_TOTAL bracket — without it the total never opens. */
+     * active so PROF_REPLAY_HUD lands. The glr_frame_* trio is the host's
+     * frame bracket — without it neither span ever opens. Coverage is measured
+     * against PROF_FRAME_WORK: every section below runs inside it, while
+     * PROF_FRAME_TOTAL additionally carries a present this test never
+     * performs. */
     repl_mark_source_dirty();
     repl_state_mark_flat_dirty();
-    glr_ctrl_frame_begin();
+    glr_frame_begin();
     glr_ctrl_display_frame();
-    glr_ctrl_frame_end();
+    glr_frame_work_end();
+    glr_frame_ended();
 
     /* Sections that should have landed a sample this frame. */
     ProfSection major[] = {
         PROF_FRAME_TOTAL,
+        PROF_FRAME_WORK,
+        PROF_PRESENT,
         PROF_AUTONORMAL,
         PROF_FLATTEN,
         PROF_SNAPSHOT,
@@ -567,20 +574,21 @@ static void test_display_frame_profile_coverage(void) {
         if (attempt > 1) {
             repl_mark_source_dirty();
             repl_state_mark_flat_dirty();
-            glr_ctrl_frame_begin();
+            glr_frame_begin();
             glr_ctrl_display_frame();
-            glr_ctrl_frame_end();
+            glr_frame_work_end();
+            glr_frame_ended();
         }
         attempts_run = attempt;
 
         /* Sum of disjoint top-level sections should be a substantial
-         * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D
+         * fraction of PROF_FRAME_WORK. PROF_SNAPSHOT / PROF_RENDER3D
          * are themselves aggregates, so summing them with the leaves
          * outside (autonormal, flatten, replay_hud, code_panel,
          * ui_panels, profile_panel, memory_panel, compositor,
          * frame_restore) covers the
          * controller's whole frame body. */
-        total_us = prof_section_last_us(PROF_FRAME_TOTAL);
+        total_us = prof_section_last_us(PROF_FRAME_WORK);
         sum_us =
             prof_section_last_us(PROF_AUTONORMAL) +
             prof_section_last_us(PROF_FLATTEN) +
@@ -608,7 +616,7 @@ static void test_display_frame_profile_coverage(void) {
         major_coverage = total_us > 0.0 ? sum_us / total_us : 0.0;
         snapshot_coverage = snapshot_us > 0.0 ? snapshot_sub_us / snapshot_us : 0.0;
 
-        printf("    attempt %d/%d: FRAME_TOTAL %.1fus, major sum %.1fus (%.1f%%); "
+        printf("    attempt %d/%d: FRAME_WORK %.1fus, major sum %.1fus (%.1f%%); "
                "SNAPSHOT %.1fus, subs %.1fus (%.1f%%)\n",
                attempt, PROFILE_COVERAGE_ATTEMPTS,
                total_us, sum_us, major_coverage * 100.0,
@@ -634,7 +642,7 @@ static void test_display_frame_profile_coverage(void) {
            best_snapshot_coverage * 100.0);
 
     /* Both should be positive (frame did real work). */
-    ASSERT_TRUE("frame total positive", best_total_us > 0.0);
+    ASSERT_TRUE("frame work positive", best_total_us > 0.0);
     ASSERT_TRUE("major-section sum positive", best_sum_us > 0.0);
 
     /* Sum should cover at least half the frame; missing a major
@@ -642,7 +650,7 @@ static void test_display_frame_profile_coverage(void) {
     if (best_total_us > 0.0) {
         char label[96];
         snprintf(label, sizeof(label),
-                 "major sections cover ≥50%% of FRAME_TOTAL (best %.1f%%)",
+                 "major sections cover ≥50%% of FRAME_WORK (best %.1f%%)",
                  best_major_coverage * 100.0);
         ASSERT_TRUE(label, best_major_coverage >= PROFILE_MAJOR_COVERAGE_MIN);
     }
@@ -656,32 +664,33 @@ static void test_display_frame_profile_coverage(void) {
     }
 }
 
-/* PROF_FRAME_TOTAL must span every stage of the *host callback* that does
- * frame work, not just the controller's share of it — and must stop short of
- * the present, which is not frame work at all.
+/* The frame boundary is the application's, and it produces three numbers from
+ * two spans: Frame Time (the whole display callback), Frame Work (the same
+ * minus the present), and Present as their difference.
  *
- * Both halves are regressions that happened. The stages gl_repl.c runs on
+ * Each piece is a regression that happened. The stages gl_repl.c runs on
  * either side of glr_ctrl_display_frame() — scripted input, the post-composite
  * splash / tour overlays — are real per-frame cost: a guided tour's caption
- * overlay alone measured ~10 ms/frame while the total reported ~1.5 ms,
+ * overlay alone measured ~10 ms/frame while the frame reported ~1.5 ms,
  * because the bracket lived inside the controller and the overlay draws after
- * it returns. The present, on the other hand, is the vsync wait: inside the
- * bracket it pinned the total at the refresh interval, so a 5 ms frame and a
- * 15 ms one both reported ~16 ms in permanent red. It now has its own row
- * outside the total (see prof_sections.h).
+ * it returns. The present is the vsync wait: counted as work it pinned the
+ * number at the refresh interval, so a 5 ms frame and a 15 ms one both read
+ * ~16 ms in permanent red. And deriving Present rather than bracketing the
+ * swap is what keeps the two spans exhaustive — anything the callback does
+ * after glr_frame_work_end() lands in Present instead of nowhere.
  *
  * Driven on the profiler's test clock so the arithmetic is exact and no GL is
  * needed: each host stage is stood in for by its own prof bracket, opened in
- * the order display_func() reaches it. The stages that self-time in production
- * (the tour overlay, the present) are stood in the same way rather than called,
- * since both need a live GL context and a window to do anything. */
-static void test_frame_total_spans_host_stages(void) {
-    double total_us, overlay_us, tour_us, present_us;
+ * the order display_func() reaches it. The tour overlay self-times in
+ * production but is stood in the same way, since it needs a live GL context
+ * and a window to do anything. */
+static void test_frame_spans_host_stages(void) {
+    double frame_us, work_us, overlay_us, tour_us, present_us;
 
-    printf("--- imrepl_ctrl frame total spans host stages ---\n");
+    printf("--- imrepl_ctrl frame spans host stages ---\n");
 
     prof_test_set_now_us(0.0);
-    glr_ctrl_frame_begin();          /* host: first statement of the callback */
+    glr_frame_begin();          /* host: first statement of the callback */
 
     /* ... scripted input (1 ms) ... */
     prof_begin(PROF_SCRIPTED_INPUT);
@@ -698,14 +707,15 @@ static void test_frame_total_spans_host_stages(void) {
     prof_end(PROF_TOUR_OVERLAY);
     prof_end(PROF_HOST_OVERLAYS);
 
-    glr_ctrl_frame_end();            /* host: before the present */
+    glr_frame_work_end();       /* host: before the present */
 
-    /* ... glFinish + swap (2 ms), outside the total ... */
-    prof_begin(PROF_PRESENT);
+    /* ... glFinish + swap (2 ms), inside the frame but outside its work ... */
     prof_test_set_now_us(17000.0);
-    prof_end(PROF_PRESENT);
 
-    total_us   = prof_section_last_us(PROF_FRAME_TOTAL);
+    glr_frame_ended();          /* host: last statement of the callback */
+
+    frame_us   = prof_section_last_us(PROF_FRAME_TOTAL);
+    work_us    = prof_section_last_us(PROF_FRAME_WORK);
     overlay_us = prof_section_last_us(PROF_HOST_OVERLAYS);
     tour_us    = prof_section_last_us(PROF_TOUR_OVERLAY);
     present_us = prof_section_last_us(PROF_PRESENT);
@@ -716,51 +726,71 @@ static void test_frame_total_spans_host_stages(void) {
     ASSERT_TRUE("scripted input not stale", !prof_section_is_stale(PROF_SCRIPTED_INPUT));
 
     ASSERT_TRUE("tour overlay measured 10ms", tour_us == 10000.0);
-    ASSERT_TRUE("present measured 2ms", present_us == 2000.0);
-    /* Every host stage that does frame work, and not the present: 15 of the
-     * callback's 17 ms. */
-    ASSERT_TRUE("frame total covers the host work stages (15ms)",
-                total_us == 15000.0);
-    ASSERT_TRUE("frame total contains the host overlays",
-                total_us >= overlay_us);
-    ASSERT_TRUE("frame total excludes the present",
-                total_us + present_us == 17000.0);
+    /* The whole callback, end to end. */
+    ASSERT_TRUE("frame time is the whole callback (17ms)", frame_us == 17000.0);
+    /* Every host stage that does frame work, and not the present. */
+    ASSERT_TRUE("frame work covers the host work stages (15ms)",
+                work_us == 15000.0);
+    ASSERT_TRUE("frame work contains the host overlays", work_us >= overlay_us);
+    /* Derived, and exhaustive: the two parts account for the whole frame. */
+    ASSERT_TRUE("present is the difference (2ms)", present_us == 2000.0);
+    ASSERT_TRUE("work + present is the frame", work_us + present_us == frame_us);
 
-    /* An unpaired end must not close a total that was never opened —
+    /* An unpaired end must not close a span that was never opened —
      * glr_ctrl_display_frame() is called bare by tests and tools. */
     prof_test_set_now_us(99000.0);
-    glr_ctrl_frame_end();
-    ASSERT_TRUE("unpaired frame_end leaves the total alone",
-                prof_section_last_us(PROF_FRAME_TOTAL) == 15000.0);
+    glr_frame_work_end();
+    glr_frame_ended();
+    ASSERT_TRUE("unpaired ends leave the frame alone",
+                prof_section_last_us(PROF_FRAME_TOTAL) == 17000.0);
+    ASSERT_TRUE("unpaired ends leave the work alone",
+                prof_section_last_us(PROF_FRAME_WORK) == 15000.0);
+    ASSERT_TRUE("unpaired ends leave the present alone",
+                prof_section_last_us(PROF_PRESENT) == 2000.0);
 
     prof_test_clear_now_us();
 }
 
-/* The two summary rows the panel draws under its divider: the frame total, and
- * the present as the one inversely-colored slack row right below it. Row order
- * is catalog order, so PROF_PRESENT following PROF_FRAME_TOTAL is what puts it
- * under the rule rather than above it — and the flags are what make one read
- * "over budget when long" and the other the reverse. */
+/* The three summary rows the panel draws under its divider: the frame total
+ * first, then the two parts it decomposes into. Row order is catalog order, so
+ * the run PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_PRESENT is what puts them
+ * under the rule and in that order — and the flags are what make the total read
+ * "over budget when long" and Present the reverse. */
 static void test_summary_row_metadata(void) {
     int section_idx;
     int total_rows = 0, slack_rows = 0;
 
     printf("--- imrepl_ctrl profile summary rows ---\n");
 
-    ASSERT_TRUE("present is the row after the frame total",
-                (int)PROF_PRESENT == (int)PROF_FRAME_TOTAL + 1);
+    ASSERT_TRUE("frame work is the row after the frame total",
+                (int)PROF_FRAME_WORK == (int)PROF_FRAME_TOTAL + 1);
+    ASSERT_TRUE("present is the row after the frame work",
+                (int)PROF_PRESENT == (int)PROF_FRAME_WORK + 1);
     ASSERT_INT("frame total row is the total",
                prof_section_info(PROF_FRAME_TOTAL).is_total, 1);
     ASSERT_INT("frame total row is not slack",
                prof_section_info(PROF_FRAME_TOTAL).is_slack, 0);
+    ASSERT_INT("frame work row is not a second total",
+               prof_section_info(PROF_FRAME_WORK).is_total, 0);
     ASSERT_INT("present row is slack",
                prof_section_info(PROF_PRESENT).is_slack, 1);
     ASSERT_INT("present row is not a second total",
                prof_section_info(PROF_PRESENT).is_total, 0);
     ASSERT_STR("frame total row is labeled Frame Time",
                prof_section_info(PROF_FRAME_TOTAL).label, "Frame Time");
+    ASSERT_STR("frame work row is labeled Frame Work",
+               prof_section_info(PROF_FRAME_WORK).label, "Frame Work");
     ASSERT_STR("present row is labeled Present",
                prof_section_info(PROF_PRESENT).label, "Present");
+
+    /* Frame Work carries the GPU query, not the two rows either side of it:
+     * Frame Time's span runs past a glFinish and Present has no span at all. */
+    ASSERT_INT("frame work is gpu-bracketed",
+               glr_prof_section_is_gpu(PROF_FRAME_WORK), 1);
+    ASSERT_INT("frame time is not gpu-bracketed",
+               glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 0);
+    ASSERT_INT("present is not gpu-bracketed",
+               glr_prof_section_is_gpu(PROF_PRESENT), 0);
 
     /* Exactly one of each across the catalog: the divider and the inverted
      * scale are both single-row affordances. */
@@ -2717,7 +2747,7 @@ static void test_tick_per_frame_scheduling(void) {
 
     /* Default mode: presentation does not own time; the paced timer does. */
     glr_ctrl_set_tick_per_frame(0);
-    glr_ctrl_frame_presented();
+    glr_frame_ended();
     ASSERT_FLOAT("timer mode: presentation does not tick",
                  repl_state_variables().anim_time, 0.0f);
     glr_ctrl_on_frame_timer();
@@ -2731,10 +2761,10 @@ static void test_tick_per_frame_scheduling(void) {
     glr_ctrl_on_frame_timer();
     ASSERT_FLOAT("frame mode: timer does not tick",
                  repl_state_variables().anim_time, 0.0f);
-    glr_ctrl_frame_presented();
+    glr_frame_ended();
     ASSERT_FLOAT("frame mode: first frame advances once",
                  repl_state_variables().anim_time, GLR_FRAME_DT_SECS);
-    glr_ctrl_frame_presented();
+    glr_frame_ended();
     ASSERT_FLOAT("frame mode: second frame advances once",
                  repl_state_variables().anim_time, 2.0f * GLR_FRAME_DT_SECS);
 
@@ -5168,7 +5198,7 @@ int main(void) {
     test_display_frame_builds_config_and_restores_live_state();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
-    test_frame_total_spans_host_stages();
+    test_frame_spans_host_stages();
     test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();

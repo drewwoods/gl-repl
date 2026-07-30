@@ -185,6 +185,17 @@ typedef void (*ProfSectionHookFn)(ProfSection s);
 void prof_install_section_hooks(ProfSectionHookFn begin_hook,
                                 ProfSectionHookFn end_hook);
 
+/* Record a sample the caller computed rather than one this module timed:
+ * updates last/EMA/histogram/staleness exactly as prof_end() would, with no
+ * clock read and no hooks (there is no span to bracket a GPU query around).
+ *
+ * For a section that is a *difference* between two measured spans and would be
+ * wrong to bracket directly — gl-repl's Present, which is the frame total minus
+ * the frame's work. Bracketing the swap itself would leave everything between
+ * the two spans unattributed; subtracting sweeps it into the row that is meant
+ * to absorb it. Prefer prof_begin/prof_end wherever there is a real span. */
+void prof_section_record_us(ProfSection s, double us);
+
 /* Accumulation-aware timing helpers for sections called inside a multi-pass
  * loop (e.g. accumulation-buffer AA).
  *

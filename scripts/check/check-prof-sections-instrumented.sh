@@ -12,6 +12,11 @@
 # prof_accum_end/_commit/_reset don't count as the entry point — the accum
 # pattern still opens every span with prof_begin, so matching prof_begin
 # alone covers both plain and accumulated sections.
+#
+# prof_section_record_us() does count: a derived row (PROF_PRESENT, which is
+# the frame total minus the frame's work) has no span to bracket, but it is
+# instrumented — it lands a sample every frame, which is all this guard is
+# asking about.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -23,10 +28,11 @@ for s in $sections; do
         PROF_SECTION_COUNT) continue ;;          # array size, not a section
         *_LAST) continue ;;                      # range alias
     esac
-    if ! grep -rqE "prof_begin\(\s*${s}\s*\)" gl_repl.c src/; then
-        echo "ERROR: catalog section ${s} has no prof_begin() site (zombie row" >&2
-        echo "       in the Compute Profile panel). Instrument it or remove it" >&2
-        echo "       from prof_sections.h + the glr_prof.c tables." >&2
+    if ! grep -rqE "prof_(begin|section_record_us)\(\s*${s}\s*[,)]" gl_repl.c src/; then
+        echo "ERROR: catalog section ${s} has no prof_begin() or" >&2
+        echo "       prof_section_record_us() site (zombie row in the Compute" >&2
+        echo "       Profile panel). Instrument it or remove it from" >&2
+        echo "       prof_sections.h + the glr_prof.c tables." >&2
         fail=1
     fi
 done

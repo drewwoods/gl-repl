@@ -185,31 +185,38 @@ void glr_ctrl_request_quit(void);
  * current in-memory scene. Returns 1 on success, 0 on failure. */
 int glr_ctrl_save_recovery_file(void);
 
-/* Frame-boundary bookkeeping, called by the host's display callback around the
- * frame's work — glr_ctrl_frame_begin() first, before any per-frame work, and
- * glr_ctrl_frame_end() after the last of it but *before* glr_ctrl_frame_present()
- * below, which is timed separately (PROF_PRESENT) as the frame's slack rather
- * than as frame time. See prof_sections.h for that split.
+/* The frame boundary. The application owns it — these three bracket the host's
+ * display callback, which is what a frame *is*; the controller is only one of
+ * the stages inside. Hence the plain glr_ prefix: they are not controller
+ * entry points like the glr_ctrl_* calls below, and glr_ctrl_display_frame()
+ * deliberately does none of this bookkeeping itself.
  *
- * These own the profiler's frame boundary: the staleness/FPS tick, the
+ *   glr_frame_begin()      first statement of the callback
+ *     ... scripted input, glr_ctrl_display_frame(), host overlays ...
+ *   glr_frame_work_end()   after the last of that, before presenting
+ *     ... glFinish + glutSwapBuffers ...
+ *   glr_frame_ended()      last statement of the callback
+ *
+ * They own the profiler's frame boundary: the staleness/FPS tick, the
  * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
- * and the PROF_FRAME_TOTAL bracket. They live here rather than inside
- * glr_ctrl_display_frame() because the callback also runs host-band work on
- * both sides of it (scripted input, splash + tour overlays) — work that a
- * bracket around the controller alone silently omits, which is exactly how a
- * guided tour's ~10 ms caption overlay stayed invisible in the profile panel
- * while the frame total reported ~1.5 ms on the same frames.
+ * and both frame spans — PROF_FRAME_TOTAL across the whole callback and
+ * PROF_FRAME_WORK across everything up to the present, with PROF_PRESENT
+ * derived from the difference (see prof_sections.h). The brackets belong out
+ * here rather than inside glr_ctrl_display_frame() because the callback runs
+ * host-band work on both sides of it (scripted input, splash + tour overlays)
+ * — work that a bracket around the controller alone silently omits, which is
+ * exactly how a guided tour's ~10 ms caption overlay stayed invisible in the
+ * profile panel while the frame reported ~1.5 ms.
  *
- * Unpaired calls are safe: frame_end() without a preceding frame_begin() is
+ * glr_frame_ended() also supplies the capture-mode simulation tick, so a host
+ * that renders frames must call it even where it does not care about timing.
+ *
+ * Unpaired calls are safe: either end without a preceding glr_frame_begin() is
  * a no-op, so tests and tools may call glr_ctrl_display_frame() on its own
- * (PROF_FRAME_TOTAL simply goes stale) without recording a bogus total. */
-void glr_ctrl_frame_begin(void);
-void glr_ctrl_frame_end(void);
-
-/* Put the finished frame on screen: glFinish() drain, then glutSwapBuffers(),
- * self-timed as PROF_PRESENT. Needs a live GL context and a double-buffered
- * window, so it is the host's last frame call and nothing else may invoke it. */
-void glr_ctrl_frame_present(void);
+ * (the rows simply go stale) without recording a bogus frame. */
+void glr_frame_begin(void);
+void glr_frame_work_end(void);
+void glr_frame_ended(void);
 
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
@@ -228,15 +235,14 @@ void glr_ctrl_on_frame_timer(void);
 
 /* Optional offline/capture scheduling mode. Normally the host frame timer
  * calls glr_ctrl_on_frame_timer(), which owns the fixed-dt simulation tick.
- * When enabled, the host still paces redraws while glr_ctrl_frame_presented
+ * When enabled, the host still paces redraws while glr_frame_ended() (above)
  * supplies exactly one tick after each rendered frame. This keeps captured
  * animation states at t0 + frame/60 regardless of rendering throughput. */
 void glr_ctrl_set_tick_per_frame(int enabled);
-void glr_ctrl_frame_presented(void);
 
 /* Fixed-dt simulation tick. Tests can drive one directly when GLUT is not
  * initialized; production scheduling is owned by the timer or, in the
- * optional mode above, by glr_ctrl_frame_presented. */
+ * optional mode above, by glr_frame_ended(). */
 void glr_ctrl_tick(void);
 
 /* ---- Router helpers ----

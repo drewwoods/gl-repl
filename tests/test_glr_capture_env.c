@@ -232,7 +232,7 @@ static void test_tick_per_frame_hook(void) {
                 repl_state_variables().anim_time == 0.0f);
 
     /* Presented frame should advance time */
-    glr_ctrl_frame_presented();
+    glr_frame_ended();
     ASSERT_TRUE("presented frame advances anim_time in tick-per-frame mode",
                 repl_state_variables().anim_time > 0.0f);
 }

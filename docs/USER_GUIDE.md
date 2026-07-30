@@ -2044,13 +2044,14 @@ graph as the final, more expensive diagnostic surface.
 Three floating panels work together:
 
 - **The section listing** (right) breaks the frame into named sections —
-  *Render 3D*, *Code Panel*, *Flatten*, and so on, down to the two summary
-  rows under the rule: *Frame Time* is everything the frame spends producing
-  the image, and *Present* is the `glFinish` + buffer swap that follows it.
-  Present is **not** part of Frame Time: with vsync on it is mostly the wait
-  for the next refresh, so it is the frame's leftover headroom rather than a
-  cost, and it is colored the other way round — a long present is green, a
-  vanishing one red, because that is the frame running out of slack.
+  *Render 3D*, *Code Panel*, *Flatten*, and so on, down to the three summary
+  rows under the rule. *Frame Time* is the whole frame, start to finish, and it
+  splits into the two rows below it: *Frame Work* is everything the frame
+  spends producing the image, and *Present* is the rest — the buffer swap and,
+  with vsync on, the wait for the next refresh. **Frame Work is the number to
+  watch when something feels slow**; Present is the frame's leftover headroom
+  rather than a cost, so it is colored the other way round — a long present is
+  green, a vanishing one red, because that is the frame running out of slack.
   The **CPU** column is a running average of wall-clock time per frame; the
   **GPU** column comes from asynchronous GL timer queries (no stalls — the
   numbers arrive a few frames late), and reads `--` where the driver lacks

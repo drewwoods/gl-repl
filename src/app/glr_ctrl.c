@@ -2362,20 +2362,22 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
     config->setup_subframe_user_data = &g_subframe_ctx;
 }
 
-/* Set between glr_ctrl_frame_begin() and glr_ctrl_frame_end() so an unpaired
- * end (a test driving glr_ctrl_display_frame() directly) cannot close a
- * PROF_FRAME_TOTAL that was never opened — prof_end() on an unstarted section
- * would record the whole epoch as one frame. */
-static int g_frame_total_open = 0;
+/* Set between glr_frame_begin() and glr_frame_ended() so an unpaired end (a
+ * test driving glr_ctrl_display_frame() directly) cannot close spans that were
+ * never opened — prof_end() on an unstarted section would record the whole
+ * epoch as one frame. Work closes first and independently, so it gets its own
+ * flag rather than sharing the frame's. */
+static int g_frame_open = 0;
+static int g_frame_work_open = 0;
 
-void glr_ctrl_frame_begin(void) {
+void glr_frame_begin(void) {
     prof_frame_tick();
     memprof_frame_tick();
     /* Dial GPU timer-query capture to what the profile panel can show this
      * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
      * query boundaries aren't free, so don't issue ones nobody can see.
      * Then open the frame's query slot — this must precede the first
-     * prof_begin of a GPU-bracketed section (FRAME_TOTAL, below).
+     * prof_begin of a GPU-bracketed section (FRAME_WORK, below).
      * Both no-op while gpu_prof is disabled. */
     {
         UiProfilePanelMode prof_mode =
@@ -2388,25 +2390,42 @@ void glr_ctrl_frame_begin(void) {
                                              : GLR_PROF_GPU_CAPTURE_ALL);
     }
     gpu_prof_frame_begin();
+    /* Both spans start here. They differ only in where they end: work stops
+     * before the present, the frame runs to the end of the callback. */
     prof_begin(PROF_FRAME_TOTAL);
-    g_frame_total_open = 1;
+    prof_begin(PROF_FRAME_WORK);
+    g_frame_open = 1;
+    g_frame_work_open = 1;
 }
 
-void glr_ctrl_frame_end(void) {
-    if (!g_frame_total_open)
+void glr_frame_work_end(void) {
+    if (!g_frame_work_open)
         return;
-    g_frame_total_open = 0;
-    prof_end(PROF_FRAME_TOTAL);
+    g_frame_work_open = 0;
+    prof_end(PROF_FRAME_WORK);
 }
 
-void glr_ctrl_frame_present(void) {
-    prof_begin(PROF_PRESENT);
-    /* Drain before timestamping the swap: without it the queued GL work spills
-     * into whatever the driver flushes next, and neither this row nor the ones
-     * above it would be attributable. */
-    glFinish();
-    glutSwapBuffers();
-    prof_end(PROF_PRESENT);
+void glr_frame_ended(void) {
+    if (g_frame_open) {
+        g_frame_open = 0;
+        prof_end(PROF_FRAME_TOTAL);
+        /* Present is what the frame spent outside its work: the glFinish drain
+         * and the swap, plus anything else the callback does after
+         * glr_frame_work_end(). Derived rather than bracketed so nothing in
+         * that stretch can go unattributed — see prof_sections.h. A frame that
+         * never closed its work span leaves the difference at the full total,
+         * which is the honest reading of "none of this was accounted for". */
+        prof_section_record_us(PROF_PRESENT,
+                               prof_section_last_us(PROF_FRAME_TOTAL)
+                             - prof_section_last_us(PROF_FRAME_WORK));
+    }
+    /* In GLR_TICK_PER_FRAME mode this is where the simulation advances, so a
+     * captured sequence is t0, t0+dt, ... . Deliberately after the total is
+     * closed: in the normal (timer-paced) mode the tick runs from the frame
+     * timer, entirely outside this callback, and counting it here only in
+     * capture mode would make the two modes' frame times incomparable. */
+    if (g_tick_per_frame)
+        glr_ctrl_tick();
 }
 
 void glr_ctrl_display_frame(void) {
@@ -2425,8 +2444,8 @@ void glr_ctrl_display_frame(void) {
     UiRenderSnapshot ui_snap;
 
     /* No frame-boundary bookkeeping here: the staleness/FPS tick, the GPU
-     * query-slot rotation and the PROF_FRAME_TOTAL bracket belong to the
-     * host's glr_ctrl_frame_begin() / _end() pair, so the total also covers
+     * query-slot rotation and both frame spans belong to the application's
+     * glr_frame_begin() / _work_end() / _ended() trio, so the frame also covers
      * the callback stages that sit outside this function. */
     glr_ctrl_refresh_window_title();
     /* The first refresh below and any time-blur refreshes inside Render 3D
@@ -4105,13 +4124,8 @@ void glr_ctrl_set_tick_per_frame(int enabled) {
     g_tick_per_frame = enabled ? 1 : 0;
 }
 
-void glr_ctrl_frame_presented(void) {
-    if (g_tick_per_frame)
-        glr_ctrl_tick();
-}
-
 /* Application-side response to the host's frame timer. Capture mode
- * transfers fixed-dt advancement to glr_ctrl_frame_presented(), so the host
+ * transfers fixed-dt advancement to glr_frame_ended(), so the host
  * can keep requesting frames without advancing simulation twice. */
 void glr_ctrl_on_frame_timer(void) {
     if (!g_tick_per_frame)

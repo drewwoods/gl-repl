@@ -153,6 +153,22 @@ void prof_end(ProfSection s) {
                          + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
 }
 
+void prof_section_record_us(ProfSection s, double us) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return;
+    init_if_needed();
+    if (us < 0.0) us = 0.0;
+
+    g_prof_last_us[s] = us;
+    g_prof_stale[s]   = 0;
+    histogram_record(&g_prof_hist[s], us);
+
+    if (g_prof_avg_us[s] == 0.0)
+        g_prof_avg_us[s] = us;       /* seed with first sample */
+    else
+        g_prof_avg_us[s] = PROF_EMA_ALPHA * us
+                         + (1.0 - PROF_EMA_ALPHA) * g_prof_avg_us[s];
+}
+
 void prof_accum_reset(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();

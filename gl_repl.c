@@ -30,17 +30,18 @@ static const char *g_export_ply_path = NULL;
 static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
-    /* Open the profiler's frame — first statement in the callback, so
-     * PROF_FRAME_TOTAL spans every stage below and not just the controller's
-     * share of them. Closed by glr_ctrl_frame_end() just before the present,
-     * which is measured separately as the frame's slack. */
-    glr_ctrl_frame_begin();
+    /* Open the frame — first statement in the callback, because the callback
+     * *is* the frame: this file owns the boundary, not the controller, which is
+     * only one of the stages below. Everything from here to glr_frame_ended()
+     * at the bottom is Frame Time. */
+    glr_frame_begin();
 
-    /* Every per-frame stage below is inside PROF_FRAME_TOTAL, so a stage with
-     * no ProfSection of its own is visible only as unattributed total — which
-     * is how a tour's ~10 ms caption overlay once hid. Add a section when you
-     * add a stage: inside the callee if it can own its own bracket, here when
-     * the stage spans the boot/controller seam that only this file bridges. */
+    /* Every per-frame stage below is inside the frame's work span, so a stage
+     * with no ProfSection of its own is visible only as unattributed work —
+     * which is how a tour's ~10 ms caption overlay once hid. Add a section when
+     * you add a stage: inside the callee if it can own its own bracket, here
+     * when the stage spans the boot/controller seam that only this file
+     * bridges. */
     prof_begin(PROF_SCRIPTED_INPUT);
     /* Headless-capture env hooks that need a live viewport / frame clock
      * (color picker, GL-state popup, help overlay, scheduled view toggle);
@@ -116,29 +117,26 @@ static void display_func(void) {
                                           glutGet(GLUT_WINDOW_HEIGHT));
     prof_end(PROF_HOST_OVERLAYS);
 
-    /* Close the frame total here, BEFORE the present: everything the callback
-     * does to produce this frame is now behind us, and the present that
-     * follows is mostly the wait for vsync — slack the frame is handed, not
-     * work it does. Including it pinned the total at the refresh interval and
-     * hid whatever the frame actually cost (see prof_sections.h). The
-     * simulation tick further below is outside the total for a different
-     * reason: in the normal (timer-paced) mode that tick runs from the frame
-     * timer, entirely outside this callback, so counting it here only in
-     * capture mode would make the two modes' totals incomparable. */
-    glr_ctrl_frame_end();
+    /* Close the frame's *work* span: everything the callback does to produce
+     * this frame is now behind us, and the present that follows is mostly the
+     * wait for vsync — slack the frame is handed, not work it does. The frame
+     * itself stays open across it, and Present is the difference (nothing in
+     * between can go unattributed that way — see prof_sections.h). */
+    glr_frame_work_end();
 
-    /* glFinish + swap, self-timed as PROF_PRESENT — outside the total above. */
-    glr_ctrl_frame_present();
+    glFinish(); /* ensure all GL commands are done before we timestamp the swap */
+    glutSwapBuffers();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
         glr_init_trace(buf);
         frames_traced++;
     }
 
-    /* In GLR_TICK_PER_FRAME mode, advance only after the completed frame so
-     * the captured sequence is t0, t0+dt, ... . The timer continues to pace
-     * redisplays but deliberately skips its own tick in this mode. */
-    glr_ctrl_frame_presented();
+    /* Close the frame: records Frame Time and derives Present, and in
+     * GLR_TICK_PER_FRAME mode advances the simulation now that the frame is on
+     * screen, so the captured sequence is t0, t0+dt, ... . (The timer keeps
+     * pacing redisplays but skips its own tick in that mode.) */
+    glr_frame_ended();
 }
 
 static void reshape_func(int w, int h) {

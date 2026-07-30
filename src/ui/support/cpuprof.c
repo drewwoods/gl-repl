@@ -221,8 +221,15 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
 
 /* Apply a green/yellow/red color based on section timing thresholds.
  * The whole-frame total row (is_total) uses 1/120s (8.3ms) and 1/60s
- * (16.7ms) breakpoints; every other section uses half those thresholds
+ * breakpoints; every other section uses half those thresholds
  * (4.15ms / 8.3ms).
+ *
+ * The total's red step gets 5% of tolerance past 1/60s. That row is the whole
+ * frame, and under vsync the whole frame *is* the refresh interval: a healthy
+ * 60 fps frame measures 16.6-16.7 ms and would cross a hard 16667 boundary and
+ * back every frame, flickering red at exactly the rate it is meant to hit. A
+ * genuinely missed vsync doubles the period to ~33 ms and is nowhere near the
+ * tolerance.
  *
  * A slack row (is_slack — gl-repl's Present, the vsync wait) reads the same
  * scale backwards: the number is time the frame was handed, not time it spent,
@@ -250,8 +257,8 @@ static void set_time_color(const ProfSectionInfo *info, double us) {
     } else if (info->is_total) {
         if (us < 8333.0)
             glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */
-        else if (us < 16667.0)
-            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – fits in 60 fps */
+        else if (us < 17500.0)
+            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – holding 60 fps */
         else
             glColor3f(0.95f, 0.38f, 0.32f);   /* red    – below 60 fps */
     } else {

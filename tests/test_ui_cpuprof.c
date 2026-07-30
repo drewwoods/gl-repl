@@ -135,7 +135,14 @@ static void test_gpu_section_policy(void) {
     ASSERT_INT_EQ("accum effect is gpu",
                   glr_prof_section_is_gpu(PROF_RENDER3D_ACCUM_EFFECT), 1);
     ASSERT_INT_EQ("code panel is gpu", glr_prof_section_is_gpu(PROF_CODE_PANEL), 1);
-    ASSERT_INT_EQ("frame total is gpu", glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 1);
+    /* Of the three summary rows only the work span carries the query: it ends
+     * where the GPU work does. Frame Time runs on past a glFinish, so its query
+     * would report the vsync wait as GPU time, and Present is derived
+     * arithmetic with no span to bracket at all. */
+    ASSERT_INT_EQ("frame work is gpu", glr_prof_section_is_gpu(PROF_FRAME_WORK), 1);
+    ASSERT_INT_EQ("frame time is cpu-only",
+                  glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 0);
+    ASSERT_INT_EQ("present is cpu-only", glr_prof_section_is_gpu(PROF_PRESENT), 0);
     /* ...pure-CPU sections and the per-fade-batch budget exclusions are not. */
     ASSERT_INT_EQ("flatten is cpu-only", glr_prof_section_is_gpu(PROF_FLATTEN), 0);
     ASSERT_INT_EQ("rebake eval is cpu-only",

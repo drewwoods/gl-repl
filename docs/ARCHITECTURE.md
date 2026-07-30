@@ -125,11 +125,12 @@ The ownership model becomes enforceable through these rules:
 
 ## Target Frame Pipeline
 
-Top-level frame orchestration belongs in the controller:
+The application owns the frame boundary; top-level orchestration *inside* it
+belongs to the controller:
 
 ```mermaid
 flowchart TD
-    cb["gl_repl.c GLUT display callback"] --> fb["glr_ctrl_frame_begin<br/><i>opens PROF_FRAME_TOTAL</i>"]
+    cb["gl_repl.c GLUT display callback"] --> fb["glr_frame_begin<br/><i>opens PROF_FRAME_TOTAL + PROF_FRAME_WORK</i>"]
     fb --> si["scripted input / capture hooks<br/><i>PROF_SCRIPTED_INPUT</i>"]
     si --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
     frame --> s1["tick profiling"]
@@ -147,8 +148,9 @@ flowchart TD
     s12 --> s13["ui_profile_panel_render(&ui_snap)"]
     s13 --> s14["restore flat count & predefined variable values"]
     s14 --> h1["splash + tour narration overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
-    h1 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
-    fe --> h2["glr_ctrl_frame_present<br/>glFinish + glutSwapBuffers<br/><i>PROF_PRESENT — outside the total</i>"]
+    h1 --> fe["glr_frame_work_end<br/><i>closes PROF_FRAME_WORK</i>"]
+    fe --> h2["glFinish + glutSwapBuffers<br/><i>unbracketed</i>"]
+    h2 --> fx["glr_frame_ended<br/><i>closes PROF_FRAME_TOTAL,<br/>derives PROF_PRESENT</i>"]
 ```
 
 Profile sections wrap each producer so snapshot construction time is
@@ -156,44 +158,54 @@ visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
-**`PROF_FRAME_TOTAL` is the whole callback minus the present.** The display
-callback runs real per-frame work on *both sides* of
-`glr_ctrl_display_frame()` — scripted-tour input before it, the
-post-composite splash / tour overlays after it — so the total's bracket
-belongs to the host, as the
-[`glr_ctrl_frame_begin()`](../src/app/glr_ctrl.h#L206) /
-[`glr_ctrl_frame_end()`](../src/app/glr_ctrl.h#L207) pair that also owns the
-staleness/FPS tick and the GPU query-slot rotation. It used to end at the
-controller's last line, which understated the frame by however much the
-host stages cost: a guided tour's caption overlay measured ~10 ms/frame
-(plus ~4 ms of `glFinish` draining its GPU work) while the total reported
-a comfortable ~1.5 ms and no row named the culprit. Any new per-frame host
-stage needs its own section for the same reason — a stage inside the
-bracket with no row of its own is only visible as unattributed total.
+**The frame is the display callback, and the application owns it.** The three
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L217) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L218) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L219) calls bracket `gl_repl.c`'s
+callback and also own the staleness/FPS tick, the GPU query-slot rotation and
+the capture-mode simulation tick. They carry the plain `glr_` prefix rather
+than `glr_ctrl_` because the controller is one stage inside a frame, not the
+frame itself: real per-frame work runs on *both sides* of
+`glr_ctrl_display_frame()` — scripted-tour input before it, the post-composite
+splash / tour overlays after it. A bracket around the controller alone
+understated the frame by however much those stages cost: a guided tour's
+caption overlay measured ~10 ms/frame (plus ~4 ms of `glFinish` draining its
+GPU work) while the frame reported a comfortable ~1.5 ms and no row named the
+culprit. Any new per-frame host stage needs its own section for the same
+reason — a stage inside the bracket with no row of its own is only visible as
+unattributed work.
 
 Where that section's bracket goes follows the band split: a stage whose work
-sits in one callee is timed *inside* it (`glr_ctrl_frame_present`,
-`glr_pointer_script_render_overlay`), so the host callback names the stage and
-nothing more. Only `PROF_SCRIPTED_INPUT` and `PROF_HOST_OVERLAYS` are bracketed
-in `gl_repl.c` itself, because each spans a boot-band call plus a controller-band
-one and `gl_repl.c` is the only file allowed to bridge the two (`PROF_HOST_SPLASH`
+sits in one callee is timed *inside* it (`glr_pointer_script_render_overlay`),
+so the host callback names the stage and nothing more. Only
+`PROF_SCRIPTED_INPUT` and `PROF_HOST_OVERLAYS` are bracketed in `gl_repl.c`
+itself, because each spans a boot-band call plus a controller-band one and
+`gl_repl.c` is the only file allowed to bridge the two (`PROF_HOST_SPLASH`
 stays with them so `splash.c` keeps its minimal test link).
 
-The present (`glFinish` + `glutSwapBuffers`, in `glr_ctrl_frame_present()`) is
-the one stage deliberately *outside* the bracket: `glr_ctrl_frame_end()` runs
-before it. With vsync on it is dominated by the wait
-for the next scan-out — time the frame is handed, not time it spends — so
-counting it as frame time pinned the total at the refresh interval and left the
-over-budget coloring permanently red no matter what the frame actually cost.
-The panel therefore draws two rows under its divider, **Frame Time** and
-**Present**, and colors Present on an inverted scale (`is_slack` in
-[`ProfSectionInfo`](../src/support/cpuprof.h): long is green, vanishing is red)
-because a shrinking present is the real warning — it is the frame's remaining
-headroom. The corollary is that `glFinish` absorbs GPU work the driver
-deferred, so a GPU-bound frame shows as slack draining out of Present rather
-than as CPU cost in any row above it; the GPU column is the cross-check.
-`test_frame_total_spans_host_stages` and `test_summary_row_metadata` in
-[`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c) pin both halves on the
+**Three summary rows out of two spans.** `PROF_FRAME_TOTAL` runs the whole
+callback and is the **Frame Time** row; `PROF_FRAME_WORK` is the same span
+stopped before the present and is **Frame Work**; **Present** is neither
+measured nor bracketed but *derived*, `TOTAL - WORK`, recorded through
+[`prof_section_record_us()`](../src/support/cpuprof.h). Subtracting rather
+than bracketing `glFinish` + `glutSwapBuffers` is what makes the two parts
+exhaustive: anything else the callback does after `glr_frame_work_end()` lands
+in Present instead of nowhere.
+
+The split exists because with vsync on the present is dominated by the wait for
+the next scan-out — time the frame is handed, not time it spends. Counted as
+work it pinned the number at the refresh interval and left the over-budget
+coloring permanently red no matter what the frame actually cost. So Frame Work
+is the row to watch for cost, and Present is colored on an inverted scale
+(`is_slack` in [`ProfSectionInfo`](../src/support/cpuprof.h): long is green,
+vanishing is red) because a shrinking present is the real warning — it is the
+frame's remaining headroom. The corollary is that `glFinish` absorbs GPU work
+the driver deferred, so a GPU-bound frame shows as slack draining out of
+Present rather than as CPU cost in any row above it; the GPU column (carried by
+Frame Work, the only one of the three whose span ends where the GPU work does)
+is the cross-check. `test_frame_spans_host_stages` and
+`test_summary_row_metadata` in
+[`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c) pin all of it on the
 profiler's test clock.
 
 The render3d frame consumes the explicit config:
@@ -1565,7 +1577,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L214) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L221) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
