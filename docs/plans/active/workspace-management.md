@@ -54,6 +54,44 @@ workspace by one junk scene. Two rules follow, and they are load-bearing:
   `output.glr` / `output.ply` keep the generic name, and the loader ignores both
   (`workspace_io_has_c_ext` accepts `.c` only).
 
+### Dev (non-bundle) runs must stay byte-identical to today
+
+Every path change here is gated on `glr_paths_cwd_supports_relative_saves()`
+(`access(".", W_OK)`, `glr_paths.c:107`) — the same predicate the code already uses.
+When the cwd is writable and no workspace is bound, **nothing moves**:
+
+| Save Scene, dev launch, no workspace bound | Target |
+|---|---|
+| active named user scene | `<slug>.c` in the **cwd** (unchanged) |
+| example / transient document | `./output.c` (unchanged — see below) |
+| `.glr` / `.ply` on a transient | `./output.{glr,ply}` (unchanged) |
+| quit recovery | `./recovery.c` (unchanged) |
+
+Note this is the **process cwd**, not the binary's directory: `cd /tmp &&
+~/src/.../gl-repl` already writes into `/tmp` today, and still will.
+
+`GLR_MODAL_SCENE_SAVE_AS` therefore fires **only when the cwd is not writable**,
+i.e. exactly where `output.c` is broken today. This is not the Ctrl+S-vs-menu drift
+this plan removes elsewhere: both entry points go through one
+`glr_action_save_active_scene()` that makes one decision from one predicate.
+The reason it cannot be unconditional is concrete —
+`scripts/docs-assets.sh:1357-1371` (`export_c_source`) drives `GLR_TYPE_KEYS=Ctrl+S`
+on the grass example inside a temp cwd and hard-requires `output.c`; an
+unconditional prompt would leave that pipeline sitting in a modal strip writing
+nothing, and `docs/USER_GUIDE.md`'s "Ctrl+S emits a real program" media is
+generated from it. `scripts/check/check-no-test-default-output.sh` also encodes
+`output.c` as the default-save contract.
+
+Consequences for `glr_paths_resolve_output_path()` and `glr_paths_app_state_path()`
+(Part 1): the fallback chain is *bound workspace* → *`leaf` verbatim when the cwd is
+writable* → *default workspace*. The middle rung is what keeps dev unchanged; drop
+it and `recovery.c` silently relocates to `./workspaces/recovery.c` for every dev
+run.
+
+One genuinely new dev-visible artifact: `./workspaces/` appears if a dev user
+creates a workspace from the new menu. `.gitignore:23` covers `workspace/` only —
+add `workspaces/`.
+
 ### One thing deliberately *not* done: binding a workspace at boot
 
 Eagerly binding a default workspace at startup would make Parts 4-6 shorter, but
@@ -90,10 +128,13 @@ which currently lists only `state-ownership-finalize.md`.
     path still works. Slug via the existing `workspace_io_filename_slug()`
     (`src/repl/workspace_io.c:78`).
   - `int glr_paths_resolve_output_path(const char *leaf, char *buf, size_t)` —
-    `<bound workspace>/<leaf>`, else `<default workspace>/<leaf>`, else `leaf`
-    verbatim (dev cwd). Used for `output.glr` / `output.ply`.
-  - `int glr_paths_app_state_path(const char *leaf, char *buf, size_t)` —
-    `<workspaces root>/<leaf>`, **never** a workspace. Used for `recovery.c`.
+    `<bound workspace>/<leaf>`, else `leaf` verbatim when the cwd is writable
+    (preserves dev behavior — see Context), else `<default workspace>/<leaf>`.
+    Used for `output.glr` / `output.ply`.
+  - `int glr_paths_app_state_path(const char *leaf, char *buf, size_t)` — `leaf`
+    verbatim when the cwd is writable, else `<workspaces root>/<leaf>`. **Never**
+    inside a workspace, so `repl_load_workspace` cannot slurp it. Used for
+    `recovery.c`.
   - `int glr_paths_same_dir(const char *a, const char *b)` — `realpath()` both
     sides (falling back to string compare when a path does not exist yet) so
     `./workspaces/x`, `workspaces/x` and the absolute form all match. Needed by
@@ -167,9 +208,10 @@ typedef enum { GLR_MODAL_NONE = 0, GLR_MODAL_WORKSPACE_NEW,
   torus_test.c?") is stored in the buffer field at `_begin` time; `panels.c`
   appends the key hints.
 
-**`GLR_MODAL_SCENE_SAVE_AS` is what kills `output.c`.** Save Scene on a
-transient/example document prompts for a name, then promotes the document to a
-real named slot and saves `<workspace>/<slug>.c`. That is the same transition
+**`GLR_MODAL_SCENE_SAVE_AS` is what kills `output.c` in the bundle.** Save Scene on
+a transient/example document — *when the cwd is not writable*, see Context — prompts
+for a name, then promotes the document to a real named slot and saves
+`<workspace>/<slug>.c`. That is the same transition
 `repl_promote_transient_if_needed()` (`scenes.c:1061`) already performs on edit, so
 reuse its slot-reservation path rather than hand-rolling one, then
 `repl_user_scene_rename(slot, typed_name)` + `glr_action_save_active_scene()`.
@@ -288,9 +330,12 @@ Load Workspace > / --- / Quit (Ctrl+Q)          (* = new)
   `GLR_MODAL_SCENE_SAVE_AS` means this arm is no longer reached from Save Scene at
   all — it survives only as the fallback for `repl_save_default_output()` and its
   tests.
-- `repl_save_active_scene()` (`scenes.c:464`): keep it strictly for named slots;
-  the transient case is now the app-layer Save-As prompt. `repl_save_default_output`
-  stays as-is (tests, dump paths) but is no longer on any interactive path.
+- `repl_save_active_scene()` (`scenes.c:464`): unchanged for named slots and for the
+  writable-cwd transient case (still `repl_save_default_output()` → `./output.c`).
+  The app-layer Save-As prompt intercepts *before* it only when the cwd is
+  unwritable, so `repl_save_default_output` keeps its contract and
+  `scripts/check/check-no-test-default-output.sh` keeps passing. Update the
+  `scenes.h:118-126` doc comment to name the new interception point.
 - `bind_app_workspace_for_scene_save_if_needed()` (`glr_actions.c:117`): drop the
   `repl_active_user_scene() < 0` early return so a transient doc about to be
   promoted binds the default workspace.
@@ -299,9 +344,10 @@ Load Workspace > / --- / Quit (Ctrl+Q)          (* = new)
   `repl_save_active_scene`) and call it from both `GLR_FILE_ITEM_SAVE_SCENE` and
   `glr_ctrl_router_handle_save_key()`.
 - `glr_ctrl_save_recovery_file()` (`glr_ctrl_router.c:151`): resolve
-  `QUIT_RECOVERY_FILE` through **`glr_paths_app_state_path()`** — the workspaces
-  root, not the bound workspace, so `repl_load_workspace` can never slurp it as a
-  scene. Print the resolved path in the quit hint (`glr_ctrl_router.c:160`) and
+  `QUIT_RECOVERY_FILE` through **`glr_paths_app_state_path()`** — `./recovery.c` in
+  a dev run, the workspaces root in a bundle, never the bound workspace (so
+  `repl_load_workspace` can never slurp it as a scene).
+  Print the resolved path in the quit hint (`glr_ctrl_router.c:160`) and
   update the block comment at `:132-139`: the workspaces root satisfies its "must
   be findable, must not be /tmp" intent while staying out of the import glob.
 - **Auto-promotion no longer dead-ends.** `reserve_slot_for_promotion()`
@@ -346,6 +392,17 @@ Automated:
   design flaw): create a workspace, save a scene, write a quit-recovery copy, save
   `.glr` and `.ply`, then `repl_load_workspace()` the same dir and assert the
   loaded scene count is exactly 1 — no `output` and no `recovery` phantom slot.
+- **Dev-parity test**: in a `mkdtemp` + `chdir` **writable** cwd with no workspace
+  bound, assert Ctrl+S on a transient still writes `./output.c` with no modal open,
+  a named scene still writes `./<slug>.c`, and recovery still writes `./recovery.c`
+  — i.e. the packaged-app fix did not move anything for dev runs. Extend the
+  existing Ctrl+S integration test in `tests/test_repl_editor.c`, which already
+  owns the sanctioned mkdtemp+chdir redirect
+  (`scripts/check/check-no-test-default-output.sh` names it as the sole exception).
+- `bash scripts/docs-assets.sh` (or at minimum its `export_c_source` step) must
+  still produce `output.c` — it is the only consumer that depends on the
+  writable-cwd `output.c` contract, and `docs/USER_GUIDE.md`'s export stills are
+  generated from it.
 - New `tests/test_glr_workspaces.c`: create two workspaces under a temp `HOME`,
   assert `glr_workspaces_count/name/path` sorted and `active_index` tracking
   (including a dev-cwd relative-vs-absolute case, which is what
@@ -394,5 +451,7 @@ Workspaces), `docs/ADVANCED_USAGE.md:11-25`, `docs/MODULES.md` (rows for
 `glr_workspaces` / `glr_modal`, and the changed workspace path policy),
 `CLAUDE.md` + `AGENTS.md:371-380` (workspace/auto-promotion section — the
 "promotion is rejected when no workspace is bound" wording changes),
-`docs/plans/active/README.md` (Part 0), then `make fix-doc-links` to repair
+`docs/plans/active/README.md` (Part 0), `.gitignore` (add `workspaces/` next to the
+existing `workspace/` at line 23), and the `scenes.h:118-126` /
+`glr_ctrl_router.c:132-139` doc comments. Then `make fix-doc-links` to repair
 line-number drift.
