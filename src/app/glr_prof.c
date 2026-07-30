@@ -102,7 +102,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
     [PROF_HOST_OVERLAYS]                     = { "Host Overlays",   0, 0 },
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
-    [PROF_POINTER_OVERLAY]                   = { "pointer",         1, 0 },
+    [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
     [PROF_PRESENT]                           = { "Present",         0, 0 },
     [PROF_FRAME_TOTAL]                       = { "Frame Total",     0, 1 },
 };

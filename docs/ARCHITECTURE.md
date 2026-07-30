@@ -146,7 +146,7 @@ flowchart TD
     s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_PANELS</i>"]
     s12 --> s13["ui_profile_panel_render(&ui_snap)"]
     s13 --> s14["restore flat count & predefined variable values"]
-    s14 --> h1["splash + scripted-pointer overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
+    s14 --> h1["splash + tour narration overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
     h1 --> h2["glFinish + glutSwapBuffers<br/><i>PROF_PRESENT</i>"]
     h2 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
 ```
@@ -159,7 +159,7 @@ transformers, highlights, virtual lines, scene config, and ui snapshot
 **`PROF_FRAME_TOTAL` is the whole callback, not the controller.** The
 display callback runs real per-frame work on *both sides* of
 `glr_ctrl_display_frame()` — scripted-tour input before it, the
-post-composite splash / pointer overlays and the present after it — so the
+post-composite splash / tour overlays and the present after it — so the
 total's bracket belongs to the host, as the
 [`glr_ctrl_frame_begin()`](../src/app/glr_ctrl.h#L204) /
 [`glr_ctrl_frame_end()`](../src/app/glr_ctrl.h#L205) pair that also owns the

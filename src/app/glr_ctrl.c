@@ -2627,9 +2627,9 @@ void glr_ctrl_display_frame(void) {
     /* Controlled-tour transport HUD (top of scene). Separate from the bottom
      * replay HUD above so a tour demonstrating replay shows both. No-ops for
      * env-capture scripts and when no controlled tour is running. Rendered
-     * before the compositor pass; the pointer/cursor overlay still composits
+     * before the compositor pass; the tour narration overlay still composits
      * on top afterward in gl_repl.c, staying visually topmost (and is timed
-     * there as PROF_POINTER_OVERLAY — this section is the HUD alone). */
+     * there as PROF_TOUR_OVERLAY — this section is the HUD alone). */
     prof_begin(PROF_TOUR_HUD);
     tour_ui_hud_render(&ui_snap);
     prof_end(PROF_TOUR_HUD);

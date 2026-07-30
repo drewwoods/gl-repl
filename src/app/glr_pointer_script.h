@@ -213,9 +213,14 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my);
  * new pointer state. No-op when inactive. */
 void glr_pointer_script_frame(void);
 
-/* Draw the overlay cursor (+ click ripple, highlight ring) over the
- * composited frame; call between glr_ctrl_display_frame() and
- * glutSwapBuffers(), like splash_render(). No-op when inactive. */
+/* Draw the narration overlay over the composited frame — caption plate, cursor
+ * arrow, click ripple, highlight ring; call between glr_ctrl_display_frame()
+ * and glutSwapBuffers(), like splash_render(). No-op when inactive.
+ *
+ * Timed as PROF_TOUR_OVERLAY: the caption is the only part with any cost, and
+ * a tour is when a human is watching. `pointer` in the name is this module's
+ * prefix (a script of pointer/keyboard events), not a claim about what the
+ * overlay draws — env-driven capture runs render it too. */
 void glr_pointer_script_render_overlay(int win_w, int win_h);
 
 #endif /* GLR_POINTER_SCRIPT_H */

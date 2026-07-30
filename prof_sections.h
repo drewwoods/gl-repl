@@ -115,7 +115,7 @@ typedef enum {
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     /* Host-band stages. The GLUT display callback in gl_repl.c does real
      * per-frame work on both sides of glr_ctrl_display_frame() — scripted
-     * input before it, the splash/pointer overlays and the present after it —
+     * input before it, the splash/tour overlays and the present after it —
      * and PROF_FRAME_TOTAL covers the whole callback, so those stages need
      * rows of their own or they show up only as unattributed total. A guided
      * tour's cursor + caption overlay is the reason this exists: it can cost
@@ -123,7 +123,13 @@ typedef enum {
     PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
     PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
     PROF_HOST_SPLASH,      /* splash_render() — startup banner only */
-    PROF_POINTER_OVERLAY,  /* glr_pointer_script_render_overlay() */
+    /* glr_pointer_script_render_overlay(): the guided-tour narration layer —
+     * caption, cursor, click ripple, highlight ring. Named for the tour rather
+     * than the cursor because the caption's bitmap text is what costs anything
+     * here; the cursor and its decorations are a few dozen vertices. (The same
+     * overlay renders for env-driven capture runs, which have no HUD and nobody
+     * watching a profile panel.) */
+    PROF_TOUR_OVERLAY,
     PROF_PRESENT,          /* glFinish() drain + glutSwapBuffers() */
     PROF_FRAME_TOTAL,   /* entire display callback, end to end: scripted
                          * input, glr_ctrl_display_frame(), host overlays,

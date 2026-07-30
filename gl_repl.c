@@ -85,7 +85,7 @@ static void display_func(void) {
 
     /* Host-band overlays: the last two passes over the composited frame, both
      * owned by this callback rather than the controller (splash is boot-band,
-     * and the pointer overlay must land after the compositor to stay
+     * and the tour overlay must land after the compositor to stay
      * topmost). Timed as one aggregate with a row per pass — see
      * prof_sections.h for why these have rows at all. */
     prof_begin(PROF_HOST_OVERLAYS);
@@ -97,13 +97,14 @@ static void display_func(void) {
         prof_end(PROF_HOST_SPLASH);
     }
 
-    /* Scripted-pointer overlay (cursor arrow, click ripple, highlight
-     * ring) so recorded video shows where the synthetic mouse is. */
+    /* Tour narration overlay (caption, cursor arrow, click ripple,
+     * highlight ring) so a tour — or a recorded video — shows what is being
+     * said and where the synthetic mouse is. */
     if (glr_pointer_script_active()) {
-        prof_begin(PROF_POINTER_OVERLAY);
+        prof_begin(PROF_TOUR_OVERLAY);
         glr_pointer_script_render_overlay(glutGet(GLUT_WINDOW_WIDTH),
                                           glutGet(GLUT_WINDOW_HEIGHT));
-        prof_end(PROF_POINTER_OVERLAY);
+        prof_end(PROF_TOUR_OVERLAY);
     }
     prof_end(PROF_HOST_OVERLAYS);
 

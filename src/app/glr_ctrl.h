@@ -193,7 +193,7 @@ int glr_ctrl_save_recovery_file(void);
  * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
  * and the PROF_FRAME_TOTAL bracket. They live here rather than inside
  * glr_ctrl_display_frame() because the callback also runs host-band work on
- * both sides of it (scripted input, splash + pointer overlays, present) —
+ * both sides of it (scripted input, splash + tour overlays, present) —
  * work that a bracket around the controller alone silently omits, which is
  * exactly how a guided tour's ~10 ms caption overlay stayed invisible in the
  * profile panel while Frame Total reported ~1.5 ms on the same frames.
