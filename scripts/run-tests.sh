@@ -48,11 +48,12 @@ else
 fi
 printf '%b\n' "$reset"
 
-# Detect a usable `time` once. The shell keyword (bash/ksh) yields
-# sub-second `real 0mX.XXXs` that parse_time_output already handles.
-# Under a shell where it is neither a keyword nor on PATH (dash with
-# no /usr/bin/time) it exits 127 — in that case timing is simply
-# dropped; the test result never depends on it.
+# Detect a usable `time` once. We report the timed command's CPU time
+# (user + sys), not `real`: the binaries run in parallel, so each job's
+# wall clock absorbs every other job's contention and the numbers all
+# converge on the suite's total. Under a shell where `time` is neither a
+# keyword nor on PATH (dash with no /usr/bin/time) it exits 127 — in that
+# case timing is simply dropped; the test result never depends on it.
 have_time=0
 if ( time -p true ) >/dev/null 2>&1; then
     have_time=1
@@ -78,29 +79,32 @@ parse_counts() {
     ' "$1"
 }
 
-parse_time_output() {
-    # Extract "real" time from time command output (format: real 0m1.234s)
-    awk '/^real/ { print $2 }' "$1"
-}
-
-time_to_seconds() {
-    # Convert time format (0m1.234s, 1m2.345s, or 1.234) to seconds as float
-    local time_str=$1
-    if [ -z "$time_str" ]; then
-        printf '0.000\n'
-        return
-    fi
-    case "$time_str" in
-        *m*)
-            local mins=$(printf '%s' "$time_str" | cut -d'm' -f1)
-            local secs=$(printf '%s' "$time_str" | cut -d'm' -f2 | cut -d's' -f1)
-            printf '%s\n' "$mins $secs" | awk '{printf "%.3f\n", $1 * 60 + $2}'
-            ;;
-        *)
-            local secs=$(printf '%s' "$time_str" | cut -d's' -f1)
-            printf '%s\n' "$secs" | awk '{printf "%.3f\n", $1}'
-            ;;
-    esac
+parse_cpu_seconds() {
+    # Total CPU time (user + sys) from `time` output, as seconds.
+    # `time -p` prints bare `1.234`; a shell keyword without -p may print
+    # `0m1.234s`, so accept both. The trailing awk args are locals — awk
+    # has no other scope, and an undeclared `s` here would clobber the
+    # sys accumulator below.
+    awk '
+    function to_sec(str,   parts, mins, secs) {
+        if (str ~ /m/) {
+            split(str, parts, "m")
+            mins = parts[1]
+            secs = parts[2]
+            sub(/s/, "", secs)
+            return mins * 60 + secs
+        } else {
+            sub(/s/, "", str)
+            return str + 0
+        }
+    }
+    /^user/ { u = to_sec($2); seen = 1 }
+    /^sys/  { s = to_sec($2); seen = 1 }
+    END {
+        if (seen)
+            printf "%.3f\n", u + s
+    }
+    ' "$1"
 }
 
 passed_bins=0
@@ -211,18 +215,14 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 log="$log_dir/$name.log"
                 time_file="$log_dir/$name.time"
 
-                # Extract elapsed time
+                # Extract CPU time (see parse_cpu_seconds)
+                cpu_str="unknown"
                 if [ -f "$time_file" ]; then
-                    elapsed_str=$(parse_time_output "$time_file")
-                    if [ -z "$elapsed_str" ]; then
-                        elapsed_str="unknown"
-                    else
-                        elapsed_secs=$(time_to_seconds "$elapsed_str")
-                        printf '%s %s\n' "$elapsed_secs" "$name" >>"$timings_file"
-                        elapsed_str="${elapsed_secs}s"
+                    cpu_secs=$(parse_cpu_seconds "$time_file")
+                    if [ -n "$cpu_secs" ]; then
+                        printf '%s %s\n' "$cpu_secs" "$name" >>"$timings_file"
+                        cpu_str="${cpu_secs}s cpu"
                     fi
-                else
-                    elapsed_str="unknown"
                 fi
 
                 counts=$(parse_counts "$log")
@@ -242,11 +242,11 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 if [ "$test_total" -ge 0 ]; then
                     passed_tests=$((passed_tests + test_passed))
                     total_tests=$((total_tests + test_total))
-                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$elapsed_str"
+                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$cpu_str"
                     printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
                 else
                     unknown_stats=$((unknown_stats + 1))
-                    printf ' [test count unknown] (%s)\n' "$elapsed_str"
+                    printf ' [test count unknown] (%s)\n' "$cpu_str"
                     printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
                 fi
 
@@ -279,9 +279,11 @@ if [ "$unknown_stats" -gt 0 ]; then
 fi
 printf '\n'
 
-# Show top 3 longest tests
+# Show the 3 most expensive tests. CPU time, not wall clock: the jobs run
+# in parallel, and time spent blocked (sleeps, waiting on a child) does not
+# count here.
 if [ -f "$timings_file" ] && [ -s "$timings_file" ]; then
-    printf '\n%b⏱️  longest tests:%b\n' "$cyan" "$reset"
+    printf '\n%b⏱️  most expensive tests (CPU time):%b\n' "$cyan" "$reset"
     sort -rn "$timings_file" | head -3 | awk '{
         secs = $1
         name = $2
