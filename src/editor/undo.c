@@ -23,7 +23,15 @@
 #include "subsystems/tutorial/tutorial_state.h"
 #include "subsystems/color_picker/color_picker_state.h"
 
+/* Overridable because this is the multiplier on MAX_EDITOR_COMMANDS, not a
+ * constant beside it: each slot is a whole document copy, and both rings are
+ * full depth, so the undo history alone is 64 of them. A capacity-raised build
+ * (`make gl-repl-unchained`) buys its larger documents by shortening this --
+ * trading undo history for command headroom is the only way to raise the cap
+ * without the resident set growing with it. */
+#ifndef REPL_UNDO_DEPTH
 #define REPL_UNDO_DEPTH 32
+#endif
 
 static EditorUndoSnapshot g_undo_buf[REPL_UNDO_DEPTH];
 static int g_undo_head = 0;

@@ -443,6 +443,62 @@ app export also adds small octahedron / capped-tube triangle proxies whose
 radius scales with the scene bounds. See *Mesh Export (PLY via GL_FEEDBACK)* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the capture/encode design.
 
+## `gl-repl-unchained` — raised capacity, experimentation only
+
+```bash
+make gl-repl-unchained                    # ./gl-repl-unchained
+make gl-repl-unchained FREEGLUT_OSMESA=1  # headless variant
+```
+
+The same application with the document ceilings lifted, for machine-generated
+scenes — a `glprobe` extraction, a mesh conversion — that blow straight past
+limits sized for hand-typed input. **Nothing in the test suite runs against it,
+and it is not a supported configuration.**
+
+| Constant | Default | Unchained |
+|---|---|---|
+| `MAX_EDITOR_COMMANDS` | 1024 | 32768 |
+| `MAX_FLAT_COMMANDS` | 8192 | 65536 |
+| `MAX_FLATTEN_VISIT_BUDGET` | 200000 | 2000000 |
+| `REPL_UNDO_DEPTH` | 32 | 8 |
+
+Two of those are not capacity increases, and both are load-bearing:
+
+- **`REPL_UNDO_DEPTH` goes *down*.** `MAX_EDITOR_COMMANDS` costs ~33 KB per
+  unit (`make capacity-matrix`) because every source command is duplicated
+  across the 32×2 undo/redo rings and 8 user-scene slots — and that memory is
+  resident, not lazily-faulted. Shortening the history is what keeps a 32×
+  document cap from costing over a gigabyte; measured resident set is ~630 MB.
+- **`MAX_FLATTEN_VISIT_BUDGET` goes up**, or the target would just trade the
+  editor ceiling for the flatten one on the first large document.
+
+### The stack
+
+The controller and editor take document-sized snapshots as ordinary locals.
+At the default cap that is 267 KB a frame — unremarkable. At 32× it is 8.5 MB,
+and `glr_ctrl_display_frame` alone overflows the 8 MB macOS main-thread stack
+on the *first* frame, with a `___chkstk_darwin` segfault and no usable
+backtrace.
+
+The build therefore links with `-Wl,-stack_size,0x8000000` (128 MB), visible as
+a non-zero `stacksize` in `LC_MAIN`:
+
+```bash
+otool -l ./gl-repl-unchained | grep -A3 LC_MAIN     # stacksize 134217728
+```
+
+On Linux the main-thread stack comes from the shell, not the executable, so
+raise it there instead:
+
+```bash
+ulimit -s 131072 && ./gl-repl-unchained scene.glr
+```
+
+Moving those ~20 snapshots off the stack is the real fix; forcing it on the
+shipping build for the sake of an experimental target is not. If you raise the
+caps further, re-check with
+`-Wframe-larger-than=131072` — that is how the overflow was found.
+
 ## Scene-file headers
 
 Saved scenes are standalone C files, but their leading comments carry REPL

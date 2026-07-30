@@ -26,7 +26,14 @@
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 #define MAX_FLATTEN_CALL_DEPTH 64
+/* Overridable so a capacity-raised build (`make gl-repl-unchained`) does not
+ * simply trade the MAX_EDITOR_COMMANDS ceiling for this one: a document large
+ * enough to need that target can exhaust the default budget on straight-line
+ * geometry alone. Pure work counter, no storage -- raising it costs nothing
+ * but the time a runaway program is allowed to burn before bailing. */
+#ifndef MAX_FLATTEN_VISIT_BUDGET
 #define MAX_FLATTEN_VISIT_BUDGET 200000
+#endif
 #define MAX_FLATTEN_ACTIVE_LOOPS (MAX_FLATTEN_CALL_DEPTH * MAX_EXPR_VARS)
 /* Per-for-loop hard stop on unrolled iterations, separate from the
  * whole-program MAX_FLATTEN_VISIT_BUDGET above: a single runaway loop

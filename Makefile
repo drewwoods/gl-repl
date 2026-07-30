@@ -883,7 +883,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them - benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo assign_plot_demo cpuprof_demo render3d-asset-builder
+ROOT_BIN_LINKS = gl-repl gl-repl-unchained render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo assign_plot_demo cpuprof_demo render3d-asset-builder
 
 HEADLESS_DEMO_TARGETS = \
 	render3d-demo \
@@ -1232,12 +1232,62 @@ $(SAMPLE_BIN): packaging/web/shell.html packaging/web/gl4es_bootstrap.c \
 	$(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a $(FREEGLUT_STATIC_LIB)
 endif
 
+# EXTRA_LDFLAGS is an append-only hook for build variants that need a link
+# flag the platform block does not supply (currently only gl-repl-unchained's
+# larger main-thread stack). Overriding GL_LDFLAGS from a sub-make would
+# replace the whole per-platform list instead of adding to it.
+EXTRA_LDFLAGS ?=
+
 $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) -o $@
+	$(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) $(EXTRA_LDFLAGS) -o $@
 
 gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
+
+# gl-repl-unchained -- the same app with the capacity ceilings lifted, for
+# EXPERIMENTATION ONLY. It exists because machine-generated documents (a
+# glprobe extraction, a mesh conversion) blow straight past limits that were
+# sized for hand-typed scenes; it is not a supported configuration and nothing
+# in the test suite runs against it.
+#
+# MAX_EDITOR_COMMANDS is the expensive one: ~33 KB per unit, because every
+# source command is duplicated across the 32x2 undo/redo rings and 8 user-scene
+# slots (`make capacity-matrix` prints the fan-out). That memory is real and
+# resident, not lazily-faulted BSS -- 16x measured 556 MB -- so the ring depth
+# is cut to 8 to pay for it. Shorter undo history is the trade that keeps a
+# 32x document cap from costing over a gigabyte.
+#
+# The flatten visit budget is raised alongside, or the target would just swap
+# one ceiling for another on the first large document.
+#
+# And the main thread needs a bigger stack. Document-sized snapshots are taken
+# as ordinary locals all over the controller and editor -- 267 KB each at the
+# default cap, which is unremarkable, but 8.5 MB at 32x. glr_ctrl_display_frame
+# alone overflows the 8 MB macOS main stack on the FIRST frame. Raising the
+# stack is the one-flag fix; moving ~20 functions' snapshots off the stack is
+# the real one, and is not something an experimental target should force on the
+# shipping build. On Linux the main stack comes from the shell, so raise it
+# with `ulimit -s` there instead.
+ifeq ($(UNAME_S),Darwin)
+  GLR_UNCHAINED_LDFLAGS = -Wl,-stack_size,0x8000000
+else
+  GLR_UNCHAINED_LDFLAGS =
+endif
+GLR_UNCHAINED_DIR = build/unchained$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
+GLR_UNCHAINED_BIN = $(GLR_UNCHAINED_DIR)/gl-repl-unchained
+
+.PHONY: gl-repl-unchained
+gl-repl-unchained: ## Build an experimental gl-repl with 32x source-command and 8x flat-command capacity, 8-deep undo (not tested, not supported).
+	$(MAKE) BUILD=unchained \
+		SAMPLE_BIN=$(GLR_UNCHAINED_BIN) \
+		CFLAGS="$(CFLAGS) -DMAX_EDITOR_COMMANDS=32768 \
+			-DMAX_FLAT_COMMANDS=65536 \
+			-DMAX_FLATTEN_VISIT_BUDGET=2000000 \
+			-DREPL_UNDO_DEPTH=8" \
+		EXTRA_LDFLAGS="$(GLR_UNCHAINED_LDFLAGS)" \
+		$(GLR_UNCHAINED_BIN)
+	ln -sfn $(GLR_UNCHAINED_BIN) $@
 
 render3d-asset-builder: ## Build separate render3d-asset-builder binary with high flat-command capacity and asset catalog.
 	$(MAKE) BUILD=render3d_asset_builder EXAMPLES_CATALOG=tools/render3d_asset_builder/catalog.ini SAMPLE_BIN=build/render3d_asset_builder/render3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render3d-asset-builder
@@ -2491,7 +2541,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM render3d_hot_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM assign_plot_demo.dSYM cpuprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM gl-repl-unchained.dSYM render3d_demo.dSYM render3d_hot_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM assign_plot_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
