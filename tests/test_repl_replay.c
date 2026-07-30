@@ -480,15 +480,20 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     ASSERT_TRUE("SUBST uses flatten args[0]=5, not re-eval=95",
                 subst_uses_flatten_value);
 
-    /* The middle expansion mode keeps useful inline value comments but does
-     * not turn the focused glVertex source row into three visual lines. */
+    /* Expanded keeps useful inline value comments but does not turn the
+     * focused glVertex source row into three visual lines. */
     g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
     replay_annotations_prepare(text, &out);
-    ASSERT_TRUE("middle expansion suppresses glVertex virtual rows",
+    ASSERT_TRUE("expanded mode suppresses glVertex virtual rows",
                 out.count == 0);
     replay_code_panel_get_command_display_text(text, 1, display, sizeof(display));
-    ASSERT_TRUE("middle expansion keeps assignment value comments",
+    ASSERT_TRUE("expanded mode keeps assignment value comments",
                 strstr(display, "//") != NULL);
+    replay_code_panel_get_command_display_text(text, 2, display, sizeof(display));
+    ASSERT_TRUE("expanded mode appends evaluated glVertex inline",
+                strstr(display, "// glVertex3f(5, 0, 0);") != NULL);
+    ASSERT_TRUE("expanded glVertex uses baked value rather than re-evaluation",
+                strstr(display, "95") == NULL);
 
     replay_stop();
 }

@@ -1118,7 +1118,7 @@ should not own replay policy.
 
 Runtime shape:
 
-* the controller builds a [`ReplayFadePlan`](../src/subsystems/replay/replay_state.h#L74) snapshot once per frame (batches,
+* the controller builds a [`ReplayFadePlan`](../src/subsystems/replay/replay_state.h#L75) snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
 * render3d iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`

@@ -1585,9 +1585,9 @@ int main(void) {
                    "  i = i + j + 3; // i = 3.2 + 1.2 + 3 = 7.4");
         ASSERT_TRUE("replay display vertex text",
                     replay_code_panel_get_command_display_text(source_document_view(), 1, display, sizeof(display)));
-        ASSERT_STR("replay display vertex source unchanged",
+        ASSERT_STR("replay display vertex gets evaluated inline comment",
                    display,
-                   "  glVertex3f(i, j, 0);");
+                   "  glVertex3f(i, j, 0); // glVertex3f(7.4, 1.2, 0);");
 
         replay_active = 0;
         replay_state = REPLAY_OFF;

@@ -1055,6 +1055,21 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
         /* No has_vars gate: the loop variable is dynamic even when the
          * bounds are literals, so the iteration readout is still useful. */
         build_replay_for_inline_comment(cmd_idx, comment, sizeof(comment));
+    } else if (replay.expand_args == REPLAY_EXPAND_EXPANDED &&
+               repl_cmd_emits_vertex(type)) {
+        char evaluated[REPL_REPLAY_ANNOTATION_TEXT_MAX];
+        int flat_idx;
+        if (!has_vars)
+            return 1;
+        flat_idx = replay_annotation_flat_cmd_for_source(cmd_idx);
+        if (flat_idx < 0)
+            return 1;
+        if (format_evaluated_cmd(&repl_state_flat_program_cmds()[flat_idx],
+                                 skip_leading_ws(base),
+                                 evaluated, sizeof(evaluated))) {
+            snprintf(comment, sizeof(comment), " // %s",
+                     skip_leading_ws(evaluated));
+        }
     } else {
         return 1;
     }

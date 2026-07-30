@@ -222,7 +222,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
 - File-private statics use `g_` prefix. Cross-module runtime state goes
   through typed facades: [`src/repl/state.h`](src/repl/state.h) (REPL),
   [`src/editor/state.h`](src/editor/state.h) (editor), peer accessors
-  ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L139), `variable_panel_state_view()`). Static helpers are
+  ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L140), `variable_panel_state_view()`). Static helpers are
   file-scoped; public API through module headers.
 - Prefixes express ownership: `repl_*` (language/program model), `editor_*`
   (text document), `glr_*` (app shell/controller/services), `render3d_*`
@@ -420,7 +420,7 @@ only (`check-repl-export-via-bridge`).
 
 ### Replay
 
-State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L139); playback/fade/input split across
+State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L140); playback/fade/input split across
 `src/subsystems/replay/`. During playback the flat count is clamped to
 [`replay_exec_limit()`](src/subsystems/replay/replay.h#L79); fade-batch ring renders old geometry in a blended
 pass. Fade replays skip `CMD_CLEAR`, and clamps never cut below the
