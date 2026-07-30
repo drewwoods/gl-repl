@@ -487,12 +487,19 @@ a non-zero `stacksize` in `LC_MAIN`:
 otool -l ./gl-repl-unchained | grep -A3 LC_MAIN     # stacksize 134217728
 ```
 
-On Linux the main-thread stack comes from the shell, not the executable, so
-raise it there instead:
+On Linux the main-thread stack comes from `RLIMIT_STACK`, not the executable,
+so raise it in the shell instead — the default there is the same 8 MB
+(Ubuntu 24.04 `ulimit -s` = 8192 KB):
 
 ```bash
 ulimit -s 131072 && ./gl-repl-unchained scene.glr
 ```
+
+There is no link-flag equivalent. GNU `ld` accepts `-z stacksize=N` and then
+prints `warning: -z stacksize=... ignored`; the binary still dies at 8 MB,
+because Linux sizes the main stack from the rlimit and ignores `PT_GNU_STACK`'s
+size field. The build therefore emits no flag there, and prints the `ulimit`
+reminder after linking.
 
 Moving those ~20 snapshots off the stack is the real fix; forcing it on the
 shipping build for the sake of an experimental target is not. If you raise the

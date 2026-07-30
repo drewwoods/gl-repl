@@ -1269,6 +1269,11 @@ gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by d
 # the real one, and is not something an experimental target should force on the
 # shipping build. On Linux the main stack comes from the shell, so raise it
 # with `ulimit -s` there instead.
+# Linux gets no flag, and that is not an oversight: the main-thread stack there
+# comes from RLIMIT_STACK, not the executable. GNU ld accepts -z stacksize and
+# then says so -- "warning: -z stacksize=... ignored" -- and the binary still
+# dies at the same 8 MB (Ubuntu 24.04's default `ulimit -s` is 8192 KB, same as
+# macOS). Only the shell can raise it, so the target says so after linking.
 ifeq ($(UNAME_S),Darwin)
   GLR_UNCHAINED_LDFLAGS = -Wl,-stack_size,0x8000000
 else
@@ -1288,6 +1293,10 @@ gl-repl-unchained: ## Build an experimental gl-repl with 32x source-command and 
 		EXTRA_LDFLAGS="$(GLR_UNCHAINED_LDFLAGS)" \
 		$(GLR_UNCHAINED_BIN)
 	ln -sfn $(GLR_UNCHAINED_BIN) $@
+ifneq ($(UNAME_S),Darwin)
+	@echo "$(YELLOW)note:$(NC) raise the stack before running, or the first frame segfaults:"
+	@echo "  $(CYAN)ulimit -s 131072 && ./$@ scene.glr$(NC)"
+endif
 
 render3d-asset-builder: ## Build separate render3d-asset-builder binary with high flat-command capacity and asset catalog.
 	$(MAKE) BUILD=render3d_asset_builder EXAMPLES_CATALOG=tools/render3d_asset_builder/catalog.ini SAMPLE_BIN=build/render3d_asset_builder/render3d-asset-builder CFLAGS="$(CFLAGS) -DMAX_FLAT_COMMANDS=32768" build/render3d_asset_builder/render3d-asset-builder
