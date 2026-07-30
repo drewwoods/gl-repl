@@ -39,6 +39,17 @@ esac
 log_dir=${TEST_LOG_DIR:-build/test-logs/run-$$}
 mkdir -p "$log_dir" || exit 2
 
+now_seconds() {
+    # Wall clock as a float. bash on macOS is 3.2, so there is no
+    # EPOCHREALTIME; GNU date and recent BSD date both take %N, and where
+    # it is unsupported the field stays literal `N` and awk's numeric-prefix
+    # conversion drops it. Both ends of the interval read the same source,
+    # so that fallback costs resolution, not accuracy.
+    date +%s.%N 2>/dev/null | awk '{ printf "%.3f\n", $0 + 0 }'
+}
+
+run_start=$(now_seconds)
+
 total_bins=$#
 printf '%b==> running %d test binaries' "$cyan" "$total_bins"
 if [ "$jobs" -gt 0 ]; then
@@ -79,31 +90,42 @@ parse_counts() {
     ' "$1"
 }
 
-parse_cpu_seconds() {
-    # Total CPU time (user + sys) from `time` output, as seconds.
-    # `time -p` prints bare `1.234`; a shell keyword without -p may print
-    # `0m1.234s`, so accept both. The trailing awk args are locals — awk
-    # has no other scope, and an undeclared `s` here would clobber the
-    # sys accumulator below.
-    awk '
-    function to_sec(str,   parts, mins, secs) {
-        if (str ~ /m/) {
-            split(str, parts, "m")
-            mins = parts[1]
-            secs = parts[2]
-            sub(/s/, "", secs)
-            return mins * 60 + secs
-        } else {
-            sub(/s/, "", str)
-            return str + 0
-        }
+# Shared awk prologue: one duration to seconds. `time -p` prints a bare
+# `1.234`, while a shell keyword without -p (and `times`) print `0m1.234s`,
+# so accept both. The trailing parameters are awk's only form of local
+# variable — an undeclared `secs` here would clobber a caller's accumulator.
+awk_to_sec='
+function to_sec(str,   parts, mins, secs) {
+    if (str ~ /m/) {
+        split(str, parts, "m")
+        mins = parts[1]
+        secs = parts[2]
+        sub(/s/, "", secs)
+        return mins * 60 + secs
     }
+    sub(/s/, "", str)
+    return str + 0
+}'
+
+parse_cpu_seconds() {
+    # CPU time (user + sys) of one timed command.
+    awk "$awk_to_sec"'
     /^user/ { u = to_sec($2); seen = 1 }
     /^sys/  { s = to_sec($2); seen = 1 }
     END {
         if (seen)
             printf "%.3f\n", u + s
     }
+    ' "$1"
+}
+
+sum_times_cpu() {
+    # Every field of `times` output: this shell own user/sys on line 1,
+    # its reaped children on line 2. The children total covers the test
+    # binaries *and* every sh/awk the runner itself spawns.
+    awk "$awk_to_sec"'
+    { for (i = 1; i <= NF; i++) total += to_sec($i) }
+    END { printf "%.3f\n", total + 0 }
     ' "$1"
 }
 
@@ -271,6 +293,12 @@ done
 
 failed_tests=$((total_tests - passed_tests))
 
+# Must not run inside $(...): that forks, and the fork reports its own
+# (empty) usage rather than this shell's.
+times_file="$log_dir/times.txt"
+times >"$times_file"
+run_end=$(now_seconds)
+
 printf '\n%b==> global summary%b\n' "$cyan" "$reset"
 printf 'test binaries: %d total, %d passed, %d failed\n' "$total_bins" "$passed_bins" "$failed_bins"
 printf 'tests:         %d total, %d passed, %d failed' "$total_tests" "$passed_tests" "$failed_tests"
@@ -278,6 +306,30 @@ if [ "$unknown_stats" -gt 0 ]; then
     printf ' (%d binaries had unknown test counts)' "$unknown_stats"
 fi
 printf '\n'
+
+# Where the time went. `runner` is everything this script does that is not
+# a test binary — process spawns, log parsing, the poll loop — and the wall
+# clock covers the runner only, not the build that produced the binaries.
+# Serially, CPU well under wall means the run is spending time blocked
+# rather than working; in parallel it exceeds wall by roughly the speedup.
+total_cpu=$(sum_times_cpu "$times_file")
+tests_cpu=$(awk '{ total += $1 } END { printf "%.3f\n", total + 0 }' "$timings_file")
+printf '%s %s %s %s\n' "$run_start" "$run_end" "$total_cpu" "$tests_cpu" | awk '{
+    wall = $2 - $1
+    total = $3
+    tests = $4
+    runner = total - tests
+    if (runner < 0)
+        runner = 0
+    printf "runner wall:   %.3fs\n", wall
+    if (tests > 0)
+        printf "cpu:           %.3fs total = %.3fs tests + %.3fs runner", total, tests, runner
+    else
+        printf "cpu:           %.3fs total", total
+    if (wall > 0)
+        printf " (%.0f%% of wall)", 100 * total / wall
+    printf "\n"
+}'
 
 # Show the 3 most expensive tests. CPU time, not wall clock: the jobs run
 # in parallel, and time spent blocked (sleeps, waiting on a child) does not
