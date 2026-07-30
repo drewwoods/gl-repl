@@ -12,7 +12,9 @@
 #include "app/glr_tours.h"
 #include "app/boot/splash.h"
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
-#include "support/cpuprof.h"     /* prof_begin/_end for this callback's stages */
+#include "support/cpuprof.h"     /* the two callback stages that span the
+                                  * boot/controller seam are bracketed here;
+                                  * every other stage self-times */
 
 #include <signal.h>
 #include <stdio.h>
@@ -34,6 +36,11 @@ static void display_func(void) {
      * which is measured separately as the frame's slack. */
     glr_ctrl_frame_begin();
 
+    /* Every per-frame stage below is inside PROF_FRAME_TOTAL, so a stage with
+     * no ProfSection of its own is visible only as unattributed total — which
+     * is how a tour's ~10 ms caption overlay once hid. Add a section when you
+     * add a stage: inside the callee if it can own its own bracket, here when
+     * the stage spans the boot/controller seam that only this file bridges. */
     prof_begin(PROF_SCRIPTED_INPUT);
     /* Headless-capture env hooks that need a live viewport / frame clock
      * (color picker, GL-state popup, help overlay, scheduled view toggle);
@@ -86,9 +93,12 @@ static void display_func(void) {
 
     /* Host-band overlays: the last two passes over the composited frame, both
      * owned by this callback rather than the controller (splash is boot-band,
-     * and the tour overlay must land after the compositor to stay
-     * topmost). Timed as one aggregate with a row per pass — see
-     * prof_sections.h for why these have rows at all. */
+     * and the tour overlay must land after the compositor to stay topmost).
+     * The aggregate row is bracketed here because it is the only place that can
+     * span both — a boot-band pass and a controller-band one. Its children are
+     * self-timed where they can be (see glr_pointer_script_render_overlay);
+     * splash_render() is bracketed from here to keep the profiler out of
+     * test_splash's deliberately minimal link. */
     prof_begin(PROF_HOST_OVERLAYS);
     /* Startup splash banner along the bottom; frame-counted, fades out.
      * Drawn over the composited frame so the scene/UI warm up underneath. */
@@ -100,13 +110,10 @@ static void display_func(void) {
 
     /* Tour narration overlay (caption, cursor arrow, click ripple,
      * highlight ring) so a tour — or a recorded video — shows what is being
-     * said and where the synthetic mouse is. */
-    if (glr_pointer_script_active()) {
-        prof_begin(PROF_TOUR_OVERLAY);
+     * said and where the synthetic mouse is. Self-timed as PROF_TOUR_OVERLAY. */
+    if (glr_pointer_script_active())
         glr_pointer_script_render_overlay(glutGet(GLUT_WINDOW_WIDTH),
                                           glutGet(GLUT_WINDOW_HEIGHT));
-        prof_end(PROF_TOUR_OVERLAY);
-    }
     prof_end(PROF_HOST_OVERLAYS);
 
     /* Close the frame total here, BEFORE the present: everything the callback
@@ -120,11 +127,8 @@ static void display_func(void) {
      * capture mode would make the two modes' totals incomparable. */
     glr_ctrl_frame_end();
 
-    /* Timed on its own, after the total, as the frame's slack row. */
-    prof_begin(PROF_PRESENT);
-    glFinish(); /* ensure all GL commands are done before we timestamp the swap */
-    glutSwapBuffers();
-    prof_end(PROF_PRESENT);
+    /* glFinish + swap, self-timed as PROF_PRESENT — outside the total above. */
+    glr_ctrl_frame_present();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
         glr_init_trace(buf);

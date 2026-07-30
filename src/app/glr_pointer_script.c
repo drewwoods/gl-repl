@@ -12,6 +12,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
+#include "support/cpuprof.h"     /* PROF_TOUR_OVERLAY bracket in the overlay pass */
 #include "ui/app/layout.h"       /* ui_layout_scene_rect (scene: targets) */
 #include "ui/app/menu_bar.h"     /* ui_menu_bar_target_* (menu/item/sub/pin) */
 #include "ui/app/state.h"        /* ui_state_viewport (GL->mouse y flip) */
@@ -1773,6 +1774,13 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     if (!g_active) return;
     (void)win_w;
 
+    /* This pass owns its own profile row rather than leaving the host to
+     * bracket it: the caption's bitmap text can cost more than the entire 3D
+     * scene, and the bracket belongs with the code that spends the time. Opened
+     * after the inactive guard above, so the row stays honestly stale outside a
+     * tour instead of reporting a per-frame zero. */
+    prof_begin(PROF_TOUR_OVERLAY);
+
     /* When a controlled tour's virtual clock is frozen (anything but Playing —
      * paused, done, stepped, or settled after a backstep), the age-driven
      * ease-in/out can't advance: a caption caught mid-fade would hang half-
@@ -1865,4 +1873,5 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
     gl2d_end();
+    prof_end(PROF_TOUR_OVERLAY);
 }

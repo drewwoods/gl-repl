@@ -2399,6 +2399,16 @@ void glr_ctrl_frame_end(void) {
     prof_end(PROF_FRAME_TOTAL);
 }
 
+void glr_ctrl_frame_present(void) {
+    prof_begin(PROF_PRESENT);
+    /* Drain before timestamping the swap: without it the queued GL work spills
+     * into whatever the driver flushes next, and neither this row nor the ones
+     * above it would be attributable. */
+    glFinish();
+    glutSwapBuffers();
+    prof_end(PROF_PRESENT);
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];

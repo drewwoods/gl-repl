@@ -187,9 +187,9 @@ int glr_ctrl_save_recovery_file(void);
 
 /* Frame-boundary bookkeeping, called by the host's display callback around the
  * frame's work — glr_ctrl_frame_begin() first, before any per-frame work, and
- * glr_ctrl_frame_end() after the last of it but *before* the present, which
- * the host times separately (PROF_PRESENT) as the frame's slack rather than as
- * frame time. See prof_sections.h for that split.
+ * glr_ctrl_frame_end() after the last of it but *before* glr_ctrl_frame_present()
+ * below, which is timed separately (PROF_PRESENT) as the frame's slack rather
+ * than as frame time. See prof_sections.h for that split.
  *
  * These own the profiler's frame boundary: the staleness/FPS tick, the
  * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
@@ -205,6 +205,11 @@ int glr_ctrl_save_recovery_file(void);
  * (PROF_FRAME_TOTAL simply goes stale) without recording a bogus total. */
 void glr_ctrl_frame_begin(void);
 void glr_ctrl_frame_end(void);
+
+/* Put the finished frame on screen: glFinish() drain, then glutSwapBuffers(),
+ * self-timed as PROF_PRESENT. Needs a live GL context and a double-buffered
+ * window, so it is the host's last frame call and nothing else may invoke it. */
+void glr_ctrl_frame_present(void);
 
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);

@@ -119,25 +119,33 @@ typedef enum {
      * PROF_FRAME_TOTAL covers all of it, so those stages need rows of their
      * own or they show up only as unattributed total. A guided tour's cursor +
      * caption overlay is the reason this exists: it can cost more than the
-     * entire 3D scene, and used to be invisible here. */
+     * entire 3D scene, and used to be invisible here.
+     *
+     * These two are bracketed from gl_repl.c itself because each spans the
+     * boot/controller seam that only the host file bridges (a boot-band call
+     * plus a controller-band one), so no single callee can own the bracket. */
     PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
     PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
-    PROF_HOST_SPLASH,      /* splash_render() — startup banner only */
-    /* glr_pointer_script_render_overlay(): the guided-tour narration layer —
-     * caption, cursor, click ripple, highlight ring. Named for the tour rather
-     * than the cursor because the caption's bitmap text is what costs anything
-     * here; the cursor and its decorations are a few dozen vertices. (The same
-     * overlay renders for env-driven capture runs, which have no HUD and nobody
-     * watching a profile panel.) */
+    PROF_HOST_SPLASH,      /* splash_render() — startup banner only. Bracketed
+                            * from the host too, so splash.c stays free of the
+                            * profiler: test_splash links it against nothing but
+                            * the theme table and the GL-stub counters. */
+    /* glr_pointer_script_render_overlay(), which owns this bracket itself: the
+     * guided-tour narration layer — caption, cursor, click ripple, highlight
+     * ring. Named for the tour rather than the cursor because the caption's
+     * bitmap text is what costs anything here; the cursor and its decorations
+     * are a few dozen vertices. (The same overlay renders for env-driven
+     * capture runs, which have no HUD and nobody watching a profile panel.) */
     PROF_TOUR_OVERLAY,
     PROF_FRAME_TOTAL,   /* the frame's *work*: scripted input,
                          * glr_ctrl_display_frame() and the host overlays —
                          * everything the callback does up to the present, and
                          * deliberately not the present itself */
-    /* glFinish() drain + glutSwapBuffers(). Sits AFTER the total, both in this
-     * catalog (so the panel draws it as the row under the total's divider) and
-     * in the callback's bracketing (glr_ctrl_frame_end() closes the total
-     * first). With vsync on, this is mostly the wait for the next scan-out —
+    /* glFinish() drain + glutSwapBuffers() (glr_ctrl_frame_present, which owns
+     * this bracket). Sits AFTER the total, both in this catalog (so the panel
+     * draws it as the row under the total's divider) and in the callback's
+     * bracketing (glr_ctrl_frame_end() closes the total first). With vsync on,
+     * this is mostly the wait for the next scan-out —
      * idle time the frame is *given*, not time it spends — so counting it in
      * the total made a healthy 2 ms frame report 16 ms and turned the total's
      * over-budget coloring permanently red. Measured on its own it is the

@@ -148,7 +148,7 @@ flowchart TD
     s13 --> s14["restore flat count & predefined variable values"]
     s14 --> h1["splash + tour narration overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
     h1 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
-    fe --> h2["glFinish + glutSwapBuffers<br/><i>PROF_PRESENT — outside the total</i>"]
+    fe --> h2["glr_ctrl_frame_present<br/>glFinish + glutSwapBuffers<br/><i>PROF_PRESENT — outside the total</i>"]
 ```
 
 Profile sections wrap each producer so snapshot construction time is
@@ -171,9 +171,17 @@ a comfortable ~1.5 ms and no row named the culprit. Any new per-frame host
 stage needs its own section for the same reason — a stage inside the
 bracket with no row of its own is only visible as unattributed total.
 
-The present (`glFinish` + `glutSwapBuffers`) is the one stage deliberately
-*outside* the bracket: `glr_ctrl_frame_end()` runs before it, and
-`PROF_PRESENT` times it on its own. With vsync on it is dominated by the wait
+Where that section's bracket goes follows the band split: a stage whose work
+sits in one callee is timed *inside* it (`glr_ctrl_frame_present`,
+`glr_pointer_script_render_overlay`), so the host callback names the stage and
+nothing more. Only `PROF_SCRIPTED_INPUT` and `PROF_HOST_OVERLAYS` are bracketed
+in `gl_repl.c` itself, because each spans a boot-band call plus a controller-band
+one and `gl_repl.c` is the only file allowed to bridge the two (`PROF_HOST_SPLASH`
+stays with them so `splash.c` keeps its minimal test link).
+
+The present (`glFinish` + `glutSwapBuffers`, in `glr_ctrl_frame_present()`) is
+the one stage deliberately *outside* the bracket: `glr_ctrl_frame_end()` runs
+before it. With vsync on it is dominated by the wait
 for the next scan-out — time the frame is handed, not time it spends — so
 counting it as frame time pinned the total at the refresh interval and left the
 over-budget coloring permanently red no matter what the frame actually cost.
@@ -1112,7 +1120,7 @@ Runtime shape:
 Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
-env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L123)
+env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L124)
 enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
 Done; env capture is never canceled and never auto-stops.
 
@@ -1132,7 +1140,7 @@ Runtime shape:
   frames.
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
-  [`PsWait`](../src/app/glr_pointer_script.c#L172) completing does (immediate verbs complete the following virtual
+  [`PsWait`](../src/app/glr_pointer_script.c#L173) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
   **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
   its duration elapses, so a trailing ring delays Done — while `echo` and the
@@ -1557,7 +1565,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L209) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L214) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one

@@ -671,8 +671,10 @@ static void test_display_frame_profile_coverage(void) {
  * outside the total (see prof_sections.h).
  *
  * Driven on the profiler's test clock so the arithmetic is exact and no GL is
- * needed: the host stages are stood in for by their own prof brackets, exactly
- * as display_func() places them. */
+ * needed: each host stage is stood in for by its own prof bracket, opened in
+ * the order display_func() reaches it. The stages that self-time in production
+ * (the tour overlay, the present) are stood in the same way rather than called,
+ * since both need a live GL context and a window to do anything. */
 static void test_frame_total_spans_host_stages(void) {
     double total_us, overlay_us, tour_us, present_us;
 

@@ -217,7 +217,8 @@ void glr_pointer_script_frame(void);
  * arrow, click ripple, highlight ring; call between glr_ctrl_display_frame()
  * and glutSwapBuffers(), like splash_render(). No-op when inactive.
  *
- * Timed as PROF_TOUR_OVERLAY: the caption is the only part with any cost, and
+ * Self-timed as PROF_TOUR_OVERLAY (the bracket is inside, past the inactive
+ * guard — callers add nothing): the caption is the only part with any cost, and
  * a tour is when a human is watching. `pointer` in the name is this module's
  * prefix (a script of pointer/keyboard events), not a claim about what the
  * overlay draws — env-driven capture runs render it too. */
