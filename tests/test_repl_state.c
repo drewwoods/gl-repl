@@ -492,7 +492,8 @@ static void test_reset_all_restores_default_runtime(void) {
     ASSERT_INT("reset_all help hidden", ui_state_help().visible, 0);
     ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
     ASSERT_INT("reset_all replay mode", replay_state_view().mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("reset_all replay expand", replay_state_view().expand_args, 1);
+    ASSERT_INT("reset_all replay expand", replay_state_view().expand_args,
+               REPLAY_EXPAND_DEFAULT);
     ASSERT_INT("reset_all replay normals",
                replay_state_view().normal_display,
                REPLAY_NORMAL_DISPLAY_OFF);

@@ -165,7 +165,7 @@ static void draw_progress_groove(int x, int y, int w, float progress) {
  * | Space pause | +/- speed | m mode | e expand | n normals | v vertex | « » step ...    |
  * +--------------------------------------------------------------------------------------+
  *
- * - Line 1: The current playback speed, replay mode (Vertex/Polygon), code expansion status,
+ * - Line 1: The current playback speed, replay mode (Vertex/Polygon), code expansion mode,
  *   normal vector overlay status, vertex index label status, nesting depth, and the command
  *   program counter fraction (right-aligned).
  * - Horizontal center bar: Visual progress groove showing commands executed.
@@ -229,7 +229,10 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
             .width = 7
         },
         {
-            .top = snap->replay.expand_args ? "Code Expanded" : "",
+            .top = snap->replay.expand_args == REPLAY_EXPAND_VERBOSE
+                 ? "Code Verbose"
+                 : (snap->replay.expand_args == REPLAY_EXPAND_EXPANDED
+                    ? "Code Expanded" : ""),
             .bottom = "e expand",
             .width = 13
         },

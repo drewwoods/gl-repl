@@ -1281,6 +1281,9 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
     if (!cmd || !cmd->has_vars || cmd->type == CMD_VAR_ASSIGN ||
         cmd->type == CMD_SCRATCH_ASSIGN)
         return;
+    if (replay.expand_args == REPLAY_EXPAND_EXPANDED &&
+        repl_cmd_emits_vertex(cmd->type))
+        return;
     int flat_idx = replay_annotation_flat_cmd_for_source(cmd_idx);
     if (flat_idx < 0)
         return;

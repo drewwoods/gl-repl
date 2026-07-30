@@ -18,7 +18,7 @@
  *   - Ctrl+K jumps to the current edit line and pauses there.
  *   - Space toggles play/pause or restarts from DONE.
  *   - Left/Right step one replay unit; Up/Down and +/- adjust speed.
- *   - M switches vertex/polygon replay mode; E toggles argument expansion.
+ *   - M switches vertex/polygon replay mode; E cycles code expansion.
  *   - N cycles replay normal display: off, vector, vector + direction.
  *   - V toggles the replay focused-vertex label.
  *   - Esc stops replay.

@@ -77,6 +77,7 @@ extern int pclose(FILE *stream);
 #endif
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
+static const char *replay_expand_names[] = { "Off", "Expanded", "Verbose" };
 static const char *backdrop_mode_names[RENDER3D_BACKDROP_COUNT] = {
     RENDER3D_BACKDROP_LIST(RENDER3D_BACKDROP_NAME_ENTRY)
 };
@@ -456,7 +457,8 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_REPLAY), .modifiers = KM_MODS(GLR_REPLAY) },
     { .label = "Replay mode", .key = GLR_CONFIG_REPLAY_MODE,
       .state_count = ARRAY_LEN(replay_mode_names), .state_names = replay_mode_names },
-    { .label = "Replay expand", .key = GLR_CONFIG_REPLAY_EXPAND, .state_count = 2 },
+    { .label = "Replay expand", .key = GLR_CONFIG_REPLAY_EXPAND,
+      .state_count = REPLAY_EXPAND_COUNT, .state_names = replay_expand_names },
     { .label = "---", .section_header = 1 },
 
     { .label = "### SCENE", .section_header = 1 },

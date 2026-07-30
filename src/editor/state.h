@@ -464,7 +464,7 @@ int                          editor_state_virtual_lines_append(int after_line_id
 
 /* Per-line text override slice. Controller pushes overrides each
  * frame for source lines whose displayed text should differ from the
- * buffer text (e.g., replay's expand_args annotations). Editor reads
+ * buffer text (e.g., replay's expanded-value annotations). Editor reads
  * via _for() with a buffer fallback. */
 const UiLineOverrideList *editor_state_line_overrides(void);
 void                          editor_state_line_overrides_clear(void);

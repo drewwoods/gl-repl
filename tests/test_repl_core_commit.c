@@ -1605,6 +1605,7 @@ int main(void) {
         editor_feed_line("glVertex3f(A[0], 0, 0);");
         replay_start();
         replay_state = REPLAY_PAUSED;
+        replay_state_mut()->expand_args = REPLAY_EXPAND_VERBOSE;
 
         replay_pc = 2;
         replay_src_line = 1;

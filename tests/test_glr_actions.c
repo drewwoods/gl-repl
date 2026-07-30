@@ -1132,6 +1132,18 @@ static void test_compute_profile_mode_names(void) {
                    GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_HISTOGRAM), "Histogram");
 }
 
+static void test_replay_expand_mode_names(void) {
+    ASSERT_INT("replay expand exposes three modes",
+               glr_config_state_count(GLR_CONFIG_REPLAY_EXPAND),
+               REPLAY_EXPAND_COUNT);
+    ASSERT_STR("replay expand mode 0", glr_config_state_name(
+                   GLR_CONFIG_REPLAY_EXPAND, REPLAY_EXPAND_OFF), "Off");
+    ASSERT_STR("replay expand mode 1", glr_config_state_name(
+                   GLR_CONFIG_REPLAY_EXPAND, REPLAY_EXPAND_EXPANDED), "Expanded");
+    ASSERT_STR("replay expand mode 2", glr_config_state_name(
+                   GLR_CONFIG_REPLAY_EXPAND, REPLAY_EXPAND_VERBOSE), "Verbose");
+}
+
 static void test_audio_menu_actions(void) {
     GlrAudioTrackSpec tracks[] = {
         { "assets/a.mp3", "Assets", "A" },
@@ -2470,6 +2482,7 @@ int main(void) {
     test_tour_paced_key();
     test_tour_sequential_steps_and_pause();
     test_compute_profile_mode_names();
+    test_replay_expand_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();
     test_scene_menu_cycle_actions();

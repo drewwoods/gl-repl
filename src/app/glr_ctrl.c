@@ -880,7 +880,7 @@ static void glr_ctrl_push_highlights(void) {
 }
 
 /* Push per-line text overrides for source lines whose displayed text
- * should differ from the buffer text. Today only replay's expand_args
+ * should differ from the buffer text. Today only replay's expansion-mode
  * annotations produce overrides (e.g. `x = 0.4` → `x = 0.4 // = 0.4`
  * with the evaluated form appended). The list stays empty outside
  * active replay, and is sparse during it (only has_vars cmds of the

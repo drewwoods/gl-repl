@@ -19,7 +19,7 @@
         .src_line_idx     = -1,                                 \
         .total_flat_cmds  = 0,                                  \
         .step_begin       = 0,                                  \
-        .expand_args      = 1,                                  \
+        .expand_args      = REPLAY_EXPAND_DEFAULT,             \
         .normal_display   = REPLAY_NORMAL_DISPLAY_OFF,          \
         .vertex_label     = 0,                                  \
         .saved_t_playing  = 1,                                  \

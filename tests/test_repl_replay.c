@@ -210,7 +210,14 @@ static void test_replay_input(void) {
     ASSERT_TRUE("m toggles mode", g_replay_mode == REPLAY_MODE_POLYGON);
 
     replay_handle_key('e');
-    ASSERT_TRUE("e toggles expand args", g_replay_expand_args == 0);
+    ASSERT_TRUE("e cycles expanded to verbose",
+                g_replay_expand_args == REPLAY_EXPAND_VERBOSE);
+    replay_handle_key('e');
+    ASSERT_TRUE("e cycles verbose to off",
+                g_replay_expand_args == REPLAY_EXPAND_OFF);
+    replay_handle_key('e');
+    ASSERT_TRUE("e cycles off to expanded",
+                g_replay_expand_args == REPLAY_EXPAND_EXPANDED);
 
     ASSERT_TRUE("normal display off by default",
                 g_replay_normal_display == REPLAY_NORMAL_DISPLAY_OFF);
@@ -445,7 +452,9 @@ static void test_replay_var_assign_uses_flatten_args(void) {
         replay_advance(repl_state_flat_program_view());
 
     ASSERT_TRUE("replay reached end without runaway", safety > 0);
-    ASSERT_TRUE("expand_args on by default", g_replay_expand_args == 1);
+    ASSERT_TRUE("expanded mode on by default",
+                g_replay_expand_args == REPLAY_EXPAND_DEFAULT);
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
 
     SourceTextView text = source_document_view();
     char display[256];
@@ -470,6 +479,16 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     ASSERT_TRUE("SUBST annotation present", subst_found);
     ASSERT_TRUE("SUBST uses flatten args[0]=5, not re-eval=95",
                 subst_uses_flatten_value);
+
+    /* The middle expansion mode keeps useful inline value comments but does
+     * not turn the focused glVertex source row into three visual lines. */
+    g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
+    replay_annotations_prepare(text, &out);
+    ASSERT_TRUE("middle expansion suppresses glVertex virtual rows",
+                out.count == 0);
+    replay_code_panel_get_command_display_text(text, 1, display, sizeof(display));
+    ASSERT_TRUE("middle expansion keeps assignment value comments",
+                strstr(display, "//") != NULL);
 
     replay_stop();
 }
@@ -621,14 +640,16 @@ static void test_replay_regression_fixes(void) {
     /* 2. Replay expand toggle routes through config */
     replay_start();
     ASSERT_TRUE("active after restart", g_replay_active);
-    ASSERT_TRUE("expand args on initially", g_replay_expand_args == 1);
+    ASSERT_TRUE("expanded mode on initially",
+                g_replay_expand_args == REPLAY_EXPAND_DEFAULT);
     ASSERT_TRUE("normal display off initially",
                 g_replay_normal_display == REPLAY_NORMAL_DISPLAY_OFF);
     ASSERT_TRUE("vertex label off initially", g_replay_vertex_label == 0);
 
     consumed = replay_handle_key('e');
     ASSERT_TRUE("expand key consumed", consumed == 1);
-    ASSERT_TRUE("expand args toggled", g_replay_expand_args == 0);
+    ASSERT_TRUE("expand key cycles expanded mode to verbose",
+                g_replay_expand_args == REPLAY_EXPAND_VERBOSE);
 
     consumed = replay_handle_key('n');
     ASSERT_TRUE("normal key consumed", consumed == 1);
@@ -770,7 +791,7 @@ static void test_replay_rendering(void) {
     hud_snap.replay.state = REPLAY_PLAYING;
     hud_snap.replay.speed = 1.0f;
     hud_snap.replay.mode = REPLAY_MODE_VERTEX;
-    hud_snap.replay.expand_args = 1;
+    hud_snap.replay.expand_args = REPLAY_EXPAND_VERBOSE;
     hud_snap.replay.normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
     hud_snap.replay.vertex_label = 1;
     hud_snap.viewport.window_w = 800;

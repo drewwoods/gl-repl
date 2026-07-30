@@ -1645,7 +1645,7 @@ loop-variable values substituted into the displayed text.
 | **Left** / **Right** | Step backward / forward (while paused) |
 | **Ctrl+K** | Jump the replay to the cursor line (first geometry at/after it) |
 | **m** / **M** | Toggle replay mode: Polygon / Vertex granularity |
-| **e** / **E** | Toggle Replay expand while playback is live |
+| **e** / **E** | Cycle Replay expand: Off / Expanded / Verbose |
 | **n** / **N** | Cycle replay normals: off / vector / vector + direction |
 | **v** / **V** | Toggle the replay focused-vertex label |
 | **Esc** | Stop replay |
@@ -1653,8 +1653,10 @@ loop-variable values substituted into the displayed text.
 The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
-time, Vertex steps a vertex at a time) and **Replay expand** (whether loops
-expand iteration-by-iteration).
+time, Vertex steps a vertex at a time) and **Replay expand**. Its middle
+**Expanded** mode keeps live assignment, loop, function, and other annotations
+while leaving each `glVertex2f`, `glVertex3f`, or `gluVertex` source row as one
+line; **Verbose** also adds the substituted and evaluated vertex rows.
 
 ---
 

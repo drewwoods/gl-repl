@@ -40,6 +40,19 @@ typedef enum {
     REPLAY_NORMAL_DISPLAY_COUNT
 } ReplayNormalDisplayMode;
 
+/* Code-panel detail during replay. The middle mode keeps live value
+ * annotations on assignments, loop headers, function definitions, and other
+ * commands, but leaves glVertex/gluVertex source rows as a single line instead
+ * of adding substituted + evaluated virtual rows beneath them. */
+typedef enum {
+    REPLAY_EXPAND_OFF = 0,
+    REPLAY_EXPAND_EXPANDED,
+    REPLAY_EXPAND_VERBOSE,
+    REPLAY_EXPAND_COUNT
+} ReplayExpandMode;
+
+#define REPLAY_EXPAND_DEFAULT REPLAY_EXPAND_EXPANDED
+
 /* Read-only view over the active fade batches; valid for one frame. */
 typedef struct {
     const ReplayFadeBatch *batches;
@@ -101,7 +114,7 @@ typedef struct {
                                           * active step instead of re-deriving the
                                           * begin via replay_prev_limit(pc) — an
                                           * O(N^2) per-frame walk — every frame. */
-    int             expand_args;
+    int             expand_args;         /* ReplayExpandMode */
     int             normal_display;      /* ReplayNormalDisplayMode */
     int             vertex_label;        /* 1 = label focused replay vertex */
     ReplPredefSnapshot baseline_predef;

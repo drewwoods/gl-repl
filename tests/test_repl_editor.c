@@ -2911,21 +2911,21 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        replay_expand_args = 0;
+        replay_expand_args = REPLAY_EXPAND_OFF;
         repl_test_publish_replay_annotations();
         (void)apply_code_panel_follow_for_test(&collapsed_follow,
                                &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
-        replay_expand_args = 1;
+        replay_expand_args = REPLAY_EXPAND_VERBOSE;
         repl_test_publish_replay_annotations();
         (void)apply_code_panel_follow_for_test(&expanded_follow,
                                &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
-        replay_expand_args = 0;
+        replay_expand_args = REPLAY_EXPAND_OFF;
         expanded_follow = -1;
         repl_test_publish_replay_annotations();
         (void)apply_code_panel_follow_for_test(&expanded_follow,
@@ -2933,7 +2933,7 @@ int main() {
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
 
-        replay_expand_args = 1;
+        replay_expand_args = REPLAY_EXPAND_VERBOSE;
         replay_active = 0;
         replay_state = REPLAY_OFF;
         replay_src_line = -1;

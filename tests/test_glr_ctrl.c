@@ -364,7 +364,7 @@ static void prepare_display_fixture(void) {
     replay_state_mut()->pc = 1;
     replay_state_mut()->mode = REPLAY_MODE_VERTEX;
     replay_state_mut()->speed = 2.5f;
-    replay_state_mut()->expand_args = 1;
+    replay_state_mut()->expand_args = REPLAY_EXPAND_VERBOSE;
     replay_state_mut()->normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
     replay_state_mut()->vertex_label = 1;
     replay_state_mut()->total_flat_cmds = 777;
@@ -449,7 +449,9 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("HUD replay total cmds on snap", g_last_replay_hud_snap.replay.total_flat_cmds, 777);
     ASSERT_INT("HUD replay state on snap", g_last_replay_hud_snap.replay.state, REPLAY_PLAYING);
     ASSERT_FLOAT("HUD replay speed on snap", g_last_replay_hud_snap.replay.speed, 2.5f);
-    ASSERT_INT("HUD replay expand args on snap", g_last_replay_hud_snap.replay.expand_args, 1);
+    ASSERT_INT("HUD replay expand args on snap",
+               g_last_replay_hud_snap.replay.expand_args,
+               REPLAY_EXPAND_VERBOSE);
     ASSERT_INT("HUD replay normal display on snap",
                g_last_replay_hud_snap.replay.normal_display,
                REPLAY_NORMAL_DISPLAY_DIRECTION);

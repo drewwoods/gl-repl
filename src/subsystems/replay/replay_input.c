@@ -95,13 +95,18 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
     case 'e':
-    case 'E':
-        /* Route Replay expand toggle through the config bridge */
-        repl_cfg_set_int("replay_expand", !repl_cfg_get_int("replay_expand", 0));
-        repl_set_status(repl_cfg_get_int("replay_expand", 0)
-                 ? "Replay: expand args ON"
-                 : "Replay: expand args OFF");
+    case 'E': {
+        int expand_mode = repl_cfg_get_int("replay_expand", REPLAY_EXPAND_OFF);
+        expand_mode = (expand_mode + 1) % REPLAY_EXPAND_COUNT;
+        repl_cfg_set_int("replay_expand", expand_mode);
+        if (expand_mode == REPLAY_EXPAND_OFF)
+            repl_set_status("Replay: expand off");
+        else if (expand_mode == REPLAY_EXPAND_EXPANDED)
+            repl_set_status("Replay: expanded");
+        else
+            repl_set_status("Replay: verbose");
         return 1;
+    }
     case 'n':
     case 'N': {
         int normal_display = state->normal_display;
