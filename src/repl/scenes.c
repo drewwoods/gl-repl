@@ -876,7 +876,7 @@ int repl_scenes_create_empty_user_scene(void) {
     char seed_err[REPL_STATUS_TEXT_MAX];
     int slot = reserve_user_scene_slot_for_new();
     if (slot < 0) {
-        repl_set_status_error("All user scene slots full -- save workspace to free a slot");
+        repl_set_status_error("All user scene slots full -- delete a scene first");
         return -1;
     }
 
@@ -1128,7 +1128,7 @@ int repl_promote_transient_if_needed(void) {
         /* Origin and (for a tutorial) the pending cfg baseline are left
          * untouched, so the next edit retries and captures everything typed
          * into the transient document in the meantime. */
-        repl_set_status_error("All user scene slots full -- save workspace to free a slot");
+        repl_set_status_error("All user scene slots full -- delete a scene first");
         return -1;
     }
 

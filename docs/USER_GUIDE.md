@@ -1665,8 +1665,9 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 - **Examples first** — a fresh launch opens on the default example. A user
   scene is created when you choose File -> New Scene, load a scene file or
   workspace, or edit an example.
-- **Auto-promotion** — editing a built-in example forks it into a fresh
-  scene slot named after the example. Subsequent edits accumulate there.
+- **Auto-promotion** — editing a built-in example, or saving it into a managed
+  workspace, forks it into a fresh scene slot named after the example.
+  Subsequent edits accumulate there.
 - **Rename** — File → Rename Scene opens an inline prompt in the status bar
   (Enter commits, Esc cancels). In a managed workspace this changes the tab
   name while retaining the scene's stable persisted filename.
@@ -1680,15 +1681,15 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | Menu | Action |
 |---|---|
 | File → New Scene | Start a fresh scene |
-| File → Save Scene (Ctrl+S) | Export the active scene as standalone C |
+| File → Save Scene (Ctrl+S) | Save the active scene; a visible example is promoted into the bound workspace first |
 | File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
 | File → Load Scene | Load a `.c` file into a new scene slot |
 | File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
 | File → Delete Scene | Confirm and remove the active managed scene from its workspace |
 | File → Reveal Workspace Folder | Reveal the bound managed workspace; disabled while no workspace is loaded |
 | File → New Workspace… | Create and open a named managed workspace |
-| File → Save Workspace | Transactionally save every open scene and the manifest |
-| File → Save Workspace As… | Create a named workspace containing the current scene collection |
+| File → Save Workspace | Transactionally save every open scene and the manifest, including a visible example tab |
+| File → Save Workspace As… | Create a named workspace containing the current scene collection, including a visible example tab |
 | File → Open Workspace → *name* | Switch to a managed workspace |
 | File → Open Workspace → Other folder… | Open a managed workspace outside the normal workspace root |
 
@@ -1714,8 +1715,11 @@ scene.
 
 ### Standalone C export
 
-**Ctrl+S** (File → Save Scene) writes a complete, compilable GLUT/OpenGL C
-program — header comments carry the REPL state (variables, config, camera),
+**Ctrl+S** (File → Save Scene) promotes a visible built-in example when a
+managed workspace is bound, then writes the workspace scene as a complete,
+compilable GLUT/OpenGL C program. For an unbound writable development launch,
+it retains the standalone `output.c` behavior. Header comments carry the REPL
+state (variables, config, camera),
 your functions become C functions, and your commands become the `display()`
 body. The generated file is **C89-compliant**, so it builds anywhere a GL/GLUT
 toolchain exists, old machines included:

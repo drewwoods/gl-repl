@@ -339,6 +339,9 @@ The app layer owns navigation and locations: `glr_paths` resolves the writable
 development paths versus per-user packaged-app paths, `glr_workspaces`
 enumerates named managed workspaces, `glr_modal` captures prompt input, and
 `glr_actions` performs save-before-switch/recovery/open/delete choreography.
+Before any user-facing managed-workspace save, it promotes a visible transient
+example or retained tutorial result into a real scene slot; the lower-level
+`repl_save_workspace()` remains a literal serializer of the occupied catalog.
 Opening the already-bound directory is a no-op, while opening another
 workspace changes camera/undo/menu state only after the REPL transaction
 succeeds.

@@ -14,6 +14,7 @@
 #include "repl/example_loader.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
 #include "repl/help_text.h"
 #include "editor/input.h"
 #include "editor/state.h"                /* editor_state_edit_line_set */
@@ -107,6 +108,26 @@ static void run_menu_action_in_temp_dir(const char *label,
     }
 
     rmdir(made_dir);
+}
+
+static void remove_test_workspace(const char *dir) {
+    WorkspaceManifest manifest;
+    char err[REPL_STATUS_TEXT_MAX];
+    if (workspace_io_manifest_read(dir, &manifest, err, sizeof(err))) {
+        for (int i = 0; i < manifest.scene_count; i++) {
+            char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+            if (workspace_io_path_join(dir, manifest.scene_files[i],
+                                       path, sizeof(path)))
+                unlink(path);
+        }
+    }
+    {
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+        if (workspace_io_path_join(dir, WORKSPACE_IO_MANIFEST_FILE,
+                                   path, sizeof(path)))
+            unlink(path);
+    }
+    rmdir(dir);
 }
 
 static void test_apply_defaults(void) {
@@ -361,6 +382,83 @@ static void test_menu_actions(void) {
      * one is an inert no-op that keeps the dropdown open (returns 0). */
     ASSERT_INT("Config parent-row activate is inert (returns 0)",
                glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0);
+}
+
+/* A built-in example is rendered as the visible scene tab but remains a
+ * transient document until its first edit. Workspace-oriented save actions
+ * must promote it before serializing the user-scene catalog; otherwise the
+ * manifest reports "Saved 0 scenes" even though a scene is visibly open. */
+static void test_workspace_save_promotes_visible_example(void) {
+    char ctrl_s_dir[] = "/tmp/test_glr_ctrl_s_example.XXXXXX";
+    char menu_dir[] = "/tmp/test_glr_save_workspace_example.XXXXXX";
+    WorkspaceManifest manifest;
+    char err[REPL_STATUS_TEXT_MAX];
+    char scene_path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+    char *made_dir;
+
+    made_dir = mkdtemp(ctrl_s_dir);
+    ASSERT_TRUE("Ctrl+S example workspace created", made_dir != NULL);
+    if (!made_dir)
+        return;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Ctrl S Example");
+    ASSERT_TRUE("Ctrl+S example manifest created",
+                workspace_io_manifest_write(ctrl_s_dir, &manifest,
+                                             err, sizeof(err)));
+
+    glr_ctrl_reset_all();
+    repl_set_workspace_dir(ctrl_s_dir);
+    repl_load_example(0);
+    ASSERT_INT("example starts transient before Ctrl+S",
+               repl_active_user_scene(), -1);
+    ASSERT_INT("Ctrl+S action saves visible example",
+               glr_action_save_active_scene(), 1);
+    ASSERT_TRUE("Ctrl+S promotes visible example",
+                repl_active_user_scene() >= 0);
+    int manifest_ok = workspace_io_manifest_read(ctrl_s_dir, &manifest,
+                                                  err, sizeof(err));
+    ASSERT_TRUE("Ctrl+S workspace manifest reloads", manifest_ok);
+    ASSERT_INT("Ctrl+S workspace contains visible example",
+               manifest.scene_count, 1);
+    int path_ok = manifest_ok && manifest.scene_count == 1 &&
+        workspace_io_path_join(ctrl_s_dir, manifest.scene_files[0],
+                               scene_path, sizeof(scene_path));
+    ASSERT_TRUE("Ctrl+S scene path resolves", path_ok);
+    if (path_ok)
+        ASSERT_INT("Ctrl+S scene file exists", access(scene_path, F_OK), 0);
+    repl_set_workspace_dir(NULL);
+    remove_test_workspace(ctrl_s_dir);
+
+    made_dir = mkdtemp(menu_dir);
+    ASSERT_TRUE("Save Workspace example directory created", made_dir != NULL);
+    if (!made_dir) {
+        glr_ctrl_reset_all();
+        return;
+    }
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Menu Example");
+    ASSERT_TRUE("Save Workspace example manifest created",
+                workspace_io_manifest_write(menu_dir, &manifest,
+                                             err, sizeof(err)));
+
+    glr_ctrl_reset_all();
+    repl_set_workspace_dir(menu_dir);
+    repl_load_example(1);
+    ASSERT_INT("example starts transient before Save Workspace",
+               repl_active_user_scene(), -1);
+    ASSERT_INT("Save Workspace action consumed",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                             GLR_FILE_ITEM_SAVE_WORKSPACE), 1);
+    ASSERT_TRUE("Save Workspace manifest reloads",
+                workspace_io_manifest_read(menu_dir, &manifest,
+                                            err, sizeof(err)));
+    ASSERT_INT("Save Workspace contains visible example",
+               manifest.scene_count, 1);
+    repl_set_workspace_dir(NULL);
+    remove_test_workspace(menu_dir);
+    glr_ctrl_reset_all();
 }
 
 /* File > Split Declaration routes to the editor split entry: a multi-var
@@ -2360,6 +2458,7 @@ int main(void) {
     test_config_parent_rows_inert();
     test_view_mode_swatch_state();
     test_menu_actions();
+    test_workspace_save_promotes_visible_example();
     test_split_decl_menu_action();
     test_load_workspace_activates_scene();
     test_shortcuts();

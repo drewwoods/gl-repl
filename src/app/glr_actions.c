@@ -157,6 +157,22 @@ static int bind_app_workspace_for_scene_save_if_needed(void) {
     return 0;
 }
 
+/* The UI presents examples and retained post-tutorial documents as tabs even
+ * though they remain transient until the first edit. A user-facing workspace
+ * save must therefore promote that visible tab before serializing the scene
+ * catalog; otherwise the low-level writer quite correctly sees zero occupied
+ * user-scene slots and commits an empty manifest. Keep this policy in the app
+ * action layer so repl_save_workspace() remains a literal catalog writer. */
+static int save_workspace_including_visible_scene(
+    const char *dir, const ReplExportLayout *layout) {
+    int promotable = repl_active_user_scene() < 0 &&
+        (repl_state_active_example_idx() >= 0 ||
+         repl_state_tutorial_origin_idx() >= 0);
+    if (promotable && repl_promote_transient_if_needed() < 0)
+        return -1;
+    return repl_save_workspace(dir, layout);
+}
+
 #define GLR_CLIPBOARD_MAX_BYTES (1024 * 1024)
 
 static char *glr_copy_text_range(const char *start, size_t len) {
@@ -269,7 +285,7 @@ static void glr_set_clipboard_scene_load_error(ReplSceneLoadStatus reason) {
         repl_set_status_error("Clipboard does not contain a loadable scene");
         break;
     case REPL_SCENE_LOAD_ERR_NO_SLOT:
-        repl_set_status_error("All scene slots full -- save workspace to free a slot");
+        repl_set_status_error("All scene slots full -- delete a scene first");
         break;
     default:
         repl_set_status_error("Load Scene from Clipboard failed");
@@ -1430,13 +1446,13 @@ int glr_action_open_workspace_path(const char *dir) {
     }
 
     if (old_workspace[0] && repl_workspace_is_managed()) {
-        if (repl_save_workspace(old_workspace, &layout) < 0)
+        if (save_workspace_including_visible_scene(old_workspace, &layout) < 0)
             return 0;
     } else if (repl_user_scene_count() > 0) {
         char recovery_dir[GLR_PATH_MAX];
         if (!glr_paths_app_state_path("recovery-workspace",
                                       recovery_dir, sizeof(recovery_dir)) ||
-            repl_save_workspace(recovery_dir, &layout) < 0) {
+            save_workspace_including_visible_scene(recovery_dir, &layout) < 0) {
             repl_set_workspace_dir(old_workspace);
             repl_set_status_error(
                 "Workspace switch cancelled: collection recovery failed");
@@ -1480,7 +1496,8 @@ int glr_action_save_active_scene(void) {
         return 0;
     glr_ctrl_fill_export_layout(&layout);
     if (repl_workspace_is_managed())
-        return repl_save_workspace(repl_workspace_dir(), &layout) >= 0;
+        return save_workspace_including_visible_scene(
+                   repl_workspace_dir(), &layout) >= 0;
     return repl_save_active_scene(&layout);
 }
 
@@ -1513,7 +1530,8 @@ static int glr_action_delete_scene_commit(int slot) {
     }
     ReplExportLayout layout;
     glr_ctrl_fill_export_layout(&layout);
-    if (repl_save_workspace(repl_workspace_dir(), &layout) < 0)
+    if (save_workspace_including_visible_scene(
+            repl_workspace_dir(), &layout) < 0)
         return 0;
     ReplScenesSnapshot *stash = repl_scenes_snapshot_capture();
     if (!stash) {
@@ -1523,7 +1541,8 @@ static int glr_action_delete_scene_commit(int slot) {
     char name[USER_SCENE_NAME_MAX];
     snprintf(name, sizeof(name), "%s", repl_user_scene_name(slot));
     if (!repl_user_scene_delete(slot) ||
-        repl_save_workspace(repl_workspace_dir(), &layout) < 0) {
+        save_workspace_including_visible_scene(
+            repl_workspace_dir(), &layout) < 0) {
         repl_scenes_snapshot_restore(stash);
         repl_scenes_snapshot_destroy(stash);
         glr_modal_set_error("Could not commit scene deletion");
@@ -1566,7 +1585,7 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
             return 0;
         }
         glr_ctrl_fill_export_layout(&layout);
-        if (repl_save_workspace(path, &layout) < 0) {
+        if (save_workspace_including_visible_scene(path, &layout) < 0) {
             (void)glr_workspaces_discard_empty(path);
             glr_modal_set_error("Could not save the new workspace");
             return 0;
@@ -1599,7 +1618,8 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
             return 0;
         }
         glr_ctrl_fill_export_layout(&layout);
-        if (repl_save_workspace(repl_workspace_dir(), &layout) < 0) {
+        if (save_workspace_including_visible_scene(
+                repl_workspace_dir(), &layout) < 0) {
             repl_set_workspace_dir(old_workspace);
             glr_modal_set_error("Could not save scene");
             return 0;
@@ -1692,7 +1712,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
                 return 1;
             }
             glr_ctrl_fill_export_layout(&layout);
-            repl_save_workspace(dir, &layout);
+            save_workspace_including_visible_scene(dir, &layout);
             glr_workspaces_refresh();
             return 1;
         }

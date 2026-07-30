@@ -126,7 +126,7 @@ static void format_load_err(ReplSceneLoadStatus reason,
         break;
     case REPL_SCENE_LOAD_ERR_NO_SLOT:
         snprintf(out, (size_t)out_sz,
-                 "All scene slots full — save workspace to free a slot");
+                 "All scene slots full — delete a scene first");
         break;
     default:
         snprintf(out, (size_t)out_sz, "Failed to load: %s", path);

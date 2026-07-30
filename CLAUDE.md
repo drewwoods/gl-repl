@@ -365,7 +365,10 @@ Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 Editing a **transient** document auto-promotes it into a fresh slot — the
 hook is [`editor_undo_push_snapshot()`](src/editor/undo.h#L126) →
 [`repl_promote_transient_if_needed()`](src/repl/scenes.h#L64) before every
-mutation. Two promotable origins: a loaded example (`active_example_idx`)
+mutation. User-facing managed-workspace saves call the same promotion first,
+so Ctrl+S / Save Workspace / Save Workspace As include the visible example
+tab instead of committing an empty manifest. Two promotable origins: a loaded
+example (`active_example_idx`)
 and the document a **completed or stopped tutorial** left behind
 (`tutorial_origin_idx`, stamped by `tutorial_end_keep_view`, never while a
 tutorial is active). Capacity is a hard eight scenes: promotion is rejected
