@@ -73,9 +73,6 @@
 #define AUDIO_DEFAULT_MUSIC "assets/song.mp3"
 #endif
 
-#ifndef AUDIO_STATE_FILE
-#define AUDIO_STATE_FILE "audio_state.ini"
-#endif
 
 #define AUDIO_MUSIC_MAX_PATHS 64
 #define AUDIO_MUSIC_MAX_LEN   512
@@ -2410,7 +2407,12 @@ int glr_audio_bootstrap(const char *assets_override,
         return -1;
 
     if (trace) trace("glr_audio_init done");
-    glr_audio_set_state_file(AUDIO_STATE_FILE);
+#if defined(__EMSCRIPTEN__)
+    /* Web: the "path" is a localStorage key, so keep it verbatim. */
+    glr_audio_set_state_file(GLR_AUDIO_STATE_FILE_NAME);
+#else
+    glr_audio_set_state_file(glr_paths_default_audio_state_file());
+#endif
 
     const char *assets_dir = assets_override;
     if (!assets_dir) {

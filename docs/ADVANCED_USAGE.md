@@ -635,9 +635,13 @@ CR/Enter rather than distinct app shortcuts.
 ```
 output.c        default save target (a standalone, compilable C file)
 <workspace>/    managed scenes plus the authoritative .glr-workspace manifest
-audio_state.ini persisted audio state (track, position, volume)
+audio_state.ini persisted audio state (track, position, volume) — in the
+                working directory, or in the app state dir when the working
+                directory is not writable (the macOS .app, whose working
+                directory is `/`)
 ./workspaces/   named workspace root for writable-directory development runs
 ~/Library/Application Support/gl-repl/workspaces  packaged macOS workspace root
+~/Library/Application Support/gl-repl/state       packaged macOS app state dir
 ~/Library/Application Support/gl-repl/Music    per-user music folder (macOS)
 $XDG_DATA_HOME/gl-repl/music                   per-user music folder (Linux)
 ```

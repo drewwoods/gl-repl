@@ -182,6 +182,28 @@ int glr_paths_app_state_path(const char *leaf, char *buf, size_t buflen) {
     return n >= 0 && n < (int)buflen;
 }
 
+const char *glr_paths_default_audio_state_file(void) {
+    static char path[GLR_PATH_MAX];
+    char dir[GLR_PATH_MAX];
+
+    if (!glr_paths_app_state_path(GLR_AUDIO_STATE_FILE_NAME,
+                                  path, sizeof(path)))
+        return GLR_AUDIO_STATE_FILE_NAME;
+    if (glr_paths_cwd_supports_relative_saves())
+        return path;
+
+    /* Unlike the recovery file, nothing else creates the state dir before
+     * the audio worker's first save — do it here, once, at bootstrap. */
+    snprintf(dir, sizeof(dir), "%s", path);
+    char *slash = strrchr(dir, '/');
+    if (!slash)
+        return path;
+    *slash = '\0';
+    if (!glr_paths_ensure_dir(dir, NULL))
+        return GLR_AUDIO_STATE_FILE_NAME;
+    return path;
+}
+
 static int absolute_lexical_path(const char *path, char *buf, size_t buflen) {
     char cwd[GLR_PATH_MAX];
     char input[GLR_PATH_MAX];

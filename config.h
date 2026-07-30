@@ -205,6 +205,14 @@
 #define GLR_DEFAULT_WORKSPACE_NAME "default"
 #endif
 
+/* Filename holding persisted audio state (track, position, volume).
+ * Resolved against the working directory when that is writable, else
+ * against the per-user data dir (glr_paths_default_audio_state_file()).
+ * On the web backend it is used verbatim as the localStorage key. */
+#ifndef GLR_AUDIO_STATE_FILE_NAME
+#define GLR_AUDIO_STATE_FILE_NAME "audio_state.ini"
+#endif
+
 /* Maximum filesystem path length (including NUL). Used by workspace,
  * scene file, and general path operations. */
 #ifndef GLR_PATH_MAX
