@@ -1189,7 +1189,17 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Blending & Transparency") == 0 ||
                      strcmp(name, "Fog") == 0 ||
                      strcmp(name, "Bitmap Text") == 0 ||
-                     strcmp(name, "If & Conditionals") == 0))
+                     strcmp(name, "If & Conditionals") == 0 ||
+                     /* Dense-solid entries share g_tutorial_dense_solid_cfg to
+                      * switch the vertex overlays off — see the staging
+                      * comment in src/repl/tutorials.c. */
+                     strcmp(name, "GLUT Solids Tour") == 0 ||
+                     strcmp(name, "Lighting Basics") == 0 ||
+                     strcmp(name, "Depth Mask & Draw Order") == 0 ||
+                     strcmp(name, "Clip Planes") == 0 ||
+                     strcmp(name, "Materials & Shininess") == 0 ||
+                     strcmp(name, "Functions") == 0 ||
+                     strcmp(name, "Scratch Arrays") == 0))
             continue;
         ASSERT_TRUE("tutorials without an entry-level @cfg have NULL cfg",
                     repl_tutorial_cfg_lines(i) == NULL);
@@ -2115,7 +2125,7 @@ static void test_first_animation_starts_on_ctrl_t(void) {
     ASSERT_TRUE("rotation command commits",
                 commit_command_step(idx, tutorial_state_view().step));
     ASSERT_STR("cube command follows rotation",
-               tutorial_current_expected_text(), "glutSolidCube(1)");
+               tutorial_current_expected_text(), "glutSolidCube(2)");
     ASSERT_TRUE("cube command commits",
                 commit_command_step(idx, tutorial_state_view().step));
 

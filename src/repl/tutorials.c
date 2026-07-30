@@ -119,6 +119,56 @@
       .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
       .var_target = 0.0f }
 
+/* Staging conventions -------------------------------------------------------
+ * Every tutorial is framed by the same camera: tutorial_baseline_apply resets
+ * the pose and re-aims it at CFG_DEFAULT_TUTORIAL_CAMERA_DIST (8) with the
+ * built-in orbit (rx 20, ry 30). At that distance the 45-degree vertical FOV
+ * shows roughly +/-3.3 world units of height about the origin, in 2D and 3D
+ * view alike, so the catalog stages geometry to one shared scale:
+ *
+ *   - Flat figures (triangles, quads, line loops) live on the +/-2 motif:
+ *     ~4 units tall, about 60% of the frame height.
+ *   - A solid presented on its own is ~2 units across, matching
+ *     glutSolidSphere(1, ...). The other GLUT solids do NOT agree at their
+ *     nominal size-1 arguments — measured extents are cube(1) 1 unit,
+ *     torus(1, 2) 6 units, teapot(1) 3.2 units, cone(1, 2) 2 units but
+ *     growing along +Z from its base rather than centered. Match them
+ *     explicitly: cube(2), torus(0.3, 0.7), teapot(0.7), and stand the cone
+ *     up with glRotatef(-90, 1, 0, 0). In a composition (a ring, a plot) the
+ *     pitch sets the size instead.
+ *   - The shared pose is yawed 30 degrees, which foreshortens anything spread
+ *     along X: equal shapes render unequal and equal pitch reads uneven. A
+ *     tutorial that asks the learner to COMPARE shapes side by side overrides
+ *     the yaw to 0 through a `// camera` block in its setup scaffold.
+ *
+ * Deviations are what the reader will read as a bug in the lesson, so keep new
+ * entries on the scale above unless the step text explains the difference. */
+
+/* Tutorial chrome turns vertex points AND vertex outlines on
+ * (CFG_DEFAULT_TUTORIAL_VERTEX_*), which is the right default while a learner
+ * is placing individual vertices: on a triangle or a cube the overlays name
+ * exactly what was typed. On a high-tessellation GLUT solid they do the
+ * opposite — a 48x32 sphere is ~1600 vertices and a size-1 teapot ~1600, so
+ * every surface turns into speckle with its silhouette buried. Any entry whose
+ * geometry is a dense solid (sphere/torus/teapot at these resolutions) shares
+ * this block; entries that stay on cubes and flat figures keep the overlays. */
+static const char *const g_tutorial_dense_solid_cfg[] = {
+    "// @cfg vertex_points = 0",
+    "// @cfg vertex_outlines = 0",
+    NULL,
+};
+
+/* Same problem, different answer, for the two REPL-language tutorials that draw
+ * solids with no lighting scaffold (Functions, Scratch Arrays). There the
+ * shading gradient is not available as a shape cue, so dropping the outlines
+ * too leaves a flat white disc that reads as a 2D sprite. Instead those entries
+ * drop the vertex points and lower their sphere tessellation to 8x6, where the
+ * outline pass reads as a low-poly globe rather than a scribble. */
+static const char *const g_tutorial_unlit_solid_cfg[] = {
+    "// @cfg vertex_points = 0",
+    NULL,
+};
+
 static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
         "// Build the smallest filled shape: open a GL_TRIANGLES batch.",
@@ -138,6 +188,10 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_SENTINEL,
 };
 
+/* The square is 2 units, not the flat-figure +/-2 motif: it is the one flat
+ * tutorial whose figure gets translated, and at 4 units wide a 2-unit shift
+ * barely separated it from the origin — it just read as an oversized quad
+ * hanging off to the right. Half the size makes the displacement legible. */
 static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
         "// Save the current matrix so this example can clean up after itself.",
@@ -156,16 +210,16 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
         "glBegin(GL_QUADS)"),
     STEP_APPEND(NULL,
         "// Give the square its lower-left corner in the transformed space.",
-        "glVertex3f(-2, -2, 0)"),
+        "glVertex3f(-1, -1, 0)"),
     STEP_APPEND(NULL,
         "// Add the lower-right corner at the same height.",
-        "glVertex3f(2, -2, 0)"),
+        "glVertex3f(1, -1, 0)"),
     STEP_APPEND(NULL,
         "// Add the upper-right corner so the quad has height.",
-        "glVertex3f(2, 2, 0)"),
+        "glVertex3f(1, 1, 0)"),
     STEP_APPEND(NULL,
         "// Add the upper-left corner; vertex order walks around the square.",
-        "glVertex3f(-2, 2, 0)"),
+        "glVertex3f(-1, 1, 0)"),
     STEP_APPEND(NULL,
         "// Close the quad batch to draw the rotated cyan square.",
         "glEnd()"),
@@ -309,9 +363,14 @@ static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_APPEND(NULL,
         "// Close the batch - the filled triangle appears.",
         "glEnd()"),
+    /* 2.5, not 10: the triangle's apex is at y = n, and the shared tutorial
+     * camera only shows about +/-3.3 units of height, so a target of 10 ended
+     * the lesson on a white slab filling the whole scene rect. Reachable by
+     * drag either way — the slider scrubs a flat 0.1 units per pixel from the
+     * declared value, so 2.5 is 15 px of travel. */
     STEP_REQUIRE_VAR(NULL,
-        "// Now drag the n slider in the variable panel to bring n to 10.",
-        "n", 10.0f),
+        "// Now drag the n slider in the variable panel to bring n to 2.5.",
+        "n", 2.5f),
     STEP_SENTINEL,
 };
 
@@ -360,7 +419,7 @@ static const TutorialStep g_tutorial_first_animation_steps[] = {
         "glRotatef(t * 45, 0, 1, 0)"),
     STEP_APPEND(NULL,
         "// Draw a cube. It stays frozen until you start the t clock.",
-        "glutSolidCube(1)"),
+        "glutSolidCube(2)"),
     STEP_REQUIRE_KEY(NULL,
         "// Press %s to start the clock and watch the cube spin.",
         "auto_time", 1,
@@ -423,9 +482,14 @@ static const char *const g_tutorial_points_lines_cfg[] = {
 };
 
 static const TutorialStep g_tutorial_points_lines_steps[] = {
+    /* 12, not 8: the GL_LINE_STRIP built in the second half of this tutorial
+     * runs through the SAME three vertices as the point batch, and a 3-unit
+     * line width swallowed 8-pixel points almost entirely — the first half's
+     * result vanished as the second half was typed. At 12 the dots still read
+     * at each joint of the finished strip. */
     STEP_APPEND(NULL,
         "// Make individual points large enough to read clearly.",
-        "glPointSize(8)"),
+        "glPointSize(12)"),
     STEP_APPEND(NULL,
         "// Open a GL_POINTS batch; every vertex becomes one dot.",
         "glBegin(GL_POINTS)"),
@@ -454,11 +518,18 @@ static const TutorialStep g_tutorial_points_lines_steps[] = {
     STEP_SENTINEL,
 };
 
+/* The lineup is a side-by-side comparison, so the camera drops the shared
+ * pose's 30-degree yaw: with any yaw the row recedes from the viewer and the
+ * far solids render smaller on an even pitch. Straight-on, a 3-unit pitch is
+ * a 3-unit gap for every pair; the 16-degree pitch angle still shows each
+ * solid's top face, so the cube reads as a box rather than a square. Distance
+ * 11 keeps the +/-7 row inside the frame with room to spare at the default
+ * window size. */
 static const char *const g_tutorial_glut_solids_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -14.00f);",
-    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(25.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -11.00f);",
+    "glRotatef(16.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
     "// Lighting scaffold shared by every solid in this tour.",
     "glEnable(GL_DEPTH_TEST)",
@@ -469,26 +540,38 @@ static const char *const g_tutorial_glut_solids_setup[] = {
     NULL,
 };
 
+/* Every argument here is chosen so the five solids come out the same 2 units
+ * across on a 3-unit pitch — see the measured extents in the staging comment
+ * at the top of this file. The nominal "size 1" call for each shape does NOT
+ * agree: cube(1) is half the sphere's width and torus(1, 2) is three times it.
+ * The cone is the one shape the learner has to reorient, because it grows
+ * along +Z from its base instead of about its center; that step earns its
+ * place by teaching the asymmetry rather than hiding it. */
 static const TutorialStep g_tutorial_glut_solids_steps[] = {
     STEP_APPEND(NULL,
-        "// Move left, then place a cube at the new local origin.",
-        "glTranslatef(-8, 0, 0)"),
-    STEP_CMD(NULL, "glutSolidCube(1)"),
+        "// Move to the left end of the row, then place a cube there.",
+        "glTranslatef(-6, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(2)"),
     STEP_APPEND(NULL,
         "// Step right and compare the cube with a smooth sphere.",
-        "glTranslatef(4, 0, 0)"),
+        "glTranslatef(3, 0, 0)"),
     STEP_CMD(NULL, "glutSolidSphere(1, 16, 12)"),
+    STEP_NOTE(
+        "// A radius-1 sphere is 2 units wide, so the cube needs size 2 to match."),
     STEP_APPEND(NULL,
         "// Move again; a torus uses inner and outer radii plus two resolutions.",
-        "glTranslatef(4, 0, 0)"),
-    STEP_CMD(NULL, "glutSolidTorus(1, 2, 16, 24)"),
+        "glTranslatef(3, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidTorus(0.3, 0.7, 16, 24)"),
     STEP_APPEND(NULL,
         "// Add freeglut's classic teapot beside the torus.",
-        "glTranslatef(4, 0, 0)"),
-    STEP_CMD(NULL, "glutSolidTeapot(1)"),
+        "glTranslatef(3, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidTeapot(0.7)"),
     STEP_APPEND(NULL,
-        "// Finish the lineup with a cone.",
-        "glTranslatef(4, 0, 0)"),
+        "// Step right once more, and down, to seat the last solid on the row.",
+        "glTranslatef(3, -1, 0)"),
+    STEP_APPEND(NULL,
+        "// A cone grows along +Z from its base, so stand this one upright.",
+        "glRotatef(-90, 1, 0, 0)"),
     STEP_CMD(NULL, "glutSolidCone(1, 2, 24, 8)"),
     STEP_SENTINEL,
 };
@@ -591,7 +674,7 @@ static const TutorialStep g_tutorial_depth_mask_steps[] = {
         "glEnable(GL_DEPTH_TEST)"),
     STEP_APPEND(NULL,
         "// Draw the opaque cube first so it establishes solid depth.",
-        "glutSolidCube(1)"),
+        "glutSolidCube(2)"),
     STEP_CMD(NULL, "glEnable(GL_BLEND)"),
     STEP_CMD(NULL, "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)"),
     STEP_APPEND(NULL,
@@ -600,7 +683,7 @@ static const TutorialStep g_tutorial_depth_mask_steps[] = {
     STEP_CMD(NULL, "glColor4f(0.4, 0.8, 1, 0.4)"),
     STEP_APPEND(NULL,
         "// Draw a larger translucent sphere around the opaque cube.",
-        "glutSolidSphere(1, 32, 24)"),
+        "glutSolidSphere(1.4, 32, 24)"),
     STEP_APPEND(NULL,
         "// Restore depth writes for whatever is drawn next.",
         "glDepthMask(GL_TRUE)"),
@@ -611,21 +694,32 @@ static const TutorialStep g_tutorial_depth_mask_steps[] = {
 
 static const char *const g_tutorial_fog_cfg[] = {
     "// @cfg backdrop = RENDER3D_BACKDROP_STARS",
+    /* Eight dense toruses — see g_tutorial_dense_solid_cfg. */
+    "// @cfg vertex_points = 0",
+    "// @cfg vertex_outlines = 0",
     NULL,
 };
 
+/* Fog strength is measured from the EYE, so the camera distance and the fog
+ * density are one setting: at the old 16 units with density 0.1, EXP2 left even
+ * the NEAREST ring ~8% visible, so the whole tunnel came out uniformly fogged
+ * and the closing NOTE described a gradient nobody could see. From 11 units at
+ * density 0.05 the near ring stays ~74% visible and the deepest ~9%. The yaw
+ * stays oblique on purpose — this is the one tutorial whose geometry recedes
+ * along Z, and looking straight down the tunnel stacks the rings concentrically
+ * instead of showing them as a receding row. */
 static const char *const g_tutorial_fog_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -16.00f);",
-    "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(20.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -11.00f);",
+    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(22.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
     "// A locked row of toruses receding away from the camera.",
     ":draw",
     "for(i, 0, 8) {",
     "  glPushMatrix()",
     "  glTranslatef(0, 0, -i * 3)",
-    "  glutSolidTorus(1, 2, 16, 24)",
+    "  glutSolidTorus(0.5, 1.5, 16, 24)",
     "  glPopMatrix()",
     "}",
     NULL,
@@ -640,7 +734,7 @@ static const TutorialStep g_tutorial_fog_steps[] = {
         "glFogi(GL_FOG_MODE, GL_EXP2)", "draw"),
     STEP_AT(NULL,
         "// Set how quickly distant geometry disappears into the fog.",
-        "glFogf(GL_FOG_DENSITY, 0.1)", "draw"),
+        "glFogf(GL_FOG_DENSITY, 0.05)", "draw"),
     STEP_AT(NULL,
         "// Match the fog color to the dark star-field backdrop.",
         "glFogfv(GL_FOG_COLOR, 0.05, 0.08, 0.12, 1)", "draw"),
@@ -649,10 +743,14 @@ static const TutorialStep g_tutorial_fog_steps[] = {
     STEP_SENTINEL,
 };
 
+/* d MUST stay 0 here: the sphere below has radius 1, so the plane y + 1 = 0
+ * this tutorial used to define is exactly tangent to its south pole and clips
+ * nothing at all — the lesson rendered as an untouched sphere. y = 0 cuts
+ * through the center, which is what the step text promises. */
 static const TutorialStep g_tutorial_clip_planes_steps[] = {
     STEP_APPEND(NULL,
-        "// Define plane 0 as y + 1 = 0; its positive half-space is kept.",
-        "glClipPlane(GL_CLIP_PLANE0, 0, 1, 0, 1)"),
+        "// Define plane 0 as y = 0; the half-space above it is kept.",
+        "glClipPlane(GL_CLIP_PLANE0, 0, 1, 0, 0)"),
     STEP_APPEND(NULL,
         "// Enable that plane so it clips every later primitive.",
         "glEnable(GL_CLIP_PLANE0)"),
@@ -722,6 +820,19 @@ static const TutorialStep g_tutorial_normals_steps[] = {
     STEP_SENTINEL,
 };
 
+/* Camera-only scaffold: the whole lesson is "compare these two triangles", and
+ * the shared pose's 30-degree yaw pushed the right-hand one further from the
+ * eye, so two identical triangles rendered visibly different sizes. Yaw 0
+ * makes the pair symmetric on screen; nothing is preloaded into the document. */
+static const char *const g_tutorial_culling_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -9.00f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    NULL,
+};
+
 static const TutorialStep g_tutorial_culling_steps[] = {
     STEP_APPEND(NULL,
         "// Enable face culling so back-facing polygons are discarded.",
@@ -761,13 +872,17 @@ static const char *const g_tutorial_bitmap_text_cfg[] = {
     NULL,
 };
 
+/* The anchor sits 1.5 units up so the text clears the size-2 cube's top face
+ * (y = 1) by half a unit and still lands well inside the frame; at y = 2 the
+ * label rendered against the top edge of the scene rect, detached from the
+ * cube it annotates. */
 static const TutorialStep g_tutorial_bitmap_text_steps[] = {
     STEP_APPEND(NULL,
         "// Draw a cube to give the label a visible scene reference.",
-        "glutSolidCube(1)"),
+        "glutSolidCube(2)"),
     STEP_APPEND(NULL,
         "// Set the 3D raster anchor just above the cube.",
-        "glRasterPos3f(0, 2, 0)"),
+        "glRasterPos3f(0, 1.5, 0)"),
     STEP_APPEND(NULL,
         "// Format the live t clock into bitmap text at that raster position.",
         "label(\"t %f\", t)"),
@@ -776,6 +891,12 @@ static const TutorialStep g_tutorial_bitmap_text_steps[] = {
     STEP_SENTINEL,
 };
 
+/* No camera-only scaffold here, unlike the other comparison tutorials: a
+ * func-open step and a `setup` array are mutually exclusive (the validator
+ * rejects the pair — func relocation would desync locked rows). So the three
+ * spokes keep the shared yawed pose and render at slightly unequal sizes; the
+ * ring radius stays at 2 so the spread stays small enough for that to read as
+ * perspective rather than as three different spheres. */
 static const TutorialStep g_tutorial_functions_steps[] = {
     STEP_NOTE(
         "// A named function packages reusable drawing commands and receives numeric arguments."),
@@ -787,7 +908,7 @@ static const TutorialStep g_tutorial_functions_steps[] = {
         "glPushMatrix()"),
     STEP_CMD(NULL, "glRotatef(a, 0, 0, 1)"),
     STEP_CMD(NULL, "glTranslatef(2, 0, 0)"),
-    STEP_CMD(NULL, "glutSolidSphere(1, 24, 16)"),
+    STEP_CMD(NULL, "glutSolidSphere(1, 8, 6)"),
     STEP_CMD(NULL, "glPopMatrix()"),
     STEP_APPEND(NULL,
         "// Close the function body.",
@@ -823,8 +944,20 @@ static const TutorialStep g_tutorial_conditionals_steps[] = {
         "}"),
     STEP_APPEND(NULL,
         "// Draw one cube whose color changes as sin(t) crosses zero.",
-        "glutSolidCube(1)"),
+        "glutSolidCube(2)"),
     STEP_SENTINEL,
+};
+
+/* Camera-only scaffold (see g_tutorial_culling_setup): the three spheres are a
+ * plot of A[0..2], so their sizes have to read as equal and their 3-unit pitch
+ * as even — exactly what the shared pose's yaw destroys. */
+static const char *const g_tutorial_scratch_arrays_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -10.00f);",
+    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    NULL,
 };
 
 static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
@@ -840,7 +973,7 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
         "for(i, 0, 3) {"),
     STEP_CMD(NULL, "glPushMatrix()"),
     STEP_CMD(NULL, "glTranslatef((i - 1) * 3, A[i], 0)"),
-    STEP_CMD(NULL, "glutSolidSphere(1, 24, 16)"),
+    STEP_CMD(NULL, "glutSolidSphere(1, 8, 6)"),
     STEP_CMD(NULL, "glPopMatrix()"),
     STEP_APPEND(NULL,
         "// Close the loop to reveal one sphere for each array element.",
@@ -949,6 +1082,7 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "GLUT Solids Tour",
         .steps      = g_tutorial_glut_solids_steps,
         .setup      = g_tutorial_glut_solids_setup,
+        .cfg        = g_tutorial_dense_solid_cfg,
         .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
         .subheading = "Beginner",
     },
@@ -974,6 +1108,7 @@ static const TutorialEntry g_tutorials[] = {
          * test_catalog_subheading_metadata enforces both. */
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
+        .cfg        = g_tutorial_dense_solid_cfg,
         .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
         .subheading = "Intermediate",
     },
@@ -1005,6 +1140,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Depth Mask & Draw Order",
         .steps      = g_tutorial_depth_mask_steps,
+        .cfg        = g_tutorial_dense_solid_cfg,
         .tags       = TUTORIAL_TAG_EFFECTS | TUTORIAL_TAG_DEPTH_LIGHTING,
         .subheading = "Intermediate",
     },
@@ -1019,6 +1155,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Clip Planes",
         .steps      = g_tutorial_clip_planes_steps,
+        .cfg        = g_tutorial_dense_solid_cfg,
         .tags       = TUTORIAL_TAG_EFFECTS,
         .subheading = "Intermediate",
     },
@@ -1026,6 +1163,7 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Materials & Shininess",
         .steps      = g_tutorial_materials_steps,
         .setup      = g_tutorial_materials_setup,
+        .cfg        = g_tutorial_dense_solid_cfg,
         .tags       = TUTORIAL_TAG_DEPTH_LIGHTING | TUTORIAL_TAG_EFFECTS,
         .subheading = "Intermediate",
     },
@@ -1039,6 +1177,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Culling & Winding",
         .steps      = g_tutorial_culling_steps,
+        .setup      = g_tutorial_culling_setup,
         .tags       = TUTORIAL_TAG_GEOMETRY,
         .subheading = "Intermediate",
     },
@@ -1052,6 +1191,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Functions",
         .steps      = g_tutorial_functions_steps,
+        .cfg        = g_tutorial_unlit_solid_cfg,
         .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
         .subheading = "Advanced",
     },
@@ -1065,6 +1205,8 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Scratch Arrays",
         .steps      = g_tutorial_scratch_arrays_steps,
+        .setup      = g_tutorial_scratch_arrays_setup,
+        .cfg        = g_tutorial_unlit_solid_cfg,
         .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
         .subheading = "Advanced",
     },
