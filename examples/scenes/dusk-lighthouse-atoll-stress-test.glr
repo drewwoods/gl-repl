@@ -16,9 +16,9 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-// shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals);
+// shared scratch: x/y/z vertex position;
 // k/s = radius/angle scratch (island coastline, firefly polar coords).
-static float x, y, z, n, k, s;
+static float x, y, z, k, s;
 static float fireflies = 44; // @tune
 static float flyRadius = 2.6; // @tune
 static float c = 3.0; // color scaling factor for sea sheet
@@ -42,20 +42,31 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 // --- sea(): animated water sheet (nested for + analytic normals) ---
 // Colored by wave height: deep azure troughs lift to bright azure crests.
 sea(half, cells, amp) {
+  // cx/sx/cz/sz cache the wave's cos/sin terms -- each is read three times
+  // below (height, normal-length n, and the normal itself) but x only
+  // changes once per j (cx/sx are reused across both strip vertices).
+  // n = 1/|gradient| is a function-scoped local: it never leaves sea().
+  float cx, sx, cz, sz, n;
   for(i, 0, cells) {
     glBegin(GL_TRIANGLE_STRIP);
       for(j, 0, cells + 1) {
         x = -half + 2*half*j/cells;
+        cx = cos(x*1.5 + t);
+        sx = sin(x*1.5 + t);
         z = -half + 2*half*i/cells;
-        y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-        n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-        glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
+        cz = cos(z*1.5 + t*0.6);
+        sz = sin(z*1.5 + t*0.6);
+        y = amp*sx*cz;
+        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*cz*cz + sx*sx*sz*sz));
+        glNormal3f(-amp*1.5*cx*cz*n, n, amp*1.5*sx*sz*n);
         glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
         glVertex3f(x, y, z);
         z = -half + 2*half*(i + 1)/cells;
-        y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-        n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-        glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
+        cz = cos(z*1.5 + t*0.6);
+        sz = sin(z*1.5 + t*0.6);
+        y = amp*sx*cz;
+        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*cz*cz + sx*sx*sz*sz));
+        glNormal3f(-amp*1.5*cx*cz*n, n, amp*1.5*sx*sz*n);
         glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
         glVertex3f(x, y, z);
       }

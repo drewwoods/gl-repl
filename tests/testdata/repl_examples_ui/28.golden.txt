@@ -112,13 +112,23 @@ void display(void) {
 
 
   orbitRings(Drel, node, incl) {
-    float th, u;
+    float th, u, cNode, sNode, cIncl, sIncl, cu, su;
+    // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
+    // are call-time constants), so they are hoisted out of the 96-point loop
+    // instead of being retaken every iteration; cu/su cache cos(u)/sin(u),
+    // each read twice in the vertex formula below.
     orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
+    cNode = cos(node);
+    sNode = sin(node);
+    cIncl = cos(incl);
+    sIncl = sin(incl);
     glBegin(GL_LINE_LOOP);
       for(i, 0, 96) {
         th = i*TAU/96;
         u = th - node;
-        glVertex3f(orbitR*(cos(node)*cos(u) - sin(node)*sin(u)*cos(incl)), orbitR*sin(u)*sin(incl), orbitR*(sin(node)*cos(u) + cos(node)*sin(u)*cos(incl)));
+        cu = cos(u);
+        su = sin(u);
+        glVertex3f(orbitR*(cNode*cu - sNode*su*cIncl), orbitR*su*sIncl, orbitR*(sNode*cu + cNode*su*cIncl));
       }
     glEnd();
   }

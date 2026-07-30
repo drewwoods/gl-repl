@@ -19,7 +19,7 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, phi, phi2, rad, rad2, topY, botY; // bell strip scratch
-static float ax, az, sway, drop; // tentacle scratch
+static float sway; // rim/tentacle sway -- read both at top level (frill) and inside tentacle()
 static float segs = 26;      // bell azimuth segments
 static float rings = 9;      // bell latitude strips
 static float tentacles = 15; // @tune
@@ -93,6 +93,7 @@ glEnd();
 // one tentacle: a swaying line strip; alpha fades toward the tip and the
 // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
 tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+  float ax, az, drop;
   ax = cos(angAt)*attach;
   az = sin(angAt)*attach;
   glBegin(GL_LINE_STRIP);

@@ -19,7 +19,7 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-static float th, dd, blink, ink, ph, slit; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
+static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
 static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 // ===== Aurora observatory: a lonely dish tracking the sky =====
 // NOTE: the dome and dish are clip-plane carvings of glutSolidSphere --
@@ -47,6 +47,7 @@ pad(rad) {
 
 // cylinder wall between y0 and y1
 drum(rad, y0, y1, segs) {
+  float th;
   glBegin(GL_QUAD_STRIP);
     for(j, 0, segs + 1) {
       th = j*TAU/segs;
@@ -111,7 +112,7 @@ glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
 // closed for the last third. The plane equations reference `slit`, so
 // they re-evaluate every frame.
 ph = fmod(t, cycle_length);
-slit = 0.31*max(min(min(ph/2, 1), (2*cycle_length/3 + 2 - ph)/2), 0);
+slit = 0.31*clamp(min(ph/2, (2*cycle_length/3 + 2 - ph)/2), 0, 1);
 glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
 glEnable(GL_CLIP_PLANE1);
 glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});

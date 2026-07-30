@@ -100,23 +100,35 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float y, c, a; // planet latitude sin; color/brightness mix in [0,1]; comet orbit angle
+  static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
   // banded gas giant: quad strips over latitude, bands swirled by t
   planet(rad, stacks, slices) {
+    float latA, latB, cA, cB, lon, cLon, sLon;
+    float y;
+    // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
+    // the normal and the vertex so each cosine is taken once, not three times.
+    // lon/cLon/sLon do the same for the per-column longitude angle.
     for(i, 0, stacks) {
       glBegin(GL_QUAD_STRIP);
         for(j, 0, slices + 1) {
-          y = sin(-PI/2 + PI*i/stacks);
-          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+          latA = -PI/2 + PI*i/stacks;
+          latB = -PI/2 + PI*(i + 1)/stacks;
+          lon = j*TAU/slices;
+          cA = cos(latA);
+          cB = cos(latB);
+          cLon = cos(lon);
+          sLon = sin(lon);
+          y = sin(latA);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
           glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-          glNormal3f(cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
-          glVertex3f(rad*cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
-          y = sin(-PI/2 + PI*(i + 1)/stacks);
-          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+          glNormal3f(cA*cLon, y, cA*sLon);
+          glVertex3f(rad*cA*cLon, rad*y, rad*cA*sLon);
+          y = sin(latB);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
           glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-          glNormal3f(cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
-          glVertex3f(rad*cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
+          glNormal3f(cB*cLon, y, cB*sLon);
+          glVertex3f(rad*cB*cLon, rad*y, rad*cB*sLon);
         }
       glEnd();
     }

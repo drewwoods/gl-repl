@@ -2543,7 +2543,7 @@ int main(int argc, char **argv) {
                 if (dump) {
                          ASSERT_TRUE("logical dump keeps stress line unwrapped",
                                 strstr(dump,
-                                       "      n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));")
+                                       "          glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));")
                                 != NULL);
                     free(dump);
                 }

@@ -100,7 +100,7 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float th, dd, blink, ink, ph, slit; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
+  static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
   static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 
   // concrete pad a building stands on
@@ -116,6 +116,7 @@ void display(void) {
 
   // cylinder wall between y0 and y1
   drum(rad, y0, y1, segs) {
+    float th;
     glBegin(GL_QUAD_STRIP);
       for(j, 0, segs + 1) {
         th = j*TAU/segs;
@@ -199,7 +200,7 @@ void display(void) {
     // closed for the last third. The plane equations reference `slit`, so
     // they re-evaluate every frame.
     ph = fmod(t, cycle_length);
-    slit = 0.31*max(min(min(ph/2, 1), (2*cycle_length/3 + 2 - ph)/2), 0);
+    slit = 0.31*clamp(min(ph/2, (2*cycle_length/3 + 2 - ph)/2), 0, 1);
     glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
     glEnable(GL_CLIP_PLANE1);
     glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});
