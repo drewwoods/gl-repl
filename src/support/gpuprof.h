@@ -104,13 +104,13 @@ void gpu_prof_end(ProfSection s);
  * Apple Silicon behind GL-on-Metal, where a render pass's fragment work
  * is batched and lands inside every bracket that contributed draws to the
  * pass) the windows of different sections overlap, so sections — and
- * Frame Total, which sums every segment — can add up to more than the
+ * the frame total, which sums every segment — can add up to more than the
  * wall-clock frame time even at a locked 60 FPS. Treat the GPU column as
  * a relative-hotspot signal; the CPU column plus the frame rate remain
  * the budget ground truth.
  *
  * Timestamp mode: interval deltas between consecutive markers tile the
- * GPU timeline, so sums are exact and Frame Total is a true window. On a
+ * GPU timeline, so sums are exact and the frame total is a true window. On a
  * tile-deferred GPU attribution can still shift between sections sharing
  * a render pass (whichever interval contains the pass flush absorbs its
  * fragment time), but totals never over-count. */

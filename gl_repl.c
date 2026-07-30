@@ -30,7 +30,8 @@ static int g_export_ply_srgb = 0;
 static void display_func(void) {
     /* Open the profiler's frame — first statement in the callback, so
      * PROF_FRAME_TOTAL spans every stage below and not just the controller's
-     * share of them. Closed by glr_ctrl_frame_end() after the swap. */
+     * share of them. Closed by glr_ctrl_frame_end() just before the present,
+     * which is measured separately as the frame's slack. */
     glr_ctrl_frame_begin();
 
     prof_begin(PROF_SCRIPTED_INPUT);
@@ -108,6 +109,18 @@ static void display_func(void) {
     }
     prof_end(PROF_HOST_OVERLAYS);
 
+    /* Close the frame total here, BEFORE the present: everything the callback
+     * does to produce this frame is now behind us, and the present that
+     * follows is mostly the wait for vsync — slack the frame is handed, not
+     * work it does. Including it pinned the total at the refresh interval and
+     * hid whatever the frame actually cost (see prof_sections.h). The
+     * simulation tick further below is outside the total for a different
+     * reason: in the normal (timer-paced) mode that tick runs from the frame
+     * timer, entirely outside this callback, so counting it here only in
+     * capture mode would make the two modes' totals incomparable. */
+    glr_ctrl_frame_end();
+
+    /* Timed on its own, after the total, as the frame's slack row. */
     prof_begin(PROF_PRESENT);
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
     glutSwapBuffers();
@@ -117,14 +130,6 @@ static void display_func(void) {
         glr_init_trace(buf);
         frames_traced++;
     }
-
-    /* Close the frame total here: everything the callback does to produce and
-     * present this frame is now behind us. The simulation tick below is
-     * deliberately outside it — in the normal (timer-paced) mode that tick
-     * runs from the frame timer, entirely outside this callback, so counting
-     * it here only in capture mode would make the two modes' totals
-     * incomparable. */
-    glr_ctrl_frame_end();
 
     /* In GLR_TICK_PER_FRAME mode, advance only after the completed frame so
      * the captured sequence is t0, t0+dt, ... . The timer continues to pace

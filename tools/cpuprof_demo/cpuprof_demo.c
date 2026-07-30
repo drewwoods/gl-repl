@@ -92,7 +92,9 @@ static int    g_lists_ready    = 0;
  * src/app/glr_prof.c): { bare label, explicit depth, is_total }. depth — not
  * any baked-in indentation — drives how far the panel indents the row, and
  * depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT are
- * unused: prof_section_info returns {NULL} and the panel omits them. */
+ * unused: prof_section_info returns {NULL} and the panel omits them. The
+ * trailing is_slack flag is left implicit (zero) throughout: the demo times
+ * only work, never a vsync wait. */
 static const ProfSectionInfo k_sections[CP_COUNT] = {
     [CP_FRAME_TOTAL]       = { "Frame Total",   0, 1 },
     [CP_IMMEDIATE]         = { "Immediate x5",  0, 0 },

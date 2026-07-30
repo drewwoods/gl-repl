@@ -656,13 +656,19 @@ static void test_display_frame_profile_coverage(void) {
     }
 }
 
-/* PROF_FRAME_TOTAL must span the *host callback*, not just the controller's
- * share of it. The stages gl_repl.c runs on either side of
- * glr_ctrl_display_frame() — scripted input, the post-composite splash / tour
- * overlays, the present — are real per-frame cost: a guided tour's caption
- * overlay alone measured ~10 ms/frame while Frame Total reported ~1.5 ms,
+/* PROF_FRAME_TOTAL must span every stage of the *host callback* that does
+ * frame work, not just the controller's share of it — and must stop short of
+ * the present, which is not frame work at all.
+ *
+ * Both halves are regressions that happened. The stages gl_repl.c runs on
+ * either side of glr_ctrl_display_frame() — scripted input, the post-composite
+ * splash / tour overlays — are real per-frame cost: a guided tour's caption
+ * overlay alone measured ~10 ms/frame while the total reported ~1.5 ms,
  * because the bracket lived inside the controller and the overlay draws after
- * it returns.
+ * it returns. The present, on the other hand, is the vsync wait: inside the
+ * bracket it pinned the total at the refresh interval, so a 5 ms frame and a
+ * 15 ms one both reported ~16 ms in permanent red. It now has its own row
+ * outside the total (see prof_sections.h).
  *
  * Driven on the profiler's test clock so the arithmetic is exact and no GL is
  * needed: the host stages are stood in for by their own prof brackets, exactly
@@ -690,12 +696,12 @@ static void test_frame_total_spans_host_stages(void) {
     prof_end(PROF_TOUR_OVERLAY);
     prof_end(PROF_HOST_OVERLAYS);
 
-    /* ... glFinish + swap (2 ms) ... */
+    glr_ctrl_frame_end();            /* host: before the present */
+
+    /* ... glFinish + swap (2 ms), outside the total ... */
     prof_begin(PROF_PRESENT);
     prof_test_set_now_us(17000.0);
     prof_end(PROF_PRESENT);
-
-    glr_ctrl_frame_end();            /* host: after the swap */
 
     total_us   = prof_section_last_us(PROF_FRAME_TOTAL);
     overlay_us = prof_section_last_us(PROF_HOST_OVERLAYS);
@@ -709,19 +715,61 @@ static void test_frame_total_spans_host_stages(void) {
 
     ASSERT_TRUE("tour overlay measured 10ms", tour_us == 10000.0);
     ASSERT_TRUE("present measured 2ms", present_us == 2000.0);
-    /* The whole callback, not the controller's slice of it. */
-    ASSERT_TRUE("frame total is end to end (17ms)", total_us == 17000.0);
-    ASSERT_TRUE("frame total contains the host stages",
-                total_us >= overlay_us + present_us);
+    /* Every host stage that does frame work, and not the present: 15 of the
+     * callback's 17 ms. */
+    ASSERT_TRUE("frame total covers the host work stages (15ms)",
+                total_us == 15000.0);
+    ASSERT_TRUE("frame total contains the host overlays",
+                total_us >= overlay_us);
+    ASSERT_TRUE("frame total excludes the present",
+                total_us + present_us == 17000.0);
 
     /* An unpaired end must not close a total that was never opened —
      * glr_ctrl_display_frame() is called bare by tests and tools. */
     prof_test_set_now_us(99000.0);
     glr_ctrl_frame_end();
     ASSERT_TRUE("unpaired frame_end leaves the total alone",
-                prof_section_last_us(PROF_FRAME_TOTAL) == 17000.0);
+                prof_section_last_us(PROF_FRAME_TOTAL) == 15000.0);
 
     prof_test_clear_now_us();
+}
+
+/* The two summary rows the panel draws under its divider: the frame total, and
+ * the present as the one inversely-colored slack row right below it. Row order
+ * is catalog order, so PROF_PRESENT following PROF_FRAME_TOTAL is what puts it
+ * under the rule rather than above it — and the flags are what make one read
+ * "over budget when long" and the other the reverse. */
+static void test_summary_row_metadata(void) {
+    int section_idx;
+    int total_rows = 0, slack_rows = 0;
+
+    printf("--- imrepl_ctrl profile summary rows ---\n");
+
+    ASSERT_TRUE("present is the row after the frame total",
+                (int)PROF_PRESENT == (int)PROF_FRAME_TOTAL + 1);
+    ASSERT_INT("frame total row is the total",
+               prof_section_info(PROF_FRAME_TOTAL).is_total, 1);
+    ASSERT_INT("frame total row is not slack",
+               prof_section_info(PROF_FRAME_TOTAL).is_slack, 0);
+    ASSERT_INT("present row is slack",
+               prof_section_info(PROF_PRESENT).is_slack, 1);
+    ASSERT_INT("present row is not a second total",
+               prof_section_info(PROF_PRESENT).is_total, 0);
+    ASSERT_STR("frame total row is labeled Frame Time",
+               prof_section_info(PROF_FRAME_TOTAL).label, "Frame Time");
+    ASSERT_STR("present row is labeled Present",
+               prof_section_info(PROF_PRESENT).label, "Present");
+
+    /* Exactly one of each across the catalog: the divider and the inverted
+     * scale are both single-row affordances. */
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSectionInfo info = prof_section_info((ProfSection)section_idx);
+        if (info.label == NULL) continue;
+        if (info.is_total) total_rows++;
+        if (info.is_slack) slack_rows++;
+    }
+    ASSERT_INT("exactly one total row", total_rows, 1);
+    ASSERT_INT("exactly one slack row", slack_rows, 1);
 }
 
 static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo(void) {
@@ -5119,6 +5167,7 @@ int main(void) {
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_frame_total_spans_host_stages();
+    test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();
     test_variable_panel_motion_preserves_reset_assignment_without_declaration();

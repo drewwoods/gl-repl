@@ -103,14 +103,18 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_HOST_OVERLAYS]                     = { "Host Overlays",   0, 0 },
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
-    [PROF_PRESENT]                           = { "Present",         0, 0 },
-    [PROF_FRAME_TOTAL]                       = { "Frame Total",     0, 1 },
+    /* The two summary rows under the divider. "Frame Time" is the frame's work
+     * (is_total: divider + whole-frame thresholds); "Present" is the vsync wait
+     * that follows it, outside the total and colored inversely (is_slack) —
+     * see prof_sections.h for why the present is not frame time. */
+    [PROF_FRAME_TOTAL]                       = { "Frame Time",      0, 1, 0 },
+    [PROF_PRESENT]                           = { "Present",         0, 0, 1 },
 };
 
 ProfSectionInfo prof_section_info(ProfSection s) {
     if (s >= 0 && s < PROF_SECTION_COUNT && k_sections[s].label != NULL)
         return k_sections[s];
-    ProfSectionInfo unknown = { "?", 0, 0 };
+    ProfSectionInfo unknown = { "?", 0, 0, 0 };
     return unknown;
 }
 
@@ -167,10 +171,9 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * diagnostic subdivisions like every other leaf under a drawing parent.
      * Scripted input issues no GL of its own, and Present is a glFinish drain
      * plus the buffer swap — by then the queue is empty, so a query there
-     * would measure nothing. Note that Present's span still falls inside
-     * PROF_FRAME_TOTAL's query: the frame total's last GPU segment therefore
-     * carries the swap. That is intentional (the CPU total is end to end) and
-     * cheap, because the glFinish ahead of it has already drained the GPU. */
+     * would measure nothing. Present also sits entirely outside
+     * PROF_FRAME_TOTAL's bracket now (the host closes the total before
+     * presenting), so neither column double-counts the swap. */
     [PROF_HOST_OVERLAYS]                     = 1,
     [PROF_FRAME_TOTAL]                       = 1,
 };

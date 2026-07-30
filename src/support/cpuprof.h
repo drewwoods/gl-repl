@@ -146,14 +146,23 @@ static inline int prof_section_set_equal(const ProfSectionSet *a,
  *             mode — so restyling the indent never re-classifies a row.
  *  is_total — nonzero for the single whole-frame total row (drawn with a
  *             divider above it and its own warn/crit thresholds).
+ *  is_slack — nonzero for a row where a *bigger* number is the healthy one:
+ *             it measures time the frame is handed rather than time it spends
+ *             (gl-repl's Present row — the vsync wait). The panel inverts the
+ *             warn/crit coloring for these, so a long wait reads green and a
+ *             vanishing one red. Such a row is outside the frame total by
+ *             construction; the flag only decides how it is colored.
  *
  * Implemented by src/app/glr_prof.c for the gl-repl binary, and by each
  * standalone demo driver for the sections it instruments. The generic timer
- * and the UI panel never hard-code section names. */
+ * and the UI panel never hard-code section names. Drivers written before a
+ * field was added keep working: a short positional initializer zero-fills the
+ * rest, which is the "ordinary work row" default for every flag here. */
 typedef struct {
     const char *label;
     int         depth;
     int         is_total;
+    int         is_slack;
 } ProfSectionInfo;
 
 ProfSectionInfo prof_section_info(ProfSection s);

@@ -115,11 +115,11 @@ typedef enum {
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     /* Host-band stages. The GLUT display callback in gl_repl.c does real
      * per-frame work on both sides of glr_ctrl_display_frame() — scripted
-     * input before it, the splash/tour overlays and the present after it —
-     * and PROF_FRAME_TOTAL covers the whole callback, so those stages need
-     * rows of their own or they show up only as unattributed total. A guided
-     * tour's cursor + caption overlay is the reason this exists: it can cost
-     * more than the entire 3D scene, and used to be invisible here. */
+     * input before it, the splash/tour overlays after it — and
+     * PROF_FRAME_TOTAL covers all of it, so those stages need rows of their
+     * own or they show up only as unattributed total. A guided tour's cursor +
+     * caption overlay is the reason this exists: it can cost more than the
+     * entire 3D scene, and used to be invisible here. */
     PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
     PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
     PROF_HOST_SPLASH,      /* splash_render() — startup banner only */
@@ -130,10 +130,23 @@ typedef enum {
      * overlay renders for env-driven capture runs, which have no HUD and nobody
      * watching a profile panel.) */
     PROF_TOUR_OVERLAY,
-    PROF_PRESENT,          /* glFinish() drain + glutSwapBuffers() */
-    PROF_FRAME_TOTAL,   /* entire display callback, end to end: scripted
-                         * input, glr_ctrl_display_frame(), host overlays,
-                         * and the present */
+    PROF_FRAME_TOTAL,   /* the frame's *work*: scripted input,
+                         * glr_ctrl_display_frame() and the host overlays —
+                         * everything the callback does up to the present, and
+                         * deliberately not the present itself */
+    /* glFinish() drain + glutSwapBuffers(). Sits AFTER the total, both in this
+     * catalog (so the panel draws it as the row under the total's divider) and
+     * in the callback's bracketing (glr_ctrl_frame_end() closes the total
+     * first). With vsync on, this is mostly the wait for the next scan-out —
+     * idle time the frame is *given*, not time it spends — so counting it in
+     * the total made a healthy 2 ms frame report 16 ms and turned the total's
+     * over-budget coloring permanently red. Measured on its own it is the
+     * frame's slack instead, and the panel colors it inversely (long = green).
+     * Caveat that follows from the split: glFinish absorbs GPU work the driver
+     * deferred, so a GPU-bound frame shows up here as slack draining away
+     * rather than as CPU cost in any row above — that is what the shrinking
+     * Present and the GPU column are for. */
+    PROF_PRESENT,
     PROF_SECTION_COUNT
 } ProfSection;
 

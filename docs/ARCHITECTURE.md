@@ -147,8 +147,8 @@ flowchart TD
     s12 --> s13["ui_profile_panel_render(&ui_snap)"]
     s13 --> s14["restore flat count & predefined variable values"]
     s14 --> h1["splash + tour narration overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
-    h1 --> h2["glFinish + glutSwapBuffers<br/><i>PROF_PRESENT</i>"]
-    h2 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
+    h1 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
+    fe --> h2["glFinish + glutSwapBuffers<br/><i>PROF_PRESENT — outside the total</i>"]
 ```
 
 Profile sections wrap each producer so snapshot construction time is
@@ -156,22 +156,37 @@ visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
-**`PROF_FRAME_TOTAL` is the whole callback, not the controller.** The
-display callback runs real per-frame work on *both sides* of
+**`PROF_FRAME_TOTAL` is the whole callback minus the present.** The display
+callback runs real per-frame work on *both sides* of
 `glr_ctrl_display_frame()` — scripted-tour input before it, the
-post-composite splash / tour overlays and the present after it — so the
-total's bracket belongs to the host, as the
-[`glr_ctrl_frame_begin()`](../src/app/glr_ctrl.h#L204) /
-[`glr_ctrl_frame_end()`](../src/app/glr_ctrl.h#L205) pair that also owns the
+post-composite splash / tour overlays after it — so the total's bracket
+belongs to the host, as the
+[`glr_ctrl_frame_begin()`](../src/app/glr_ctrl.h#L206) /
+[`glr_ctrl_frame_end()`](../src/app/glr_ctrl.h#L207) pair that also owns the
 staleness/FPS tick and the GPU query-slot rotation. It used to end at the
 controller's last line, which understated the frame by however much the
 host stages cost: a guided tour's caption overlay measured ~10 ms/frame
-(plus ~4 ms of `glFinish` draining its GPU work) while Frame Total reported
+(plus ~4 ms of `glFinish` draining its GPU work) while the total reported
 a comfortable ~1.5 ms and no row named the culprit. Any new per-frame host
 stage needs its own section for the same reason — a stage inside the
 bracket with no row of its own is only visible as unattributed total.
-`test_frame_total_spans_host_stages` in [`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c)
-pins the contract on the profiler's test clock.
+
+The present (`glFinish` + `glutSwapBuffers`) is the one stage deliberately
+*outside* the bracket: `glr_ctrl_frame_end()` runs before it, and
+`PROF_PRESENT` times it on its own. With vsync on it is dominated by the wait
+for the next scan-out — time the frame is handed, not time it spends — so
+counting it as frame time pinned the total at the refresh interval and left the
+over-budget coloring permanently red no matter what the frame actually cost.
+The panel therefore draws two rows under its divider, **Frame Time** and
+**Present**, and colors Present on an inverted scale (`is_slack` in
+[`ProfSectionInfo`](../src/support/cpuprof.h): long is green, vanishing is red)
+because a shrinking present is the real warning — it is the frame's remaining
+headroom. The corollary is that `glFinish` absorbs GPU work the driver
+deferred, so a GPU-bound frame shows as slack draining out of Present rather
+than as CPU cost in any row above it; the GPU column is the cross-check.
+`test_frame_total_spans_host_stages` and `test_summary_row_metadata` in
+[`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c) pin both halves on the
+profiler's test clock.
 
 The render3d frame consumes the explicit config:
 
@@ -1479,7 +1494,7 @@ loaded:
 * **timestamp mode** (preferred; `glQueryCounter(GL_TIMESTAMP)`, ARB /
   GL 3.3 only — typical on Linux/Mesa contexts): one marker per section
   transition; interval deltas tile the GPU timeline exactly, so
-  per-section times are additive and Frame Total is a true window.
+  per-section times are additive and the frame total is a true window.
   `glQueryCounter` is only loaded when `has_timestamp` is advertised —
   GLX's GetProcAddress can return a callable stub for *any* name, so
   load-and-see is not a safe capability test.
@@ -1542,7 +1557,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L207) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L209) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one

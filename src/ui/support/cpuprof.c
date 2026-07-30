@@ -193,16 +193,32 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
 /* Apply a green/yellow/red color based on section timing thresholds.
  * The whole-frame total row (is_total) uses 1/120s (8.3ms) and 1/60s
  * (16.7ms) breakpoints; every other section uses half those thresholds
- * (4.15ms / 8.3ms). */
+ * (4.15ms / 8.3ms).
+ *
+ * A slack row (is_slack — gl-repl's Present, the vsync wait) reads the same
+ * scale backwards: the number is time the frame was handed, not time it spent,
+ * so a long one is the healthy case and a shrinking one means the work above
+ * has eaten the budget. Same three colors, inverted breakpoints — half a
+ * 60 fps frame of slack left is green, an eighth is yellow, less is red. The
+ * near-zero clamp below still wins, and reads as "nothing measured" rather
+ * than an alarm: a real glFinish + swap never costs under 2 us, so that arm is
+ * only reachable from the GL stubs. */
 /* FPS gauge: green/yellow/red is a fixed data-viz semantic, NOT theme
  * tokens (theme.h bucket 3 - red must read as "over budget" in every
  * scheme; it must not follow the UI accent). */
-static void set_time_color(int is_total, double us) {
+static void set_time_color(const ProfSectionInfo *info, double us) {
     if (us < 2.0) {
         glColor3f(0.30f, 0.30f, 0.38f);       /* near-zero – same as stale */
         return;
     }
-    if (is_total) {
+    if (info->is_slack) {
+        if (us >= 8333.0)
+            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – half a frame spare */
+        else if (us >= 2083.0)
+            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – slack running out */
+        else
+            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – no headroom left */
+    } else if (info->is_total) {
         if (us < 8333.0)
             glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */
         else if (us < 16667.0)
@@ -494,7 +510,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
         if (cpu_ok) {
             fmt_us(val_buf, (int)sizeof(val_buf), cpu_us);
-            set_time_color(info.is_total, cpu_us);
+            set_time_color(&info, cpu_us);
         } else {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
@@ -503,7 +519,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
         if (gpu_ok) {
             fmt_us(val_buf, (int)sizeof(val_buf), gpu_us);
-            set_time_color(info.is_total, gpu_us);
+            set_time_color(&info, gpu_us);
         } else {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
@@ -521,7 +537,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             double max_us = cpu_ok ? cpu_us : 0.0;
             if (gpu_ok && gpu_us > max_us) max_us = gpu_us;
             fmt_us(val_buf, (int)sizeof(val_buf), max_us);
-            set_time_color(info.is_total, max_us);
+            set_time_color(&info, max_us);
         } else {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
