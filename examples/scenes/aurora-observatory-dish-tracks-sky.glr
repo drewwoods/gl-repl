@@ -20,7 +20,7 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float th, dd, blink, ink, ph, slit; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
-static float cycle_length = 60; // seconds per dome shutter cycle (open ~2/3 of it)
+static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 // ===== Aurora observatory: a lonely dish tracking the sky =====
 // NOTE: the dome and dish are clip-plane carvings of glutSolidSphere --
 // a sphere is ONE flat command however finely tessellated, so the whole
