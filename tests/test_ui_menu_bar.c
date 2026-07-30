@@ -7,6 +7,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_pointer_script.h"
+#include "app/glr_workspaces.h"
 #include "repl/scenes.h"
 #include "repl/workspace_io.h"
 #include "repl/examples.h"
@@ -215,6 +216,67 @@ static int find_dropdown_item_point(int menu_id, int target_item,
     }
 
     return 0;
+}
+
+/* The File menu's workspace header names the binding the workspace rows below
+ * it act on. Three things are pinned: the unbound wording (the state that is
+ * otherwise invisible), that a bound manifest's name reaches the label, and
+ * that the row stays inert — it is a header, not a command. */
+static void test_workspace_header_row(void) {
+    char temp_dir[] = "/tmp/test_workspace_header.XXXXXX";
+    char *dir;
+    WorkspaceManifest manifest;
+
+    reset_menu_bar_fixture(1000, 600);
+    repl_set_workspace_dir(NULL);
+    glr_workspaces_refresh();
+    ASSERT_STR_EQ("workspace header names the unbound state",
+                  ui_menu_bar_menu_item_label_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_WORKSPACE_HDR),
+                  "### WORKSPACE: (none)");
+
+    dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("workspace header test directory created", dir != NULL);
+    if (!dir) return;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Header Test");
+    ASSERT_TRUE("workspace header manifest written",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
+    repl_set_workspace_dir(dir);
+    ASSERT_STR_EQ("workspace header names the bound workspace",
+                  ui_menu_bar_menu_item_label_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_WORKSPACE_HDR),
+                  "### WORKSPACE: Header Test");
+
+    /* Overlong names truncate instead of widening the whole File dropdown.
+     * Rewriting the manifest under an unchanged binding also exercises the
+     * memo's documented invalidation point. */
+    snprintf(manifest.name, sizeof(manifest.name),
+             "AbcdefghijklmnopqrstuvwxyzABCD");
+    ASSERT_TRUE("workspace header long-name manifest written",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
+    glr_workspaces_refresh();
+    ASSERT_STR_EQ("workspace header truncates a long name",
+                  ui_menu_bar_menu_item_label_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_WORKSPACE_HDR),
+                  "### WORKSPACE: Abcdefghijklmnopqrstuvwx");
+
+    ASSERT_INT_EQ("workspace header row is not clickable",
+                  find_dropdown_item_point(GLR_MENU_FILE,
+                                           GLR_FILE_ITEM_WORKSPACE_HDR,
+                                           NULL, NULL), 0);
+    ui_menu_bar_close();
+
+    repl_set_workspace_dir(NULL);
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(path);
+    }
+    rmdir(dir);
+    glr_workspaces_refresh();
 }
 
 static void test_open_close_state(void) {
@@ -1530,6 +1592,7 @@ int main(void) {
     test_menu_bar_rect_helper();
     test_reveal_workspace_enabled_state();
     test_scene_file_action_enabled_state();
+    test_workspace_header_row();
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();

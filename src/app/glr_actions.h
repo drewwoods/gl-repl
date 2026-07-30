@@ -46,6 +46,7 @@ enum {
     GLR_FILE_ITEM_EXPORT_PLY,        /* F11: capture geometry to output.ply */
     GLR_FILE_ITEM_SPLIT_DECL,        /* Ctrl+Shift+S: split multi-var decl at cursor */
     GLR_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
+    GLR_FILE_ITEM_WORKSPACE_HDR,     /* "### WORKSPACE: <name>" inert header */
     GLR_FILE_ITEM_NEW_WORKSPACE,
     GLR_FILE_ITEM_SAVE_WORKSPACE,
     GLR_FILE_ITEM_SAVE_WORKSPACE_AS,

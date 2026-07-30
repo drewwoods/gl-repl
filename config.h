@@ -205,6 +205,18 @@
 #define GLR_DEFAULT_WORKSPACE_NAME "default"
 #endif
 
+/* Window title. The base name stands alone at glutCreateWindow() time (no
+ * scene is loaded yet); the controller then keeps the live title at
+ * "<base> - <workspace> / <scene>" so the OS window, the Dock, the window
+ * switcher, and every screenshot name the active workspace binding. See
+ * glr_ctrl_refresh_window_title(). */
+#ifndef GLR_WINDOW_TITLE_BASE
+#define GLR_WINDOW_TITLE_BASE "gl-repl"
+#endif
+#ifndef GLR_WINDOW_TITLE_MAX
+#define GLR_WINDOW_TITLE_MAX 256
+#endif
+
 /* Filename holding persisted audio state (track, position, volume).
  * Resolved against the working directory when that is writable, else
  * against the per-user data dir (glr_paths_default_audio_state_file()).

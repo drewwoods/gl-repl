@@ -183,6 +183,7 @@ static inline GLUTproc glutGetProcAddress(const char *name) {
     return (GLUTproc)0;
 }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
+static inline void glutSetWindowTitle(const char *title) { (void)title; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline void glutBitmapString(void *font, const unsigned char *string) {
     const unsigned char *ch = string;

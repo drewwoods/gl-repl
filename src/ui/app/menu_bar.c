@@ -74,6 +74,14 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 
 #define PIN_SEARCH_MIN_W 140
 
+/* File-menu workspace header row. The dropdown sizes itself to its widest
+ * raw label, so the workspace name is truncated rather than allowed to
+ * stretch the whole File menu to a 63-char name's width. */
+enum {
+    WORKSPACE_HDR_NAME_MAX  = 24,
+    WORKSPACE_HDR_LABEL_MAX = 16 + WORKSPACE_HDR_NAME_MAX  /* "### WORKSPACE: " */
+};
+
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 
 static int g_menu_item_hover = -1;
@@ -436,6 +444,18 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_SPLIT_DECL)    return "Split Declaration";
         if (i == GLR_FILE_ITEM_REVEAL_WORKSPACE) return "Reveal Workspace Folder";
         if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
+        if (i == GLR_FILE_ITEM_WORKSPACE_HDR) {
+            /* Names the binding the rows below it act on: which workspace
+             * "Save Workspace" writes to, or that there is none to write to.
+             * Inert by construction — menu_chrome_kind() classifies the
+             * "### " prefix as a header, which both the hit-test and the
+             * pointer-target lookup skip. */
+            static char ws_header[WORKSPACE_HDR_LABEL_MAX];
+            const char *name = glr_workspaces_active_name();
+            snprintf(ws_header, sizeof(ws_header), "### WORKSPACE: %.*s",
+                     WORKSPACE_HDR_NAME_MAX, name[0] ? name : "(none)");
+            return ws_header;
+        }
         if (i == GLR_FILE_ITEM_NEW_WORKSPACE) return "New Workspace...";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE_AS) return "Save Workspace As...";
@@ -1239,6 +1259,10 @@ const char *ui_menu_bar_menu_item_shortcut_for_test(int menu_id, int item_idx) {
 
 int ui_menu_bar_menu_item_enabled_for_test(int menu_id, int item_idx) {
     return menu_item_enabled(menu_id, item_idx);
+}
+
+const char *ui_menu_bar_menu_item_label_for_test(int menu_id, int item_idx) {
+    return menu_item_label(menu_id, item_idx);
 }
 
 /* Classify a raw dropdown label as header / separator / item — the

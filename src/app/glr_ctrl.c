@@ -41,6 +41,7 @@
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
+#include "app/glr_workspaces.h"      /* glr_workspaces_active_name (window title) */
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
@@ -1693,6 +1694,47 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
     out->count = n;
 }
 
+/* Keep the window title naming the active workspace binding and scene:
+ * "gl-repl - <workspace> / <scene>". The workspace field is always present —
+ * an unbound collection of scenes reads "(no workspace)" rather than dropping
+ * the field, since that absence is exactly what the title exists to show. The
+ * scene half is omitted only when neither a user scene nor an example is
+ * active (Scene -> New, or a running tutorial), matching the scene tab strip's
+ * "no synthetic tab" rule.
+ *
+ * ASCII separators only: X11's XStoreName takes Latin-1, so a nicer em dash
+ * would not survive the trip on Linux.
+ *
+ * Called every frame, but glutSetWindowTitle only fires when the composed
+ * string actually changes — the per-frame cost is two snprintfs and a strcmp,
+ * with no filesystem work (glr_workspaces_active_name memoizes its manifest
+ * read) and no window-system traffic. */
+static void glr_ctrl_refresh_window_title(void) {
+    static char pushed[GLR_WINDOW_TITLE_MAX];
+    char title[GLR_WINDOW_TITLE_MAX];
+    char scene_part[USER_SCENE_NAME_MAX + 4];
+    const char *workspace = glr_workspaces_active_name();
+    const char *scene = NULL;
+    int slot = repl_active_user_scene();
+    int example_idx = repl_state_scenes().active_example_idx;
+
+    if (slot >= 0)
+        scene = repl_user_scene_name(slot);
+    else if (example_idx >= 0)
+        scene = repl_example_name(example_idx);
+
+    scene_part[0] = '\0';
+    if (scene && scene[0])
+        snprintf(scene_part, sizeof(scene_part), " / %s", scene);
+    snprintf(title, sizeof(title), "%s - %s%s", GLR_WINDOW_TITLE_BASE,
+             workspace[0] ? workspace : "(no workspace)", scene_part);
+
+    if (strcmp(title, pushed) == 0)
+        return;
+    snprintf(pushed, sizeof(pushed), "%s", title);
+    glutSetWindowTitle(title);
+}
+
 static const char *glr_ctrl_unbalanced_warning_for_type(CmdType type) {
     switch (type) {
     case CMD_BEGIN:        return "missing glEnd";
@@ -2318,6 +2360,7 @@ void glr_ctrl_display_frame(void) {
 
     prof_frame_tick();
     memprof_frame_tick();
+    glr_ctrl_refresh_window_title();
     /* Dial GPU timer-query capture to what the profile panel can show this
      * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
      * query boundaries aren't free, so don't issue ones nobody can see.

@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
                          * explicit --no-accum drops the request. */
                         (opts.use_accum != GLR_CLI_ACCUM_OFF ? GLUT_ACCUM : 0));
     glutInitWindowSize(opts.window_w, opts.window_h);
-    glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
+    glutCreateWindow(GLR_WINDOW_TITLE_BASE);
     glr_init_trace("window created");
 
     glr_ctrl_init_gl();

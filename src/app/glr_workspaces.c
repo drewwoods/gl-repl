@@ -24,6 +24,14 @@ typedef struct {
 static GlrWorkspaceEntry g_entries[GLR_WORKSPACES_MAX];
 static int g_count;
 
+/* glr_workspaces_active_name() memo. g_name_valid is a separate flag rather
+ * than a "g_name_dir is empty" test because "" (unbound) is itself a
+ * cacheable key — and the flag is what glr_workspaces_refresh() clears, so a
+ * newly written manifest at an already-bound directory is picked up. */
+static char g_name_dir[GLR_PATH_MAX];
+static char g_name[WORKSPACE_IO_NAME_MAX];
+static int  g_name_valid;
+
 static int entry_cmp(const void *a, const void *b) {
     const GlrWorkspaceEntry *ea = (const GlrWorkspaceEntry *)a;
     const GlrWorkspaceEntry *eb = (const GlrWorkspaceEntry *)b;
@@ -34,6 +42,7 @@ void glr_workspaces_refresh(void) {
     char root[GLR_PATH_MAX];
     DIR *d;
     g_count = 0;
+    g_name_valid = 0;
     if (!glr_paths_workspaces_root(root, sizeof(root)))
         return;
     d = opendir(root);
@@ -77,6 +86,50 @@ int glr_workspaces_active_index(void) {
         if (glr_paths_same_dir(active, g_entries[i].path))
             return i;
     return -1;
+}
+
+/* Trailing path component of `dir`, ignoring trailing slashes; "" when the
+ * path is all slashes. Last-resort workspace name for a manifest that carries
+ * no name= line. */
+static const char *dir_basename(const char *dir) {
+    size_t end = strlen(dir);
+    size_t start;
+    while (end > 0 && dir[end - 1] == '/')
+        end--;
+    start = end;
+    while (start > 0 && dir[start - 1] != '/')
+        start--;
+    return dir + start;
+}
+
+const char *glr_workspaces_active_name(void) {
+    const char *dir = repl_workspace_dir();
+    if (!dir)
+        dir = "";
+    if (g_name_valid && strcmp(dir, g_name_dir) == 0)
+        return g_name;
+
+    snprintf(g_name_dir, sizeof(g_name_dir), "%s", dir);
+    g_name[0] = '\0';
+    if (dir[0]) {
+        WorkspaceManifest manifest;
+        int idx = glr_workspaces_active_index();
+        if (idx >= 0) {
+            snprintf(g_name, sizeof(g_name), "%s", g_entries[idx].name);
+        } else if (workspace_io_manifest_read(dir, &manifest, NULL, 0)) {
+            const char *base = dir_basename(dir);
+            snprintf(g_name, sizeof(g_name), "%s",
+                     manifest.name[0] ? manifest.name : base);
+        }
+    }
+    /* A bound directory that resolved to no name is a directory with no
+     * manifest *yet* — the state between binding a workspace path and writing
+     * its manifest. Leave that one uncached so the name appears as soon as the
+     * manifest lands, even without an intervening glr_workspaces_refresh().
+     * Costs one stat per call, and only while in that transient state; the
+     * common unbound case (dir == "") caches and never touches the disk. */
+    g_name_valid = (dir[0] == '\0' || g_name[0] != '\0');
+    return g_name;
 }
 
 static void set_err(char *err, size_t err_sz, const char *msg) {

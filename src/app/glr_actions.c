@@ -1733,6 +1733,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             /* Hover-only flyout parent. */
             return 0;
         case GLR_FILE_ITEM_SCENE_SEP:
+        case GLR_FILE_ITEM_WORKSPACE_HDR:
         case GLR_FILE_ITEM_QUIT_SEP:
             return 1;
         case GLR_FILE_ITEM_QUIT:
