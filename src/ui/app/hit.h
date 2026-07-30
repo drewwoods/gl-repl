@@ -21,6 +21,7 @@ typedef enum {
     UI_HIT_CODE_FOCUS_TOGGLE,
     UI_HIT_HELP_TOGGLE,
     UI_HIT_CODE_PANEL_TAB,
+    UI_HIT_CODE_PANEL_WORKSPACE_CHIP, /* tab strip's leading workspace chip */
     UI_HIT_INLINE_COLOR_SWATCH,
     UI_HIT_NUMERIC_SWATCH,
     UI_HIT_MENU_BUTTON,

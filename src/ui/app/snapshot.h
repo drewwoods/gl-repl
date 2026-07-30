@@ -56,6 +56,16 @@ enum { UI_RESHAPE_PROJ_LINE_MAX = 96 };/* == REPL_EXPORT_PROJ_LINE_MAX */
 enum { UI_LIGHTS_DISPLAY_MAX = 8 };
 enum { UI_INIT_SECTION_MAX = 32 };
 
+/* Workspace binding the tab strip's leading chip names. `name` is "" when no
+ * managed workspace is bound — the chip renders that absence rather than
+ * hiding, so "these are loose scenes" is a visible state. Dimension repeated
+ * locally for UI-layer purity, like UI_SCENE_TAB_NAME_MAX above; glr_ctrl.c
+ * STATIC_ASSERTs the equivalence. */
+enum { UI_WORKSPACE_NAME_MAX = 64 };   /* == WORKSPACE_IO_NAME_MAX */
+typedef struct {
+    char name[UI_WORKSPACE_NAME_MAX];
+} UiWorkspaceBinding;
+
 typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;
 typedef struct {
     char           name[UI_SCENE_TAB_NAME_MAX];
@@ -154,6 +164,7 @@ typedef struct UiRenderSnapshot {
 
     /* Scene tab strip — derived each frame, no persistent model */
     UiSceneTabList              scene_tabs;
+    UiWorkspaceBinding          workspace;
 
     /* Inline scene-rename prompt. Owns its own display state (sourced
      * from editor_inline_rename_buffer) instead of riding the shared

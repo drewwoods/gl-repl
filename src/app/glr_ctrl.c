@@ -42,6 +42,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
 #include "app/glr_workspaces.h"      /* glr_workspaces_active_name (window title) */
+#include "repl/workspace_io.h"       /* WORKSPACE_IO_NAME_MAX (snapshot cap assert) */
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
@@ -1646,6 +1647,8 @@ STATIC_ASSERT(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1,
               "scene-tab cap must fit every user slot plus the example tab");
 STATIC_ASSERT(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX,
               "scene-tab name buffer must match the user-scene name max");
+STATIC_ASSERT(UI_WORKSPACE_NAME_MAX == WORKSPACE_IO_NAME_MAX,
+              "workspace-chip name buffer must match the manifest name max");
 /* Same rationale for the snapshot's resolved reshape-projection block:
  * snapshot.h hardcodes the dimensions (UI-layer purity), repl/export.h
  * owns the source-of-truth, equivalence is asserted here. */
@@ -2004,6 +2007,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
     snap->user_scene_active_idx   = repl_active_user_scene();
     glr_ctrl_build_scene_tabs(&snap->scene_tabs);
+    snprintf(snap->workspace.name, UI_WORKSPACE_NAME_MAX, "%s",
+             glr_workspaces_active_name());
 
     snap->rename_active = editor_inline_rename_active();
     snprintf(snap->rename_text, sizeof(snap->rename_text), "%s",

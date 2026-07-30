@@ -28,6 +28,35 @@ enum {
                          * top isn't clipped by the menu bar */
 };
 
+/* Workspace chip metrics. The chip leads the strip as a breadcrumb root —
+ * "<workspace> > [tab][tab]" — so the container is named before the things it
+ * contains. It is deliberately NOT tab-shaped (no rounded top, no outline):
+ * it is not selectable and must not read as a ninth scene. */
+enum {
+    CHIP_PAD_X   = 8,
+    CHIP_MIN_W   = 52,
+    CHIP_MAX_W   = 150,
+    CHIP_GAP     = 6,   /* px between the chip's separator and tab 0 */
+    CHIP_SEP_W   = 7,   /* width reserved for the ">" breadcrumb glyph */
+};
+
+/* Chip label: the workspace name, or the unbound state spelled out. Loose
+ * scenes are the state users cannot currently see, so the chip names it
+ * instead of going blank. */
+static const char *chip_label(const UiRenderSnapshot *snap) {
+    return snap->workspace.name[0] ? snap->workspace.name : "no workspace";
+}
+
+/* Chip width, including its trailing separator glyph and gap. The chip always
+ * shows when the strip shows — its absence would be indistinguishable from an
+ * unbound workspace, which is the very distinction it exists to draw. */
+static int chip_total_w(const UiRenderSnapshot *snap) {
+    int lw = (int)strlen(chip_label(snap)) * FONT_SMALL_W + 2 * CHIP_PAD_X;
+    if (lw < CHIP_MIN_W) lw = CHIP_MIN_W;
+    if (lw > CHIP_MAX_W) lw = CHIP_MAX_W;
+    return lw + CHIP_SEP_W + CHIP_GAP;
+}
+
 /* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
  * the panel is hidden or the derived set is empty). cp_x / cp_w / tab_by /
  * tab_bh are the band's outer rectangle (OpenGL bottom-left y). */
@@ -35,10 +64,12 @@ static int scene_tabs_rects(const UiRenderSnapshot *snap,
                             int x[UI_SCENE_TAB_CAP],
                             int w[UI_SCENE_TAB_CAP],
                             int *cp_x_out, int *cp_w_out,
-                            int *tab_by, int *tab_bh) {
+                            int *tab_by, int *tab_bh,
+                            int *chip_x_out, int *chip_w_out) {
     int cp_x, cp_y, cp_w, cp_h;
     int menu_by, by, bh;
     int count, avail, natural_sum, i, cx;
+    int chip_w;
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0)
@@ -54,14 +85,26 @@ static int scene_tabs_rects(const UiRenderSnapshot *snap,
     bh = TAB_STRIP_H;
     by = menu_by - bh;
 
-    if (cp_x_out) *cp_x_out = cp_x;
-    if (cp_w_out) *cp_w_out = cp_w;
-    if (tab_by)   *tab_by = by;
-    if (tab_bh)   *tab_bh = bh;
+    /* Chip width is reserved before the tabs are laid out, so the overflow
+     * shrink below divides what is actually left over rather than letting the
+     * last tab slide under the chip. */
+    chip_w = chip_total_w(snap);
+    avail = cp_w - 2 * CODE_MARGIN_X - chip_w;
+    if (avail < count) {
+        /* Panel too narrow for chip + one px per tab: the tabs are the
+         * primary control, so they keep the space and the chip yields. */
+        chip_w = 0;
+        avail = cp_w - 2 * CODE_MARGIN_X;
+        if (avail < count)
+            avail = count;
+    }
 
-    avail = cp_w - 2 * CODE_MARGIN_X;
-    if (avail < count)
-        avail = count;
+    if (cp_x_out)   *cp_x_out = cp_x;
+    if (cp_w_out)   *cp_w_out = cp_w;
+    if (tab_by)     *tab_by = by;
+    if (tab_bh)     *tab_bh = bh;
+    if (chip_x_out) *chip_x_out = cp_x + CODE_MARGIN_X;
+    if (chip_w_out) *chip_w_out = chip_w ? chip_w - CHIP_SEP_W - CHIP_GAP : 0;
 
     natural_sum = 0;
     for (i = 0; i < count; i++) {
@@ -81,12 +124,31 @@ static int scene_tabs_rects(const UiRenderSnapshot *snap,
             w[i] = share;
     }
 
-    cx = cp_x + CODE_MARGIN_X;
+    cx = cp_x + CODE_MARGIN_X + chip_w;
     for (i = 0; i < count; i++) {
         x[i] = cx;
         cx += w[i];
     }
     return count;
+}
+
+int ui_scene_tabs_chip_rect(const UiRenderSnapshot *snap,
+                            int *x, int *y, int *w, int *h) {
+    int tx[UI_SCENE_TAB_CAP], tw[UI_SCENE_TAB_CAP];
+    int by, bh, chip_x, chip_w;
+
+    if (!snap)
+        return 0;
+    if (scene_tabs_rects(snap, tx, tw, NULL, NULL, &by, &bh,
+                         &chip_x, &chip_w) <= 0)
+        return 0;
+    if (chip_w <= 0)
+        return 0;
+    if (x) *x = chip_x;
+    if (y) *y = by;
+    if (w) *w = chip_w;
+    if (h) *h = bh;
+    return 1;
 }
 
 int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
@@ -95,7 +157,7 @@ int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
 
     if (!snap)
         return 0;
-    if (scene_tabs_rects(snap, x, w, NULL, NULL, &by, &bh) <= 0)
+    if (scene_tabs_rects(snap, x, w, NULL, NULL, &by, &bh, NULL, NULL) <= 0)
         return 0;
     return bh;
 }
@@ -174,14 +236,54 @@ static void scene_tabs_draw_label(int tx, int ty, const char *name,
     gl2d_draw_string((float)tx, (float)ty, buf, FONT_SMALL);
 }
 
+/* Draw the leading workspace chip: a flat recessed plate, its label, and the
+ * ">" breadcrumb glyph that ties it to the tabs. No-op when the chip yielded
+ * its width to the tabs (chip_w == 0).
+ *
+ * A bound workspace reads in the primary text colour; the unbound state is
+ * muted and lower-contrast, so "loose scenes" looks like a gap in the
+ * breadcrumb rather than a named container. */
+static void scene_tabs_draw_chip(const UiRenderSnapshot *snap,
+                                 int chip_x, int chip_w, int by, int bh,
+                                 int hover) {
+    const char *label;
+    int bound;
+    float ch;
+
+    if (chip_w <= 0)
+        return;
+    label = chip_label(snap);
+    bound = (snap->workspace.name[0] != '\0');
+    ch = (float)(bh - TAB_TOP_GAP);
+
+    ui_clr_a(hover ? UI_TOK_MENU_LABEL_HOVER_BG : UI_TOK_RAISED, 0.9f);
+    glRectf((float)chip_x, (float)by, (float)(chip_x + chip_w), (float)by + ch);
+
+    if (hover)
+        ui_clr(UI_TOK_TEXT_ON_HILITE);
+    else if (bound)
+        ui_clr(UI_TOK_TEXT_PRIMARY);
+    else
+        ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+    scene_tabs_draw_label(chip_x + CHIP_PAD_X, by + 3, label,
+                          chip_w - 2 * CHIP_PAD_X);
+
+    /* Breadcrumb separator, always muted — it is punctuation, not content. */
+    ui_clr(UI_TOK_TEXT_MUTED);
+    gl2d_draw_string((float)(chip_x + chip_w + 1), (float)(by + 3), ">",
+                     FONT_SMALL);
+}
+
 void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
     int x[UI_SCENE_TAB_CAP], w[UI_SCENE_TAB_CAP];
     int cp_x, cp_w, by, bh, count;
-    int ry, hover, i;
+    int chip_x, chip_w;
+    int ry, hover, in_band, chip_hover, i;
 
     if (!snap)
         return;
-    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh);
+    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh,
+                             &chip_x, &chip_w);
     if (count <= 0)
         return;
 
@@ -189,9 +291,11 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
      * same flip the hit-test uses. */
     ry = snap->viewport.window_h - snap->pointer.mouse_y;
     hover = -1;
-    if (snap->pointer.mouse_x >= cp_x &&
-        snap->pointer.mouse_x < cp_x + cp_w &&
-        ry >= by && ry < by + bh) {
+    chip_hover = 0;
+    in_band = (snap->pointer.mouse_x >= cp_x &&
+               snap->pointer.mouse_x < cp_x + cp_w &&
+               ry >= by && ry < by + bh);
+    if (in_band) {
         for (i = 0; i < count; i++) {
             if (snap->pointer.mouse_x >= x[i] &&
                 snap->pointer.mouse_x < x[i] + w[i]) {
@@ -199,6 +303,9 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
                 break;
             }
         }
+        chip_hover = (chip_w > 0 &&
+                      snap->pointer.mouse_x >= chip_x &&
+                      snap->pointer.mouse_x < chip_x + chip_w);
     }
 
     glEnable(GL_BLEND);
@@ -208,6 +315,8 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
     ui_clr_a(UI_TOK_SURFACE, 0.98f);
     glRectf((float)cp_x, (float)by,
             (float)(cp_x + cp_w), (float)(by + bh));
+
+    scene_tabs_draw_chip(snap, chip_x, chip_w, by, bh, chip_hover);
 
     for (i = 0; i < count; i++) {
         const UiSceneTab *tab = &snap->scene_tabs.tabs[i];
@@ -274,16 +383,25 @@ UiHit ui_scene_tabs_hit_test(const UiRenderSnapshot *snap, int mx, int my) {
     UiHit h = ui_hit_none();
     int x[UI_SCENE_TAB_CAP], w[UI_SCENE_TAB_CAP];
     int cp_x, cp_w, by, bh, count, ry, i;
+    int chip_x, chip_w;
 
     if (!snap)
         return h;
-    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh);
+    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh,
+                             &chip_x, &chip_w);
     if (count <= 0)
         return h;
 
     ry = snap->viewport.window_h - my;
     if (mx < cp_x || mx >= cp_x + cp_w || ry < by || ry >= by + bh)
         return h;  /* outside the band -> let other handlers run */
+
+    if (chip_w > 0 && mx >= chip_x && mx < chip_x + chip_w) {
+        h.kind = UI_HIT_CODE_PANEL_WORKSPACE_CHIP;
+        h.local_x = (float)(mx - chip_x);
+        h.local_y = (float)(ry - by);
+        return h;
+    }
 
     for (i = 0; i < count; i++) {
         if (mx >= x[i] && mx < x[i] + w[i]) {

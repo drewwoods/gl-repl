@@ -1676,6 +1676,26 @@ void ui_menu_bar_open_config(float now) {
     ui_menu_bar_set_open_menu(MENU_CONFIG, now);
 }
 
+void ui_menu_bar_open_workspace_list(float now) {
+    if (!menu_visible(MENU_FILE))
+        return;
+    if (g_open_menu == MENU_FILE && g_submenu_menu_id == MENU_FILE &&
+        g_submenu_parent_row == GLR_FILE_ITEM_OPEN_WORKSPACE) {
+        ui_menu_bar_close();
+        return;
+    }
+    /* set_open_menu clears the submenu, so expand the flyout after it. The
+     * hover row is set to the flyout's parent as well: leaving it at -1 would
+     * let the next pointer motion inside the dropdown tear the flyout down
+     * through update_submenu_hover_at's "parent no longer hovered" branch. */
+    ui_menu_bar_set_open_menu(MENU_FILE, now);
+    g_menu_item_hover    = GLR_FILE_ITEM_OPEN_WORKSPACE;
+    g_submenu_menu_id    = MENU_FILE;
+    g_submenu_parent_row = GLR_FILE_ITEM_OPEN_WORKSPACE;
+    g_submenu_open_time  = now;
+    g_submenu_scroll     = 0;
+}
+
 int ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta) {
     int sx, sy, sw, sh, count, max_scroll;
     if (g_open_menu < 0 ||

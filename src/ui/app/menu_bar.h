@@ -75,6 +75,12 @@ void ui_menu_bar_set_open_menu(int menu_id, float now);
 /* Open the Config dropdown specifically (convenience for keyboard shortcut). */
 void ui_menu_bar_open_config(float now);
 
+/* Open the File dropdown with its "Open Workspace" flyout already expanded and
+ * its parent row hovered — the state a hover would have produced. Backs the
+ * tab strip's workspace chip, whose whole job is to lead here. Toggles closed
+ * when that flyout is already the open one. */
+void ui_menu_bar_open_workspace_list(float now);
+
 /* Frozen open-dropdown state (which menu, its fade clock, the hovered row).
  * Capture it before an action that runs glr_ctrl_reset_transients() — which
  * closes the menu — and restore it afterward to keep the dropdown open

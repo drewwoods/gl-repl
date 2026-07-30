@@ -1694,12 +1694,14 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → Reveal Workspace Folder | Reveal the bound managed workspace; disabled while no workspace is loaded |
 | File → Delete Workspace Scene | Confirm and remove the active managed scene from its workspace; disabled for examples, tutorials, and unbound scenes |
 
-Which workspace those rows act on is named in two always-available places: the
-**WORKSPACE:** header inside the File menu, directly above the workspace rows,
+Which workspace those rows act on is named in three always-available places:
+the chip leading the scene tab strip, which reads as a breadcrumb
+(`Demo > [scene][scene]`) and opens the workspace list when clicked; the
+**WORKSPACE:** header inside the File menu, directly above the workspace rows;
 and the window title, which reads `gl-repl - <workspace> / <scene>`. A scene
-collection that is not bound to any workspace reads `(none)` in the header and
-`(no workspace)` in the title, so "nothing is bound yet" is visible rather than
-merely implied.
+collection that is not bound to any workspace says so in each — `no workspace`
+on the chip, `(none)` in the header, `(no workspace)` in the title — so
+"nothing is bound yet" is visible rather than merely implied.
 
 A workspace is a directory with a `.glr-workspace` manifest. The manifest is
 the ordered source of truth for the workspace's scene files; unlisted `.c`

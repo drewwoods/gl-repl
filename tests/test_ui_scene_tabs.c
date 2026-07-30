@@ -12,6 +12,8 @@
 #include "repl/example_loader.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
+#include "app/glr_workspaces.h"
 #include "ui/app/hit.h"
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
@@ -24,7 +26,9 @@
 #include "support/test_harness.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -128,12 +132,35 @@ static void test_geometry_hit(void) {
 
     band_rect(&cp_x, &cp_w, &by, &bh);
 
-    /* Just inside the first tab (>= TAB_MIN_W from the left margin). */
-    h = ui_scene_tabs_hit_test(&snap,
-                               cp_x + CODE_MARGIN_X + 2,
-                               win_h - (by + bh / 2));
-    ASSERT_TRUE("first-tab click -> TAB", h.kind == UI_HIT_CODE_PANEL_TAB);
-    ASSERT_INT_EQ("first-tab item_idx", h.item_idx, 0);
+    /* The band now leads with the workspace chip, so the left margin is the
+     * chip and tab 0 sits to its right. Scan rightward from the chip's end
+     * for tab 0 rather than recomputing the private chip metrics — the
+     * contract under test is the breadcrumb ORDER, not the exact gap. */
+    {
+        int chip_x = 0, chip_w = 0;
+        int found_tab_x = -1;
+        int mx;
+
+        ASSERT_TRUE("chip is shown alongside tabs",
+                    ui_scene_tabs_chip_rect(&snap, &chip_x, NULL, &chip_w,
+                                            NULL));
+        h = ui_scene_tabs_hit_test(&snap, chip_x + 2,
+                                   win_h - (by + bh / 2));
+        ASSERT_TRUE("left-margin click -> WORKSPACE_CHIP",
+                    h.kind == UI_HIT_CODE_PANEL_WORKSPACE_CHIP);
+        ASSERT_INT_EQ("chip starts at the band's left margin", chip_x,
+                      cp_x + CODE_MARGIN_X);
+
+        for (mx = chip_x + chip_w; mx < cp_x + cp_w; mx++) {
+            h = ui_scene_tabs_hit_test(&snap, mx, win_h - (by + bh / 2));
+            if (h.kind == UI_HIT_CODE_PANEL_TAB) {
+                found_tab_x = mx;
+                break;
+            }
+        }
+        ASSERT_TRUE("tab 0 is reachable right of the chip", found_tab_x >= 0);
+        ASSERT_INT_EQ("first-tab item_idx", h.item_idx, 0);
+    }
 
     /* Far right of a wide panel: in-band but off every (short) tab. */
     h = ui_scene_tabs_hit_test(&snap, cp_x + cp_w - 2,
@@ -157,6 +184,72 @@ static void test_band_h_lockstep(void) {
         ASSERT_INT_EQ("TAB_STRIP_H drops visible rows by exactly one",
                       with, base - 1);
     }
+}
+
+/* The leading workspace chip: it must render in BOTH binding states (an
+ * unbound collection is exactly what it exists to make visible), name a bound
+ * workspace, and lead to the Open Workspace flyout on click. */
+static void test_workspace_chip(void) {
+    char temp_dir[] = "/tmp/test_chip_workspace.XXXXXX";
+    char *dir;
+    WorkspaceManifest manifest;
+    UiRenderSnapshot snap;
+    UiMenuBarRuntimeSnapshot menu;
+    UiHit h = ui_hit_none();
+    int chip_w = 0;
+
+    reset_fixture();
+    seed_user_scene();
+    repl_set_workspace_dir(NULL);
+    glr_workspaces_refresh();
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_STR("chip name is empty while unbound", snap.workspace.name, "");
+    ASSERT_TRUE("chip still renders while unbound",
+                ui_scene_tabs_chip_rect(&snap, NULL, NULL, &chip_w, NULL));
+    ASSERT_TRUE("unbound chip has real width", chip_w > 0);
+
+    dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("chip test directory created", dir != NULL);
+    if (!dir) return;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Chip Test");
+    ASSERT_TRUE("chip test manifest written",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
+    repl_set_workspace_dir(dir);
+    glr_workspaces_refresh();
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_STR("chip names the bound workspace", snap.workspace.name,
+               "Chip Test");
+
+    /* Click leads to the workspace list rather than switching anything. */
+    ui_menu_bar_close();
+    h.kind = UI_HIT_CODE_PANEL_WORKSPACE_CHIP;
+    glr_ctrl_router_handle_code_panel_hit(h, 0, 0);
+    ui_menu_bar_runtime_capture(&menu);
+    ASSERT_INT_EQ("chip click opens the File menu", menu.open_menu,
+                  GLR_MENU_FILE);
+    ASSERT_INT_EQ("chip click expands the Open Workspace flyout",
+                  menu.submenu_parent_row, GLR_FILE_ITEM_OPEN_WORKSPACE);
+    ASSERT_INT_EQ("flyout belongs to the File menu", menu.submenu_menu_id,
+                  GLR_MENU_FILE);
+    ASSERT_INT_EQ("flyout parent is hovered so motion cannot tear it down",
+                  menu.item_hover, GLR_FILE_ITEM_OPEN_WORKSPACE);
+
+    /* Second click on the chip toggles the same flyout closed. */
+    glr_ctrl_router_handle_code_panel_hit(h, 0, 0);
+    ui_menu_bar_runtime_capture(&menu);
+    ASSERT_INT_EQ("second chip click closes the menu", menu.open_menu, -1);
+
+    repl_set_workspace_dir(NULL);
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(path);
+    }
+    rmdir(dir);
+    glr_workspaces_refresh();
 }
 
 static void test_double_click_rename(void) {
@@ -355,6 +448,7 @@ int main(void) {
     test_derivation();
     test_geometry_hit();
     test_band_h_lockstep();
+    test_workspace_chip();
     test_double_click_rename();
     test_dropdown_over_band_consumes();
     test_rename_prompt_owns_its_state();

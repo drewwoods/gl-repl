@@ -57,7 +57,7 @@ would replace.
 That independence is intentional documentation, not just a build
 optimization. A demo should stay `src/app`-free unless a new exception is
 explicitly justified in its object-list comment and local docs. Pulling in
-`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L72) to make a demo
+`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L82) to make a demo
 easier usually means the owner module is missing a smaller contract or view
 type.
 
@@ -71,7 +71,7 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L140) from REPL runtime state + view state and calls
    [`glr_camera_load_modelview()`](glr_camera.h#L158) then [`render3d_draw_scene()`](../render3d/render.h#L137) (with the
    owned [`Render3dState`](../render3d/render.h#L97), once per accumulation-jitter sample);
-3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L72) and fans it out to the `ui_*_render`
+3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L82) and fans it out to the `ui_*_render`
    functions.
 
 On input, `glr_ctrl_keyboard` / `_mouse` normalize the event, ask UI to

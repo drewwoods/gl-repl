@@ -1644,6 +1644,16 @@ static int route_scene_tab_hit(const UiHit *hit) {
     return 1;  /* out-of-range stale idx — consumed no-op */
 }
 
+/* UI_HIT_CODE_PANEL_WORKSPACE_CHIP: the tab strip's leading workspace chip.
+ * Its only job is to lead to the workspace list, so it opens the File menu's
+ * Open Workspace flyout — where the active row is already accented — instead
+ * of duplicating any switching logic. Always consumed. */
+static int route_workspace_chip_hit(void) {
+    ui_menu_bar_open_workspace_list(repl_state_variables().anim_time);
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_STATUS_HISTORY: the bottom messages button (item_idx == 1)
  * toggles the inline recent-message list; a click on the open list body
  * (item_idx == 0) is consumed so it doesn't fall through to the scene. */
@@ -1770,13 +1780,18 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
      * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
      * dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from
-     * ui_panels_handle_code_panel_press. */
+     * ui_panels_handle_code_panel_press. The workspace chip is exempt for the
+     * same reason a menu button is: it is a menu-opening control, so it must
+     * own its own open/close toggle. Dismissing here first would close the
+     * flyout its handler is about to reopen, and the second click would read
+     * as doing nothing. */
     int dismissed_dropdown = 0;
     if (hit.kind != UI_HIT_MENU_BUTTON &&
         hit.kind != UI_HIT_MENU_ITEM &&
         hit.kind != UI_HIT_SUBMENU_ITEM &&
         hit.kind != UI_HIT_PIN_BUTTON &&
         hit.kind != UI_HIT_COLOR_SWATCH &&
+        hit.kind != UI_HIT_CODE_PANEL_WORKSPACE_CHIP &&
         ui_menu_bar_menu_dropdown_is_open()) {
         ui_menu_bar_close();
         dismissed_dropdown = 1;
@@ -1852,6 +1867,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_help_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:
         consumed = route_scene_tab_hit(&hit); break;
+    case UI_HIT_CODE_PANEL_WORKSPACE_CHIP:
+        consumed = route_workspace_chip_hit(); break;
     case UI_HIT_STATUS_HISTORY:
         consumed = route_status_history_hit(&hit); break;
     case UI_HIT_HELP_PANEL:

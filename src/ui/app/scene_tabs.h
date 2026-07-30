@@ -14,6 +14,9 @@
  *   ui_scene_tabs_hit_test():
  *     UI_HIT_CODE_PANEL_TAB    — a clickable scene tab; item_idx = display
  *                                index into snapshot.scene_tabs.
+ *     UI_HIT_CODE_PANEL_WORKSPACE_CHIP — the leading workspace chip; the
+ *                                controller opens the File menu's Open
+ *                                Workspace flyout.
  *     UI_HIT_CODE_PANEL_CHROME — in-band but off-tab (gaps / right of the
  *                                last tab); inert, consumes the click so it
  *                                does not fall through to a code-text hit.
@@ -23,6 +26,15 @@
  *   panel geometry comes through the shared ui_layout_code_panel_rect()
  *   helper, exactly as menu_bar.c does (so the band stays consistent with
  *   the rest of the panel chrome by construction).
+ *
+ * Leading workspace chip: the strip reads as a breadcrumb,
+ * "<workspace> > [tab][tab]", naming the container before its contents. The
+ * chip is flat and outline-less — not tab-shaped — because it is not
+ * selectable and must not read as another scene. It shows whenever the strip
+ * shows, spelling out "no workspace" when nothing is bound: hiding it would
+ * make an unbound collection indistinguishable from a bound one, which is the
+ * distinction it exists to draw. It yields its width back to the tabs only
+ * when the panel is too narrow for both.
  *
  * Shape/kind cues: every tab has a rounded-top outline (no bottom edge)
  * so the strip reads as tabs, not flat menu buttons. The active tab is
@@ -54,6 +66,13 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap);
  * band (TAB on a tab rect, CHROME in-band off-tab) so blank-strip clicks
  * never fall through to the code panel. */
 UiHit ui_scene_tabs_hit_test(const UiRenderSnapshot *snap, int mx, int my);
+
+/* Leading workspace chip's rect within the band (OpenGL bottom-left y, like
+ * the rest of the strip). Returns 1 when the chip is shown, 0 when the strip
+ * is hidden or the chip yielded its width to the tabs — in which case the out
+ * params are untouched. Any out param may be NULL. */
+int ui_scene_tabs_chip_rect(const UiRenderSnapshot *snap,
+                            int *x, int *y, int *w, int *h);
 
 /* Vertical reserve the strip occupies: TAB_STRIP_H when a non-empty tab
  * set is shown, else 0. The code panel threads this into its top-chrome
