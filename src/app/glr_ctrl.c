@@ -1698,12 +1698,10 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
 }
 
 /* Keep the window title naming the active workspace binding and scene:
- * "gl-repl - <workspace> / <scene>". The workspace field is always present —
- * an unbound collection of scenes reads "(no workspace)" rather than dropping
- * the field, since that absence is exactly what the title exists to show. The
- * scene half is omitted only when neither a user scene nor an example is
- * active (Scene -> New, or a running tutorial), matching the scene tab strip's
- * "no synthetic tab" rule.
+ * "gl-repl - Workspace: <workspace> | <scene>". If no workspace is bound, the workspace
+ * segment is omitted: "gl-repl - <scene>" or just "gl-repl". The scene half is
+ * omitted only when neither a user scene nor an example is active (Scene -> New,
+ * or a running tutorial), matching the scene tab strip's "no synthetic tab" rule.
  *
  * ASCII separators only: X11's XStoreName takes Latin-1, so a nicer em dash
  * would not survive the trip on Linux.
@@ -1733,11 +1731,20 @@ static void glr_ctrl_refresh_window_title(void) {
         scene_label = "Example: ";
     }
 
-    scene_part[0] = '\0';
-    if (scene && scene[0])
-        snprintf(scene_part, sizeof(scene_part), " / %s%s", scene_label, scene);
-    snprintf(title, sizeof(title), "%s - %s%s", GLR_WINDOW_TITLE_BASE,
-             workspace[0] ? workspace : "(no workspace)", scene_part);
+    if (workspace && workspace[0]) {
+        scene_part[0] = '\0';
+        if (scene && scene[0])
+            snprintf(scene_part, sizeof(scene_part), " | %s%s", scene_label, scene);
+        snprintf(title, sizeof(title), "%s - Workspace: %s%s", GLR_WINDOW_TITLE_BASE,
+                 workspace, scene_part);
+    } else {
+        if (scene && scene[0]) {
+            snprintf(title, sizeof(title), "%s - %s%s", GLR_WINDOW_TITLE_BASE,
+                     scene_label, scene);
+        } else {
+            snprintf(title, sizeof(title), "%s", GLR_WINDOW_TITLE_BASE);
+        }
+    }
 
     if (strcmp(title, pushed) == 0)
         return;

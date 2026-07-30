@@ -58,6 +58,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_memory_panel_render             test_ui_memory_panel_render
 #define glutSetCursor                      test_glutSetCursor
 #define glr_export_mesh_ply                test_glr_export_mesh_ply
+#define glutSetWindowTitle                 test_glutSetWindowTitle
 
 /* glr_camera.h was already pulled in at line 3 (before the #define),
  * so its `glr_camera_load_modelview` declaration is preserved as the
@@ -72,6 +73,13 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
 void test_ui_variable_panel_render(const UiVariablePanelView *view);
 void test_glutSetCursor(int cursor);
 int test_glr_export_mesh_ply(const char *path, int srgb_decode);
+static char g_last_window_title[256];
+static void test_glutSetWindowTitle(const char *title) {
+    if (title)
+        snprintf(g_last_window_title, sizeof(g_last_window_title), "%s", title);
+    else
+        g_last_window_title[0] = '\0';
+}
 
 #include "app/glr_ctrl.c"
 /* The input router was carved out of glr_ctrl.c into glr_ctrl_router.c; this
@@ -95,6 +103,7 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 #undef ui_memory_panel_render
 #undef glutSetCursor
 #undef glr_export_mesh_ply
+#undef glutSetWindowTitle
 
 static Render3dRenderConfig g_last_scene_config;
 /* Snapshot copy captured by the replay HUD stub; replaces the old
@@ -5091,6 +5100,18 @@ static void test_post_filter_key_cycling(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+static void test_refresh_window_title(void) {
+    g_last_window_title[0] = '\0';
+    repl_state_scenes_set_active_example_idx(0);
+    glr_ctrl_refresh_window_title();
+    g_last_window_title[0] = '\0';
+    repl_state_scenes_set_active_example_idx(1);
+    glr_ctrl_refresh_window_title();
+    ASSERT_TRUE("window title is set", g_last_window_title[0] != '\0');
+    ASSERT_TRUE("window title omits '(no workspace)' when no workspace is active",
+                strstr(g_last_window_title, "(no workspace)") == NULL);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -5166,6 +5187,7 @@ int main(void) {
     test_app_lifecycle_bootstrap_shutdown();
     test_init_gl_requires_loaded_point_parameter_proc();
     test_code_panel_scroll_clamping_and_follow();
+    test_refresh_window_title();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

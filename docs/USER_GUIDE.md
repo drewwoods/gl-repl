@@ -1698,10 +1698,11 @@ Which workspace those rows act on is named in three always-available places:
 the chip leading the scene tab strip, which reads as a breadcrumb
 (`Demo > [scene][scene]`) and opens the workspace list when clicked; the
 **WORKSPACE:** header inside the File menu, directly above the workspace rows;
-and the window title, which reads `gl-repl - <workspace> / <scene>`. A scene
-collection that is not bound to any workspace says so in each — `no workspace`
-on the chip, `(none)` in the header, `(no workspace)` in the title — so
-"nothing is bound yet" is visible rather than merely implied.
+and the window title, which reads `gl-repl - Workspace: <workspace> | <scene>` (or
+`gl-repl - <scene>` when no workspace is bound). A scene collection that is
+not bound to any workspace says so in the chip (`no workspace`) and menu header
+(`(none)`), while dropping the workspace field from the window title — so
+"nothing is bound yet" is visible without cluttering the title bar.
 
 A workspace is a directory with a `.glr-workspace` manifest. The manifest is
 the ordered source of truth for the workspace's scene files; unlisted `.c`
