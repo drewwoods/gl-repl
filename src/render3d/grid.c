@@ -4,6 +4,7 @@
 #include "grid.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include "accent_palette.h"  /* shared accent palette: ruler axis role colors */
+#include "render3d_hash.h"   /* render3d_hash01 — frozen decoration placement */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 #include <stdio.h>    /* snprintf (2D grid label text) */
 
@@ -782,10 +783,11 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
  * Ocean's underwater fill) — looking up through the ice. */
 
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
- * the cracks and frost heave stay frozen in place (no swimming). */
+ * the cracks and frost heave stay frozen in place (no swimming).
+ * Range adapter over the shared render3d_hash01 — same arithmetic as
+ * the copy this replaced, so every hashed position is unchanged. */
 static float grid_pos_hash(float a, float b) {
-    float s = sinf(a * 12.9898f + b * 78.233f) * 43758.5453f;
-    return (s - floorf(s)) * 2.0f - 1.0f;
+    return render3d_hash01(a, b) * 2.0f - 1.0f;
 }
 
 /* Crack segment count scales with extent so the kinks stay ~1.5 world

@@ -1559,8 +1559,8 @@ Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
 brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
 changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
 
-Seven axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
-Gizmo, Ruler.
+Nine axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
+Gizmo, Ruler, Arrow, Fountain.
 
 ![Compass axes](images/axes-compass.png)
 

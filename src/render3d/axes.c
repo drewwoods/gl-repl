@@ -4,6 +4,7 @@
 #include "axes.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include "occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
+#include "render3d_hash.h"   /* render3d_hash01 — Fountain droplet scatter */
 #include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
 /* ---- Axes transition curve plugin (Render3dXnReveal, see render3d_transition.h).
@@ -53,9 +54,11 @@ typedef struct AxesThemeSpec {
  * axes_color call multiplies through xn_alpha. The struct is
  * deliberately small — axes don't carry the breath/anim_time
  * GridDrawContext has because each per-theme renderer that needs
- * those takes them as separate args. */
+ * those takes them as separate args. Unlike GridDrawContext there is
+ * no xn_opacity here: grid needs it for the fog-recede pass, but the
+ * axes' fog path reads xn.fog_tf straight off the resolve, so the
+ * field was write-only. */
 typedef struct AxesDrawContext {
-    float xn_opacity;
     float xn_alpha;
 } AxesDrawContext;
 
@@ -343,7 +346,7 @@ static void render3d_axes_render_pulse_theme(const AxesDrawContext *ctx,
 }
 
 /* Procedural theme — see the AXES_NEON_LEN note at the top of this
- * file for why NEON is the only theme that doesn't sit in the
+ * file for why NEON, like FOUNTAIN, doesn't sit in the
  * g_axes_theme_specs table. */
 static void render3d_axes_render_neon_theme(const AxesDrawContext *ctx,
                                          float breath, float as) {
@@ -601,136 +604,156 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
     draw_axis_label_triplet(ctx, len, 0.25f, spec->label, "XYZ", 1);
 }
 
-/* -- Fountain theme: particle-stream coordinate axes.
- * Each axis gets a dim solid line and a stream of small electron-like
- * particles emitting from the origin, alpha-fading toward the tip,
- * then respawning.  A leader particle drives the phase; the rest use
- * golden-ratio offsets for stateless, evenly-spaced distribution.
- * Faint orbital rings at each axis midpoint complete the Bohr look.
- * Procedural (per-frame positions driven by anim_time), so like NEON
- * it stays out of the spec table. */
+/* -- Fountain theme: droplet-stream coordinate axes.
+ * Each axis gets a dim solid line and a stream of droplets sprayed out
+ * of the origin. They decelerate as they climb, spread laterally on the
+ * way, and fade out before the tip, then respawn. A leader droplet
+ * drives the phase; the rest use golden-ratio offsets for stateless,
+ * evenly-spaced distribution. Faint spray rings at each axis midpoint
+ * bound the stream. Procedural (per-frame positions driven by
+ * anim_time), so like NEON it stays out of the spec table. */
 
-#define FOUNTAIN_ORBIT_RADIUS 0.12f
 #define FOUNTAIN_RING_SEGMENTS 24
+#define FOUNTAIN_DROPLET_COUNT 150
+#define FOUNTAIN_STREAM_SPEED  0.10f          /* axis-lengths per second   */
+#define FOUNTAIN_PHI           0.6180339887f  /* 1/φ — golden ratio fract   */
+#define FOUNTAIN_SPRAY_RADIUS  0.05f          /* base lateral spray amp     */
+#define FOUNTAIN_SPRAY_MIN     0.6f           /* min per-droplet r scale    */
+#define FOUNTAIN_SPRAY_MAX     1.4f           /* max per-droplet r scale    */
+#define FOUNTAIN_SWIRL_RATE    2.0f           /* base rad/s around the axis */
+#define FOUNTAIN_BASE_ALPHA    0.6f           /* alpha at origin (t=0)      */
+#define FOUNTAIN_RING_SLACK    1.15f          /* rings sit just outside it  */
+
+/* Axial position in [0,1] at stream parameter t. Ease-out, so droplets
+ * decelerate as they climb the way a real spray slows toward its apex. */
+static float fountain_along(float t) {
+    float inv = 1.0f - t;
+    return 1.0f - inv * inv;
+}
+
+/* Lateral spray envelope at t. sqrtf front-loads the spread so the
+ * stream is already wider than the gap between droplets while they are
+ * still bright — the linear ramp this replaced put the widest spread
+ * exactly where alpha reached 0, which read as a solid line fading out
+ * rather than as a spray. The rings measure themselves off this same
+ * function so they can't drift away from the stream they bound. */
+static float fountain_spray_radius(float t, float radius_scale) {
+    return FOUNTAIN_SPRAY_RADIUS * radius_scale * sqrtf(t);
+}
+
+/* Spray ring perpendicular to each axis at `dist` along it. The three
+ * rings differ only in which coordinate is pinned, so they share one
+ * helper the way the line/tip/label triplets above do. */
+static void draw_axis_ring_triplet(const AxesDrawContext *ctx, float dist,
+                                   float radius, const Render3dRgba colors[3]) {
+    for (int axis = 0; axis < 3; axis++) {
+        glBegin(GL_LINE_LOOP);
+        axes_color_rgba(ctx, colors[axis]);
+        for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
+            float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
+            float u = cosf(a) * radius, v = sinf(a) * radius;
+            switch (axis) {
+            case RENDER3D_AXIS_X: glVertex3f(dist, u, v); break;
+            case RENDER3D_AXIS_Y: glVertex3f(u, dist, v); break;
+            case RENDER3D_AXIS_Z: glVertex3f(u, v, dist); break;
+            }
+        }
+        glEnd();
+    }
+}
 
 static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
-                                           float anim_time, float breath) {
+                                                float anim_time, float breath,
+                                                float as) {
     float len = AXES_FOUNTAIN_LEN;
     float glow = 0.6f + breath * 0.4f;
 
     /* Dim axis lines */
     Render3dRgba dim_axes[3] = {
-        rgba(0.85f, 0.25f, 0.25f, 0.22f),
-        rgba(0.25f, 0.85f, 0.25f, 0.22f),
-        rgba(0.25f, 0.25f, 0.85f, 0.22f),
+        rgba(0.85f, 0.25f, 0.25f, fminf(0.22f * as, 1.0f)),
+        rgba(0.25f, 0.85f, 0.25f, fminf(0.22f * as, 1.0f)),
+        rgba(0.25f, 0.25f, 0.85f, fminf(0.22f * as, 1.0f)),
     };
     draw_axis_line_triplet(ctx, len, 1.2f, dim_axes, 1);
 
-    /* Particle stream: many small electrons emit from origin along each
-     * axis, fading out toward the tip, then respawn.  One leader particle
-     * sets the base phase; the rest use golden-ratio offsets so the
-     * distribution is even and deterministic (no state needed).
-     * Each particle gets a pseudo-random angular offset, orbit radius,
-     * and rotation speed via a cheap hash so they scatter like dust
-     * rather than marching single-file. */
-    #define FOUNTAIN_PARTICLE_COUNT 150
-    #define FOUNTAIN_PARTICLE_SPEED 0.10f          /* axis-lengths per second */
-    #define FOUNTAIN_PHI            0.6180339887f  /* 1/φ — golden ratio fract */
-    #define FOUNTAIN_WOBBLE_RADIUS  0.05f          /* base orbital wobble amp  */
-    #define FOUNTAIN_WOBBLE_RATE    2.0f           /* base rad/s around axis   */
-    #define FOUNTAIN_BASE_ALPHA     0.6f           /* alpha at origin (t=0)    */
-
-    float leader_t = fmodf(anim_time * FOUNTAIN_PARTICLE_SPEED, 1.0f);
-
-    /* Per-axis bright colors */
-    float cr[3] = { 1.0f,  0.45f, 0.45f };
-    float cg[3] = { 0.45f, 1.0f,  0.45f };
-    float cb[3] = { 0.45f, 0.45f, 1.0f  };
+    /* Droplet stream. One leader droplet sets the base phase; the rest
+     * ride golden-ratio offsets, so the distribution is even and
+     * deterministic with no state to carry between frames. */
+    Render3dRgba spray[3] = {
+        rgba(1.0f,  0.45f, 0.45f, 1.0f),
+        rgba(0.45f, 1.0f,  0.45f, 1.0f),
+        rgba(0.45f, 0.45f, 1.0f,  1.0f),
+    };
+    float leader_t = fmodf(anim_time * FOUNTAIN_STREAM_SPEED, 1.0f);
 
     glPointSize(2.0f);
     glBegin(GL_POINTS);
     for (int axis = 0; axis < 3; axis++) {
         /* Phase offset per axis so the three streams don't sync */
         float axis_phase = (float)axis * 0.333f;
-        for (int p = 0; p < FOUNTAIN_PARTICLE_COUNT; p++) {
-            /* Deterministic position along the axis [0..1) */
-            float t = fmodf(leader_t + (float)p * FOUNTAIN_PHI + axis_phase, 1.0f);
-            float along = t * len;
+        for (int p = 0; p < FOUNTAIN_DROPLET_COUNT; p++) {
+            float fp = (float)p, fa = (float)axis;
+            float t = fmodf(leader_t + fp * FOUNTAIN_PHI + axis_phase, 1.0f);
 
-            /* Alpha: FOUNTAIN_BASE_ALPHA at origin, fading to 0 at the tip */
-            float alpha = FOUNTAIN_BASE_ALPHA * (1.0f - t) * glow;
+            /* Bright at the origin, out by the apex. Quadratic rather
+             * than linear so droplets stay visible into the stretch
+             * where the spray has actually spread out. Cheap enough to
+             * test before hashing, so invisible droplets cost nothing. */
+            float alpha = FOUNTAIN_BASE_ALPHA * (1.0f - t * t) * glow * as;
             if (alpha < 0.01f) continue;
+            if (alpha > 1.0f) alpha = 1.0f;
 
-            /* Cheap deterministic hashes per (axis, particle) — two
-             * independent channels for angle/radius and direction/rate. */
-            float seed  = (float)(axis * 73 + p * 137 + 5) * 43758.5453f;
-            float seed2 = (float)(axis * 53 + p * 97 + 11) * 27183.8141f;
-            float hash  = sinf(seed);
-            float hash2 = sinf(seed2);
+            /* Per-droplet spread and swirl, hashed fresh each frame from
+             * (axis, index) alone — same stateless model as the golden-
+             * ratio phase above and as grid.c's per-vertex hashing. Two
+             * independent channels for angle and radius; the swirl takes
+             * a third and splits it, scaling by 97 and re-fracting for
+             * the direction bit so rotation sense doesn't correlate with
+             * speed the way sin/cos of a shared seed used to. */
+            float h_angle = render3d_hash01(fp * 1.7f + fa * 19.0f, fa * 3.1f +  5.0f);
+            float h_rad   = render3d_hash01(fp * 2.3f + fa * 31.0f, fa * 7.9f + 11.0f);
+            float h_swirl = render3d_hash01(fp * 3.9f + fa * 43.0f, fa * 5.3f + 17.0f);
 
-            /* Per-particle random angle, radius, direction, and speed so
-             * the stream looks like scattered dust, not ants in a row. */
-            float angle_offset = hash * (float)M_PI * 2.0f;
-            float radius_scale = 0.6f + (hash * hash) * 0.8f; /* 0.6..1.4 */
-            float direction    = (hash2 > 0.0f) ? 1.0f : -1.0f; /* CW or CCW */
-            float speed_scale  = 0.3f + (cosf(seed2) * 0.5f + 0.5f) * 1.4f; /* 0.3..1.7 */
+            float radius_scale = FOUNTAIN_SPRAY_MIN
+                                 + h_rad * (FOUNTAIN_SPRAY_MAX - FOUNTAIN_SPRAY_MIN);
+            float rate = FOUNTAIN_SWIRL_RATE * (0.3f + h_swirl * 1.4f) /* 0.3..1.7 */
+                         * ((fmodf(h_swirl * 97.0f, 1.0f) < 0.5f) ? 1.0f : -1.0f);
 
-            float wobble_angle = angle_offset
-                                 + anim_time * FOUNTAIN_WOBBLE_RATE * speed_scale * direction;
-            float r = FOUNTAIN_WOBBLE_RADIUS * radius_scale * t;
-            float wx = cosf(wobble_angle) * r;
-            float wy = sinf(wobble_angle) * r;
+            float along = fountain_along(t) * len;
+            float r     = fountain_spray_radius(t, radius_scale);
+            float ang   = h_angle * (float)M_PI * 2.0f + anim_time * rate;
+            float u = cosf(ang) * r, v = sinf(ang) * r;
 
-            axes_color(ctx, cr[axis], cg[axis], cb[axis], alpha);
+            axes_color(ctx, spray[axis].r, spray[axis].g, spray[axis].b, alpha);
             switch (axis) {
-            case 0: glVertex3f(along, wx, wy);  break; /* X: wobble in YZ */
-            case 1: glVertex3f(wx, along, wy);  break; /* Y: wobble in XZ */
-            case 2: glVertex3f(wx, wy, along);  break; /* Z: wobble in XY */
+            case RENDER3D_AXIS_X: glVertex3f(along, u, v); break; /* spread in YZ */
+            case RENDER3D_AXIS_Y: glVertex3f(u, along, v); break; /* spread in XZ */
+            case RENDER3D_AXIS_Z: glVertex3f(u, v, along); break; /* spread in XY */
             }
         }
     }
     glEnd();
     glPointSize(1.0f);
 
-    /* Orbital rings at midpoint of each axis (perpendicular to axis) */
-    float mid = len * 0.5f;
-    float ring_alpha = 0.18f + breath * 0.10f;
+    /* Spray rings at each axis midpoint, sized off the widest droplet
+     * envelope there plus a little slack so they read as bounding the
+     * stream rather than cutting through it. */
+    float ring_alpha = fminf((0.18f + breath * 0.10f) * as, 1.0f);
+    Render3dRgba rings[3] = {
+        rgba(0.90f, 0.30f, 0.30f, ring_alpha),
+        rgba(0.30f, 0.90f, 0.30f, ring_alpha),
+        rgba(0.30f, 0.30f, 0.90f, ring_alpha),
+    };
     glLineWidth(1.0f);
+    draw_axis_ring_triplet(ctx, len * 0.5f,
+                           fountain_spray_radius(0.5f, FOUNTAIN_SPRAY_MAX)
+                               * FOUNTAIN_RING_SLACK,
+                           rings);
 
-    /* X-axis ring: circle in YZ plane at x=mid */
-    glBegin(GL_LINE_LOOP);
-    axes_color(ctx, 0.90f, 0.30f, 0.30f, ring_alpha);
-    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
-        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
-        glVertex3f(mid, cosf(a) * FOUNTAIN_ORBIT_RADIUS,
-                        sinf(a) * FOUNTAIN_ORBIT_RADIUS);
-    }
-    glEnd();
-
-    /* Y-axis ring: circle in XZ plane at y=mid */
-    glBegin(GL_LINE_LOOP);
-    axes_color(ctx, 0.30f, 0.90f, 0.30f, ring_alpha);
-    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
-        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
-        glVertex3f(cosf(a) * FOUNTAIN_ORBIT_RADIUS, mid,
-                   sinf(a) * FOUNTAIN_ORBIT_RADIUS);
-    }
-    glEnd();
-
-    /* Z-axis ring: circle in XY plane at z=mid */
-    glBegin(GL_LINE_LOOP);
-    axes_color(ctx, 0.30f, 0.30f, 0.90f, ring_alpha);
-    for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
-        float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
-        glVertex3f(cosf(a) * FOUNTAIN_ORBIT_RADIUS,
-                   sinf(a) * FOUNTAIN_ORBIT_RADIUS, mid);
-    }
-    glEnd();
-
-    /* Nucleus dot at origin */
+    /* Emitter dot at the origin */
     glPointSize(5.0f);
     glBegin(GL_POINTS);
-    axes_color(ctx, 0.95f, 0.92f, 0.80f, 0.6f + breath * 0.3f);
+    axes_color(ctx, 0.95f, 0.92f, 0.80f, fminf((0.6f + breath * 0.3f) * as, 1.0f));
     glVertex3f(0, 0, 0);
     glEnd();
     glPointSize(1.0f);
@@ -760,7 +783,7 @@ void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
 #endif
     );
     if (!xn.draw) return;
-    AxesDrawContext ctx = { .xn_opacity = xn.opacity, .xn_alpha = xn.alpha };
+    AxesDrawContext ctx = { .xn_alpha = xn.alpha };
 
     render3d_axes_push_state();
 
@@ -786,7 +809,9 @@ void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
     case AXES_THEME_GIZMO:   render3d_axes_render_gizmo_theme(&ctx, config, as); break;
     case AXES_THEME_RULER:   render3d_axes_render_ruler_theme(&ctx);            break;
     case AXES_THEME_ARROW:   render3d_axes_render_arrow_theme(&ctx);            break;
-    case AXES_THEME_FOUNTAIN:    render3d_axes_render_fountain_theme(&ctx, config->anim_time, breath); break;
+    case AXES_THEME_FOUNTAIN:
+        render3d_axes_render_fountain_theme(&ctx, config->anim_time, breath, as);
+        break;
     default:                                                                 break;
     }
 
