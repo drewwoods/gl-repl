@@ -94,7 +94,7 @@ ink = 6;
 glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
 drum(1.05, 0, 1.0, 24);
 glTranslatef(0, 1.0, 0);
-glRotatef(-135, 0, 1, 0);
+glRotatef(-172, 0, 1, 0);
 ink = 8;
 glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
 // dome = the top of a sphere: GL_CLIP_PLANE1 keeps y >= 0, and the
@@ -171,18 +171,31 @@ glEnable(GL_BLEND);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glDepthMask(GL_FALSE);
 
-// warm light spilling from the dome slit; fades as the shutter closes
+// warm light spilling from the dome slit; fades as the shutter closes.
+// Additive (GL_ONE) so it brightens whatever is behind the gap instead of
+// painting a flat panel over it, and a wider/dimmer halo behind the bright
+// core sells "glow" the same way the beacon's two-point halo does below.
 glPushMatrix();
 glTranslatef(1.8, 1.0, 0.5);
-glRotatef(-135, 0, 1, 0);
+glRotatef(-172, 0, 1, 0);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 glBegin(GL_QUADS);
-  glColor4f(1.0, 0.85, 0.15, 0.65*slit/0.31);
-  glVertex3f(-0.24, 0.02, -0.42);
-  glVertex3f(0.24, 0.02, -0.42);
-  glColor4f(1.0, 0.85, 0.15, 0.20*slit/0.31);
-  glVertex3f(0.15, 0.92, -0.28);
-  glVertex3f(-0.15, 0.92, -0.28);
+  glColor4f(1.0, 0.85, 0.15, 0.35*slit/0.31);
+  glVertex3f(-0.40, 0.00, -0.56);
+  glVertex3f(0.40, 0.00, -0.56);
+  glColor4f(1.0, 0.85, 0.15, 0.08*slit/0.31);
+  glVertex3f(0.24, 0.95, -0.32);
+  glVertex3f(-0.24, 0.95, -0.32);
 glEnd();
+glBegin(GL_QUADS);
+  glColor4f(1.0, 0.85, 0.15, 0.60*slit/0.31);
+  glVertex3f(-0.20, 0.02, -0.45);
+  glVertex3f(0.20, 0.02, -0.45);
+  glColor4f(1.0, 0.85, 0.15, 0.18*slit/0.31);
+  glVertex3f(0.12, 0.90, -0.30);
+  glVertex3f(-0.12, 0.90, -0.30);
+glEnd();
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glPopMatrix();
 
 // two amber windows on the drum's south face
