@@ -49,6 +49,7 @@ static void test_cpuprof_metrics(void) {
 static void test_cpuprof_time_color_policy(void) {
     ProfSectionInfo ordinary_total = { "Other Total", 0, 1, 0, 0 };
     ProfSectionInfo frame_total = prof_section_info(PROF_FRAME_TOTAL);
+    ProfSectionInfo slack = { "Present", 0, 0, 1, 0 };
 
     ASSERT_INT_EQ("ordinary 17ms total is red",
                   ui_profile_time_color(&ordinary_total, 17000.0),
@@ -59,6 +60,15 @@ static void test_cpuprof_time_color_policy(void) {
     ASSERT_INT_EQ("frame tolerance still ends at 17.5ms",
                   ui_profile_time_color(&frame_total, 17500.0),
                   UI_PROFILE_TIME_RED);
+    ASSERT_INT_EQ("slack row is informational even near-zero",
+                  ui_profile_time_color(&slack, 0.5),
+                  UI_PROFILE_TIME_INFO);
+    ASSERT_INT_EQ("slack row is informational when shrunk to nothing",
+                  ui_profile_time_color(&slack, 0.0),
+                  UI_PROFILE_TIME_INFO);
+    ASSERT_INT_EQ("slack row is informational when plentiful",
+                  ui_profile_time_color(&slack, 12000.0),
+                  UI_PROFILE_TIME_INFO);
 }
 
 static void test_cpuprof_section_collapse(void) {

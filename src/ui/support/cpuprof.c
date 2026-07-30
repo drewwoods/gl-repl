@@ -231,29 +231,20 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
  * period to ~33 ms and is nowhere near the tolerance. Other totals keep the
  * hard 1/60s red step.
  *
- * A slack row (is_slack — gl-repl's Present, the vsync wait) reads the same
- * scale backwards: the number is time the frame was handed, not time it spent,
- * so a long one is the healthy case and a shrinking one means the work above
- * has eaten the budget. Same three colors, inverted breakpoints — half a
- * 60 fps frame of slack left is green, an eighth is yellow, less is red. The
- * near-zero clamp below still wins, and reads as "nothing measured" rather
- * than an alarm: a real glFinish + swap never costs under 2 us, so that arm is
- * only reachable from the GL stubs. */
+ * A slack row (is_slack — gl-repl's Present, the vsync wait) isn't a budget
+ * the frame can blow: it's the leftover time the frame was handed back, so
+ * it never signals an alarm. It always reads as informational (a distinct
+ * color, not the green/yellow/red budget scale) regardless of magnitude. */
 /* FPS gauge: green/yellow/red is a fixed data-viz semantic, NOT theme
  * tokens (theme.h bucket 3 - red must read as "over budget" in every
  * scheme; it must not follow the UI accent). */
 UiProfileTimeColor ui_profile_time_color(const ProfSectionInfo *info,
                                          double us) {
+    if (info->is_slack)
+        return UI_PROFILE_TIME_INFO;
     if (us < 2.0)
         return UI_PROFILE_TIME_NEAR_ZERO;
-    if (info->is_slack) {
-        if (us >= 8333.0)
-            return UI_PROFILE_TIME_GREEN;
-        else if (us >= 2083.0)
-            return UI_PROFILE_TIME_YELLOW;
-        else
-            return UI_PROFILE_TIME_RED;
-    } else if (info->is_frame_total) {
+    if (info->is_frame_total) {
         if (us < 16700.0)
             return UI_PROFILE_TIME_GREEN;
         else if (us < 17500.0)
@@ -287,6 +278,9 @@ static void set_time_color(const ProfSectionInfo *info, double us) {
         break;
     case UI_PROFILE_TIME_RED:
         glColor3f(0.95f, 0.38f, 0.32f);
+        break;
+    case UI_PROFILE_TIME_INFO:
+        glColor3f(0.40f, 0.68f, 0.95f);
         break;
     case UI_PROFILE_TIME_NEAR_ZERO:
     default:

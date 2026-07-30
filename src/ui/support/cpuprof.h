@@ -63,7 +63,8 @@ typedef enum {
     UI_PROFILE_TIME_NEAR_ZERO = 0,
     UI_PROFILE_TIME_GREEN,
     UI_PROFILE_TIME_YELLOW,
-    UI_PROFILE_TIME_RED
+    UI_PROFILE_TIME_RED,
+    UI_PROFILE_TIME_INFO   /* is_slack rows: informational, not a budget alarm */
 } UiProfileTimeColor;
 
 UiProfileTimeColor ui_profile_time_color(const ProfSectionInfo *info,
