@@ -431,7 +431,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
         if (i == GLR_FILE_ITEM_LOAD_CLIPBOARD) return "Load Scene from Clipboard";
         if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
-        if (i == GLR_FILE_ITEM_DELETE_SCENE)  return "Delete Scene";
+        if (i == GLR_FILE_ITEM_DELETE_SCENE)  return "Delete Workspace Scene";
         if (i == GLR_FILE_ITEM_EXPORT_PLY)    return "Export .ply";
         if (i == GLR_FILE_ITEM_SPLIT_DECL)    return "Split Declaration";
         if (i == GLR_FILE_ITEM_REVEAL_WORKSPACE) return "Reveal Workspace Folder";
@@ -519,9 +519,16 @@ static const char *menu_item_label(int menu_id, int i) {
 }
 
 static int menu_item_enabled(int menu_id, int item_idx) {
-    if (menu_id == MENU_FILE &&
-        item_idx == GLR_FILE_ITEM_REVEAL_WORKSPACE)
-        return repl_workspace_is_managed();
+    if (menu_id == MENU_FILE) {
+        int editable_scene = !tutorial_active() &&
+                             repl_active_user_scene() >= 0;
+        if (item_idx == GLR_FILE_ITEM_RENAME_SCENE)
+            return editable_scene;
+        if (item_idx == GLR_FILE_ITEM_DELETE_SCENE)
+            return editable_scene && repl_workspace_is_managed();
+        if (item_idx == GLR_FILE_ITEM_REVEAL_WORKSPACE)
+            return repl_workspace_is_managed();
+    }
     return 1;
 }
 

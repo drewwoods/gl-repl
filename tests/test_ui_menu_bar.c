@@ -10,6 +10,7 @@
 #include "repl/scenes.h"
 #include "repl/workspace_io.h"
 #include "repl/examples.h"
+#include "repl/example_loader.h"
 #include "repl/tutorials.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay.h"
@@ -89,6 +90,72 @@ static void test_reveal_workspace_enabled_state(void) {
     ASSERT_INT_EQ("Reveal Workspace enabled for managed binding",
         ui_menu_bar_menu_item_enabled_for_test(
             GLR_MENU_FILE, GLR_FILE_ITEM_REVEAL_WORKSPACE), 1);
+
+    repl_set_workspace_dir(NULL);
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(path);
+    }
+    rmdir(dir);
+}
+
+static void test_scene_file_action_enabled_state(void) {
+    char temp_dir[] = "/tmp/test_scene_file_actions.XXXXXX";
+    char *dir;
+    WorkspaceManifest manifest;
+
+    reset_menu_bar_fixture(1000, 600);
+    repl_set_workspace_dir(NULL);
+    ASSERT_INT_EQ("Rename Scene disabled without a user scene",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 0);
+    ASSERT_INT_EQ("Delete Workspace Scene disabled while unbound",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_DELETE_SCENE), 0);
+
+    repl_load_example(0);
+    ASSERT_INT_EQ("Rename Scene disabled for an example",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 0);
+    ASSERT_INT_EQ("Delete Workspace Scene disabled for an example",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_DELETE_SCENE), 0);
+
+    ASSERT_TRUE("user scene created for File action state test",
+                repl_scenes_create_empty_user_scene() >= 0);
+    ASSERT_INT_EQ("Rename Scene enabled for an unbound user scene",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 1);
+    ASSERT_INT_EQ("Delete Workspace Scene stays disabled while unbound",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_DELETE_SCENE), 0);
+
+    dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("scene action test directory created", dir != NULL);
+    if (!dir) return;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Scene Actions");
+    ASSERT_TRUE("scene action managed manifest written",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
+    repl_set_workspace_dir(dir);
+    ASSERT_INT_EQ("Rename Scene enabled for a workspace scene",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 1);
+    ASSERT_INT_EQ("Delete Workspace Scene enabled for a workspace scene",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_DELETE_SCENE), 1);
+
+    tutorial_state_mut()->active = 1;
+    ASSERT_INT_EQ("Rename Scene disabled during a tutorial",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 0);
+    ASSERT_INT_EQ("Delete Workspace Scene disabled during a tutorial",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_DELETE_SCENE), 0);
+    tutorial_state_mut()->active = 0;
 
     repl_set_workspace_dir(NULL);
     {
@@ -1462,6 +1529,7 @@ int main(void) {
 
     test_menu_bar_rect_helper();
     test_reveal_workspace_enabled_state();
+    test_scene_file_action_enabled_state();
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();

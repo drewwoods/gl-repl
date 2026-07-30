@@ -1666,6 +1666,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         case GLR_FILE_ITEM_RENAME_SCENE: {
             int slot = repl_active_user_scene();
+            if (tutorial_active()) {
+                repl_set_status_error("Rename Scene is unavailable during a tutorial");
+                return 1;
+            }
             if (slot < 0) {
                 repl_set_status_error("No active scene to rename");
                 return 1;
@@ -1676,6 +1680,11 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         case GLR_FILE_ITEM_DELETE_SCENE: {
             int slot = repl_active_user_scene();
+            if (tutorial_active()) {
+                repl_set_status_error(
+                    "Delete Workspace Scene is unavailable during a tutorial");
+                return 1;
+            }
             if (slot < 0 || !repl_workspace_is_managed()) {
                 repl_set_status_error("No managed workspace scene to delete");
                 return 1;

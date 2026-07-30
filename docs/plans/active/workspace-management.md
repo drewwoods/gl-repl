@@ -196,7 +196,7 @@ Add `src/app/glr_modal.{c,h}` with kinds for:
 - Save Workspace As
 - Open Other Folder
 - Save Scene As
-- Confirm Delete Scene
+- Confirm Delete Workspace Scene
 
 The modal module owns prompt state, filtering, rendering data, and key capture.
 Filesystem/scene mutations remain in `glr_actions`; modal commit delegates to an
@@ -239,10 +239,9 @@ File menu layout:
 
 ```text
 New Scene / Save Scene / Save Scene as .glr / Load Scene /
-Load Scene from Clipboard / Rename Scene / Delete Scene / Export .ply /
-Split Declaration / Reveal Workspace Folder / --- /
+Load Scene from Clipboard / Rename Scene / Export .ply / Split Declaration / --- /
 New Workspace... / Save Workspace / Save Workspace As... /
-Open Workspace > / --- / Quit
+Open Workspace > / Reveal Workspace Folder / Delete Workspace Scene / --- / Quit
 ```
 
 File receives a flyout provider for Open Workspace. It lists managed workspaces

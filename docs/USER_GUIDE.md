@@ -1670,7 +1670,8 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
   Subsequent edits accumulate there.
 - **Rename** — File → Rename Scene opens an inline prompt in the status bar
   (Enter commits, Esc cancels). In a managed workspace this changes the tab
-  name while retaining the scene's stable persisted filename.
+  name while retaining the scene's stable persisted filename. The action is
+  disabled while an example or tutorial is active.
 - **Switching** — click a scene tab, or cycle with F12 / Shift+F12.
 - **Capacity** — all eight tabs are explicit. New/load/promotion operations
   fail without mutation when every slot is occupied; gl-repl never evicts a
@@ -1685,13 +1686,13 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
 | File → Load Scene | Load a `.c` file into a new scene slot |
 | File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
-| File → Delete Scene | Confirm and remove the active managed scene from its workspace |
-| File → Reveal Workspace Folder | Reveal the bound managed workspace; disabled while no workspace is loaded |
 | File → New Workspace… | Create and open a named managed workspace |
 | File → Save Workspace | Transactionally save every open scene and the manifest, including a visible example tab |
 | File → Save Workspace As… | Create a named workspace containing the current scene collection, including a visible example tab |
 | File → Open Workspace → *name* | Switch to a managed workspace |
 | File → Open Workspace → Other folder… | Open a managed workspace outside the normal workspace root |
+| File → Reveal Workspace Folder | Reveal the bound managed workspace; disabled while no workspace is loaded |
+| File → Delete Workspace Scene | Confirm and remove the active managed scene from its workspace; disabled for examples, tutorials, and unbound scenes |
 
 A workspace is a directory with a `.glr-workspace` manifest. The manifest is
 the ordered source of truth for the workspace's scene files; unlisted `.c`
