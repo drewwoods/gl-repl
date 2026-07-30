@@ -2522,7 +2522,8 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 # tools/glprobe/glprobe_glut.h instead of its own #ifdef __APPLE__ GLUT block;
 # see tools/glprobe/README.md. Binary lands at build/glprobe/<basename>.
 GLPROBE_SRCS = tools/glprobe/glprobe.c src/support/mesh_ply.c
-GLPROBE_BIN  = build/glprobe/$(basename $(notdir $(SAMPLE)))
+GLPROBE_DIR  = build/glprobe$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
+GLPROBE_BIN  = $(GLPROBE_DIR)/$(basename $(notdir $(SAMPLE)))
 
 # The same probe as an injectable library, for samples whose source must not be
 # touched. Interposes glutDisplayFunc to get a frame hook; see the header of
@@ -2542,8 +2543,9 @@ GLPROBE_BIN  = build/glprobe/$(basename $(notdir $(SAMPLE)))
 # by the preload library, and a debugging convenience target that quietly
 # produces an unprobeable binary is worse than one extra CMake directory.
 GLPROBE_PRELOAD_EXT  = $(if $(filter Darwin,$(UNAME_S)),dylib,so)
-GLPROBE_PRELOAD_LIB  = build/glprobe/libglprobe_preload.$(GLPROBE_PRELOAD_EXT)
-GLPROBE_PRELOAD_SRCS = tools/glprobe/glprobe_preload.c $(GLPROBE_SRCS)
+GLPROBE_PRELOAD_LIB  = $(GLPROBE_DIR)/libglprobe_preload.$(GLPROBE_PRELOAD_EXT)
+GLPROBE_PRELOAD_SRCS = tools/glprobe/glprobe_preload.c \
+                       tools/glprobe/glprobe_extract.c $(GLPROBE_SRCS)
 
 # Headless only: redirect a sample's <GLUT/glut.h> (the Apple-framework branch
 # of its own #ifdef) to the glprobe shim, so an untouched Apple-style sample
@@ -2578,7 +2580,7 @@ glprobe: $(GLPROBE_GLUT_DEPS) ## Build a standalone GL sample with the GL_FEEDBA
 		echo "$(RED)usage: make glprobe SAMPLE=<sample.c> [FREEGLUT_OSMESA=1]$(NC)"; \
 		exit 1; }
 	@test -f "$(SAMPLE)" || { echo "$(RED)no such sample: $(SAMPLE)$(NC)"; exit 1; }
-	@mkdir -p build/glprobe
+	@mkdir -p $(GLPROBE_DIR)
 	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations \
 		$(GLPROBE_COMPAT_CFLAGS) $(GL_HEADER_CFLAGS) \
 		-Itools/glprobe -Isrc \
@@ -2587,7 +2589,7 @@ glprobe: $(GLPROBE_GLUT_DEPS) ## Build a standalone GL sample with the GL_FEEDBA
 
 .PHONY: glprobe-preload
 glprobe-preload: $(GLPROBE_GLUT_DEPS) ## Build the glprobe probe as an LD_PRELOAD/DYLD_INSERT_LIBRARIES library (no sample source changes).
-	@mkdir -p build/glprobe
+	@mkdir -p $(GLPROBE_DIR)
 	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations -shared -fPIC \
 		$(GL_HEADER_CFLAGS) -Itools/glprobe -Isrc \
 		-o $(GLPROBE_PRELOAD_LIB) $(GLPROBE_PRELOAD_SRCS) \

@@ -57,7 +57,7 @@ make glprobe SAMPLE=flame-torch.c                     # native window
 make glprobe SAMPLE=flame-torch.c FREEGLUT_OSMESA=1   # headless
 ```
 
-The binary lands at `build/glprobe/<basename>`. The headless form needs no
+The binary lands at `build/glprobe/<basename>` (`build/glprobe-osmesa/` for the headless build — the two must not share a path, since a native sample with an OSMesa preload library injected into it simply hangs). The headless form needs no
 window at all, so it composes with the freeglut capture hooks:
 
 ```bash
@@ -97,6 +97,8 @@ make glprobe-preload FREEGLUT_OSMESA=1  # headless
 DYLD_INSERT_LIBRARIES=build/glprobe/libglprobe_preload.dylib GLPROBE=1 ./sample
 # Linux
 LD_PRELOAD=build/glprobe/libglprobe_preload.so GLPROBE=1 ./sample
+
+# The sample and the library must be built for the SAME backend.
 ```
 
 It gets its frame hook by interposing `glutDisplayFunc()`: it keeps the app's
@@ -109,7 +111,7 @@ passes, so the extra runs never reach the screen.
 |---|---|
 | `GLPROBE=1` | arm the probe (otherwise the library is inert) |
 | `GLPROBE_FRAME=n` | probe frame *n* instead of the first |
-| `GLPROBE_PLY=path` | rejected with a note — see the limitations below |
+| `GLPROBE_EXTRACT=path` | write the geometry out — see [Extraction](#extraction-getting-the-geometry-out) |
 
 ### The two passes
 
@@ -163,16 +165,88 @@ neutral pass's suppression check rather than after it.
 - **No geometry lens.** Camera-independent model-space coordinates would
   require overriding the modelview, and the app's display callback calls
   `glLoadIdentity()` and installs its own camera — the very thing that would
-  have to be suppressed. Coordinates come from unprojecting through the view
-  matrix snooped from `gluLookAt()`, so they are world-space when the app uses
-  `gluLookAt` and approximate otherwise (the report says which).
-- **No PLY.** The writer inverts a known ortho transform that only the
-  in-process geometry lens installs. `GLPROBE_PLY` prints a note rather than
-  writing a file whose positions would be silently wrong.
+  have to be suppressed. Diagnostic coordinates are unprojected through the
+  live matrices instead. (Extraction sidesteps this by neutralizing the view
+  for its own pass — but it gives up the *as-drawn* comparison to do so.)
+- **No PLY from the diagnostic passes.** They run under the app's own
+  perspective, whose inverse the writer cannot apply. `GLPROBE_EXTRACT` installs
+  the ortho the writer needs; use that.
 - **No per-function attribution.** State changes are the only boundaries
-  available; batches approximate objects, they do not name them.
+  available; batches approximate objects, they do not name them — and where an
+  app changes material per *tile* rather than per object (a checkerboard
+  ground), the segmentation degrades into dozens of tiny batches.
 
-For any of those four, use the in-process API.
+## Extraction: getting the geometry out
+
+The probe modes above answer questions about a frame. `GLPROBE_EXTRACT` takes
+the mesh instead — from an arbitrary binary, with no source access:
+
+```bash
+GLPROBE_EXTRACT=scene.ply  DYLD_INSERT_LIBRARIES=… ./sample   # PLY mesh
+GLPROBE_EXTRACT=scene.glr  DYLD_INSERT_LIBRARIES=… ./sample   # gl-repl snippet
+```
+
+| Env var | Meaning |
+|---|---|
+| `GLPROBE_EXTRACT=path` | extract to `path`; `.ply` writes a mesh, anything else a gl-repl snippet |
+| `GLPROBE_BATCH=n` | only the Nth batch (see [batches](#batches-without-knowing-the-source)) |
+| `GLPROBE_MAX_TRIS=n` | stop after n triangles |
+
+Extraction does not reuse the diagnostic passes, because two things that are
+right for a report are wrong for an extractor:
+
+- **The projection is replaced with a containing ortho.** Feedback clips to the
+  view volume, so a capture under the app's own perspective silently drops
+  everything off-screen or past the far plane. Overriding works because apps
+  set their projection in `reshape()`, not per frame.
+- **The view is neutralized**, so the modelview carries only the app's model
+  transforms and coordinates come back in world space with no camera baked in.
+
+The cube is then refitted to the mesh and captured a second time: window
+coordinates are floats, so a 3-unit scene inside the 1000-unit first-pass cube
+throws away most of the mantissa.
+
+### The camera comes too
+
+An extracted scene that opens at gl-repl's default pose looks like the import
+failed. So the extractor snapshots the app's **view matrix** — at the first
+`glBegin` or `glPushMatrix` of a probe pass, whichever comes first — and
+decomposes it into gl-repl's `// camera` block:
+
+```
+// camera
+glTranslatef(0.0f, 0.0f, -8.0000f);
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);
+glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.1941f, -1.4489f, 0.3362f);
+```
+
+Deliberately *not* snooped from `gluLookAt`: plenty of programs build the view
+from raw `glTranslatef`/`glRotatef` and never call it. Reading the resulting
+matrix covers both. The translation split is underdetermined (three equations,
+a distance plus a three-vector target), and is fixed by taking the distance
+from the view-z offset and letting the target absorb the rest — which preserves
+an app's off-center framing instead of silently recentering the scene.
+
+`glClearColor` is snooped too, so the extracted scene keeps its background.
+
+### Budget
+
+gl-repl's editor buffer is a fixed `MAX_EDITOR_COMMANDS` (1024) array, so the
+emitted command count is a hard ceiling, not a soft one. The extractor prints
+it and warns when it is exceeded. Two levers bring it down: `GLPROBE_BATCH`
+(one object) and `GLPROBE_MAX_TRIS`.
+
+What keeps the count low is what is *not* emitted. No `glNormal3f` — feedback
+carries no normals, and a `@cfg auto_normals = 1` header has gl-repl derive
+them per facet. `glColor3f` only when the color actually changes.
+
+Roughly, commands ≈ 3 × triangles. But **auto-normals are not free**: gl-repl
+materializes the derived normals as real document rows once the scene runs, so
+the live count lands above what was written. Measured on a 312-triangle
+extraction: 941 commands in the file, 1022 in the editor. Budget for about 10%
+more than the extractor reports, which puts the practical ceiling near 300
+triangles per import.
 
 ## Reading the report
 

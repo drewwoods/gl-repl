@@ -44,8 +44,12 @@
 #endif
 
 #include "glprobe.h"
+#include "glprobe_extract.h"
 #include "glprobe_glut.h"
 
+#include "support/mesh_ply.h"
+
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,6 +120,10 @@ REAL_DECL_VOID(glMaterialfv, (GLenum face, GLenum pname, const GLfloat *params),
                              (face, pname, params))
 REAL_DECL_VOID(glBindTexture, (GLenum target, GLuint texture),
                               (target, texture))
+REAL_DECL_VOID(glClearColor, (GLclampf r, GLclampf g, GLclampf b, GLclampf a),
+                             (r, g, b, a))
+REAL_DECL_VOID(glBegin, (GLenum mode), (mode))
+REAL_DECL_VOID(glPushMatrix, (void), ())
 #endif
 
 /* ------------------------------------------------------------------- state */
@@ -128,14 +136,35 @@ static int   g_enabled;               /* GLPROBE set in the environment      */
 static int   g_target_frame = 1;      /* GLPROBE_FRAME                       */
 static int   g_frame;                 /* frames seen so far                  */
 static char  g_ply_path[512];         /* GLPROBE_PLY                         */
+static char  g_extract_path[512];     /* GLPROBE_EXTRACT                     */
+static int   g_extract_batch = -1;    /* GLPROBE_BATCH                       */
+static int   g_extract_max_tris;      /* GLPROBE_MAX_TRIS                    */
+static const char *g_argv0 = "the probed binary";
 
 static int   g_in_pass;               /* inside a feedback pass              */
 static int   g_force_neutral;         /* the NEUTRAL pass is running         */
+static int   g_neutralize_view;       /* extraction: gluLookAt is a no-op    */
 
 /* View matrix snooped from gluLookAt, so window coords can be unprojected
  * back into world space. Valid only once the app has actually called it. */
 static double g_view[16];
 static int    g_have_view;
+
+/* The app's VIEW matrix, snapshotted at the first geometry of a probe pass.
+ *
+ * Deliberately not taken from gluLookAt: plenty of programs build their view
+ * out of raw glTranslatef/glRotatef and never call it, and the modelview at
+ * the moment the frame's first primitive is issued is the view under either
+ * style. Snapshotting also fires on the first glPushMatrix, since an app whose
+ * very first object is drawn inside a push would otherwise hand back a matrix
+ * with that object's model transform folded in. */
+static double g_view_mat[16];
+static int    g_have_view_mat;
+static int    g_view_snapshot_pending;
+
+/* Snooped so an extracted scene keeps the app's background. */
+static float  g_clear_color[4];
+static int    g_have_clear_color;
 
 /* Batch markers. Each state change the app makes during a pass emits a
  * glPassThrough with the next id, and the label table records what the change
@@ -164,9 +193,45 @@ static void batch_mark(const char *fmt, ...) {
 void GLPROBE_REPLACEMENT(gluLookAt)(GLdouble ex, GLdouble ey, GLdouble ez,
                                     GLdouble cx, GLdouble cy, GLdouble cz,
                                     GLdouble ux, GLdouble uy, GLdouble uz) {
+    if (g_neutralize_view) {
+        /* Extraction only: skip the view entirely so the modelview carries
+         * nothing but the app's own model transforms, and feedback hands back
+         * WORLD coordinates directly -- no inverse to apply, no camera baked
+         * into the mesh. Everything the app does after this (glRotatef for a
+         * turntable, per-object glTranslatef) still applies, which is right:
+         * that is the scene's own pose, not the viewer's. */
+        g_have_view = 1;
+        return;
+    }
     REAL(gluLookAt)(ex, ey, ez, cx, cy, cz, ux, uy, uz);
     glGetDoublev(GL_MODELVIEW_MATRIX, g_view);
     g_have_view = 1;
+}
+
+static void view_snapshot_maybe(void) {
+    if (!g_view_snapshot_pending)
+        return;
+    g_view_snapshot_pending = 0;
+    glGetDoublev(GL_MODELVIEW_MATRIX, g_view_mat);
+    g_have_view_mat = 1;
+}
+
+void GLPROBE_REPLACEMENT(glBegin)(GLenum mode) {
+    view_snapshot_maybe();
+    REAL(glBegin)(mode);
+}
+
+void GLPROBE_REPLACEMENT(glPushMatrix)(void) {
+    view_snapshot_maybe();
+    REAL(glPushMatrix)();
+}
+
+void GLPROBE_REPLACEMENT(glClearColor)(GLclampf r, GLclampf g, GLclampf b,
+                                       GLclampf a) {
+    g_clear_color[0] = (float)r; g_clear_color[1] = (float)g;
+    g_clear_color[2] = (float)b; g_clear_color[3] = (float)a;
+    g_have_clear_color = 1;
+    REAL(glClearColor)(r, g, b, a);
 }
 
 /* Swallowed during a pass so the extra runs of the app's display callback
@@ -433,12 +498,344 @@ static void probe_frame(void) {
     fprintf(f, "\n");
 
     if (g_ply_path[0]) {
-        /* PLY needs the known ortho inverse that only the in-process geometry
-         * lens installs, so say so rather than writing a file whose vertex
-         * positions would be silently wrong. */
-        fprintf(f, "   note: GLPROBE_PLY is ignored in preload mode -- a PLY "
-                   "dump needs the geometry lens (see README).\n\n");
+        /* The diagnostic passes run under the app's own perspective, whose
+         * inverse the PLY writer cannot apply. Extraction installs the ortho
+         * the writer needs, so point there rather than writing a file whose
+         * vertex positions would be silently wrong. */
+        fprintf(f, "   note: GLPROBE_PLY is not a diagnostic output -- use "
+                   "GLPROBE_EXTRACT=<file>.ply instead.\n\n");
     }
+    free(buf);
+}
+
+/* ---------------------------------------------------------- extraction */
+
+/* Capture cube half-extent for the first (sizing) extract pass, and the
+ * viewport the inverse is computed against. */
+#define EXTRACT_ORTHO_R0 1000.0f
+#define EXTRACT_VP       4096
+
+/* One extraction pass. Unlike the diagnostic passes this REPLACES the
+ * projection -- feedback clips to the view volume, so a capture taken under
+ * the app's own perspective loses everything off-screen, which is fine for a
+ * report about the visible frame and fatal for an extractor. The app sets its
+ * projection in reshape(), not per frame, so overriding it here sticks for the
+ * duration of the callback. */
+static int extract_pass(float *buf, int cap_floats, float ortho_r) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-ortho_r, ortho_r, -ortho_r, ortho_r, -ortho_r, ortho_r);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glViewport(0, 0, EXTRACT_VP, EXTRACT_VP);
+    glDepthRange(0.0, 1.0);
+
+    g_batch_next = 0;
+    g_in_pass = 1;
+    g_force_neutral = 1;      /* culling/clipping must not eat the mesh */
+    g_neutralize_view = 1;    /* gluLookAt becomes a no-op -> world space */
+    REAL(glDisable)(GL_LIGHTING);
+    REAL(glDisable)(GL_CULL_FACE);
+    REAL(glDisable)(GL_SCISSOR_TEST);
+    for (int i = 0; i < 6; i++)
+        REAL(glDisable)((GLenum)(GL_CLIP_PLANE0 + i));
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glFeedbackBuffer((GLsizei)cap_floats, GL_3D_COLOR, buf);
+    glRenderMode(GL_FEEDBACK);
+    if (g_app_display)
+        g_app_display();
+    int written = glRenderMode(GL_RENDER);
+
+    g_neutralize_view = 0;
+    g_force_neutral = 0;
+    g_in_pass = 0;
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopAttrib();
+    return written;
+}
+
+static int extract_pass_grow(float ortho_r, float **out_buf) {
+    int cap_floats = FB_INITIAL;
+    float *buf = NULL;
+    for (;;) {
+        float *nb = realloc(buf, (size_t)cap_floats * sizeof *nb);
+        if (!nb) {
+            free(buf);
+            return -1;
+        }
+        buf = nb;
+        int written = extract_pass(buf, cap_floats, ortho_r);
+        if (written >= 0) {
+            *out_buf = buf;
+            return written;
+        }
+        if (cap_floats >= FB_MAX) {
+            free(buf);
+            return -1;
+        }
+        cap_floats <<= 1;
+        if (cap_floats > FB_MAX)
+            cap_floats = FB_MAX;
+    }
+}
+
+/* Widest |coordinate| in a capture, used to size the second pass's cube.
+ * Window coordinates are floats, so a 2-unit scene inside a 1000-unit cube
+ * throws away most of the mantissa; refitting is what makes an extracted mesh
+ * accurate rather than merely plausible. */
+static float capture_extent(const float *fb, int n, float ortho_r) {
+    GlProbeExtractCapture cap;
+    cap.ortho_r = ortho_r;
+    cap.vp_x = 0; cap.vp_y = 0; cap.vp_w = EXTRACT_VP; cap.vp_h = EXTRACT_VP;
+    cap.depth_near = 0.0f; cap.depth_far = 1.0f;
+
+    float ext = 0.0f;
+    int i = 0;
+    while (i < n) {
+        int tok = (int)fb[i++];
+        int nverts;
+        switch (tok) {
+        case MESH_PLY_TOK_POINT: nverts = 1; break;
+        case MESH_PLY_TOK_LINE:
+        case MESH_PLY_TOK_LINE_RESET: nverts = 2; break;
+        case MESH_PLY_TOK_POLYGON:
+            if (i >= n) return ext;
+            nverts = (int)fb[i++];
+            if (nverts < 3) return ext;
+            break;
+        case MESH_PLY_TOK_PASS_THROUGH:
+            if (i >= n) return ext;
+            i++;
+            continue;
+        case MESH_PLY_TOK_BITMAP:
+        case MESH_PLY_TOK_DRAW_PIXEL:
+        case MESH_PLY_TOK_COPY_PIXEL: nverts = 1; break;
+        default: return ext;
+        }
+        if (i + nverts * 7 > n)
+            return ext;
+        for (int k = 0; k < nverts; k++) {
+            const float *f = fb + i + k * 7;
+            float c[3];
+            c[0] = (2.0f * f[0] / (float)EXTRACT_VP - 1.0f) * cap.ortho_r;
+            c[1] = (2.0f * f[1] / (float)EXTRACT_VP - 1.0f) * cap.ortho_r;
+            c[2] = -(2.0f * f[2] - 1.0f) * cap.ortho_r;
+            for (int a = 0; a < 3; a++) {
+                float m = c[a] < 0.0f ? -c[a] : c[a];
+                if (m > ext && m < 1e30f)
+                    ext = m;
+            }
+        }
+        i += nverts * 7;
+    }
+    return ext;
+}
+
+/* Run the app's display callback with nothing overridden, purely so the
+ * interposed glBegin/glPushMatrix can snapshot the view matrix. Feedback is on
+ * with a tiny buffer: the geometry is thrown away, the point is that nothing
+ * rasterizes and the screen is untouched. */
+static void view_probe_pass(void) {
+    static float scratch[64];
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    g_in_pass = 1;
+    g_view_snapshot_pending = 1;
+    glFeedbackBuffer((GLsizei)(sizeof scratch / sizeof scratch[0]), GL_3D,
+                     scratch);
+    glRenderMode(GL_FEEDBACK);
+    if (g_app_display)
+        g_app_display();
+    glRenderMode(GL_RENDER);
+    g_view_snapshot_pending = 0;
+    g_in_pass = 0;
+    glPopAttrib();
+}
+
+/* Decompose a view matrix into gl-repl's orbit camera block,
+ *
+ *     M = T(0,0,-dist) . Rx(rx) . Ry(ry) . T(-target)
+ *
+ * which is general enough to cover both a gluLookAt view and a hand-rolled
+ * glTranslatef/glRotatef one, because it only reads the resulting matrix.
+ *
+ * Rx(a).Ry(b) expands to
+ *     [  cos b        0       sin b  ]
+ *     [  sin a sin b  cos a  -sin a cos b ]
+ *     [ -cos a sin b  sin a   cos a cos b ]
+ * so the pitch falls out of one element and the yaw out of the top row.
+ *
+ * The translation is underdetermined -- three equations for dist plus a
+ * three-vector target -- so the split is fixed by taking dist from the view-z
+ * offset and letting the target absorb whatever is left. That is the choice
+ * that keeps an app's off-center framing (a camera raised to chest height, say)
+ * instead of silently recentering the scene.
+ */
+static GlProbeExtractCamera derive_camera(void) {
+    GlProbeExtractCamera c;
+    memset(&c, 0, sizeof c);
+    if (!g_have_view_mat)
+        return c;
+
+    /* Column-major: m[col*4 + row]. */
+    const double *m = g_view_mat;
+    double r00 = m[0], r02 = m[8];
+    double r21 = m[6];            /* col 1, row 2 */
+    double tx = m[12], ty = m[13], tz = m[14];
+
+    double sa = r21;
+    if (sa > 1.0) sa = 1.0;
+    if (sa < -1.0) sa = -1.0;
+
+    const double kRad2Deg = 57.29577951308232;
+    double rx = asin(sa);
+    double ry = atan2(r02, r00);
+
+    double dist = -tz;
+    if (dist < 0.0) {
+        /* A view that puts the scene behind the eye is not an orbit pose; take
+         * the magnitude so the block is at least loadable. */
+        dist = -dist;
+    }
+
+    /* residual = M_translation - (0, 0, -dist), then target = -R^T . residual. */
+    double res[3];
+    res[0] = tx;
+    res[1] = ty;
+    res[2] = tz + dist;
+
+    double ca = cos(rx), sa2 = sin(rx);
+    double cb = cos(ry), sb = sin(ry);
+    /* R = Rx(rx).Ry(ry); R^T rows are R's columns. */
+    double rT[3][3];
+    rT[0][0] = cb;        rT[0][1] = sa2 * sb;  rT[0][2] = -ca * sb;
+    rT[1][0] = 0.0;       rT[1][1] = ca;        rT[1][2] = sa2;
+    rT[2][0] = sb;        rT[2][1] = -sa2 * cb; rT[2][2] = ca * cb;
+
+    c.present = 1;
+    c.dist = (float)dist;
+    c.rx = (float)(rx * kRad2Deg);
+    c.ry = (float)(ry * kRad2Deg);
+    c.tx = (float)-(rT[0][0] * res[0] + rT[0][1] * res[1] + rT[0][2] * res[2]);
+    c.ty = (float)-(rT[1][0] * res[0] + rT[1][1] * res[1] + rT[1][2] * res[2]);
+    c.tz = (float)-(rT[2][0] * res[0] + rT[2][1] * res[1] + rT[2][2] * res[2]);
+    return c;
+}
+
+static int path_ends_with(const char *p, const char *suffix) {
+    size_t lp = strlen(p), ls = strlen(suffix);
+    return lp >= ls && strcmp(p + lp - ls, suffix) == 0;
+}
+
+static void extract_frame(void) {
+    FILE *log = stderr;
+    float *buf = NULL;
+
+    view_probe_pass();
+
+    int n = extract_pass_grow(EXTRACT_ORTHO_R0, &buf);
+    if (n < 0) {
+        fprintf(log, "!! glprobe: extraction capture failed\n");
+        return;
+    }
+
+    /* Refit and re-capture at the scene's own scale. */
+    float ext = capture_extent(buf, n, EXTRACT_ORTHO_R0);
+    float fit = ext * 1.25f;
+    if (fit < 1e-4f)
+        fit = 1e-4f;
+    if (ext > 0.0f && fit < EXTRACT_ORTHO_R0) {
+        free(buf);
+        buf = NULL;
+            n = extract_pass_grow(fit, &buf);
+            if (n < 0) {
+            fprintf(log, "!! glprobe: extraction re-capture failed\n");
+            return;
+        }
+    } else {
+        fit = EXTRACT_ORTHO_R0;
+    }
+
+    GlProbeExtractCapture cap;
+    cap.ortho_r = fit;
+    cap.vp_x = 0; cap.vp_y = 0; cap.vp_w = EXTRACT_VP; cap.vp_h = EXTRACT_VP;
+    cap.depth_near = 0.0f; cap.depth_far = 1.0f;
+
+    FILE *f = fopen(g_extract_path, "w");
+    if (!f) {
+        fprintf(log, "!! glprobe: cannot open %s for writing\n", g_extract_path);
+        free(buf);
+        return;
+    }
+
+    if (path_ends_with(g_extract_path, ".ply")) {
+        MeshPlyCapture mc;
+        mc.ortho_r = fit;
+        mc.vp_x = 0; mc.vp_y = 0; mc.vp_w = EXTRACT_VP; mc.vp_h = EXTRACT_VP;
+        mc.depth_near = 0.0f; mc.depth_far = 1.0f;
+        mc.floats_per_vertex = MESH_PLY_FLOATS_PER_VERTEX;
+
+        MeshPlyOptions po;
+        memset(&po, 0, sizeof po);
+        po.weld = 1;
+        po.weld_eps = 1e-4f;
+        po.smooth_normals = 1;
+        po.triangulate = 1;
+        po.primitive_radius_scale = 0.0025f;
+
+        MeshPlyStats ms;
+        int ntris = mesh_ply_write(f, buf, n, &mc, &po, &ms);
+        if (ntris < 0)
+            fprintf(log, "!! glprobe: PLY write failed\n");
+        else
+            fprintf(log, "glprobe: extracted %d triangles (%d verts, %d edges) "
+                         "to %s\n", ms.tris, ms.verts, ms.edges,
+                    g_extract_path);
+    } else {
+        GlProbeExtractOptions eo;
+        memset(&eo, 0, sizeof eo);
+        eo.batch = g_extract_batch;
+        eo.max_tris = g_extract_max_tris;
+        eo.source_note = g_argv0;
+        eo.camera = derive_camera();
+        eo.has_clear_color = g_have_clear_color;
+        memcpy(eo.clear_color, g_clear_color, sizeof eo.clear_color);
+
+        GlProbeExtractStats es;
+        if (glprobe_extract_write_repl_c(f, buf, n, &cap, &eo, &es) != 0) {
+            fprintf(log, "!! glprobe: snippet write failed\n");
+        } else {
+            fprintf(log, "glprobe: extracted %d triangles to %s "
+                         "(%d source commands)\n",
+                    es.tris_written, g_extract_path, es.lines_written);
+            if (es.tris_skipped)
+                fprintf(log, "glprobe: %d triangles dropped by "
+                             "GLPROBE_MAX_TRIS\n", es.tris_skipped);
+            /* gl-repl's editor buffer is a fixed array, so this is a hard
+             * ceiling, not a soft one. Warn with headroom rather than at the
+             * limit: `auto_normals` materializes derived normals as real
+             * document rows once the scene runs, so the count written here is
+             * a lower bound on what the editor will actually hold (312
+             * triangles measured 941 written -> 1022 live). */
+            if (es.lines_written > 850)
+                fprintf(log,
+                        "!! %d commands leaves little room under gl-repl's "
+                        "MAX_EDITOR_COMMANDS (1024) --\n"
+                        "!! auto_normals adds document rows at runtime (expect "
+                        "~10%% more).\n"
+                        "!! Narrow it with GLPROBE_BATCH=<n> (one object) or "
+                        "GLPROBE_MAX_TRIS=<n>.\n", es.lines_written);
+        }
+    }
+
+    fclose(f);
     free(buf);
 }
 
@@ -446,8 +843,12 @@ static void probe_frame(void) {
 
 static void probe_display(void) {
     g_frame++;
-    if (g_enabled && g_frame == g_target_frame)
-        probe_frame();
+    if (g_frame == g_target_frame) {
+        if (g_extract_path[0])
+            extract_frame();
+        if (g_enabled)
+            probe_frame();
+    }
     if (g_app_display)
         g_app_display();
 }
@@ -473,8 +874,20 @@ __attribute__((constructor)) static void glprobe_preload_init(void) {
     if (ply)
         snprintf(g_ply_path, sizeof g_ply_path, "%s", ply);
 
-    if (g_enabled)
-        fprintf(stderr, "glprobe: armed for frame %d\n", g_target_frame);
+    const char *extract = getenv("GLPROBE_EXTRACT");
+    if (extract)
+        snprintf(g_extract_path, sizeof g_extract_path, "%s", extract);
+    const char *batch = getenv("GLPROBE_BATCH");
+    if (batch)
+        g_extract_batch = atoi(batch);
+    const char *maxt = getenv("GLPROBE_MAX_TRIS");
+    if (maxt)
+        g_extract_max_tris = atoi(maxt);
+
+    if (g_enabled || g_extract_path[0])
+        fprintf(stderr, "glprobe: armed for frame %d%s%s\n", g_target_frame,
+                g_extract_path[0] ? ", extracting to " : "",
+                g_extract_path[0] ? g_extract_path : "");
 }
 
 INTERPOSE(glutDisplayFunc)
@@ -484,3 +897,6 @@ INTERPOSE(glEnable)
 INTERPOSE(glDisable)
 INTERPOSE(glMaterialfv)
 INTERPOSE(glBindTexture)
+INTERPOSE(glClearColor)
+INTERPOSE(glBegin)
+INTERPOSE(glPushMatrix)
