@@ -59,12 +59,13 @@ else
 fi
 printf '%b\n' "$reset"
 
-# Detect a usable `time` once. We report the timed command's CPU time
-# (user + sys), not `real`: the binaries run in parallel, so each job's
-# wall clock absorbs every other job's contention and the numbers all
-# converge on the suite's total. Under a shell where `time` is neither a
-# keyword nor on PATH (dash with no /usr/bin/time) it exits 127 — in that
-# case timing is simply dropped; the test result never depends on it.
+# Detect a usable `time` once. Its `real` and `user`/`sys` are both
+# reported per test, and neither alone is the answer: the binaries run
+# concurrently, so a job's wall clock absorbs every other job's contention,
+# while its CPU ignores whatever it spent waiting. Under a shell where
+# `time` is neither a keyword nor on PATH (dash with no /usr/bin/time) it
+# exits 127 — in that case timing is simply dropped; the test result never
+# depends on it.
 have_time=0
 if ( time -p true ) >/dev/null 2>&1; then
     have_time=1
@@ -107,14 +108,19 @@ function to_sec(str,   parts, mins, secs) {
     return str + 0
 }'
 
-parse_cpu_seconds() {
-    # CPU time (user + sys) of one timed command.
+parse_job_times() {
+    # "<wall> <cpu>" for one timed command, both in seconds. The two answer
+    # different questions and a slot-hogging test needs both: cpu is what the
+    # test costs, wall is how long it held a job slot. They diverge by
+    # whatever the test spent waiting — for a machine's worth of parallel
+    # jobs, mostly waiting for a core.
     awk "$awk_to_sec"'
+    /^real/ { r = to_sec($2); seen = 1 }
     /^user/ { u = to_sec($2); seen = 1 }
     /^sys/  { s = to_sec($2); seen = 1 }
     END {
         if (seen)
-            printf "%.3f\n", u + s
+            printf "%.3f %.3f\n", r, u + s
     }
     ' "$1"
 }
@@ -237,13 +243,15 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 log="$log_dir/$name.log"
                 time_file="$log_dir/$name.time"
 
-                # Extract CPU time (see parse_cpu_seconds)
-                cpu_str="unknown"
+                # Extract wall + CPU time (see parse_job_times)
+                time_str="unknown"
                 if [ -f "$time_file" ]; then
-                    cpu_secs=$(parse_cpu_seconds "$time_file")
-                    if [ -n "$cpu_secs" ]; then
-                        printf '%s %s\n' "$cpu_secs" "$name" >>"$timings_file"
-                        cpu_str="${cpu_secs}s cpu"
+                    job_times=$(parse_job_times "$time_file")
+                    if [ -n "$job_times" ]; then
+                        wall_secs=${job_times%% *}
+                        cpu_secs=${job_times##* }
+                        printf '%s %s %s\n' "$cpu_secs" "$name" "$wall_secs" >>"$timings_file"
+                        time_str="${wall_secs}s wall, ${cpu_secs}s cpu"
                     fi
                 fi
 
@@ -264,11 +272,11 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 if [ "$test_total" -ge 0 ]; then
                     passed_tests=$((passed_tests + test_passed))
                     total_tests=$((total_tests + test_total))
-                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$cpu_str"
+                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$time_str"
                     printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
                 else
                     unknown_stats=$((unknown_stats + 1))
-                    printf ' [test count unknown] (%s)\n' "$cpu_str"
+                    printf ' [test count unknown] (%s)\n' "$time_str"
                     printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
                 fi
 
@@ -331,22 +339,20 @@ printf '%s %s %s %s\n' "$run_start" "$run_end" "$total_cpu" "$tests_cpu" | awk '
     printf "\n"
 }'
 
-# Show the 3 most expensive tests. CPU time, not wall clock: the jobs run
-# in parallel, and time spent blocked (sleeps, waiting on a child) does not
-# count here.
+# Show the 3 longest tests, ranked by wall: a parallel run cannot finish
+# ahead of its longest single binary, so that is the one worth splitting.
+# CPU rides along to say which kind of long it is — matching numbers mean
+# the test is working, a wall far above its CPU means it sat waiting.
 if [ -f "$timings_file" ] && [ -s "$timings_file" ]; then
-    printf '\n%b⏱️  most expensive tests (CPU time):%b\n' "$cyan" "$reset"
-    sort -rn "$timings_file" | head -3 | awk '{
-        secs = $1
-        name = $2
+    printf '\n%b⏱️  longest tests:%b\n' "$cyan" "$reset"
+    sort -rn -k3 "$timings_file" | head -3 | awk '
+    function fmt(secs,   mins) {
         mins = int(secs / 60)
-        remaining = secs - (mins * 60)
-        if (mins > 0) {
-            printf "  %s: %dm%.1fs\n", name, mins, remaining
-        } else {
-            printf "  %s: %.3fs\n", name, secs
-        }
-    }'
+        if (mins > 0)
+            return sprintf("%dm%.1fs", mins, secs - mins * 60)
+        return sprintf("%.3fs", secs)
+    }
+    { printf "  %s: %s wall, %s cpu\n", $2, fmt($3), fmt($1) }'
 fi
 
 if [ "$failed_bins" -gt 0 ]; then
