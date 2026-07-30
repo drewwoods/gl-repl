@@ -217,6 +217,16 @@ static GLCmd diff_cmd(CmdType type, int source_line_idx, int num_args, ...) {
     return cmd;
 }
 
+/* glMultMatrixf is the one transform whose values do not ride on args[]: both
+ * argument spellings arrive on payload.matrix (see command.h), which is what
+ * the executor and the fold each read, so it cannot go through diff_cmd's
+ * varargs. */
+static GLCmd diff_mult_matrix_cmd(int source_line_idx, const float m[16]) {
+    GLCmd cmd = diff_cmd(CMD_MULT_MATRIXF, source_line_idx, 0);
+    memcpy(cmd.payload.matrix.m, m, 16 * sizeof(float));
+    return cmd;
+}
+
 /* --- the two sides ------------------------------------------------------ */
 
 /* Driver side: the production executor walk, not a second model of it. */
@@ -843,6 +853,48 @@ static void test_diff_transform_fold(void) {
     diff_int_row("GL_MODELVIEW_STACK_DEPTH", GL_MODELVIEW_STACK_DEPTH);
 }
 
+/* 3b. glMultMatrixf, which the fold ignored outright until it was given a case
+ * of its own: the matrix row simply kept whatever the previous transform left,
+ * and every cell derived from the modelview (the light world positions, the
+ * raster position) followed it off. Column-major, deliberately asymmetric and
+ * non-orthogonal — a shear plus a translation — so a transposed load or a
+ * pre-multiply instead of a post-multiply changes the product rather than
+ * cancelling out against the surrounding rotate. */
+static const float k_diff_shear_matrix[16] = {
+    1.0f,  0.0f, 0.0f, 0.0f,
+    0.4f,  1.0f, 0.0f, 0.0f,
+    0.0f,  0.3f, 1.0f, 0.0f,
+    0.5f, -1.5f, 2.0f, 1.0f
+};
+
+static void test_diff_mult_matrix_fold(void) {
+    GLCmd cmds[6];
+    int n = 0;
+
+    cmds[n] = diff_cmd(CMD_TRANSLATE3F, n, 3, 0.0, 1.0, -2.0); n++;
+    cmds[n] = diff_mult_matrix_cmd(n, k_diff_shear_matrix); n++;
+    cmds[n] = diff_cmd(CMD_ROTATEF, n, 4, 30.0, 0.0, 0.0, 1.0); n++;
+    cmds[n] = diff_cmd(CMD_PUSH_MATRIX, n, 0); n++;
+    cmds[n] = diff_mult_matrix_cmd(n, k_diff_shear_matrix); n++;
+    cmds[n] = diff_cmd(CMD_POP_MATRIX, n, 0); n++;
+
+    /* Composed between two ordinary transforms: neither neighbour can stand in
+     * for the multiply, so a fold that drops it lands on a different matrix. */
+    diff_case("inspector vs driver: glMultMatrixf composition", cmds, n, 3);
+    diff_matrix_row();
+
+    /* And again inside a push, where it must compose onto the copied top. */
+    diff_case("inspector vs driver: glMultMatrixf inside a push", cmds, n, 5);
+    diff_matrix_row();
+    diff_int_row("GL_MODELVIEW_STACK_DEPTH", GL_MODELVIEW_STACK_DEPTH);
+
+    /* The pop discards it: back to the matrix at the checkpoint above. */
+    diff_case("inspector vs driver: glMultMatrixf discarded by a pop", cmds, n,
+              n);
+    diff_matrix_row();
+    diff_int_row("GL_MODELVIEW_STACK_DEPTH", GL_MODELVIEW_STACK_DEPTH);
+}
+
 /* 4. glPushAttrib/glPopAttrib group semantics: the pop must restore the cells
  * the mask covers and leave the rest alone. The fold decides membership from
  * attrib_bits; GL decides it from the spec, and here they must agree. */
@@ -1192,6 +1244,7 @@ int main(int argc, char **argv) {
     test_diff_generated_prologue();
     test_diff_user_state_writes();
     test_diff_transform_fold();
+    test_diff_mult_matrix_fold();
     test_diff_attrib_group_scoping();
     test_diff_raster_color_latch();
     test_diff_lit_raster_color();

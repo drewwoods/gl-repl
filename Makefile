@@ -147,6 +147,16 @@ endif
 # on macOS. -Werror=implicit-function-declaration makes any future
 # such hidden-symbol regression a hard compile error instead of a
 # silent pointer-truncation crash.
+#
+# -Werror=switch (already warned by -Wall) upgrades "enumeration value not
+# handled in switch" to an error, so a switch that opts out of a `default:`
+# has to name every enumerator. It is worth the ceremony because CmdType is
+# the project's widest enum and is dispatched on in a dozen TUs: a new command
+# that a switch forgets is a silent behaviour gap, not a crash. Verified
+# clean under both Apple clang and GCC 14 when introduced. A switch that
+# genuinely does not care still keeps its `default:` and is unaffected;
+# dropping one is how a fold declares "this list is exhaustive on purpose"
+# (see gl_state_apply_cmd in src/repl/gl_state_inspector.c).
 
 # Debug info, deliberately not a blanket -ggdb -g3. Emscripten is the reason:
 # emcc keeps DWARF inside the .wasm and, when it is present, falls back to
@@ -172,6 +182,7 @@ COMMON_CFLAGS = \
 	-Wall $(DEBUG_INFO_CFLAGS) \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c99 -D_GNU_SOURCE -Werror=implicit-function-declaration \
+	-Werror=switch \
 	-DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \

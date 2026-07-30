@@ -1157,6 +1157,19 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         s->matrix_touched = 1;
         s->matrix_source = source;
         break;
+    case CMD_MULT_MATRIXF:
+        /* Both spellings arrive with values on the command: the inline
+         * 16-expression form is baked by the parser, the scratch-array form
+         * (glMultMatrixf(A)) is snapshotted into payload.matrix by flatten,
+         * and this fold walks the flat program. gl_state_mat_mul is
+         * post-multiply in the same column-major layout glMultMatrixf takes,
+         * and it writes through a temporary, so aliasing out with a is safe
+         * (the translate/scale/rotate wrappers above rely on that too). */
+        gl_state_mat_mul(s->matrix_stack[s->matrix_top], cmd->payload.matrix.m,
+                         s->matrix_stack[s->matrix_top]);
+        s->matrix_touched = 1;
+        s->matrix_source = source;
+        break;
     case CMD_COLOR_MATERIAL:
         s->color_material_face = (GLenum)cmd->args[0];
         s->color_material_mode = (GLenum)cmd->args[1];
@@ -1363,7 +1376,58 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
             s->fog_color_source = source;
         }
         break;
-    default:
+
+    /* Deliberately no `default:` — -Werror=switch then makes a new CmdType a
+     * compile error here rather than a silently unmodelled state change (which
+     * is exactly how CMD_MULT_MATRIXF went missing from the matrix fold). Every
+     * type below is an explicit "does not move any tracked cell"; a new command
+     * that does belongs in a case above, not in this list.
+     *
+     * Geometry: consumes current color/normal/matrix, never writes them. */
+    case CMD_BEGIN:
+    case CMD_END:
+    case CMD_VERTEX3F:
+    case CMD_VERTEX2F:
+    case CMD_GLUT_TORUS:
+    case CMD_GLUT_CUBE:
+    case CMD_GLUT_SPHERE:
+    case CMD_GLUT_TEAPOT:
+    case CMD_GLUT_CONE:
+    case CMD_LABEL:
+    /* Tessellation: the vertex data rides the tessellator's own cursor and
+     * reaches GL through its callbacks, not as a state write at this row. */
+    case CMD_TESS_BEGIN_POLYGON:
+    case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END:
+    case CMD_TESS_NORMAL:
+    case CMD_TESS_COLOR:
+    case CMD_TESS_VERTEX:
+    /* Framebuffer write; the clear values themselves are tracked via
+     * CMD_CLEAR_COLOR / _DEPTH / _STENCIL above. */
+    case CMD_CLEAR:
+    /* Control flow and variables: resolved by flatten before this walk, so the
+     * fold only ever sees their effect baked into the commands it does read. */
+    case CMD_FOR_BEGIN:
+    case CMD_FOR_END:
+    case CMD_FUNC_DEF:
+    case CMD_FUNC_END:
+    case CMD_CALL:
+    case CMD_IF_BEGIN:
+    case CMD_IF_END:
+    case CMD_ELSE_IF:
+    case CMD_ELSE:
+    case CMD_GOTO_LABEL:
+    case CMD_GOTO:
+    case CMD_VAR_ASSIGN:
+    case CMD_SCRATCH_ASSIGN:
+    case CMD_VAR_DECLARE:
+    case CMD_COMMENT:
+    case CMD_EMPTY:
+    /* Attribute stack: intercepted by the caller (repl_gl_state_report_at_line)
+     * so it can snapshot/restore whole groups; never reaches this switch. */
+    case CMD_PUSH_ATTRIB:
+    case CMD_POP_ATTRIB:
+    case CMD_TYPE_COUNT:
         break;
     }
 }
