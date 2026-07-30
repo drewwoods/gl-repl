@@ -1312,6 +1312,9 @@ static void hist_draw_stats_tooltip(const UiHistogramPanelView *view,
         snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "count");
         snprintf(rows[row_count][1], sizeof(rows[0][1]), "%llu", stats.count);
         row_count++;
+        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "total");
+        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.sum_us);
+        row_count++;
         snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "min");
         fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.min_us);
         row_count++;
@@ -1327,9 +1330,6 @@ static void hist_draw_stats_tooltip(const UiHistogramPanelView *view,
         snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "stddev");
         fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]),
                     stats.stddev_us);
-        row_count++;
-        snprintf(rows[row_count][0], sizeof(rows[0][0]), "%s", "total");
-        fmt_us_wide(rows[row_count][1], (int)sizeof(rows[0][1]), stats.sum_us);
         row_count++;
     }
 
