@@ -172,6 +172,19 @@ for ((i=0; i<total_bins; i++)); do
     job_completed[i]=0
 done
 
+# Column widths for the per-completion report. Every name is known before
+# the first line prints, so the timing columns can line up from the top
+# rather than drifting with each name's length.
+idx_w=${#total_bins}
+name_w=0
+for ((i=0; i<total_bins; i++)); do
+    if [ "${#job_names[i]}" -gt "$name_w" ]; then
+        name_w=${#job_names[i]}
+    fi
+done
+counts_w=17
+timing_w=29
+
 concurrency=$jobs
 if [ "$concurrency" -le 0 ]; then
     concurrency=$total_bins
@@ -243,15 +256,17 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 log="$log_dir/$name.log"
                 time_file="$log_dir/$name.time"
 
-                # Extract wall + CPU time (see parse_job_times)
-                time_str="unknown"
+                # Extract wall + CPU time (see parse_job_times). Both are
+                # right-aligned in a fixed field so the eye can run down the
+                # column instead of re-finding it on every line.
+                time_str=$(printf '%*s' "$timing_w" 'no timing')
                 if [ -f "$time_file" ]; then
                     job_times=$(parse_job_times "$time_file")
                     if [ -n "$job_times" ]; then
                         wall_secs=${job_times%% *}
                         cpu_secs=${job_times##* }
                         printf '%s %s %s\n' "$cpu_secs" "$name" "$wall_secs" >>"$timings_file"
-                        time_str="${wall_secs}s wall, ${cpu_secs}s cpu"
+                        time_str=$(printf '%8ss wall  %8ss cpu' "$wall_secs" "$cpu_secs")
                     fi
                 fi
 
@@ -259,24 +274,37 @@ while [ "$completed_count" -lt "$total_bins" ]; do
                 test_passed=${counts%% *}
                 test_total=${counts#* }
 
+                if [ "$test_total" -ge 0 ]; then
+                    counts_str=$(printf '%d/%d tests' "$test_passed" "$test_total")
+                else
+                    counts_str='count unknown'
+                fi
+
+                # One printf per line, every field width-controlled. The exit
+                # code trails the columns rather than following the name, so a
+                # failure does not shift the row it most needs comparing.
                 if [ "$rc" -eq 0 ]; then
                     passed_bins=$((passed_bins + 1))
-                    printf '[%02d/%d] %bPASS%b %s' "$((completed_count + 1))" "$total_bins" "$green" "$reset" "$name"
+                    printf '[%0*d/%d] %bPASS%b  %-*s  %*s  %s\n' \
+                        "$idx_w" "$((completed_count + 1))" "$total_bins" \
+                        "$green" "$reset" "$name_w" "$name" \
+                        "$counts_w" "$counts_str" "$time_str"
                 else
                     failed_bins=$((failed_bins + 1))
                     printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
-                    printf '[%02d/%d] %bFAIL%b %s (exit %d)' "$((completed_count + 1))" "$total_bins" "$red" "$reset" "$name" "$rc"
+                    printf '[%0*d/%d] %bFAIL%b  %-*s  %*s  %s  (exit %d)\n' \
+                        "$idx_w" "$((completed_count + 1))" "$total_bins" \
+                        "$red" "$reset" "$name_w" "$name" \
+                        "$counts_w" "$counts_str" "$time_str" "$rc"
                     printf '%s\n' "$name" >>"$failed_tests_file"
                 fi
 
                 if [ "$test_total" -ge 0 ]; then
                     passed_tests=$((passed_tests + test_passed))
                     total_tests=$((total_tests + test_total))
-                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$time_str"
                     printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
                 else
                     unknown_stats=$((unknown_stats + 1))
-                    printf ' [test count unknown] (%s)\n' "$time_str"
                     printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
                 fi
 
@@ -345,14 +373,14 @@ printf '%s %s %s %s\n' "$run_start" "$run_end" "$total_cpu" "$tests_cpu" | awk '
 # the test is working, a wall far above its CPU means it sat waiting.
 if [ -f "$timings_file" ] && [ -s "$timings_file" ]; then
     printf '\n%b⏱️  longest tests:%b\n' "$cyan" "$reset"
-    sort -rn -k3 "$timings_file" | head -3 | awk '
+    sort -rn -k3 "$timings_file" | head -3 | awk -v name_w="$name_w" '
     function fmt(secs,   mins) {
         mins = int(secs / 60)
         if (mins > 0)
             return sprintf("%dm%.1fs", mins, secs - mins * 60)
         return sprintf("%.3fs", secs)
     }
-    { printf "  %s: %s wall, %s cpu\n", $2, fmt($3), fmt($1) }'
+    { printf "  %-*s  %9s wall  %9s cpu\n", name_w, $2, fmt($3), fmt($1) }'
 fi
 
 if [ "$failed_bins" -gt 0 ]; then
