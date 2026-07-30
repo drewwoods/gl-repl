@@ -75,6 +75,13 @@ confirmation prompt**, uploads them to a GitHub release. Orchestrated by
   `REMOTE_HOST`/`REMOTE_PATH`, and the back-compat `SKIP_MACOS=1` / `SKIP_LINUX=1`
   (= mode `skip`) are read from the environment.
 
+- **Release notes** live in [`packaging/release/<tag>.md`](../packaging/release/README.md)
+  and are **not** applied automatically — `do_upload` creates the draft with a
+  one-line placeholder, so attach the real body with
+  `gh release edit <tag> --repo <repo> --notes-file packaging/release/<tag>.md`.
+  Every set of notes needs the macOS Gatekeeper walkthrough: ad-hoc signing
+  means each download hits the "unidentified developer" prompt.
+
 `make fetch-music` is the inverse: it downloads the music pack from the GitHub
 release (via [`scripts/fetch-music.sh`](../scripts/fetch-music.sh)) into the
 **local** assets folder (`MUSIC_DEST`, default `assets/`). `MUSIC_TAG=<tag>`
