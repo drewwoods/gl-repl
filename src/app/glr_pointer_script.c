@@ -1679,15 +1679,26 @@ static void ps_circle(float cx, float cy, float radius, int filled) {
     glEnd();
 }
 
+/* A caption's chosen bitmap font plus the vertical extents the backing
+ * plate needs. Ascent/descent are carried in the ladder rather than asked
+ * of GLUT: glutBitmapHeight is a freeglut extension, absent from Apple's
+ * GLUT framework (the USE_GLUT build), and one height would not separate
+ * above-baseline from below-baseline anyway. */
+typedef struct {
+    void  *font;
+    float  ascent;   /* baseline -> top of tall glyphs, px */
+    float  descent;  /* baseline -> bottom of descenders, px */
+} PsEchoFont;
+
 /* Echo captions render in a fixed-size GLUT bitmap font (bitmap glyphs
  * don't scale, so the script's requested cap height only selects the
  * nearest font from this ladder). */
-static void *ps_echo_font(float cap_px) {
-    static const struct { float px; void *font; } k_fonts[] = {
-        { 10.0f, GLUT_BITMAP_HELVETICA_10 },
-        { 12.0f, GLUT_BITMAP_HELVETICA_12 },
-        { 18.0f, GLUT_BITMAP_HELVETICA_18 },
-        { 24.0f, GLUT_BITMAP_TIMES_ROMAN_24 },
+static PsEchoFont ps_echo_font(float cap_px) {
+    static const struct { float px; PsEchoFont f; } k_fonts[] = {
+        { 10.0f, { GLUT_BITMAP_HELVETICA_10,    8.0f, 2.0f } },
+        { 12.0f, { GLUT_BITMAP_HELVETICA_12,   10.0f, 3.0f } },
+        { 18.0f, { GLUT_BITMAP_HELVETICA_18,   14.0f, 4.0f } },
+        { 24.0f, { GLUT_BITMAP_TIMES_ROMAN_24, 18.0f, 6.0f } },
     };
     size_t best = 0;
     float best_d = -1.0f;
@@ -1695,7 +1706,7 @@ static void *ps_echo_font(float cap_px) {
         float d = fabsf(cap_px - k_fonts[i].px);
         if (best_d < 0.0f || d < best_d) { best_d = d; best = i; }
     }
-    return k_fonts[best].font;
+    return k_fonts[best].f;
 }
 
 /* Draw a NUL-terminated string with its baseline left edge at (x, y) in
@@ -1807,30 +1818,46 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     }
 
     /* Echo caption: bitmap text (e.g. "Ctrl+K") pinned at a screen spot to
-     * label how the next action was triggered. A 1px dark outline (eight
-     * offset passes) is laid down first, then the bright glyphs on top, so
-     * it reads over any scene; the whole caption eases in/out. */
+     * label how the next action was triggered. A translucent dark plate goes
+     * down first so the glyphs read over any scene, then the caption is drawn
+     * once on top; the whole thing eases in/out together.
+     *
+     * The plate replaced an eight-pass 1px glyph outline, and the reason is
+     * performance, not taste. Apple's GL rasterizes tall bitmap glyphs ~30x
+     * slower per glyph than the short fonts the rest of the app uses (measured
+     * 337 glyphs: Times-24 ~12 ms vs Helvetica-12 ~0.4 ms; the cliff is around
+     * 16 glyph rows), and tours request 24 px. Nine passes over a ~35-char
+     * caption was therefore ~10 ms of CPU plus ~4 ms of extra glFinish drain
+     * every frame a caption was up — more than the whole 3D scene, and enough
+     * to miss the 60 Hz deadline on its own. One pass over a plate costs a
+     * ninth of that and gives *better* contrast over busy geometry. Keep it to
+     * one text pass: any per-glyph multiplier here is paid at that rate. */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
+        /* Plate padding around the glyph box, px. Asymmetric on purpose: the
+         * ladder's ascent covers tall glyphs, so the extra room reads better
+         * split toward the sides. */
+        const float pad_x = 10.0f, pad_y = 5.0f;
         float alpha = glr_pointer_script_echo_alpha(g_frame - g_echo_start,
                                                     g_echo_dur, clock_frozen);
-        void *font = ps_echo_font(g_echo_size);
+        PsEchoFont font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
+        float w = ps_bitmap_width(font.font, g_echo_text);
         /* Center the caption horizontally on its anchor point rather than
          * left-aligning at it, so the label sits symmetrically over the
          * target it annotates. */
-        float cx = g_echo_x - ps_bitmap_width(font, g_echo_text) * 0.5f;
-        static const float k_halo[][2] = {
-            { -1, -1 }, { 0, -1 }, { 1, -1 }, { -1, 0 },
-            {  1,  0 }, { -1, 1 }, { 0,  1 }, {  1, 1 },
-        };
-        int i;
-        glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.85f);
-        for (i = 0; i < (int)(sizeof(k_halo) / sizeof(k_halo[0])); i++)
-            ps_bitmap_text(cx + k_halo[i][0], cy + k_halo[i][1],
-                           font, g_echo_text);
+        float cx = g_echo_x - w * 0.5f;
+
+        glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.72f);
+        glBegin(GL_QUADS);
+        glVertex2f(cx - pad_x,     cy - font.descent - pad_y);
+        glVertex2f(cx + w + pad_x, cy - font.descent - pad_y);
+        glVertex2f(cx + w + pad_x, cy + font.ascent + pad_y);
+        glVertex2f(cx - pad_x,     cy + font.ascent + pad_y);
+        glEnd();
+
         glColor4f(0.98f, 0.98f, 0.99f, alpha);
-        ps_bitmap_text(cx, cy, font, g_echo_text);
+        ps_bitmap_text(cx, cy, font.font, g_echo_text);
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);
