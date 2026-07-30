@@ -76,6 +76,14 @@ typedef struct {
 /* Minimum gap kept between a clipped label and the CPU value column. */
 #define PROF_COL_GAP          6
 
+/* Values are right-justified inside this much of each column's pitch, leaving
+ * the last cell as a gutter so a full-width number can't abut the next column.
+ * PROF_COL_VAL_W is the column *pitch*, not a text width. */
+#define PROF_COL_VAL_FIELD_W  (PROF_COL_VAL_W - FONT_SMALL_W)
+
+/* Width of a formatted value's suffix, " us" / " ms" — the space included. */
+#define PROF_VAL_UNIT_CELLS   3
+
 /* Visual indentation per nesting level. Labels arrive un-indented; the panel
  * offsets each row by depth * this, so prof_section_info()'s explicit depth is
  * the single source of truth (restyling the indent never re-classifies a row).
@@ -114,6 +122,27 @@ static const char *fit_label(const char *src, int max_px,
     memcpy(buf, src, (size_t)(max_chars - 3));
     memcpy(buf + max_chars - 3, "...", 4);
     return buf;
+}
+
+/* Draw one column entry right-justified in its field.
+ *
+ * Every suffix this panel prints is exactly two characters ("us" / "ms"), so
+ * aligning the right edge is what lands them all in one column: left-aligned,
+ * a "400 us" row and a "14.53 ms" row stagger their units by two cells and the
+ * eye has to re-find the unit on every line. FONT_SMALL is fixed-width, so the
+ * offset is a character count. A string too wide for the field falls back to
+ * left-aligned rather than bleeding into the column to its left — the same
+ * failure mode an over-wide value has always had, just not a silent one.
+ *
+ * `placeholder` marks the stale "--", which is a missing *number*, not a
+ * missing unit: it gets the suffix width back so it right-aligns under the
+ * digits. That also keeps it off the shoulder of the next column, whose widest
+ * value starts one cell past this field's edge. */
+static void draw_col_value(int col_x, float y, const char *s, int placeholder) {
+    int cells = (int)strlen(s) + (placeholder ? PROF_VAL_UNIT_CELLS : 0);
+    int pad = PROF_COL_VAL_FIELD_W - FONT_SMALL_W * cells;
+    if (pad < 0) pad = 0;
+    gl2d_draw_string((float)(col_x + pad), y, s, FONT_SMALL);
 }
 
 /* Format µs as "1234 us" or "12.3 ms", whichever is more readable. */
@@ -430,11 +459,13 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
     int col_gpu = col_cpu + PROF_COL_VAL_W;
     int col_max = col_gpu + PROF_COL_VAL_W;
 
+    /* Headings ride the same right edge as the values under them, so each one
+     * still reads as sitting over its own column. */
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)tx,       (float)ty, "Section",  FONT_SMALL);
-    gl2d_draw_string((float)col_cpu,  (float)ty, "CPU",      FONT_SMALL);
-    gl2d_draw_string((float)col_gpu,  (float)ty, "GPU",      FONT_SMALL);
-    gl2d_draw_string((float)col_max,  (float)ty, "Max",      FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)ty, "Section", FONT_SMALL);
+    draw_col_value(col_cpu, (float)ty, "CPU", 0);
+    draw_col_value(col_gpu, (float)ty, "GPU", 0);
+    draw_col_value(col_max, (float)ty, "Max", 0);
     ty -= 2;
 
     /* Thin rule under headings */
@@ -515,7 +546,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
         }
-        gl2d_draw_string((float)col_cpu, (float)ty, val_buf, FONT_SMALL);
+        draw_col_value(col_cpu, (float)ty, val_buf, !cpu_ok);
 
         if (gpu_ok) {
             fmt_us(val_buf, (int)sizeof(val_buf), gpu_us);
@@ -524,7 +555,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
         }
-        gl2d_draw_string((float)col_gpu, (float)ty, val_buf, FONT_SMALL);
+        draw_col_value(col_gpu, (float)ty, val_buf, !gpu_ok);
 
         /* NOTE: Max takes the worse of the two independently-smoothed EMAs
          * (and the GPU EMA runs 1-3 frames behind the CPU one, since query
@@ -542,7 +573,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             snprintf(val_buf, sizeof(val_buf), "--");
             glColor3fv(k_prof_dim);
         }
-        gl2d_draw_string((float)col_max, (float)ty, val_buf, FONT_SMALL);
+        draw_col_value(col_max, (float)ty, val_buf, !(cpu_ok || gpu_ok));
 
         ty -= PROF_ROW_H;
     }
