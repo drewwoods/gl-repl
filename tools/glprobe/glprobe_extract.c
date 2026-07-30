@@ -64,6 +64,17 @@ typedef struct {
     Vert  last_color;
     int   lines;
     int   err;
+
+    /* glBegin is opened lazily and closed whenever the batch state changes:
+     * glMaterialfv between glBegin and glEnd is invalid GL, so a material
+     * switch has to break the primitive block rather than sit inside it. */
+    int   in_begin;
+
+    /* Last state actually written, so a batch that repeats the previous
+     * material emits nothing. Worth the bookkeeping: a checkerboard ground
+     * alternates two materials across dozens of batches. */
+    int   have_state;
+    GlProbeExtractBatch last_state;
 } Emit;
 
 static void emit_line(Emit *e, const char *fmt, ...) {
@@ -77,8 +88,76 @@ static void emit_line(Emit *e, const char *fmt, ...) {
     e->lines++;
 }
 
-static void emit_vert(Emit *e, const Vert *v) {
-    if (!e->have_color || color_differs(v, &e->last_color)) {
+static int vec4_same(const float *a, const float *b) {
+    for (int i = 0; i < 4; i++)
+        if (a[i] != b[i])
+            return 0;
+    return 1;
+}
+
+static void emit_vec4_material(Emit *e, const char *pname, const float *v) {
+    emit_line(e, "glMaterialfv(GL_FRONT_AND_BACK, %s, (GLfloat[]){%.*f, %.*f, "
+                 "%.*f, %.*f});\n", pname,
+              e->prec, v[0], e->prec, v[1], e->prec, v[2], e->prec, v[3]);
+}
+
+/* Close any open primitive block and write whatever changed between the last
+ * emitted state and this batch's. */
+static void emit_batch_state(Emit *e, const GlProbeExtractBatch *b) {
+    const GlProbeExtractBatch *p = e->have_state ? &e->last_state : NULL;
+
+    if (e->in_begin) {
+        emit_line(e, "glEnd();\n");
+        e->in_begin = 0;
+    }
+
+    if (!p || p->lit != b->lit)
+        emit_line(e, "gl%sable(GL_LIGHTING);\n", b->lit ? "En" : "Dis");
+
+    if (b->lit) {
+        /* Diffuse goes out as glColor3f under GL_COLOR_MATERIAL rather than as
+         * glMaterialfv(GL_DIFFUSE). Both parse, but color-material is the
+         * idiom gl-repl's own scenes use and the one its default light rig is
+         * tuned against -- an extraction that opts out with
+         * glDisable(GL_COLOR_MATERIAL) loads correctly and renders nearly
+         * black. It is also one command instead of two. */
+        if (!p || !p->lit)
+            emit_line(e, "glEnable(GL_COLOR_MATERIAL);\n");
+        if (!p || !p->lit)
+            emit_line(e, "glColorMaterial(GL_FRONT_AND_BACK, "
+                         "GL_AMBIENT_AND_DIFFUSE);\n");
+        if (b->has_material) {
+            if (!p || !p->has_material || !vec4_same(p->specular, b->specular))
+                emit_vec4_material(e, "GL_SPECULAR", b->specular);
+            if (!p || !p->has_material || p->shininess != b->shininess)
+                emit_line(e, "glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, "
+                             "%.*f);\n", e->prec, b->shininess);
+        }
+        /* The batch's own color, unless the app was already driving diffuse
+         * from glColor -- in which case the per-vertex stream is the truth. */
+        if (!b->color_material) {
+            if (!p || !p->has_material || !vec4_same(p->diffuse, b->diffuse) ||
+                !p->lit)
+                emit_line(e, "glColor3f(%.*f, %.*f, %.*f);\n",
+                          e->prec, b->diffuse[0], e->prec, b->diffuse[1],
+                          e->prec, b->diffuse[2]);
+            /* That glColor3f is now the live color; make the next unlit batch
+             * re-state its own rather than diffing against a stale value. */
+            e->have_color = 0;
+        }
+    }
+
+    e->last_state = *b;
+    e->have_state = 1;
+}
+
+static int batch_uses_vertex_color(const GlProbeExtractBatch *b) {
+    return !b || !b->lit || b->color_material;
+}
+
+static void emit_vert(Emit *e, const Vert *v, const GlProbeExtractBatch *b) {
+    if (batch_uses_vertex_color(b) &&
+        (!e->have_color || color_differs(v, &e->last_color))) {
         emit_line(e, "glColor3f(%.*f, %.*f, %.*f);\n",
                   e->prec, v->r, e->prec, v->g, e->prec, v->b);
         e->last_color = *v;
@@ -124,6 +203,12 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
     emit_line(&e, "// Geometry is world space; normals are derived by gl-repl "
                   "(feedback carries none).\n");
     emit_line(&e, "// @cfg auto_normals = 1\n");
+    /* An extracted mesh has thousands of vertices; the per-vertex point and
+     * outline overlays are tuned for hand-typed scenes with a dozen and turn
+     * this into confetti. Off by default here, not because they are wrong but
+     * because at this density they hide the thing being inspected. */
+    emit_line(&e, "// @cfg vertex_points = 0\n");
+    emit_line(&e, "// @cfg vertex_outlines = 0\n");
 
     /* The camera block is consumed by gl-repl's camera bridge rather than
      * becoming document commands, so it costs nothing against the budget --
@@ -149,9 +234,9 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
                   e.prec, o.clear_color[0], e.prec, o.clear_color[1],
                   e.prec, o.clear_color[2], e.prec, o.clear_color[3]);
     emit_line(&e, "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
-    emit_line(&e, "glBegin(GL_TRIANGLES);\n");
 
     int cur_batch = -1;
+    int emitted_batch = -2;
     int i = 0;
     while (i < float_count) {
         int tok = (int)feedback[i++];
@@ -203,6 +288,11 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
         Vert v0 = read_vert(vp, cap);
         if (!vert_finite(&v0))
             continue;
+
+        const GlProbeExtractBatch *bs =
+            (o.batches && cur_batch >= 0 && cur_batch < o.batch_count)
+                ? &o.batches[cur_batch] : NULL;
+
         for (int k = 1; k + 1 < nverts; k++) {
             Vert a = read_vert(vp + k * FPV, cap);
             Vert b = read_vert(vp + (k + 1) * FPV, cap);
@@ -212,15 +302,26 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
                 st.tris_skipped++;
                 continue;
             }
-            emit_vert(&e, &v0);
-            emit_vert(&e, &a);
-            emit_vert(&e, &b);
+            /* State first, then open the block -- deferred to here so a batch
+             * whose primitives were all filtered out emits nothing at all. */
+            if (bs && (!e.have_state || emitted_batch != cur_batch)) {
+                emit_batch_state(&e, bs);
+                emitted_batch = cur_batch;
+            }
+            if (!e.in_begin) {
+                emit_line(&e, "glBegin(GL_TRIANGLES);\n");
+                e.in_begin = 1;
+            }
+            emit_vert(&e, &v0, bs);
+            emit_vert(&e, &a, bs);
+            emit_vert(&e, &b, bs);
             st.tris_written++;
             st.verts_written += 3;
         }
     }
 
-    emit_line(&e, "glEnd();\n");
+    if (e.in_begin)
+        emit_line(&e, "glEnd();\n");
 
     st.lines_written = e.lines;
     if (stats)

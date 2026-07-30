@@ -51,6 +51,24 @@ typedef struct {
     float tx, ty, tz;      /* orbit target in world space */
 } GlProbeExtractCamera;
 
+/* The lighting/material state the app had installed when one batch drew.
+ *
+ * Feedback carries a color per vertex, but for LIT geometry that color is
+ * meaningless here: the extract pass turns lighting off so positions are not
+ * distorted, and a lit object never calls glColor, so the stream comes back
+ * holding whatever glColor happened to be current -- white, in practice. The
+ * color of a lit surface lives in its material, which is state the extractor
+ * has to shadow separately and re-emit per batch. Without this the whole
+ * extraction is one flat glColor3f(1, 1, 1). */
+typedef struct {
+    int   lit;              /* GL_LIGHTING was on: emit material, not glColor */
+    int   color_material;   /* GL_COLOR_MATERIAL was on: glColor drives diffuse,
+                               so per-vertex color is meaningful again */
+    int   has_material;     /* the app set a material at all */
+    float diffuse[4], ambient[4], specular[4];
+    float shininess;
+} GlProbeExtractBatch;
+
 typedef struct {
     /* Emit only the primitives inside the Nth glPassThrough batch (the
      * material/texture segmentation the preload front-end injects). -1 emits
@@ -78,6 +96,12 @@ typedef struct {
      * app so the extracted scene keeps its background. */
     int   has_clear_color;
     float clear_color[4];
+
+    /* Per-batch lighting/material state, indexed by the glPassThrough marker
+     * value. NULL emits geometry with per-vertex color only, which is correct
+     * only for a wholly unlit scene. */
+    const GlProbeExtractBatch *batches;
+    int batch_count;
 } GlProbeExtractOptions;
 
 typedef struct {

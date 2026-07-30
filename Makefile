@@ -2575,6 +2575,37 @@ GLPROBE_SRCS = tools/glprobe/glprobe.c src/support/mesh_ply.c
 GLPROBE_DIR  = build/glprobe$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
 GLPROBE_BIN  = $(GLPROBE_DIR)/$(basename $(notdir $(SAMPLE)))
 
+# make extract SAMPLE=<file.c> -- one command, geometry out.
+#
+# Builds the sample and the probe library headless, runs one frame with no
+# window, and drops <name>.ply and <name>.glr in the CURRENT directory. Both
+# come from a SINGLE capture, so they describe the same frame; running the app
+# twice would not, for anything animated.
+#
+# Headless is not a convenience here, it is what makes the target a target: a
+# windowed run never exits on its own, so it could not be a build step.
+#
+# Optional: BATCH=<n> extracts one object, MAX_TRIS=<n> caps the count, FRAME=<n>
+# picks a later frame (useful when frame 1 catches an animation mid-setup).
+.PHONY: extract
+extract: ## Extract geometry from a standalone GL sample: make extract SAMPLE=<file.c> -> <name>.ply + <name>.glr
+	@test -n "$(SAMPLE)" || { \
+		echo "$(RED)usage: make extract SAMPLE=<sample.c> [BATCH=n] [MAX_TRIS=n] [FRAME=n]$(NC)"; \
+		exit 1; }
+	@test -f "$(SAMPLE)" || { echo "$(RED)no such sample: $(SAMPLE)$(NC)"; exit 1; }
+	@$(MAKE) --no-print-directory glprobe glprobe-preload \
+		SAMPLE="$(SAMPLE)" FREEGLUT_OSMESA=1 >/dev/null
+	@GLPROBE_EXTRACT="$(CURDIR)/$(basename $(notdir $(SAMPLE)))" \
+	 $(if $(BATCH),GLPROBE_BATCH=$(BATCH),) \
+	 $(if $(MAX_TRIS),GLPROBE_MAX_TRIS=$(MAX_TRIS),) \
+	 $(if $(FRAME),GLPROBE_FRAME=$(FRAME),) \
+	 DYLD_INSERT_LIBRARIES="$(CURDIR)/build/glprobe-osmesa/libglprobe_preload.$(GLPROBE_PRELOAD_EXT)" \
+	 LD_PRELOAD="$(CURDIR)/build/glprobe-osmesa/libglprobe_preload.$(GLPROBE_PRELOAD_EXT)" \
+	 FREEGLUT_CAPTURE_FRAMES=$(if $(FRAME),$(FRAME),1) \
+	 $(CURDIR)/build/glprobe-osmesa/$(basename $(notdir $(SAMPLE))) 2>&1 \
+	 | grep -v '^freeglut' || true
+	@rm -f freeglut-*.ppm
+
 # The same probe as an injectable library, for samples whose source must not be
 # touched. Interposes glutDisplayFunc to get a frame hook; see the header of
 # tools/glprobe/glprobe_preload.c.

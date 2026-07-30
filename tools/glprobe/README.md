@@ -166,8 +166,9 @@ neutral pass's suppression check rather than after it.
   require overriding the modelview, and the app's display callback calls
   `glLoadIdentity()` and installs its own camera — the very thing that would
   have to be suppressed. Diagnostic coordinates are unprojected through the
-  live matrices instead. (Extraction sidesteps this by neutralizing the view
-  for its own pass — but it gives up the *as-drawn* comparison to do so.)
+  live matrices instead. (Extraction recovers world space a different way, by
+  inverting the captured view matrix — but it gives up the *as-drawn*
+  comparison to do so.)
 - **No PLY from the diagnostic passes.** They run under the app's own
   perspective, whose inverse the writer cannot apply. `GLPROBE_EXTRACT` installs
   the ortho the writer needs; use that.
@@ -178,33 +179,95 @@ neutral pass's suppression check rather than after it.
 
 ## Extraction: getting the geometry out
 
-The probe modes above answer questions about a frame. `GLPROBE_EXTRACT` takes
-the mesh instead — from an arbitrary binary, with no source access:
+The probe modes above answer questions about a frame. Extraction takes the mesh
+instead — from an arbitrary binary, with no source access. One command:
 
 ```bash
-GLPROBE_EXTRACT=scene.ply  DYLD_INSERT_LIBRARIES=… ./sample   # PLY mesh
+make extract SAMPLE=tourist.c     # → ./tourist.ply and ./tourist.glr
+```
+
+That builds the sample and the probe library headless, runs a single frame with
+no window, and writes both files from **one** capture — so they describe the
+same frame, which running the app twice would not for anything animated.
+Optional `BATCH=n`, `MAX_TRIS=n`, `FRAME=n`.
+
+By hand, against your own binary:
+
+```bash
+GLPROBE_EXTRACT=scene.ply  DYLD_INSERT_LIBRARIES=… ./sample   # mesh
 GLPROBE_EXTRACT=scene.glr  DYLD_INSERT_LIBRARIES=… ./sample   # gl-repl snippet
+GLPROBE_EXTRACT=scene      DYLD_INSERT_LIBRARIES=… ./sample   # both
 ```
 
 | Env var | Meaning |
 |---|---|
-| `GLPROBE_EXTRACT=path` | extract to `path`; `.ply` writes a mesh, anything else a gl-repl snippet |
+| `GLPROBE_EXTRACT=path` | `.ply` → mesh, `.glr` → snippet, **no extension → both** |
 | `GLPROBE_BATCH=n` | only the Nth batch (see [batches](#batches-without-knowing-the-source)) |
 | `GLPROBE_MAX_TRIS=n` | stop after n triangles |
 
-Extraction does not reuse the diagnostic passes, because two things that are
-right for a report are wrong for an extractor:
+Extraction does not reuse the diagnostic passes, because what is right for a
+report is wrong for an extractor. **The projection is replaced with a
+containing ortho**: feedback clips to the view volume, so a capture under the
+app's own perspective silently drops everything off-screen or past the far
+plane. Overriding works because apps set their projection in `reshape()`, not
+per frame.
 
-- **The projection is replaced with a containing ortho.** Feedback clips to the
-  view volume, so a capture under the app's own perspective silently drops
-  everything off-screen or past the far plane. Overriding works because apps
-  set their projection in `reshape()`, not per frame.
-- **The view is neutralized**, so the modelview carries only the app's model
-  transforms and coordinates come back in world space with no camera baked in.
+The cube is then refitted and captured a second time — window coordinates are
+floats, so a 3-unit scene inside the 1000-unit first-pass cube throws away most
+of the mantissa. The refit is measured in **eye** space, because that is the
+space the capture happens in; sizing the cube to the world extent drops a scene
+the camera has pushed out to z = −14.
 
-The cube is then refitted to the mesh and captured a second time: window
-coordinates are floats, so a 3-unit scene inside the 1000-unit first-pass cube
-throws away most of the mantissa.
+### Eye space → world space
+
+The modelview is deliberately left alone, so the app applies its own camera
+however it likes. What comes back is therefore eye space, and the buffer is
+multiplied through by the inverse of the view matrix before anything reads it.
+
+That inverse is what makes extraction general. Neutralizing `gluLookAt` — the
+obvious approach — only ever covered one camera style: a program that builds
+its view from raw `glTranslatef`/`glRotatef` sails straight past it, and its
+geometry comes out in eye space *and* gets the camera applied a second time
+from the emitted `// camera` block. Reading the matrix covers both.
+
+The rewrite is applied to the **feedback buffer**, not to the emitted vertices,
+so `mesh_ply.c` (which has no idea a camera exists) works unchanged and the two
+output formats cannot disagree about where the geometry is.
+
+### Materials and colour
+
+Feedback carries a colour per vertex, but for **lit** geometry that colour is
+meaningless: the extract pass turns lighting off so positions are not
+distorted, and a lit object never calls `glColor`, so the stream comes back
+holding whatever `glColor` happened to be current. Left alone, an entire
+extraction is one flat `glColor3f(1, 1, 1)`.
+
+So the extractor shadows the app's lighting and material state
+(`glMaterialfv`/`glMaterialf`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`), snapshots
+it at every batch boundary, and re-emits it per batch:
+
+```
+glEnable(GL_LIGHTING);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.15, 0.15, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 20.0);
+glColor3f(0.3200, 0.5500, 0.2500);
+glBegin(GL_TRIANGLES);
+```
+
+Diffuse goes out as `glColor3f` under `GL_COLOR_MATERIAL` rather than as
+`glMaterialfv(GL_DIFFUSE)`. Both parse, but colour-material is the idiom
+gl-repl's own scenes use and the one its default light rig is tuned against —
+and it is one command instead of two.
+
+Unlit batches keep their per-vertex colours instead, which is what makes a
+blended particle system come across intact. Only what *changed* between batches
+is written, so a checkerboard alternating two materials across dozens of
+batches costs a handful of commands.
+
+`glMaterialfv` cannot appear between `glBegin` and `glEnd`, so a material switch
+closes the primitive block and opens a new one.
 
 ### The camera comes too
 
@@ -222,8 +285,9 @@ glTranslatef(0.1941f, -1.4489f, 0.3362f);
 ```
 
 Deliberately *not* snooped from `gluLookAt`: plenty of programs build the view
-from raw `glTranslatef`/`glRotatef` and never call it. Reading the resulting
-matrix covers both. The translation split is underdetermined (three equations,
+from raw `glTranslatef`/`glRotatef` and never call it — `tourist.c` does
+exactly that. Reading the resulting matrix covers both, and the same matrix is
+what converts the capture back to world space above. The translation split is underdetermined (three equations,
 a distance plus a three-vector target), and is fixed by taking the distance
 from the view-z offset and letting the target absorb the rest — which preserves
 an app's off-center framing instead of silently recentering the scene.
