@@ -129,7 +129,9 @@ Top-level frame orchestration belongs in the controller:
 
 ```mermaid
 flowchart TD
-    cb["gl_repl.c GLUT display callback"] --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
+    cb["gl_repl.c GLUT display callback"] --> fb["glr_ctrl_frame_begin<br/><i>opens PROF_FRAME_TOTAL</i>"]
+    fb --> si["scripted input / capture hooks<br/><i>PROF_SCRIPTED_INPUT</i>"]
+    si --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
     frame --> s1["tick profiling"]
     s1 --> s2["rebuild autonormals if dirty"]
     s2 --> s3["rebuild flat program if dirty<br/><i>PROF_FLATTEN</i>"]
@@ -144,12 +146,32 @@ flowchart TD
     s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_PANELS</i>"]
     s12 --> s13["ui_profile_panel_render(&ui_snap)"]
     s13 --> s14["restore flat count & predefined variable values"]
+    s14 --> h1["splash + scripted-pointer overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
+    h1 --> h2["glFinish + glutSwapBuffers<br/><i>PROF_PRESENT</i>"]
+    h2 --> fe["glr_ctrl_frame_end<br/><i>closes PROF_FRAME_TOTAL</i>"]
 ```
 
 Profile sections wrap each producer so snapshot construction time is
 visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
+
+**`PROF_FRAME_TOTAL` is the whole callback, not the controller.** The
+display callback runs real per-frame work on *both sides* of
+`glr_ctrl_display_frame()` — scripted-tour input before it, the
+post-composite splash / pointer overlays and the present after it — so the
+total's bracket belongs to the host, as the
+[`glr_ctrl_frame_begin()`](../src/app/glr_ctrl.h#L204) /
+[`glr_ctrl_frame_end()`](../src/app/glr_ctrl.h#L205) pair that also owns the
+staleness/FPS tick and the GPU query-slot rotation. It used to end at the
+controller's last line, which understated the frame by however much the
+host stages cost: a guided tour's caption overlay measured ~10 ms/frame
+(plus ~4 ms of `glFinish` draining its GPU work) while Frame Total reported
+a comfortable ~1.5 ms and no row named the culprit. Any new per-frame host
+stage needs its own section for the same reason — a stage inside the
+bracket with no row of its own is only visible as unattributed total.
+`test_frame_total_spans_host_stages` in [`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c)
+pins the contract on the profiler's test clock.
 
 The render3d frame consumes the explicit config:
 
@@ -1520,7 +1542,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L188) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L207) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one

@@ -511,10 +511,13 @@ static void test_display_frame_profile_coverage(void) {
 
     /* Drive one frame after marking both dirty so PROF_AUTONORMAL
      * and PROF_FLATTEN both run. The fixture also leaves replay
-     * active so PROF_REPLAY_HUD lands. */
+     * active so PROF_REPLAY_HUD lands. The frame_begin/_end pair is the
+     * host's PROF_FRAME_TOTAL bracket — without it the total never opens. */
     repl_mark_source_dirty();
     repl_state_mark_flat_dirty();
+    glr_ctrl_frame_begin();
     glr_ctrl_display_frame();
+    glr_ctrl_frame_end();
 
     /* Sections that should have landed a sample this frame. */
     ProfSection major[] = {
@@ -555,7 +558,9 @@ static void test_display_frame_profile_coverage(void) {
         if (attempt > 1) {
             repl_mark_source_dirty();
             repl_state_mark_flat_dirty();
+            glr_ctrl_frame_begin();
             glr_ctrl_display_frame();
+            glr_ctrl_frame_end();
         }
         attempts_run = attempt;
 
@@ -640,6 +645,74 @@ static void test_display_frame_profile_coverage(void) {
                  best_snapshot_coverage * 100.0);
         ASSERT_TRUE(label, best_snapshot_coverage >= PROFILE_SNAPSHOT_COVERAGE_MIN);
     }
+}
+
+/* PROF_FRAME_TOTAL must span the *host callback*, not just the controller's
+ * share of it. The stages gl_repl.c runs on either side of
+ * glr_ctrl_display_frame() — scripted input, the post-composite splash /
+ * pointer overlays, the present — are real per-frame cost: a guided tour's
+ * caption overlay alone measured ~10 ms/frame while Frame Total reported ~4 ms,
+ * because the bracket lived inside the controller and the overlay draws after
+ * it returns.
+ *
+ * Driven on the profiler's test clock so the arithmetic is exact and no GL is
+ * needed: the host stages are stood in for by their own prof brackets, exactly
+ * as display_func() places them. */
+static void test_frame_total_spans_host_stages(void) {
+    double total_us, overlay_us, pointer_us, present_us;
+
+    printf("--- imrepl_ctrl frame total spans host stages ---\n");
+
+    prof_test_set_now_us(0.0);
+    glr_ctrl_frame_begin();          /* host: first statement of the callback */
+
+    /* ... scripted input (1 ms) ... */
+    prof_begin(PROF_SCRIPTED_INPUT);
+    prof_test_set_now_us(1000.0);
+    prof_end(PROF_SCRIPTED_INPUT);
+
+    /* ... glr_ctrl_display_frame() would run here (4 ms) ... */
+    prof_test_set_now_us(5000.0);
+
+    /* ... host overlays: the tour's pointer overlay (10 ms) ... */
+    prof_begin(PROF_HOST_OVERLAYS);
+    prof_begin(PROF_POINTER_OVERLAY);
+    prof_test_set_now_us(15000.0);
+    prof_end(PROF_POINTER_OVERLAY);
+    prof_end(PROF_HOST_OVERLAYS);
+
+    /* ... glFinish + swap (2 ms) ... */
+    prof_begin(PROF_PRESENT);
+    prof_test_set_now_us(17000.0);
+    prof_end(PROF_PRESENT);
+
+    glr_ctrl_frame_end();            /* host: after the swap */
+
+    total_us   = prof_section_last_us(PROF_FRAME_TOTAL);
+    overlay_us = prof_section_last_us(PROF_HOST_OVERLAYS);
+    pointer_us = prof_section_last_us(PROF_POINTER_OVERLAY);
+    present_us = prof_section_last_us(PROF_PRESENT);
+
+    ASSERT_TRUE("host overlays not stale", !prof_section_is_stale(PROF_HOST_OVERLAYS));
+    ASSERT_TRUE("pointer overlay not stale", !prof_section_is_stale(PROF_POINTER_OVERLAY));
+    ASSERT_TRUE("present not stale", !prof_section_is_stale(PROF_PRESENT));
+    ASSERT_TRUE("scripted input not stale", !prof_section_is_stale(PROF_SCRIPTED_INPUT));
+
+    ASSERT_TRUE("pointer overlay measured 10ms", pointer_us == 10000.0);
+    ASSERT_TRUE("present measured 2ms", present_us == 2000.0);
+    /* The whole callback, not the controller's slice of it. */
+    ASSERT_TRUE("frame total is end to end (17ms)", total_us == 17000.0);
+    ASSERT_TRUE("frame total contains the host stages",
+                total_us >= overlay_us + present_us);
+
+    /* An unpaired end must not close a total that was never opened —
+     * glr_ctrl_display_frame() is called bare by tests and tools. */
+    prof_test_set_now_us(99000.0);
+    glr_ctrl_frame_end();
+    ASSERT_TRUE("unpaired frame_end leaves the total alone",
+                prof_section_last_us(PROF_FRAME_TOTAL) == 17000.0);
+
+    prof_test_clear_now_us();
 }
 
 static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo(void) {
@@ -5024,6 +5097,7 @@ int main(void) {
     test_display_frame_builds_config_and_restores_live_state();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
+    test_frame_total_spans_host_stages();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();
     test_variable_panel_motion_preserves_reset_assignment_without_declaration();

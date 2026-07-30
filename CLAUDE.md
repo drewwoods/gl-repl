@@ -266,7 +266,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L188) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L207) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
@@ -275,6 +275,14 @@ HUD) → 2D overlays. `render3d_demo` is the load-bearing proof that
 `src/render3d/` has no REPL dependency; `make render3d-hot` is its
 dlopen-based live-reload variant (state lives in the host TU; a
 [`Render3dState`](src/render3d/render.h#L97) layout change still needs a relaunch).
+
+The display callback is wider than the controller: [`gl_repl.c`](gl_repl.c) brackets it
+with `glr_ctrl_frame_begin()` / `_end()` (which own `PROF_FRAME_TOTAL`, the
+staleness/FPS tick and the GPU slot rotation) and runs scripted-tour input
+before `glr_ctrl_display_frame()` plus the splash/pointer overlays and
+`glFinish`+swap after it. **Per-frame work added to the host callback needs its
+own `ProfSection`** — inside the total but rowless, it shows up only as
+unattributed remainder (that is how a tour's ~10 ms caption overlay hid).
 
 ### Accumulation effects
 

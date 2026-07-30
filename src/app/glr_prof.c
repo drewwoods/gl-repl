@@ -88,6 +88,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_REFORMAT]                          = { "Reformat",        0, 0 },
     [PROF_AUTONORMAL]                        = { "Autonormal",      0, 0 },
     [PROF_REPLAY_HUD]                        = { "Replay HUD",      0, 0 },
+    [PROF_TOUR_HUD]                          = { "Tour HUD",        0, 0 },
     [PROF_PROFILE_PANEL]                     = { "Profile Panel",   0, 0 },
     [PROF_PROFILE_PANEL_FPS]                 = { "fps plot",        1, 0 },
     [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    1, 0 },
@@ -98,6 +99,11 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_ASSIGN_PLOT_PANEL]                 = { "panel",           1, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
+    [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
+    [PROF_HOST_OVERLAYS]                     = { "Host Overlays",   0, 0 },
+    [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
+    [PROF_POINTER_OVERLAY]                   = { "pointer",         1, 0 },
+    [PROF_PRESENT]                           = { "Present",         0, 0 },
     [PROF_FRAME_TOTAL]                       = { "Frame Total",     0, 1 },
 };
 
@@ -144,6 +150,7 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * these rows are intended to explain, especially in browser builds. */
     [PROF_UI_PANELS]                         = 1,
     [PROF_REPLAY_HUD]                        = 1,
+    [PROF_TOUR_HUD]                          = 1,
     [PROF_PROFILE_PANEL]                     = 1,
     /* Profile-panel children are diagnostic CPU subdivisions. Their parent
      * owns the GPU query so the overlay does not nest timer queries while it
@@ -155,6 +162,16 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * that issues no GL at all. */
     [PROF_ASSIGN_PLOT_PANEL]                 = 1,
     [PROF_COMPOSITOR]                        = 1,
+    /* Host-band stages: the overlay aggregate draws (splash banner, tour
+     * cursor/caption), so it owns a query; its two children stay CPU-only
+     * diagnostic subdivisions like every other leaf under a drawing parent.
+     * Scripted input issues no GL of its own, and Present is a glFinish drain
+     * plus the buffer swap — by then the queue is empty, so a query there
+     * would measure nothing. Note that Present's span still falls inside
+     * PROF_FRAME_TOTAL's query: the frame total's last GPU segment therefore
+     * carries the swap. That is intentional (the CPU total is end to end) and
+     * cheap, because the glFinish ahead of it has already drained the GPU. */
+    [PROF_HOST_OVERLAYS]                     = 1,
     [PROF_FRAME_TOTAL]                       = 1,
 };
 

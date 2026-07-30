@@ -94,6 +94,7 @@ typedef enum {
     PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
+    PROF_TOUR_HUD,      /* tour_ui_hud_render() (only during a guided tour) */
     PROF_PROFILE_PANEL,           /* all compute-profile surfaces */
     PROF_PROFILE_PANEL_FPS,       /* ui_fps_panel_render() */
     PROF_PROFILE_PANEL_SECTIONS,  /* ui_profile_panel_render() */
@@ -112,7 +113,21 @@ typedef enum {
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
-    PROF_FRAME_TOTAL,   /* entire display callback */
+    /* Host-band stages. The GLUT display callback in gl_repl.c does real
+     * per-frame work on both sides of glr_ctrl_display_frame() — scripted
+     * input before it, the splash/pointer overlays and the present after it —
+     * and PROF_FRAME_TOTAL covers the whole callback, so those stages need
+     * rows of their own or they show up only as unattributed total. A guided
+     * tour's cursor + caption overlay is the reason this exists: it can cost
+     * more than the entire 3D scene, and used to be invisible here. */
+    PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
+    PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
+    PROF_HOST_SPLASH,      /* splash_render() — startup banner only */
+    PROF_POINTER_OVERLAY,  /* glr_pointer_script_render_overlay() */
+    PROF_PRESENT,          /* glFinish() drain + glutSwapBuffers() */
+    PROF_FRAME_TOTAL,   /* entire display callback, end to end: scripted
+                         * input, glr_ctrl_display_frame(), host overlays,
+                         * and the present */
     PROF_SECTION_COUNT
 } ProfSection;
 

@@ -185,6 +185,25 @@ void glr_ctrl_request_quit(void);
  * current in-memory scene. Returns 1 on success, 0 on failure. */
 int glr_ctrl_save_recovery_file(void);
 
+/* Frame-boundary bookkeeping, called by the host's display callback around
+ * everything else it does that frame — glr_ctrl_frame_begin() first, before
+ * any per-frame work, and glr_ctrl_frame_end() last, after the buffer swap.
+ *
+ * These own the profiler's frame boundary: the staleness/FPS tick, the
+ * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
+ * and the PROF_FRAME_TOTAL bracket. They live here rather than inside
+ * glr_ctrl_display_frame() because the callback also runs host-band work on
+ * both sides of it (scripted input, splash + pointer overlays, present) —
+ * work that a bracket around the controller alone silently omits, which is
+ * exactly how a guided tour's ~10 ms caption overlay stayed invisible in the
+ * profile panel while Frame Total reported ~1.5 ms on the same frames.
+ *
+ * Unpaired calls are safe: frame_end() without a preceding frame_begin() is
+ * a no-op, so tests and tools may call glr_ctrl_display_frame() on its own
+ * (PROF_FRAME_TOTAL simply goes stale) without recording a bogus total. */
+void glr_ctrl_frame_begin(void);
+void glr_ctrl_frame_end(void);
+
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
 void glr_ctrl_keyboard(unsigned char key, int x, int y);

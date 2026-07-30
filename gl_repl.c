@@ -12,6 +12,7 @@
 #include "app/glr_tours.h"
 #include "app/boot/splash.h"
 #include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
+#include "support/cpuprof.h"     /* prof_begin/_end for this callback's stages */
 
 #include <signal.h>
 #include <stdio.h>
@@ -27,13 +28,22 @@ static const char *g_export_ply_path = NULL;
 static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
+    /* Open the profiler's frame — first statement in the callback, so
+     * PROF_FRAME_TOTAL spans every stage below and not just the controller's
+     * share of them. Closed by glr_ctrl_frame_end() after the swap. */
+    glr_ctrl_frame_begin();
+
+    prof_begin(PROF_SCRIPTED_INPUT);
     /* Headless-capture env hooks that need a live viewport / frame clock
      * (color picker, GL-state popup, help overlay, scheduled view toggle);
      * no-ops unless their GLR_* env var is set. */
     glr_capture_env_frame_hook();
     /* Scripted pointer/keyboard input (GLR_POINTER_SCRIPT): fire this
-     * frame's events before the frame renders so it reflects them. */
+     * frame's events before the frame renders so it reflects them. The
+     * synthesized keys/clicks dispatch straight into glr_ctrl_*, so a
+     * scripted commit's parse/flatten cost lands in this section. */
     glr_pointer_script_frame();
+    prof_end(PROF_SCRIPTED_INPUT);
     /* Trace the first two frames separately (gated on the init-trace
      * detailed flag — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
@@ -73,24 +83,47 @@ static void display_func(void) {
         exit(n < 0 ? 1 : 0);
     }
 
+    /* Host-band overlays: the last two passes over the composited frame, both
+     * owned by this callback rather than the controller (splash is boot-band,
+     * and the pointer overlay must land after the compositor to stay
+     * topmost). Timed as one aggregate with a row per pass — see
+     * prof_sections.h for why these have rows at all. */
+    prof_begin(PROF_HOST_OVERLAYS);
     /* Startup splash banner along the bottom; frame-counted, fades out.
      * Drawn over the composited frame so the scene/UI warm up underneath. */
-    if (splash_active())
+    if (splash_active()) {
+        prof_begin(PROF_HOST_SPLASH);
         splash_render(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+        prof_end(PROF_HOST_SPLASH);
+    }
 
     /* Scripted-pointer overlay (cursor arrow, click ripple, highlight
      * ring) so recorded video shows where the synthetic mouse is. */
-    if (glr_pointer_script_active())
+    if (glr_pointer_script_active()) {
+        prof_begin(PROF_POINTER_OVERLAY);
         glr_pointer_script_render_overlay(glutGet(GLUT_WINDOW_WIDTH),
                                           glutGet(GLUT_WINDOW_HEIGHT));
+        prof_end(PROF_POINTER_OVERLAY);
+    }
+    prof_end(PROF_HOST_OVERLAYS);
 
+    prof_begin(PROF_PRESENT);
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
     glutSwapBuffers();
+    prof_end(PROF_PRESENT);
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
         glr_init_trace(buf);
         frames_traced++;
     }
+
+    /* Close the frame total here: everything the callback does to produce and
+     * present this frame is now behind us. The simulation tick below is
+     * deliberately outside it — in the normal (timer-paced) mode that tick
+     * runs from the frame timer, entirely outside this callback, so counting
+     * it here only in capture mode would make the two modes' totals
+     * incomparable. */
+    glr_ctrl_frame_end();
 
     /* In GLR_TICK_PER_FRAME mode, advance only after the completed frame so
      * the captured sequence is t0, t0+dt, ... . The timer continues to pace

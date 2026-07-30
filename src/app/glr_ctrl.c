@@ -2355,6 +2355,43 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
     config->setup_subframe_user_data = &g_subframe_ctx;
 }
 
+/* Set between glr_ctrl_frame_begin() and glr_ctrl_frame_end() so an unpaired
+ * end (a test driving glr_ctrl_display_frame() directly) cannot close a
+ * PROF_FRAME_TOTAL that was never opened — prof_end() on an unstarted section
+ * would record the whole epoch as one frame. */
+static int g_frame_total_open = 0;
+
+void glr_ctrl_frame_begin(void) {
+    prof_frame_tick();
+    memprof_frame_tick();
+    /* Dial GPU timer-query capture to what the profile panel can show this
+     * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
+     * query boundaries aren't free, so don't issue ones nobody can see.
+     * Then open the frame's query slot — this must precede the first
+     * prof_begin of a GPU-bracketed section (FRAME_TOTAL, below).
+     * Both no-op while gpu_prof is disabled. */
+    {
+        UiProfilePanelMode prof_mode =
+            (UiProfilePanelMode)ui_state_profile_panel().mode;
+        /* OFF and FPS issue no timer queries — the FPS plot needs no
+         * per-section GPU data, and query boundaries cost real GPU time. */
+        glr_prof_set_gpu_capture_mode(
+            (prof_mode == PROFILE_PANEL_OFF ||
+             prof_mode == PROFILE_PANEL_FPS) ? GLR_PROF_GPU_CAPTURE_OFF
+                                             : GLR_PROF_GPU_CAPTURE_ALL);
+    }
+    gpu_prof_frame_begin();
+    prof_begin(PROF_FRAME_TOTAL);
+    g_frame_total_open = 1;
+}
+
+void glr_ctrl_frame_end(void) {
+    if (!g_frame_total_open)
+        return;
+    g_frame_total_open = 0;
+    prof_end(PROF_FRAME_TOTAL);
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];
@@ -2370,27 +2407,11 @@ void glr_ctrl_display_frame(void) {
     Render3dRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 
-    prof_frame_tick();
-    memprof_frame_tick();
+    /* No frame-boundary bookkeeping here: the staleness/FPS tick, the GPU
+     * query-slot rotation and the PROF_FRAME_TOTAL bracket belong to the
+     * host's glr_ctrl_frame_begin() / _end() pair, so the total also covers
+     * the callback stages that sit outside this function. */
     glr_ctrl_refresh_window_title();
-    /* Dial GPU timer-query capture to what the profile panel can show this
-     * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
-     * query boundaries aren't free, so don't issue ones nobody can see.
-     * Then open the frame's query slot — this must precede the first
-     * prof_begin of a GPU-bracketed section (FRAME_TOTAL, next line).
-     * Both no-op while gpu_prof is disabled. */
-    {
-        UiProfilePanelMode prof_mode =
-            (UiProfilePanelMode)ui_state_profile_panel().mode;
-        /* OFF and FPS issue no timer queries — the FPS plot needs no
-         * per-section GPU data, and query boundaries cost real GPU time. */
-        glr_prof_set_gpu_capture_mode(
-            (prof_mode == PROFILE_PANEL_OFF ||
-             prof_mode == PROFILE_PANEL_FPS) ? GLR_PROF_GPU_CAPTURE_OFF
-                                             : GLR_PROF_GPU_CAPTURE_ALL);
-    }
-    gpu_prof_frame_begin();
-    prof_begin(PROF_FRAME_TOTAL);
     /* The first refresh below and any time-blur refreshes inside Render 3D
      * are one displayed-frame cost. The REPL boundary retains direct timing
      * for export/debug/replay callers outside this scope. */
@@ -2607,8 +2628,11 @@ void glr_ctrl_display_frame(void) {
      * replay HUD above so a tour demonstrating replay shows both. No-ops for
      * env-capture scripts and when no controlled tour is running. Rendered
      * before the compositor pass; the pointer/cursor overlay still composits
-     * on top afterward in gl_repl.c, staying visually topmost. */
+     * on top afterward in gl_repl.c, staying visually topmost (and is timed
+     * there as PROF_POINTER_OVERLAY — this section is the HUD alone). */
+    prof_begin(PROF_TOUR_HUD);
     tour_ui_hud_render(&ui_snap);
+    prof_end(PROF_TOUR_HUD);
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
     for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
@@ -2735,8 +2759,6 @@ void glr_ctrl_display_frame(void) {
      * motion and interpolate prev<->cur for camera blur. */
     g_prev_frame_pose = g_cur_frame_pose;
     g_prev_frame_pose_valid = 1;
-
-    prof_end(PROF_FRAME_TOTAL);
 }
 
 void glr_ctrl_reshape(int w, int h) {
