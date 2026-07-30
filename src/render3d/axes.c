@@ -609,11 +609,9 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
  * of the origin. They decelerate as they climb, spread laterally on the
  * way, and fade out before the tip, then respawn. A leader droplet
  * drives the phase; the rest use golden-ratio offsets for stateless,
- * evenly-spaced distribution. Faint spray rings at each axis midpoint
- * bound the stream. Procedural (per-frame positions driven by
+ * evenly-spaced distribution. Procedural (per-frame positions driven by
  * anim_time), so like NEON it stays out of the spec table. */
 
-#define FOUNTAIN_RING_SEGMENTS 24
 #define FOUNTAIN_DROPLET_COUNT 150
 #define FOUNTAIN_STREAM_SPEED  0.10f          /* axis-lengths per second   */
 #define FOUNTAIN_PHI           0.6180339887f  /* 1/φ — golden ratio fract   */
@@ -622,45 +620,6 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
 #define FOUNTAIN_SPRAY_MAX     1.4f           /* max per-droplet r scale    */
 #define FOUNTAIN_SWIRL_RATE    2.0f           /* base rad/s around the axis */
 #define FOUNTAIN_BASE_ALPHA    0.6f           /* alpha at origin (t=0)      */
-#define FOUNTAIN_RING_SLACK    1.15f          /* rings sit just outside it  */
-
-/* Axial position in [0,1] at stream parameter t. Ease-out, so droplets
- * decelerate as they climb the way a real spray slows toward its apex. */
-static float fountain_along(float t) {
-    float inv = 1.0f - t;
-    return 1.0f - inv * inv;
-}
-
-/* Lateral spray envelope at t. sqrtf front-loads the spread so the
- * stream is already wider than the gap between droplets while they are
- * still bright — the linear ramp this replaced put the widest spread
- * exactly where alpha reached 0, which read as a solid line fading out
- * rather than as a spray. The rings measure themselves off this same
- * function so they can't drift away from the stream they bound. */
-static float fountain_spray_radius(float t, float radius_scale) {
-    return FOUNTAIN_SPRAY_RADIUS * radius_scale * sqrtf(t);
-}
-
-/* Spray ring perpendicular to each axis at `dist` along it. The three
- * rings differ only in which coordinate is pinned, so they share one
- * helper the way the line/tip/label triplets above do. */
-static void draw_axis_ring_triplet(const AxesDrawContext *ctx, float dist,
-                                   float radius, const Render3dRgba colors[3]) {
-    for (int axis = 0; axis < 3; axis++) {
-        glBegin(GL_LINE_LOOP);
-        axes_color_rgba(ctx, colors[axis]);
-        for (int i = 0; i < FOUNTAIN_RING_SEGMENTS; i++) {
-            float a = (float)i * 2.0f * (float)M_PI / (float)FOUNTAIN_RING_SEGMENTS;
-            float u = cosf(a) * radius, v = sinf(a) * radius;
-            switch (axis) {
-            case RENDER3D_AXIS_X: glVertex3f(dist, u, v); break;
-            case RENDER3D_AXIS_Y: glVertex3f(u, dist, v); break;
-            case RENDER3D_AXIS_Z: glVertex3f(u, v, dist); break;
-            }
-        }
-        glEnd();
-    }
-}
 
 static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
                                                 float anim_time, float breath,
@@ -719,8 +678,16 @@ static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
             float rate = FOUNTAIN_SWIRL_RATE * (0.3f + h_swirl * 1.4f) /* 0.3..1.7 */
                          * ((fmodf(h_swirl * 97.0f, 1.0f) < 0.5f) ? 1.0f : -1.0f);
 
-            float along = fountain_along(t) * len;
-            float r     = fountain_spray_radius(t, radius_scale);
+            /* Axial ease-out, so droplets decelerate as they climb the
+             * way a real spray slows toward its apex. The lateral spread
+             * front-loads via sqrtf, so the stream is already wider than
+             * the gap between droplets while they are still bright — a
+             * linear ramp puts the widest spread exactly where alpha
+             * reaches 0, which reads as a solid line fading out rather
+             * than as a spray. */
+            float inv   = 1.0f - t;
+            float along = (1.0f - inv * inv) * len;
+            float r     = FOUNTAIN_SPRAY_RADIUS * radius_scale * sqrtf(t);
             float ang   = h_angle * (float)M_PI * 2.0f + anim_time * rate;
             float u = cosf(ang) * r, v = sinf(ang) * r;
 
@@ -734,21 +701,6 @@ static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
     }
     glEnd();
     glPointSize(1.0f);
-
-    /* Spray rings at each axis midpoint, sized off the widest droplet
-     * envelope there plus a little slack so they read as bounding the
-     * stream rather than cutting through it. */
-    float ring_alpha = fminf((0.18f + breath * 0.10f) * as, 1.0f);
-    Render3dRgba rings[3] = {
-        rgba(0.90f, 0.30f, 0.30f, ring_alpha),
-        rgba(0.30f, 0.90f, 0.30f, ring_alpha),
-        rgba(0.30f, 0.30f, 0.90f, ring_alpha),
-    };
-    glLineWidth(1.0f);
-    draw_axis_ring_triplet(ctx, len * 0.5f,
-                           fountain_spray_radius(0.5f, FOUNTAIN_SPRAY_MAX)
-                               * FOUNTAIN_RING_SLACK,
-                           rings);
 
     /* Emitter dot at the origin */
     glPointSize(5.0f);
