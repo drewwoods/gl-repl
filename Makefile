@@ -1221,7 +1221,7 @@ $(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 	cmake --build $(FREEGLUT_BUILD) --target freeglut_static
 
 freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
-	rm -rf $(FREEGLUT_BUILD)
+	rm -rf $(FREEGLUT_BUILD) $(FREEGLUT_SRC)/build-osmesa-shared
 
 # WEB=1: shell.html, gl4es_bootstrap.c, and the static archives are
 # link-time inputs (not objects in $(SAMPLE_OBJS) -- see GL_LDFLAGS above),
@@ -2524,17 +2524,75 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 GLPROBE_SRCS = tools/glprobe/glprobe.c src/support/mesh_ply.c
 GLPROBE_BIN  = build/glprobe/$(basename $(notdir $(SAMPLE)))
 
+# The same probe as an injectable library, for samples whose source must not be
+# touched. Interposes glutDisplayFunc to get a frame hook; see the header of
+# tools/glprobe/glprobe_preload.c.
+#
+#   make glprobe-preload
+#   DYLD_INSERT_LIBRARIES=build/glprobe/libglprobe_preload.dylib GLPROBE=1 ./sample
+#
+# INTERPOSITION NEEDS A DYNAMIC GLUT. The default macOS link is the Apple GLUT
+# framework and Linux uses -lglut, both fine. FREEGLUT_OSMESA=1 normally links
+# the vendored freeglut as a STATIC archive, which leaves no glutDisplayFunc
+# symbol to interpose -- so the headless variant builds and links a SHARED
+# freeglut instead (separate CMake dir, gitignored like the others).
+#
+# Both glprobe targets share these flags. The `glprobe` sample build has no need
+# of a dynamic GLUT itself, but a sample linked the other way cannot be probed
+# by the preload library, and a debugging convenience target that quietly
+# produces an unprobeable binary is worse than one extra CMake directory.
+GLPROBE_PRELOAD_EXT  = $(if $(filter Darwin,$(UNAME_S)),dylib,so)
+GLPROBE_PRELOAD_LIB  = build/glprobe/libglprobe_preload.$(GLPROBE_PRELOAD_EXT)
+GLPROBE_PRELOAD_SRCS = tools/glprobe/glprobe_preload.c $(GLPROBE_SRCS)
+
+# Headless only: redirect a sample's <GLUT/glut.h> (the Apple-framework branch
+# of its own #ifdef) to the glprobe shim, so an untouched Apple-style sample
+# builds against OSMesa. Must precede the SDK on the include path, hence first.
+# Never set for a native build, where the real framework is the right answer.
+GLPROBE_COMPAT_CFLAGS = $(if $(filter 1,$(FREEGLUT_OSMESA)),-Itools/glprobe/compat,)
+
+ifeq ($(FREEGLUT_OSMESA),1)
+  FREEGLUT_SHARED_BUILD := $(FREEGLUT_SRC)/build-osmesa-shared
+  FREEGLUT_SHARED_LIB   := $(FREEGLUT_SHARED_BUILD)/lib/libglut_osmesa.$(GLPROBE_PRELOAD_EXT)
+  GLPROBE_GLUT_LDFLAGS = -L$(FREEGLUT_SHARED_BUILD)/lib -lglut_osmesa \
+	-Wl,-rpath,$(abspath $(FREEGLUT_SHARED_BUILD)/lib) \
+	-L$(MESA_PREFIX)/lib -lOSMesa -lGL -L$(MESA_GLU_PREFIX)/lib -lGLU \
+	-Wl,-rpath,$(MESA_PREFIX)/lib -Wl,-rpath,$(MESA_GLU_PREFIX)/lib -lm
+  GLPROBE_GLUT_DEPS = $(FREEGLUT_SHARED_LIB)
+else
+  GLPROBE_GLUT_LDFLAGS = $(GLUT_GL_LDFLAGS)
+  GLPROBE_GLUT_DEPS =
+endif
+
+$(FREEGLUT_SHARED_LIB): $(FREEGLUT_SRC)/VENDORED.txt
+	PKG_CONFIG_PATH="$(FREEGLUT_PKG_CONFIG_PATH):$$PKG_CONFIG_PATH" \
+	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_SHARED_BUILD) \
+	  $(FREEGLUT_CMAKE_BACKEND) -DFREEGLUT_BUILD_STATIC_LIBS=OFF \
+	  -DFREEGLUT_BUILD_SHARED_LIBS=ON -DFREEGLUT_BUILD_DEMOS=OFF \
+	  -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(FREEGLUT_SHARED_BUILD) --target freeglut
+
 .PHONY: glprobe
-glprobe: ## Build a standalone GL sample with the GL_FEEDBACK geometry probe (SAMPLE=<file.c>).
+glprobe: $(GLPROBE_GLUT_DEPS) ## Build a standalone GL sample with the GL_FEEDBACK geometry probe (SAMPLE=<file.c>).
 	@test -n "$(SAMPLE)" || { \
 		echo "$(RED)usage: make glprobe SAMPLE=<sample.c> [FREEGLUT_OSMESA=1]$(NC)"; \
 		exit 1; }
 	@test -f "$(SAMPLE)" || { echo "$(RED)no such sample: $(SAMPLE)$(NC)"; exit 1; }
 	@mkdir -p build/glprobe
-	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations $(GL_HEADER_CFLAGS) \
+	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations \
+		$(GLPROBE_COMPAT_CFLAGS) $(GL_HEADER_CFLAGS) \
 		-Itools/glprobe -Isrc \
-		-o $(GLPROBE_BIN) $(SAMPLE) $(GLPROBE_SRCS) $(GLUT_GL_LDFLAGS)
+		-o $(GLPROBE_BIN) $(SAMPLE) $(GLPROBE_SRCS) $(GLPROBE_GLUT_LDFLAGS)
 	@echo "$(GREEN)built $(GLPROBE_BIN)$(NC)"
+
+.PHONY: glprobe-preload
+glprobe-preload: $(GLPROBE_GLUT_DEPS) ## Build the glprobe probe as an LD_PRELOAD/DYLD_INSERT_LIBRARIES library (no sample source changes).
+	@mkdir -p build/glprobe
+	$(CC) -std=c99 -g -O1 -Wno-deprecated-declarations -shared -fPIC \
+		$(GL_HEADER_CFLAGS) -Itools/glprobe -Isrc \
+		-o $(GLPROBE_PRELOAD_LIB) $(GLPROBE_PRELOAD_SRCS) \
+		$(GLPROBE_GLUT_LDFLAGS)
+	@echo "$(GREEN)built $(GLPROBE_PRELOAD_LIB)$(NC)"
 
 # Call graph generation targets -----------------------------------------------
 

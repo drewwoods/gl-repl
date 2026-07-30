@@ -127,7 +127,10 @@ neutral `src/support` helper where the peer has one), and is guarded by
   tree. Captures a draw callback twice — once under a known ortho with lighting
   off, once under the live camera and lights — so "why can't I see it?" splits
   into "is the mesh wrong?" and "is the shading wrong?". Dumps PLY through the
-  same pure writer as the app's mesh export. Not linked into any demo.
+  same pure writer as the app's mesh export. `make glprobe-preload` builds the
+  same probe as an `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` library that hooks
+  `glutDisplayFunc` and needs no source change at all. Not linked into any
+  demo.
 
 ## Build
 

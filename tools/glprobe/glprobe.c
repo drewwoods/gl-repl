@@ -38,13 +38,11 @@
  * the PLY path and the analysis path cannot disagree about the stride. */
 #define FPV MESH_PLY_FLOATS_PER_VERTEX
 
-/* One capture's inverse-transform inputs: whatever matrices were in force when
- * glRenderMode(GL_FEEDBACK) ran, so window coords can be unprojected back. */
-typedef struct {
-    GLdouble mv[16], proj[16];
-    GLint    vp[4];
-    float    ortho_r;   /* geometry mode only; 0 in shading mode */
-} ProbeXform;
+/* GlProbeXform (glprobe.h) is spelled in plain double/int so the header needs
+ * no GL types; pin that to the GL spelling here rather than casting at every
+ * glGet call site. */
+typedef char glprobe_xform_double_check[sizeof(GLdouble) == sizeof(double) ? 1 : -1];
+typedef char glprobe_xform_int_check[sizeof(GLint) == sizeof(int) ? 1 : -1];
 
 /* ---------------------------------------------------------------- capture */
 
@@ -64,7 +62,7 @@ static void probe_state_neutral(void) {
  * transform actually in force into *xf. */
 static int probe_capture(int mode, GlProbeDrawFn draw, void *user,
                          float *buf, int cap_floats, float ortho_r,
-                         ProbeXform *xf) {
+                         GlProbeXform *xf) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -82,13 +80,10 @@ static int probe_capture(int mode, GlProbeDrawFn draw, void *user,
         glViewport(0, 0, GLPROBE_VP, GLPROBE_VP);
         glDepthRange(0.0, 1.0);
         probe_state_neutral();
-        xf->ortho_r = ortho_r;
-    } else {
-        /* Shading mode deliberately changes NOTHING: the whole point is that
-         * the capture sees the same matrices, lights and materials the visible
-         * frame does, so the colors coming back are the ones on screen. */
-        xf->ortho_r = 0.0f;
     }
+    /* Shading mode deliberately changes NOTHING above: the whole point is that
+     * the capture sees the same matrices, lights and materials the visible
+     * frame does, so the colors coming back are the ones on screen. */
 
     glGetDoublev(GL_MODELVIEW_MATRIX, xf->mv);
     glGetDoublev(GL_PROJECTION_MATRIX, xf->proj);
@@ -115,7 +110,7 @@ static int probe_capture(int mode, GlProbeDrawFn draw, void *user,
  * failed; *out_overflow distinguishes the two. */
 static int probe_capture_grow(int mode, GlProbeDrawFn draw, void *user,
                               int cap_floats, float ortho_r,
-                              float **out_buf, ProbeXform *xf,
+                              float **out_buf, GlProbeXform *xf,
                               int *out_overflow) {
     float *buf = NULL;
     *out_overflow = 0;
@@ -159,7 +154,7 @@ static int vec_finite(float a, float b, float c) {
     return isfinite(a) && isfinite(b) && isfinite(c);
 }
 
-static void unproject(const ProbeXform *xf, ProbeVert *v) {
+static void unproject(const GlProbeXform *xf, ProbeVert *v) {
     GLdouble ox = 0, oy = 0, oz = 0;
     if (gluUnProject((GLdouble)v->wx, (GLdouble)v->wy, (GLdouble)v->wz,
                      xf->mv, xf->proj, xf->vp, &ox, &oy, &oz) == GL_TRUE) {
@@ -175,7 +170,7 @@ static void unproject(const ProbeXform *xf, ProbeVert *v) {
     }
 }
 
-static ProbeVert read_vert(const float *f, const ProbeXform *xf) {
+static ProbeVert read_vert(const float *f, const GlProbeXform *xf) {
     ProbeVert v;
     v.wx = f[0]; v.wy = f[1]; v.wz = f[2];
     v.r  = f[3]; v.g  = f[4]; v.b  = f[5]; v.a = f[6];
@@ -239,19 +234,105 @@ static void dump_prim(ProbeDump *d, const char *kind, const ProbeVert *vs,
         d->remaining--;
 }
 
-/* Parse the feedback stream into *r. Returns 0 on success, -1 on a malformed
- * or truncated stream (which, absent an overflow, means a GL bug or a stride
- * mismatch -- worth surfacing rather than silently under-reporting). */
-static int analyze(const float *fb, int n, const ProbeXform *xf,
-                   GlProbeReport *r, ProbeDump *dump) {
-    double lum_sum = 0.0;
-    int lum_n = 0;
-    ProbeVert poly[256];
+/* A report under construction. The running luminance sum has nowhere to live
+ * in the public struct, so accumulation goes through this instead -- which also
+ * lets one pass over the stream feed two reports at once (the whole-capture
+ * total and the current glPassThrough batch). */
+typedef struct {
+    GlProbeReport *r;
+    double lum_sum;
+    int    lum_n;
+} Acc;
 
+static void acc_begin(Acc *a, GlProbeReport *r, int mode) {
+    memset(r, 0, sizeof *r);
+    r->mode = mode;
     r->lum_min = r->alpha_min = 1e30f;
     r->lum_max = r->alpha_max = -1e30f;
     r->bbox_min[0] = r->bbox_min[1] = r->bbox_min[2] = 1e30f;
     r->bbox_max[0] = r->bbox_max[1] = r->bbox_max[2] = -1e30f;
+    a->r = r;
+    a->lum_sum = 0.0;
+    a->lum_n = 0;
+}
+
+static void acc_vert(Acc *a, const ProbeVert *v, const GlProbeXform *xf) {
+    GlProbeReport *r = a->r;
+    r->verts++;
+    if (!v->finite) {
+        r->nonfinite++;
+        return;
+    }
+    if (v->x < r->bbox_min[0]) r->bbox_min[0] = v->x;
+    if (v->y < r->bbox_min[1]) r->bbox_min[1] = v->y;
+    if (v->z < r->bbox_min[2]) r->bbox_min[2] = v->z;
+    if (v->x > r->bbox_max[0]) r->bbox_max[0] = v->x;
+    if (v->y > r->bbox_max[1]) r->bbox_max[1] = v->y;
+    if (v->z > r->bbox_max[2]) r->bbox_max[2] = v->z;
+
+    float lum = luminance(v);
+    if (lum < r->lum_min) r->lum_min = lum;
+    if (lum > r->lum_max) r->lum_max = lum;
+    if (v->a < r->alpha_min) r->alpha_min = v->a;
+    if (v->a > r->alpha_max) r->alpha_max = v->a;
+    a->lum_sum += lum;
+    a->lum_n++;
+    if (lum < GLPROBE_DARK_LUM)
+        r->dark_verts++;
+
+    /* Geometry mode installs a cube that contains everything, so it can never
+     * report a clip -- the counters would only ever be noise there. */
+    if (r->mode != GLPROBE_MODE_GEOMETRY) {
+        if (v->wx < (float)xf->vp[0] ||
+            v->wx > (float)(xf->vp[0] + xf->vp[2]) ||
+            v->wy < (float)xf->vp[1] ||
+            v->wy > (float)(xf->vp[1] + xf->vp[3]))
+            r->offscreen++;
+        if (v->wz < 0.0f || v->wz > 1.0f)
+            r->depth_clipped++;
+    }
+}
+
+static void acc_prim(Acc *a, int tok, int nverts, int degenerate) {
+    GlProbeReport *r = a->r;
+    if (tok == MESH_PLY_TOK_POINT)
+        r->points++;
+    else if (tok == MESH_PLY_TOK_POLYGON) {
+        r->polygons++;
+        r->tris += nverts - 2;
+        r->degenerate += degenerate;
+    } else
+        r->lines++;
+}
+
+static void acc_end(Acc *a) {
+    GlProbeReport *r = a->r;
+    if (a->lum_n > 0)
+        r->lum_mean = (float)(a->lum_sum / a->lum_n);
+    if (r->verts == 0 || a->lum_n == 0) {
+        r->lum_min = r->lum_max = r->lum_mean = 0.0f;
+        r->alpha_min = r->alpha_max = 0.0f;
+        r->bbox_min[0] = r->bbox_min[1] = r->bbox_min[2] = 0.0f;
+        r->bbox_max[0] = r->bbox_max[1] = r->bbox_max[2] = 0.0f;
+    }
+}
+
+/* Parse the feedback stream into *r, optionally splitting it into sub-reports
+ * at each glPassThrough marker. Returns 0 on success, -1 on a malformed or
+ * truncated stream (which, absent an overflow, means a GL bug or a stride
+ * mismatch -- worth surfacing rather than silently under-reporting). */
+static int analyze(const float *fb, int n, const GlProbeXform *xf, int mode,
+                   GlProbeReport *r, GlProbeReport *batches, int max_batches,
+                   ProbeDump *dump) {
+    ProbeVert poly[256];
+    Acc total, batch;
+    int have_batch = 0;
+
+    acc_begin(&total, r, mode);
+    if (batches && max_batches > 0) {
+        r->batches = batches;
+        r->batch_count = 0;
+    }
 
     int i = 0;
     while (i < n) {
@@ -276,7 +357,19 @@ static int analyze(const float *fb, int n, const ProbeXform *xf,
         case MESH_PLY_TOK_PASS_THROUGH:
             if (i >= n)
                 return -1;
-            i++;                 /* one value, carries no geometry */
+            /* A marker closes the batch in progress and opens the next. The
+             * caller injected it from a state-change hook, so the split lands
+             * on an object boundary without anyone naming the objects. */
+            if (r->batches && r->batch_count < max_batches) {
+                if (have_batch)
+                    acc_end(&batch);
+                float id = fb[i];
+                acc_begin(&batch, &batches[r->batch_count], mode);
+                batches[r->batch_count].batch_id = id;
+                r->batch_count++;
+                have_batch = 1;
+            }
+            i++;
             continue;
         case MESH_PLY_TOK_BITMAP:
         case MESH_PLY_TOK_DRAW_PIXEL:
@@ -297,73 +390,44 @@ static int analyze(const float *fb, int n, const ProbeXform *xf,
             ProbeVert v = read_vert(fb + i + k * FPV, xf);
             if (buffered)
                 poly[k] = v;
-
             if (!kind)
                 continue;        /* pixel/bitmap token: consumed only */
-
-            r->verts++;
-            if (!v.finite) {
-                r->nonfinite++;
-                continue;
-            }
-            if (v.x < r->bbox_min[0]) r->bbox_min[0] = v.x;
-            if (v.y < r->bbox_min[1]) r->bbox_min[1] = v.y;
-            if (v.z < r->bbox_min[2]) r->bbox_min[2] = v.z;
-            if (v.x > r->bbox_max[0]) r->bbox_max[0] = v.x;
-            if (v.y > r->bbox_max[1]) r->bbox_max[1] = v.y;
-            if (v.z > r->bbox_max[2]) r->bbox_max[2] = v.z;
-
-            float lum = luminance(&v);
-            if (lum < r->lum_min) r->lum_min = lum;
-            if (lum > r->lum_max) r->lum_max = lum;
-            if (v.a < r->alpha_min) r->alpha_min = v.a;
-            if (v.a > r->alpha_max) r->alpha_max = v.a;
-            lum_sum += lum;
-            lum_n++;
-            if (lum < GLPROBE_DARK_LUM)
-                r->dark_verts++;
-
-            if (r->mode == GLPROBE_MODE_SHADING) {
-                if (v.wx < (float)xf->vp[0] ||
-                    v.wx > (float)(xf->vp[0] + xf->vp[2]) ||
-                    v.wy < (float)xf->vp[1] ||
-                    v.wy > (float)(xf->vp[1] + xf->vp[3]))
-                    r->offscreen++;
-                if (v.wz < 0.0f || v.wz > 1.0f)
-                    r->depth_clipped++;
-            }
+            acc_vert(&total, &v, xf);
+            if (have_batch)
+                acc_vert(&batch, &v, xf);
         }
         i += nverts * FPV;
 
         if (!kind)
             continue;
-        if (tok == MESH_PLY_TOK_POINT)
-            r->points++;
-        else if (tok == MESH_PLY_TOK_POLYGON) {
-            r->polygons++;
-            r->tris += nverts - 2;
-            if (buffered) {
-                float area, edge;
-                poly_area(poly, nverts, &area, &edge);
-                if (edge <= 0.0f || area <= 1e-6f * edge * edge)
-                    r->degenerate++;
-            }
-        } else
-            r->lines++;
+
+        int degenerate = 0;
+        if (tok == MESH_PLY_TOK_POLYGON && buffered) {
+            float area, edge;
+            poly_area(poly, nverts, &area, &edge);
+            degenerate = (edge <= 0.0f || area <= 1e-6f * edge * edge);
+        }
+        acc_prim(&total, tok, nverts, degenerate);
+        if (have_batch)
+            acc_prim(&batch, tok, nverts, degenerate);
 
         if (buffered)
             dump_prim(dump, kind, poly, nverts);
     }
 
-    if (lum_n > 0)
-        r->lum_mean = (float)(lum_sum / lum_n);
-    if (r->verts == 0 || lum_n == 0) {
-        r->lum_min = r->lum_max = r->lum_mean = 0.0f;
-        r->alpha_min = r->alpha_max = 0.0f;
-        r->bbox_min[0] = r->bbox_min[1] = r->bbox_min[2] = 0.0f;
-        r->bbox_max[0] = r->bbox_max[1] = r->bbox_max[2] = 0.0f;
-    }
+    if (have_batch)
+        acc_end(&batch);
+    acc_end(&total);
     return 0;
+}
+
+int glprobe_analyze(const float *feedback, int float_count,
+                    const GlProbeXform *xf, int mode, GlProbeReport *out,
+                    GlProbeReport *batches, int max_batches) {
+    if (!feedback || !xf || !out)
+        return -1;
+    return analyze(feedback, float_count, xf, mode, out, batches, max_batches,
+                   NULL);
 }
 
 /* ------------------------------------------------------------ public API */
@@ -384,7 +448,7 @@ int glprobe_geometry(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
     float ortho_r = auto_fit ? GLPROBE_ORTHO_R : o.ortho_r;
 
     float *buf = NULL;
-    ProbeXform xf;
+    GlProbeXform xf;
     int overflow = 0;
     int n = probe_capture_grow(GLPROBE_MODE_GEOMETRY, draw, user,
                                o.buffer_floats, ortho_r, &buf, &xf, &overflow);
@@ -392,9 +456,7 @@ int glprobe_geometry(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
         return -1;
 
     GlProbeReport r;
-    memset(&r, 0, sizeof r);
-    r.mode = GLPROBE_MODE_GEOMETRY;
-    if (analyze(buf, n, &xf, &r, NULL) != 0) {
+    if (analyze(buf, n, &xf, GLPROBE_MODE_GEOMETRY, &r, NULL, 0, NULL) != 0) {
         free(buf);
         return -1;
     }
@@ -420,9 +482,8 @@ int glprobe_geometry(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
                                    o.buffer_floats, fit, &buf, &xf, &overflow);
             if (n < 0)
                 return -1;
-            memset(&r, 0, sizeof r);
-            r.mode = GLPROBE_MODE_GEOMETRY;
-            if (analyze(buf, n, &xf, &r, NULL) != 0) {
+            if (analyze(buf, n, &xf, GLPROBE_MODE_GEOMETRY, &r, NULL, 0,
+                        NULL) != 0) {
                 free(buf);
                 return -1;
             }
@@ -475,7 +536,7 @@ int glprobe_shading(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
     opts_defaults(opts, &o);
 
     float *buf = NULL;
-    ProbeXform xf;
+    GlProbeXform xf;
     int overflow = 0;
     int n = probe_capture_grow(GLPROBE_MODE_SHADING, draw, user,
                                o.buffer_floats, 0.0f, &buf, &xf, &overflow);
@@ -483,9 +544,7 @@ int glprobe_shading(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
         return -1;
 
     GlProbeReport r;
-    memset(&r, 0, sizeof r);
-    r.mode = GLPROBE_MODE_SHADING;
-    int rc = analyze(buf, n, &xf, &r, NULL);
+    int rc = analyze(buf, n, &xf, GLPROBE_MODE_SHADING, &r, NULL, 0, NULL);
     r.overflow = overflow;
     free(buf);
     if (rc != 0)
@@ -503,8 +562,13 @@ void glprobe_report_print(const GlProbeReport *r, const char *label,
         f = stderr;
     (void)opts;   /* per-primitive dump is emitted by glprobe_diagnose */
 
-    const char *mode = r->mode == GLPROBE_MODE_GEOMETRY ? "geometry (known ortho, lighting off)"
-                                                        : "shading  (live camera + lights)";
+    const char *mode;
+    switch (r->mode) {
+    case GLPROBE_MODE_GEOMETRY: mode = "geometry (known ortho, lighting off)"; break;
+    case GLPROBE_MODE_AS_DRAWN: mode = "as-drawn (whole frame, app state untouched)"; break;
+    case GLPROBE_MODE_NEUTRAL:  mode = "neutral  (whole frame, culling/clip/lighting off)"; break;
+    default:                    mode = "shading  (live camera + lights)"; break;
+    }
     fprintf(f, "\n== glprobe: %s ==\n   mode: %s\n", label ? label : "(unnamed)", mode);
 
     if (r->overflow)
@@ -543,7 +607,7 @@ void glprobe_report_print(const GlProbeReport *r, const char *label,
         fprintf(f, "!! %d of %d vertices are outside the depth range -- the near/far "
                    "planes are cutting this geometry.\n", r->depth_clipped, r->verts);
 
-    if (r->mode == GLPROBE_MODE_SHADING) {
+    if (r->mode == GLPROBE_MODE_SHADING || r->mode == GLPROBE_MODE_AS_DRAWN) {
         int pct = r->verts ? (100 * r->dark_verts) / r->verts : 0;
         if (r->dark_verts == r->verts)
             fprintf(f, "!! EVERY vertex is darker than %.2f luminance -- the geometry "
@@ -559,6 +623,21 @@ void glprobe_report_print(const GlProbeReport *r, const char *label,
         if (r->alpha_max <= 0.0f)
             fprintf(f, "!! every vertex has alpha 0 -- fully transparent under a "
                        "blended draw.\n");
+    }
+
+    /* Per-batch breakdown. Each row is the geometry drawn between two state
+     * changes, which is as close to "one object" as a capture can get without
+     * being told where the objects are. Empty batches are skipped: a state
+     * change that draws nothing is noise, not a finding. */
+    for (int b = 0; b < r->batch_count; b++) {
+        const GlProbeReport *bt = &r->batches[b];
+        if (bt->verts == 0)
+            continue;
+        fprintf(f, "   %-38s %5d tris  lum max %.4f%s%s\n",
+                bt->batch_label[0] ? bt->batch_label : "(unlabeled batch)",
+                bt->tris, bt->lum_max,
+                (bt->verts && bt->dark_verts == bt->verts) ? "  !! all dark" : "",
+                (bt->verts && bt->offscreen == bt->verts) ? "  !! all off-screen" : "");
     }
 }
 
@@ -585,20 +664,19 @@ int glprobe_diagnose(GlProbeDrawFn draw, void *user, const char *label,
             /* Re-capture purely to print; a dump is an interactive action, so
              * the second pass costs nothing that matters. */
             float *buf = NULL;
-            ProbeXform xf;
+            GlProbeXform xf;
             int overflow = 0;
             int n = probe_capture_grow(GLPROBE_MODE_GEOMETRY, draw, user,
                                        o.buffer_floats, GLPROBE_ORTHO_R,
                                        &buf, &xf, &overflow);
             if (n >= 0) {
                 GlProbeReport tmp;
-                memset(&tmp, 0, sizeof tmp);
-                tmp.mode = GLPROBE_MODE_GEOMETRY;
                 ProbeDump d;
                 d.f = f;
                 d.remaining = o.dump_primitives;
                 fprintf(f, "   primitives:\n");
-                analyze(buf, n, &xf, &tmp, &d);
+                analyze(buf, n, &xf, GLPROBE_MODE_GEOMETRY, &tmp, NULL, 0,
+                        &d);
                 free(buf);
             }
         }

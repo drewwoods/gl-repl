@@ -28,7 +28,12 @@ to infer it from a dark screenshot.
 
 `glprobe_diagnose()` runs both over the same callback and prints a verdict.
 
-## Using it
+There are two front-ends. The **in-process API** below needs three lines added
+to the sample and gives the full picture; the [**preload
+library**](#without-touching-the-source-the-preload-library) needs no source
+change at all and gives most of it.
+
+## Using it (in-process)
 
 ```c
 #include "glprobe_glut.h"   /* GL + GLU + GLUT, headless-capable (see below) */
@@ -60,16 +65,114 @@ cd /tmp && GLPROBE=1 FREEGLUT_CAPTURE_FRAMES=1 \
     ~/…/build/glprobe/flame-torch          # report on stderr + a PPM frame
 ```
 
-### `glprobe_glut.h`
+### `glprobe_glut.h` and the headless include shim
 
 A sample written with the usual `#ifdef __APPLE__ / <GLUT/glut.h>` block cannot
-build against the vendored OSMesa freeglut — on macOS that block always picks
-the Apple framework, which has no headless backend. Replacing that block with
-`#include "glprobe_glut.h"` is the only source change needed to gain
-`FREEGLUT_OSMESA=1`. It is deliberately *not* `include/gl_includes.h`: that one
-is the app's shim (forces freeglut on macOS, pulls in glext for the GPU
-profiler, defines `M_PI`), and samples here should need nothing but a C
-compiler and a GL.
+build against the vendored OSMesa freeglut on its own — on macOS that block
+always picks the Apple framework, which has no headless backend.
+
+New samples can just `#include "glprobe_glut.h"` and get the right GL/GLU/GLUT
+for every build. It is deliberately *not* `include/gl_includes.h`: that one is
+the app's shim (forces freeglut on macOS, pulls in glext for the GPU profiler,
+defines `M_PI`), and samples here should need nothing but a C compiler and a GL.
+
+Existing samples need no edit. The headless target puts
+[`compat/`](compat/GLUT/glut.h) ahead of the macOS SDK on the include path, so
+the sample's own `<GLUT/glut.h>` resolves to a one-line header that pulls in
+`glprobe_glut.h` instead. That is what lets the preload library — whose whole
+premise is not touching the file — work headlessly. A native build never sets
+it, because on a machine with a window server the real framework is the right
+GLUT.
+
+## Without touching the source: the preload library
+
+Everything above needs three lines added to the sample. The same probe also
+ships as an injectable library that needs **none**:
+
+```bash
+make glprobe-preload                    # native
+make glprobe-preload FREEGLUT_OSMESA=1  # headless
+
+# macOS
+DYLD_INSERT_LIBRARIES=build/glprobe/libglprobe_preload.dylib GLPROBE=1 ./sample
+# Linux
+LD_PRELOAD=build/glprobe/libglprobe_preload.so GLPROBE=1 ./sample
+```
+
+It gets its frame hook by interposing `glutDisplayFunc()`: it keeps the app's
+callback and installs its own, which on the armed frame runs the app's display
+function two extra times inside `glRenderMode(GL_FEEDBACK)` before running it
+for real. `glutSwapBuffers()` is interposed too and swallowed during those
+passes, so the extra runs never reach the screen.
+
+| Env var | Meaning |
+|---|---|
+| `GLPROBE=1` | arm the probe (otherwise the library is inert) |
+| `GLPROBE_FRAME=n` | probe frame *n* instead of the first |
+| `GLPROBE_PLY=path` | rejected with a note — see the limitations below |
+
+### The two passes
+
+Same idea as the in-process lenses, but chosen for what an outsider can
+actually change about a frame it does not understand:
+
+- **as-drawn** — nothing touched. Exactly the frame on screen.
+- **neutral** — culling, clip planes, scissor, polygon mode and lighting forced
+  off for the whole pass, with the app's own `glEnable` calls for those
+  swallowed while it runs.
+
+More primitives in *neutral* than in *as-drawn* means state is eating geometry
+(winding, `GL_CULL_FACE`, a clip plane). The same primitives but black in
+*as-drawn* means lighting is.
+
+### Batches, without knowing the source
+
+There are no function boundaries out here, so the library injects a
+`glPassThrough` marker whenever the app changes **material diffuse**, **bound
+texture**, or `GL_LIGHTING`/`GL_BLEND`, and the analyzer splits the stream
+there. That segments a whole frame into per-object batches with zero knowledge
+of the program:
+
+```
+   after diffuse (0.10, 0.10, 0.12)          52 tris  lum max 0.0427  !! all dark
+   after diffuse (0.40, 0.22, 0.08)         312 tris  lum max 0.0228  !! all dark
+   after diffuse (0.12, 0.06, 0.02)         576 tris  lum max 0.0059  !! all dark
+   after glBindTexture(1)                  1000 tris  lum max 0.9803
+   after glBindTexture(2)                   240 tris  lum max 0.8622
+```
+
+`glColor` is deliberately *not* a boundary: it changes per particle in any
+particle system, which would shred the report into hundreds of one-quad rows.
+
+The lighting verdict is then decided **per batch**, not per frame — one bright
+additive particle system drags a frame's dark-vertex count below 100% and would
+otherwise hide a completely black object sitting next to it.
+
+Both passes must emit the *identical* marker sequence or the comparison gives
+up, which is why the marking in `glEnable`/`glDisable` happens before the
+neutral pass's suppression check rather than after it.
+
+### Limitations
+
+- **Interposition needs a dynamic GLUT.** A sample statically linked against
+  the vendored freeglut archive has no `glutDisplayFunc` symbol left to
+  interpose. The default macOS link (Apple GLUT framework) and Linux `-lglut`
+  are both fine; `FREEGLUT_OSMESA=1` builds and links a *shared* freeglut
+  (`third_party/freeglut/build-osmesa-shared/`, gitignored) precisely so the
+  headless combination works.
+- **No geometry lens.** Camera-independent model-space coordinates would
+  require overriding the modelview, and the app's display callback calls
+  `glLoadIdentity()` and installs its own camera — the very thing that would
+  have to be suppressed. Coordinates come from unprojecting through the view
+  matrix snooped from `gluLookAt()`, so they are world-space when the app uses
+  `gluLookAt` and approximate otherwise (the report says which).
+- **No PLY.** The writer inverts a known ortho transform that only the
+  in-process geometry lens installs. `GLPROBE_PLY` prints a note rather than
+  writing a file whose positions would be silently wrong.
+- **No per-function attribution.** State changes are the only boundaries
+  available; batches approximate objects, they do not name them.
+
+For any of those four, use the in-process API.
 
 ## Reading the report
 

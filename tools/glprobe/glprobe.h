@@ -49,7 +49,7 @@ typedef void (*GlProbeDrawFn)(void *user);
  * the callback applies itself); shading mode keeps the caller's matrices, so
  * coordinates come back in the space that was current at probe entry (world
  * space when probed after the camera is loaded). */
-typedef struct {
+typedef struct GlProbeReport {
     /* Primitive census. `verts` counts every vertex in the stream; a polygon
      * of n corners contributes n verts and (n - 2) fan triangles. */
     int points, lines, polygons, verts, tris;
@@ -89,10 +89,29 @@ typedef struct {
     int overflow;
 
     /* Which capture produced this report, for the printed header. */
-    int mode;  /* GLPROBE_MODE_GEOMETRY | GLPROBE_MODE_SHADING */
+    int mode;  /* GLPROBE_MODE_GEOMETRY | GLPROBE_MODE_SHADING | ..._AS_DRAWN | ..._NEUTRAL */
+
+    /* Sub-reports, one per glPassThrough marker in the captured stream. The
+     * in-process API emits no markers, so these stay empty; the LD_PRELOAD
+     * front-end injects one whenever the app changes material, texture or
+     * lighting state, which segments a whole-frame capture into per-object
+     * batches without knowing anything about the app's source. Points into a
+     * caller-owned array (see glprobe_analyze); never freed by glprobe. */
+    struct GlProbeReport *batches;
+    int batch_count;
+
+    /* Set on a sub-report only: the marker value that opened this batch, and a
+     * caller-supplied description of the state change it stood for. */
+    float batch_id;
+    char  batch_label[72];
 } GlProbeReport;
 
-enum { GLPROBE_MODE_GEOMETRY = 0, GLPROBE_MODE_SHADING = 1 };
+enum {
+    GLPROBE_MODE_GEOMETRY = 0,  /* known ortho, no camera, lighting off       */
+    GLPROBE_MODE_SHADING  = 1,  /* live camera + lights                       */
+    GLPROBE_MODE_AS_DRAWN = 2,  /* preload: whole frame, app state untouched  */
+    GLPROBE_MODE_NEUTRAL  = 3   /* preload: whole frame, culling/clip/light off */
+};
 
 /* A vertex this dark reads as black against any normal backdrop. Chosen to sit
  * just above the ambient-only term of a typical dim material, so an unlit mesh
@@ -136,6 +155,32 @@ int glprobe_geometry(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
  * Returns 0 on success, -1 on capture failure. `opts` may be NULL. */
 int glprobe_shading(GlProbeDrawFn draw, void *user, const GlProbeOptions *opts,
                     GlProbeReport *out);
+
+/* The transform a capture ran under, used to unproject window coordinates back
+ * into a readable space. The in-process API fills this itself; the LD_PRELOAD
+ * front-end assembles one from the live projection plus the view matrix it
+ * snoops from gluLookAt, so its coordinates come out in world space. */
+typedef struct {
+    double mv[16], proj[16];
+    int    vp[4];
+} GlProbeXform;
+
+/* Analyze an already-captured GL_3D_COLOR feedback stream -- the entry point
+ * for front-ends that run their own glRenderMode(GL_FEEDBACK) pass, which the
+ * two capture calls above cannot do for them (a whole-frame capture must not
+ * touch the app's matrices, and only the caller knows what its markers mean).
+ *
+ * `feedback[0 .. float_count)` is parsed with 7 floats per vertex. When
+ * `batches` is non-NULL the stream is also split at every GL_PASS_THROUGH
+ * token into at most `max_batches` sub-reports, and out->batches/batch_count
+ * are pointed at that caller-owned array. Marker values land in
+ * batch_id; labeling them is the caller's job.
+ *
+ * `mode` is stamped onto the report (and every sub-report) for the printed
+ * header. Returns 0, or -1 on a malformed/truncated stream. */
+int glprobe_analyze(const float *feedback, int float_count,
+                    const GlProbeXform *xf, int mode, GlProbeReport *out,
+                    GlProbeReport *batches, int max_batches);
 
 /* Print a human-readable report to `f` (NULL = stderr), tagged with `label`.
  * Lines that indicate a problem are prefixed with "!!" so a long log can be
