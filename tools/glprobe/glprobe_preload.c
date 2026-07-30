@@ -130,7 +130,18 @@ REAL_DECL_VOID(glPushMatrix, (void), ())
 
 /* ------------------------------------------------------------------- state */
 
-#define GLPROBE_MAX_BATCHES 48
+/* Marker capacity. Sized for the pathological case rather than the typical
+ * one: a checkerboard ground that changes material PER TILE burns a hundred
+ * markers before the scene's actual objects are reached, and tourist.c does
+ * exactly that -- at 48 the entire figure inherited the last ground tile's
+ * colour, and every material on it was lost without a word. All of this is
+ * static, ~2 MB across the state and the two report arrays. */
+#define GLPROBE_MAX_BATCHES 4096
+
+/* Rows the diagnostic report will print before summarizing. Separate from the
+ * capacity above because the two want opposite things: extraction wants every
+ * state change recorded, a report wants to stay readable. */
+#define GLPROBE_MAX_PRINTED_BATCHES 32
 
 static void (*g_app_display)(void);   /* the app's real display callback */
 
@@ -198,9 +209,19 @@ static void batch_capture_state(int idx) {
     b->shininess = g_app_shininess;
 }
 
+static int g_batch_overflow;   /* markers dropped this pass */
+
 static void batch_mark(const char *fmt, ...) {
-    if (!g_in_pass || g_batch_next >= GLPROBE_MAX_BATCHES)
+    if (!g_in_pass)
         return;
+    if (g_batch_next >= GLPROBE_MAX_BATCHES) {
+        /* Counted, not ignored. Running out of markers means every later state
+         * change is silently folded into the last batch -- geometry keeps its
+         * positions and quietly takes the wrong material, which looks like a
+         * correct extraction until someone reads the colours. */
+        g_batch_overflow++;
+        return;
+    }
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(g_batch_label[g_batch_next], sizeof g_batch_label[0], fmt, ap);
@@ -361,6 +382,7 @@ static int run_pass(int neutral, float *buf, int cap_floats, GlProbeXform *xf) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     g_batch_next = 0;
+    g_batch_overflow = 0;
     g_force_neutral = neutral;
     g_in_pass = 1;
 
@@ -580,6 +602,7 @@ static int extract_pass(float *buf, int cap_floats, float ortho_r) {
     glDepthRange(0.0, 1.0);
 
     g_batch_next = 0;
+    g_batch_overflow = 0;
     g_in_pass = 1;
     g_force_neutral = 1;      /* culling/clipping must not eat the mesh */
     REAL(glDisable)(GL_LIGHTING);
@@ -917,6 +940,12 @@ static void extract_frame(void) {
     } else {
         fit = EXTRACT_ORTHO_R0;
     }
+
+    if (g_batch_overflow)
+        fprintf(log, "!! glprobe: %d state changes past the %d-marker limit "
+                     "were folded into the last batch --\n"
+                     "!! their materials are WRONG. Raise GLPROBE_MAX_BATCHES.\n",
+                g_batch_overflow, GLPROBE_MAX_BATCHES);
 
     /* Eye -> world, now that the capture is final. Re-encoding into the same
      * cube is safe even when a world coordinate lands outside it: nothing

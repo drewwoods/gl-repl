@@ -118,6 +118,12 @@ enum {
  * trips it and a merely dark-but-lit one does not. */
 #define GLPROBE_DARK_LUM 0.05f
 
+/* Batch rows glprobe_report_print emits before summarizing the rest. A scene
+ * that changes material per tile produces hundreds; a report that lists them
+ * all is unreadable, and the diagnostic question ("which object is unlit?") is
+ * answered by the first few plus the verdict. */
+#define GLPROBE_REPORT_BATCH_ROWS 32
+
 typedef struct {
     /* Feedback buffer size in floats. 0 = 1M floats (~150k vertices), grown
      * x2 and re-run on overflow up to 64M. A capture that still overflows

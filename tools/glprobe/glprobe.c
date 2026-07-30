@@ -629,16 +629,26 @@ void glprobe_report_print(const GlProbeReport *r, const char *label,
      * changes, which is as close to "one object" as a capture can get without
      * being told where the objects are. Empty batches are skipped: a state
      * change that draws nothing is noise, not a finding. */
+    int printed = 0, suppressed = 0;
     for (int b = 0; b < r->batch_count; b++) {
         const GlProbeReport *bt = &r->batches[b];
         if (bt->verts == 0)
             continue;
+        if (printed >= GLPROBE_REPORT_BATCH_ROWS) {
+            suppressed++;
+            continue;
+        }
+        printed++;
         fprintf(f, "   %-38s %5d tris  lum max %.4f%s%s\n",
                 bt->batch_label[0] ? bt->batch_label : "(unlabeled batch)",
                 bt->tris, bt->lum_max,
                 (bt->verts && bt->dark_verts == bt->verts) ? "  !! all dark" : "",
                 (bt->verts && bt->offscreen == bt->verts) ? "  !! all off-screen" : "");
     }
+    if (suppressed)
+        fprintf(f, "   ... and %d more batches (per-tile material changes make "
+                   "long lists; see the extractor for the full set)\n",
+                suppressed);
 }
 
 int glprobe_diagnose(GlProbeDrawFn draw, void *user, const char *label,

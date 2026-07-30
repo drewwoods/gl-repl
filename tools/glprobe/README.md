@@ -146,6 +146,14 @@ of the program:
 `glColor` is deliberately *not* a boundary: it changes per particle in any
 particle system, which would shred the report into hundreds of one-quad rows.
 
+Marker capacity is 4096, sized for the pathological case rather than the
+typical one. A checkerboard ground that changes material **per tile** burns a
+hundred markers before reaching the scene's actual objects — `tourist.c` does
+exactly that, and at the original 48 the entire figure inherited the last
+ground tile's colour, losing every material on it silently. Running out is now
+reported rather than ignored. The diagnostic report prints the first 32 batches
+and summarizes the rest; extraction keeps them all.
+
 The lighting verdict is then decided **per batch**, not per frame — one bright
 additive particle system drags a frame's dark-vertex count below 100% and would
 otherwise hide a completely black object sitting next to it.
