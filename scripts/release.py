@@ -187,6 +187,12 @@ def stage_music(dest: Path, src_rel: str):
     if src.is_dir():
         for p in sorted(src.iterdir(), key=lambda p: p.name):
             if p.name.lower().endswith(".mp3"):
+                # Tracks are gitignored symlinks into a music library, so a
+                # dangling one is routine (moved/renamed source). Skip it with a
+                # warning rather than aborting the whole release mid-build.
+                if not p.exists():
+                    warn(f"skipping broken symlink {p.name} -> {os.readlink(p)}")
+                    continue
                 shutil.copy(p, dest / p.name)  # follows symlinks
                 n += 1
     rel = dest.relative_to(ROOT) if dest.is_relative_to(ROOT) else dest
