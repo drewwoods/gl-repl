@@ -1504,6 +1504,76 @@ static void repl_code_panel_apply_trailing_comment_segment(const char *text,
         };
 }
 
+static float repl_code_panel_clamp_color_component(float value) {
+    if (value < 0.0f)
+        return 0.0f;
+    if (value > 1.0f)
+        return 1.0f;
+    return value;
+}
+
+/* Expanded replay appends an evaluated glColor/gluColor call after the source
+ * row. Tint just that generated suffix with the RGB state it establishes, so
+ * expressions changing color over time are visible at a glance. Alpha stays
+ * opaque here: applying glColor4f's alpha to the glyphs would make a perfectly
+ * valid zero-alpha annotation disappear and defeat the debugging aid. */
+static void repl_code_panel_apply_replay_color_comment_segment(
+    const UiRenderSnapshot *snap, CmdType type, const char *text,
+    UiTextPanelRow *row) {
+    const char *annotation = NULL;
+    const char *scan;
+    float r, g, b, a;
+    int consumed = 0;
+    int matched = 0;
+
+    if (!snap || !text || !row || !snap->replay.active ||
+        snap->replay.expand_args != REPLAY_EXPAND_EXPANDED ||
+        !repl_cmd_sets_current_color(type))
+        return;
+
+    /* The source may already have its own trailing comment. Replay's
+     * generated annotation is always the final // suffix. */
+    scan = text;
+    while ((scan = strstr(scan, "//")) != NULL) {
+        annotation = scan;
+        scan += 2;
+    }
+    if (!annotation)
+        return;
+
+    switch (type) {
+    case CMD_COLOR3F:
+        matched = sscanf(annotation, "// glColor3f(%f, %f, %f);%n",
+                         &r, &g, &b, &consumed);
+        break;
+    case CMD_COLOR4F:
+        matched = sscanf(annotation, "// glColor4f(%f, %f, %f, %f);%n",
+                         &r, &g, &b, &a, &consumed);
+        break;
+    case CMD_TESS_COLOR:
+        matched = sscanf(annotation, "// gluColor(%f, %f, %f, %f);%n",
+                         &r, &g, &b, &a, &consumed);
+        break;
+    default:
+        return;
+    }
+    if (matched != (type == CMD_COLOR3F ? 3 : 4) ||
+        consumed <= 0 || annotation[consumed] != '\0' ||
+        row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+        return;
+
+    row->color_segments[row->color_segment_count++] =
+        (UiTextPanelColorSegment){
+            .char_start = (int)(annotation - text),
+            .char_count = consumed,
+            .color = repl_code_panel_rgb(
+                repl_code_panel_clamp_color_component(r),
+                repl_code_panel_clamp_color_component(g),
+                repl_code_panel_clamp_color_component(b)),
+            .shadow = 0,
+        };
+}
+
 static void repl_code_panel_append_attrib_bit_token_segment(
     UiTextPanelRow *row, const ReplAttribTokenSpan *span) {
     int idx;
@@ -1734,6 +1804,9 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
          * part of the command's syntax color. (The fade path is for
          * whole-line instruction comments, so it is left untouched.) */
         repl_code_panel_apply_trailing_comment_segment(display_text, row);
+        repl_code_panel_apply_replay_color_comment_segment(
+            builder->snap, builder->snap->document_cmds[line_idx].type,
+            display_text, row);
         /* Cursor-on-push/pop: colour the glPushAttrib line's mask tokens.
          * Last so the opaque per-bit spans win over the syntax colour. */
         repl_code_panel_apply_attrib_bit_token_segments(builder->snap, line_idx,

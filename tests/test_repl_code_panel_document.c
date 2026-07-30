@@ -12,6 +12,7 @@
 #include "repl/export.h"
 #include "repl/state.h"
 #include "repl/state_owners.h"
+#include "subsystems/replay/replay_state.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
@@ -237,12 +238,59 @@ static void test_attrib_bit_tokens_align_on_edit_line(TestHarness *h) {
     TEST_ASSERT_INT(h, "new input has only its two per-bit color segments", n, 2);
 }
 
+static void test_expanded_replay_color_comments_match_values(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiTextPanelColorSegment segs[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    const char *gl_text = "glColor3f(t, 0, 0); // glColor3f(1.2, 0.25, -0.1);";
+    const char *glu_text = "gluColor(t, 0, 0, 1); // gluColor(0.1, 0.6, 0.9, 0.4);";
+    const char *gl_annotation;
+    const char *glu_annotation;
+    SegColor gl_color;
+    SegColor glu_color;
+    int n;
+
+    reset_doc_fixture();
+    editor_feed_line("glColor3f(t, 0, 0);");
+    editor_feed_line("gluColor(t, 0, 0, 1);");
+    editor_state_line_overrides_clear();
+    editor_state_line_overrides_append(0, gl_text);
+    editor_state_line_overrides_append(1, glu_text);
+    replay_state_mut()->active = 1;
+    replay_state_mut()->expand_args = REPLAY_EXPAND_EXPANDED;
+    glr_ctrl_build_ui_snapshot(&snap);
+
+    gl_annotation = strstr(gl_text, "// glColor3f");
+    glu_annotation = strstr(glu_text, "// gluColor");
+    ASSERT_TRUE("glColor replay annotation present", gl_annotation != NULL);
+    ASSERT_TRUE("gluColor replay annotation present", glu_annotation != NULL);
+
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 0, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    gl_color = winning_seg_color(segs, n, (int)(gl_annotation - gl_text));
+    ASSERT_TRUE("glColor annotation uses evaluated red",
+                gl_color.has && fabsf(gl_color.r - 1.0f) < 1e-4f);
+    ASSERT_TRUE("glColor annotation uses evaluated green",
+                gl_color.has && fabsf(gl_color.g - 0.25f) < 1e-4f);
+    ASSERT_TRUE("glColor annotation clamps evaluated blue",
+                gl_color.has && fabsf(gl_color.b) < 1e-4f);
+
+    n = ui_repl_code_panel_row_color_segments_for_test(
+            &snap, 1, segs, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    glu_color = winning_seg_color(segs, n, (int)(glu_annotation - glu_text));
+    ASSERT_TRUE("gluColor annotation uses evaluated RGB",
+                glu_color.has && fabsf(glu_color.r - 0.1f) < 1e-4f &&
+                fabsf(glu_color.g - 0.6f) < 1e-4f &&
+                fabsf(glu_color.b - 0.9f) < 1e-4f);
+}
+
 int main(void) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
     int target = -99;
     int on_insert = -99;
     int row_offset = -99;
+
+    test_expanded_replay_color_comments_match_values(&g_harness);
 
     reset_doc_fixture();
     editor_feed_line("glBegin(GL_POINTS);");

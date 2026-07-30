@@ -1657,7 +1657,8 @@ time, Vertex steps a vertex at a time) and **Replay expand**. Its middle
 **Expanded** mode keeps live assignment, loop, function, and other annotations
 while leaving vertex, color, and normal calls on one line with their evaluated
 call appended as a `//` comment; **Verbose** instead adds substituted and
-evaluated rows beneath the source row.
+evaluated rows beneath the source row. Evaluated `glColor`/`gluColor` comments
+use the RGB color they set (kept opaque so zero-alpha values remain readable).
 
 ---
 
