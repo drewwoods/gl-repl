@@ -798,6 +798,12 @@ static int g_code_panel_drag_moved  = 0;
  * on the active edit row) and the existing line-range path. */
 static int g_code_panel_drag_char_anchor = -1;
 
+/* Scrollbar thumb drag. The press records how far below the thumb's top edge
+ * it landed (UiHit.item_idx) so motion maps the pointer back to a thumb top
+ * with the same grip instead of snapping the thumb's top to the cursor. */
+static int g_scrollbar_drag_active = 0;
+static int g_scrollbar_drag_grab_dy = 0;
+
 /* Double-click detection: previous UI_HIT_CODE_TEXT press timestamp
  * and target. A second press at the same (line, char) within
  * DOUBLE_CLICK_MS reads as a double-click and selects the word under
@@ -840,6 +846,49 @@ void glr_ctrl_router_reset_code_panel_drag(void) {
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved  = 0;
     g_code_panel_drag_char_anchor = -1;
+    if (g_scrollbar_drag_active) {
+        g_scrollbar_drag_active = 0;
+        ui_state_code_panel_mut()->scrollbar_drag = 0;
+        editor_request_redraw();
+    }
+}
+
+/* Move the code panel to the scroll row the current pointer position maps
+ * to. Scrolling by hand cancels cursor-follow for this frame — otherwise the
+ * follow pass would immediately drag the view back to the caret and the
+ * thumb would fight the drag. Returns 1 when the drag consumed the event. */
+static int glr_ctrl_router_apply_scrollbar_drag(int y) {
+    const UiRenderSnapshot *ui_snap;
+    int scroll;
+
+    if (!g_scrollbar_drag_active)
+        return 0;
+
+    ui_snap = glr_ctrl_drag_hit_test_snapshot();
+    scroll = ui_repl_code_panel_scrollbar_scroll_at(ui_snap, y,
+                                                    g_scrollbar_drag_grab_dy);
+    if (scroll < 0)
+        return 1;
+
+    if (scroll != editor_scroll()) {
+        editor_scroll_set(scroll);
+        editor_request_redraw();
+    }
+    editor_scroll_follow_cursor_set(0);
+    return 1;
+}
+
+/* UI_HIT_CODE_SCROLLBAR: arm the thumb drag and jump to the pressed
+ * position. A press on the track (rather than the thumb) arrives with a
+ * half-thumb grab offset, so it centers the thumb on the pointer and the
+ * drag continues from there. */
+static int route_code_scrollbar_hit(const UiHit *hit, int y) {
+    g_scrollbar_drag_active = 1;
+    g_scrollbar_drag_grab_dy = hit->item_idx > 0 ? hit->item_idx : 0;
+    ui_state_code_panel_mut()->scrollbar_drag = 1;
+    editor_request_redraw();
+    glr_ctrl_router_apply_scrollbar_drag(y);
+    return 1;
 }
 
 /* Apply an input-row drag motion: if the press char-anchor is armed
@@ -1867,6 +1916,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_insert_line_hit(&hit); break;
     case UI_HIT_CODE_GUTTER:
         consumed = route_code_gutter_hit(&hit); break;
+    case UI_HIT_CODE_SCROLLBAR:
+        consumed = route_code_scrollbar_hit(&hit, y); break;
     case UI_HIT_CODE_PANEL_CHROME:
         consumed = route_code_panel_chrome_hit(); break;
     case UI_HIT_CODE_CLEAR_ALL:
@@ -2375,6 +2426,13 @@ static void motion_dispatch(int x, int y) {
     }
 
     if (glr_ctrl_router_handle_variable_panel_motion(x, y)) {
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        return;
+    }
+
+    /* Scrollbar thumb drag: ahead of the selection drag, which would
+     * otherwise claim the same pointer motion over the code panel. */
+    if (glr_ctrl_router_apply_scrollbar_drag(y)) {
         glr_ctrl_router_handle_camera_pointer_set(x, y);
         return;
     }

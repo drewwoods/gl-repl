@@ -38,6 +38,7 @@
 typedef struct {
     float panel_frac;
     int   resizing_panel;
+    int   scrollbar_drag;       /* thumb drag in progress (draw emphasis) */
     int   layout_mode;          /* mirror of presentation.code_panel_layout */
     int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */

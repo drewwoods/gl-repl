@@ -123,7 +123,7 @@ Consequences:
   editor text and REPL command state. A failed validation updates
   neither. Undo restores both sides together.
 - **UI is view + hit-test, not a controller.** Renderers consume
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L82). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L51) and return.
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L82). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L60) and return.
   `glr_ctrl` dispatches based on `UiHit.kind`. There is no central
   dispatch enum; the editor and the peer subsystems are each their
   own controller.
@@ -313,7 +313,7 @@ handlers — they just log) plus Quit.
 |---|---|
 | `repl_*` | Program model and compiler pipeline: parser, eval, command spec, source scope, compile, command store, flatten, executor, autonormal, examples, export. **No editor or UI state. No replay runtime state (that lives on the `replay` peer).** |
 | `editor_*` | Text-document model + controller: line text, active input, cursor, scroll, selection, navigation, undo/redo, clipboard, search, autocomplete, cursor blink, commit orchestration. Includes read-only document sessions (e.g. help) backed by a content provider |
-| `ui_*` | Screen-space rendering and hit-test/measurement services. Renderers consume snapshots; input handlers compute neutral [`UiHit`](../src/ui/core/hit.h#L51) results and return them. **Does not own state. Does not dispatch.** |
+| `ui_*` | Screen-space rendering and hit-test/measurement services. Renderers consume snapshots; input handlers compute neutral [`UiHit`](../src/ui/core/hit.h#L60) results and return them. **Does not own state. Does not dispatch.** |
 | `render3d_*` | 3D rendering, camera/view transforms, world decorators, 3D overlays. Camera input routes through `glr_ctrl` to render3d/viewport controller |
 | `glr_*` | Application controller/composition layer: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status. Intended to be a router/coordinator; currently still carries too much mixed app policy, so new behavior should move toward the owning layer when possible |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
@@ -451,7 +451,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 |--------|------|
 | `gl_repl` | `main()`, GLUT callback registration, frame-timer scheduling, redisplay, and buffer swap |
 | `glr_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, application tick policy, and non-editor input routing. It is the only input-event mutation gate |
-| `src/app/glr_ctrl_router` | The `glr_ctrl_router_*` input helpers, split out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): GLUT dispatch shims plus [`UiHit`](../src/ui/core/hit.h#L51) routing for replay, audio, config, save, camera, variable panel, swatches, scene press, and wheel zoom — each to its owning subsystem, ahead of the editor dispatch |
+| `src/app/glr_ctrl_router` | The `glr_ctrl_router_*` input helpers, split out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): GLUT dispatch shims plus [`UiHit`](../src/ui/core/hit.h#L60) routing for replay, audio, config, save, camera, variable panel, swatches, scene press, and wheel zoom — each to its owning subsystem, ahead of the editor dispatch |
 | `src/app/glr_ctrl_view_transition` | 2D/3D view-mode transition state machine carved out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): the projection blend + camera easing when View mode toggles. Camera + presentation state only (no scene/ui/repl/editor), ticked by the controller |
 | `src/app/glr_actions` | Menu/action dispatch and the `g_cfg_items[]` config-descriptor table: scene + workspace load/save flows, rename, example/scene switching, config-row cycling. Translates menu ids + item indices into app operations |
 | `src/app/glr_modal` | App-level text prompts and delete confirmation. Owns modal state/key capture; delegates commits to `glr_actions` so filesystem mutations retain one controller |
@@ -630,7 +630,7 @@ Render3d code renders. It does not parse, edit, save, or dispatch UI actions.
 ### 5. 2D UI rendering and hit-test
 
 Generic `ui_*` modules are reusable screen-space view/hit-test
-services. They render from snapshots and return neutral [`UiHit`](../src/ui/core/hit.h#L51)
+services. They render from snapshots and return neutral [`UiHit`](../src/ui/core/hit.h#L60)
 results to `glr_ctrl`, which dispatches to the owning subsystem.
 UI does **not** own state and does **not** dispatch.
 
@@ -649,8 +649,8 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_state` | Owns [`UiState`](../src/ui/app/state.h#L20): viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` and are re-exported by `repl_state_views` where a view facade needs them |
 | `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L82), the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
-| `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L51), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L51); `glr_ctrl` dispatches on it |
-| `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L51) |
+| `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L60), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L60); `glr_ctrl` dispatches on it |
+| `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L60) |
 | `ui_text_panel` | Generic text-panel renderer and hit-tester over [`UiTextPanelSnapshot`](../src/ui/core/text_panel.h#L266); owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`), plus `_opts` twins that take the whole-word flag — the short names keep plain-substring behavior for the editor-demo twin. REPL/editor-free; used by `editor_search` |
 | `ui_theme` ([`src/ui/core/theme.c`](../src/ui/core/theme.c)) | Single source of truth for 2D chrome color: semantic `ui_clr(UI_TOK_*)` tokens resolved against one active theme row, so a runtime theme switch updates one storage site instead of one copy per TU. Computed/data palettes (HSV math, syntax categories, the FPS gauge) deliberately stay outside it |
@@ -680,12 +680,12 @@ Files that do not belong in this layer:
 - Feature session state: help session state lives in
   [`src/editor/help_session.c`](../src/editor/help_session.c); color-picker state lives in
   [`src/subsystems/color_picker/color_picker_state.c`](../src/subsystems/color_picker/color_picker_state.c).
-- Direct dispatch APIs: generic UI returns passive [`UiHit`](../src/ui/core/hit.h#L51) values and lets
+- Direct dispatch APIs: generic UI returns passive [`UiHit`](../src/ui/core/hit.h#L60) values and lets
   `glr_ctrl` route them to the owning subsystem.
 
 > [!IMPORTANT]
 > A UI renderer may draw. A UI input handler may hit-test and return a
-> [`UiHit`](../src/ui/core/hit.h#L51). Neither may directly mutate REPL / editor /
+> [`UiHit`](../src/ui/core/hit.h#L60). Neither may directly mutate REPL / editor /
 > peer-subsystem state.
 
 ### 6. Services and neutral support
@@ -707,7 +707,7 @@ Files that do not belong in this layer:
 ## Ownership / Coordination Diagram
 
 The coordination diagram shows the post-cleanup target under the
-M/V/C+compiler+router contract. UI returns neutral [`UiHit`](../src/ui/core/hit.h#L51) results;
+M/V/C+compiler+router contract. UI returns neutral [`UiHit`](../src/ui/core/hit.h#L60) results;
 `glr_ctrl` dispatches to the owning subsystem; the editor and the
 peer subsystems are each their own controller. There is no central
 `UiAction` dispatch enum.
@@ -812,7 +812,7 @@ Reading the layer view:
 
 - Input flows one way: GLUT → [`gl_repl.c`](../gl_repl.c) → app shell → owning
   subsystem. UI's role on the input side is passive: it computes a
-  [`UiHit`](../src/ui/core/hit.h#L51) and hands it back.
+  [`UiHit`](../src/ui/core/hit.h#L60) and hands it back.
 - The editor and peer subsystems are each their own controller. The
   only path that crosses into the REPL pipeline is `editor → repl`
   (commit transaction).
@@ -1190,7 +1190,7 @@ flowchart LR
 Reading the diagram:
 
 - Input flows in one direction: GLUT → `glr_ctrl_router` → `glr_ctrl` →
-  owning subsystem. UI computes a passive [`UiHit`](../src/ui/core/hit.h#L51) along the way; it never
+  owning subsystem. UI computes a passive [`UiHit`](../src/ui/core/hit.h#L60) along the way; it never
   mutates state. There is no central dispatch enum.
 - The editor and the peer subsystems (variable_panel, replay) are
   each their own controller. They mutate their own state directly
@@ -1328,7 +1328,7 @@ render-neutral types belong in explicit shared headers such as
 | New 3D world decorator | `render3d_*` |
 | New 3D REPL-aware overlay | `render3d_*`, consuming snapshots/configs from [`Render3dRenderConfig`](../src/render3d/render_types.h#L140) |
 | New 2D UI render | `ui_*` render path, snapshot-only |
-| New 2D UI input behavior | `ui_*` hit-test that returns a [`UiHit`](../src/ui/core/hit.h#L51); if a new region needs distinguishing, add a [`UiHitKind`](../src/ui/core/hit.h#L17) value |
+| New 2D UI input behavior | `ui_*` hit-test that returns a [`UiHit`](../src/ui/core/hit.h#L60); if a new region needs distinguishing, add a [`UiHitKind`](../src/ui/core/hit.h#L17) value |
 | New owning subsystem (variable panel, replay, etc.) | Its own `subsystem_*` files plus a route from `glr_ctrl` based on `UiHit.kind` |
 | New cross-owner frame wiring | `glr_ctrl` |
 | New app lifecycle/window wiring | [`gl_repl.c`](../gl_repl.c) (GLUT entry) |
@@ -1357,7 +1357,7 @@ render-neutral types belong in explicit shared headers such as
   keep REPL readers behind the neutral `source_document` port.
 - `check-ui-returns-hits-only`, `check-ui-panels-no-mutators`, and
   `check-output-actualization` keep UI render/input code passive: hit-tests
-  return [`UiHit`](../src/ui/core/hit.h#L51), render-side discoveries return `Ui*Output`, and `glr_ctrl`
+  return [`UiHit`](../src/ui/core/hit.h#L60), render-side discoveries return `Ui*Output`, and `glr_ctrl`
   actualizes them.
 - `check-repl-demo-no-editor` and `check-repl-demo-stubs-shrinking` keep
   `tools/repl_demo` a stub-free proof that the REPL pipeline links without

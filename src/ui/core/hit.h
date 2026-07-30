@@ -19,6 +19,7 @@ typedef enum {
     UI_HIT_CODE_TEXT,            /* committed code-panel text row */
     UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
     UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
+    UI_HIT_CODE_SCROLLBAR,       /* code-panel scrollbar track / thumb */
     UI_HIT_PANEL_DIVIDER,        /* draggable code-panel ↔ scene divider */
     UI_HIT_CORE_COUNT
 } UiHitKind;
@@ -45,6 +46,14 @@ typedef enum {
  *     line_idx = committed source-cmd row
  *     visual_row = wrap-row offset
  *     cmd_idx = logical text-panel row index
+ *
+ *   UI_HIT_CODE_SCROLLBAR
+ *     item_idx = grab offset in pixels from the pointer up to the thumb's
+ *                top edge, so a drag maps a later pointer y back to a thumb
+ *                top (thumb_top = gl_y + item_idx) without the thumb
+ *                jumping on the press. A press on the track rather than the
+ *                thumb reports half the thumb height, which centers the
+ *                thumb on the pointer.
  *
  *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
  */

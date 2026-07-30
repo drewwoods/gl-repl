@@ -681,6 +681,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .rows = g_repl_code_panel_rows,
         .row_count = 0,
         .scroll = snap->scroll.scroll,
+        .scrollbar_drag = snap->code_panel.scrollbar_drag,
         .chrome_flags = UI_TEXT_PANEL_CHROME_STATUSBAR |
                         UI_TEXT_PANEL_CHROME_SCROLLBAR |
                         UI_TEXT_PANEL_CHROME_LINE_NUMS |
@@ -3257,6 +3258,28 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                 : UI_HIT_CODE_TEXT);
     }
     return hit;
+}
+
+int ui_repl_code_panel_scrollbar_scroll_at(const UiRenderSnapshot *snap,
+                                           int my, int grab_dy) {
+    ReplCodePanelBuilder builder;
+    int gl_y;
+
+    if (!snap)
+        return -1;
+
+    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+        builder = g_builder_cache.builder;
+        builder.text_snap.rows = g_repl_code_panel_rows;
+    } else {
+        if (!repl_code_panel_init_builder(&builder, snap))
+            return -1;
+        repl_code_panel_build_rows(&builder);
+    }
+
+    gl_y = builder.text_snap.vp_h - my;
+    return ui_text_panel_scroll_for_thumb_top(&builder.text_snap,
+                                              gl_y + grab_dy);
 }
 
 int ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,

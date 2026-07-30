@@ -75,7 +75,11 @@ Top to bottom:
   Sketch*). Click to switch.
 - **Code panel** — the live, editable list of GL commands. By default it sits
   above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
-  **Ctrl+B** or the *Code panel* config item.
+  **Ctrl+B** or the *Code panel* config item. When a document is taller than
+  the panel, a scrollbar appears along its right edge: the mouse wheel scrolls
+  as usual, and dragging the thumb — or clicking anywhere on the track, which
+  jumps the thumb there and keeps dragging — moves through a long document in
+  one gesture.
 - **Status bar** — command count, current line, the accumulation indicator
   (`AA 1x` / `Blur 8x`), and clickable controls for undo/redo, copy/cut,
   clearing all commands, *focus* ([code focus](#keeping-the-buffer-tidy)),

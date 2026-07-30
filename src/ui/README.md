@@ -21,12 +21,12 @@ The architecturally important part is the **strict view/controller split**:
   ([`UiRenderSnapshot`](app/snapshot.h#L82)) and produces pixels. It does not read live program or
   editor state, and it does not mutate anything.
 - **A UI input handler may hit-test and return.** It computes a *neutral*
-  [`UiHit`](core/hit.h#L51) (e.g. "the pointer is over code row 12, char 4" or "over the
+  [`UiHit`](core/hit.h#L60) (e.g. "the pointer is over code row 12, char 4" or "over the
   Replay button") and hands it back. It does **not** decide what that means
   or call into the editor/REPL.
 
 The owning subsystem (the editor, or a `src/subsystems/` peer) then interprets
-the [`UiHit`](core/hit.h#L51). This is the classic lesson that a **view should not be a
+the [`UiHit`](core/hit.h#L60). This is the classic lesson that a **view should not be a
 controller**: keeping rendering and hit-testing free of policy is what lets
 the same panel serve code editing, the help overlay, and the demos without
 each one leaking into the view code.
@@ -73,7 +73,7 @@ Inside the full app this is **layer 5** of the ownership map. Each frame the
 controller ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`UiRenderSnapshot`](app/snapshot.h#L82) from
 REPL runtime state + [`EditorState`](../editor/state.h#L199) + [`UiState`](app/state.h#L20) + peer state and fans it out to the
 `ui_*_render` functions. On input, the controller asks UI to hit-test, gets
-a [`UiHit`](core/hit.h#L51) back, and dispatches it to the owning subsystem.
+a [`UiHit`](core/hit.h#L60) back, and dispatches it to the owning subsystem.
 
 [`UiState`](app/state.h#L20) ([`app/state.c`](app/state.c)) owns only **transient chrome**: viewport, pointer,
 status-text TTL, panel visibility, the panel-divider geometry. It explicitly
@@ -93,7 +93,7 @@ source-line targets.
 | [`core/layout_utils.h`](core/layout_utils.h) | Header-only rectangle helpers shared by layout code |
 | [`core/tabbed_overlay.c`](core/tabbed_overlay.c) / `.h` | Generic modal tabbed text overlay (the F1 help shell) |
 | [`core/gl_2d.h`](core/gl_2d.h) | Header-only 2D OpenGL helpers |
-| [`core/hit.h`](core/hit.h) | [`UiHit`](core/hit.h#L51) / [`UiHitKind`](core/hit.h#L17) — the passive UI → controller result |
+| [`core/hit.h`](core/hit.h) | [`UiHit`](core/hit.h#L60) / [`UiHitKind`](core/hit.h#L17) — the passive UI → controller result |
 | [`core/metrics.h`](core/metrics.h), [`core/theme.h`](core/theme.h) | Shared layout metrics + colors |
 | [`app/layout.c`](app/layout.c) / `.h` | App 3D viewport / code-panel rectangle geometry |
 | [`app/overlay_layout.c`](app/overlay_layout.c) / `.h` | Floating overlay panel placement |
@@ -113,5 +113,5 @@ source-line targets.
 | [`support/cpuprof.c`](support/cpuprof.c) / `.h` | CPU profiling overlay renderer and geometry helpers |
 
 **Boundary:** a UI renderer draws; a UI input handler hit-tests and returns a
-[`UiHit`](core/hit.h#L51). Neither directly mutates REPL / editor / peer state, and `ui_*` does
+[`UiHit`](core/hit.h#L60). Neither directly mutates REPL / editor / peer state, and `ui_*` does
 not include `render3d_*` headers.

@@ -67,7 +67,7 @@ Inside the full app this is **layer 2** of the ownership map. The contract:
 **the editor is the model/controller for text; UI is its view.**
 
 - The editor exposes per-frame snapshots that `src/ui` renders, and it
-  consumes neutral [`UiHit`](../ui/core/hit.h#L51) results (from UI hit-testing) to interpret mouse
+  consumes neutral [`UiHit`](../ui/core/hit.h#L60) results (from UI hit-testing) to interpret mouse
   input. UI never decides text behavior.
 - A keystroke that can change line text, cursor, scroll, selection,
   search/autocomplete, or undo history is handled here — after

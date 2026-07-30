@@ -103,7 +103,7 @@ is identical:
    [`ReplayRuntimeState`](replay/replay_state.h#L97), the variable-panel drag transaction, the
    tutorial step/lock state).
 2. Input is routed to the subsystem's controller by `glr_ctrl` based on
-   the [`UiHit`](../ui/core/hit.h#L51) kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
+   the [`UiHit`](../ui/core/hit.h#L60) kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
    `variable_panel_handle_*`).
 3. The subsystem mutates its own state; if a change must reach the
    program (a slider value, a picked color), it goes through the editor

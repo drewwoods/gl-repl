@@ -29,6 +29,7 @@
         .code_panel = {                                               \
             .panel_frac     = CFG_DEFAULT_PANEL_FRAC,                 \
             .resizing_panel = 0,                                      \
+            .scrollbar_drag = 0,                                      \
         },                                                            \
     }
 

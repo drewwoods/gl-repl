@@ -112,6 +112,14 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                                   int mx, int my);
 
+/* Scroll row a scrollbar drag should land on: my is the pointer's window y
+ * (GLUT coordinates, origin top-left) and grab_dy the offset the press
+ * recorded in UiHit.item_idx, so the thumb keeps the same grip through the
+ * drag. Returns the clamped scroll row, or -1 when the panel currently shows
+ * no scrollbar. */
+int  ui_repl_code_panel_scrollbar_scroll_at(const UiRenderSnapshot *snap,
+                                            int my, int grab_dy);
+
 /* Resolve a visible source row to a point in its code-text hit area, in GLUT
  * mouse coordinates (origin top-left). Handles committed, live-input, insert,
  * and trailing blank rows through the same row model as render/hit-test. */

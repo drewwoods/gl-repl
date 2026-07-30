@@ -1429,6 +1429,62 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
 }
 
+/* Press-drag-release on the code panel's scrollbar scrolls the document.
+ * The press must not be read as a cursor move or a selection drag, and the
+ * release must disarm the drag so later motion goes back to the camera. */
+static void test_scrollbar_drag_scrolls_code_panel(void) {
+    UiHit hit;
+    int x = -1;
+    int y = -1;
+    int win_h;
+    int cp_x, cp_y, cp_w, cp_h;
+    int press_line;
+    int scroll_bottom;
+
+    printf("--- imrepl_ctrl scrollbar drag ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    /* Enough rows that the panel overflows and grows a scrollbar. */
+    for (int i = 0; i < 80; i++)
+        editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_navigate_to_line(0);
+    editor_scroll_set(0);
+
+    ASSERT_TRUE("code panel grew a scrollbar",
+                find_hit_point_in_code_panel(UI_HIT_CODE_SCROLLBAR,
+                                             &hit, &x, &y));
+    ASSERT_TRUE("scrollbar press reports a grab offset", hit.item_idx >= 0);
+
+    win_h = ui_state_viewport().window_h;
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    press_line = editor_state_edit_line();
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("scrollbar press marks the drag active",
+               ui_state_code_panel().scrollbar_drag, 1);
+    ASSERT_INT("scrollbar press does not move the edit cursor",
+               editor_state_edit_line(), press_line);
+
+    /* Drag to the panel's bottom edge: the document scrolls to its end. */
+    glr_ctrl_motion(x, win_h - (cp_y + 1));
+    scroll_bottom = editor_scroll();
+    ASSERT_TRUE("dragging to the bottom scrolls forward", scroll_bottom > 0);
+    ASSERT_INT("dragging does not move the edit cursor",
+               editor_state_edit_line(), press_line);
+
+    /* And back to the top. */
+    glr_ctrl_motion(x, win_h - (cp_y + cp_h - 1));
+    ASSERT_INT("dragging back to the top scrolls home", editor_scroll(), 0);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, win_h - (cp_y + cp_h - 1));
+    ASSERT_INT("release disarms the scrollbar drag",
+               ui_state_code_panel().scrollbar_drag, 0);
+
+    /* Motion after the release is no longer a scroll gesture. */
+    glr_ctrl_motion(x, win_h - (cp_y + 1));
+    ASSERT_INT("post-release motion leaves scroll alone", editor_scroll(), 0);
+}
+
 /* Right-clicking an assignment row opens its value plot. Before this branch
  * existed the row fell into route_right_code_panel_hit's inert `else` (there
  * is no authored description record for either assignment type), so the
@@ -5231,6 +5287,7 @@ int main(void) {
     test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
+    test_scrollbar_drag_scrolls_code_panel();
     test_right_click_assignment_opens_value_plot();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();

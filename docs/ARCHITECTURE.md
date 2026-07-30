@@ -890,7 +890,7 @@ tests cover the edge cases.
 
 Mutations route through `repl_actions`, `repl_command_store`,
 `variable_panel_drag`, or another REPL-owned mutation path. UI input
-hit-tests (`*_hit_test`, `*_rect`) compute neutral [`UiHit`](../src/ui/core/hit.h#L51) values and
+hit-tests (`*_hit_test`, `*_rect`) compute neutral [`UiHit`](../src/ui/core/hit.h#L60) values and
 return — `glr_ctrl_router_handle_code_panel_hit` dispatches by
 `UiHit.kind` to the owning subsystem. Render-side
 discoveries (e.g. the editor cursor pixel computed during the generic
@@ -910,11 +910,28 @@ These references describe designs that exercise the snapshot, hit-test, and
 mutation boundaries above. They are grouped here so the core UI contract is
 complete before the implementation-specific material begins.
 
+#### Code-panel scrollbar drag
+
+The scrollbar is one geometry solve in [`src/ui/core/text_panel.c`](../src/ui/core/text_panel.c)
+(`ui_text_panel_scrollbar_geometry`) shared by the draw, the hit-test, and the
+drag mapping, so the drawn thumb and the grabbable thumb cannot drift apart.
+The strip is inset from the panel's right edge because the resize divider's
+grab band is classified *first*: a flush thumb would be unclickable in the LEFT
+layout. Ownership splits the usual way — the hit-test returns
+`UI_HIT_CODE_SCROLLBAR` carrying the press's grab offset (a press on the empty
+track reports half the thumb height, which centers the thumb and continues as a
+drag), the router owns the drag flag and feeds motion back through
+`ui_repl_code_panel_scrollbar_scroll_at`, and the scroll row itself stays
+editor state (`editor_scroll_set`, with cursor-follow cleared so the follow
+pass cannot yank the view back mid-drag). `ui_text_panel_scroll_for_thumb_top`
+is the exact inverse of the thumb placement, including the minimum-thumb clamp,
+so a drag to the track's ends lands on scroll 0 and the last row.
+
 #### Menu Flyouts And Tutorial Catalogs
 
 The menu bar uses one submenu/flyout engine in [`src/ui/app/menu_bar.c`](../src/ui/app/menu_bar.c). The
 engine is UI-pure: providers expose row count, row labels, absolute target
-indices, row kind, and active state; hit-tests return [`UiHit`](../src/ui/core/hit.h#L51) values, and the
+indices, row kind, and active state; hit-tests return [`UiHit`](../src/ui/core/hit.h#L60) values, and the
 controller routes the hit to the owner.
 
 **Config menu.** `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c) is the

@@ -1003,37 +1003,191 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
     return wrap_row > 0 ? wrap_row : 1;
 }
 
-static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap,
-                                      int total_rows,
-                                      int visible_rows) {
-    int bar_h;
-    float frac;
-    float pos;
-    int thumb_h;
-    int thumb_y;
-    int panel_top;
+/* --- Scrollbar -----------------------------------------------------------
+ *
+ * The strip is inset from the panel's right edge rather than flush against
+ * it: at the edge it would sit inside the resize divider's grab band (the
+ * divider is classified first, so those pixels can never start a thumb drag
+ * in the LEFT layout). TEXT_PANEL_SCROLLBAR_INSET clears that band, and the
+ * click band's left edge stops short of the inline right-action swatch
+ * column (ui_text_panel_right_action_rect) so swatch clicks stay reachable.
+ */
+#define TEXT_PANEL_SCROLLBAR_W         7
+#define TEXT_PANEL_SCROLLBAR_INSET     4
+#define TEXT_PANEL_SCROLLBAR_GRAB_PAD  1
+#define TEXT_PANEL_SCROLLBAR_MIN_THUMB 12
 
-    if (!(snap->chrome_flags & UI_TEXT_PANEL_CHROME_SCROLLBAR) ||
-        total_rows <= visible_rows)
+typedef struct {
+    int track_x, track_y, track_w, track_h;
+    int thumb_y, thumb_h;
+    int max_scroll;  /* total_rows - visible_rows, > 0 */
+    int travel;      /* track_h - thumb_h, the thumb top's usable range */
+} TextPanelScrollbar;
+
+static int text_panel_total_visual_rows(const UiTextPanelSnapshot *snap) {
+    int total = 0;
+
+    for (int i = 0; i < snap->row_count; i++) {
+        int rows = text_panel_row_wrap_count_cached(snap, i);
+        total += rows < 1 ? 1 : rows;
+    }
+    return total;
+}
+
+/* Solve the scrollbar for the snapshot's current scroll. Returns 0 when the
+ * panel shows no scrollbar. The thumb is placed along `travel` (not the raw
+ * track height) so a thumb clamped up to the minimum height still bottoms
+ * out exactly at the track's bottom edge — that is what makes the placement
+ * exactly invertible for drag mapping. */
+static int text_panel_scrollbar_solve(const UiTextPanelSnapshot *snap,
+                                      TextPanelScrollbar *out) {
+    TextPanelViewportMetrics metrics;
+    TextPanelScrollbar sb;
+    int total_rows;
+    int track_top;
+    int scroll;
+
+    if (!snap || snap->cp_w <= 0 || snap->cp_h <= 0 ||
+        !(snap->chrome_flags & UI_TEXT_PANEL_CHROME_SCROLLBAR))
+        return 0;
+
+    metrics = text_panel_viewport_metrics(snap);
+    total_rows = text_panel_total_visual_rows(snap);
+    if (total_rows <= metrics.visible_rows)
+        return 0;
+
+    track_top = snap->cp_y + snap->cp_h - CODE_MARGIN_Y - LINE_H
+                - snap->top_chrome_h;
+    sb.track_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - metrics.statusbar_h
+                 - snap->top_chrome_h;
+    if (sb.track_h <= 0)
+        return 0;
+
+    sb.track_w = TEXT_PANEL_SCROLLBAR_W;
+    sb.track_x = snap->cp_x + snap->cp_w - TEXT_PANEL_SCROLLBAR_INSET
+                 - sb.track_w;
+    sb.track_y = track_top - sb.track_h;
+
+    sb.thumb_h = (int)((float)sb.track_h * (float)metrics.visible_rows
+                       / (float)total_rows);
+    if (sb.thumb_h < TEXT_PANEL_SCROLLBAR_MIN_THUMB)
+        sb.thumb_h = TEXT_PANEL_SCROLLBAR_MIN_THUMB;
+    if (sb.thumb_h > sb.track_h)
+        sb.thumb_h = sb.track_h;
+
+    sb.max_scroll = total_rows - metrics.visible_rows;
+    sb.travel = sb.track_h - sb.thumb_h;
+
+    scroll = snap->scroll;
+    if (scroll < 0)
+        scroll = 0;
+    if (scroll > sb.max_scroll)
+        scroll = sb.max_scroll;
+
+    sb.thumb_y = track_top - sb.thumb_h
+                 - (int)((float)sb.travel * (float)scroll
+                         / (float)sb.max_scroll);
+
+    if (out)
+        *out = sb;
+    return 1;
+}
+
+int ui_text_panel_scrollbar_geometry(const UiTextPanelSnapshot *snap,
+                                     UiTextPanelRect *out_track,
+                                     UiTextPanelRect *out_thumb) {
+    TextPanelScrollbar sb;
+
+    if (!text_panel_scrollbar_solve(snap, &sb))
+        return 0;
+
+    if (out_track) {
+        out_track->x = sb.track_x;
+        out_track->y = sb.track_y;
+        out_track->w = sb.track_w;
+        out_track->h = sb.track_h;
+    }
+    if (out_thumb) {
+        out_thumb->x = sb.track_x;
+        out_thumb->y = sb.thumb_y;
+        out_thumb->w = sb.track_w;
+        out_thumb->h = sb.thumb_h;
+    }
+    return 1;
+}
+
+int ui_text_panel_scroll_for_thumb_top(const UiTextPanelSnapshot *snap,
+                                       int thumb_top_y) {
+    TextPanelScrollbar sb;
+    int track_top;
+    int offset;
+    int scroll;
+
+    if (!text_panel_scrollbar_solve(snap, &sb))
+        return -1;
+    if (sb.travel <= 0)
+        return 0;
+
+    track_top = sb.track_y + sb.track_h;
+    offset = track_top - thumb_top_y;   /* pixels the thumb top moved down */
+    if (offset < 0)
+        offset = 0;
+    if (offset > sb.travel)
+        offset = sb.travel;
+
+    /* Round to the nearest row so a thumb parked mid-row does not bias the
+     * drag toward the top of the document. */
+    scroll = (offset * sb.max_scroll + sb.travel / 2) / sb.travel;
+    if (scroll < 0)
+        scroll = 0;
+    if (scroll > sb.max_scroll)
+        scroll = sb.max_scroll;
+    return scroll;
+}
+
+static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap) {
+    TextPanelScrollbar sb;
+
+    if (!text_panel_scrollbar_solve(snap, &sb))
         return;
 
-    panel_top = snap->cp_y + snap->cp_h;
-    bar_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - text_panel_statusbar_h(snap)
-            - snap->top_chrome_h;
-    frac = (float)visible_rows / (float)total_rows;
-    pos = (float)snap->scroll / (float)total_rows;
-    thumb_h = (int)(bar_h * frac);
-    if (thumb_h < 12)
-        thumb_h = 12;
-    thumb_y = panel_top - CODE_MARGIN_Y - LINE_H - snap->top_chrome_h
-              - (int)(bar_h * pos) - thumb_h;
-
     glEnable(GL_BLEND);
-    ui_clr_a(UI_TOK_TEXT_MUTED, 0.35f);
-    glRectf((float)(snap->cp_x + snap->cp_w - 6), (float)thumb_y,
-            (float)(snap->cp_x + snap->cp_w - 1),
-            (float)(thumb_y + thumb_h));
+    /* Faint track behind the thumb — the strip is draggable along its whole
+     * length, so it reads as a control rather than a floating tick. */
+    ui_clr_a(UI_TOK_TEXT_MUTED, 0.12f);
+    glRectf((float)sb.track_x, (float)sb.track_y,
+            (float)(sb.track_x + sb.track_w),
+            (float)(sb.track_y + sb.track_h));
+
+    ui_clr_a(UI_TOK_TEXT_MUTED, snap->scrollbar_drag ? 0.75f : 0.35f);
+    glRectf((float)sb.track_x, (float)sb.thumb_y,
+            (float)(sb.track_x + sb.track_w),
+            (float)(sb.thumb_y + sb.thumb_h));
     glDisable(GL_BLEND);
+}
+
+/* Classify a pointer already known to be inside the panel rect against the
+ * scrollbar's click band. Writes the press's grab offset (see UiHit's
+ * UI_HIT_CODE_SCROLLBAR note) to *out_grab_dy. */
+static int text_panel_point_on_scrollbar(const UiTextPanelSnapshot *snap,
+                                         int mx, int gl_y,
+                                         int *out_grab_dy) {
+    TextPanelScrollbar sb;
+    const int pad = TEXT_PANEL_SCROLLBAR_GRAB_PAD;
+
+    if (!text_panel_scrollbar_solve(snap, &sb))
+        return 0;
+    if (mx < sb.track_x - pad || mx >= sb.track_x + sb.track_w + pad)
+        return 0;
+    if (gl_y < sb.track_y || gl_y >= sb.track_y + sb.track_h)
+        return 0;
+
+    if (out_grab_dy) {
+        *out_grab_dy = (gl_y >= sb.thumb_y && gl_y < sb.thumb_y + sb.thumb_h)
+                     ? sb.thumb_y + sb.thumb_h - gl_y  /* grabbed the thumb */
+                     : sb.thumb_h / 2;                 /* track: center it */
+    }
+    return 1;
 }
 
 int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
@@ -1380,7 +1534,7 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
 
     out->total_rows = total_rows;
     prof_begin(PROF_CODE_PANEL_TEXT_CHROME);
-    text_panel_draw_scrollbar(snap, total_rows, metrics.visible_rows);
+    text_panel_draw_scrollbar(snap);
     prof_accum_end(PROF_CODE_PANEL_TEXT_CHROME);
     prof_accum_commit(PROF_CODE_PANEL_TEXT_CHROME);
     gl2d_end();
@@ -1412,6 +1566,20 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
     if (mx < snap->cp_x || mx >= snap->cp_x + snap->cp_w ||
         gl_y < snap->cp_y || gl_y >= snap->cp_y + snap->cp_h)
         return h;
+
+    /* Scrollbar ahead of the rows underneath it: the strip overlaps the
+     * right end of every visible row, and a press there is a scroll gesture,
+     * not a cursor move. */
+    {
+        int grab_dy = 0;
+        if (text_panel_point_on_scrollbar(snap, mx, gl_y, &grab_dy)) {
+            h.kind = UI_HIT_CODE_SCROLLBAR;
+            h.item_idx = grab_dy;
+            h.local_x = (float)(mx - snap->cp_x);
+            h.local_y = (float)(gl_y - snap->cp_y);
+            return h;
+        }
+    }
 
     row_from_top = (metrics.first_line_y + LINE_H - 3 - gl_y) / LINE_H;
     if (row_from_top < 0 || row_from_top >= metrics.visible_rows)

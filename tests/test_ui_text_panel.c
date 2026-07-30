@@ -809,6 +809,112 @@ static void test_enclosing_parens_scope(void) {
                                                  &open, &close));
 }
 
+/* Scrollbar: geometry, click band, and the drag mapping that turns a pointer
+ * position back into a scroll row. */
+static void test_scrollbar_hit_and_drag_mapping(void) {
+    enum { ROW_COUNT = 60 };
+    static UiTextPanelRow rows[ROW_COUNT];
+    UiTextPanelSnapshot snap;
+    UiTextPanelRect track, thumb;
+    UiHit hit;
+    int visible_rows;
+    int max_scroll;
+    int track_top;
+    int mid_x;
+    int i;
+
+    printf("--- scrollbar drag ---\n");
+
+    for (i = 0; i < ROW_COUNT; i++) {
+        rows[i] = (UiTextPanelRow){
+            .text = "glVertex3f(0, 0, 0)",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .left_gutter_label = i + 1,
+            .source_line_idx = i,
+            .search_row_idx = i,
+            .hit_eligible = 1,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        };
+    }
+
+    snap = make_snapshot(rows, ROW_COUNT, 0, 0, 400, 220,
+                         UI_TEXT_PANEL_CHROME_SCROLLBAR |
+                         UI_TEXT_PANEL_CHROME_STATUSBAR);
+    visible_rows = ui_text_panel_visible_lines_for_height(snap.cp_h,
+                                                          STATUSBAR_H, 0);
+    max_scroll = ROW_COUNT - visible_rows;
+    ASSERT_TRUE("content overflows the panel", max_scroll > 0);
+
+    ASSERT_INT_EQ("scrollbar present", 1,
+                  ui_text_panel_scrollbar_geometry(&snap, &track, &thumb));
+    ASSERT_TRUE("thumb inside track",
+                thumb.y >= track.y &&
+                thumb.y + thumb.h <= track.y + track.h);
+    ASSERT_INT_EQ("thumb starts at track top at scroll 0",
+                  thumb.y + thumb.h, track.y + track.h);
+    /* The strip must clear the resize divider's grab band, or the LEFT
+     * layout classifies every thumb press as a panel resize. */
+    ASSERT_TRUE("thumb clears the divider grab band",
+                track.x + track.w <
+                snap.cp_x + snap.cp_w - UI_PANEL_DIVIDER_GRAB_PX);
+
+    track_top = track.y + track.h;
+    mid_x = track.x + track.w / 2;
+
+    /* Press on the thumb: reports the grab offset from the thumb's top. */
+    hit = ui_text_panel_hit_test(&snap, mid_x,
+                                 snap.vp_h - (thumb.y + thumb.h - 3));
+    ASSERT_INT_EQ("thumb press hit kind", hit.kind, UI_HIT_CODE_SCROLLBAR);
+    ASSERT_INT_EQ("thumb press grab offset", hit.item_idx, 3);
+
+    /* Press on the empty track below the thumb: centers the thumb there. */
+    hit = ui_text_panel_hit_test(&snap, mid_x,
+                                 snap.vp_h - (track.y + 2));
+    ASSERT_INT_EQ("track press hit kind", hit.kind, UI_HIT_CODE_SCROLLBAR);
+    ASSERT_INT_EQ("track press centers the thumb", hit.item_idx, thumb.h / 2);
+
+    /* A press just left of the strip still lands on the text rows. */
+    hit = ui_text_panel_hit_test(&snap, track.x - 4,
+                                 snap.vp_h - (thumb.y + thumb.h - 3));
+    ASSERT_TRUE("pixels left of the strip stay text",
+                hit.kind == UI_HIT_CODE_TEXT);
+
+    /* Drag mapping: thumb top at the track's ends pins scroll to its range. */
+    ASSERT_INT_EQ("thumb at track top scrolls to 0",
+                  ui_text_panel_scroll_for_thumb_top(&snap, track_top), 0);
+    ASSERT_INT_EQ("thumb dragged above the track clamps to 0",
+                  ui_text_panel_scroll_for_thumb_top(&snap, track_top + 500),
+                  0);
+    ASSERT_INT_EQ("thumb at track bottom scrolls to the last row",
+                  ui_text_panel_scroll_for_thumb_top(&snap,
+                                                     track.y + thumb.h),
+                  max_scroll);
+    ASSERT_INT_EQ("thumb dragged below the track clamps to max",
+                  ui_text_panel_scroll_for_thumb_top(&snap, track.y - 500),
+                  max_scroll);
+
+    /* Round trip: every scroll row places a thumb that maps back to it. */
+    for (i = 0; i <= max_scroll; i++) {
+        snap.scroll = i;
+        ASSERT_INT_EQ("scroll survives thumb round trip",
+                      ui_text_panel_scrollbar_geometry(&snap, NULL, &thumb) &&
+                      ui_text_panel_scroll_for_thumb_top(
+                          &snap, thumb.y + thumb.h) == i,
+                      1);
+    }
+    snap.scroll = 0;
+
+    /* A panel whose content fits shows no scrollbar and hit-tests as text. */
+    snap.row_count = 3;
+    ASSERT_INT_EQ("no scrollbar when content fits", 0,
+                  ui_text_panel_scrollbar_geometry(&snap, &track, &thumb));
+    ASSERT_INT_EQ("no scroll mapping without a scrollbar", -1,
+                  ui_text_panel_scroll_for_thumb_top(&snap, 0));
+    hit = ui_text_panel_hit_test(&snap, mid_x, my_for_visual_row(&snap, 0));
+    ASSERT_INT_EQ("strip pixels are text when no scrollbar", hit.kind,
+                  UI_HIT_CODE_TEXT);
+}
+
 int main(void) {
     printf("--- ui_text_panel tests ---\n");
 
@@ -825,6 +931,7 @@ int main(void) {
     test_match_paren_pairs();
     test_match_bracket_multiline();
     test_enclosing_parens_scope();
+    test_scrollbar_hit_and_drag_mapping();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_text_panel");

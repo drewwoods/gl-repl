@@ -321,6 +321,11 @@ typedef struct {
     /* Scroll position: absolute visual-row index at the top of the viewport. */
     int scroll;
 
+    /* Non-zero while the user is dragging the scrollbar thumb. Presentation
+     * only — the thumb draws emphasized; the scroll value itself still
+     * arrives through `scroll`. The adapter mirrors its own drag flag here. */
+    int scrollbar_drag;
+
     /* Chrome visibility flags (UI_TEXT_PANEL_CHROME_* bitmask). */
     int chrome_flags;
 
@@ -399,8 +404,8 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
 
 /* Hit-test the text panel at window coordinates (mx, my). Returns a UiHit
  * describing the region struck. Only generic text-panel hit kinds are
- * returned: UI_HIT_CODE_TEXT, UI_HIT_CODE_INSERT_LINE,
- * UI_HIT_CODE_GUTTER, UI_HIT_PANEL_DIVIDER, UI_HIT_NONE. Adapters that
+ * returned: UI_HIT_CODE_TEXT, UI_HIT_CODE_INSERT_LINE, UI_HIT_CODE_GUTTER,
+ * UI_HIT_CODE_SCROLLBAR, UI_HIT_PANEL_DIVIDER, UI_HIT_NONE. Adapters that
  * expose feature-specific right-edge actions own that routing and may
  * rewrite to UI_HIT_INLINE_COLOR_SWATCH or another feature-specific kind.
  * For UI_TEXT_PANEL_ROW_VIRTUAL rows, the generic hit-test may leave
@@ -419,6 +424,26 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
  * Pure. */
 int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
                                    int mx, int gl_y);
+
+/* Scrollbar geometry in OpenGL bottom-left window coordinates. Returns 1 and
+ * fills the non-NULL out params when the panel currently shows a scrollbar
+ * (UI_TEXT_PANEL_CHROME_SCROLLBAR set and the wrapped content taller than the
+ * viewport); returns 0 without touching them otherwise. *out_track is the full
+ * strip the thumb travels in — the click band, so a click on the track pages
+ * the thumb there — and *out_thumb the movable part at the current scroll.
+ * Pure; the same solve backs the draw, the hit-test and the drag mapping so
+ * they cannot drift. */
+int ui_text_panel_scrollbar_geometry(const UiTextPanelSnapshot *snap,
+                                     UiTextPanelRect *out_track,
+                                     UiTextPanelRect *out_thumb);
+
+/* Scroll row index that would place the scrollbar thumb's top edge at
+ * thumb_top_y (OpenGL bottom-left y) — the inverse of the thumb placement in
+ * ui_text_panel_scrollbar_geometry, clamped to [0, total_rows - visible_rows].
+ * Returns -1 when the panel shows no scrollbar. Pure; the controller feeds it
+ * the dragged pointer position plus the grab offset recorded at press. */
+int ui_text_panel_scroll_for_thumb_top(const UiTextPanelSnapshot *snap,
+                                       int thumb_top_y);
 
 int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
                                     int line_y,
