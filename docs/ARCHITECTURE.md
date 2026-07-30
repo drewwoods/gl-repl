@@ -302,9 +302,46 @@ Persistence sidecars carry parallel `lines[][]` arrays:
 | Persisted form | Module |
 |---|---|
 | Undo / redo snapshots | `editor_undo` (`EditorUndoSnapshot.editor_lines`) |
-| User-scene slots | `repl_scenes` (workspace save / load + LRU eviction) |
+| User-scene slots | `repl_scenes` (explicit eight-slot catalog + transactional managed-workspace save/load) |
 | Clipboard cmds | `EditorClipboardState.lines` |
 | Single-file / workspace export | `repl_export` (no extra sidecar; reads the source-document port) |
+
+### Managed workspace transaction
+
+A workspace is not a directory glob. It is a directory containing a required
+`.glr-workspace` manifest whose ordered `scene=` rows are the complete set of
+scene files owned by the app. Manifest-less directories are rejected, and
+unlisted `.c` files are neither imported nor pruned. Version 1 is deliberately
+small and line-oriented:
+
+```text
+version=1
+name=Demo
+scene=lantern.c
+scene=torus.c
+```
+
+[`src/repl/workspace_io.c`](../src/repl/workspace_io.c) validates and commits
+this filesystem format. [`src/repl/scenes.c`](../src/repl/scenes.c) owns the
+catalog transaction: load captures the complete old scene catalog and live
+document before parsing every manifest entry, then restores both on any
+failure. Save exports sibling temporary scene files, renames those files, and
+publishes the manifest last. Only filenames from the previous manifest are
+eligible for pruning. Each scene keeps its assigned filename when its display
+name changes; a new filename is allocated only for an unpersisted scene or to
+avoid colliding with an unrelated file.
+
+The tab catalog has a hard capacity of eight. New, imported, and promoted
+scenes fail without mutation at capacity; binding a workspace never enables
+implicit eviction.
+
+The app layer owns navigation and locations: `glr_paths` resolves the writable
+development paths versus per-user packaged-app paths, `glr_workspaces`
+enumerates named managed workspaces, `glr_modal` captures prompt input, and
+`glr_actions` performs save-before-switch/recovery/open/delete choreography.
+Opening the already-bound directory is a no-op, while opening another
+workspace changes camera/undo/menu state only after the REPL transaction
+succeeds.
 
 Flat commands have no text of their own. A flat command maps to its
 source line through `src_cmd_idx`, resolved via
@@ -1316,7 +1353,7 @@ values through these seams:
 
 | Seam | Purpose |
 |---|---|
-| Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L118) exposes `@cfg` reads and writes without coupling export to app config modules. |
+| Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L122) exposes `@cfg` reads and writes without coupling export to app config modules. |
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
@@ -2440,8 +2477,8 @@ back.
 
 Promotion order is load-bearing when the origin is a tutorial:
 
-1. reserve a slot (free slot, else LRU eviction to the bound workspace) —
-   nothing else has happened yet, so a slots-full rejection leaves the
+1. reserve a free slot — there is no implicit eviction, so a slots-full
+   rejection leaves the
    origin *and* the pending baseline intact and the next edit retries,
    capturing everything typed in the meantime;
 2. `save_scene_to_slot()` captures the live document **and the
@@ -2757,8 +2794,8 @@ work can either close the gap or document the intentional behaviour.
 - Float-decl overwrite cascade ([`tests/test_repl_editor.c`](../tests/test_repl_editor.c)'s
   `overwrite shared` / `expand decl` cases).
 - Predef-table full (`MAX_PREDEF_VARS`) — same file.
-- LRU eviction when every inactive user-scene slot is occupied
-  (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
+- Hard-cap rejection when all eight user-scene slots are occupied, both
+  unbound and managed (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
 - Func alias roundtrip and `if`/`for`/`goto` not hijacked
   ([`tests/test_repl_core_io.c`](../tests/test_repl_core_io.c)).
 - Replay state machine + fade batches ([`tests/test_repl_replay.c`](../tests/test_repl_replay.c)).

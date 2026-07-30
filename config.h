@@ -197,10 +197,12 @@
 
 /* ---- App-wide file/render/timing defaults ----------------------------- */
 
-/* Default workspace directory path, relative to the working directory.
- * Used when a workspace is loaded/saved without an explicit path. */
-#ifndef GLR_DEFAULT_WORKSPACE_DIR
-#define GLR_DEFAULT_WORKSPACE_DIR "./workspace"
+/* Managed-workspace root and the lazily-created default workspace name. */
+#ifndef GLR_WORKSPACES_ROOT_DIR
+#define GLR_WORKSPACES_ROOT_DIR "./workspaces"
+#endif
+#ifndef GLR_DEFAULT_WORKSPACE_NAME
+#define GLR_DEFAULT_WORKSPACE_NAME "default"
 #endif
 
 /* Maximum filesystem path length (including NUL). Used by workspace,

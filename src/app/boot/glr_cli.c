@@ -98,7 +98,7 @@ static void print_usage(const char *prog) {
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
-            "  workspace/   Optional directory: load every *.c as a user scene\n"
+            "  workspace/   Optional managed directory with .glr-workspace\n"
             "  -            Read a saved session or snippet from stdin\n",
             name);
 }

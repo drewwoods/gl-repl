@@ -7,6 +7,7 @@
 #include "repl/examples.h"
 #include "repl/tutorials.h"       /* repl_tutorial_name for post-tutorial promotion */
 #include "repl/eval.h"
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -19,11 +20,10 @@
 #include "source_document.h" /* source_document_view */
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
 
-#include <dirent.h>
-#include <limits.h>          /* NAME_MAX */
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #define g_example_idx            (repl_state_active_example_idx())
 /* Post-tutorial promotion marker — the tutorial twin of g_example_idx.
@@ -65,9 +65,8 @@
  *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds_mut()[]
  *                        == -1 => an example or fresh workspace is active
  *
- *   last_touch is bumped from the monotonic g_user_scene_tick counter
- *   on every access (load/save/rename) so LRU eviction can pick the
- *   coldest slot when the 9th scene is needed.
+ *   last_touch is retained for stable snapshot compatibility and future
+ *   explicit close/reopen ordering; capacity is currently a hard 8 scenes.
  *
  * The per-scene snapshot is embedded on UserScene (the `snapshot`
  * field) so cfg, camera, variables, source text, and aliases travel
@@ -83,6 +82,7 @@
 typedef struct {
     int           used;
     char          name[USER_SCENE_NAME_MAX];
+    char          file_name[WORKSPACE_IO_FILE_MAX];
     uint32_t      last_touch;
     SceneSnapshot snapshot;
 } UserScene;
@@ -294,8 +294,8 @@ static void install_scene_into_live(int slot) {
 /* Heap-allocate a transient SceneSnapshot scratch (~1.2 MB —
  * cmds[4096] + lines[4096][256] dominate). Stack allocation is a
  * real overflow hazard because workspace/load flows can keep multiple
- * snapshots live while try_evict_lru adds another on a recursive
- * frame; that exceeds the default POSIX worker stack (512 KB – 2 MB)
+ * snapshots can be live together during transactional loads; putting them on
+ * the stack exceeds the default POSIX worker stack (512 KB – 2 MB)
  * and pressures the 8 MB main stack alongside ASan/UBSan redzones.
  * Every successful scene_snapshot_scratch_alloc must be paired with
  * scene_snapshot_scratch_free at every exit path. Returns NULL on OOM. */
@@ -315,65 +315,139 @@ static void restore_live_from_stash(const SceneSnapshot *src) {
     (void)scene_snapshot_apply_live(src, SCENE_SNAPSHOT_CAMERA_SNAP);
 }
 
-static void user_scene_copy(UserScene *dst, const UserScene *src) {
-    if (!dst || !src)
-        return;
-    /* UserScene is plain data (the embedded SceneSnapshot is itself POD), so a
-     * whole-struct assignment copies every field — drop-proof if a field is
-     * ever added, unlike a hand-maintained member-by-member copy. */
-    *dst = *src;
-}
-
-static int scene_slug_used(const char used[][USER_SCENE_NAME_MAX],
-                           int used_count,
-                           const char *slug) {
-    for (int i = 0; i < used_count; i++) {
-        if (strcmp(used[i], slug) == 0)
+static int scene_file_name_used(const char *file_name, int ignore_slot) {
+    for (int i = 0; i < MAX_USER_SCENES; i++) {
+        if (i == ignore_slot || !g_user_scenes[i].used)
+            continue;
+        if (g_user_scenes[i].file_name[0] &&
+            strcmp(g_user_scenes[i].file_name, file_name) == 0)
             return 1;
     }
     return 0;
 }
 
-static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
-    if (!out || out_sz == 0) return;
-    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
-        out[0] = '\0';
+static void ensure_scene_file_name(int slot) {
+    char base[USER_SCENE_NAME_MAX];
+    char candidate[WORKSPACE_IO_FILE_MAX];
+    int depth = 0;
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used ||
+        g_user_scenes[slot].file_name[0])
         return;
-    }
+    workspace_io_filename_slug(g_user_scenes[slot].name, base, sizeof(base));
+    do {
+        char slug[USER_SCENE_NAME_MAX];
+        workspace_io_slug_with_collision_depth(base, depth++, slug, sizeof(slug));
+        snprintf(candidate, sizeof(candidate), "%s.c", slug);
+    } while (scene_file_name_used(candidate, slot));
+    snprintf(g_user_scenes[slot].file_name,
+             sizeof(g_user_scenes[slot].file_name), "%s", candidate);
+}
 
-    char used[MAX_USER_SCENES][USER_SCENE_NAME_MAX];
-    int used_count = 0;
-
-    for (int scene_slot = 0; scene_slot < MAX_USER_SCENES; scene_slot++) {
-        if (!g_user_scenes[scene_slot].used)
-            continue;
-
-        char base_slug[USER_SCENE_NAME_MAX];
-        char candidate[USER_SCENE_NAME_MAX];
-        workspace_io_filename_slug(g_user_scenes[scene_slot].name,
-                                   base_slug, sizeof(base_slug));
-        int collision_depth = 0;
-        workspace_io_slug_with_collision_depth(base_slug, collision_depth,
-                                               candidate, sizeof(candidate));
-        while (scene_slug_used(used, used_count, candidate)) {
-            collision_depth++;
-            workspace_io_slug_with_collision_depth(base_slug, collision_depth,
-                                                   candidate, sizeof(candidate));
-        }
-
-        if (scene_slot == slot) {
-            snprintf(out, out_sz, "%s", candidate);
+static void scene_export_leaf_for_slot(int slot, const char *ext,
+                                       char *out, size_t out_sz) {
+    char slug[USER_SCENE_NAME_MAX];
+    if (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used) {
+        ensure_scene_file_name(slot);
+        if (g_user_scenes[slot].file_name[0]) {
+            snprintf(slug, sizeof(slug), "%s", g_user_scenes[slot].file_name);
+            char *dot = strrchr(slug, '.');
+            if (dot) *dot = '\0';
+            snprintf(out, out_sz, "%s.%s", slug, ext);
             return;
         }
-
-        snprintf(used[used_count], sizeof(used[used_count]), "%s", candidate);
-        used_count++;
     }
+    snprintf(out, out_sz, "output.%s", ext);
+}
 
-    out[0] = '\0';
+static int manifest_contains_file(const WorkspaceManifest *manifest,
+                                  const char *file_name) {
+    if (!manifest || !file_name)
+        return 0;
+    for (int i = 0; i < manifest->scene_count; i++)
+        if (strcmp(manifest->scene_files[i], file_name) == 0)
+            return 1;
+    return 0;
+}
+
+static void cleanup_workspace_scene_temps(const char *dir,
+                                          const WorkspaceManifest *manifest) {
+    if (!dir || !manifest)
+        return;
+    for (int i = 0; i < manifest->scene_count; i++) {
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 16];
+        char tmp_path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 20];
+        if (!workspace_io_path_join(dir, manifest->scene_files[i],
+                                    path, sizeof(path)))
+            continue;
+        int n = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+        if (n >= 0 && n < (int)sizeof(tmp_path))
+            unlink(tmp_path);
+    }
+}
+
+static int workspace_path_exists(const char *dir, const char *leaf) {
+    char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+    struct stat st;
+    return workspace_io_path_join(dir, leaf, path, sizeof(path)) &&
+           stat(path, &st) == 0;
+}
+
+static void ensure_scene_file_name_for_workspace(
+    int slot, const char *dir, const WorkspaceManifest *old_manifest) {
+    char base[USER_SCENE_NAME_MAX];
+    char candidate[WORKSPACE_IO_FILE_MAX];
+    int depth = 0;
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used)
+        return;
+
+    if (g_user_scenes[slot].file_name[0] &&
+        (!workspace_path_exists(dir, g_user_scenes[slot].file_name) ||
+         manifest_contains_file(old_manifest,
+                                g_user_scenes[slot].file_name)))
+        return;
+
+    workspace_io_filename_slug(g_user_scenes[slot].name, base, sizeof(base));
+    do {
+        char slug[USER_SCENE_NAME_MAX];
+        workspace_io_slug_with_collision_depth(base, depth++, slug,
+                                                sizeof(slug));
+        snprintf(candidate, sizeof(candidate), "%s.c", slug);
+    } while (scene_file_name_used(candidate, slot) ||
+             (workspace_path_exists(dir, candidate) &&
+              !manifest_contains_file(old_manifest, candidate)));
+    snprintf(g_user_scenes[slot].file_name,
+             sizeof(g_user_scenes[slot].file_name), "%s", candidate);
+}
+
+static void cleanup_unpublished_scene_files(
+    const char *dir, const WorkspaceManifest *manifest,
+    const WorkspaceManifest *old_manifest, int committed_count) {
+    for (int i = 0; i < committed_count && i < manifest->scene_count; i++) {
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+        if (manifest_contains_file(old_manifest, manifest->scene_files[i]))
+            continue;
+        if (workspace_io_path_join(dir, manifest->scene_files[i],
+                                   path, sizeof(path)))
+            unlink(path);
+    }
 }
 
 int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
+    WorkspaceManifest old_manifest;
+    WorkspaceManifest manifest;
+    char previous_file_names[MAX_USER_SCENES][WORKSPACE_IO_FILE_MAX];
+    char prev_workspace_dir[REPL_WORKSPACE_DIR_MAX];
+    char err[REPL_STATUS_TEXT_MAX];
+    SceneSnapshot *stash = NULL;
+    int had_old_manifest = 0;
+    int manifest_exists = 0;
+    int committed_count = 0;
+    int written = 0;
+
+    memset(&old_manifest, 0, sizeof(old_manifest));
+    memset(&manifest, 0, sizeof(manifest));
+    err[0] = '\0';
+
     if (!dir || !*dir) {
         repl_set_status_error("Workspace save: no folder provided");
         return -1;
@@ -392,41 +466,106 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
                            repl_dispatch_edit_line_get());
     }
 
-    char prev_workspace_dir[REPL_WORKSPACE_DIR_MAX];
     snprintf(prev_workspace_dir, sizeof(prev_workspace_dir), "%s",
              g_workspace_dir);
+    for (int i = 0; i < MAX_USER_SCENES; i++)
+        snprintf(previous_file_names[i], sizeof(previous_file_names[i]), "%s",
+                 g_user_scenes[i].file_name);
     snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
-    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
+    stash = scene_snapshot_scratch_alloc();
     if (!stash) {
         repl_set_status_error("Workspace save: out of memory");
-        snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
+        snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
+                 prev_workspace_dir);
         return -1;
     }
     stash_live_state(stash);
 
-    int written = 0;
+    manifest_exists = workspace_io_manifest_exists(dir);
+    had_old_manifest = workspace_io_manifest_read(dir, &old_manifest,
+                                                   err, sizeof(err));
+    if (manifest_exists && !had_old_manifest) {
+        goto fail;
+    }
+    manifest.version = 1;
+    const char *base = strrchr(dir, '/');
+    snprintf(manifest.name, sizeof(manifest.name), "%s",
+             had_old_manifest ? old_manifest.name
+                              : ((base && base[1]) ? base + 1 : dir));
+    if (!workspace_io_workspace_name_valid(manifest.name))
+        snprintf(manifest.name, sizeof(manifest.name), "Workspace");
+
     for (int s = 0; s < MAX_USER_SCENES; s++) {
         if (!g_user_scenes[s].used) continue;
+        ensure_scene_file_name_for_workspace(
+            s, dir, had_old_manifest ? &old_manifest : NULL);
         install_scene_into_live(s);
 
-        char slug[USER_SCENE_NAME_MAX];
-        scene_filename_slug_for_slot(s, slug, sizeof(slug));
-
-        char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
-        snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+        char tmp_path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 16];
+        if (!workspace_io_path_join(dir, g_user_scenes[s].file_name,
+                                    path, sizeof(path))) {
+            snprintf(err, sizeof(err),
+                     "Workspace save: scene path is too long");
+            goto fail;
+        }
+        if (snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path) >=
+            (int)sizeof(tmp_path)) {
+            snprintf(err, sizeof(err),
+                     "Workspace save: temporary path is too long");
+            goto fail;
+        }
 
         g_export_scene_name_hint_writable = g_user_scenes[s].name;
-        if (!repl_export_save_output(path, source_document_view(), layout)) {
+        if (!repl_export_save_output(tmp_path, source_document_view(), layout)) {
             g_export_scene_name_hint_writable = NULL;
-            restore_live_from_stash(stash);
-            scene_snapshot_scratch_free(stash);
-            snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
-                     prev_workspace_dir);
-            return -1;
+            unlink(tmp_path);
+            snprintf(err, sizeof(err),
+                     "Workspace save: could not stage scene files");
+            goto fail;
         }
         g_export_scene_name_hint_writable = NULL;
+        snprintf(manifest.scene_files[manifest.scene_count], WORKSPACE_IO_FILE_MAX,
+                 "%s", g_user_scenes[s].file_name);
+        manifest.scene_count++;
         written++;
+    }
+
+    for (int i = 0; i < manifest.scene_count; i++) {
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+        char tmp_path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 16];
+        workspace_io_path_join(dir, manifest.scene_files[i], path, sizeof(path));
+        snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+        if (rename(tmp_path, path) != 0) {
+            snprintf(err, sizeof(err),
+                     "Workspace save: could not commit scene files");
+            goto fail;
+        }
+        committed_count++;
+    }
+
+    if (!workspace_io_manifest_write(dir, &manifest,
+                                     err, sizeof(err)))
+        goto fail;
+
+    if (had_old_manifest) {
+        for (int i = 0; i < old_manifest.scene_count; i++) {
+            if (!manifest_contains_file(&manifest, old_manifest.scene_files[i])) {
+                char stale[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+                if (workspace_io_path_join(dir, old_manifest.scene_files[i],
+                                           stale, sizeof(stale))) {
+                    if (unlink(stale) != 0 && errno != ENOENT) {
+                        int rolled_back = workspace_io_manifest_write(
+                            dir, &old_manifest, err, sizeof(err));
+                        snprintf(err, sizeof(err), "%s", rolled_back
+                            ? "Workspace save: could not remove an obsolete scene"
+                            : "Workspace save: delete and manifest rollback failed");
+                        goto fail;
+                    }
+                }
+            }
+        }
     }
 
     restore_live_from_stash(stash);
@@ -437,6 +576,23 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
              written, written == 1 ? "" : "s", dir);
     repl_set_status(msg);
     return written;
+
+fail:
+    g_export_scene_name_hint_writable = NULL;
+    cleanup_workspace_scene_temps(dir, &manifest);
+    cleanup_unpublished_scene_files(
+        dir, &manifest, had_old_manifest ? &old_manifest : NULL,
+        committed_count);
+    for (int i = 0; i < MAX_USER_SCENES; i++)
+        snprintf(g_user_scenes[i].file_name,
+                 sizeof(g_user_scenes[i].file_name), "%s",
+                 previous_file_names[i]);
+    restore_live_from_stash(stash);
+    scene_snapshot_scratch_free(stash);
+    snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
+             prev_workspace_dir);
+    repl_set_status_error(err[0] ? err : "Workspace save failed");
+    return -1;
 }
 
 /* Single source of truth for active-scene export file naming, shared by Save
@@ -450,25 +606,27 @@ static void format_scene_path(const char *ext, const char *workspace_dir,
                               char *out, size_t out_sz) {
     int slot = g_active_user_scene;
     if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
-        snprintf(out, out_sz, "output.%s", ext);
+        if (workspace_dir && workspace_dir[0])
+            snprintf(out, out_sz, "%s/output.%s", workspace_dir, ext);
+        else
+            snprintf(out, out_sz, "output.%s", ext);
         return;
     }
-    char slug[USER_SCENE_NAME_MAX];
-    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
+    char leaf[WORKSPACE_IO_FILE_MAX];
+    scene_export_leaf_for_slot(slot, ext, leaf, sizeof(leaf));
     if (workspace_dir && workspace_dir[0])
-        snprintf(out, out_sz, "%s/%s.%s", workspace_dir, slug, ext);
+        snprintf(out, out_sz, "%s/%s", workspace_dir, leaf);
     else
-        snprintf(out, out_sz, "%s.%s", slug, ext);
+        snprintf(out, out_sz, "%s", leaf);
 }
 
-void repl_save_active_scene(const ReplExportLayout *layout) {
+int repl_save_active_scene(const ReplExportLayout *layout) {
     int slot = g_active_user_scene;
 
     /* No active named user scene (example / transient): keep the
      * historical single-file behavior (./output.c). */
     if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
-        repl_save_default_output(layout);
-        return;
+        return repl_save_default_output(layout);
     }
 
     const char *workspace_dir = g_workspace_dir[0] ? g_workspace_dir : NULL;
@@ -479,7 +637,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
         snprintf(emsg, sizeof(emsg),
                  "Save scene: cannot create %s", workspace_dir);
         repl_set_status_error(emsg);
-        return;
+        return 0;
     }
 
     char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
@@ -488,7 +646,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     g_export_scene_name_hint_writable = g_user_scenes[slot].name;
     if (!repl_export_save_output(path, source_document_view(), layout)) {
         g_export_scene_name_hint_writable = NULL;
-        return;
+        return 0;
     }
     g_export_scene_name_hint_writable = NULL;
 
@@ -499,19 +657,18 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     snprintf(msg, sizeof(msg), "Saved %s (%d commands)",
              path, repl_state_document_count());
     repl_set_status(msg);
+    return 1;
 }
 
 const char *repl_active_scene_export_path(const char *ext) {
     static char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
-    int slot = g_active_user_scene;
     const char *workspace_dir = g_workspace_dir[0] ? g_workspace_dir : NULL;
 
     /* Mirror Save Scene's target, best-effort: create the workspace dir if a
      * named scene will use it, and fall back to the cwd if it can't be made
      * (the exporter's own fopen reports any remaining failure). */
-    int use_workspace_dir =
-        (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used &&
-         workspace_dir && workspace_dir[0] && workspace_io_ensure_dir(workspace_dir));
+    int use_workspace_dir = workspace_dir && workspace_dir[0] &&
+                            workspace_io_ensure_dir(workspace_dir);
     format_scene_path(ext, use_workspace_dir ? workspace_dir : NULL,
                       path, sizeof(path));
     return path;
@@ -596,16 +753,28 @@ static int scene_text_loader(void *ctx) {
     return load_scene_lines_into_slot(c->lines, c->source_name, c->fallback_name);
 }
 
-int repl_load_workspace(const char *dir) {
-    if (!dir || !*dir) return 0;
-
-    DIR *d = opendir(dir);
-    if (!d) {
-        char msg[REPL_STATUS_TEXT_MAX];
-        snprintf(msg, sizeof(msg), "Workspace load: cannot open %s", dir);
-        repl_set_status_error(msg);
-        return -1;
+ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
+    ReplWorkspaceLoadResult result;
+    WorkspaceManifest manifest;
+    char err[REPL_STATUS_TEXT_MAX];
+    memset(&result, 0, sizeof(result));
+    if (!dir || !*dir) {
+        repl_set_status_error("Workspace load: no folder provided");
+        return result;
     }
+
+    result.managed = workspace_io_manifest_exists(dir);
+    if (!result.managed) {
+        repl_set_status_error("Folder is not a managed gl-repl workspace");
+        return result;
+    }
+    if (!workspace_io_manifest_read(dir, &manifest, err, sizeof(err))) {
+        if (strstr(err, "more than 8 scenes"))
+            result.capacity_exceeded = 1;
+        repl_set_status_error(err);
+        return result;
+    }
+    result.files_seen = manifest.scene_count;
 
     /* Ask the host to restore tutorial-mutated cfg before this path
      * stashes live cfg as the pre-workspace snapshot. */
@@ -613,33 +782,58 @@ int repl_load_workspace(const char *dir) {
 
     SceneSnapshot *stash = scene_snapshot_scratch_alloc();
     if (!stash) {
-        closedir(d);
         repl_set_status_error("Workspace load: out of memory");
-        return -1;
+        return result;
+    }
+    repl_scenes_save_active_scene_if_any();
+    ReplScenesSnapshot *catalog_stash = repl_scenes_snapshot_capture();
+    if (!catalog_stash) {
+        scene_snapshot_scratch_free(stash);
+        repl_set_status_error("Workspace load: out of memory");
+        return result;
     }
     stash_live_state(stash);
     int stash_example = g_example_idx;
+    char old_workspace[REPL_WORKSPACE_DIR_MAX];
+    snprintf(old_workspace, sizeof(old_workspace), "%s", g_workspace_dir);
 
     /* Replace the existing workspace contents rather than merging the
      * imported files into whatever slots were already in memory. */
     repl_scenes_reset();
 
-    int loaded = 0;
-    struct dirent *ent;
-    while ((ent = readdir(d))) {
-        const char *name = ent->d_name;
-        if (name[0] == '.') continue;
-        if (!workspace_io_has_c_ext(name)) continue;
-
-        char path[REPL_WORKSPACE_DIR_MAX + NAME_MAX + 1];
-        snprintf(path, sizeof(path), "%s/%s", dir, name);
-        if (load_scene_file_into_slot(path) >= 0)
-            loaded++;
+    for (int i = 0; i < result.files_seen; i++) {
+        const char *name = manifest.scene_files[i];
+        char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 1];
+        if (!workspace_io_path_join(dir, name, path, sizeof(path)) ||
+            !workspace_io_regular_file(path)) {
+            result.files_failed++;
+            break;
+        }
+        int slot = load_scene_file_into_slot(path);
+        if (slot < 0) {
+            result.files_failed++;
+            break;
+        }
+        snprintf(g_user_scenes[slot].file_name,
+                 sizeof(g_user_scenes[slot].file_name), "%s", name);
+        result.scenes_loaded++;
     }
-    closedir(d);
+
+    if (result.files_failed) {
+        repl_scenes_snapshot_restore(catalog_stash);
+        restore_live_from_stash(stash);
+        repl_state_scenes_set_active_example_idx(stash_example);
+        snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
+                 old_workspace);
+        repl_scenes_snapshot_destroy(catalog_stash);
+        scene_snapshot_scratch_free(stash);
+        repl_set_status_error("Workspace load failed; previous workspace restored");
+        return result;
+    }
 
     restore_live_from_stash(stash);
     scene_snapshot_scratch_free(stash);
+    repl_scenes_snapshot_destroy(catalog_stash);
     repl_state_scenes_set_active_example_idx(stash_example);
     g_active_user_scene = -1;
 
@@ -647,15 +841,21 @@ int repl_load_workspace(const char *dir) {
 
     char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
-             loaded, loaded == 1 ? "" : "s", dir);
+             result.scenes_loaded, result.scenes_loaded == 1 ? "" : "s", dir);
     repl_set_status(msg);
-    return loaded;
+    result.ok = 1;
+    return result;
+}
+
+int repl_load_workspace(const char *dir) {
+    ReplWorkspaceLoadResult result = repl_load_workspace_ex(dir);
+    return result.ok ? result.scenes_loaded : -1;
 }
 
 /* Land the active slot on the first occupied user scene. repl_load_workspace
  * intentionally leaves active == -1 with the pre-load document live (so the
  * caller owns the activation policy); both the CLI bootstrap and the
- * interactive Load Workspace action call this afterward so a workspace tab is
+ * interactive Open Workspace action call this afterward so a workspace tab is
  * actually selected instead of stranding the user on the now-tabless pre-load
  * document. Returns the activated slot, or -1 if no slot is occupied. */
 int repl_scenes_activate_first_loaded_slot(void) {
@@ -668,66 +868,8 @@ int repl_scenes_activate_first_loaded_slot(void) {
     return -1;
 }
 
-static int evict_scene_to_workspace(int slot);  /* defined below */
-static int pick_lru_user_scene_slot(void);      /* defined below */
-
-/* Attempt LRU eviction to free a slot. Returns the evicted slot
- * index on success (caller can restore that slot if a subsequent
- * operation fails), -1 if no eviction was needed (a free slot
- * already existed), -2 if eviction was needed but couldn't run
- * (no workspace bound, no eligible victim, or evict_scene_to_workspace
- * itself failed).
- *
- * On a successful eviction `*out_stash` receives a copy of the victim's
- * in-memory entry, including its SceneSnapshot, so the caller can restore
- * the scene tab if needed; the on-disk file written by the eviction is left
- * in place either way (the user's data is preserved both in-memory after
- * restore AND on disk via Load Workspace). */
-static int try_evict_lru(UserScene *out_stash) {
-    if (find_free_user_scene_slot() >= 0)
-        return -1;
-    if (!g_workspace_dir[0]) return -2;
-    int victim = pick_lru_user_scene_slot();
-    if (victim < 0) return -2;
-
-    /* Snapshot the victim's in-memory entry BEFORE evict_scene_to_workspace
-     * runs — that helper marks the slot unused and clears its cfg as its
-     * last step, so without this capture a subsequent parse failure would
-     * leave the user staring at a missing tab. */
-    user_scene_copy(out_stash, &g_user_scenes[victim]);
-
-    /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
-     * wrap in its own stash/restore so the caller's outer live stash stays
-     * the user's actual document, not the evicted scene's content. */
-    SceneSnapshot *live_temp = scene_snapshot_scratch_alloc();
-    if (!live_temp) return -2;
-    stash_live_state(live_temp);
-    int ok = evict_scene_to_workspace(victim);
-    restore_live_from_stash(live_temp);
-    scene_snapshot_scratch_free(live_temp);
-    if (!ok) return -2;
-    return victim;
-}
-
-/* Restore a slot snapshot taken by try_evict_lru. Reinstates the
- * in-memory entry (so the scene tab reappears). No-op if `slot < 0`
- * (the "no eviction happened" sentinel from try_evict_lru). */
-static void restore_evicted_slot(int slot, const UserScene *stash) {
-    if (slot < 0) return;
-    user_scene_copy(&g_user_scenes[slot], stash);
-}
-
 static int reserve_user_scene_slot_for_new(void) {
-    int slot = find_free_user_scene_slot();
-    if (slot >= 0)
-        return slot;
-
-    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
-    if (!evicted_stash)
-        return -1;
-    int evicted_slot = try_evict_lru(evicted_stash);
-    free(evicted_stash);
-    return evicted_slot >= 0 ? evicted_slot : -1;
+    return find_free_user_scene_slot();
 }
 
 int repl_scenes_create_empty_user_scene(void) {
@@ -776,20 +918,16 @@ static int repl_load_scene_via_loader(SceneSlotLoader loader,
      * loader wipes live state. */
     repl_scenes_save_active_scene_if_any();
 
-    /* Stash so a parse failure or slots-full restore leaves the live
-     * document intact. The concrete loader clears live state as its
-     * first step, so we must capture before that point.
-     *
-     * Both scratches are heap-allocated up front; this function holds
-     * them simultaneously across a try_evict_lru call (which adds
-     * another SceneSnapshot on its own frame). On the stack that totals
-     * ~3.6 MB before redzones — close to overrun on default worker
-     * stacks. */
+    if (find_free_user_scene_slot() < 0) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
+        return -1;
+    }
+
+    /* Stash so a parse failure leaves the live document intact. The concrete
+     * loader clears live state as its first step. */
     SceneSnapshot *stash = scene_snapshot_scratch_alloc();
-    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
-    if (!stash || !evicted_stash) {
+    if (!stash) {
         scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
         return -1;
     }
@@ -797,42 +935,17 @@ static int repl_load_scene_via_loader(SceneSlotLoader loader,
     int stash_example = g_example_idx;
     int stash_active  = g_active_user_scene;
 
-    /* Eviction is transactional with the load: snapshot the victim
-     * slot's in-memory entry so a subsequent parse failure can
-     * restore the tab. Without this, a bad-syntax load would silently
-     * drop the LRU tab from the user's workspace. */
-    int evicted_slot = try_evict_lru(evicted_stash);
-    if (evicted_slot == -2) {
-        restore_live_from_stash(stash);
-        scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
-        repl_state_scenes_set_active_example_idx(stash_example);
-        g_active_user_scene = stash_active;
-        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
-        return -1;
-    }
-    /* evicted_slot == -1 means no eviction was needed (a free slot
-     * already existed); >=0 means we evicted and snapshotted. */
-
     int slot = loader(ctx);
     if (slot < 0) {
         restore_live_from_stash(stash);
         repl_state_scenes_set_active_example_idx(stash_example);
         g_active_user_scene = stash_active;
-        /* Roll back the eviction's in-memory mutation. The on-disk
-         * file written by evict_scene_to_workspace is left in place —
-         * it's a faithful copy of the scene's pre-eviction state, so
-         * after restore_evicted_slot the in-memory tab and the disk
-         * file agree, and the user has lost nothing. */
-        restore_evicted_slot(evicted_slot, evicted_stash);
         scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
         return -1;
     }
 
     scene_snapshot_scratch_free(stash);
-    free(evicted_stash);
 
     /* The loader left live state == the loaded scene and stored a copy
      * in the slot. Activate the slot so subsequent edits accumulate
@@ -960,78 +1073,8 @@ int repl_load_scene_text_as_new_slot(const char *text,
     return slot;
 }
 
-static int evict_scene_to_workspace(int slot) {
-    if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
-    if (!g_user_scenes[slot].used)            return 0;
-    if (!g_workspace_dir[0])                  return 0;
-
-    if (!workspace_io_ensure_dir(g_workspace_dir)) return 0;
-
-    install_scene_into_live(slot);
-
-    char slug[USER_SCENE_NAME_MAX];
-    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
-
-    char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
-    snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
-
-    g_export_scene_name_hint_writable = g_user_scenes[slot].name;
-    /* LRU eviction runs as a side effect of repl_promote_transient_if_needed
-     * (called from editor_undo_push_snapshot). The user isn't actively
-     * saving here, so the layout struct is unavailable — pass NULL and
-     * accept the 800x600 fallback in the exported display(). */
-    if (!repl_export_save_output(path, source_document_view(), NULL)) {
-        g_export_scene_name_hint_writable = NULL;
-        return 0;
-    }
-    g_export_scene_name_hint_writable = NULL;
-
-    g_user_scenes[slot].used = 0;
-    scene_cfg_clear(slot);
-    return 1;
-}
-
-static int pick_lru_user_scene_slot(void) {
-    int best = -1;
-    uint32_t best_tick = 0;
-    for (int s = 0; s < MAX_USER_SCENES; s++) {
-        if (!g_user_scenes[s].used)    continue;
-        if (s == g_active_user_scene)  continue;
-        if (best < 0 || g_user_scenes[s].last_touch < best_tick) {
-            best = s;
-            best_tick = g_user_scenes[s].last_touch;
-        }
-    }
-    return best;
-}
-
-/* Obtain a slot for a promotion: a free one, else the LRU victim flushed to
- * the bound workspace directory. Returns -1 when neither is available (every
- * slot occupied and no workspace bound / no eligible victim / the eviction
- * write failed), leaving the catalog untouched. Deliberately runs BEFORE any
- * origin clearing or tutorial teardown so a failed reservation is fully
- * retryable on the next edit. */
 static int reserve_slot_for_promotion(void) {
-    int slot = find_free_user_scene_slot();
-    if (slot >= 0)
-        return slot;
-    if (!g_workspace_dir[0])
-        return -1;
-
-    int victim = pick_lru_user_scene_slot();
-    if (victim < 0)
-        return -1;
-
-    /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
-     * stash/restore around it so the caller's document survives the flush. */
-    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
-    if (!stash)
-        return -1;
-    stash_live_state(stash);
-    int ok = evict_scene_to_workspace(victim);
-    restore_live_from_stash(stash);
-    scene_snapshot_scratch_free(stash);
-    return ok ? victim : -1;
+    return find_free_user_scene_slot();
 }
 
 /* Push just the per-scene cfg subset of `slot` back onto the live view.
@@ -1186,6 +1229,28 @@ int repl_user_scene_rename(int slot, const char *new_name) {
     return 1;
 }
 
+const char *repl_user_scene_file_name(int slot) {
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used)
+        return "";
+    ensure_scene_file_name(slot);
+    return g_user_scenes[slot].file_name;
+}
+
+int repl_user_scene_delete(int slot) {
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used)
+        return 0;
+    g_user_scenes[slot].used = 0;
+    g_user_scenes[slot].file_name[0] = '\0';
+    scene_cfg_clear(slot);
+    if (g_active_user_scene == slot)
+        g_active_user_scene = -1;
+    return 1;
+}
+
+int repl_workspace_is_managed(void) {
+    return g_workspace_dir[0] && workspace_io_manifest_exists(g_workspace_dir);
+}
+
 void repl_scenes_capture_pre_example_cfg_if_entering(void) {
     /* Capture only on the transition from non-example -> example.
      * Subsequent example->example F12 cycles leave the snapshot
@@ -1228,7 +1293,7 @@ void repl_scenes_reset(void) {
 /* Whole-catalog snapshot. The slot array dominates (~10 MB: 8 * SceneSnapshot),
  * so this is heap-allocated. Copies every slot verbatim (occupied or not — a
  * whole-array copy is drop-proof if UserScene grows a field) plus the active
- * index, the LRU tick, and the pre-example cfg bag. */
+ * index, the monotonic activity tick, and the pre-example cfg bag. */
 struct ReplScenesSnapshot {
     UserScene     slots[MAX_USER_SCENES];
     int           active_user_scene;

@@ -130,6 +130,7 @@ int  ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
                                        int *sw, int *sh);
 const char *ui_menu_bar_menu_item_shortcut_for_test(int menu_id,
                                                    int item_idx);
+int  ui_menu_bar_menu_item_enabled_for_test(int menu_id, int item_idx);
 
 /* Refresh open-dropdown hover state from the current pointer. Returns 1 when
  * the hovered parent row or Scene example submenu changed. */

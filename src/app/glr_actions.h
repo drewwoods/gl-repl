@@ -43,11 +43,15 @@ enum {
     GLR_FILE_ITEM_LOAD_SCENE,        /* Prompt for a .c scene path */
     GLR_FILE_ITEM_LOAD_CLIPBOARD,    /* macOS: load scene text from NSPasteboard via pbpaste */
     GLR_FILE_ITEM_RENAME_SCENE,
+    GLR_FILE_ITEM_DELETE_SCENE,
     GLR_FILE_ITEM_EXPORT_PLY,        /* F11: capture geometry to output.ply */
     GLR_FILE_ITEM_SPLIT_DECL,        /* Ctrl+Shift+S: split multi-var decl at cursor */
+    GLR_FILE_ITEM_REVEAL_WORKSPACE,
     GLR_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
+    GLR_FILE_ITEM_NEW_WORKSPACE,
     GLR_FILE_ITEM_SAVE_WORKSPACE,
-    GLR_FILE_ITEM_LOAD_WORKSPACE,
+    GLR_FILE_ITEM_SAVE_WORKSPACE_AS,
+    GLR_FILE_ITEM_OPEN_WORKSPACE,
     GLR_FILE_ITEM_QUIT_SEP,          /* "---" non-actionable divider row */
     GLR_FILE_ITEM_QUIT,              /* Ctrl+Q */
     GLR_FILE_ITEM_COUNT
@@ -155,6 +159,10 @@ int  glr_cfg_handle_special_shortcut(int key);
  * if the menu should close after the action, 0 if it should stay open (for toggles).
  * Called by the menu UI (ui_menu_bar.h). */
 int  glr_action_menu_item_activate(int menu_id, int item_idx);
+int  glr_action_save_active_scene(void);
+int  glr_action_open_workspace_index(int idx);
+int  glr_action_open_workspace_path(const char *path);
+void glr_action_begin_open_workspace_path(void);
 
 /* Built-in example metadata exposed through the app layer for CLI and UI
  * callers that should not include repl/examples.h directly. */

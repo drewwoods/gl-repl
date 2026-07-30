@@ -1094,7 +1094,7 @@ typed structured blocks, flatten provenance, local-var snapshots, and
 
 It is deliberately not a miniature full app. It does not exercise editor undo,
 selection, autocomplete, cursor/input post-effects, code-panel rendering,
-scene-tab LRU/promotion, workspace save orchestration, full import/export
+scene-tab capacity/promotion, workspace save orchestration, full import/export
 metadata bridges, or tutorial/replay UI presentation. Those behaviors are
 owned outside `src/repl` or at its host boundary; keeping them out of the demo
 is the point of the link-boundary proof.
@@ -1151,7 +1151,7 @@ grouping is the mental model.)
 [`export_format_shared.h`](export_format_shared.h)
 
 **Scenes & workspaces**
-[`scenes.c`](scenes.c)/`.h` (user-scene slots, LRU, promotion) ·
+[`scenes.c`](scenes.c)/`.h` (explicit user-scene slots, promotion, managed workspaces) ·
 [`scene_snapshot.c`](scene_snapshot.c)/`.h` (copyable scene payload) ·
 [`workspace_io.c`](workspace_io.c)/`.h` (filesystem + file-naming mechanics) ·
 [`cfg_baseline.c`](cfg_baseline.c)/`.h` (flat key/value config bag)

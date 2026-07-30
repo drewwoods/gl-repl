@@ -4,11 +4,14 @@
 #include "app/glr_paths.h"
 
 #include <errno.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "config.h"
 
 #define GLR_APP_NAME "gl-repl"
 
@@ -101,7 +104,7 @@ int glr_paths_user_music_dir(char *buf, size_t buflen) {
 }
 
 int glr_paths_user_workspace_dir(char *buf, size_t buflen) {
-    return user_data_subdir("workspace", buf, buflen);
+    return user_data_subdir("workspaces/default", buf, buflen);
 }
 
 int glr_paths_cwd_supports_relative_saves(void) {
@@ -110,10 +113,132 @@ int glr_paths_cwd_supports_relative_saves(void) {
 
 const char *glr_paths_default_workspace_dir(void) {
     static char dir[GLR_PATH_MAX];
+    char root[GLR_PATH_MAX];
+    if (glr_paths_workspaces_root(root, sizeof(root))) {
+        int n = snprintf(dir, sizeof(dir), "%s/%s", root,
+                         GLR_DEFAULT_WORKSPACE_NAME);
+        if (n >= 0 && n < (int)sizeof(dir))
+            return dir;
+    }
+    return GLR_WORKSPACES_ROOT_DIR "/" GLR_DEFAULT_WORKSPACE_NAME;
+}
 
-    if (glr_paths_cwd_supports_relative_saves())
-        return GLR_DEFAULT_WORKSPACE_DIR;
-    if (glr_paths_user_workspace_dir(dir, sizeof(dir)))
-        return dir;
-    return GLR_DEFAULT_WORKSPACE_DIR;
+int glr_paths_workspaces_root(char *buf, size_t buflen) {
+    if (!buf || buflen == 0)
+        return 0;
+    if (glr_paths_cwd_supports_relative_saves()) {
+        int n = snprintf(buf, buflen, "%s", GLR_WORKSPACES_ROOT_DIR);
+        return n >= 0 && n < (int)buflen;
+    }
+    return user_data_subdir("workspaces", buf, buflen);
+}
+
+int glr_paths_workspace_dir_for_name(const char *name,
+                                     char *buf, size_t buflen) {
+    char root[GLR_PATH_MAX];
+    char slug[64];
+    if (!name || !name[0] || strchr(name, '/') || strchr(name, '\\') ||
+        !glr_paths_workspaces_root(root, sizeof(root)))
+        return 0;
+    size_t j = 0;
+    for (size_t i = 0; name[i] && j + 1 < sizeof(slug); i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (isalnum(c))
+            slug[j++] = (char)tolower(c);
+        else if (c == ' ' || c == '-' || c == '_')
+            slug[j++] = '_';
+    }
+    if (j == 0)
+        return 0;
+    slug[j] = '\0';
+    int n = snprintf(buf, buflen, "%s/%s", root, slug);
+    return n >= 0 && n < (int)buflen;
+}
+
+int glr_paths_resolve_output_path(const char *leaf,
+                                  char *buf, size_t buflen) {
+    if (!leaf || !leaf[0] || !buf || buflen == 0)
+        return 0;
+    if (glr_paths_cwd_supports_relative_saves()) {
+        int n = snprintf(buf, buflen, "%s", leaf);
+        return n >= 0 && n < (int)buflen;
+    }
+    const char *dir = glr_paths_default_workspace_dir();
+    int n = snprintf(buf, buflen, "%s/%s", dir, leaf);
+    return n >= 0 && n < (int)buflen;
+}
+
+int glr_paths_app_state_path(const char *leaf, char *buf, size_t buflen) {
+    char data[GLR_PATH_MAX];
+    if (!leaf || !leaf[0] || !buf || buflen == 0)
+        return 0;
+    if (glr_paths_cwd_supports_relative_saves()) {
+        int n = snprintf(buf, buflen, "%s", leaf);
+        return n >= 0 && n < (int)buflen;
+    }
+    if (!glr_paths_user_data_dir(data, sizeof(data)))
+        return 0;
+    int n = snprintf(buf, buflen, "%s/state/%s", data, leaf);
+    return n >= 0 && n < (int)buflen;
+}
+
+static int absolute_lexical_path(const char *path, char *buf, size_t buflen) {
+    char cwd[GLR_PATH_MAX];
+    char input[GLR_PATH_MAX];
+    char *parts[GLR_PATH_MAX / 2];
+    int part_count = 0;
+    if (!path || !path[0])
+        return 0;
+    if (path[0] == '/') {
+        if (snprintf(input, sizeof(input), "%s", path) >= (int)sizeof(input))
+            return 0;
+    } else {
+        if (!getcwd(cwd, sizeof(cwd)))
+            return 0;
+        if (snprintf(input, sizeof(input), "%s/%s", cwd, path) >=
+            (int)sizeof(input))
+            return 0;
+    }
+
+    char *cursor = input;
+    while (*cursor) {
+        while (*cursor == '/') cursor++;
+        if (!*cursor) break;
+        char *part = cursor;
+        while (*cursor && *cursor != '/') cursor++;
+        if (*cursor) *cursor++ = '\0';
+        if (!strcmp(part, "."))
+            continue;
+        if (!strcmp(part, "..")) {
+            if (part_count > 0) part_count--;
+            continue;
+        }
+        parts[part_count++] = part;
+    }
+
+    size_t used = 0;
+    if (buflen < 2) return 0;
+    buf[used++] = '/';
+    for (int i = 0; i < part_count; i++) {
+        size_t len = strlen(parts[i]);
+        if (used + len + (i + 1 < part_count ? 1u : 0u) >= buflen)
+            return 0;
+        memcpy(buf + used, parts[i], len);
+        used += len;
+        if (i + 1 < part_count) buf[used++] = '/';
+    }
+    buf[used] = '\0';
+    return 1;
+}
+
+int glr_paths_same_dir(const char *a, const char *b) {
+    char ar[GLR_PATH_MAX], br[GLR_PATH_MAX];
+    if (!a || !a[0] || !b || !b[0])
+        return 0;
+    if (realpath(a, ar) && realpath(b, br))
+        return strcmp(ar, br) == 0;
+    if (!absolute_lexical_path(a, ar, sizeof(ar)) ||
+        !absolute_lexical_path(b, br, sizeof(br)))
+        return strcmp(a, b) == 0;
+    return strcmp(ar, br) == 0;
 }

@@ -470,8 +470,8 @@ int repl_export_save_output(const char *filename, SourceTextView text,
     return 1;
 }
 
-void repl_save_default_output(const ReplExportLayout *layout) {
-    (void)repl_export_save_output("output.c", source_document_view(), layout);
+int repl_save_default_output(const ReplExportLayout *layout) {
+    return repl_export_save_output("output.c", source_document_view(), layout);
 }
 
 void repl_dump_code_panel_text(FILE *out, SourceTextView text) {

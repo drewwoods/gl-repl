@@ -157,7 +157,7 @@ keep stubs minimal no-op. After touching stubs verify: `make test-stubs`,
 ```bash
 ./gl-repl                  # Fresh session
 ./gl-repl output.c         # Reload saved session
-./gl-repl workspace/       # Load every *.c as a user scene
+./gl-repl workspace/       # Load a managed .glr-workspace directory
 ./gl-repl --example torus  # Built-in example (name or 1-based index)
 ./gl-repl --tour editing   # Guided tour on launch
 ./gl-repl --list-examples | --list-tours | --dump-code
@@ -364,20 +364,21 @@ Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 ([`src/repl/scenes.c`](src/repl/scenes.c)); no automatic startup scene.
 Editing a **transient** document auto-promotes it into a fresh slot — the
 hook is [`editor_undo_push_snapshot()`](src/editor/undo.h#L126) →
-[`repl_promote_transient_if_needed()`](src/repl/scenes.h#L55) before every
+[`repl_promote_transient_if_needed()`](src/repl/scenes.h#L64) before every
 mutation. Two promotable origins: a loaded example (`active_example_idx`)
 and the document a **completed or stopped tutorial** left behind
 (`tutorial_origin_idx`, stamped by `tutorial_end_keep_view`, never while a
-tutorial is active). LRU eviction to `<workspace_dir>/<slug>.c` only when a
-workspace is bound (else promotion is rejected with a status message —
-and, for a tutorial origin, is retried on the next edit with the origin and
+tutorial is active). Capacity is a hard eight scenes: promotion is rejected
+without mutation when every slot is occupied (and, for a tutorial origin, is
+retried on the next edit with the origin and
 pending cfg baseline left intact). A tutorial promotion captures the
 lesson's view into the slot *before* tutorial teardown restores the
 pre-tutorial globals, then re-applies the slot's per-scene cfg subset; see
 `docs/ARCHITECTURE.md` "Post-tutorial scene promotion".
 F12 cycles examples → user scenes → back. Inline rename filters
-path-unsafe chars. Workspace round-trips via `@scene-name` /
-`@workspace-dir` headers.
+path-unsafe chars. Managed workspaces require `.glr-workspace`; manifest-less
+directories are rejected and unlisted `.c` files are ignored. Scene metadata
+still round-trips through `@scene-name` / `@workspace-dir` headers.
 
 ### Example metadata & presentation reset
 

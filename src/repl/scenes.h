@@ -1,7 +1,7 @@
 /*
  * src/repl/scenes.h - User-scene promotion, capture, and reset hooks.
  *
- * The slot model itself lives in src/repl/scenes.c (LRU eviction, workspace
+ * The slot model itself lives in src/repl/scenes.c (fixed capacity, workspace
  * persistence). This header exposes the lifecycle entry points that
  * other REPL modules, the editor, and the controller call when an edit should
  * promote an example, an example load should capture/restore scene context, or
@@ -35,8 +35,17 @@ typedef enum {
     REPL_SCENE_LOAD_ERR_NOT_FOUND,  /* stat() failed (no such file, EACCES, ...) */
     REPL_SCENE_LOAD_ERR_IS_DIR,     /* path resolved to a directory */
     REPL_SCENE_LOAD_ERR_PARSE,      /* repl_export_load_from_file rejected it */
-    REPL_SCENE_LOAD_ERR_NO_SLOT     /* slots full and no workspace bound to evict to */
+    REPL_SCENE_LOAD_ERR_NO_SLOT     /* all eight scene slots are occupied */
 } ReplSceneLoadStatus;
+
+typedef struct {
+    int ok;
+    int managed;
+    int files_seen;
+    int scenes_loaded;
+    int files_failed;
+    int capacity_exceeded;
+} ReplWorkspaceLoadResult;
 
 /* Called before any mutation: if the live document is a promotable
  * TRANSIENT one (no active user scene), allocate a scene slot, copy the
@@ -49,7 +58,7 @@ typedef enum {
  * tutorial teardown restores the user's pre-tutorial global settings and the
  * slot's per-scene cfg subset is re-applied to the live view.
  * Returns the promoted slot index, or -1 if promotion was a no-op or
- * rejected. A rejection (all slots full, no workspace to evict into) leaves
+ * rejected. A rejection (all slots full) leaves
  * the origin — and any pending tutorial baseline — intact, so the next edit
  * retries and still captures everything typed in between. */
 int  repl_promote_transient_if_needed(void);
@@ -72,17 +81,14 @@ void repl_scenes_reset_for_transient(void);
 /* Create a fresh, named user-scene slot, seed its editable display defaults,
  * and make it active. This is the File -> New Scene path: unlike
  * tutorial/transient buffers, it must appear in the scene tab strip
- * immediately. Returns the active slot index, or -1 if every slot is full
- * and no workspace-backed LRU eviction is available. */
+ * immediately. Returns the active slot index, or -1 if every slot is full. */
 int  repl_scenes_create_empty_user_scene(void);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
- * Any slot can hold a user-created, imported, or promoted scene. When every
- * inactive slot is full and a new promotion happens, the LRU slot is flushed
- * to the workspace directory (if bound) and reused. The active slot is the one
+ * Any slot can hold a user-created, imported, or promoted scene. Capacity is a
+ * hard eight scenes until an explicit workspace scene browser exists. The active slot is the one
  * currently loaded into g_cmds[]; -1 means an example or transient buffer is
- * active instead. Editing resets the "last touched" timestamp for LRU
- * eviction. */
+ * active instead. */
 int  repl_user_scene_valid(void);         /* 1 if any slot occupied */
 void repl_load_user_scene(void);          /* load slot 0 (back-compat) */
 int  repl_user_scene_count(void);         /* number of occupied slots */
@@ -106,15 +112,18 @@ void repl_scenes_mark_example_active(void);
  * the slot uses a generic imported-scene name. */
 void repl_scenes_activate_loaded_document_slot(const char *scene_name_hint);
 
-/* Workspace I/O: load every *.c scene under `dir`. Returns the number of
- * files loaded, 0 for an empty directory argument, or -1 on I/O error. */
+/* Workspace I/O: load the ordered scene files named by `dir/.glr-workspace`.
+ * Manifest-less directories are rejected. The compact wrapper returns the
+ * number of loaded scenes (including zero for a valid empty workspace), or
+ * -1 on any validation, capacity, I/O, or parse error. */
 int  repl_load_workspace(const char *dir);
+ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir);
 
-/* Save every occupied user-scene slot to `<dir>/<slug>.c`.
- * Each slot is flushed with its own @scene-name header. Both functions
- * remember `dir` so single-file exports carry a `@workspace-dir` hint.
- * Sets status message on success or failure.
- * Returns the number of files written, or -1 on error. */
+/* Save every occupied user-scene slot and publish `dir/.glr-workspace` last.
+ * Scene filenames are assigned once and remain stable across display-name
+ * changes. Only files owned by the previous manifest may be pruned. The
+ * workspace binding changes only after a successful commit. Returns the
+ * number of files written, or -1 on error. */
 int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
 
 /* Save the active user scene to a file named after the scene:
@@ -124,7 +133,7 @@ int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
  * active named user scene (an example / transient document) this falls
  * back to repl_save_default_output() (./output.c). Creates the workspace
  * dir if needed and sets its own status naming the real file. */
-void repl_save_active_scene(const ReplExportLayout *layout);
+int  repl_save_active_scene(const ReplExportLayout *layout);
 
 /* Return the path to use when exporting the active scene to a file with
  * extension `ext` (no leading dot), mirroring repl_save_active_scene's
@@ -134,6 +143,9 @@ void repl_save_active_scene(const ReplExportLayout *layout);
  * export so it tracks the scene name the way Save Scene does. Returns a
  * pointer to a static buffer valid until the next call. */
 const char *repl_active_scene_export_path(const char *ext);
+const char *repl_user_scene_file_name(int slot);
+int  repl_user_scene_delete(int slot);
+int  repl_workspace_is_managed(void);
 
 /* Runtime "load file as new scene": loads `path` into a freshly-
  * allocated user-scene slot (slot allocation is delegated to the
@@ -171,7 +183,7 @@ int  repl_scenes_activate_first_loaded_slot(void);
 void repl_scenes_reset(void);
 
 /* Opaque, heap-backed snapshot of the whole user-scene catalog: every slot's
- * occupancy/name/LRU timestamp/SceneSnapshot, the active user-scene index, the
+ * occupancy/name/stable filename/SceneSnapshot, the active user-scene index, the
  * monotonic scene tick, and the pre-example config bag. Used by the tour
  * baseline (src/app/glr_tour_snapshot.c) so Back / Done-restart reinstate the
  * exact scene catalog the tour started from.

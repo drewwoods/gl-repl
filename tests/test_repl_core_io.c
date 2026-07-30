@@ -12,6 +12,7 @@
 #include "editor/input.h"
 #include "repl/pipeline.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
 #include "repl/state_owners.h"
 #include "repl/export.h"
 #include "repl/executor.h"
@@ -77,6 +78,21 @@ static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
     }
     buf[nread] = '\0';
     return nread;
+}
+
+static int write_two_scene_manifest(const char *dir, const char *name,
+                                    const char *first, const char *second) {
+    WorkspaceManifest manifest;
+    char err[128];
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "%s", name);
+    manifest.scene_count = 2;
+    snprintf(manifest.scene_files[0], sizeof(manifest.scene_files[0]),
+             "%s", first);
+    snprintf(manifest.scene_files[1], sizeof(manifest.scene_files[1]),
+             "%s", second);
+    return workspace_io_manifest_write(dir, &manifest, err, sizeof(err));
 }
 
 static int count_substr(const char *haystack, const char *needle) {
@@ -1199,6 +1215,10 @@ int main(void) {
             }
         }
 
+        ASSERT_TRUE("p1 managed manifest written",
+                    write_two_scene_manifest(workspace_in, "P1 Workspace",
+                                             "scene_a.c", "scene_b.c"));
+
         glr_ctrl_reset_all(); declare_test_vars();
 
         int loaded = repl_load_workspace(workspace_in);
@@ -1216,9 +1236,9 @@ int main(void) {
         /* Read each saved file and confirm the @cfg matches the
          * scene's own saved cfg, not the live value at save time. */
         char buf_a[8192], buf_b[8192];
-        size_t na = read_text_file("/tmp/repl_core_p1_workspace_out/p1_scene_a.c",
+        size_t na = read_text_file("/tmp/repl_core_p1_workspace_out/scene_a.c",
                                    buf_a, sizeof(buf_a));
-        size_t nb = read_text_file("/tmp/repl_core_p1_workspace_out/p1_scene_b.c",
+        size_t nb = read_text_file("/tmp/repl_core_p1_workspace_out/scene_b.c",
                                    buf_b, sizeof(buf_b));
         ASSERT_TRUE("p1 saved scene_a opens", na > 0);
         ASSERT_TRUE("p1 saved scene_b opens", nb > 0);
@@ -1326,6 +1346,10 @@ int main(void) {
             }
         }
 
+        ASSERT_TRUE("cam managed manifest written",
+                    write_two_scene_manifest(workspace_in, "Camera Workspace",
+                                             "scene_a.c", "scene_b.c"));
+
         glr_ctrl_reset_all(); declare_test_vars();
 
         int loaded = repl_load_workspace(workspace_in);
@@ -1342,9 +1366,9 @@ int main(void) {
         ASSERT_TRUE("cam save_workspace wrote 2 files", saved == 2);
 
         char buf_a[8192], buf_b[8192];
-        size_t na = read_text_file("/tmp/repl_core_cam_workspace_out/cam_scene_a.c",
+        size_t na = read_text_file("/tmp/repl_core_cam_workspace_out/scene_a.c",
                                    buf_a, sizeof(buf_a));
-        size_t nb = read_text_file("/tmp/repl_core_cam_workspace_out/cam_scene_b.c",
+        size_t nb = read_text_file("/tmp/repl_core_cam_workspace_out/scene_b.c",
                                    buf_b, sizeof(buf_b));
         ASSERT_TRUE("cam saved scene_a opens", na > 0);
         ASSERT_TRUE("cam saved scene_b opens", nb > 0);
@@ -1447,6 +1471,11 @@ int main(void) {
                 fclose(f);
             }
         }
+
+        ASSERT_TRUE("cam-switch managed manifest written",
+                    write_two_scene_manifest(workspace_in,
+                                             "Camera Switch Workspace",
+                                             "scene_a.c", "scene_b.c"));
 
         glr_ctrl_reset_all(); declare_test_vars();
 

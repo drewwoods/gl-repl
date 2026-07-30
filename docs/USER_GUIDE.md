@@ -58,7 +58,7 @@ Run a fresh session, or reload earlier work:
 ```bash
 ./gl-repl                  # fresh session
 ./gl-repl output.c         # reload a saved scene
-./gl-repl workspace/       # load every *.c in a directory as scenes
+./gl-repl workspace/       # load a managed .glr-workspace directory
 printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 ```
 
@@ -1668,9 +1668,12 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 - **Auto-promotion** — editing a built-in example forks it into a fresh
   scene slot named after the example. Subsequent edits accumulate there.
 - **Rename** — File → Rename Scene opens an inline prompt in the status bar
-  (Enter commits, Esc cancels). Names become filenames on export, so `/`,
-  `\` and `:` are filtered.
+  (Enter commits, Esc cancels). In a managed workspace this changes the tab
+  name while retaining the scene's stable persisted filename.
 - **Switching** — click a scene tab, or cycle with F12 / Shift+F12.
+- **Capacity** — all eight tabs are explicit. New/load/promotion operations
+  fail without mutation when every slot is occupied; gl-repl never evicts a
+  tab implicitly.
 
 ### Saving and loading
 
@@ -1681,15 +1684,29 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
 | File → Load Scene | Load a `.c` file into a new scene slot |
 | File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
-| File → Save Workspace | Write every open scene as `<name>.c` in a directory |
-| File → Load Workspace | Load every `*.c` in a directory as scenes |
+| File → Delete Scene | Confirm and remove the active managed scene from its workspace |
+| File → Reveal Workspace Folder | Reveal the bound managed workspace; disabled while no workspace is loaded |
+| File → New Workspace… | Create and open a named managed workspace |
+| File → Save Workspace | Transactionally save every open scene and the manifest |
+| File → Save Workspace As… | Create a named workspace containing the current scene collection |
+| File → Open Workspace → *name* | Switch to a managed workspace |
+| File → Open Workspace → Other folder… | Open a managed workspace outside the normal workspace root |
 
-A workspace is just a directory of exported scene files. Once one is bound
-and more than 8 scenes are open, the least-recently-used slot is
-automatically saved to the workspace directory before being replaced.
-Single files and workspaces round-trip freely — scene names and the
-workspace binding are carried in `@scene-name` / `@workspace-dir` header
-comments.
+A workspace is a directory with a `.glr-workspace` manifest. The manifest is
+the ordered source of truth for the workspace's scene files; unlisted `.c`
+files are ignored and never pruned. A directory without this manifest is
+rejected—there is no fallback that imports every `.c` file. Use **Load Scene**
+for standalone files.
+
+Scene files are staged before the manifest is committed. A malformed or
+missing scene rolls the entire open back, leaving the previous workspace and
+document intact. Switching away first saves the current managed workspace;
+an unbound collection is copied to the app recovery area.
+
+Development launches from a writable directory retain relative outputs such
+as `output.c`. Packaged-app saves use the per-user gl-repl data directory and
+prompt for a scene name when a transient example has not yet become a named
+scene.
 
 ---
 

@@ -17,6 +17,7 @@
 #include "repl/cfg_baseline.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
 #include "repl/eval.h"            /* REQUIRE_VAR tests: predef-var declare/lookup */
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
@@ -53,6 +54,22 @@ static int mock_get_modifiers(void) {
 
 static const char *status_text(void) {
     return ui_state_status_mut()->text;
+}
+
+static int make_empty_managed_workspace(const char *dir, const char *name) {
+    WorkspaceManifest manifest;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "%s", name);
+    return workspace_io_manifest_write(dir, &manifest, NULL, 0);
+}
+
+static void remove_empty_managed_workspace(const char *dir) {
+    char path[REPL_WORKSPACE_DIR_MAX + 32];
+    if (workspace_io_path_join(dir, WORKSPACE_IO_MANIFEST_FILE,
+                               path, sizeof(path)))
+        unlink(path);
+    rmdir(dir);
 }
 
 static void get_expected_hint(int tutorial_idx, int step, int total, int is_commit, char *out, size_t out_size) {
@@ -971,19 +988,21 @@ static void test_loading_workspace_exits_tutorial(void) {
     ASSERT_TRUE("mkdtemp tutorial workspace", made_dir != NULL);
     if (!made_dir)
         return;
+    ASSERT_TRUE("tutorial workspace manifest",
+                make_empty_managed_workspace(made_dir, "Tutorial Test"));
 
     ASSERT_INT("empty workspace load succeeds",
                repl_load_workspace(made_dir), 0);
     ASSERT_TRUE("workspace load exits tutorial", !tutorial_active());
 
-    rmdir(made_dir);
+    remove_empty_managed_workspace(made_dir);
 }
 
 static void test_invalid_workspace_load_does_not_exit_tutorial(void) {
     reset_fixture();
     tutorial_start(0);
 
-    ASSERT_INT("null workspace load fails", repl_load_workspace(NULL), 0);
+    ASSERT_INT("null workspace load fails", repl_load_workspace(NULL), -1);
     ASSERT_TRUE("tutorial survives invalid workspace load", tutorial_active());
 }
 
@@ -3393,12 +3412,14 @@ static void test_workspace_load_during_tutorial_restores_baseline(void) {
     char *made_dir = mkdtemp(temp_dir);
     ASSERT_TRUE("mkdtemp restore-test workspace", made_dir != NULL);
     if (!made_dir) return;
+    ASSERT_TRUE("restore-test workspace manifest",
+                make_empty_managed_workspace(made_dir, "Restore Test"));
     (void)repl_load_workspace(made_dir);
     ASSERT_TRUE("workspace load exits tutorial", !tutorial_active());
     /* The whole point: grid is back to baseline, not stuck at RADAR. */
     ASSERT_INT("grid restored to baseline after workspace load",
                repl_cfg_get_int("grid", -1), baseline);
-    rmdir(made_dir);
+    remove_empty_managed_workspace(made_dir);
 }
 
 /* Regression for finding 1: exiting on a REQUIRE step must not let the
@@ -4462,10 +4483,8 @@ static void test_promotion_keeps_scene_cfg_and_restores_globals(void) {
  *    survive, the edit still lands in the transient document, and a later
  *    edit — once a slot can be freed — captures everything typed in between. */
 static void test_slots_full_promotion_is_retryable(void) {
-    char temp_dir[] = "/tmp/test_tutorial_promote.XXXXXX";
-
     reset_fixture();
-    repl_set_workspace_dir(NULL);   /* no workspace => no LRU eviction */
+    repl_set_workspace_dir(NULL);
     for (int i = 0; i < MAX_USER_SCENES; i++)
         (void)repl_scenes_create_empty_user_scene();
     ASSERT_INT("every user-scene slot occupied",
@@ -4494,11 +4513,10 @@ static void test_slots_full_promotion_is_retryable(void) {
                repl_state_document_count(), doc_before + 2);
     ASSERT_INT("still unpromoted", repl_active_user_scene(), -1);
 
-    /* Bind a workspace so LRU eviction can free a slot, then edit again. */
-    char *made_dir = mkdtemp(temp_dir);
-    ASSERT_TRUE("mkdtemp promotion-retry workspace", made_dir != NULL);
-    if (!made_dir) return;
-    repl_set_workspace_dir(made_dir);
+    /* Capacity is explicit now: deleting a tab frees a slot, and the next
+     * edit retries the retained tutorial promotion. */
+    ASSERT_TRUE("explicitly delete one full-capacity tab",
+                repl_user_scene_delete(0));
 
     commit_free_form_line("glColor3f(0.7, 0.8, 0.9)");
     int slot = repl_active_user_scene();
@@ -4513,8 +4531,6 @@ static void test_slots_full_promotion_is_retryable(void) {
         ASSERT_INT("promoted document kept the intervening transient edits",
                    repl_state_document_count(), doc_before + 3);
     }
-
-    repl_set_workspace_dir(NULL);
 }
 
 /* 8. Wholesale replacement discards an UNEDITED post-tutorial result: no slot
@@ -4544,6 +4560,8 @@ static void test_wholesale_replacement_discards_unedited_result(void) {
     char *made_dir = mkdtemp(temp_dir);
     ASSERT_TRUE("mkdtemp discard-test workspace", made_dir != NULL);
     if (!made_dir) return;
+    ASSERT_TRUE("discard-test workspace manifest",
+                make_empty_managed_workspace(made_dir, "Discard Test"));
     (void)repl_load_workspace(made_dir);
 
     ASSERT_INT("unedited post-tutorial document promoted nothing",
@@ -4553,7 +4571,7 @@ static void test_wholesale_replacement_discards_unedited_result(void) {
                 !tutorial_state_view().baseline_valid);
     ASSERT_INT("pre-tutorial grid restored", repl_cfg_get_int("grid", -1),
                grid_baseline);
-    rmdir(made_dir);
+    remove_empty_managed_workspace(made_dir);
 
     /* Same discard, via the example-load replacement path. */
     reset_fixture();

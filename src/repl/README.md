@@ -82,7 +82,7 @@ narrower boundary probes: one parses plain GL lines directly, one
 hand-constructs a loop to isolate flattening, and one registers variables
 directly to isolate `has_vars` re-evaluation. None of these demo modes cover
 editor undo/cursor/input effects, UI/controller routing, full import/export
-metadata, scene-tab LRU behavior, or tutorial/replay presentation; those stay
+metadata, scene-tab capacity/promotion behavior, or tutorial/replay presentation; those stay
 with their owning modules in the full app and tests.
 
 The three print-summary samples each isolate one pipeline behavior:
@@ -186,8 +186,8 @@ at build time, like the example catalog.
 | [`export_glr.c`](export_glr.c) | `.glr` scene writer — the authoring format (non-default `@cfg` + `// camera` + document text), symmetric with [`example_loader.c`](example_loader.c) |
 | [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h), [`export_format_shared.h`](export_format_shared.h) | Export/import API and shared state-text dimensions |
 | **Scenes & workspaces** | |
-| [`scenes.c`](scenes.c) / `.h`, [`scene_snapshot.c`](scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
-| [`workspace_io.c`](workspace_io.c) / `.h`, [`cfg_baseline.c`](cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
+| [`scenes.c`](scenes.c) / `.h`, [`scene_snapshot.c`](scene_snapshot.c) / `.h` | Explicit eight-slot user-scene catalog (promotion, stable filenames, transactional persistence); copyable scene payload |
+| [`workspace_io.c`](workspace_io.c) / `.h`, [`cfg_baseline.c`](cfg_baseline.c) / `.h` | Strict managed-workspace manifest/filesystem mechanics; flat key/value config bag |
 | **Program-adjacent data** | |
 | [`examples.c`](examples.c) / `.h`, [`example_loader.c`](example_loader.c) / `.h` | Built-in example catalog facade; example load + `.glr` snippets, `.c` import sources, and `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/`; `--examples-dir` can replace the compiled-in catalog at runtime for authoring |
 | [`command_descriptions.c`](command_descriptions.c) / `.h` | Lookup facade for the generated right-click GL command help catalog. Authored source lives in [`command_descriptions.txt`](command_descriptions.txt); `glEnable`/`glDisable` select capability-specific entries by `args[0]` |

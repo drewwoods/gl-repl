@@ -160,7 +160,7 @@ int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
     if (snap->status_history.count <= 0)
         return 0;
     /* The modal prompt strips own the bottom band; no button while active. */
-    if (snap->rename_active || snap->file_prompt_active)
+    if (snap->rename_active || snap->file_prompt_active || snap->app_modal_active)
         return 0;
 
     ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
@@ -608,6 +608,12 @@ static void status_banner_render(const UiRenderSnapshot *snap,
 }
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
+    if (snap->app_modal_active) {
+        int n = (int)strlen(snap->app_modal_message);
+        draw_modal_strip(snap, snap->app_modal_message, n,
+                         (int)sizeof(snap->app_modal_message));
+        return;
+    }
     if (snap->rename_active) {
         char msg[REPL_STATUS_TEXT_MAX];
         int n = snprintf(msg, sizeof(msg),
@@ -679,7 +685,7 @@ static UiHit status_surface_hit_test(const UiRenderSnapshot *snap,
         return hit;
 
     ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-    if (snap->rename_active || snap->file_prompt_active) {
+    if (snap->rename_active || snap->file_prompt_active || snap->app_modal_active) {
         if (point_in_gl_rect(mx, my, win_h, sc_x, sc_y,
                              sc_w, STATUSBAR_H))
             return overlay_chrome_hit(mx, my, win_h, sc_x, sc_y);

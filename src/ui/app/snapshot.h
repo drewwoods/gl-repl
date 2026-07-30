@@ -174,6 +174,11 @@ typedef struct UiRenderSnapshot {
     char                        file_prompt_text[256];
     char                        file_prompt_error[192];
 
+    /* App-owned workspace/save/delete modal, fully formatted by the
+     * controller so this pure UI snapshot has no app-layer enum dependency. */
+    int                         app_modal_active;
+    char                        app_modal_message[512];
+
     /* F1 help overlay text content (controller-adapted from REPL help
      * text; the renderer is tabbed-overlay-shaped and feature-agnostic). */
     const struct UiOverlayContent *help_content;

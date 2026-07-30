@@ -22,7 +22,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | Option | Effect |
 |---|---|
 | *file*.c | Reload a previously saved session from a single file. |
-| *workspace*/ | Load every `*.c` under the directory as a separate scene. |
+| *workspace*/ | Load the ordered scenes named by the directory's required `.glr-workspace` manifest. Manifest-less directories are rejected. |
 | `-` | Read a saved session or REPL snippet from standard input. Input is buffered to an anonymous temporary file so the normal multi-pass importer is preserved. |
 | `-h`, `--help` | Print the full flag + environment reference and exit. |
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
@@ -634,8 +634,10 @@ CR/Enter rather than distinct app shortcuts.
 
 ```
 output.c        default save target (a standalone, compilable C file)
-<workspace>/    a directory of *.c scenes, round-tripped via @-headers
+<workspace>/    managed scenes plus the authoritative .glr-workspace manifest
 audio_state.ini persisted audio state (track, position, volume)
+./workspaces/   named workspace root for writable-directory development runs
+~/Library/Application Support/gl-repl/workspaces  packaged macOS workspace root
 ~/Library/Application Support/gl-repl/Music    per-user music folder (macOS)
 $XDG_DATA_HOME/gl-repl/music                   per-user music folder (Linux)
 ```

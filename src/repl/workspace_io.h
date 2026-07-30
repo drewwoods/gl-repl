@@ -12,12 +12,34 @@
 
 #include <stddef.h>
 
+#define WORKSPACE_IO_MANIFEST_FILE ".glr-workspace"
+#define WORKSPACE_IO_MAX_SCENES 8
+#define WORKSPACE_IO_NAME_MAX 64
+#define WORKSPACE_IO_FILE_MAX 96
+
+typedef struct {
+    int version;
+    char name[WORKSPACE_IO_NAME_MAX];
+    int scene_count;
+    char scene_files[WORKSPACE_IO_MAX_SCENES][WORKSPACE_IO_FILE_MAX];
+} WorkspaceManifest;
+
 /* Recursively create `dir` (mkdir -p semantics). Returns 1 on success or when
  * the directory already exists, 0 on failure or empty input. */
 int workspace_io_ensure_dir(const char *dir);
 
 /* 1 if `name` ends in ".c" / ".C". */
 int workspace_io_has_c_ext(const char *name);
+int workspace_io_workspace_name_valid(const char *name);
+int workspace_io_regular_file(const char *path);
+int workspace_io_manifest_exists(const char *dir);
+int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
+                               char *err, size_t err_sz);
+int workspace_io_manifest_write(const char *dir,
+                                const WorkspaceManifest *manifest,
+                                char *err, size_t err_sz);
+int workspace_io_path_join(const char *dir, const char *leaf,
+                           char *out, size_t out_sz);
 
 /* Scene display name from a file path: the basename with its extension
  * stripped, clamped to out_sz. */

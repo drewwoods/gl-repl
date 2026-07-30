@@ -226,7 +226,7 @@ extern const char  *g_footer_post_init[];
  * flow was moved out of hidden ui/glr state reads (implemented in step 7c of
  * feature/decouple-repl-from-gl-repl-alt.md).
  *
- * Callers that do not have a viewport on hand (LRU evict in
+ * Callers that do not have a viewport on hand (workspace persistence in
  * src/repl/scenes.c, headless tests, the standalone repl_demo which does
  * not export) may pass NULL. The export call sites then use
  * defensive defaults: render3d_w / render3d_h fall back to 800x600 in the
@@ -258,7 +258,7 @@ int repl_export_save_output(const char *filename, SourceTextView text,
  * ./output.c. This is the default single-file export path behind Ctrl+S when no
  * named scene-specific save target takes over. `layout` is the controller-built
  * ReplExportLayout passed through to the exporter as opaque integers. */
-void repl_save_default_output(const ReplExportLayout *layout);
+int repl_save_default_output(const ReplExportLayout *layout);
 
 /* Write the scene as a `.glr` source file — the authoring format built-in
  * examples ship in (see src/repl/export_glr.c), not a compilable C program.

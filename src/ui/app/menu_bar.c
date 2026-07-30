@@ -10,6 +10,7 @@
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "app/glr_audio.h"
+#include "app/glr_workspaces.h"
 #include "app/glr_config.h"
 #include "app/glr_tours.h"
 #include "keymap.h"
@@ -430,11 +431,15 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
         if (i == GLR_FILE_ITEM_LOAD_CLIPBOARD) return "Load Scene from Clipboard";
         if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
+        if (i == GLR_FILE_ITEM_DELETE_SCENE)  return "Delete Scene";
         if (i == GLR_FILE_ITEM_EXPORT_PLY)    return "Export .ply";
         if (i == GLR_FILE_ITEM_SPLIT_DECL)    return "Split Declaration";
+        if (i == GLR_FILE_ITEM_REVEAL_WORKSPACE) return "Reveal Workspace Folder";
         if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
+        if (i == GLR_FILE_ITEM_NEW_WORKSPACE) return "New Workspace...";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
-        if (i == GLR_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
+        if (i == GLR_FILE_ITEM_SAVE_WORKSPACE_AS) return "Save Workspace As...";
+        if (i == GLR_FILE_ITEM_OPEN_WORKSPACE) return "Open Workspace";
         if (i == GLR_FILE_ITEM_QUIT_SEP)      return "---";
         if (i == GLR_FILE_ITEM_QUIT)          return "Quit";
         return NULL;
@@ -511,6 +516,13 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     return NULL;
+}
+
+static int menu_item_enabled(int menu_id, int item_idx) {
+    if (menu_id == MENU_FILE &&
+        item_idx == GLR_FILE_ITEM_REVEAL_WORKSPACE)
+        return repl_workspace_is_managed();
+    return 1;
 }
 
 static const char *menu_item_shortcut(int menu_id, int i) {
@@ -989,9 +1001,40 @@ static const FlyoutProvider kConfigProvider = {
     .row_kind      = config_flyout_row_kind_fn,
 };
 
+static int file_flyout_row_count(int parent_row) {
+    return parent_row == GLR_FILE_ITEM_OPEN_WORKSPACE
+           ? glr_workspaces_count() + 1 : 0;
+}
+
+static const char *file_flyout_row_label(int parent_row, int ordinal) {
+    if (parent_row != GLR_FILE_ITEM_OPEN_WORKSPACE || ordinal < 0)
+        return NULL;
+    if (ordinal == glr_workspaces_count())
+        return "Other folder...";
+    return glr_workspaces_name(ordinal);
+}
+
+static int file_flyout_row_abs_index(int parent_row, int ordinal) {
+    return parent_row == GLR_FILE_ITEM_OPEN_WORKSPACE ? ordinal : -1;
+}
+
+static GlrConfigRowKind file_flyout_row_kind(int parent_row, int ordinal) {
+    (void)parent_row;
+    (void)ordinal;
+    return GLR_CFG_ROW_ITEM;
+}
+
+static const FlyoutProvider kFileProvider = {
+    .row_count = file_flyout_row_count,
+    .row_label = file_flyout_row_label,
+    .row_abs_index = file_flyout_row_abs_index,
+    .row_kind = file_flyout_row_kind,
+};
+
 /* Resolve menu_id to its FlyoutProvider, or NULL for menus without
  * submenus (File). */
 static const FlyoutProvider *flyout_provider_for(int menu_id) {
+    if (menu_id == MENU_FILE)      return &kFileProvider;
     if (menu_id == MENU_SCENE)     return &kSceneProvider;
     if (menu_id == MENU_TUTORIALS) return &kTutorialProvider;
     if (menu_id == MENU_CONFIG)    return &kConfigProvider;
@@ -1187,6 +1230,10 @@ const char *ui_menu_bar_menu_item_shortcut_for_test(int menu_id, int item_idx) {
     return menu_item_shortcut(menu_id, item_idx);
 }
 
+int ui_menu_bar_menu_item_enabled_for_test(int menu_id, int item_idx) {
+    return menu_item_enabled(menu_id, item_idx);
+}
+
 /* Classify a raw dropdown label as header / separator / item — the
  * one place the "### "-prefix and "---" conventions are decoded, so
  * the render paths and the hit-test agree (no more 3 hand-copied
@@ -1229,7 +1276,9 @@ static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     int row = dropdown_row_for_gl_y(dy, dh, ry);
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
-    if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM) return -1;
+    if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM ||
+        !menu_item_enabled(g_open_menu, row))
+        return -1;
     return row;
 }
 
@@ -1352,6 +1401,8 @@ static int target_open_row_by_label(const char *name) {
     for (int i = 0; i < n; i++) {
         const char *lbl = menu_item_label(g_open_menu, i);
         if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM)
+            continue;
+        if (!menu_item_enabled(g_open_menu, i))
             continue;
         if (target_label_matches(lbl, name))
             return i;
@@ -1696,6 +1747,9 @@ static float ui_fade_alpha(float anim_time, float open_time) {
  * is conveyed solely by the right-hand state-value column's colour. */
 static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                                  const UiRenderSnapshot *snap) {
+    if (menu_id == MENU_FILE)
+        return parent_row == GLR_FILE_ITEM_OPEN_WORKSPACE &&
+               ordinal == glr_workspaces_active_index();
     if (menu_id == MENU_SCENE) {
         int example_idx = submenu_row_abs_index(menu_id, parent_row,
                                                 ordinal);
@@ -2713,13 +2767,16 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         int is_active_scene   = (scene_hit >= 0 &&
                                  scene_hit == snap->user_scene_active_idx);
 
-        if (i == g_menu_item_hover || is_open_parent) {
+        int enabled = menu_item_enabled(menu_id, i);
+        if (enabled && (i == g_menu_item_hover || is_open_parent)) {
             ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha);
             glRectf((float)(dx + 1), (float)(ey - 2),
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
             ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
-        } else if (is_active_scene) {
+        } else if (enabled && is_active_scene) {
             ui_clr_a(UI_TOK_ACCENT, alpha);
+        } else if (!enabled) {
+            ui_clr_a(UI_TOK_TEXT_MUTED, 0.55f * alpha);
         } else {
             ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
         }

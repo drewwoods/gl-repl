@@ -98,8 +98,9 @@ static void run_menu_action_in_temp_dir(const char *label,
         }
         if (expect_workspace_dir) {
             ASSERT_INT("menu action wrote temp workspace dir",
-                       access(GLR_DEFAULT_WORKSPACE_DIR, F_OK), 0);
-            rmdir(GLR_DEFAULT_WORKSPACE_DIR);
+                       access(GLR_WORKSPACES_ROOT_DIR "/" GLR_DEFAULT_WORKSPACE_NAME,
+                              F_OK), 0);
+            rmdir(GLR_WORKSPACES_ROOT_DIR "/" GLR_DEFAULT_WORKSPACE_NAME);
         }
         repl_set_workspace_dir(workspace_dir);
         ASSERT_INT("restore cwd after menu action", chdir(cwd), 0);
@@ -311,11 +312,10 @@ static void test_menu_actions(void) {
                                 GLR_FILE_ITEM_SAVE_WORKSPACE,
                                 NULL,
                                 1);
-    run_menu_action_in_temp_dir("File Load Workspace",
-                                GLR_MENU_FILE,
-                                GLR_FILE_ITEM_LOAD_WORKSPACE,
-                                NULL,
-                                0);
+    ASSERT_INT("File Open Workspace parent is hover-only",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                             GLR_FILE_ITEM_OPEN_WORKSPACE),
+               0);
 
     /* Scene menu - tag rows are hover-only; examples load via submenu hits. */
     int tag_count = repl_example_visible_tag_count();
@@ -378,7 +378,7 @@ static void test_split_decl_menu_action(void) {
     ASSERT_STR("split line 1", editor_buffer_line(1), "  static float extent;");
 }
 
-/* Regression: the in-app Load Workspace action must land on a loaded
+/* Regression: the in-app Open Workspace action must land on a loaded
  * scene (active slot >= 0) AND rescue the pre-load document to the
  * recovery file. Before the fix, repl_load_workspace left the active
  * slot at -1 with the (now tabless) pre-load document still live — the
@@ -411,23 +411,22 @@ static void test_load_workspace_activates_scene(void) {
      * active scene — exactly the reported repro (fresh start, then Load
      * Workspace from inside the REPL). */
     glr_ctrl_reset_all();
+    repl_set_workspace_dir(NULL);
     editor_feed_line("glColor3f(0.9, 0.1, 0.1);");
     ASSERT_TRUE("loadws pre-load doc non-empty",
                 source_document_view().line_count > 0);
 
-    repl_set_workspace_dir("ws");
     unlink(QUIT_RECOVERY_FILE);  /* clean slate for the rescue check */
-    ASSERT_INT("Load Workspace action consumed",
-               glr_action_menu_item_activate(GLR_MENU_FILE,
-                                             GLR_FILE_ITEM_LOAD_WORKSPACE),
+    ASSERT_INT("Open Workspace action succeeds",
+               glr_action_open_workspace_path("ws"),
                1);
 
     /* The fix: a workspace tab is actually selected now (was -1 pre-fix). */
-    ASSERT_TRUE("Load Workspace lands on a scene",
+    ASSERT_TRUE("Open Workspace lands on a scene",
                 repl_active_user_scene() >= 0);
     /* The pre-load document was rescued to the recovery file (the menu
      * caller did not save recovery at all pre-fix). */
-    ASSERT_INT("Load Workspace wrote recovery file",
+    ASSERT_INT("Open Workspace wrote recovery file",
                access(QUIT_RECOVERY_FILE, F_OK), 0);
 
     unlink(QUIT_RECOVERY_FILE);

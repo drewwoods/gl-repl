@@ -181,7 +181,7 @@ void glr_ctrl_set_stencil_readback_supported_for_test(int supported);
 void glr_ctrl_request_quit(void);
 
 /* Write the live scene to the recovery file (config.h QUIT_RECOVERY_FILE).
- * Used by the quit safeguard and by Load Workspace before it discards the
+ * Used by the quit safeguard and by Open Workspace before it replaces the
  * current in-memory scene. Returns 1 on success, 0 on failure. */
 int glr_ctrl_save_recovery_file(void);
 

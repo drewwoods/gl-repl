@@ -104,6 +104,7 @@
 #include "ui/app/variable_panel_view.h"
 #include "app/glr_color_picker_bridge.h"
 #include "app/glr_ctrl_internal.h"
+#include "app/glr_modal.h"
 #include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -1972,6 +1973,42 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snprintf(snap->file_prompt_error, sizeof(snap->file_prompt_error), "%s",
              editor_inline_file_prompt_error());
 
+    snap->app_modal_active = glr_modal_active();
+    snap->app_modal_message[0] = '\0';
+    if (snap->app_modal_active) {
+        const char *text = glr_modal_text();
+        const char *error = glr_modal_error();
+        switch (glr_modal_kind()) {
+        case GLR_MODAL_WORKSPACE_NEW:
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "New workspace: %s_   %s%s[Enter] create   [Esc] cancel",
+                     text, error[0] ? error : "", error[0] ? "   " : "");
+            break;
+        case GLR_MODAL_WORKSPACE_SAVE_AS:
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "Save workspace as: %s_   %s%s[Enter] save   [Esc] cancel",
+                     text, error[0] ? error : "", error[0] ? "   " : "");
+            break;
+        case GLR_MODAL_WORKSPACE_OPEN_PATH:
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "Open workspace: %s_   %s%s[Enter] open   [Esc] cancel",
+                     text, error[0] ? error : "", error[0] ? "   " : "");
+            break;
+        case GLR_MODAL_SCENE_SAVE_AS:
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "Save scene as: %s_   %s%s[Enter] save   [Esc] cancel",
+                     text, error[0] ? error : "", error[0] ? "   " : "");
+            break;
+        case GLR_MODAL_CONFIRM_DELETE_SCENE:
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "%s   %s%s[Y] delete   [Esc] cancel", text,
+                     error[0] ? error : "", error[0] ? "   " : "");
+            break;
+        default:
+            break;
+        }
+    }
+
     snap->help_content = glr_ctrl_help_overlay_content();
     snap->editor_transformers = editor_state_transformers();
     snap->editor_highlights = editor_state_highlights();
@@ -3287,6 +3324,7 @@ void glr_ctrl_reset_all(void) {
      * file-load prompt. */
     editor_inline_rename_cancel();
     editor_inline_file_prompt_cancel();
+    glr_modal_cancel();
     /* Register the default editor completion provider. Editor input
      * dispatch calls editor_completion_* without knowing about
      * glr_completion; the registration here installs the

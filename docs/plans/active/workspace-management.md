@@ -1,457 +1,314 @@
-# Workspace management + fixing single-file exports in the packaged macOS app
+# Managed workspaces + reliable packaged-app saves
 
-## Context
+## Goal
 
-Running `gl-repl.app` from Finder, only Save/Load Workspace works, and it is clunky:
+Make the packaged macOS app's filesystem behavior predictable and make a
+workspace a safe, named collection of scenes rather than an implicit glob of a
+process working directory.
 
-1. **One hard-coded workspace.** `glr_paths_default_workspace_dir()`
-   (`src/app/glr_paths.c:111`) returns `./workspace` when the cwd is writable and
-   `~/Library/Application Support/gl-repl/workspace` otherwise. There is no way to
-   create a second workspace, pick between workspaces, or delete a scene from one
-   (no delete-scene function exists anywhere in the codebase — verified by grep).
-   Removing a scene's slot without unlinking its `.c` would be pointless anyway:
-   `repl_load_workspace()` re-imports every `*.c` in the directory.
+The finished behavior is:
 
-2. **Single-file exports silently write to an unwritable cwd.**
-   `format_scene_path()` (`src/repl/scenes.c:449`) returns a bare `output.<ext>`
-   whenever there is no active *named* user scene — i.e. for every example or
-   transient document — ignoring the workspace directory entirely. Finder launches
-   the app with cwd `/`, so `fopen` fails and nothing appears. Three further leaks
-   of the same bug:
-   - `repl_save_active_scene()` (`scenes.c:469`) shortcuts to
-     `repl_save_default_output()` → hard-coded `"output.c"` (`export.c:473`).
-   - `bind_app_workspace_for_scene_save_if_needed()` (`glr_actions.c:117`) returns
-     early when `repl_active_user_scene() < 0`, so transient docs never bind a
-     workspace at all.
-   - Ctrl+S (`glr_ctrl_router_handle_save_key`, `glr_ctrl_router.c:103`) never
-     calls that bind helper, so Ctrl+S and File → Save Scene already disagree.
-   - `glr_ctrl_save_recovery_file()` (`glr_ctrl_router.c:151`) writes
-     `QUIT_RECOVERY_FILE` = `"recovery.c"` relative to the cwd with **no fallback**,
-     so the quit safeguard is dead in a bundle.
+- packaged-app writes always land under the user's application-data directory;
+- development launches keep the existing writable-cwd `output.c`, `recovery.c`,
+  and relative scene-save contract;
+- Ctrl+S and File -> Save Scene use one action path;
+- users can create, save-as, open, reveal, and switch named workspaces;
+- managed workspaces have stable scene ordering and filenames;
+- rename/delete/save cannot resurrect stale scene files;
+- workspace switches and loads are transactional and never discard a second
+  in-memory scene merely because only the active document was recovered;
+- `.glr`, `.ply`, and recovery output never become phantom workspace scenes.
 
-Outcome: multiple named workspaces created and picked from the menu, scenes
-deletable, and every write landing in a directory that exists and is writable —
-with a Reveal in Finder action so the user can actually find the file.
+The current single-directory layout is unreleased, so there is no migration
+requirement for `Application Support/gl-repl/workspace`.
 
-Decisions taken: no back-compat for the current
-`Application Support/gl-repl/workspace` layout (unreleased); both **New Workspace**
-and **Save Workspace As**; delete removes slot **and** file behind a confirm;
-exports fall back to the bound/default workspace plus Reveal in Finder.
+## Design decisions
 
-### The constraint that shapes Parts 3 and 6
+### Managed workspace manifest
 
-`repl_load_workspace()` imports **every** `*.c` in the directory
-(`scenes.c:629-638`, filtered only by `workspace_io_has_c_ext`). So any app-owned
-`.c` the plan writes *into* a workspace comes back as a phantom scene on the next
-load, eating one of the 8 `MAX_USER_SCENES` slots. Naively routing `output.c` and
-`recovery.c` into the bound workspace would mean every quit-and-reload grows the
-workspace by one junk scene. Two rules follow, and they are load-bearing:
+A managed workspace contains a `.glr-workspace` manifest. It is a compact,
+line-oriented format so the C99 implementation needs no JSON dependency:
 
-- **`recovery.c` is app state, not workspace state** → it goes in the workspaces
-  *root*, never inside a workspace.
-- **`output.c` is designed out**, not relocated: saving a transient/example
-  document prompts for a scene name and promotes it to a real named slot. Only
-  `output.glr` / `output.ply` keep the generic name, and the loader ignores both
-  (`workspace_io_has_c_ext` accepts `.c` only).
+```text
+version=1
+name=Demo
+scene=lantern.c
+scene=torus.c
+```
 
-### Dev (non-bundle) runs must stay byte-identical to today
+The manifest is the authoritative ordered set of app-owned scene files.
+Unlisted `.c` files are not imported, pruned, renamed, or deleted. This is the
+commit record that prevents stale files and unrelated C sources from becoming
+phantom scene tabs.
 
-Every path change here is gated on `glr_paths_cwd_supports_relative_saves()`
-(`access(".", W_OK)`, `glr_paths.c:107`) — the same predicate the code already uses.
-When the cwd is writable and no workspace is bound, **nothing moves**:
+Scene filenames are stable after first assignment. A scene display rename does
+not silently recompute a slug or rename the file. The in-memory scene record
+retains its persisted filename; only an unpersisted scene, or a collision with
+an unrelated file, receives a new collision-free filename.
 
-| Save Scene, dev launch, no workspace bound | Target |
-|---|---|
-| active named user scene | `<slug>.c` in the **cwd** (unchanged) |
-| example / transient document | `./output.c` (unchanged — see below) |
-| `.glr` / `.ply` on a transient | `./output.{glr,ply}` (unchanged) |
-| quit recovery | `./recovery.c` (unchanged) |
+A folder without `.glr-workspace` is not a workspace. **Other folder...** opens
+another managed workspace outside the app-owned root and rejects manifest-less
+directories. Standalone `.c` files remain available through Load Scene. There
+is deliberately no compatibility path for the old implicit "every `*.c`"
+directory format.
 
-Note this is the **process cwd**, not the binary's directory: `cd /tmp &&
-~/src/.../gl-repl` already writes into `/tmp` today, and still will.
+### Eight tabs are not the workspace database
 
-`GLR_MODAL_SCENE_SAVE_AS` therefore fires **only when the cwd is not writable**,
-i.e. exactly where `output.c` is broken today. This is not the Ctrl+S-vs-menu drift
-this plan removes elsewhere: both entry points go through one
-`glr_action_save_active_scene()` that makes one decision from one predicate.
-The reason it cannot be unconditional is concrete —
-`scripts/docs-assets.sh:1357-1371` (`export_c_source`) drives `GLR_TYPE_KEYS=Ctrl+S`
-on the grass example inside a temp cwd and hard-requires `output.c`; an
-unconditional prompt would leave that pipeline sitting in a modal strip writing
-nothing, and `docs/USER_GUIDE.md`'s "Ctrl+S emits a real program" media is
-generated from it. `scripts/check/check-no-test-default-output.sh` also encodes
-`output.c` as the default-save contract.
+`MAX_USER_SCENES` remains the open-tab capacity. The manifest may list more
+scenes in a later scene-browser extension, but this change must not silently
+load or discard entries beyond the current capacity. Workspace load returns an
+explicit capacity error and rolls back. The initial implementation therefore
+rejects managed manifests with more than `MAX_USER_SCENES` entries.
 
-Consequences for `glr_paths_resolve_output_path()` and `glr_paths_app_state_path()`
-(Part 1): the fallback chain is *bound workspace* → *`leaf` verbatim when the cwd is
-writable* → *default workspace*. The middle rung is what keeps dev unchanged; drop
-it and `recovery.c` silently relocates to `./workspaces/recovery.c` for every dev
-run.
+### Transaction boundaries
 
-One genuinely new dev-visible artifact: `./workspaces/` appears if a dev user
-creates a workspace from the new menu. `.gitignore:23` covers `workspace/` only —
-add `workspaces/`.
+Workspace open is all-or-nothing:
 
-### One thing deliberately *not* done: binding a workspace at boot
+1. flush the live active scene into its in-memory slot;
+2. capture the complete scene catalog, live document, binding, and presentation
+   state needed by the existing scene snapshot APIs;
+3. parse the manifest and every referenced scene into a replacement catalog;
+4. on any missing file, parse failure, allocation failure, or capacity overflow,
+   restore the old catalog and live document and keep the old workspace bound;
+5. only after full success publish the new binding, activate the first scene (or
+   create a fresh named scene for a genuinely empty managed workspace), clear
+   undo, and clear the camera default.
 
-Eagerly binding a default workspace at startup would make Parts 4-6 shorter, but
-`emit_workspace_dir()` (`src/repl/export_setup.c:123-131`) writes
-`/* @workspace-dir <dir> */` into every export whenever `repl_workspace_dir()` is
-non-empty. Binding at boot would therefore stamp the user's absolute home path
-into every saved scene and add a header line to all the UI goldens
-(`tests/testdata/repl_examples_ui/*.golden.txt` — verified: none contains
-`@workspace-dir` today). The workspace stays unbound until the user acts.
+Workspace save stages each output as a sibling temporary file. The manifest is
+written and renamed last, so the old manifest continues to describe a complete
+old workspace until every new scene file is ready. Only files named by the
+previous manifest may be pruned after the new manifest commits.
 
----
+Switching away from a bound managed workspace first saves all in-memory scenes.
+If that save fails, the switch is cancelled. An unbound collection is not
+silently overwritten; New/Open first writes a complete recovery workspace under
+the app-state root, rather than recovering only the live scene.
 
-## Part 0 — Housekeeping
+### Path policy
 
-This file was `workspace-managment.md`; renamed to `workspace-management.md`
-(already done via `git mv`). Add the row to `docs/plans/active/README.md`'s table,
-which currently lists only `state-ownership-finalize.md`.
+App path decisions live in `src/app/glr_paths.{c,h}`:
 
-## Part 1 — Path policy: a workspaces root
+- workspaces root: `./workspaces` for the existing writable-cwd development
+  contract, otherwise `<user-data>/workspaces`;
+- default managed workspace: `<root>/default`;
+- app state: relative leaf in writable-cwd development runs, otherwise
+  `<user-data>/state/<leaf>`;
+- unbound `.glr` / `.ply`: relative leaf in writable-cwd development runs,
+  otherwise `<default-workspace>/<leaf>`.
 
-`src/app/glr_paths.{c,h}`, `config.h`
+The path APIs distinguish a **workspace name** from an **arbitrary folder
+path**. New Workspace and Save Workspace As accept names only and always create
+`<root>/<slug>`. Other Folder accepts a path. A slash is never an implicit mode
+switch in a name field.
 
-- `config.h`: replace `GLR_DEFAULT_WORKSPACE_DIR "./workspace"` with
-  `GLR_WORKSPACES_ROOT_DIR "./workspaces"` + `GLR_DEFAULT_WORKSPACE_NAME "default"`.
-  Only 4 non-test references exist (`glr_paths.c:115,118`,
-  `tests/test_glr_actions.c:101`), so this is a contained rename.
-- New API, following the existing `user_data_subdir()` shape:
-  - `int glr_paths_workspaces_root(char *buf, size_t buflen)` — `./workspaces` when
-    `glr_paths_cwd_supports_relative_saves()`, else `<user-data>/workspaces`.
-  - `const char *glr_paths_default_workspace_dir(void)` — now `<root>/default`
-    (same static-buffer contract as today).
-  - `int glr_paths_workspace_dir_for_name(const char *name, char *buf, size_t)` —
-    `<root>/<slug>`; a `name` containing `/` is taken as a literal path so a typed
-    path still works. Slug via the existing `workspace_io_filename_slug()`
-    (`src/repl/workspace_io.c:78`).
-  - `int glr_paths_resolve_output_path(const char *leaf, char *buf, size_t)` —
-    `<bound workspace>/<leaf>`, else `leaf` verbatim when the cwd is writable
-    (preserves dev behavior — see Context), else `<default workspace>/<leaf>`.
-    Used for `output.glr` / `output.ply`.
-  - `int glr_paths_app_state_path(const char *leaf, char *buf, size_t)` — `leaf`
-    verbatim when the cwd is writable, else `<workspaces root>/<leaf>`. **Never**
-    inside a workspace, so `repl_load_workspace` cannot slurp it. Used for
-    `recovery.c`.
-  - `int glr_paths_same_dir(const char *a, const char *b)` — `realpath()` both
-    sides (falling back to string compare when a path does not exist yet) so
-    `./workspaces/x`, `workspaces/x` and the absolute form all match. Needed by
-    `glr_workspaces_active_index()`; without it the active-workspace highlight
-    silently never matches in dev-cwd runs.
-- Reuse `glr_paths_ensure_dir(path, &created)` (`glr_paths.c:31`) — do **not** add
-  a third mkdir-p (`workspace_io_ensure_dir` at `workspace_io.c:33` is already a
-  near-duplicate of it; leave that alone, out of scope).
+`glr_paths_same_dir()` canonicalizes existing paths with `realpath()` and uses a
+lexically normalized absolute fallback for paths that do not exist yet.
 
-## Part 2 — Workspace enumeration (new module)
+No workspace is bound merely by booting the app or opening/cancelling a prompt.
+That avoids stamping an absolute `@workspace-dir` into unrelated exports and
+keeps current UI goldens unchanged.
 
-`src/app/glr_workspaces.{c,h}` — modelled directly on the audio playlist scanner
-(`scan_dir_into()` at `src/app/glr_audio.c:101`: `opendir`/`readdir`, skip
-dotfiles, `qsort` for stable order, fixed-cap arrays). Filter with a `stat` +
-`S_ISDIR` helper (`path_is_dir` at `glr_paths.c:15` — export it or duplicate the
-three lines; `d_type` is not portable).
+## Implementation
+
+### 1. Workspace filesystem model
+
+Extend `src/repl/workspace_io.{c,h}` with:
+
+- manifest constants and `WorkspaceManifest` storage capped at
+  `MAX_USER_SCENES` for this implementation;
+- strict workspace-name validation before slug fallback (`"!!!"` is invalid;
+  `workspace_io_filename_slug()` currently falls back to `"s"`);
+- manifest read/write-to-temp/commit helpers;
+- safe path join and stable filename allocation;
+- regular-file checks for manifest entries;
+- strict rejection of manifest-less folders.
+
+Extend each `UserScene` with its persisted `.c` filename. Imported managed
+scenes receive the manifest filename; new/promoted scenes allocate one stable
+filename against the catalog and destination. Save Workspace As retains those
+stable identities when possible and resolves any unrelated-file collision
+without publishing the new assignment unless the save succeeds.
+
+Change workspace APIs to report structured outcomes rather than overloading an
+integer count:
 
 ```c
-void        glr_workspaces_refresh(void);            /* rescan <root> */
+typedef struct {
+    int ok;
+    int managed;
+    int files_seen;
+    int scenes_loaded;
+    int files_failed;
+    int capacity_exceeded;
+} ReplWorkspaceLoadResult;
+```
+
+Update startup and tests to use the structured managed-workspace result; do not
+retain an old-format workspace compatibility surface.
+
+`repl_save_active_scene()` becomes an `int` result. Actions close Save-As
+prompts only after confirmed success. Reveal targets the bound managed
+workspace and is disabled while no managed workspace is loaded.
+
+### 2. Complete recovery and safe switching
+
+Retain `recovery.c` for quit compatibility, but add an app-owned recovery
+workspace directory for destructive workspace switches. It contains every
+occupied scene plus a manifest and is never inside a user workspace.
+
+`glr_action_open_workspace_dir()` owns the switch choreography:
+
+- save the current managed workspace first;
+- otherwise save a complete recovery workspace;
+- transactionally load the target;
+- mutate camera/undo/menu state only after load succeeds;
+- create a fresh named scene only when the load result explicitly says the
+  managed workspace is valid and empty.
+
+### 3. Workspace catalog and paths
+
+Add `src/app/glr_workspaces.{c,h}`:
+
+```c
+void        glr_workspaces_refresh(void);
 int         glr_workspaces_count(void);
-const char *glr_workspaces_name(int idx);            /* display name */
-const char *glr_workspaces_path(int idx);            /* full path */
-int         glr_workspaces_active_index(void);       /* glr_paths_same_dir vs repl_workspace_dir(), else -1 */
-int         glr_workspaces_create(const char *name, char *out_path, size_t sz,
+const char *glr_workspaces_name(int idx);
+const char *glr_workspaces_path(int idx);
+int         glr_workspaces_active_index(void);
+int         glr_workspaces_create(const char *name,
+                                  char *out_path, size_t out_sz,
                                   char *err, size_t err_sz);
 ```
 
-Caps mirror audio (`GLR_WORKSPACES_MAX 64`, `GLR_PATH_MAX` per entry). Refresh is
-explicit — never per-frame, because `menu_item_count()` runs every frame while the
-dropdown is open. Call it from: boot (once, alongside the workspaces-root
-`ensure_dir` + `created` hint, same pattern as `glr_audio.c:167-173`),
-`route_menu_button_hit()` (`glr_ctrl_router.c:1503`) when the opened menu is
-`GLR_MENU_FILE`, and after every create/save-as/load/delete.
+Only directories containing a valid `.glr-workspace` are listed as managed
+workspaces. Enumeration is explicit and sorted; refresh on File-menu open and
+after create/save-as/open/delete.
 
-`glr_workspaces_create()` is the one place that must not be permissive —
-`glr_paths_ensure_dir` treats `EEXIST` as success, and `repl_save_workspace()`
-never deletes stale `.c` files, so a silent bind onto an existing directory would
-merge that directory's orphan scenes into the new layout. Two rejections, each
-reported in-strip so the prompt stays open (see Part 3):
+Creation uses an exclusive leaf `mkdir`, never permissive mkdir-p onto an
+existing destination. Empty, punctuation-only, path-containing, and colliding
+names keep the prompt open with an inline error.
 
-| Input | Result |
-|---|---|
-| `demo` when `<root>/demo` exists | `"Workspace 'demo' already exists"` |
-| name whose slug is empty (`"!!!"`, `"   "`) | `"Workspace name needs a letter or digit"` |
+### 4. App modal
 
-## Part 3 — App-layer modal (name prompts + confirm)
+Add `src/app/glr_modal.{c,h}` with kinds for:
 
-`src/app/glr_modal.{c,h}` — one module, not four more copies of the bespoke
-inline-modal pattern. It lives in `src/app/` rather than `src/editor/` because its
-commits call `glr_paths_*` / `glr_workspaces_*`, and `src/editor/` must not depend
-on the app layer.
+- New Workspace
+- Save Workspace As
+- Open Other Folder
+- Save Scene As
+- Confirm Delete Scene
 
-Shape copied from `src/editor/inline_file_prompt.c` (statics + buffer + error
-string + `_active/_begin/_handle_key/_handle_special/_cancel/_buffer`):
+The modal module owns prompt state, filtering, rendering data, and key capture.
+Filesystem/scene mutations remain in `glr_actions`; modal commit delegates to an
+action callback so the modal is not a second business-action controller.
 
-```c
-typedef enum { GLR_MODAL_NONE = 0, GLR_MODAL_WORKSPACE_NEW,
-               GLR_MODAL_WORKSPACE_SAVE_AS, GLR_MODAL_WORKSPACE_LOAD_PATH,
-               GLR_MODAL_SCENE_SAVE_AS, GLR_MODAL_CONFIRM_DELETE_SCENE } GlrModalKind;
+It is mutually exclusive with the two existing editor inline prompts, routes
+before them for keyboard/special input, cancels on outside click/reset, and
+surfaces commit errors inside the strip.
+
+Save Scene As is used only for an example/post-tutorial transient when relative
+saves are unavailable. It reserves/promotes the scene, applies the requested
+name, saves it, and closes only after success. Cancelling the prompt leaves the
+workspace binding unchanged.
+
+### 5. Safe delete and rename
+
+Delete is available only for an active scene in a bound managed workspace.
+Confirmation names the persisted file. Commit order is:
+
+1. snapshot the complete in-memory catalog and remove the scene from the
+   working catalog;
+2. stage and commit a manifest without the scene;
+3. remove the scene file (`ENOENT` is success; other failures restore the old
+   manifest and the catalog snapshot);
+4. activate another slot, or create a fresh named scene if none remains;
+5. clear undo and refresh the workspace list.
+
+An unbound scene uses **Remove Tab**, not a misleading destructive
+Delete-on-disk action.
+
+Rename updates the display name immediately in memory. On the next successful
+managed save, its stable filename remains unchanged; a later explicit
+"rename file with scene" feature can perform the staged manifest transaction.
+This deliberately favors identity and safety over making the filename mirror
+every display-name edit.
+
+### 6. File menu and Reveal
+
+File menu layout:
+
+```text
+New Scene / Save Scene / Save Scene as .glr / Load Scene /
+Load Scene from Clipboard / Rename Scene / Delete Scene / Export .ply /
+Split Declaration / Reveal Workspace Folder / --- /
+New Workspace... / Save Workspace / Save Workspace As... /
+Open Workspace > / --- / Quit
 ```
 
-- Text kinds: char filter = `prompt_char_ok`'s policy from
-  `inline_file_prompt.c:88` (allow `.` and `/`, reject quotes/shell metachars) for
-  the workspace kinds; `GLR_MODAL_SCENE_SAVE_AS` uses `rename_char_ok`'s stricter
-  policy (`inline_rename.c:64`, rejects `/ \ :`) since the name becomes a scene
-  slug. Enter commits, Esc cancels, a failed commit keeps the strip open with an
-  in-strip error (`g_prompt_err` pattern) — the strip occludes the status bar, so
-  `repl_set_status` alone would be invisible.
-- `GLR_MODAL_CONFIRM_DELETE_SCENE`: no buffer; `Y`/`y` commits, everything else
-  except Esc is swallowed. The composed question ("Delete scene 'torus test' and
-  torus_test.c?") is stored in the buffer field at `_begin` time; `panels.c`
-  appends the key hints.
+File receives a flyout provider for Open Workspace. It lists managed workspaces
+plus **Other folder...**, highlights the active managed workspace, and handles
+File submenu routing before the existing example fallthrough.
 
-**`GLR_MODAL_SCENE_SAVE_AS` is what kills `output.c` in the bundle.** Save Scene on
-a transient/example document — *when the cwd is not writable*, see Context — prompts
-for a name, then promotes the document to a real named slot and saves
-`<workspace>/<slug>.c`. That is the same transition
-`repl_promote_transient_if_needed()` (`scenes.c:1061`) already performs on edit, so
-reuse its slot-reservation path rather than hand-rolling one, then
-`repl_user_scene_rename(slot, typed_name)` + `glr_action_save_active_scene()`.
-Errors to surface in-strip: no free slot (`"All scene slots full — delete or save
-a scene first"`) and duplicate name (`repl_user_scene_rename` already
-de-duplicates via `derive_unique_scene_name`, so report the name it actually got).
+Reveal is deterministic: it reveals the bound managed workspace directory and
+is greyed out/non-interactive when none is loaded. It does not track a mutable
+"last output" whose meaning changes by action. macOS uses `posix_spawn()` with
+`/usr/bin/open` and waits/reaps; other native platforms report that the action
+is unavailable.
 
-**Mutual exclusion.** `glr_modal_begin_*` cancels both editor inline modals
-(`editor_inline_rename_cancel`, `editor_inline_file_prompt_cancel`). The reverse
-direction cannot live in `src/editor/`, so add `glr_modal_cancel()` at the three
-app-layer sites that start those modals: the Rename Scene and Load Scene File-menu
-cases (`glr_actions.c:1405,1416`), the scene-tab double-click rename
-(`glr_ctrl_router.c:1606`), and the existing click-outside cancel
-(`glr_ctrl_router.c:1738-1741`). Also cancel in `glr_ctrl_reset_all`
-(next to `glr_ctrl.c:3288-3289`).
+### 7. Capacity behavior
 
-**Key routing.** Add `glr_modal_handle_key` / `_handle_special` at the *head* of
-the fixed sandwich in `keyboard_dispatch()` (`glr_ctrl_router.c:2012`) and
-`special_dispatch()` (`:2074`), before the two existing modal captures.
-
-**Render.** Three new snapshot fields next to the existing modal ones
-(`src/ui/app/snapshot.h:158-175`): `modal_kind`, `modal_text[256]`,
-`modal_error[192]`; filled beside `glr_ctrl.c:1965-1973`. New branch in
-`ui_panels_render_scene_status()` (`src/ui/app/panels.c:610`) reusing
-`draw_modal_strip()` (`panels.c:98`) and switching on `modal_kind` for the
-label/verb, e.g. `"New workspace: %s_   [Enter] create   [Esc] cancel"`,
-`"Save scene as: %s_   [Enter] save   [Esc] cancel"`,
-`"%s   [Y] delete   [Esc] cancel"`. Also add the kind to the two "a modal owns the
-bottom band" guards at `panels.c:163` and `panels.c:682-687`.
-
-## Part 4 — Delete scene
-
-- `src/repl/scenes.c`: refactor `format_scene_path()` to take an explicit slot
-  (`format_scene_path_for_slot`), keeping `repl_active_scene_export_path()` as a
-  thin wrapper so the "one source of truth for export naming" comment at
-  `scenes.c:442-448` stays true. Export
-  `const char *repl_user_scene_file_path(int slot, const char *ext)` so the caller
-  can resolve the filename *before* the slot is freed.
-- New `int repl_user_scene_delete(int slot)`: clear `g_user_scenes[slot].used` +
-  `scene_cfg_clear(slot)` (mirroring `evict_scene_to_workspace`'s teardown at
-  `scenes.c:989-990`), and if it was the active slot leave
-  `g_active_user_scene = -1` (the caller re-lands).
-- New `glr_action_delete_active_scene()` in `glr_actions.c`: guard
-  `repl_active_user_scene() < 0` → `repl_set_status_error("No active scene to
-  delete")`; else `glr_modal_begin_confirm_delete_scene(slot)`. The confirm commit:
-  1. **Only unlink when a workspace is actually bound.** With no bound workspace
-     the slug resolves to a cwd-relative path, and unlinking in an arbitrary cwd is
-     exactly the class of bug this plan exists to fix. Unbound → drop the slot only
-     and say so (`"Removed scene <name> (no workspace bound — nothing deleted on
-     disk)"`).
-  2. Resolve the path, `repl_user_scene_delete(slot)`, then `unlink()` and **check
-     the result** — report `"Deleted <name> (<path>)"` on success,
-     `"Removed <name> — could not delete <path>: <strerror(errno)>"` on failure
-     (`ENOENT` reported as "no file on disk", not an error).
-  3. Delete only the `.c`. `.glr` / `.ply` are user exports, not workspace state.
-  4. `repl_scenes_activate_first_loaded_slot()` (`scenes.c:661`) +
-     `editor_undo_note_wholesale_replacement()` — mandatory: a wholesale document
-     replacement must clear the undo ring or Ctrl+Z restores the deleted scene into
-     whatever is now live.
-  5. `glr_workspaces_refresh()`.
-- No keymap binding — menu-only, like Export .ply.
-
-## Part 5 — File menu rows + a File flyout
-
-`src/app/glr_actions.h` (enum), `src/app/glr_actions.c` (dispatch),
-`src/ui/app/menu_bar.c` (labels + provider), `src/app/glr_ctrl_router.c` (routing)
-
-New layout (three new rows + one reordered separator):
-
-```
-New Scene / Save Scene (Ctrl+S) / Save Scene as .glr / Load Scene /
-Load Scene from Clipboard / Rename Scene / Delete Scene* / Export .ply /
-Split Declaration (Ctrl+Shift+Q) / Reveal in Finder* / --- /
-New Workspace...* / Save Workspace / Save Workspace As...* /
-Load Workspace > / --- / Quit (Ctrl+Q)          (* = new)
-```
-
-- Labels go in the `menu_item_label()` File table (`menu_bar.c:427-440`).
-- **File gets its first flyout.** Add `kFileProvider` + a
-  `flyout_provider_for(MENU_FILE)` branch (`menu_bar.c:994`). `row_count` returns
-  `glr_workspaces_count() + 1` only for `parent_row == GLR_FILE_ITEM_LOAD_WORKSPACE`
-  (0 otherwise); the trailing row is `"Other folder…"` → the
-  `GLR_MODAL_WORKSPACE_LOAD_PATH` prompt, so a workspace outside the root is still
-  reachable. `menu_row_has_submenu()` (`:1068`) then grows the `>` affordance and
-  hover-open for free, and long lists already scroll
-  (`ui_menu_bar_handle_wheel_scroll`, `:1597`).
-- `submenu_row_is_active()` (`:1697`): add a `MENU_FILE` case →
-  `ordinal == glr_workspaces_active_index()` so the bound workspace is tinted.
-- **`route_submenu_item_hit()` (`glr_ctrl_router.c:1547`) needs a `GLR_MENU_FILE`
-  branch placed before the final fallthrough** — that fallthrough is
-  `glr_scene_load_example(item_idx)`, so a missing branch silently loads examples.
-- The `Load Workspace` parent row becomes **inert on click** (return 0, hover-open
-  only), matching every other parent/tag row in the engine; the bound workspace is
-  reachable as the highlighted flyout entry.
-- Factor the existing `GLR_FILE_ITEM_LOAD_WORKSPACE` body
-  (`glr_actions.c:1433-1451` — recovery save, camera clear, `repl_load_workspace`,
-  undo clear, `repl_scenes_activate_first_loaded_slot`) into
-  `glr_action_load_workspace_dir(const char *dir)`, then **route New Workspace
-  through it too**: `glr_workspaces_create()` + `glr_action_load_workspace_dir()`.
-  Loading a freshly created empty directory loads zero scenes, so New Workspace
-  inherits the recovery save, camera clear and undo clear for free instead of
-  discarding the current document with no safety net (the flaw in a
-  `repl_scenes_reset()`-based implementation). One addition needed: when
-  `repl_load_workspace` returns 0 the pre-load document stays live and tabless, so
-  follow up with `repl_scenes_create_empty_user_scene()` to land the user on a
-  fresh named slot.
-- `Save Workspace As...` = `glr_workspaces_create()` + bind +
-  `repl_save_workspace(dir, &layout)` (reuses `scenes.c:376` unchanged; it already
-  binds the dir and restores the previous one on failure).
-
-## Part 6 — Make every write land somewhere writable
-
-- `format_scene_path_for_slot()` (`scenes.c:449`): the no-named-scene arm becomes
-  `<workspace_dir>/output.<ext>` instead of bare `output.<ext>`. **This is the fix
-  for the missing `.glr` / `.ply`.** For `.c`, Part 3's
-  `GLR_MODAL_SCENE_SAVE_AS` means this arm is no longer reached from Save Scene at
-  all — it survives only as the fallback for `repl_save_default_output()` and its
-  tests.
-- `repl_save_active_scene()` (`scenes.c:464`): unchanged for named slots and for the
-  writable-cwd transient case (still `repl_save_default_output()` → `./output.c`).
-  The app-layer Save-As prompt intercepts *before* it only when the cwd is
-  unwritable, so `repl_save_default_output` keeps its contract and
-  `scripts/check/check-no-test-default-output.sh` keeps passing. Update the
-  `scenes.h:118-126` doc comment to name the new interception point.
-- `bind_app_workspace_for_scene_save_if_needed()` (`glr_actions.c:117`): drop the
-  `repl_active_user_scene() < 0` early return so a transient doc about to be
-  promoted binds the default workspace.
-- Kill the Ctrl+S / menu drift: extract `glr_action_save_active_scene()` (bind +
-  transient→Save-As prompt + `glr_ctrl_fill_export_layout` +
-  `repl_save_active_scene`) and call it from both `GLR_FILE_ITEM_SAVE_SCENE` and
-  `glr_ctrl_router_handle_save_key()`.
-- `glr_ctrl_save_recovery_file()` (`glr_ctrl_router.c:151`): resolve
-  `QUIT_RECOVERY_FILE` through **`glr_paths_app_state_path()`** — `./recovery.c` in
-  a dev run, the workspaces root in a bundle, never the bound workspace (so
-  `repl_load_workspace` can never slurp it as a scene).
-  Print the resolved path in the quit hint (`glr_ctrl_router.c:160`) and
-  update the block comment at `:132-139`: the workspaces root satisfies its "must
-  be findable, must not be /tmp" intent while staying out of the import glob.
-- **Auto-promotion no longer dead-ends.** `reserve_slot_for_promotion()`
-  (`scenes.c:1014-1019`) returns -1 when every slot is full *and* no workspace is
-  bound, so editing a transient with 8 scenes open just refuses. `src/repl/` cannot
-  call `glr_paths_*`, and binding at boot is ruled out (see Context), so add a
-  `const char *(*default_workspace_dir)(void)` hook to `ReplHostEffects`
-  (`src/repl/host_effects.h:38`) installed by the controller; the reservation binds
-  it via `repl_set_workspace_dir()` instead of failing. NULL hook = today's
-  behavior, so pure REPL tests and `repl_demo` are unaffected.
-- **Reveal in Finder**: `static char g_last_output_path[GLR_PATH_MAX]` in
-  `glr_actions.c` + `glr_action_note_output_path()`, set by Save Scene, Save .glr,
-  Export .ply, Save Workspace (the dir) and the workspace create paths; the menu
-  item falls back to the bound/default workspace dir when nothing has been written
-  yet. Implement with `posix_spawn("/usr/bin/open", {"open","-R",path})` +
-  `waitpid` — **not** `popen` (the default path contains a space in
-  `Application Support`, so shell quoting is a live breakage/injection hazard) and
-  **not** bare `fork`+`execv` without a reap (one zombie per reveal). `open -R`
-  returns immediately, so the blocking wait is negligible. Non-Apple builds report
-  `"Reveal in Finder is macOS-only"`, mirroring the clipboard item's `#else` at
-  `glr_actions.c:223-228`. (The File menu is already hidden under Emscripten —
-  `menu_visible()`, `menu_bar.c:53`.)
-
----
+Implicit LRU eviction is removed. With a manifest capped at eight scenes,
+evicting a tab to disk would either create an inaccessible ninth manifest entry
+or later prune the evicted scene. New/import/promotion operations therefore
+fail without mutation when all eight tabs are occupied and tell the user to
+delete a scene first. A future scene browser can raise the manifest capacity
+and reintroduce close/reopen semantics explicitly.
 
 ## Verification
 
-Automated:
-- `make test` — plus the existing tests that hard-code File-menu indices, labels
-  and workspace paths and **will** fail until updated:
-  `tests/test_ui_menu_bar.c` (`:191`, `:1307`), `tests/test_glr_actions.c`
-  (`:73-105`, `:305-348`), `tests/test_scene_file_menu.c` (whole file),
-  `tests/test_repl_core_extra.c:1102-1360` (inline-modal flows),
-  `tests/test_ui_scene_tabs.c`, `tests/test_repl_state.c:439-500`.
-- Extend `test_app_save_falls_back_to_user_workspace()`
-  (`tests/test_scene_file_menu.c:317-406` — sets `HOME` to a temp dir and
-  `chdir`s into a `0555` dir) to assert that with a **transient/example** document
-  Save Scene opens the Save-As prompt and lands `<workspace>/<slug>.c`, Save .glr
-  and Export .ply land `<workspace>/output.{glr,ply}`, and Ctrl+S and the menu path
-  agree.
-- **Pollution regression test** (the one that would have caught the original
-  design flaw): create a workspace, save a scene, write a quit-recovery copy, save
-  `.glr` and `.ply`, then `repl_load_workspace()` the same dir and assert the
-  loaded scene count is exactly 1 — no `output` and no `recovery` phantom slot.
-- **Dev-parity test**: in a `mkdtemp` + `chdir` **writable** cwd with no workspace
-  bound, assert Ctrl+S on a transient still writes `./output.c` with no modal open,
-  a named scene still writes `./<slug>.c`, and recovery still writes `./recovery.c`
-  — i.e. the packaged-app fix did not move anything for dev runs. Extend the
-  existing Ctrl+S integration test in `tests/test_repl_editor.c`, which already
-  owns the sanctioned mkdtemp+chdir redirect
-  (`scripts/check/check-no-test-default-output.sh` names it as the sole exception).
-- `bash scripts/docs-assets.sh` (or at minimum its `export_c_source` step) must
-  still produce `output.c` — it is the only consumer that depends on the
-  writable-cwd `output.c` contract, and `docs/USER_GUIDE.md`'s export stills are
-  generated from it.
-- New `tests/test_glr_workspaces.c`: create two workspaces under a temp `HOME`,
-  assert `glr_workspaces_count/name/path` sorted and `active_index` tracking
-  (including a dev-cwd relative-vs-absolute case, which is what
-  `glr_paths_same_dir` exists for); create-collision and empty-slug rejections;
-  New Workspace writes a recovery copy before discarding and lands on a fresh slot;
-  Save Workspace As writes N files; delete-scene unlinks the `.c`, reports
-  `unlink` failure, refuses to unlink when unbound, and the scene does not come
-  back after a reload.
-- New modal key-flow tests (begin → type → Enter → dir exists + bound; Esc;
-  empty-name error keeps the strip open; confirm `Y` vs Esc; Save-As on a transient
-  produces a named slot), and a File-flyout test (`row_count`/`row_label`/
-  `row_abs_index` + `route_submenu_item_hit` for `GLR_MENU_FILE`).
-- Auto-promotion: with 8 slots full, no workspace bound and the new host hook
-  installed, an edit to a transient promotes instead of refusing.
-- `make check-state-ownership`, `make check-c99`, `make test-stubs`. New TUs are
-  picked up automatically by the `src/app/*.c` and `src/ui/app/*.c` wildcards
-  (`Makefile:428,438`).
-- **Goldens**: checked — `tests/testdata/repl_examples_ui/*.golden.txt` hold
-  *exported scene text* (`@cfg` block + code), not menu rows, so new File-menu rows
-  do not churn them, and no new `GlrConfigKey` is added. The one way this change
-  could churn them is a stray `@workspace-dir` header, which is why nothing binds a
-  workspace at boot. If one appears, `make rebuild-golden` (`Makefile:2028`, runs
-  under `USE_GL_STUBS=1`) regenerates — but treat a diff there as a bug, not churn.
+Required regressions:
 
-Manual (the actual bug report), with native GL — not OSMesa:
-1. `make app && open gl-repl.app` (Finder launch ⇒ cwd `/`).
-2. File → New Workspace… → `demo`; confirm the status line shows
-   `~/Library/Application Support/gl-repl/workspaces/demo`.
-3. Type a scene, Ctrl+S, then File → Reveal in Finder — the `.c` must be there.
-4. Load an example (F12), Ctrl+S → the Save-As strip appears; name it
-   `from example` and confirm `demo/from_example.c` plus a new named tab. Then
-   Save Scene as .glr and Export .ply and Reveal each.
-5. File → New Workspace… → `demo` again ⇒ in-strip "already exists" error, prompt
-   stays open. Then `other` ⇒ succeeds.
-6. File → Load Workspace ▸ must list `demo` and `other` with `other` highlighted;
-   switch back to `demo` and confirm the scenes return.
-7. File → Delete Scene → `Y`; confirm the tab disappears, the `.c` is gone from
-   Finder, and Load Workspace ▸ demo does not resurrect it.
-8. Ctrl+Q; confirm `recovery.c` is written to
-   `.../gl-repl/workspaces/recovery.c` (the **root**, not inside `demo`), and
-   `./gl-repl "<path>/recovery.c"` reloads it. Re-open Load Workspace ▸ demo and
-   confirm no `recovery` or `output` scene tab appeared.
+- packaged app: transient Ctrl+S prompts and saves a named scene under app data;
+- writable-cwd development: transient Ctrl+S still writes `./output.c` without a
+  prompt; `.glr`, `.ply`, and `recovery.c` remain relative;
+- Ctrl+S and File -> Save Scene share the exact action path;
+- cancel Save Scene As leaves the workspace binding unchanged;
+- rename/save/reload produces one scene, not old and new filenames;
+- colliding scene slugs remain stable across delete/save/reload;
+- unrelated `.c` beside a managed manifest is ignored and never pruned;
+- switching with multiple dirty in-memory scenes preserves all of them;
+- malformed/missing manifest scene rolls the complete load back;
+- more than eight manifest scenes reports capacity and rolls back;
+- failed Save Workspace As keeps the old binding;
+- failed unlink keeps/restores the scene and manifest;
+- empty managed workspace creates one fresh named tab;
+- recovery `.c`, `.glr`, and `.ply` never load as workspace scenes;
+- workspace enumeration is sorted and relative/absolute active matching works;
+- File flyout routing cannot fall through to example loading;
+- auto-promotion with eight slots fails without mutating the origin.
 
-Docs to update in the same change: `docs/USER_GUIDE.md:1661-1693` (Scenes &
-Workspaces), `docs/ADVANCED_USAGE.md:11-25`, `docs/MODULES.md` (rows for
-`glr_workspaces` / `glr_modal`, and the changed workspace path policy),
-`CLAUDE.md` + `AGENTS.md:371-380` (workspace/auto-promotion section — the
-"promotion is rejected when no workspace is bound" wording changes),
-`docs/plans/active/README.md` (Part 0), `.gitignore` (add `workspaces/` next to the
-existing `workspace/` at line 23), and the `scenes.h:118-126` /
-`glr_ctrl_router.c:132-139` doc comments. Then `make fix-doc-links` to repair
-line-number drift.
+Run:
+
+```bash
+make test
+make test-stubs
+make check-state-ownership
+make check-c99
+bash scripts/docs-assets.sh
+```
+
+Manual packaged-app pass:
+
+1. `make app && open gl-repl.app`.
+2. Create `demo`, save two scenes, rename one, and reveal the workspace.
+3. Create/open another workspace and return; both scenes must survive.
+4. Delete one scene and reopen; it must not return.
+5. Put an unrelated `.c` beside the manifest; it must not appear or be removed.
+6. Break a manifest scene path, attempt to open it, and confirm the current
+   workspace remains intact.
+7. Quit and confirm the standalone recovery path is printed and writable.
+
+Docs updated with the implementation: `docs/USER_GUIDE.md`,
+`docs/ADVANCED_USAGE.md`, `docs/MODULES.md`, `docs/ARCHITECTURE.md`,
+`src/repl/ARCHITECTURE.md`, `CLAUDE.md`, `AGENTS.md`, and `.gitignore`. Run
+`make fix-doc-links` after line-number drift.

@@ -19,6 +19,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/scenes.h"       /* repl_scenes_* / repl_promote_transient_if_needed */
+#include "repl/workspace_io.h"
 #include "app/glr_debug.h"
 #include "repl/time.h"
 #include "subsystems/replay/replay.h"
@@ -456,6 +457,149 @@ void test_workspace_round_trip() {
         closedir(d);
         rmdir(dir);
     }
+}
+
+static void test_managed_workspace_contract(void) {
+    char legacy_template[] = "/tmp/repl_legacy_workspace.XXXXXX";
+    char managed_template[] = "/tmp/repl_managed_workspace.XXXXXX";
+    char broken_template[] = "/tmp/repl_broken_workspace.XXXXXX";
+    char *legacy_dir;
+    char *managed_dir;
+    char *broken_dir;
+
+    printf("--- Managed workspace manifest contract ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_INT("contract source scene created",
+               repl_scenes_create_empty_user_scene(), 0);
+    editor_feed_line("glVertex3f(3, 2, 1);");
+    int original_count = repl_state_document_count();
+
+    legacy_dir = mkdtemp(legacy_template);
+    ASSERT_TRUE("legacy folder created", legacy_dir != NULL);
+    if (!legacy_dir) return;
+    {
+        char stray[512];
+        snprintf(stray, sizeof(stray), "%s/legacy.c", legacy_dir);
+        FILE *f = fopen(stray, "w");
+        ASSERT_TRUE("legacy scene file created", f != NULL);
+        if (f) {
+            fputs("void display(void) {}\n", f);
+            fclose(f);
+        }
+        ReplWorkspaceLoadResult rejected = repl_load_workspace_ex(legacy_dir);
+        ASSERT_INT("manifest-less folder rejected", rejected.ok, 0);
+        ASSERT_INT("manifest-less folder is not managed", rejected.managed, 0);
+        ASSERT_INT("legacy rejection preserves scene count",
+                   repl_user_scene_count(), 1);
+        ASSERT_INT("legacy rejection preserves live document",
+                   repl_state_document_count(), original_count);
+        unlink(stray);
+    }
+    rmdir(legacy_dir);
+
+    managed_dir = mkdtemp(managed_template);
+    ASSERT_TRUE("managed folder created", managed_dir != NULL);
+    if (!managed_dir) return;
+    ASSERT_INT("managed workspace save", repl_save_workspace(managed_dir, NULL), 1);
+    int slot = repl_active_user_scene();
+    char stable_file[WORKSPACE_IO_FILE_MAX];
+    snprintf(stable_file, sizeof(stable_file), "%s",
+             repl_user_scene_file_name(slot));
+    ASSERT_TRUE("stable filename assigned", stable_file[0] != '\0');
+
+    char unrelated[512];
+    snprintf(unrelated, sizeof(unrelated), "%s/unrelated.c", managed_dir);
+    FILE *unrelated_file = fopen(unrelated, "w");
+    ASSERT_TRUE("unrelated C file created", unrelated_file != NULL);
+    if (unrelated_file) {
+        fputs("int unrelated_translation_unit;\n", unrelated_file);
+        fclose(unrelated_file);
+    }
+
+    ASSERT_TRUE("scene display rename succeeds",
+                repl_user_scene_rename(slot, "Renamed Scene"));
+    ASSERT_INT("renamed workspace saves", repl_save_workspace(managed_dir, NULL), 1);
+    ASSERT_STR("display rename keeps persisted filename",
+               repl_user_scene_file_name(slot), stable_file);
+    ASSERT_INT("unrelated C file is not pruned", access(unrelated, F_OK), 0);
+    {
+        WorkspaceManifest manifest;
+        ASSERT_TRUE("managed manifest rereads",
+                    workspace_io_manifest_read(managed_dir, &manifest,
+                                               NULL, 0));
+        ASSERT_INT("manifest owns exactly one scene", manifest.scene_count, 1);
+        ASSERT_STR("manifest retains stable filename",
+                   manifest.scene_files[0], stable_file);
+    }
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_INT("managed workspace reloads one listed scene",
+               repl_load_workspace(managed_dir), 1);
+    ASSERT_INT("unrelated C does not become a scene",
+               repl_user_scene_count(), 1);
+    ASSERT_STR("renamed display name round-trips",
+               repl_user_scene_name(0), "Renamed Scene");
+
+    broken_dir = mkdtemp(broken_template);
+    ASSERT_TRUE("broken managed folder created", broken_dir != NULL);
+    if (broken_dir) {
+        WorkspaceManifest broken;
+        memset(&broken, 0, sizeof(broken));
+        broken.version = 1;
+        snprintf(broken.name, sizeof(broken.name), "Broken Workspace");
+        broken.scene_count = 1;
+        snprintf(broken.scene_files[0], sizeof(broken.scene_files[0]),
+                 "missing.c");
+        ASSERT_TRUE("broken manifest written",
+                    workspace_io_manifest_write(broken_dir, &broken, NULL, 0));
+        ReplWorkspaceLoadResult failed = repl_load_workspace_ex(broken_dir);
+        ASSERT_INT("missing managed scene fails transaction", failed.ok, 0);
+        ASSERT_INT("failed transaction preserves prior catalog",
+                   repl_user_scene_count(), 1);
+        ASSERT_STR("failed transaction preserves prior scene",
+                   repl_user_scene_name(0), "Renamed Scene");
+        char broken_manifest[512];
+        snprintf(broken_manifest, sizeof(broken_manifest), "%s/%s",
+                 broken_dir, WORKSPACE_IO_MANIFEST_FILE);
+        unlink(broken_manifest);
+        rmdir(broken_dir);
+    }
+
+    {
+        char scene_path[512];
+        char manifest_path[512];
+        snprintf(scene_path, sizeof(scene_path), "%s/%s", managed_dir,
+                 stable_file);
+        snprintf(manifest_path, sizeof(manifest_path), "%s/%s", managed_dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(scene_path);
+        unlink(unrelated);
+        unlink(manifest_path);
+        rmdir(managed_dir);
+    }
+    repl_set_workspace_dir(NULL);
+}
+
+static void test_workspace_manifest_capacity_rejected(void) {
+    char temp_dir[] = "/tmp/repl_capacity_workspace.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("capacity workspace created", dir != NULL);
+    if (!dir) return;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, WORKSPACE_IO_MANIFEST_FILE);
+    FILE *f = fopen(path, "w");
+    ASSERT_TRUE("capacity manifest opened", f != NULL);
+    if (f) {
+        fputs("version=1\nname=Too Many Scenes\n", f);
+        for (int i = 0; i < MAX_USER_SCENES + 1; i++)
+            fprintf(f, "scene=scene_%d.c\n", i);
+        fclose(f);
+        ReplWorkspaceLoadResult result = repl_load_workspace_ex(dir);
+        ASSERT_INT("over-capacity manifest rejected", result.ok, 0);
+        ASSERT_INT("capacity error distinguished", result.capacity_exceeded, 1);
+    }
+    unlink(path);
+    rmdir(dir);
 }
 
 /* When the CLI argument is a workspace directory (`./gl-repl ./workspace`),
@@ -951,7 +1095,7 @@ void test_user_scene_promote_all_slots_full() {
     int occupied = repl_user_scene_count();
     ASSERT_INT("all slots occupied", occupied, MAX_USER_SCENES);
 
-    /* Next promotion from an example should be refused (pre-LRU). */
+    /* Next promotion from an example is refused at the hard capacity. */
     repl_load_example(0);
     int rejected = repl_promote_transient_if_needed();
     ASSERT_INT("promotion rejected when full", rejected, -1);
@@ -959,12 +1103,18 @@ void test_user_scene_promote_all_slots_full() {
 }
 
 void test_user_scene_promote_lru_evict() {
-    printf("--- User scene promotion LRU eviction ---\n");
+    printf("--- Managed workspace does not enable implicit eviction ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     char dir[64];
     snprintf(dir, sizeof(dir), "/tmp/repl_lru_test.%d", (int)getpid());
+    WorkspaceManifest manifest;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Capacity Test");
+    ASSERT_TRUE("managed capacity workspace created",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
     repl_set_workspace_dir(dir);
 
     /* Fill all user-scene slots via repeated promotion. */
@@ -974,23 +1124,18 @@ void test_user_scene_promote_lru_evict() {
     }
     ASSERT_INT("all slots occupied", repl_user_scene_count(), MAX_USER_SCENES);
 
-    /* Capture the oldest slot name so we can verify its file was written. */
-    char evicted_name[USER_SCENE_NAME_MAX];
-    snprintf(evicted_name, sizeof(evicted_name), "%s",
-             repl_user_scene_name(0));
-
-    /* Ninth promotion should succeed now that a workspace dir is set:
-     * slot 0 (oldest inactive scene) is flushed to disk and reused. */
+    /* Binding a workspace no longer changes capacity semantics. A ninth
+     * promotion must fail without evicting, writing, or replacing a tab. */
     repl_load_example(0);
     int promoted = repl_promote_transient_if_needed();
-    ASSERT_INT("promotion reuses evicted slot", promoted, 0);
-    ASSERT_INT("active user scene is slot 0", repl_active_user_scene(), 0);
-    ASSERT_INT("slot count unchanged after eviction",
+    ASSERT_INT("promotion remains rejected in a managed workspace",
+               promoted, -1);
+    ASSERT_INT("transient remains active", repl_active_user_scene(), -1);
+    ASSERT_INT("slot count unchanged after rejection",
                repl_user_scene_count(), MAX_USER_SCENES);
 
-    /* Check the evicted scene is present on disk. */
+    /* No implicit persistence happens as a side effect of capacity failure. */
     DIR *d = opendir(dir);
-    int found_evicted = 0;
     int file_count = 0;
     if (d) {
         struct dirent *ent;
@@ -999,40 +1144,24 @@ void test_user_scene_promote_lru_evict() {
             size_t len = strlen(n);
             if (len > 2 && strcmp(n + len - 2, ".c") == 0) {
                 file_count++;
-                char path[512];
-                snprintf(path, sizeof(path), "%s/%s", dir, n);
-                FILE *f = fopen(path, "r");
-                if (f) {
-                    char buf[512];
-                    while (fgets(buf, sizeof(buf), f)) {
-                        if (strstr(buf, evicted_name)) {
-                            found_evicted = 1;
-                            break;
-                        }
-                    }
-                    fclose(f);
-                }
-                unlink(path);
             }
         }
         closedir(d);
     }
-    ASSERT_INT("evicted scene written to disk", found_evicted, 1);
-    ASSERT_TRUE("at least one file written", file_count >= 1);
+    ASSERT_INT("capacity rejection wrote no scene files", file_count, 0);
+    {
+        char manifest_path[128];
+        snprintf(manifest_path, sizeof(manifest_path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(manifest_path);
+    }
     rmdir(dir);
     repl_set_workspace_dir("");
 }
 
-/* #5 regression: repl_load_scene_as_new_slot keeps two UserScene
- * scratches live while try_evict_lru allocates a third — ~3.6 MB on
- * the stack pre-fix, which overflows small worker stacks. The fix
- * heap-allocates every scratch. ASan in BUILD=debug surfaces any
- * missing free / double free / use-after-free on these paths, so the
- * test only needs to drive load-at-capacity (the worst-case
- * 3-allocation path) twice to exercise alloc / restore / free across
- * both the "load OK" and the LRU-evict-succeeded branches. */
+/* At capacity, file loads fail before parsing and preserve every slot. */
 void test_user_scene_load_scratch_alloc_lifecycle(void) {
-    printf("--- User scene scratch alloc lifecycle ---\n");
+    printf("--- User scene load rejects hard-cap overflow ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
@@ -1057,20 +1186,18 @@ void test_user_scene_load_scratch_alloc_lifecycle(void) {
     ASSERT_INT("scratch test: all slots occupied",
                repl_user_scene_count(), MAX_USER_SCENES);
 
-    /* Worst case: every slot used, scene loaded from disk forces
-     * try_evict_lru. Exercises the 3-allocation path
-     * (stash + evicted_stash + try_evict_lru's live_temp). */
+    /* Every slot is used, so the load is rejected without mutation. */
     ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
     int new_slot = repl_load_scene_as_new_slot(scene_path, &reason);
-    ASSERT_TRUE("scratch test: 3-stash load succeeds", new_slot >= 0);
-    ASSERT_INT("scratch test: load reason ok",
-               reason, REPL_SCENE_LOAD_OK);
+    ASSERT_INT("capacity load rejected", new_slot, -1);
+    ASSERT_INT("capacity reason reported",
+               reason, REPL_SCENE_LOAD_ERR_NO_SLOT);
 
-    /* Load again to exercise the path twice — any leak would still be
-     * an ASan-detectable leak at exit, but doubling the call makes a
-     * deterministic missing-free obvious in test output (RSS bump). */
+    /* Repeating the rejection stays non-mutating. */
     int new_slot2 = repl_load_scene_as_new_slot(scene_path, &reason);
-    ASSERT_TRUE("scratch test: second load succeeds", new_slot2 >= 0);
+    ASSERT_INT("second capacity load rejected", new_slot2, -1);
+    ASSERT_INT("all slots remain occupied",
+               repl_user_scene_count(), MAX_USER_SCENES);
 
     /* Cleanup files we created. */
     unlink(scene_path);
@@ -1358,14 +1485,7 @@ void test_inline_file_prompt_flow() {
         unlink(src_path);
     }
 
-    /* --- Regression: eviction + parse failure preserves the tab ----- */
-    /* Bug P1 (round 2): when all slots are full and a workspace is
-     * bound, the load path LRU-evicts a tab to disk. If the
-     * subsequent parse failed, the in-memory slot was permanently
-     * gone from the tabs (the data was still on disk, but the user
-     * would see a tab disappear despite the "Failed to load" error).
-     * Fix: snapshot the victim slot before evicting and restore it
-     * on parse failure. */
+    /* --- Regression: capacity rejection preserves every tab -------- */
     {
         /* Fill all MAX_USER_SCENES slots and bind a workspace dir. */
         glr_ctrl_reset_all(); declare_test_vars();
@@ -1383,8 +1503,8 @@ void test_inline_file_prompt_flow() {
                 repl_promote_transient_if_needed();
             }
             int filled_count = repl_user_scene_count();
-            ASSERT_TRUE("workspace filled to capacity (or close)",
-                        filled_count > 0);
+            ASSERT_INT("workspace filled to capacity",
+                       filled_count, MAX_USER_SCENES);
 
             /* Write a *.c file that will fail to parse. */
             const char *bad_path = "/tmp/test_repl_evict_bad.c";
@@ -1395,16 +1515,14 @@ void test_inline_file_prompt_flow() {
                 fclose(f);
             }
 
-            /* Attempt the load — expect parse failure. */
+            /* Capacity is checked before parsing the new file. */
             ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
             int new_slot = repl_load_scene_as_new_slot(bad_path, &reason);
-            ASSERT_INT("bad-syntax load fails", new_slot, -1);
+            ASSERT_INT("full-capacity load fails", new_slot, -1);
+            ASSERT_INT("full-capacity reason", reason,
+                       REPL_SCENE_LOAD_ERR_NO_SLOT);
 
-            /* If we evicted (only matters when all slots were full),
-             * the tab count must be unchanged after failure. When the
-             * synth couldn't quite fill capacity, this is still a
-             * useful invariant: a failed parse never reduces tab count. */
-            ASSERT_INT("failed-parse load preserves tab count (P1)",
+            ASSERT_INT("capacity rejection preserves tab count",
                        repl_user_scene_count(), filled_count);
 
             unlink(bad_path);
@@ -1996,6 +2114,8 @@ int main(int argc, char **argv) {
     test_user_scene_rename_flow();
     test_inline_file_prompt_flow();
     test_workspace_round_trip();
+    test_managed_workspace_contract();
+    test_workspace_manifest_capacity_rejected();
     test_workspace_initial_load_activates_first_slot();
     test_markerless_raw_scene_import();
     test_initial_missing_file_starts_new_scene();

@@ -44,6 +44,9 @@
 #include "editor/state.h"
 #include "editor/undo.h"
 #include "app/glr_actions.h"
+#include "app/glr_modal.h"
+#include "app/glr_workspaces.h"
+#include "app/glr_paths.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
@@ -102,11 +105,7 @@
 
 int glr_ctrl_router_handle_save_key(unsigned char key) {
     if (keymap_event_is(key, GLR_SAVE)) {
-        /* Ctrl+S == File > Save Scene: active named scene ->
-         * <workspace>/<slug>.c; example/transient -> ./output.c. */
-        ReplExportLayout layout;
-        glr_ctrl_fill_export_layout(&layout);
-        repl_save_active_scene(&layout);
+        glr_action_save_active_scene();
         return 1;
     }
     return 0;
@@ -130,7 +129,7 @@ int glr_ctrl_router_handle_time_reset_key(unsigned char key) {
 }
 
 /* Recovery safeguard: Ctrl+Q, File > Quit, and SIGINT (Ctrl+C), plus
- * Load Workspace (which replaces every in-memory slot), write a recovery
+ * Open Workspace (which replaces every in-memory slot), write a recovery
  * copy to a DISTINCT, findable file — never the active scene/workspace. The point
  * is to rescue an unintended exit / forgotten save / discarded scene
  * without silently clobbering the user's real scene; reload it with
@@ -147,19 +146,33 @@ void glr_ctrl_request_quit(void) {
 }
 
 /* Write the live scene to the recovery file. Shared by the quit
- * safeguard and Load Workspace. Returns 1 on success, 0 on failure. */
+ * safeguard and Open Workspace. Returns 1 on success, 0 on failure. */
 int glr_ctrl_save_recovery_file(void) {
     ReplExportLayout layout;
+    char path[GLR_PATH_MAX];
+    if (!glr_paths_app_state_path(QUIT_RECOVERY_FILE, path, sizeof(path)))
+        return 0;
+    if (!glr_paths_cwd_supports_relative_saves()) {
+        char state_dir[GLR_PATH_MAX];
+        snprintf(state_dir, sizeof(state_dir), "%s", path);
+        char *slash = strrchr(state_dir, '/');
+        if (!slash)
+            return 0;
+        *slash = '\0';
+        if (!glr_paths_ensure_dir(state_dir, NULL))
+            return 0;
+    }
     glr_ctrl_fill_export_layout(&layout);
-    return repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
+    return repl_export_save_output(path, source_document_view(),
                                    &layout) ? 1 : 0;
 }
 
 static void glr_ctrl_save_quit_recovery(void) {
     if (glr_ctrl_save_recovery_file()) {
-        printf("Saved recovery copy to %s (reload: ./%s %s)\n",
-               QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
-               QUIT_RECOVERY_FILE);
+        char path[GLR_PATH_MAX];
+        glr_paths_app_state_path(QUIT_RECOVERY_FILE, path, sizeof(path));
+        printf("Saved recovery copy to %s (reload: %s %s)\n",
+               path, glr_ctrl_program_name(), path);
     }
 }
 
@@ -1505,6 +1518,8 @@ static int route_menu_button_hit(const UiHit *hit) {
     if (menu_id < 0) return 0;
 
     int open_menu = ui_menu_bar_open_menu_id();
+    if (menu_id == GLR_MENU_FILE)
+        glr_workspaces_refresh();
     if (open_menu == menu_id)
         ui_menu_bar_close();
     else
@@ -1547,6 +1562,15 @@ static int route_menu_item_hit(const UiHit *hit) {
 static int route_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
+    if (hit->cmd_idx == GLR_MENU_FILE) {
+        if (hit->item_idx == glr_workspaces_count())
+            glr_action_begin_open_workspace_path();
+        else
+            glr_action_open_workspace_index(hit->item_idx);
+        ui_menu_bar_close();
+        editor_request_redraw();
+        return 1;
+    }
     if (hit->cmd_idx == GLR_MENU_CONFIG) {
         glr_cfg_cycle_row(hit->item_idx, 1);
         editor_request_redraw();
@@ -1735,6 +1759,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
      * user clicked, rename mode exits). Begin-rename routes through a
      * later dispatch in this same call, so rename is not yet active at
      * entry for the click that starts it — no self-cancel. */
+    if (glr_modal_active())
+        glr_modal_cancel();
     if (editor_inline_rename_active())
         editor_inline_rename_cancel();
     if (editor_inline_file_prompt_active())
@@ -2014,6 +2040,10 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
      * resumes editing and dismisses it without swallowing that key. */
     ui_state_command_description_close();
 
+    if (glr_modal_handle_key(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
+        return;
+    }
     /* Rename / file-prompt capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         glr_ctrl_router_dismiss_gl_state_for_editor_input();
@@ -2073,6 +2103,11 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
 
 static void special_dispatch(int key, int x, int y) {
     ui_state_command_description_close();
+
+    if (glr_modal_handle_special(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
+        return;
+    }
 
     if (editor_input_rename_capture_special(key)) {
         glr_ctrl_router_dismiss_gl_state_for_editor_input();

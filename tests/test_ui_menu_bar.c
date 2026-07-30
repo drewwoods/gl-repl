@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "ui/app/menu_bar.h"
@@ -7,6 +8,7 @@
 #include "app/glr_config.h"
 #include "app/glr_pointer_script.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "repl/state_owners.h"
@@ -25,7 +27,9 @@
 #include <GL/gl_stub_counts.h>
 #endif
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -60,6 +64,40 @@ static void test_menu_bar_rect_helper(void) {
                   cp_y + cp_h - CODE_MARGIN_Y - LINE_H);
     ASSERT_INT_EQ("menu bar w matches code panel", bar_w, cp_w);
     ASSERT_INT_EQ("menu bar h is one line", bar_h, LINE_H);
+}
+
+static void test_reveal_workspace_enabled_state(void) {
+    char temp_dir[] = "/tmp/test_reveal_workspace.XXXXXX";
+    char *dir;
+    WorkspaceManifest manifest;
+
+    reset_menu_bar_fixture(1000, 600);
+    repl_set_workspace_dir(NULL);
+    ASSERT_INT_EQ("Reveal Workspace disabled while unbound",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_REVEAL_WORKSPACE), 0);
+
+    dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("Reveal Workspace test directory created", dir != NULL);
+    if (!dir) return;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Reveal Test");
+    ASSERT_TRUE("Reveal Workspace managed manifest written",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
+    repl_set_workspace_dir(dir);
+    ASSERT_INT_EQ("Reveal Workspace enabled for managed binding",
+        ui_menu_bar_menu_item_enabled_for_test(
+            GLR_MENU_FILE, GLR_FILE_ITEM_REVEAL_WORKSPACE), 1);
+
+    repl_set_workspace_dir(NULL);
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(path);
+    }
+    rmdir(dir);
 }
 
 static int menu_bar_center_my(void) {
@@ -1423,6 +1461,7 @@ int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
     test_menu_bar_rect_helper();
+    test_reveal_workspace_enabled_state();
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();

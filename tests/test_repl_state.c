@@ -10,6 +10,7 @@
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/export.h"
 #include "repl/scenes.h"
+#include "repl/workspace_io.h"
 #include "repl/example_loader.h"
 #include "editor/state.h"
 #include "editor/undo.h"
@@ -842,7 +843,7 @@ static void test_user_scene_load_clears_scene_camera_default(void) {
 }
 
 /* Sibling of test_user_scene_load_clears_scene_camera_default: the
- * LOAD_WORKSPACE menu path (glr_actions.c) must also clear the per-scene
+ * workspace-open action (glr_actions.c) must also clear the per-scene
  * camera default. Without this, after load-example-with-camera →
  * load-workspace, a Ctrl+Shift+C still eases to the previous example's
  * pose instead of the built-in default. */
@@ -860,16 +861,15 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     for (int i = 0; i < 500; i++)
         glr_camera_tick();
 
-    /* Bind the workspace dir without saving anything to it; the menu
-     * handler reads repl_workspace_dir() and falls through to
-     * repl_load_workspace(dir), which returns 0 on an empty dir. The
-     * bug is whether the menu handler clears the scene camera default
-     * *before* calling repl_load_workspace, not in load itself. */
-    repl_set_workspace_dir(dir);
+    WorkspaceManifest manifest;
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Camera Test");
+    ASSERT_TRUE("empty managed workspace created",
+                workspace_io_manifest_write(dir, &manifest, NULL, 0));
 
-    int activated = glr_action_menu_item_activate(GLR_MENU_FILE,
-                                                  GLR_FILE_ITEM_LOAD_WORKSPACE);
-    ASSERT_INT("menu LOAD_WORKSPACE activated", activated, 1);
+    int activated = glr_action_open_workspace_path(dir);
+    ASSERT_INT("workspace open activated", activated, 1);
 
     /* Ctrl+Shift+C → ease_to_default. With the scene default still set
      * (bug), the camera converges to the test example's pose (dist=8, rx=30,
@@ -888,6 +888,12 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     ASSERT_TRUE("after workspace load, falls back to built-in ry (30)",
                 fabsf(cam.ry - 30.0f) < 0.5f);
 
+    {
+        char manifest_path[512];
+        snprintf(manifest_path, sizeof(manifest_path), "%s/%s", dir,
+                 WORKSPACE_IO_MANIFEST_FILE);
+        unlink(manifest_path);
+    }
     rmdir(dir);
 }
 

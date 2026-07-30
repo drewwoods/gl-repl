@@ -11,6 +11,7 @@ audio_state.ini
 gl-repl
 output.c
 output.ply
+output.glr
 build/
 # Vendored freeglut CMake build output (also matched by the bare build/ above;
 # anchored here for clarity). build-osmesa/ is the FREEGLUT_OSMESA=1 variant's
@@ -20,7 +21,8 @@ third_party/freeglut/build*/
 # gl4es + GLU wasm static libs and checkouts, fetched/built by
 # scripts/web-deps.sh for the WEB=1 build.
 third_party/web/
-workspace/
+/workspaces/
+/recovery-workspace/
 bench_repl
 /render3d_demo
 /render3d_hot_demo
