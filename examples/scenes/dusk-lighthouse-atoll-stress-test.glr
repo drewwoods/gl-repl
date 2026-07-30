@@ -16,8 +16,10 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-// shared scratch: x/y/z vertex position;
-// k/s = radius/angle scratch (island coastline, firefly polar coords).
+// Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
+// vertex position, k/s its polar angle/radius. sea() and island() used to
+// borrow these too; both now name their own function-scoped locals, so
+// nothing leaks between the three of them.
 static float x, y, z, k, s;
 static float fireflies = 44; // @tune
 static float flyRadius = 2.6; // @tune
@@ -42,33 +44,39 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 // --- sea(): animated water sheet (nested for + analytic normals) ---
 // Colored by wave height: deep azure troughs lift to bright azure crests.
 sea(half, cells, amp) {
-  // cx/sx/cz/sz cache the wave's cos/sin terms -- each is read three times
-  // below (height, normal-length n, and the normal itself) but x only
-  // changes once per j (cx/sx are reused across both strip vertices).
-  // n = 1/|gradient| is a function-scoped local: it never leaves sea().
-  float cx, sx, cz, sz, n;
+  // Every temporary here is a function-scoped local -- nothing sea() computes
+  // is of any interest outside it. The strip spans two rows, and z depends
+  // only on i, so BOTH rows' cos/sin terms (czA/szA, czB/szB) hoist clear of
+  // the j loop; cx/sx change once per j and are shared by the two vertices.
+  // m is the 0..1 crest mix that the color line reads three times, and
+  // n = 1/|gradient| turns the analytic gradient into a unit normal.
+  float x, y, cx, sx, m, n;
+  float zA, czA, szA;
+  float zB, czB, szB;
   for(i, 0, cells) {
+    zA = -half + 2*half*i/cells;
+    czA = cos(zA*1.5 + t*0.6);
+    szA = sin(zA*1.5 + t*0.6);
+    zB = -half + 2*half*(i + 1)/cells;
+    czB = cos(zB*1.5 + t*0.6);
+    szB = sin(zB*1.5 + t*0.6);
     glBegin(GL_TRIANGLE_STRIP);
       for(j, 0, cells + 1) {
         x = -half + 2*half*j/cells;
         cx = cos(x*1.5 + t);
         sx = sin(x*1.5 + t);
-        z = -half + 2*half*i/cells;
-        cz = cos(z*1.5 + t*0.6);
-        sz = sin(z*1.5 + t*0.6);
-        y = amp*sx*cz;
-        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*cz*cz + sx*sx*sz*sz));
-        glNormal3f(-amp*1.5*cx*cz*n, n, amp*1.5*sx*sz*n);
-        glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
-        glVertex3f(x, y, z);
-        z = -half + 2*half*(i + 1)/cells;
-        cz = cos(z*1.5 + t*0.6);
-        sz = sin(z*1.5 + t*0.6);
-        y = amp*sx*cz;
-        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*cz*cz + sx*sx*sz*sz));
-        glNormal3f(-amp*1.5*cx*cz*n, n, amp*1.5*sx*sz*n);
-        glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
-        glVertex3f(x, y, z);
+        y = amp*sx*czA;
+        m = 0.5 + 0.5*y/amp;
+        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*czA*czA + sx*sx*szA*szA));
+        glNormal3f(-amp*1.5*cx*czA*n, n, amp*1.5*sx*szA*n);
+        glColor3f(0.18 + 0.18/c*m, 0.34 + 0.36/c*m, 0.55 + 0.43/c*m);
+        glVertex3f(x, y, zA);
+        y = amp*sx*czB;
+        m = 0.5 + 0.5*y/amp;
+        n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*czB*czB + sx*sx*szB*szB));
+        glNormal3f(-amp*1.5*cx*czB*n, n, amp*1.5*sx*szB*n);
+        glColor3f(0.18 + 0.18/c*m, 0.34 + 0.36/c*m, 0.55 + 0.43/c*m);
+        glVertex3f(x, y, zB);
       }
     glEnd();
   }
@@ -76,6 +84,7 @@ sea(half, cells, amp) {
 
 // --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
 island(r, lagoon) {
+  float k, x, z; // coastline radius; lagoon vertex position
   glFrontFace(GL_CW);
   gluBegin(GLU_POLYGON);
   // Outer wobbly coastline

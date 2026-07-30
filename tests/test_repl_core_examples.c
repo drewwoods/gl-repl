@@ -2532,18 +2532,26 @@ int main(int argc, char **argv) {
      * covered separately by the visual code-panel dump tests.
      */
     {
-        int stress_idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
+        /*
+         * The anchor is Mars' JPL Keplerian element list in the orrery: at
+         * ~165 columns it is the longest source line in the catalog, and it
+         * is long for a reason no refactor can shorten (twelve orbital
+         * elements, one per argument). Earlier revisions of this test pinned
+         * whichever dense expression happened to be longest, and every pass
+         * that factored one out had to repoint the fixture.
+         */
+        int wrap_idx = find_example_index_by_name("Orrery (labels track 3D orbits)");
 
-        ASSERT_TRUE("wrap placeholder stress example found", stress_idx >= 0);
-        if (stress_idx >= 0) {
-            load_example_for_test(stress_idx);
+        ASSERT_TRUE("wrap placeholder example found", wrap_idx >= 0);
+        if (wrap_idx >= 0) {
+            load_example_for_test(wrap_idx);
             {
                 char *dump = dump_current_code_panel_text();
                 ASSERT_TRUE("wrap placeholder dump alloc", dump != NULL);
                 if (dump) {
-                         ASSERT_TRUE("logical dump keeps stress line unwrapped",
+                    ASSERT_TRUE("logical dump keeps long line unwrapped",
                                 strstr(dump,
-                                       "          glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));")
+                                       "  planetKepler(1.52371034, 0.00001847, 0.09339410, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343);")
                                 != NULL);
                     free(dump);
                 }

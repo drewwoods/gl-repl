@@ -103,10 +103,11 @@ void display(void) {
   static float spinRate = 0.06; // revolutions per second
   static float seats = 8;
   static float bulbs = 28;
-  static float bob, glow, sel;
+  static float glow; // bulb-chase brightness, shared by the deck rim and both bulb rings
 
 
   drawSeat(ang) {
+    float bob, sel; // this seat's bob height and color index -- private to one call
     glPushMatrix();
       glRotatef(ang, 0, 1, 0);
       glTranslatef(2, 0, 0);
@@ -123,16 +124,15 @@ void display(void) {
       bob = 0.2 * sin(t*TAU*0.7 + ang*PI/180);
       // Cycle 3 seat colors by index. ang = seat*360/seats, so ang*seats/360
       // is the integer seat number; fmod(.,3) picks the color. (Writing it as
-      // ang/45 would silently couple to seats == 8.) Three guards partition sel
-      // into a 3-way branch -- an if/else-if chain.
+      // ang/45 would silently couple to seats == 8.) A real if/else-if chain
+      // partitions sel completely -- the earlier three independent ifs left
+      // sel exactly 0.5 or 1.5 falling through with no color set at all.
       sel = fmod(ang*seats/360, 3);
       if(sel < 0.5) {
         glColor3f(0.85, 0.22, 0.25);
-      }
-      if(sel > 0.5 && sel < 1.5) {
+      } else if(sel < 1.5) {
         glColor3f(0.2, 0.6, 0.62);
-      }
-      if(sel > 1.5) {
+      } else {
         glColor3f(0.9, 0.7, 0.25);
       }
       glPushMatrix();

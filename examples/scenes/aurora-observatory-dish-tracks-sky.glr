@@ -20,7 +20,13 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
+static float dishAz; // dish azimuth, degrees -- see the note below
 static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)
+// The dish is posed twice: once in the lit opaque pass and again in the
+// unlit glow pass that hangs the feed struts and pulses off it. Both read
+// dishAz so the two frames cannot drift apart -- the same reason the
+// stencil example keeps its mask quad in a func.
+dishAz = 16*sin(0.22*t) - 12;
 // ===== Aurora observatory: a lonely dish tracking the sky =====
 // NOTE: the dome and dish are clip-plane carvings of glutSolidSphere --
 // a sphere is ONE flat command however finely tessellated, so the whole
@@ -47,13 +53,18 @@ pad(rad) {
 
 // cylinder wall between y0 and y1
 drum(rad, y0, y1, segs) {
-  float th;
+  // ct/st are the wall direction at this segment: the normal IS the unit
+  // xz direction, and both rim vertices sit on it, so one cos/sin pair
+  // feeds all three lines instead of being retaken six times.
+  float th, ct, st;
   glBegin(GL_QUAD_STRIP);
     for(j, 0, segs + 1) {
       th = j*TAU/segs;
-      glNormal3f(cos(th), 0, sin(th));
-      glVertex3f(rad*cos(th), y1, rad*sin(th));
-      glVertex3f(rad*cos(th), y0, rad*sin(th));
+      ct = cos(th);
+      st = sin(th);
+      glNormal3f(ct, 0, st);
+      glVertex3f(rad*ct, y1, rad*st);
+      glVertex3f(rad*ct, y0, rad*st);
     }
   glEnd();
 }
@@ -144,7 +155,7 @@ glutSolidCone(0.42, 1.3, 14, 4);
 glPopMatrix();
 glTranslatef(0, 1.3, 0);
 glutSolidSphere(0.15, 10, 8);
-glRotatef(16*sin(0.22*t) - 12, 0, 1, 0);
+glRotatef(dishAz, 0, 1, 0);
 glRotatef(-38, 1, 0, 0);
 ink = 7.5;
 glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
@@ -249,7 +260,7 @@ glEnd();
 // feed struts + expanding teal pulses in the dish frame (additive)
 glPushMatrix();
 glTranslatef(-2.4, 1.3, 0.3);
-glRotatef(16*sin(0.22*t) - 12, 0, 1, 0);
+glRotatef(dishAz, 0, 1, 0);
 glRotatef(-38, 1, 0, 0);
 glLineWidth(1);
 glBegin(GL_LINES);

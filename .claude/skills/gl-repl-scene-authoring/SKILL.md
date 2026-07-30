@@ -215,14 +215,47 @@ inserting is not.
 Hoist loop-invariant assignments out of `for` bodies — they multiply against the
 flat cap, not the source cap.
 
+**Measure the flat cap before naming anything inside a loop.** Introducing a
+named local costs one flat command per *executed* iteration, so a 135-blade
+loop pays 135 per new assignment:
+
+```bash
+make gl-repl USE_GL_STUBS=1     # no GL libs needed for a flat dump
+./gl-repl --examples-dir examples --example <n> --dump-flat | sed -n 2p
+./gl-repl --examples-dir examples --example <n> --flat-histogram  # per-func costs
+```
+
+Headroom is wildly uneven: *Swaying grass field* sits at **8113 of 8192** and
+cannot absorb a single new per-blade assignment, while most scenes are under
+half. Check first; the failure mode is a scene that silently stops loading.
+
 The two variable caps are independent, which is the lever when a scene runs out
 of declarations: move a function's temporaries to plain `float` locals and they
 stop costing predef slots entirely (the *Orrery* scene went 29 globals → 16 this
 way). A function with many parameters is where the *other* cap bites first —
-`planetKepler()` there sits at 16 params + 15 locals = 31 of 32.
+`planetKepler()` there sat at 16 params + 15 locals = 31 of 32 until the sphere
+draw moved to its own `drawBody()` func; splitting a func's *positioning* args
+from its *appearance* args is the usual way to buy that scope back.
+
+**Max 8 names per `float` declaration** ("too many names per declaration
+(max 8); split across lines") — split a wide local list over several lines.
 
 ## Authoring gotchas
 
+- **Comment run before a `func()` header: 16 lines max.** Import buffers a
+  function's preceding comments in a fixed `IMPORT_MAX_PENDING_COMMENTS` (16)
+  slot array and **silently drops the overflow** — the export/import roundtrip
+  test then fails with a one-line diff. Count the run *after* hoisting: export
+  moves `static float` decls to the document top, so paragraphs those decls
+  used to separate become one contiguous run. Break a long run up by moving
+  prose inside the function body (which is not buffered) instead.
+- **Hoisting a subexpression into a local can move the last ULP.** Caching a
+  call (`cx = cos(...)`) is exact, but reassociating is not: `0.30*i/rings`
+  parses as `(0.30*i)/rings` and does not always equal `0.30*u` for
+  `u = i/rings`. Expect ~1e-7 relative drift on affected colors/positions —
+  below 8-bit framebuffer resolution, but it means the flat dumps are not
+  byte-identical. Diff `--dump-flat` at several `--time` values to see the
+  real blast radius rather than assuming either way.
 - **Const-fold vs flatten differential** — an expression that constant-folds at
   parse time and one that flattens per-frame can disagree; verify the animated
   path, not just the `t = 0` frame.
