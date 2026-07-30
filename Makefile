@@ -247,7 +247,7 @@ ifeq ($(origin BUILD),command line)
 # explicit BUILD — honor it
 else ifeq ($(origin BUILD),environment)
 # explicit BUILD — honor it
-else ifneq ($(filter test test-detailed test-stubs test-msan test-full,$(MAKECMDGOALS)),)
+else ifneq ($(filter test test-detailed test-stubs test-no-checks test-only test-msan test-full,$(MAKECMDGOALS)),)
 BUILD := debug
 else
 BUILD := release
@@ -2035,6 +2035,13 @@ test-stubs: check ## Build and run tests using local GL/GLU/GLUT stubs, without 
 	+$(MAKE) --no-print-directory internal-test-suite \
 		USE_GL_STUBS=1 BUILD=$(BUILD) \
 		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
+
+test-no-checks: ## Build and run tests using local GL stubs, without running pre-checks.
+	+$(MAKE) --no-print-directory internal-test-suite \
+		USE_GL_STUBS=1 BUILD=$(BUILD) \
+		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
+
+test-only: test-no-checks ## Alias for test-no-checks.
 
 test-asan-ubsan: ## Build and run the stubbed test suite under AddressSanitizer + UBSan (forces sanitizers on regardless of environment).
 	+$(MAKE) --no-print-directory internal-test-suite \
