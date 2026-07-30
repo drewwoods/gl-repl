@@ -27,6 +27,7 @@
 
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
+#define MAX_FLATTEN_ACTIVE_LOOPS (MAX_FLATTEN_CALL_DEPTH * MAX_EXPR_VARS)
 /* Per-for-loop hard stop on unrolled iterations, separate from the
  * whole-program MAX_FLATTEN_VISIT_BUDGET above: a single runaway loop
  * bails at this many iterations even if the global budget has room. */
@@ -126,6 +127,11 @@ typedef struct {
      * flatten_range is size-capped (check-tier-c-function-size) and cannot
      * take another parameter. */
     int frame_has_locals;
+    /* Dynamic loop stack survives calls even though lexical `vars` correctly
+     * does not. Each emitted command snapshots its innermost entries solely
+     * for replay annotations. */
+    FlatCmdActiveLoop active_loops[MAX_FLATTEN_ACTIVE_LOOPS];
+    int active_loop_count;
     int call_depth;
     int abort;
     int visit_budget;
@@ -247,12 +253,23 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
                             ctx->call_depth);
 
     if (ctx->flat_local_vars) {
+        int loop_count = ctx->active_loop_count;
+        int loop_start = 0;
         if (vars && num_vars > 0)
             snap_count = num_vars < MAX_EXPR_VARS ? num_vars : MAX_EXPR_VARS;
         ctx->flat_local_vars[flat_cmd_idx].num_vars = snap_count;
         if (snap_count > 0)
             memcpy(ctx->flat_local_vars[flat_cmd_idx].vars, vars,
                    (size_t)snap_count * sizeof(ExprVar));
+        if (loop_count > MAX_EXPR_VARS) {
+            loop_start = loop_count - MAX_EXPR_VARS;
+            loop_count = MAX_EXPR_VARS;
+        }
+        ctx->flat_local_vars[flat_cmd_idx].num_active_loops = loop_count;
+        if (loop_count > 0)
+            memcpy(ctx->flat_local_vars[flat_cmd_idx].active_loops,
+                   &ctx->active_loops[loop_start],
+                   (size_t)loop_count * sizeof(FlatCmdActiveLoop));
     }
     return 1;
 }
@@ -365,6 +382,7 @@ static void flatten_for_loop(FlattenContext *ctx,
     for (float val = start_val;
          (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
          val += step_val) {
+        int saved_active_loop_count;
         if (--max_iters < 0) break;
         if (ctx->abort) return;
         ExprVar lvars[MAX_EXPR_VARS];
@@ -386,11 +404,20 @@ static void flatten_for_loop(FlattenContext *ctx,
                 lvars[lnv++] = vars[v];
                 outer_n++;
             }
+        saved_active_loop_count = ctx->active_loop_count;
+        if (ctx->active_loop_count < MAX_FLATTEN_ACTIVE_LOOPS) {
+            FlatCmdActiveLoop *active =
+                &ctx->active_loops[ctx->active_loop_count++];
+            active->source_cmd_idx = i;
+            active->iter_value = val;
+            active->end_value = end_val;
+        }
         /* The iterator is a LOOP binding and the outer entries keep their
          * kinds, so ctx->frame_has_locals carries through unchanged. */
         flatten_range(ctx, i + 1, loop_end, lvars, ldeps, lkinds, lnv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
+        ctx->active_loop_count = saved_active_loop_count;
         /* Copy the outer bindings back. `lvars` is rebuilt per iteration,
          * so without this `float acc; acc = 0; for(i,0,n){ acc = acc+i; }`
          * would silently reset every pass. Index 0 is the iterator, which

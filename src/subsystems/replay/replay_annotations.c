@@ -950,7 +950,6 @@ static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size)
     char args_text[MAX_LINE_LEN];
     char bounds[3][MAX_LINE_LEN];
     int nbounds;
-    int for_end;
     int cur_flat;
     int have_iter = 0;
     int have_limit = 0;
@@ -958,6 +957,7 @@ static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size)
     float limit_val = 0.0f;
     const char *end_expr = NULL;
     int oi;
+    const FlatCmdActiveLoop *active_loop = NULL;
 
     if (!out || out_size <= 0)
         return 0;
@@ -969,25 +969,35 @@ static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size)
         !var_name[0])
         return 0;
 
-    for_end = repl_source_scope_find_block_end(cmd_idx);
     cur_flat = replay_current_flat_cmd();
 
-    /* Iteration: current line must be inside this loop for the var to be live. */
-    if (cur_flat >= 0 && replay.src_line_idx > cmd_idx &&
-        replay.src_line_idx < for_end) {
-        int vi = visible_var_index(local_vars[cur_flat].vars,
-                                   local_vars[cur_flat].num_vars, var_name);
-        if (vi >= 0) {
-            iter_val = local_vars[cur_flat].vars[vi].value;
-            have_iter = 1;
+    /* The flat snapshot carries dynamic loop ancestry separately from lexical
+     * locals, so an iterator remains annotatable while replay is executing in
+     * a function called from its body. Scan backward for recursion: the same
+     * source loop can be active in several call frames and the innermost one
+     * is the value relevant to the current command. */
+    if (cur_flat >= 0) {
+        const FlatCmdLocalVars *locals = &local_vars[cur_flat];
+        for (int i = locals->num_active_loops - 1; i >= 0; i--) {
+            if (locals->active_loops[i].source_cmd_idx == cmd_idx) {
+                active_loop = &locals->active_loops[i];
+                break;
+            }
         }
+    }
+    if (active_loop) {
+        iter_val = active_loop->iter_value;
+        have_iter = 1;
     }
 
     /* Limit: resolve the end bound when it references a variable. */
     nbounds = split_top_level_args(args_text, bounds, 3);
     if (nbounds >= 2)
         end_expr = skip_leading_ws(bounds[1]);
-    if (cur_flat >= 0 && end_expr && expr_text_has_ident(end_expr)) {
+    if (active_loop && end_expr && expr_text_has_ident(end_expr)) {
+        limit_val = active_loop->end_value;
+        have_limit = 1;
+    } else if (cur_flat >= 0 && end_expr && expr_text_has_ident(end_expr)) {
         ReplPredefSnapshot predef;
         float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
         memset(&predef, 0, sizeof(predef));

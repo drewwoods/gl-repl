@@ -127,6 +127,13 @@ static int flat_locals_equal(const FlatCmdLocalVars *a,
                    sizeof(float)) != 0)
             return 0;
     }
+    if (a->num_active_loops != b->num_active_loops)
+        return 0;
+    for (int v = 0; v < a->num_active_loops; v++) {
+        if (memcmp(&a->active_loops[v], &b->active_loops[v],
+                   sizeof(a->active_loops[v])) != 0)
+            return 0;
+    }
     return 1;
 }
 

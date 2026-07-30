@@ -35,8 +35,20 @@
  * a flat command's scope after the fact — replay's value-tracing
  * annotations — read it to reconstruct per-instance bindings. */
 typedef struct {
+    int   source_cmd_idx;
+    float iter_value;
+    float end_value;
+} FlatCmdActiveLoop;
+
+typedef struct {
     int     num_vars;
     ExprVar vars[MAX_EXPR_VARS];
+    /* Dynamic loop ancestry is separate from lexical vars: a callee must not
+     * be able to evaluate expressions against its caller's iterators, but
+     * replay still needs those values to annotate loop headers while showing
+     * commands several calls deeper. Innermost entries are stored last. */
+    int               num_active_loops;
+    FlatCmdActiveLoop active_loops[MAX_EXPR_VARS];
 } FlatCmdLocalVars;
 
 /* Read-only view over an expanded command stream. The live view points at

@@ -1385,6 +1385,63 @@ static void test_replay_for_header_expands_iter_and_limit(void) {
     replay_stop();
 }
 
+/* Loop annotations follow dynamic call ancestry, not just source-text
+ * containment. This mirrors the Sierpinski carpet shape: the loop calls the
+ * recursive function, and replay eventually lands on a vertex above the loop
+ * header in the source document. The innermost recursive invocation wins. */
+static void test_replay_for_header_crosses_recursive_call(void) {
+    static const int expected_iter[] = { 0, 1, 0, 1, 0, 1 };
+    int for_line;
+    int seen = 0;
+    int safety = 4096;
+    char display[256];
+
+    glr_ctrl_reset_all();
+    editor_feed_line("carpet(depth, tag) {");
+    editor_feed_line("if(depth <= 0) {");
+    editor_feed_line("glVertex3f(tag, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("if(depth > 0) {");
+    editor_feed_line("for(i, 0, depth + 1) {");
+    editor_feed_line("carpet(depth - 1, i);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("carpet(2, -1);");
+    repl_flatten_commands(editor_state_edit_line());
+
+    for_line = find_doc_cmd_of_type(CMD_FOR_BEGIN);
+    ASSERT_TRUE("found recursive-call for source line", for_line >= 0);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0 &&
+           seen < (int)(sizeof(expected_iter) / sizeof(expected_iter[0]))) {
+        replay_advance(repl_state_flat_program_view());
+        if (g_replay_src_line != 2)
+            continue;
+        replay_code_panel_get_command_display_text(source_document_view(),
+                                                   for_line,
+                                                   display, sizeof(display));
+        {
+            char expected[32];
+            snprintf(expected, sizeof(expected), "i = %d", expected_iter[seen]);
+            ASSERT_TRUE("recursive loop shows innermost iterator",
+                        strstr(display, expected) != NULL);
+        }
+        ASSERT_TRUE("recursive loop resolves caller-frame limit",
+                    strstr(display, "depth + 1 = 2") != NULL);
+        seen++;
+    }
+    ASSERT_TRUE("visited every recursive base vertex",
+                seen == (int)(sizeof(expected_iter) / sizeof(expected_iter[0])));
+    ASSERT_TRUE("recursive replay stayed within safety budget", safety > 0);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -1406,6 +1463,7 @@ int main(void) {
     test_replay_funcdef_shows_alias_params();
     test_replay_atoll_sea_def_params();
     test_replay_for_header_expands_iter_and_limit();
+    test_replay_for_header_crosses_recursive_call();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_expanded_color_and_normal_values_inline();
     test_replay_baseline_restore_survives_predef_reshape();

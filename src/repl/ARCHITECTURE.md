@@ -286,11 +286,16 @@ surfaces it on the CLI.
 
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
-the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
+the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
 ([`repl_state_flat_program_local_vars()`](state_views.h#L180)):
 
 ```c
-typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
+typedef struct {
+    int num_vars;
+    ExprVar vars[MAX_EXPR_VARS];
+    int num_active_loops;
+    FlatCmdActiveLoop active_loops[MAX_EXPR_VARS];
+} FlatCmdLocalVars;
 ```
 
 The re-evaluation itself happens at *flatten* time, not execution time:
@@ -301,7 +306,12 @@ and the right `t` (live each frame, because a playing `t` re-flattens per
 frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
 (§5.3). The stored snapshot array serves consumers that must reconstruct a
 flat command's scope after the fact — replay's value-tracing annotations
-read it to display per-instance bindings.
+read it to display per-instance bindings. The separate `active_loops` list is
+dynamic ancestry rather than lexical scope: it follows calls so a loop header
+can still show its iterator while replay is executing in a callee, without
+making a caller's iterator visible to expressions inside that callee. When
+recursion activates the same source loop more than once, the innermost entry
+wins.
 
 Replay associates an earlier assignment with the active invocation using
 stable flat-command provenance (`func_scope_mask`, `call_depth`, immediate and
@@ -510,7 +520,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L129) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L141) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -537,7 +547,7 @@ Expansion is recursive and **bounded**:
 
 On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
-provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L37) snapshot (§3.4).
+provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L43) snapshot (§3.4).
 
 #### Expression paths and cache lifecycle
 
@@ -547,7 +557,7 @@ paths. They all produce the same baked [`GLCmd`](command.h#L121) stream:
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
    source array. `has_vars` is decided at commit time against predefs and the
    enclosing loop/function bindings, so its baked args cannot change between
-   frames. The enclosing [`FlatCmdLocalVars`](flatten.h#L37) snapshot is still
+   frames. The enclosing [`FlatCmdLocalVars`](flatten.h#L43) snapshot is still
    recorded for replay annotations.
 2. On an uncached variable-bearing numeric command, the direct evaluator uses
    the committed command type/arity to extract and evaluate only the known
@@ -644,7 +654,7 @@ There are three intentional disable/reference modes:
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
 | Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; every relevant value change full-flattens and no rebake is attempted. |
-| One [`repl_flatten_program()`](flatten.h#L129) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| One [`repl_flatten_program()`](flatten.h#L141) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
 | Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables the literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
@@ -656,7 +666,7 @@ paths by
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`, but
 the engine is reusable: tests and replay tools flatten into a *temporary*
-buffer and pass a [`FlatProgramView`](flatten.h#L46) over it, never touching
+buffer and pass a [`FlatProgramView`](flatten.h#L58) over it, never touching
 the live arrays.
 
 ### 5.3 Execute — flat program to GL
@@ -1044,7 +1054,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L129) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L141) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
