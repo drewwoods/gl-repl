@@ -930,11 +930,60 @@ static int hist_series_count(void) {
     return series_count;
 }
 
+typedef struct {
+    ProfSection section;
+    double mean_us;
+    int sampled;
+} HistLegendSeries;
+
+/* Mean-time order for the legend, shared by rendering and hit-testing so each
+ * displayed cell and its click target use the same series order. Sampled
+ * series sort slowest first; unsampled series follow them, with catalog order
+ * making both equal means and the unsampled tail deterministic. */
+static int hist_legend_series_precedes(const HistLegendSeries *a,
+                                       const HistLegendSeries *b) {
+    if (a->sampled != b->sampled)
+        return a->sampled > b->sampled;
+    if (a->sampled && a->mean_us != b->mean_us)
+        return a->mean_us > b->mean_us;
+    return (int)a->section < (int)b->section;
+}
+
+static int hist_legend_series(HistLegendSeries *out, int max_series) {
+    int count = 0;
+    int section_idx;
+
+    if (out == NULL || max_series <= 0) return 0;
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        HistogramStats stats;
+        HistLegendSeries entry;
+        int insert_at;
+
+        if (!hist_series_visible(s)) continue;
+        if (count >= max_series) break;
+        memset(&stats, 0, sizeof(stats));
+        prof_section_stats(s, &stats);
+        entry.section = s;
+        entry.mean_us = stats.mean_us;
+        entry.sampled = stats.count > 0;
+
+        insert_at = count;
+        while (insert_at > 0 &&
+               hist_legend_series_precedes(&entry, &out[insert_at - 1])) {
+            out[insert_at] = out[insert_at - 1];
+            insert_at--;
+        }
+        out[insert_at] = entry;
+        count++;
+    }
+    return count;
+}
+
 /* A series' position in catalog order among the visible set — the index its
- * identity color is generated from. The legend and the two bar passes walk the
- * whole catalog and count as they go; the hover tooltip needs one series'
- * ordinal on its own, so it recomputes it the same way rather than colouring
- * its title differently from the swatch it is describing. */
+ * identity color is generated from. The two bar passes walk the whole catalog;
+ * the mean-sorted legend and hover tooltip resolve the catalog ordinal from
+ * the section so changing position never changes a series' color. */
 static int hist_series_ordinal(ProfSection s) {
     int ordinal = 0;
     for (int section_idx = 0; section_idx < (int)s; section_idx++) {
@@ -1008,6 +1057,7 @@ int ui_histogram_panel_height(void) {
 
 int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
                                 int mx, int my) {
+    HistLegendSeries series[PROF_SECTION_COUNT];
     int panel_h;
     int gl_y;
     int control_w;
@@ -1015,7 +1065,7 @@ int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
     int legend_rows;
     int tx;
     int ordinal;
-    int section_idx;
+    int series_count;
 
     if (view == NULL || !view->visible ||
         view->window_w <= 0 || view->window_h <= 0)
@@ -1042,20 +1092,18 @@ int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
     legend_rows  = (hist_series_count() + HIST_LEGEND_COLS - 1)
                  / HIST_LEGEND_COLS;
     tx = view->panel_x + 8;
-    ordinal = 0;
-    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        ProfSection s = (ProfSection)section_idx;
+    series_count = hist_legend_series(series, PROF_SECTION_COUNT);
+    for (ordinal = 0; ordinal < series_count; ordinal++) {
+        ProfSection s = series[ordinal].section;
         int row, col, lx, ly;
-        if (!hist_series_visible(s)) continue;
         row = ordinal / HIST_LEGEND_COLS;
         col = ordinal % HIST_LEGEND_COLS;
-        ordinal++;
         lx = tx + col * legend_col_w;
         ly = view->panel_y + HIST_BOTTOM_PAD
            + (legend_rows - 1 - row) * HIST_LEGEND_ROW_H;
         if (mx >= lx && mx < lx + legend_col_w &&
             gl_y >= ly && gl_y < ly + HIST_LEGEND_ROW_H)
-            return section_idx;
+            return (int)s;
     }
     return UI_HISTOGRAM_PANEL_HIT_NONE;
 }
@@ -1172,19 +1220,20 @@ static void hist_series_columns(ProfSection s, int lo_bin, int hi_bin,
     }
 }
 
-/* Legend: catalog order, filling columns left to right. A series with no
- * samples keeps its slot (so the panel height is stable) but is dimmed. Drawn
- * on every path through the panel, including the empty ones — it is the only
- * way back once every series has been toggled off. */
+/* Legend: descending histogram mean, filling columns left to right. A series
+ * with no samples follows the sampled set and is dimmed. Drawn on every path
+ * through the panel, including the empty ones — it is the only way back once
+ * every series has been toggled off. */
 static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
                              const unsigned long *series_samples) {
+    HistLegendSeries series[PROF_SECTION_COUNT];
     int legend_col_w = (HIST_PANEL_W - 16) / HIST_LEGEND_COLS;
     int tx = view->panel_x + 8;
-    int ordinal = 0;
+    int series_count = hist_legend_series(series, PROF_SECTION_COUNT);
 
-    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        ProfSection s = (ProfSection)section_idx;
-        if (!hist_series_visible(s)) continue;
+    for (int ordinal = 0; ordinal < series_count; ordinal++) {
+        ProfSection s = series[ordinal].section;
+        int section_idx = (int)s;
 
         int row = ordinal / HIST_LEGEND_COLS;
         int col = ordinal % HIST_LEGEND_COLS;
@@ -1193,7 +1242,7 @@ static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
                 + (legend_rows - 1 - row) * HIST_LEGEND_ROW_H;
 
         float rgb[3];
-        hist_series_color(ordinal++, rgb);
+        hist_series_color(hist_series_ordinal(s), rgb);
 
         unsigned long samples = series_samples[section_idx];
         if (prof_section_set_contains(&view->hidden_series, s)) {

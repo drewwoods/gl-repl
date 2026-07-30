@@ -824,6 +824,43 @@ static void test_histogram_legend_toggle(void) {
                 prof_section_set_is_empty(&mask));
 }
 
+/* The legend's click map follows descending histogram mean, not catalog
+ * order. Rendering uses the same ordered list, so this also protects the
+ * shared layout contract that hover and toggles rely on. */
+static void test_histogram_legend_sorted_by_mean(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10
+    };
+    int first = -1, second = -1;
+    int series_count = 0;
+    int legend_rows;
+    int ly;
+    int hit;
+
+    prof_test_reset();
+    for (int s = 0; s < PROF_SECTION_COUNT; s++) {
+        ProfSectionInfo info = prof_section_info((ProfSection)s);
+        if (info.depth != 0 || info.label == NULL || info.label[0] == '\0')
+            continue;
+        if (first < 0) first = s;
+        else if (second < 0) second = s;
+        series_count++;
+    }
+    ASSERT_TRUE("catalog has two legend series to order",
+                first >= 0 && second >= 0);
+
+    prof_section_record_us((ProfSection)first, 100.0);
+    prof_section_record_us((ProfSection)second, 900.0);
+    legend_rows = (series_count + 2 - 1) / 2;
+    ly = view.panel_y + 8 + (legend_rows - 1) * 12;
+    hit = ui_histogram_panel_hit_test(&view, view.panel_x + 11,
+                                      view.window_h - (ly + 6));
+    ASSERT_INT_EQ("largest histogram mean occupies first legend cell",
+                  hit, second);
+    prof_test_reset();
+}
+
 /* Right-button semantics over the same legend rectangle: solo replaces the mask
  * with "every plotted series but this one", regardless of what was hidden
  * before, and re-soloing the series that is already alone restores them all. */
@@ -1361,6 +1398,7 @@ int main(void) {
     test_histogram_panel_metrics();
     test_histogram_reset_hit_test();
     test_histogram_legend_toggle();
+    test_histogram_legend_sorted_by_mean();
     test_histogram_legend_solo();
     test_histogram_hidden_series_drops_bars();
     test_histogram_axis_follows_hidden_series();

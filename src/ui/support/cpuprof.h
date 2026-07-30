@@ -157,10 +157,11 @@ int  ui_fps_panel_height(void);
  * goes into the set at once). A hidden series is dropped from the plot,
  * from the y-scale (so hiding a dominant distribution lets the rest grow) and
  * from the x-axis span (so hiding the fast sections zooms the axis onto what
- * is left), but keeps its legend slot — rendered as a hollow swatch — so the
- * layout, and therefore the legend hit-test, never shifts as series come and
- * go. With every series hidden the plot draws empty and says so; the legend
- * still renders, since it is the only way back.
+ * is left), but keeps its mean-sorted legend entry — rendered as a hollow
+ * swatch — so toggling visibility does not change the ordering or hit-test.
+ * Sampled entries sort by descending histogram mean; unsampled entries follow
+ * in catalog order. With every series hidden the plot draws empty and says so;
+ * the legend still renders, since it is the only way back.
  *
  * pointer_x/pointer_y are the last known pointer position in GLUT window
  * coordinates (y down). Resting the pointer on a legend entry pops that
