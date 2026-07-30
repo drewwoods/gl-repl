@@ -577,11 +577,9 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
     for (int a = 0; a < 3; a++) {
         Render3dRgba c = spec->axis[a];
         axes_color(ctx, c.r, c.g, c.b, c.a);
-        glVertex3f(a == 0 ? 0.0f : 0.0f,
-                   a == 1 ? 0.0f : 0.0f,
-                   a == 2 ? 0.0f : 0.0f);
+        glVertex3f(0.0f, 0.0f, 0.0f);   /* all three shafts start here */
         axes_color(ctx, c.r, c.g, c.b, c.a * tip_alpha);
-        glVertex3f(a == 0 ? len : 0.0f,
+        glVertex3f(a == 0 ? len : 0.0f, /* ...and the tip picks the axis */
                    a == 1 ? len : 0.0f,
                    a == 2 ? len : 0.0f);
     }
