@@ -111,6 +111,16 @@ has music. It assembles `Contents/{MacOS/gl-repl, Resources/, Info.plist}`:
   build on a non-mac host warns and leaves it unsigned. Proper Developer-ID
   signing + notarization (removes the prompt entirely) is intentionally not
   done — it needs a paid account.
+- **Signing fails loudly, and is verified on the shipped bytes.** On macOS both
+  `make app` and the release re-sign hard-fail instead of warning: a silently
+  unsigned bundle is exactly what ships as "damaged", so it must not survive to
+  an upload. The mac zip is built with **`ditto -c -k --sequesterRsrc
+  --keepParent`** (the Apple-supported bundle archiver) rather than `zip`, then
+  `verify_macos_zip()` unpacks that archive, applies a
+  `com.apple.quarantine` xattr exactly as a browser download would, and re-runs
+  `codesign --verify --deep --strict`. An invalid signature on a quarantined app
+  *is* the "damaged" block, so this is the check that keeps it out of a release;
+  it aborts the build rather than staging a broken artifact.
 
 Build products (`gl-repl.app/`, `gl-repl.icns`, `gl-repl.iconset/`) are
 gitignored; the committed `.svg`s are the source of truth. Pure packaging

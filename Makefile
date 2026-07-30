@@ -1260,9 +1260,16 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 	# "damaged" hard block macOS shows for a fully unsigned, quarantined app.
 	# No Apple account needed. (The release flow re-signs after it swaps in the
 	# full music pack, since editing Resources/ invalidates this signature.)
-	@codesign --force --deep --sign - $(APP_BUNDLE) 2>/dev/null \
-		&& echo "ad-hoc signed $(APP_BUNDLE)" \
-		|| echo "warning: codesign unavailable — $(APP_BUNDLE) left unsigned"
+	# On a mac this is load-bearing, so it hard-fails rather than warning: a
+	# silently-unsigned bundle is exactly what ships as "damaged". Off-mac
+	# (cross-packaging) there is no codesign, so it degrades to a warning.
+	@if [ "$$(uname -s)" = "Darwin" ]; then \
+		codesign --force --deep --sign - $(APP_BUNDLE) || exit 1; \
+		codesign --verify --deep --strict --verbose=2 $(APP_BUNDLE) || exit 1; \
+		echo "ad-hoc signed + verified $(APP_BUNDLE)"; \
+	else \
+		echo "warning: not macOS — $(APP_BUNDLE) left unsigned"; \
+	fi
 	touch $(APP_BUNDLE)
 	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
 

@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -290,6 +291,7 @@ def build_macos(cfg, dist: Path, tag, mdir, target):
     if sys.platform == "darwin":
         say("ad-hoc re-signing gl-repl.app (music pack changed the bundle)")
         run(["codesign", "--force", "--deep", "--sign", "-", str(appdir)])
+        run(["codesign", "--verify", "--deep", "--strict", str(appdir)])
     else:
         warn("not on macOS — can't re-sign gl-repl.app after the music swap, so "
              "its signature is invalid. Package on a mac, or downloaders must "
@@ -300,9 +302,40 @@ def build_macos(cfg, dist: Path, tag, mdir, target):
     if zip_path.exists():
         zip_path.unlink()
     say(f"zipping -> dist/{tag}/{zip_path.name}")
-    run(["zip", "-q", "-r", "-y", str(zip_path), "gl-repl.app"],
-        cwd=str(appdir.parent))
+    if sys.platform == "darwin":
+        # ditto, not zip: it is the Apple-supported bundle archiver and keeps
+        # the signature intact through the round trip (resource forks
+        # sequestered, bundle dir preserved as the archive root).
+        run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
+             "gl-repl.app", str(zip_path)], cwd=str(appdir.parent))
+        verify_macos_zip(zip_path)
+    else:
+        run(["zip", "-q", "-r", "-y", str(zip_path), "gl-repl.app"],
+            cwd=str(appdir.parent))
     shutil.rmtree(stage, ignore_errors=True)
+
+
+def verify_macos_zip(zip_path: Path):
+    """Prove the *shipped bytes* are what a downloader gets: unpack the zip,
+    quarantine the copy exactly as a browser download would, and re-verify the
+    signature. An invalid/absent signature on a quarantined app is precisely
+    what macOS reports as "gl-repl.app is damaged", so this is the check that
+    keeps that from reaching a release."""
+    with tempfile.TemporaryDirectory() as tmp:
+        run(["ditto", "-x", "-k", str(zip_path), tmp])
+        app = Path(tmp) / "gl-repl.app"
+        if not app.is_dir():
+            die(f"{zip_path.name}: no gl-repl.app at the archive root.")
+        run(["xattr", "-w", "com.apple.quarantine",
+             "0081;00000000;Safari;", str(app)])
+        try:
+            run(["codesign", "--verify", "--deep", "--strict", "--verbose=2",
+                 str(app)])
+        except subprocess.CalledProcessError:
+            die(f"{zip_path.name}: the unpacked bundle fails signature "
+                "verification — a downloader would see \"gl-repl.app is "
+                "damaged\". Not shipping it.")
+        say(f"verified {zip_path.name}: quarantined copy passes codesign")
 
 
 LINUX_README = """gl-repl — Immediate-mode OpenGL REPL ({tag}, linux-{arch})
