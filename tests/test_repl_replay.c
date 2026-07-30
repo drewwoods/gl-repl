@@ -539,6 +539,47 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     replay_stop();
 }
 
+static void test_replay_expanded_color_and_normal_values_inline(void) {
+    int t_idx;
+    int safety = 1024;
+    char display[256];
+
+    glr_ctrl_reset_all();
+    t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef exists for inline state values", t_idx >= 0);
+    g_predef_vars_mut[t_idx].value = 0.25f;
+
+    editor_feed_line("glColor3f(t, t + 1, t + 2);");
+    editor_feed_line("glColor4f(t, t + 1, t + 2, t + 3);");
+    editor_feed_line("glNormal3f(t, -t, t * 2);");
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    replay_start();
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("inline state replay reached end", safety > 0);
+    ASSERT_TRUE("inline state values use expanded mode",
+                g_replay_expand_args == REPLAY_EXPAND_EXPANDED);
+
+    replay_code_panel_get_command_display_text(source_document_view(), 0,
+                                               display, sizeof(display));
+    ASSERT_TRUE("expanded glColor3f appends evaluated call",
+                strstr(display, "// glColor3f(0.25, 1.25, 2.25);") != NULL);
+    replay_code_panel_get_command_display_text(source_document_view(), 1,
+                                               display, sizeof(display));
+    ASSERT_TRUE("expanded glColor4f appends evaluated call",
+                strstr(display,
+                       "// glColor4f(0.25, 1.25, 2.25, 3.25);") != NULL);
+    replay_code_panel_get_command_display_text(source_document_view(), 2,
+                                               display, sizeof(display));
+    ASSERT_TRUE("expanded glNormal3f appends evaluated call",
+                strstr(display, "// glNormal3f(0.25, -0.25, 0.5);") != NULL);
+
+    replay_stop();
+}
+
 /* #3 regression: the replay baseline must be restored by NAME, not by
  * slot index. Replay spans multiple frames; mid-replay the live predef
  * table can be reshaped (workspace switch, scene load, undo across
@@ -1366,6 +1407,7 @@ int main(void) {
     test_replay_atoll_sea_def_params();
     test_replay_for_header_expands_iter_and_limit();
     test_replay_single_arg_shape_gets_eval_annotation();
+    test_replay_expanded_color_and_normal_values_inline();
     test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
     test_replay_cursor_sync_and_unrecognized_keys();

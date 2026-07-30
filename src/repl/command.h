@@ -229,6 +229,20 @@ static inline int repl_cmd_emits_vertex(CmdType type) {
             type == CMD_TESS_VERTEX);
 }
 
+/* True for immediate-mode and tessellator commands that update the current
+ * per-vertex color or normal state. These group the equivalent GL/GLU command
+ * families without erasing the distinction at call sites that need it. */
+static inline int repl_cmd_sets_current_color(CmdType type) {
+    return (type == CMD_COLOR3F ||
+            type == CMD_COLOR4F ||
+            type == CMD_TESS_COLOR);
+}
+
+static inline int repl_cmd_sets_current_normal(CmdType type) {
+    return (type == CMD_NORMAL3F ||
+            type == CMD_TESS_NORMAL);
+}
+
 /* True for the opening commands of REPL control-flow blocks: for-loop,
  * function definition, if-block. Block depth tracking treats all three
  * the same way ("a new scope just opened, increment depth"). Used

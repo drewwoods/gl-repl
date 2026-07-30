@@ -1056,7 +1056,9 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
          * bounds are literals, so the iteration readout is still useful. */
         build_replay_for_inline_comment(cmd_idx, comment, sizeof(comment));
     } else if (replay.expand_args == REPLAY_EXPAND_EXPANDED &&
-               repl_cmd_emits_vertex(type)) {
+               (repl_cmd_emits_vertex(type) ||
+                repl_cmd_sets_current_color(type) ||
+                repl_cmd_sets_current_normal(type))) {
         char evaluated[REPL_REPLAY_ANNOTATION_TEXT_MAX];
         int flat_idx;
         if (!has_vars)
@@ -1180,6 +1182,7 @@ static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
     case CMD_GLUT_TEAPOT:      *nargs_out = 1; return "glutSolidTeapot(%g);";
     case CMD_GLUT_CONE:        *nargs_out = 4; return "glutSolidCone(%g, %g, %g, %g);";
     case CMD_TESS_NORMAL:      *nargs_out = 3; return "gluNormal(%g, %g, %g);";
+    case CMD_TESS_COLOR:       *nargs_out = 4; return "gluColor(%g, %g, %g, %g);";
     case CMD_TESS_VERTEX:      *nargs_out = 3; return "gluVertex(%g, %g, %g);";
     default:                   *nargs_out = 0; return NULL;
     }

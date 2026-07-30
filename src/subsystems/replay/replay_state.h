@@ -42,9 +42,9 @@ typedef enum {
 
 /* Code-panel detail during replay. The middle mode keeps live value
  * annotations on assignments, loop headers, function definitions, and other
- * commands. It leaves glVertex/gluVertex source rows as a single line with the
- * evaluated call appended as a comment instead of adding substituted +
- * evaluated virtual rows beneath them. */
+ * commands. It leaves vertex, color, and normal source rows as a single line
+ * with the evaluated call appended as a comment instead of adding substituted
+ * + evaluated virtual rows beneath them. */
 typedef enum {
     REPLAY_EXPAND_OFF = 0,
     REPLAY_EXPAND_EXPANDED,
