@@ -56,6 +56,19 @@ typedef enum {
  * unchanged while a branch is collapsed. */
 typedef ProfSectionSet UiProfileCollapseMask;
 
+/* Semantic timing bands used by the section listing. Exposed as a pure
+ * classifier so the threshold policy can be tested without inspecting GL
+ * color calls. */
+typedef enum {
+    UI_PROFILE_TIME_NEAR_ZERO = 0,
+    UI_PROFILE_TIME_GREEN,
+    UI_PROFILE_TIME_YELLOW,
+    UI_PROFILE_TIME_RED
+} UiProfileTimeColor;
+
+UiProfileTimeColor ui_profile_time_color(const ProfSectionInfo *info,
+                                         double us);
+
 enum {
     UI_PROFILE_PANEL_HIT_NONE = -1,
     UI_PROFILE_PANEL_TOGGLE_ALL = -2

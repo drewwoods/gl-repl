@@ -5,13 +5,17 @@
  * (src/ui/support/cpuprof.c) are section-name agnostic: they key on the
  * opaque ProfSection int and ask the app for each section's display via
  * prof_section_info(). This file is that app-side table for the gl-repl
- * binary — each row is { label, depth, is_total }:
+ * binary — each row is
+ * { label, depth, is_total, is_slack, is_frame_total }:
  *   - label    is the bare section name (NO indentation baked in);
  *   - depth    is the nesting level (0 = top-level, 1/2/3 = children),
  *              the single source of truth — the panel derives the visual
  *              indentation from it, so restyling the indent never changes
  *              the nesting classification;
- *   - is_total marks the one whole-frame total row.
+ *   - is_total marks a total row;
+ *   - is_slack marks an inversely-colored headroom row;
+ *   - is_frame_total marks the one total whose 60 Hz threshold gets refresh
+ *     jitter tolerance.
  * Depth reflects true prof_begin/prof_end enclosure (PROF_SNAPSHOT_* nest in
  * PROF_SNAPSHOT, PROF_RENDER3D_OVERLAY_* in _OVERLAYS, etc.). A standalone
  * demo that reuses cpuprof supplies its own prof_section_info.
@@ -104,10 +108,11 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
     /* The three summary rows under the divider: the whole frame, then the two
-     * parts it splits into. "Frame Time" carries is_total (the divider above it
-     * and the whole-frame thresholds); "Present" is the vsync wait, colored
-     * inversely because a long one is headroom rather than cost (is_slack). */
-    [PROF_FRAME_TOTAL]                       = { "Frame Time",      0, 1, 0 },
+     * parts it splits into. "Frame Time" carries is_total (the divider above
+     * it and the full-budget thresholds) plus is_frame_total (refresh-boundary
+     * tolerance); "Present" is the vsync wait, colored inversely because a
+     * long one is headroom rather than cost (is_slack). */
+    [PROF_FRAME_TOTAL]                       = { "Frame Time",      0, 1, 0, 1 },
     [PROF_FRAME_WORK]                        = { "Frame Work",      0, 0, 0 },
     [PROF_PRESENT]                           = { "Present",         0, 0, 1 },
 };
@@ -115,7 +120,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
 ProfSectionInfo prof_section_info(ProfSection s) {
     if (s >= 0 && s < PROF_SECTION_COUNT && k_sections[s].label != NULL)
         return k_sections[s];
-    ProfSectionInfo unknown = { "?", 0, 0, 0 };
+    ProfSectionInfo unknown = { "?", 0, 0, 0, 0 };
     return unknown;
 }
 

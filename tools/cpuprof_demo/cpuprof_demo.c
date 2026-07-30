@@ -89,14 +89,14 @@ static GLuint g_recompile_list = 0;
 static int    g_lists_ready    = 0;
 
 /* The demo's half of the cpuprof display contract (gl-repl's half is
- * src/app/glr_prof.c): { bare label, explicit depth, is_total }. depth — not
- * any baked-in indentation — drives how far the panel indents the row, and
- * depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT are
- * unused: prof_section_info returns {NULL} and the panel omits them. The
- * trailing is_slack flag is left implicit (zero) throughout: the demo times
- * only work, never a vsync wait. */
+ * src/app/glr_prof.c):
+ * { bare label, explicit depth, is_total, is_slack, is_frame_total }. depth —
+ * not any baked-in indentation — drives how far the panel indents the row,
+ * and depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT
+ * are unused: prof_section_info returns {NULL} and the panel omits them. The
+ * demo times no slack row; its outer span is a whole-frame total. */
 static const ProfSectionInfo k_sections[CP_COUNT] = {
-    [CP_FRAME_TOTAL]       = { "Frame Total",   0, 1 },
+    [CP_FRAME_TOTAL]       = { "Frame Total",   0, 1, 0, 1 },
     [CP_IMMEDIATE]         = { "Immediate x5",  0, 0 },
     [CP_REUSE]             = { "List reuse",    0, 0 },
     [CP_REUSE_CALL]        = { "call list x5",  1, 0 },

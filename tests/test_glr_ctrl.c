@@ -736,17 +736,29 @@ static void test_frame_spans_host_stages(void) {
     ASSERT_TRUE("present is the difference (2ms)", present_us == 2000.0);
     ASSERT_TRUE("work + present is the frame", work_us + present_us == frame_us);
 
+    /* If the host omits work_end, do not subtract the preceding frame's stale
+     * Work sample. None of the new frame was accounted as work, so all of it
+     * belongs to Present, and ending it must clear both open flags. */
+    prof_test_set_now_us(20000.0);
+    glr_frame_begin();
+    prof_test_set_now_us(25000.0);
+    glr_frame_ended();
+    ASSERT_TRUE("frame without work_end still records its total",
+                prof_section_last_us(PROF_FRAME_TOTAL) == 5000.0);
+    ASSERT_TRUE("frame without work_end attributes the full frame to present",
+                prof_section_last_us(PROF_PRESENT) == 5000.0);
+
     /* An unpaired end must not close a span that was never opened —
      * glr_ctrl_display_frame() is called bare by tests and tools. */
     prof_test_set_now_us(99000.0);
     glr_frame_work_end();
     glr_frame_ended();
     ASSERT_TRUE("unpaired ends leave the frame alone",
-                prof_section_last_us(PROF_FRAME_TOTAL) == 17000.0);
+                prof_section_last_us(PROF_FRAME_TOTAL) == 5000.0);
     ASSERT_TRUE("unpaired ends leave the work alone",
                 prof_section_last_us(PROF_FRAME_WORK) == 15000.0);
     ASSERT_TRUE("unpaired ends leave the present alone",
-                prof_section_last_us(PROF_PRESENT) == 2000.0);
+                prof_section_last_us(PROF_PRESENT) == 5000.0);
 
     prof_test_clear_now_us();
 }
@@ -770,12 +782,18 @@ static void test_summary_row_metadata(void) {
                prof_section_info(PROF_FRAME_TOTAL).is_total, 1);
     ASSERT_INT("frame total row is not slack",
                prof_section_info(PROF_FRAME_TOTAL).is_slack, 0);
+    ASSERT_INT("frame total row has refresh tolerance",
+               prof_section_info(PROF_FRAME_TOTAL).is_frame_total, 1);
     ASSERT_INT("frame work row is not a second total",
                prof_section_info(PROF_FRAME_WORK).is_total, 0);
+    ASSERT_INT("frame work row has no refresh tolerance",
+               prof_section_info(PROF_FRAME_WORK).is_frame_total, 0);
     ASSERT_INT("present row is slack",
                prof_section_info(PROF_PRESENT).is_slack, 1);
     ASSERT_INT("present row is not a second total",
                prof_section_info(PROF_PRESENT).is_total, 0);
+    ASSERT_INT("present row has no refresh tolerance",
+               prof_section_info(PROF_PRESENT).is_frame_total, 0);
     ASSERT_STR("frame total row is labeled Frame Time",
                prof_section_info(PROF_FRAME_TOTAL).label, "Frame Time");
     ASSERT_STR("frame work row is labeled Frame Work",

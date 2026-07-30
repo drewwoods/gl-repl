@@ -144,14 +144,17 @@ static inline int prof_section_set_equal(const ProfSectionSet *a,
  *             nesting. The panel derives the visual indentation from it and
  *             treats depth>0 as a "detail" sub-section hidden outside DETAILS
  *             mode — so restyling the indent never re-classifies a row.
- *  is_total — nonzero for the single whole-frame total row (drawn with a
- *             divider above it and its own warn/crit thresholds).
+ *  is_total — nonzero for a total row (drawn with a divider above it and the
+ *             full-budget warn/crit thresholds).
  *  is_slack — nonzero for a row where a *bigger* number is the healthy one:
  *             it measures time the frame is handed rather than time it spends
  *             (gl-repl's Present row — the vsync wait). The panel inverts the
  *             warn/crit coloring for these, so a long wait reads green and a
  *             vanishing one red. Such a row is outside the frame total by
  *             construction; the flag only decides how it is colored.
+ *  is_frame_total — nonzero only for the whole-frame total. It keeps the
+ *             refresh-boundary tolerance specific to that row: another total
+ *             uses the ordinary hard full-budget threshold.
  *
  * Implemented by src/app/glr_prof.c for the gl-repl binary, and by each
  * standalone demo driver for the sections it instruments. The generic timer
@@ -163,6 +166,7 @@ typedef struct {
     int         depth;
     int         is_total;
     int         is_slack;
+    int         is_frame_total;
 } ProfSectionInfo;
 
 ProfSectionInfo prof_section_info(ProfSection s);

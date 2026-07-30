@@ -46,6 +46,21 @@ static void test_cpuprof_metrics(void) {
                 ui_profile_panel_height(PROFILE_PANEL_HISTOGRAM) > 0);
 }
 
+static void test_cpuprof_time_color_policy(void) {
+    ProfSectionInfo ordinary_total = { "Other Total", 0, 1, 0, 0 };
+    ProfSectionInfo frame_total = prof_section_info(PROF_FRAME_TOTAL);
+
+    ASSERT_INT_EQ("ordinary 17ms total is red",
+                  ui_profile_time_color(&ordinary_total, 17000.0),
+                  UI_PROFILE_TIME_RED);
+    ASSERT_INT_EQ("17ms frame total gets refresh tolerance",
+                  ui_profile_time_color(&frame_total, 17000.0),
+                  UI_PROFILE_TIME_YELLOW);
+    ASSERT_INT_EQ("frame tolerance still ends at 17.5ms",
+                  ui_profile_time_color(&frame_total, 17500.0),
+                  UI_PROFILE_TIME_RED);
+}
+
 static void test_cpuprof_section_collapse(void) {
     UiProfileCollapseMask collapsed = prof_section_set_empty();
     int expanded_h = ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
@@ -1325,6 +1340,7 @@ static void test_cpuprof_render_histogram_listing(void) {
 int main(void) {
     printf("--- ui_cpuprof tests ---\n");
     test_cpuprof_metrics();
+    test_cpuprof_time_color_policy();
     test_cpuprof_section_collapse();
     test_cpuprof_section_hit_test();
     test_gpu_section_policy();

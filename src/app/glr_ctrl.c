@@ -2407,7 +2407,9 @@ void glr_frame_work_end(void) {
 
 void glr_frame_ended(void) {
     if (g_frame_open) {
+        int work_was_closed = !g_frame_work_open;
         g_frame_open = 0;
+        g_frame_work_open = 0;
         prof_end(PROF_FRAME_TOTAL);
         /* Present is what the frame spent outside its work: the glFinish drain
          * and the swap, plus anything else the callback does after
@@ -2416,8 +2418,10 @@ void glr_frame_ended(void) {
          * never closed its work span leaves the difference at the full total,
          * which is the honest reading of "none of this was accounted for". */
         prof_section_record_us(PROF_PRESENT,
-                               prof_section_last_us(PROF_FRAME_TOTAL)
-                             - prof_section_last_us(PROF_FRAME_WORK));
+            work_was_closed
+                ? prof_section_last_us(PROF_FRAME_TOTAL)
+                    - prof_section_last_us(PROF_FRAME_WORK)
+                : prof_section_last_us(PROF_FRAME_TOTAL));
     }
     /* In GLR_TICK_PER_FRAME mode this is where the simulation advances, so a
      * captured sequence is t0, t0+dt, ... . Deliberately after the total is

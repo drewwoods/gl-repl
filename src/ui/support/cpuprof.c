@@ -220,16 +220,16 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
 }
 
 /* Apply a green/yellow/red color based on section timing thresholds.
- * The whole-frame total row (is_total) uses 1/120s (8.3ms) and 1/60s
- * breakpoints; every other section uses half those thresholds
+ * Total rows use 1/120s (8.3ms) and 1/60s breakpoints; ordinary sections use
+ * half those thresholds
  * (4.15ms / 8.3ms).
  *
- * The total's red step gets 5% of tolerance past 1/60s. That row is the whole
- * frame, and under vsync the whole frame *is* the refresh interval: a healthy
- * 60 fps frame measures 16.6-16.7 ms and would cross a hard 16667 boundary and
- * back every frame, flickering red at exactly the rate it is meant to hit. A
- * genuinely missed vsync doubles the period to ~33 ms and is nowhere near the
- * tolerance.
+ * The whole-frame total alone gets 5% of tolerance past 1/60s. Under vsync it
+ * *is* the refresh interval: a healthy 60 fps frame measures 16.6-16.7 ms and
+ * would cross a hard 16667 boundary and back every frame, flickering red at
+ * exactly the rate it is meant to hit. A genuinely missed vsync doubles the
+ * period to ~33 ms and is nowhere near the tolerance. Other totals keep the
+ * hard 1/60s red step.
  *
  * A slack row (is_slack — gl-repl's Present, the vsync wait) reads the same
  * scale backwards: the number is time the frame was handed, not time it spent,
@@ -242,32 +242,56 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
 /* FPS gauge: green/yellow/red is a fixed data-viz semantic, NOT theme
  * tokens (theme.h bucket 3 - red must read as "over budget" in every
  * scheme; it must not follow the UI accent). */
-static void set_time_color(const ProfSectionInfo *info, double us) {
-    if (us < 2.0) {
-        glColor3f(0.30f, 0.30f, 0.38f);       /* near-zero – same as stale */
-        return;
-    }
+UiProfileTimeColor ui_profile_time_color(const ProfSectionInfo *info,
+                                         double us) {
+    if (us < 2.0)
+        return UI_PROFILE_TIME_NEAR_ZERO;
     if (info->is_slack) {
         if (us >= 8333.0)
-            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – half a frame spare */
+            return UI_PROFILE_TIME_GREEN;
         else if (us >= 2083.0)
-            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – slack running out */
+            return UI_PROFILE_TIME_YELLOW;
         else
-            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – no headroom left */
+            return UI_PROFILE_TIME_RED;
+    } else if (info->is_frame_total) {
+        if (us < 16700.0)
+            return UI_PROFILE_TIME_GREEN;
+        else if (us < 17500.0)
+            return UI_PROFILE_TIME_YELLOW;
+        else
+            return UI_PROFILE_TIME_RED;
     } else if (info->is_total) {
         if (us < 8333.0)
-            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */
-        else if (us < 17500.0)
-            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – holding 60 fps */
+            return UI_PROFILE_TIME_GREEN;
+        else if (us < 16667.0)
+            return UI_PROFILE_TIME_YELLOW;
         else
-            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – below 60 fps */
+            return UI_PROFILE_TIME_RED;
     } else {
         if (us < 4167.0)
-            glColor3f(0.50f, 0.88f, 0.45f);   /* green  – half-budget OK */
+            return UI_PROFILE_TIME_GREEN;
         else if (us < 8333.0)
-            glColor3f(0.95f, 0.82f, 0.25f);   /* yellow – half-budget tight */
+            return UI_PROFILE_TIME_YELLOW;
         else
-            glColor3f(0.95f, 0.38f, 0.32f);   /* red    – over half-budget */
+            return UI_PROFILE_TIME_RED;
+    }
+}
+
+static void set_time_color(const ProfSectionInfo *info, double us) {
+    switch (ui_profile_time_color(info, us)) {
+    case UI_PROFILE_TIME_GREEN:
+        glColor3f(0.50f, 0.88f, 0.45f);
+        break;
+    case UI_PROFILE_TIME_YELLOW:
+        glColor3f(0.95f, 0.82f, 0.25f);
+        break;
+    case UI_PROFILE_TIME_RED:
+        glColor3f(0.95f, 0.38f, 0.32f);
+        break;
+    case UI_PROFILE_TIME_NEAR_ZERO:
+    default:
+        glColor3f(0.30f, 0.30f, 0.38f);
+        break;
     }
 }
 
