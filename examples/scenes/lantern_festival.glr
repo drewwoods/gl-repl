@@ -13,7 +13,7 @@ glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, -5.0f, 0.0f);
 
 static float bright = 1.0;  // @tune @config overall lantern intensity
-static float spread = 12;   // @tune horizontal scatter of the flock
+static float spread = 12;   // @tune horizontal scatter of the flock and its glints
 static float rise = 0.55;   // @tune @config ascent speed
 static float lanterns = 20; // @tune @config number of lanterns in the flock
 
@@ -91,13 +91,15 @@ water() {
 }
 
 // Sparse firelight glints: pow() gates the sine so each spark spends
-// most of its cycle dark, then flashes.
+// most of its cycle dark, then flashes. The glint field tracks `spread`
+// a third wider than the flock, so the sparks always fringe the water
+// under the lanterns instead of clumping when the flock scatters.
 glints() {
   float gx, gz, gp, ga;
   glPointSize(6);
   glBegin(GL_POINTS);
     for (k, 0, lanterns*2) {
-      gx = 16 * rand2(51, k);
+      gx = 1.33 * spread * rand2(51, k);
       gz = 0 - 3 - 26 * rand(52, k);
       gp = TAU * rand(53, k);
       ga = pow(0.5 + 0.5 * sin(1.8 * t + gp), 6);
