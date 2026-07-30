@@ -1711,6 +1711,10 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
  * with no filesystem work (glr_workspaces_active_name memoizes its manifest
  * read) and no window-system traffic. */
 static void glr_ctrl_refresh_window_title(void) {
+#ifdef __EMSCRIPTEN__
+    /* Emscripten's glutSetWindowTitle is a no-op, so skip the string formatting and strcmp. */
+    return;
+#endif
     static char pushed[GLR_WINDOW_TITLE_MAX];
     char title[GLR_WINDOW_TITLE_MAX];
     char scene_part[USER_SCENE_NAME_MAX + 16];
