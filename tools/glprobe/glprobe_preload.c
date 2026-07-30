@@ -126,6 +126,13 @@ REAL_DECL_VOID(glClearColor, (GLclampf r, GLclampf g, GLclampf b, GLclampf a),
                              (r, g, b, a))
 REAL_DECL_VOID(glBegin, (GLenum mode), (mode))
 REAL_DECL_VOID(glPushMatrix, (void), ())
+REAL_DECL_VOID(glutSolidCube, (GLdouble size), (size))
+REAL_DECL_VOID(glutSolidTeapot, (GLdouble size), (size))
+REAL_DECL_VOID(glutSolidSphere, (GLdouble r, GLint sl, GLint st), (r, sl, st))
+REAL_DECL_VOID(glutSolidCone, (GLdouble b, GLdouble h, GLint sl, GLint st),
+                              (b, h, sl, st))
+REAL_DECL_VOID(glutSolidTorus, (GLdouble ir, GLdouble orr, GLint ns, GLint nr),
+                               (ir, orr, ns, nr))
 #endif
 
 /* ------------------------------------------------------------------- state */
@@ -230,6 +237,57 @@ static void batch_mark(const char *fmt, ...) {
     glPassThrough((GLfloat)g_batch_next);
     g_batch_next++;
 }
+
+static int g_capture_shapes = 1;   /* GLPROBE_SHAPES=0 to tessellate instead */
+
+/* Defined with the extraction transforms further down; needed here because the
+ * shape hooks run during the pass, not after it. */
+static int  mat4_affine_inverse(const double *m, double *out);
+static void mat4_mul(const double *a, const double *b, double *c);
+
+/* Record a GLUT solid as its own batch: one marker before it (carrying the
+ * shape) and one after (plain), so its tessellated triangles occupy exactly
+ * one batch and the snippet emitter can drop them in favour of the call. */
+static void batch_mark_shape(int kind, int argc, const double *args) {
+    if (!g_in_pass || !g_capture_shapes)
+        return;
+    if (g_batch_next >= GLPROBE_MAX_BATCHES) {
+        g_batch_overflow++;
+        return;
+    }
+    int idx = g_batch_next;
+    batch_capture_state(idx);
+    snprintf(g_batch_label[idx], sizeof g_batch_label[0], "GLUT solid");
+
+    GlProbeExtractBatch *b = &g_batch_state[idx];
+    b->shape = kind;
+    b->shape_argc = argc;
+    for (int i = 0; i < argc && i < 4; i++)
+        b->shape_args[i] = (float)args[i];
+
+    /* The solid's transform relative to the scene, not the camera: the
+     * modelview here is V . M, and the same inverse view that straightens the
+     * vertex stream is what turns it into M. */
+    double mv[16], world[16], inv[16];
+    glGetDoublev(GL_MODELVIEW_MATRIX, mv);
+    if (g_have_view_mat && mat4_affine_inverse(g_view_mat, inv))
+        mat4_mul(inv, mv, world);
+    else
+        memcpy(world, mv, sizeof world);
+    for (int i = 0; i < 16; i++)
+        b->matrix[i] = (float)world[i];
+
+    glPassThrough((GLfloat)idx);
+    g_batch_next++;
+}
+
+#define GLPROBE_SHAPE_HOOK(name, kind, argc, params, argv, args_init)          \
+    void GLPROBE_REPLACEMENT(name) params {                                    \
+        double a[4]; args_init                                                 \
+        batch_mark_shape(kind, argc, a);                                       \
+        REAL(name) argv;                                                       \
+        batch_mark("after %s", #name);                                         \
+    }
 
 /* ------------------------------------------------- interposed GL/GLU/GLUT */
 
@@ -370,6 +428,24 @@ void GLPROBE_REPLACEMENT(glBindTexture)(GLenum target, GLuint texture) {
     batch_mark("after glBindTexture(%u)", (unsigned)texture);
     REAL(glBindTexture)(target, texture);
 }
+
+GLPROBE_SHAPE_HOOK(glutSolidCube, GLPROBE_SHAPE_CUBE, 1,
+                   (GLdouble size), (size),
+                   a[0] = size;)
+GLPROBE_SHAPE_HOOK(glutSolidTeapot, GLPROBE_SHAPE_TEAPOT, 1,
+                   (GLdouble size), (size),
+                   a[0] = size;)
+GLPROBE_SHAPE_HOOK(glutSolidSphere, GLPROBE_SHAPE_SPHERE, 3,
+                   (GLdouble r, GLint sl, GLint st), (r, sl, st),
+                   a[0] = r; a[1] = sl; a[2] = st;)
+GLPROBE_SHAPE_HOOK(glutSolidCone, GLPROBE_SHAPE_CONE, 4,
+                   (GLdouble base, GLdouble h, GLint sl, GLint st),
+                   (base, h, sl, st),
+                   a[0] = base; a[1] = h; a[2] = sl; a[3] = st;)
+GLPROBE_SHAPE_HOOK(glutSolidTorus, GLPROBE_SHAPE_TORUS, 4,
+                   (GLdouble ir, GLdouble orr, GLint ns, GLint nr),
+                   (ir, orr, ns, nr),
+                   a[0] = ir; a[1] = orr; a[2] = ns; a[3] = nr;)
 
 /* ------------------------------------------------------------- the passes */
 
@@ -691,6 +767,17 @@ static int mat4_affine_inverse(const double *m, double *out) {
     out[14] = -(r[2] * tx + r[5] * ty + r[8] * tz);
     out[15] = 1.0;
     return 1;
+}
+
+/* c = a . b, column-major 4x4. */
+static void mat4_mul(const double *a, const double *b, double *c) {
+    for (int col = 0; col < 4; col++)
+        for (int row = 0; row < 4; row++) {
+            double v = 0.0;
+            for (int k = 0; k < 4; k++)
+                v += a[k * 4 + row] * b[col * 4 + k];
+            c[col * 4 + row] = v;
+        }
 }
 
 /* Rewrite a capture from EYE space into WORLD space, in place.
@@ -1022,9 +1109,16 @@ static void extract_write(FILE *log, const char *path, const float *buf, int n,
         if (glprobe_extract_write_repl_c(f, buf, n, &cap, &eo, &es) != 0) {
             fprintf(log, "!! glprobe: snippet write failed\n");
         } else {
-            fprintf(log, "glprobe: extracted %d triangles to %s "
-                         "(%d source commands)\n",
-                    es.tris_written, path, es.lines_written);
+            if (es.shapes_written)
+                fprintf(log, "glprobe: extracted %d GLUT solids (standing in "
+                             "for %d triangles) + %d loose triangles to %s "
+                             "(%d source commands)\n",
+                        es.shapes_written, es.tris_replaced, es.tris_written,
+                        path, es.lines_written);
+            else
+                fprintf(log, "glprobe: extracted %d triangles to %s "
+                             "(%d source commands)\n",
+                        es.tris_written, path, es.lines_written);
             if (es.tris_skipped)
                 fprintf(log, "glprobe: %d triangles dropped by "
                              "GLPROBE_MAX_TRIS\n", es.tris_skipped);
@@ -1091,6 +1185,9 @@ __attribute__((constructor)) static void glprobe_preload_init(void) {
     const char *batch = getenv("GLPROBE_BATCH");
     if (batch)
         g_extract_batch = atoi(batch);
+    const char *shapes = getenv("GLPROBE_SHAPES");
+    if (shapes && strcmp(shapes, "0") == 0)
+        g_capture_shapes = 0;
     const char *maxt = getenv("GLPROBE_MAX_TRIS");
     if (maxt)
         g_extract_max_tris = atoi(maxt);
@@ -1112,3 +1209,8 @@ INTERPOSE(glBindTexture)
 INTERPOSE(glClearColor)
 INTERPOSE(glBegin)
 INTERPOSE(glPushMatrix)
+INTERPOSE(glutSolidCube)
+INTERPOSE(glutSolidTeapot)
+INTERPOSE(glutSolidSphere)
+INTERPOSE(glutSolidCone)
+INTERPOSE(glutSolidTorus)

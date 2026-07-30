@@ -60,6 +60,19 @@ typedef struct {
  * color of a lit surface lives in its material, which is state the extractor
  * has to shadow separately and re-emit per batch. Without this the whole
  * extraction is one flat glColor3f(1, 1, 1). */
+/* GLUT solids the REPL can express directly. Capturing the CALL instead of the
+ * triangles it tessellates into is both far more compact and far more useful:
+ * a cube is 4 commands instead of ~108, and it stays a cube in the editor
+ * rather than becoming an unrecognizable triangle soup. */
+enum {
+    GLPROBE_SHAPE_NONE = 0,
+    GLPROBE_SHAPE_CUBE,      /* size                          */
+    GLPROBE_SHAPE_SPHERE,    /* radius, slices, stacks        */
+    GLPROBE_SHAPE_CONE,      /* base, height, slices, stacks  */
+    GLPROBE_SHAPE_TORUS,     /* inner, outer, nsides, rings   */
+    GLPROBE_SHAPE_TEAPOT     /* size                          */
+};
+
 typedef struct {
     int   lit;              /* GL_LIGHTING was on: emit material, not glColor */
     int   color_material;   /* GL_COLOR_MATERIAL was on: glColor drives diffuse,
@@ -67,6 +80,14 @@ typedef struct {
     int   has_material;     /* the app set a material at all */
     float diffuse[4], ambient[4], specular[4];
     float shininess;
+
+    /* Non-zero when this batch IS a GLUT solid rather than loose geometry. Its
+     * primitives are then skipped by the snippet emitter (the shape command
+     * reproduces them) but still written to PLY, which has no glutSolidCube. */
+    int   shape;
+    int   shape_argc;
+    float shape_args[4];
+    float matrix[16];       /* the solid's world transform, column-major */
 } GlProbeExtractBatch;
 
 typedef struct {
@@ -109,6 +130,8 @@ typedef struct {
     int verts_written;
     int lines_written;    /* source lines in the emitted snippet (C only) */
     int tris_skipped;     /* dropped by max_tris */
+    int shapes_written;   /* GLUT solids emitted as calls */
+    int tris_replaced;    /* triangles those calls stand in for */
 } GlProbeExtractStats;
 
 /* Write the capture as a gl-repl-importable C snippet.

@@ -211,7 +211,8 @@ GLPROBE_EXTRACT=scene      DYLD_INSERT_LIBRARIES=… ./sample   # both
 |---|---|
 | `GLPROBE_EXTRACT=path` | `.ply` → mesh, `.glr` → snippet, **no extension → both** |
 | `GLPROBE_BATCH=n` | only the Nth batch (see [batches](#batches-without-knowing-the-source)) |
-| `GLPROBE_MAX_TRIS=n` | stop after n triangles |
+| `GLPROBE_MAX_TRIS=n` | stop after n triangles (loose geometry only) |
+| `GLPROBE_SHAPES=0` | tessellate GLUT solids instead of emitting the calls |
 
 Extraction does not reuse the diagnostic passes, because what is right for a
 report is wrong for an extractor. **The projection is replaced with a
@@ -276,6 +277,39 @@ batches costs a handful of commands.
 
 `glMaterialfv` cannot appear between `glBegin` and `glEnd`, so a material switch
 closes the primitive block and opens a new one.
+
+### GLUT solids come out as GLUT solids
+
+`glutSolidCube` and friends are intercepted directly and written as the call
+the app made, wrapped in their own transform, instead of the triangles they
+tessellate into:
+
+```
+glPushMatrix();
+glMultMatrixf((GLfloat[]){0.7600, 0, 0, 0, 0, 0.1000, 0, 0, 0, 0, 0.7600, 0, -4.8000, -0.4500, -4.8000, 1});
+glutSolidCube(1.0000);
+glPopMatrix();
+```
+
+gl-repl has all five solids as first-class commands, so this is both far more
+compact and far more *useful* — the shape stays a shape in the editor instead
+of arriving as triangle soup. `tourist.c`, which builds its entire character
+out of scaled cubes, goes from **9631 source commands to 1241**: 248 solids
+standing in for all 2976 triangles. It also stops auto-normals expanding the
+document, since the solids bring their own.
+
+The transform is the solid's world matrix — the modelview at the call is
+`V · M`, and the same inverse view that straightens the vertex stream turns it
+back into `M`.
+
+Each solid is bracketed by markers so its tessellation occupies exactly one
+batch, which is what lets the snippet emitter drop those triangles. **PLY is
+unaffected** and still gets the full tessellation — there is no
+`glutSolidCube` in a mesh file.
+
+`GLPROBE_SHAPES=0` turns this off and tessellates everything, which is what you
+want if the goal is a mesh rather than an editable scene. Note that
+`GLPROBE_MAX_TRIS` does not bound solids, only loose geometry.
 
 ### The camera comes too
 

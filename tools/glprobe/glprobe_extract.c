@@ -155,6 +155,49 @@ static int batch_uses_vertex_color(const GlProbeExtractBatch *b) {
     return !b || !b->lit || b->color_material;
 }
 
+/* Write a GLUT solid as the call the app actually made, wrapped in its own
+ * transform. Four commands where the tessellation would have been hundreds --
+ * and it stays editable as a shape instead of arriving as triangle soup. */
+static void emit_shape(Emit *e, const GlProbeExtractBatch *b) {
+    static const char *const kSig[] = {
+        NULL,
+        "glutSolidCube(%.*f);\n",
+        "glutSolidSphere(%.*f, %.*f, %.*f);\n",
+        "glutSolidCone(%.*f, %.*f, %.*f, %.*f);\n",
+        "glutSolidTorus(%.*f, %.*f, %.*f, %.*f);\n",
+        "glutSolidTeapot(%.*f);\n"
+    };
+    if (b->shape <= 0 || b->shape >= (int)(sizeof kSig / sizeof kSig[0]))
+        return;
+
+    if (e->in_begin) {
+        emit_line(e, "glEnd();\n");
+        e->in_begin = 0;
+    }
+
+    emit_line(e, "glPushMatrix();\n");
+    const float *m = b->matrix;
+    emit_line(e, "glMultMatrixf((GLfloat[]){%.*f, %.*f, %.*f, %.*f, "
+                 "%.*f, %.*f, %.*f, %.*f, %.*f, %.*f, %.*f, %.*f, "
+                 "%.*f, %.*f, %.*f, %.*f});\n",
+              e->prec, m[0],  e->prec, m[1],  e->prec, m[2],  e->prec, m[3],
+              e->prec, m[4],  e->prec, m[5],  e->prec, m[6],  e->prec, m[7],
+              e->prec, m[8],  e->prec, m[9],  e->prec, m[10], e->prec, m[11],
+              e->prec, m[12], e->prec, m[13], e->prec, m[14], e->prec, m[15]);
+
+    const int p = e->prec;
+    switch (b->shape_argc) {
+    case 1: emit_line(e, kSig[b->shape], p, b->shape_args[0]); break;
+    case 3: emit_line(e, kSig[b->shape], p, b->shape_args[0], p,
+                      b->shape_args[1], p, b->shape_args[2]); break;
+    case 4: emit_line(e, kSig[b->shape], p, b->shape_args[0], p,
+                      b->shape_args[1], p, b->shape_args[2], p,
+                      b->shape_args[3]); break;
+    default: break;
+    }
+    emit_line(e, "glPopMatrix();\n");
+}
+
 static void emit_vert(Emit *e, const Vert *v, const GlProbeExtractBatch *b) {
     if (batch_uses_vertex_color(b) &&
         (!e->have_color || color_differs(v, &e->last_color))) {
@@ -292,6 +335,22 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
         const GlProbeExtractBatch *bs =
             (o.batches && cur_batch >= 0 && cur_batch < o.batch_count)
                 ? &o.batches[cur_batch] : NULL;
+
+        /* A GLUT solid's tessellation is redundant with the call itself, so
+         * the primitives are dropped and the command written once, on first
+         * sight of the batch. */
+        if (bs && bs->shape) {
+            if (emitted_batch != cur_batch) {
+                emit_batch_state(&e, bs);
+                emit_shape(&e, bs);
+                emitted_batch = cur_batch;
+                st.shapes_written++;
+                st.tris_replaced += nverts - 2;
+            } else {
+                st.tris_replaced += nverts - 2;
+            }
+            continue;
+        }
 
         for (int k = 1; k + 1 < nverts; k++) {
             Vert a = read_vert(vp + k * FPV, cap);
