@@ -2057,7 +2057,10 @@ Three floating panels work together:
   Each section keeps its listing color; the legend below maps them. Click a
   legend entry to drop that series from the plot (and from both axes, so
   hiding the fast sections zooms in on what is left); click it again to bring
-  it back. **Rest the pointer on a legend entry** and that series' numbers pop
+  it back. **Right-click a legend entry** to plot *only* that series — the
+  one-press way to isolate one distribution out of a dozen overlaid ones;
+  right-click the soloed entry again to bring the rest back.
+  **Rest the pointer on a legend entry** and that series' numbers pop
   up over the plot — sample count, fastest, mean and slowest sample, standard
   deviation, and the total time spent in the section. Those are exact,
   measured values rather than anything read back off the plot, so they stay

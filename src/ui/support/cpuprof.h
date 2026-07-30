@@ -140,7 +140,8 @@ int  ui_fps_panel_height(void);
  *
  * hidden_series is a session-only set (one entry per ProfSection, same shape as
  * the profile panel's collapsed_sections) of series the user has toggled off
- * by clicking their legend swatch. A hidden series is dropped from the plot,
+ * by clicking their legend swatch (right-click solos instead: everything else
+ * goes into the set at once). A hidden series is dropped from the plot,
  * from the y-scale (so hiding a dominant distribution lets the rest grow) and
  * from the x-axis span (so hiding the fast sections zooms the axis onto what
  * is left), but keeps its legend slot — rendered as a hollow swatch — so the
@@ -179,10 +180,12 @@ int  ui_histogram_panel_height(void);
  *     sample histograms; the section listing's EMAs are unaffected);
  *   - a non-negative ProfSection index when a legend swatch/label was clicked,
  *     so the controller toggles that series in the hidden-series mask via
- *     ui_histogram_panel_toggle_series();
+ *     ui_histogram_panel_toggle_series() (left button) or narrows the plot to
+ *     it alone via ui_histogram_panel_solo_series() (right button);
  *   - UI_HISTOGRAM_PANEL_HIT_NONE otherwise.
- * Pure classification; the legend layout is hidden-independent, so the result
- * does not depend on view->hidden_series. */
+ * Button-agnostic: one rectangle per legend entry, and the caller decides what
+ * the press means. Pure classification; the legend layout is
+ * hidden-independent, so the result does not depend on view->hidden_series. */
 enum {
     UI_HISTOGRAM_PANEL_HIT_NONE  = -1,
     UI_HISTOGRAM_PANEL_HIT_RESET = -2
@@ -196,6 +199,19 @@ int  ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
  * ui_histogram_panel_hit_test() result. Out-of-range or non-plotted section
  * indices leave the mask unchanged. */
 ProfSectionSet ui_histogram_panel_toggle_series(
+    ProfSectionSet hidden_series, int section_idx);
+
+/* Pure session-state transition: "plot only this one". Hides every plottable
+ * series except section_idx, whatever the incoming mask said — the controller
+ * applies it to UiProfilePanelState.hidden_histogram_series for a right press
+ * on the same legend rectangle the left button toggles. Isolating one
+ * distribution out of a dozen overlaid ones otherwise costs eleven clicks.
+ *
+ * Soloing the series that is already alone in the plot returns the empty mask
+ * instead, so the gesture is its own way back rather than a dead end that only
+ * per-series left-clicks can undo. Out-of-range or non-plotted section indices
+ * leave the mask unchanged. */
+ProfSectionSet ui_histogram_panel_solo_series(
     ProfSectionSet hidden_series, int section_idx);
 
 /* The panel's x-axis policy, exposed for tests.

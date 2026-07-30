@@ -1315,6 +1315,20 @@ static int route_assign_plot_reset_hit(void) {
     return 1;
 }
 
+/* UI_HIT_HISTOGRAM_SERIES_TOGGLE, right button: "plot only this one" — hide
+ * every other series in a single press instead of left-clicking the other
+ * eleven off one at a time. Same presentation-only mask as the left-button
+ * toggle next door (route_histogram_series_toggle_hit); re-soloing the series
+ * that is already alone restores the full plot. Defined here rather than
+ * beside its left-button twin so route_right_press below can reach it. */
+static int route_histogram_series_solo_hit(const UiHit *hit) {
+    UiProfilePanelState *panel = ui_state_profile_panel_mut();
+    panel->hidden_histogram_series = ui_histogram_panel_solo_series(
+        panel->hidden_histogram_series, hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
 /* Right-click over an assignment row toggles that row's value plot; over a
  * committed GL-family command it opens the authored help card (glEnable /
  * glDisable resolve that card by capability argument); over a visually empty
@@ -1361,6 +1375,8 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
  *   - numeric swatch arrow → coarse (x10) step;
  *   - Config flyout row → backward-cycle, dropdown stays open;
  *   - variable slider row → log-mode drag begin;
+ *   - histogram legend entry → solo that series (left toggles one, right
+ *     narrows the plot to one);
  *   - scene / no hit → camera (right-drag pan);
  *   - code text → command help card / OpenGL-state inspector
  *     (route_right_code_panel_hit);
@@ -1422,6 +1438,9 @@ static void route_right_press(int x, int y) {
     case UI_HIT_ASSIGN_PLOT_RATE:
         /* Backward through the rate cycle, matching the Config flyout. */
         route_assign_plot_rate_hit(-1);
+        return;
+    case UI_HIT_HISTOGRAM_SERIES_TOGGLE:
+        route_histogram_series_solo_hit(&hit);
         return;
     case UI_HIT_SCENE:
     case UI_HIT_NONE:
@@ -1723,6 +1742,7 @@ static int route_histogram_series_toggle_hit(const UiHit *hit) {
     editor_request_redraw();
     return 1;
 }
+
 
 /* Derive a code-panel target line from a hit, mirroring the legacy
  * code_panel_drag_target. Insert-line drags use edit_line (the line

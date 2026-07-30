@@ -21,7 +21,8 @@
  * clips anything longer, so a name that overruns reads as "Foo bar b...".) 'd' collapses to the three method totals / expands the call+compile
  * breakdown; clicking the histogram header's [reset] control clears the
  * accumulated distribution, and clicking a histogram legend swatch toggles
- * that series in and out of the plot; 'q' quits.
+ * that series in and out of the plot (right-click plots only that series);
+ * 'q' quits.
  *
  * Sections: this demo declares its OWN catalog (the CP_* enum below) — it does
  * NOT borrow gl-repl's section names. cpuprof_demo and gl-repl share the
@@ -238,17 +239,26 @@ static void idle_func(void) {
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN) return;
+    int hit;
+    if (state != GLUT_DOWN ||
+        (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON))
+        return;
     /* Route a click on the histogram header's [reset] control to the sampler,
      * clearing the cumulative distribution (the section EMAs are unaffected);
-     * a click on a legend swatch toggles that series in and out of the plot. */
-    int hit = ui_histogram_panel_hit_test(&g_hist_view, x, y);
+     * a click on a legend swatch toggles that series in and out of the plot,
+     * and a right-click on one narrows the plot to it alone (again to
+     * restore). Same split the gl-repl controller's router applies. */
+    hit = ui_histogram_panel_hit_test(&g_hist_view, x, y);
     if (hit == UI_HISTOGRAM_PANEL_HIT_RESET) {
+        if (button != GLUT_LEFT_BUTTON) return;
         prof_histogram_reset();
         glutPostRedisplay();
     } else if (hit >= 0) {
         g_hist_view.hidden_series =
-            ui_histogram_panel_toggle_series(g_hist_view.hidden_series, hit);
+            (button == GLUT_RIGHT_BUTTON)
+                ? ui_histogram_panel_solo_series(g_hist_view.hidden_series, hit)
+                : ui_histogram_panel_toggle_series(g_hist_view.hidden_series,
+                                                   hit);
         glutPostRedisplay();
     }
 }
@@ -289,7 +299,8 @@ int main(int argc, char **argv) {
 
     printf("cpuprof_demo: immediate vs display-list reuse vs recompile/frame\n");
     printf("  d=toggle sections/histogram   r=reset histogram"
-           "   click legend=toggle series   hover legend=stats   q=quit\n");
+           "   click legend=toggle series   right-click legend=solo series"
+           "   hover legend=stats   q=quit\n");
     glutMainLoop();
     return 0;
 }

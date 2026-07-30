@@ -802,6 +802,60 @@ static void test_histogram_legend_toggle(void) {
                 prof_section_set_is_empty(&mask));
 }
 
+/* Right-button semantics over the same legend rectangle: solo replaces the mask
+ * with "every plotted series but this one", regardless of what was hidden
+ * before, and re-soloing the series that is already alone restores them all. */
+static void test_histogram_legend_solo(void) {
+    ProfSectionSet mask;
+    ProfSectionSet from_other;
+    int first = -1, second = -1;
+    int stray_hidden = 0;
+    int s;
+
+    for (s = 0; s < PROF_SECTION_COUNT; s++) {
+        ProfSectionInfo info = prof_section_info((ProfSection)s);
+        if (info.depth != 0 || !info.label || !info.label[0]) continue;
+        if (first < 0) first = s;
+        else { second = s; break; }
+    }
+    ASSERT_TRUE("catalog has two plotted series to solo", second >= 0);
+
+    mask = ui_histogram_panel_solo_series(prof_section_set_empty(), first);
+    ASSERT_TRUE("solo keeps its own series plotted",
+                !prof_section_set_contains(&mask, (ProfSection)first));
+    ASSERT_TRUE("solo hides the other plotted series",
+                prof_section_set_contains(&mask, (ProfSection)second));
+
+    /* Sections with no legend cell (nested or unlabeled) stay out of the mask —
+     * they are not plotted in the first place, so hiding them means nothing. */
+    for (s = 0; s < PROF_SECTION_COUNT; s++) {
+        ProfSectionInfo info = prof_section_info((ProfSection)s);
+        if (info.depth == 0 && info.label && info.label[0]) continue;
+        if (prof_section_set_contains(&mask, (ProfSection)s)) stray_hidden = 1;
+    }
+    ASSERT_TRUE("solo leaves non-plotted sections out of the mask",
+                !stray_hidden);
+
+    /* Absolute, not incremental: the incoming mask does not survive. */
+    from_other = ui_histogram_panel_solo_series(
+        ui_histogram_panel_toggle_series(prof_section_set_empty(), first),
+        first);
+    ASSERT_TRUE("solo ignores the incoming mask",
+                prof_section_set_equal(&from_other, &mask));
+
+    mask = ui_histogram_panel_solo_series(mask, first);
+    ASSERT_TRUE("re-soloing the lone series restores all of them",
+                prof_section_set_is_empty(&mask));
+
+    mask = ui_histogram_panel_solo_series(prof_section_set_empty(), -1);
+    ASSERT_TRUE("out-of-range solo leaves the mask untouched",
+                prof_section_set_is_empty(&mask));
+    mask = ui_histogram_panel_solo_series(prof_section_set_empty(),
+                                          PROF_SECTION_COUNT + 5);
+    ASSERT_TRUE("non-plotted solo leaves the mask untouched",
+                prof_section_set_is_empty(&mask));
+}
+
 /* Hiding a populated series must remove its bars from the plot: with one of two
  * fed series masked off, the plot passes emit fewer vertices than with both
  * shown. */
@@ -1284,6 +1338,7 @@ int main(void) {
     test_histogram_panel_metrics();
     test_histogram_reset_hit_test();
     test_histogram_legend_toggle();
+    test_histogram_legend_solo();
     test_histogram_hidden_series_drops_bars();
     test_histogram_axis_follows_hidden_series();
     test_histogram_all_hidden_keeps_legend();

@@ -991,6 +991,31 @@ ProfSectionSet ui_histogram_panel_toggle_series(
     return hidden_series;
 }
 
+ProfSectionSet ui_histogram_panel_solo_series(
+        ProfSectionSet hidden_series, int section_idx) {
+    ProfSectionSet solo;
+    int other_idx;
+
+    if (section_idx < 0 || section_idx >= PROF_SECTION_COUNT ||
+        !hist_series_visible((ProfSection)section_idx))
+        return hidden_series;
+
+    solo = prof_section_set_empty();
+    for (other_idx = 0; other_idx < PROF_SECTION_COUNT; other_idx++) {
+        ProfSection s = (ProfSection)other_idx;
+        if (other_idx == section_idx || !hist_series_visible(s)) continue;
+        prof_section_set_add(&solo, s);
+    }
+
+    /* Soloing the series that is already alone in the plot un-solos instead of
+     * doing nothing: reaching "everything back" by left-clicking a dozen legend
+     * entries one at a time is not a way back, and the gesture that got here is
+     * the one the hand is already on. */
+    if (prof_section_set_equal(&hidden_series, &solo))
+        return prof_section_set_empty();
+    return solo;
+}
+
 int ui_histogram_axis_range(ProfSectionSet hidden_series,
                             int *lo_bin, int *hi_bin) {
     HistogramBin bins[HISTOGRAM_BIN_COUNT];
