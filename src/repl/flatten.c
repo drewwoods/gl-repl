@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "c_compat.h"            /* STATIC_ASSERT */
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"
 #include "source_document.h"
@@ -231,7 +232,12 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
      * flatten_reparse_line), and reading array 0 here would overwrite it. */
     if (cmd->type == CMD_MULT_MATRIXF && repl_cmd_mult_matrix_from_array(cmd)) {
         int array_idx = (int)cmd->args[0];
-        for (int k = 0; k < REPL_MATRIX_CELL_COUNT && k < REPL_SCRATCH_ARRAY_LEN; k++)
+        /* A scratch array must be able to supply every matrix cell. A runtime
+         * `k < REPL_SCRATCH_ARRAY_LEN` second bound would silently copy a
+         * partial matrix if the two limits ever diverged; assert instead. */
+        STATIC_ASSERT(REPL_MATRIX_CELL_COUNT <= REPL_SCRATCH_ARRAY_LEN,
+                      "a scratch array must cover a full 4x4 matrix");
+        for (int k = 0; k < REPL_MATRIX_CELL_COUNT; k++)
             repl_eval_scratch_get(array_idx, k,
                                   &ctx->flat_cmds[flat_cmd_idx].payload.matrix.m[k]);
     }

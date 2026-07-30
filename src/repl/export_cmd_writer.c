@@ -309,7 +309,10 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
              * trailing comment. The static assert keeps that arithmetic
              * honest if either limit moves. */
             char line[MAX_LINE_LEN * 2];
-            const char *comment = source_text ? strstr(source_text, "//") : NULL;
+            /* export_document_text() returns "" for every row it cannot
+             * resolve, never NULL — so this and the indent scan below both
+             * dereference unconditionally. */
+            const char *comment = strstr(source_text, "//");
             int indent = 0;
             int off;
 

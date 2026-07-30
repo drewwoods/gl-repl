@@ -1596,8 +1596,16 @@ static int parse_clear_stencil(const char *args, GLCmd *cmd,
     cmd->has_vars = has_vars;
     if (text_out && text_sz > 0) {
         char value_text[REPL_SOURCE_FLOAT_TEXT_MAX];
-        snprintf(text_out, (size_t)text_sz, "%sglClearStencil(%s);", indent,
-                 has_vars ? slot_raw[0] : fmt_source_float(value_text, raw));
+        /* The canonical form can outgrow its source line — the interactive
+         * `;` path hands us a line with no trailing semicolon — so refuse an
+         * over-long line rather than store a truncated row. */
+        if (!repl_format_fits(text_out, (size_t)text_sz,
+                              "%sglClearStencil(%s);", indent,
+                              has_vars ? slot_raw[0]
+                                       : fmt_source_float(value_text, raw))) {
+            parser_emit_error_static(ctx, "Command too long");
+            return 0;
+        }
     }
     return 1;
 }
@@ -1649,10 +1657,18 @@ static int parse_stencil_func(const char *args, GLCmd *cmd,
     cmd->has_vars = has_vars;
     if (text_out && text_sz > 0) {
         char ref_text[REPL_SOURCE_FLOAT_TEXT_MAX];
-        snprintf(text_out, (size_t)text_sz, "%sglStencilFunc(%s, %s, 0x%02X);",
-                 indent, slot_raw[0], has_vars ? slot_raw[1]
-                                           : fmt_source_float(ref_text, raw_ref),
-                 (unsigned)mask);
+        /* Wider than its source line: the mask is re-rendered as 0xNN (a
+         * literal `5` grows by three chars) and the interactive `;` path
+         * supplies no trailing semicolon. Reject rather than truncate. */
+        if (!repl_format_fits(text_out, (size_t)text_sz,
+                              "%sglStencilFunc(%s, %s, 0x%02X);",
+                              indent, slot_raw[0],
+                              has_vars ? slot_raw[1]
+                                       : fmt_source_float(ref_text, raw_ref),
+                              (unsigned)mask)) {
+            parser_emit_error_static(ctx, "Command too long");
+            return 0;
+        }
     }
     return 1;
 }
