@@ -50,10 +50,14 @@ static void face_normal(const float *a, const float *b, const float *c,
     normalize_or_zero(n);
 }
 
-static GLCmd make_auto_normal(float nx, float ny, float nz) {
+/* `type` is CMD_NORMAL3F for immediate-mode geometry and CMD_TESS_NORMAL
+ * for a tessellator contour — the two families are otherwise identical
+ * here, and the executor consumes each as the current normal for the
+ * vertices that follow. */
+static GLCmd make_auto_normal(CmdType type, float nx, float ny, float nz) {
     GLCmd c;
     memset(&c, 0, sizeof(c));
-    c.type = CMD_NORMAL3F;
+    c.type = type;
     c.args[0] = nx;
     c.args[1] = ny;
     c.args[2] = nz;
@@ -64,12 +68,15 @@ static GLCmd make_auto_normal(float nx, float ny, float nz) {
 }
 
 /* Canonical text for an auto-normal at insert_pos */
-static void make_auto_normal_text(int insert_pos, float nx, float ny, float nz,
+static void make_auto_normal_text(CmdType type, int insert_pos,
+                                  float nx, float ny, float nz,
                                   char *text_out, int text_sz) {
     char ind[REPL_INDENT_TEXT_MAX];
     normal_indent(insert_pos, ind, sizeof(ind));
     snprintf(text_out, (size_t)text_sz,
-             "%sglNormal3f(%g, %g, %g);", ind, nx, ny, nz);
+             (type == CMD_TESS_NORMAL) ? "%sgluNormal(%g, %g, %g);"
+                                       : "%sglNormal3f(%g, %g, %g);",
+             ind, nx, ny, nz);
 }
 
 static void insert_cmd_at(int pos, const GLCmd *cmd,
@@ -78,7 +85,7 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
     ReplCommandStore store = repl_command_store_live();
     char line[MAX_LINE_LEN];
 
-    make_auto_normal_text(pos, nx, ny, nz, line, sizeof(line));
+    make_auto_normal_text(cmd->type, pos, nx, ny, nz, line, sizeof(line));
     /* Text first; if the cmd-store insert fails (capacity), roll the
      * text back so the auto-normal line doesn't linger without its
      * matching GLCmd. */
@@ -392,6 +399,103 @@ static void compute_block_normals_smooth(GLenum mode, GLenum front_face,
         normalize_or_zero(norms[idx]);
 }
 
+/* ------------------------------------------------------------------ */
+/* Tessellator contours (gluBegin(GLU_CONTOUR) / gluVertex / gluEnd)    */
+/* ------------------------------------------------------------------ */
+
+/* Newell's method over the whole contour rather than a cross product of
+ * the first three vertices: a GLU contour is an arbitrary polygon, so its
+ * leading vertices may be collinear (which a cross product answers with
+ * (0,0,0)) or locally concave (which answers with a flipped normal).
+ * Summing every edge's contribution is immune to both and costs one pass.
+ * The immediate-mode GL_POLYGON case deliberately keeps its first-three
+ * cross product — changing it would move existing scenes' normals. */
+static void contour_normal_newell(const int *vi, int nv, float *n) {
+    const GLCmd *cmds = repl_state_document_cmds();
+
+    n[0] = n[1] = n[2] = 0.0f;
+    for (int i = 0; i < nv; i++) {
+        const float *a = cmds[vi[i]].args;
+        const float *b = cmds[vi[(i + 1) % nv]].args;
+        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    normalize_or_zero(n);
+}
+
+/* One auto `gluNormal` per contour, never one per vertex. The GLU
+ * tessellator re-triangulates the contour into faces that have no 1:1
+ * correspondence with the gluVertex rows you wrote, so a per-vertex normal
+ * would be a claim the geometry cannot honor; the contour is the unit that
+ * means something. That is also why Smooth mode routes here unchanged —
+ * a contour is planar by construction, so averaging within it just returns
+ * the contour normal. (Averaging *across* contours that share exact
+ * positions would be a real feature; it is deliberately not this one.)
+ *
+ * Returns the index one past the contour, for the caller's walk.
+ */
+static int autonormal_tess_contour(int begin_idx, GLenum front_face,
+                                   int *edit_line_inout) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int vi[MAX_EDITOR_COMMANDS];
+    int nv = 0;
+    int any_vertex_has_vars = 0;
+    int existing_normal = -1;
+    int contour_end = repl_state_document_count();
+    float n[3];
+
+    for (int j = begin_idx + 1; j < repl_state_document_count(); j++) {
+        if (!cmds[j].valid) continue;
+        if (cmds[j].type == CMD_TESS_END ||
+            cmds[j].type == CMD_TESS_BEGIN_CONTOUR ||
+            cmds[j].type == CMD_TESS_BEGIN_POLYGON) {
+            contour_end = j;
+            break;
+        }
+        if (cmds[j].type == CMD_TESS_NORMAL) {
+            if (existing_normal < 0) existing_normal = j;
+            continue;
+        }
+        if (cmds[j].type == CMD_TESS_VERTEX) {
+            vi[nv++] = j;
+            if (cmds[j].has_vars) any_vertex_has_vars = 1;
+        }
+    }
+
+    /* Same bail-outs as the immediate-mode walk: vars-bearing coordinates
+     * carry parse-time values, not evaluated ones, and a hand-written
+     * gluNormal owns its contour outright — anywhere in the contour, not
+     * just at the top, because the contour is the unit here. */
+    if (nv < 3 || any_vertex_has_vars)
+        return contour_end + 1;
+    if (existing_normal >= 0 && !cmds[existing_normal].is_auto)
+        return contour_end + 1;
+
+    contour_normal_newell(vi, nv, n);
+    apply_front_face_to_normal(front_face, n);
+
+    if (existing_normal >= 0) {
+        ReplCommandStore store = repl_command_store_live();
+        GLCmd auto_normal = make_auto_normal(CMD_TESS_NORMAL, n[0], n[1], n[2]);
+        char line[MAX_LINE_LEN];
+
+        make_auto_normal_text(CMD_TESS_NORMAL, existing_normal,
+                              n[0], n[1], n[2], line, sizeof(line));
+        if (source_document_replace_line(existing_normal, line))
+            repl_command_store_replace_one(&store, existing_normal,
+                                           &auto_normal);
+        return contour_end + 1;
+    }
+
+    {
+        /* Top of the contour, so every gluVertex in it is covered. */
+        GLCmd nc = make_auto_normal(CMD_TESS_NORMAL, n[0], n[1], n[2]);
+        insert_cmd_at(begin_idx + 1, &nc, n[0], n[1], n[2], edit_line_inout);
+        return contour_end + 2;   /* +1 for the row just inserted */
+    }
+}
+
 /* The `autonormal` toggle moved out of REPL state onto `glr_state`. The
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
@@ -415,6 +519,11 @@ void repl_recompute_autonormals(int autonormal_mode,
          * up an auto-normal as long as its vertices have literal
          * coords (see the has_vars guard below). The matching END
          * markers fall through to the `i++` at the bottom. */
+        if (repl_state_document_cmds()[i].valid &&
+            repl_state_document_cmds()[i].type == CMD_TESS_BEGIN_CONTOUR) {
+            i = autonormal_tess_contour(i, front_face, edit_line_inout);
+            continue;
+        }
         if (!repl_state_document_cmds()[i].valid || repl_state_document_cmds()[i].type != CMD_BEGIN) { i++; continue; }
 
         GLenum mode = (GLenum)repl_state_document_cmds()[i].args[0];
@@ -469,10 +578,11 @@ void repl_recompute_autonormals(int autonormal_mode,
                 repl_state_document_cmds()[vidx - 1].type == CMD_NORMAL3F) {
                 if (repl_state_document_cmds()[vidx - 1].is_auto) {
                     ReplCommandStore store = repl_command_store_live();
-                    GLCmd auto_normal = make_auto_normal(nx, ny, nz);
+                    GLCmd auto_normal = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
                     char line[MAX_LINE_LEN];
 
-                    make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
+                    make_auto_normal_text(CMD_NORMAL3F, vidx - 1, nx, ny, nz,
+                                          line, sizeof(line));
                     /* In-place replacement: both ops touch the same
                      * row, no order-dependent rollback to worry about.
                      * Both writes are required for consistency, so
@@ -484,7 +594,7 @@ void repl_recompute_autonormals(int autonormal_mode,
                 continue;
             }
 
-            GLCmd nc = make_auto_normal(nx, ny, nz);
+            GLCmd nc = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
             insert_cmd_at(vidx, &nc, nx, ny, nz, edit_line_inout);
             offset++;
             block_end++;

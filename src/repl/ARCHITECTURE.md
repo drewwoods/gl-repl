@@ -530,7 +530,20 @@ are parsed source literals, so the same corner written the same way is bit-equal
 and exactness is what keeps the pass linear instead of an O(nv²) tolerance sweep
 that a large unrolled mesh could not afford. A position that matches nothing
 keeps its own face normal, so a break in the geometry stays flat-shaded exactly
-at the break. The two passes stay separate functions — the face walk leans on
+at the break.
+
+Tessellator contours are a third walk, entered on `CMD_TESS_BEGIN_CONTOUR`.
+They get **one** `is_auto` `CMD_TESS_NORMAL` at the top of the contour, not one
+per `CMD_TESS_VERTEX`: GLU re-triangulates the contour into faces with no 1:1
+correspondence to the `gluVertex` rows, so the contour is the only unit a
+synthesized normal can describe — which is also why `REPL_AUTONORMAL_SMOOTH`
+routes here unchanged (a contour is planar, so averaging within it returns the
+contour normal). The normal comes from Newell's method over every edge rather
+than a cross product of the first three vertices, because a contour is an
+arbitrary polygon whose leading vertices may be collinear or locally concave;
+the immediate-mode `GL_POLYGON` case deliberately keeps its first-three cross
+product so existing scenes' normals do not move. A hand-written `gluNormal`
+anywhere in the contour suppresses the pass for that whole contour. The two passes stay separate functions — the face walk leans on
 per-primitive "which vertex owns this face" rules that stop meaning anything
 once a vertex can hold several faces. Both modes emit one normal row per
 vertex, so switching modes rewrites the existing `is_auto` rows in place

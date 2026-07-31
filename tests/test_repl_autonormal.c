@@ -546,36 +546,172 @@ static void test_smooth_front_face_cw(void) {
     ASSERT_FLOAT("smooth cw: lone v2 z", repl_state_document_cmds_mut()[6].args[2], -1.0f);
 }
 
-/* Tessellated geometry is outside the pass entirely, in BOTH modes: the
- * walk only enters CMD_BEGIN blocks and only collects CMD_VERTEX3F /
- * CMD_VERTEX2F, while gluVertex rows (CMD_TESS_VERTEX) live in a
- * gluBegin(GLU_POLYGON) / GLU_CONTOUR block and feed off their own
- * gluNormal (CMD_TESS_NORMAL). Nothing synthesizes a gluNormal today —
- * this pins that, so adding tess support is a deliberate change with a
- * failing test rather than a silent one. */
-static void test_tess_block_is_untouched(void) {
-    printf("test_tess_block_is_untouched\n");
+/* ------------------------------------------------------------------ */
+/* Tessellator contours: one auto gluNormal per contour                */
+/* ------------------------------------------------------------------ */
+
+/* A square contour in the XY plane, wound CCW, gets exactly one
+ * gluNormal(0, 0, 1) at the top of the contour — not one per gluVertex.
+ * The tessellator re-triangulates the contour, so the contour is the only
+ * unit a synthesized normal can honestly describe. */
+static void test_tess_contour_gets_one_normal(void) {
+    printf("test_tess_contour_gets_one_normal\n");
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluBegin(GLU_POLYGON);");
     editor_feed_line("gluBegin(GLU_CONTOUR);");
     editor_feed_line("gluVertex(0, 0, 0);");
     editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(1, 1, 0);");
     editor_feed_line("gluVertex(0, 1, 0);");
     editor_feed_line("gluEnd();");
     editor_feed_line("gluEnd();");
     int cmds_before = repl_state_document_count();
-
     repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
-    ASSERT_INT("tess: face mode adds nothing",
-               repl_state_document_count(), cmds_before);
-    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
-    ASSERT_INT("tess: smooth mode adds nothing",
-               repl_state_document_count(), cmds_before);
 
-    for (int i = 0; i < repl_state_document_count(); i++)
-        ASSERT_INT("tess: no synthesized rows",
-                   repl_state_document_cmds_mut()[i].is_auto, 0);
+    ASSERT_INT("tess: exactly one row added",
+               repl_state_document_count(), cmds_before + 1);
+    /* Row 1 is gluBegin(GLU_CONTOUR); the normal lands at row 2. */
+    ASSERT_TRUE("tess: normal is at the top of the contour",
+                repl_state_document_cmds_mut()[2].type == CMD_TESS_NORMAL &&
+                repl_state_document_cmds_mut()[2].is_auto);
+    ASSERT_FLOAT("tess: normal z", repl_state_document_cmds_mut()[2].args[2], 1.0f);
+    ASSERT_FLOAT("tess: normal x", repl_state_document_cmds_mut()[2].args[0], 0.0f);
+    ASSERT_FLOAT("tess: normal y", repl_state_document_cmds_mut()[2].args[1], 0.0f);
+
+    /* Idempotent, and Smooth routes to the same per-contour answer. */
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+    ASSERT_INT("tess: smooth adds no second row",
+               repl_state_document_count(), cmds_before + 1);
+    ASSERT_FLOAT("tess: smooth keeps the contour normal",
+                 repl_state_document_cmds_mut()[2].args[2], 1.0f);
+}
+
+/* Newell's method, not a cross product of the first three vertices: this
+ * contour opens with three collinear points, which a cross product answers
+ * with a degenerate (0, 0, 0). */
+static void test_tess_contour_collinear_start(void) {
+    printf("test_tess_contour_collinear_start\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(2, 0, 0);");
+    editor_feed_line("gluVertex(2, 1, 0);");
+    editor_feed_line("gluVertex(0, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    ASSERT_TRUE("collinear start: normal synthesized",
+                repl_state_document_cmds_mut()[2].type == CMD_TESS_NORMAL);
+    ASSERT_FLOAT("collinear start: still +z",
+                 repl_state_document_cmds_mut()[2].args[2], 1.0f);
+}
+
+/* A hand-written gluNormal owns its contour outright — anywhere in the
+ * contour, not just at the top, because the contour is the unit. */
+static void test_tess_manual_normal_wins(void) {
+    printf("test_tess_manual_normal_wins\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluNormal(1, 0, 0);");   /* mid-contour, deliberate */
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(1, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    int cmds_before = repl_state_document_count();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    ASSERT_INT("tess manual: nothing inserted",
+               repl_state_document_count(), cmds_before);
+    ASSERT_FLOAT("tess manual: value untouched x",
+                 repl_state_document_cmds_mut()[3].args[0], 1.0f);
+    ASSERT_FLOAT("tess manual: value untouched z",
+                 repl_state_document_cmds_mut()[3].args[2], 0.0f);
+    ASSERT_INT("tess manual: stays manual",
+               repl_state_document_cmds_mut()[3].is_auto, 0);
+}
+
+/* Each contour of a multi-contour polygon is normalled independently, and
+ * an auto row is rewritten in place when the geometry moves. */
+static void test_tess_two_contours_and_refresh(void) {
+    printf("test_tess_two_contours_and_refresh\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(1, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    /* Second contour lies in the XZ plane: a different normal. */
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluVertex(0, 0, 1);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    int cmds_before = repl_state_document_count();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    ASSERT_INT("two contours: one row each",
+               repl_state_document_count(), cmds_before + 2);
+    ASSERT_FLOAT("contour 1: +z", repl_state_document_cmds_mut()[2].args[2], 1.0f);
+    /* rows: 0 poly, 1 contour, 2 normal, 3..5 verts, 6 end, 7 contour, 8 normal */
+    ASSERT_TRUE("contour 2: normal row",
+                repl_state_document_cmds_mut()[8].type == CMD_TESS_NORMAL &&
+                repl_state_document_cmds_mut()[8].is_auto);
+    ASSERT_FLOAT("contour 2: +y", repl_state_document_cmds_mut()[8].args[1], 1.0f);
+
+    /* Flip the first contour's winding and re-run: the auto row updates in
+     * place, no second row appears. */
+    /* rows 3,4,5 are the contour's vertices; swap the last two. */
+    repl_state_document_cmds_mut()[4].args[1] = 1.0f;   /* (1,0,0) -> (1,1,0) */
+    repl_state_document_cmds_mut()[5].args[1] = 0.0f;   /* (1,1,0) -> (1,0,0) */
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    ASSERT_INT("refresh: no rows added",
+               repl_state_document_count(), cmds_before + 2);
+    ASSERT_FLOAT("refresh: contour 1 flipped to -z",
+                 repl_state_document_cmds_mut()[2].args[2], -1.0f);
+}
+
+/* The tess walk inherits the same bail-outs as the immediate-mode one:
+ * glFrontFace(GL_CW) flips the contour normal, and a contour whose
+ * coordinates come from expressions is skipped whole. */
+static void test_tess_front_face_and_vars(void) {
+    printf("test_tess_front_face_and_vars\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glFrontFace(GL_CW);");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(1, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    ASSERT_FLOAT("tess cw: normal flipped",
+                 repl_state_document_cmds_mut()[3].args[2], -1.0f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(x, 0, 0);");
+    editor_feed_line("gluVertex(1, y, 0);");
+    editor_feed_line("gluVertex(1, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    int cmds_before = repl_state_document_count();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    ASSERT_INT("tess vars: contour skipped",
+               repl_state_document_count(), cmds_before);
 }
 
 /* Switching mode on an already-normalled document rewrites the existing
@@ -612,7 +748,11 @@ int main(void) {
     test_smooth_weld_is_exact();
     test_smooth_triangle_strip_stays_unit();
     test_smooth_front_face_cw();
-    test_tess_block_is_untouched();
+    test_tess_contour_gets_one_normal();
+    test_tess_contour_collinear_start();
+    test_tess_manual_normal_wins();
+    test_tess_two_contours_and_refresh();
+    test_tess_front_face_and_vars();
     test_smooth_rewrites_existing_auto_rows();
 
     return test_harness_report(&g_harness, "test_repl_autonormal");

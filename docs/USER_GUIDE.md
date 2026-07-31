@@ -1302,7 +1302,11 @@ highlight over it.
   *exactly* equal position within one `glBegin` block, which is what makes
   a corner spelled as several `glVertex3f` lines shade as one; coordinates
   that differ at all — a seam, a near-miss — keep their own face normal and
-  stay flat-shaded right there. Either way, a block with any
+  stay flat-shaded right there. Tessellated geometry gets **one
+  `gluNormal` per `gluBegin(GLU_CONTOUR)`** rather than one per `gluVertex`
+  — the tessellator re-triangulates the contour, so the contour is the unit
+  a synthesized normal can honestly describe, and Smooth gives the same
+  answer as Face there. Either way, a block with any
   expression-valued coordinate is left alone — the pass reads literal source
   coordinates.
 

@@ -99,11 +99,14 @@ static void rebuild_restore_auto_normals(const SceneSnapshot *before) {
 
         if (!before->cmds[i].is_auto)
             continue;
-        if (before->cmds[i].type != CMD_NORMAL3F)
+        /* Both normal families can be auto-generated: glNormal3f per vertex
+         * for immediate-mode geometry, gluNormal per tessellator contour.
+         * The row must still be the same family after the rebuild. */
+        if (!repl_cmd_sets_current_normal(before->cmds[i].type))
             continue;
 
         cmd = repl_state_document_cmds()[i];
-        if (cmd.type != CMD_NORMAL3F || cmd.is_auto)
+        if (cmd.type != before->cmds[i].type || cmd.is_auto)
             continue;
         cmd.is_auto = 1;
         repl_command_store_replace_one(&store, i, &cmd);
