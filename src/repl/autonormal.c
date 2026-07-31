@@ -246,11 +246,40 @@ static int pos_equal_exact(const float *a, const float *b) {
            pos_key_bits(a[2]) == pos_key_bits(b[2]);
 }
 
-/* Open-addressed position -> first-vertex-at-that-position table and the
- * per-vertex representative it yields. File-static rather than automatic:
- * these are sized off MAX_EDITOR_COMMANDS, which a custom build can raise
- * far enough to blow the stack. Only the leading 2*nv slots are used and
- * cleared per block, so the cost is proportional to the block, not to the
+/* The two arrays behind the weld. They do different jobs and are indexed
+ * differently — the distinction is the whole trick, so spelling it out:
+ *
+ *   g_weld_slots[]  is the hash table. Indexed by pos_hash() % cap with
+ *                   linear probing, each slot holds a *vertex index*
+ *                   meaning "the first vertex seen at this position". No
+ *                   key is ever copied into it: on a probe collision
+ *                   pos_equal_exact() re-reads the stored vertex's args
+ *                   straight out of the document, so a hash collision
+ *                   costs an extra probe and can never mis-weld. Sized
+ *                   2 * MAX_EDITOR_COMMANDS so the load factor stays at
+ *                   or below 0.5 even for a block that uses every command
+ *                   slot in the document.
+ *
+ *   g_weld_rep[]    is the result, indexed by vertex: g_weld_rep[i] is the
+ *                   vertex that i welds onto (itself when i is the first
+ *                   at its position). The table above is scratch that
+ *                   exists only to fill this in; the accumulate and
+ *                   write-back passes read nothing else.
+ *
+ * Both are indexed by *local* vertex index (0..nv-1 within the block), not
+ * by document command index — vi[] is the indirection to the document row.
+ * That is also why MAX_EDITOR_COMMANDS bounds g_weld_rep: a block cannot
+ * hold more vertices than the document holds commands.
+ *
+ * The representative chain is one level deep by construction. A vertex
+ * either claims an empty slot (and becomes its own rep) or finds an
+ * occupied one whose stored index is already a rep, so there is no
+ * union-find path to compress.
+ *
+ * File-static rather than automatic: both are sized off
+ * MAX_EDITOR_COMMANDS, which a custom build can raise far enough to blow
+ * the stack. Only the leading 2*nv slots are used and cleared per block,
+ * so a document of many small blocks pays for its blocks, not for the
  * command cap. */
 static int g_weld_slots[2 * MAX_EDITOR_COMMANDS];
 static int g_weld_rep[MAX_EDITOR_COMMANDS];
