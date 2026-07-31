@@ -2366,6 +2366,18 @@ touch [`src/repl/export.c`](../src/repl/export.c) for commands with non-source-t
 declarations (`@declare`), tess blocks, REPL primitives that need a
 standalone helper, etc.
 
+**Command flags that are not in the text need their own marker.** A
+generated normal carries `GLCmd.is_auto`, which no amount of round-tripping
+the line text can reconstruct — so export appends `/* @auto */` to the line
+and `import_feed_one_line()` strips it and re-stamps the flag. Unlike
+`@declare` the marker rides the command's own line, keeping one exported
+line per source row; the tess arm appends it to the lowered `{ _tn[...] }`
+form, and the import block-comment normalizer hands both back as `// @auto`
+before the tess translator (which rebuilds its output from scratch) can drop
+it. Without the marker a reloaded scene's normals read as hand-written, and
+the autonormal pass then refuses to update them — a hand-written normal owns
+its block — so they silently freeze at their exported values.
+
 **Behavior parity is required, not just syntactic round-trip.** When the
 exporter emits a helper function (`write_label_helper`, `write_rand_helper`,
 etc.), the helper's behavior **must match the REPL executor case** to the

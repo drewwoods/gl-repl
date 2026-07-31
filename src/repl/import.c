@@ -1760,16 +1760,89 @@ static void import_translate_repl_line(const char *line,
     repl_eval_c_expr_to_repl(line, repl_line, repl_line_sz);
 }
 
+/* Detect and strip the trailing `// @auto` marker export writes on a
+ * generated normal. Runs on the incoming line rather than the translated
+ * one because the tess translator rebuilds its output from scratch and
+ * would drop the marker; the block-comment normalizer has already turned
+ * the exported C89 block comment back into `//` form by this point.
+ *
+ * Returns 1 when the marker was found, with `out` holding the line minus
+ * the marker (and minus the whitespace that separated them). */
+static int import_take_auto_normal_marker(const char *line, char *out,
+                                          size_t out_sz) {
+    const char *comment;
+    const char *tag;
+    size_t keep;
+
+    if (!line || !out || out_sz == 0)
+        return 0;
+
+    comment = strstr(line, "//");
+    if (!comment)
+        return 0;
+
+    tag = comment + 2;
+    while (*tag && isspace((unsigned char)*tag))
+        tag++;
+    if (strncmp(tag, REPL_EXPORT_AUTO_NORMAL_MARKER,
+                strlen(REPL_EXPORT_AUTO_NORMAL_MARKER)) != 0)
+        return 0;
+    tag += strlen(REPL_EXPORT_AUTO_NORMAL_MARKER);
+    while (*tag && isspace((unsigned char)*tag))
+        tag++;
+    /* Only a marker that is the whole comment: `// @auto plus notes` is a
+     * user comment that happens to start with the tag, and rewriting the
+     * row would lose the notes. */
+    if (*tag)
+        return 0;
+
+    keep = (size_t)(comment - line);
+    while (keep > 0 && isspace((unsigned char)line[keep - 1]))
+        keep--;
+    if (keep >= out_sz)
+        keep = out_sz - 1;
+    memcpy(out, line, keep);
+    out[keep] = '\0';
+    return 1;
+}
+
+/* Re-stamp is_auto on the row a marked line just produced. The load path
+ * appends, so the new row is the one at `before`; the type check keeps a
+ * marker on any other command from doing anything.
+ *
+ * Writes through the command store: that is the owner boundary for command
+ * mutation, and import is not a state-owner file. Same read-modify-replace
+ * shape the autonormal pass itself uses. */
+static void import_restore_auto_normal(int before) {
+    ReplCommandStore store;
+    GLCmd marked;
+
+    if (repl_state_document_count() != before + 1)
+        return;
+    marked = repl_state_document_cmds()[before];
+    if (marked.type != CMD_NORMAL3F && marked.type != CMD_TESS_NORMAL)
+        return;
+    marked.is_auto = 1;
+    store = repl_command_store_live();
+    repl_command_store_replace_one(&store, before, &marked);
+}
+
 static void import_feed_one_line(ImportState *s, const char *line) {
     char repl_line[MAX_LINE_LEN];
+    char unmarked[MAX_LINE_LEN];
     int before = repl_state_document_count();
     int handled = 0;
+    int was_auto;
 
     /* Snippet directives such as @declare are written by
      * write_canonical_cmd_as_c() and must be handled before the generic
      * C-to-REPL path. */
     if (import_parse_snippet_directive(s, line))
         return;
+
+    was_auto = import_take_auto_normal_marker(line, unmarked, sizeof(unmarked));
+    if (was_auto)
+        line = unmarked;
 
     /* Feed lines through the non-editor source-load API
      * (repl_load_apply_line in src/repl/compile.c) instead of
@@ -1779,6 +1852,9 @@ static void import_feed_one_line(ImportState *s, const char *line) {
     import_translate_repl_line(line, repl_line, sizeof(repl_line));
     handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
                                    &s->edit_line);
+
+    if (was_auto && handled)
+        import_restore_auto_normal(before);
 
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {

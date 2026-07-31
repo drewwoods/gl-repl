@@ -1318,8 +1318,10 @@ highlight over it.
   the rest of the program. A `glNormal3f` you typed yourself is never
   tagged and never dimmed — and the pass leaves it alone, so a hand-written
   normal keeps ownership of its block. Nothing is written into your source
-  text for this; the marking is display-only, and an exported `.c` file
-  carries the generated lines as ordinary `glNormal3f` calls.
+  text for this; the marking is display-only. An exported `.c` file tags
+  its generated normals with a trailing `/* @auto */` comment — harmless to
+  compile, and it is what lets a reloaded scene keep updating those normals
+  instead of freezing them at the values they had when you saved.
 
 Decluttered label scopes give active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,

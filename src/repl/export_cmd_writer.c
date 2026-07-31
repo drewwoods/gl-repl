@@ -146,6 +146,14 @@ int export_uses_tess_commands(void) {
     return 0;
 }
 
+/* Marks a generated normal (GLCmd.is_auto) so import can restore the flag.
+ * The tess arms build their own lowered C, so the marker is appended to the
+ * finished line rather than to REPL source text; write_normal_as_c below
+ * carries the immediate-mode half. */
+static const char *tess_auto_marker(const GLCmd *cmd) {
+    return cmd->is_auto ? " /* " REPL_EXPORT_AUTO_NORMAL_MARKER " */" : "";
+}
+
 static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
                                   const char *source_text) {
     char payload[MAX_LINE_LEN];
@@ -167,8 +175,8 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
     case CMD_TESS_NORMAL:
         if (arg_count != 3)
             return 0;
-        fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }\n",
-                c_args[0], c_args[1], c_args[2]);
+        fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }%s\n",
+                c_args[0], c_args[1], c_args[2], tess_auto_marker(cmd));
         return 1;
     case CMD_TESS_COLOR:
         if (arg_count == 3) {
@@ -223,6 +231,33 @@ static void write_cmd_source_as_c(FILE *f, const char *source_text,
     format_cmd_source_as_c(out, sizeof(out), source_text, translate_exprs);
     export_write_c89_line(f, out);
 }
+
+/* A normal the autonormal pass generated, tagged so import can restore
+ * is_auto. Without the tag a reloaded scene's normals read as hand-written,
+ * and the pass then refuses to touch them (a hand-written normal owns its
+ * block) — the normals silently freeze at their exported values.
+ *
+ * The marker is emitted in REPL `//` form and converted to a C89 block
+ * comment by export_write_c89_line, which is also what lets import's
+ * block-comment normalizer hand it back as `// @auto`. An is_auto row has
+ * no trailing comment of its own to collide with — the pass rewrites the
+ * row's text wholesale on every recompute — but a row that somehow carries
+ * one keeps it and goes untagged rather than emitting two comments. */
+static void write_normal_as_c(FILE *f, const GLCmd *cmd,
+                              const char *source_text, int translate_exprs) {
+    char out[MAX_LINE_LEN];
+
+    format_cmd_source_as_c(out, sizeof(out), source_text, translate_exprs);
+    /* Plain strstr is exact here: a normal's args are numeric expressions,
+     * so there is no string literal for a bare "//" to hide inside. */
+    if (cmd->is_auto && !strstr(out, "//")) {
+        size_t len = strlen(out);
+        snprintf(out + len, sizeof(out) - len, " // %s",
+                 REPL_EXPORT_AUTO_NORMAL_MARKER);
+    }
+    export_write_c89_line(f, out);
+}
+
 
 int find_export_block_end(int begin_idx) {
     int depth = 1;
@@ -421,14 +456,17 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             *tess_depth = 0;
         }
         break;
+    case CMD_NORMAL3F:
+        write_normal_as_c(f, cmd, source_text, for_depth > 0 || cmd->has_vars);
+        break;
     case CMD_TESS_NORMAL:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
             char x[EXPORT_FLOAT_TEXT_MAX], y[EXPORT_FLOAT_TEXT_MAX], z[EXPORT_FLOAT_TEXT_MAX];
             repl_format_source_float(x, sizeof(x), cmd->args[0]);
             repl_format_source_float(y, sizeof(y), cmd->args[1]);
             repl_format_source_float(z, sizeof(z), cmd->args[2]);
-            fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }\n",
-                    x, y, z);
+            fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }%s\n",
+                    x, y, z, tess_auto_marker(cmd));
         }
         break;
     case CMD_TESS_COLOR:

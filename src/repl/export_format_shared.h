@@ -43,6 +43,11 @@
 
 #define REPL_SNIPPET_DIRECTIVE_DECLARE       "declare"
 #define REPL_SNIPPET_DIRECTIVE_FUNC_BODY     "func-body"
+/* Trailing marker on a normal the autonormal pass generated (GLCmd.is_auto).
+ * Unlike the directives above it rides on the command's own line rather than
+ * owning one, so the exported file keeps one line per source row. Written by
+ * export_cmd_writer.c, read and stripped by import_feed_one_line(). */
+#define REPL_EXPORT_AUTO_NORMAL_MARKER       "@auto"
 #define REPL_EXPORT_C89_LOOP_SCOPE_MARKER    "repl-export-c89-loop-scope"
 #define REPL_EXPORT_C89_LOOP_VAR_MARKER      "repl-export-c89-loop-var"
 #define REPL_EXPORT_GLFLOAT1_HELPER          "repl_glfloat1"

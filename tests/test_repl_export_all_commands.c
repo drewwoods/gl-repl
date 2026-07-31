@@ -334,8 +334,142 @@ static void test_export_prologue_direct(void) {
     }
 }
 
+/* Count document rows carrying is_auto, split by whether the pass generated
+ * them. A hand-written normal must never come back marked. */
+static int count_auto_normals(void) {
+    int n = 0;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (!cmd->valid)
+            continue;
+        if ((cmd->type == CMD_NORMAL3F || cmd->type == CMD_TESS_NORMAL) &&
+            cmd->is_auto)
+            n++;
+    }
+    return n;
+}
+
+/* is_auto has to survive export/import or a reloaded scene's generated
+ * normals read as hand-written, and the autonormal pass then refuses to
+ * update them (a hand-written normal owns its block) — the normals freeze
+ * at whatever values were exported. The marker rides the command's own
+ * line, so this also pins that it never leaks into the REPL row text. */
+static void test_auto_normal_marker_roundtrip(void) {
+    const char *path = "/tmp/repl_export_auto_normal.c";
+    char *export_text;
+    char *code_before;
+    char *code_after;
+    int auto_before, auto_after;
+    int manual_row = -1;
+    int diff_line = 0;
+    FILE *f;
+
+    repl_eval_init_predef_vars();
+    glr_ctrl_reset_all();
+
+    /* First block keeps a hand-written normal (the pass leaves it alone),
+     * second gets a generated one, third exercises the tess contour path
+     * whose exported form is lowered C rather than REPL source text. */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    /* A normal no face of this document generates, so the assertions
+     * below cannot match a generated line by coincidence. */
+    editor_feed_line("glNormal3f(0.25, 0.5, 0.75);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 2);");
+    editor_feed_line("glVertex3f(1, 0, 2);");
+    editor_feed_line("glVertex3f(0, 1, 2);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 4);");
+    editor_feed_line("gluVertex(1, 0, 4);");
+    editor_feed_line("gluVertex(1, 1, 4);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->type == CMD_NORMAL3F && !cmd->is_auto) {
+            manual_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("hand-written normal survives the autonormal pass",
+                manual_row >= 0);
+
+    auto_before = count_auto_normals();
+    ASSERT_TRUE("autonormal pass generated both an immediate and a tess normal",
+                auto_before >= 2);
+
+    code_before = dump_code_panel();
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    f = fopen(path, "r");
+    ASSERT_TRUE("auto-normal export opened", f != NULL);
+    export_text = f ? slurp_stream(f) : NULL;
+    if (f) fclose(f);
+    ASSERT_TRUE("auto-normal export read", export_text != NULL);
+
+    if (export_text) {
+        ASSERT_TRUE("generated normal exports with the auto marker",
+                    strstr(export_text, "/* @auto */") != NULL);
+        ASSERT_TRUE("hand-written normal exports untagged",
+                    strstr(export_text,
+                           "glNormal3f(0.25, 0.5, 0.75); /* @auto */") == NULL);
+        ASSERT_TRUE("hand-written normal still exports",
+                    strstr(export_text, "glNormal3f(0.25, 0.5, 0.75);") != NULL);
+        ASSERT_TRUE("tess normal carries the marker on its lowered form",
+                    strstr(export_text, "_tn[2] = 1; } /* @auto */") != NULL ||
+                    strstr(export_text, "_tn[2] = -1; } /* @auto */") != NULL);
+    }
+
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("auto-normal import succeeded",
+                repl_export_load_from_file(path, NULL) == 1);
+
+    auto_after = count_auto_normals();
+    ASSERT_TRUE("is_auto restored on import", auto_after == auto_before);
+
+    {
+        int manual_after = -1;
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            const GLCmd *cmd = &repl_state_document_cmds()[i];
+            if (cmd->valid && cmd->type == CMD_NORMAL3F && !cmd->is_auto) {
+                manual_after = i;
+                break;
+            }
+        }
+        ASSERT_TRUE("hand-written normal stays unmarked across the roundtrip",
+                    manual_after >= 0);
+    }
+
+    /* The marker is transport, not source: no row may come back carrying it. */
+    code_after = dump_code_panel();
+    ASSERT_TRUE("no @auto marker leaks into the document text",
+                code_after && strstr(code_after, "@auto") == NULL);
+    ASSERT_TRUE("auto-normal roundtrip is text-exact",
+                compare_text(code_before, code_after, &diff_line));
+    if (code_before && code_after &&
+        !compare_text(code_before, code_after, &diff_line)) {
+        printf("Auto-normal roundtrip mismatch at line %d\nBefore:\n%s\n\nAfter:\n%s\n",
+               diff_line, code_before, code_after);
+    }
+
+    free(export_text);
+    free(code_before);
+    free(code_after);
+    remove(path);
+}
+
 int main(void) {
     test_export_prologue_direct();
+    test_auto_normal_marker_roundtrip();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;
