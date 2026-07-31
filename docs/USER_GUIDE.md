@@ -103,7 +103,9 @@ Examples* entry from the [Tours](#guided-tours) menu.
 
 ### Your first triangle
 
-Type each line, then press `;` or Enter to commit it:
+Fresh launches open on the default built-in example. Choose **File → New
+Scene** first so the triangle has a clean scene of its own, then type each
+line and press `;` or Enter to commit it:
 
 ```c
 glColor3f(0.98, 0.76, 0.36)
@@ -303,8 +305,10 @@ Two things worth knowing: matching is case-insensitive, so `Radius` and
 
 ### Display default commands
 
-A new scene is not empty. Every fresh scene — at launch, from File → New
-Scene, or after **Ctrl+L** — starts with these five lines already committed:
+A new user scene is not empty. **File → New Scene** starts one with these five
+lines already committed, and **Ctrl+L** resets the current scene to the same
+five lines. A fresh app launch is different: it opens the default built-in
+example, as described under [Scenes & Workspaces](#scenes--workspaces).
 
 ```c
 glEnable(GL_COLOR_MATERIAL);
@@ -505,11 +509,17 @@ numeric argument everywhere is a full math expression.
     `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
+- [`glLineStipple(factor, pattern)`](https://docs.gl/gl2/glLineStipple) — repeat
+  a 16-bit line pattern while `GL_LINE_STIPPLE` is enabled
 - [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
 - [`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA | GL_ONE)`](https://docs.gl/gl2/glBlendFunc)
 - [`glColorMaterial(face, mode)`](https://docs.gl/gl2/glColorMaterial)
-- [`glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glMaterial)
-- [`glLightModeli(pname, param)`](https://docs.gl/gl2/glLightModel), [`glFrontFace(mode)`](https://docs.gl/gl2/glFrontFace)
+- [`glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glMaterial),
+  [`glMaterialf(face, GL_SHININESS, value)`](https://docs.gl/gl2/glMaterial)
+- [`glLightModeli(pname, param)`](https://docs.gl/gl2/glLightModel),
+  [`glFrontFace(mode)`](https://docs.gl/gl2/glFrontFace),
+  [`glCullFace(mode)`](https://docs.gl/gl2/glCullFace) with mode `GL_FRONT`,
+  `GL_BACK`, or `GL_FRONT_AND_BACK`
 - [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
 - [`glStencilFunc(func, ref, mask)`](https://docs.gl/gl2/glStencilFunc),
   [`glStencilOp(stencil-fail, depth-fail, depth-pass)`](https://docs.gl/gl2/glStencilOp),
@@ -1022,13 +1032,20 @@ parse.
 ### Labels & goto (experimental, top-level only)
 
 ```c
-loop:                    // declare a jump target
-:loop                    // alternative syntax, colon first
-goto loop                // jump back; pair with if(...) to exit
+float n;
+n = 0;
+loop:                    // declare a jump target (:loop also works)
+n = n + 1;
+if(n < 5) {
+    goto loop;           // jump back four times, then continue below
+}
+glutSolidCube(n/5);
 ```
 
-(Note the distinction: `:name` / `name:` is a goto target; `label("...")` is
-the bitmap-text call.)
+`goto` and its target must both be at the top level. Always put a backward jump
+behind a condition that eventually becomes false; an unconditional jump back
+to its own label never terminates. Note the distinction: `:name` / `name:` is
+a goto target, while `label("...")` is the bitmap-text call.
 
 ### Comments
 
@@ -1913,17 +1930,10 @@ the REPL. Two rules keep the round trip clean:
   `./gl-repl --example "bubble sort (scratch arrays)" --flat-histogram`
   prints per-function and per-line costs sorted by spend.
 
-> **Advanced — extending the REPL itself.** If you want a GL call the REPL
-> doesn't speak yet, the interpreter is built to be extended: see
-> [*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
-> `ARCHITECTURE.md` for the full recipe (command type, spec-table row,
-> executor case, replay annotation, help text, save/load round-trip). To
-> raise the flat command budget, bump `MAX_FLAT_COMMANDS` in
-> [`config.h`](../config.h) — it is `#ifndef`-guarded, so
-> `-DMAX_FLAT_COMMANDS=16384` on the compiler command line works without
-> editing the file (`MAX_EDITOR_COMMANDS` is the separate source-line cap).
-> Expect proportionally more per-frame work: the flattened program
-> re-executes every frame.
+Extending the interpreter itself is contributor work rather than scene
+authoring. If you need a GL call the REPL does not yet support, see
+[*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
+`ARCHITECTURE.md`.
 
 ### Scene export (`.glr`)
 
@@ -1942,10 +1952,10 @@ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 ...your commands, verbatim...
 ```
 
-It goes to the same place Save Scene does — `<workspace>/<scene-slug>.glr` —
-and is the format to reach for when you are **authoring or modifying an
-example** rather than exporting a program. To turn one into a loadable
-example catalog, see [Authoring an example
+It goes to the same directory as Save Scene, but uses the distinct
+`<scene-slug>.glr` filename and format. Reach for it when you are **authoring
+or modifying an example** rather than exporting a program. To turn one into a
+loadable example catalog, see [Authoring an example
 catalog](ADVANCED_USAGE.md#authoring-an-example-catalog).
 
 Two things the format deliberately drops, because the example loader ignores
@@ -2135,15 +2145,6 @@ aid, and educational environment** — a place to see immediate-mode GL
 respond line by line — not a platform to build a complete application on.
 The export is the product; the REPL is where it is born.
 
-> **Honest footnote on interpreter speed.** There is plenty of low-hanging
-> fruit in the interpreter — identifier lookup is a series of string
-> compares where a trie would do, and the per-frame flatten is a complete
-> pass where a partial recompile of only the dirty range would suffice.
-> These are deliberate omissions: optimizing further heads toward building
-> a virtual machine, and the project's complexity has already grown well
-> past its original intention. If the REPL feels slow, that's the signal to
-> export.
-
 ---
 
 ## Profiling & Diagnostics
@@ -2291,7 +2292,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Key | Action |
 |---|---|
 | `;` | Commit current line |
-| Enter | Insert new line |
+| Enter | Commit the current line and move to a new one |
 | Backspace | Delete character or selected lines |
 | Tab | Autocomplete (Tab/Enter accepts) |
 | Up / Down | Navigate lines |
@@ -2302,7 +2303,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+D | Delete line or selection |
-| Ctrl+L | Clear all commands |
+| Ctrl+L | Reset the scene to the five display defaults |
 | Ctrl+F | Search (seeded from highlighted text) |
 | Tab (find bar) | Cycle find field / replace field / whole-word chip |
 | Enter (replace field) | Replace all matches |
