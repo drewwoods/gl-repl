@@ -830,6 +830,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         .err_sz          = (int)sizeof(body_err),
         .func_aliases    = ctx->func_aliases,
         .source_scope    = &ctx->source_scope,
+        .pending_loop_body = 1,
     };
     ReplParsedLine body_pl;
     if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {

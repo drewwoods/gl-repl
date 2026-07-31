@@ -1872,7 +1872,46 @@ int main() {
         ASSERT_INT("for inline: cmd 2 is FOR_END", repl_state_document_cmds()[2].type, CMD_FOR_END);
     }
 
-    /* 19. Committing func defs - basic */
+    /* 19. Inline for-loop bodies may be loop jumps. */
+    {
+        static const struct {
+            const char *keyword;
+            CmdType type;
+        } cases[] = {
+            { "break", CMD_BREAK },
+            { "continue", CMD_CONTINUE },
+        };
+
+        for (int i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++) {
+            for (int has_semicolon = 0; has_semicolon <= 1;
+                 has_semicolon++) {
+                char input[MAX_INPUT_LEN];
+                char label[112];
+                const char *spelling = has_semicolon ? "with ;" : "without ;";
+                glr_ctrl_reset_all();
+                snprintf(input, sizeof(input), "for(i, 0, 3) %s%s",
+                         cases[i].keyword, has_semicolon ? ";" : "");
+                {
+                    EditorInputState *inp = editor_state_input_mut();
+                    repl_copy_string_fits(inp->input, sizeof(inp->input), input);
+                    inp->input_len = (int)strlen(inp->input);
+                }
+
+                snprintf(label, sizeof(label), "for inline %s %s returns 1",
+                         cases[i].keyword, spelling);
+                ASSERT_INT(label, editor_try_commit_for_loop(), 1);
+                snprintf(label, sizeof(label), "for inline %s %s: 3 cmds",
+                         cases[i].keyword, spelling);
+                ASSERT_INT(label, repl_state_document_count(), 3);
+                snprintf(label, sizeof(label), "for inline %s %s: body type",
+                         cases[i].keyword, spelling);
+                ASSERT_INT(label, repl_state_document_cmds()[1].type,
+                           cases[i].type);
+            }
+        }
+    }
+
+    /* 20. Committing func defs - basic */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         {
@@ -1888,7 +1927,7 @@ int main() {
         ASSERT_STR("func end source", editor_buffer_line(1), "  }");
     }
 
-    /* 20. editor_try_commit_func_def - update existing func-def header */
+    /* 21. editor_try_commit_func_def - update existing func-def header */
     {
         glr_ctrl_reset_all();
         {

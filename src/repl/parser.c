@@ -1953,7 +1953,7 @@ static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
      * the frame if the statement really has no loop to bind to. */
     if (strcmp(p, "break") == 0 || strcmp(p, "continue") == 0) {
         int is_break = (p[0] == 'b');
-        if (parser_source_scope(ctx) &&
+        if (!ctx->pending_loop_body && parser_source_scope(ctx) &&
             !parser_scope_in_loop_at(ctx, source_line_idx)) {
             parser_emit_error(ctx,
                 "'%s' is only valid inside a for-loop body", p);

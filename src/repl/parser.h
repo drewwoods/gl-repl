@@ -64,6 +64,11 @@ typedef struct {
      * the parser uses top-level/default indentation and does not read live REPL
      * state. */
     const ReplSourceScopeView *source_scope;
+    /* The parsed command is the body of a loop being assembled in the same
+     * compile transaction, so its CMD_FOR_BEGIN is not present in source_scope
+     * yet. This permits break/continue to bind to that pending loop while
+     * retaining the ambient scope for indentation and all other validation. */
+    int pending_loop_body;
     /* Optional expression-span capture (see ReplExprCaptureSink in
      * repl/eval.h). When set, the parser fires the sink at every point it
      * text-evaluates an expression, so the compiled-expression cache can
