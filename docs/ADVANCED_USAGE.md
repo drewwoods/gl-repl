@@ -450,6 +450,27 @@ Built-in examples use the same `@cfg` + `// camera` headers, so a saved
 scene and an example are the same file format. Only *leading* directives
 are metadata; the same text later in the file is an ordinary comment.
 
+### Authoring an example catalog
+
+**File → Save Scene as .glr** writes the same file shape the built-in examples
+ship in — `@cfg` + `// camera` headers and the commands verbatim, with no C
+scaffold (see [User Guide → Scene export](USER_GUIDE.md#scene-export-glr) for
+what the format drops). To turn one into an example:
+
+1. Drop the `.glr` file into `examples/scenes/`.
+2. Add a section for it to `examples/catalog.ini`.
+
+It then loads as a built-in. Runtime example directories take the same layout
+as-is, so `--examples-dir <dir>` will load `<dir>/catalog.ini` +
+`<dir>/scenes/` without a rebuild:
+
+```bash
+./gl-repl --examples-dir examples --example <name-or-idx>
+```
+
+Catalog entry fields, size budgets, and the other files an example must be
+edited alongside are covered by the `gl-repl-scene-authoring` skill.
+
 ### `@cfg` scene-presentation slugs
 
 A scene file (and a built-in example) carries one `// @cfg <slug> = <value>`
