@@ -6,6 +6,7 @@
 #include "ui/app/state.h"
 #include "repl/state_owners.h"
 #include "repl/command_store.h"
+#include "repl/pipeline.h"                   /* repl_recompute_autonormals */
 #include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
 #include "repl/example_loader.h"
@@ -1653,6 +1654,102 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
                 label[0] == '\0');
 }
 
+/* Auto-generated normals must be distinguishable from hand-typed ones. The
+ * signal is entirely render-side (is_auto rides the document command; nothing
+ * is written into the source text, which the autonormal pass rewrites on
+ * every recompute), so it is asserted on the built rows.
+ *
+ * The dim is asserted as a relationship against the hand-typed row rather
+ * than against REPL_CODE_PANEL_AUTO_{ROW,LABEL}_ALPHA, so retuning either
+ * constant does not break the test — only collapsing the distinction does. */
+static void test_auto_normal_rows_are_labelled_and_dimmed(void) {
+    UiRenderSnapshot snap;
+    char label[8];
+    float auto_text_a = -1.0f, auto_aux_a = -1.0f;
+    float manual_text_a = -1.0f;
+    int auto_row = -1;
+
+    printf("Testing auto-normal row labels...\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(4000, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_state_presentation_mut()->show_vertex_indices = 1;
+    glr_state_presentation_mut()->autonormal = REPL_AUTONORMAL_FACE;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    /* A hand-written normal owns its block, so put the generated one in a
+     * second block: the document then holds one of each to compare. */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glNormal3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 2);");
+    editor_feed_line("glVertex3f(1, 0, 2);");
+    editor_feed_line("glVertex3f(0, 1, 2);");
+    editor_feed_line("glEnd();");
+
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds()[i].type == CMD_NORMAL3F &&
+            repl_state_document_cmds()[i].is_auto) {
+            auto_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("autonormal pass generated a normal row", auto_row >= 0);
+
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    ASSERT_TRUE("auto normal row found",
+                ui_repl_code_panel_row_aux_label_for_test(auto_row, label));
+    ASSERT_TRUE("auto normal row carries the auto label",
+                strcmp(label, "auto") == 0);
+    ASSERT_TRUE("hand-typed normal row found",
+                ui_repl_code_panel_row_aux_label_for_test(1, label));
+    ASSERT_TRUE("hand-typed normal row carries no label", label[0] == '\0');
+
+    ASSERT_TRUE("auto row alphas readable",
+                ui_repl_code_panel_row_alphas_for_test(auto_row, &auto_text_a,
+                                                       &auto_aux_a));
+    ASSERT_TRUE("hand-typed row alphas readable",
+                ui_repl_code_panel_row_alphas_for_test(1, &manual_text_a, NULL));
+    ASSERT_TRUE("hand-typed normal renders at full strength",
+                manual_text_a == 1.0f);
+    ASSERT_TRUE("auto normal row text is dimmed against the hand-typed row",
+                auto_text_a < manual_text_a);
+    ASSERT_TRUE("auto label recedes further than the row text it annotates",
+                auto_aux_a > 0.0f && auto_aux_a < auto_text_a);
+
+    /* The label shares the aux column with the vertex indices, and only
+     * ui_repl_code_panel_compute_text_x's idx_col_w term reserves the space
+     * it paints into. With the column gone the producer must go quiet too,
+     * or the label lands left of the line-number gutter. */
+    glr_state_presentation_mut()->show_vertex_indices = 0;
+    glr_ctrl_sync_ui_chrome();
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    ASSERT_TRUE("auto normal row still found without the aux column",
+                ui_repl_code_panel_row_aux_label_for_test(auto_row, label));
+    ASSERT_TRUE("auto label suppressed when the aux column is not reserved",
+                label[0] == '\0');
+    ASSERT_TRUE("auto row stays dimmed without the aux column",
+                ui_repl_code_panel_row_alphas_for_test(auto_row, &auto_text_a,
+                                                       NULL) &&
+                auto_text_a < manual_text_a);
+
+    glr_state_presentation_mut()->autonormal = CFG_DEFAULT_AUTONORMAL;
+    glr_ctrl_sync_ui_chrome();
+}
+
 static void test_statusbar_action_tooltips(void) {
     static const int kinds[] = {
         UI_HIT_CODE_UNDO,
@@ -2161,6 +2258,7 @@ int main(void) {
     test_statusbar_command_count_overflow_color();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
+    test_auto_normal_rows_are_labelled_and_dimmed();
     test_statusbar_action_tooltips();
     test_tutorial_fade_math_uses_snapshot_view();
     test_tutorial_fade_render_uses_per_char_path();

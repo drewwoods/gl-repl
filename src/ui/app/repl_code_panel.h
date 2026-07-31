@@ -163,6 +163,15 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
 int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
                                               char out_label[8]);
 
+/* Test-only companion to ui_repl_code_panel_row_aux_label_for_test: report
+ * the row's base text alpha and its aux-label alpha (both 1.0 when the row
+ * opted out of translucency). Lets the auto-normal dim be asserted as a
+ * relationship against an ordinary row rather than against the literal
+ * tuning constants. Returns 1 when a row was found. */
+int ui_repl_code_panel_row_alphas_for_test(int source_line_idx,
+                                           float *out_text_alpha,
+                                           float *out_aux_alpha);
+
 /* Test-only: build rows without GL rendering and return the muted base color
  * plus syntax-span count for the first static row containing `needle`. */
 int ui_repl_code_panel_generated_row_style_for_test(

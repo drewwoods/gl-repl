@@ -370,15 +370,28 @@ static void text_panel_draw_left_aux(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
                                      int line_y) {
     int aux_x;
+    int blend_on;
 
     if (!(snap->chrome_flags & UI_TEXT_PANEL_CHROME_AUX_COL) ||
         !row->left_aux_label[0])
         return;
 
     aux_x = snap->cp_x + snap->text_x - 6 * FONT_W;
-    ui_clr(UI_TOK_TEXT_SECTION);
+
+    /* Blend is off by default in the panel pass — the row-text path turns it
+     * on per span and back off again — so a translucent label has to bracket
+     * its own draw or the alpha is simply discarded. */
+    blend_on = row->left_aux_alpha > 0.0f && row->left_aux_alpha < 1.0f;
+    if (blend_on) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    ui_clr_a(UI_TOK_TEXT_SECTION,
+             row->left_aux_alpha > 0.0f ? row->left_aux_alpha : 1.0f);
     gl2d_draw_string((float)aux_x, (float)line_y,
                      row->left_aux_label, FONT_MONO);
+    if (blend_on)
+        glDisable(GL_BLEND);
 }
 
 static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,

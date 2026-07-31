@@ -630,6 +630,11 @@ static unsigned repl_code_panel_line_attrib_bits(const UiRenderSnapshot *snap,
     return mask;
 }
 
+/* `show_vertex_indices` gates the 6-char aux column here, and the panel's
+ * UI_TEXT_PANEL_CHROME_AUX_COL flag must use the same condition — the
+ * renderer draws the column at text_x - 6 * FONT_W, so an unreserved column
+ * paints over the line-number gutter. Every producer of a left_aux_label
+ * (vertex indices, the auto-normal label) therefore rides this one flag. */
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
     if (!snap)
         return 0;
@@ -685,6 +690,11 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .chrome_flags = UI_TEXT_PANEL_CHROME_STATUSBAR |
                         UI_TEXT_PANEL_CHROME_SCROLLBAR |
                         UI_TEXT_PANEL_CHROME_LINE_NUMS |
+                        /* Must stay in lockstep with the idx_col_w term in
+                         * ui_repl_code_panel_compute_text_x: that is what
+                         * reserves the 6 char widths this column paints into.
+                         * Painting it while the layout has not reserved it
+                         * puts the label left of the line-number gutter. */
                         (snap->code_panel.show_vertex_indices
                             ? UI_TEXT_PANEL_CHROME_AUX_COL
                             : 0),
@@ -771,6 +781,60 @@ static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
 
     snprintf(row->left_aux_label, sizeof(row->left_aux_label),
              primitive_vnums_exact ? "v%d" : "vn", vnum);
+}
+
+/* Auto-generated rows (synthesized normals) read as machine output, not as
+ * something the user typed. `is_auto` already rides on the document command
+ * the panel walks, so the whole signal is render-time: nothing is written
+ * into the source text, which the autonormal pass rewrites wholesale on
+ * every recompute.
+ *
+ * The label is the unambiguous channel; the dim is reinforcement. The aux
+ * column is shared with the v0/v1 vertex indices, but an auto normal is
+ * never a vertex row, so the two never contend for it. */
+#define REPL_CODE_PANEL_AUTO_ROW_ALPHA 0.8f
+
+/* The label is pure chrome — it names the mechanism once the reader has
+ * learned the dim, and then repeats down the block — so it is tuned
+ * independently of, and further back than, the row text it annotates. */
+#define REPL_CODE_PANEL_AUTO_LABEL_ALPHA 0.30f
+
+static int repl_code_panel_line_is_auto(const UiRenderSnapshot *snap,
+                                        int line_idx) {
+    const GLCmd *cmd;
+
+    if (!snap || line_idx < 0 || line_idx >= snap->document_count)
+        return 0;
+    cmd = &snap->document_cmds[line_idx];
+    return cmd->valid && cmd->is_auto;
+}
+
+static void repl_code_panel_set_auto_label(UiTextPanelRow *row,
+                                           const UiRenderSnapshot *snap,
+                                           int line_idx) {
+    if (!row || !snap || !snap->code_panel.show_vertex_indices)
+        return;
+    if (!repl_code_panel_line_is_auto(snap, line_idx))
+        return;
+
+    snprintf(row->left_aux_label, sizeof(row->left_aux_label), "auto");
+    row->left_aux_alpha = REPL_CODE_PANEL_AUTO_LABEL_ALPHA;
+}
+
+/* Runs after every segment pass: the syntax / trailing-comment / attrib-bit
+ * passes write their own per-character colours, so dimming row->color alone
+ * would leave a highlighted row at full brightness. */
+static void repl_code_panel_apply_auto_dim(UiTextPanelRow *row,
+                                           const UiRenderSnapshot *snap,
+                                           int line_idx) {
+    if (!row || !repl_code_panel_line_is_auto(snap, line_idx))
+        return;
+
+    row->color = repl_code_panel_scaled_alpha(row->color,
+                                              REPL_CODE_PANEL_AUTO_ROW_ALPHA);
+    for (int i = 0; i < row->color_segment_count; i++)
+        row->color_segments[i].color = repl_code_panel_scaled_alpha(
+            row->color_segments[i].color, REPL_CODE_PANEL_AUTO_ROW_ALPHA);
 }
 
 static void repl_code_panel_set_right_action(UiTextPanelRow *row,
@@ -1791,6 +1855,7 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     row->hit_eligible = 1;
     repl_code_panel_set_vertex_label(row, builder->snap, line_idx, is_vertex, vnum,
                                      primitive_vnums_exact);
+    repl_code_panel_set_auto_label(row, builder->snap, line_idx);
     repl_code_panel_set_right_action(row, builder->snap, line_idx);
     repl_code_panel_apply_command_overlays(builder, line_idx, row);
     if (repl_code_panel_line_is_fading(builder->snap, line_idx)) {
@@ -1813,6 +1878,7 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
         repl_code_panel_apply_attrib_bit_token_segments(builder->snap, line_idx,
                                                         display_text, row);
     }
+    repl_code_panel_apply_auto_dim(row, builder->snap, line_idx);
 }
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
@@ -2108,6 +2174,12 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
     is_edit = (!snap->editor_input.insert_mode && line_idx == snap->edit_line);
     is_vertex = cmd->valid && repl_cmd_emits_vertex(cmd->type);
     repl_code_panel_vertex_aux_label(snap, state, line_idx, is_vertex, aux_label);
+    /* Parking the cursor on an auto row keeps the label (it is still an
+     * auto row until the edit commits); the dim is deliberately not applied
+     * to the live input row, which stays at full brightness. */
+    if (!aux_label[0] && snap->code_panel.show_vertex_indices &&
+        repl_code_panel_line_is_auto(snap, line_idx))
+        snprintf(aux_label, sizeof(aux_label), "auto");
 
     if (is_edit) {
         repl_code_panel_add_input_row(builder, line_idx, -1,
@@ -3443,6 +3515,31 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
             out_rgba[2] = row->left_marker_color.b;
             out_rgba[3] = row->left_marker_color.a;
         }
+        return 1;
+    }
+    return 0;
+}
+
+int ui_repl_code_panel_row_alphas_for_test(int source_line_idx,
+                                           float *out_text_alpha,
+                                           float *out_aux_alpha) {
+    if (out_text_alpha) *out_text_alpha = 1.0f;
+    if (out_aux_alpha)  *out_aux_alpha = 1.0f;
+    if (!g_builder_cache.valid)
+        return 0;
+    for (int i = 0; i < g_builder_cache.builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &g_repl_code_panel_rows[i];
+        if (row->source_line_idx != source_line_idx)
+            continue;
+        if (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT)
+            continue;
+        if (out_text_alpha)
+            *out_text_alpha = row->color.has_alpha ? row->color.a : 1.0f;
+        /* Mirrors text_panel_draw_left_aux's own "0 means opaque" reading. */
+        if (out_aux_alpha)
+            *out_aux_alpha = row->left_aux_alpha > 0.0f
+                ? row->left_aux_alpha : 1.0f;
         return 1;
     }
     return 0;

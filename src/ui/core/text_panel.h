@@ -146,6 +146,11 @@ typedef struct {
  *                      column. 0 means no label (static/virtual rows).
  *   left_aux_label   - Optional short string drawn at the idx_x column
  *                      (e.g. "v3", "vn"). Empty string means no label.
+ *   left_aux_alpha   - Alpha multiplier for left_aux_label, against the
+ *                      label's theme colour. Rows are zero-initialised and
+ *                      the common case is a fully opaque label, so 0 (and
+ *                      any negative) means 1.0 — an adapter opts into
+ *                      translucency by setting a positive fraction.
  *   right_action     - Right-edge decoration. active==0 means no
  *                      decoration on this row. Any semantic routing for
  *                      this region is adapter-owned.
@@ -186,6 +191,7 @@ typedef struct {
     UiTextPanelRowKind    kind;
     int                   left_gutter_label;
     char                  left_aux_label[8];
+    float                 left_aux_alpha;
     UiTextPanelRightAction right_action;
     int                   source_line_idx;
     int                   hit_target_line_idx;

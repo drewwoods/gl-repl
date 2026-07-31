@@ -1313,6 +1313,14 @@ highlight over it.
   expression-valued coordinate is left alone — the pass reads literal source
   coordinates.
 
+  Generated lines are marked in the code panel: an `auto` tag in the same
+  left column as the `v0`/`v1` vertex indices, and slightly dimmer text than
+  the rest of the program. A `glNormal3f` you typed yourself is never
+  tagged and never dimmed — and the pass leaves it alone, so a hand-written
+  normal keeps ownership of its block. Nothing is written into your source
+  text for this; the marking is display-only, and an exported `.c` file
+  carries the generated lines as ordinary `glNormal3f` calls.
+
 Decluttered label scopes give active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,
 rather than covering partial-vertex, normal, clip-plane, translate, or rotate
