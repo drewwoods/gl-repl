@@ -50,6 +50,7 @@ rendering, recording, and every environment variable, see
 - [Exporting & Importing](#exporting--importing)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
 - [Performance & Scope](#performance--scope)
+- [Design Goals & Deliberate Limitations](#design-goals--deliberate-limitations)
 - [Profiling & Diagnostics](#profiling--diagnostics)
 - [Music](#music)
 - [Command-Line Options](#command-line-options)
@@ -2144,6 +2145,55 @@ That division of labor is by design: the REPL is a **launchpad, debugging
 aid, and educational environment** — a place to see immediate-mode GL
 respond line by line — not a platform to build a complete application on.
 The export is the product; the REPL is where it is born.
+
+---
+
+## Design Goals & Deliberate Limitations
+
+gl-repl is deliberately smaller than the OpenGL it teaches. A few of the
+things it does not do are not gaps waiting to be filled — they are the shape
+of the tool, and they are what keeps the rest of it coherent. Knowing which
+is which saves you hunting for a feature that was never coming.
+
+**The code is the only interface to the geometry.** As the
+[introduction](#gl-repl-user-guide-draft) says, there is no click-to-select,
+no drag-a-vertex, no in-scene gizmo; the mouse moves the camera and nothing
+else. This is not a modeler and not a CAD program — the source *is* the
+model. A second way to move a vertex would mean a second source of truth,
+and the moment the two disagree the code panel stops being a trustworthy
+description of the scene and the exported C stops being the thing you
+edited. Every editing aid here therefore points the same direction: from a
+line of code out to the pixels it produced (the
+[cursor guides](#cursor-guides--vertex-overlays),
+[transform guides](#transform-guides), the
+[assignment plot](#plotting-an-assignments-values)).
+
+**No textures.** There is no `glTexCoord`, no texture binding, no image
+loading, and this is a decision rather than an omission. Texturing is a
+domain at least as large as geometry itself: texture coordinates and wrap
+modes, alpha testing and alpha masks, multitexturing and combiners, light
+maps, normal / bump / emboss mapping, projected shadow maps — plus the
+combinations of all of the above, which is where most of the interesting
+technique actually lives. Admitting any of it invites all of it, and the
+center of gravity of the app shifts from *watch immediate-mode geometry,
+lighting, and pipeline state respond line by line* to *manage texture
+units*. What a scene is made of here is vertices, color, lighting, and
+state — and those are exactly what the overlays, the
+[diagnostic views](#diagnostic-views), and the guides are built to explain.
+
+**Fixed-function immediate mode only.** No shaders, no vertex buffers, no
+draw-array batching. The fixed-function pipeline is the subject of the
+tool, not an implementation detail of it; `glBegin`/`glEnd` is what makes a
+single line of code have a single visible consequence, which is the whole
+premise of typing into a REPL and watching the frame change.
+
+**Not a platform to build an application on.** Covered above under
+[Performance & Scope](#performance--scope), and the same principle: the REPL
+is where a scene is born, the exported C is where it grows up.
+
+None of these are permanent laws of nature — but any of them changing would
+be a change of scope, argued through a design brief first, not a feature
+request quietly granted.
 
 ---
 
