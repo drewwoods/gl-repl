@@ -903,7 +903,7 @@ EOF
 # the in-scene labels are scope-driven.)
 stage_vertex_entry() { stage vertex_entry <<'EOF'
 /* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
+/* @cfg vertex_points = 1 */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX_POS */
 /* @cfg overlay_scope = OVERLAY_SCOPE_WHOLE_SCENE */
 /* @cfg variable_panel = 0 */
