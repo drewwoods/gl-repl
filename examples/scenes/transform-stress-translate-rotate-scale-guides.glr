@@ -1,6 +1,6 @@
 // @cfg vertex_outlines = 0
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
-// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED
 // @cfg vertex_points = 0
 // camera
 glTranslatef(0.0f, 0.0f, -5.00f);

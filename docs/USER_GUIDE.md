@@ -1237,12 +1237,25 @@ that frame, matching where the vertex will actually land.
 
 ### Cursor guides & vertex overlays
 
-Once lines are committed, the cursor keeps pointing into the scene. A
-crosshair guide marks the vertex your cursor line refers to, with its
-position label — move the cursor through a `glBegin` block and the guide
-follows:
+Once lines are committed, the cursor keeps pointing into the scene: whatever
+geometry the line under your cursor draws is outlined and labelled out in the
+viewport, and moving the cursor moves the highlight.
 
-![Cursor guide and Tron grid in the Transform stress example](images/transform-stress.png)
+![Cursor on each of two tri() calls in turn; the highlight and vertex labels move to the triangle that call draws](images/cursor-highlight.png)
+
+Both halves are the same scene and the same program — only the cursor has
+moved. The *Transform stress* example calls one `tri()` function from two
+different transform stacks, so line 54 draws the magenta triangle up top and
+line 60 draws the yellow one spinning at the origin. Park the cursor on either
+call and the highlight, the `v0`/`v1`/`v2` labels, and the vertex outline land
+on *that* call's triangle. This works through function calls and loop
+iterations, not just on literal `glVertex3f` lines, which is what makes it
+useful for finding out which of forty identical-looking shapes a line is
+responsible for.
+
+On a `glVertex3f` line the guide narrows to that one vertex: a crosshair at its
+position, with the coordinates spelled out beside it. Arrow the cursor down
+through a `glBegin` block and the crosshair steps from vertex to vertex.
 
 The overlay toggles annotate geometry scene-wide:
 

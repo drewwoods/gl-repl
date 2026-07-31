@@ -67,6 +67,8 @@ H=800
 GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
 LP_CROP=545x300+362+402       # label-placement: scene pane around the two quads
 LP_CODE_CROP=1094x250+8+48    # label-placement: the code panel above it
+CH_CODE_CROP=450x233+8+86     # cursor-highlight: code rows 49..61 (both tri() calls)
+CH_SCENE_CROP=450x352+382+396 # cursor-highlight: scene pane spanning both triangles
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -120,6 +122,7 @@ PNG_ASSETS=(
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges export-c-grass export-c-knobs
     motion-blur xform-guide-still single-polygon-scope label-placement
+    cursor-highlight
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
     numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-frames
@@ -1244,6 +1247,39 @@ fi
 if want single-polygon-scope; then
     ( export GLR_EDIT_LINE=10
       still "$OUT/single-polygon-scope.png" 16 "$(stage_single_polygon)" )
+fi
+
+# Cursor-follow demo: the SAME asset twice, differing only in which line the
+# cursor sits on. Transform stress calls one tri() function from two different
+# transform stacks, so parking the cursor on each call in turn moves the
+# highlight between two triangles that are far apart on screen and different
+# colours -- which is the point the User Guide's overlay section is making.
+# GLR_EDIT_LINE is a 0-BASED document index, so 53/59 are panel lines 54/60.
+#
+# Each tile is a code strip above a scene strip (same width, so -append needs
+# no padding), montaged at NATIVE resolution: the code rows have to stay
+# legible, and a full-window 1x2 montage would need a 2x downscale to fit $W.
+# GLR_NO_SPLASH keeps the startup wordmark out of the scene pane without
+# paying WARM_SPLASH frames for it, and GLR_TICK_PER_FRAME pins t so both
+# captures render the same pose of the spinning tri().
+#
+# use a long warm to wait for the camera crosshair to fade
+if want cursor-highlight; then
+    ( export GLR_NO_SPLASH=1 GLR_TICK_PER_FRAME=1
+      for line in 53 59; do
+          ( export GLR_EDIT_LINE=$line
+            WARM=220 still "$WORK/ch-$line.png" 16 \
+                --example "$EX_XFORM" --time 1 )
+          magick "$WORK/ch-$line.png" -crop "$CH_CODE_CROP" +repage \
+              "$WORK/ch-code-$line.png"
+          magick "$WORK/ch-$line.png" -crop "$CH_SCENE_CROP" +repage \
+              "$WORK/ch-scene-$line.png"
+          magick "$WORK/ch-code-$line.png" "$WORK/ch-scene-$line.png" \
+              -append -background black "$WORK/ch-tile-$line.png"
+      done )
+    montage1x2 "$WORK/ch-pair.png" "$WORK/ch-tile-53.png" "$WORK/ch-tile-59.png"
+    write_png "$WORK/ch-pair.png" "$OUT/cursor-highlight.png"
+    echo "docs-assets: wrote $OUT/cursor-highlight.png"
 fi
 
 # Cropped to the scene pane and montaged at NATIVE resolution rather than
