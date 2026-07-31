@@ -38,6 +38,8 @@
 #ifndef UI_ASSIGN_PLOT_H
 #define UI_ASSIGN_PLOT_H
 
+#include <stddef.h>   /* size_t */
+
 #include "subsystems/assign_plot/assign_plot.h"
 
 /* Panel width. Matches the FPS and variable panels so the overlay column has
@@ -108,6 +110,13 @@ int  ui_assign_plot_panel_hit_test(const UiAssignPlotPanelView *view,
 /* Short label for a capture rate ("once", "1 Hz", "frame"). Public so tests
  * and the controller can name a rate without duplicating the table. */
 const char *ui_assign_plot_rate_label(int rate);
+
+/* Format a statistic into `buf`, dropping significant digits until it is at
+ * most `max_chars` wide (<= 0 means "no limit"). Public so a test can pin the
+ * fit: the numbers that need it — a near-zero mean printing as 1.027e-11 —
+ * only show up as an overlap on screen otherwise. */
+void ui_assign_plot_format_stat(char *buf, size_t buf_sz, double v,
+                                int max_chars);
 
 /* Whether a log-Y request can actually be honored for `view`'s data: every
  * plotted value strictly positive. Public so the controller can say so in the

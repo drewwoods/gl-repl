@@ -54,6 +54,9 @@
 /* Gap between a stat cell's right-aligned value and the next cell's key, so
  * "-0.8" and "max" do not read as one token. */
 #define AP_STAT_GAP      14
+/* Minimum gap between a stat's own key and its value. Below this the value is
+ * re-formatted with fewer significant digits rather than run into the key. */
+#define AP_STAT_MIN_GAP   8
 
 #define AP_CLOSE_LABEL  "[x]"
 #define AP_RESET_LABEL  "[reset]"
@@ -224,9 +227,27 @@ static const char *ap_fit_label(const char *src, int max_px,
 
 /* Assignment values are unitless, so there is no us/ms vocabulary to fall back
  * on: %g picks fixed or exponential notation per magnitude, and 4 significant
- * digits is about what fits beside a label in a 250px panel. */
-static void ap_fmt_value(char *buf, size_t buf_sz, double v) {
-    snprintf(buf, buf_sz, "%.4g", v);
+ * digits is about what fits beside a label in a 250px panel.
+ *
+ * `max_chars` is what the cell actually has left after its key, and precision
+ * is dropped until the number fits. An exponent eats characters a plain
+ * decimal does not — the mean of a symmetric sine lands on something like
+ * 1.027e-11 — and at 4 digits that runs straight into the key beside it.
+ * Significant digits are the right thing to spend: 1e-11 still says "this is
+ * zero, to rounding", which is the whole content of that number.
+ *
+ * If even one digit does not fit, the value is left too wide rather than
+ * truncated: a clipped number reads as a different, wrong number. */
+void ui_assign_plot_format_stat(char *buf, size_t buf_sz, double v,
+                                int max_chars) {
+    static const char *const k_precisions[] = { "%.4g", "%.3g", "%.2g", "%.1g" };
+
+    if (!buf || buf_sz == 0) return;
+    for (size_t i = 0; i < sizeof(k_precisions) / sizeof(k_precisions[0]); i++) {
+        snprintf(buf, buf_sz, k_precisions[i], v);
+        if (max_chars <= 0 || (int)strlen(buf) <= max_chars)
+            return;
+    }
 }
 
 /* Shorter form for the axis gutter, which has ~5 characters of room. */
@@ -475,14 +496,22 @@ static void ap_draw_trace(const AssignPlotColumn *cols, int count,
     }
 }
 
-/* One "key   value" pair inside a half-width stats cell. */
+/* One "key   value" pair inside a half-width stats cell: key left, value right,
+ * formatted to whatever room the key leaves it. */
 static void ap_draw_stat(int x, int y, int cell_w,
-                         const char *key, const char *value) {
-    int vw = (int)strlen(value) * FONT_SMALL_W;
+                         const char *key, double value) {
+    char buf[32];
+    int key_w = (int)strlen(key) * FONT_SMALL_W;
+    int vw;
+
+    ui_assign_plot_format_stat(buf, sizeof(buf), value,
+                               (cell_w - key_w - AP_STAT_MIN_GAP) / FONT_SMALL_W);
+    vw = (int)strlen(buf) * FONT_SMALL_W;
+
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)x, (float)y, key, FONT_SMALL);
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    gl2d_draw_string((float)(x + cell_w - vw), (float)y, value, FONT_SMALL);
+    gl2d_draw_string((float)(x + cell_w - vw), (float)y, buf, FONT_SMALL);
 }
 
 void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
@@ -740,19 +769,16 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
         int cell_cap = (ASSIGN_PLOT_PANEL_W - 2 * AP_PAD) / 2;
         if (cell_w > cell_cap) cell_w = cell_cap;
         int row_y  = panel_y + AP_BOTTOM_PAD + AP_STATS_ROW_H;
-        char buf[24];
 
         if (st->count > 0) {
-            ap_fmt_value(buf, sizeof(buf), st->min);
-            ap_draw_stat(tx, row_y, cell_w - AP_STAT_GAP, "min", buf);
-            ap_fmt_value(buf, sizeof(buf), st->max);
-            ap_draw_stat(tx + cell_w, row_y, cell_w - AP_STAT_GAP, "max", buf);
+            ap_draw_stat(tx, row_y, cell_w - AP_STAT_GAP, "min", st->min);
+            ap_draw_stat(tx + cell_w, row_y, cell_w - AP_STAT_GAP,
+                         "max", st->max);
 
             row_y -= AP_STATS_ROW_H;
-            ap_fmt_value(buf, sizeof(buf), st->mean);
-            ap_draw_stat(tx, row_y, cell_w - AP_STAT_GAP, "mean", buf);
-            ap_fmt_value(buf, sizeof(buf), st->stddev);
-            ap_draw_stat(tx + cell_w, row_y, cell_w - AP_STAT_GAP, "sd", buf);
+            ap_draw_stat(tx, row_y, cell_w - AP_STAT_GAP, "mean", st->mean);
+            ap_draw_stat(tx + cell_w, row_y, cell_w - AP_STAT_GAP,
+                         "sd", st->stddev);
         } else {
             ui_clr(UI_TOK_TEXT_PLACEHOLDER);
             gl2d_draw_string((float)tx, (float)row_y,

@@ -656,6 +656,60 @@ static void test_legend_hover_selects_series(void) {
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 }
 
+/* A near-zero mean (the mean of a symmetric sine is ~1e-11, not 0) formats to
+ * an exponent that does not fit beside its key at four significant digits.
+ * It must lose digits rather than collide with the label or be clipped. */
+static void test_render_tiny_exponent_stats(void) {
+    UiAssignPlotPanelView v = make_view(20, -1.0f, 1.0f);
+    char buf[32];
+
+    /* The reported case: mean of sin over a symmetric range. At 4 significant
+     * digits "1.027e-11" is 9 characters, which does not fit beside "mean" in
+     * the 250px panel's cell — it must shed digits until it does. */
+    ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 9);
+    ASSERT_STR("a fitting width keeps full precision", buf, "1.027e-11");
+
+    ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 8);
+    ASSERT_TRUE("a tighter cell sheds digits", (int)strlen(buf) <= 8);
+    ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 5);
+    ASSERT_STR("and keeps shedding down to one", buf, "1e-11");
+
+    /* Still the magnitude, which is the entire content of a near-zero mean. */
+    ASSERT_TRUE("the exponent survives", strstr(buf, "e-11") != NULL);
+
+    /* No limit means the default four significant digits. */
+    ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 0);
+    ASSERT_STR("no limit is full precision", buf, "1.027e-11");
+
+    /* An impossible budget leaves the number too wide rather than truncating
+     * it into a different, wrong number. */
+    ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 2);
+    ASSERT_TRUE("an impossible width is not silently truncated",
+                (int)strlen(buf) > 2);
+
+    /* Ordinary values are untouched by any of this. */
+    ui_assign_plot_format_stat(buf, sizeof(buf), 7.0, 12);
+    ASSERT_STR("plain values format as before", buf, "7");
+
+    v.plot.series[0].stats.mean   = 1.0273455e-11;
+    v.plot.series[0].stats.stddev = 7.0710678e-1;
+    v.plot.series[0].stats.min    = -9.9999994e-1;
+    v.plot.series[0].stats.max    = 1.2345678e+12;
+
+    gl_stub_counts_reset();
+    ui_assign_plot_panel_render(&v);
+    ASSERT_TRUE("wide-exponent statistics still render",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
+
+    /* Same numbers in the expanded panel, where the cells are capped rather
+     * than doubled — the fit has to hold in both sizes. */
+    v.plot.expanded = 1;
+    gl_stub_counts_reset();
+    ui_assign_plot_panel_render(&v);
+    ASSERT_TRUE("and in the expanded panel",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
+}
+
 /* The plot body itself is not a control; it must fall through so the caller
  * can consume it as inert overlay chrome. */
 static void test_hit_plot_body_is_inert(void) {
@@ -696,6 +750,7 @@ int main(void) {
     test_y_axis_spans_all_series();
     test_render_gap_columns();
     test_legend_hover_selects_series();
+    test_render_tiny_exponent_stats();
     return test_harness_report(&g_harness, "test_ui_assign_plot");
 }
 #else
