@@ -930,13 +930,12 @@ stage_xform_guide() {  # $1 = translate | rotate | scale | scale-origin
     local color body
     case "$1" in
         translate)
-            color='1, 0.35, 0.2'
+            color='0.1, 0.95, 0.85'
             body='glTranslatef(2, 0.8, 0);
 glutSolidCube(0.4);' ;;
         rotate)
-            color='0.1, 0.95, 0.85'
-            body='glRotatef(70, 0, 1, 0);
-glTranslatef(2, 0.3, 0);
+            color='1, 0.35, 0.2'
+            body='glRotatef(45, 0, 1, 0);
 glutSolidCube(0.5);' ;;
         scale)
             color='1, 0.85, 0.15'
