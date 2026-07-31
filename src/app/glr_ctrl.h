@@ -50,6 +50,10 @@ int glr_ctrl_open_gl_state_popup(int line);
  * off-screen (caller should retry next frame) or is not an assignment. */
 int glr_ctrl_open_assign_plot(int line);
 
+/* Add `line` to the open assignment plot as an extra series (the
+ * Shift+right-click gesture). Returns non-zero once that row is plotted. */
+int glr_ctrl_add_assign_plot_series(int line);
+
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
  * in declaration order; if two entries target the same GlrConfigKey for

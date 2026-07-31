@@ -376,10 +376,16 @@ The caption under the plot always says which one you are looking at, along with
 the executions found this frame and the total number of samples behind the
 statistics.
 
-**Y is linear and signed, and does not force a zero baseline.** A variable
+**Y is signed by default, and does not force a zero baseline.** A variable
 oscillating between 100 and 101 shows its shape rather than flattening against
 the top of a 0–101 axis. When the range does cross zero, the zero line is drawn
 brighter, because a sign change is usually what you are hunting for.
+
+`[log]` switches Y to log₁₀ spacing, for a value that decays or grows over
+orders of magnitude. It only applies when every plotted value is strictly
+positive — zero and negative numbers have no place on a log axis — so on signed
+data the chip greys out and the plot stays linear rather than quietly dropping
+the samples that do not fit.
 
 Under the plot: **min**, **max**, **mean** and **sd** (sample standard
 deviation). These are fed from every captured value. When a frame produces more
@@ -393,17 +399,40 @@ Everything is driven by the mouse, from the panel itself:
 |---|---|
 | `[x]` | Close the plot (right-clicking the plotted row again does the same) |
 | `[1 Hz]` | Cycle the capture rate: **once** → **1 Hz** → **frame**. Right-click cycles backward |
-| `[reset]` | Drop the collected samples and statistics, keeping the row and rate |
+| `[lin]` / `[log]` | Switch the Y axis between linear and log₁₀ |
+| `[expand]` / `[shrink]` | Double the panel, for a closer look at the curve |
+| `[reset]` | Drop the collected samples and statistics, keeping the rows and rate |
 
 **once** freezes after a single capture — useful for pinning down one frame
 while you edit around it. **1 Hz** (the default) is the low-cost live view.
 **frame** captures every frame, for watching a value respond to a drag.
 Changing the rate clears the window, since it redefines what the numbers cover.
 
-Right-clicking a different assignment retargets the panel; there is one plot at
-a time. Editing the plotted row re-titles the panel and keeps plotting it;
-deleting it, or replacing it with something that is not an assignment, closes
-the panel rather than silently plotting its neighbour.
+Right-clicking a different assignment retargets the panel to that row alone.
+Editing a plotted row re-titles it and keeps plotting it; deleting it, or
+replacing it with something that is not an assignment, drops it rather than
+silently plotting its neighbour — and when the last one goes, the panel closes.
+
+**Comparing several rows.** **Shift**+right-click adds an assignment to the open
+plot instead of replacing what is there, up to four at once; Shift+right-click a
+plotted row again to remove it. Each series gets its own color, and a legend
+under the plot names them. The statistics below describe **one** series at a
+time — hover a legend entry to read that row's numbers, otherwise you get the
+first one, which is drawn lit so you always know whose numbers are on screen.
+
+Two things are shared by everything on the plot, which is what makes the
+comparison meaningful and also what limits it:
+
+- **The X axis** comes from the first row you plotted. A row that runs a
+  different number of times per frame cannot share it — a once-per-frame value
+  and a value from inside a 64-iteration loop have no common X — so adding one
+  is refused with a message rather than drawn misleadingly. On the
+  capture axis, a row that does not run in some frame leaves a visible gap
+  instead of a line drawn across values it never produced.
+- **The Y axis** spans every series. That is the point when you are comparing
+  values of similar size; when they are not, the smaller one flattens toward
+  the baseline. The per-series statistics still carry the exact numbers, and
+  `[expand]` gives the curve more room.
 
 ### Inspecting OpenGL state
 
@@ -2361,6 +2390,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+Y | Cycle syntax highlight |
 | Right-click GL command | Show a short description of that command |
 | Right-click `var = expr;` | Toggle the [assignment value plot](#plotting-an-assignments-values) for that row |
+| Shift+right-click `var = expr;` | Add (or remove) that row as an extra series on the open plot |
 | Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point |
 | Esc | Clear input / close overlay |
 

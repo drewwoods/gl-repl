@@ -266,7 +266,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L236) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L240) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
@@ -458,7 +458,33 @@ is a flat-program scan that early-outs when closed. `PROF_ASSIGN_PLOT` spans
 both phases via `prof_accum_*` (the scan and the draw sit at opposite ends of
 the frame); the reset and the commit are both gated on the panel being open, so
 never reset one without the other. Controls are mouse-only (no keymap slot, no
-`GlrConfigKey`, so no `@cfg`/golden churn).
+`GlrConfigKey`, so no `@cfg`/golden churn) — the rate, `[lin]`/`[log]` and
+`[expand]` chips plus the legend all live in the panel.
+
+Up to `MAX_ASSIGN_PLOT_SERIES` = 4 rows plot together (**Shift**+right-click
+adds/removes a series; plain right-click retargets to one row). Two axes are
+shared and that drives the rules:
+
+- **X comes from the primary series** (`series[0]`, the row the plot was opened
+  on). A row whose execution count disagrees is **refused at add time**
+  (`ASSIGN_PLOT_SERIES_INCOMPATIBLE`) — a once-per-frame row and a 64-per-frame
+  row have nothing to put on a common X. In `X_FRAME` mode every series appends
+  exactly one column per capture so column N means capture N for all of them; a
+  series that did not run gets `valid = 0` (drawn as a gap, uncounted in the
+  stats), and one added mid-history is **back-filled** with gaps so it is never
+  stretched across captures it never saw.
+- **Y is shared** — that is the point of overlaying — so series of wildly
+  different magnitudes flatten each other; the per-series stats carry the real
+  numbers. Log Y is honored only when every plotted value is strictly positive
+  (`ui_assign_plot_y_log_available()`); otherwise the axis stays linear and the
+  chip draws inert rather than lying.
+
+The stats block describes **one** series: the hovered legend entry, else the
+primary. Hover is resolved by the panel's own hit-test from `pointer_x/_y`
+(same model as the histogram panel), so the lit entry and the described one
+cannot disagree. Panel size depends on both `expanded` and `series_count` (the
+legend row only exists past one series), so `ui_assign_plot_panel_size()` takes
+both and `UiOverlayLayoutInputs` forwards them.
 
 ### Autocomplete / search
 

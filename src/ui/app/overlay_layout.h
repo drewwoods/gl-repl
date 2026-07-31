@@ -65,6 +65,9 @@ typedef struct {
     ProfSectionSet profile_collapsed_sections;
     int memory_mode;
     int assign_plot_visible;
+    int assign_plot_expanded;    /* the plot's own [expand] chip: doubles its
+                                  * footprint, so the solver has to know */
+    int assign_plot_series_count; /* >1 adds the plot's legend row */
     int band_h;
 } UiOverlayLayoutInputs;
 

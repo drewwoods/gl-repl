@@ -35,6 +35,29 @@
  * lie. A capture that finds zero executions leaves the mode alone and appends
  * nothing.
  *
+ * --- Several series on one plot ---
+ *
+ * Up to MAX_ASSIGN_PLOT_SERIES rows can be plotted together (Shift+right-click
+ * adds a row to the open plot; plain right-click retargets it to that row
+ * alone). Two things are shared and cannot be per-series:
+ *
+ *   The X axis. It is derived from the *primary* series — the one the plot was
+ *   opened on — and a row is refused at add time when its execution count
+ *   disagrees, because a once-per-frame row and a 64-per-frame row have
+ *   nothing to put on a common X. The check runs against the flat program at
+ *   the moment of the click; a row that has never executed cannot be judged
+ *   and is admitted (it simply contributes nothing until it runs).
+ *
+ *   In X_EXEC mode series may still legitimately differ in execution count
+ *   (two loops of different lengths), so each series is spread across the full
+ *   width and X reads as normalized progress through that row's executions
+ *   rather than as a shared execution index.
+ *
+ * The Y axis is shared too, and deliberately so: the reason to put two rows on
+ * one plot is to compare them. Series of wildly different magnitudes will
+ * flatten each other — the per-series statistics under the legend are what
+ * carry the real numbers in that case.
+ *
  * --- Decimation vs. statistics ---
  *
  * The plot is impressionistic by design: a frame with more executions than
@@ -52,6 +75,11 @@
  * which is the point at which more resolution stops being visible. */
 #define ASSIGN_PLOT_COLS 192
 
+/* Series the plot can hold at once. Four is the point where the legend still
+ * fits the collapsed panel, four hues stay tellable apart, and a shared Y axis
+ * still means something. */
+#define MAX_ASSIGN_PLOT_SERIES 4
+
 /* Capture rate. Cycled by the panel's own chip — mouse-only, deliberately no
  * keymap slot and no config key: this is a per-plot property, not a global
  * setting, and it should not appear in exported @cfg headers. */
@@ -67,46 +95,106 @@ typedef enum {
     ASSIGN_PLOT_X_FRAME      /* X = successive captures (time series)         */
 } AssignPlotXMode;
 
+/* Presentation flags. Held here beside the rate rather than in ui_state so the
+ * panel's size query and its renderer read them out of the one view they
+ * already take, and so all three mouse-only chips live in one place.
+ *
+ * Like the rate they survive open/close — retargeting a row should not undo
+ * the zoom the user just asked for — and unlike the rate neither resets the
+ * buffer: they change how captured values are drawn, not which values were
+ * captured or what window the statistics describe. */
+
 /* One plot column: the min/max envelope of the values that fell into it. When
  * a frame has no more executions than there are columns (and always in
  * X_FRAME mode) each column holds a single value and lo == hi, so the envelope
- * collapses and the plotted line is exact. */
+ * collapses and the plotted line is exact.
+ *
+ * `valid` is 0 for a column a series has no value for. Only X_FRAME mode
+ * produces those, and only with more than one series: every series appends one
+ * column per capture so that column N means capture N for all of them, which
+ * means a series that did not execute that frame has to hold its place rather
+ * than shift its history left against the others. The renderer breaks its line
+ * there — a gap in a time series is information, not an absence of it. */
 typedef struct {
     float lo, hi;
+    int   valid;
 } AssignPlotColumn;
 
-/* Flat per-frame view for the renderer. Columns are in display order, oldest
- * first — the ring is normalized here so no caller has to know about it. */
+/* One plotted row. Columns are in display order, oldest first — the ring is
+ * normalized here so no caller has to know about it. */
 typedef struct {
-    int open;
     int source_line_idx;
-    int rate;             /* AssignPlotRate  */
-    int x_mode;           /* AssignPlotXMode */
-    int captured;         /* at least one capture has landed */
     int exec_count;       /* executions found by the most recent capture */
     const AssignPlotColumn *cols;
     int col_count;
     RunStatsSummary stats;
+} AssignPlotSeriesView;
+
+/* Flat per-frame view for the renderer.
+ *
+ * `series[0]` is the primary: it fixes the X axis mode for the whole plot (see
+ * "The two X axes" above), and it is the series whose statistics the panel
+ * shows when nothing is hovered. Series are held in the order they were
+ * added. */
+typedef struct {
+    int open;
+    int rate;             /* AssignPlotRate  */
+    int x_mode;           /* AssignPlotXMode */
+    int captured;         /* at least one capture has landed */
+    int expanded;         /* double-size panel                            */
+    int y_log;            /* log Y requested (see ui/support/assign_plot.h
+                           * for when it is honored) */
+    int series_count;
+    AssignPlotSeriesView series[MAX_ASSIGN_PLOT_SERIES];
 } AssignPlotView;
 
-/* Target a source row (an index into the committed document). Resets the
- * buffer and statistics. Targeting the row that is already open is a no-op, so
- * callers that want toggle behavior should use assign_plot_toggle(). */
+/* Target a source row (an index into the committed document), replacing every
+ * series with that one. Resets the buffers and statistics. Retargeting the row
+ * that is already the sole series is a no-op, so callers that want toggle
+ * behavior should use assign_plot_toggle(). */
 void assign_plot_open(int source_line_idx);
 
-/* Untarget. Safe to call when already closed. */
+/* Untarget everything. Safe to call when already closed. */
 void assign_plot_close(void);
 
-/* Open `source_line_idx`, or close if that row is the one already open. */
+/* Open `source_line_idx`, or close if that row is the only one plotted. */
 void assign_plot_toggle(int source_line_idx);
 
+/* Outcome of assign_plot_toggle_series(), which the caller reports — a refusal
+ * that said nothing would look like a dead gesture. */
+typedef enum {
+    ASSIGN_PLOT_SERIES_ADDED = 0,
+    ASSIGN_PLOT_SERIES_REMOVED,     /* it was already plotted               */
+    ASSIGN_PLOT_SERIES_FULL,        /* MAX_ASSIGN_PLOT_SERIES already held  */
+    ASSIGN_PLOT_SERIES_INCOMPATIBLE /* its X axis cannot be the plot's      */
+} AssignPlotSeriesResult;
+
+/* Add `source_line_idx` as an additional series, or drop it if it is already
+ * plotted. Opens the plot on that row when nothing is plotted yet, so the
+ * add gesture works from a closed panel. Dropping the last series closes.
+ *
+ * Adding resets nothing that is already captured: the new series starts empty
+ * and fills from the next capture, while the others keep their history. */
+int  assign_plot_toggle_series(int source_line_idx);  /* AssignPlotSeriesResult */
+
 int  assign_plot_is_open(void);
+int  assign_plot_series_count(void);
+
+/* The primary series' row, or -1 when closed. */
 int  assign_plot_source_line(void);
+
+/* Is `source_line_idx` one of the plotted series? */
+int  assign_plot_has_series(int source_line_idx);
 
 /* Rate control. Both reset the buffer and statistics: a rate change redefines
  * the window the numbers describe. `dir` is +1 forward / -1 backward. */
 void assign_plot_set_rate(int rate);
 void assign_plot_cycle_rate(int dir);
+
+/* Presentation toggles. Neither touches the buffer or the statistics. */
+void assign_plot_toggle_expanded(void);
+void assign_plot_toggle_y_log(void);
+int  assign_plot_is_expanded(void);
 
 /* Drop the buffer and statistics, keeping the target and rate. Re-arms
  * ASSIGN_PLOT_RATE_ONCE for one more capture. */

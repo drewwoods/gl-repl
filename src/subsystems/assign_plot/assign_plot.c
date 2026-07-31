@@ -11,30 +11,52 @@
 /* One second between captures at ASSIGN_PLOT_RATE_1HZ. */
 #define ASSIGN_PLOT_1HZ_PERIOD_US 1000000.0
 
+/* One plotted row's buffer. Columns are kept in display order (oldest first)
+ * rather than as a ring, so the view can hand the renderer a plain array. In
+ * X_FRAME mode a full buffer shifts down by one on append: 1.5 KB of memmove
+ * per series at most once per frame, which is far cheaper than making every
+ * reader understand ring wrap. */
+typedef struct {
+    int              source_line_idx;
+    AssignPlotColumn cols[ASSIGN_PLOT_COLS];
+    int              col_count;
+    int              exec_count;
+    RunStats         stats;
+} AssignPlotSeries;
+
 static int    g_open = 0;
-static int    g_source_line_idx = -1;
 static int    g_rate = ASSIGN_PLOT_RATE_1HZ;
 static int    g_x_mode = ASSIGN_PLOT_X_EXEC;
 static int    g_captured = 0;
 static double g_last_capture_us = 0.0;
-static int    g_exec_count = 0;
+static int    g_expanded = 0;
+static int    g_y_log = 0;
 
-/* Columns are kept in display order (oldest first) rather than as a ring, so
- * the view can hand the renderer a plain array. In X_FRAME mode a full buffer
- * shifts down by one on append: 1.5 KB of memmove at most once per frame, which
- * is far cheaper than making every reader understand ring wrap. */
-static AssignPlotColumn g_cols[ASSIGN_PLOT_COLS];
-static int              g_col_count = 0;
+static AssignPlotSeries g_series[MAX_ASSIGN_PLOT_SERIES];
+static int              g_series_count = 0;
 
-static RunStats g_stats;
+static void assign_plot_series_clear_samples(AssignPlotSeries *s) {
+    memset(s->cols, 0, sizeof(s->cols));
+    s->col_count = 0;
+    s->exec_count = 0;
+    runstats_clear(&s->stats);
+}
 
+/* Drop every series' history. The plot-wide capture bookkeeping goes with it:
+ * "captured" and the rate clock describe the window the buffers cover. */
 static void assign_plot_clear_samples(void) {
-    memset(g_cols, 0, sizeof(g_cols));
-    g_col_count = 0;
-    g_exec_count = 0;
+    for (int i = 0; i < g_series_count; i++)
+        assign_plot_series_clear_samples(&g_series[i]);
     g_captured = 0;
     g_last_capture_us = 0.0;
-    runstats_clear(&g_stats);
+}
+
+/* Index of the series plotting `source_line_idx`, or -1. */
+static int assign_plot_series_index(int source_line_idx) {
+    for (int i = 0; i < g_series_count; i++)
+        if (g_series[i].source_line_idx == source_line_idx)
+            return i;
+    return -1;
 }
 
 /* The value an assignment produced, by command type. Flatten bakes the
@@ -56,18 +78,42 @@ static int assign_plot_type_is_assign(CmdType type) {
     return type == CMD_VAR_ASSIGN || type == CMD_SCRATCH_ASSIGN;
 }
 
-/* The targeted row must still exist and still be an assignment. It does not
- * have to be the *same* assignment: if the row is edited the plot follows what
- * is now there, and the panel title (rebuilt by the controller from the live
+/* A plotted row must still exist and still be an assignment. It does not have
+ * to be the *same* assignment: if the row is edited the series follows what is
+ * now there, and the panel's legend (rebuilt by the controller from the live
  * row each frame) says so. Anything else — the row deleted, or replaced by a
- * command that assigns nothing — closes the plot rather than silently plotting
- * a neighbour. */
-static int assign_plot_target_is_live(void) {
+ * command that assigns nothing — drops that series rather than silently
+ * plotting a neighbour. */
+static int assign_plot_row_is_live(int source_line_idx) {
     const GLCmd *cmd;
-    if (g_source_line_idx < 0 || g_source_line_idx >= repl_state_document_count())
+    if (source_line_idx < 0 || source_line_idx >= repl_state_document_count())
         return 0;
-    cmd = repl_state_document_cmd_at(g_source_line_idx);
+    cmd = repl_state_document_cmd_at(source_line_idx);
     return cmd && cmd->valid && assign_plot_type_is_assign(cmd->type);
+}
+
+/* Drop dead series, keeping the rest in order. Closes the plot when the last
+ * one goes. Returns 1 if anything was removed. */
+static int assign_plot_prune_dead_series(void) {
+    int kept = 0;
+    int removed = 0;
+
+    for (int i = 0; i < g_series_count; i++) {
+        if (!assign_plot_row_is_live(g_series[i].source_line_idx)) {
+            removed = 1;
+            continue;
+        }
+        if (kept != i)
+            g_series[kept] = g_series[i];
+        kept++;
+    }
+    g_series_count = kept;
+    if (g_series_count == 0) {
+        g_open = 0;
+        g_captured = 0;
+        g_last_capture_us = 0.0;
+    }
+    return removed;
 }
 
 static int assign_plot_rate_allows(double now_us) {
@@ -83,42 +129,43 @@ static int assign_plot_rate_allows(double now_us) {
     }
 }
 
-/* Executions of the targeted row in the current flat program. The full flat
+/* Executions of `source_line_idx` in the current flat program. The full flat
  * count on purpose — see the header on why replay's clamp is not applied. */
-static int assign_plot_count_executions(void) {
+static int assign_plot_count_executions(int source_line_idx) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
     int found = 0;
     if (!flat) return 0;
     for (int i = 0; i < n; i++) {
-        if (flat[i].src_cmd_idx == g_source_line_idx
+        if (flat[i].src_cmd_idx == source_line_idx
             && assign_plot_type_is_assign(flat[i].type))
             found++;
     }
     return found;
 }
 
-/* Second pass: fold this frame's executions into `cols` columns, and every
- * value into the statistics. `total` comes from assign_plot_count_executions()
- * so the column a value belongs to can be computed without buffering the
- * values first.
+/* Second pass for one series: fold this frame's executions into `cols`
+ * columns, and every value into the statistics. `total` comes from
+ * assign_plot_count_executions() so the column a value belongs to can be
+ * computed without buffering the values first.
  *
  * With cols <= total the column index is non-decreasing in `seen` and advances
  * by at most one per value, so columns fill strictly left to right with no
  * gaps — which is what lets `col != prev_col` stand in for "first value in
  * this column" and why no per-column seen flag is needed. */
-static void assign_plot_fill_exec_columns(int total, int cols) {
+static void assign_plot_fill_exec_columns(AssignPlotSeries *s,
+                                          int total, int cols) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
     int seen = 0;
     int prev_col = -1;
 
-    memset(g_cols, 0, sizeof(g_cols));
+    memset(s->cols, 0, sizeof(s->cols));
 
     for (int i = 0; i < n && seen < total; i++) {
         float value;
         int col;
-        if (flat[i].src_cmd_idx != g_source_line_idx) continue;
+        if (flat[i].src_cmd_idx != s->source_line_idx) continue;
         if (!assign_plot_cmd_value(&flat[i], &value)) continue;
 
         /* 64-bit product: `total` can reach MAX_FLAT_COMMANDS today, which
@@ -129,73 +176,175 @@ static void assign_plot_fill_exec_columns(int total, int cols) {
         if (col > cols - 1) col = cols - 1;
 
         if (col != prev_col) {
-            g_cols[col].lo = value;
-            g_cols[col].hi = value;
+            s->cols[col].lo = value;
+            s->cols[col].hi = value;
+            s->cols[col].valid = 1;
             prev_col = col;
         } else {
-            if (value < g_cols[col].lo) g_cols[col].lo = value;
-            if (value > g_cols[col].hi) g_cols[col].hi = value;
+            if (value < s->cols[col].lo) s->cols[col].lo = value;
+            if (value > s->cols[col].hi) s->cols[col].hi = value;
         }
-        runstats_record(&g_stats, (double)value);
+        runstats_record(&s->stats, (double)value);
         seen++;
     }
-    g_col_count = cols;
+    s->col_count = cols;
 }
 
-/* X_FRAME append: one column per capture, scrolling once the buffer is full. */
-static void assign_plot_append_frame_column(float value) {
-    if (g_col_count >= ASSIGN_PLOT_COLS) {
-        memmove(&g_cols[0], &g_cols[1],
-                (size_t)(ASSIGN_PLOT_COLS - 1) * sizeof(g_cols[0]));
-        g_col_count = ASSIGN_PLOT_COLS - 1;
+/* X_FRAME append: one column per capture, scrolling once the buffer is full.
+ * `valid` 0 marks a capture this series had no value for — the column still
+ * has to exist so column N means capture N for every series. */
+static void assign_plot_append_frame_column(AssignPlotSeries *s,
+                                            float lo, float hi, int valid) {
+    if (s->col_count >= ASSIGN_PLOT_COLS) {
+        memmove(&s->cols[0], &s->cols[1],
+                (size_t)(ASSIGN_PLOT_COLS - 1) * sizeof(s->cols[0]));
+        s->col_count = ASSIGN_PLOT_COLS - 1;
     }
-    g_cols[g_col_count].lo = value;
-    g_cols[g_col_count].hi = value;
-    g_col_count++;
-    runstats_record(&g_stats, (double)value);
+    s->cols[s->col_count].lo = valid ? lo : 0.0f;
+    s->cols[s->col_count].hi = valid ? hi : 0.0f;
+    s->cols[s->col_count].valid = valid;
+    s->col_count++;
+    /* The statistics take the endpoints, not the column: for the ordinary
+     * once-per-frame row they are the same value, and for a row folded from
+     * several executions they are the two that matter. */
+    if (valid) {
+        runstats_record(&s->stats, (double)lo);
+        if (hi > lo) runstats_record(&s->stats, (double)hi);
+    }
 }
 
-/* The single value of a row that executed exactly once this frame. */
-static int assign_plot_single_value(float *out_value) {
+/* The min/max envelope of everything `source_line_idx` produced this frame.
+ * The primary series always contributes exactly one value in X_FRAME mode;
+ * a secondary series may have run more than once (an edit can make a row
+ * disagree with the mode after it was admitted), and folding those into one
+ * column keeps every series' history aligned on the shared capture axis. */
+static int assign_plot_frame_envelope(int source_line_idx,
+                                      float *out_lo, float *out_hi) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
+    int found = 0;
+
     for (int i = 0; i < n; i++) {
-        if (flat[i].src_cmd_idx == g_source_line_idx
-            && assign_plot_cmd_value(&flat[i], out_value))
-            return 1;
+        float value;
+        if (flat[i].src_cmd_idx != source_line_idx) continue;
+        if (!assign_plot_cmd_value(&flat[i], &value)) continue;
+        if (!found || value < *out_lo) *out_lo = value;
+        if (!found || value > *out_hi) *out_hi = value;
+        found = 1;
     }
-    return 0;
+    return found;
 }
 
 void assign_plot_open(int source_line_idx) {
     if (source_line_idx < 0) return;
-    if (g_open && g_source_line_idx == source_line_idx) return;
+    if (g_open && g_series_count == 1
+        && g_series[0].source_line_idx == source_line_idx)
+        return;
     g_open = 1;
-    g_source_line_idx = source_line_idx;
+    g_series_count = 1;
+    g_series[0].source_line_idx = source_line_idx;
     g_x_mode = ASSIGN_PLOT_X_EXEC;
     assign_plot_clear_samples();
 }
 
 void assign_plot_close(void) {
     g_open = 0;
-    g_source_line_idx = -1;
-    assign_plot_clear_samples();
+    g_series_count = 0;
+    g_captured = 0;
+    g_last_capture_us = 0.0;
 }
 
 void assign_plot_toggle(int source_line_idx) {
-    if (g_open && g_source_line_idx == source_line_idx) {
+    if (g_open && g_series_count == 1
+        && g_series[0].source_line_idx == source_line_idx) {
         assign_plot_close();
         return;
     }
     assign_plot_open(source_line_idx);
 }
 
+/* Can a row join the current plot's X axis? Judged from the flat program as it
+ * stands, because that is the only evidence available at click time:
+ *
+ *   - nothing plotted yet, or the row has never executed: nothing to
+ *     contradict, so admit it;
+ *   - X_FRAME (the primary runs once per frame): a row that runs many times
+ *     per frame has no place on a capture axis;
+ *   - X_EXEC: a row that runs exactly once would be a single dot on an axis
+ *     of execution progress.
+ */
+static int assign_plot_row_fits_x_mode(int source_line_idx) {
+    int execs;
+    if (g_series_count == 0) return 1;
+    execs = assign_plot_count_executions(source_line_idx);
+    if (execs == 0) return 1;
+    return (g_x_mode == ASSIGN_PLOT_X_FRAME) ? (execs == 1) : (execs >= 2);
+}
+
+int assign_plot_toggle_series(int source_line_idx) {
+    int existing;
+
+    if (source_line_idx < 0) return ASSIGN_PLOT_SERIES_INCOMPATIBLE;
+
+    if (!g_open || g_series_count == 0) {
+        assign_plot_open(source_line_idx);
+        return ASSIGN_PLOT_SERIES_ADDED;
+    }
+
+    existing = assign_plot_series_index(source_line_idx);
+    if (existing >= 0) {
+        /* Removing the primary hands the X axis to whatever is left, so the
+         * buffers no longer describe a consistent axis — clear them and let
+         * the next capture re-derive the mode. */
+        for (int i = existing; i + 1 < g_series_count; i++)
+            g_series[i] = g_series[i + 1];
+        g_series_count--;
+        if (g_series_count == 0)
+            assign_plot_close();
+        else if (existing == 0)
+            assign_plot_clear_samples();
+        return ASSIGN_PLOT_SERIES_REMOVED;
+    }
+
+    if (g_series_count >= MAX_ASSIGN_PLOT_SERIES)
+        return ASSIGN_PLOT_SERIES_FULL;
+    if (!assign_plot_row_fits_x_mode(source_line_idx))
+        return ASSIGN_PLOT_SERIES_INCOMPATIBLE;
+
+    /* The new series starts empty rather than resetting the plot: the point of
+     * adding one is to compare it against history already on screen.
+     *
+     * On the capture axis that history has to be accounted for, though —
+     * column N means capture N for every series, and a series that simply
+     * started shorter would be stretched across the full width and read as
+     * aligned with values it never saw. It is back-filled with gap columns
+     * instead: no data before it was added, drawn as the absence it is. */
+    assign_plot_series_clear_samples(&g_series[g_series_count]);
+    g_series[g_series_count].source_line_idx = source_line_idx;
+    if (g_x_mode == ASSIGN_PLOT_X_FRAME) {
+        int backfill = g_series[0].col_count;
+        for (int i = 0; i < backfill; i++)
+            assign_plot_append_frame_column(&g_series[g_series_count],
+                                            0.0f, 0.0f, 0);
+    }
+    g_series_count++;
+    return ASSIGN_PLOT_SERIES_ADDED;
+}
+
 int assign_plot_is_open(void) {
     return g_open;
 }
 
+int assign_plot_series_count(void) {
+    return g_open ? g_series_count : 0;
+}
+
 int assign_plot_source_line(void) {
-    return g_open ? g_source_line_idx : -1;
+    return (g_open && g_series_count > 0) ? g_series[0].source_line_idx : -1;
+}
+
+int assign_plot_has_series(int source_line_idx) {
+    return g_open && assign_plot_series_index(source_line_idx) >= 0;
 }
 
 void assign_plot_set_rate(int rate) {
@@ -209,47 +358,92 @@ void assign_plot_cycle_rate(int dir) {
     assign_plot_set_rate((g_rate + step) % ASSIGN_PLOT_RATE_COUNT);
 }
 
+/* Presentation only: deliberately no assign_plot_clear_samples(). Zooming the
+ * panel or switching the Y axis to log re-draws the values already captured;
+ * throwing them away would make both chips destructive, which is the opposite
+ * of what "look at this more closely" should do. */
+void assign_plot_toggle_expanded(void) {
+    g_expanded = !g_expanded;
+}
+
+void assign_plot_toggle_y_log(void) {
+    g_y_log = !g_y_log;
+}
+
+int assign_plot_is_expanded(void) {
+    return g_expanded;
+}
+
 void assign_plot_reset(void) {
     assign_plot_clear_samples();
 }
 
 void assign_plot_capture(double now_us) {
     int total, cols;
+    int any_executed = 0;
 
     /* The gate that makes this feature free when nobody is looking: no flat
      * scan, no clock arithmetic, nothing. */
     if (!g_open) return;
 
-    if (!assign_plot_target_is_live()) {
-        assign_plot_close();
+    if (assign_plot_prune_dead_series() && !g_open)
         return;
-    }
     if (!assign_plot_rate_allows(now_us)) return;
 
-    total = assign_plot_count_executions();
+    /* The primary series fixes the axis for the whole plot. */
+    total = assign_plot_count_executions(g_series[0].source_line_idx);
 
     if (total >= 2) {
         if (g_x_mode != ASSIGN_PLOT_X_EXEC) {
             g_x_mode = ASSIGN_PLOT_X_EXEC;
             assign_plot_clear_samples();
         }
-        cols = (total < ASSIGN_PLOT_COLS) ? total : ASSIGN_PLOT_COLS;
-        assign_plot_fill_exec_columns(total, cols);
     } else if (total == 1) {
-        float value = 0.0f;
         if (g_x_mode != ASSIGN_PLOT_X_FRAME) {
             g_x_mode = ASSIGN_PLOT_X_FRAME;
             assign_plot_clear_samples();
         }
-        if (assign_plot_single_value(&value))
-            assign_plot_append_frame_column(value);
     }
-    /* total == 0: the row did not run this frame (a false `if`, a `goto` that
-     * jumped over it). Leave the axis mode and the buffer alone — a row that
-     * runs intermittently should keep the history it has, and flipping the
-     * axis on an empty frame would throw it away. */
+    /* total == 0: the primary did not run this frame (a false `if`, a `goto`
+     * that jumped over it). Leave the axis mode alone — a row that runs
+     * intermittently should keep the history it has, and flipping the axis on
+     * an empty frame would throw it away. Secondary series are still sampled
+     * below, so the plot does not stall on the primary's silence. */
 
-    g_exec_count = total;
+    if (g_x_mode == ASSIGN_PLOT_X_EXEC) {
+        for (int i = 0; i < g_series_count; i++) {
+            int execs = (i == 0) ? total
+                      : assign_plot_count_executions(g_series[i].source_line_idx);
+            g_series[i].exec_count = execs;
+            if (execs <= 0) continue;
+            cols = (execs < ASSIGN_PLOT_COLS) ? execs : ASSIGN_PLOT_COLS;
+            assign_plot_fill_exec_columns(&g_series[i], execs, cols);
+        }
+    } else {
+        float lo[MAX_ASSIGN_PLOT_SERIES], hi[MAX_ASSIGN_PLOT_SERIES];
+        int   got[MAX_ASSIGN_PLOT_SERIES];
+
+        for (int i = 0; i < g_series_count; i++) {
+            lo[i] = hi[i] = 0.0f;
+            got[i] = assign_plot_frame_envelope(g_series[i].source_line_idx,
+                                                &lo[i], &hi[i]);
+            g_series[i].exec_count =
+                (i == 0) ? total
+                         : assign_plot_count_executions(g_series[i].source_line_idx);
+            if (got[i]) any_executed = 1;
+        }
+        /* Append for every series or none: a partial append would slide the
+         * capture axis out from under the series that were skipped. When
+         * nothing ran at all, the buffers are left exactly as they were. */
+        if (any_executed) {
+            /* An envelope spanning several executions is folded into the one
+             * column this capture owns. */
+            for (int i = 0; i < g_series_count; i++)
+                assign_plot_append_frame_column(&g_series[i], lo[i], hi[i],
+                                                got[i]);
+        }
+    }
+
     g_captured = 1;
     g_last_capture_us = now_us;
 }
@@ -257,22 +451,34 @@ void assign_plot_capture(double now_us) {
 AssignPlotView assign_plot_view(void) {
     AssignPlotView v;
     memset(&v, 0, sizeof(v));
-    v.open            = g_open;
-    v.source_line_idx = g_open ? g_source_line_idx : -1;
-    v.rate            = g_rate;
-    v.x_mode          = g_x_mode;
-    v.captured        = g_captured;
-    v.exec_count      = g_exec_count;
-    v.cols            = g_cols;
-    v.col_count       = g_col_count;
-    runstats_read(&g_stats, &v.stats);
+    v.open         = g_open;
+    v.rate         = g_rate;
+    v.x_mode       = g_x_mode;
+    v.captured     = g_captured;
+    v.expanded     = g_expanded;
+    v.y_log        = g_y_log;
+    v.series_count = g_open ? g_series_count : 0;
+    for (int i = 0; i < v.series_count; i++) {
+        v.series[i].source_line_idx = g_series[i].source_line_idx;
+        v.series[i].exec_count      = g_series[i].exec_count;
+        v.series[i].cols            = g_series[i].cols;
+        v.series[i].col_count       = g_series[i].col_count;
+        runstats_read(&g_series[i].stats, &v.series[i].stats);
+    }
     return v;
 }
 
 void assign_plot_reset_all(void) {
     g_open = 0;
-    g_source_line_idx = -1;
+    g_series_count = 0;
     g_rate = ASSIGN_PLOT_RATE_1HZ;
     g_x_mode = ASSIGN_PLOT_X_EXEC;
-    assign_plot_clear_samples();
+    g_expanded = 0;
+    g_y_log = 0;
+    g_captured = 0;
+    g_last_capture_us = 0.0;
+    for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++) {
+        g_series[i].source_line_idx = -1;
+        assign_plot_series_clear_samples(&g_series[i]);
+    }
 }

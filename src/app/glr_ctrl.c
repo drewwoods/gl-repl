@@ -1906,7 +1906,7 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
     return 0;
 }
 
-/* Label for the assignment plot: the left-hand side of the targeted row, as
+/* Label for one assignment-plot series: the left-hand side of its row, as
  * the user wrote it ("angle", "A[i]"). Derived from the editor buffer rather
  * than from the GLCmd because per-line canonical text lives there and nowhere
  * else — and because re-deriving it every frame means an edited row retitles
@@ -1961,9 +1961,10 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->profile_panel  = ui_state_profile_panel();
     snap->memory_panel   = ui_state_memory_panel();
     snap->assign_plot    = assign_plot_view();
-    glr_ctrl_assign_plot_title(snap->assign_plot.source_line_idx,
-                               snap->assign_plot_title,
-                               sizeof(snap->assign_plot_title));
+    for (int i = 0; i < snap->assign_plot.series_count; i++)
+        glr_ctrl_assign_plot_title(snap->assign_plot.series[i].source_line_idx,
+                                   snap->assign_plot_titles[i],
+                                   sizeof(snap->assign_plot_titles[i]));
     snap->status         = ui_state_status();
     snap->status_history = ui_state_status_history();
     /* Count of structurally unbalanced bracket commands, surfaced as a
@@ -2184,6 +2185,8 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
         .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
         .memory_mode                = snap->memory_panel.mode,
         .assign_plot_visible        = snap->assign_plot.open,
+        .assign_plot_expanded       = snap->assign_plot.expanded,
+        .assign_plot_series_count   = snap->assign_plot.series_count,
         .band_h                     = ui_overlay_layout_last_band_h(),
     });
 }
@@ -2197,7 +2200,10 @@ static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.visible  = snap->assign_plot.open;
-    v.title    = snap->assign_plot_title;
+    for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++)
+        v.titles[i] = snap->assign_plot_titles[i];
+    v.pointer_x = snap->pointer.mouse_x;
+    v.pointer_y = snap->pointer.mouse_y;
     v.plot     = snap->assign_plot;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_ASSIGN_PLOT,
@@ -3958,6 +3964,18 @@ int glr_ctrl_open_assign_plot(int line) {
     return assign_plot_is_open() && assign_plot_source_line() == line;
 }
 
+int glr_ctrl_add_assign_plot_series(int line) {
+    /* The Shift+right-click path has no synthetic-modifier route through
+     * glr_ctrl_mouse (modifiers are read from GLUT, not passed in), so this
+     * calls the same subsystem entry the router does. The click routing
+     * itself is covered by glr_ctrl_open_assign_plot above and by
+     * test_glr_ctrl. */
+    if (line < 0)
+        return 0;
+    assign_plot_toggle_series(line);
+    return assign_plot_has_series(line);
+}
+
 void glr_ctrl_set_accum_passes(int count) {
     static const int steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
     for (int i = 0; i < (int)ARRAY_LEN(steps); i++) {
@@ -4086,6 +4104,8 @@ void glr_ctrl_tick(void) {
             .profile_collapsed_sections = ui_state_profile_panel().collapsed_sections,
             .memory_mode                = ui_state_memory_panel().mode,
             .assign_plot_visible        = assign_plot_is_open(),
+            .assign_plot_expanded       = assign_plot_is_expanded(),
+            .assign_plot_series_count   = assign_plot_series_count(),
             .band_h                     = band_h,
         });
         ui_overlay_layout_tick(&in);

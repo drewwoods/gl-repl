@@ -1532,8 +1532,9 @@ static void test_right_click_assignment_opens_value_plot(void) {
         UiRenderSnapshot snap;
         glr_ctrl_build_ui_snapshot(&snap);
         ASSERT_STR("title is the row's left-hand side",
-                   snap.assign_plot_title, "angle");
+                   snap.assign_plot_titles[0], "angle");
         ASSERT_INT("snapshot carries the open flag", snap.assign_plot.open, 1);
+        ASSERT_INT("one series to start", snap.assign_plot.series_count, 1);
     }
 
     /* Right-clicking the same row again closes it. */

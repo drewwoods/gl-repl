@@ -744,6 +744,8 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
         .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
         .memory_mode                = snap->memory_panel.mode,
         .assign_plot_visible        = snap->assign_plot.open,
+        .assign_plot_expanded       = snap->assign_plot.expanded,
+        .assign_plot_series_count   = snap->assign_plot.series_count,
         .band_h                     = ui_overlay_layout_last_band_h(),
     });
 
@@ -787,15 +789,30 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
             plot_view.visible  = panel->visible;
             plot_view.panel_x  = px;
             plot_view.panel_y  = py;
-            plot_view.title    = snap->assign_plot_title;
+            for (int s = 0; s < MAX_ASSIGN_PLOT_SERIES; s++)
+                plot_view.titles[s] = snap->assign_plot_titles[s];
+            plot_view.pointer_x = mx;
+            plot_view.pointer_y = my;
             plot_view.plot     = snap->assign_plot;
             plot_hit = ui_assign_plot_panel_hit_test(&plot_view, mx, my);
+            /* A legend entry (a non-negative result) is hover-only: it selects
+             * whose statistics the panel shows and has no click action, so it
+             * is consumed as inert chrome rather than routed. */
+            if (plot_hit >= 0)
+                return overlay_chrome_hit(mx, my, win_h, px, py);
             if (plot_hit != UI_ASSIGN_PLOT_HIT_NONE) {
-                hit.kind = (plot_hit == UI_ASSIGN_PLOT_HIT_CLOSE)
-                             ? UI_HIT_ASSIGN_PLOT_CLOSE
-                         : (plot_hit == UI_ASSIGN_PLOT_HIT_RATE)
-                             ? UI_HIT_ASSIGN_PLOT_RATE
-                             : UI_HIT_ASSIGN_PLOT_RESET;
+                switch (plot_hit) {
+                    case UI_ASSIGN_PLOT_HIT_CLOSE:
+                        hit.kind = UI_HIT_ASSIGN_PLOT_CLOSE;  break;
+                    case UI_ASSIGN_PLOT_HIT_RATE:
+                        hit.kind = UI_HIT_ASSIGN_PLOT_RATE;   break;
+                    case UI_ASSIGN_PLOT_HIT_YSCALE:
+                        hit.kind = UI_HIT_ASSIGN_PLOT_YSCALE; break;
+                    case UI_ASSIGN_PLOT_HIT_EXPAND:
+                        hit.kind = UI_HIT_ASSIGN_PLOT_EXPAND; break;
+                    default:
+                        hit.kind = UI_HIT_ASSIGN_PLOT_RESET;  break;
+                }
                 hit.local_x = (float)(mx - px);
                 hit.local_y = (float)(win_h - my - py);
                 return hit;

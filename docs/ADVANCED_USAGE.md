@@ -115,7 +115,9 @@ When both a command-line flag and an env var exist, the flag wins.
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |
 | `GLR_OPEN_COLOR_PICKER` | 0-based line index of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
 | `GLR_OPEN_GL_STATE` | 0-based line index of a blank source row. | Routes a synthetic right-click to that visible row and opens the GL-state popup; retries after `GLR_EDIT_LINE` follow-scroll. |
-| `GLR_OPEN_ASSIGN_PLOT` | 0-based line index of an assignment row. | Routes a synthetic right-click to that visible row and opens its value plot; same retry-until-on-screen behavior. No-op if the row is not a `var = expr;` / `A[i] = expr;`. |
+| `GLR_OPEN_ASSIGN_PLOT` | Comma-separated 0-based line indices of assignment rows. | Routes a synthetic right-click to the first (visible) row and opens its value plot; same retry-until-on-screen behavior. Further rows are added as extra series, up to four, as Shift+right-click would. No-op if a row is not a `var = expr;` / `A[i] = expr;`, or if its X axis cannot match the first row's. |
+| `GLR_ASSIGN_PLOT_EXPANDED` | Any non-empty value; default off. | Opens the assignment plot in its doubled size (the `[expand]` chip, otherwise mouse-only). |
+| `GLR_ASSIGN_PLOT_LOG` | Any non-empty value; default off. | Requests the log₁₀ Y axis (the `[log]` chip). Ignored by the axis itself unless every plotted value is positive. |
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
 | `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |

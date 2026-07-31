@@ -89,12 +89,14 @@ typedef struct UiRenderSnapshot {
     UiVariableDragView          variable_drag;
     UiProfilePanelState       profile_panel;
     UiMemoryPanelState        memory_panel;
-    /* Assignment-value plot. `assign_plot.cols` points at the capture
-     * subsystem's own buffer for the frame; the title is copied because it is
-     * re-derived from the live source row each frame (so editing the row
-     * retitles the panel instead of stranding a stale label). */
+    /* Assignment-value plot. `assign_plot.series[i].cols` points at the
+     * capture subsystem's own buffer for the frame; the titles are copied
+     * because they are re-derived from the live source rows each frame (so
+     * editing a row retitles its series instead of stranding a stale
+     * label). One per series, indexed alike. */
     AssignPlotView            assign_plot;
-    char                      assign_plot_title[UI_ASSIGN_PLOT_TITLE_MAX];
+    char                      assign_plot_titles[MAX_ASSIGN_PLOT_SERIES]
+                                                [UI_ASSIGN_PLOT_TITLE_MAX];
     UiStatusState             status;
     UiStatusHistory           status_history;
     EditorSearchState             search;

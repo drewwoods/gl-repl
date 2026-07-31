@@ -159,9 +159,9 @@ transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
 **The frame is the display callback, and the application owns it.** The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L232) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L233) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L234) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L236) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L237) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L238) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -843,7 +843,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L82) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L122) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L126) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -1008,20 +1008,60 @@ come from [`src/support/runstats.c`](../src/support/runstats.c), which is
 `histogram.c`'s statistics half extracted: assignment values are signed and
 unitless, and no positive log-spaced bin range could hold them.
 
-**Ownership split.** The peer subsystem owns only the target line, the rate,
-the buffer and the statistics. The panel *title* is not stored — the controller
-re-derives it from the live source row's left-hand side each frame
-(`glr_ctrl_assign_plot_title`), so editing the row retitles the plot instead of
-stranding a stale label, and the subsystem stays free of any `src/editor`
-dependency. The drift check is correspondingly loose: the row must still exist
-and still be an assignment, not still be the *same* assignment.
+**Several series.** Up to `MAX_ASSIGN_PLOT_SERIES` (4) rows plot together —
+Shift+right-click adds or removes one, plain right-click retargets to a single
+row. `series[0]` is the primary and it alone fixes the X axis, so a row whose
+execution count disagrees with the mode is **refused when it is added**
+(`ASSIGN_PLOT_SERIES_INCOMPATIBLE`), judged against the flat program as it
+stands at click time; a row that has never executed cannot be judged and is
+admitted. In `X_FRAME` mode the shared axis has to stay meaningful column by
+column, so every series appends exactly one column per capture — a series that
+did not run contributes `valid = 0` (a drawn gap, uncounted by the statistics)
+and one added mid-history is back-filled with gaps rather than starting short
+and being stretched across captures it never saw. In `X_EXEC` mode series may
+legitimately differ in execution count (two loops of different lengths), so
+each is spread across the full width and X reads as normalized progress.
+
+Y is shared and deliberately so — comparison is the point — which does mean
+series of very different magnitudes flatten each other; the per-series
+statistics are what carry the real numbers there.
+
+**Ownership split.** The peer subsystem owns only the target lines, the rate,
+the presentation chips, and per series the buffer and statistics. The panel
+*titles* are not stored — the controller re-derives each from its live source
+row's left-hand side every frame (`glr_ctrl_assign_plot_title`), so editing a
+row retitles its series instead of stranding a stale label, and the subsystem
+stays free of any `src/editor` dependency. The drift check is correspondingly
+loose: a row must still exist and still be an assignment, not still be the
+*same* assignment. A row that fails it drops that series alone; the panel
+closes only when the last one goes.
 
 **Controls are mouse-only, by design.** Capture rate (once / 1 Hz / every
-frame) is a property of one plot, not a global setting, so it has no
-[`keymap.h`](../keymap.h) binding and no `GlrConfigKey` — and therefore never
-reaches an exported `@cfg` header. Left-press on the rate chip cycles forward,
-right-press backward, mirroring the Config flyout idiom. Right-clicking the
+frame), the Y scale and the zoom are properties of one plot, not global
+settings, so none has a [`keymap.h`](../keymap.h) binding or a `GlrConfigKey` —
+and therefore none reaches an exported `@cfg` header. Left-press on the rate
+chip cycles forward, right-press backward, mirroring the Config flyout idiom;
+the two-state chips do the same thing on either button. Right-clicking the
 plotted row again closes the panel, mirroring the GL-state inspector toggle.
+
+Chip geometry is resolved once by `ap_ctrl_layout()` and consumed by both the
+renderer and the hit-test — four chips whose widths change with their own state
+(`[1 Hz]` vs `[frame]`, `[expand]` vs `[shrink]`) is more mirrored arithmetic
+than two code paths keep in step. The legend hit region works the same way, and
+is hover-only: it selects whose statistics the stats block reports (resolved
+from `pointer_x/_y` exactly as the histogram panel's tooltip is), so the lit
+entry and the described one cannot disagree. Clicks there are consumed as inert
+chrome. Panel size depends on `expanded` *and* `series_count` — the legend row
+exists only past one series — so `ui_assign_plot_panel_size()` takes both and
+`UiOverlayLayoutInputs` carries both to the overlay solver, which must reserve
+the real footprint or the zoomed panel overlaps its neighbours.
+
+The log-Y chip toggles a *request*: `ui_assign_plot_y_log_available()` gates it
+on every plotted value being strictly positive, since assignment values are
+routinely signed or zero and there is no honest place for those on a log axis.
+When it cannot be honored the axis stays linear, the chip draws in the
+placeholder color, and the router says so in the status line — a refusal that
+looked like a dead control would be worse than no control.
 
 Routing enters at `route_right_code_panel_hit()`
 ([`src/app/glr_ctrl_router.c`](../src/app/glr_ctrl_router.c)) **before** the
@@ -1180,7 +1220,7 @@ Runtime shape:
   whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
   is captured on the first frame after `start_tour` (deferred so the Tours-menu
   close path is part of the baseline). Left-Arrow restores that baseline, calls
-  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L85) to re-sync derived chrome + export strings,
+  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L89) to re-sync derived chrome + export strings,
   then fast-executes the prefix `[0, target)` via `ps_finish_event_immediate`
   (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
   turn). The baseline is derived-state-free: the flat program, renderer
@@ -1466,7 +1506,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
 - **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) resets core REPL
-  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L70) resets the editor, UI, and peer
+  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L74) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
   initialization but run the idempotent `glr_ctrl_install_app_services()`
@@ -1617,7 +1657,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L236) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L240) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
@@ -1644,7 +1684,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L122) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L126) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
@@ -2147,7 +2187,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L70)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L74)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

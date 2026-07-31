@@ -1389,10 +1389,11 @@ static int glr_ctrl_router_hit_is_blank_gl_state_anchor(const UiHit *hit) {
     return cmd && cmd->type == CMD_EMPTY;
 }
 
-/* UI_HIT_ASSIGN_PLOT_*: the assignment plot's three mouse-only controls.
- * Left-press cycles the capture rate forward, right-press backward — the same
- * idiom the config flyout rows use, and the only control path this panel has
- * (deliberately: a capture rate belongs to one plot, not to the keymap). */
+/* UI_HIT_ASSIGN_PLOT_*: the assignment plot's mouse-only controls. Left-press
+ * cycles the capture rate forward, right-press backward — the same idiom the
+ * config flyout rows use, and the only control path this panel has
+ * (deliberately: a capture rate belongs to one plot, not to the keymap). The
+ * Y-scale and zoom chips are plain toggles on either button. */
 static int route_assign_plot_close_hit(void) {
     assign_plot_close();
     editor_request_redraw();
@@ -1404,6 +1405,70 @@ static int route_assign_plot_rate_hit(int dir) {
     assign_plot_cycle_rate(dir);
     snprintf(msg, sizeof(msg), "assignment plot: capture %s",
              ui_assign_plot_rate_label(assign_plot_view().rate));
+    ui_state_status_set(msg);
+    editor_request_redraw();
+    return 1;
+}
+
+/* The chip toggles the *request* unconditionally; whether the axis can honor
+ * it depends on the data, so the status line reports what actually happened.
+ * Without that, asking for log on a trace that crosses zero looks like a
+ * broken control rather than an impossible one. */
+static int route_assign_plot_yscale_hit(void) {
+    UiAssignPlotPanelView probe;
+    char msg[REPL_STATUS_TEXT_MAX];
+
+    assign_plot_toggle_y_log();
+
+    memset(&probe, 0, sizeof(probe));
+    probe.plot = assign_plot_view();
+    if (!probe.plot.y_log)
+        snprintf(msg, sizeof(msg), "assignment plot: linear Y");
+    else if (ui_assign_plot_y_log_available(&probe))
+        snprintf(msg, sizeof(msg), "assignment plot: log Y");
+    else
+        snprintf(msg, sizeof(msg),
+                 "assignment plot: log Y needs positive values (linear)");
+    ui_state_status_set(msg);
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_assign_plot_expand_hit(void) {
+    assign_plot_toggle_expanded();
+    editor_request_redraw();
+    return 1;
+}
+
+/* Shift+right-click on an assignment row: add it to the open plot, or drop it
+ * if it is already there. Every outcome is reported — a refusal that said
+ * nothing would be indistinguishable from a missed click. */
+static int route_assign_plot_series_hit(int line_idx) {
+    char msg[REPL_STATUS_TEXT_MAX];
+
+    switch (assign_plot_toggle_series(line_idx)) {
+        case ASSIGN_PLOT_SERIES_ADDED:
+            snprintf(msg, sizeof(msg), "assignment plot: %d series",
+                     assign_plot_series_count());
+            break;
+        case ASSIGN_PLOT_SERIES_REMOVED:
+            if (!assign_plot_is_open())
+                snprintf(msg, sizeof(msg), "assignment plot: closed");
+            else
+                snprintf(msg, sizeof(msg), "assignment plot: %d series",
+                         assign_plot_series_count());
+            break;
+        case ASSIGN_PLOT_SERIES_FULL:
+            snprintf(msg, sizeof(msg),
+                     "assignment plot: at most %d series",
+                     MAX_ASSIGN_PLOT_SERIES);
+            break;
+        case ASSIGN_PLOT_SERIES_INCOMPATIBLE:
+        default:
+            snprintf(msg, sizeof(msg),
+                     "assignment plot: that row's x axis does not match");
+            break;
+    }
     ui_state_status_set(msg);
     editor_request_redraw();
     return 1;
@@ -1453,10 +1518,17 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
                        cmd->type == CMD_SCRATCH_ASSIGN)) {
         /* Ahead of the description lookup because neither assignment type has
          * an authored description record — without this branch the row falls
-         * into the inert `else` below and right-click does nothing at all. */
+         * into the inert `else` below and right-click does nothing at all.
+         *
+         * Shift adds the row to the open plot (or removes it again) instead of
+         * retargeting: comparing two rows is the reason to hold the modifier,
+         * and plain right-click keeps meaning "just this one". */
         ui_state_gl_state_inspector_close();
         ui_state_command_description_close();
-        assign_plot_toggle(hit->line_idx);
+        if (glr_ctrl_shift_fine_modifier_active())
+            route_assign_plot_series_hit(hit->line_idx);
+        else
+            assign_plot_toggle(hit->line_idx);
     } else if (cmd && repl_command_description_lookup(cmd, &description)) {
         ui_state_gl_state_inspector_close();
         ui_state_command_description_open(hit->line_idx, x, y);
@@ -1538,6 +1610,14 @@ static void route_right_press(int x, int y) {
     case UI_HIT_ASSIGN_PLOT_RATE:
         /* Backward through the rate cycle, matching the Config flyout. */
         route_assign_plot_rate_hit(-1);
+        return;
+    /* Two-state chips: nothing to run backward, so right-press does what
+     * left-press does rather than falling through to the camera. */
+    case UI_HIT_ASSIGN_PLOT_YSCALE:
+        route_assign_plot_yscale_hit();
+        return;
+    case UI_HIT_ASSIGN_PLOT_EXPAND:
+        route_assign_plot_expand_hit();
         return;
     case UI_HIT_HISTOGRAM_SERIES_TOGGLE:
         route_histogram_series_solo_hit(&hit);
@@ -1957,6 +2037,10 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_assign_plot_rate_hit(1); break;
     case UI_HIT_ASSIGN_PLOT_RESET:
         consumed = route_assign_plot_reset_hit(); break;
+    case UI_HIT_ASSIGN_PLOT_YSCALE:
+        consumed = route_assign_plot_yscale_hit(); break;
+    case UI_HIT_ASSIGN_PLOT_EXPAND:
+        consumed = route_assign_plot_expand_hit(); break;
     case UI_HIT_OVERLAY_CHROME:
         consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:

@@ -32,6 +32,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define US_PER_SEC 1000000.0
 
+/* The primary series. Most cases here plot exactly one row, so naming the
+ * series once keeps the assertions about the values rather than the shape of
+ * the view. */
+#define S0(v) ((v).series[0])
+
 static void load_scene(const char *const *lines) {
     glr_ctrl_reset_all();
     assign_plot_reset_all();
@@ -81,17 +86,17 @@ static void test_exec_mode_captures_loop_values(void) {
 
     ASSERT_TRUE("plot is open", v.open);
     ASSERT_INT("x axis is exec index", v.x_mode, ASSIGN_PLOT_X_EXEC);
-    ASSERT_INT("one execution per loop iteration", v.exec_count, 8);
-    ASSERT_INT("one column per execution", v.col_count, 8);
-    ASSERT_INT("every value reached the statistics", (int)v.stats.count, 8);
+    ASSERT_INT("one execution per loop iteration", S0(v).exec_count, 8);
+    ASSERT_INT("one column per execution", S0(v).col_count, 8);
+    ASSERT_INT("every value reached the statistics", (int)S0(v).stats.count, 8);
     /* i * 2 over i in [0, 8) */
-    ASSERT_FLOAT("min is the first iteration", v.stats.min, 0.0);
-    ASSERT_FLOAT("max is the last iteration", v.stats.max, 14.0);
-    ASSERT_FLOAT("mean of 0,2,..,14", v.stats.mean, 7.0);
-    ASSERT_FLOAT("first column holds the first value", v.cols[0].lo, 0.0);
-    ASSERT_FLOAT("last column holds the last value", v.cols[7].hi, 14.0);
+    ASSERT_FLOAT("min is the first iteration", S0(v).stats.min, 0.0);
+    ASSERT_FLOAT("max is the last iteration", S0(v).stats.max, 14.0);
+    ASSERT_FLOAT("mean of 0,2,..,14", S0(v).stats.mean, 7.0);
+    ASSERT_FLOAT("first column holds the first value", S0(v).cols[0].lo, 0.0);
+    ASSERT_FLOAT("last column holds the last value", S0(v).cols[7].hi, 14.0);
     ASSERT_TRUE("undecimated columns collapse to a point",
-                v.cols[3].lo == v.cols[3].hi);
+                S0(v).cols[3].lo == S0(v).cols[3].hi);
 }
 
 /* A top-level row runs once per frame: X becomes successive captures. */
@@ -117,11 +122,11 @@ static void test_frame_mode_accumulates_across_captures(void) {
 
     v = assign_plot_view();
     ASSERT_INT("x axis switched to captures", v.x_mode, ASSIGN_PLOT_X_FRAME);
-    ASSERT_INT("one execution per frame", v.exec_count, 1);
-    ASSERT_INT("one column per capture", v.col_count, 5);
-    ASSERT_INT("one sample per capture", (int)v.stats.count, 5);
-    ASSERT_FLOAT("oldest capture is t=0", v.cols[0].lo, 0.0);
-    ASSERT_FLOAT("newest capture is t=4", v.cols[4].hi, 40.0);
+    ASSERT_INT("one execution per frame", S0(v).exec_count, 1);
+    ASSERT_INT("one column per capture", S0(v).col_count, 5);
+    ASSERT_INT("one sample per capture", (int)S0(v).stats.count, 5);
+    ASSERT_FLOAT("oldest capture is t=0", S0(v).cols[0].lo, 0.0);
+    ASSERT_FLOAT("newest capture is t=4", S0(v).cols[4].hi, 40.0);
 }
 
 /* The buffer scrolls rather than wrapping, so columns stay in display order. */
@@ -148,15 +153,15 @@ static void test_frame_mode_ring_scrolls(void) {
 
     v = assign_plot_view();
     ASSERT_INT("column count saturates at the cap",
-               v.col_count, ASSIGN_PLOT_COLS);
+               S0(v).col_count, ASSIGN_PLOT_COLS);
     ASSERT_INT("statistics keep counting past the cap",
-               (int)v.stats.count, overflow);
+               (int)S0(v).stats.count, overflow);
     ASSERT_FLOAT("newest capture is at the right edge",
-                 v.cols[ASSIGN_PLOT_COLS - 1].hi, (float)(overflow - 1));
+                 S0(v).cols[ASSIGN_PLOT_COLS - 1].hi, (float)(overflow - 1));
     ASSERT_FLOAT("oldest surviving capture leads the buffer",
-                 v.cols[0].lo, (float)(overflow - ASSIGN_PLOT_COLS));
+                 S0(v).cols[0].lo, (float)(overflow - ASSIGN_PLOT_COLS));
     ASSERT_FLOAT("statistics still remember the dropped minimum",
-                 v.stats.min, 0.0);
+                 S0(v).stats.min, 0.0);
 }
 
 /* More executions than columns: the plot decimates, the statistics do not. */
@@ -178,28 +183,28 @@ static void test_decimation_preserves_extremes_and_stats(void) {
     assign_plot_capture(0.0);
     v = assign_plot_view();
 
-    ASSERT_INT("all 500 executions were found", v.exec_count, 500);
-    ASSERT_INT("columns are capped", v.col_count, ASSIGN_PLOT_COLS);
-    ASSERT_INT("statistics saw every execution", (int)v.stats.count, 500);
+    ASSERT_INT("all 500 executions were found", S0(v).exec_count, 500);
+    ASSERT_INT("columns are capped", S0(v).col_count, ASSIGN_PLOT_COLS);
+    ASSERT_INT("statistics saw every execution", (int)S0(v).stats.count, 500);
 
     for (int i = 0; i < 500; i++) expected_mean += (double)i;
     expected_mean /= 500.0;
-    ASSERT_FLOAT("mean is over all 500 values", v.stats.mean, expected_mean);
-    ASSERT_FLOAT("min survives decimation", v.stats.min, 0.0);
-    ASSERT_FLOAT("max survives decimation", v.stats.max, 499.0);
+    ASSERT_FLOAT("mean is over all 500 values", S0(v).stats.mean, expected_mean);
+    ASSERT_FLOAT("min survives decimation", S0(v).stats.min, 0.0);
+    ASSERT_FLOAT("max survives decimation", S0(v).stats.max, 499.0);
 
     /* Columns are envelopes over a monotonic ramp, so they must be ordered
      * and must together span the whole range. */
-    ASSERT_FLOAT("first column starts at the first value", v.cols[0].lo, 0.0);
+    ASSERT_FLOAT("first column starts at the first value", S0(v).cols[0].lo, 0.0);
     ASSERT_FLOAT("last column ends at the last value",
-                 v.cols[ASSIGN_PLOT_COLS - 1].hi, 499.0);
+                 S0(v).cols[ASSIGN_PLOT_COLS - 1].hi, 499.0);
     {
         int ordered = 1;
         int has_span = 0;
-        for (int c = 0; c < v.col_count; c++) {
-            if (v.cols[c].hi < v.cols[c].lo) ordered = 0;
-            if (c > 0 && v.cols[c].lo < v.cols[c - 1].hi) ordered = 0;
-            if (v.cols[c].hi > v.cols[c].lo) has_span = 1;
+        for (int c = 0; c < S0(v).col_count; c++) {
+            if (S0(v).cols[c].hi < S0(v).cols[c].lo) ordered = 0;
+            if (c > 0 && S0(v).cols[c].lo < S0(v).cols[c - 1].hi) ordered = 0;
+            if (S0(v).cols[c].hi > S0(v).cols[c].lo) has_span = 1;
         }
         ASSERT_TRUE("columns are non-overlapping and ascending", ordered);
         ASSERT_TRUE("decimated columns carry a real min/max span", has_span);
@@ -226,9 +231,9 @@ static void test_rate_once_captures_exactly_once(void) {
         assign_plot_capture((double)frame * US_PER_SEC);
     }
     ASSERT_INT("ONCE keeps the first capture only",
-               (int)assign_plot_view().stats.count, 1);
+               (int)S0(assign_plot_view()).stats.count, 1);
     ASSERT_FLOAT("and it is the first frame's value",
-                 assign_plot_view().stats.max, 0.0);
+                 S0(assign_plot_view()).stats.max, 0.0);
 }
 
 static void test_rate_1hz_gates_on_the_clock(void) {
@@ -252,14 +257,14 @@ static void test_rate_1hz_gates_on_the_clock(void) {
         assign_plot_capture((double)frame * (US_PER_SEC / 60.0));
     }
     ASSERT_INT("1 Hz captures once per elapsed second",
-               (int)assign_plot_view().stats.count, 3);
+               (int)S0(assign_plot_view()).stats.count, 3);
 
     /* One frame short of the next second is still gated out. */
     assign_plot_reset();
     for (int frame = 0; frame < 60; frame++)
         assign_plot_capture((double)frame * (US_PER_SEC / 60.0));
     ASSERT_INT("a sub-second burst captures only once",
-               (int)assign_plot_view().stats.count, 1);
+               (int)S0(assign_plot_view()).stats.count, 1);
 }
 
 static void test_rate_change_resets_the_window(void) {
@@ -279,13 +284,13 @@ static void test_rate_change_resets_the_window(void) {
         reflatten();
         assign_plot_capture((double)frame);
     }
-    ASSERT_INT("four frames captured", (int)assign_plot_view().stats.count, 4);
+    ASSERT_INT("four frames captured", (int)S0(assign_plot_view()).stats.count, 4);
 
     assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
     ASSERT_INT("re-selecting a rate clears the window",
-               (int)assign_plot_view().stats.count, 0);
+               (int)S0(assign_plot_view()).stats.count, 0);
     ASSERT_INT("and the plot buffer with it",
-               assign_plot_view().col_count, 0);
+               S0(assign_plot_view()).col_count, 0);
 }
 
 static void test_cycle_rate_wraps_both_ways(void) {
@@ -337,7 +342,7 @@ static void test_mode_flip_clears_the_window(void) {
     for (int frame = 0; frame < 3; frame++)
         assign_plot_capture((double)frame);
     ASSERT_INT("frame mode collected three captures",
-               (int)assign_plot_view().stats.count, 3);
+               (int)S0(assign_plot_view()).stats.count, 3);
     ASSERT_INT("frame axis", assign_plot_view().x_mode, ASSIGN_PLOT_X_FRAME);
 
     /* ...then retarget the loop row, which is exec-mode. */
@@ -346,7 +351,7 @@ static void test_mode_flip_clears_the_window(void) {
     ASSERT_INT("retargeting switched the axis",
                assign_plot_view().x_mode, ASSIGN_PLOT_X_EXEC);
     ASSERT_INT("and the window is only the new row's executions",
-               (int)assign_plot_view().stats.count, 6);
+               (int)S0(assign_plot_view()).stats.count, 6);
 }
 
 /* A[i] = expr is the other assignment type; its value lives in args[2]. */
@@ -367,9 +372,9 @@ static void test_scratch_assign_is_plotted(void) {
     assign_plot_open(row);
     assign_plot_capture(0.0);
     v = assign_plot_view();
-    ASSERT_INT("four scratch writes", v.exec_count, 4);
-    ASSERT_FLOAT("values come from args[2]", v.stats.max, 9.0);
-    ASSERT_FLOAT("and start at zero", v.stats.min, 0.0);
+    ASSERT_INT("four scratch writes", S0(v).exec_count, 4);
+    ASSERT_FLOAT("values come from args[2]", S0(v).stats.max, 9.0);
+    ASSERT_FLOAT("and start at zero", S0(v).stats.min, 0.0);
 }
 
 /* Signed values are the reason this cannot reuse the duration histogram. */
@@ -390,12 +395,12 @@ static void test_negative_values_are_measured_exactly(void) {
     assign_plot_capture(0.0);
     v = assign_plot_view();
 
-    ASSERT_FLOAT("min is negative", v.stats.min, -2.0);
-    ASSERT_FLOAT("max is positive", v.stats.max, 2.0);
-    ASSERT_FLOAT("mean straddles zero", v.stats.mean, 0.0);
+    ASSERT_FLOAT("min is negative", S0(v).stats.min, -2.0);
+    ASSERT_FLOAT("max is positive", S0(v).stats.max, 2.0);
+    ASSERT_FLOAT("mean straddles zero", S0(v).stats.mean, 0.0);
     /* -2,-1,0,1,2 -> sample variance 10/4 = 2.5 */
     ASSERT_FLOAT("sample stddev uses the n-1 divisor",
-                 v.stats.stddev, sqrt(2.5));
+                 S0(v).stats.stddev, sqrt(2.5));
 }
 
 /* Target lifecycle. */
@@ -430,7 +435,7 @@ static void test_capture_is_inert_when_closed(void) {
     assign_plot_capture(0.0);
     ASSERT_TRUE("no target: nothing captured",
                 !assign_plot_view().captured);
-    ASSERT_INT("and no samples", (int)assign_plot_view().stats.count, 0);
+    ASSERT_INT("and no samples", (int)S0(assign_plot_view()).stats.count, 0);
 }
 
 /* The row is gone, or is no longer an assignment: close rather than plot a
@@ -500,7 +505,7 @@ static void test_zero_executions_preserve_history(void) {
         assign_plot_capture((double)frame);
     }
     ASSERT_INT("three captures while the gate is open",
-               (int)assign_plot_view().stats.count, 3);
+               (int)S0(assign_plot_view()).stats.count, 3);
 
     /* Close the gate: at t == 0 the `if` is false and the row never runs. */
     repl_state_time_set(0.0f);
@@ -509,9 +514,9 @@ static void test_zero_executions_preserve_history(void) {
 
     ASSERT_TRUE("plot stays open", assign_plot_is_open());
     ASSERT_INT("no executions this frame",
-               assign_plot_view().exec_count, 0);
+               S0(assign_plot_view()).exec_count, 0);
     ASSERT_INT("history is untouched",
-               (int)assign_plot_view().stats.count, 3);
+               (int)S0(assign_plot_view()).stats.count, 3);
     ASSERT_INT("axis is untouched",
                assign_plot_view().x_mode, ASSIGN_PLOT_X_FRAME);
 }
@@ -531,7 +536,7 @@ static void test_reset_keeps_target_and_rate(void) {
     assign_plot_open(row);
     assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
     assign_plot_capture(0.0);
-    ASSERT_INT("captured", (int)assign_plot_view().stats.count, 4);
+    ASSERT_INT("captured", (int)S0(assign_plot_view()).stats.count, 4);
 
     assign_plot_reset();
     ASSERT_TRUE("still open", assign_plot_is_open());
@@ -539,7 +544,268 @@ static void test_reset_keeps_target_and_rate(void) {
     ASSERT_INT("rate is kept",
                assign_plot_view().rate, ASSIGN_PLOT_RATE_FRAME);
     ASSERT_INT("samples are dropped",
-               (int)assign_plot_view().stats.count, 0);
+               (int)S0(assign_plot_view()).stats.count, 0);
+}
+
+/* --- several series on one plot --- */
+
+/* Index of the n-th (0-based) source row of `type`. */
+static int find_nth_row(CmdType type, int n) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int seen = 0;
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid || cmds[i].type != type) continue;
+        if (seen++ == n) return i;
+    }
+    return -1;
+}
+
+/* Two rows in the same loop: both fill, each with its own values. */
+static void test_second_series_captures_independently(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "float y;",
+        "for(i, 0, 8) {",
+        "x = i * 2;",
+        "y = i + 100;",
+        "}",
+        NULL
+    };
+    int row_x, row_y;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+    ASSERT_TRUE("scene has two assignment rows", row_x >= 0 && row_y >= 0);
+
+    assign_plot_open(row_x);
+    ASSERT_INT("adding the second row is accepted",
+               assign_plot_toggle_series(row_y), ASSIGN_PLOT_SERIES_ADDED);
+    ASSERT_INT("two series", assign_plot_series_count(), 2);
+    ASSERT_INT("the primary is still the row it opened on",
+               assign_plot_source_line(), row_x);
+
+    assign_plot_capture(0.0);
+    v = assign_plot_view();
+
+    ASSERT_INT("view carries both", v.series_count, 2);
+    ASSERT_INT("primary kept its row", v.series[0].source_line_idx, row_x);
+    ASSERT_INT("secondary took the other", v.series[1].source_line_idx, row_y);
+    ASSERT_INT("both ran eight times", v.series[1].exec_count, 8);
+    /* Each series carries its own values and its own statistics — a shared
+     * buffer would show one row's numbers under both names. */
+    ASSERT_FLOAT("x starts at 0", v.series[0].cols[0].lo, 0.0);
+    ASSERT_FLOAT("y starts at 100", v.series[1].cols[0].lo, 100.0);
+    ASSERT_FLOAT("x tops out at 14", v.series[0].stats.max, 14.0);
+    ASSERT_FLOAT("y tops out at 107", v.series[1].stats.max, 107.0);
+}
+
+/* Shift+right-click on a plotted row removes it again. */
+static void test_toggle_series_removes_and_closes(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "float y;",
+        "for(i, 0, 4) {",
+        "x = i;",
+        "y = i;",
+        "}",
+        NULL
+    };
+    int row_x, row_y;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+
+    assign_plot_open(row_x);
+    assign_plot_toggle_series(row_y);
+    ASSERT_INT("two series", assign_plot_series_count(), 2);
+
+    ASSERT_INT("toggling a plotted row removes it",
+               assign_plot_toggle_series(row_y), ASSIGN_PLOT_SERIES_REMOVED);
+    ASSERT_INT("back to one", assign_plot_series_count(), 1);
+    ASSERT_TRUE("and it is the primary that stayed",
+                assign_plot_has_series(row_x) && !assign_plot_has_series(row_y));
+
+    ASSERT_INT("removing the last one is still a removal",
+               assign_plot_toggle_series(row_x), ASSIGN_PLOT_SERIES_REMOVED);
+    ASSERT_INT("and closes the plot", assign_plot_is_open(), 0);
+    ASSERT_INT("with no series left", assign_plot_series_count(), 0);
+
+    /* From closed, the add gesture opens on that row rather than doing
+     * nothing — otherwise the modifier would be a dead key on a closed panel. */
+    ASSERT_INT("adding from closed opens",
+               assign_plot_toggle_series(row_x), ASSIGN_PLOT_SERIES_ADDED);
+    ASSERT_INT("open on one series", assign_plot_series_count(), 1);
+}
+
+static void test_series_cap_is_enforced(void) {
+    static const char *const k_scene[] = {
+        "float a;", "float b;", "float c;", "float d;", "float q;",
+        "for(i, 0, 4) {",
+        "a = i;", "b = i;", "c = i;", "d = i;", "q = i;",
+        "}",
+        NULL
+    };
+    int rows[5];
+
+    load_scene(k_scene);
+    for (int i = 0; i < 5; i++) {
+        rows[i] = find_nth_row(CMD_VAR_ASSIGN, i);
+        ASSERT_TRUE("scene row exists", rows[i] >= 0);
+    }
+
+    assign_plot_open(rows[0]);
+    for (int i = 1; i < MAX_ASSIGN_PLOT_SERIES; i++)
+        ASSERT_INT("filling up to the cap",
+                   assign_plot_toggle_series(rows[i]),
+                   ASSIGN_PLOT_SERIES_ADDED);
+    ASSERT_INT("full", assign_plot_series_count(), MAX_ASSIGN_PLOT_SERIES);
+
+    ASSERT_INT("one more is refused",
+               assign_plot_toggle_series(rows[MAX_ASSIGN_PLOT_SERIES]),
+               ASSIGN_PLOT_SERIES_FULL);
+    ASSERT_INT("and nothing was displaced",
+               assign_plot_series_count(), MAX_ASSIGN_PLOT_SERIES);
+    ASSERT_TRUE("the refused row is not plotted",
+                !assign_plot_has_series(rows[MAX_ASSIGN_PLOT_SERIES]));
+}
+
+/* A once-per-frame row and a many-per-frame row cannot share an X axis. */
+static void test_incompatible_x_mode_is_refused(void) {
+    static const char *const k_scene[] = {
+        "float top;",
+        "float inner;",
+        "top = t * 2;",
+        "for(i, 0, 8) {",
+        "inner = i;",
+        "}",
+        NULL
+    };
+    int row_top, row_inner;
+
+    load_scene(k_scene);
+    row_top   = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_inner = find_nth_row(CMD_VAR_ASSIGN, 1);
+    ASSERT_TRUE("scene has both shapes", row_top >= 0 && row_inner >= 0);
+
+    /* Primary runs once per frame → the plot is a capture time series. */
+    assign_plot_open(row_top);
+    assign_plot_capture(0.0);
+    ASSERT_INT("primary put the plot on the capture axis",
+               assign_plot_view().x_mode, ASSIGN_PLOT_X_FRAME);
+    ASSERT_INT("a loop row is refused",
+               assign_plot_toggle_series(row_inner),
+               ASSIGN_PLOT_SERIES_INCOMPATIBLE);
+    ASSERT_INT("still one series", assign_plot_series_count(), 1);
+
+    /* And the other way round. */
+    assign_plot_open(row_inner);
+    assign_plot_capture(0.0);
+    ASSERT_INT("primary put the plot on the exec axis",
+               assign_plot_view().x_mode, ASSIGN_PLOT_X_EXEC);
+    ASSERT_INT("a once-per-frame row is refused",
+               assign_plot_toggle_series(row_top),
+               ASSIGN_PLOT_SERIES_INCOMPATIBLE);
+    ASSERT_INT("still one series", assign_plot_series_count(), 1);
+}
+
+/* In capture mode every series appends one column per capture, so column N
+ * means capture N for all of them — a series that did not run holds its place
+ * with an invalid column instead of sliding its history left. */
+static void test_frame_mode_keeps_series_aligned(void) {
+    static const char *const k_scene[] = {
+        "float always;",
+        "float sometimes;",
+        "always = t;",
+        "if(t) {",
+        "sometimes = t * 10;",
+        "}",
+        NULL
+    };
+    int row_always, row_sometimes;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_always    = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_sometimes = find_nth_row(CMD_VAR_ASSIGN, 1);
+    ASSERT_TRUE("scene has both rows",
+                row_always >= 0 && row_sometimes >= 0);
+
+    assign_plot_open(row_always);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
+    assign_plot_capture(0.0);
+    ASSERT_INT("capture axis", assign_plot_view().x_mode,
+               ASSIGN_PLOT_X_FRAME);
+    ASSERT_INT("the guarded row joins",
+               assign_plot_toggle_series(row_sometimes),
+               ASSIGN_PLOT_SERIES_ADDED);
+
+    /* t = 0 closes the `if`; t = 1, 2 open it. */
+    for (int frame = 0; frame < 3; frame++) {
+        repl_state_time_set((float)frame);
+        reflatten();
+        assign_plot_capture((double)(frame + 1));
+    }
+
+    v = assign_plot_view();
+    /* Four captures: the one that established the axis, then t = 0, 1, 2. */
+    ASSERT_INT("both series have the same number of columns",
+               v.series[0].col_count, v.series[1].col_count);
+    ASSERT_TRUE("and there are four of them", v.series[0].col_count == 4);
+
+    ASSERT_INT("the always-run series has no gaps",
+               v.series[0].cols[0].valid && v.series[0].cols[1].valid
+               && v.series[0].cols[2].valid && v.series[0].cols[3].valid, 1);
+    /* Column 0 predates the add: back-filled as a gap so the two series stay
+     * on the same capture index rather than the newcomer being stretched. */
+    ASSERT_INT("the newcomer has a gap where it did not yet exist",
+               v.series[1].cols[0].valid, 0);
+    ASSERT_INT("and a gap at the frame its guard was closed",
+               v.series[1].cols[1].valid, 0);
+    ASSERT_INT("and values where it ran", v.series[1].cols[2].valid, 1);
+    ASSERT_FLOAT("which are its own", v.series[1].cols[2].lo, 10.0);
+    /* A gap contributes nothing to the statistics — it is a missing sample,
+     * not a zero. */
+    ASSERT_INT("the gap is not counted as a sample",
+               (int)v.series[1].stats.count, 2);
+    ASSERT_FLOAT("nor does it drag the minimum to zero",
+                 v.series[1].stats.min, 10.0);
+}
+
+/* Deleting one plotted row drops that series and leaves the rest alone. */
+static void test_dead_row_drops_only_its_series(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "float y;",
+        "for(i, 0, 4) {",
+        "x = i;",
+        "y = i;",
+        "}",
+        NULL
+    };
+    int row_x, row_y;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+
+    assign_plot_open(row_x);
+    assign_plot_toggle_series(row_y);
+    assign_plot_capture(0.0);
+    ASSERT_INT("two series", assign_plot_series_count(), 2);
+
+    /* Overwrite the second row with something that assigns nothing. */
+    editor_navigate_to_line(row_y);
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    reflatten();
+    assign_plot_capture(US_PER_SEC * 10.0);
+
+    ASSERT_TRUE("the plot stays open", assign_plot_is_open());
+    ASSERT_INT("down to one series", assign_plot_series_count(), 1);
+    ASSERT_INT("and it is the surviving row", assign_plot_source_line(), row_x);
 }
 
 int main(void) {
@@ -561,5 +827,11 @@ int main(void) {
     test_out_of_range_target_closes();
     test_zero_executions_preserve_history();
     test_reset_keeps_target_and_rate();
+    test_second_series_captures_independently();
+    test_toggle_series_removes_and_closes();
+    test_series_cap_is_enforced();
+    test_incompatible_x_mode_is_refused();
+    test_frame_mode_keeps_series_aligned();
+    test_dead_row_drops_only_its_series();
     return test_harness_report(&g_harness, "test_assign_plot");
 }

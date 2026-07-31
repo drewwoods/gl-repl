@@ -101,14 +101,29 @@ int main(void) {
     /* --- The assignment plot is driven by its own flag, not a profile
            mode, and sits directly above the variable panel. --- */
     {
+        int plot_w = 0, plot_h = 0, plot_xw = 0, plot_xh = 0;
         UiOverlayLayoutIn shown = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
             .assign_plot_visible = 1,
+            .assign_plot_series_count = 1,
         });
+        UiOverlayLayoutIn zoomed = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+            .assign_plot_visible  = 1,
+            .assign_plot_expanded = 1,
+            .assign_plot_series_count = 1,
+        });
+        ui_assign_plot_panel_size(0, 1, &plot_w, &plot_h);
+        ui_assign_plot_panel_size(1, 1, &plot_xw, &plot_xh);
+
         AI("assign_plot_visible shows the panel",
            shown.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].visible, 1);
         AI("and it carries the renderer's own size",
-           shown.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w,
-           ui_assign_plot_panel_width());
+           shown.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w, plot_w);
+        /* The [expand] chip has to reach the solver, or the zoomed panel
+           overlaps whatever is stacked above it. */
+        AI("expanded reserves the wider box",
+           zoomed.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w, plot_xw);
+        AI("expanded reserves the taller box",
+           zoomed.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].h, plot_xh);
         AI("profile surfaces stay off",
            shown.panels[UI_OVERLAY_PANEL_PROFILE].visible, 0);
     }

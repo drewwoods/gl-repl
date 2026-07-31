@@ -14,7 +14,7 @@
                                             * ui_layout_code_panel_layout_mode */
 #include "ui/core/layout_utils.h"          /* ui_clamp_panel_y */
 #include "ui/subsystems/variable_panel.h"  /* ui_variable_panel_size */
-#include "ui/support/assign_plot.h"        /* ui_assign_plot_panel_width/height */
+#include "ui/support/assign_plot.h"        /* ui_assign_plot_panel_size */
 #include "ui/support/cpuprof.h"            /* ui_profile_panel_width/height */
 #include "ui/support/memprof.h"            /* ui_memory_panel_width/height */
 
@@ -86,8 +86,10 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args) {
      * assignment row and disappears when they close it. */
     in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].visible =
         (args.assign_plot_visible != 0);
-    in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w = ui_assign_plot_panel_width();
-    in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].h = ui_assign_plot_panel_height();
+    ui_assign_plot_panel_size(args.assign_plot_expanded,
+                              args.assign_plot_series_count,
+                              &in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w,
+                              &in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].h);
     return in;
 }
 

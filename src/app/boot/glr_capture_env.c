@@ -10,8 +10,10 @@
 #include "app/glr_ctrl.h"           /* glr_ctrl_* capture entry points */
 #include "app/glr_pointer_script.h" /* glr_pointer_script_load_env / _active */
 #include "app/boot/splash.h"             /* splash_skip */
+#include "subsystems/assign_plot/assign_plot.h"  /* plot presentation chips */
 
 #include <stdlib.h>                 /* getenv, atoi, atof, strtof */
+#include <string.h>                 /* strchr */
 
 /* Capture affordance (doc GIFs), sibling of GLR_TIME / GLR_EDIT_LINE:
  * GLR_VIEW_TOGGLE_AT="t1,t2,..." toggles the 2D/3D view mode once as the
@@ -89,12 +91,19 @@ static void maybe_capture_open_gl_state(void) {
 }
 
 /* Capture affordance, sibling of GLR_OPEN_GL_STATE: GLR_OPEN_ASSIGN_PLOT=
- * <line> routes a real synthetic right-click to that source row, which must
- * be an assignment, opening its value plot. Same retry-until-on-screen shape
- * as the state popup above. */
+ * <line>[,<line>...] routes a real synthetic right-click to the first source
+ * row, which must be an assignment, opening its value plot; any further rows
+ * are added as extra series (the Shift+right-click gesture), so a multi-series
+ * plot is reachable headlessly. Same retry-until-on-screen shape as the state
+ * popup above — only the first row needs to be on screen, since the rest do
+ * not go through the code panel's hit model.
+ *
+ * GLR_ASSIGN_PLOT_EXPANDED=1 and GLR_ASSIGN_PLOT_LOG=1 set the panel's two
+ * presentation chips, which are otherwise mouse-only. */
 static void maybe_capture_open_assign_plot(void) {
     static int done = 0;
     const char *s;
+    const char *p;
 
     if (done) return;
     s = getenv("GLR_OPEN_ASSIGN_PLOT");
@@ -102,8 +111,19 @@ static void maybe_capture_open_assign_plot(void) {
         done = 1;
         return;
     }
-    if (glr_ctrl_open_assign_plot(atoi(s)))
-        done = 1;
+    if (!glr_ctrl_open_assign_plot(atoi(s)))
+        return;   /* row not on screen yet — retry next frame */
+
+    for (p = strchr(s, ','); p; p = strchr(p + 1, ','))
+        glr_ctrl_add_assign_plot_series(atoi(p + 1));
+
+    {
+        const char *expanded = getenv("GLR_ASSIGN_PLOT_EXPANDED");
+        const char *log_y    = getenv("GLR_ASSIGN_PLOT_LOG");
+        if (expanded && *expanded) assign_plot_toggle_expanded();
+        if (log_y && *log_y)       assign_plot_toggle_y_log();
+    }
+    done = 1;
 }
 
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
