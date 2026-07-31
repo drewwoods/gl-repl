@@ -35,7 +35,6 @@ typedef struct {
     int show_vertex_labels;
     int overlay_scope;    /* 0 = first loop instance, 1 = all, 2 = all instances at vertex (no declutter) */
     int show_normal_vectors;
-    int show_vertex_indices;
     int show_vertex_outlines;
     int vertex_outline_style;
     int show_vertex_points;

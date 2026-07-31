@@ -41,7 +41,6 @@
  * 1 = label every unrolled vertex with a globally-unique number;
  * 2 = label all instances at their vertex positions (without decluttering). */
 #define CFG_DEFAULT_OVERLAY_SCOPE 0
-#define CFG_DEFAULT_VERTEX_INDICES    1
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #ifndef CFG_DEFAULT_VERTEX_OUTLINES
 #define CFG_DEFAULT_VERTEX_OUTLINES   1   /* overridable via -D (e.g. web build) */

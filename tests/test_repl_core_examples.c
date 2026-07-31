@@ -141,7 +141,7 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
     glr_state_presentation_mut()->axes_theme = 5;
     glr_state_presentation_mut()->show_vertex_labels = 0;
-    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+    glr_ctrl_sync_ui_chrome();
     glr_state_presentation_mut()->show_normal_vectors = 1;
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
@@ -1840,8 +1840,6 @@ int main(int argc, char **argv) {
                     glr_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("no cfg reset labels default",
                     glr_state_presentation().show_vertex_labels == CFG_DEFAULT_VERTEX_LABELS);
-        ASSERT_TRUE("no cfg reset indices default",
-                    glr_state_presentation().show_vertex_indices == CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_TRUE("no cfg reset normals default",
                     glr_state_presentation().show_normal_vectors == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("no cfg reset outlines default",

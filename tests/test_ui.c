@@ -739,7 +739,7 @@ static void test_ui_panels_hit_test(void) {
                                                                   : " [left]";
         char lbl[80];
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = 6 * FONT_W;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int sx, sy, sw, sh;
         int cp_x, cp_y, cp_w, cp_h;
@@ -1297,7 +1297,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = 6 * FONT_W;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     UiReplCodePanelLayout layout;
     build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
@@ -1416,7 +1416,7 @@ static int find_code_panel_text_row(int want_line, int want_char_neg1,
                                      UiHit *out, int *out_mx, int *out_my) {
     int cp_x, cp_y, cp_w, cp_h;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = 6 * FONT_W;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int mx;
 
@@ -1445,7 +1445,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
         const char *mode = cf ? " [focus]" : " [full]";
         char lbl[96];
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = 6 * FONT_W;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int cp_x, cp_y, cp_w, cp_h;
         UiReplCodePanelLayout layout;
@@ -1479,7 +1479,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
         const char *mode = cf ? " [focus]" : " [full]";
         char lbl[96];
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = 6 * FONT_W;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int cp_x, cp_y, cp_w, cp_h;
         UiReplCodePanelLayout layout;
@@ -1521,90 +1521,46 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
 }
 
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
- * (v0, v1, ...) when show_vertex_indices is on, just like glVertex3f. */
+ * (v0, v1, ...) just like glVertex3f.
+ *
+ * This used to measure a glRasterPos2f delta between renders with the
+ * vertex-index column off and on. That column is now unconditional (the
+ * `show_vertex_indices` flag it toggled was unreachable outside tests), so
+ * the label is read off the built row instead — which pins the label text
+ * rather than merely that one more string was drawn. */
 static void test_vertex2f_gutter_labels(void) {
+    UiRenderSnapshot snap;
+    char label[8];
+
     printf("Testing glVertex2f gutter labels...\n");
 
-    /* Use a wide viewport (4000px) so that the available character width
-     * (>165 chars) stays above every header line in both the idx_col_w=0 and
-     * idx_col_w=54 states.  Toggling show_vertex_indices then causes no row
-     * wrapping changes, so the only glRasterPos2f delta is the "v0" label. */
-    glr_ctrl_reset_all();
-    ui_state_viewport_set_size(4000, 600);
-    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-    ui_state_code_panel_mut()->panel_frac = 0.4f;
+    for (int use_2f = 1; use_2f >= 0; use_2f--) {
+        glr_ctrl_reset_all();
+        ui_state_viewport_set_size(4000, 600);
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        glr_ctrl_sync_ui_chrome();
+        ui_state_code_panel_mut()->panel_frac = 0.4f;
 
-    /* Commit a real program so both the document array and editor buffer
-     * are populated — the wrap iterator needs non-empty display text to
-     * produce rows, which is required for the gutter to draw. */
-    editor_feed_line("glBegin(GL_TRIANGLES);");
-    editor_feed_line("glVertex2f(1, 2);");
-    editor_feed_line("glEnd();");
-    /* Cursor on glEnd so glVertex2f is a non-edit row with a visible gutter */
-    editor_state_edit_line_set(2);
+        /* Commit a real program so both the document array and editor buffer
+         * are populated — the wrap iterator needs non-empty display text to
+         * produce rows, which is required for the gutter to draw. */
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        editor_feed_line(use_2f ? "glVertex2f(1, 2);" : "glVertex3f(1, 2, 0);");
+        editor_feed_line("glEnd();");
+        /* Cursor on glEnd so the vertex is a non-edit row, and so the label
+         * scope (the cursor's own glBegin block) covers it. */
+        editor_state_edit_line_set(2);
 
-    /* The workspace header can be many rows long in builds with full REPL
-     * state (e.g. stubs with bootstrap commands), so scroll=0 may not show
-     * user code at all.  Run a warm-up render with follow_cursor set so that
-     * the scroll settles to the cursor's row; both measurement renders then
-     * see the same window and the vertex label is the only delta. */
-    editor_scroll_follow_cursor_set(1);
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        ui_panels_render_code_panel(&s, NULL);   /* scroll now follows cursor */
+        ui_repl_code_panel_invalidate_row_cache_for_test();
+        make_test_ui_snapshot(&snap);
+        ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+        ASSERT_TRUE(use_2f ? "vertex2f row found" : "vertex3f row found",
+                    ui_repl_code_panel_row_aux_label_for_test(1, label));
+        ASSERT_TRUE(use_2f ? "vertex2f gutter label drawn"
+                           : "vertex3f gutter label consistent with vertex2f",
+                    strcmp(label, "v0") == 0);
     }
-
-    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-    unsigned long long base;
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s, NULL);
-        base = gl_stub_counts[GL_STUB_glRasterPos2f];
-    }
-
-    glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s, NULL);
-    }
-    ASSERT_TRUE("vertex2f gutter label drawn when show_vertex_indices=1",
-                gl_stub_counts[GL_STUB_glRasterPos2f] > base);
-
-    /* Confirm vertex3f has the same behaviour */
-    glr_ctrl_reset_all();
-    ui_state_viewport_set_size(4000, 600);
-    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-    ui_state_code_panel_mut()->panel_frac = 0.4f;
-
-    editor_feed_line("glBegin(GL_TRIANGLES);");
-    editor_feed_line("glVertex3f(1, 2, 0);");
-    editor_feed_line("glEnd();");
-    editor_state_edit_line_set(2);
-
-    editor_scroll_follow_cursor_set(1);
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        ui_panels_render_code_panel(&s, NULL);
-    }
-
-    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-    unsigned long long v3f_base;
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s, NULL);
-        v3f_base = gl_stub_counts[GL_STUB_glRasterPos2f];
-    }
-    glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
-    {
-        UiRenderSnapshot s; make_test_ui_snapshot(&s);
-        gl_stub_counts_reset();
-        ui_panels_render_code_panel(&s, NULL);
-    }
-    ASSERT_TRUE("vertex3f gutter label consistent with vertex2f",
-                gl_stub_counts[GL_STUB_glRasterPos2f] > v3f_base);
 }
 
 static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
@@ -1616,7 +1572,6 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
     glr_ctrl_reset_all();
     ui_state_viewport_set_size(4000, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    glr_state_presentation_mut()->show_vertex_indices = 1;
     glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
@@ -1674,7 +1629,6 @@ static void test_auto_normal_rows_are_labelled_and_dimmed(void) {
     glr_ctrl_reset_all();
     ui_state_viewport_set_size(4000, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    glr_state_presentation_mut()->show_vertex_indices = 1;
     glr_state_presentation_mut()->autonormal = REPL_AUTONORMAL_FACE;
     glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
@@ -1727,24 +1681,6 @@ static void test_auto_normal_rows_are_labelled_and_dimmed(void) {
                 auto_text_a < manual_text_a);
     ASSERT_TRUE("auto label recedes further than the row text it annotates",
                 auto_aux_a > 0.0f && auto_aux_a < auto_text_a);
-
-    /* The label shares the aux column with the vertex indices, and only
-     * ui_repl_code_panel_compute_text_x's idx_col_w term reserves the space
-     * it paints into. With the column gone the producer must go quiet too,
-     * or the label lands left of the line-number gutter. */
-    glr_state_presentation_mut()->show_vertex_indices = 0;
-    glr_ctrl_sync_ui_chrome();
-    ui_repl_code_panel_invalidate_row_cache_for_test();
-    make_test_ui_snapshot(&snap);
-    ui_repl_code_panel_render_with_chrome(&snap, NULL);
-    ASSERT_TRUE("auto normal row still found without the aux column",
-                ui_repl_code_panel_row_aux_label_for_test(auto_row, label));
-    ASSERT_TRUE("auto label suppressed when the aux column is not reserved",
-                label[0] == '\0');
-    ASSERT_TRUE("auto row stays dimmed without the aux column",
-                ui_repl_code_panel_row_alphas_for_test(auto_row, &auto_text_a,
-                                                       NULL) &&
-                auto_text_a < manual_text_a);
 
     glr_state_presentation_mut()->autonormal = CFG_DEFAULT_AUTONORMAL;
     glr_ctrl_sync_ui_chrome();

@@ -3491,7 +3491,6 @@ void glr_ctrl_sync_ui_chrome(void) {
     GlrPresentationState p = glr_state_presentation();
     UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->layout_mode         = p.code_panel_layout;
-    cp->show_vertex_indices = p.show_vertex_indices;
     cp->wrap_at_comma       = p.wrap_at_comma;
     cp->syntax_highlight    = p.syntax_highlight;
     cp->code_focus          = p.code_focus;

@@ -630,16 +630,19 @@ static unsigned repl_code_panel_line_attrib_bits(const UiRenderSnapshot *snap,
     return mask;
 }
 
-/* `show_vertex_indices` gates the 6-char aux column here, and the panel's
- * UI_TEXT_PANEL_CHROME_AUX_COL flag must use the same condition — the
- * renderer draws the column at text_x - 6 * FONT_W, so an unreserved column
- * paints over the line-number gutter. Every producer of a left_aux_label
- * (vertex indices, the auto-normal label) therefore rides this one flag. */
+/* The 6-char aux column (vertex indices, the auto-normal tag) is always
+ * reserved, and UI_TEXT_PANEL_CHROME_AUX_COL is always set to match — the
+ * renderer draws the column at text_x - 6 * FONT_W, so reserving and
+ * painting it must never disagree or the labels land on the line-number
+ * gutter. It was previously conditional on a `show_vertex_indices` flag
+ * that had no GlrConfigKey, no menu row and no binding: nothing outside
+ * tests could turn it off, so the conditional layout only ever produced
+ * duplicated width arithmetic in test helpers. */
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
     if (!snap)
         return 0;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = 6 * FONT_W;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     return idx_x + idx_col_w;
 }
@@ -690,14 +693,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .chrome_flags = UI_TEXT_PANEL_CHROME_STATUSBAR |
                         UI_TEXT_PANEL_CHROME_SCROLLBAR |
                         UI_TEXT_PANEL_CHROME_LINE_NUMS |
-                        /* Must stay in lockstep with the idx_col_w term in
-                         * ui_repl_code_panel_compute_text_x: that is what
-                         * reserves the 6 char widths this column paints into.
-                         * Painting it while the layout has not reserved it
-                         * puts the label left of the line-number gutter. */
-                        (snap->code_panel.show_vertex_indices
-                            ? UI_TEXT_PANEL_CHROME_AUX_COL
-                            : 0),
+                        UI_TEXT_PANEL_CHROME_AUX_COL,
         .input = {
             .input = snap->editor_input.input ? snap->editor_input.input : "",
             .input_len = snap->editor_input.input_len,
@@ -774,7 +770,7 @@ static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
                                              int line_idx,
                                              int is_vertex, int vnum,
                                              int primitive_vnums_exact) {
-    if (!row || !snap || !snap->code_panel.show_vertex_indices || !is_vertex)
+    if (!row || !snap || !is_vertex)
         return;
     if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
         return;
@@ -812,7 +808,7 @@ static int repl_code_panel_line_is_auto(const UiRenderSnapshot *snap,
 static void repl_code_panel_set_auto_label(UiTextPanelRow *row,
                                            const UiRenderSnapshot *snap,
                                            int line_idx) {
-    if (!row || !snap || !snap->code_panel.show_vertex_indices)
+    if (!row || !snap)
         return;
     if (!repl_code_panel_line_is_auto(snap, line_idx))
         return;
@@ -2093,7 +2089,7 @@ static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
         return;
 
     out_label[0] = '\0';
-    if (!snap || !state || !snap->code_panel.show_vertex_indices || !is_vertex)
+    if (!snap || !state || !is_vertex)
         return;
     if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
         return;
@@ -2177,8 +2173,7 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
     /* Parking the cursor on an auto row keeps the label (it is still an
      * auto row until the edit commits); the dim is deliberately not applied
      * to the live input row, which stays at full brightness. */
-    if (!aux_label[0] && snap->code_panel.show_vertex_indices &&
-        repl_code_panel_line_is_auto(snap, line_idx))
+    if (!aux_label[0] && repl_code_panel_line_is_auto(snap, line_idx))
         snprintf(aux_label, sizeof(aux_label), "auto");
 
     if (is_edit) {

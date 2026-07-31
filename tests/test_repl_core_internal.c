@@ -749,7 +749,7 @@ int main() {
         glr_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
         glr_state_presentation_mut()->show_vertex_labels = 1;
         glr_state_presentation_mut()->show_normal_vectors = 1;
-        glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
+        glr_ctrl_sync_ui_chrome();
         glr_state_presentation_mut()->show_vertex_outlines = 1;
         glr_state_presentation_mut()->vertex_outline_style =
             VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
@@ -781,8 +781,6 @@ int main() {
                    glr_state_presentation().show_vertex_labels, CFG_DEFAULT_VERTEX_LABELS);
         ASSERT_INT("presentation reset normals",
                    glr_state_presentation().show_normal_vectors, CFG_DEFAULT_NORMAL_VECTORS);
-        ASSERT_INT("presentation reset indices",
-                   glr_state_presentation().show_vertex_indices, CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_INT("presentation reset outlines",
                    glr_state_presentation().show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_INT("presentation reset vertex outline style",

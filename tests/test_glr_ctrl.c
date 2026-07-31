@@ -3634,7 +3634,6 @@ static void test_display_frame_follows_replay_line_after_tick(void) {
     ui_state_viewport_set_size(800, 230);
     ui_state_code_panel_mut()->panel_frac = 0.5f;
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    glr_state_presentation_mut()->show_vertex_indices = 0;
     glr_ctrl_sync_ui_chrome();
 
     for (int i = 0; i < 30; i++) {

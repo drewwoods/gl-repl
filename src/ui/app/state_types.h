@@ -29,7 +29,7 @@
 /* Code-panel render chrome: panel divider and per-frame mirrors
  * of the presentation flags renderers need.
  *
- * `layout_mode` and `show_vertex_indices` are per-frame mirrors of
+ * `layout_mode` and the flags below it are per-frame mirrors of
  * ReplPresentationState fields so ui_*.c renderers and hit-tests can
  * read them without crossing the repl_state_*() boundary; the controller
  * refreshes them in glr_ctrl_build_ui_snapshot. The source of truth still lives
@@ -40,7 +40,6 @@ typedef struct {
     int   resizing_panel;
     int   scrollbar_drag;       /* thumb drag in progress (draw emphasis) */
     int   layout_mode;          /* mirror of presentation.code_panel_layout */
-    int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
     int   syntax_highlight;     /* mirror of presentation.syntax_highlight */
     int   code_focus;           /* mirror of presentation.code_focus */

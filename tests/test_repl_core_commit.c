@@ -143,7 +143,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     UiReplCodePanelLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = 6 * FONT_W;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line;
 
@@ -1198,7 +1198,7 @@ int main(void) {
     editor_navigate_to_line(0);
     {
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = 6 * FONT_W;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int mx = text_x + 1;
         int my = code_panel_mouse_y_for_cmd(repl_state_document_count());
@@ -1218,7 +1218,7 @@ int main(void) {
     editor_feed_line("}");
     {
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = 6 * FONT_W;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
         int mx = text_x + indent * FONT_W + 1;

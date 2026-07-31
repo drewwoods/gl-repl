@@ -26,7 +26,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 static int code_panel_text_x(void) {
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = 6 * FONT_W;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     return idx_x + idx_col_w;
 }
@@ -36,7 +36,7 @@ static void reset_doc_fixture(void) {
     ui_state_viewport_set_size(800, 260);
     ui_state_code_panel_mut()->panel_frac = 0.45f;
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+    glr_ctrl_sync_ui_chrome();
     editor_scroll_set(0);
     editor_scroll_follow_cursor_set(0);
     repl_state_refresh_workspace_header_lines();

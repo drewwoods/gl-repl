@@ -217,7 +217,6 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->grid_extent_idx = GRID_EXTENT_CLOSE;
     presentation->axes_theme = AXES_THEME_NEON;
     presentation->show_normal_vectors = 1;
-    presentation->show_vertex_indices = 0;
     presentation->show_vertex_points = 0;
     presentation->xform_guide_mode = RENDER3D_XFORM_GUIDE_OFF;
     presentation->show_light_indicators = 0;
