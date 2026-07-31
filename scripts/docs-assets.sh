@@ -637,6 +637,8 @@ EOF
 # vertex it names and reads as its in-block ordinal (v0..v3, twice).
 # $1 = OVERLAY_LABEL_PLACEMENT_<NAME>. GLR_EDIT_LINE parks the cursor on the
 # block's first glVertex3f so the cursor-bound overlays fire.
+# The body below is quoted verbatim in docs/USER_GUIDE.md beside the image —
+# keep the two in step, or the guide explains numbers the asset doesn't show.
 stage_label_placement() { stage "lp-$1" <<EOF
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES */
