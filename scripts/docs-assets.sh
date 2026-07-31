@@ -65,7 +65,8 @@ DEMOS="$OUT/demos"
 W=1200          # target width/height of every asset's source window
 H=800
 GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
-LP_CROP=545x300+362+402  # label-placement: scene pane around the two quads
+LP_CROP=545x300+362+402       # label-placement: scene pane around the two quads
+LP_CODE_CROP=1094x250+8+48    # label-placement: the code panel above it
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -637,8 +638,6 @@ EOF
 # vertex it names and reads as its in-block ordinal (v0..v3, twice).
 # $1 = OVERLAY_LABEL_PLACEMENT_<NAME>. GLR_EDIT_LINE parks the cursor on the
 # block's first glVertex3f so the cursor-bound overlays fire.
-# The body below is quoted verbatim in docs/USER_GUIDE.md beside the image —
-# keep the two in step, or the guide explains numbers the asset doesn't show.
 stage_label_placement() { stage "lp-$1" <<EOF
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES */
@@ -1250,16 +1249,28 @@ fi
 # Cropped to the scene pane and montaged at NATIVE resolution rather than
 # resized to $W: this asset is read for its label text, and the 2x downscale
 # a full-window 1x2 montage needs makes v0..v7 illegible.
+#
+# The program that produced the labels rides IN the image, as a code-panel
+# strip above the pair, so the guide never has to quote a copy that can drift
+# from what the asset actually rendered. One strip, not two: the code panel is
+# identical in both captures (its gutter marks auto-normals, not label numbers,
+# so it does not vary with the placement). The widths are picked to match
+# montage1x2's output exactly -- (545 + 2*2) * 2 == 1094 + 2*2 -- so the
+# vertical append needs no padding.
 if want label-placement; then
     ( export GLR_EDIT_LINE=8
       still "$WORK/lp-declutter.png" 16 \
             "$(stage_label_placement OVERLAY_LABEL_PLACEMENT_DECLUTTERED)"
       still "$WORK/lp-at-vertex.png" 16 \
             "$(stage_label_placement OVERLAY_LABEL_PLACEMENT_AT_VERTEX)" )
+    magick "$WORK/lp-declutter.png" -crop "${LP_CODE_CROP}" +repage \
+        -bordercolor black -border 2 "$WORK/lp-code.png"
     magick "$WORK/lp-declutter.png" -crop "${LP_CROP}" +repage "$WORK/lp-a.png"
     magick "$WORK/lp-at-vertex.png" -crop "${LP_CROP}" +repage "$WORK/lp-b.png"
     montage1x2 "$WORK/lp-pair.png" "$WORK/lp-a.png" "$WORK/lp-b.png"
-    write_png "$WORK/lp-pair.png" "$OUT/label-placement.png"
+    magick "$WORK/lp-code.png" "$WORK/lp-pair.png" -append \
+        -background black "$WORK/lp-all.png"
+    write_png "$WORK/lp-all.png" "$OUT/label-placement.png"
     echo "docs-assets: wrote $OUT/label-placement.png"
 fi
 

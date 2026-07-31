@@ -1359,29 +1359,15 @@ labels. **At vertex** is the explicit exact-position placement and bypasses
 this decluttering.
 
 The placement also decides **how vertices are numbered**, because the two
-choices need different numbers to stay readable. Both panels below run this
-program under *Cursor block, all instances* scope, with the cursor on the
-first `glVertex3f` — one quad drawn twice by a `for` loop, so the flat program
-holds two unrolled copies of a single four-vertex `glBegin` block:
+choices need different numbers to stay readable:
 
-```c
-glColor3f(0.15, 0.55, 1);
-for(i, 0, 2) {
-    glPushMatrix();
-    glTranslatef(-1.05 + i * 2.1, 0, 0);
-    glBegin(GL_QUADS);
-    glVertex3f(-0.75, -0.85, 0);
-    glVertex3f(0.75, -0.85, 0);
-    glVertex3f(0.75, 0.85, 0);
-    glVertex3f(-0.75, 0.85, 0);
-    glEnd();
-    glPopMatrix();
-}
-```
+![Label placement: one quad drawn twice by a loop, shown decluttered (v0..v7, globally unique) and at vertex (v0..v3, repeated per copy)](images/label-placement.png)
 
-![Label placement: the same looped quad decluttered (v0..v7, globally unique) and at vertex (v0..v3, repeated per copy)](images/label-placement.png)
-
-Only the placement differs between the two panels.
+The program is the code panel at the top; both scenes below it ran exactly
+that, under *Cursor block, all instances* scope with the cursor on line 9.
+The `for` loop draws one quad twice, so the flat program holds two unrolled
+copies of a single four-vertex `glBegin` block. Only the placement differs
+between the two scenes.
 
 - **Decluttered** (left) numbers **globally**: `v0`..`v7`. These labels float
   off their vertex onto a clear row, so a repeated `v0`..`v3` per copy would
