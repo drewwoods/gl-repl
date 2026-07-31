@@ -650,6 +650,120 @@ static void test_once_rate_rearms_for_series_added_later(void) {
     ASSERT_INT("the added row captures once", (int)v.series[1].stats.count, 1);
 }
 
+/* The point of a one-shot over several rows: every series frozen from the
+ * *same* frame, so the numbers can be read against each other. Values that
+ * track `t` at different multiples make a cross-frame mix detectable. */
+static void test_once_snapshot_is_one_frame(void) {
+    static const char *const k_scene[] = {
+        "float a;", "float b;", "a = t;", "b = t * 10;", NULL
+    };
+    int row_a, row_b;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_a = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_b = find_nth_row(CMD_VAR_ASSIGN, 1);
+
+    repl_state_time_set(1.0f);
+    reflatten();
+    assign_plot_open(row_a);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    assign_plot_capture(0.0);
+    ASSERT_FLOAT("the first shot froze t=1", S0(assign_plot_view()).cols[0].lo,
+                 1.0);
+
+    /* Adding a row re-arms; the next frame is what both series describe. */
+    assign_plot_toggle_series(row_b);
+    repl_state_time_set(5.0f);
+    reflatten();
+    assign_plot_capture(1.0);
+
+    v = assign_plot_view();
+    ASSERT_FLOAT("the primary re-froze on the new frame",
+                 v.series[0].cols[0].lo, 5.0);
+    ASSERT_FLOAT("and the added row froze on that same frame",
+                 v.series[1].cols[0].lo, 50.0);
+    ASSERT_INT("one column each", v.series[0].col_count, 1);
+    ASSERT_INT("one column each", v.series[1].col_count, 1);
+
+    /* Frozen for good: later frames do not move either series. */
+    repl_state_time_set(9.0f);
+    reflatten();
+    assign_plot_capture(2.0);
+    v = assign_plot_view();
+    ASSERT_FLOAT("still the frozen frame", v.series[0].cols[0].lo, 5.0);
+    ASSERT_FLOAT("for both series", v.series[1].cols[0].lo, 50.0);
+}
+
+/* A one-shot must not be spent on a frame where some row has not run: that
+ * freezes an incomplete comparison no later frame can repair. */
+static void test_once_waits_for_a_complete_frame(void) {
+    static const char *const k_scene[] = {
+        "float a;", "float b;", "a = t;", "if(t) {", "b = t * 10;", "}", NULL
+    };
+    int row_a, row_b;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_a = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_b = find_nth_row(CMD_VAR_ASSIGN, 1);
+
+    repl_state_time_set(0.0f);   /* guard closed: b does not run */
+    reflatten();
+    assign_plot_open(row_a);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    assign_plot_toggle_series(row_b);
+
+    assign_plot_capture(0.0);
+    v = assign_plot_view();
+    ASSERT_INT("an incomplete frame is not kept", (int)v.series[0].stats.count, 0);
+    ASSERT_INT("nor for the silent row", (int)v.series[1].stats.count, 0);
+    ASSERT_INT("and the shot is still armed", v.captured, 0);
+
+    repl_state_time_set(3.0f);   /* guard open: both rows run */
+    reflatten();
+    assign_plot_capture(1.0);
+    v = assign_plot_view();
+    ASSERT_INT("the complete frame is taken", (int)v.series[0].stats.count, 1);
+    ASSERT_INT("for both rows", (int)v.series[1].stats.count, 1);
+    ASSERT_FLOAT("and both describe it", v.series[0].cols[0].lo, 3.0);
+    ASSERT_FLOAT("from the same frame", v.series[1].cols[0].lo, 30.0);
+
+    /* Now spent: a later frame must not move it. */
+    repl_state_time_set(7.0f);
+    reflatten();
+    assign_plot_capture(2.0);
+    ASSERT_FLOAT("the shot is spent", S0(assign_plot_view()).cols[0].lo, 3.0);
+}
+
+/* The same rule with one series: a guarded row used to freeze as
+ * "(not executed)" on the first frame and never recover. */
+static void test_once_single_series_waits_to_run(void) {
+    static const char *const k_scene[] = {
+        "float a;", "if(t) {", "a = t * 2;", "}", NULL
+    };
+    int row;
+
+    load_scene(k_scene);
+    row = find_nth_row(CMD_VAR_ASSIGN, 0);
+
+    repl_state_time_set(0.0f);
+    reflatten();
+    assign_plot_open(row);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    assign_plot_capture(0.0);
+    ASSERT_INT("nothing captured while the row is skipped",
+               (int)S0(assign_plot_view()).stats.count, 0);
+
+    repl_state_time_set(4.0f);
+    reflatten();
+    assign_plot_capture(1.0);
+    ASSERT_INT("the first frame it runs is the one kept",
+               (int)S0(assign_plot_view()).stats.count, 1);
+    ASSERT_FLOAT("with that frame's value",
+                 S0(assign_plot_view()).cols[0].lo, 8.0);
+}
+
 /* Shift+right-click on a plotted row removes it again. */
 static void test_toggle_series_removes_and_closes(void) {
     static const char *const k_scene[] = {
@@ -911,6 +1025,9 @@ int main(void) {
     test_second_series_captures_independently();
     test_top_level_series_can_join_before_first_capture();
     test_once_rate_rearms_for_series_added_later();
+    test_once_snapshot_is_one_frame();
+    test_once_waits_for_a_complete_frame();
+    test_once_single_series_waits_to_run();
     test_toggle_series_removes_and_closes();
     test_series_cap_is_enforced();
     test_incompatible_x_mode_is_refused();

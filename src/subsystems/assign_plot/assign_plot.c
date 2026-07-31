@@ -383,6 +383,7 @@ void assign_plot_reset(void) {
 void assign_plot_capture(double now_us) {
     int total, cols;
     int any_executed = 0;
+    int all_executed = 1;
 
     /* The gate that makes this feature free when nobody is looking: no flat
      * scan, no clock arithmetic, nothing. */
@@ -417,7 +418,7 @@ void assign_plot_capture(double now_us) {
             int execs = (i == 0) ? total
                       : assign_plot_count_executions(g_series[i].source_line_idx);
             g_series[i].exec_count = execs;
-            if (execs <= 0) continue;
+            if (execs <= 0) { all_executed = 0; continue; }
             cols = (execs < ASSIGN_PLOT_COLS) ? execs : ASSIGN_PLOT_COLS;
             assign_plot_fill_exec_columns(&g_series[i], execs, cols);
         }
@@ -432,6 +433,7 @@ void assign_plot_capture(double now_us) {
                 (i == 0) ? total
                          : assign_plot_count_executions(g_series[i].source_line_idx);
             if (got[i]) any_executed = 1;
+            else        all_executed = 0;
         }
         /* Append for every series or none: a partial append would slide the
          * capture axis out from under the series that were skipped. When
@@ -443,6 +445,23 @@ void assign_plot_capture(double now_us) {
                 assign_plot_append_frame_column(&g_series[i], lo[i], hi[i],
                                                 got[i]);
         }
+    }
+
+    /* A one-shot is meant to be a frame you can read across: every series
+     * frozen from the same execution of the program. A frame where some row
+     * has not run yet (a guard still closed, a `goto` still jumping it) cannot
+     * be that, so the shot is not spent on it — the partial attempt is thrown
+     * away and the next frame is tried instead. Without this the shot lands on
+     * whatever frame happened to be first and freezes an incomplete
+     * comparison, which no later frame can repair.
+     *
+     * The cost is that a plot whose rows never all run in one frame keeps
+     * scanning, at the price of the FRAME rate. That is the honest state to be
+     * in — the panel says "(collecting)" — and it resolves itself the moment a
+     * complete frame arrives. */
+    if (g_rate == ASSIGN_PLOT_RATE_ONCE && !all_executed) {
+        assign_plot_clear_samples();   /* also leaves g_captured clear: still armed */
+        return;
     }
 
     g_captured = 1;

@@ -422,7 +422,14 @@ Everything is driven by the mouse, from the panel itself:
 while you edit around it. **1 Hz** (the default) is the low-cost live view.
 **frame** captures every frame, for watching a value respond to a drag.
 Changing the rate clears the window, since it redefines what the numbers cover.
-Adding a series to a frozen **once** plot re-arms one fresh snapshot for all rows.
+
+A **once** snapshot is always one frame read across every plotted row, so the
+numbers can be compared directly. Two things follow from that: adding a series
+to a frozen plot re-arms it, so the next snapshot covers all the rows together;
+and a frame in which some row has not run — a guard still closed, a `goto`
+still jumping over it — is not taken, because it could not be compared. The
+plot keeps saying *(collecting)* until a frame arrives where every plotted row
+ran, and freezes on that one.
 
 Right-clicking a different assignment retargets the panel to that row alone.
 Editing a plotted row re-titles it and keeps plotting it; deleting it, or

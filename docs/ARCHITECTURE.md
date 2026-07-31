@@ -1022,7 +1022,13 @@ and being stretched across captures it never saw. In `X_EXEC` mode series may
 legitimately differ in execution count (two loops of different lengths), so
 each is spread across the full width and X reads as normalized progress.
 A frozen `once` capture is the exception: adding a row clears and re-arms the
-one-shot so every series in that snapshot comes from the same frame.
+one-shot so every series in that snapshot comes from the same frame. The same
+rule bounds when the shot is spent at all — `assign_plot_capture()` only sets
+`g_captured` for a frame in which *every* series ran, discarding the partial
+attempt otherwise. A one-shot exists to be read across, and a frame that froze
+with one row still skipped could not be, with no later frame able to repair it.
+The cost is that a plot whose rows never coincide keeps scanning at the FRAME
+rate; the panel says `(collecting)` while that is true.
 
 Y is shared and deliberately so — comparison is the point — which does mean
 series of very different magnitudes flatten each other; the per-series

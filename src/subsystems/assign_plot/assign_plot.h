@@ -33,7 +33,8 @@
  * execution count; a flip clears the buffer and the statistics, because the two
  * axes describe different things and averaging across the change would be a
  * lie. A capture that finds zero executions leaves the mode alone and appends
- * nothing.
+ * nothing — and at the ONCE rate does not count as the shot, so a row that is
+ * still being skipped does not freeze the plot empty.
  *
  * --- Several series on one plot ---
  *
@@ -84,7 +85,11 @@
  * keymap slot and no config key: this is a per-plot property, not a global
  * setting, and it should not appear in exported @cfg headers. */
 typedef enum {
-    ASSIGN_PLOT_RATE_ONCE = 0,  /* one capture, then frozen                 */
+    /* One capture, then frozen — but only a frame in which *every* series
+     * ran. A one-shot is meant to be read across, so it is not spent on a
+     * frame where some row is still being skipped; that attempt is discarded
+     * and the next frame tried. */
+    ASSIGN_PLOT_RATE_ONCE = 0,
     ASSIGN_PLOT_RATE_1HZ,       /* at most one capture per second (default) */
     ASSIGN_PLOT_RATE_FRAME,     /* every frame                              */
     ASSIGN_PLOT_RATE_COUNT
