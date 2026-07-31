@@ -17,6 +17,7 @@
 #include "repl/flatten.h"
 #include "repl/command_store.h"
 #include "repl/state_owners.h"
+#include "repl/workspace_io.h"  /* recovery-workspace cleanup */
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "editor/input.h"
@@ -3444,6 +3445,110 @@ static void test_quit_recovery_file(void) {
     rmdir(made_dir);
 }
 
+/* Viewing a built-in example is not user work: the live document is the
+ * shipped example verbatim, so quitting from it must NOT write (and
+ * thereby clobber) QUIT_RECOVERY_FILE. The first edit promotes the
+ * example into a user-scene slot, and from then on it is worth saving. */
+static void test_recovery_skips_unpromoted_example(void) {
+    char cwd[1024];
+    char temp_dir[] = "/tmp/test_glr_ctrl_recovery_ex.XXXXXX";
+    char *made_dir;
+    int have_cwd;
+
+    printf("--- imrepl_ctrl recovery skips unpromoted example ---\n");
+
+    glr_ctrl_reset_all();
+    repl_load_example(0);
+    ASSERT_INT("example active, no scene slot", repl_active_user_scene(), -1);
+    ASSERT_INT("unpromoted example is not user work",
+               glr_ctrl_recovery_has_user_work(), 0);
+
+    made_dir = mkdtemp(temp_dir);
+    have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+    ASSERT_TRUE("mkdtemp example-recovery dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before example-recovery save", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+
+    ASSERT_INT("chdir example-recovery dir", chdir(made_dir), 0);
+    glr_ctrl_save_quit_recovery();
+    ASSERT_TRUE("quit from example wrote no recovery file",
+                access(QUIT_RECOVERY_FILE, F_OK) != 0);
+
+    /* Promote (what any edit does) -> the document is now the user's. */
+    ASSERT_TRUE("example promoted to a slot",
+                repl_promote_transient_if_needed() >= 0);
+    ASSERT_INT("promoted example is user work",
+               glr_ctrl_recovery_has_user_work(), 1);
+    glr_ctrl_save_quit_recovery();
+    ASSERT_INT("quit after promotion wrote recovery file",
+               access(QUIT_RECOVERY_FILE, F_OK), 0);
+
+    unlink(QUIT_RECOVERY_FILE);
+    ASSERT_INT("restore cwd after example-recovery save", chdir(cwd), 0);
+    rmdir(made_dir);
+    glr_ctrl_reset_all();
+}
+
+/* Remove a workspace directory and every file its manifest names. */
+static void remove_recovery_workspace(const char *dir) {
+    WorkspaceManifest manifest;
+    char err[REPL_STATUS_TEXT_MAX];
+    char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
+    if (workspace_io_manifest_read(dir, &manifest, err, sizeof(err))) {
+        for (int i = 0; i < manifest.scene_count; i++) {
+            if (workspace_io_path_join(dir, manifest.scene_files[i],
+                                       path, sizeof(path)))
+                unlink(path);
+        }
+    }
+    if (workspace_io_path_join(dir, WORKSPACE_IO_MANIFEST_FILE,
+                               path, sizeof(path)))
+        unlink(path);
+    rmdir(dir);
+}
+
+/* Quitting while an example is on screen must still rescue the user's
+ * in-memory scene slots — they die with the process and the single-file
+ * recovery copy can only hold the (uninteresting) visible document. They
+ * go to a recovery WORKSPACE instead, never to the bound workspace dir. */
+static void test_recovery_workspace_rescues_scene_slots(void) {
+    char cwd[1024];
+    char temp_dir[] = "/tmp/test_glr_ctrl_recovery_ws.XXXXXX";
+    char *made_dir;
+    int have_cwd;
+
+    printf("--- imrepl_ctrl recovery workspace rescues scene slots ---\n");
+
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("created a user scene", repl_scenes_create_empty_user_scene() >= 0);
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    repl_load_example(0);
+    ASSERT_INT("example is live, not the scene", repl_active_user_scene(), -1);
+    ASSERT_INT("scene slot survives the example load", repl_user_scene_count(), 1);
+
+    made_dir = mkdtemp(temp_dir);
+    have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+    ASSERT_TRUE("mkdtemp recovery-workspace dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before recovery-workspace save", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+
+    ASSERT_INT("chdir recovery-workspace dir", chdir(made_dir), 0);
+    ASSERT_INT("quit rescued the scene slots",
+               glr_ctrl_save_quit_recovery(), 1);
+    ASSERT_TRUE("no recovery.c written for the example",
+                access(QUIT_RECOVERY_FILE, F_OK) != 0);
+    ASSERT_INT("recovery workspace manifest written",
+               access("recovery-workspace/" WORKSPACE_IO_MANIFEST_FILE, F_OK), 0);
+    ASSERT_STR("workspace binding left unbound", repl_workspace_dir(), "");
+
+    remove_recovery_workspace("recovery-workspace");
+    ASSERT_INT("restore cwd after recovery-workspace save", chdir(cwd), 0);
+    rmdir(made_dir);
+    glr_ctrl_reset_all();
+}
+
 /* Audit #39 prep: glr_ctrl_build_ui_snapshot is called twice per
  * display frame, defended as "the second build picks up post-
  * follow-scroll offsets." The fix proposes splitting snapshot into
@@ -5315,6 +5420,8 @@ int main(void) {
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();
+    test_recovery_skips_unpromoted_example();
+    test_recovery_workspace_rescues_scene_slots();
     test_build_ui_snapshot_is_idempotent();
     test_display_frame_scene_config_is_stable_across_frames();
     test_display_frame_no_replay_means_no_fade_plumbing();

@@ -1861,7 +1861,8 @@ cc -std=c89 -Wall -o scene output.c -framework OpenGL -framework GLUT -lm  # mac
 Everything round-trips: `./gl-repl output.c` reloads the file with
 variables, settings, camera, scene name, and `// @tune` tags intact.
 
-`Ctrl+Q` quits and saves a recovery copy to a temp file.
+`Ctrl+Q` quits and saves a recovery copy to a temp file — an unedited built-in
+example is skipped instead (any unsaved scenes go to `recovery-workspace/`).
 
 #### What the export is free of
 

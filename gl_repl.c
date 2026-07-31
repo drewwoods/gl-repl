@@ -361,11 +361,8 @@ int main(int argc, char **argv) {
 
     glutMainLoop();
 #ifndef USE_GLUT
-    if (g_window_closed && glr_ctrl_save_recovery_file()) {
-        printf("Saved recovery copy to %s (reload: ./%s %s)\n",
-               QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
-               QUIT_RECOVERY_FILE);
-    }
+    if (g_window_closed)
+        glr_ctrl_save_quit_recovery();
 #endif
     return 0;
 }

@@ -159,9 +159,9 @@ transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
 **The frame is the display callback, and the application owns it.** The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L217) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L218) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L219) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L232) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L233) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L234) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -1617,7 +1617,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L221) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L236) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one

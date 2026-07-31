@@ -180,9 +180,24 @@ void glr_ctrl_set_stencil_readback_supported_for_test(int supported);
  * normal path in glr_ctrl_tick(). */
 void glr_ctrl_request_quit(void);
 
+/* 1 when the live document is worth rescuing to the recovery file. An
+ * unpromoted built-in example is not: it is the shipped example verbatim
+ * (the first edit promotes it into a user-scene slot), so saving it would
+ * only overwrite a genuine recovery copy. Every recovery-save caller
+ * checks this first. */
+int glr_ctrl_recovery_has_user_work(void);
+
+/* The whole quit-time safeguard, shared by Ctrl+Q, File > Quit, SIGINT
+ * and window close: write the live document to QUIT_RECOVERY_FILE when
+ * it is user work, else rescue any occupied scene slots into a recovery
+ * workspace, else do nothing. Prints what it wrote. Returns 1 if
+ * anything was saved. */
+int glr_ctrl_save_quit_recovery(void);
+
 /* Write the live scene to the recovery file (config.h QUIT_RECOVERY_FILE).
  * Used by the quit safeguard and by Open Workspace before it replaces the
- * current in-memory scene. Returns 1 on success, 0 on failure. */
+ * current in-memory scene. Returns 1 on success, 0 on failure. Writes
+ * unconditionally — gate it on glr_ctrl_recovery_has_user_work(). */
 int glr_ctrl_save_recovery_file(void);
 
 /* The frame boundary. The application owns it — these three bracket the host's

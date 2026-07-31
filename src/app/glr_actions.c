@@ -1435,7 +1435,9 @@ int glr_action_open_workspace_path(const char *dir) {
         return 1;
     }
 
-    if (!glr_ctrl_save_recovery_file()) {
+    /* Nothing to rescue when the visible document is an unpromoted
+     * example — skipping the write is success, not a failed save. */
+    if (glr_ctrl_recovery_has_user_work() && !glr_ctrl_save_recovery_file()) {
         repl_set_status_error("Workspace switch cancelled: recovery save failed");
         return 0;
     }
