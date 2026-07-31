@@ -50,6 +50,12 @@ typedef enum ReplAutoNormalMode {
 
 void repl_recompute_autonormals(int autonormal_mode,
                                 int *edit_line_inout);
+
+/* Delete every generated normal row (immediate-mode and tessellator),
+ * returning the number removed. Call on the transition to
+ * REPL_AUTONORMAL_OFF — not on every OFF-mode recompute; see the comment
+ * on the definition. Rows the user typed are left alone. */
+int repl_strip_auto_normals(int *edit_line_inout);
 void repl_refresh_camera_lines(void);
 void repl_refresh_render_state_strings(void);
 void repl_ensure_init_bootstrap_ready(void);

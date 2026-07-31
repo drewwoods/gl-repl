@@ -1221,7 +1221,32 @@ void glr_cfg_cycle_row(int row, int delta) {
         }
     } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
         if (glr_state_presentation().autonormal == REPL_AUTONORMAL_OFF) {
-            repl_set_status("Auto-normals: Off (existing normals kept)");
+            /* Off removes what the pass generated. Leaving the rows behind
+             * stranded them: the pass only ever added, so there was no
+             * non-manual way back, and because it mutates the document from
+             * the display frame there was no undo entry to fall back on
+             * either. Undo cannot serve here while the mode is on — the next
+             * frame just re-inserts — so Off is the only possible way out.
+             *
+             * The snapshot is what makes the removal safe rather than merely
+             * symmetric: Ctrl+Z restores the rows, and with the mode now off
+             * nothing re-runs to take them away again. */
+            int edit_line = editor_state_edit_line();
+            int removed;
+
+            editor_undo_push_snapshot();
+            removed = repl_strip_auto_normals(&edit_line);
+            editor_state_edit_line_set(edit_line);
+            if (removed > 0) {
+                repl_mark_source_dirty();
+                snprintf(cfg_status_buf, sizeof(cfg_status_buf),
+                         "Auto-normals: Off (%d generated normal%s removed, "
+                         "Ctrl+Z to restore)",
+                         removed, removed == 1 ? "" : "s");
+                repl_set_status(cfg_status_buf);
+            } else {
+                repl_set_status("Auto-normals: Off");
+            }
         } else {
             /* Face <-> Smooth also needs the recompute: the rows are
              * already there, but every one of them changes value. */

@@ -42,6 +42,21 @@ static int auto_normal_count(void) {
     return n;
 }
 
+/* Every generated row, immediate-mode and tessellator alike — the set
+ * repl_strip_auto_normals() is responsible for. auto_normal_count() above
+ * deliberately stays glNormal3f-only: the dedup it measures is a property
+ * of vertex runs, which tess contours do not have. */
+static int auto_normal_count_all(void) {
+    int n = 0;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->is_auto &&
+            (cmd->type == CMD_NORMAL3F || cmd->type == CMD_TESS_NORMAL))
+            n++;
+    }
+    return n;
+}
+
 /* The normal in effect at the `ord`-th glVertex of the document (0-based).
  *
  * A normal is GL state, so a vertex's normal is whatever row most recently
@@ -835,6 +850,100 @@ static void test_smooth_rewrites_existing_auto_rows(void) {
                  normal_axis_at_vertex(0, 2), 1.0f);
 }
 
+/* ------------------------------------------------------------------ */
+/* repl_strip_auto_normals: the way back out of the feature            */
+/* ------------------------------------------------------------------ */
+
+/* Turning auto-normals off has to remove what the pass generated. The pass
+ * runs from the display frame, so while the mode is on it re-inserts
+ * anything an undo takes away — Off is the only point at which the rows
+ * can go, and without it there is no non-manual way to get rid of them. */
+static void test_strip_removes_only_generated_rows(void) {
+    printf("test_strip_removes_only_generated_rows\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    /* The typed normal must survive the strip untouched. Note it shields
+     * only the vertex directly after it — the rest of the block still gets
+     * generated rows (owning the whole block is the *tess* rule) — so this
+     * document deliberately mixes typed and generated normals inside one
+     * glBegin, which is the case the strip has to get right. */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glNormal3f(0.25, 0.5, 0.75);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 2);");
+    editor_feed_line("glVertex3f(1, 0, 2);");
+    editor_feed_line("glVertex3f(0, 1, 2);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 4);");
+    editor_feed_line("gluVertex(1, 0, 4);");
+    editor_feed_line("gluVertex(1, 1, 4);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+
+    int before_pass = repl_state_document_count();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    int generated = repl_state_document_count() - before_pass;
+    ASSERT_TRUE("strip: the pass generated immediate and tess rows",
+                generated >= 2);
+    ASSERT_INT("strip: generated count matches the is_auto rows",
+               auto_normal_count_all(), generated);
+    ASSERT_TRUE("strip: a tess contour normal is among them",
+                auto_normal_count_all() > auto_normal_count());
+
+    int removed = repl_strip_auto_normals(NULL);
+    ASSERT_INT("strip: removes exactly what the pass added",
+               removed, generated);
+    ASSERT_INT("strip: document is back to its pre-pass size",
+               repl_state_document_count(), before_pass);
+    ASSERT_INT("strip: no generated rows remain", auto_normal_count_all(), 0);
+
+    /* The typed normal is the one normal left standing. */
+    int manual = 0;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->type == CMD_NORMAL3F && !cmd->is_auto)
+            manual++;
+    }
+    ASSERT_INT("strip: the hand-written normal survives", manual, 1);
+    ASSERT_FLOAT("strip: and keeps its value",
+                 normal_axis_at_vertex(0, 0), 0.25f);
+
+    /* Stripping again is a no-op, and the pass can rebuild from here — the
+     * feature is a toggle, not a one-way door. */
+    ASSERT_INT("strip: second strip removes nothing",
+               repl_strip_auto_normals(NULL), 0);
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    ASSERT_INT("strip: re-enabling regenerates the same rows",
+               auto_normal_count_all(), generated);
+}
+
+/* A document with nothing generated in it must come through untouched —
+ * the strip keys on is_auto, not on "looks like a normal". */
+static void test_strip_leaves_a_hand_written_document_alone(void) {
+    printf("test_strip_leaves_a_hand_written_document_alone\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glNormal3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+
+    int before = repl_state_document_count();
+    ASSERT_INT("strip: nothing to remove", repl_strip_auto_normals(NULL), 0);
+    ASSERT_INT("strip: document unchanged",
+               repl_state_document_count(), before);
+    ASSERT_FLOAT("strip: hand-written normal intact",
+                 normal_axis_at_vertex(0, 2), 1.0f);
+}
+
 int main(void) {
     test_degenerate_normal();
     test_triangle_strip();
@@ -859,6 +968,8 @@ int main(void) {
     test_tess_two_contours_and_refresh();
     test_tess_front_face_and_vars();
     test_smooth_rewrites_existing_auto_rows();
+    test_strip_removes_only_generated_rows();
+    test_strip_leaves_a_hand_written_document_alone();
 
     return test_harness_report(&g_harness, "test_repl_autonormal");
 }

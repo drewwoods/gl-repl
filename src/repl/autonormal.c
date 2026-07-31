@@ -535,6 +535,39 @@ static int autonormal_tess_contour(int begin_idx, GLenum front_face,
     }
 }
 
+/* Remove every row the pass generated, immediate-mode and tessellator
+ * alike, and report how many went. `is_auto` marks exactly the rows this
+ * module owns, so a normal the user typed is never touched.
+ *
+ * This is the *undo* for switching auto-normals on, and it has to be: the
+ * pass runs from the display frame, so as long as the mode is on it will
+ * re-insert anything Ctrl+Z takes away. Turning the feature off is the
+ * only point at which the rows can actually go.
+ *
+ * Deliberately a one-shot for the caller to invoke on that transition
+ * rather than something repl_recompute_autonormals() does whenever it is
+ * called with OFF. Continuous stripping would re-delete rows the moment
+ * an undo restored them, and would silently eat the generated normals of
+ * any scene imported while the mode happened to be off — which is exactly
+ * what the `@auto` export marker exists to preserve. */
+int repl_strip_auto_normals(int *edit_line_inout) {
+    int removed = 0;
+
+    for (int i = repl_state_document_count() - 1; i >= 0; i--) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+
+        if (!cmd->valid || !cmd->is_auto)
+            continue;
+        if (cmd->type != CMD_NORMAL3F && cmd->type != CMD_TESS_NORMAL)
+            continue;
+        /* Back-to-front so each delete leaves the not-yet-visited indices
+         * below it untouched. */
+        if (delete_cmd_at(i, edit_line_inout))
+            removed++;
+    }
+    return removed;
+}
+
 /* The `autonormal` toggle moved out of REPL state onto `glr_state`. The
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call

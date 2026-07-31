@@ -1325,12 +1325,22 @@ highlight over it.
   Generated lines are marked in the code panel: an `auto` tag in the same
   left column as the `v0`/`v1` vertex indices, and slightly dimmer text than
   the rest of the program. A `glNormal3f` you typed yourself is never
-  tagged and never dimmed — and the pass leaves it alone, so a hand-written
-  normal keeps ownership of its block. Nothing is written into your source
-  text for this; the marking is display-only. An exported `.c` file tags
-  its generated normals with a trailing `/* @auto */` comment — harmless to
-  compile, and it is what lets a reloaded scene keep updating those normals
-  instead of freezing them at the values they had when you saved.
+  tagged, never dimmed, and never overwritten; it also becomes the normal
+  in effect for the vertex after it, so that vertex gets no generated line.
+  Later vertices in the same block still do — owning a whole block outright
+  is the *tessellator* rule, where a hand-written `gluNormal` suppresses the
+  contour's generated one. Nothing is written into your source text for the
+  marking; it is display-only. An exported `.c` file tags its generated
+  normals with a trailing `/* @auto */` comment — harmless to compile, and
+  it is what lets a reloaded scene keep updating those normals instead of
+  freezing them at the values they had when you saved.
+
+  **Off removes the generated lines**, leaving your own normals in place,
+  and puts the removal on the undo stack — so an accidental toggle is one
+  Ctrl+Z away. That is the only way back out: while the mode is on, the pass
+  re-derives its lines every frame, so undo alone cannot get rid of them. If
+  you want to keep a generated normal permanently, edit its line — an edited
+  normal is a normal you typed, and Off will not touch it.
 
 Decluttered label scopes give active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,

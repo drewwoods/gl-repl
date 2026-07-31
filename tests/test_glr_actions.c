@@ -18,6 +18,7 @@
 #include "repl/workspace_io.h"
 #include "repl/help_text.h"
 #include "editor/input.h"
+#include "editor/undo.h"          /* editor_undo_pop_snapshot */
 #include "editor/state.h"                /* editor_state_edit_line_set */
 #include "editor/inline_rename.h"
 #include "repl/examples.h"
@@ -261,7 +262,7 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("autonormal Off", glr_state_presentation().autonormal,
                REPL_AUTONORMAL_OFF);
     ASSERT_STR("status autonormal Off", g_last_status,
-               "Auto-normals: Off (existing normals kept)");
+               "Auto-normals: Off");
 
     /* Test Point Attenuation */
     glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 0);
@@ -2442,6 +2443,65 @@ static void test_help_commands_tab_lists_if_branches(void) {
                                           "Fallback branch"));
 }
 
+
+/* Switching auto-normals off removes what the pass generated, and leaves an
+ * undo entry so an accidental toggle is recoverable. Both halves matter: the
+ * pass mutates the document from the display frame, so before this there was
+ * neither a way to remove the rows nor a Ctrl+Z to fall back on. */
+static void test_auto_normals_off_strips_generated_rows(void) {
+    int auto_normals_row = -1;
+    int doc_before, doc_with_normals;
+
+    printf("Testing auto-normals Off strips generated rows...\n");
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_AUTO_NORMALS)
+            auto_normals_row = i;
+    }
+    ASSERT_TRUE("auto-normals config row found", auto_normals_row >= 0);
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    doc_before = repl_state_document_count();
+
+    /* Generate: the controller normally runs this from the display frame. */
+    glr_state_presentation_mut()->autonormal = REPL_AUTONORMAL_FACE;
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    doc_with_normals = repl_state_document_count();
+    ASSERT_TRUE("pass generated at least one normal",
+                doc_with_normals > doc_before);
+
+    /* Cycle Face -> Smooth -> Off; only the Off step strips. */
+    glr_cfg_cycle_row(auto_normals_row, 1);
+    ASSERT_INT("cycled to Smooth", glr_state_presentation().autonormal,
+               REPL_AUTONORMAL_SMOOTH);
+    ASSERT_INT("Smooth keeps the generated rows",
+               repl_state_document_count(), doc_with_normals);
+
+    glr_cfg_cycle_row(auto_normals_row, 1);
+    ASSERT_INT("cycled to Off", glr_state_presentation().autonormal,
+               REPL_AUTONORMAL_OFF);
+    ASSERT_INT("Off removed the generated rows",
+               repl_state_document_count(), doc_before);
+    ASSERT_STR("status names the removal and the way back", g_last_status,
+               "Auto-normals: Off (1 generated normal removed, "
+               "Ctrl+Z to restore)");
+
+    /* The snapshot is the point: an accidental Off is recoverable, and with
+     * the mode now off nothing re-runs to strip the rows a second time. */
+    editor_undo_pop_snapshot();
+    ASSERT_INT("Ctrl+Z restores the stripped rows",
+               repl_state_document_count(), doc_with_normals);
+    repl_recompute_autonormals(glr_state_presentation().autonormal, NULL);
+    ASSERT_INT("and they stay restored while the mode is off",
+               repl_state_document_count(), doc_with_normals);
+}
+
 int main(void) {
     /* Before audio init, the actions layer must treat audio as disabled
      * (the --no-audio case): defaults application and the play/pause
@@ -2471,6 +2531,7 @@ int main(void) {
     test_keymap_binding_to_string();
     test_help_keys_tab_uses_keymap_labels();
     test_help_commands_tab_lists_if_branches();
+    test_auto_normals_off_strips_generated_rows();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
     test_fkey_reassignment_and_alt_shortcuts();
