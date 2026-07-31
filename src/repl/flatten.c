@@ -133,6 +133,16 @@ typedef struct {
     FlatCmdActiveLoop active_loops[MAX_FLATTEN_ACTIVE_LOOPS];
     int active_loop_count;
     int call_depth;
+    /* Pending break/continue, set by the CMD_BREAK / CMD_CONTINUE arms of
+     * flatten_range and consumed by the innermost enclosing
+     * flatten_for_loop. Every walk that can sit between the statement and
+     * its loop unwinds on it: flatten_range returns, flatten_if_block
+     * returns through it, and flatten_call clears it at the frame boundary
+     * (a callee's break must not reach the caller's loop, exactly as in C).
+     * Zero when no jump is in flight. */
+    enum { FLATTEN_LOOP_SIGNAL_NONE = 0,
+           FLATTEN_LOOP_SIGNAL_BREAK,
+           FLATTEN_LOOP_SIGNAL_CONTINUE } loop_signal;
     int abort;
     int visit_budget;
     char status[REPL_DIAG_TEXT_MAX];
@@ -429,6 +439,19 @@ static void flatten_for_loop(FlattenContext *ctx,
             if (var_deps)
                 var_deps[v] = ldeps[1 + v];
         }
+        /* Consume the jump *after* the copy-back: assignments the body ran
+         * before the break still happened, and dropping their values would
+         * make `for(i,0,n){ acc = acc+i; if(...) break; }` lose the last
+         * accumulation. CONTINUE just falls into the next iteration; BREAK
+         * ends the unroll. Either way the signal stops here — this is the
+         * innermost loop, so a nested loop's jump never reaches its
+         * parent. */
+        if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
+            int stop = (ctx->loop_signal == FLATTEN_LOOP_SIGNAL_BREAK);
+            ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
+            if (stop)
+                return;
+        }
     }
 }
 
@@ -634,6 +657,17 @@ static void flatten_call(FlattenContext *ctx,
                       i, nested_root_call, nested_func_mask);
         if (ctx->call_depth > 0) ctx->call_depth--;
         ctx->frame_has_locals = caller_has_locals;
+        /* Call-frame boundary for loop jumps. The parser rejects a break
+         * whose loop is not in the same function body, so reaching here
+         * with a signal means the document changed under a row that was
+         * valid when committed (the enclosing loop was deleted, say).
+         * Report it rather than letting the jump escape into whatever loop
+         * the *caller* happens to be in — that would be a silent
+         * miscompile against the exported C. */
+        if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
+            ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
+            flatten_fail(ctx, "break/continue outside a loop");
+        }
     } while (0);
 }
 
@@ -1334,6 +1368,30 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
     return rv;
 }
 
+/* Raise a pending loop jump. Kept out of flatten_range's body so the
+ * reasoning lives somewhere it can be read: the statement emits nothing,
+ * it only asks the walk to unwind to the innermost enclosing
+ * flatten_for_loop, which decides whether to start the next iteration or
+ * stop unrolling. A guarded jump needs no dep bookkeeping of its own —
+ * flatten_eval_if_line already notes the guarding condition's deps as
+ * structural, which is what forces a re-flatten (rather than a value-only
+ * rebake) when the condition's inputs change. */
+static void flatten_raise_loop_signal(FlattenContext *ctx, CmdType type) {
+    ctx->loop_signal = (type == CMD_BREAK) ? FLATTEN_LOOP_SIGNAL_BREAK
+                                           : FLATTEN_LOOP_SIGNAL_CONTINUE;
+}
+
+/* Source rows the expansion walk consumes without emitting anything: the
+ * block tails whose heads it already jumped over, the if-chain arm
+ * markers, comments and blank lines, and declarations (whose registration
+ * happened at commit time). */
+static int flatten_cmd_emits_nothing(CmdType type) {
+    return type == CMD_FOR_END || type == CMD_FUNC_END ||
+           type == CMD_COMMENT || type == CMD_EMPTY ||
+           type == CMD_VAR_DECLARE ||
+           flatten_cmd_is_source_only_cond_marker(type);
+}
+
 /* Recursively expand source_commands[start..end_idx) into the destination
  * flat buffer named by FlattenContext. For-loops are unrolled, function calls
  * are inlined, and if-blocks with loop-variable conditions are evaluated.
@@ -1351,6 +1409,9 @@ static void flatten_range(FlattenContext *ctx,
         const GLCmd *src_cmd = &ctx->source_cmds[i];
 
         if (ctx->abort) return;
+        /* A jump raised by an earlier row (or by a nested if-arm) stops this
+         * range dead — everything after it in the body is unreachable. */
+        if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) return;
         if (--ctx->visit_budget < 0) {
             flatten_fail(ctx, "Recursive expansion exceeded visit budget");
             return;
@@ -1366,15 +1427,16 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (src_cmd->type == CMD_FOR_END) { i++; continue; }
+        if (src_cmd->type == CMD_BREAK || src_cmd->type == CMD_CONTINUE) {
+            flatten_raise_loop_signal(ctx, src_cmd->type);
+            return;
+        }
 
         if (src_cmd->type == CMD_FUNC_DEF) {
             int func_end = flatten_repl_source_scope_find_block_end(ctx, i);
             i = (func_end < ctx->source_count) ? func_end + 1 : ctx->source_count;
             continue;
         }
-        if (src_cmd->type == CMD_FUNC_END) { i++; continue; }
-
         if (src_cmd->type == CMD_CALL) {
             flatten_call(ctx, src_cmd, i, vars, var_deps, nv,
                          root_call_src_cmd_idx, func_scope_mask);
@@ -1391,19 +1453,13 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (flatten_cmd_is_source_only_cond_marker(src_cmd->type)) { i++; continue; }
-
         if ((src_cmd->type == CMD_GOTO_LABEL || src_cmd->type == CMD_GOTO) &&
             func_scope_mask != 0) {
             flatten_fail(ctx, "goto and labels are not supported inside functions");
             return;
         }
 
-        if (src_cmd->type == CMD_COMMENT) { i++; continue; }
-
-        if (src_cmd->type == CMD_EMPTY) { i++; continue; }
-
-        if (src_cmd->type == CMD_VAR_DECLARE) { i++; continue; }
+        if (flatten_cmd_emits_nothing(src_cmd->type)) { i++; continue; }
 
         /* Variable assignments: update predefined var and pass through */
         if (src_cmd->type == CMD_VAR_ASSIGN) {
@@ -1541,6 +1597,13 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         prof_accum_commit(PROF_FLATTEN_REPARSE);
         prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
         prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
+    }
+    /* Same escape check as the call-frame boundary, for a top-level jump:
+     * a `break` whose loop was deleted out from under it fails the frame
+     * with a diagnostic instead of quietly truncating the program. */
+    if (ctx.loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
+        ctx.loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
+        flatten_fail(&ctx, "break/continue outside a loop");
     }
     if (ctx.abort) {
         ctx.flat_count = 0;

@@ -487,6 +487,8 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
     { "} else if(",          "} else if(expr)",                                          1, { "expr" } },
     { "} else {",            "} else {",                                                 0, { NULL } },
+    { "break;",              "break;",                                                   0, { NULL } },
+    { "continue;",           "continue;",                                                0, { NULL } },
     { "goto ",               "goto label",                                               0, { NULL } },
     REPL_FUNC_SLOT_LIST(FUNC_DECL_COMPLETION)
     REPL_FUNC_SLOT_LIST(FUNC_CALL_COMPLETION)
@@ -785,6 +787,8 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_STENCIL_MASK, "glStencilMask", 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FOR_BEGIN,                    1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_BREAK,                        1, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_CONTINUE,                     1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FUNC_DEF,                     1, CMD_CAT_FUNCTION),
     CMD_TYPE_SPEC(CMD_FUNC_END,                     1, CMD_CAT_FUNCTION),
     CMD_TYPE_SPEC(CMD_CALL,                         1, CMD_CAT_FUNCTION),

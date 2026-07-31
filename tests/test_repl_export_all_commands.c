@@ -467,9 +467,77 @@ static void test_auto_normal_marker_roundtrip(void) {
     remove(path);
 }
 
+/* break / continue are the two commands that produce no flat command at
+ * all — flatten consumes them while unrolling — so the mega-roundtrip's
+ * command inventory cannot cover them. They still have to survive export
+ * (where they are plain C keywords inside the generated `for`) and import
+ * (where the loader's parser must accept them at their loop depth). */
+static void test_loop_jump_roundtrip(void) {
+    const char *path = "/tmp/repl_export_loop_jumps.c";
+    char *export_text;
+    char *code_before;
+    char *code_after;
+    int diff_line = 0;
+    FILE *f;
+
+    repl_eval_init_predef_vars();
+    glr_ctrl_reset_all();
+    declare_test_vars();
+
+    editor_feed_line("for(i, 0, 8) {");
+    editor_feed_line("if(i > 5) {");
+    editor_feed_line("break;");
+    editor_feed_line("}");
+    editor_feed_line("if(i == 2) {");
+    editor_feed_line("continue;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+
+    ASSERT_TRUE("loop-jump rows committed",
+                repl_state_document_count() == 9);
+
+    code_before = dump_code_panel();
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    f = fopen(path, "r");
+    ASSERT_TRUE("loop-jump export opened", f != NULL);
+    export_text = f ? slurp_stream(f) : NULL;
+    if (f) fclose(f);
+
+    if (export_text) {
+        /* Both keywords mean in C exactly what they mean here, so they
+         * export as themselves rather than through a helper. */
+        ASSERT_TRUE("break exports as C break",
+                    strstr(export_text, "break;") != NULL);
+        ASSERT_TRUE("continue exports as C continue",
+                    strstr(export_text, "continue;") != NULL);
+    }
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    ASSERT_TRUE("loop-jump import succeeded",
+                repl_export_load_from_file(path, NULL) == 1);
+
+    code_after = dump_code_panel();
+    ASSERT_TRUE("loop-jump roundtrip is text-exact",
+                compare_text(code_before, code_after, &diff_line));
+    if (code_before && code_after &&
+        !compare_text(code_before, code_after, &diff_line)) {
+        printf("Loop-jump roundtrip mismatch at line %d\nBefore:\n%s\n\nAfter:\n%s\n",
+               diff_line, code_before, code_after);
+    }
+
+    free(export_text);
+    free(code_before);
+    free(code_after);
+    remove(path);
+}
+
 int main(void) {
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
+    test_loop_jump_roundtrip();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;

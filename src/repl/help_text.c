@@ -132,6 +132,8 @@ static const char *const k_lang_sections_tail[] = {
     "    glVertex3f(...)         \tend with }",
     "  }",
     "  Nesting supported up to 4 levels",
+    "  break;                   \tLeave the innermost enclosing loop",
+    "  continue;                \tSkip to that loop's next iteration",
     "",
     "Functions (func0..func9 or any user name, up to "
         _HELP_STR(MAX_FUNC_HINT_PARAMS) " params):",

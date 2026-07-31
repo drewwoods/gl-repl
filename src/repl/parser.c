@@ -102,6 +102,10 @@ static int parser_scope_in_begin_block_at(const ReplParseContext *ctx, int pos) 
     return repl_source_scope_view_in_begin_block_at(parser_source_scope(ctx), pos);
 }
 
+static int parser_scope_in_loop_at(const ReplParseContext *ctx, int pos) {
+    return repl_source_scope_view_in_loop_at(parser_source_scope(ctx), pos);
+}
+
 static void parser_scope_cmd_indent(const ReplParseContext *ctx,
                                     int pos, char *buf, int buf_sz) {
     repl_source_scope_view_cmd_indent(parser_source_scope(ctx), pos, buf, buf_sz);
@@ -1924,6 +1928,104 @@ static int check_trailing_garbage(const char *after, const ReplParseContext *ctx
     return 1;
 }
 
+/* Bare-keyword statements: the REPL forms that are a word (and maybe a
+ * label) rather than a `name(args)` call — `break`, `continue`,
+ * `goto name`, and `:name` / `name:` label definitions. Split out of
+ * parse_command so this keyword set can grow without the dispatcher
+ * doing.
+ *
+ * Returns 1 when the line parsed, 0 when it was one of these forms but
+ * invalid (diagnostic already emitted), and -1 when it is none of them —
+ * the caller then continues into its unknown-command reporting. `p` is
+ * the trimmed line with any trailing `;` already stripped; `len` is its
+ * length. */
+static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
+                                   char *text_out, int text_sz,
+                                   const ReplParseContext *ctx,
+                                   int source_line_idx) {
+    /* break / continue - leave the enclosing for-loop, or skip to its next
+     * iteration. Both are resolved entirely in flatten (which unrolls the
+     * loop), so neither ever reaches the flat program or the executor.
+     *
+     * The enclosing-loop check needs a source-scope view to answer; a
+     * context-free parse (tests, tools) has no document to walk, so it
+     * accepts the line and leaves the diagnostic to flatten, which fails
+     * the frame if the statement really has no loop to bind to. */
+    if (strcmp(p, "break") == 0 || strcmp(p, "continue") == 0) {
+        int is_break = (p[0] == 'b');
+        if (parser_source_scope(ctx) &&
+            !parser_scope_in_loop_at(ctx, source_line_idx)) {
+            parser_emit_error(ctx,
+                "'%s' is only valid inside a for-loop body", p);
+            return 0;
+        }
+        cmd->type = is_break ? CMD_BREAK : CMD_CONTINUE;
+        cmd->valid = 1;
+        cmd->num_args = 0;
+        {
+            char ind_str[REPL_INDENT_TEXT_MAX];
+            parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
+                                    (int)sizeof(ind_str));
+            write_text(text_out, text_sz, "%s%s;", ind_str, is_break ? "break" : "continue");
+        }
+        return 1;
+    }
+
+    /* goto label - jump to a named label.
+     *
+     * Current limitations:
+     * - top-level only; flatten rejects labels/gotos inside functions
+     * - executor updates control flow, assignments, and if-conditions, but
+     *   variable-driven GL commands inside goto loops are still using their
+     *   flattened args rather than being re-evaluated per jump
+     * - replay intentionally does not model dynamic goto traces
+     */
+    if (strncmp(p, "goto ", 5) == 0) {
+        const char *lname = p + 5;
+        while (*lname && isspace((unsigned char)*lname)) lname++;
+        /* Extract clean label name (strip trailing ; or whitespace) */
+        char clean_lname[REPL_GOTO_LABEL_MAX]; int ll = 0;
+        while (ll < REPL_GOTO_LABEL_MAX - 1 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
+            clean_lname[ll] = lname[ll]; ll++;
+        }
+        clean_lname[ll] = '\0';
+        if (ll > 0) {
+            cmd->type = CMD_GOTO;
+            cmd->valid = 1;
+            {
+                char ind_str[REPL_INDENT_TEXT_MAX];
+                parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
+                                        (int)sizeof(ind_str));
+                write_text(text_out, text_sz, "%sgoto %s;", ind_str, clean_lname);
+            }
+            return 1;
+        }
+    }
+
+    /* :label or label: - define a label */
+    if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
+        (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
+        cmd->type = CMD_GOTO_LABEL;
+        cmd->valid = 1;
+        /* labels go at column 0 in C */
+        if (p[0] == ':') {
+            write_text(text_out, text_sz, "%s:", p + 1);
+        } else {
+            char label[REPL_GOTO_LABEL_MAX];
+            int n = 0;
+            while (n < (int)sizeof(label) - 1 &&
+                   p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
+                label[n] = p[n];
+                n++;
+            }
+            label[n] = '\0';
+            write_text(text_out, text_sz, "%s:", label);
+        }
+        return 1;
+    }
+    return -1;
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
@@ -2182,57 +2284,11 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (strcmp(func, "gluColor") == 0)
         return parse_glu_color(args, cmd, text_out, text_sz, tess_indent, ctx);
 
-    /* goto label - jump to a named label.
-     *
-     * Current limitations:
-     * - top-level only; flatten rejects labels/gotos inside functions
-     * - executor updates control flow, assignments, and if-conditions, but
-     *   variable-driven GL commands inside goto loops are still using their
-     *   flattened args rather than being re-evaluated per jump
-     * - replay intentionally does not model dynamic goto traces
-     */
-    if (strncmp(p, "goto ", 5) == 0) {
-        const char *lname = p + 5;
-        while (*lname && isspace((unsigned char)*lname)) lname++;
-        /* Extract clean label name (strip trailing ; or whitespace) */
-        char clean_lname[REPL_GOTO_LABEL_MAX]; int ll = 0;
-        while (ll < REPL_GOTO_LABEL_MAX - 1 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
-            clean_lname[ll] = lname[ll]; ll++;
-        }
-        clean_lname[ll] = '\0';
-        if (ll > 0) {
-            cmd->type = CMD_GOTO;
-            cmd->valid = 1;
-            {
-                char ind_str[REPL_INDENT_TEXT_MAX];
-                parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
-                                        (int)sizeof(ind_str));
-                WRITE_TEXT("%sgoto %s;", ind_str, clean_lname);
-            }
-            return 1;
-        }
-    }
-
-    /* :label or label: - define a label */
-    if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
-        (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
-        cmd->type = CMD_GOTO_LABEL;
-        cmd->valid = 1;
-        /* labels go at column 0 in C */
-        if (p[0] == ':') {
-            WRITE_TEXT("%s:", p + 1);
-        } else {
-            char label[REPL_GOTO_LABEL_MAX];
-            int n = 0;
-            while (n < (int)sizeof(label) - 1 &&
-                   p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
-                label[n] = p[n];
-                n++;
-            }
-            label[n] = '\0';
-            WRITE_TEXT("%s:", label);
-        }
-        return 1;
+    {
+        int kw = parse_keyword_statement(p, len, cmd, text_out, text_sz,
+                                         ctx, source_line_idx);
+        if (kw >= 0)
+            return kw;
     }
 
 unknown_command:

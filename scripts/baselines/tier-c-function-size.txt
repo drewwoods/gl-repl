@@ -19,6 +19,11 @@
 #
 # 2026-07-14: re-tightened to current sizes (parse_command 361 -> 335,
 # flatten_range 92 -> 91) to close the slack the ratchet had accumulated.
+#
+# 2026-07-31: adding break/continue paid for itself. parse_command
+# 335 -> 289 after lifting the bare-keyword forms (break/continue/goto/
+# label) into parse_keyword_statement; flatten_range 91 -> 89 after
+# folding the emit-nothing arms into flatten_cmd_emits_nothing.
 
-parse_command: 335
-flatten_range: 91
+parse_command: 289
+flatten_range: 89

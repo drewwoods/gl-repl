@@ -1409,6 +1409,8 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
      * fold only ever sees their effect baked into the commands it does read. */
     case CMD_FOR_BEGIN:
     case CMD_FOR_END:
+    case CMD_BREAK:
+    case CMD_CONTINUE:
     case CMD_FUNC_DEF:
     case CMD_FUNC_END:
     case CMD_CALL:

@@ -389,6 +389,39 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     return repl_source_scope_view_nearest_open_block_at(live_source_scope_view(), pos);
 }
 
+/* Is `pos` inside a for-loop body that `break` / `continue` may target?
+ *
+ * Same open-block stack as nearest_open_block_at, but read from the
+ * innermost frame outward rather than just at the top: an if-block between
+ * the statement and its loop is transparent (C's rule), so
+ * `for { if { break; } }` is legal. A CMD_FUNC_DEF frame ends the search —
+ * a callee's break can no more escape into its caller's loop here than it
+ * can in C, and flatten enforces the same boundary at the call frame. */
+int repl_source_scope_view_in_loop_at(const ReplSourceScopeView *view,
+                                      int pos) {
+    CmdType stack[REPL_MAX_BLOCK_NEST_DEPTH];
+    int depth = 0;
+
+    if (!view || !view->cmds) return 0;
+    for (int i = 0; i < pos && i < view->count; i++) {
+        CmdType t = view->cmds[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH) stack[depth++] = t;
+        } else if (repl_cmd_is_block_end(t)) {
+            if (depth > 0) depth--;
+        }
+    }
+    while (depth-- > 0) {
+        if (stack[depth] == CMD_FOR_BEGIN) return 1;
+        if (stack[depth] == CMD_FUNC_DEF) return 0;
+    }
+    return 0;
+}
+
+int repl_source_scope_in_loop_at(int pos) {
+    return repl_source_scope_view_in_loop_at(live_source_scope_view(), pos);
+}
+
 static int source_scope_view_find_if_chain_head(const ReplSourceScopeView *view,
                                                 int line_idx) {
     int depth = 0;

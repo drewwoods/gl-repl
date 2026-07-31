@@ -344,7 +344,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 > ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
-  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L121), [`CmdType`](../src/repl/command.h#L44), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
+  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L122), [`CmdType`](../src/repl/command.h#L44), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
   [`TessVertex`](../src/repl/executor.h#L67), [`FlatCmdLocalVars`](../src/repl/flatten.h#L43), [`FlatProgramView`](../src/repl/flatten.h#L58),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L153), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
@@ -503,7 +503,7 @@ commands.
 | `repl_replace` | Whole-document rebuild (`repl_document_rebuild`) behind find-bar replace: replays substituted text through `repl_load_apply_line` under a [`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) that is restored wholesale if any line is rejected. A rename is invalid at every intermediate step, so this is a transaction, not a sequence of commits |
 | `repl_bootstrap` | Startup loading helpers (`repl_load_initial_commands`): the file/workspace/stdin/example load a session begins with, returning the post-load cursor target for the caller to apply. Positional `-` spools stdin to an anonymous seekable file before entering the shared multi-pass importer |
 | `repl_host_effects` | Host-installed side-effect bridge: status, cursor, input, completion, and tutorial effects owned *above* `src/repl` are reached through it, so uninstalled callbacks make pure tests and `repl_demo` no-op cleanly |
-| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L121) array mechanics only: insert, replace, delete, load. No text-buffer writes |
+| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L122) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_expr` + `repl_expr_program` | Expression side of flattening: dep masks + value-only rebake, and the compiled-expression cache the per-frame re-evaluation runs on |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
@@ -516,7 +516,7 @@ commands.
 | `src/repl/time` | `repl_set_time` and the transient-`t` handling the animation-blur sub-step path relies on |
 | `src/repl/keymap_format` | Renders [`keymap.h`](../keymap.h) bindings as text for the help overlay and `make keymap-list`, so the binding table is never transcribed by hand |
 
-[`GLCmd`](../src/repl/command.h#L121) is a parse-result record: type, args, flags, provenance. It does
+[`GLCmd`](../src/repl/command.h#L122) is a parse-result record: type, args, flags, provenance. It does
 not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L199).
 
 ### 2. Editor — text, cursor, navigation, commit, undo
@@ -693,7 +693,7 @@ Files that do not belong in this layer:
 
 | Module | Role |
 |--------|------|
-| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers. Split by output section — `export_prologue` (headers/`@cfg`/globals), `export_setup` (the generated `init()`), `export_display` (the `display()` body), `export_cmd_writer` (per-[`GLCmd`](../src/repl/command.h#L121) C text) — over the shared [`export_format_shared.h`](../src/repl/export_format_shared.h) helpers |
+| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers. Split by output section — `export_prologue` (headers/`@cfg`/globals), `export_setup` (the generated `init()`), `export_display` (the `display()` body), `export_cmd_writer` (per-[`GLCmd`](../src/repl/command.h#L122) C text) — over the shared [`export_format_shared.h`](../src/repl/export_format_shared.h) helpers |
 | `src/repl/export_glr` | The other writer: `.glr` scene source (File → Save Scene as .glr), the authoring format built-in examples ship in — non-default scene-subset `@cfg`, the `// camera` block, and the document text at column 0, with none of the standalone-C scaffold. Symmetric with `src/repl/example_loader`, which reads exactly that; the reader/writer pair moves together. Off-default detection uses the cfg bridge's `fill_scene_defaults` (app-side table over `CFG_DEFAULT_*`) |
 | `src/repl/import` | Reverses the exporter line-by-line, feeding geometry through [`editor_feed_line()`](../src/editor/input.h#L188). The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim between the two TUs on purpose |
 | `src/app/glr_mesh_export` + `src/support/mesh_ply` | PLY mesh export (File → Export .ply). `glr_mesh_export` (app, GL-coupled) runs the flat program in one `glRenderMode(GL_FEEDBACK)` pass under a fixed ortho transform; `mesh_ply` (pure, no-GL, neutral tier) parses the feedback stream → world coords → welded triangle mesh → ASCII PLY. Single capture path covers user geometry, GLU tess, and the GLUT solids |

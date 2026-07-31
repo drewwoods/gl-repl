@@ -87,6 +87,8 @@ int  repl_source_scope_view_find_block_end(const ReplSourceScopeView *view,
                                            int begin_idx);
 CmdType repl_source_scope_view_nearest_open_block_at(const ReplSourceScopeView *view,
                                                      int pos);
+int repl_source_scope_view_in_loop_at(const ReplSourceScopeView *view,
+                                      int pos);
 int repl_source_scope_view_block_extent(const ReplSourceScopeView *view,
                                         int line_idx,
                                         int *out_start, int *out_count);
@@ -159,6 +161,12 @@ int  repl_source_scope_cmd_indent_chars(int pos);
  * CMD_IF, or CMD_NONE if at top-level), used for validation and error messages. */
 int     repl_source_scope_find_block_end(int begin_idx);
 CmdType repl_source_scope_nearest_open_block_at(int pos);
+
+/* Returns 1 if `pos` sits inside a for-loop body that a `break` / `continue`
+ * statement there would bind to. If-blocks between the statement and the loop
+ * are transparent; an enclosing CMD_FUNC_DEF is a hard boundary. Used by the
+ * parser to reject a loop-less break/continue at commit time. */
+int repl_source_scope_in_loop_at(int pos);
 
 /* Return the inclusive [head..end] extent of a structured block. For
  * CMD_FOR_BEGIN / CMD_FUNC_DEF / CMD_IF_BEGIN rows, `line_idx` is the block

@@ -303,7 +303,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L121)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L122)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -345,7 +345,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
   nowhere: `flatten_bind_func_locals` re-derives them from
   `payload.decl.names[]` per call.
-- [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type`
+- [`GLCmd`](src/repl/command.h#L122) payload is a tagged union keyed on `type`
   (`payload.decl.*`, `payload.assign.prev_local_value`, `payload.label.fmt`,
   `payload.matrix.m[]`); other types must not read it. A flat local assignment
   captures its pre-write target value in the assignment arm because the
@@ -547,6 +547,7 @@ glPolygonMode(face, mode), glPolygonOffset(factor, units)
 glutSolidTorus/Cube/Sphere/Teapot/Cone, glRasterPos3f
 label("fmt", ...)              (bitmap text; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
+break;   continue;                (innermost enclosing loop, same func body)
 :name / goto name              (goto labels — not label())
 float name[, ...];    var = expr;    A[i] = expr;    // comment
 static float name[, ...];      (global from anywhere; plain `float` inside a

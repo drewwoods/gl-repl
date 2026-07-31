@@ -20,6 +20,8 @@ NON_GL_COMMANDS = {
     "CMD_DISABLE",
     "CMD_FOR_BEGIN",
     "CMD_FOR_END",
+    "CMD_BREAK",
+    "CMD_CONTINUE",
     "CMD_FUNC_DEF",
     "CMD_FUNC_END",
     "CMD_CALL",

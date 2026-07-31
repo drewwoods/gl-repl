@@ -1917,6 +1917,141 @@ done:
     return buf;
 }
 
+/* Count flat commands of one type in the live flat program. */
+static int count_flat_type(CmdType type) {
+    int n = 0;
+    for (int i = 0; i < repl_state_flat_program_count(); i++)
+        if (repl_state_flat_program_cmds()[i].type == type)
+            n++;
+    return n;
+}
+
+/* break / continue are resolved by flatten while it unrolls the loop, so
+ * every claim about them is a claim about the *shape* of the flat program:
+ * they emit nothing themselves, and what they change is how much of the
+ * body around them got emitted. */
+void test_loop_jump_commands(void) {
+    printf("--- break / continue ---\n");
+
+    /* 1. break stops the unroll at the guarded iteration. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 8) {");
+    editor_feed_line("if(i > 3) {");
+    editor_feed_line("break;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i,0,0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("break ends the unroll at the guard",
+               count_flat_type(CMD_VERTEX3F), 4);
+    ASSERT_INT("break itself emits no flat command",
+               count_flat_type(CMD_BREAK), 0);
+
+    /* 2. continue drops one iteration's body and keeps unrolling. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 5) {");
+    editor_feed_line("if(i == 2) {");
+    editor_feed_line("continue;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i,0,0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("continue skips exactly its own iteration",
+               count_flat_type(CMD_VERTEX3F), 4);
+    ASSERT_INT("continue itself emits no flat command",
+               count_flat_type(CMD_CONTINUE), 0);
+
+    /* 3. A jump binds to the innermost loop only: the outer loop still
+     * runs all three iterations, so its trailing command appears 3x. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("for(j, 0, 5) {");
+    editor_feed_line("if(j > 0) {");
+    editor_feed_line("break;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i,j,0);");
+    editor_feed_line("}");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("inner break leaves the outer loop running",
+               count_flat_type(CMD_COLOR3F), 3);
+    ASSERT_INT("inner break ends each inner pass after one vertex",
+               count_flat_type(CMD_VERTEX3F), 3);
+
+    /* 4. Writes the body made before the jump survive it — the loop copies
+     * iteration bindings back before consuming the signal. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("n = 0;");
+    editor_feed_line("for(i, 0, 8) {");
+    editor_feed_line("n = n + 1;");
+    editor_feed_line("if(i > 2) {");
+    editor_feed_line("break;");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    {
+        ReplVariableView vv = repl_state_variables();
+        int idx = repl_eval_find_predef_var_idx("n");
+        ASSERT_TRUE("accumulator var found", idx >= 0);
+        if (idx >= 0)
+            ASSERT_TRUE("assignment before the break is kept",
+                        vv.vars[idx].value == 4.0f);
+    }
+
+    /* 5. A loop inside a function is the callee's own: the jump resolves
+     * there and does not escape into the caller's loop. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0(n) {");
+    editor_feed_line("for(k, 0, 4) {");
+    editor_feed_line("if(k > n) {");
+    editor_feed_line("break;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(k,n,0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("for(i, 0, 2) {");
+    editor_feed_line("func0(i);");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("callee break does not end the caller's loop",
+               count_flat_type(CMD_COLOR3F), 2);
+    ASSERT_INT("callee break ends only the callee's loop, per call",
+               count_flat_type(CMD_VERTEX3F), 3);  /* n=0 -> 1, n=1 -> 2 */
+
+    /* 6. Commit rejects a jump with no loop to bind to — at top level and
+     * inside a function body whose loops are all elsewhere. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("top-level break rejected",
+                editor_feed_line("break;") == 0);
+    ASSERT_TRUE("top-level continue rejected",
+                editor_feed_line("continue;") == 0);
+    ASSERT_INT("rejected jump commits no row", repl_state_document_count(), 0);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    ASSERT_TRUE("break in a loop-less function body rejected",
+                editor_feed_line("break;") == 0);
+
+    /* 7. An if-block between the statement and its loop is transparent,
+     * as in C — that is the case the rejection must not catch. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("if(i > 0) {");
+    ASSERT_TRUE("break under an if inside a loop is accepted",
+                editor_feed_line("break;") == 1);
+
+    /* 8. The interactive `;` key hands the parser a line *without* the
+     * semicolon, so both spellings have to commit. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 3) {");
+    ASSERT_TRUE("break commits without a trailing semicolon",
+                editor_feed_line("break") == 1);
+    ASSERT_TRUE("continue commits without a trailing semicolon",
+                editor_feed_line("continue") == 1);
+}
+
 void test_var_declare_cmd() {
     printf("--- CMD_VAR_DECLARE coverage ---\n");
 
@@ -2131,6 +2266,7 @@ int main(int argc, char **argv) {
     test_in_example_toggles_dont_leak_to_user_scene();
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
+    test_loop_jump_commands();
     test_time();
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);
