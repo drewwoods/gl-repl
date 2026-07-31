@@ -546,6 +546,38 @@ static void test_smooth_front_face_cw(void) {
     ASSERT_FLOAT("smooth cw: lone v2 z", repl_state_document_cmds_mut()[6].args[2], -1.0f);
 }
 
+/* Tessellated geometry is outside the pass entirely, in BOTH modes: the
+ * walk only enters CMD_BEGIN blocks and only collects CMD_VERTEX3F /
+ * CMD_VERTEX2F, while gluVertex rows (CMD_TESS_VERTEX) live in a
+ * gluBegin(GLU_POLYGON) / GLU_CONTOUR block and feed off their own
+ * gluNormal (CMD_TESS_NORMAL). Nothing synthesizes a gluNormal today —
+ * this pins that, so adding tess support is a deliberate change with a
+ * failing test rather than a silent one. */
+static void test_tess_block_is_untouched(void) {
+    printf("test_tess_block_is_untouched\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("gluVertex(0, 1, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    int cmds_before = repl_state_document_count();
+
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    ASSERT_INT("tess: face mode adds nothing",
+               repl_state_document_count(), cmds_before);
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+    ASSERT_INT("tess: smooth mode adds nothing",
+               repl_state_document_count(), cmds_before);
+
+    for (int i = 0; i < repl_state_document_count(); i++)
+        ASSERT_INT("tess: no synthesized rows",
+                   repl_state_document_cmds_mut()[i].is_auto, 0);
+}
+
 /* Switching mode on an already-normalled document rewrites the existing
  * is_auto rows in place instead of inserting a second set. */
 static void test_smooth_rewrites_existing_auto_rows(void) {
@@ -580,6 +612,7 @@ int main(void) {
     test_smooth_weld_is_exact();
     test_smooth_triangle_strip_stays_unit();
     test_smooth_front_face_cw();
+    test_tess_block_is_untouched();
     test_smooth_rewrites_existing_auto_rows();
 
     return test_harness_report(&g_harness, "test_repl_autonormal");
