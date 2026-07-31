@@ -1926,6 +1926,9 @@ check-user-guide-keymap: ## Validate USER_GUIDE shortcut claims against keymap.h
 check-user-guide-examples: ## Validate docs' example references and USER_GUIDE's catalog table.
 	@python3 scripts/check/check-user-guide-examples.py
 
+check-user-guide-commands: ## Validate every REPL command is listed in USER_GUIDE.md (or explicitly exempt).
+	@python3 scripts/check/check-user-guide-commands.py
+
 check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
 	@bash scripts/keymap.sh check
 
@@ -1987,6 +1990,7 @@ CHECK_TARGETS = \
 	check-doc-links \
 	check-user-guide-keymap \
 	check-user-guide-examples \
+	check-user-guide-commands \
 	check-examples-catalog \
 	check-tours-catalog \
 	check-command-descriptions \
