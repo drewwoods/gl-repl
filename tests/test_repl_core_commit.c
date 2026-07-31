@@ -43,6 +43,39 @@
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
+/* Fake EditorClipboardHostBridge, standing in for the OS clipboard that
+ * src/app/glr_clipboard.c bridges to on the native builds. `g_bridge_external`
+ * is what the "system clipboard" holds that we have not seen before; NULL is
+ * the bridge's way of saying nothing outside has changed. */
+static char g_bridge_published[4096];
+static int  g_bridge_publish_count;
+static const char *g_bridge_external;
+
+static void clipboard_bridge_reset(void) {
+    g_bridge_published[0] = '\0';
+    g_bridge_publish_count = 0;
+    g_bridge_external = NULL;
+}
+
+static void test_bridge_publish(const char *text) {
+    snprintf(g_bridge_published, sizeof(g_bridge_published), "%s",
+             text ? text : "");
+    g_bridge_publish_count++;
+}
+
+static const char *test_bridge_poll_external(void) {
+    const char *text = g_bridge_external;
+    /* One-shot, like the real bridge: adopting counts as syncing, so the
+     * same external text is not re-staged on the next paste. */
+    g_bridge_external = NULL;
+    return text;
+}
+
+static const EditorClipboardHostBridge g_test_clipboard_bridge = {
+    test_bridge_publish,
+    test_bridge_poll_external,
+};
+
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
@@ -2855,6 +2888,60 @@ int main(void) {
                     editor_clipboard_cut_current_with_result() == 1);
         ASSERT_TRUE("cut-result: doc shrank by one",
                     repl_state_document_count() == doc_count_before_cut - 1);
+    }
+
+    /* EditorClipboardHostBridge: the OS-clipboard seam the native builds
+     * install (src/app/glr_clipboard.c). Driven here with a fake bridge, so
+     * the behavior is pinned without a system clipboard in the loop. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_BLEND);");
+        editor_feed_line("glDisable(GL_BLEND);");
+
+        clipboard_bridge_reset();
+        editor_clipboard_install_host_bridge(&g_test_clipboard_bridge);
+
+        /* Copy mirrors the payload out. */
+        editor_navigate_to_line(0);
+        editor_clipboard_copy_current();
+        ASSERT_TRUE("bridge: copy published once",
+                    g_bridge_publish_count == 1);
+        ASSERT_TRUE("bridge: published text is the copied line",
+                    strstr(g_bridge_published, "glEnable(GL_BLEND);") != NULL);
+
+        /* A blocked copy must leave the OS clipboard alone: whatever the
+         * user has out there is not ours to overwrite on a no-op. */
+        editor_handle_key('\r', 0, 0);        /* insert mode, no selection */
+        editor_clipboard_copy_current();
+        ASSERT_TRUE("bridge: blocked copy publishes nothing",
+                    g_bridge_publish_count == 1);
+        editor_handle_key(27 /* Esc */, 0, 0);
+
+        /* Nothing new outside (poll returns NULL): paste uses the internal
+         * payload, which is what preserves its kind and line range. */
+        int count_before = repl_state_document_count();
+        g_bridge_external = NULL;
+        editor_navigate_to_line(repl_state_document_count() - 1);
+        editor_clipboard_paste_current();
+        ASSERT_TRUE("bridge: paste with no external change inserts the copy",
+                    repl_state_document_count() == count_before + 1);
+
+        /* Foreign multi-line text is adopted and pasted as source lines. */
+        count_before = repl_state_document_count();
+        g_bridge_external = "glShadeModel(GL_FLAT);\nglDepthMask(GL_FALSE);";
+        editor_clipboard_paste_current();
+        ASSERT_TRUE("bridge: external multi-line paste inserts both lines",
+                    repl_state_document_count() == count_before + 2);
+
+        /* A trailing newline must not add an empty command (which would
+         * fail the whole paste as an unparseable line). */
+        count_before = repl_state_document_count();
+        g_bridge_external = "glPointSize(3);\n";
+        editor_clipboard_paste_current();
+        ASSERT_TRUE("bridge: trailing newline adds exactly one line",
+                    repl_state_document_count() == count_before + 1);
+
+        editor_clipboard_install_host_bridge(NULL);
     }
 
     printf("repl_core_commit: %d/%d passed\n", g_harness.passed, g_harness.run);

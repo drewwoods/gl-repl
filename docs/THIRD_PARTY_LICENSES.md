@@ -9,14 +9,16 @@ reproduced (or pointed to) below; all are permissive.
 
 - **Upstream:** <https://github.com/freeglut/freeglut> (currently vendored from
   a fork that adds the headless OSMesa backend, env/signal-gated frame
-  capture on the windowed backends, and an Emscripten/WebAssembly platform
-  backend; see `VENDORED.txt`).
+  capture on the windowed backends, an Emscripten/WebAssembly platform
+  backend, a high-resolution stroke font, and clipboard access
+  (`glutSetClipboardString` / `glutGetClipboardString`, Cocoa); see
+  `VENDORED.txt`).
 - **Vendored at:** `third_party/freeglut/` (built as a static library on macOS —
   Cocoa backend by default, the headless OSMesa backend under
   `make ... FREEGLUT_OSMESA=1`, or the Emscripten backend under
   `make ... WEB=1`). See `third_party/freeglut/VENDORED.txt` for the
   exact pinned source + commit; at time of writing it is
-  `a76da52bc7abf21bc10eb8ceebba4ac7f359ab9c`.
+  `e1a7d181e135c2e6efde03ca49fc127be61ee0a1`.
 - **License:** X-Consortium / MIT-style (the freeglut license).
 
 The full contributor list lives in `third_party/freeglut/AUTHORS` (current

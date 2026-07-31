@@ -227,6 +227,20 @@ FGAPI GLUTproc FGAPIENTRY glutGetProcAddress( const char *procName );
 FGAPI void FGAPIENTRY glutSwapInterval(int n);
 
 /*
+ * Clipboard access as UTF-8 text, see fg_clipboard.c
+ */
+
+#define GLUT_HAS_CLIPBOARD 1
+
+/* glutGetClipboardString() returns NULL when the clipboard holds no text --
+ * including on the backends that have no implementation yet, so an
+ * application may call it unconditionally. The returned string is owned by
+ * freeglut and stays valid until the next call to it or until freeglut is
+ * deinitialised; copy it if you need to keep it. */
+FGAPI void        FGAPIENTRY glutSetClipboardString( const char *string );
+FGAPI const char* FGAPIENTRY glutGetClipboardString( void );
+
+/*
  * Multi-touch/multi-pointer extensions
  */
 

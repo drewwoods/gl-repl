@@ -63,4 +63,33 @@ void editor_clipboard_paste_current(void);   /* paste buffer at edit line */
 int editor_clipboard_copy_current_with_result(void);
 int editor_clipboard_cut_current_with_result(void);
 
+/* --- OS clipboard bridge ----------------------------------------------- */
+
+/*
+ * Optional bridge to the window system's clipboard, installed by the app
+ * (src/app/glr_clipboard.c) so this module keeps making no platform calls
+ * of its own. With no bridge installed the internal buffer is the whole
+ * story — that is what the tests, the editor demo, and the web build (whose
+ * OS clipboard arrives through the DOM instead, see glr_web_io.c) run with.
+ *
+ * The internal clipboard stays the thing that is pasted: the bridge only
+ * mirrors it outward on copy/cut, and replaces it on paste when something
+ * else has since taken ownership outside. That ordering is what preserves
+ * the payload kind and the block-aware line ranges across a copy/paste that
+ * never left the app, which a plain-text round trip through the OS would
+ * flatten.
+ */
+typedef struct {
+    /* Mirror freshly copied/cut clipboard text out to the OS clipboard. */
+    void (*publish)(const char *text);
+
+    /* OS clipboard text if it differs from what we last published or
+     * consumed, else NULL. NULL means "nothing new outside". */
+    const char *(*poll_external)(void);
+} EditorClipboardHostBridge;
+
+/* NULL uninstalls. The bridge is stored by pointer, not copied, so it must
+ * outlive the editor (a file-scope static in the installing module). */
+void editor_clipboard_install_host_bridge(const EditorClipboardHostBridge *bridge);
+
 #endif /* EDITOR_CLIPBOARD_H */

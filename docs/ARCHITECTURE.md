@@ -1406,7 +1406,7 @@ The build system enforces a stub-free boundary:
 
 ### Host Bridges & Boundary Mechanisms
 
-The app controller installs four boundary mechanisms at startup.
+The app controller installs five boundary mechanisms at startup.
 
 #### 1. Source-Document Port ([`source_document.h`](../source_document.h))
 
@@ -1436,7 +1436,30 @@ values through these seams:
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
 | [`ReplExportLayout`](../src/repl/export.h#L234) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
-#### 4. Global State Reset & Dispatch Separation
+#### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
+
+[`glr_clipboard_install()`](../src/app/glr_clipboard.h#L26) gives the editor a
+way to reach the system clipboard without the editor band making a platform
+call: `publish` mirrors a completed copy/cut outward, `poll_external` reports
+the system clipboard on paste **only when it differs** from what we last
+published or adopted.
+
+That asymmetry is the design. The internal
+[`EditorClipboardState`](../src/editor/state.h#L106) stays the thing that is
+pasted, so a copy/paste that never left the app keeps its payload kind
+(LINES vs. INPUT_TEXT) and its block-aware line range — round-tripping every
+paste through plain OS text would flatten both. Foreign text has no kind, so
+it is classified on adoption: multi-line becomes source lines, a single line
+becomes input text when an input selection or insert mode can receive it.
+
+Backend selection is compile-time, in [`glr_clipboard.c`](../src/app/glr_clipboard.c) alone: freeglut's
+`glutSetClipboardString`/`glutGetClipboardString` under `GLUT_HAS_CLIPBOARD`
+(implemented on the vendored fork's Cocoa backend; the others return an empty
+clipboard until theirs lands), `pbcopy`/`pbpaste` on the `make glut`
+Apple-framework build, and none on web — where the clipboard arrives as DOM
+events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is installed at all.
+
+#### 5. Global State Reset & Dispatch Separation
 
 - **Dispatch:** Pure structured-block validators remain in
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor

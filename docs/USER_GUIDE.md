@@ -263,7 +263,10 @@ parameter hint after the open paren names that definition's parameters.
 ### Editing what's there
 
 Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
-(**Ctrl+Z / Ctrl+Y**) work like a normal editor. Right-click a GL command for
+(**Ctrl+Z / Ctrl+Y**) work like a normal editor. Copy and cut also put the text
+on the **system clipboard**, so it pastes into any other app, and Ctrl+V takes
+text copied from anywhere else — multi-line text arrives as source lines, a
+single line lands in the input row when you are editing one. Right-click a GL command for
 a short description, or an assignment for [a plot of its
 values](#plotting-an-assignments-values). **Ctrl+D** deletes the current line or selection;
 **Ctrl+L** clears the scene and restores the [five editable display

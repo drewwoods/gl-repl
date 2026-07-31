@@ -17,6 +17,7 @@
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* (scene-subset baseline) */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
+#include "app/glr_clipboard.h"       /* glr_clipboard_read_text (Load Scene from Clipboard) */
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
@@ -174,8 +175,6 @@ static int save_workspace_including_visible_scene(
     return repl_save_workspace(dir, layout);
 }
 
-#define GLR_CLIPBOARD_MAX_BYTES (1024 * 1024)
-
 static char *glr_copy_text_range(const char *start, size_t len) {
     char *out = (char *)malloc(len + 1);
     if (!out)
@@ -203,80 +202,6 @@ static char *glr_scene_text_from_clipboard_text(const char *clipboard_text) {
     return glr_copy_text_range(clipboard_text, strlen(clipboard_text));
 }
 
-static char *glr_system_clipboard_read_text(char *err, int err_sz) {
-    if (err && err_sz > 0)
-        err[0] = '\0';
-#if defined(__APPLE__)
-    FILE *pipe = popen("/usr/bin/pbpaste", "r");
-    if (!pipe) {
-        if (err && err_sz > 0)
-            snprintf(err, (size_t)err_sz, "Clipboard read failed");
-        return NULL;
-    }
-
-    size_t cap = 4096;
-    size_t len = 0;
-    char *buf = (char *)malloc(cap);
-    if (!buf) {
-        pclose(pipe);
-        if (err && err_sz > 0)
-            snprintf(err, (size_t)err_sz, "Clipboard load: out of memory");
-        return NULL;
-    }
-
-    char chunk[1024];
-    size_t nread;
-    while ((nread = fread(chunk, 1, sizeof(chunk), pipe)) > 0) {
-        if (len + nread + 1 > GLR_CLIPBOARD_MAX_BYTES) {
-            free(buf);
-            pclose(pipe);
-            if (err && err_sz > 0)
-                snprintf(err, (size_t)err_sz, "Clipboard text is too large");
-            return NULL;
-        }
-        if (len + nread + 1 > cap) {
-            size_t new_cap = cap;
-            while (len + nread + 1 > new_cap)
-                new_cap *= 2;
-            char *next = (char *)realloc(buf, new_cap);
-            if (!next) {
-                free(buf);
-                pclose(pipe);
-                if (err && err_sz > 0)
-                    snprintf(err, (size_t)err_sz, "Clipboard load: out of memory");
-                return NULL;
-            }
-            buf = next;
-            cap = new_cap;
-        }
-        memcpy(buf + len, chunk, nread);
-        len += nread;
-    }
-
-    int read_failed = ferror(pipe);
-    int close_status = pclose(pipe);
-    if (read_failed || (close_status != 0 && len == 0)) {
-        free(buf);
-        if (err && err_sz > 0)
-            snprintf(err, (size_t)err_sz, "Clipboard read failed");
-        return NULL;
-    }
-    if (len == 0) {
-        free(buf);
-        if (err && err_sz > 0)
-            snprintf(err, (size_t)err_sz, "Clipboard is empty");
-        return NULL;
-    }
-    buf[len] = '\0';
-    return buf;
-#else
-    if (err && err_sz > 0)
-        snprintf(err, (size_t)err_sz,
-                 "Load Scene from Clipboard is macOS-only");
-    return NULL;
-#endif
-}
-
 static void glr_set_clipboard_scene_load_error(ReplSceneLoadStatus reason) {
     switch (reason) {
     case REPL_SCENE_LOAD_ERR_EMPTY_PATH:
@@ -296,7 +221,7 @@ static void glr_set_clipboard_scene_load_error(ReplSceneLoadStatus reason) {
 
 static void glr_action_load_scene_from_clipboard(void) {
     char err[REPL_STATUS_TEXT_MAX];
-    char *clipboard_text = glr_system_clipboard_read_text(err, (int)sizeof(err));
+    char *clipboard_text = glr_clipboard_read_text(err, (int)sizeof(err));
     if (!clipboard_text) {
         repl_set_status_error(err[0] ? err : "Clipboard read failed");
         return;

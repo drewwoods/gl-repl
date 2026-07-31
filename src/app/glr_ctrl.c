@@ -104,6 +104,7 @@
 #include "ui/core/tabbed_overlay.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
+#include "app/glr_clipboard.h"        /* glr_clipboard_install (OS clipboard) */
 #include "app/glr_color_picker_bridge.h"
 #include "app/glr_ctrl_internal.h"
 #include "app/glr_modal.h"
@@ -3390,6 +3391,9 @@ static void glr_ctrl_install_app_services(void) {
     variable_panel_install_value_source(&g_glr_var_value_source);
     /* Color-picker host: document read/write + screen geometry. */
     glr_color_picker_install_host();
+    /* OS-clipboard bridge: mirrors editor copy/cut out to the system
+     * clipboard and adopts it on paste when another app has taken it over. */
+    glr_clipboard_install();
     /* Install the export-config bridge for @cfg headers and per-scene config snapshotting. */
     glr_actions_install_export_cfg_bridge();
     /* Install the export-camera bridge for // camera blocks serialization. */

@@ -29,6 +29,121 @@
 
 static EditorUndoSnapshot g_clipboard_paste_rollback_snapshot;
 
+/* Installed by the app on the native builds; NULL everywhere else. See the
+ * EditorClipboardHostBridge contract in clipboard.h. */
+static const EditorClipboardHostBridge *g_host_bridge = NULL;
+
+void editor_clipboard_install_host_bridge(const EditorClipboardHostBridge *bridge) {
+    g_host_bridge = bridge;
+}
+
+/* Serializes the internal clipboard to plain text and hands it to the host.
+ * Called only where a copy/cut actually produced a payload: a blocked one
+ * (var-decl guard, tutorial guard, nothing selected) must leave whatever the
+ * user has in the OS clipboard alone. */
+static void clipboard_publish_to_host(void) {
+    const EditorClipboardState *cb;
+
+    if (!g_host_bridge || !g_host_bridge->publish)
+        return;
+
+    cb = editor_state_clipboard();
+
+    if (cb->kind == EDITOR_CLIPBOARD_INPUT_TEXT) {
+        char text[MAX_INPUT_LEN];
+        int len = cb->input_text_len;
+        if (len < 0 || len >= (int)sizeof(text))
+            len = (int)sizeof(text) - 1;
+        memcpy(text, cb->input_text, (size_t)len);
+        text[len] = '\0';
+        g_host_bridge->publish(text);
+        return;
+    }
+
+    if (cb->kind == EDITOR_CLIPBOARD_LINES && cb->line_count > 0) {
+        /* Newline-joined, no trailing newline — sized from the payload
+         * rather than the MAX_EDITOR_COMMANDS x MAX_LINE_LEN worst case,
+         * same as the paste path below. */
+        size_t total = 1;
+        char *text;
+        char *p;
+
+        for (int i = 0; i < cb->line_count; i++)
+            total += strlen(cb->lines[i]) + 1;
+
+        text = malloc(total);
+        if (!text)
+            return;
+
+        p = text;
+        for (int i = 0; i < cb->line_count; i++) {
+            size_t len = strlen(cb->lines[i]);
+            memcpy(p, cb->lines[i], len);
+            p += len;
+            if (i + 1 < cb->line_count)
+                *p++ = '\n';
+        }
+        *p = '\0';
+
+        g_host_bridge->publish(text);
+        free(text);
+    }
+}
+
+/* Splits external text on '\n' (tolerating a '\r' before it) into the
+ * line clipboard, dropping empty segments — in particular the trailing one
+ * a terminal newline produces, which would otherwise fail the whole paste
+ * as an empty command. Clamped to the clipboard's capacity. */
+static void clipboard_stage_external_lines(const char *text) {
+    EditorClipboardState *cb = editor_state_clipboard_mut();
+    const char *p = text;
+    int n = 0;
+
+    while (*p && n < MAX_EDITOR_COMMANDS) {
+        const char *eol = strchr(p, '\n');
+        size_t len = eol ? (size_t)(eol - p) : strlen(p);
+
+        if (len > 0 && p[len - 1] == '\r')
+            len--;
+        if (len > 0) {
+            if (len >= MAX_LINE_LEN)
+                len = MAX_LINE_LEN - 1;
+            memcpy(cb->lines[n], p, len);
+            cb->lines[n][len] = '\0';
+            n++;
+        }
+        if (!eol)
+            break;
+        p = eol + 1;
+    }
+
+    editor_state_clipboard_count_set(n);
+}
+
+/* Adopts the OS clipboard when something outside the app has taken it over
+ * since our last copy. Plain text carries no payload kind, so it is
+ * classified the same way the web bridge classifies a foreign paste:
+ * anything multi-line is source lines, a single line lands in the input
+ * buffer when the cursor is somewhere it can (an active input selection or
+ * insert mode), and otherwise it is a source line too. */
+static void clipboard_adopt_external_if_changed(void) {
+    const char *text;
+
+    if (!g_host_bridge || !g_host_bridge->poll_external)
+        return;
+
+    text = g_host_bridge->poll_external();
+    if (!text || !text[0])
+        return;
+
+    if (strchr(text, '\n'))
+        clipboard_stage_external_lines(text);
+    else if (editor_input_selection_active() || editor_insert_mode())
+        editor_clipboard_set_input_text(text, (int)strlen(text));
+    else
+        clipboard_stage_external_lines(text);
+}
+
 static int tutorial_guard_clipboard_change_or_status(int pos,
                                                      int delete_count,
                                                      int insert_count) {
@@ -340,8 +455,13 @@ int editor_clipboard_copy_current_with_result(void) {
     return result;
 }
 
+/* The host bridge is driven from these two wrappers rather than from the
+ * _with_result twins they call: the web build calls the twins and exports the
+ * payload to JavaScript itself (glr_web_io.c), and has no native bridge
+ * installed to publish through anyway. */
 void editor_clipboard_copy_current(void) {
-    (void)editor_clipboard_copy_current_with_result();
+    if (editor_clipboard_copy_current_with_result())
+        clipboard_publish_to_host();
 }
 
 int editor_clipboard_cut_current_with_result(void) {
@@ -379,10 +499,13 @@ int editor_clipboard_cut_current_with_result(void) {
 }
 
 void editor_clipboard_cut_current(void) {
-    (void)editor_clipboard_cut_current_with_result();
+    if (editor_clipboard_cut_current_with_result())
+        clipboard_publish_to_host();
 }
 
 void editor_clipboard_paste_current(void) {
+    clipboard_adopt_external_if_changed();
+
     switch (editor_state_clipboard_kind()) {
     case EDITOR_CLIPBOARD_EMPTY:
         repl_set_status("Clipboard empty");

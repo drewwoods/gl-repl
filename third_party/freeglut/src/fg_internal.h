@@ -1161,6 +1161,16 @@ void fghCaptureInit( void );
 void fghCaptureTick( void );
 void fghCaptureOnSwap( SFG_Window *window );
 
+/* Clipboard access (fg_clipboard.c). A backend supplies the conversion only:
+ * fgPlatformGetClipboardString() returns a freshly allocated UTF-8 string,
+ * or NULL for "no text", which fg_clipboard.c caches and frees --
+ * fghClipboardDeinitialise() drops that cache from fgDeinitialize(). Both
+ * platform hooks have no-op fallbacks in fg_clipboard.c for the backends
+ * that do not implement them yet. */
+void fghClipboardDeinitialise( void );
+void fgPlatformSetClipboardString( const char *string );
+char *fgPlatformGetClipboardString( void );
+
 SFG_Proc fgPlatformGetProcAddress( const char *procName );
 
 void fgPlatformInitSwapCtl(void);

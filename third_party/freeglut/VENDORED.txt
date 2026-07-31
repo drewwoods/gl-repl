@@ -1,11 +1,11 @@
 freeglut vendored into this tree.
 
 upstream: https://github.com/drewwoods/freeglut
-ref:      emscripten-backend
-sha:      24fe13f28e6c7ed37c815ec717e58ba3c55c6f15
+ref:      cocoa-clipboard
+sha:      e1a7d181e135c2e6efde03ca49fc127be61ee0a1
 
 Produced by:
-  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh emscripten-backend
+  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh cocoa-clipboard
 
 Do NOT edit the vendored tree by hand; re-run the command above (with a
 different <ref>, or FREEGLUT_REPO, to update) instead. The Makefile's

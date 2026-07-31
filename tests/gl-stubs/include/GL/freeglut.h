@@ -184,6 +184,14 @@ static inline GLUTproc glutGetProcAddress(const char *name) {
 }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
 static inline void glutSetWindowTitle(const char *title) { (void)title; }
+
+/* Clipboard (vendored-freeglut extension). Declaring GLUT_HAS_CLIPBOARD keeps
+ * the stub build on the same branch of src/app/glr_clipboard.c that the real
+ * build takes; a stub clipboard is simply always empty, so a paste falls back
+ * to the editor's internal buffer -- which is what the tests exercise. */
+#define GLUT_HAS_CLIPBOARD 1
+static inline void glutSetClipboardString(const char *string) { (void)string; }
+static inline const char *glutGetClipboardString(void) { return (const char *)0; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline void glutBitmapString(void *font, const unsigned char *string) {
     const unsigned char *ch = string;

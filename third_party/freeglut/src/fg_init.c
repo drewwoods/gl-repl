@@ -244,6 +244,8 @@ void fgDeinitialize( void )
 
     fgPlatformDeinitialiseInputDevices ();
 
+    fghClipboardDeinitialise ();
+
     fgState.MouseWheelTicks = 0;
 
     fgState.MajorVersion = 1;
