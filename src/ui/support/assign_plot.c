@@ -455,8 +455,8 @@ static int ap_y_axis_log(double lo, double hi, ApYAxis *out) {
 /* Resolve the axis for this frame's columns. `want_log` is the chip; the data
  * picks which log axis that means. Strictly-positive data keeps the plain
  * log10 axis — it has a real bottom end and no need of a floor, so nothing
- * that worked before changes — and anything crossing or touching zero gets the
- * symmetric one. */
+ * that worked before changes — and any range containing non-positive values,
+ * including an entirely negative one, gets the symmetric axis. */
 static int ap_y_axis(const AssignPlotView *plot, int want_log, ApYAxis *out) {
     double lo, hi;
     if (!ap_col_extent(plot, &lo, &hi)) return 0;

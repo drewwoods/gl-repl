@@ -1021,6 +1021,8 @@ and one added mid-history is back-filled with gaps rather than starting short
 and being stretched across captures it never saw. In `X_EXEC` mode series may
 legitimately differ in execution count (two loops of different lengths), so
 each is spread across the full width and X reads as normalized progress.
+A frozen `once` capture is the exception: adding a row clears and re-arms the
+one-shot so every series in that snapshot comes from the same frame.
 
 Y is shared and deliberately so — comparison is the point — which does mean
 series of very different magnitudes flatten each other; the per-series

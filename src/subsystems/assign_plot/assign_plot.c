@@ -204,21 +204,14 @@ static void assign_plot_append_frame_column(AssignPlotSeries *s,
     s->cols[s->col_count].hi = valid ? hi : 0.0f;
     s->cols[s->col_count].valid = valid;
     s->col_count++;
-    /* The statistics take the endpoints, not the column: for the ordinary
-     * once-per-frame row they are the same value, and for a row folded from
-     * several executions they are the two that matter. */
-    if (valid) {
-        runstats_record(&s->stats, (double)lo);
-        if (hi > lo) runstats_record(&s->stats, (double)hi);
-    }
 }
 
-/* The min/max envelope of everything `source_line_idx` produced this frame.
+/* The min/max envelope of everything this series produced this frame.
  * The primary series always contributes exactly one value in X_FRAME mode;
  * a secondary series may have run more than once (an edit can make a row
  * disagree with the mode after it was admitted), and folding those into one
  * column keeps every series' history aligned on the shared capture axis. */
-static int assign_plot_frame_envelope(int source_line_idx,
+static int assign_plot_frame_envelope(AssignPlotSeries *s,
                                       float *out_lo, float *out_hi) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
@@ -226,10 +219,11 @@ static int assign_plot_frame_envelope(int source_line_idx,
 
     for (int i = 0; i < n; i++) {
         float value;
-        if (flat[i].src_cmd_idx != source_line_idx) continue;
+        if (flat[i].src_cmd_idx != s->source_line_idx) continue;
         if (!assign_plot_cmd_value(&flat[i], &value)) continue;
         if (!found || value < *out_lo) *out_lo = value;
         if (!found || value > *out_hi) *out_hi = value;
+        runstats_record(&s->stats, (double)value);
         found = 1;
     }
     return found;
@@ -274,10 +268,15 @@ void assign_plot_toggle(int source_line_idx) {
  *     of execution progress.
  */
 static int assign_plot_row_fits_x_mode(int source_line_idx) {
-    int execs;
+    int execs, primary_execs;
     if (g_series_count == 0) return 1;
     execs = assign_plot_count_executions(source_line_idx);
     if (execs == 0) return 1;
+
+    primary_execs = assign_plot_count_executions(g_series[0].source_line_idx);
+    if (primary_execs > 0)
+        return (primary_execs == 1) == (execs == 1);
+    if (!g_captured) return 1;
     return (g_x_mode == ASSIGN_PLOT_X_FRAME) ? (execs == 1) : (execs >= 2);
 }
 
@@ -311,8 +310,8 @@ int assign_plot_toggle_series(int source_line_idx) {
     if (!assign_plot_row_fits_x_mode(source_line_idx))
         return ASSIGN_PLOT_SERIES_INCOMPATIBLE;
 
-    /* The new series starts empty rather than resetting the plot: the point of
-     * adding one is to compare it against history already on screen.
+    /* The new series normally starts empty rather than resetting the plot: the
+     * point of adding one is to compare it against history already on screen.
      *
      * On the capture axis that history has to be accounted for, though —
      * column N means capture N for every series, and a series that simply
@@ -321,13 +320,16 @@ int assign_plot_toggle_series(int source_line_idx) {
      * instead: no data before it was added, drawn as the absence it is. */
     assign_plot_series_clear_samples(&g_series[g_series_count]);
     g_series[g_series_count].source_line_idx = source_line_idx;
-    if (g_x_mode == ASSIGN_PLOT_X_FRAME) {
+    g_series_count++;
+    if (g_rate == ASSIGN_PLOT_RATE_ONCE && g_captured) {
+        /* A one-shot must describe the same frame for every series. */
+        assign_plot_clear_samples();
+    } else if (g_x_mode == ASSIGN_PLOT_X_FRAME) {
         int backfill = g_series[0].col_count;
         for (int i = 0; i < backfill; i++)
-            assign_plot_append_frame_column(&g_series[g_series_count],
+            assign_plot_append_frame_column(&g_series[g_series_count - 1],
                                             0.0f, 0.0f, 0);
     }
-    g_series_count++;
     return ASSIGN_PLOT_SERIES_ADDED;
 }
 
@@ -425,8 +427,7 @@ void assign_plot_capture(double now_us) {
 
         for (int i = 0; i < g_series_count; i++) {
             lo[i] = hi[i] = 0.0f;
-            got[i] = assign_plot_frame_envelope(g_series[i].source_line_idx,
-                                                &lo[i], &hi[i]);
+            got[i] = assign_plot_frame_envelope(&g_series[i], &lo[i], &hi[i]);
             g_series[i].exec_count =
                 (i == 0) ? total
                          : assign_plot_count_executions(g_series[i].source_line_idx);

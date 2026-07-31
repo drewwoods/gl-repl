@@ -386,12 +386,12 @@ magnitude. What that means depends on the data:
 
 - **Strictly positive** values get a plain log axis — decade gridlines, nothing
   clipped.
-- **Anything that crosses or touches zero** — every sinusoid does — gets a
-  *symmetric* log axis: magnitudes below a small floor read as zero, and above
-  it the distance from the center is the number of decades, carrying the sign.
-  Two sine waves an order of magnitude apart then sit a decade apart at their
-  peaks instead of the smaller one flattening against the baseline, and both
-  still cross a real zero line.
+- **Values that are entirely negative, cross zero, or touch zero** — every
+  sinusoid does the latter two — get a *symmetric* log axis: magnitudes below a
+  small floor read as zero, and above it the distance from the center is the
+  number of decades, carrying the sign. Two sine waves an order of magnitude
+  apart then sit a decade apart at their peaks instead of the smaller one
+  flattening against the baseline, and both still cross a real zero line.
 
 The floor scales with the largest value on the plot, so a trace living at
 `1e-6` plots the same shape as one living at `1`. What you give up is
@@ -422,6 +422,7 @@ Everything is driven by the mouse, from the panel itself:
 while you edit around it. **1 Hz** (the default) is the low-cost live view.
 **frame** captures every frame, for watching a value respond to a drag.
 Changing the rate clears the window, since it redefines what the numbers cover.
+Adding a series to a frozen **once** plot re-arms one fresh snapshot for all rows.
 
 Right-clicking a different assignment retargets the panel to that row alone.
 Editing a plotted row re-titles it and keeps plotting it; deleting it, or

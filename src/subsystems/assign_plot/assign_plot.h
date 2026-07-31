@@ -173,8 +173,9 @@ typedef enum {
  * plotted. Opens the plot on that row when nothing is plotted yet, so the
  * add gesture works from a closed panel. Dropping the last series closes.
  *
- * Adding resets nothing that is already captured: the new series starts empty
- * and fills from the next capture, while the others keep their history. */
+ * Adding normally keeps existing history: the new series starts empty and
+ * fills from the next capture. A frozen one-shot instead clears and re-arms so
+ * its next snapshot describes the same frame for every series. */
 int  assign_plot_toggle_series(int source_line_idx);  /* AssignPlotSeriesResult */
 
 int  assign_plot_is_open(void);

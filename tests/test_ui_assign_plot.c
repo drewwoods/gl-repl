@@ -13,6 +13,7 @@
 #include <GL/gl_stub_counts.h>
 #endif
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -22,6 +23,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(label, cond)    TEST_ASSERT_TRUE(&g_harness, label, cond)
 #define ASSERT_INT(label, got, exp) TEST_ASSERT_INT(&g_harness, label, got, exp)
 #define ASSERT_STR(label, got, exp) TEST_ASSERT_STR(&g_harness, label, got, exp)
+#define ASSERT_FLOAT(label, got, exp) \
+    TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-3f)
+
+#define TRACE_PATH "build/test_ui_assign_plot_trace.txt"
 
 enum { WIN_W = 1200, WIN_H = 800 };
 
@@ -69,6 +74,41 @@ static UiAssignPlotPanelView make_view(int count, float lo, float hi) {
     v.plot.series_count = 1;
     set_series(&v, 0, "angle", count, lo, hi);
     return v;
+}
+
+/* Render one series and recover the Y coordinates of its line strip from the
+ * GL-stub trace. Matching the series color and trace alpha excludes grid and
+ * envelope vertices, so these values directly constrain the axis transform. */
+static int render_series_trace_y(const UiAssignPlotPanelView *v, int series,
+                                 float *out_y, int cap) {
+    float rgb[3];
+    FILE *trace;
+    char line[128];
+    int active = 0;
+    int count = 0;
+
+    ui_assign_plot_series_color(series, rgb);
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        float r, g, b, a, x, y;
+        if (sscanf(line, "glColor4f %f %f %f %f", &r, &g, &b, &a) == 4) {
+            active = fabsf(r - rgb[0]) < 1e-4f
+                  && fabsf(g - rgb[1]) < 1e-4f
+                  && fabsf(b - rgb[2]) < 1e-4f
+                  && fabsf(a - 0.95f) < 1e-4f;
+        } else if (active
+                   && sscanf(line, "glVertex2f %f %f", &x, &y) == 2) {
+            if (count < cap) out_y[count] = y;
+            count++;
+        }
+    }
+    fclose(trace);
+    return count;
 }
 
 /* The panel's own size for the view's zoom state — every geometry assertion
@@ -460,52 +500,87 @@ static void test_y_log_availability(void) {
 /* The case this exists for: a sinusoid, and two sinusoids of different
  * amplitude on one plot. Neither can use a positive-only log axis. */
 static void test_render_symlog_axis(void) {
-    UiAssignPlotPanelView v = make_view(40, -1.0f, 1.0f);
+    UiAssignPlotPanelView v = make_view(3, -1.0f, 1.0f);
+    float y[ASSIGN_PLOT_COLS];
+    int n;
 
-    /* Signed data used to be refused outright; it now draws. (Vertex counts
-     * cannot tell the two axes apart — same gridline count, same trace
-     * length — so this asserts it renders, and ap_symlog_pos' behavior is
-     * pinned by the cases below.) */
+    /* -1, 0, 1 must retain sign and symmetry. A transform that collapses
+     * everything to zero still emits the same number of GL calls, so assert
+     * the actual trace coordinates. */
     v.plot.y_log = 1;
-    gl_stub_counts_reset();
-    ui_assign_plot_panel_render(&v);
-    ASSERT_TRUE("signed data draws on the log chip",
-                gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    n = render_series_trace_y(&v, 0, y, ASSIGN_PLOT_COLS);
+    ASSERT_INT("signed trace has one vertex per sample", n, 3);
+    ASSERT_TRUE("negative, zero and positive stay ordered",
+                y[0] < y[1] && y[1] < y[2]);
+    ASSERT_FLOAT("zero stays at the symmetric center",
+                 y[1], (y[0] + y[2]) * 0.5f);
 
     /* Two amplitudes an order of magnitude apart: the small one must not
      * flatten onto the baseline, which is the whole reason for the mode. */
     {
         UiAssignPlotPanelView two = make_view(40, -100.0f, 100.0f);
+        float large_y[ASSIGN_PLOT_COLS], small_y[ASSIGN_PLOT_COLS];
+        int large_n, small_n;
         set_series(&two, 1, "small", 40, -1.0f, 1.0f);
         two.plot.y_log = 1;
-        gl_stub_counts_reset();
-        ui_assign_plot_panel_render(&two);
-        ASSERT_TRUE("mixed-magnitude series both draw",
-                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+        large_n = render_series_trace_y(&two, 0, large_y, ASSIGN_PLOT_COLS);
+        small_n = render_series_trace_y(&two, 1, small_y, ASSIGN_PLOT_COLS);
+        ASSERT_INT("large series trace is complete", large_n, 40);
+        ASSERT_INT("small series trace is complete", small_n, 40);
+        ASSERT_TRUE("small magnitude keeps a visible signed span",
+                    small_y[0] < small_y[39]);
+        ASSERT_TRUE("small trace nests inside the larger decades",
+                    large_y[0] < small_y[0] && small_y[39] < large_y[39]);
     }
 
     /* Values near zero collapse into the floor band rather than diving for
      * however many decades the arithmetic happens to leave behind. */
     {
-        UiAssignPlotPanelView tiny = make_view(40, -1.0f, 1.0f);
-        g_cols[0][20].lo = 1.0e-11f;   /* a sine's zero crossing */
-        g_cols[0][20].hi = 1.0e-11f;
+        UiAssignPlotPanelView tiny = make_view(4, -1.0f, 1.0f);
+        float values[] = {-1.0f, 0.0f, 1.0e-11f, 1.0f};
+        for (int i = 0; i < 4; i++)
+            g_cols[0][i].lo = g_cols[0][i].hi = values[i];
         tiny.plot.y_log = 1;
-        gl_stub_counts_reset();
-        ui_assign_plot_panel_render(&tiny);
-        ASSERT_TRUE("a near-zero sample does not break the axis",
-                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+        n = render_series_trace_y(&tiny, 0, y, ASSIGN_PLOT_COLS);
+        ASSERT_INT("floor-band trace is complete", n, 4);
+        ASSERT_FLOAT("a near-zero sample maps to zero", y[2], y[1]);
     }
 
     /* Small-magnitude data must not be swallowed by a fixed floor: the same
      * trace scaled down by 1e-6 has to plot the same way. */
     {
-        UiAssignPlotPanelView small = make_view(40, -1.0e-6f, 1.0e-6f);
+        UiAssignPlotPanelView unit, small;
+        float unit_y[5], small_y[5];
+        int unit_n, small_n;
+
+        unit = make_view(5, -1.0f, 1.0f);
+        unit.plot.y_log = 1;
+        unit_n = render_series_trace_y(&unit, 0, unit_y, 5);
+
+        small = make_view(5, -1.0e-6f, 1.0e-6f);
         small.plot.y_log = 1;
-        gl_stub_counts_reset();
-        ui_assign_plot_panel_render(&small);
-        ASSERT_TRUE("a 1e-6 scale trace still plots",
-                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+        small_n = render_series_trace_y(&small, 0, small_y, 5);
+        ASSERT_INT("unit-scale trace is complete", unit_n, 5);
+        ASSERT_INT("small-scale trace is complete", small_n, 5);
+        for (int i = 0; i < 5; i++)
+            ASSERT_FLOAT("relative floor is scale invariant",
+                         small_y[i], unit_y[i]);
+    }
+
+    /* Entirely negative ranges use the symmetric axis too. Consecutive
+     * negative decades must therefore be evenly spaced, unlike linear Y. */
+    {
+        UiAssignPlotPanelView negative = make_view(3, -100.0f, -1.0f);
+        float values[] = {-100.0f, -10.0f, -1.0f};
+        for (int i = 0; i < 3; i++)
+            g_cols[0][i].lo = g_cols[0][i].hi = values[i];
+        negative.plot.y_log = 1;
+        n = render_series_trace_y(&negative, 0, y, ASSIGN_PLOT_COLS);
+        ASSERT_INT("negative-only trace is complete", n, 3);
+        ASSERT_TRUE("negative decades stay ordered",
+                    y[0] < y[1] && y[1] < y[2]);
+        ASSERT_FLOAT("negative decades are evenly spaced",
+                     y[1] - y[0], y[2] - y[1]);
     }
 
     /* All-zero data has no decade in either direction: linear fallback. */
@@ -540,12 +615,12 @@ static void test_render_log_axis(void) {
     ASSERT_TRUE("log axis is a different drawing",
                 log_vertices != linear_vertices);
 
-    /* Sign-crossing data with log requested: linear fallback, still drawn. */
+    /* Sign-crossing data uses symmetric log and still draws. */
     v = make_view(30, -10.0f, 10.0f);
     v.plot.y_log = 1;
     gl_stub_counts_reset();
     ui_assign_plot_panel_render(&v);
-    ASSERT_TRUE("unhonorable log request still plots",
+    ASSERT_TRUE("sign-crossing log request still plots",
                 gl_stub_counts[GL_STUB_glVertex2f] > 0);
 
     /* Same for an empty plot, where there is no extent at all. */

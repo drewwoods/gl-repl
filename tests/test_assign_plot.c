@@ -602,6 +602,54 @@ static void test_second_series_captures_independently(void) {
     ASSERT_FLOAT("y tops out at 107", v.series[1].stats.max, 107.0);
 }
 
+/* Before the first capture, compatibility comes from the primary row's live
+ * execution count rather than the default X mode. */
+static void test_top_level_series_can_join_before_first_capture(void) {
+    static const char *const k_scene[] = {
+        "float x;", "float y;", "x = t;", "y = t * 2;", NULL
+    };
+    int row_x, row_y;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+    assign_plot_open(row_x);
+
+    ASSERT_INT("two top-level rows are compatible before capture",
+               assign_plot_toggle_series(row_y), ASSIGN_PLOT_SERIES_ADDED);
+    ASSERT_INT("both rows joined", assign_plot_series_count(), 2);
+}
+
+/* Adding to a frozen one-shot re-arms one coherent snapshot rather than
+ * leaving the new series permanently empty. */
+static void test_once_rate_rearms_for_series_added_later(void) {
+    static const char *const k_scene[] = {
+        "float x;", "float y;", "x = t;", "y = t * 2;", NULL
+    };
+    int row_x, row_y;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+    assign_plot_open(row_x);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    assign_plot_capture(0.0);
+    ASSERT_INT("the first one-shot captured",
+               (int)S0(assign_plot_view()).stats.count, 1);
+
+    ASSERT_INT("the second row joins the frozen plot",
+               assign_plot_toggle_series(row_y), ASSIGN_PLOT_SERIES_ADDED);
+    v = assign_plot_view();
+    ASSERT_INT("the old one-shot is cleared", (int)v.series[0].stats.count, 0);
+    ASSERT_INT("the new series starts with it", (int)v.series[1].stats.count, 0);
+
+    assign_plot_capture(1.0);
+    v = assign_plot_view();
+    ASSERT_INT("the primary recaptures once", (int)v.series[0].stats.count, 1);
+    ASSERT_INT("the added row captures once", (int)v.series[1].stats.count, 1);
+}
+
 /* Shift+right-click on a plotted row removes it again. */
 static void test_toggle_series_removes_and_closes(void) {
     static const char *const k_scene[] = {
@@ -775,6 +823,39 @@ static void test_frame_mode_keeps_series_aligned(void) {
                  v.series[1].stats.min, 10.0);
 }
 
+/* A secondary can be admitted while silent and later run several times. Its
+ * frame column is an envelope, but its statistics must still see every value. */
+static void test_frame_secondary_stats_include_every_execution(void) {
+    static const char *const k_scene[] = {
+        "float x;", "float y;", "x = t;", "for(i, 0, t) {", "y = i;", "}",
+        NULL
+    };
+    int row_x, row_y;
+    AssignPlotView v;
+
+    load_scene(k_scene);
+    row_x = find_nth_row(CMD_VAR_ASSIGN, 0);
+    row_y = find_nth_row(CMD_VAR_ASSIGN, 1);
+    assign_plot_open(row_x);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
+    assign_plot_capture(0.0);
+    ASSERT_INT("a silent secondary is admitted",
+               assign_plot_toggle_series(row_y), ASSIGN_PLOT_SERIES_ADDED);
+
+    repl_state_time_set(4.0f);
+    reflatten();
+    assign_plot_capture(1.0);
+    v = assign_plot_view();
+
+    ASSERT_INT("the secondary ran four times", v.series[1].exec_count, 4);
+    ASSERT_INT("statistics saw all four values",
+               (int)v.series[1].stats.count, 4);
+    ASSERT_FLOAT("mean includes the interior values",
+                 v.series[1].stats.mean, 1.5);
+    ASSERT_FLOAT("sample deviation includes the interior values",
+                 v.series[1].stats.stddev, sqrt(5.0 / 3.0));
+}
+
 /* Deleting one plotted row drops that series and leaves the rest alone. */
 static void test_dead_row_drops_only_its_series(void) {
     static const char *const k_scene[] = {
@@ -828,10 +909,13 @@ int main(void) {
     test_zero_executions_preserve_history();
     test_reset_keeps_target_and_rate();
     test_second_series_captures_independently();
+    test_top_level_series_can_join_before_first_capture();
+    test_once_rate_rearms_for_series_added_later();
     test_toggle_series_removes_and_closes();
     test_series_cap_is_enforced();
     test_incompatible_x_mode_is_refused();
     test_frame_mode_keeps_series_aligned();
+    test_frame_secondary_stats_include_every_execution();
     test_dead_row_drops_only_its_series();
     return test_harness_report(&g_harness, "test_assign_plot");
 }
