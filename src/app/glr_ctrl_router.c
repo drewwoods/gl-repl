@@ -1446,18 +1446,33 @@ static int route_assign_plot_expand_hit(void) {
  * nothing would be indistinguishable from a missed click. */
 static int route_assign_plot_series_hit(int line_idx) {
     char msg[REPL_STATUS_TEXT_MAX];
+    AssignPlotView before = assign_plot_view();
+    int result = assign_plot_toggle_series(line_idx);
+    AssignPlotView after = assign_plot_view();
+    /* Changing the series set of a frozen one-shot throws that snapshot away
+     * and re-arms, so every series ends up describing one frame. Right
+     * behavior, but it discards something the user deliberately froze, so it
+     * has to be said rather than just happening.
+     *
+     * Observed from the view rather than re-derived from the rule (which of
+     * add/remove re-arms, and when), so this cannot drift from what the
+     * subsystem actually did. Only worth reporting for ONCE: at the live
+     * rates the window refills on its own and is not news. */
+    const char *rearmed =
+        (after.rate == ASSIGN_PLOT_RATE_ONCE && before.captured
+         && after.open && !after.captured) ? " (recapturing)" : "";
 
-    switch (assign_plot_toggle_series(line_idx)) {
+    switch (result) {
         case ASSIGN_PLOT_SERIES_ADDED:
-            snprintf(msg, sizeof(msg), "assignment plot: %d series",
-                     assign_plot_series_count());
+            snprintf(msg, sizeof(msg), "assignment plot: %d series%s",
+                     assign_plot_series_count(), rearmed);
             break;
         case ASSIGN_PLOT_SERIES_REMOVED:
             if (!assign_plot_is_open())
                 snprintf(msg, sizeof(msg), "assignment plot: closed");
             else
-                snprintf(msg, sizeof(msg), "assignment plot: %d series",
-                         assign_plot_series_count());
+                snprintf(msg, sizeof(msg), "assignment plot: %d series%s",
+                         assign_plot_series_count(), rearmed);
             break;
         case ASSIGN_PLOT_SERIES_FULL:
             snprintf(msg, sizeof(msg),

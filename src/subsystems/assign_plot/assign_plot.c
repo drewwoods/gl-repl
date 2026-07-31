@@ -257,15 +257,30 @@ void assign_plot_toggle(int source_line_idx) {
     assign_plot_open(source_line_idx);
 }
 
-/* Can a row join the current plot's X axis? Judged from the flat program as it
- * stands, because that is the only evidence available at click time:
+/* Can a row join the current plot's X axis? What has to match is the *shape*
+ * of the two rows' execution: a row that runs once per frame belongs on the
+ * capture axis and a row that runs many times belongs on the execution axis,
+ * and no axis holds both.
  *
- *   - nothing plotted yet, or the row has never executed: nothing to
+ * The comparison is against the primary's live execution count, taken from the
+ * flat program as it stands at click time, rather than against g_x_mode. The
+ * mode is only derived during a capture, so before the first one it still
+ * holds the default from assign_plot_open() and describes nothing — reading it
+ * there refuses every second top-level row. Comparing the two rows directly
+ * also does the right thing when the primary has just been edited into (or out
+ * of) a loop: the pair is admitted or refused on what the program does now,
+ * and the next capture flips the mode to match.
+ *
+ * In order:
+ *
+ *   - nothing plotted yet, or the candidate has never executed: nothing to
  *     contradict, so admit it;
- *   - X_FRAME (the primary runs once per frame): a row that runs many times
- *     per frame has no place on a capture axis;
- *   - X_EXEC: a row that runs exactly once would be a single dot on an axis
- *     of execution progress.
+ *   - the primary ran this frame: admit only if both are once-per-frame or
+ *     both are many-per-frame;
+ *   - the primary did not run and nothing has been captured: no evidence
+ *     either way, so admit;
+ *   - otherwise fall back to the mode the last capture derived — X_FRAME
+ *     wants a row that runs once, X_EXEC one that runs at least twice.
  */
 static int assign_plot_row_fits_x_mode(int source_line_idx) {
     int execs, primary_execs;

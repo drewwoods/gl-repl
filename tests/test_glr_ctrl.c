@@ -1555,6 +1555,82 @@ static void test_right_click_assignment_opens_value_plot(void) {
     assign_plot_reset_all();
 }
 
+/* Shift held: the modifier provider is the test seam the router reads through
+ * (glutGetModifiers is not callable here). */
+static int shift_mods_provider(void) {
+    return GLUT_ACTIVE_SHIFT;
+}
+
+/* Shift+right-click adds a row to the open plot instead of retargeting, and
+ * the status line reports the count — plus, for a frozen one-shot, the fact
+ * that the snapshot the user deliberately froze has been re-armed. */
+static void test_shift_right_click_adds_plot_series(void) {
+    UiHit hit;
+    int x = -1, y = -1;
+
+    printf("--- imrepl_ctrl shift+right-click adds a plot series ---\n");
+
+    glr_ctrl_reset_all();
+    assign_plot_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_menu_bar_close();
+    ui_state_help_mut()->visible = 0;
+    variable_panel_set_visible(0);
+
+    editor_feed_line("float angle;");
+    editor_feed_line("float speed;");
+    editor_feed_line("angle = t * 30;");
+    editor_feed_line("speed = t * 2;");
+    editor_navigate_to_line(0);
+
+    /* Plain right-click opens on the first assignment. */
+    ASSERT_TRUE("found the first assignment row",
+                find_code_text_hit_for_line(2, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("plot opened on one series", assign_plot_series_count(), 1);
+
+    /* Shift+right-click on the second adds rather than retargets. */
+    editor_input_set_modifier_provider_for_test(shift_mods_provider);
+    ASSERT_TRUE("found the second assignment row",
+                find_code_text_hit_for_line(3, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("shift+right-click added a series",
+               assign_plot_series_count(), 2);
+    ASSERT_INT("and kept the original primary", assign_plot_source_line(), 2);
+    ASSERT_TRUE("the status line reports the count",
+                strstr(ui_state_status().text, "2 series") != NULL);
+    ASSERT_TRUE("and says nothing about recapturing on a live plot",
+                strstr(ui_state_status().text, "recapturing") == NULL);
+
+    /* Shift+right-click again removes it. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("shift+right-click again removed it",
+               assign_plot_series_count(), 1);
+
+    /* A frozen one-shot: adding discards that snapshot, and says so. */
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    repl_flatten_commands(0);
+    repl_state_flat_program_clear_dirty();
+    assign_plot_capture(0.0);
+    ASSERT_INT("the one-shot froze", assign_plot_view().captured, 1);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("the series joined", assign_plot_series_count(), 2);
+    ASSERT_INT("and the one-shot re-armed", assign_plot_view().captured, 0);
+    ASSERT_TRUE("which the status line says",
+                strstr(ui_state_status().text, "recapturing") != NULL);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+    assign_plot_reset_all();
+}
+
 static void test_right_click_gl_command_description_popup(void) {
     UiCommandDescriptionPanelView view;
     UiHit hit;
@@ -5396,6 +5472,7 @@ int main(void) {
     test_right_click_code_panel_does_not_start_camera_pan();
     test_scrollbar_drag_scrolls_code_panel();
     test_right_click_assignment_opens_value_plot();
+    test_shift_right_click_adds_plot_series();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_divider_hover_yields_to_front_panel();
