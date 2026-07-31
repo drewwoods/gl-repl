@@ -21,12 +21,29 @@
  * door, whose durations span decades and so want log spacing.)
  *
  * The [lin]/[log] chip requests log10 spacing for the runs where that is the
- * right question — a value decaying over orders of magnitude. Log is honored
- * only when every plotted value is strictly positive: assignment values are
- * routinely signed or zero, and there is no honest place on a log axis for
- * those. When the request cannot be honored the plot stays linear and the chip
- * draws in the placeholder color, so an unexpectedly linear axis is visibly
- * explained rather than silently ignored.
+ * right question — values spread over orders of magnitude. Which log axis that
+ * means is decided by the data, not by the user:
+ *
+ *   Strictly-positive data gets a plain log10 axis: a real bottom end, decade
+ *   gridlines, nothing clipped.
+ *
+ *   Data that crosses or touches zero — every sinusoid does — gets a
+ *   *symmetric* one: magnitudes below a derived floor read as zero, and above
+ *   it the axis is log10(|v| / floor) carrying the value's sign. Two sinusoids
+ *   an order of magnitude apart then sit a decade apart at their peaks instead
+ *   of one flattening against the baseline, and both still cross a real center
+ *   line. What it costs is resolution near zero, which is the trade being
+ *   asked for.
+ *
+ * The floor scales with the largest magnitude on the plot rather than being a
+ * fixed constant, so the same shape of plot comes out whether the values live
+ * at 1e0 or 1e-6, with an absolute cap so unit-scale data does not open more
+ * decades than are worth reading.
+ *
+ * The one thing no log axis can describe is a trace pinned at exactly zero:
+ * there the plot stays linear, the chip draws in the placeholder color, and
+ * the controller says so — an unexpectedly linear axis is visibly explained
+ * rather than silently ignored.
  *
  * The [expand] chip doubles the panel's width and its plot well. Everything
  * else about the drawing is scale-independent, so both sizes run the same
@@ -118,8 +135,9 @@ const char *ui_assign_plot_rate_label(int rate);
 void ui_assign_plot_format_stat(char *buf, size_t buf_sz, double v,
                                 int max_chars);
 
-/* Whether a log-Y request can actually be honored for `view`'s data: every
- * plotted value strictly positive. Public so the controller can say so in the
+/* Whether a log-Y request can actually be honored for `view`'s data — which
+ * now means only that some value has a non-zero magnitude, since signed data
+ * goes on the symmetric axis. Public so the controller can say so in the
  * status line when the chip is clicked, rather than leaving a chip that
  * visibly does nothing. */
 int ui_assign_plot_y_log_available(const UiAssignPlotPanelView *view);

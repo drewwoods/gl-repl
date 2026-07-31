@@ -272,12 +272,22 @@ static double ap_nice_step(double span) {
     return 10.0 * mag;
 }
 
-/* The Y axis actually drawn. `lo`/`hi`/`step` live in *axis space*: value
- * units when linear, log10(value) when log — every consumer goes through
- * ap_value_y() / ap_tick_value(), so nothing else has to know which. */
+/* Which Y mapping is in force. LOG and SYMLOG are both "the [log] chip is on";
+ * which one applies is decided by the data, not by the user. */
+typedef enum {
+    AP_Y_LINEAR = 0,
+    AP_Y_LOG,      /* strictly-positive data: plain log10                  */
+    AP_Y_SYMLOG    /* data that crosses or touches zero: signed log10      */
+} ApYKind;
+
+/* The Y axis actually drawn. `lo`/`hi`/`step` live in *axis space*: value units
+ * when linear, log10(value) when LOG, and signed decades away from
+ * `zero_floor` when SYMLOG — every consumer goes through ap_value_y() /
+ * ap_tick_value(), so nothing else has to know which. */
 typedef struct {
-    int    log;        /* log space (a request that could be honored) */
+    int    kind;             /* ApYKind */
     double lo, hi, step;
+    double zero_floor;       /* SYMLOG: |v| at or below this reads as zero */
 } ApYAxis;
 
 /* Min/max across every series' plotted columns — the Y axis is shared, so the
@@ -311,10 +321,10 @@ int ui_assign_plot_y_log_available(const UiAssignPlotPanelView *view) {
     if (!view) return 0;
     if (!ap_col_extent(&view->plot, &lo, &hi))
         return 0;
-    /* The *minimum* is the test: one zero or negative sample anywhere in the
-     * trace has no position on a log axis, and dropping it would silently
-     * redraw a different dataset than the one captured. */
-    return lo > 0.0;
+    /* Signed data goes on the symmetric axis, so the only thing log cannot
+     * describe is data with no magnitude at all: a trace pinned at exactly
+     * zero has no decade to sit on, in either direction. */
+    return fabs(lo) > 0.0 || fabs(hi) > 0.0;
 }
 
 /* Value range of the plotted columns, widened to a nice step on both ends.
@@ -341,11 +351,80 @@ static int ap_y_axis_linear(double lo, double hi, ApYAxis *out) {
     /* Snap outward to whole steps so every gridline lands on a round number.
      * Deliberately NOT snapped to zero: a variable living in [100, 101] must
      * keep its shape rather than collapse onto the top of a 0..101 axis. */
-    out->log  = 0;
+    out->kind = AP_Y_LINEAR;
     out->lo   = floor(lo / step) * step;
     out->hi   = ceil(hi / step) * step;
     if (out->hi <= out->lo) out->hi = out->lo + step;
     out->step = step;
+    return 1;
+}
+
+/* --- symmetric log ---
+ *
+ * A sinusoid has no positive-only log axis: it crosses zero every period, and
+ * near the crossing its magnitude runs off toward whatever the arithmetic
+ * leaves behind (1e-11 for a sine sampled off its exact zeros). Plotting
+ * log10(|v|) straight would spend most of the well on that dive and squash the
+ * part anyone cares about.
+ *
+ * So: magnitudes below a floor read as zero, and above it the axis is
+ * log10(|v| / floor) carrying the value's sign. Two sinusoids an order of
+ * magnitude apart then sit one decade apart at their peaks — which is the
+ * whole point of asking for log on signed data — and both still cross a real
+ * center line.
+ *
+ * The floor is derived rather than fixed. A fixed constant is right for
+ * unit-scale data and wrong for a scene whose values live at 1e-6, where it
+ * would swallow the trace whole; scaling it to the largest magnitude present
+ * keeps the same *shape* of plot at any scale — three decades below the peak.
+ *
+ * The absolute term is a ceiling on the floor, not a floor on it: it only
+ * binds above unit scale, where it says "keep resolving down to 0.01 anyway".
+ * That is deliberate. Values here are usually O(1)–O(100) — angles, positions,
+ * color channels — and for a trace peaking at 100 the hundredths are still
+ * worth a gridline, so it opens a fourth decade rather than stopping at 0.1.
+ * Far above that the axis does get tall in decades, which is compressed but
+ * never wrong; nothing in this REPL's vocabulary lives there. */
+#define AP_SYMLOG_REL_FLOOR  1.0e-3   /* three decades below the peak */
+#define AP_SYMLOG_MAX_FLOOR  1.0e-2   /* but resolve to 0.01 regardless */
+
+/* Signed decades away from the floor. */
+static double ap_symlog_pos(double v, double zero_floor) {
+    double a = fabs(v);
+    double p;
+    if (!(a > zero_floor)) return 0.0;
+    p = log10(a / zero_floor);
+    return (v < 0.0) ? -p : p;
+}
+
+static int ap_y_axis_symlog(double lo, double hi, ApYAxis *out) {
+    double max_abs = fabs(lo) > fabs(hi) ? fabs(lo) : fabs(hi);
+    double zf, p_lo, p_hi, span, step;
+
+    if (!(max_abs > 0.0)) return 0;   /* nothing but zeros — caller falls back */
+
+    zf = max_abs * AP_SYMLOG_REL_FLOOR;
+    if (zf > AP_SYMLOG_MAX_FLOOR) zf = AP_SYMLOG_MAX_FLOOR;
+    if (!(zf > 0.0)) return 0;
+
+    p_lo = ap_symlog_pos(lo, zf);
+    p_hi = ap_symlog_pos(hi, zf);
+    span = p_hi - p_lo;
+    if (!(span > 0.0)) { p_lo -= 1.0; p_hi += 1.0; span = p_hi - p_lo; }
+
+    /* Whole decades, so every gridline is a power of ten times the floor. */
+    step = ceil(span / (double)AP_Y_TARGET_DIVS);
+    if (!(step > 0.0)) step = 1.0;
+
+    out->kind       = AP_Y_SYMLOG;
+    out->zero_floor = zf;
+    out->step       = step;
+    /* Snapped to multiples of the step, which puts a gridline exactly on the
+     * center whenever the data spans it — the sign change is the thing being
+     * looked for, and on this axis it is also where the floor band sits. */
+    out->lo = floor(p_lo / step) * step;
+    out->hi = ceil(p_hi / step) * step;
+    if (out->hi <= out->lo) out->hi = out->lo + step;
     return 1;
 }
 
@@ -362,7 +441,7 @@ static int ap_y_axis_log(double lo, double hi, ApYAxis *out) {
     if (hi_e <= lo_e) hi_e = lo_e + 1.0;
     decades = hi_e - lo_e;
 
-    out->log  = 1;
+    out->kind = AP_Y_LOG;
     out->lo   = lo_e;
     out->hi   = hi_e;
     /* One gridline per decade until there are more decades than the target
@@ -373,27 +452,55 @@ static int ap_y_axis_log(double lo, double hi, ApYAxis *out) {
     return 1;
 }
 
-/* Resolve the axis for this frame's columns. `want_log` is the chip; it is
- * honored only when every value is positive (see the header). */
+/* Resolve the axis for this frame's columns. `want_log` is the chip; the data
+ * picks which log axis that means. Strictly-positive data keeps the plain
+ * log10 axis — it has a real bottom end and no need of a floor, so nothing
+ * that worked before changes — and anything crossing or touching zero gets the
+ * symmetric one. */
 static int ap_y_axis(const AssignPlotView *plot, int want_log, ApYAxis *out) {
     double lo, hi;
     if (!ap_col_extent(plot, &lo, &hi)) return 0;
-    if (want_log && lo > 0.0) return ap_y_axis_log(lo, hi, out);
+    if (want_log) {
+        if (lo > 0.0) return ap_y_axis_log(lo, hi, out);
+        if (ap_y_axis_symlog(lo, hi, out)) return 1;
+        /* All zeros: no magnitude to put on any log axis. */
+    }
     return ap_y_axis_linear(lo, hi, out);
 }
 
-/* Axis-space position of a value: identity when linear, log10 when log.
- * Callers hand in raw values throughout. */
+/* Axis-space position of a value: identity when linear, log10 when log, signed
+ * decades above the floor when symlog. Callers hand in raw values throughout. */
 static double ap_axis_pos(const ApYAxis *ax, double v) {
-    if (!ax->log) return v;
-    /* Guarded for completeness: a log axis only exists over positive data, so
-     * this floor is unreachable through ap_y_axis(). */
-    return (v > 0.0) ? log10(v) : ax->lo;
+    switch (ax->kind) {
+        case AP_Y_LOG:
+            /* Guarded for completeness: a plain log axis only exists over
+             * positive data, so this floor is unreachable through
+             * ap_y_axis(). */
+            return (v > 0.0) ? log10(v) : ax->lo;
+        case AP_Y_SYMLOG:
+            return ap_symlog_pos(v, ax->zero_floor);
+        case AP_Y_LINEAR:
+        default:
+            return v;
+    }
 }
 
-/* Value a gridline at axis-space `p` stands for — what the gutter labels. */
+/* Value a gridline at axis-space `p` stands for — what the gutter labels. On
+ * the symmetric axis the center is the floor band, which is exactly the
+ * "indistinguishable from zero" reading it is labeled with. */
 static double ap_tick_value(const ApYAxis *ax, double p) {
-    return ax->log ? pow(10.0, p) : p;
+    double v;
+    switch (ax->kind) {
+        case AP_Y_LOG:
+            return pow(10.0, p);
+        case AP_Y_SYMLOG:
+            if (fabs(p) < 1e-9) return 0.0;
+            v = ax->zero_floor * pow(10.0, fabs(p));
+            return (p < 0.0) ? -v : v;
+        case AP_Y_LINEAR:
+        default:
+            return p;
+    }
 }
 
 /* X center of a column, in pixels. A single column sits mid-plot rather than
@@ -616,12 +723,13 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     if (have_data) {
         /* Gridlines on whole steps; the zero line, when the axis crosses it,
          * gets a brighter rule because sign changes are usually the thing
-         * being looked for. A log axis is strictly positive and so never has
-         * one — the test simply never fires there. */
+         * being looked for. The symmetric log axis has one too — its center is
+         * where the sign flips. A plain log axis is strictly positive and
+         * never has one, so the test is suppressed there. */
         for (double p = ax.lo; p <= ax.hi + ax.step * 0.5; p += ax.step) {
             double v = ap_tick_value(&ax, p);
             float gy = ap_value_y(&ax, v, plot_y, plot_h);
-            int is_zero = !ax.log && (fabs(p) < ax.step * 1e-6);
+            int is_zero = ax.kind != AP_Y_LOG && (fabs(p) < ax.step * 1e-6);
             ui_clr_a(UI_TOK_DIVIDER, is_zero ? 0.65f : 0.30f);
             glBegin(GL_LINES);
             glVertex2f((float)plot_x,            gy);

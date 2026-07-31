@@ -424,19 +424,29 @@ static void test_hit_tracks_expanded_geometry(void) {
                UI_ASSIGN_PLOT_HIT_CLOSE);
 }
 
-/* Log Y is honored only over strictly-positive data. The predicate is public
- * because the controller reports it; these are its edges. */
+/* Log Y is honored for anything with a magnitude — signed data lands on the
+ * symmetric axis rather than being refused. The predicate is public because
+ * the controller reports it; these are its edges. */
 static void test_y_log_availability(void) {
     UiAssignPlotPanelView v = make_view(10, 1.0f, 1000.0f);
     ASSERT_INT("all-positive data can go log",
                ui_assign_plot_y_log_available(&v), 1);
 
     v = make_view(10, -5.0f, 5.0f);
-    ASSERT_INT("a sign change cannot",
-               ui_assign_plot_y_log_available(&v), 0);
+    ASSERT_INT("a sign change goes symmetric rather than being refused",
+               ui_assign_plot_y_log_available(&v), 1);
 
     v = make_view(10, 0.0f, 5.0f);
-    ASSERT_INT("a zero cannot",
+    ASSERT_INT("touching zero is fine too",
+               ui_assign_plot_y_log_available(&v), 1);
+
+    v = make_view(10, -5.0f, -1.0f);
+    ASSERT_INT("all-negative data has magnitude",
+               ui_assign_plot_y_log_available(&v), 1);
+
+    /* The one real refusal: no magnitude anywhere to put on any decade. */
+    v = make_view(10, 0.0f, 0.0f);
+    ASSERT_INT("a trace pinned at zero cannot",
                ui_assign_plot_y_log_available(&v), 0);
 
     v = make_view(0, 0.0f, 0.0f);
@@ -445,6 +455,68 @@ static void test_y_log_availability(void) {
 
     ASSERT_INT("NULL view cannot",
                ui_assign_plot_y_log_available(NULL), 0);
+}
+
+/* The case this exists for: a sinusoid, and two sinusoids of different
+ * amplitude on one plot. Neither can use a positive-only log axis. */
+static void test_render_symlog_axis(void) {
+    UiAssignPlotPanelView v = make_view(40, -1.0f, 1.0f);
+
+    /* Signed data used to be refused outright; it now draws. (Vertex counts
+     * cannot tell the two axes apart — same gridline count, same trace
+     * length — so this asserts it renders, and ap_symlog_pos' behavior is
+     * pinned by the cases below.) */
+    v.plot.y_log = 1;
+    gl_stub_counts_reset();
+    ui_assign_plot_panel_render(&v);
+    ASSERT_TRUE("signed data draws on the log chip",
+                gl_stub_counts[GL_STUB_glVertex2f] > 0);
+
+    /* Two amplitudes an order of magnitude apart: the small one must not
+     * flatten onto the baseline, which is the whole reason for the mode. */
+    {
+        UiAssignPlotPanelView two = make_view(40, -100.0f, 100.0f);
+        set_series(&two, 1, "small", 40, -1.0f, 1.0f);
+        two.plot.y_log = 1;
+        gl_stub_counts_reset();
+        ui_assign_plot_panel_render(&two);
+        ASSERT_TRUE("mixed-magnitude series both draw",
+                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    }
+
+    /* Values near zero collapse into the floor band rather than diving for
+     * however many decades the arithmetic happens to leave behind. */
+    {
+        UiAssignPlotPanelView tiny = make_view(40, -1.0f, 1.0f);
+        g_cols[0][20].lo = 1.0e-11f;   /* a sine's zero crossing */
+        g_cols[0][20].hi = 1.0e-11f;
+        tiny.plot.y_log = 1;
+        gl_stub_counts_reset();
+        ui_assign_plot_panel_render(&tiny);
+        ASSERT_TRUE("a near-zero sample does not break the axis",
+                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    }
+
+    /* Small-magnitude data must not be swallowed by a fixed floor: the same
+     * trace scaled down by 1e-6 has to plot the same way. */
+    {
+        UiAssignPlotPanelView small = make_view(40, -1.0e-6f, 1.0e-6f);
+        small.plot.y_log = 1;
+        gl_stub_counts_reset();
+        ui_assign_plot_panel_render(&small);
+        ASSERT_TRUE("a 1e-6 scale trace still plots",
+                    gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    }
+
+    /* All-zero data has no decade in either direction: linear fallback. */
+    {
+        UiAssignPlotPanelView zero = make_view(40, 0.0f, 0.0f);
+        zero.plot.y_log = 1;
+        gl_stub_counts_reset();
+        ui_assign_plot_panel_render(&zero);
+        ASSERT_TRUE("an all-zero trace still frames itself",
+                    gl_stub_counts[GL_STUB_glRectf] > 0);
+    }
 }
 
 /* Log Y draws, and a log request over data that cannot support it silently
@@ -573,18 +645,23 @@ static void test_render_multi_series(void) {
 static void test_y_axis_spans_all_series(void) {
     UiAssignPlotPanelView v = make_multi_view(2);
 
-    /* series 0 is 0..10, series 1 is 100..200 — nothing positive is missing,
-     * so log stays available across the union. */
-    ASSERT_INT("log needs every series positive",
-               ui_assign_plot_y_log_available(&v), 0);  /* series 0 starts at 0 */
+    /* Log is available across the union either way — a negative in one series
+     * puts the whole plot on the symmetric axis rather than refusing it. */
+    ASSERT_INT("a zero in the first series still allows log",
+               ui_assign_plot_y_log_available(&v), 1);
 
     set_series(&v, 0, "angle", 20, 1.0f, 10.0f);
     ASSERT_INT("all-positive across both series allows log",
                ui_assign_plot_y_log_available(&v), 1);
 
-    /* One negative sample anywhere disqualifies the whole plot. */
     set_series(&v, 1, "speed", 20, -1.0f, 5.0f);
-    ASSERT_INT("a negative in the second series blocks log",
+    ASSERT_INT("a negative in the second series still allows log",
+               ui_assign_plot_y_log_available(&v), 1);
+
+    /* Both series flat at zero is the one case with no magnitude at all. */
+    set_series(&v, 0, "angle", 20, 0.0f, 0.0f);
+    set_series(&v, 1, "speed", 20, 0.0f, 0.0f);
+    ASSERT_INT("two all-zero series have no decade to sit on",
                ui_assign_plot_y_log_available(&v), 0);
 }
 
@@ -737,6 +814,7 @@ int main(void) {
     test_render_log_axis();
     test_render_expanded();
     test_y_log_availability();
+    test_render_symlog_axis();
     test_hit_outside_and_hidden();
     test_hit_close();
     test_hit_rate_and_reset();

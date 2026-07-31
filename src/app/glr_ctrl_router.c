@@ -1412,8 +1412,9 @@ static int route_assign_plot_rate_hit(int dir) {
 
 /* The chip toggles the *request* unconditionally; whether the axis can honor
  * it depends on the data, so the status line reports what actually happened.
- * Without that, asking for log on a trace that crosses zero looks like a
- * broken control rather than an impossible one. */
+ * Signed data goes on the symmetric axis, so the only refusal left is a trace
+ * with no magnitude at all — and a chip that silently did nothing there would
+ * look broken rather than impossible. */
 static int route_assign_plot_yscale_hit(void) {
     UiAssignPlotPanelView probe;
     char msg[REPL_STATUS_TEXT_MAX];
@@ -1428,7 +1429,7 @@ static int route_assign_plot_yscale_hit(void) {
         snprintf(msg, sizeof(msg), "assignment plot: log Y");
     else
         snprintf(msg, sizeof(msg),
-                 "assignment plot: log Y needs positive values (linear)");
+                 "assignment plot: log Y needs a non-zero value (linear)");
     ui_state_status_set(msg);
     editor_request_redraw();
     return 1;

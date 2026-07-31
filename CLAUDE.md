@@ -475,9 +475,13 @@ shared and that drives the rules:
   stretched across captures it never saw.
 - **Y is shared** — that is the point of overlaying — so series of wildly
   different magnitudes flatten each other; the per-series stats carry the real
-  numbers. Log Y is honored only when every plotted value is strictly positive
-  (`ui_assign_plot_y_log_available()`); otherwise the axis stays linear and the
-  chip draws inert rather than lying.
+  numbers. `[log]` resolves per data: plain log10 for strictly-positive values,
+  **symmetric** log10 (`AP_Y_SYMLOG`) for anything crossing or touching zero —
+  magnitudes under a peak-derived floor read as zero, above it the position is
+  signed decades, so sinusoids of different amplitude separate instead of one
+  flattening. Only an all-zero trace refuses
+  (`ui_assign_plot_y_log_available()`); then the axis stays linear and the chip
+  draws inert rather than lying.
 
 The stats block describes **one** series: the hovered legend entry, else the
 primary. Hover is resolved by the panel's own hit-test from `pointer_x/_y`

@@ -381,11 +381,26 @@ oscillating between 100 and 101 shows its shape rather than flattening against
 the top of a 0–101 axis. When the range does cross zero, the zero line is drawn
 brighter, because a sign change is usually what you are hunting for.
 
-`[log]` switches Y to log₁₀ spacing, for a value that decays or grows over
-orders of magnitude. It only applies when every plotted value is strictly
-positive — zero and negative numbers have no place on a log axis — so on signed
-data the chip greys out and the plot stays linear rather than quietly dropping
-the samples that do not fit.
+`[log]` switches Y to log₁₀ spacing, for values spread over orders of
+magnitude. What that means depends on the data:
+
+- **Strictly positive** values get a plain log axis — decade gridlines, nothing
+  clipped.
+- **Anything that crosses or touches zero** — every sinusoid does — gets a
+  *symmetric* log axis: magnitudes below a small floor read as zero, and above
+  it the distance from the center is the number of decades, carrying the sign.
+  Two sine waves an order of magnitude apart then sit a decade apart at their
+  peaks instead of the smaller one flattening against the baseline, and both
+  still cross a real zero line.
+
+The floor scales with the largest value on the plot, so a trace living at
+`1e-6` plots the same shape as one living at `1`. What you give up is
+resolution near zero: a value dipping to `1e-11` on its way through a zero
+crossing is drawn as zero rather than diving off the bottom of the plot, which
+is the trade you are asking for by choosing log.
+
+The one thing no log axis can show is a trace pinned at exactly zero — there
+the chip greys out and the plot stays linear.
 
 Under the plot: **min**, **max**, **mean** and **sd** (sample standard
 deviation). These are fed from every captured value. When a frame produces more

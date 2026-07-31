@@ -1056,12 +1056,24 @@ exists only past one series — so `ui_assign_plot_panel_size()` takes both and
 `UiOverlayLayoutInputs` carries both to the overlay solver, which must reserve
 the real footprint or the zoomed panel overlaps its neighbours.
 
-The log-Y chip toggles a *request*: `ui_assign_plot_y_log_available()` gates it
-on every plotted value being strictly positive, since assignment values are
-routinely signed or zero and there is no honest place for those on a log axis.
-When it cannot be honored the axis stays linear, the chip draws in the
-placeholder color, and the router says so in the status line — a refusal that
-looked like a dead control would be worse than no control.
+The log-Y chip toggles a *request*; the data decides which log axis it gets.
+Strictly-positive values take a plain log10 axis. Anything crossing or touching
+zero takes a **symmetric** one (`AP_Y_SYMLOG`): magnitudes at or below a floor
+map to the center, and above it the position is `log10(|v| / floor)` carrying
+the sign. Assignment values are routinely sinusoidal, and without this the
+chip was simply unavailable for the most common shape in the language — while
+plotting raw `log10(|v|)` would spend most of the well on the 1e-11 dive a
+sampled sine makes through its zero crossings.
+
+The floor is `max_abs * AP_SYMLOG_REL_FLOOR`, capped at `AP_SYMLOG_MAX_FLOOR`.
+Deriving it from the peak makes the plot scale-invariant — the same shape comes
+out at 1e0 or 1e-6, where a fixed constant would swallow the trace whole. The
+absolute term is a *ceiling* on the floor and so only binds above unit scale,
+where it keeps hundredths resolvable. `ui_assign_plot_y_log_available()` is
+correspondingly weak now: the only refusal left is a trace pinned at exactly
+zero, which has no decade in either direction. When it cannot be honored the
+axis stays linear, the chip draws in the placeholder color, and the router says
+so — a refusal that looked like a dead control would be worse than no control.
 
 Routing enters at `route_right_code_panel_hit()`
 ([`src/app/glr_ctrl_router.c`](../src/app/glr_ctrl_router.c)) **before** the
