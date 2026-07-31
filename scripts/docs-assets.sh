@@ -71,6 +71,10 @@ CH_CODE_CROP=450x233+8+86     # cursor-highlight: code rows 49..61 (both tri() c
 CH_SCENE_CROP=450x352+382+396 # cursor-highlight: scene pane spanning both triangles
 VG_CODE_CROP=592x57+8+104     # vertex-guides: code rows 4..6 (glBegin + the vertex rows)
 VG_SCENE_CROP=592x390+305+365 # vertex-guides: scene pane framing all four guide shapes
+XG_CODE_CROP=596x112+8+46     # xform-guide-montage: code rows 1..6 (the whole program)
+XG_SCENE_CROP=596x280+400+420 # xform-guide-montage: scene pane around origin + guide
+XM_CODE_CROP=800x150+8+46     # xform-guide-mode: code rows 1..8 (the whole program)
+XM_SCENE_CROP=800x240+28+368  # xform-guide-mode: scene pane spanning both anchors
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -123,7 +127,8 @@ PNG_ASSETS=(
     winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges export-c-grass export-c-knobs
-    motion-blur xform-guide-still single-polygon-scope label-placement
+    motion-blur xform-guide-montage xform-guide-mode
+    single-polygon-scope label-placement
     vertex-guides cursor-highlight clip-plane autocomplete
     color-picker numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-frames
@@ -570,6 +575,17 @@ montage1x2() {
         \( "$b" -bordercolor black -border 2 \) +append -background black "$out"
 }
 
+# montage2x1 <out> <a> <b> — stack two images vertically, same style. Use it
+# when the pair differs along the HORIZONTAL axis (two takes of the same wide
+# scene): stacking keeps a screen x in both tiles at the same image x, so the
+# difference reads as a vertical offset instead of a search across the page.
+montage2x1() {
+    local out=$1 a=$2 b=$3
+    magick \
+        \( "$a" -bordercolor black -border 2 \) \
+        \( "$b" -bordercolor black -border 2 \) -append -background black "$out"
+}
+
 # ---- staged scenes ------------------------------------------------------
 
 stage_triangle() { stage triangle <<'EOF'
@@ -883,6 +899,93 @@ glTranslatef(2, 0.8, 0);
 glColor3f(0.1, 0.95, 0.85);
 glutSolidCube(0.5);
 glPopMatrix();
+// Snippet end
+EOF
+}
+
+# One transform-guide kind per tiny program, cursor on line 4 (GLR_EDIT_LINE=3
+# at the call site) — the transform whose guide is on show. Four programs rather
+# than four cursor stops in one, so every tile's code strip is the whole program
+# at the same crop and every guide anchors at the same place: the cursor line is
+# the FIRST transform in each, so the default Frame mode's anchor (the
+# pre-cursor modelview's origin) is the world origin in all four tiles.
+#
+#   translate     arrow = the argument vector, tip where the cube lands.
+#   rotate        anchored on the rotation axis, so the guide draws its
+#                 synthetic dial (see draw_rotate_guide); the trailing
+#                 glTranslatef is there to give the sweep something visibly
+#                 rotated to point at.
+#   scale         the anchor is the origin, so scale always draws the 3-axis
+#                 gizmo: gray unit reference per axis, pulse arrow only on the
+#                 axes whose factor differs from 1. NO trailing translate in
+#                 either scale tile — offset geometry would sit off the gizmo
+#                 and read as a guide that missed its own cube.
+#   scale-origin  the same gizmo with all three factors off 1 (and one of them
+#                 below 1, so an inward arrow is in the montage too).
+#
+# Colors are active accent-palette anchors (make palette-list), one per tile so
+# a tile is identifiable at a glance; the guide derives its own color from the
+# command's vector, not from glColor3f.
+stage_xform_guide() {  # $1 = translate | rotate | scale | scale-origin
+    local color body
+    case "$1" in
+        translate)
+            color='1, 0.35, 0.2'
+            body='glTranslatef(2, 0.8, 0);
+glutSolidCube(0.4);' ;;
+        rotate)
+            color='0.1, 0.95, 0.85'
+            body='glRotatef(70, 0, 1, 0);
+glTranslatef(2, 0.3, 0);
+glutSolidCube(0.5);' ;;
+        scale)
+            color='1, 0.85, 0.15'
+            body='glScalef(2.2, 1, 1);
+glutSolidCube(0.35);' ;;
+        scale-origin)
+            color='0.55, 0.3, 1'
+            body='glScalef(1.8, 0.6, 1.4);
+glutSolidCube(0.35);' ;;
+        *)  echo "docs-assets: unknown xform guide case '$1'" >&2; return 1 ;;
+    esac
+    stage "xg-$1" <<EOF
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glColor3f($color);
+$body
+// Snippet end
+EOF
+}
+
+# World vs Frame guide mode, same program and same cursor line both times
+# (the second glTranslatef, GLR_EDIT_LINE=6) so only the anchor moves: World
+# draws from the world origin, Frame from where the pre-cursor modelview left
+# it — the first cube — which puts the Frame arrow's tip on the second cube and
+# the World arrow's tip in empty space. That contrast is the whole asset.
+#
+# The vector is deliberately diagonal: an axis-aligned one would draw both
+# arrows along the red world X axis line, where the two anchors are much harder
+# to tell apart. transform_guides has no symbolic cfg form, so the mode is the
+# raw enum ordinal — 1 = RENDER3D_XFORM_GUIDE_WORLD, 2 = _FRAME.
+stage_xform_guide_mode() {  # $1 = 1 (World) | 2 (Frame)
+    stage "xgm-$1" <<EOF
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg transform_guides = $1 */
+// Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glColor3f(1, 0.35, 0.2);
+glTranslatef(1.8, 0.4, 0);
+glutSolidCube(0.5);
+glColor3f(0.1, 0.95, 0.85);
+glTranslatef(-3.6, 1, 0);
+glutSolidCube(0.5);
 // Snippet end
 EOF
 }
@@ -1598,9 +1701,48 @@ fi
 # Subshells: WARM and the exported GLR_* capture hooks are set inside ( ) so
 # they stay scoped to one capture — explicit, and safe even under shells
 # (POSIX mode) where a VAR=x prefix on a function call persists after it.
-if want xform-guide-still; then
-    ( export GLR_EDIT_LINE=5
-      still "$OUT/xform-guide-still.png" 16 "$(stage_guide)" )
+
+# Transform guides, one tile per guide kind (see stage_xform_guide). Each tile
+# is a code strip above a scene strip at NATIVE resolution, same construction as
+# vertex-guides: the program that produced the guide rides in the image with the
+# cursor row highlighted, so the montage needs no font-drawn captions and the
+# User Guide never has to quote a copy of the code that can drift from it.
+if want xform-guide-montage; then
+    xg_tiles=()
+    for kind in translate rotate scale scale-origin; do
+        ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=3
+          still "$WORK/xg-$kind.png" 16 "$(stage_xform_guide "$kind")" )
+        magick "$WORK/xg-$kind.png" -crop "$XG_CODE_CROP" +repage \
+            "$WORK/xg-c-$kind.png"
+        magick "$WORK/xg-$kind.png" -crop "$XG_SCENE_CROP" +repage \
+            "$WORK/xg-s-$kind.png"
+        magick "$WORK/xg-c-$kind.png" "$WORK/xg-s-$kind.png" -append \
+            -background black "$WORK/xg-t-$kind.png"
+        xg_tiles+=("$WORK/xg-t-$kind.png")
+    done
+    montage2x2 "$WORK/xg-2x2.png" "${xg_tiles[@]}"
+    write_png "$WORK/xg-2x2.png" "$OUT/xform-guide-montage.png"
+    echo "docs-assets: wrote $OUT/xform-guide-montage.png"
+fi
+
+# Guide mode: the SAME program and cursor twice, differing only in the
+# transform_guides cfg, stacked so the two anchors line up vertically. One
+# shared code strip (the two captures render an identical code panel), and the
+# widths are picked to match montage2x1's output exactly -- 800 + 2*2 both ways
+# -- so the vertical append needs no padding.
+if want xform-guide-mode; then
+    ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=6
+      still "$WORK/xgm-world.png" 16 "$(stage_xform_guide_mode 1)"
+      still "$WORK/xgm-frame.png" 16 "$(stage_xform_guide_mode 2)" )
+    magick "$WORK/xgm-world.png" -crop "$XM_CODE_CROP" +repage \
+        -bordercolor black -border 2 "$WORK/xgm-code.png"
+    magick "$WORK/xgm-world.png" -crop "$XM_SCENE_CROP" +repage "$WORK/xgm-a.png"
+    magick "$WORK/xgm-frame.png" -crop "$XM_SCENE_CROP" +repage "$WORK/xgm-b.png"
+    montage2x1 "$WORK/xgm-pair.png" "$WORK/xgm-a.png" "$WORK/xgm-b.png"
+    magick "$WORK/xgm-code.png" "$WORK/xgm-pair.png" -append \
+        -background black "$WORK/xgm-all.png"
+    write_png "$WORK/xgm-all.png" "$OUT/xform-guide-mode.png"
+    echo "docs-assets: wrote $OUT/xform-guide-mode.png"
 fi
 
 # Mid-typing states: GLR_TYPE_KEYS feeds the partial line through the real

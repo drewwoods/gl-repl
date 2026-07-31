@@ -1427,77 +1427,54 @@ alone even though both share the same `glBegin`/`glEnd` pair.
 ### Transform guides
 
 With **Transform guides** on (Ctrl+Shift+X), placing the cursor on a committed
-`glTranslatef` / `glRotatef` / `glScalef` line draws an overlay arrow or arc
-showing what that line does — color-coded by axis (X=red, Y=green, Z=blue
-blends), with a pulse traveling along the path:
+`glTranslatef` / `glRotatef` / `glScalef` line draws an overlay showing what
+that line does. Every guide is drawn in the same "axes pulse" language — a dim
+base shape with a bright dot traveling along it — colored from the command's
+own vector, so a pure-axis transform reads as a pure axis color (X=red,
+Y=green, Z=blue) and diagonals blend:
 
-![Cursor on a glTranslatef line: the guide shows the displacement](images/xform-guide-still.png)
+![Four transform guides: a translate arrow, a rotate dial, and two scale gizmos, each with the program that produced it](images/xform-guide-montage.png)
+
+Each kind draws its own shape, labeled with its own readout:
+
+- **Translate** — an arrow along the argument vector, tip where the geometry
+  lands, labeled with the endpoint position.
+- **Rotate** — a dial in the plane of the rotation, swept by the pulse in the
+  direction of the turn and labeled with the angle.
+- **Scale** — a 3-axis gizmo: a gray unit reference with a tick at `1.0` on
+  each axis, and a pulsing arrow only on the axes whose factor is not 1 —
+  outward for `> 1`, inward for `< 1` (the green Y arrow in the last tile).
 
 Guides only appear when the line parsed cleanly and your current input
 matches the committed source — partial or mid-edit lines are skipped.
 
-All guides share an "axes pulse" visual language: a dim solid base line or
-arc with a bright dot traveling along it and a short fading trail behind.
-The color is derived from the command's vector so the shape of the motion
-reads at a glance:
-
-- **Translate** — shaft color is `(|tx|, |ty|, |tz|)` normalized by its max
-  component, mapped to RGB. A pure-axis translation reads as a pure axis
-  color (`glTranslatef(2, 0, 0)` → red, `glTranslatef(0, 0, -3)` → blue);
-  diagonals blend. A 4-fin pyramid arrowhead marks the tip.
-- **Rotate** — shaft color is `(|ax|, |ay|, |az|)` normalized, so a Y-axis
-  rotation reads green. The axis stub through the rotation pivot shares the
-  color; the pulse dot sweeps along the arc so direction is unambiguous.
-  (When the "before" point lies on the rotation axis the arc collapses to a
-  point — hover a rotate line whose pivot is off-axis to see the sweep.)
-- **Scale** — shaft color is `(|sx-1|, |sy-1|, |sz-1|)` normalized, so the
-  color highlights which axes deviate from identity (`glScalef(2, 1, 1)`
-  reads red). The arrow runs from the "before" point to the component-wise
-  scaled result. If the "before" point is at the origin, a 3-axis gizmo is
-  drawn instead: a gray unit reference segment and a pulsing arrow per axis
-  in that axis's color.
-
-#### What is the "before" point?
-
-OpenGL applies transforms in reverse source order when computing a vertex:
-`M_1 · M_2 · ... · M_n · v`. That means the cursor's command `C_k` operates
-on the point that the *later* commands `C_{k+1..n}` have already placed.
-The guide starts at that point. Accumulation of the post-cursor transforms
-stops at the first draw call (`glBegin`, the `glutSolid*` shapes, a tess
-polygon) — transforms after an intervening draw don't factor in.
-
 #### Guide mode
 
-The Config menu has an **Xform guide mode** toggle with two options:
+**Transform guides** is a three-state setting — Ctrl+Shift+X (or the Config
+menu row) cycles Off → World → Frame — and the two on-states differ in *where*
+the guide is anchored. It is worth knowing which one you are reading: OpenGL
+applies transforms in reverse source order when computing a vertex
+(`M_1 · M_2 · ... · M_n · v`), so the literal reading of a transform line is
+often not where you see it act.
 
-- **World** — the guide is rendered in world axes at the world origin: the
-  strict OpenGL reverse-order reading of your line, independent of
-  surrounding transforms. Cursor on the last line of
+![The same glTranslatef line under World mode and under Frame mode: World anchors the arrow at the world origin, Frame at the first cube](images/xform-guide-mode.png)
 
-  ```
-  glTranslatef(0, 0, 2);
-  glRotatef(45, 0, 1, 0);
-  glTranslatef(0, 0, -2);   // cursor here
-  ```
+Both captures above run the same program with the cursor on the same
+`glTranslatef(-3.6, 1, 0)`; only the mode differs.
 
-  shows an arrow from `(0, 0, 0)` to `(0, 0, -2)` along world Z.
-
-- **Frame** *(default)* — the guide anchors at the scene-world position the
-  full pre-cursor modelview has carried the origin to, so it lines up
-  visually with geometry drawn by earlier `func0()` / `glBegin` blocks.
-  Only the anchor comes from the pre-cursor matrix — the guide itself still
-  draws with world-axis orientation. Cursor on the second translate in
-
-  ```
-  glTranslatef(2, 0, 0);
-  func0();
-  glTranslatef(-4, 0, 0);   // cursor here
-  func0();
-  ```
-
-  anchors the guide at `x = 2`, so the arrow runs `(2, 0, 0)` →
-  `(-2, 0, 0)`, matching the rendered triangles. World mode would draw
-  `(0, 0, 0)` → `(-4, 0, 0)`.
+- **World** *(top)* — the strict reverse-order reading, drawn in world axes
+  starting from the point the commands *after* the cursor have already placed
+  (accumulation stops at the first draw call — `glBegin`, a `glutSolid*`
+  shape, a tess polygon). Here nothing follows the cursor but the cube, so the
+  arrow leaves the world origin and ends in empty space. When post-cursor
+  transforms *do* carry that point off the origin, rotate sweeps the point
+  itself instead of drawing a dial, and scale draws a single before → after
+  arrow instead of the gizmo.
+- **Frame** *(default, bottom)* — anchored where the modelview *before* the
+  cursor has carried the origin: the first cube. The same vector now runs from
+  the first cube to the second, lining up with the geometry as rendered. Only
+  the anchor comes from the pre-cursor matrix — the guide still draws with
+  world-axis orientation.
 
 The *Transform stress* example (F12 to cycle to it) is built to exercise
 all three transform guides (translate, rotate, scale) at once.
