@@ -512,11 +512,23 @@ before render3d renders.
 
 [`autonormal.c`](autonormal.c) keeps `glNormal3f` commands in sync with the geometry, at
 the **source** level. When enabled and `normals_dirty` is set,
-[`repl_recompute_autonormals()`](pipeline.h#L34) recomputes face normals (cross product of
+[`repl_recompute_autonormals()`](pipeline.h#L51) recomputes face normals (cross product of
 triangle edges, normalized) and inserts/updates `is_auto` `CMD_NORMAL3F`
 commands ahead of the vertices that feed them. Because it edits the
 source array (and can shift the cursor), it runs *before* flatten and
 takes the edit-line by reference.
+
+The caller passes a `ReplAutoNormalMode`, not a flag.
+`REPL_AUTONORMAL_FACE` is the walk above. `REPL_AUTONORMAL_SMOOTH` runs a
+separate accumulate-and-weld pass instead: each face adds its *unnormalized*
+normal (magnitude = 2x area, so the average is area-weighted) to every one of
+its own vertices, coincident positions within the block are welded so a corner
+repeated as several `glVertex3f` lines shades as one, then each sum is
+normalized. The two passes stay separate functions — the face walk leans on
+per-primitive "which vertex owns this face" rules that stop meaning anything
+once a vertex can hold several faces. Both modes emit one normal row per
+vertex, so switching modes rewrites the existing `is_auto` rows in place
+rather than inserting a second set.
 
 ### 5.2 Flatten — lowering source to flat
 

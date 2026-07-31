@@ -3,6 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "repl/state_owners.h"
+#include "repl/pipeline.h"           /* ReplAutoNormalMode */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "ui/app/state.h"
@@ -246,11 +247,21 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("code panel layout left", glr_state_presentation().code_panel_layout, 0);
     ASSERT_STR("status left", g_last_status, "Layout: left code panel");
 
-    /* Test Auto-normals */
-    glr_state_presentation_mut()->autonormal = 0;
+    /* Test Auto-normals: a three-state cycle Off -> Face -> Smooth -> Off */
+    glr_state_presentation_mut()->autonormal = REPL_AUTONORMAL_OFF;
     glr_cfg_cycle_row(auto_normals_row, 1);
-    ASSERT_INT("autonormal ON", glr_state_presentation().autonormal, 1);
-    ASSERT_STR("status autonormal ON", g_last_status, "Auto-normals: ON");
+    ASSERT_INT("autonormal Face", glr_state_presentation().autonormal,
+               REPL_AUTONORMAL_FACE);
+    ASSERT_STR("status autonormal Face", g_last_status, "Auto-normals: Face");
+    glr_cfg_cycle_row(auto_normals_row, 1);
+    ASSERT_INT("autonormal Smooth", glr_state_presentation().autonormal,
+               REPL_AUTONORMAL_SMOOTH);
+    ASSERT_STR("status autonormal Smooth", g_last_status, "Auto-normals: Smooth");
+    glr_cfg_cycle_row(auto_normals_row, 1);
+    ASSERT_INT("autonormal Off", glr_state_presentation().autonormal,
+               REPL_AUTONORMAL_OFF);
+    ASSERT_STR("status autonormal Off", g_last_status,
+               "Auto-normals: Off (existing normals kept)");
 
     /* Test Point Attenuation */
     glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 0);

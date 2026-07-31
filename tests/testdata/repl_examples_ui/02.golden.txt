@@ -24,7 +24,7 @@
 /* @cfg winding = 0 */
 /* @cfg depth_view = 0 */
 /* @cfg stencil_view = 0 */
-/* @cfg auto_normals = 0 */
+/* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg label_highlight_scope = OVERLAY_SCOPE_AT_VERTEX */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_points = 1 */

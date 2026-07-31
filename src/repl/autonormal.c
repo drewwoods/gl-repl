@@ -26,16 +26,28 @@ static void normal_indent(int pos, char *buf, int buf_sz) {
     buf[spaces] = '\0';
 }
 
-static void face_normal(const float *a, const float *b, const float *c,
-                        float *n) {
+/* Unnormalized face normal: the edge cross product, whose magnitude is
+ * twice the triangle's area. The smooth pass accumulates these raw so
+ * larger faces weigh proportionally more at a shared vertex. */
+static void face_normal_raw(const float *a, const float *b, const float *c,
+                            float *n) {
     float e1[3] = { b[0]-a[0], b[1]-a[1], b[2]-a[2] };
     float e2[3] = { c[0]-a[0], c[1]-a[1], c[2]-a[2] };
     n[0] = e1[1]*e2[2] - e1[2]*e2[1];
     n[1] = e1[2]*e2[0] - e1[0]*e2[2];
     n[2] = e1[0]*e2[1] - e1[1]*e2[0];
+}
+
+static void normalize_or_zero(float *n) {
     float len = sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
     if (len > 1e-8f) { n[0] /= len; n[1] /= len; n[2] /= len; }
     else { n[0] = 0; n[1] = 0; n[2] = 0; }
+}
+
+static void face_normal(const float *a, const float *b, const float *c,
+                        float *n) {
+    face_normal_raw(a, b, c, n);
+    normalize_or_zero(n);
 }
 
 static GLCmd make_auto_normal(float nx, float ny, float nz) {
@@ -186,14 +198,134 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     }
 }
 
+/* Accumulate the face wound (vi[a], vi[b], vi[c]) onto every local vertex
+ * listed in `verts`. The winding triple and the receiving set are separate
+ * arguments because a strip/fan face is wound from three specific corners
+ * but deposits on all of its vertices (four, for the quad primitives). */
+static void accum_face(GLenum front_face, const int *vi, float norms[][3],
+                       int a, int b, int c, const int *verts, int nverts) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    float n[3];
+
+    face_normal_raw(cmds[vi[a]].args, cmds[vi[b]].args, cmds[vi[c]].args, n);
+    apply_front_face_to_normal(front_face, n);
+    for (int k = 0; k < nverts; k++) {
+        norms[verts[k]][0] += n[0];
+        norms[verts[k]][1] += n[1];
+        norms[verts[k]][2] += n[2];
+    }
+}
+
+static int same_position(const float *a, const float *b) {
+    float dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
+    return dx*dx + dy*dy + dz*dz <= 1e-12f;   /* 1e-6 in distance */
+}
+
+/* Join vertices that occupy the same position so a corner spelled as
+ * several separate glVertex3f lines (GL_TRIANGLES, GL_QUADS) shades as one
+ * — strips and fans already share by index, and accumulate for free.
+ * O(nv^2) over a single glBegin block. Each vertex accumulates into the
+ * first coincident vertex ahead of it, then reads the total back. */
+static void weld_coincident(const int *vi, int nv, float norms[][3]) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int rep[MAX_EDITOR_COMMANDS];
+
+    for (int i = 0; i < nv; i++) {
+        rep[i] = i;
+        for (int j = 0; j < i; j++) {
+            if (rep[j] == j &&
+                same_position(cmds[vi[i]].args, cmds[vi[j]].args)) {
+                rep[i] = j;
+                break;
+            }
+        }
+    }
+    for (int i = 0; i < nv; i++) {
+        if (rep[i] == i) continue;
+        for (int k = 0; k < 3; k++) {
+            norms[rep[i]][k] += norms[i][k];
+            norms[i][k] = 0;
+        }
+    }
+    for (int i = 0; i < nv; i++)
+        if (rep[i] != i)
+            memcpy(norms[i], norms[rep[i]], sizeof(norms[i]));
+}
+
+/* Smooth counterpart of compute_block_normals: every face deposits its
+ * area-weighted normal on each of its own vertices, coincident positions
+ * are welded, and the sums are normalized. Kept separate from the face
+ * walk rather than folded into it — the face pass writes one normal per
+ * face and leans on primitive-specific "which vertex owns this face"
+ * rules that have no meaning once a vertex can hold several faces. */
+static void compute_block_normals_smooth(GLenum mode, GLenum front_face,
+                                         int *vi, int nv, float norms[][3]) {
+    for (int idx = 0; idx < nv; idx++)
+        norms[idx][0] = norms[idx][1] = norms[idx][2] = 0;
+
+    switch (mode) {
+    case GL_TRIANGLES:
+        for (int idx = 0; idx + 2 < nv; idx += 3) {
+            int f[3] = { idx, idx+1, idx+2 };
+            accum_face(front_face, vi, norms, idx, idx+1, idx+2, f, 3);
+        }
+        break;
+    case GL_TRIANGLE_STRIP:
+        for (int idx = 0; idx + 2 < nv; idx++) {
+            int f[3] = { idx, idx+1, idx+2 };
+            /* Same alternating winding correction as the face pass. */
+            if (idx % 2 == 0)
+                accum_face(front_face, vi, norms, idx, idx+1, idx+2, f, 3);
+            else
+                accum_face(front_face, vi, norms, idx, idx+2, idx+1, f, 3);
+        }
+        break;
+    case GL_TRIANGLE_FAN:
+        for (int idx = 1; idx + 1 < nv; idx++) {
+            int f[3] = { 0, idx, idx+1 };
+            accum_face(front_face, vi, norms, 0, idx, idx+1, f, 3);
+        }
+        break;
+    case GL_QUADS:
+        for (int idx = 0; idx + 3 < nv; idx += 4) {
+            int f[4] = { idx, idx+1, idx+2, idx+3 };
+            accum_face(front_face, vi, norms, idx, idx+1, idx+2, f, 4);
+        }
+        break;
+    case GL_QUAD_STRIP:
+        for (int idx = 0; idx + 3 < nv; idx += 2) {
+            int f[4] = { idx, idx+1, idx+2, idx+3 };
+            accum_face(front_face, vi, norms, idx, idx+1, idx+2, f, 4);
+        }
+        break;
+    case GL_POLYGON:
+        if (nv >= 3) {
+            /* One planar face: wind it from the first three vertices and
+             * give every vertex the same normal, exactly as the face pass
+             * does. Nothing to average. */
+            for (int idx = 0; idx < nv; idx++) {
+                int one = idx;
+                accum_face(front_face, vi, norms, 0, 1, 2, &one, 1);
+            }
+        }
+        break;
+    default:
+        break;
+    }
+
+    weld_coincident(vi, nv, norms);
+    for (int idx = 0; idx < nv; idx++)
+        normalize_or_zero(norms[idx]);
+}
+
 /* The `autonormal` toggle moved out of REPL state onto `glr_state`. The
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
  * by passing the toggle explicitly (implemented as step 7a of
  * feature/decouple-repl-from-gl-repl-alt.md). */
-void repl_recompute_autonormals(int autonormal_enabled,
+void repl_recompute_autonormals(int autonormal_mode,
                                 int *edit_line_inout) {
-    if (!autonormal_enabled) return;
+    if (autonormal_mode == REPL_AUTONORMAL_OFF) return;
 
     int i = 0;
     GLenum front_face = GL_CCW;
@@ -249,7 +381,10 @@ void repl_recompute_autonormals(int autonormal_enabled,
         }
 
         float norms[MAX_EDITOR_COMMANDS][3];
-        compute_block_normals(mode, front_face, vi, nv, norms);
+        if (autonormal_mode == REPL_AUTONORMAL_SMOOTH)
+            compute_block_normals_smooth(mode, front_face, vi, nv, norms);
+        else
+            compute_block_normals(mode, front_face, vi, nv, norms);
 
         int offset = 0;
         for (int v = 0; v < nv; v++) {

@@ -40,7 +40,7 @@ typedef struct {
     int vertex_outline_style;
     int show_vertex_points;
     Render3dXformGuideMode xform_guide_mode;
-    int autonormal;
+    int autonormal;   /* ReplAutoNormalMode (repl/pipeline.h): off/face/smooth */
     int show_light_indicators;
     int light_theme;
     int backdrop_mode;

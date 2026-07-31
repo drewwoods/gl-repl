@@ -1295,7 +1295,14 @@ an invisible depth seed), and under Polygon highlight = On it ignores clipping
 and culling too — so you can get a cut, culled outline with a whole-shape
 highlight over it.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
-  geometry so lighting works without hand-written normals.
+  geometry so lighting works without hand-written normals. **Face** gives
+  every vertex of a primitive that primitive's own normal (hard edges);
+  **Smooth** averages the faces meeting at each vertex, area-weighted, so
+  curved surfaces shade continuously. Smooth joins vertices that share a
+  position within one `glBegin` block, which is what makes a corner spelled
+  as several `glVertex3f` lines shade as one. Either way, a block with any
+  expression-valued coordinate is left alone — the pass reads literal source
+  coordinates.
 
 Decluttered label scopes give active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,

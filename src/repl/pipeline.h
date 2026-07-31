@@ -31,7 +31,24 @@ ReplFlatRefreshKind repl_refresh_flat_program_for_deps(
  * call. The display controller must close every scope it opens. */
 void repl_flat_refresh_profile_frame_begin(void);
 void repl_flat_refresh_profile_frame_end(void);
-void repl_recompute_autonormals(int autonormal_enabled,
+/* Auto-normal shading modes. The value is owned by glr_state's config
+ * (GLR_CONFIG_AUTO_NORMALS) and passed in by the caller — see the comment
+ * on repl_recompute_autonormals. FACE gives every vertex of a primitive
+ * its face's normal; SMOOTH averages the faces meeting at each vertex,
+ * welding coincident positions within one glBegin block. */
+#define REPL_AUTONORMAL_LIST(X) \
+    X(OFF,    "Off")            \
+    X(FACE,   "Face")           \
+    X(SMOOTH, "Smooth")
+
+typedef enum ReplAutoNormalMode {
+#define REPL_AUTONORMAL_ENUM_ENTRY(name, str) REPL_AUTONORMAL_##name,
+    REPL_AUTONORMAL_LIST(REPL_AUTONORMAL_ENUM_ENTRY)
+#undef REPL_AUTONORMAL_ENUM_ENTRY
+    REPL_AUTONORMAL_COUNT
+} ReplAutoNormalMode;
+
+void repl_recompute_autonormals(int autonormal_mode,
                                 int *edit_line_inout);
 void repl_refresh_camera_lines(void);
 void repl_refresh_render_state_strings(void);

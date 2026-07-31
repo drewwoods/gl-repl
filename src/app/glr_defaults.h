@@ -127,7 +127,7 @@
 #define CFG_DEFAULT_MULTISAMPLE       1
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
-#define CFG_DEFAULT_AUTONORMAL        0
+#define CFG_DEFAULT_AUTONORMAL        0  /* REPL_AUTONORMAL_OFF */
 #define CFG_DEFAULT_HIGHLIGHT_POLY    POLY_HIGHLIGHT_ON
 /* use_accum is the "accum buffer is usable" gate (the --accum /
  * --no-accum switches), NOT the AA on/off toggle. AA renders only when

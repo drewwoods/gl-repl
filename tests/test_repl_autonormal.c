@@ -403,6 +403,140 @@ static void test_autonormal_inside_funcn_var_args_skipped(void) {
                repl_state_document_count(), cmds_before);
 }
 
+/* ------------------------------------------------------------------ */
+/* REPL_AUTONORMAL_SMOOTH                                              */
+/* ------------------------------------------------------------------ */
+
+/* Two right triangles meeting along the edge (0,0,0)-(1,0,0), one in the
+ * XY plane (face normal +z), one in the XZ plane (face normal +y), fed as
+ * GL_TRIANGLES so the shared corners are *separate* glVertex3f lines.
+ * Smooth mode must weld those by position: the two shared corners average
+ * to (0, 1, 1)/sqrt(2), the two lone corners keep their own face normal. */
+static void feed_folded_pair(void) {
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+}
+
+static void test_smooth_welds_shared_corners(void) {
+    printf("test_smooth_welds_shared_corners\n");
+
+    const float k = 0.70710678f;  /* 1/sqrt(2) */
+
+    feed_folded_pair();
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+
+    /* BEGIN + 6 vertices + 6 auto-normals + END */
+    ASSERT_INT("smooth: cmd count", repl_state_document_count(), 14);
+
+    /* v0 = (0,0,0), shared by both faces */
+    ASSERT_FLOAT("smooth: shared v0 x", repl_state_document_cmds_mut()[1].args[0], 0.0f);
+    ASSERT_FLOAT("smooth: shared v0 y", repl_state_document_cmds_mut()[1].args[1], k);
+    ASSERT_FLOAT("smooth: shared v0 z", repl_state_document_cmds_mut()[1].args[2], k);
+    /* v1 = (1,0,0), also shared */
+    ASSERT_FLOAT("smooth: shared v1 y", repl_state_document_cmds_mut()[3].args[1], k);
+    ASSERT_FLOAT("smooth: shared v1 z", repl_state_document_cmds_mut()[3].args[2], k);
+    /* v2 = (0,1,0), only on the XY face */
+    ASSERT_FLOAT("smooth: lone v2 y", repl_state_document_cmds_mut()[5].args[1], 0.0f);
+    ASSERT_FLOAT("smooth: lone v2 z", repl_state_document_cmds_mut()[5].args[2], 1.0f);
+    /* v3 = (0,0,0) again: the same welded average as v0 */
+    ASSERT_FLOAT("smooth: duplicate v3 y", repl_state_document_cmds_mut()[7].args[1], k);
+    ASSERT_FLOAT("smooth: duplicate v3 z", repl_state_document_cmds_mut()[7].args[2], k);
+    /* v4 = (0,0,1), only on the XZ face */
+    ASSERT_FLOAT("smooth: lone v4 y", repl_state_document_cmds_mut()[9].args[1], 1.0f);
+    ASSERT_FLOAT("smooth: lone v4 z", repl_state_document_cmds_mut()[9].args[2], 0.0f);
+    /* v5 = (1,0,0) again */
+    ASSERT_FLOAT("smooth: duplicate v5 y", repl_state_document_cmds_mut()[11].args[1], k);
+    ASSERT_FLOAT("smooth: duplicate v5 z", repl_state_document_cmds_mut()[11].args[2], k);
+}
+
+/* The same geometry under FACE mode keeps hard edges — the guard that
+ * smooth mode is an addition, not a change to the existing behavior. */
+static void test_face_mode_unchanged_by_smooth(void) {
+    printf("test_face_mode_unchanged_by_smooth\n");
+
+    feed_folded_pair();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+
+    ASSERT_FLOAT("face: v0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("face: v0 y", repl_state_document_cmds_mut()[1].args[1], 0.0f);
+    ASSERT_FLOAT("face: v2 z", repl_state_document_cmds_mut()[5].args[2], 1.0f);
+    ASSERT_FLOAT("face: v3 y", repl_state_document_cmds_mut()[7].args[1], 1.0f);
+    ASSERT_FLOAT("face: v3 z", repl_state_document_cmds_mut()[7].args[2], 0.0f);
+    ASSERT_FLOAT("face: v5 y", repl_state_document_cmds_mut()[11].args[1], 1.0f);
+}
+
+/* Strips share vertices by index, so they smooth without any welding.
+ * A flat strip must still come out unit-length everywhere (-z for the
+ * rung order below): if the alternating winding correction were dropped,
+ * the interior vertices would accumulate opposing normals and cancel to
+ * (0, 0, 0). */
+static void test_smooth_triangle_strip_stays_unit(void) {
+    printf("test_smooth_triangle_strip_stays_unit\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLE_STRIP);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glVertex3f(2, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+
+    for (int v = 0; v < 5; v++) {
+        char label[64];
+        snprintf(label, sizeof(label), "smooth strip: v%d is unit -z", v);
+        ASSERT_FLOAT(label, repl_state_document_cmds_mut()[1 + v * 2].args[2], -1.0f);
+    }
+}
+
+/* Smooth mode inherits the glFrontFace flip: GL_CW negates every
+ * accumulated face before it is averaged. */
+static void test_smooth_front_face_cw(void) {
+    printf("test_smooth_front_face_cw\n");
+
+    const float k = 0.70710678f;
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glFrontFace(GL_CW);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+
+    ASSERT_FLOAT("smooth cw: shared v0 y", repl_state_document_cmds_mut()[2].args[1], -k);
+    ASSERT_FLOAT("smooth cw: shared v0 z", repl_state_document_cmds_mut()[2].args[2], -k);
+    ASSERT_FLOAT("smooth cw: lone v2 z", repl_state_document_cmds_mut()[6].args[2], -1.0f);
+}
+
+/* Switching mode on an already-normalled document rewrites the existing
+ * is_auto rows in place instead of inserting a second set. */
+static void test_smooth_rewrites_existing_auto_rows(void) {
+    printf("test_smooth_rewrites_existing_auto_rows\n");
+
+    feed_folded_pair();
+    repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
+    int count_after_face = repl_state_document_count();
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+
+    ASSERT_INT("mode switch: no rows added", repl_state_document_count(),
+               count_after_face);
+    ASSERT_FLOAT("mode switch: v0 now averaged",
+                 repl_state_document_cmds_mut()[1].args[1], 0.70710678f);
+}
+
 int main(void) {
     test_degenerate_normal();
     test_triangle_strip();
@@ -416,6 +550,11 @@ int main(void) {
     test_gl_triangles();
     test_autonormal_inside_funcn_literal_coords();
     test_autonormal_inside_funcn_var_args_skipped();
+    test_smooth_welds_shared_corners();
+    test_face_mode_unchanged_by_smooth();
+    test_smooth_triangle_strip_stays_unit();
+    test_smooth_front_face_cw();
+    test_smooth_rewrites_existing_auto_rows();
 
     return test_harness_report(&g_harness, "test_repl_autonormal");
 }

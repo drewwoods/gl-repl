@@ -32,14 +32,43 @@ default that is sane for a bare scene.
 Pin or derive the value under test from the `CFG_DEFAULT_*` macro. Tests that
 hardcode "the current default" break every time a default is retuned.
 
+## Anything that is not a plain on/off exports a symbol, not a number
+
+A row with `state_count > 2` (or a 2-state row whose states aren't "on" and
+"off") needs a **symbol table** so `@cfg` reads
+`/* @cfg auto_normals = REPL_AUTONORMAL_SMOOTH */` instead of a bare `2`. Two
+edits in `src/app/glr_actions.c`:
+
+1. A `cfg_<thing>_symbols[]` array, generated from the owning enum's
+   `X_LIST(X)` macro so the names cannot drift from the enum:
+
+   ```c
+   static const char *cfg_auto_normal_symbols[REPL_AUTONORMAL_COUNT] = {
+   #define AUTO_NORMAL_SYMBOL_ENTRY(name, str) [REPL_AUTONORMAL_##name] = "REPL_AUTONORMAL_" #name,
+       REPL_AUTONORMAL_LIST(AUTO_NORMAL_SYMBOL_ENTRY)
+   #undef AUTO_NORMAL_SYMBOL_ENTRY
+   };
+   ```
+
+   Generate `.state_names` (the menu labels) from the same list macro. If the
+   enum has no list macro yet, add one where the enum lives — that is the
+   pattern every other multi-state key follows.
+
+2. A `strcmp` arm in `cfg_symbol_table_for_slug()` keyed on the **slug**, which
+   `cfg_slug_from_label()` derives from `.label` (lowercased, non-alnum runs →
+   `_`): "Auto-normals" → `auto_normals`. Old files keep loading — the reader
+   falls back to an integer literal when the text matches no symbol.
+
 ## Golden-fixture consequence (the step people miss)
 
-A new `GlrConfigKey` adds one `@cfg` line to **all 32 example goldens**.
-Regenerate rather than hand-editing:
+A new `GlrConfigKey` adds one `@cfg` line to **all 32 example goldens**, and
+adding a symbol table to an existing key rewrites that key's line in every one
+of them. Regenerate rather than hand-editing:
 
+- `make rebuild-golden BUILD=debug` rewrites all of them (wraps the stub test
+  binary's `--update-golden`); `--dump-index N` dumps a single example.
 - `make test_X` defaults to `BUILD=release`; rebuild with `BUILD=debug` before
   regenerating fixtures.
-- Regen via the stub test binary's `--dump-index` path.
 - `make test_repl_core_examples` is the focused suite.
 
 ## Config bridge

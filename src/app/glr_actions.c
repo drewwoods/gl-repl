@@ -402,6 +402,14 @@ static const char *depth_viz_names[] = { "Off", "Linear", "Scene", "Split" };
 /* Stencil view states mirror BufferVizStencilMode (stencil_viz.h). */
 static const char *stencil_viz_names[] = { "Off", "Palette", "Ramp", "Split" };
 static const char *accum_passes_names[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_NAME_ENTRY) };
+/* Auto-normal states come straight off ReplAutoNormalMode
+ * (repl/pipeline.h): Face gives each primitive one normal, Smooth averages
+ * the faces meeting at a vertex. */
+static const char *auto_normal_names[REPL_AUTONORMAL_COUNT] = {
+#define AUTO_NORMAL_NAME_ENTRY(name, str) [REPL_AUTONORMAL_##name] = str,
+    REPL_AUTONORMAL_LIST(AUTO_NORMAL_NAME_ENTRY)
+#undef AUTO_NORMAL_NAME_ENTRY
+};
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
  * menu entry, no keyboard-shortcut field here, no @cfg persistence).
@@ -522,7 +530,8 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Stencil view", .key = GLR_CONFIG_STENCIL_VIZ,
       .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names,
       .key_code = KM_KEY(GLR_STENCIL_VIZ), .modifiers = KM_MODS(GLR_STENCIL_VIZ) },
-    { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
+    { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS,
+      .state_count = ARRAY_LEN(auto_normal_names), .state_names = auto_normal_names },
     { .label = "---", .section_header = 1 },
 
     { .label = "### OVERLAYS", .section_header = 1 },
@@ -828,6 +837,11 @@ static const char *cfg_syntax_highlight_symbols[SYNTAX_HIGHLIGHT_COUNT] = {
     SYNTAX_HIGHLIGHT_LIST(SYNTAX_HIGHLIGHT_SYMBOL_ENTRY)
 #undef SYNTAX_HIGHLIGHT_SYMBOL_ENTRY
 };
+static const char *cfg_auto_normal_symbols[REPL_AUTONORMAL_COUNT] = {
+#define AUTO_NORMAL_SYMBOL_ENTRY(name, str) [REPL_AUTONORMAL_##name] = "REPL_AUTONORMAL_" #name,
+    REPL_AUTONORMAL_LIST(AUTO_NORMAL_SYMBOL_ENTRY)
+#undef AUTO_NORMAL_SYMBOL_ENTRY
+};
 static const char *cfg_post_fx_scope_symbols[GLR_POST_FX_SCOPE_COUNT] = {
 #define POST_FX_SCOPE_SYMBOL_ENTRY(suffix, name_str, symbol_str) [GLR_POST_FX_SCOPE_##suffix] = symbol_str,
     POST_FX_SCOPE_LIST(POST_FX_SCOPE_SYMBOL_ENTRY)
@@ -899,6 +913,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "syntax_highlight") == 0) {
         *count = SYNTAX_HIGHLIGHT_COUNT;
         return cfg_syntax_highlight_symbols;
+    }
+    if (strcmp(slug, "auto_normals") == 0) {
+        *count = REPL_AUTONORMAL_COUNT;
+        return cfg_auto_normal_symbols;
     }
     if (strcmp(slug, "post_fx_scope") == 0) {
         *count = GLR_POST_FX_SCOPE_COUNT;
@@ -1277,11 +1295,16 @@ void glr_cfg_cycle_row(int row, int delta) {
             repl_set_status("Layout: left code panel");
         }
     } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
-        if (glr_state_presentation().autonormal) {
-            repl_mark_source_dirty();
-            repl_set_status("Auto-normals: ON");
+        if (glr_state_presentation().autonormal == REPL_AUTONORMAL_OFF) {
+            repl_set_status("Auto-normals: Off (existing normals kept)");
         } else {
-            repl_set_status("Auto-normals: OFF (existing normals kept)");
+            /* Face <-> Smooth also needs the recompute: the rows are
+             * already there, but every one of them changes value. */
+            repl_mark_source_dirty();
+            snprintf(cfg_status_buf, sizeof(cfg_status_buf),
+                     "Auto-normals: %s",
+                     glr_config_state_name(item->key, new_value));
+            repl_set_status(cfg_status_buf);
         }
     } else if (item->key == GLR_CONFIG_POINT_ATTENUATION) {
         repl_apply_init_bootstrap();
