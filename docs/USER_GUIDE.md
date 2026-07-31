@@ -1210,30 +1210,35 @@ the whole scene to answer one question.
 ### Vertex entry guides
 
 While a `glVertex3f(` line is still being typed, the scene shows where the
-vertex *could* land given what's entered so far — one guide per remaining
-degree of freedom, colored by the axis you typed (X red, Y green, Z blue):
+vertex *could* still land given what you have entered so far. Each coordinate
+you type removes a degree of freedom, and the guide collapses to match — a
+surface, then a line, then a point:
 
-- **One coordinate typed** → a translucent graph-paper sheet spanning the
-  two open axes, with integer grid lines (the zero lines brighter), a
-  dashed ghost rim visible through geometry, and an `x = 1.2` readout
-  naming the pinned coordinate:
+![The guide narrowing as coordinates are typed: sheet at x = 1.2, then a line along z, then a point, then a fresh sheet for the next vertex](images/vertex-guides.png)
 
-![Typing glVertex3f(1.2 — the two open coordinates span a graph-paper sheet at x = 1.2](images/vertex-guide-plane.png)
+Reading in order, and the typed line above each panel is what produced it:
 
-- **Two coordinates typed** → the locus collapses to a line along the one
-  open axis, with integer tick dots (the 0 tick larger), end fades, a
-  dashed ghost pass through occluders, and the still-free axis named at
-  the positive end:
+- **One coordinate** → a translucent graph-paper sheet spanning the two open
+  axes, with integer grid lines (the zero lines brighter), a dashed ghost rim
+  visible through geometry, and an `x = 1.2` readout naming the coordinate you
+  pinned.
+- **Two coordinates** → the locus collapses to a line along the one open axis,
+  with integer tick dots (the 0 tick larger), end fades, a dashed ghost pass
+  through occluders, and the still-free axis named at the positive end.
+- **All three** → a point marker at the exact position, pulsing so it stays
+  findable against geometry. The same marker appears when the cursor sits on a
+  committed vertex line.
+- **The next vertex** starts the ladder over. In the last panel the first
+  vertex has been committed and a second is under way, pinned on `y` this time
+  — so the sheet is horizontal and green where the first was vertical and red.
 
-![Typing glVertex3f(1.2, 0.8 — one open coordinate leaves a tick-marked line along z](images/vertex-guide-line.png)
+The guide is colored by the axis you pinned (X red, Y green, Z blue), which is
+why the sheet changes color between the first and last panels.
 
-- **All three typed** → a pulsing point marker at the exact position (also
-  shown when the cursor sits on a committed vertex line).
-
-`glVertex2f` pins `z = 0` implicitly, so its first coordinate already
-narrows the guide to a line. Guides follow the cursor's transform context —
-inside a `glPushMatrix`/`glTranslatef` frame the sheet and line render in
-that frame, matching where the vertex will actually land.
+`glVertex2f` pins `z = 0` implicitly, so its first coordinate already narrows
+the guide to a line. Guides follow the cursor's transform context — inside a
+`glPushMatrix`/`glTranslatef` frame the sheet and line render in that frame,
+matching where the vertex will actually land.
 
 ### Cursor guides & vertex overlays
 

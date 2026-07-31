@@ -69,6 +69,8 @@ LP_CROP=545x300+362+402       # label-placement: scene pane around the two quads
 LP_CODE_CROP=1094x250+8+48    # label-placement: the code panel above it
 CH_CODE_CROP=450x233+8+86     # cursor-highlight: code rows 49..61 (both tri() calls)
 CH_SCENE_CROP=450x352+382+396 # cursor-highlight: scene pane spanning both triangles
+VG_CODE_CROP=592x57+8+104     # vertex-guides: code rows 4..6 (glBegin + the vertex rows)
+VG_SCENE_CROP=592x390+305+365 # vertex-guides: scene pane framing all four guide shapes
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -122,9 +124,8 @@ PNG_ASSETS=(
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges export-c-grass export-c-knobs
     motion-blur xform-guide-still single-polygon-scope label-placement
-    cursor-highlight
-    vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
-    numeric-stepper gl-state-inspector profile-panels
+    vertex-guides cursor-highlight clip-plane autocomplete
+    color-picker numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-frames
     sc-parametric-torus sc-bezier sc-orbit-plot sc-gl-repl-logo sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
@@ -894,17 +895,24 @@ EOF
 stage_vertex_entry() { stage vertex_entry <<'EOF'
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX_POS */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_OFF */
+// camera
+// -9.5 rather than the default framing: the 2-DOF sheet is a fixed-size quad
+// around the pinned coordinate, and at -6.5 the x = 1.2 one (a vertical plane,
+// seen near edge-on from this iso angle) runs off the bottom-right corner. This
+// distance fits all four guide shapes inside one shared crop.
+glTranslatef(0.0000f, 0.0000f, -9.5000f);
+glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);
+glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 // Snippet start
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 glBegin(GL_TRIANGLES);
-glVertex3f(-1, 0, 0);
-glVertex3f(1, 0, 0);
-glVertex3f(0, 1.4, 0);
 // Snippet end
 EOF
 }
@@ -1585,17 +1593,41 @@ if want xform-guide-still; then
       still "$OUT/xform-guide-still.png" 16 "$(stage_guide)" )
 fi
 
-# Mid-typing states: GLR_TYPE_KEYS feeds the partial line through the
-# real keyboard dispatch after load (see stage_vertex_entry). One typed
-# coordinate -> the 2-DOF graph-paper sheet; two -> the 1-DOF tick line.
-if want vertex-guide-plane; then
-    ( export GLR_TYPE_KEYS='glVertex3f(1.2'
-      still "$OUT/vertex-guide-plane.png" 16 "$(stage_vertex_entry)" )
-fi
-
-if want vertex-guide-line; then
-    ( export GLR_TYPE_KEYS='glVertex3f(1.2, 0.8'
-      still "$OUT/vertex-guide-line.png" 16 "$(stage_vertex_entry)" )
+# Mid-typing states: GLR_TYPE_KEYS feeds the partial line through the real
+# keyboard dispatch after load (see stage_vertex_entry), so the guides pose
+# without anyone touching a keyboard. One 2x2 montage walks the whole
+# degrees-of-freedom ladder in reading order:
+#
+#   one coordinate typed  -> 2-DOF graph-paper sheet   | two -> 1-DOF tick line
+#   all three             -> 0-DOF point marker        | next vertex -> sheet again
+#
+# The fourth tile is the one that needs the semicolon: it commits the first
+# vertex and starts a second, showing the ladder restart against geometry that
+# is already in the block. Each tile is a code strip (rows 4..6, so the typed
+# text that produced the guide rides in the image) above a scene strip, both
+# $VG_* crops, montaged at NATIVE resolution -- the typed line is the caption,
+# and a 2x downscale would blur it. GLR_NO_SPLASH keeps the startup wordmark
+# out of the scene pane; WARM_PLAIN is far short of the ~186-frame fade.
+if want vertex-guides; then
+    vg_keys=(
+        'glVertex3f(1.2'
+        'glVertex3f(1.2, 0.8'
+        'glVertex3f(1.2, 0.8, 0)'
+        'glVertex3f(1.2, 0.8, 0);glVertex3f(,1'
+    )
+    vg_tiles=()
+    for i in 0 1 2 3; do
+        ( export GLR_NO_SPLASH=1 GLR_TYPE_KEYS="${vg_keys[$i]}"
+          still "$WORK/vg-$i.png" 16 "$(stage_vertex_entry)" )
+        magick "$WORK/vg-$i.png" -crop "$VG_CODE_CROP" +repage "$WORK/vg-c$i.png"
+        magick "$WORK/vg-$i.png" -crop "$VG_SCENE_CROP" +repage "$WORK/vg-s$i.png"
+        magick "$WORK/vg-c$i.png" "$WORK/vg-s$i.png" -append \
+            -background black "$WORK/vg-t$i.png"
+        vg_tiles+=("$WORK/vg-t$i.png")
+    done
+    montage2x2 "$WORK/vg-2x2.png" "${vg_tiles[@]}"
+    write_png "$WORK/vg-2x2.png" "$OUT/vertex-guides.png"
+    echo "docs-assets: wrote $OUT/vertex-guides.png"
 fi
 
 # Autocomplete: the popup + inline ghost exist only mid-typing, so
