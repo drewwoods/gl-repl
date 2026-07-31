@@ -65,6 +65,7 @@ DEMOS="$OUT/demos"
 W=1200          # target width/height of every asset's source window
 H=800
 GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
+LP_CROP=545x300+362+402  # label-placement: scene pane around the two quads
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -117,7 +118,7 @@ PNG_ASSETS=(
     winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges export-c-grass export-c-knobs
-    motion-blur xform-guide-still single-polygon-scope
+    motion-blur xform-guide-still single-polygon-scope label-placement
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
     numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-frames
@@ -625,6 +626,44 @@ glVertex3f(1.6, -0.8, 0);
 glVertex3f(1.6, 0.8, 0);
 glVertex3f(0.2, 0.8, 0);
 glEnd();
+// Snippet end
+EOF
+}
+
+# One quad drawn twice by a loop, so the flat program holds two unrolled
+# copies of the same glBegin block. That is the case where the two label
+# numbering rules diverge: a decluttered label floats off its vertex and so
+# must be globally unique (v0..v7), while an at-vertex label sits on the
+# vertex it names and reads as its in-block ordinal (v0..v3, twice).
+# $1 = OVERLAY_LABEL_PLACEMENT_<NAME>. GLR_EDIT_LINE parks the cursor on the
+# block's first glVertex3f so the cursor-bound overlays fire.
+stage_label_placement() { stage "lp-$1" <<EOF
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES */
+/* @cfg vertex_label_placement = $1 */
+/* @cfg grid = GRID_THEME_OFF */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+// camera
+glTranslatef(0.0f, 0.0f, -4.6f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+// Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glColor3f(0.15, 0.55, 1);
+for(i, 0, 2) {
+glPushMatrix();
+glTranslatef(-1.05 + i * 2.1, 0, 0);
+glBegin(GL_QUADS);
+glVertex3f(-0.75, -0.85, 0);
+glVertex3f(0.75, -0.85, 0);
+glVertex3f(0.75, 0.85, 0);
+glVertex3f(-0.75, 0.85, 0);
+glEnd();
+glPopMatrix();
+}
 // Snippet end
 EOF
 }
@@ -1204,6 +1243,22 @@ fi
 if want single-polygon-scope; then
     ( export GLR_EDIT_LINE=10
       still "$OUT/single-polygon-scope.png" 16 "$(stage_single_polygon)" )
+fi
+
+# Cropped to the scene pane and montaged at NATIVE resolution rather than
+# resized to $W: this asset is read for its label text, and the 2x downscale
+# a full-window 1x2 montage needs makes v0..v7 illegible.
+if want label-placement; then
+    ( export GLR_EDIT_LINE=8
+      still "$WORK/lp-declutter.png" 16 \
+            "$(stage_label_placement OVERLAY_LABEL_PLACEMENT_DECLUTTERED)"
+      still "$WORK/lp-at-vertex.png" 16 \
+            "$(stage_label_placement OVERLAY_LABEL_PLACEMENT_AT_VERTEX)" )
+    magick "$WORK/lp-declutter.png" -crop "${LP_CROP}" +repage "$WORK/lp-a.png"
+    magick "$WORK/lp-at-vertex.png" -crop "${LP_CROP}" +repage "$WORK/lp-b.png"
+    montage1x2 "$WORK/lp-pair.png" "$WORK/lp-a.png" "$WORK/lp-b.png"
+    write_png "$WORK/lp-pair.png" "$OUT/label-placement.png"
+    echo "docs-assets: wrote $OUT/label-placement.png"
 fi
 
 if want wireframe-hidden-line; then

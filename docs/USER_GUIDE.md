@@ -1356,9 +1356,29 @@ Decluttered placement gives active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,
 rather than covering partial-vertex, normal, clip-plane, translate, or rotate
 labels. **At vertex** is the explicit exact-position placement and bypasses
-this decluttering — it also numbers labels by their index within the primitive
-rather than globally, since a label sitting on its own vertex has nothing to
-disambiguate.
+this decluttering.
+
+The placement also decides **how vertices are numbered**, because the two
+choices need different numbers to stay readable:
+
+![Label placement: the same looped quad decluttered (v0..v7, globally unique) and at vertex (v0..v3, repeated per copy)](images/label-placement.png)
+
+Both panels are the same scene — one quad drawn twice by a `for` loop, so the
+flat program holds two unrolled copies of one `glBegin` block — under
+*Cursor block, all instances* scope. Only the placement differs.
+
+- **Decluttered** (left) numbers **globally**: `v0`..`v7`. These labels float
+  off their vertex onto a clear row, so a repeated `v0`..`v3` per copy would
+  leave two labels reading `v2` sitting near each other with nothing but
+  crossing leader lines to say which quad each belongs to.
+- **At vertex** (right) numbers by **index within the primitive**: `v0`..`v3`,
+  once per copy. The label is drawn on the vertex it names, so there is
+  nothing to disambiguate, and the in-block ordinal is the more useful reading
+  — it tells you which corner of the quad you are on, and stays short. Global
+  numbering on a dense surface would put four-digit numbers on every vertex.
+
+*Last instance* and *Single polygon* keep only one copy, so both rules produce
+the same numbers there.
 
 **Single polygon** scope narrows labels and the polygon highlight down to
 just the one primitive your cursor is building, instead of the whole
