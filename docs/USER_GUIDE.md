@@ -961,22 +961,6 @@ ends the **innermost enclosing** loop; a jump inside a nested loop never
 touches the outer one. `continue` abandons the rest of the current
 iteration and starts the next.
 
-Two consequences of the REPL resolving them while it unrolls the loop:
-
-- They bind to a loop in the **same function body**. A `break` inside
-  `func0` cannot end a loop in the code that *called* `func0`, so a
-  statement with no loop of its own to leave is rejected when you commit
-  it. An `if` between the statement and its loop is transparent, as in C.
-- The condition guarding a jump is a **structural** input, exactly like a
-  loop bound: changing what it depends on re-flattens the program rather
-  than re-baking values into the existing shape. That is what lets a
-  `t`-driven `break` change the geometry as the animation runs.
-
-Neither statement produces a command in the flat program — they are gone by
-the time anything renders — so they take no flat-command budget, appear in
-no replay step, and cost nothing per frame beyond the guard that decides
-them.
-
 ### Functions
 
 ```c
