@@ -21,6 +21,29 @@ typedef enum OverlayVertexLabelMode {
     OVERLAY_VERTEX_LABEL_COUNT
 } OverlayVertexLabelMode;
 
+/* Where a label sits, which is a property of the label and not of the scope
+ * that chose which vertices get one — the two are orthogonal, so every label
+ * mode is reachable at either placement.
+ *
+ * DECLUTTERED runs the 2D layout pass: labels are pushed off each other along
+ * Y and yield to the fixed-priority cursor-guide text, so a crowded block
+ * stays readable at the cost of leader lines. AT_VERTEX bypasses that
+ * entirely and pins each label to its own projected vertex, additively
+ * blended — exact position, overlaps and all. It also stops labels being
+ * registered as guide-label obstacles, since they no longer claim a row. */
+#define OVERLAY_LABEL_PLACEMENT_LIST(X) \
+    X(DECLUTTERED, "Decluttered")       \
+    X(AT_VERTEX, "At vertex")
+
+#define OVERLAY_LABEL_PLACEMENT_NAME_ENTRY(name, str) [OVERLAY_LABEL_PLACEMENT_##name] = str,
+
+typedef enum OverlayLabelPlacement {
+#define OVERLAY_LABEL_PLACEMENT_ENUM_ENTRY(name, str) OVERLAY_LABEL_PLACEMENT_##name,
+    OVERLAY_LABEL_PLACEMENT_LIST(OVERLAY_LABEL_PLACEMENT_ENUM_ENTRY)
+#undef OVERLAY_LABEL_PLACEMENT_ENUM_ENTRY
+    OVERLAY_LABEL_PLACEMENT_COUNT
+} OverlayLabelPlacement;
+
 /* LAST_INSTANCE picks the final unrolled copy of the cursor's block. Flatten
  * threads assignments forward, so it is the copy whose loop-body variable
  * values the variable panel still reports, and the last one a replay draws —
@@ -31,18 +54,19 @@ typedef enum OverlayVertexLabelMode {
  * Every scope but WHOLE_SCENE is anchored to the block under the cursor —
  * hence the shared name prefix. WHOLE_SCENE drops the cursor anchor for
  * *labels* only: it numbers every vertex the program emits. The highlight
- * stays cursor-bound there (as it does under AT_VERTEX), because a highlight
- * that covers everything distinguishes nothing.
+ * stays cursor-bound there, because a highlight that covers everything
+ * distinguishes nothing.
  *
- * Occlusion is not a scope: vertex labels are always culled against the scene
- * depth buffer (a label you can see for a vertex you cannot is a lie about
- * where the geometry is). The polygon highlight is deliberately exempt — it
- * draws through hidden geometry so the cursor's shape stays findable. */
+ * A scope answers "which vertices get a label", nothing else. Two things that
+ * once lived in this list and do not belong to it: occlusion, which is now
+ * unconditional (a label you can see for a vertex you cannot is a lie about
+ * where the geometry is; the polygon highlight is deliberately exempt and
+ * still draws through hidden geometry so the cursor's shape stays findable),
+ * and at-vertex placement, which is OverlayLabelPlacement above. */
 #define OVERLAY_SCOPE_LIST(X) \
     X(LAST_INSTANCE, "Cursor block, last instance")  \
     X(ALL_INSTANCES, "Cursor block, all instances")  \
     X(WHOLE_SCENE, "Whole scene")                    \
-    X(AT_VERTEX, "Cursor block, at vertex")          \
     X(SINGLE_POLYGON, "Cursor block, single polygon")
 
 #define OVERLAY_SCOPE_NAME_ENTRY(name, str) [OVERLAY_SCOPE_##name] = str,
@@ -137,8 +161,8 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    int overlay_scope;    /* 0 = last loop instance, 1 = all, 2 = all at vertex
-                            * (no declutter), 3 = all but depth-tested (visible) */
+    int overlay_scope;          /* OverlayScope           */
+    int vertex_label_placement; /* OverlayLabelPlacement  */
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
@@ -154,7 +178,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx);
 void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
-                                         int label_options);
+                                         int scope,
+                                         int placement);
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 

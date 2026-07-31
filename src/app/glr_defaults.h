@@ -35,6 +35,7 @@
 #define CFG_DEFAULT_GRID_BRIGHTNESS_IDX GRID_BRIGHTNESS_NORMAL
 #define CFG_DEFAULT_AXES_THEME        AXES_THEME_OFF
 #define CFG_DEFAULT_VERTEX_LABELS     OVERLAY_VERTEX_LABEL_INDEX
+#define CFG_DEFAULT_VERTEX_LABEL_PLACEMENT OVERLAY_LABEL_PLACEMENT_DECLUTTERED
 /* Overlay scope: 0 = label/highlight the first representative copy of a
  * looped primitive (so the parametric torus shows v0..vN once, not
  * duplicated per ring);

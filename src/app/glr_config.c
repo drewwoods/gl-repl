@@ -244,6 +244,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_POST_FX_SCOPE:       return NULL; /* derived render fields */
     case GLR_CONFIG_POST_FX_EFFECT:      return NULL; /* derived render fields */
     case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
+    case GLR_CONFIG_VERTEX_LABEL_PLACEMENT: return &glr_state_presentation_mut()->vertex_label_placement;
     case GLR_CONFIG_OVERLAY_SCOPE:       return &glr_state_presentation_mut()->overlay_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
     case GLR_CONFIG_VERTEX_OUTLINES:      return &glr_state_presentation_mut()->show_vertex_outlines;
@@ -306,6 +307,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_POST_FX_SCOPE:       return glr_state_presentation().post_fx_scope;
     case GLR_CONFIG_POST_FX_EFFECT:      return glr_state_presentation().post_fx_effect;
     case GLR_CONFIG_VERTEX_LABELS:       return glr_state_presentation().show_vertex_labels;
+    case GLR_CONFIG_VERTEX_LABEL_PLACEMENT: return glr_state_presentation().vertex_label_placement;
     case GLR_CONFIG_OVERLAY_SCOPE:       return glr_state_presentation().overlay_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return glr_state_presentation().show_normal_vectors;
     case GLR_CONFIG_VERTEX_OUTLINES:      return glr_state_presentation().show_vertex_outlines;

@@ -313,6 +313,11 @@ static const char *audio_loop_status_label(int mode) {
 static const char *overlay_scope_names[OVERLAY_SCOPE_COUNT] = {
     OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_NAME_ENTRY)
 };
+/* Where labels sit, orthogonal to which vertices get one (overlay_scope_names
+ * above) -- the same split as Vertex outlines vs Vertex outline style. */
+static const char *vertex_label_placement_names[OVERLAY_LABEL_PLACEMENT_COUNT] = {
+    OVERLAY_LABEL_PLACEMENT_LIST(OVERLAY_LABEL_PLACEMENT_NAME_ENTRY)
+};
 /* Accumulation buffer split into two rows: the effect mode (Off / AA
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
  * its state index to an actual count on the supported ladder in
@@ -469,6 +474,9 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
       .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
       .is_special = 1 },
+    { .label = "Vertex label placement", .key = GLR_CONFIG_VERTEX_LABEL_PLACEMENT,
+      .state_count = OVERLAY_LABEL_PLACEMENT_COUNT,
+      .state_names = vertex_label_placement_names },
     { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2,
       .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
@@ -531,6 +539,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_GRID_BRIGHTNESS:
     case GLR_CONFIG_AXES_THEME:
     case GLR_CONFIG_VERTEX_LABELS:
+    case GLR_CONFIG_VERTEX_LABEL_PLACEMENT:
     case GLR_CONFIG_OVERLAY_SCOPE:
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
@@ -574,6 +583,7 @@ static const GlrCfgSceneDefault k_cfg_scene_defaults[] = {
     { GLR_CONFIG_GRID_BRIGHTNESS,      CFG_DEFAULT_GRID_BRIGHTNESS_IDX },
     { GLR_CONFIG_AXES_THEME,           CFG_DEFAULT_AXES_THEME },
     { GLR_CONFIG_VERTEX_LABELS,        CFG_DEFAULT_VERTEX_LABELS },
+    { GLR_CONFIG_VERTEX_LABEL_PLACEMENT, CFG_DEFAULT_VERTEX_LABEL_PLACEMENT },
     { GLR_CONFIG_OVERLAY_SCOPE,        CFG_DEFAULT_OVERLAY_SCOPE },
     { GLR_CONFIG_NORMAL_VECTORS,       CFG_DEFAULT_NORMAL_VECTORS },
     { GLR_CONFIG_VERTEX_OUTLINES,      CFG_DEFAULT_VERTEX_OUTLINES },
@@ -752,6 +762,11 @@ static const char *cfg_vertex_label_symbols[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_SYMBOL_ENTRY)
 #undef OVERLAY_VERTEX_LABEL_SYMBOL_ENTRY
 };
+static const char *cfg_vertex_label_placement_symbols[OVERLAY_LABEL_PLACEMENT_COUNT] = {
+#define OVERLAY_LABEL_PLACEMENT_SYMBOL_ENTRY(name, str) [OVERLAY_LABEL_PLACEMENT_##name] = "OVERLAY_LABEL_PLACEMENT_" #name,
+    OVERLAY_LABEL_PLACEMENT_LIST(OVERLAY_LABEL_PLACEMENT_SYMBOL_ENTRY)
+#undef OVERLAY_LABEL_PLACEMENT_SYMBOL_ENTRY
+};
 static const char *cfg_vertex_outline_style_symbols[VERTEX_OUTLINE_STYLE_COUNT] = {
 #define VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY(name, str) [VERTEX_OUTLINE_STYLE_##name] = "VERTEX_OUTLINE_STYLE_" #name,
     VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY)
@@ -830,6 +845,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "vertex_labels") == 0) {
         *count = OVERLAY_VERTEX_LABEL_COUNT;
         return cfg_vertex_label_symbols;
+    }
+    if (strcmp(slug, "vertex_label_placement") == 0) {
+        *count = OVERLAY_LABEL_PLACEMENT_COUNT;
+        return cfg_vertex_label_placement_symbols;
     }
     if (strcmp(slug, "vertex_outline_style") == 0) {
         *count = VERTEX_OUTLINE_STYLE_COUNT;

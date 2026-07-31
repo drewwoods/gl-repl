@@ -1330,13 +1330,11 @@ typedef struct {
     int   vw, vh;
     VertexLabel labels[VERTEX_LABEL_MAX];
     int   count;
-    /* Scope: 0 labels only the last unrolled copy of the cursor's looped
-     * primitive (the parametric torus shows v0..vN once, not per ring);
-     * 1 labels every unrolled vertex with a globally-unique number;
-     * 2 labels all instances at their vertex positions (without decluttering);
-     * 3 (visible) is like 1 but depth-tested so occluded vertices are dropped;
-     * 4 (single polygon) is 0 narrowed to the primitive under the cursor. */
-    int   label_options;
+    /* Which vertices get a label (OverlayScope) and where each one sits
+     * (OverlayLabelPlacement). Orthogonal: scope narrows the walk, placement
+     * only decides whether the 2D layout pass runs. */
+    int   scope;
+    int   placement;
     int   block_instances;   /* selected blocks (loop iterations) seen so far  */
     int   labelable_seen;    /* running index over all visited labelable verts */
     /* SINGLE_POLYGON scope: the cursor primitive's block-local ordinal range
@@ -1345,8 +1343,8 @@ typedef struct {
     int   poly_first;
     int   poly_last;
     int   poly_fan_anchor;
-    /* Visible-only scope: scene depth buffer (vw*vh, viewport-local, bottom-up)
-     * read once before the walk; NULL for every other scope. */
+    /* Scene depth buffer (vw*vh, viewport-local, bottom-up) read once before
+     * the walk, for the occlusion cull; NULL only if the readback failed. */
     const float *depthbuf;
 } VertexLabelCtx;
 
@@ -1537,14 +1535,14 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
      * whole-block labels by design. */
     if (state->vertex_idx_in_block == 0) {
         ctx->block_instances++;
-        if ((ctx->label_options == OVERLAY_SCOPE_LAST_INSTANCE ||
-             ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON) &&
+        if ((ctx->scope == OVERLAY_SCOPE_LAST_INSTANCE ||
+             ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON) &&
             ctx->block_instances > 1)
             ctx->count = 0;
     }
     global_num = ctx->labelable_seen++;
 
-    if (ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON &&
+    if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
         ctx->poly_valid && state->primitive_mode != 0) {
         int ord = state->vertex_idx_in_block;
         if (!((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
@@ -1575,12 +1573,19 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
             return;
     }
 
-    /* Scopes that keep more than one block need globally-unique numbers, or
-     * every unrolled copy repeats v0..vN. At-vertex is the exception: its
-     * labels sit on their own vertex, where the in-block ordinal is the
-     * useful reading. */
-    label_num = (ctx->label_options == OVERLAY_SCOPE_ALL_INSTANCES ||
-                 ctx->label_options == OVERLAY_SCOPE_WHOLE_SCENE)
+    /* Numbering exists to disambiguate, so it keys on whether ambiguity is
+     * possible — which is a question about both scope and placement.
+     *
+     * A decluttered label floats away from its vertex on a leader line, so
+     * once a scope keeps more than one unrolled copy a repeated v0..vN per
+     * copy is genuinely unreadable: number those globally. An at-vertex label
+     * sits ON the vertex it names, so there is nothing to disambiguate and
+     * the in-block ordinal is the more useful reading (and stays small —
+     * global numbering over a torus puts four-digit numbers on every vertex).
+     * Single-copy scopes are unambiguous either way. */
+    label_num = (ctx->placement != OVERLAY_LABEL_PLACEMENT_AT_VERTEX &&
+                 (ctx->scope == OVERLAY_SCOPE_ALL_INSTANCES ||
+                  ctx->scope == OVERLAY_SCOPE_WHOLE_SCENE))
                 ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     lbl->num = label_num;
@@ -1643,7 +1648,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->width = 1.0f;
     }
 
-    if (ctx->label_options == OVERLAY_SCOPE_AT_VERTEX) {
+    if (ctx->placement == OVERLAY_LABEL_PLACEMENT_AT_VERTEX) {
         for (i = 0; i < ctx->count; i++) {
             VertexLabel *l = &ctx->labels[i];
             l->drawn = 1;
@@ -1664,10 +1669,10 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
          * sticky across frames (see the TEMPORALLY STICKY note above). */
         g_label_sticky_frame++;
         if ((int)ctx->mode != g_label_sticky_mode ||
-            ctx->label_options != g_label_sticky_scope) {
+            ctx->scope != g_label_sticky_scope) {
             memset(g_label_sticky, 0, sizeof(g_label_sticky));
             g_label_sticky_mode  = (int)ctx->mode;
-            g_label_sticky_scope = ctx->label_options;
+            g_label_sticky_scope = ctx->scope;
         }
         for (oi = 0; oi < ctx->count; oi++) {
             VertexLabel *l = &ctx->labels[oi];
@@ -1935,7 +1940,8 @@ static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
 void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
-                                         int label_options) {
+                                         int scope,
+                                         int placement) {
     ReplayVertexWalkContext ctx;
     /* Big label store (the all-instances walk can collect a whole looped
      * surface); keep it off the render stack. Render is single-threaded and
@@ -1950,14 +1956,14 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     /* Whole-scene is the one scope that is not anchored to the cursor's
      * block, so it is the one that walks the program unfiltered. */
     ctx = edit_overlays_build_vertex_walk_context(
-        walk_ctx, label_options != OVERLAY_SCOPE_WHOLE_SCENE);
+        walk_ctx, scope != OVERLAY_SCOPE_WHOLE_SCENE);
     if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
         return;
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    if (label_options == OVERLAY_SCOPE_AT_VERTEX) {
+    if (placement == OVERLAY_LABEL_PLACEMENT_AT_VERTEX) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         render3d_clr_a(RENDER3D_CLR_VERTEX_LABEL, 0.5f);
@@ -1969,7 +1975,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.is_ortho        = is_ortho;
     label_ctx.view_inv_ok     = 0;
     label_ctx.count           = 0;
-    label_ctx.label_options   = label_options;
+    label_ctx.scope           = scope;
+    label_ctx.placement       = placement;
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
     label_ctx.depthbuf        = NULL;
@@ -2370,8 +2377,10 @@ void edit_overlays_post_overlays(void *user_data) {
     guide_label_obstacles_reset();
     snapshot = pack->snapshot;
     snapshot.label_sink = (Render3dGuideLabelSink){0};
+    /* At-vertex labels claim no layout row, so they are not obstacles the
+     * guide text has to route around. */
     if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF &&
-        pack->overlay_scope != OVERLAY_SCOPE_AT_VERTEX) {
+        pack->vertex_label_placement != OVERLAY_LABEL_PLACEMENT_AT_VERTEX) {
         snapshot.label_sink.record = guide_label_obstacles_record;
         snapshot.label_sink.user_data = NULL;
         normal_label_sink = &snapshot.label_sink;
@@ -2418,7 +2427,8 @@ void edit_overlays_post_resolve_overlays(void *user_data) {
         edit_overlays_render_vertex_numbers(&pack->walk,
                                             pack->vertex_label_mode,
                                             pack->ortho_mode,
-                                            pack->overlay_scope);
+                                            pack->overlay_scope,
+                                            pack->vertex_label_placement);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->walk.replay_vertex_label) {

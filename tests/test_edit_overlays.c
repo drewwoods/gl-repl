@@ -1804,7 +1804,7 @@ static void init_test_vertex_label_ctx(VertexLabelCtx *ctx, int scope) {
     set_identity(identity);
     memcpy(ctx->proj, identity, sizeof(identity));
     ctx->mode = OVERLAY_VERTEX_LABEL_INDEX;
-    ctx->label_options = scope;
+    ctx->scope = scope;
     ctx->vw = 1024;
     ctx->vh = 768;
     ctx->count = 1;
@@ -1875,7 +1875,7 @@ static void test_vertex_label_guide_obstacle_layout(void) {
                 ctx.labels[0].draw_y != ctx.labels[0].anchor_y);
 
     at_vertex = ctx;
-    at_vertex.label_options = OVERLAY_SCOPE_AT_VERTEX;
+    at_vertex.placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX;
     at_vertex.labels[0].draw_y = 0.0f;
     vertex_labels_layout_and_draw(&at_vertex);
     ASSERT_INT("At vertex still draws through guide obstacles",
@@ -2029,7 +2029,7 @@ static void test_overlay_scope(void) {
     VertexLabelCtx one;
     memset(&one, 0, sizeof(one));
     one.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    one.label_options = OVERLAY_SCOPE_LAST_INSTANCE;
+    one.scope = OVERLAY_SCOPE_LAST_INSTANCE;
     memcpy(one.proj, id, sizeof(id));
     one.vw = 1024;
     one.vh = 768;
@@ -2051,7 +2051,7 @@ static void test_overlay_scope(void) {
     VertexLabelCtx all;
     memset(&all, 0, sizeof(all));
     all.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    all.label_options = OVERLAY_SCOPE_ALL_INSTANCES;
+    all.scope = OVERLAY_SCOPE_ALL_INSTANCES;
     memcpy(all.proj, id, sizeof(id));
     all.vw = 1024;
     all.vh = 768;
@@ -2073,7 +2073,7 @@ static void test_overlay_scope(void) {
     VertexLabelCtx scene;
     memset(&scene, 0, sizeof(scene));
     scene.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    scene.label_options = OVERLAY_SCOPE_WHOLE_SCENE;
+    scene.scope = OVERLAY_SCOPE_WHOLE_SCENE;
     memcpy(scene.proj, id, sizeof(id));
     scene.vw = 1024;
     scene.vh = 768;
@@ -2088,11 +2088,15 @@ static void test_overlay_scope(void) {
                 strcmp(scene.labels[2].idx, " v2") == 0 &&
                 strcmp(scene.labels[3].idx, " v3") == 0);
 
-    /* At-vertex: every vertex, numbered by in-block index, bypass layout. */
+    /* At-vertex placement keeps the collection rule of whatever scope it runs
+     * under (here all-instances: every vertex) but numbers in-block, because
+     * a label sitting on its own vertex has nothing to disambiguate. That is
+     * what the retired at-vertex *scope* did, now reachable under any scope. */
     VertexLabelCtx at_vert;
     memset(&at_vert, 0, sizeof(at_vert));
     at_vert.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    at_vert.label_options = OVERLAY_SCOPE_AT_VERTEX;
+    at_vert.scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    at_vert.placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX;
     memcpy(at_vert.proj, id, sizeof(id));
     at_vert.vw = 1024;
     at_vert.vh = 768;
@@ -2106,6 +2110,11 @@ static void test_overlay_scope(void) {
                 strcmp(at_vert.labels[1].idx, " v1") == 0 &&
                 strcmp(at_vert.labels[2].idx, " v0") == 0 &&
                 strcmp(at_vert.labels[3].idx, " v1") == 0);
+
+    /* The same scope decluttered numbers globally instead — the placement is
+     * what decides, since only a floated label can be ambiguous. */
+    ASSERT_TRUE("decluttered all-instances still numbers globally",
+                strcmp(all.labels[2].idx, " v2") == 0);
 
     vertex_labels_layout_and_draw(&at_vert);
     ASSERT_INT("label 0 drawn in at-vertex", at_vert.labels[0].drawn, 1);
@@ -2145,7 +2154,7 @@ static void test_single_polygon_label_scope(void) {
     VertexLabelCtx quad;
     memset(&quad, 0, sizeof(quad));
     quad.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    quad.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    quad.scope = OVERLAY_SCOPE_SINGLE_POLYGON;
     quad.poly_valid = 1;
     quad.poly_first = 4;
     quad.poly_last = 7;
@@ -2171,7 +2180,7 @@ static void test_single_polygon_label_scope(void) {
     VertexLabelCtx tess;
     memset(&tess, 0, sizeof(tess));
     tess.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    tess.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    tess.scope = OVERLAY_SCOPE_SINGLE_POLYGON;
     tess.poly_valid = 1;
     tess.poly_first = 0;
     tess.poly_last = 0;  /* would filter to just ordinal 0 if applied */
@@ -2191,7 +2200,7 @@ static void test_single_polygon_label_scope(void) {
     VertexLabelCtx fan;
     memset(&fan, 0, sizeof(fan));
     fan.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    fan.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    fan.scope = OVERLAY_SCOPE_SINGLE_POLYGON;
     fan.poly_valid = 1;
     fan.poly_first = 2;
     fan.poly_last = 3;
@@ -2239,7 +2248,7 @@ static void test_vertex_label_visible_occlusion(void) {
         VertexLabelCtx ctx;
         memset(&ctx, 0, sizeof(ctx));
         ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
-        ctx.label_options = scope;
+        ctx.scope = scope;
         memcpy(ctx.proj, id, sizeof(id));
         ctx.vw = 4;
         ctx.vh = 4;
@@ -2468,7 +2477,8 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     TraceLog log;
     trace_begin();
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
-                                        OVERLAY_SCOPE_ALL_INSTANCES);
+                                        OVERLAY_SCOPE_ALL_INSTANCES,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -2520,7 +2530,8 @@ static void test_render_via_repl_program(void) {
     walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
 
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
-                                        OVERLAY_SCOPE_ALL_INSTANCES);
+                                        OVERLAY_SCOPE_ALL_INSTANCES,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);
@@ -2864,7 +2875,7 @@ static void test_guide_obstacle_store_per_subpass(void) {
                g_guide_label_obstacles.count, 0);
 
     pack.snapshot.show_guides = 1;
-    pack.overlay_scope = OVERLAY_SCOPE_AT_VERTEX;
+    pack.vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX;
     edit_overlays_post_overlays(&pack);
     ASSERT_INT("At vertex bypass does not collect guide-label obstacles",
                g_guide_label_obstacles.count, 0);

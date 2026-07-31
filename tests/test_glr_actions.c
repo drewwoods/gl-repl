@@ -1956,7 +1956,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     glr_state_presentation_mut()->axes_theme = AXES_THEME_GIZMO;
     glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_CITY_AND_STARS;
     glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
-    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_AT_VERTEX;
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_WHOLE_SCENE;
+    glr_config_set(GLR_CONFIG_VERTEX_LABEL_PLACEMENT,
+                   OVERLAY_LABEL_PLACEMENT_AT_VERTEX);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
     glr_config_set(GLR_CONFIG_SYNTAX_HIGHLIGHT, SYNTAX_HIGHLIGHT_ON_SHADOW);
     ASSERT_INT("vertex_outline_style set/get",
@@ -1974,7 +1976,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_all label_highlight_scope is symbolic", repl_config_bag_get(&bag, "label_highlight_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_all label_highlight_scope is symbolic", repl_config_bag_get(&bag, "label_highlight_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
+    ASSERT_STR("fill_all vertex_label_placement is symbolic",
+               repl_config_bag_get(&bag, "vertex_label_placement"),
+               "OVERLAY_LABEL_PLACEMENT_AT_VERTEX");
     ASSERT_STR("fill_all vertex_outline_style is symbolic",
                repl_config_bag_get(&bag, "vertex_outline_style"),
                "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");
@@ -1994,7 +1999,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_scene_subset label_highlight_scope is symbolic", repl_config_bag_get(&scene_bag, "label_highlight_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_scene_subset label_highlight_scope is symbolic", repl_config_bag_get(&scene_bag, "label_highlight_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
+    ASSERT_STR("fill_scene_subset vertex_label_placement is symbolic",
+               repl_config_bag_get(&scene_bag, "vertex_label_placement"),
+               "OVERLAY_LABEL_PLACEMENT_AT_VERTEX");
     ASSERT_STR("fill_scene_subset vertex_outline_style is symbolic",
                repl_config_bag_get(&scene_bag, "vertex_outline_style"),
                "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");

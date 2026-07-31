@@ -1263,9 +1263,8 @@ The overlay toggles annotate geometry scene-wide:
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
 - **Label & highlight scope** (F8): Cursor block — last instance / all
-  instances / at vertex / single polygon — plus **Whole scene**. Controls how
-  broadly cursor-bound overlays are shown around repeated function/loop
-  instances. *Last instance* picks the final unrolled copy, so the highlight,
+  instances / single polygon — plus **Whole scene**. Controls how broadly
+  cursor-bound overlays are shown around repeated function/loop instances. *Last instance* picks the final unrolled copy, so the highlight,
   the vertex labels and the cursor guide all sit on the copy whose loop-body
   variable values the **variable panel** is showing — and on the last polygon a
   replay draws. *Whole scene* is the one scope not anchored to the cursor: it
@@ -1275,6 +1274,10 @@ The overlay toggles annotate geometry scene-wide:
   Vertex labels are always culled against the depth buffer — a vertex hidden
   behind solid geometry gets no label, in every scope. The polygon highlight is
   exempt and still draws through, so the cursor's shape stays findable.
+- **Vertex label placement**: Decluttered / At vertex — *where* each label
+  sits, independent of which vertices get one. Decluttered floats labels onto
+  clear rows with leader lines; At vertex pins each to its own vertex, exact
+  position and overlaps included.
 - **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
@@ -1349,11 +1352,13 @@ highlight over it.
   you want to keep a generated normal permanently, edit its line — an edited
   normal is a normal you typed, and Off will not touch it.
 
-Decluttered label scopes give active edit-guide text priority: vertex labels
+Decluttered placement gives active edit-guide text priority: vertex labels
 move to a nearby row, or are omitted when the bounded layout has no clear row,
 rather than covering partial-vertex, normal, clip-plane, translate, or rotate
-labels. **At vertex** remains the explicit exact-position mode and bypasses
-this decluttering.
+labels. **At vertex** is the explicit exact-position placement and bypasses
+this decluttering — it also numbers labels by their index within the primitive
+rather than globally, since a label sitting on its own vertex has nothing to
+disambiguate.
 
 **Single polygon** scope narrows labels and the polygon highlight down to
 just the one primitive your cursor is building, instead of the whole

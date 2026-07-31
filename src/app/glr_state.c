@@ -52,6 +52,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .grid_brightness_idx    = CFG_DEFAULT_GRID_BRIGHTNESS_IDX, \
         .axes_theme             = CFG_DEFAULT_AXES_THEME, \
         .show_vertex_labels     = CFG_DEFAULT_VERTEX_LABELS, \
+        .vertex_label_placement = CFG_DEFAULT_VERTEX_LABEL_PLACEMENT, \
         .overlay_scope           = CFG_DEFAULT_OVERLAY_SCOPE, \
         .show_normal_vectors    = CFG_DEFAULT_NORMAL_VECTORS, \
         .show_vertex_outlines   = CFG_DEFAULT_VERTEX_OUTLINES, \
@@ -140,6 +141,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     p->grid_brightness_idx   = CFG_DEFAULT_GRID_BRIGHTNESS_IDX;
     p->axes_theme            = CFG_DEFAULT_AXES_THEME;
     p->show_vertex_labels    = CFG_DEFAULT_VERTEX_LABELS;
+    p->vertex_label_placement = CFG_DEFAULT_VERTEX_LABEL_PLACEMENT;
     p->overlay_scope         = CFG_DEFAULT_OVERLAY_SCOPE;
     p->show_normal_vectors   = CFG_DEFAULT_NORMAL_VECTORS;
     p->show_vertex_outlines  = CFG_DEFAULT_VERTEX_OUTLINES;

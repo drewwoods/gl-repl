@@ -25,8 +25,9 @@
 /* @cfg depth_view = 0 */
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
-/* @cfg label_highlight_scope = OVERLAY_SCOPE_AT_VERTEX */
+/* @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */

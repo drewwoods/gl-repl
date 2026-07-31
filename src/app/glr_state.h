@@ -33,6 +33,7 @@ typedef struct {
     int grid_brightness_idx;
     int axes_theme;
     int show_vertex_labels;
+    int vertex_label_placement;
     int overlay_scope;    /* 0 = first loop instance, 1 = all, 2 = all instances at vertex (no declutter) */
     int show_normal_vectors;
     int show_vertex_outlines;

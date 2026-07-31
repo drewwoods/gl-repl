@@ -683,6 +683,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;
     pack->overlay_scope = presentation.overlay_scope;
+    pack->vertex_label_placement = presentation.vertex_label_placement;
     pack->ortho_mode = presentation.ortho_mode;
     pack->show_normal_vectors = presentation.show_normal_vectors;
     pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;
