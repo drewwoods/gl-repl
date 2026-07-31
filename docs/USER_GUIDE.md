@@ -26,10 +26,14 @@ get your bearings from the [built-in examples](#built-in-examples) and guided
 [diagnostic views](#diagnostic-views) to understand and debug what you built,
 and finally [keep and ship](#scenes--workspaces) the
 result. Reference material - the full [CLI](#command-line-options) and
-[keyboard](#keyboard--mouse-reference) listings - sits at the end. For headless
-rendering, recording, and every environment variable, see
-[`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); for project internals,
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+[keyboard](#keyboard--mouse-reference) listings - sits at the end.
+
+This guide describes what gl-repl *is*. For the OpenGL techniques you can
+build with it - clip planes, stencil masks, decals, attribute scoping - and
+worked explanations of the math functions, see
+[`TUTORIAL.md`](TUTORIAL.md). For headless rendering, recording, and every
+environment variable, see [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); for project
+internals, [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Contents
 
@@ -283,31 +287,11 @@ highlighted the previous query is kept.
 
 ### Replace
 
-**Tab** in the find bar opens the replace row underneath it and cycles focus
-through *find field → replace field → whole-word chip*. In the replace field,
-**Enter** runs **Replace All**; the *Replace* button rewrites just the match
-you are parked on. Clicking any of the three widgets focuses (and, for the
-chip, toggles) it.
-
-The **word** chip switches matching from plain substring to whole identifiers,
-and it applies to the search as well as the replace - the match count and the
-highlights always show exactly what a replace would rewrite. Turn it on before
-renaming something short: without it, replacing `r` also hits the `r` inside
-`glColor3f`.
-
-Replace All is the tool for **renaming a variable or a function**. A rename
-cannot be done one line at a time - the REPL rejects a declaration whose name
-is still referenced below it, and rejects a use of a name that is not declared
-yet - so the whole document is rewritten and validated in a single
-transaction. If the result does not parse, nothing changes: the document, its
-variables, and its scratch arrays are restored, and the status line names the
-offending line. A successful replace is one **Ctrl+Z** away from being undone,
-and variable values (including anything you dialed in with a `@tune` slider)
-carry across the rename.
-
-Two things worth knowing: matching is case-insensitive, so `Radius` and
-`radius` are both replaced; and a replacement that pushes a line past the
-256-character limit fails the whole operation rather than truncating.
+**Tab** in the find bar opens a replace row. Type a replacement and press
+**Enter** for **Replace All**, or click *Replace* for a single match. The
+**word** chip restricts both search and replace to whole identifiers - turn it
+on before renaming something short. Replace All rewrites the entire document
+in one transaction and is undoable with **Ctrl+Z**.
 
 ### Display default commands
 
@@ -528,8 +512,9 @@ numeric argument everywhere is a full math expression.
 - [`glPolygonOffset(factor,units)`](https://docs.gl/gl2/glPolygonOffset) - depth
   nudge for coplanar passes; needs `glEnable(GL_POLYGON_OFFSET_FILL)`
 - [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) -
-  save/restore a group of GL state (see Scoping state below). `mask` is one or
-  more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
+  save/restore a group of GL state ([tutorial](TUTORIAL.md#scoping-state-with-glpushattrib);
+  the editor draws the scope, see [Attribute scope](#attribute-scope)). `mask`
+  is one or more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
   `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`,
   `GL_STENCIL_BUFFER_BIT`, `GL_TRANSFORM_BIT`,
   `GL_ENABLE_BIT`, `GL_COLOR_BUFFER_BIT`, OR'd with `|`, or
@@ -562,11 +547,24 @@ numeric argument everywhere is a full math expression.
 - [`glStencilFunc(func, ref, mask)`](https://docs.gl/gl2/glStencilFunc),
   [`glStencilOp(stencil-fail, depth-fail, depth-pass)`](https://docs.gl/gl2/glStencilOp),
   [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) - stencil-mask
-  setup, scoped by `GL_STENCIL_BUFFER_BIT` on the attribute stack
+  setup ([tutorial](TUTORIAL.md#stencil-masks)), scoped by
+  `GL_STENCIL_BUFFER_BIT` on the attribute stack. `ref` and `mask` both take
+  decimal or `0xNN` in `0..255`, but differ in kind: `ref` is a full
+  expression, so it can animate, while `mask` must be a literal - a mask names
+  bits, not a quantity to sweep. Fractional references truncate toward zero,
+  and the two ways to leave `0..255` are handled differently on purpose: a
+  **literal** out of range is rejected at commit, where you are right there to
+  be told, while an **animated** one is clamped per frame, because a parse
+  error that fires on frame 900 is not a usable failure mode. `glClearStencil`
+  shares that policy
 - [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) - each channel GL_TRUE/GL_FALSE or 0/1
-- [`glClear(mask)`](https://docs.gl/gl2/glClear) - clear again part-way down a scene (see Clearing
-  mid-scene). `mask` combines `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, and
-  `GL_STENCIL_BUFFER_BIT` with `|`
+- [`glClear(mask)`](https://docs.gl/gl2/glClear) - **your program's own frame
+  setup**: nothing clears the scene rectangle on its behalf, exactly as in the
+  exported C, so deleting the line smears the frame. A second one part-way down
+  a scene starts a later pass on a fresh buffer
+  ([tutorial](TUTORIAL.md#clearing-mid-scene)). `mask` combines
+  `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, and `GL_STENCIL_BUFFER_BIT`
+  with `|`; the accumulation bit is not offered
 - [`glClearDepth(depth)`](https://docs.gl/gl2/glClearDepth) - the depth value a
   `GL_DEPTH_BUFFER_BIT` clear writes. GL clamps it to 0..1 and defaults to 1
   (the far plane); a lower value makes the cleared buffer reject geometry
@@ -577,7 +575,12 @@ numeric argument everywhere is a full math expression.
   expression, truncated toward zero; scoped by `GL_STENCIL_BUFFER_BIT`
 - [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) - scalar boundary-edge flag; 0/1 accepted
 - [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) - user clip
-  plane (see Clip planes)
+  plane, gated by `glEnable(GL_CLIP_PLANE0..5)`; coefficients are expressions,
+  so a plane can animate, and the cursor draws the one you are editing (see
+  [the clip-plane guide](#the-clip-plane-guide) and
+  [tutorial](TUTORIAL.md#clip-planes)). Export routes the equation through a
+  small `repl_gldouble4` helper so the C file stays C89-compilable, and reload
+  converts it back
 - [`glFogi(GL_FOG_MODE, GL_LINEAR|GL_EXP|GL_EXP2)`](https://docs.gl/gl2/glFog),
   [`glFogf(pname, value)`](https://docs.gl/gl2/glFog) with pname `GL_FOG_DENSITY`,
   `GL_FOG_START`, or `GL_FOG_END`, and
@@ -591,6 +594,32 @@ numeric argument everywhere is a full math expression.
 compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) and
 [`glFogfv`](https://docs.gl/gl2/glFog) accept the same flat shorthand
 (`glClipPlane(plane, a, b, c, d)`, `glFogfv(GL_FOG_COLOR, r, g, b, a)`).
+
+#### Enum and mask arguments
+
+"Every numeric argument is an expression" stops at the slots that name a GL
+constant. An enum slot takes one token from a fixed list and nothing else -
+no expression, no variable, no arithmetic - and a mask slot (`glClear`,
+`glPushAttrib`) takes one or more of those tokens joined with `|`. Tab
+completion offers the legal set for the slot the cursor is in, which is the
+quickest way to see what a command will accept.
+
+Mask spellings are **canonicalized on commit**: duplicates collapse and the
+tokens come back in a fixed order regardless of how you typed them, so
+`GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT` commits as `GL_COLOR_BUFFER_BIT |
+GL_DEPTH_BUFFER_BIT`. `GL_ALL_ATTRIB_BITS` is kept as itself rather than
+expanded, and means the union of the groups the REPL can currently change -
+so its scope grows if a later release models another group.
+
+Three slots bend the rule, each in a documented direction:
+
+- **Boolean slots take `0`/`1` too.** `glDepthMask`, `glColorMask`, and
+  `glEdgeFlag` accept either spelling and canonicalize to `GL_TRUE` /
+  `GL_FALSE`.
+- **`glStencilFunc`'s `ref` is a real expression** while its `mask` stays a
+  literal - see the bullet above.
+- **`glLightModeli`'s parameter slot is an expression**, since it carries a
+  value rather than a mode.
 
 ### GLUT solid shapes
 
@@ -654,188 +683,6 @@ label("Earth phase = %f", t);
 - This is a REPL convenience, not a real GL call - exported C files include
   a self-contained `label()` helper so they still compile standalone.
 
-### Clip planes
-
-```c
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
-glEnable(GL_CLIP_PLANE0);
-```
-
-`glClipPlane` sets the plane equation `a*x + b*y + c*z + d >= 0` - GL keeps
-the half-space the inequality selects and clips everything on the other
-side. Six planes are available (`GL_CLIP_PLANE0..5`); each does nothing
-until its cap is enabled. The equation is interpreted in the coordinate
-frame active at the call, so transforms before the line position the plane
-just like they position geometry.
-
-Coefficients are full expressions, so a plane can animate - a `d` driven by
-`t` sweeps a live cross-section through the scene:
-
-![An animated clip plane sweeping a torus](images/clip-plane-sweep.gif)
-
-A plane equation is hard to picture from four numbers, so the cursor draws
-it for you - see [the clip-plane guide](#the-clip-plane-guide). Exporting
-keeps clip planes standalone-compilable: the C file routes the equation
-through a small `repl_gldouble4` helper (compound literals are C99; the
-export targets C89) and reload converts it back.
-
-The *Clip planes carve solids (glClipPlane)* example walks the three core
-moves - one plane (a sphere becomes a dome), two planes meeting at an angle
-(a 120° wedge), and an animated `d` (a cutaway sweeping through a torus).
-
-### Clearing mid-scene
-
-```c
-glClear(GL_DEPTH_BUFFER_BIT);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glClear(GL_STENCIL_BUFFER_BIT);
-```
-
-The REPL does not clear the scene rectangle on your program's behalf. Like the
-exported C, a scene's own `glClear` is its frame setup; use another one in the
-middle of a scene when a later pass needs a fresh buffer.
-
-The useful one is `GL_DEPTH_BUFFER_BIT`. It throws away the depth of
-everything drawn so far, so geometry below the line draws over what came
-before it no matter how far away it is - the classic way to sit a HUD, a
-gizmo, or an inset object on top of a scene without moving it:
-
-```c
-glutSolidTeapot(0.6);
-glClear(GL_DEPTH_BUFFER_BIT);   // everything below wins the depth test
-glColor3f(0.98, 0.45, 0.4);
-glutSolidCube(0.3);             // ...so the cube is never hidden by the teapot
-```
-
-`GL_COLOR_BUFFER_BIT` repaints the scene with the current
-[`glClearColor`](https://docs.gl/gl2/glClearColor), erasing geometry drawn
-above the line. It is confined to the 3D viewport, so it cannot touch the
-code panel or the menu bar - the rest of the window keeps the background the
-frame started with.
-
-`mask` is one bit, or any combination OR'd with `|`. Unlike every other numeric
-argument, it is not an expression: only these three tokens are accepted, and
-the line is stored in a fixed order regardless of how you spell it
-(`GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT` commits as
-`GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT`). The stencil buffer is available
-as `GL_STENCIL_BUFFER_BIT` for masked rendering. The accumulation bit is not
-offered because clearing it would fight the accum effects under [Rendering
-quality](#rendering-quality).
-
-### Stencil masks
-
-Stencil commands let a first pass write a byte-sized mask and later geometry
-draw only where that mask passes. Start a frame with
-`glClear(GL_STENCIL_BUFFER_BIT)`, which writes 0 unless `glClearStencil(value)`
-has set a different value (0..255).
-
-`glStencilFunc(func, ref, mask)` compares the incoming reference with the
-stored value while `GL_STENCIL_TEST` is enabled. Both `ref` and `mask` are
-restricted to 0 through 255 and accept decimal or `0xNN`, but they differ in
-kind: `ref` is a full expression, so it can animate, while `mask` must be a
-literal - a mask names bits, not a quantity to sweep. Fractional references
-truncate toward zero before GL receives them, and an animated `ref` that
-leaves the range is clamped to it rather than rejected.
-
-`glStencilOp` chooses the actions for stencil failure, depth failure, and a
-full pass; `glStencilMask` limits which stencil bits can be written. Use
-`glStencilMask(0)` to protect a completed mask while later geometry tests it.
-
-All of it - comparison, ops, write mask and clear value - is scoped by
-`GL_STENCIL_BUFFER_BIT` on the attribute stack, so a masked pass can be
-wrapped in `glPushAttrib(GL_STENCIL_BUFFER_BIT)` / `glPopAttrib()` and leave
-nothing behind. The `GL_STENCIL_TEST` enable flag rides that bit *and*
-`GL_ENABLE_BIT`, the same dual membership real GL gives it.
-
-The grid, axes, backdrop and light indicators are drawn with the stencil test
-suspended, so a mask never clips the host's own chrome. Vertex outlines and
-points *do* follow it - they report what your geometry did, and an outline
-around masked-away geometry would be a lie - but they never write stencil, so
-turning them on cannot disturb a mask a later pass depends on.
-
-A mask is invisible in the rendered frame, so there is a viewer for it:
-[Stencil view](#stencil-view), under [Diagnostic Views](#diagnostic-views).
-
-### Wireframe & decals - glPolygonMode, glPolygonOffset
-
-`glPolygonMode(face, mode)` picks how polygons rasterize: `GL_FILL` (the
-default), `GL_LINE` for edges only, or `GL_POINT` for their corners. It is a
-wireframe of the geometry you already submitted - no second set of line
-primitives to build, and `face` (`GL_FRONT`, `GL_BACK`, `GL_FRONT_AND_BACK`)
-can give the two sides different treatments:
-
-```c
-glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-glutSolidSphere(1, 24, 16);       // the same sphere, as wireframe
-glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-```
-
-`glPolygonOffset(factor, units)` exists for the pass you draw *on top of*
-another. Two coplanar surfaces have mathematically equal depth, so the depth
-test can't order them and the result speckles - the artefact known as
-z-fighting. The offset shifts polygon depths a hair before the test, and
-negative values pull toward the viewer:
-
-```c
-glEnable(GL_POLYGON_OFFSET_FILL);
-glPolygonOffset(-1, -1);          // pull the decal in front of the wall
-glColor3f(1, 0.4, 0.2);
-glBegin(GL_QUADS); /* … the decal, drawn on the wall's plane … */ glEnd();
-glDisable(GL_POLYGON_OFFSET_FILL);
-```
-
-`factor` scales with the polygon's depth slope (how steeply it recedes) and
-`units` is a fixed multiple of the smallest resolvable depth difference;
-`(-1, -1)` is the conventional starting pair for both. **The offset only
-applies while the matching capability is enabled** - `GL_POLYGON_OFFSET_FILL`
-for filled polygons, `GL_POLYGON_OFFSET_LINE` and `GL_POLYGON_OFFSET_POINT`
-for the other two `glPolygonMode` modes. Setting an offset without enabling
-one of those does nothing at all, which is the usual reason a decal still
-flickers.
-
-The two commands are made for each other: a wireframe drawn over its own solid
-is the same z-fight, so `glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)` plus
-`glEnable(GL_POLYGON_OFFSET_LINE)` is how an outlined-solid pass stays clean.
-
-### Scoping state with glPushAttrib
-
-`glPushAttrib(mask)` saves a group of GL state; the matching `glPopAttrib()`
-puts it back. Use them to make a local change without it leaking into the
-rest of the scene:
-
-```c
-glColor3f(0.2, 0.6, 1);
-glPushAttrib(GL_CURRENT_BIT | GL_LINE_BIT);
-  glColor3f(1, 0.3, 0.3);   // red, and…
-  glLineWidth(4);           // …fat lines, but only until the pop
-  glBegin(GL_LINE_LOOP); glVertex3f(-1, 0, 0); glVertex3f(1, 0, 0); glEnd();
-glPopAttrib();              // colour and line width snap back to blue / 1
-```
-
-`mask` names which *groups* of state to save, one or more of `GL_CURRENT_BIT`
-(colour, normal, raster position, edge flag), `GL_POINT_BIT`, `GL_LINE_BIT`,
-`GL_POLYGON_BIT` (cull + winding + polygon mode/offset), `GL_LIGHTING_BIT`
-(materials, shade model,
-lights), `GL_FOG_BIT` (fog mode / density / start / end / colour),
-`GL_DEPTH_BUFFER_BIT`, `GL_STENCIL_BUFFER_BIT` (stencil func/ref/mask, the
-three `glStencilOp` slots, the write mask and the clear value),
-`GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
-(every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear
-colour, colour mask). The `GL_FOG` and `GL_STENCIL_TEST` enable flags are saved
-by both their group bit and `GL_ENABLE_BIT`, matching real GL. Join several with `|` - like `glClear`'s
-mask it is a fixed set of tokens (no expressions), canonicalised to a stable
-order. `GL_ALL_ATTRIB_BITS` is a compact alias for the union of every group the
-REPL can currently change; its scope therefore grows if a later release adds
-another supported group.
-
-Two editor affordances make the scope visible. Park the cursor on a
-`glPushAttrib` line and each mask token lights up in its own colour, and every
-earlier line whose value the push *saves* gets a matching gutter marker
-("what's about to be protected"). Park it on the `glPopAttrib` and the lines
-whose changes the pop *reverts* light up instead ("what snaps back here"). A
-push or pop with no partner gets the same red gutter warning as an unmatched
-`glPushMatrix`.
-
 ### Math expressions
 
 Every numeric argument is a full expression, evaluated when the line runs:
@@ -846,34 +693,118 @@ Every numeric argument is a full expression, evaluated when the line runs:
   `sqrt`, `abs`, `pow`, `log`, `ln`, `min`, `max`, `clamp(x, lo, hi)`,
   `lerp(a, b, s)`, `smoothstep(e0, e1, x)`, `sign`, `floor`, `ceil`, `round`,
   `fmod`, `rem`, `rand(seed[, iter])`, `rand2(seed[, iter])`.
-- **Constants:** `PI`, `TAU`, `e`.
-
-These behave as their C or GLSL namesakes do, with five things worth pinning
-down:
-
-- `log` is base 10 and `ln` is base e.
-- `fmod` is C's `fmodf` (the result takes the dividend's sign); `rem` is the
-  IEEE remainder via `remainderf`, which rounds the quotient to nearest and so
-  can differ in sign.
-- `asin` and `acos` clamp their argument to `[-1, 1]` first, so a dot product
-  that drifts a hair past 1 returns a number rather than a NaN that would erase
-  your geometry mid-edit.
-- `lerp` is deliberately **not** clamped: `s` outside `[0, 1]` overshoots.
-- `smoothstep` accepts `e0 > e1`, ramping from 1 down to 0.
-
-That function list is **closed**, and a name outside it is rejected when the
-line commits (`unknown function 'fabs'`) rather than quietly evaluating to
-zero. The distinction matters because the REPL's spellings are not always
-libm's: absolute value is `abs`, not `fabs`, and there are no `f`-suffixed
-forms - `sinf` is as unknown as a typo. Export translates each name to its C
-twin (`abs` becomes `fabsf`), so a scene that commits is a scene whose
-exported C computes the same numbers.
+- **Constants:** `PI`, `TAU`, `e`, plus `NAN` and `INFINITY` (also spelled
+  `nan`, `inf`, `infinity`).
 
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter) pair,
 and `rand2` is the same hash mapped to `[-1, 1]`. There is no per-frame random
 state anywhere: the same pair always returns the same number, which is what
 makes `rand` the stateless substitute for stored random values - see [Working
 without state](#working-without-state).
+
+That list is the whole vocabulary - there is no way to add to it, because a
+`funcN` emits geometry and does not return a value. A name outside the list is
+rejected when the line commits (`unknown function 'fabs'`) rather than quietly
+evaluating to zero, so a typo surfaces as an error on the line that has it.
+Export translates each name to its C twin (`abs` becomes `fabsf`), which is
+what makes a scene that commits a scene whose exported C computes the same
+numbers.
+
+What each function is *for*, and how to shape animation with `clamp` / `lerp` /
+`smoothstep` / `atan2`, is worked through in
+[TUTORIAL.md](TUTORIAL.md#math-expressions).
+
+#### Where expressions differ from C
+
+The syntax is C's, but this is a float evaluator with no integer type, and the
+domain errors you are most likely to hit while editing are **guarded** rather
+than left to poison the frame: division and `%` by zero yield `0`, `sqrt` takes
+the absolute value of its argument, `asin`/`acos` clamp to `[-1, 1]`, and a
+zero-width `smoothstep` degenerates to the step function it is the limit of.
+Guarded is not the same as total - see [NaN and infinity](#nan-and-infinity)
+below for what still gets through.
+
+That guarding, plus a value model with no integers, costs a handful of
+deviations, and they are the ones that surprise people:
+
+- **`%` is float modulo** - `5.5 % 2` is `1.5`, where C's `%` is integer-only
+  and would not compile that. It is exactly `fmod`, including the truncation
+  described below, so it is *not* GLSL's floored `mod` either.
+- **Dividing by zero yields `0`**, not infinity or NaN. So does `%` by zero.
+  (The threshold is a magnitude of `1e-12`, so a denominator merely *near*
+  zero collapses too, rather than exploding.)
+- **`==` and `!=` compare within a `1e-6` epsilon**, not bitwise. Two values
+  that differ only in the last few bits count as equal, which is what makes
+  `if(fmod(i, 3) == 0)` usable at all.
+- **`&&` and `||` do not short-circuit** - both sides always evaluate. Nothing
+  in the language has side effects, so this only ever costs time.
+- **`asin` and `acos` clamp their argument to `[-1, 1]`** first, so a dot
+  product that drifts a hair past 1 returns a number rather than a NaN.
+- **`abs` is float absolute value**, C's `fabsf`. In C, `abs` is
+  `int abs(int)` from `<stdlib.h>`, so the same call there truncates:
+  `abs(-1.5)` is `1.5` here and `1` in C. The trap runs both directions, and
+  it is the one spelling worth double-checking when you move an expression
+  between the two.
+- **The libm spellings are not accepted.** `fabs` does not exist here, and
+  neither do the `f`-suffixed forms - `sinf` is as unknown as a typo. You
+  cannot supply the missing name either: a `funcN` draws, it does not return a
+  value, so the function list above is the entire vocabulary.
+- **`log` is base 10 and `ln` is base e** - the reverse of C's `log`/`log10`
+  naming, and the reason a `log` copied out of C code comes back wrong.
+- **`fmod` is truncated, not floored** - it is C's `fmodf`, and the `f` stands
+  for *floating-point* (the prefix in `fabs`, `fmin`, `fdim`), not for
+  *floored*. It is in fact the non-floored one. GLSL's `mod` differs from it
+  in a single operation:
+
+  ```c
+  fmod(x, y)  ==  x - y*trunc(x/y)   // here and in C - quotient toward zero
+  mod(x, y)   ==  x - y*floor(x/y)   // GLSL - quotient toward -infinity
+  ```
+
+  `trunc` and `floor` agree whenever `x/y` is positive, so the two are the
+  same function until an operand goes negative. Then `fmod` takes the sign of
+  the **dividend** and `mod` the sign of the **divisor**: `fmod(-1, 3)` is
+  `-1`, where GLSL's `mod(-1, 3)` is `2`. There is no `mod` here (nor a
+  `trunc` - `fmod` is already the truncating one), so when you want the
+  floored version - wrapping an index or an angle, where a negative input
+  should land back inside `[0, y)` - spell out the `floor` form above.
+- `rem` is the IEEE remainder via `remainderf`, which rounds the quotient to
+  nearest rather than toward zero and so can differ in sign from both:
+  `rem(5, 3)` is `-1` where `fmod(5, 3)` is `2`.
+- `lerp` is deliberately **not** clamped (`s` outside `[0, 1]` overshoots), and
+  `smoothstep` accepts `e0 > e1`, ramping from 1 down to 0.
+
+And a few things C has that simply are not here: no ternary `?:`, no bitwise
+operators (`|` appears only inside a [mask
+argument](#enum-and-mask-arguments)), no compound assignment, and no
+assignment-as-expression - `var = expr;` is a statement of its own. A `1.5f`
+literal is accepted on input but the suffix is dropped from the committed line.
+
+#### NaN and infinity
+
+The guards listed above cover the cases that come up while editing, not every
+domain error, so both values remain reachable:
+
+- `log` and `ln` of a negative number return NaN, and of `0` return `-inf` -
+  the guarded `sqrt` has no equivalent here, because a negative logarithm has
+  no sensible substitute the way `sqrt(-4)` has `2`.
+- `pow` with a negative base and a fractional exponent returns NaN, matching
+  C's `powf`.
+- `NAN` and `INFINITY` are constants you can type outright.
+
+A NaN coordinate generally means the geometry using it fails to draw, so a
+shape that vanishes right after an edit to a `log`, `ln`, or `pow` argument is
+worth suspecting first.
+
+Tracking one down is fiddlier than it looks, because the functions differ on
+whether they pass a NaN along:
+
+- Arithmetic propagates it, and so does `clamp` - its comparisons are both
+  false against a NaN, so the value falls through untouched.
+- `min` and `max` **discard** it. They are C's `fminf`/`fmaxf`, which return
+  the other operand when one side is NaN, so `min(x, 1)` quietly yields `1`
+  and the NaN disappears somewhere upstream of the symptom.
+- `sign` returns `0` for a NaN, the same as it does for exactly zero.
 
 ### Variables
 
@@ -890,6 +821,16 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
 - Program-wide variable values persist across commits and are saved/loaded
   with the scene.
 - Program-wide initializers are allowed: `float n = 1;`.
+- A name is at most 15 characters, and one declaration line may introduce at
+  most 8 of them - split a wider list across lines. `t`, `PI`, `TAU`, `e`,
+  `float`, `var`, and the scratch-array names `A`, `B`, `C` are reserved and
+  refuse a declaration.
+
+A committed line holds at most **255 characters**. The line you are typing is
+not held to that - the input buffer runs to 1024 - so a long line is rejected
+when you commit it, not while you compose it. It is also the one limit an edit
+can hit indirectly: a Replace All that would push any line past it fails the
+whole operation rather than truncating.
 
 That is what `float` means at the top level; `static float` is also
 program-wide even when typed inside a function. A plain `float` inside a
@@ -910,8 +851,11 @@ A[0] = A[0] + (A[1] - A[0]) * 0.25;
 glVertex3f(A[0], 0, 0);
 ```
 
-Indices truncate to int and must stay in `0..15`. Like variables, scratch
-arrays persist and round-trip through save/load.
+The index is itself a full expression - `A[i]`, `A[i + 1]`, `A[floor(u*4)]`
+all work - truncated to int, and it must land in `0..15`. A bare `A` with no
+subscript is an error everywhere except [`glMultMatrixf(A)`](#from-a-scratch-array),
+which reads the whole array as a matrix. Like variables, scratch arrays persist
+and round-trip through save/load.
 
 #### Writing several cells at once
 
@@ -1132,22 +1076,32 @@ parse.
 
 ### Disabling a block
 
-Wrap the rows you want to switch off in `if(0) { … }`. The condition is
-resolved before anything runs, so the body emits nothing at all - the same
-effect as deleting the lines, but reversible by editing one character:
+Place the cursor on the header line of a `for`, `if`, or function block - or
+on its closing `}` - and press `Ctrl+/`. Every line in the block is commented
+out in one press:
 
 ```c
-glBegin(GL_TRIANGLES);
-glVertex3f(0, 2, 0);
-if(0) {
-    glVertex3f(-2, -2, 0);   // switched off - emits nothing
+for(i, 0, 5) {                 // ← cursor here, or on the closing brace…
+    glTranslatef(1.2, 0, 0);
+    glutSolidCube(0.6);
 }
-glVertex3f(2, -2, 0);
-glEnd();
 ```
 
-To disable rows without restructuring them, select the range and press
-`Ctrl+/`, which comments every line in it; pressing it again restores them.
+```c
+// for(i, 0, 5) {              // …and one Ctrl+/ later
+//     glTranslatef(1.2, 0, 0);
+//     glutSolidCube(0.6);
+// }
+```
+
+Pressing it again on either brace line restores the block. The toggle works
+off the block structure the REPL parsed, so it applies to `for`, `if` /
+`else if` / `else`, and function definitions - the constructs that own a brace
+pair.
+
+Alternatively you can wrap lines in `if(0) { … }` - the body emits nothing
+but the lines stay visible. This is a bit clunkier in practice because it
+requires adding and later removing the wrapper.
 
 ### Comments
 
@@ -1593,6 +1547,22 @@ enables that plane's cap, the guide dims and the readout appends `(off)`.
 Like the vertex guides, the disc renders in the coordinate frame active at
 the call, so it sits exactly where the plane cuts.
 
+### Attribute scope
+
+`glPushAttrib` / `glPopAttrib` protect a group of GL state
+([tutorial](TUTORIAL.md#scoping-state-with-glpushattrib)), and two editor
+affordances make that scope visible instead of imagined.
+
+Park the cursor on a `glPushAttrib` line and each mask token lights up in its
+own colour, while every earlier line whose value the push *saves* gets a
+matching gutter marker - "what's about to be protected". Park it on the
+`glPopAttrib` and the lines whose changes the pop *reverts* light up instead -
+"what snaps back here". `GL_ALL_ATTRIB_BITS` has no per-bit colour of its own,
+but the lines it covers still get their markers.
+
+A push or pop with no partner gets the same red gutter warning as an unmatched
+`glPushMatrix`.
+
 ### Auto-normals
 
 Unlike everything above, **Auto-normals** does not draw anything - it writes
@@ -1688,7 +1658,7 @@ inert - WebGL cannot read the depth buffer back.
 
 **Stencil view** (Ctrl+Shift+S) cycles **Off / Palette / Ramp / Split** - a
 false-color overlay of the stencil buffer, with a legend in the scene's top-left
-corner. It is the companion to [Stencil masks](#stencil-masks): a mask changes
+corner. It is the companion to [stencil masks](TUTORIAL.md#stencil-masks): a mask changes
 what draws without ever showing itself, so this is the only way to see what
 your mask pass actually wrote.
 
