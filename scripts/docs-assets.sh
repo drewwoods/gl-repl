@@ -892,10 +892,20 @@ EOF
 # (exported at the call site) types a partial glVertex3f( there — the
 # only way to pose the 2-DOF sheet / 1-DOF line guides, which exist only
 # mid-typing (a committed line always has all three coordinates).
+#
+# vertex_labels needs WHOLE_SCENE to show up here. Every other scope anchors
+# the labels to the cursor's block, and the cursor spends these captures on a
+# half-typed line, which is not a committed vertex and so numbers nothing --
+# the labels stayed silently off under the default scope. WHOLE_SCENE is not
+# cursor-anchored, so the vertex committed in the fourth capture gets its
+# v0 readout while the guide for the *next* vertex is still up. (The v0/v1
+# gutter marks in the code panel remain cursor-bound and do not appear; only
+# the in-scene labels are scope-driven.)
 stage_vertex_entry() { stage vertex_entry <<'EOF'
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX_POS */
+/* @cfg overlay_scope = OVERLAY_SCOPE_WHOLE_SCENE */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 /* @cfg grid = GRID_THEME_OFF */

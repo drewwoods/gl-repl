@@ -1229,8 +1229,9 @@ Reading in order, and the typed line above each panel is what produced it:
   findable against geometry. The same marker appears when the cursor sits on a
   committed vertex line.
 - **The next vertex** starts the ladder over. In the last panel the first
-  vertex has been committed and a second is under way, pinned on `y` this time
-  — so the sheet is horizontal and green where the first was vertical and red.
+  vertex has been committed — it is the one labelled `v0` — and a second is
+  under way, pinned on `y` this time, so the sheet is horizontal and green
+  where the first was vertical and red.
 
 The guide is colored by the axis you pinned (X red, Y green, Z blue), which is
 why the sheet changes color between the first and last panels.
@@ -1268,7 +1269,11 @@ The overlay toggles annotate geometry scene-wide:
 
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
-  optionally with its coordinates.
+  optionally with its coordinates. "At the cursor" is literal: the cursor has
+  to be resting on a committed `glVertex3f` line. Park it anywhere else — a
+  blank row, a `glBegin`, a vertex you are still typing — and there is no
+  primitive to number, so nothing is labelled. **Whole scene** is the scope
+  that lifts that restriction.
 - **Overlay scope** (F8): Cursor block — last instance / all instances /
   single polygon — plus **Whole scene**. Controls how broadly the cursor-bound
   overlays are shown around repeated function/loop instances: the vertex
