@@ -2281,12 +2281,16 @@ static void test_on_normal_vector_arrow_callback(void) {
     state.normal[1] = 0.0f;
     state.normal[2] = 1.0f;
 
+    /* Whole-scene scope: this covers the arrow geometry, so take the one
+     * scope that filters nothing. Scope filtering itself is
+     * test_normal_vectors_overlay_scope. */
     NormalVectorRenderCtx ctx = {
         .scale = 2.0f,
         .show_all = 1,
         .replay_display = REPLAY_NORMAL_DISPLAY_OFF,
         .anchor_idx = -1,
         .stop_flag = NULL,
+        .scope = OVERLAY_SCOPE_WHOLE_SCENE,
     };
     TraceLog log;
     trace_begin();
@@ -2299,6 +2303,77 @@ static void test_on_normal_vector_arrow_callback(void) {
      * once as the line endpoint, once as the arrowhead point. */
     ASSERT_INT("arrow tip at vertex + normal*scale",
                trace_count_line(&log, "glVertex3f 1 1 3"), 2);
+}
+
+/* Normal vectors honor the overlay scope. Two unrolled copies of one source
+ * line (what a for loop flattens to), so the three interesting scopes give
+ * three different answers over the same program. Vertices carry distinct
+ * coordinates so the trace can tell the copies apart. */
+static void test_normal_vectors_overlay_scope(void) {
+    printf("--- edit_overlays normal vectors honor the overlay scope ---\n");
+
+    enum { CURSOR_LINE = 7, OTHER_LINE = 9 };
+    GLCmd cmds[9];
+    /* Copy 0 of the cursor's block. */
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[2], CMD_END, 0, 0, 0);
+    /* Copy 1 of the same source line. */
+    mk_cmd(&cmds[3], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 2.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[5], CMD_END, 0, 0, 0);
+    /* An unrelated block the cursor is not on. */
+    mk_cmd(&cmds[6], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 3.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[8], CMD_END, 0, 0, 0);
+    cmds[1].src_cmd_idx = CURSOR_LINE;
+    cmds[4].src_cmd_idx = CURSOR_LINE;
+    cmds[7].src_cmd_idx = OTHER_LINE;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 9;
+    walk.show_normal_vectors = 1;
+    walk.cursor.edit_line_idx = CURSOR_LINE;
+    /* Match by source line, not by a flat block range. */
+    walk.cursor.cursor_block_begin = -1;
+    walk.cursor.cursor_block_end = -1;
+
+    TraceLog log;
+
+    walk.cursor_overlay_scope = OVERLAY_SCOPE_WHOLE_SCENE;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("whole scene: arrow on the first copy",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("whole scene: arrow on the second copy",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+    ASSERT_INT("whole scene: arrow on the unrelated block",
+               trace_count_line(&log, "glVertex3f 3 0 0"), 1);
+
+    walk.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("all instances: arrow on the first copy",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("all instances: arrow on the second copy",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+    ASSERT_INT("all instances: unrelated block is out of scope",
+               trace_count_line(&log, "glVertex3f 3 0 0"), 0);
+
+    walk.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("last instance: earlier copy is out of scope",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("last instance: arrow on the last copy only",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+    ASSERT_INT("last instance: unrelated block is out of scope",
+               trace_count_line(&log, "glVertex3f 3 0 0"), 0);
 }
 
 static void test_render_normal_vectors_replay_only(void) {
@@ -2914,6 +2989,7 @@ int main(void) {
     test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
     test_render_normal_vectors_replay_only();
+    test_normal_vectors_overlay_scope();
     test_render_replay_vertex_label();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();

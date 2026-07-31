@@ -679,17 +679,25 @@ static int cursor_scope_selects_one_instance(const OverlayWalkCtx *ctx) {
  * render passes walk forward, so the copy to highlight has to be resolved
  * before they start; the predicate is the same one they use, and it costs a
  * second GL-free walk of the flat program. */
-static int last_selected_block_head(const OverlayWalkCtx *ctx,
+static int last_matching_block_head(const OverlayWalkCtx *ctx,
                                     CmdType head_type, int is_tess) {
     const GLCmd *cmds = ctx->program.cmds;
     int found = -1;
 
-    if (!ctx->highlight_current_poly) return -1;
     for (int i = 0; i < ctx->program.cmd_count; i++) {
         if (!cmds[i].valid || cmds[i].type != head_type) continue;
         if (outline_block_matches_cursor(i, is_tess, ctx)) found = i;
     }
     return found;
+}
+
+/* Same, gated on the highlight actually being on — the outline passes have
+ * nothing to resolve when it is off. The normal-vector pass wants the
+ * ungated form above: it honors the scope whether or not the highlight does. */
+static int last_selected_block_head(const OverlayWalkCtx *ctx,
+                                    CmdType head_type, int is_tess) {
+    if (!ctx->highlight_current_poly) return -1;
+    return last_matching_block_head(ctx, head_type, is_tess);
 }
 
 /* Same, for the glutSolid* pass — those match per command, not per block. */
@@ -1826,7 +1834,64 @@ typedef struct NormalVectorRenderCtx {
     const FlatProgramView *program;
     int *stop_flag;
     Render3dGuideLabelSink label_sink;
+    /* Overlay scope, applied to the show_all arrows only. The walk itself
+     * stays unnarrowed (selected_block_only == 0) so the replay anchor below
+     * is still reachable from any block; the scope is enforced per vertex
+     * instead. `target_head` is the pre-resolved last matching block head for
+     * the single-copy scopes, or -1 for "any matching block". cur_* is walk
+     * state, maintained by on_normal_vector_cmd. */
+    const OverlayWalkCtx *walk;
+    int scope;
+    int target_head;
+    int cur_head;
+    int cur_head_matches;
 } NormalVectorRenderCtx;
+
+/* Track which block the walk is inside, and whether that block belongs to the
+ * cursor — the walk only computes block selection when it is narrowing itself,
+ * and this pass deliberately is not. */
+static void on_normal_vector_cmd(const ReplayVertexWalkState *state,
+                                 void *user) {
+    NormalVectorRenderCtx *ctx = (NormalVectorRenderCtx *)user;
+    const GLCmd *cmd;
+
+    if (!ctx || !ctx->walk || !ctx->program || !ctx->program->cmds)
+        return;
+    if (state->flat_cmd_idx < 0 || state->flat_cmd_idx >= ctx->program->cmd_count)
+        return;
+    cmd = &ctx->program->cmds[state->flat_cmd_idx];
+    if (cmd->type == CMD_END || cmd->type == CMD_TESS_END) {
+        /* Clear on the way out, or a stray vertex between blocks would
+         * inherit the previous block's verdict. */
+        ctx->cur_head = -1;
+        ctx->cur_head_matches = 0;
+        return;
+    }
+    if (cmd->type != CMD_BEGIN && cmd->type != CMD_TESS_BEGIN_POLYGON)
+        return;
+
+    ctx->cur_head = state->flat_cmd_idx;
+    ctx->cur_head_matches = outline_block_matches_cursor(
+        state->flat_cmd_idx, cmd->type == CMD_TESS_BEGIN_POLYGON, ctx->walk);
+}
+
+/* Does this vertex fall inside the overlay scope? Whole-scene takes every
+ * vertex; the rest take the cursor's block, narrowed to one unrolled copy for
+ * the single-copy scopes and to one primitive for single-polygon. */
+static int normal_vector_in_scope(const NormalVectorRenderCtx *ctx,
+                                  const ReplayVertexWalkState *state) {
+    if (ctx->scope == OVERLAY_SCOPE_WHOLE_SCENE)
+        return 1;
+    if (!ctx->cur_head_matches)
+        return 0;
+    if (ctx->target_head >= 0 && ctx->cur_head != ctx->target_head)
+        return 0;
+    if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->walk &&
+        ctx->walk->cursor_poly_valid && state->primitive_mode != 0 &&
+        !cursor_poly_contains_ordinal(ctx->walk, state->vertex_idx_in_block))
+        return 0;
+    return 1;
+}
 
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
@@ -1834,10 +1899,12 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
     const NormalVectorRenderCtx *ctx = (const NormalVectorRenderCtx *)user;
     int is_anchor;
     int draw_focused;
+    int show_this;
     if (!ctx)
         return;
 
     is_anchor = ctx->anchor_idx >= 0 && state->flat_cmd_idx == ctx->anchor_idx;
+    show_this = ctx->show_all && normal_vector_in_scope(ctx, state);
     if (!ctx->show_all) {
         if (!is_anchor)
             return;
@@ -1851,7 +1918,7 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                    is_anchor &&
                    state->lighting_enabled;
 
-    if (ctx->show_all) {
+    if (show_this) {
         render3d_clr(RENDER3D_CLR_NORMAL_LABEL);
         render3d_draw_normal_vector_arrow(vx, vy, vz,
                                        state->normal[0],
@@ -2141,8 +2208,11 @@ static void edit_overlays_render_normal_vectors_with_sink(
     render3d_clr(RENDER3D_CLR_NORMAL_LABEL);
 
     static const ReplayVertexWalkCallbacks cb = {
+        .on_each_cmd = on_normal_vector_cmd,
         .on_vertex = on_normal_vector_arrow,
     };
+    int scope = walk_ctx ? (int)walk_ctx->cursor_overlay_scope
+                         : OVERLAY_SCOPE_WHOLE_SCENE;
     NormalVectorRenderCtx render_ctx = {
         .scale = GLR_NORMAL_ARROW_SCALE,
         .show_all = show_all,
@@ -2154,7 +2224,22 @@ static void edit_overlays_render_normal_vectors_with_sink(
         .stop_flag = show_all ? NULL : &stop,
         .label_sink = label_sink ? *label_sink
                                  : (Render3dGuideLabelSink){0},
+        .walk = walk_ctx,
+        .scope = scope,
+        /* Resolved before the walk: it runs forward and cannot know which
+         * matching copy is the last one until it has passed them all, and an
+         * arrow already drawn cannot be taken back the way a collected label
+         * can. Costs one GL-free pass over the flat program. */
+        .target_head = -1,
+        .cur_head = -1,
+        .cur_head_matches = 0,
     };
+    if (walk_ctx && cursor_scope_selects_one_instance(walk_ctx)) {
+        int head = last_matching_block_head(walk_ctx, CMD_BEGIN, 0);
+        if (head < 0)
+            head = last_matching_block_head(walk_ctx, CMD_TESS_BEGIN_POLYGON, 1);
+        render_ctx.target_head = head;
+    }
     replay_walk_user_vertices(&ctx, &cb, &render_ctx);
 
     glPopAttrib();
