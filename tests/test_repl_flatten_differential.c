@@ -312,8 +312,12 @@ static void load_auto_normal_doc(void) {
     repl_recompute_autonormals(1, NULL);
 }
 
-/* The document synthesizes one auto-normal per triangle vertex. */
-#define EXPECTED_AUTO_NORMALS 3
+/* The three vertices of a single triangle all take its one face normal, and
+ * the pass emits one row per run of vertices sharing a normal — so the
+ * document synthesizes exactly one auto-normal, not one per vertex. What
+ * these tests pin is that is_auto survives the flatten, not how many rows
+ * carry it; the count only has to match what the pass actually produced. */
+#define EXPECTED_AUTO_NORMALS 1
 
 /* An auto-generated normal is a literal command; the fast path must carry its
  * is_auto flag into the flat program. */

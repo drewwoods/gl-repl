@@ -111,6 +111,45 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
     }
 }
 
+/* Drop a generated row the dedup pass has made redundant. The mirror of
+ * insert_cmd_at, with the order reversed: the store delete is attempted
+ * first because it is the only half that can refuse (a bad range leaves
+ * the store untouched), so the text delete only runs once the row is
+ * known to be gone. Capacity cannot fail a delete, so there is no
+ * rollback counterpart. Returns 1 when the row was removed. */
+static int delete_cmd_at(int pos, int *edit_line_inout) {
+    ReplCommandStore store = repl_command_store_live();
+    ReplStoreMutOpts opts = {
+        .flags        = 0,   /* delete gates on cursor_inout, not flags */
+        .cursor_inout = edit_line_inout,
+    };
+    SourceTextChange change = {
+        .kind         = SOURCE_TEXT_DELETE_RANGE,
+        .pos          = pos,
+        .count        = 1,
+        .delete_pos   = -1,
+        .delete_count = 0,
+    };
+
+    if (!repl_command_store_delete_range(&store, pos, 1, &opts))
+        return 0;
+    source_document_apply_change(&change);
+    return 1;
+}
+
+/* Two generated normals are interchangeable when they agree to within a
+ * hair. These are computed cross products rather than source literals —
+ * the exact-match rule the smooth pass uses for *positions* would leave
+ * coplanar faces looking distinct over rounding — so the comparison is
+ * epsilon-based. */
+#define AUTONORMAL_SAME_EPS 1e-6f
+
+static int normals_match(const float *a, const float *b) {
+    return fabsf(a[0] - b[0]) <= AUTONORMAL_SAME_EPS &&
+           fabsf(a[1] - b[1]) <= AUTONORMAL_SAME_EPS &&
+           fabsf(a[2] - b[2]) <= AUTONORMAL_SAME_EPS;
+}
+
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
     if (front_face == GL_CW) {
         n[0] = -n[0];
@@ -570,34 +609,80 @@ void repl_recompute_autonormals(int autonormal_mode,
             compute_block_normals(mode, front_face, vi, nv, norms);
 
         int offset = 0;
+        /* The normal GL is left holding as the walk reaches each vertex.
+         * A vertex whose face normal already matches it needs no row of
+         * its own — the normal is current state, not a per-vertex
+         * attribute, so a flat face spelled as four glVertex3f lines
+         * needs one glNormal3f, not four identical ones.
+         *
+         * Deliberately reset per glBegin block rather than carried
+         * across blocks: whatever normal was in effect beforehand would
+         * have to be tracked through arbitrary intervening commands to
+         * be trusted, so the first vertex of every block always gets its
+         * own row. One redundant row per block buys not having to model
+         * GL state outside it. */
+        int have_current = 0;
+        float current[3] = { 0, 0, 0 };
+
         for (int v = 0; v < nv; v++) {
             int vidx = vi[v] + offset;
             float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
+            float n[3];
+            const GLCmd *prev = (vidx > 0) ? &repl_state_document_cmds()[vidx - 1]
+                                           : NULL;
+            int prev_is_normal = prev && prev->valid &&
+                                 prev->type == CMD_NORMAL3F;
 
-            if (vidx > 0 && repl_state_document_cmds()[vidx - 1].valid &&
-                repl_state_document_cmds()[vidx - 1].type == CMD_NORMAL3F) {
-                if (repl_state_document_cmds()[vidx - 1].is_auto) {
-                    ReplCommandStore store = repl_command_store_live();
-                    GLCmd auto_normal = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
-                    char line[MAX_LINE_LEN];
+            n[0] = nx; n[1] = ny; n[2] = nz;
 
-                    make_auto_normal_text(CMD_NORMAL3F, vidx - 1, nx, ny, nz,
-                                          line, sizeof(line));
-                    /* In-place replacement: both ops touch the same
-                     * row, no order-dependent rollback to worry about.
-                     * Both writes are required for consistency, so
-                     * gate the cmd-store on a successful text write. */
-                    if (source_document_replace_line(vidx - 1, line))
-                        repl_command_store_replace_one(&store, vidx - 1,
-                                                       &auto_normal);
+            /* A hand-written normal owns its row *and* the state that
+             * follows it: it becomes what GL is holding, so a later
+             * vertex matching it is redundant for the same reason. */
+            if (prev_is_normal && !prev->is_auto) {
+                current[0] = prev->args[0];
+                current[1] = prev->args[1];
+                current[2] = prev->args[2];
+                have_current = 1;
+                continue;
+            }
+
+            if (have_current && normals_match(current, n)) {
+                /* Redundant. Drop the generated row if a previous pass
+                 * left one here; the values it carried are exactly what
+                 * is already in effect, so nothing renders differently. */
+                if (prev_is_normal && prev->is_auto &&
+                    delete_cmd_at(vidx - 1, edit_line_inout)) {
+                    offset--;
+                    block_end--;
                 }
                 continue;
             }
 
-            GLCmd nc = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
-            insert_cmd_at(vidx, &nc, nx, ny, nz, edit_line_inout);
-            offset++;
-            block_end++;
+            if (prev_is_normal) {
+                ReplCommandStore store = repl_command_store_live();
+                GLCmd auto_normal = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
+                char line[MAX_LINE_LEN];
+
+                make_auto_normal_text(CMD_NORMAL3F, vidx - 1, nx, ny, nz,
+                                      line, sizeof(line));
+                /* In-place replacement: both ops touch the same
+                 * row, no order-dependent rollback to worry about.
+                 * Both writes are required for consistency, so
+                 * gate the cmd-store on a successful text write. */
+                if (source_document_replace_line(vidx - 1, line))
+                    repl_command_store_replace_one(&store, vidx - 1,
+                                                   &auto_normal);
+            } else {
+                GLCmd nc = make_auto_normal(CMD_NORMAL3F, nx, ny, nz);
+                insert_cmd_at(vidx, &nc, nx, ny, nz, edit_line_inout);
+                offset++;
+                block_end++;
+            }
+
+            current[0] = nx;
+            current[1] = ny;
+            current[2] = nz;
+            have_current = 1;
         }
 
         i = block_end + 1;

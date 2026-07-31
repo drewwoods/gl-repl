@@ -1313,6 +1313,15 @@ highlight over it.
   expression-valued coordinate is left alone — the pass reads literal source
   coordinates.
 
+  **One line per run, not per vertex.** A normal is GL state, so a flat face
+  spelled as four `glVertex3f` lines needs one `glNormal3f`, not four
+  identical ones; consecutive vertices that would get the same normal share
+  a single generated line. A cube face collapses to one line, and a
+  hand-written normal counts as the normal in effect for the vertices that
+  follow it. This makes the line count mode-dependent: switching Face to
+  Smooth generally *adds* lines, because averaged per-vertex normals differ
+  where flat ones did not, and switching back removes them again.
+
   Generated lines are marked in the code panel: an `auto` tag in the same
   left column as the `v0`/`v1` vertex indices, and slightly dimmer text than
   the rest of the program. A `glNormal3f` you typed yourself is never
