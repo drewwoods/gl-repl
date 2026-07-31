@@ -1262,14 +1262,16 @@ The overlay toggles annotate geometry scene-wide:
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
-- **Label & highlight scope** (F8): Cursor block — last instance / all
-  instances / single polygon — plus **Whole scene**. Controls how broadly
-  cursor-bound overlays are shown around repeated function/loop instances. *Last instance* picks the final unrolled copy, so the highlight,
-  the vertex labels and the cursor guide all sit on the copy whose loop-body
-  variable values the **variable panel** is showing — and on the last polygon a
-  replay draws. *Whole scene* is the one scope not anchored to the cursor: it
-  numbers **every** vertex the program emits, not just the block you are
-  editing. The highlight stays on the cursor's block there.
+- **Overlay scope** (F8): Cursor block — last instance / all instances /
+  single polygon — plus **Whole scene**. Controls how broadly the cursor-bound
+  overlays are shown around repeated function/loop instances: the vertex
+  labels, the polygon highlight, the **normal vectors** and the cursor guide
+  all obey it. *Last instance* picks the final unrolled copy, so they all sit
+  on the copy whose loop-body variable values the **variable panel** is
+  showing — and on the last polygon a replay draws. *Whole scene* is the one
+  scope not anchored to the cursor: it takes **every** vertex the program
+  emits, not just the block you are editing. The highlight stays on the
+  cursor's block there.
 
   Vertex labels are always culled against the depth buffer — a vertex hidden
   behind solid geometry gets no label, in every scope. The polygon highlight is
@@ -1278,7 +1280,10 @@ The overlay toggles annotate geometry scene-wide:
   sits, independent of which vertices get one. Decluttered floats labels onto
   clear rows with leader lines; At vertex pins each to its own vertex, exact
   position and overlaps included.
-- **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow.
+- **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow,
+  within the **Overlay scope** above — so on a dense surface you can narrow
+  the arrows to the block you are editing instead of reading a pincushion.
+  *Whole scene* is the scope that arrows everything.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
@@ -1606,7 +1611,7 @@ taller than the window):
   or a loaded file — and to the built-in defaults only when the scene has no
   camera header)
 - **GEOMETRY** — Wireframe, Winding, Depth view, Stencil view, Auto-normals
-- **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
+- **OVERLAYS** — Overlay scope, Vertex labels, Vertex points, Vertex outlines,
   Vertex outline style, Normal vectors, Polygon highlight, Transform guides
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
@@ -1625,7 +1630,7 @@ backward):
 | F5 | Backdrop |
 | F6 | Axes theme |
 | F7 | Vertex labels |
-| F8 | Label & highlight scope |
+| F8 | Overlay scope |
 | F9 | Light theme |
 | F10 | Post FX Scope |
 

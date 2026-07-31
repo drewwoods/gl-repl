@@ -1861,22 +1861,25 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                RENDER3D_BACKDROP_CITY_AND_STARS);
 
     out = -1;
-    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_ALL_INSTANCES",
-                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_TRUE("resolve overlay_scope: OVERLAY_SCOPE_ALL_INSTANCES",
+                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES", out,
                OVERLAY_SCOPE_ALL_INSTANCES);
 
     out = -1;
-    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_SINGLE_POLYGON",
-                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_SINGLE_POLYGON", &out));
+    ASSERT_TRUE("resolve overlay_scope: OVERLAY_SCOPE_SINGLE_POLYGON",
+                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_SINGLE_POLYGON", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_SINGLE_POLYGON", out,
                OVERLAY_SCOPE_SINGLE_POLYGON);
 
+    /* overlay_scope is canonical; the two names it has been through still
+     * resolve, so a scene saved under either keeps loading. */
     out = -1;
-    ASSERT_TRUE("resolve legacy overlay_scope alias",
-                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
-    ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy", out,
-               OVERLAY_SCOPE_ALL_INSTANCES);
+    ASSERT_TRUE("resolve legacy label_highlight_scope alias",
+                repl_cfg_resolve_text("label_highlight_scope",
+                                      "OVERLAY_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy label_highlight_scope",
+               out, OVERLAY_SCOPE_ALL_INSTANCES);
 
     out = -1;
     ASSERT_TRUE("resolve legacy label_scope alias",
@@ -1885,8 +1888,8 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                OVERLAY_SCOPE_ALL_INSTANCES);
 
     out = -1;
-    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_WHOLE_SCENE",
-                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_WHOLE_SCENE", &out));
+    ASSERT_TRUE("resolve overlay_scope: OVERLAY_SCOPE_WHOLE_SCENE",
+                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_WHOLE_SCENE", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_WHOLE_SCENE", out, OVERLAY_SCOPE_WHOLE_SCENE);
     ASSERT_TRUE("resolve vertex_labels: OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE",
                 repl_cfg_resolve_text("vertex_labels",
@@ -1976,7 +1979,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_all label_highlight_scope is symbolic", repl_config_bag_get(&bag, "label_highlight_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
+    ASSERT_STR("fill_all overlay_scope is symbolic", repl_config_bag_get(&bag, "overlay_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
     ASSERT_STR("fill_all vertex_label_placement is symbolic",
                repl_config_bag_get(&bag, "vertex_label_placement"),
                "OVERLAY_LABEL_PLACEMENT_AT_VERTEX");
@@ -1999,7 +2002,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_scene_subset label_highlight_scope is symbolic", repl_config_bag_get(&scene_bag, "label_highlight_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
+    ASSERT_STR("fill_scene_subset overlay_scope is symbolic", repl_config_bag_get(&scene_bag, "overlay_scope"), "OVERLAY_SCOPE_WHOLE_SCENE");
     ASSERT_STR("fill_scene_subset vertex_label_placement is symbolic",
                repl_config_bag_get(&scene_bag, "vertex_label_placement"),
                "OVERLAY_LABEL_PLACEMENT_AT_VERTEX");

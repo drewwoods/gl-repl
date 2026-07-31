@@ -465,7 +465,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "---", .section_header = 1 },
 
     { .label = "### OVERLAYS", .section_header = 1 },
-    { .label = "Label & highlight scope", .key = GLR_CONFIG_OVERLAY_SCOPE,
+    { .label = "Overlay scope", .key = GLR_CONFIG_OVERLAY_SCOPE,
       .state_count = OVERLAY_SCOPE_COUNT,
       .state_names = overlay_scope_names,
       .key_code = KM_KEY(GLR_OVERLAY_SCOPE), .modifiers = KM_MODS(GLR_OVERLAY_SCOPE),
@@ -638,8 +638,9 @@ static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
         }
     }
 
-    if (strcmp(*slug, "overlay_scope") == 0 || strcmp(*slug, "label_scope") == 0) {
-        snprintf(slug_buf, slug_buf_sz, "%s", "label_highlight_scope");
+    if (strcmp(*slug, "label_highlight_scope") == 0 ||
+        strcmp(*slug, "label_scope") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "overlay_scope");
         *slug = slug_buf;
     }
 
@@ -838,7 +839,7 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
         *count = LIGHT_THEME_COUNT;
         return cfg_light_theme_symbols;
     }
-    if (strcmp(slug, "label_highlight_scope") == 0 || strcmp(slug, "label_scope") == 0 || strcmp(slug, "overlay_scope") == 0) {
+    if (strcmp(slug, "overlay_scope") == 0 || strcmp(slug, "label_scope") == 0 || strcmp(slug, "label_highlight_scope") == 0) {
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
     }

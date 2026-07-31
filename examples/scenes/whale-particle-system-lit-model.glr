@@ -1,4 +1,4 @@
-// @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
 // @cfg grid = GRID_THEME_OCEAN
 // @cfg axes = AXES_THEME_OFF

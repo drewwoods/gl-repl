@@ -610,7 +610,7 @@ EOF
 stage_single_polygon() { stage single_polygon <<'EOF'
 /* @cfg poly_highlight = 1 */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
-/* @cfg label_highlight_scope = OVERLAY_SCOPE_SINGLE_POLYGON */
+/* @cfg overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON */
 /* @cfg grid = GRID_THEME_OFF */
 // Snippet start
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -640,7 +640,7 @@ EOF
 # block's first glVertex3f so the cursor-bound overlays fire.
 stage_label_placement() { stage "lp-$1" <<EOF
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
-/* @cfg label_highlight_scope = OVERLAY_SCOPE_ALL_INSTANCES */
+/* @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES */
 /* @cfg vertex_label_placement = $1 */
 /* @cfg grid = GRID_THEME_OFF */
 /* @cfg variable_panel = 0 */
