@@ -233,7 +233,7 @@ int main(void) {
     int before_n = repl_state_document_count();
     CmdType before_types[MAX_EDITOR_COMMANDS];
     for (int i = 0; i < before_n; i++)
-        before_types[i] = repl_state_document_cmds_mut()[i].type;
+        before_types[i] = repl_state_document_cmds()[i].type;
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
@@ -361,10 +361,10 @@ int main(void) {
     for (int i = 0; i < before_n; i++) {
         char label[64];
         snprintf(label, sizeof(label), "roundtrip type %d", i);
-        ASSERT_TRUE(label, repl_state_document_cmds_mut()[i].type == before_types[i]);
+        ASSERT_TRUE(label, repl_state_document_cmds()[i].type == before_types[i]);
     }
     ASSERT_TRUE("roundtrip blank line type preserved",
-                repl_state_document_cmds_mut()[2].type == CMD_EMPTY);
+                repl_state_document_cmds()[2].type == CMD_EMPTY);
     ASSERT_TRUE("roundtrip blank line text preserved",
                 strcmp(editor_buffer_line(2), "") == 0);
 
@@ -476,7 +476,7 @@ int main(void) {
     ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path, NULL) == 1);
     ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
     ASSERT_TRUE("scratch roundtrip keeps assign type",
-                repl_state_document_cmds_mut()[2].type == CMD_SCRATCH_ASSIGN);
+                repl_state_document_cmds()[2].type == CMD_SCRATCH_ASSIGN);
     ASSERT_TRUE("scratch roundtrip keeps blend source",
                 strstr(editor_buffer_line(2), "A[0] = A[0] + (A[1] - A[0])*0.25;") != NULL);
     ASSERT_TRUE("scratch roundtrip keeps vertex source",
@@ -723,7 +723,7 @@ int main(void) {
         CmdType else_types[MAX_EDITOR_COMMANDS];
         int built_elif = 0, built_else = 0;
         for (int i = 0; i < else_n; i++) {
-            else_types[i] = repl_state_document_cmds_mut()[i].type;
+            else_types[i] = repl_state_document_cmds()[i].type;
             if (else_types[i] == CMD_ELSE_IF) built_elif++;
             if (else_types[i] == CMD_ELSE)    built_else++;
         }
@@ -749,13 +749,13 @@ int main(void) {
             char label[64];
             snprintf(label, sizeof(label), "else round-trip type %d", i);
             ASSERT_TRUE(label,
-                        repl_state_document_cmds_mut()[i].type == else_types[i]);
+                        repl_state_document_cmds()[i].type == else_types[i]);
         }
         {
             int rt_elif = 0, rt_else = 0;
             for (int i = 0; i < repl_state_document_count(); i++) {
-                if (repl_state_document_cmds_mut()[i].type == CMD_ELSE_IF) rt_elif++;
-                if (repl_state_document_cmds_mut()[i].type == CMD_ELSE)    rt_else++;
+                if (repl_state_document_cmds()[i].type == CMD_ELSE_IF) rt_elif++;
+                if (repl_state_document_cmds()[i].type == CMD_ELSE)    rt_else++;
             }
             ASSERT_INT("else round-trip keeps first-class else-if", rt_elif, 1);
             ASSERT_INT("else round-trip keeps first-class else", rt_else, 1);
@@ -768,9 +768,9 @@ int main(void) {
             int vtx_count = 0;
             float vtx_x = -1.0f;
             for (int i = 0; i < repl_state_flat_program_count(); i++) {
-                if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F) {
+                if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F) {
                     vtx_count++;
-                    vtx_x = repl_state_flat_program_cmds_mut()[i].args[0];
+                    vtx_x = repl_state_flat_program_cmds()[i].args[0];
                 }
             }
             ASSERT_INT("else round-trip flatten emits exactly one arm",
@@ -878,7 +878,7 @@ int main(void) {
     editor_feed_line("func0(1.5, x + 2);");
 
     int func_n = repl_state_document_count();
-    for (int i = 0; i < func_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
+    for (int i = 0; i < func_n; i++) before_types[i] = repl_state_document_cmds()[i].type;
 
     glr_state_presentation_mut()->show_vertex_outlines = 1;
     glr_state_presentation_mut()->show_vertex_points = 1;
@@ -923,11 +923,11 @@ int main(void) {
     {
         int have_var = 0, have_def = 0, have_body = 0, have_end = 0, have_call = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
-            if (repl_state_document_cmds_mut()[i].type == CMD_VAR_ASSIGN) have_var++;
-            if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF) have_def++;
-            if (repl_state_document_cmds_mut()[i].type == CMD_VERTEX3F) have_body++;
-            if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_END) have_end++;
-            if (repl_state_document_cmds_mut()[i].type == CMD_CALL) have_call++;
+            if (repl_state_document_cmds()[i].type == CMD_VAR_ASSIGN) have_var++;
+            if (repl_state_document_cmds()[i].type == CMD_FUNC_DEF) have_def++;
+            if (repl_state_document_cmds()[i].type == CMD_VERTEX3F) have_body++;
+            if (repl_state_document_cmds()[i].type == CMD_FUNC_END) have_end++;
+            if (repl_state_document_cmds()[i].type == CMD_CALL) have_call++;
         }
         ASSERT_TRUE("param func roundtrip has var assign", have_var == 1);
         ASSERT_TRUE("param func roundtrip has func def", have_def == 1);
@@ -938,11 +938,11 @@ int main(void) {
 
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("param func flatten count", repl_state_flat_program_count() >= 2);
-    ASSERT_TRUE("param func flatten vertex type", repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("param func flatten vertex type", repl_state_flat_program_cmds()[repl_state_flat_program_count() - 1].type == CMD_VERTEX3F);
     ASSERT_TRUE("param func flatten x",
-                fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[0] - 1.5f) < 1e-6f);
+                fabsf(repl_state_flat_program_cmds()[repl_state_flat_program_count() - 1].args[0] - 1.5f) < 1e-6f);
     ASSERT_TRUE("param func flatten y",
-                fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
+                fabsf(repl_state_flat_program_cmds()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
 
     glr_ctrl_reset_all();
     editor_feed_line("func0(radius, sides, phase) {");
@@ -966,9 +966,9 @@ int main(void) {
     {
         int have_bound = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
-            if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN &&
+            if (repl_state_document_cmds()[i].type == CMD_FOR_BEGIN &&
                 strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "", "sides + 1") != NULL &&
-                repl_state_document_cmds_mut()[i].has_vars) {
+                repl_state_document_cmds()[i].has_vars) {
                 have_bound = 1;
             }
         }
@@ -978,7 +978,7 @@ int main(void) {
     {
         int vertex_count = 0;
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 vertex_count++;
         ASSERT_TRUE("loaded param loop iterates through sides plus center close",
                     vertex_count == 7);
@@ -998,13 +998,13 @@ int main(void) {
     ASSERT_TRUE("load decl plus promoted func output",
                 repl_export_load_from_file(decl_func_path, NULL) == 1);
     ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
-    ASSERT_TRUE("imported decl remains first", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
-    ASSERT_TRUE("imported func follows decl", repl_state_document_cmds_mut()[1].type == CMD_FUNC_DEF);
-    ASSERT_TRUE("imported func body follows header", repl_state_document_cmds_mut()[2].type == CMD_VERTEX3F);
-    ASSERT_TRUE("imported func end follows body", repl_state_document_cmds_mut()[3].type == CMD_FUNC_END);
-    ASSERT_TRUE("imported prior command follows func block", repl_state_document_cmds_mut()[4].type == CMD_CLEAR_COLOR);
-    ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds_mut()[5].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
+    ASSERT_TRUE("imported decl remains first", repl_state_document_cmds()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("imported func follows decl", repl_state_document_cmds()[1].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("imported func body follows header", repl_state_document_cmds()[2].type == CMD_VERTEX3F);
+    ASSERT_TRUE("imported func end follows body", repl_state_document_cmds()[3].type == CMD_FUNC_END);
+    ASSERT_TRUE("imported prior command follows func block", repl_state_document_cmds()[4].type == CMD_CLEAR_COLOR);
+    ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds()[5].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("imported call follows assign", repl_state_document_cmds()[6].type == CMD_CALL);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("float r;");
@@ -1021,19 +1021,19 @@ int main(void) {
                 repl_export_load_from_file(decl_func_blank_path, NULL) == 1);
     ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
     ASSERT_TRUE("imported decl stays first with blank func prelude",
-                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+                repl_state_document_cmds()[0].type == CMD_VAR_DECLARE);
     ASSERT_TRUE("imported blank stays after decl",
-                repl_state_document_cmds_mut()[1].type == CMD_EMPTY);
+                repl_state_document_cmds()[1].type == CMD_EMPTY);
     ASSERT_TRUE("imported comment stays after blank",
-                repl_state_document_cmds_mut()[2].type == CMD_COMMENT);
+                repl_state_document_cmds()[2].type == CMD_COMMENT);
     ASSERT_TRUE("imported func def stays after blank/comment prelude",
-                repl_state_document_cmds_mut()[3].type == CMD_FUNC_DEF);
+                repl_state_document_cmds()[3].type == CMD_FUNC_DEF);
     ASSERT_TRUE("imported func body stays after func def",
-                repl_state_document_cmds_mut()[4].type == CMD_VERTEX3F);
+                repl_state_document_cmds()[4].type == CMD_VERTEX3F);
     ASSERT_TRUE("imported func end stays after func body",
-                repl_state_document_cmds_mut()[5].type == CMD_FUNC_END);
+                repl_state_document_cmds()[5].type == CMD_FUNC_END);
     ASSERT_TRUE("imported call stays after function block",
-                repl_state_document_cmds_mut()[6].type == CMD_CALL);
+                repl_state_document_cmds()[6].type == CMD_CALL);
     ASSERT_TRUE("imported blank prelude text preserved",
                 strcmp(editor_buffer_line(1), "") == 0);
     ASSERT_TRUE("imported comment prelude text preserved",
@@ -1070,17 +1070,17 @@ int main(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path, NULL) == 1);
     ASSERT_TRUE("shape roundtrip cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("loaded shape sphere second", repl_state_document_cmds_mut()[1].type == CMD_GLUT_SPHERE);
-    ASSERT_TRUE("loaded shape cone third",    repl_state_document_cmds_mut()[2].type == CMD_GLUT_CONE);
-    ASSERT_TRUE("loaded shape torus fourth",  repl_state_document_cmds_mut()[3].type == CMD_GLUT_TORUS);
-    ASSERT_TRUE("loaded shape teapot fifth",  repl_state_document_cmds_mut()[4].type == CMD_GLUT_TEAPOT);
-    ASSERT_TRUE("loaded shape cube sixth",    repl_state_document_cmds_mut()[5].type == CMD_GLUT_CUBE);
+    ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds()[0].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("loaded shape sphere second", repl_state_document_cmds()[1].type == CMD_GLUT_SPHERE);
+    ASSERT_TRUE("loaded shape cone third",    repl_state_document_cmds()[2].type == CMD_GLUT_CONE);
+    ASSERT_TRUE("loaded shape torus fourth",  repl_state_document_cmds()[3].type == CMD_GLUT_TORUS);
+    ASSERT_TRUE("loaded shape teapot fifth",  repl_state_document_cmds()[4].type == CMD_GLUT_TEAPOT);
+    ASSERT_TRUE("loaded shape cube sixth",    repl_state_document_cmds()[5].type == CMD_GLUT_CUBE);
     ASSERT_TRUE("loaded shape sphere keeps expr source",
                 strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "",
                        "glutSolidSphere(x, 16, 12);") != NULL);
     ASSERT_TRUE("loaded shape sphere has_vars set",
-                repl_state_document_cmds_mut()[1].has_vars == 1);
+                repl_state_document_cmds()[1].has_vars == 1);
     ASSERT_TRUE("loaded shape cone source intact",
                 strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
                        "glutSolidCone(0.15, 1.5, 8, 1);") != NULL);
@@ -1719,11 +1719,11 @@ int main(void) {
         ASSERT_TRUE("re-imported header value round-trips exactly",
                     x_idx >= 0 && g_predef_vars[x_idx].value == precise_x);
         ASSERT_TRUE("re-imported loop start round-trips exactly",
-                    repl_state_document_cmds_mut()[0].args[0] == loop_start);
+                    repl_state_document_cmds()[0].args[0] == loop_start);
         ASSERT_TRUE("re-imported loop end round-trips exactly",
-                    repl_state_document_cmds_mut()[0].args[1] == loop_end);
+                    repl_state_document_cmds()[0].args[1] == loop_end);
         ASSERT_TRUE("re-imported loop step round-trips exactly",
-                    repl_state_document_cmds_mut()[0].args[2] == loop_step);
+                    repl_state_document_cmds()[0].args[2] == loop_step);
 
         remove(precision_path);
     }
@@ -2684,7 +2684,7 @@ static void test_import_robustness(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load truncated file", repl_export_load_from_file(test_path, NULL) == 1);
     ASSERT_INT("truncated file count", repl_state_document_count(), 2);
-    ASSERT_INT("indent cache updated safely", repl_state_document_cmds_mut()[1].type, CMD_VERTEX3F);
+    ASSERT_INT("indent cache updated safely", repl_state_document_cmds()[1].type, CMD_VERTEX3F);
 
     /* 3. Mixed Line Endings (CRLF) */
     f = fopen(test_path, "wb");

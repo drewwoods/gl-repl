@@ -287,7 +287,7 @@ surfaces it on the CLI.
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L180)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L179)):
 
 ```c
 typedef struct {
@@ -763,10 +763,11 @@ State access is intentionally two-tiered:
 - **[`state_views.h`](state_views.h)** — read-only, by-value getters
   (`repl_state_document_cmds()`, `repl_state_variables()`, …). Safe to
   include from `render3d_*` and `ui_*`.
-- **[`state_owners.h`](state_owners.h)** — mutable `_mut()` accessors, setters, and reset
-  helpers. For owner modules and the controller only.
+- **[`state_owners.h`](state_owners.h)** — mutable `_mut()` / `_writable()`
+  owner accessors, setters, and reset helpers. For owner modules and the
+  controller only; broad command-array mutators are intentionally absent.
 
-[`repl_state_ensure_sentinels()`](state_owners.h#L149) patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](state_owners.h#L132) patches the non-zero defaults (most
 importantly the array capacities — under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
@@ -1238,7 +1239,7 @@ export, and flat-program queries never see the wrapped contents as valid.
 
 ### 13.2 Why `t` can force a re-flatten
 
-[`repl_state_time_advance()`](state_owners.h#L72) updates the visible `t` binding whenever the
+[`repl_state_time_advance()`](state_owners.h#L60) updates the visible `t` binding whenever the
 clock is playing ([`state.c`](state.c)). If the current source mentions `t`, it also
 sets `flat_program.dirty = 1`, so the controller rebuilds the flat program. That
 is *required* because flatten is the only stage that resolves **program

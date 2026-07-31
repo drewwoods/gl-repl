@@ -15,6 +15,8 @@
 #include "repl/example_loader.h"
 #include "repl/export.h"
 #include "repl/flatten.h"
+#include "repl/command_store.h"
+#include "repl/state_owners.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "editor/input.h"
@@ -331,8 +333,8 @@ static void prepare_display_fixture(void) {
     repl_state_variables_mut()->anim_time = 4.25f;
     editor_insert_mode_set(1);
 
-    doc_cmds = repl_state_document_cmds_mut();
-    flat_cmds = repl_state_flat_program_cmds_mut();
+    doc_cmds = repl_command_store_live().cmds;
+    flat_cmds = repl_state_flat_program_writable()->cmds;
     set_cmd3(&doc_cmds[0], CMD_VERTEX3F, 0, "glVertex3f(1, 2, 3);",
              1.0f, 2.0f, 3.0f);
     set_cmd3(&doc_cmds[1], CMD_COLOR3F, 1, "glColor3f(0.2, 0.4, 0.6);",
@@ -3461,7 +3463,7 @@ static void test_build_ui_snapshot_is_idempotent(void) {
 
     printf("--- imrepl_ctrl snapshot idempotence ---\n");
     prepare_display_fixture();
-    repl_state_flat_program_mut()->overflow_cmd_count = MAX_FLAT_COMMANDS + 7;
+    repl_state_flat_program_writable()->overflow_cmd_count = MAX_FLAT_COMMANDS + 7;
 
     glr_ctrl_build_ui_snapshot(&snap_a);
     glr_ctrl_build_ui_snapshot(&snap_b);

@@ -2,6 +2,7 @@
 #include "repl/pipeline.h"
 #include "editor/input.h"
 #include "repl/state_owners.h"
+#include "repl/command_store.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,10 +47,10 @@ static void test_degenerate_normal(void) {
 
     /* An auto-normal should be inserted before each vertex */
     ASSERT_INT("degenerate: cmd count", repl_state_document_count(), 8);
-    ASSERT_TRUE("degenerate: first inserted is auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
-    ASSERT_FLOAT("degenerate: normal x is 0", repl_state_document_cmds_mut()[1].args[0], 0.0f);
-    ASSERT_FLOAT("degenerate: normal y is 0", repl_state_document_cmds_mut()[1].args[1], 0.0f);
-    ASSERT_FLOAT("degenerate: normal z is 0", repl_state_document_cmds_mut()[1].args[2], 0.0f);
+    ASSERT_TRUE("degenerate: first inserted is auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
+    ASSERT_FLOAT("degenerate: normal x is 0", repl_state_document_cmds()[1].args[0], 0.0f);
+    ASSERT_FLOAT("degenerate: normal y is 0", repl_state_document_cmds()[1].args[1], 0.0f);
+    ASSERT_FLOAT("degenerate: normal z is 0", repl_state_document_cmds()[1].args[2], 0.0f);
 
 }
 
@@ -71,11 +72,11 @@ static void test_triangle_strip(void) {
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("strip: cmd count", repl_state_document_count(), 10);
-    ASSERT_TRUE("strip: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
-    ASSERT_TRUE("strip: v1 has auto normal", repl_state_document_cmds_mut()[3].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[3].is_auto);
+    ASSERT_TRUE("strip: v0 has auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
+    ASSERT_TRUE("strip: v1 has auto normal", repl_state_document_cmds()[3].type == CMD_NORMAL3F && repl_state_document_cmds()[3].is_auto);
     /* All normals for a flat strip in xy-plane should point along +z */
-    ASSERT_FLOAT("strip: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
-    ASSERT_FLOAT("strip: n1 z", repl_state_document_cmds_mut()[3].args[2], 1.0f);
+    ASSERT_FLOAT("strip: n0 z", repl_state_document_cmds()[1].args[2], 1.0f);
+    ASSERT_FLOAT("strip: n1 z", repl_state_document_cmds()[3].args[2], 1.0f);
 
 }
 
@@ -97,9 +98,9 @@ static void test_triangle_fan(void) {
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("fan: cmd count", repl_state_document_count(), 10);
-    ASSERT_TRUE("fan: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_TRUE("fan: v0 has auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
     /* Fan in xy-plane, normal should be +z */
-    ASSERT_FLOAT("fan: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("fan: n0 z", repl_state_document_cmds()[1].args[2], 1.0f);
 
 }
 
@@ -121,9 +122,9 @@ static void test_quads(void) {
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("quads: cmd count", repl_state_document_count(), 10);
-    ASSERT_TRUE("quads: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_TRUE("quads: v0 has auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
     /* Quad in xy-plane: cross (1,0,0)x(1,1,0) = (0,0,1) */
-    ASSERT_FLOAT("quads: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("quads: n0 z", repl_state_document_cmds()[1].args[2], 1.0f);
 
 }
 
@@ -145,9 +146,9 @@ static void test_quad_strip(void) {
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("quad_strip: cmd count", repl_state_document_count(), 10);
-    ASSERT_TRUE("quad_strip: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
+    ASSERT_TRUE("quad_strip: v0 has auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
     /* First quad: v0=(0,0,0) v1=(1,0,0) v2=(0,1,0). Normal = (0,0,1) */
-    ASSERT_FLOAT("quad_strip: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("quad_strip: n0 z", repl_state_document_cmds()[1].args[2], 1.0f);
 
 }
 
@@ -169,8 +170,8 @@ static void test_polygon(void) {
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("polygon: cmd count", repl_state_document_count(), 10);
-    ASSERT_TRUE("polygon: v0 has auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
-    ASSERT_FLOAT("polygon: n0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_TRUE("polygon: v0 has auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
+    ASSERT_FLOAT("polygon: n0 z", repl_state_document_cmds()[1].args[2], 1.0f);
 
 }
 
@@ -192,9 +193,9 @@ static void test_unsupported_mode(void) {
     /* compute_block_normals default branch leaves all norms at zero,
      * but recompute_autonormals still inserts (0,0,0) auto-normals */
     ASSERT_INT("unsupported mode: auto normals still inserted", repl_state_document_count(), 6);
-    ASSERT_TRUE("unsupported mode: inserted cmd is auto normal", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F && repl_state_document_cmds_mut()[1].is_auto);
-    ASSERT_FLOAT("unsupported mode: normal is zero x", repl_state_document_cmds_mut()[1].args[0], 0.0f);
-    ASSERT_FLOAT("unsupported mode: normal is zero z", repl_state_document_cmds_mut()[1].args[2], 0.0f);
+    ASSERT_TRUE("unsupported mode: inserted cmd is auto normal", repl_state_document_cmds()[1].type == CMD_NORMAL3F && repl_state_document_cmds()[1].is_auto);
+    ASSERT_FLOAT("unsupported mode: normal is zero x", repl_state_document_cmds()[1].args[0], 0.0f);
+    ASSERT_FLOAT("unsupported mode: normal is zero z", repl_state_document_cmds()[1].args[2], 0.0f);
 
 }
 
@@ -284,9 +285,9 @@ static void test_gl_triangles(void) {
     editor_feed_line("glEnd();");
     repl_recompute_autonormals(1, NULL);
     ASSERT_TRUE("autonormal inserts before each triangle vertex", repl_state_document_count() == 8);
-    ASSERT_TRUE("autonormal default front-face first cmd type", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F);
-    ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds_mut()[1].is_auto == 1);
-    ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds_mut()[1].args[2] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("autonormal default front-face first cmd type", repl_state_document_cmds()[1].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds()[1].is_auto == 1);
+    ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds()[1].args[2] - 1.0f) < 1e-6f);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glFrontFace(GL_CW);");
@@ -297,13 +298,13 @@ static void test_gl_triangles(void) {
     editor_feed_line("glEnd();");
     repl_recompute_autonormals(1, NULL);
     ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", repl_state_document_count() == 9);
-    ASSERT_TRUE("autonormal front-face cw first cmd type", repl_state_document_cmds_mut()[2].type == CMD_NORMAL3F);
-    ASSERT_TRUE("autonormal front-face cw first cmd auto", repl_state_document_cmds_mut()[2].is_auto == 1);
-    ASSERT_TRUE("autonormal front-face cw flips z", fabsf(repl_state_document_cmds_mut()[2].args[2] - (-1.0f)) < 1e-6f);
+    ASSERT_TRUE("autonormal front-face cw first cmd type", repl_state_document_cmds()[2].type == CMD_NORMAL3F);
+    ASSERT_TRUE("autonormal front-face cw first cmd auto", repl_state_document_cmds()[2].is_auto == 1);
+    ASSERT_TRUE("autonormal front-face cw flips z", fabsf(repl_state_document_cmds()[2].args[2] - (-1.0f)) < 1e-6f);
 
-    repl_state_document_cmds_mut()[0].args[0] = GL_CCW;
+    repl_command_store_live().cmds[0].args[0] = GL_CCW;
     repl_recompute_autonormals(1, NULL);
-    ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(repl_state_document_cmds_mut()[2].args[2] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(repl_state_document_cmds()[2].args[2] - 1.0f) < 1e-6f);
 
 }
 
@@ -355,9 +356,9 @@ static void test_autonormal_inside_funcn_literal_coords(void) {
      * outward normal is +X. */
     int auto_idx = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].valid &&
-            repl_state_document_cmds_mut()[i].type == CMD_NORMAL3F &&
-            repl_state_document_cmds_mut()[i].is_auto) {
+        if (repl_state_document_cmds()[i].valid &&
+            repl_state_document_cmds()[i].type == CMD_NORMAL3F &&
+            repl_state_document_cmds()[i].is_auto) {
             auto_idx = i;
             break;
         }
@@ -365,11 +366,11 @@ static void test_autonormal_inside_funcn_literal_coords(void) {
     ASSERT_TRUE("funcN literal: auto-normal exists", auto_idx >= 0);
     if (auto_idx >= 0) {
         ASSERT_FLOAT("funcN literal: normal x",
-                     repl_state_document_cmds_mut()[auto_idx].args[0], 1.0f);
+                     repl_state_document_cmds()[auto_idx].args[0], 1.0f);
         ASSERT_FLOAT("funcN literal: normal y",
-                     repl_state_document_cmds_mut()[auto_idx].args[1], 0.0f);
+                     repl_state_document_cmds()[auto_idx].args[1], 0.0f);
         ASSERT_FLOAT("funcN literal: normal z",
-                     repl_state_document_cmds_mut()[auto_idx].args[2], 0.0f);
+                     repl_state_document_cmds()[auto_idx].args[2], 0.0f);
     }
 }
 
@@ -436,24 +437,24 @@ static void test_smooth_welds_shared_corners(void) {
     ASSERT_INT("smooth: cmd count", repl_state_document_count(), 14);
 
     /* v0 = (0,0,0), shared by both faces */
-    ASSERT_FLOAT("smooth: shared v0 x", repl_state_document_cmds_mut()[1].args[0], 0.0f);
-    ASSERT_FLOAT("smooth: shared v0 y", repl_state_document_cmds_mut()[1].args[1], k);
-    ASSERT_FLOAT("smooth: shared v0 z", repl_state_document_cmds_mut()[1].args[2], k);
+    ASSERT_FLOAT("smooth: shared v0 x", repl_state_document_cmds()[1].args[0], 0.0f);
+    ASSERT_FLOAT("smooth: shared v0 y", repl_state_document_cmds()[1].args[1], k);
+    ASSERT_FLOAT("smooth: shared v0 z", repl_state_document_cmds()[1].args[2], k);
     /* v1 = (1,0,0), also shared */
-    ASSERT_FLOAT("smooth: shared v1 y", repl_state_document_cmds_mut()[3].args[1], k);
-    ASSERT_FLOAT("smooth: shared v1 z", repl_state_document_cmds_mut()[3].args[2], k);
+    ASSERT_FLOAT("smooth: shared v1 y", repl_state_document_cmds()[3].args[1], k);
+    ASSERT_FLOAT("smooth: shared v1 z", repl_state_document_cmds()[3].args[2], k);
     /* v2 = (0,1,0), only on the XY face */
-    ASSERT_FLOAT("smooth: lone v2 y", repl_state_document_cmds_mut()[5].args[1], 0.0f);
-    ASSERT_FLOAT("smooth: lone v2 z", repl_state_document_cmds_mut()[5].args[2], 1.0f);
+    ASSERT_FLOAT("smooth: lone v2 y", repl_state_document_cmds()[5].args[1], 0.0f);
+    ASSERT_FLOAT("smooth: lone v2 z", repl_state_document_cmds()[5].args[2], 1.0f);
     /* v3 = (0,0,0) again: the same welded average as v0 */
-    ASSERT_FLOAT("smooth: duplicate v3 y", repl_state_document_cmds_mut()[7].args[1], k);
-    ASSERT_FLOAT("smooth: duplicate v3 z", repl_state_document_cmds_mut()[7].args[2], k);
+    ASSERT_FLOAT("smooth: duplicate v3 y", repl_state_document_cmds()[7].args[1], k);
+    ASSERT_FLOAT("smooth: duplicate v3 z", repl_state_document_cmds()[7].args[2], k);
     /* v4 = (0,0,1), only on the XZ face */
-    ASSERT_FLOAT("smooth: lone v4 y", repl_state_document_cmds_mut()[9].args[1], 1.0f);
-    ASSERT_FLOAT("smooth: lone v4 z", repl_state_document_cmds_mut()[9].args[2], 0.0f);
+    ASSERT_FLOAT("smooth: lone v4 y", repl_state_document_cmds()[9].args[1], 1.0f);
+    ASSERT_FLOAT("smooth: lone v4 z", repl_state_document_cmds()[9].args[2], 0.0f);
     /* v5 = (1,0,0) again */
-    ASSERT_FLOAT("smooth: duplicate v5 y", repl_state_document_cmds_mut()[11].args[1], k);
-    ASSERT_FLOAT("smooth: duplicate v5 z", repl_state_document_cmds_mut()[11].args[2], k);
+    ASSERT_FLOAT("smooth: duplicate v5 y", repl_state_document_cmds()[11].args[1], k);
+    ASSERT_FLOAT("smooth: duplicate v5 z", repl_state_document_cmds()[11].args[2], k);
 }
 
 /* The same geometry under FACE mode keeps hard edges — the guard that
@@ -464,12 +465,12 @@ static void test_face_mode_unchanged_by_smooth(void) {
     feed_folded_pair();
     repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
 
-    ASSERT_FLOAT("face: v0 z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
-    ASSERT_FLOAT("face: v0 y", repl_state_document_cmds_mut()[1].args[1], 0.0f);
-    ASSERT_FLOAT("face: v2 z", repl_state_document_cmds_mut()[5].args[2], 1.0f);
-    ASSERT_FLOAT("face: v3 y", repl_state_document_cmds_mut()[7].args[1], 1.0f);
-    ASSERT_FLOAT("face: v3 z", repl_state_document_cmds_mut()[7].args[2], 0.0f);
-    ASSERT_FLOAT("face: v5 y", repl_state_document_cmds_mut()[11].args[1], 1.0f);
+    ASSERT_FLOAT("face: v0 z", repl_state_document_cmds()[1].args[2], 1.0f);
+    ASSERT_FLOAT("face: v0 y", repl_state_document_cmds()[1].args[1], 0.0f);
+    ASSERT_FLOAT("face: v2 z", repl_state_document_cmds()[5].args[2], 1.0f);
+    ASSERT_FLOAT("face: v3 y", repl_state_document_cmds()[7].args[1], 1.0f);
+    ASSERT_FLOAT("face: v3 z", repl_state_document_cmds()[7].args[2], 0.0f);
+    ASSERT_FLOAT("face: v5 y", repl_state_document_cmds()[11].args[1], 1.0f);
 }
 
 /* The weld is exact, not tolerant. A corner that misses by a hair is a
@@ -491,10 +492,10 @@ static void test_smooth_weld_is_exact(void) {
     repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
 
     /* Face 1 keeps a pure +z, face 2 a pure +y — no averaging. */
-    ASSERT_FLOAT("near-miss: v0 stays +z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
-    ASSERT_FLOAT("near-miss: v0 has no y", repl_state_document_cmds_mut()[1].args[1], 0.0f);
-    ASSERT_FLOAT("near-miss: v3 stays +y", repl_state_document_cmds_mut()[7].args[1], 1.0f);
-    ASSERT_FLOAT("near-miss: v3 has no z", repl_state_document_cmds_mut()[7].args[2], 0.0f);
+    ASSERT_FLOAT("near-miss: v0 stays +z", repl_state_document_cmds()[1].args[2], 1.0f);
+    ASSERT_FLOAT("near-miss: v0 has no y", repl_state_document_cmds()[1].args[1], 0.0f);
+    ASSERT_FLOAT("near-miss: v3 stays +y", repl_state_document_cmds()[7].args[1], 1.0f);
+    ASSERT_FLOAT("near-miss: v3 has no z", repl_state_document_cmds()[7].args[2], 0.0f);
 }
 
 /* Strips share vertices by index, so they smooth without any welding.
@@ -518,7 +519,7 @@ static void test_smooth_triangle_strip_stays_unit(void) {
     for (int v = 0; v < 5; v++) {
         char label[64];
         snprintf(label, sizeof(label), "smooth strip: v%d is unit -z", v);
-        ASSERT_FLOAT(label, repl_state_document_cmds_mut()[1 + v * 2].args[2], -1.0f);
+        ASSERT_FLOAT(label, repl_state_document_cmds()[1 + v * 2].args[2], -1.0f);
     }
 }
 
@@ -541,9 +542,9 @@ static void test_smooth_front_face_cw(void) {
     editor_feed_line("glEnd();");
     repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
 
-    ASSERT_FLOAT("smooth cw: shared v0 y", repl_state_document_cmds_mut()[2].args[1], -k);
-    ASSERT_FLOAT("smooth cw: shared v0 z", repl_state_document_cmds_mut()[2].args[2], -k);
-    ASSERT_FLOAT("smooth cw: lone v2 z", repl_state_document_cmds_mut()[6].args[2], -1.0f);
+    ASSERT_FLOAT("smooth cw: shared v0 y", repl_state_document_cmds()[2].args[1], -k);
+    ASSERT_FLOAT("smooth cw: shared v0 z", repl_state_document_cmds()[2].args[2], -k);
+    ASSERT_FLOAT("smooth cw: lone v2 z", repl_state_document_cmds()[6].args[2], -1.0f);
 }
 
 /* ------------------------------------------------------------------ */
@@ -573,18 +574,18 @@ static void test_tess_contour_gets_one_normal(void) {
                repl_state_document_count(), cmds_before + 1);
     /* Row 1 is gluBegin(GLU_CONTOUR); the normal lands at row 2. */
     ASSERT_TRUE("tess: normal is at the top of the contour",
-                repl_state_document_cmds_mut()[2].type == CMD_TESS_NORMAL &&
-                repl_state_document_cmds_mut()[2].is_auto);
-    ASSERT_FLOAT("tess: normal z", repl_state_document_cmds_mut()[2].args[2], 1.0f);
-    ASSERT_FLOAT("tess: normal x", repl_state_document_cmds_mut()[2].args[0], 0.0f);
-    ASSERT_FLOAT("tess: normal y", repl_state_document_cmds_mut()[2].args[1], 0.0f);
+                repl_state_document_cmds()[2].type == CMD_TESS_NORMAL &&
+                repl_state_document_cmds()[2].is_auto);
+    ASSERT_FLOAT("tess: normal z", repl_state_document_cmds()[2].args[2], 1.0f);
+    ASSERT_FLOAT("tess: normal x", repl_state_document_cmds()[2].args[0], 0.0f);
+    ASSERT_FLOAT("tess: normal y", repl_state_document_cmds()[2].args[1], 0.0f);
 
     /* Idempotent, and Smooth routes to the same per-contour answer. */
     repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
     ASSERT_INT("tess: smooth adds no second row",
                repl_state_document_count(), cmds_before + 1);
     ASSERT_FLOAT("tess: smooth keeps the contour normal",
-                 repl_state_document_cmds_mut()[2].args[2], 1.0f);
+                 repl_state_document_cmds()[2].args[2], 1.0f);
 }
 
 /* Newell's method, not a cross product of the first three vertices: this
@@ -606,9 +607,9 @@ static void test_tess_contour_collinear_start(void) {
     repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
 
     ASSERT_TRUE("collinear start: normal synthesized",
-                repl_state_document_cmds_mut()[2].type == CMD_TESS_NORMAL);
+                repl_state_document_cmds()[2].type == CMD_TESS_NORMAL);
     ASSERT_FLOAT("collinear start: still +z",
-                 repl_state_document_cmds_mut()[2].args[2], 1.0f);
+                 repl_state_document_cmds()[2].args[2], 1.0f);
 }
 
 /* A hand-written gluNormal owns its contour outright — anywhere in the
@@ -631,11 +632,11 @@ static void test_tess_manual_normal_wins(void) {
     ASSERT_INT("tess manual: nothing inserted",
                repl_state_document_count(), cmds_before);
     ASSERT_FLOAT("tess manual: value untouched x",
-                 repl_state_document_cmds_mut()[3].args[0], 1.0f);
+                 repl_state_document_cmds()[3].args[0], 1.0f);
     ASSERT_FLOAT("tess manual: value untouched z",
-                 repl_state_document_cmds_mut()[3].args[2], 0.0f);
+                 repl_state_document_cmds()[3].args[2], 0.0f);
     ASSERT_INT("tess manual: stays manual",
-               repl_state_document_cmds_mut()[3].is_auto, 0);
+               repl_state_document_cmds()[3].is_auto, 0);
 }
 
 /* Each contour of a multi-contour polygon is normalled independently, and
@@ -662,23 +663,23 @@ static void test_tess_two_contours_and_refresh(void) {
 
     ASSERT_INT("two contours: one row each",
                repl_state_document_count(), cmds_before + 2);
-    ASSERT_FLOAT("contour 1: +z", repl_state_document_cmds_mut()[2].args[2], 1.0f);
+    ASSERT_FLOAT("contour 1: +z", repl_state_document_cmds()[2].args[2], 1.0f);
     /* rows: 0 poly, 1 contour, 2 normal, 3..5 verts, 6 end, 7 contour, 8 normal */
     ASSERT_TRUE("contour 2: normal row",
-                repl_state_document_cmds_mut()[8].type == CMD_TESS_NORMAL &&
-                repl_state_document_cmds_mut()[8].is_auto);
-    ASSERT_FLOAT("contour 2: +y", repl_state_document_cmds_mut()[8].args[1], 1.0f);
+                repl_state_document_cmds()[8].type == CMD_TESS_NORMAL &&
+                repl_state_document_cmds()[8].is_auto);
+    ASSERT_FLOAT("contour 2: +y", repl_state_document_cmds()[8].args[1], 1.0f);
 
     /* Flip the first contour's winding and re-run: the auto row updates in
      * place, no second row appears. */
     /* rows 3,4,5 are the contour's vertices; swap the last two. */
-    repl_state_document_cmds_mut()[4].args[1] = 1.0f;   /* (1,0,0) -> (1,1,0) */
-    repl_state_document_cmds_mut()[5].args[1] = 0.0f;   /* (1,1,0) -> (1,0,0) */
+    repl_command_store_live().cmds[4].args[1] = 1.0f; /* (1,0,0) -> (1,1,0) */
+    repl_command_store_live().cmds[5].args[1] = 0.0f; /* (1,1,0) -> (1,0,0) */
     repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
     ASSERT_INT("refresh: no rows added",
                repl_state_document_count(), cmds_before + 2);
     ASSERT_FLOAT("refresh: contour 1 flipped to -z",
-                 repl_state_document_cmds_mut()[2].args[2], -1.0f);
+                 repl_state_document_cmds()[2].args[2], -1.0f);
 }
 
 /* The tess walk inherits the same bail-outs as the immediate-mode one:
@@ -698,7 +699,7 @@ static void test_tess_front_face_and_vars(void) {
     editor_feed_line("gluEnd();");
     repl_recompute_autonormals(REPL_AUTONORMAL_FACE, NULL);
     ASSERT_FLOAT("tess cw: normal flipped",
-                 repl_state_document_cmds_mut()[3].args[2], -1.0f);
+                 repl_state_document_cmds()[3].args[2], -1.0f);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluBegin(GLU_POLYGON);");
@@ -727,7 +728,7 @@ static void test_smooth_rewrites_existing_auto_rows(void) {
     ASSERT_INT("mode switch: no rows added", repl_state_document_count(),
                count_after_face);
     ASSERT_FLOAT("mode switch: v0 now averaged",
-                 repl_state_document_cmds_mut()[1].args[1], 0.70710678f);
+                 repl_state_document_cmds()[1].args[1], 0.70710678f);
 }
 
 int main(void) {

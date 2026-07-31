@@ -1465,7 +1465,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L140) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L70) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -2147,7 +2147,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L140) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L70)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L70)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

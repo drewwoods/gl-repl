@@ -381,7 +381,7 @@ int main() {
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
         opts = (ReplFlattenOptions){
-            .source_cmds = repl_state_document_cmds_mut(),
+            .source_cmds = repl_state_document_cmds(),
             .source_cmd_count = repl_state_document_count(),
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
@@ -399,7 +399,7 @@ int main() {
         ASSERT_TRUE("flatten_program arg eval",
                     fabsf(temp_flat[1].args[0] - 2.0f) < 1e-6f);
         ASSERT_INT("flatten_program provenance source type",
-                   repl_state_document_cmds_mut()[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[temp_flat[1].src_cmd_idx].type, CMD_VERTEX3F);
         ASSERT_INT("flatten_program live count unchanged",
                    repl_state_flat_program_count(), live_count);
         ASSERT_INT("flatten_program live first unchanged",
@@ -486,7 +486,7 @@ int main() {
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
         opts = (ReplFlattenOptions){
-            .source_cmds = repl_state_document_cmds_mut(),
+            .source_cmds = repl_state_document_cmds(),
             .source_cmd_count = repl_state_document_count(),
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
@@ -505,7 +505,7 @@ int main() {
         editor_feed_line("}");
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
-        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmds = repl_state_document_cmds();
         opts.source_cmd_count = repl_state_document_count();
         ASSERT_INT("unreferenced func flatten ok",
                    repl_flatten_program(&opts, &result), 1);
@@ -522,7 +522,7 @@ int main() {
         editor_feed_line("}");
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
-        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmds = repl_state_document_cmds();
         opts.source_cmd_count = repl_state_document_count();
         ASSERT_INT("dead-disable flatten ok",
                    repl_flatten_program(&opts, &result), 1);
@@ -538,7 +538,7 @@ int main() {
         editor_feed_line("}");
         memset(temp_flat, 0, sizeof(temp_flat));
         memset(temp_locals, 0, sizeof(temp_locals));
-        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmds = repl_state_document_cmds();
         opts.source_cmd_count = repl_state_document_count();
         ASSERT_INT("for-reached flatten ok",
                    repl_flatten_program(&opts, &result), 1);
@@ -574,7 +574,7 @@ int main() {
 
         store = repl_command_store_live();
         ASSERT_TRUE("command_store uses document cmds",
-                    store.cmds == repl_state_document_cmds_mut());
+                    store.cmds == repl_state_document_cmds());
         ASSERT_TRUE("command_store uses document count",
                     store.count == &repl_state_document_mut()->cmd_count);
         repl_state_normals_dirty_clear();
@@ -1022,7 +1022,7 @@ int main() {
         editor_feed_line("}");
         editor_feed_line("func0(7);");
 
-        GLCmd *cmds = repl_state_document_cmds_mut();
+        GLCmd *cmds = repl_command_store_live().cmds;
         int n = repl_state_document_count();
         ASSERT_INT("dup-funcN setup: doc count", n, 4);
         ASSERT_INT("dup-funcN setup: row 0 is FUNC_DEF",

@@ -394,7 +394,7 @@ static void test_compile_apply_updates_both(void) {
     ASSERT_INT("post-apply cmd count", repl_state_document_count(), 1);
     ASSERT_INT("post-apply buffer count", editor_buffer_count(), 1);
     ASSERT_INT("post-apply cmd type",
-               repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
     ASSERT_TRUE("post-apply predef registered",
                 repl_eval_find_predef_var_idx("energy") >= 0);
     ASSERT_STR("post-apply buffer line text",
@@ -475,7 +475,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
     /* Find Y's row index and point the editor at it in overwrite mode. */
     int y_row = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
-        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        const GLCmd *c = &repl_state_document_cmds()[i];
         if (c->type == CMD_VAR_DECLARE && c->payload.decl.count == 1 &&
             strcmp(c->payload.decl.names[0], "Y") == 0) {
             y_row = i;
@@ -548,7 +548,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
 
     int x_row = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
-        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        const GLCmd *c = &repl_state_document_cmds()[i];
         if (c->type == CMD_VAR_DECLARE && c->payload.decl.count == 1 &&
             strcmp(c->payload.decl.names[0], "X") == 0) {
             x_row = i;
@@ -581,9 +581,9 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     ASSERT_FLOAT("Y value survives overwrite",
                  g_predef_vars[y_slot].value, 42.0f, 1e-6f);
     ASSERT_INT("replacement row is var assign",
-               repl_state_document_cmds_mut()[x_row].type, CMD_VAR_ASSIGN);
+               repl_state_document_cmds()[x_row].type, CMD_VAR_ASSIGN);
     ASSERT_INT("replacement row slot matches live Y slot",
-               repl_state_document_cmds_mut()[x_row].var_idx, y_slot);
+               repl_state_document_cmds()[x_row].var_idx, y_slot);
 }
 
 static void test_overwrite_decl_ignores_shadowed_param_refs(void) {
@@ -616,7 +616,7 @@ static void test_overwrite_decl_ignores_shadowed_param_refs(void) {
     ASSERT_TRUE("shadowed param decl overwrite declared y",
                 repl_eval_find_predef_var_idx("y") >= 0);
     ASSERT_INT("shadowed param decl overwrite kept func def",
-               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+               repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
 }
 
 static void test_overwrite_assign_ignores_shadowed_param_refs(void) {
@@ -721,7 +721,7 @@ static void test_delete_range_ignores_shadowed_param_refs(void) {
     ASSERT_INT("shadowed param delete removed x",
                repl_eval_find_predef_var_idx("x"), -1);
     ASSERT_INT("shadowed param delete kept func def at top",
-               repl_state_document_cmds_mut()[0].type, CMD_FUNC_DEF);
+               repl_state_document_cmds()[0].type, CMD_FUNC_DEF);
 }
 
 /* Forced cmd-store capacity failure leaves predef-vars, editor
@@ -1585,7 +1585,7 @@ static void test_local_decl_inside_func(void) {
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_INT("local takes no predef slot", repl_eval_find_predef_var_idx("u"), -1);
     ASSERT_INT("local decl row is a CMD_VAR_DECLARE",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
 }
 
 /* `static` selects storage and beats cursor position: typed from inside a
@@ -1689,9 +1689,9 @@ static void test_local_decl_allows_shadowing_outer_scopes(void) {
     ASSERT_INT("a local may share a name with a loop iterator",
                commit_decl_at("float i;", 2, err, sizeof(err)), 1);
     ASSERT_INT("the local hoists to the function-body top, above the loop",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ASSERT_INT("the hoisted row is a local",
-               repl_state_document_cmds_mut()[1].var_idx, REPL_VAR_IDX_LOCAL);
+               repl_state_document_cmds()[1].var_idx, REPL_VAR_IDX_LOCAL);
 }
 
 /* A declaration typed at depth relocates to the owning function's
@@ -1710,11 +1710,11 @@ static void test_local_decl_hoists_from_nested_block(void) {
     ASSERT_INT("a decl typed inside a nested for commits",
                commit_decl_at("float u;", 2, err, sizeof(err)), 1);
     ASSERT_INT("it hoists to the function prologue, not the loop body",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ASSERT_STR("and takes the body's indent",
                editor_buffer_line(1), "    float u;");
     ASSERT_INT("the loop header follows it",
-               repl_state_document_cmds_mut()[2].type, CMD_FOR_BEGIN);
+               repl_state_document_cmds()[2].type, CMD_FOR_BEGIN);
 }
 
 /* Assignment resolves lexically: a local target carries the sentinel and
@@ -1796,15 +1796,15 @@ static void test_local_to_global_conversion(void) {
     ASSERT_INT("converting an unreferenced local succeeds",
                commit_decl_at("static float u;", 1, err, sizeof(err)), 1);
     ASSERT_INT("the converted row moved to the document top",
-               repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
     ASSERT_INT("the converted row is global",
-               repl_state_document_cmds_mut()[0].var_idx, 0);
+               repl_state_document_cmds()[0].var_idx, 0);
     ASSERT_STR("the converted row is re-emitted in global form",
                editor_buffer_line(0), "  static float u;");
     ASSERT_TRUE("the converted name now holds a predef slot",
                 repl_eval_find_predef_var_idx("u") >= 0);
     ASSERT_INT("the function header follows it",
-               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+               repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
 
     /* A same-name global is a duplicate in the same namespace, so it
      * still blocks the conversion. */
@@ -2026,7 +2026,7 @@ static void test_param_capturing_an_assignment_is_rejected(void) {
     editor_feed_line("}");
 
     ASSERT_INT("row 1 is the function header",
-               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+               repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
     ASSERT_INT("a parameter that would capture a body assignment is rejected",
                recompile_func_header("func0(x) {", 1, err, sizeof(err)),
                REPL_COMPILE_ERROR);
@@ -2034,7 +2034,7 @@ static void test_param_capturing_an_assignment_is_rejected(void) {
                 strstr(err, "would capture an assignment") != NULL &&
                 strstr(err, "function parameters are constant") != NULL);
     ASSERT_INT("the header is unchanged",
-               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+               repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
 }
 
 /* The loop-header twin: renaming `for(i, ...)` to `for(x, ...)` over a
@@ -2055,7 +2055,7 @@ static void test_loop_rename_capturing_an_assignment_is_rejected(void) {
     editor_feed_line("}");
 
     ASSERT_INT("row 3 is the loop header",
-               repl_state_document_cmds_mut()[3].type, CMD_FOR_BEGIN);
+               repl_state_document_cmds()[3].type, CMD_FOR_BEGIN);
     ASSERT_INT("renaming the iterator over a captured assignment is rejected",
                compile_for_header_at("for(x, 0, 3) {", 3, 0, err, sizeof(err)),
                REPL_COMPILE_ERROR);
@@ -2063,7 +2063,7 @@ static void test_loop_rename_capturing_an_assignment_is_rejected(void) {
                 strstr(err, "would capture an assignment") != NULL &&
                 strstr(err, "loop variables are constant") != NULL);
     ASSERT_INT("the loop header is unchanged",
-               repl_state_document_cmds_mut()[3].type, CMD_FOR_BEGIN);
+               repl_state_document_cmds()[3].type, CMD_FOR_BEGIN);
 }
 
 /* Ordinary shadowing stays legal. This feature must not quietly ban what
@@ -2101,7 +2101,7 @@ static void test_shadowing_without_capture_is_accepted(void) {
     editor_feed_line("}");
     editor_feed_line("}");
     ASSERT_INT("row 2 is the loop header",
-               repl_state_document_cmds_mut()[2].type, CMD_FOR_BEGIN);
+               repl_state_document_cmds()[2].type, CMD_FOR_BEGIN);
     ASSERT_INT("an iterator may shadow a local it does not write",
                compile_for_header_at("for(x, 0, 3) {", 2, 0, err, sizeof(err)),
                REPL_COMPILE_OK);
@@ -2153,7 +2153,7 @@ static void test_capacity_blocks_later_binder_edits(void) {
      * live local would read 0 mid-body. */
     seed_saturated_func();
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN) {
+        if (repl_state_document_cmds()[i].type == CMD_FOR_BEGIN) {
             loop_row = i;
             break;
         }
@@ -2179,7 +2179,7 @@ static void seed_func_with_used_local(void) {
     editor_feed_line("glVertex3f(u, 0, 0);");
     editor_feed_line("}");
     ASSERT_INT("row 1 is the local declaration",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
 }
 
 /* All five declaration-replacement routes share one guard. These are the
@@ -2193,7 +2193,7 @@ static void test_raw_replace_routes_respect_the_guard(void) {
     ASSERT_INT("overwriting a used local decl with a GL command is refused",
                editor_feed_line("glVertex3f(9, 0, 0);"), 0);
     ASSERT_INT("the declaration row survives",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
 
     /* Route: Enter over the decl row. */
     seed_func_with_used_local();
@@ -2202,9 +2202,9 @@ static void test_raw_replace_routes_respect_the_guard(void) {
     set_input("glVertex3f(9, 0, 0);");
     editor_handle_key('\r', 0, 0);
     ASSERT_INT("Enter over a used local decl leaves it in place",
-               repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ASSERT_INT("and it is still the same local declaration",
-               repl_state_document_cmds_mut()[1].var_idx, REPL_VAR_IDX_LOCAL);
+               repl_state_document_cmds()[1].var_idx, REPL_VAR_IDX_LOCAL);
 }
 
 /* The var-assign cascade: refuse when a dropped name is read, allow when
@@ -2228,7 +2228,7 @@ static void test_overwrite_local_decl_with_assignment(void) {
     editor_feed_line("glVertex3f(used, 0, 0);");
     editor_feed_line("}");
     ASSERT_INT("row 2 is the second local declaration",
-               repl_state_document_cmds_mut()[2].type, CMD_VAR_DECLARE);
+               repl_state_document_cmds()[2].type, CMD_VAR_DECLARE);
 
     editor_state_edit_line_set(2);
     editor_insert_mode_set(0);
@@ -2284,7 +2284,7 @@ static void test_block_comment_toggle_over_a_local_decl(void) {
                change.predef_op_count, 0);
     ASSERT_INT("it applies", editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_INT("the declaration row is now a comment",
-               repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+               repl_state_document_cmds()[1].type, CMD_COMMENT);
 }
 
 /* The local delete guard is bounded to its own function body: a same-name
@@ -2309,7 +2309,7 @@ static void test_local_delete_guard_is_bounded_to_its_body(void) {
     editor_feed_line("}");
 
     for (int i = 0; i < repl_state_document_count(); i++) {
-        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        const GLCmd *c = &repl_state_document_cmds()[i];
         if (c->type == CMD_FUNC_DEF && (int)c->args[0] == 1) {
             func1_row = i;
             break;
@@ -2317,7 +2317,7 @@ static void test_local_delete_guard_is_bounded_to_its_body(void) {
     }
     ASSERT_TRUE("found func1", func1_row >= 0);
     ASSERT_INT("func1's local sits right after its header",
-               repl_state_document_cmds_mut()[func1_row + 1].type,
+               repl_state_document_cmds()[func1_row + 1].type,
                CMD_VAR_DECLARE);
 
     ctx = repl_compile_context_from_live(func1_row + 1);
@@ -2449,7 +2449,7 @@ int main(void) {
         /* Verify slot 0 is a CMD_FUNC_DEF for fn=0. */
         int found_first = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
-            const GLCmd *c = &repl_state_document_cmds_mut()[i];
+            const GLCmd *c = &repl_state_document_cmds()[i];
             if (c->valid && c->type == CMD_FUNC_DEF && (int)c->args[0] == 0) {
                 found_first = 1;
                 break;

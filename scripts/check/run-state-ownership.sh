@@ -303,6 +303,23 @@ check_repl_no_mut_reads() {
     bash scripts/check/check-repl-no-mut-reads.sh
 }
 
+check_no_retired_repl_state_apis() {
+    # Broad array mutators and symmetry-only facade entries were retired once
+    # every real mutation had a narrower owner surface. Keep them gone: a new
+    # caller should use command_store, a targeted setter, or the flat-program
+    # owner's explicit writable slice.
+    local pattern
+    pattern='repl_state_(document_cmds_mut|document_cmd_at_mut|document_capacity|flat_program_mut|flat_program_cmds_mut|flat_program_local_vars_mut|flat_program_reset|scenes_mut|import_export_mut|import_export_reset)[[:space:]]*\('
+    local bad
+    bad=$(git grep -nE "$pattern" -- '*.c' '*.h' 2>/dev/null || true)
+    if [ -n "$bad" ]; then
+        echo "${RED}ERROR: retired broad REPL state API resurfaced:${NC}"
+        echo "$bad"
+        exit 1
+    fi
+    echo "Retired REPL state APIs ${GREEN}OK${NC}"
+}
+
 check_render3d_no_upper_layers() {
     bash scripts/check/check-render3d-no-upper-layers.sh
 }
@@ -551,6 +568,7 @@ else
     run_check check-editor-no-app check_editor_no_app
     run_check check-repl-no-app check_repl_no_app
     run_check check-repl-no-mut-reads check_repl_no_mut_reads
+    run_check check-no-retired-repl-state-apis check_no_retired_repl_state_apis
     run_check check-render3d-no-upper-layers check_render3d_no_upper_layers
     run_check check-ui-core-no-upper-layers check_ui_core_no_upper_layers
     run_check check-app-boot-band check_app_boot_band

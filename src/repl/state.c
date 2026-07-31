@@ -163,20 +163,7 @@ const GLCmd *repl_state_document_cmds(void) {
     return g_repl_state.document.cmds;
 }
 
-GLCmd *repl_state_document_cmds_mut(void) {
-    return g_repl_state.document.cmds;
-}
-
 const GLCmd *repl_state_document_cmd_at(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= g_repl_state.document.cmd_count)
-        return NULL;
-    return &g_repl_state.document.cmds[cmd_idx];
-}
-
-/* No in-tree callers today; kept as the _mut twin of
- * repl_state_document_cmd_at above (facade symmetry). */
-/* cppcheck-suppress unusedFunction */
-GLCmd *repl_state_document_cmd_at_mut(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= g_repl_state.document.cmd_count)
         return NULL;
     return &g_repl_state.document.cmds[cmd_idx];
@@ -188,13 +175,6 @@ int repl_state_document_count(void) {
 
 void repl_state_document_count_set(int cmd_count) {
     g_repl_state.document.cmd_count = cmd_count;
-}
-
-/* No in-tree callers today; kept alongside repl_state_document_count
- * so the document facade exposes count and capacity as a pair. */
-/* cppcheck-suppress unusedFunction */
-int repl_state_document_capacity(void) {
-    return MAX_EDITOR_COMMANDS;
 }
 
 int repl_state_normals_dirty(void) {
@@ -213,7 +193,6 @@ void repl_state_document_reset(void) {
     source_document_clear();
 }
 
-ReplFlatProgramState *repl_state_flat_program_mut(void) { return &g_repl_state.flat_program; }
 ReplFlatProgramState *repl_state_flat_program_writable(void) { return &g_repl_state.flat_program; }
 
 const GLCmd *repl_state_flat_program_cmds(void) {
@@ -221,14 +200,6 @@ const GLCmd *repl_state_flat_program_cmds(void) {
 }
 
 const FlatCmdLocalVars *repl_state_flat_program_local_vars(void) {
-    return g_repl_state.flat_program.local_vars;
-}
-
-GLCmd *repl_state_flat_program_cmds_mut(void) {
-    return g_repl_state.flat_program.cmds;
-}
-
-FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void) {
     return g_repl_state.flat_program.local_vars;
 }
 
@@ -318,20 +289,6 @@ void repl_state_flat_program_set_current_block(int begin_idx, int end_idx,
 
 void repl_state_flat_program_clear_current_block(void) {
     repl_state_flat_program_set_current_block(-1, -1, -1);
-}
-
-/* No in-tree callers today; kept so every state slice has a reset in
- * the per-slice reset family (facade symmetry). */
-/* cppcheck-suppress unusedFunction */
-void repl_state_flat_program_reset(void) {
-    g_repl_state.flat_program.cmd_count = g_repl_state.flat_program.overflow_cmd_count = 0;
-    g_repl_state.flat_program.dirty = 1;
-    g_repl_state.flat_program.user_lighting_enabled = 0;
-    g_repl_state.flat_program.structural_dep_mask = 0;
-    g_repl_state.flat_program.value_dep_mask = 0;
-    g_repl_state.flat_program.args_dirty_mask = 0;
-    g_repl_state.flat_program.rebake_ok = 0;
-    repl_state_flat_program_clear_current_block();
 }
 
 void repl_state_mark_flat_dirty(void) {
@@ -460,10 +417,6 @@ ReplSceneRuntimeState repl_state_scenes(void) {
     return g_repl_state.scene_runtime;
 }
 
-ReplSceneRuntimeState *repl_state_scenes_mut(void) {
-    return &g_repl_state.scene_runtime;
-}
-
 ReplSceneRuntimeState *repl_state_scenes_writable(void) {
     return &g_repl_state.scene_runtime;
 }
@@ -501,7 +454,6 @@ ReplImportExportView repl_state_import_export(void) {
     };
 }
 
-ReplImportExportState *repl_state_import_export_mut(void) { return &g_repl_state.import_export; }
 ReplImportExportState *repl_state_import_export_writable(void) { return &g_repl_state.import_export; }
 
 void repl_state_capture(ReplRuntimeState *snapshot) {
@@ -582,13 +534,6 @@ void repl_state_checkpoint_restore(const ReplCheckpointState *snapshot) {
     g_repl_state.flat_program.args_dirty_mask = 0;
     g_repl_state.flat_program.rebake_ok = 0;
     repl_state_flat_program_clear_current_block();
-}
-
-/* No in-tree callers today; kept so every state slice has a reset in
- * the per-slice reset family (facade symmetry). */
-/* cppcheck-suppress unusedFunction */
-void repl_state_import_export_reset(void) {
-    g_repl_state.import_export = repl_state_defaults()->import_export;
 }
 
 /* Reset REPL-owned slices only. Peer/editor/UI state, chrome sync, and

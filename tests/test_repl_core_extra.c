@@ -150,8 +150,8 @@ void test_repl_replay_advanced() {
     int full_flat_count = repl_state_flat_program_count();
     FlatProgramView live_program = repl_flat_program_view_live();
     ASSERT_INT("flat program view count", live_program.cmd_count, full_flat_count);
-    ASSERT_TRUE("flat program view cmds", live_program.cmds == repl_state_flat_program_cmds_mut());
-    ASSERT_TRUE("flat program view locals", live_program.local_vars == repl_state_flat_program_local_vars_mut());
+    ASSERT_TRUE("flat program view cmds", live_program.cmds == repl_state_flat_program_cmds());
+    ASSERT_TRUE("flat program view locals", live_program.local_vars == repl_state_flat_program_local_vars());
 
     ReplExecutionOptions limited_exec = { .flat_cmd_count = 1 };
     repl_execute_program(&limited_exec);
@@ -1823,7 +1823,7 @@ void test_debug_dump_flat_commands() {
 
     int vertex_flats = 0;
     for (int i = 0; i < repl_state_flat_program_count(); i++)
-        if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+        if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
             vertex_flats++;
     ASSERT_INT("for-loop unrolled to 3 vertices", vertex_flats, 3);
 
@@ -1831,7 +1831,7 @@ void test_debug_dump_flat_commands() {
     ASSERT_TRUE("loop dump captured", loop != NULL);
     if (loop) {
         /* Flattening unrolls the for-loop, so only the body commands survive
-         * in repl_state_flat_program_cmds_mut()[]. The FOR_BEGIN/FOR_END source markers do not
+         * in repl_state_flat_program_cmds()[]. The FOR_BEGIN/FOR_END source markers do not
          * appear in the flat stream. */
         int hits = 0;
         const char *p = loop;
@@ -1855,8 +1855,8 @@ void test_debug_dump_flat_commands() {
 
     int scoped_hits = 0;
     for (int i = 0; i < repl_state_flat_program_count(); i++) {
-        if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F &&
-            repl_state_flat_program_cmds_mut()[i].func_scope_mask != 0u)
+        if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F &&
+            repl_state_flat_program_cmds()[i].func_scope_mask != 0u)
             scoped_hits++;
     }
     ASSERT_TRUE("inlined call sets func_scope_mask", scoped_hits >= 1);
@@ -1880,7 +1880,7 @@ void test_debug_dump_flat_commands() {
     }
 
     /* Implicit flatten: even if the caller leaves repl_state_flat_program_dirty() set and stale
-     * flat state behind, the dump should rebuild repl_state_flat_program_cmds_mut()[] on demand. */
+     * flat state behind, the dump should rebuild repl_state_flat_program_cmds()[] on demand. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(0,0,0);");
     repl_state_mark_flat_dirty();
@@ -1927,7 +1927,7 @@ void test_var_declare_cmd() {
     /* 1. The source array should have exactly one CMD_VAR_DECLARE entry */
     int found_decl = 0;
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].type == CMD_VAR_DECLARE)
+        if (repl_state_document_cmds()[i].type == CMD_VAR_DECLARE)
             found_decl++;
     }
     ASSERT_INT("float decl produces CMD_VAR_DECLARE", found_decl, 1);

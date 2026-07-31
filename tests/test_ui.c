@@ -5,6 +5,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/state.h"
 #include "repl/state_owners.h"
+#include "repl/command_store.h"
 #include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
 #include "repl/example_loader.h"
@@ -42,6 +43,11 @@
 #include <assert.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
+
+static GLCmd *test_ui_document_cmds(void) {
+    ReplCommandStore store = repl_command_store_live();
+    return store.cmds;
+}
 
 /* Build the variable-panel view from live app state (mirrors the
  * pre-narrowing NULL-snapshot path) so these tests drive rect/hit by count. */
@@ -259,12 +265,12 @@ static void test_color_picker(void) {
 
     /* Setup a command to edit */
     repl_state_document_count_set(1);
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 1.0f;
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 0;
 
     ASSERT_TRUE("can edit color cmd", color_picker_can_edit_cmd(0));
 
@@ -294,8 +300,8 @@ static void test_color_picker(void) {
     color_picker_handle_release();
 
     /* Test Alpha support */
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
-    repl_state_document_cmds_mut()[0].args[3] = 0.5f;
+    test_ui_document_cmds()[0].type = CMD_COLOR4F;
+    test_ui_document_cmds()[0].args[3] = 0.5f;
     color_picker_start(0, 300);
 
     gl_stub_counts_reset();
@@ -311,7 +317,7 @@ static void test_color_picker(void) {
     color_picker_handle_release();
 
     /* Test glClearColor limits */
-    repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
+    test_ui_document_cmds()[0].type = CMD_CLEAR_COLOR;
     color_picker_start(0, 300);
     view = color_picker_view();
     int sv_mx2 = view.rects.sv_x + 10;
@@ -320,7 +326,7 @@ static void test_color_picker(void) {
     color_picker_handle_release();
 
     /* Test CMD_TESS_COLOR writeback */
-    repl_state_document_cmds_mut()[0].type = CMD_TESS_COLOR;
+    test_ui_document_cmds()[0].type = CMD_TESS_COLOR;
     color_picker_start(0, 300);
     view = color_picker_view();
     color_picker_handle_press(view.rects.hue_x + 5, ui_state_viewport().window_h - (view.rects.hue_y + 10));
@@ -328,29 +334,29 @@ static void test_color_picker(void) {
 
     /* Test RGB->HSV branches */
     color_picker_stop();
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 1.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 0.0f;
+    test_ui_document_cmds()[0].args[1] = 1.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
     color_picker_start(0, 300);
 
-    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 1.0f;
+    test_ui_document_cmds()[0].args[0] = 0.0f;
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 1.0f;
     color_picker_start(0, 300);
 
     /* Open an uneditable command to hit coverage */
-    repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
+    test_ui_document_cmds()[0].type = CMD_BEGIN;
     color_picker_start(0, 300);
 
     /* Test invalid/vars constraints */
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].valid = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].valid = 0;
     color_picker_can_edit_cmd(0);
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 1;
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 1;
     color_picker_can_edit_cmd(0);
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].has_vars = 0;
 
     /* Out of bounds cmd_idx */
     color_picker_can_edit_cmd(-1);
@@ -372,7 +378,7 @@ static void test_color_picker(void) {
     /* Test writeback short-circuit (mutated command type underneath) */
     color_picker_start(0, 300);
     view = color_picker_view();
-    repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
+    test_ui_document_cmds()[0].type = CMD_BEGIN;
     color_picker_handle_press(view.rects.sv_x + 10, ui_state_viewport().window_h - (view.rects.sv_y + 10));
     color_picker_handle_release();
 
@@ -389,12 +395,12 @@ static void test_color_picker(void) {
     /* --- Palettes ------------------------------------------------------ */
     color_picker_state_reset();   /* back to CP_TAB_BASIC */
     repl_state_document_count_set(1);
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 1.0f;   /* blue */
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 0.0f;
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 1.0f;   /* blue */
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 0;
     color_picker_start(0, 300);
 
     view = color_picker_view();
@@ -446,8 +452,8 @@ static void test_color_picker(void) {
 
     /* glClearColor clamps a bright (white) swatch to REPL_CLEAR_COLOR_MAX_V. */
     color_picker_state_reset();
-    repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
-    repl_state_document_cmds_mut()[0].args[3] = 1.0f;
+    test_ui_document_cmds()[0].type = CMD_CLEAR_COLOR;
+    test_ui_document_cmds()[0].args[3] = 1.0f;
     color_picker_start(0, 300);
     view = color_picker_view();
     {
@@ -464,12 +470,12 @@ static void test_color_picker(void) {
 
     /* --- Hex readout + sticky harmony key ------------------------------ */
     repl_state_document_count_set(1);
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 1.0f;   /* pure red */
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 1.0f;   /* pure red */
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 0;
     color_picker_start(0, 300);
     view = color_picker_view();
     ASSERT_TRUE("hex readout for pure red", strcmp(view.hex, "#FF0000FF") == 0);
@@ -499,9 +505,9 @@ static void test_color_picker(void) {
     /* Close and reopen on a *different* command color: the key persists
      * across instances (tab stays Harmony, key not re-seeded). */
     color_picker_stop();
-    repl_state_document_cmds_mut()[0].args[0] = 0.0f;   /* green */
-    repl_state_document_cmds_mut()[0].args[1] = 1.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].args[0] = 0.0f;   /* green */
+    test_ui_document_cmds()[0].args[1] = 1.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
     color_picker_start(0, 300);
     view = color_picker_view();
     ASSERT_TRUE("tab persisted as Harmony", view.palette_tab == CP_TAB_HARMONY);
@@ -889,12 +895,12 @@ static void test_ui_color_picker_hit_test(void) {
      * relative to the code-panel rect, so probe the actual rect by
      * sweeping mx / my for the click coordinate that hits SV (region 1). */
     repl_state_document_count_set(1);
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 1.0f;
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 0;
     color_picker_start(0, 300);
 
     int win_h = ui_state_viewport().window_h;
@@ -1045,12 +1051,12 @@ static void test_ui_panels_hit_test_dispatch(void) {
      * Probe for an SV-rect coordinate so we don't depend on the
      * picker's internal placement math. */
     repl_state_document_count_set(1);
-    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
-    repl_state_document_cmds_mut()[0].args[0] = 1.0f;
-    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
-    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
-    repl_state_document_cmds_mut()[0].valid = 1;
-    repl_state_document_cmds_mut()[0].has_vars = 0;
+    test_ui_document_cmds()[0].type = CMD_COLOR3F;
+    test_ui_document_cmds()[0].args[0] = 1.0f;
+    test_ui_document_cmds()[0].args[1] = 0.0f;
+    test_ui_document_cmds()[0].args[2] = 0.0f;
+    test_ui_document_cmds()[0].valid = 1;
+    test_ui_document_cmds()[0].has_vars = 0;
     color_picker_start(0, 300);
 
     int sv_mx = -1, sv_my = -1;

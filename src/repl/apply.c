@@ -150,10 +150,11 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
          * edit carried by the same change invalidates too; this keeps the
          * cache safe even for a predef-op-only change. */
         repl_expr_cache_invalidate(repl_expr_cache_live());
-        for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-            if (repl_state_document_cmds()[cmd_idx].type == CMD_VAR_ASSIGN &&
-                repl_state_document_cmds()[cmd_idx].var_idx > slot)
-                repl_state_document_cmds_mut()[cmd_idx].var_idx--;
+        ReplCommandStore store = repl_command_store_live();
+        for (int cmd_idx = 0; cmd_idx < repl_command_store_count(&store); cmd_idx++) {
+            if (store.cmds[cmd_idx].type == CMD_VAR_ASSIGN &&
+                store.cmds[cmd_idx].var_idx > slot)
+                store.cmds[cmd_idx].var_idx--;
         }
     }
 

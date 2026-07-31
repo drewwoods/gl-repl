@@ -192,7 +192,7 @@ static int test_leading_ws_chars(const char *text) {
 /* Resolve source text for a flat command using the editor buffer, mirroring
  * the real executor's execution_flat_text() logic. */
 static const char *flat_cmd_text(int pc) {
-    int src = repl_state_flat_program_cmds_mut()[pc].src_cmd_idx;
+    int src = repl_state_flat_program_cmds()[pc].src_cmd_idx;
     if (src < 0 || src >= repl_state_document_count())
         return "";
     const char *t = editor_buffer_line(src);
@@ -210,32 +210,32 @@ static void run_flat_control_flow_only(void) {
     int goto_count = 0;
 
     while (pc < repl_state_flat_program_count()) {
-        if (!repl_state_flat_program_cmds_mut()[pc].valid) {
+        if (!repl_state_flat_program_cmds()[pc].valid) {
             pc++;
             continue;
         }
 
-        switch (repl_state_flat_program_cmds_mut()[pc].type) {
+        switch (repl_state_flat_program_cmds()[pc].type) {
         case CMD_VAR_ASSIGN: {
             /* Match the real executor: apply pre-computed args[0]
              * without re-evaluating. Flatten owns the eval. */
-            int vi = repl_state_flat_program_cmds_mut()[pc].var_idx;
-            float value = repl_state_flat_program_cmds_mut()[pc].args[0];
+            int vi = repl_state_flat_program_cmds()[pc].var_idx;
+            float value = repl_state_flat_program_cmds()[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
                 g_predef_vars_mut[vi].value = value;
             break;
         }
         case CMD_IF_BEGIN: {
-            float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
+            float cond = repl_state_flat_program_cmds()[pc].args[0];
+            if (repl_state_flat_program_cmds()[pc].has_vars) {
                 char cond_text[256];
                 if (repl_extract_paren_payload(flat_cmd_text(pc),
                                                cond_text, sizeof(cond_text))) {
                     const ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
-                    if (repl_state_flat_program_local_vars_mut()[pc].num_vars > 0) {
-                        eval_vars = repl_state_flat_program_local_vars_mut()[pc].vars;
-                        eval_num_vars = repl_state_flat_program_local_vars_mut()[pc].num_vars;
+                    if (repl_state_flat_program_local_vars()[pc].num_vars > 0) {
+                        eval_vars = repl_state_flat_program_local_vars()[pc].vars;
+                        eval_num_vars = repl_state_flat_program_local_vars()[pc].num_vars;
                     }
                     ExprCtx ctx = { cond_text, eval_vars, eval_num_vars };
                     cond = repl_eval_expr(&ctx);
@@ -244,8 +244,8 @@ static void run_flat_control_flow_only(void) {
             if (cond == 0.0f) {
                 int depth = 1;
                 while (depth > 0 && ++pc < repl_state_flat_program_count()) {
-                    if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_END) depth--;
+                    if (repl_state_flat_program_cmds()[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (repl_state_flat_program_cmds()[pc].type == CMD_IF_END) depth--;
                 }
             }
             break;
@@ -258,8 +258,8 @@ static void run_flat_control_flow_only(void) {
                 return;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
-                if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
+                if (repl_state_flat_program_cmds()[li].valid &&
+                    repl_state_flat_program_cmds()[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(flat_cmd_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
@@ -283,7 +283,7 @@ static int test_count_cmd_type(CmdType type) {
     int count = 0;
 
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].type == type)
+        if (repl_state_document_cmds()[i].type == type)
             count++;
     }
     return count;
@@ -293,8 +293,8 @@ static void assert_flat_vertex3_x(const char *label, int flat_idx,
                                   float expected) {
     ASSERT_TRUE(label, flat_idx >= 0 &&
                 flat_idx < repl_state_flat_program_count() &&
-                repl_state_flat_program_cmds_mut()[flat_idx].type == CMD_VERTEX3F &&
-                fabsf(repl_state_flat_program_cmds_mut()[flat_idx].args[0] -
+                repl_state_flat_program_cmds()[flat_idx].type == CMD_VERTEX3F &&
+                fabsf(repl_state_flat_program_cmds()[flat_idx].args[0] -
                       expected) < 1e-6f);
 }
 
@@ -412,7 +412,7 @@ static void run_program_feed_matrix(void) {
                repl_state_flat_count(), 1);
     assert_flat_vertex3_x("feed matrix func call: x", 0, 2.0f);
     ASSERT_FLOAT("feed matrix func call: y",
-                 repl_state_flat_program_cmds_mut()[0].args[1], 3.0f);
+                 repl_state_flat_program_cmds()[0].args[1], 3.0f);
 
     reset_repl();
     ASSERT_TRUE("feed matrix nested locals: feed",
@@ -425,7 +425,7 @@ static void run_program_feed_matrix(void) {
     assert_flat_vertex3_x("feed matrix nested locals: first x", 0, 0.0f);
     assert_flat_vertex3_x("feed matrix nested locals: third x", 2, 2.0f);
     ASSERT_FLOAT("feed matrix nested locals: third y",
-                 repl_state_flat_program_cmds_mut()[2].args[1], 3.0f);
+                 repl_state_flat_program_cmds()[2].args[1], 3.0f);
 
     reset_repl();
     ASSERT_TRUE("feed matrix scratch assign: feed",
@@ -435,7 +435,7 @@ static void run_program_feed_matrix(void) {
     ASSERT_FLOAT("feed matrix scratch assign: A[0]",
                  scratch_val("A", 0), 3.0f);
     ASSERT_FLOAT("feed matrix scratch assign: vertex x",
-                 repl_state_flat_program_cmds_mut()[2].args[0], 3.0f);
+                 repl_state_flat_program_cmds()[2].args[0], 3.0f);
 }
 
 typedef enum {
@@ -952,7 +952,7 @@ int main(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("z = -0.55;");
     ASSERT_TRUE("var assign cmd count", repl_state_document_count() == 1);
-    ASSERT_TRUE("var assign type", repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("var assign type", repl_state_document_cmds()[0].type == CMD_VAR_ASSIGN);
     {
         int z_idx = -1;
         for (int i = 0; i < g_num_predef_vars; i++) {
@@ -970,7 +970,7 @@ int main(void) {
     editor_feed_line("A[0] = 1;");
     ASSERT_TRUE("scratch assign cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("scratch assign type",
-                repl_state_document_cmds_mut()[0].type == CMD_SCRATCH_ASSIGN);
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_ASSIGN);
     ASSERT_TRUE("scratch assign normalized text",
               strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                   "A[0] = 1;") != NULL);
@@ -979,11 +979,11 @@ int main(void) {
         ASSERT_TRUE("scratch assign applied live",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 1.0f) < 1e-6f);
         ASSERT_TRUE("scratch assign cached array idx",
-                    fabsf(repl_state_document_cmds_mut()[0].args[0]) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[0]) < 1e-6f);
         ASSERT_TRUE("scratch assign cached elem idx",
-                    fabsf(repl_state_document_cmds_mut()[0].args[1]) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[1]) < 1e-6f);
         ASSERT_TRUE("scratch assign cached value",
-                    fabsf(repl_state_document_cmds_mut()[0].args[2] - 1.0f) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[2] - 1.0f) < 1e-6f);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -992,9 +992,9 @@ int main(void) {
     editor_feed_line("}");
     ASSERT_TRUE("scratch assign in loop cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("scratch assign in loop type",
-                repl_state_document_cmds_mut()[1].type == CMD_SCRATCH_ASSIGN);
+                repl_state_document_cmds()[1].type == CMD_SCRATCH_ASSIGN);
     ASSERT_TRUE("scratch assign in loop has vars",
-                repl_state_document_cmds_mut()[1].has_vars == 1);
+                repl_state_document_cmds()[1].has_vars == 1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("A[0] = 1;");
@@ -1027,9 +1027,9 @@ int main(void) {
     editor_feed_line("y = foo;");
     ASSERT_TRUE("cascade fixture cmd count", repl_state_document_count() == 2);
     ASSERT_TRUE("cascade fixture line 0 is decl",
-                repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+                repl_state_document_cmds()[0].type == CMD_VAR_DECLARE);
     ASSERT_TRUE("cascade fixture line 1 is assign",
-                repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
+                repl_state_document_cmds()[1].type == CMD_VAR_ASSIGN);
     {
         editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -1045,7 +1045,7 @@ int main(void) {
                     strstr(g_status, "in use") != NULL);
         ASSERT_TRUE("cascade in-use leaves doc unchanged",
                     repl_state_document_count() == 2 &&
-                    repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+                    repl_state_document_cmds()[0].type == CMD_VAR_DECLARE);
         ASSERT_TRUE("cascade in-use leaves foo declared",
                     repl_eval_find_predef_var_idx("foo") >= 0);
     }
@@ -1066,7 +1066,7 @@ int main(void) {
     editor_feed_line("}");
     ASSERT_TRUE("expr assign cmd count", repl_state_document_count() == 6);
     ASSERT_TRUE("expr assign preserves source", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n + 1") != NULL);
-    ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds_mut()[2].has_vars == 1);
+    ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds()[2].has_vars == 1);
     repl_flatten_commands(editor_state_edit_line());
     repl_execute_commands();
     {
@@ -1097,10 +1097,10 @@ int main(void) {
     ASSERT_TRUE("goto geom cmd count", repl_state_document_count() == 10);
     ASSERT_TRUE("goto geom first vertex keeps expr",
                 strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "0.42*n") != NULL);
-    ASSERT_TRUE("goto geom first vertex has vars", repl_state_document_cmds_mut()[3].has_vars == 1);
+    ASSERT_TRUE("goto geom first vertex has vars", repl_state_document_cmds()[3].has_vars == 1);
     repl_flatten_commands(editor_state_edit_line());
-    ASSERT_TRUE("goto geom flat first vertex has vars", repl_state_flat_program_cmds_mut()[3].has_vars == 1);
-    ASSERT_TRUE("goto geom flat second vertex has vars", repl_state_flat_program_cmds_mut()[4].has_vars == 1);
+    ASSERT_TRUE("goto geom flat first vertex has vars", repl_state_flat_program_cmds()[3].has_vars == 1);
+    ASSERT_TRUE("goto geom flat second vertex has vars", repl_state_flat_program_cmds()[4].has_vars == 1);
     run_flat_control_flow_only();
     {
         int n_idx = predef_idx("n");
@@ -1111,7 +1111,7 @@ int main(void) {
                         fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
     }
     ASSERT_TRUE("goto geom flat first vertex still at initial x",
-                fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - (-1.5f)) < 1e-5f);
+                fabsf(repl_state_flat_program_cmds()[3].args[0] - (-1.5f)) < 1e-5f);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line(":walk");
@@ -1121,7 +1121,7 @@ int main(void) {
     ASSERT_TRUE("label loads back into editor as repl syntax",
                 strcmp(editor_state_input().input, ":walk") == 0);
     editor_handle_key(';', 0, 0);
-    ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_GOTO_LABEL);
+    ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds()[0].type == CMD_GOTO_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1129,9 +1129,9 @@ int main(void) {
     editor_feed_line("glVertex3f(i, 0, 0);");
     editor_feed_line("}");
     ASSERT_TRUE("for block cmd count", repl_state_document_count() == 3);
-    ASSERT_TRUE("for begin", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
-    ASSERT_TRUE("for body", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("for end", repl_state_document_cmds_mut()[2].type == CMD_FOR_END);
+    ASSERT_TRUE("for begin", repl_state_document_cmds()[0].type == CMD_FOR_BEGIN);
+    ASSERT_TRUE("for body", repl_state_document_cmds()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("for end", repl_state_document_cmds()[2].type == CMD_FOR_END);
     ASSERT_TRUE("for body keeps i", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "i") != NULL);
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1146,8 +1146,8 @@ int main(void) {
      * semantics, not a transient empty insert row that vanishes on a
      * same-index click. */
     ASSERT_TRUE("enter at line start inserts blank above (count)", repl_state_document_count() == 3);
-    ASSERT_TRUE("enter at line start: blank above is empty", repl_state_document_cmds_mut()[1].type == CMD_EMPTY);
-    ASSERT_TRUE("enter at line start: content shifts down", repl_state_document_cmds_mut()[2].type == CMD_END);
+    ASSERT_TRUE("enter at line start: blank above is empty", repl_state_document_cmds()[1].type == CMD_EMPTY);
+    ASSERT_TRUE("enter at line start: content shifts down", repl_state_document_cmds()[2].type == CMD_END);
     ASSERT_TRUE("enter at line start: cursor follows content down", editor_state_edit_line() == 2);
     ASSERT_TRUE("enter at line start: not insert mode", editor_insert_mode() == 0);
     ASSERT_TRUE("enter at line start: cursor at column 0", editor_cursor_pos() == 0);
@@ -1297,9 +1297,9 @@ int main(void) {
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("}");
     ASSERT_TRUE("if block cmd count", repl_state_document_count() == 3);
-    ASSERT_TRUE("if begin", repl_state_document_cmds_mut()[0].type == CMD_IF_BEGIN);
-    ASSERT_TRUE("if body", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
-    ASSERT_TRUE("if end", repl_state_document_cmds_mut()[2].type == CMD_IF_END);
+    ASSERT_TRUE("if begin", repl_state_document_cmds()[0].type == CMD_IF_BEGIN);
+    ASSERT_TRUE("if body", repl_state_document_cmds()[1].type == CMD_COLOR3F);
+    ASSERT_TRUE("if end", repl_state_document_cmds()[2].type == CMD_IF_END);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("top-level if (false cond) compiled away",
                 repl_state_flat_program_count() == 0);
@@ -1319,7 +1319,7 @@ int main(void) {
         ASSERT_TRUE("top-level if (true cond) body in flat",
                     repl_state_flat_program_count() == 1);
         ASSERT_TRUE("top-level if (true cond) body type",
-                    repl_state_flat_program_cmds_mut()[0].type == CMD_COLOR3F);
+                    repl_state_flat_program_cmds()[0].type == CMD_COLOR3F);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1328,10 +1328,10 @@ int main(void) {
     editor_feed_line("}");
     editor_feed_line("func0()");
     ASSERT_TRUE("func cmd count", repl_state_document_count() == 4);
-    ASSERT_TRUE("func def", repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
-    ASSERT_TRUE("func body", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("func end", repl_state_document_cmds_mut()[2].type == CMD_FUNC_END);
-    ASSERT_TRUE("func call", repl_state_document_cmds_mut()[3].type == CMD_CALL);
+    ASSERT_TRUE("func def", repl_state_document_cmds()[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("func body", repl_state_document_cmds()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("func end", repl_state_document_cmds()[2].type == CMD_FUNC_END);
+    ASSERT_TRUE("func call", repl_state_document_cmds()[3].type == CMD_CALL);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(radius, yoff) {");
@@ -1339,7 +1339,7 @@ int main(void) {
     editor_feed_line("}");
     editor_feed_line("func0(1.5, x + 2);");
     ASSERT_TRUE("param func cmd count", repl_state_document_count() == 4);
-    ASSERT_TRUE("param func def", repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("param func def", repl_state_document_cmds()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("param func header keeps names",
                 strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "radius") != NULL &&
                 strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "yoff") != NULL);
@@ -1347,7 +1347,7 @@ int main(void) {
                 strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "radius") != NULL);
     ASSERT_TRUE("param func body keeps yoff",
                 strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "yoff") != NULL);
-    ASSERT_TRUE("param func call type", repl_state_document_cmds_mut()[3].type == CMD_CALL);
+    ASSERT_TRUE("param func call type", repl_state_document_cmds()[3].type == CMD_CALL);
     ASSERT_TRUE("param func call keeps expr",
                 strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "x + 2") != NULL);
 
@@ -1359,12 +1359,12 @@ int main(void) {
     editor_feed_line("}");
     editor_feed_line("func0();");
     ASSERT_TRUE("promoted func keeps cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("promoted func def before commands", repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
-    ASSERT_TRUE("promoted func body before commands", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("promoted func end before commands", repl_state_document_cmds_mut()[2].type == CMD_FUNC_END);
-    ASSERT_TRUE("promoted prior clear command preserved", repl_state_document_cmds_mut()[3].type == CMD_CLEAR_COLOR);
-    ASSERT_TRUE("promoted prior enable command preserved", repl_state_document_cmds_mut()[4].type == CMD_ENABLE);
-    ASSERT_TRUE("promoted following call appends after prior commands", repl_state_document_cmds_mut()[5].type == CMD_CALL);
+    ASSERT_TRUE("promoted func def before commands", repl_state_document_cmds()[0].type == CMD_FUNC_DEF);
+    ASSERT_TRUE("promoted func body before commands", repl_state_document_cmds()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("promoted func end before commands", repl_state_document_cmds()[2].type == CMD_FUNC_END);
+    ASSERT_TRUE("promoted prior clear command preserved", repl_state_document_cmds()[3].type == CMD_CLEAR_COLOR);
+    ASSERT_TRUE("promoted prior enable command preserved", repl_state_document_cmds()[4].type == CMD_ENABLE);
+    ASSERT_TRUE("promoted following call appends after prior commands", repl_state_document_cmds()[5].type == CMD_CALL);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func1(a, b) {");
@@ -1379,21 +1379,21 @@ int main(void) {
     editor_feed_line("func0(4);");
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("nested func flatten count", repl_state_flat_program_count() == 6);
-    ASSERT_TRUE("nested func flatten first begin", repl_state_flat_program_cmds_mut()[0].type == CMD_BEGIN);
-    ASSERT_TRUE("nested func flatten first vertex", repl_state_flat_program_cmds_mut()[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("nested func flatten first x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - 2.0f) < 1e-6f);
-    ASSERT_TRUE("nested func flatten first y", fabsf(repl_state_flat_program_cmds_mut()[1].args[1] - 3.0f) < 1e-6f);
-    ASSERT_TRUE("nested func flatten second x", fabsf(repl_state_flat_program_cmds_mut()[4].args[0] - 4.0f) < 1e-6f);
-    ASSERT_TRUE("nested func flatten second y", fabsf(repl_state_flat_program_cmds_mut()[4].args[1] - 5.0f) < 1e-6f);
-    ASSERT_TRUE("nested func call provenance immediate", repl_state_flat_program_cmds_mut()[1].call_src_cmd_idx == 6);
-    ASSERT_TRUE("nested func call provenance root first", repl_state_flat_program_cmds_mut()[1].root_call_src_cmd_idx == 8);
-    ASSERT_TRUE("nested func call provenance root second", repl_state_flat_program_cmds_mut()[4].root_call_src_cmd_idx == 9);
-    ASSERT_TRUE("nested func scope mask includes both", (repl_state_flat_program_cmds_mut()[1].func_scope_mask & 0x3u) == 0x3u);
+    ASSERT_TRUE("nested func flatten first begin", repl_state_flat_program_cmds()[0].type == CMD_BEGIN);
+    ASSERT_TRUE("nested func flatten first vertex", repl_state_flat_program_cmds()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("nested func flatten first x", fabsf(repl_state_flat_program_cmds()[1].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten first y", fabsf(repl_state_flat_program_cmds()[1].args[1] - 3.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten second x", fabsf(repl_state_flat_program_cmds()[4].args[0] - 4.0f) < 1e-6f);
+    ASSERT_TRUE("nested func flatten second y", fabsf(repl_state_flat_program_cmds()[4].args[1] - 5.0f) < 1e-6f);
+    ASSERT_TRUE("nested func call provenance immediate", repl_state_flat_program_cmds()[1].call_src_cmd_idx == 6);
+    ASSERT_TRUE("nested func call provenance root first", repl_state_flat_program_cmds()[1].root_call_src_cmd_idx == 8);
+    ASSERT_TRUE("nested func call provenance root second", repl_state_flat_program_cmds()[4].root_call_src_cmd_idx == 9);
+    ASSERT_TRUE("nested func scope mask includes both", (repl_state_flat_program_cmds()[1].func_scope_mask & 0x3u) == 0x3u);
     /* func0 body (depth 1) calls func1 (depth 2): the inner vertices are two
      * call frames deep, where func_scope_mask alone could not tell depth from
      * "inside func0 and func1". Both invocations sit at the same depth. */
-    ASSERT_TRUE("nested func call_depth first is 2", repl_state_flat_program_cmds_mut()[1].call_depth == 2);
-    ASSERT_TRUE("nested func call_depth second is 2", repl_state_flat_program_cmds_mut()[4].call_depth == 2);
+    ASSERT_TRUE("nested func call_depth first is 2", repl_state_flat_program_cmds()[1].call_depth == 2);
+    ASSERT_TRUE("nested func call_depth second is 2", repl_state_flat_program_cmds()[4].call_depth == 2);
     {
         int matched = 0;
         editor_state_edit_line_set(8);
@@ -1431,25 +1431,25 @@ int main(void) {
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("}");
     ASSERT_TRUE("nested block trailing cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("nested block trailing cmd order body", repl_state_document_cmds_mut()[4].type == CMD_COLOR3F);
-    ASSERT_TRUE("nested block trailing cmd order end", repl_state_document_cmds_mut()[5].type == CMD_FUNC_END);
+    ASSERT_TRUE("nested block trailing cmd order body", repl_state_document_cmds()[4].type == CMD_COLOR3F);
+    ASSERT_TRUE("nested block trailing cmd order end", repl_state_document_cmds()[5].type == CMD_FUNC_END);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("for(i, 0, n) glVertex3f(i, n, 0);");
     editor_feed_line("}");
     editor_feed_line("func0(3);");
-    ASSERT_TRUE("local for begin type", repl_state_document_cmds_mut()[1].type == CMD_FOR_BEGIN);
-    ASSERT_TRUE("local for body type", repl_state_document_cmds_mut()[2].type == CMD_VERTEX3F);
-    ASSERT_TRUE("local for end type", repl_state_document_cmds_mut()[3].type == CMD_FOR_END);
+    ASSERT_TRUE("local for begin type", repl_state_document_cmds()[1].type == CMD_FOR_BEGIN);
+    ASSERT_TRUE("local for body type", repl_state_document_cmds()[2].type == CMD_VERTEX3F);
+    ASSERT_TRUE("local for end type", repl_state_document_cmds()[3].type == CMD_FOR_END);
     ASSERT_TRUE("local for header keeps n", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "n") != NULL);
     ASSERT_TRUE("local for body keeps n", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n") != NULL);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("local for flatten count", repl_state_flat_program_count() == 3);
-    ASSERT_TRUE("local for first x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
-    ASSERT_TRUE("local for second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - 1.0f) < 1e-6f);
-    ASSERT_TRUE("local for third x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 2.0f) < 1e-6f);
-    ASSERT_TRUE("local for body uses param", fabsf(repl_state_flat_program_cmds_mut()[2].args[1] - 3.0f) < 1e-6f);
+    ASSERT_TRUE("local for first x", fabsf(repl_state_flat_program_cmds()[0].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("local for second x", fabsf(repl_state_flat_program_cmds()[1].args[0] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("local for third x", fabsf(repl_state_flat_program_cmds()[2].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("local for body uses param", fabsf(repl_state_flat_program_cmds()[2].args[1] - 3.0f) < 1e-6f);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("// top-level note");
@@ -1460,17 +1460,17 @@ int main(void) {
     editor_feed_line("// trailing note");
     ASSERT_TRUE("comments remain source rows",
                 repl_state_document_count() == 6 &&
-                repl_state_document_cmds_mut()[0].type == CMD_COMMENT &&
-                repl_state_document_cmds_mut()[2].type == CMD_COMMENT &&
-                repl_state_document_cmds_mut()[5].type == CMD_COMMENT);
+                repl_state_document_cmds()[0].type == CMD_COMMENT &&
+                repl_state_document_cmds()[2].type == CMD_COMMENT &&
+                repl_state_document_cmds()[5].type == CMD_COMMENT);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("comments omitted from flattened loop count",
                 repl_state_flat_program_count() == 3);
     for (int flat_idx = 0; flat_idx < repl_state_flat_program_count(); flat_idx++) {
         ASSERT_TRUE("flattened loop command is executable vertex",
-                    repl_state_flat_program_cmds_mut()[flat_idx].type == CMD_VERTEX3F);
+                    repl_state_flat_program_cmds()[flat_idx].type == CMD_VERTEX3F);
         ASSERT_TRUE("flattened loop command maps to source body",
-                    repl_state_flat_program_cmds_mut()[flat_idx].src_cmd_idx == 3);
+                    repl_state_flat_program_cmds()[flat_idx].src_cmd_idx == 3);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1484,8 +1484,8 @@ int main(void) {
     ASSERT_TRUE("local if header keeps scale", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "scale > 1") != NULL);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("local if flatten count", repl_state_flat_program_count() == 1);
-    ASSERT_TRUE("local if flatten type", repl_state_flat_program_cmds_mut()[0].type == CMD_VERTEX3F);
-    ASSERT_TRUE("local if flatten x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("local if flatten type", repl_state_flat_program_cmds()[0].type == CMD_VERTEX3F);
+    ASSERT_TRUE("local if flatten x", fabsf(repl_state_flat_program_cmds()[0].args[0] - 2.0f) < 1e-6f);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(cols) {");
@@ -1497,12 +1497,12 @@ int main(void) {
     editor_feed_line("func0(4);");
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("local assign flatten count", repl_state_flat_program_count() == 10);
-    ASSERT_TRUE("local assign first type", repl_state_flat_program_cmds_mut()[0].type == CMD_VAR_ASSIGN);
-    ASSERT_TRUE("local assign first value", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - (-1.5f)) < 1e-6f);
-    ASSERT_TRUE("local assign second value", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - (-0.75f)) < 1e-6f);
-    ASSERT_TRUE("local assign third value", fabsf(repl_state_flat_program_cmds_mut()[4].args[0] - 0.0f) < 1e-6f);
-    ASSERT_TRUE("local assign last value", fabsf(repl_state_flat_program_cmds_mut()[8].args[0] - 1.5f) < 1e-6f);
-    ASSERT_TRUE("local assign vertex last x", fabsf(repl_state_flat_program_cmds_mut()[9].args[0] - 1.5f) < 1e-6f);
+    ASSERT_TRUE("local assign first type", repl_state_flat_program_cmds()[0].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("local assign first value", fabsf(repl_state_flat_program_cmds()[0].args[0] - (-1.5f)) < 1e-6f);
+    ASSERT_TRUE("local assign second value", fabsf(repl_state_flat_program_cmds()[2].args[0] - (-0.75f)) < 1e-6f);
+    ASSERT_TRUE("local assign third value", fabsf(repl_state_flat_program_cmds()[4].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("local assign last value", fabsf(repl_state_flat_program_cmds()[8].args[0] - 1.5f) < 1e-6f);
+    ASSERT_TRUE("local assign vertex last x", fabsf(repl_state_flat_program_cmds()[9].args[0] - 1.5f) < 1e-6f);
     run_flat_control_flow_only();
     {
         int x_idx = predef_idx("x");
@@ -1784,7 +1784,7 @@ int main(void) {
         int matched = 0;
         editor_state_edit_line_set(0);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i, editor_state_edit_line());
         ASSERT_TRUE("top-level color before block matches first vertices", matched == 2);
     }
@@ -1792,7 +1792,7 @@ int main(void) {
         int matched = 0;
         editor_state_edit_line_set(5);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i, editor_state_edit_line());
         ASSERT_TRUE("top-level second color before block matches second vertices", matched == 2);
     }
@@ -1815,7 +1815,7 @@ int main(void) {
         int matched = 0;
         editor_state_edit_line_set(0);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i, editor_state_edit_line());
         ASSERT_TRUE("top-level normal before block matches first vertices", matched == 2);
     }
@@ -1823,7 +1823,7 @@ int main(void) {
         int matched = 0;
         editor_state_edit_line_set(5);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i, editor_state_edit_line());
         ASSERT_TRUE("top-level second normal before block matches second vertices", matched == 2);
     }
@@ -2351,7 +2351,7 @@ int main(void) {
         /* Exact-flat-index helper: each expansion sees only its own scope. */
         int first_v = -1, second_v = -1;
         for (int i = 0; i < repl_state_flat_program_count(); i++) {
-            const GLCmd *fc = &repl_state_flat_program_cmds_mut()[i];
+            const GLCmd *fc = &repl_state_flat_program_cmds()[i];
             if (fc->type == CMD_VERTEX3F && fc->src_cmd_idx == 1) {
                 if (first_v < 0) first_v = i;
                 else if (second_v < 0) second_v = i;
@@ -2410,7 +2410,7 @@ int main(void) {
     {
         int matched = 0;
         for (int i = 0; i < repl_state_flat_program_count(); i++)
-            if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
+            if (repl_state_flat_program_cmds()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i, editor_state_edit_line());
         ASSERT_TRUE("navigate refreshes current block highlight", matched == 2);
     }
@@ -2433,10 +2433,10 @@ int main(void) {
         int end = repl_state_flat_program_current_block_end();
         ASSERT_TRUE("current block after loop maps to later begin",
                     begin >= 0 &&
-                    repl_state_flat_program_cmds_mut()[begin].src_cmd_idx == 6);
+                    repl_state_flat_program_cmds()[begin].src_cmd_idx == 6);
         ASSERT_TRUE("current block after loop maps to later end",
                     end >= begin &&
-                    repl_state_flat_program_cmds_mut()[end].src_cmd_idx == 10);
+                    repl_state_flat_program_cmds()[end].src_cmd_idx == 10);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -2461,10 +2461,10 @@ int main(void) {
         int end = repl_state_flat_program_current_block_end();
         ASSERT_TRUE("function block after loop maps to function begin",
                     begin >= 0 &&
-                    repl_state_flat_program_cmds_mut()[begin].src_cmd_idx == 1);
+                    repl_state_flat_program_cmds()[begin].src_cmd_idx == 1);
         ASSERT_TRUE("function block after loop maps to function end",
                     end >= begin &&
-                    repl_state_flat_program_cmds_mut()[end].src_cmd_idx == 4);
+                    repl_state_flat_program_cmds()[end].src_cmd_idx == 4);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
@@ -2480,16 +2480,16 @@ int main(void) {
     editor_feed_line("func0(3);");
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("recursive flatten count", repl_state_flat_program_count() == 4);
-    ASSERT_TRUE("recursive first x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 3.0f) < 1e-6f);
-    ASSERT_TRUE("recursive second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - 2.0f) < 1e-6f);
-    ASSERT_TRUE("recursive third x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 1.0f) < 1e-6f);
-    ASSERT_TRUE("recursive base x", fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("recursive first x", fabsf(repl_state_flat_program_cmds()[0].args[0] - 3.0f) < 1e-6f);
+    ASSERT_TRUE("recursive second x", fabsf(repl_state_flat_program_cmds()[1].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("recursive third x", fabsf(repl_state_flat_program_cmds()[2].args[0] - 1.0f) < 1e-6f);
+    ASSERT_TRUE("recursive base x", fabsf(repl_state_flat_program_cmds()[3].args[0] - 0.0f) < 1e-6f);
     /* call_depth climbs with each recursive entry — func_scope_mask cannot
      * express this since every frame reuses func0's single scope bit. */
-    ASSERT_TRUE("recursive call_depth ladder 1", repl_state_flat_program_cmds_mut()[0].call_depth == 1);
-    ASSERT_TRUE("recursive call_depth ladder 2", repl_state_flat_program_cmds_mut()[1].call_depth == 2);
-    ASSERT_TRUE("recursive call_depth ladder 3", repl_state_flat_program_cmds_mut()[2].call_depth == 3);
-    ASSERT_TRUE("recursive call_depth base 4", repl_state_flat_program_cmds_mut()[3].call_depth == 4);
+    ASSERT_TRUE("recursive call_depth ladder 1", repl_state_flat_program_cmds()[0].call_depth == 1);
+    ASSERT_TRUE("recursive call_depth ladder 2", repl_state_flat_program_cmds()[1].call_depth == 2);
+    ASSERT_TRUE("recursive call_depth ladder 3", repl_state_flat_program_cmds()[2].call_depth == 3);
+    ASSERT_TRUE("recursive call_depth base 4", repl_state_flat_program_cmds()[3].call_depth == 4);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
@@ -2513,9 +2513,9 @@ int main(void) {
     editor_feed_line("func0(2);");
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("mutual recursion flatten count", repl_state_flat_program_count() == 3);
-    ASSERT_TRUE("mutual recursion first x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 2.0f) < 1e-6f);
-    ASSERT_TRUE("mutual recursion second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - (-1.0f)) < 1e-6f);
-    ASSERT_TRUE("mutual recursion base x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 0.0f) < 1e-6f);
+    ASSERT_TRUE("mutual recursion first x", fabsf(repl_state_flat_program_cmds()[0].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("mutual recursion second x", fabsf(repl_state_flat_program_cmds()[1].args[0] - (-1.0f)) < 1e-6f);
+    ASSERT_TRUE("mutual recursion base x", fabsf(repl_state_flat_program_cmds()[2].args[0] - 0.0f) < 1e-6f);
 
     /* Runaway recursion (depth limit guard) */
     glr_ctrl_reset_all(); declare_test_vars();
@@ -2571,7 +2571,7 @@ int main(void) {
     g_status[0] = '\0';
     editor_feed_line("func0(z) {");
     ASSERT_TRUE("func def overwrite: still CMD_FUNC_DEF",
-                repl_state_document_cmds_mut()[0].type == CMD_FUNC_DEF);
+                repl_state_document_cmds()[0].type == CMD_FUNC_DEF);
     ASSERT_TRUE("func def overwrite: header keeps new param",
                 strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "", "z") != NULL);
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
@@ -2607,13 +2607,13 @@ int main(void) {
 
     /* Regression: calling func<N> with no definition is rejected at
      * commit time, the same way `x = 1;` is rejected before `float x;`
-     * is declared.  Call is never added to repl_state_document_cmds_mut() and status names the
+     * is declared.  Call is never added to repl_state_document_cmds() and status names the
      * function. */
     glr_ctrl_reset_all(); declare_test_vars();
     g_status[0] = '\0';
     int pre_call_cmd_count = repl_state_document_count();
     editor_feed_line("func5();");
-    ASSERT_TRUE("undefined top-level call: not added to repl_state_document_cmds_mut()",
+    ASSERT_TRUE("undefined top-level call: not added to repl_state_document_cmds()",
                 repl_state_document_count() == pre_call_cmd_count);
     ASSERT_TRUE("undefined top-level call: status names func5",
                 strstr(g_status, "func5") != NULL);
@@ -2630,10 +2630,10 @@ int main(void) {
     ASSERT_TRUE("defined top-level call: commit adds a CMD_CALL",
                 repl_state_document_count() == pre_retry_cmd_count + 1);
     ASSERT_TRUE("defined top-level call: last cmd is CMD_CALL",
-                repl_state_document_cmds_mut()[repl_state_document_count() - 1].type == CMD_CALL);
+                repl_state_document_cmds()[repl_state_document_count() - 1].type == CMD_CALL);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("defined top-level call: flat body expands",
-                repl_state_flat_program_count() == 1 && repl_state_flat_program_cmds_mut()[0].type == CMD_VERTEX3F);
+                repl_state_flat_program_count() == 1 && repl_state_flat_program_cmds()[0].type == CMD_VERTEX3F);
 
     /* Forward references inside a function body are still allowed so
      * mutual recursion keeps working.  func0's body calls func1 before
@@ -2657,7 +2657,7 @@ int main(void) {
     editor_feed_line("func0(2);");
     ASSERT_TRUE("mutual recursion: top-level call accepted",
                 repl_state_document_count() == pre_mutual_call_count + 1 &&
-                repl_state_document_cmds_mut()[repl_state_document_count() - 1].type == CMD_CALL);
+                repl_state_document_cmds()[repl_state_document_count() - 1].type == CMD_CALL);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("mutual recursion: flatten reaches base case",
                 repl_state_flat_program_count() > 0);
@@ -2757,7 +2757,7 @@ int main(void) {
                      "in-begin %s: committed type matches",
                      in_begin_cases[i].name);
             ASSERT_TRUE(label,
-                repl_state_document_cmds_mut()[before].type
+                repl_state_document_cmds()[before].type
                     == in_begin_cases[i].expected_type);
 
             snprintf(label, sizeof(label),
@@ -2801,8 +2801,8 @@ int main(void) {
         ASSERT_TRUE("paste-vblank: exactly one line inserted",
                     repl_state_document_count() == 4);
         ASSERT_TRUE("paste-vblank: glDepthMask not duplicated in doc",
-                    repl_state_document_cmds_mut()[3].type == CMD_DEPTH_MASK &&
-                    repl_state_document_cmds_mut()[2].type != CMD_DEPTH_MASK);
+                    repl_state_document_cmds()[3].type == CMD_DEPTH_MASK &&
+                    repl_state_document_cmds()[2].type != CMD_DEPTH_MASK);
         /* Core fix: if paste left us in insert mode, the input buffer
          * must be empty — not pre-loaded with glDepthMask's text. */
         if (editor_insert_mode())

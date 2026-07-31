@@ -388,7 +388,7 @@ int main(void) {
                         transform_rgb[2] < 0.75f);
         }
 
-        snprintf(repl_state_import_export_mut()->camera_comment_line,
+        snprintf(repl_state_import_export_writable()->camera_comment_line,
                  REPL_EXPORT_CAMERA_LINE_MAX, "  // --- Camera ---");
         build_doc(&snap, &layout);
         ASSERT_TRUE("full chrome includes preserved camera marker",

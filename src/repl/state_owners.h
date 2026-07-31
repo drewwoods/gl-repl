@@ -15,26 +15,17 @@
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
-GLCmd       *repl_state_document_cmds_mut(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
-/* Mutable twin of repl_state_document_cmd_at — completes this header's
- * const/mut accessor pairing. No in-tree caller today; kept so the
- * document slice exposes the same const/mut surface as the others. */
-GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
 int          repl_state_document_count(void);
 void         repl_state_document_count_set(int cmd_count);
-int          repl_state_document_capacity(void);
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
 /* Clears the source-command array + source-text document only.
  * The edit-line cursor is editor-owned and is not touched here. */
 void         repl_state_document_reset(void);
 
-ReplFlatProgramState       *repl_state_flat_program_mut(void);
 ReplFlatProgramState       *repl_state_flat_program_writable(void);
 const GLCmd      *repl_state_flat_program_cmds(void);
-GLCmd            *repl_state_flat_program_cmds_mut(void);
-FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void);
 int               repl_state_flat_program_count(void);
 void              repl_state_flat_program_set_count(int cmd_count);
 int               repl_state_flat_program_dirty(void);
@@ -58,9 +49,6 @@ void              repl_state_flat_program_set_current_block(int begin_idx,
                                                             int end_idx,
                                                             int source_line_idx);
 void              repl_state_flat_program_clear_current_block(void);
-/* Per-slice reset mirroring repl_state_document_reset. No in-tree caller
- * today; kept so every owned slice exposes a uniform _reset entry. */
-void              repl_state_flat_program_reset(void);
 FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView         repl_state_variables(void);
@@ -113,7 +101,6 @@ void                   repl_state_render_clear_light_enabled_mask(void);
 void                   repl_state_render_set_light_enabled_mask(unsigned mask);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
-ReplSceneRuntimeState       *repl_state_scenes_mut(void);
 ReplSceneRuntimeState       *repl_state_scenes_writable(void);
 void                         repl_state_scenes_set_active_example_idx(int idx);
 /* Owner setter for the post-tutorial promotion marker (see the field docs on
@@ -123,11 +110,7 @@ void                         repl_state_scenes_set_active_example_idx(int idx);
 void                         repl_state_scenes_set_tutorial_origin_idx(int idx);
 
 ReplImportExportView        repl_state_import_export(void);
-ReplImportExportState       *repl_state_import_export_mut(void);
 ReplImportExportState       *repl_state_import_export_writable(void);
-/* Per-slice reset mirroring repl_state_document_reset. No in-tree caller
- * today; kept so every owned slice exposes a uniform _reset entry. */
-void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);
 
 

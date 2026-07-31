@@ -220,11 +220,11 @@ point.
   too. The bent purity seam this item watched no longer exists — compile
   no longer touches the alias table.
 - **`apply.c` reaches into `repl_state_document_cmds_mut()`**
-  to cascade `num_args` decrements during `repl_apply_predef_ops`.
-  STILL OPEN (2026-06-20) — line drifted to ~149 (was 121–124).
-  Correct, but grabby across the module boundary. A
-  `command_store` helper for "decrement num_args above slot X" would
-  localize the concern.
+  to cascade `var_idx` decrements during `repl_apply_predef_ops`.
+  RESOLVED (2026-07-31). The broad command-array mutator was retired;
+  `apply.c` now performs this owner-only cascade through its existing
+  `ReplCommandStore`, while read-only callers use
+  `repl_state_document_cmds()`.
 - **`core.h` still publishes `editor_navigate_to_line` /
   `editor_feed_line`** on the REPL public facade. RESOLVED
   (2026-06-20) — neither symbol is on `core.h` anymore (R10 work).

@@ -8,6 +8,7 @@
 #include "subsystems/replay/replay.h"
 #include "repl/state.h"
 #include "repl/state_owners.h"
+#include "repl/command_store.h"
 #include "subsystems/replay/replay.c"
 #include "subsystems/replay/replay_annotations.h"
 #include "source_document.h"
@@ -64,7 +65,8 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void add_mock_cmd(int idx, CmdType type) {
-    GLCmd* cmds = repl_state_document_cmds_mut();
+    ReplCommandStore store = repl_command_store_live();
+    GLCmd *cmds = store.cmds;
     memset(&cmds[idx], 0, sizeof(GLCmd));
     cmds[idx].type = type;
     cmds[idx].valid = 1;
@@ -756,8 +758,9 @@ static void test_replay_cursor_sync_and_unrecognized_keys(void) {
     glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     add_mock_cmd(1, CMD_VERTEX3F);
-    repl_state_document_cmds_mut()[0].src_cmd_idx = 0;
-    repl_state_document_cmds_mut()[1].src_cmd_idx = 1;
+    ReplCommandStore store = repl_command_store_live();
+    store.cmds[0].src_cmd_idx = 0;
+    store.cmds[1].src_cmd_idx = 1;
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
     repl_state_flat_program_clear_dirty();

@@ -4,6 +4,7 @@
 #include "app/glr_actions.h"
 #include "repl/state.h"
 #include "repl/state_owners.h"
+#include "repl/command_store.h"
 #include "repl/flatten.h"
 #include "repl/gl_state_inspector.h"
 #include "repl/attrib_bits.h"
@@ -122,7 +123,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_cursor_pos_set(6);
     repl_state_document_count_set(2);
     editor_state_edit_line_set(1);
-    doc_cmds = repl_state_document_cmds_mut();
+    doc_cmds = repl_command_store_live().cmds;
     doc_cmds[0].type = CMD_BEGIN;
     doc_cmds[0].valid = 1;
     editor_buffer_set_line(0, "  glBegin(GL_TRIANGLES);");
@@ -131,10 +132,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_buffer_set_line(1, "  glEnd();");
 
     repl_state_flat_program_set_count(1);
-    flat_program = repl_state_flat_program_mut();
+    flat_program = repl_state_flat_program_writable();
     flat_program->overflow_cmd_count = 9000;
-    flat_cmds = repl_state_flat_program_cmds_mut();
-    flat_locals = repl_state_flat_program_local_vars_mut();
+    flat_cmds = flat_program->cmds;
+    flat_locals = flat_program->local_vars;
     flat_cmds[0].type = CMD_VERTEX3F;
     flat_cmds[0].valid = 1;
     flat_cmds[0].src_cmd_idx = 7;
@@ -259,10 +260,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     replay->normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
     replay->vertex_label = 1;
 
-    scenes = repl_state_scenes_mut();
+    scenes = repl_state_scenes_writable();
     scenes->active_example_idx = 3;
     repl_set_workspace_dir("/tmp/repl-state-stage1");
-    io = repl_state_import_export_mut();
+    io = repl_state_import_export_writable();
     io->export_scene_name_hint = scene_hint;
     snprintf(io->pending_scene_name, sizeof(io->pending_scene_name), "%s",
              "pending scene");
@@ -343,7 +344,7 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_view().overflow_cmd_count, 9000);
     ASSERT_INT("flat cmd type restored", repl_state_flat_program_cmds()[0].type, CMD_VERTEX3F);
     ASSERT_INT("flat local var count restored",
-               repl_state_flat_program_local_vars_mut()[0].num_vars, 1);
+               repl_state_flat_program_local_vars()[0].num_vars, 1);
     ASSERT_INT("flat lighting restored",
                repl_state_flat_program_user_lighting_enabled(), 1);
     ASSERT_INT("selection anchor restored", editor_state_selection().anchor_idx, 4);

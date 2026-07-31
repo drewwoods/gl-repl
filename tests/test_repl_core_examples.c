@@ -272,7 +272,7 @@ static void fixture_path_for_idx(int idx, char *out, int out_sz) {
 
 static int examples_have_no_invalid_cmds(void) {
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid)
+        if (!repl_state_document_cmds()[i].valid)
             return 0;
     }
     return 1;
@@ -755,7 +755,7 @@ static char *collect_loaded_definition_lines(void) {
     char *joined;
 
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
+        if (repl_state_document_cmds()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds()[i].type != CMD_VAR_ASSIGN)
             continue;
         count++;
     }
@@ -766,7 +766,7 @@ static char *collect_loaded_definition_lines(void) {
 
     count = 0;
     for (int i = 0; i < repl_state_document_count(); i++) {
-        if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds_mut()[i].type != CMD_VAR_ASSIGN)
+        if (repl_state_document_cmds()[i].type != CMD_VAR_DECLARE && repl_state_document_cmds()[i].type != CMD_VAR_ASSIGN)
             continue;
         canon_lines[count] = canonicalize_definition_line(editor_buffer_line(i));
         if (!canon_lines[count]) {

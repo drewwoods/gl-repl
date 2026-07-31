@@ -415,7 +415,7 @@ static void tick_and_execute(float t_value) {
 static void print_source_summary(const char *label, int loaded) {
     printf("%s: loaded %d source command(s)\n", label, loaded);
     int doc_count = repl_state_document_count();
-    const GLCmd *cmds = repl_state_document_cmds_mut();
+    const GLCmd *cmds = repl_state_document_cmds();
     for (int i = 0; i < doc_count; i++)
         printf("  src[%d] %-22s\n", i, cmd_type_name(cmds[i].type));
 }

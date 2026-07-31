@@ -97,9 +97,9 @@ int main(void) {
     declare_test_vars();
     ASSERT_TRUE("load loop file", repl_export_load_from_file(tmp_loop_path, NULL) == 1);
     ASSERT_TRUE("loop imported 3 cmds", repl_state_document_count() == 3);
-    ASSERT_TRUE("loop header type", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
-    ASSERT_TRUE("loop body type", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);
-    ASSERT_TRUE("loop body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
+    ASSERT_TRUE("loop header type", repl_state_document_cmds()[0].type == CMD_FOR_BEGIN);
+    ASSERT_TRUE("loop body type", repl_state_document_cmds()[1].type == CMD_VERTEX3F);
+    ASSERT_TRUE("loop body has vars", repl_state_document_cmds()[1].has_vars == 1);
     ASSERT_TRUE("loop body keeps expression", strstr(editor_buffer_line(1), "i + x") != NULL);
     ASSERT_TRUE("loop body indented", strncmp(editor_buffer_line(1), "    ", 4) == 0);
 
@@ -136,10 +136,10 @@ int main(void) {
     declare_test_vars();
     ASSERT_TRUE("load else-if file", repl_export_load_from_file(tmp_else_path, NULL) == 1);
     ASSERT_TRUE("else-if imported 7 cmds", repl_state_document_count() == 7);
-    ASSERT_TRUE("else-if header type", repl_state_document_cmds_mut()[0].type == CMD_IF_BEGIN);
-    ASSERT_TRUE("else-if separator type", repl_state_document_cmds_mut()[2].type == CMD_ELSE_IF);
-    ASSERT_TRUE("else separator type", repl_state_document_cmds_mut()[4].type == CMD_ELSE);
-    ASSERT_TRUE("else-if end type", repl_state_document_cmds_mut()[6].type == CMD_IF_END);
+    ASSERT_TRUE("else-if header type", repl_state_document_cmds()[0].type == CMD_IF_BEGIN);
+    ASSERT_TRUE("else-if separator type", repl_state_document_cmds()[2].type == CMD_ELSE_IF);
+    ASSERT_TRUE("else separator type", repl_state_document_cmds()[4].type == CMD_ELSE);
+    ASSERT_TRUE("else-if end type", repl_state_document_cmds()[6].type == CMD_IF_END);
     ASSERT_TRUE("else-if canonical text",
                 strcmp(editor_buffer_line(2), "  } else if(x < 1) {") == 0);
     ASSERT_TRUE("else canonical text",
@@ -162,7 +162,7 @@ int main(void) {
     editor_feed_line("x = i + 1;");
     editor_feed_line("}");
     ASSERT_TRUE("assign in loop cmd count", repl_state_document_count() == 3);
-    ASSERT_TRUE("assign in loop type", repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
+    ASSERT_TRUE("assign in loop type", repl_state_document_cmds()[1].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("assign in loop indent", strncmp(editor_buffer_line(1), "    ", 4) == 0);
     ASSERT_TRUE("assign in loop keeps expression", strstr(editor_buffer_line(1), "i + 1") != NULL);
     {
@@ -229,7 +229,7 @@ int main(void) {
     glr_ctrl_reset_all();
     editor_feed_line("float a = 2, b, c = 3;");
     ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
-    ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
+    ASSERT_TRUE("decl cmd type", repl_state_document_cmds()[0].type == CMD_VAR_DECLARE);
     editor_buffer_set_line(0, "float a=max(1, 2),b,c=abs(-3)// vars");
     editor_reformat_commands();
     {
@@ -250,7 +250,7 @@ int main(void) {
         int n = repl_state_document_count();
         ASSERT_TRUE("tess+func cmd count", n == 6);
         ASSERT_TRUE("tess+func call type",
-                     repl_state_document_cmds_mut()[4].type == CMD_CALL);
+                     repl_state_document_cmds()[4].type == CMD_CALL);
         const char *call_line = editor_buffer_line(4);
         ASSERT_TRUE("funcN call inside tess block includes tess indent",
                      call_line && strncmp(call_line, "    ", 4) == 0);
@@ -269,8 +269,8 @@ int main(void) {
     editor_feed_line("glPopMatrix();");
     {
         ASSERT_TRUE("push block cmd count", repl_state_document_count() == 4);
-        ASSERT_TRUE("push line type", repl_state_document_cmds_mut()[0].type == CMD_PUSH_MATRIX);
-        ASSERT_TRUE("pop line type", repl_state_document_cmds_mut()[3].type == CMD_POP_MATRIX);
+        ASSERT_TRUE("push line type", repl_state_document_cmds()[0].type == CMD_PUSH_MATRIX);
+        ASSERT_TRUE("pop line type", repl_state_document_cmds()[3].type == CMD_POP_MATRIX);
         ASSERT_TRUE("push line not indented",
                     strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
         ASSERT_TRUE("push body translate indented",
@@ -324,7 +324,7 @@ int main(void) {
     editor_feed_line("glVertex3f(x, 0, 0);");
     editor_feed_line("glPopMatrix();");
     {
-        ASSERT_TRUE("vars body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
+        ASSERT_TRUE("vars body has vars", repl_state_document_cmds()[1].has_vars == 1);
         ASSERT_TRUE("vars body keeps expression", strstr(editor_buffer_line(1), "x") != NULL);
         ASSERT_TRUE("vars body indented",
                     strncmp(editor_buffer_line(1), "    glVertex3f", 14) == 0);

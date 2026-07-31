@@ -356,7 +356,7 @@ int main() {
         ASSERT_INT("commit chain float decl consumed", result, 1);
         ASSERT_INT("commit chain float decl inserted one cmd", repl_state_document_count(), 1);
         ASSERT_INT("commit chain float decl cmd type",
-                   repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
         ASSERT_TRUE("commit chain float decl registered var",
                     repl_eval_find_predef_var_idx("chain_order") >= 0);
     }
@@ -382,7 +382,7 @@ int main() {
         /* The block now has FOR_BEGIN + FOR_END. */
         ASSERT_TRUE("for-loop closed",
                     repl_state_document_count() >= 2 &&
-                    repl_state_document_cmds_mut()[repl_state_document_count() - 1].type
+                    repl_state_document_cmds()[repl_state_document_count() - 1].type
                         == CMD_FOR_END);
     }
 
@@ -475,7 +475,7 @@ int main() {
 
             int found = 0;
             for (int i = 0; i < repl_state_document_count(); i++)
-                if (repl_state_document_cmds_mut()[i].type == cases[c].want)
+                if (repl_state_document_cmds()[i].type == cases[c].want)
                     found = 1;
             snprintf(detail, sizeof(detail), "%s: block head command present", cases[c].label);
             ASSERT_TRUE(detail, found);
@@ -739,7 +739,7 @@ int main() {
 
         ASSERT_INT("semicolon route committed one command", repl_state_document_count(), 1);
         ASSERT_INT("semicolon route used float declaration handler",
-                   repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
         ASSERT_TRUE("semicolon route registered declared variable",
                     repl_eval_find_predef_var_idx("keyboard_route") >= 0);
     }
@@ -1574,7 +1574,7 @@ int main() {
         /* Feed a label command to create a CMD_GOTO_LABEL entry */
         editor_feed_line(":myloop");
         ASSERT_INT("label cmd created", repl_state_document_count(), 1);
-        ASSERT_INT("label cmd type", repl_state_document_cmds_mut()[0].type, CMD_GOTO_LABEL);
+        ASSERT_INT("label cmd type", repl_state_document_cmds()[0].type, CMD_GOTO_LABEL);
 
         /* Now load it back into input */
         editor_load_line_to_input(0);
@@ -1631,7 +1631,7 @@ int main() {
         editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("blank line inserted: doc count grows", repl_state_document_count(), 4);
-        ASSERT_INT("blank line inserted: cmd type", repl_state_document_cmds_mut()[2].type, CMD_EMPTY);
+        ASSERT_INT("blank line inserted: cmd type", repl_state_document_cmds()[2].type, CMD_EMPTY);
         ASSERT_STR("blank line inserted: source text empty", editor_buffer_line(2), "");
         ASSERT_INT("blank line inserted: edit line advances", editor_state_edit_line(), 3);
         ASSERT_INT("blank line inserted: stays in insert mode", editor_insert_mode(), 1);
@@ -1658,9 +1658,9 @@ int main() {
         editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("enter-col0: blank inserted immediately", repl_state_document_count(), 3);
-        ASSERT_INT("enter-col0: blank above is empty", repl_state_document_cmds_mut()[1].type, CMD_EMPTY);
+        ASSERT_INT("enter-col0: blank above is empty", repl_state_document_cmds()[1].type, CMD_EMPTY);
         ASSERT_STR("enter-col0: blank source text empty", editor_buffer_line(1), "");
-        ASSERT_INT("enter-col0: content shifts down", repl_state_document_cmds_mut()[2].type, CMD_END);
+        ASSERT_INT("enter-col0: content shifts down", repl_state_document_cmds()[2].type, CMD_END);
         ASSERT_INT("enter-col0: cursor follows content down", editor_state_edit_line(), 2);
         ASSERT_INT("enter-col0: not insert mode", editor_insert_mode(), 0);
         ASSERT_INT("enter-col0: cursor at column 0", editor_cursor_pos(), 0);
@@ -1690,7 +1690,7 @@ int main() {
         editor_navigate_to_line(insert_idx);     /* "click" the same index */
         ASSERT_INT("insert-row click(same idx): blank persists", repl_state_document_count(), 4);
         ASSERT_INT("insert-row click(same idx): blank is empty",
-                   repl_state_document_cmds_mut()[insert_idx].type, CMD_EMPTY);
+                   repl_state_document_cmds()[insert_idx].type, CMD_EMPTY);
 
         /* Down-arrow (different index) is consistent: also persists. */
         glr_ctrl_reset_all();
@@ -1704,7 +1704,7 @@ int main() {
         editor_navigate_to_line(insert_idx2 + 1); /* down-arrow */
         ASSERT_INT("insert-row down-arrow: blank persists", repl_state_document_count(), 4);
         ASSERT_INT("insert-row down-arrow: blank is empty",
-                   repl_state_document_cmds_mut()[insert_idx2].type, CMD_EMPTY);
+                   repl_state_document_cmds()[insert_idx2].type, CMD_EMPTY);
     }
 
     /* 12e. The editor statusbar names a single missing stack closer and
@@ -1770,7 +1770,7 @@ int main() {
         ASSERT_INT("insert assign returns 1", r, 1);
         ASSERT_INT("insert assign: 3 cmds", repl_state_document_count(), 3);
         /* The assignment should appear at index 1 */
-        ASSERT_INT("insert assign: cmd 1 is VAR_ASSIGN", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
+        ASSERT_INT("insert assign: cmd 1 is VAR_ASSIGN", repl_state_document_cmds()[1].type, CMD_VAR_ASSIGN);
     }
 
     /* 14. editor_try_commit_assign_variable - overwrite existing cmd */
@@ -1868,8 +1868,8 @@ int main() {
         ASSERT_INT("for inline returns 1", r, 1);
         /* Should create 3 cmds: for-begin, body, for-end */
         ASSERT_INT("for inline: 3 cmds", repl_state_document_count(), 3);
-        ASSERT_INT("for inline: cmd 0 is FOR_BEGIN", repl_state_document_cmds_mut()[0].type, CMD_FOR_BEGIN);
-        ASSERT_INT("for inline: cmd 2 is FOR_END", repl_state_document_cmds_mut()[2].type, CMD_FOR_END);
+        ASSERT_INT("for inline: cmd 0 is FOR_BEGIN", repl_state_document_cmds()[0].type, CMD_FOR_BEGIN);
+        ASSERT_INT("for inline: cmd 2 is FOR_END", repl_state_document_cmds()[2].type, CMD_FOR_END);
     }
 
     /* 19. Committing func defs - basic */
@@ -2103,9 +2103,9 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("float_decl no-semi: accepted", result, 1);
         ASSERT_INT("float_decl no-semi: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl no-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("float_decl no-semi: payload.decl.count", repl_state_document_cmds_mut()[0].payload.decl.count, 1);
-        ASSERT_STR("float_decl no-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "tmp");
+        ASSERT_INT("float_decl no-semi: type", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("float_decl no-semi: payload.decl.count", repl_state_document_cmds()[0].payload.decl.count, 1);
+        ASSERT_STR("float_decl no-semi: var name", repl_state_document_cmds()[0].payload.decl.names[0], "tmp");
         ASSERT_TRUE("float_decl no-semi: predef registered",
                      repl_eval_find_predef_var_idx("tmp") >= 0);
     }
@@ -2115,8 +2115,8 @@ int main() {
         glr_ctrl_reset_all();
         editor_feed_line("float abc;");
         ASSERT_INT("float_decl with-semi: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "abc");
+        ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds()[0].payload.decl.names[0], "abc");
         ASSERT_TRUE("float_decl with-semi: predef registered",
                      repl_eval_find_predef_var_idx("abc") >= 0);
     }
@@ -2138,8 +2138,8 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("float_decl init no-semi: accepted", result, 1);
         ASSERT_INT("float_decl init no-semi: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl init no-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl init no-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "tmp");
+        ASSERT_INT("float_decl init no-semi: type", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl init no-semi: var name", repl_state_document_cmds()[0].payload.decl.names[0], "tmp");
         int idx = repl_eval_find_predef_var_idx("tmp");
         ASSERT_TRUE("float_decl init no-semi: predef registered", idx >= 0);
         if (idx >= 0)
@@ -2152,8 +2152,8 @@ int main() {
         glr_ctrl_reset_all();
         editor_feed_line("float radius = 2.5;");
         ASSERT_INT("float_decl init expr: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl init expr: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "radius");
+        ASSERT_INT("float_decl init expr: type", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds()[0].payload.decl.names[0], "radius");
         int idx = repl_eval_find_predef_var_idx("radius");
         ASSERT_TRUE("float_decl init expr: registered", idx >= 0);
         if (idx >= 0)
@@ -2179,7 +2179,7 @@ int main() {
         ASSERT_INT("float_decl multi no-semi: accepted", result, 1);
         ASSERT_INT("float_decl multi no-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl multi no-semi: payload.decl.count",
-                   repl_state_document_cmds_mut()[0].payload.decl.count, 3);
+                   repl_state_document_cmds()[0].payload.decl.count, 3);
         ASSERT_TRUE("float_decl multi no-semi: a registered",
                      repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("float_decl multi no-semi: b registered",
@@ -2194,7 +2194,7 @@ int main() {
         editor_feed_line("float x = 1, y = 2;");
         ASSERT_INT("float_decl multi init: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl multi init: payload.decl.count",
-                   repl_state_document_cmds_mut()[0].payload.decl.count, 2);
+                   repl_state_document_cmds()[0].payload.decl.count, 2);
         int xi = repl_eval_find_predef_var_idx("x");
         int yi = repl_eval_find_predef_var_idx("y");
         ASSERT_TRUE("float_decl multi init: x registered", xi >= 0);
@@ -2223,12 +2223,12 @@ int main() {
 
         editor_feed_line("float tmp = 40;");
         ASSERT_INT("decl-top: 4 cmds after float tmp", repl_state_document_count(), 4);
-        ASSERT_INT("decl-top: repl_state_document_cmds_mut()[0] is float n", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[0] name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "n");
-        ASSERT_INT("decl-top: repl_state_document_cmds_mut()[1] is float tmp", repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
-        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[1] name", repl_state_document_cmds_mut()[1].payload.decl.names[0], "tmp");
-        ASSERT_INT("decl-top: repl_state_document_cmds_mut()[2] is assign", repl_state_document_cmds_mut()[2].type, CMD_VAR_ASSIGN);
-        ASSERT_INT("decl-top: repl_state_document_cmds_mut()[3] is glBegin", repl_state_document_cmds_mut()[3].type, CMD_BEGIN);
+        ASSERT_INT("decl-top: repl_state_document_cmds()[0] is float n", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top: repl_state_document_cmds()[0] name", repl_state_document_cmds()[0].payload.decl.names[0], "n");
+        ASSERT_INT("decl-top: repl_state_document_cmds()[1] is float tmp", repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top: repl_state_document_cmds()[1] name", repl_state_document_cmds()[1].payload.decl.names[0], "tmp");
+        ASSERT_INT("decl-top: repl_state_document_cmds()[2] is assign", repl_state_document_cmds()[2].type, CMD_VAR_ASSIGN);
+        ASSERT_INT("decl-top: repl_state_document_cmds()[3] is glBegin", repl_state_document_cmds()[3].type, CMD_BEGIN);
     }
 
     /* 33. float decl from edit position in middle of code still
@@ -2254,14 +2254,14 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("decl-top mid: accepted", result, 1);
         ASSERT_INT("decl-top mid: 3 cmds", repl_state_document_count(), 3);
-        ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[0] is decl",
-                   repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("decl-top mid: repl_state_document_cmds_mut()[0] name",
-                   repl_state_document_cmds_mut()[0].payload.decl.names[0], "radius");
-        ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[1] preserved glBegin",
-                   repl_state_document_cmds_mut()[1].type, CMD_BEGIN);
-        ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[2] preserved glEnd",
-                   repl_state_document_cmds_mut()[2].type, CMD_END);
+        ASSERT_INT("decl-top mid: repl_state_document_cmds()[0] is decl",
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_STR("decl-top mid: repl_state_document_cmds()[0] name",
+                   repl_state_document_cmds()[0].payload.decl.names[0], "radius");
+        ASSERT_INT("decl-top mid: repl_state_document_cmds()[1] preserved glBegin",
+                   repl_state_document_cmds()[1].type, CMD_BEGIN);
+        ASSERT_INT("decl-top mid: repl_state_document_cmds()[2] preserved glEnd",
+                   repl_state_document_cmds()[2].type, CMD_END);
     }
 
     /* 34. Overwriting a multi-name decl that shares a name with the new
@@ -2290,9 +2290,9 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("overwrite shared: accepted", result, 1);
         ASSERT_INT("overwrite shared: still 1 cmd", repl_state_document_count(), 1);
-        ASSERT_INT("overwrite shared: payload.decl.count", repl_state_document_cmds_mut()[0].payload.decl.count, 2);
-        ASSERT_STR("overwrite shared: slot 0 is a", repl_state_document_cmds_mut()[0].payload.decl.names[0], "a");
-        ASSERT_STR("overwrite shared: slot 1 is c", repl_state_document_cmds_mut()[0].payload.decl.names[1], "c");
+        ASSERT_INT("overwrite shared: payload.decl.count", repl_state_document_cmds()[0].payload.decl.count, 2);
+        ASSERT_STR("overwrite shared: slot 0 is a", repl_state_document_cmds()[0].payload.decl.names[0], "a");
+        ASSERT_STR("overwrite shared: slot 1 is c", repl_state_document_cmds()[0].payload.decl.names[1], "c");
         ASSERT_TRUE("overwrite shared: a still registered",
                     repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("overwrite shared: c registered",
@@ -2323,8 +2323,8 @@ int main() {
 
         int result = editor_try_commit_float_decl();
         ASSERT_INT("drop b: accepted", result, 1);
-        ASSERT_INT("drop b: payload.decl.count now 1", repl_state_document_cmds_mut()[0].payload.decl.count, 1);
-        ASSERT_STR("drop b: slot 0 is n", repl_state_document_cmds_mut()[0].payload.decl.names[0], "n");
+        ASSERT_INT("drop b: payload.decl.count now 1", repl_state_document_cmds()[0].payload.decl.count, 1);
+        ASSERT_STR("drop b: slot 0 is n", repl_state_document_cmds()[0].payload.decl.names[0], "n");
         ASSERT_TRUE("drop b: n still registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_TRUE("drop b: b unregistered",
@@ -2354,9 +2354,9 @@ int main() {
         ASSERT_INT("drop referenced b: handler consumed input", result, 1);
         /* Overwrite must have been rejected: decl still has both names */
         ASSERT_INT("drop referenced b: decl unchanged",
-                   repl_state_document_cmds_mut()[0].payload.decl.count, 2);
+                   repl_state_document_cmds()[0].payload.decl.count, 2);
         ASSERT_STR("drop referenced b: b preserved",
-                   repl_state_document_cmds_mut()[0].payload.decl.names[1], "b");
+                   repl_state_document_cmds()[0].payload.decl.names[1], "b");
         ASSERT_TRUE("drop referenced b: status mentions 'b'",
                     strstr(g_status, "'b'") != NULL);
         ASSERT_TRUE("drop referenced b: status does not mention 'n'",
@@ -2375,8 +2375,8 @@ int main() {
         editor_delete_cmd_range(0, 1, "Deleted");
 
         ASSERT_INT("delete referenced decl: cmd count unchanged", repl_state_document_count(), 2);
-        ASSERT_INT("delete referenced decl: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("delete referenced decl: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
+        ASSERT_INT("delete referenced decl: first still decl", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("delete referenced decl: second still assign", repl_state_document_cmds()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("delete referenced decl: n still registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
         assert_status_contains("delete referenced decl: status", "'n'");
@@ -2396,8 +2396,8 @@ int main() {
         editor_handle_key(24, 0, 0);
 
         ASSERT_INT("cut referenced decl: cmd count unchanged", repl_state_document_count(), 2);
-        ASSERT_INT("cut referenced decl: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("cut referenced decl: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
+        ASSERT_INT("cut referenced decl: first still decl", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("cut referenced decl: second still assign", repl_state_document_cmds()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("cut referenced decl: n still registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_INT("cut referenced decl: clipboard count preserved", editor_state_clipboard_count(), 1);
@@ -2683,7 +2683,7 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("expand decl: accepted", result, 1);
         ASSERT_INT("expand decl: still 4 cmds", repl_state_document_count(), 4);
-        ASSERT_INT("expand decl: payload.decl.count is 4", repl_state_document_cmds_mut()[0].payload.decl.count, 4);
+        ASSERT_INT("expand decl: payload.decl.count is 4", repl_state_document_cmds()[0].payload.decl.count, 4);
 
         ai = repl_eval_find_predef_var_idx("a");
         bi = repl_eval_find_predef_var_idx("b");
@@ -2708,13 +2708,13 @@ int main() {
                         g_predef_vars[di].value == 0.0f);
 
         /* CMD_VAR_ASSIGN slot refs must still point to the right variables */
-        ASSERT_INT("expand decl: assign a slot correct", repl_state_document_cmds_mut()[1].var_idx, ai);
-        ASSERT_INT("expand decl: assign b slot correct", repl_state_document_cmds_mut()[2].var_idx, bi);
-        ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds_mut()[3].var_idx, ci);
+        ASSERT_INT("expand decl: assign a slot correct", repl_state_document_cmds()[1].var_idx, ai);
+        ASSERT_INT("expand decl: assign b slot correct", repl_state_document_cmds()[2].var_idx, bi);
+        ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds()[3].var_idx, ci);
     }
 
     /* editor_try_commit_assign_variable - overlong formatted source is rejected with
-     * "Command too long" and does not mutate repl_state_document_cmds_mut() / repl_state_document_count(). */
+     * "Command too long" and does not mutate repl_state_document_cmds() / repl_state_document_count(). */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         int old_num_cmds = repl_state_document_count();
@@ -3079,9 +3079,9 @@ int main() {
 
         ASSERT_INT("nav auto-commit valid edit: cursor moved", editor_state_edit_line(), 1);
         ASSERT_INT("nav auto-commit valid edit: first cmd type",
-                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
         ASSERT_TRUE("nav auto-commit valid edit: x arg",
-                    fabsf(repl_state_document_cmds_mut()[0].args[0] - 9.0f) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[0] - 9.0f) < 1e-6f);
         ASSERT_STR("nav auto-commit valid edit: input loaded next", editor_state_input().input, "glVertex3f(1, 1, 1)");
     }
 
@@ -3124,9 +3124,9 @@ int main() {
         ASSERT_INT("nav auto-commit append: cmd count", repl_state_document_count(), 3);
         ASSERT_INT("nav auto-commit append: cursor moved up", editor_state_edit_line(), 1);
         ASSERT_INT("nav auto-commit append: new cmd type",
-                   repl_state_document_cmds_mut()[2].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[2].type, CMD_VERTEX3F);
         ASSERT_TRUE("nav auto-commit append: x arg",
-                    fabsf(repl_state_document_cmds_mut()[2].args[0] - 3.0f) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[2].args[0] - 3.0f) < 1e-6f);
     }
 
     /* Invalid new end-of-buffer input is discarded before moving away. */
@@ -3195,7 +3195,7 @@ int main() {
         snprintf(lbl, sizeof lbl,
                  "mouse auto-commit valid edit: x arg%s", mode);
         ASSERT_TRUE(lbl,
-                    fabsf(repl_state_document_cmds_mut()[0].args[0] - 8.0f) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[0] - 8.0f) < 1e-6f);
         snprintf(lbl, sizeof lbl,
                  "mouse auto-commit valid edit: input loaded clicked%s", mode);
         ASSERT_STR(lbl, editor_state_input().input, "glVertex3f(2, 2, 2)");
@@ -3216,7 +3216,7 @@ int main() {
         ASSERT_INT("autocomplete down changes selection", g_ac_sel, 1);
         ASSERT_INT("autocomplete down does not navigate", editor_state_edit_line(), 0);
         ASSERT_TRUE("autocomplete down does not commit edit",
-                    fabsf(repl_state_document_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
+                    fabsf(repl_state_document_cmds()[0].args[0] - 0.0f) < 1e-6f);
     }
 
     /* editor_clear_all_cmds - clears scene including float declarations. */
@@ -3231,7 +3231,7 @@ int main() {
         editor_feed_line("float tmp;");
         editor_feed_line("glVertex3f(1, 0, 0)");
         ASSERT_INT("clear_all: setup two cmds", repl_state_document_count(), 2);
-        ASSERT_INT("clear_all: first is var decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("clear_all: first is var decl", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
         ASSERT_INT("clear_all: decl registers one predef var",
                    g_num_predef_vars, base_num_predef_vars + 1);
         for (i = 0; i < g_num_predef_vars; i++) {
@@ -3317,7 +3317,7 @@ int main() {
         editor_feed_line("x = 1;");
         ASSERT_INT("uncomment setup: two cmds", repl_state_document_count(), 2);
         ASSERT_INT("uncomment setup: line 1 is assign",
-                   repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
+                   repl_state_document_cmds()[1].type, CMD_VAR_ASSIGN);
 
         /* Comment the assignment with Ctrl+/. */
         editor_state_edit_line_set(1);
@@ -3326,7 +3326,7 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment assignment: type became comment",
-                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
         ASSERT_TRUE("comment assignment: source keeps x = 1",
                     strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "x = 1") != NULL);
         assert_status_contains("comment assignment: status", "Commented");
@@ -3338,12 +3338,12 @@ int main() {
         g_status[0] = '\0';
         editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment assignment: type back to assign",
-                   repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
+                   repl_state_document_cmds()[1].type, CMD_VAR_ASSIGN);
         ASSERT_TRUE("uncomment assignment: no error status",
                     strstr(g_status, "Cannot uncomment") == NULL);
         assert_status_contains("uncomment assignment: status", "Uncommented");
         ASSERT_TRUE("uncomment assignment: value restored",
-                    repl_state_document_cmds_mut()[1].var_idx == repl_eval_find_predef_var_idx("x"));
+                    repl_state_document_cmds()[1].var_idx == repl_eval_find_predef_var_idx("x"));
 
         g_mock_modifiers = saved_mods;
     }
@@ -3359,7 +3359,7 @@ int main() {
         glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(t, 0, 0);");
         ASSERT_INT("uncomment vars: setup vertex committed",
-                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
         ASSERT_TRUE("uncomment vars: setup line keeps t",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "glVertex3f(t") != NULL);
@@ -3370,7 +3370,7 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment vars: row is comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_TRUE("comment vars: source keeps t",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "glVertex3f(t") != NULL);
@@ -3380,14 +3380,14 @@ int main() {
         g_status[0] = '\0';
         editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment vars: type back to vertex",
-                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
         ASSERT_TRUE("uncomment vars: no error status",
                     strstr(g_status, "Cannot uncomment") == NULL);
         ASSERT_TRUE("uncomment vars: source still references t (not literal)",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "glVertex3f(t") != NULL);
         ASSERT_TRUE("uncomment vars: has_vars still set",
-                    repl_state_document_cmds_mut()[0].has_vars == 1);
+                    repl_state_document_cmds()[0].has_vars == 1);
 
         g_mock_modifiers = saved_mods;
     }
@@ -3402,7 +3402,7 @@ int main() {
         glr_ctrl_reset_all();
         editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);");
         ASSERT_INT("uncomment point-param setup: committed",
-                   repl_state_document_cmds_mut()[0].type, CMD_POINT_PARAMETER_FV);
+                   repl_state_document_cmds()[0].type, CMD_POINT_PARAMETER_FV);
         ASSERT_TRUE("uncomment point-param setup: canonical compound literal",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "(GLfloat[]){0.2, 0, 0.15}") != NULL);
@@ -3413,7 +3413,7 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment point-param: row is comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_TRUE("comment point-param: source keeps command",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "glPointParameterfv") != NULL);
@@ -3423,7 +3423,7 @@ int main() {
         g_status[0] = '\0';
         editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment point-param: type restored",
-                   repl_state_document_cmds_mut()[0].type, CMD_POINT_PARAMETER_FV);
+                   repl_state_document_cmds()[0].type, CMD_POINT_PARAMETER_FV);
         ASSERT_TRUE("uncomment point-param: no error status",
                     strstr(g_status, "Cannot uncomment") == NULL);
         ASSERT_TRUE("uncomment point-param: source still canonical",
@@ -3452,7 +3452,7 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("comment unref decl: row is CMD_COMMENT",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_TRUE("comment unref decl: predef var removed",
                     repl_eval_find_predef_var_idx("comment_x") < 0);
 
@@ -3477,7 +3477,7 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("comment refed decl: row stays CMD_VAR_DECLARE",
-                   repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
         ASSERT_TRUE("comment refed decl: predef var still declared",
                     repl_eval_find_predef_var_idx("refed_y") >= 0);
         assert_status_contains("comment refed decl: error wording",
@@ -3517,7 +3517,7 @@ int main() {
         ASSERT_TRUE("delete-with-inline-comment setup: p declared",
                     repl_eval_find_predef_var_idx("p") >= 0);
         ASSERT_INT("delete-with-inline-comment setup: vertex line is GL cmd",
-                   repl_state_document_cmds_mut()[1].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[1].type, CMD_VERTEX3F);
 
         editor_delete_cmd_range(0, 1, "Deleted");
 
@@ -3552,7 +3552,7 @@ int main() {
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key('/', 0, 0);
-        ASSERT_INT("mangled setup: commented", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_INT("mangled setup: commented", repl_state_document_cmds()[0].type, CMD_COMMENT);
 
         /* Replace the comment body with nonsense so the re-parse fails. */
         editor_buffer_set_line(0, "// !@#$not a command$@#!");
@@ -3560,7 +3560,7 @@ int main() {
         editor_state_edit_line_set(0);
         editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment genuinely bad: stays a comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         assert_status_contains("uncomment genuinely bad: error status",
                                "Cannot uncomment");
 
@@ -4108,11 +4108,11 @@ int main() {
         editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
-        ASSERT_INT("comment if-begin", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_INT("comment if-begin", repl_state_document_cmds()[0].type, CMD_COMMENT);
 
         editor_state_edit_line_set(2);
         editor_handle_key('/', 0, 0);
-        ASSERT_INT("comment if-end", repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+        ASSERT_INT("comment if-end", repl_state_document_cmds()[2].type, CMD_COMMENT);
 
         g_mock_modifiers = saved_mods;
     }
@@ -4133,11 +4133,11 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("for-block batch: line 0 is comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_INT("for-block batch: line 1 is comment",
-                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
         ASSERT_INT("for-block batch: line 2 is comment",
-                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+                   repl_state_document_cmds()[2].type, CMD_COMMENT);
         ASSERT_TRUE("for-block batch: line 0 text has // prefix",
                     strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
                            "// for") != NULL);
@@ -4166,11 +4166,11 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("for-end back-scan: line 0 is comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_INT("for-end back-scan: line 1 is comment",
-                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
         ASSERT_INT("for-end back-scan: line 2 is comment",
-                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+                   repl_state_document_cmds()[2].type, CMD_COMMENT);
 
         g_mock_modifiers = saved_mods;
     }
@@ -4191,11 +4191,11 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("func-block batch: line 0 is comment",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_INT("func-block batch: line 1 is comment",
-                   repl_state_document_cmds_mut()[1].type, CMD_COMMENT);
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
         ASSERT_INT("func-block batch: line 2 is comment",
-                   repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
+                   repl_state_document_cmds()[2].type, CMD_COMMENT);
 
         g_mock_modifiers = saved_mods;
     }
@@ -4213,7 +4213,7 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key('/', 0, 0);  /* commenting out */
         ASSERT_INT("toggle framing setup: commented",
-                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
 
         editor_buffer_set_line(0, "// !@#$not a command$@#!");
         g_status[0] = '\0';
@@ -4243,7 +4243,7 @@ int main() {
         editor_handle_key('/', 0, 0);
 
         ASSERT_INT("unset prefix: line stays a regular cmd",
-                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
         ASSERT_INT("unset prefix: status untouched", g_status[0], '\0');
 
         editor_set_line_comment_prefix(saved_prefix);

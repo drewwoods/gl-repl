@@ -173,7 +173,6 @@ typedef struct {
 const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
-int          repl_state_document_capacity(void);
 int          repl_state_normals_dirty(void);
 
 const GLCmd      *repl_state_flat_program_cmds(void);

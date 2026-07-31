@@ -62,7 +62,7 @@
 
 /* User scene slots for the workspace / example-promotion system.
  *
- *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds_mut()[]
+ *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds()[]
  *                        == -1 => an example or fresh workspace is active
  *
  *   last_touch is retained for stable snapshot compatibility and future
