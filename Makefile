@@ -1286,7 +1286,7 @@ GLR_UNCHAINED_BIN = $(GLR_UNCHAINED_DIR)/gl-repl-unchained
 gl-repl-unchained: ## Build an experimental gl-repl with 32x source-command and 8x flat-command capacity, 8-deep undo (not tested, not supported).
 	$(MAKE) BUILD=unchained \
 		SAMPLE_BIN=$(GLR_UNCHAINED_BIN) \
-		CFLAGS="$(CFLAGS) -DMAX_EDITOR_COMMANDS=32768 \
+		CFLAGS="$(CFLAGS) -DMAX_EDITOR_COMMANDS=65536 \
 			-DMAX_FLAT_COMMANDS=65536 \
 			-DMAX_FLATTEN_VISIT_BUDGET=2000000 \
 			-DREPL_UNDO_DEPTH=8" \
