@@ -1298,9 +1298,11 @@ highlight over it.
   geometry so lighting works without hand-written normals. **Face** gives
   every vertex of a primitive that primitive's own normal (hard edges);
   **Smooth** averages the faces meeting at each vertex, area-weighted, so
-  curved surfaces shade continuously. Smooth joins vertices that share a
-  position within one `glBegin` block, which is what makes a corner spelled
-  as several `glVertex3f` lines shade as one. Either way, a block with any
+  curved surfaces shade continuously. Smooth joins vertices that share an
+  *exactly* equal position within one `glBegin` block, which is what makes
+  a corner spelled as several `glVertex3f` lines shade as one; coordinates
+  that differ at all — a seam, a near-miss — keep their own face normal and
+  stay flat-shaded right there. Either way, a block with any
   expression-valued coordinate is left alone — the pass reads literal source
   coordinates.
 

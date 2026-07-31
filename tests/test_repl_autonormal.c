@@ -472,6 +472,31 @@ static void test_face_mode_unchanged_by_smooth(void) {
     ASSERT_FLOAT("face: v5 y", repl_state_document_cmds_mut()[11].args[1], 1.0f);
 }
 
+/* The weld is exact, not tolerant. A corner that misses by a hair is a
+ * break in the geometry: both copies keep their own face normal, so the
+ * seam shades flat instead of quietly averaging across it. */
+static void test_smooth_weld_is_exact(void) {
+    printf("test_smooth_weld_is_exact\n");
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    /* Same fold as above, but the shared corners are off by 1e-4. */
+    editor_feed_line("glVertex3f(0.0001, 0, 0);");
+    editor_feed_line("glVertex3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(1.0001, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
+
+    /* Face 1 keeps a pure +z, face 2 a pure +y — no averaging. */
+    ASSERT_FLOAT("near-miss: v0 stays +z", repl_state_document_cmds_mut()[1].args[2], 1.0f);
+    ASSERT_FLOAT("near-miss: v0 has no y", repl_state_document_cmds_mut()[1].args[1], 0.0f);
+    ASSERT_FLOAT("near-miss: v3 stays +y", repl_state_document_cmds_mut()[7].args[1], 1.0f);
+    ASSERT_FLOAT("near-miss: v3 has no z", repl_state_document_cmds_mut()[7].args[2], 0.0f);
+}
+
 /* Strips share vertices by index, so they smooth without any welding.
  * A flat strip must still come out unit-length everywhere (-z for the
  * rung order below): if the alternating winding correction were dropped,
@@ -552,6 +577,7 @@ int main(void) {
     test_autonormal_inside_funcn_var_args_skipped();
     test_smooth_welds_shared_corners();
     test_face_mode_unchanged_by_smooth();
+    test_smooth_weld_is_exact();
     test_smooth_triangle_strip_stays_unit();
     test_smooth_front_face_cw();
     test_smooth_rewrites_existing_auto_rows();

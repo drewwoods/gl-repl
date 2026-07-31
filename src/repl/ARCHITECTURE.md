@@ -524,7 +524,13 @@ separate accumulate-and-weld pass instead: each face adds its *unnormalized*
 normal (magnitude = 2x area, so the average is area-weighted) to every one of
 its own vertices, coincident positions within the block are welded so a corner
 repeated as several `glVertex3f` lines shades as one, then each sum is
-normalized. The two passes stay separate functions — the face walk leans on
+normalized. The weld matches positions **exactly**, on the float bit patterns
+(±0 canonicalized), through a per-block open-addressed table — the coordinates
+are parsed source literals, so the same corner written the same way is bit-equal,
+and exactness is what keeps the pass linear instead of an O(nv²) tolerance sweep
+that a large unrolled mesh could not afford. A position that matches nothing
+keeps its own face normal, so a break in the geometry stays flat-shaded exactly
+at the break. The two passes stay separate functions — the face walk leans on
 per-primitive "which vertex owns this face" rules that stop meaning anything
 once a vertex can hold several faces. Both modes emit one normal row per
 vertex, so switching modes rewrites the existing `is_auto` rows in place

@@ -216,40 +216,85 @@ static void accum_face(GLenum front_face, const int *vi, float norms[][3],
     }
 }
 
-static int same_position(const float *a, const float *b) {
-    float dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
-    return dx*dx + dy*dy + dz*dz <= 1e-12f;   /* 1e-6 in distance */
+/* Positions weld on an exact match, never a tolerance. Both sides come
+ * from parsed source literals, so the same corner written the same way
+ * parses to identical bits, and matching on bits keeps the weld a single
+ * hash pass — a tolerance would force an O(nv^2) sweep, which does not
+ * survive a large unrolled mesh. A vertex that matches nothing simply
+ * keeps its own face normal, i.e. a break in the geometry falls back to
+ * flat shading exactly where the break is. */
+static unsigned pos_key_bits(float v) {
+    unsigned bits;
+    memcpy(&bits, &v, sizeof(bits));
+    /* -0.0f and 0.0f compare equal but encode differently: one key. */
+    if ((bits & 0x7fffffffu) == 0) bits = 0;
+    return bits;
 }
+
+static unsigned pos_hash(const float *p) {
+    unsigned h = 2166136261u;   /* FNV-1a over the three canonical keys */
+    for (int k = 0; k < 3; k++) {
+        h ^= pos_key_bits(p[k]);
+        h *= 16777619u;
+    }
+    return h;
+}
+
+static int pos_equal_exact(const float *a, const float *b) {
+    return pos_key_bits(a[0]) == pos_key_bits(b[0]) &&
+           pos_key_bits(a[1]) == pos_key_bits(b[1]) &&
+           pos_key_bits(a[2]) == pos_key_bits(b[2]);
+}
+
+/* Open-addressed position -> first-vertex-at-that-position table and the
+ * per-vertex representative it yields. File-static rather than automatic:
+ * these are sized off MAX_EDITOR_COMMANDS, which a custom build can raise
+ * far enough to blow the stack. Only the leading 2*nv slots are used and
+ * cleared per block, so the cost is proportional to the block, not to the
+ * command cap. */
+static int g_weld_slots[2 * MAX_EDITOR_COMMANDS];
+static int g_weld_rep[MAX_EDITOR_COMMANDS];
 
 /* Join vertices that occupy the same position so a corner spelled as
  * several separate glVertex3f lines (GL_TRIANGLES, GL_QUADS) shades as one
  * — strips and fans already share by index, and accumulate for free.
- * O(nv^2) over a single glBegin block. Each vertex accumulates into the
- * first coincident vertex ahead of it, then reads the total back. */
+ * Each vertex accumulates into the first vertex at its position, then
+ * reads the total back. */
 static void weld_coincident(const int *vi, int nv, float norms[][3]) {
     const GLCmd *cmds = repl_state_document_cmds();
-    int rep[MAX_EDITOR_COMMANDS];
+    unsigned cap = (unsigned)nv * 2u;   /* load factor 0.5 by construction */
+
+    if (nv <= 1) return;
+    for (unsigned s = 0; s < cap; s++)
+        g_weld_slots[s] = -1;
 
     for (int i = 0; i < nv; i++) {
-        rep[i] = i;
-        for (int j = 0; j < i; j++) {
-            if (rep[j] == j &&
-                same_position(cmds[vi[i]].args, cmds[vi[j]].args)) {
-                rep[i] = j;
+        unsigned slot = pos_hash(cmds[vi[i]].args) % cap;
+        for (;;) {
+            int held = g_weld_slots[slot];
+            if (held < 0) {
+                g_weld_slots[slot] = i;
+                g_weld_rep[i] = i;
                 break;
             }
+            if (pos_equal_exact(cmds[vi[held]].args, cmds[vi[i]].args)) {
+                g_weld_rep[i] = held;
+                break;
+            }
+            if (++slot == cap) slot = 0;
         }
     }
+
     for (int i = 0; i < nv; i++) {
-        if (rep[i] == i) continue;
+        if (g_weld_rep[i] == i) continue;
         for (int k = 0; k < 3; k++) {
-            norms[rep[i]][k] += norms[i][k];
+            norms[g_weld_rep[i]][k] += norms[i][k];
             norms[i][k] = 0;
         }
     }
     for (int i = 0; i < nv; i++)
-        if (rep[i] != i)
-            memcpy(norms[i], norms[rep[i]], sizeof(norms[i]));
+        if (g_weld_rep[i] != i)
+            memcpy(norms[i], norms[g_weld_rep[i]], sizeof(norms[i]));
 }
 
 /* Smooth counterpart of compute_block_normals: every face deposits its
