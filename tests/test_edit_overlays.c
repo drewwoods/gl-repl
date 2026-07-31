@@ -2066,6 +2066,28 @@ static void test_overlay_scope(void) {
                 strcmp(all.labels[2].idx, " v2") == 0 &&
                 strcmp(all.labels[3].idx, " v3") == 0);
 
+    /* Whole-scene: same collection rule as all-instances at the callback
+     * level — the difference is upstream, where the walk is not narrowed to
+     * the cursor's block. Numbering must stay global, or vertices from
+     * different blocks would collide on v0. */
+    VertexLabelCtx scene;
+    memset(&scene, 0, sizeof(scene));
+    scene.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    scene.label_options = OVERLAY_SCOPE_WHOLE_SCENE;
+    memcpy(scene.proj, id, sizeof(id));
+    scene.vw = 1024;
+    scene.vh = 768;
+    for (int i = 0; i < 4; i++) {
+        state.vertex_idx_in_block = vidx[i];
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &scene);
+    }
+    ASSERT_INT("whole-scene collects every vertex", scene.count, 4);
+    ASSERT_TRUE("whole-scene numbers globally (no duplicates)",
+                strcmp(scene.labels[0].idx, " v0") == 0 &&
+                strcmp(scene.labels[1].idx, " v1") == 0 &&
+                strcmp(scene.labels[2].idx, " v2") == 0 &&
+                strcmp(scene.labels[3].idx, " v3") == 0);
+
     /* At-vertex: every vertex, numbered by in-block index, bypass layout. */
     VertexLabelCtx at_vert;
     memset(&at_vert, 0, sizeof(at_vert));
@@ -2190,12 +2212,14 @@ static void test_single_polygon_label_scope(void) {
                 strcmp(fan.labels[2].idx, " v3") == 0);
 }
 
-/* Visible-only scope: a vertex is dropped when the scene depth buffer holds
- * nearer geometry at its pixel. Uses a tiny 4x4 depth grid so the projected
- * pixel lookup is easy to reason about (identity proj over a 4x4 viewport maps
- * object (x,y) -> ((x*0.5+0.5)*4, (y*0.5+0.5)*4)). */
+/* Occlusion cull: a vertex is dropped when the scene depth buffer holds nearer
+ * geometry at its pixel. This is unconditional — it is not a scope, so the
+ * assertion runs over every scope rather than one opted-in mode. Uses a tiny
+ * 4x4 depth grid so the projected pixel lookup is easy to reason about
+ * (identity proj over a 4x4 viewport maps object (x,y) ->
+ * ((x*0.5+0.5)*4, (y*0.5+0.5)*4)). */
 static void test_vertex_label_visible_occlusion(void) {
-    printf("--- edit_overlays vertex label visible-only occlusion ---\n");
+    printf("--- edit_overlays vertex label occlusion cull ---\n");
 
     float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     extern float g_gl_stub_modelview_matrix[16];
@@ -2210,22 +2234,31 @@ static void test_vertex_label_visible_occlusion(void) {
     for (int i = 0; i < 16; i++) depth[i] = 1.0f;
     depth[1 * 4 + 1] = 0.0f;
 
-    VertexLabelCtx ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    ctx.label_options = OVERLAY_SCOPE_VISIBLE;
-    memcpy(ctx.proj, id, sizeof(id));
-    ctx.vw = 4;
-    ctx.vh = 4;
-    ctx.depthbuf = depth;
+    for (int scope = 0; scope < OVERLAY_SCOPE_COUNT; scope++) {
+        char msg[128];
+        VertexLabelCtx ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
+        ctx.label_options = scope;
+        memcpy(ctx.proj, id, sizeof(id));
+        ctx.vw = 4;
+        ctx.vh = 4;
+        ctx.depthbuf = depth;
 
-    /* (0,0,0) -> pixel (2,2), window depth 0.5 vs scene 1.0 -> visible. */
-    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &ctx);
-    /* (-0.5,-0.5,0) -> pixel (1,1), window depth 0.5 vs scene 0.0 -> occluded. */
-    on_vertex_number_label(&state, -0.5f, -0.5f, 0.0f, &ctx);
+        /* Both vertices sit in one block, so no scope drops either on
+         * block-selection grounds; only the depth cull can. */
+        state.vertex_idx_in_block = 0;
+        /* (0,0,0) -> pixel (2,2), window depth 0.5 vs scene 1.0 -> visible. */
+        on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &ctx);
+        state.vertex_idx_in_block = 1;
+        /* (-0.5,-0.5,0) -> pixel (1,1), depth 0.5 vs scene 0.0 -> occluded. */
+        on_vertex_number_label(&state, -0.5f, -0.5f, 0.0f, &ctx);
 
-    ASSERT_INT("visible-only keeps the unoccluded vertex and drops the occluded one",
-               ctx.count, 1);
+        snprintf(msg, sizeof(msg),
+                 "scope %d keeps the unoccluded vertex and drops the occluded one",
+                 scope);
+        ASSERT_INT(msg, ctx.count, 1);
+    }
 }
 
 /* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to

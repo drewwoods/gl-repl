@@ -26,13 +26,24 @@ typedef enum OverlayVertexLabelMode {
  * values the variable panel still reports, and the last one a replay draws —
  * highlights, labels and cursor guides then agree with the rest of the UI.
  * (The `for` counter itself is loop-scoped and restored, so it reads as its
- * declared value either way.) */
+ * declared value either way.)
+ *
+ * Every scope but WHOLE_SCENE is anchored to the block under the cursor —
+ * hence the shared name prefix. WHOLE_SCENE drops the cursor anchor for
+ * *labels* only: it numbers every vertex the program emits. The highlight
+ * stays cursor-bound there (as it does under AT_VERTEX), because a highlight
+ * that covers everything distinguishes nothing.
+ *
+ * Occlusion is not a scope: vertex labels are always culled against the scene
+ * depth buffer (a label you can see for a vertex you cannot is a lie about
+ * where the geometry is). The polygon highlight is deliberately exempt — it
+ * draws through hidden geometry so the cursor's shape stays findable. */
 #define OVERLAY_SCOPE_LIST(X) \
-    X(LAST_INSTANCE, "Last instance")      \
-    X(ALL_INSTANCES, "All instances")      \
-    X(AT_VERTEX, "At vertex")              \
-    X(VISIBLE, "Visible only")             \
-    X(SINGLE_POLYGON, "Single polygon")
+    X(LAST_INSTANCE, "Cursor block, last instance")  \
+    X(ALL_INSTANCES, "Cursor block, all instances")  \
+    X(WHOLE_SCENE, "Whole scene")                    \
+    X(AT_VERTEX, "Cursor block, at vertex")          \
+    X(SINGLE_POLYGON, "Cursor block, single polygon")
 
 #define OVERLAY_SCOPE_NAME_ENTRY(name, str) [OVERLAY_SCOPE_##name] = str,
 

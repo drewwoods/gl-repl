@@ -1530,8 +1530,8 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     /* Last-instance mode: only the last unrolled copy (else the torus repeats
      * v0..vN once per ring). The walk is forward-only and can't know which copy
      * is last, so every new copy simply discards what the previous one
-     * collected. All-instances and At-vertex modes keep all copies; declutter
-     * pass still drops whatever doesn't fit for All-instances. Single-polygon
+     * collected. All-instances, Whole-scene and At-vertex modes keep all
+     * copies; declutter pass still drops whatever doesn't fit. Single-polygon
      * narrows last-instance further to the primitive under the cursor — but
      * only for glBegin blocks (primitive_mode != 0); tess (GLU) polygons keep
      * whole-block labels by design. */
@@ -1565,17 +1565,22 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         return;  /* projects off-screen: a direct glRasterPos3f would have
                     produced an invalid raster position and drawn nothing here */
 
-    /* Visible-only scope: drop the vertex if the scene rendered nearer geometry
-     * at this pixel (i.e. the vertex is occluded). depthbuf is only set for the
-     * VISIBLE scope; the off-screen guard above keeps the index in range. */
+    /* Drop the vertex if the scene rendered nearer geometry at this pixel
+     * (i.e. the vertex is occluded) — labels never show through solid
+     * geometry, in any scope. depthbuf is NULL only when the readback failed;
+     * the off-screen guard above keeps the index in range. */
     if (ctx->depthbuf) {
         float scene_d = ctx->depthbuf[(int)sy * ctx->vw + (int)sx];
         if (depth > scene_d + VERTEX_LABEL_OCCLUDE_BIAS)
             return;
     }
 
+    /* Scopes that keep more than one block need globally-unique numbers, or
+     * every unrolled copy repeats v0..vN. At-vertex is the exception: its
+     * labels sit on their own vertex, where the in-block ordinal is the
+     * useful reading. */
     label_num = (ctx->label_options == OVERLAY_SCOPE_ALL_INSTANCES ||
-                 ctx->label_options == OVERLAY_SCOPE_VISIBLE)
+                 ctx->label_options == OVERLAY_SCOPE_WHOLE_SCENE)
                 ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     lbl->num = label_num;
@@ -1937,12 +1942,15 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
      * this is reset per call. */
     static VertexLabelCtx label_ctx;
     GLint vp[4];
-    float *depthbuf = NULL;   /* visible-only scope: scene depth snapshot */
+    float *depthbuf = NULL;   /* scene depth snapshot: occlusion cull */
 
     if (mode == OVERLAY_VERTEX_LABEL_OFF)
         return;
 
-    ctx = edit_overlays_build_vertex_walk_context(walk_ctx, 1);
+    /* Whole-scene is the one scope that is not anchored to the cursor's
+     * block, so it is the one that walks the program unfiltered. */
+    ctx = edit_overlays_build_vertex_walk_context(
+        walk_ctx, label_options != OVERLAY_SCOPE_WHOLE_SCENE);
     if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
         return;
 
@@ -1978,12 +1986,13 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.vw = vp[2];
     label_ctx.vh = vp[3];
 
-    /* Visible-only scope: snapshot the scene depth buffer once (one readback,
-     * not a per-vertex GL round-trip) so the callback can cull occluded
-     * vertices. The scene geometry has already drawn its depths by the time
-     * overlays run. Indexed viewport-local (bottom-up), matching project_to_screen. */
-    if (label_options == OVERLAY_SCOPE_VISIBLE &&
-        label_ctx.vw > 0 && label_ctx.vh > 0) {
+    /* Snapshot the scene depth buffer once (one readback, not a per-vertex GL
+     * round-trip) so the callback can cull occluded vertices. The scene
+     * geometry has already drawn its depths by the time overlays run. Indexed
+     * viewport-local (bottom-up), matching project_to_screen. Unconditional:
+     * occlusion culling applies in every scope, so the readback is the price
+     * of having vertex labels on at all. */
+    if (label_ctx.vw > 0 && label_ctx.vh > 0) {
         size_t n = (size_t)label_ctx.vw * (size_t)label_ctx.vh;
         depthbuf = malloc(n * sizeof(float));
         if (depthbuf) {

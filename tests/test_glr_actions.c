@@ -1883,6 +1883,11 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                 repl_cfg_resolve_text("label_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy label_scope", out,
                OVERLAY_SCOPE_ALL_INSTANCES);
+
+    out = -1;
+    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_WHOLE_SCENE",
+                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_WHOLE_SCENE", &out));
+    ASSERT_INT("  -> OVERLAY_SCOPE_WHOLE_SCENE", out, OVERLAY_SCOPE_WHOLE_SCENE);
     ASSERT_TRUE("resolve vertex_labels: OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE",
                 repl_cfg_resolve_text("vertex_labels",
                                       "OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE", &out));
