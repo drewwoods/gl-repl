@@ -163,13 +163,21 @@ static void maybe_capture_open_assign_plot(void) {
 }
 
 /* Capture affordance, sibling of GLR_OPEN_ASSIGN_PLOT: GLR_OPEN_COMMAND_HELP=
- * <line> right-clicks a committed GL-family row to raise its authored help
- * card. Ordered after the assign-plot hook in the frame hook because the
+ * <line>[,<dx>] right-clicks a committed GL-family row to raise its authored
+ * help card. Ordered after the assign-plot hook in the frame hook because the
  * routing closes the card when a right-click lands on an assignment row —
- * posing both means opening the plot first. */
+ * posing both means opening the plot first.
+ *
+ * The optional dx slides the card along x from where the click left it (screen
+ * px, right positive; the renderer clamps it into the window). The row picks
+ * the card and fixes its y, so x is the only axis a capture can curate — which
+ * it needs, because the click has to land on the row being explained, not on
+ * clear space. */
 static void maybe_capture_open_command_help(void) {
     static int done = 0;
     const char *s;
+    const char *comma;
+    int dx;
 
     if (done) return;
     s = getenv("GLR_OPEN_COMMAND_HELP");
@@ -177,7 +185,9 @@ static void maybe_capture_open_command_help(void) {
         done = 1;
         return;
     }
-    if (glr_ctrl_open_command_description(atoi(s)))
+    comma = strchr(s, ',');
+    dx = comma ? atoi(comma + 1) : 0;
+    if (glr_ctrl_open_command_description(atoi(s), dx))
         done = 1;   /* else the row is not on screen yet — retry next frame */
 }
 

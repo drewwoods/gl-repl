@@ -1637,6 +1637,8 @@ static void test_right_click_gl_command_description_popup(void) {
     GLCmd probe;
     ReplCommandDescription description;
     int enable_line;
+    int anchor_px;
+    int anchor_py;
     int x = -1;
     int y = -1;
 
@@ -1734,6 +1736,28 @@ static void test_right_click_gl_command_description_popup(void) {
     glr_ctrl_mouse(4, GLUT_DOWN, x, y);
     ASSERT_INT("subsequent editor wheel event dismisses description",
                ui_state_command_description().visible, 0);
+
+    /* The capture entry point (GLR_OPEN_COMMAND_HELP) takes the same routing,
+     * then slides the opened card along x. The click still has to land on the
+     * row being explained, so the offset is the only way a scripted capture
+     * can move the card off whatever it would cover. */
+    ASSERT_INT("capture hook opens the card on a GL row",
+               glr_ctrl_open_command_description(0, 0), 1);
+    anchor_px = ui_state_command_description().anchor_px;
+    anchor_py = ui_state_command_description().anchor_py;
+    ASSERT_INT("capture hook re-opens with a right offset",
+               glr_ctrl_open_command_description(0, 90), 1);
+    ASSERT_INT("offset slides the anchor right",
+               ui_state_command_description().anchor_px, anchor_px + 90);
+    ASSERT_INT("offset leaves the row's y alone",
+               ui_state_command_description().anchor_py, anchor_py);
+    ASSERT_INT("offset keeps the card on its source row",
+               ui_state_command_description().source_line_idx, 0);
+    ASSERT_INT("a negative offset slides it back left",
+               glr_ctrl_open_command_description(0, -40), 1);
+    ASSERT_INT("left offset applies to the click anchor, not the last card",
+               ui_state_command_description().anchor_px, anchor_px - 40);
+    ui_state_command_description_close();
 }
 
 static void test_right_click_empty_line_toggles_gl_state_report(void) {

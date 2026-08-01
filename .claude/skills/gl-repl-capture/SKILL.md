@@ -40,7 +40,7 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 | `GLR_OPEN_COLOR_PICKER=<line>` | open the floating picker on frame 1 |
 | `GLR_OPEN_GL_STATE=<line>` | open the GL-state popup on frame 1 |
 | `GLR_OPEN_ASSIGN_PLOT=<line>[,<line>…]` | open the value plot; extra lines join as series (max 4) |
-| `GLR_OPEN_COMMAND_HELP=<line>` | right-click a GL row for its help card — pose it after the plot, which closes it |
+| `GLR_OPEN_COMMAND_HELP=<line>[,<dx>]` | right-click a GL row for its help card; `dx` slides it right — pose it after the plot, which closes it |
 | `GLR_ASSIGN_PLOT_RATE=once/1hz/frame` | plot capture rate — `frame` is what makes a plotted shot deterministic |
 | `GLR_ASSIGN_PLOT_LOG=1` / `_EXPANDED=1` | the plot's `log` and `2x` chips |
 | `GLR_ACCUM_PASSES=1/2/4/8/12/16` | accumulation passes |

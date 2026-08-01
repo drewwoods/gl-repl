@@ -3962,7 +3962,7 @@ int glr_ctrl_open_assign_plot(int line) {
     return assign_plot_is_open() && assign_plot_source_line() == line;
 }
 
-int glr_ctrl_open_command_description(int line) {
+int glr_ctrl_open_command_description(int line, int anchor_dx) {
     UiRenderSnapshot snap;
     int x;
     int y;
@@ -3984,8 +3984,20 @@ int glr_ctrl_open_command_description(int line) {
     glr_ctrl_passive_motion(x, y);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
-    return ui_state_command_description().visible &&
-           ui_state_command_description().source_line_idx == line;
+    if (!ui_state_command_description().visible ||
+        ui_state_command_description().source_line_idx != line)
+        return 0;
+    /* Re-anchor rather than clicking somewhere else: the click has to land on
+     * the row to pick the right card, but where the card then sits is a
+     * curation choice for a capture — the row fixes its y, and this slides it
+     * along x, away from whatever it would otherwise cover. The renderer
+     * clamps into the window, so an offset past the edge simply pins there. */
+    if (anchor_dx) {
+        UiCommandDescriptionState st = ui_state_command_description();
+        ui_state_command_description_open(line, st.anchor_px + anchor_dx,
+                                          st.anchor_py);
+    }
+    return 1;
 }
 
 int glr_ctrl_add_assign_plot_series(int line) {
