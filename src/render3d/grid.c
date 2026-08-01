@@ -382,10 +382,16 @@ static void grid_reveal_line(const GridDrawContext *ctx, Render3dRgba c,
  * only where something bright sits behind the grid. It also never applies
  * alpha_scale, whose whole job is the opposite case.
  *
- * Restricted to major lines + origin axes: casing Classic's five minor
- * subdivisions per cell too would double the vertex count and read as mud.
+ * Every line gets one: majors, minors and the origin axes. Minors keep the
+ * effect honest — a cased major crossing bare minors reads as two different
+ * grids — but they are the dense ones (five subdivisions per cell, and the
+ * whole graticule again at FAR extent), so they take a narrower casing.
+ * Nothing else holds them back: the strength already self-scales with the
+ * core's own alpha (see grid_casing_color), so a minor at a quarter of a
+ * major's opacity gets a quarter of the shadow without a second constant.
  */
-#define GRID_CASING_WIDTH_ADD   2.0f  /* px added to the cased line's width  */
+#define GRID_CASING_WIDTH_ADD   2.0f  /* px added to a cased major / axis    */
+#define GRID_CASING_MINOR_W_ADD 1.0f  /* ...and to a cased minor line        */
 #define GRID_CASING_ALPHA       0.55f /* casing alpha at the top of the ramp */
 #define GRID_CASING_RAMP_START  1.5f  /* grid_brightness where it fades in   */
 #define GRID_CASING_RAMP_FULL   3.0f  /* ...and reaches GRID_CASING_ALPHA    */
@@ -587,38 +593,55 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx,
     glDepthMask(GL_FALSE);
 }
 
+/* One casing pass over the lines of a single rank (want_major 0/1), at one
+ * width. Split by rank because a glLineWidth cannot change inside a
+ * GL_LINES block, and majors and minors want different widths.
+ *
+ * Walks the same v sequence as the core loop rather than stepping by
+ * ctx->major, so "which lines are major" is decided by one predicate and a
+ * casing can never land half a tolerance off its line. */
+static void draw_grid_casing_lines(const GridDrawContext *ctx,
+                                   const GridThemeSpec *spec, float casing_a,
+                                   int want_major, float width_add) {
+    GridDrawContext cctx = grid_casing_ctx(ctx);
+    glLineWidth(1.0f + width_add);
+    grid_contrast_blend_begin();
+    glBegin(GL_LINES);
+    for (float v = -ctx->extent; v <= ctx->extent + GRID_LOOP_EPSILON;
+         v += ctx->step) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        if (grid_is_major_line(v, ctx->major, ctx->major_tol) != want_major)
+            continue;
+        GridLineColors colors, casing;
+        spec->line_color(v, want_major, ctx, &colors);
+        casing.x_const = grid_contrast_color(
+            grid_casing_color(ctx, casing_a, colors.x_const.a),
+            colors.x_const);
+        casing.z_const = grid_contrast_color(
+            grid_casing_color(ctx, casing_a, colors.z_const.a),
+            colors.z_const);
+        draw_grid_line_pair(v, &cctx, casing);
+    }
+    glEnd();
+    grid_contrast_blend_end();
+    glLineWidth(1.0f);
+}
+
 static void draw_grid_standard_theme(const GridDrawContext *ctx,
                                      const GridThemeSpec *spec) {
     if (spec->begin_pass)
         spec->begin_pass(ctx);
 
-    /* Contrast casing under the major lines (see GRID_CASING_*). Walks the
-     * same v sequence as the core loop rather than stepping by ctx->major,
-     * so "which lines are major" is decided by one predicate and the casing
-     * can never land half a tolerance off its line. */
+    /* Contrast casing under the whole graticule (see GRID_CASING_*). Both
+     * ranks run before the core loop, so every casing stays under every
+     * line — a minor's shadow can never land on top of a major's core at a
+     * crossing. Minors first, so where the two overlap the major's wider,
+     * stronger shadow is what survives. */
     float casing_a = grid_casing_alpha(ctx);
     if (casing_a > 0.0f) {
-        GridDrawContext cctx = grid_casing_ctx(ctx);
-        glLineWidth(1.0f + GRID_CASING_WIDTH_ADD);
-        grid_contrast_blend_begin();
-        glBegin(GL_LINES);
-        for (float v = -ctx->extent; v <= ctx->extent + GRID_LOOP_EPSILON;
-             v += ctx->step) {
-            if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-            if (!grid_is_major_line(v, ctx->major, ctx->major_tol)) continue;
-            GridLineColors colors, casing;
-            spec->line_color(v, 1, ctx, &colors);
-            casing.x_const = grid_contrast_color(
-                grid_casing_color(ctx, casing_a, colors.x_const.a),
-                colors.x_const);
-            casing.z_const = grid_contrast_color(
-                grid_casing_color(ctx, casing_a, colors.z_const.a),
-                colors.z_const);
-            draw_grid_line_pair(v, &cctx, casing);
-        }
-        glEnd();
-        grid_contrast_blend_end();
-        glLineWidth(1.0f);
+        draw_grid_casing_lines(ctx, spec, casing_a, 0,
+                               GRID_CASING_MINOR_W_ADD);
+        draw_grid_casing_lines(ctx, spec, casing_a, 1, GRID_CASING_WIDTH_ADD);
     }
 
     glBegin(GL_LINES);
