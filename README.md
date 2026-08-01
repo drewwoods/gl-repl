@@ -91,6 +91,15 @@ make gl-repl
 printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 ```
 
+It runs in a browser too. With `emcc` on your `PATH`:
+
+```bash
+make web                   # Emscripten build — gl4es → WebGL2
+make web-serve             # serve it at http://localhost:8000/
+```
+
+<sub>Details and the emsdk setup: [packaging/web/README.md](packaging/web/README.md).</sub>
+
 Press **F1** in-app for the full command and key reference. There are
 guided tutorials under the **Tutorials** menu — *First Triangle* takes
 about a minute.
@@ -100,6 +109,7 @@ about a minute.
 Type these. Watch each line land as you commit it.
 
 ```c
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -110,6 +120,10 @@ glutSolidTorus(0.3, 0.9, 24, 48);
 
 Now press `Ctrl+T`. The torus spins. That's the whole loop — the rotation
 rate is just the scalar in front of `t`, and every line stays editable.
+
+`glClear` is load-bearing and yours to keep: nothing wipes the frame on your
+program's behalf, exactly like the C this exports to. Delete the line and the
+torus smears across its own trail — which is sometimes what you want.
 
 <br>
 
