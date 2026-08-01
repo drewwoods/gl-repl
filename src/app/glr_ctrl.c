@@ -1990,6 +1990,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
+    snap->math_collision_mask = repl_export_math_collision_mask();
     flat_program         = repl_state_flat_program_view();
     predef = repl_eval_predef_view();
     glr_ctrl_fill_ui_variable_panel_vars(snap, predef);

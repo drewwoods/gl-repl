@@ -204,6 +204,14 @@ extern const char  *g_header_post[];
 extern const char  *g_footer_pre_init[];
 extern const char  *g_footer_post_init[];
 
+/* <math.h> exposes a few short POSIX function names that are also natural
+ * scene-variable names. The header template contains paired wrappers for
+ * those names; consumers use this mask + predicate to show only the pairs
+ * required by the current predefined-variable table. */
+unsigned repl_export_math_collision_mask(void);
+int      repl_export_header_pre_line_visible(int line_idx,
+                                             unsigned collision_mask);
+
 /* Stringify a macro value (compose-time only). Used to inject
  * REPL_SCRATCH_ARRAY_LEN into the literal scratch-decl line shown in
  * the live editor + exported file, so changing the array length

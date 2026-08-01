@@ -30,8 +30,11 @@ static int startup_example_index(void) {
 static void scroll_to_display_function(void) {
     repl_state_refresh_workspace_header_lines();
     ReplImportExportView meta = repl_state_import_export();
+    unsigned collision_mask = repl_export_math_collision_mask();
     int target = meta.workspace_header_line_count;
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
+        if (!repl_export_header_pre_line_visible(line_idx, collision_mask))
+            continue;
         if (strcmp(g_header_pre[line_idx], REPL_EXPORT_DISPLAY_OPEN_LINE) == 0)
             break;
         target++;

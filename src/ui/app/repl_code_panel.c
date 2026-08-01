@@ -220,8 +220,12 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
         rows += repl_code_panel_row_count(snap,
                                           import_export.workspace_header_lines[i],
                                           text_x, panel_w);
-    for (int i = 0; g_header_pre[i]; i++)
-        rows += repl_code_panel_row_count(snap, g_header_pre[i], text_x, panel_w);
+    for (int i = 0; g_header_pre[i]; i++) {
+        if (repl_export_header_pre_line_visible(
+                i, snap->math_collision_mask))
+            rows += repl_code_panel_row_count(
+                snap, g_header_pre[i], text_x, panel_w);
+    }
     for (int i = 0; g_display_header[i]; i++)
         rows += repl_code_panel_row_count(snap, g_display_header[i], text_x, panel_w);
     for (int i = 0; i < snap->lights_pre_camera_count; i++)
@@ -1958,6 +1962,18 @@ static void repl_code_panel_add_static_null_terminated_lines(
         repl_code_panel_add_static_row(builder, lines[i]);
 }
 
+static void repl_code_panel_add_header_pre_lines(
+    ReplCodePanelBuilder *builder) {
+    if (!builder || !builder->snap)
+        return;
+
+    for (int i = 0; g_header_pre[i]; i++) {
+        if (repl_export_header_pre_line_visible(
+                i, builder->snap->math_collision_mask))
+            repl_code_panel_add_static_row(builder, g_header_pre[i]);
+    }
+}
+
 static void repl_code_panel_add_static_buffer_lines(
     ReplCodePanelBuilder *builder,
     int count,
@@ -1985,8 +2001,7 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         snap->import_export.workspace_header_line_count,
         sizeof(snap->import_export.workspace_header_lines[0]),
         snap->import_export.workspace_header_lines);
-    repl_code_panel_add_static_null_terminated_lines(
-        builder, g_header_pre);
+    repl_code_panel_add_header_pre_lines(builder);
     repl_code_panel_add_static_null_terminated_lines(
         builder, g_display_header);
 

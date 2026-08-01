@@ -21,10 +21,9 @@
  * was the original motivator; jn/yn/gamma/lgamma/tgamma are added
  * defensively after the audit in #7 of the bug investigation.
  *
- * If a math.h identifier isn't actually declared on the host platform
- * (e.g. `pow10` is GNU-only), the `#define X _X` is harmless — the
- * preprocessor rewrite has nothing to act on, and the `#undef`
- * leaves the name back where it started. */
+ * The template contains every supported pair, but consumers filter it through
+ * repl_export_header_pre_line_visible(), so ordinary scenes pay no preamble
+ * cost and a scene declaring (say) y0 emits only the y0 pair. */
 const char *g_header_pre[] = {
     "#define j0 _j0",
     "#define j1 _j1",
@@ -68,6 +67,62 @@ const char *g_header_pre[] = {
     "",
     NULL
 };
+
+typedef struct {
+    const char *name;
+    const char *define_line;
+    const char *undef_line;
+    unsigned    bit;
+} MathCollisionWrapper;
+
+static const MathCollisionWrapper g_math_collision_wrappers[] = {
+    { "j0",     "#define j0 _j0",         "#undef j0",     1u << 0 },
+    { "j1",     "#define j1 _j1",         "#undef j1",     1u << 1 },
+    { "jn",     "#define jn _jn",         "#undef jn",     1u << 2 },
+    { "y0",     "#define y0 _y0",         "#undef y0",     1u << 3 },
+    { "y1",     "#define y1 _y1",         "#undef y1",     1u << 4 },
+    { "yn",     "#define yn _yn",         "#undef yn",     1u << 5 },
+    { "gamma",  "#define gamma _gamma",   "#undef gamma",  1u << 6 },
+    { "lgamma", "#define lgamma _lgamma", "#undef lgamma", 1u << 7 },
+    { "tgamma", "#define tgamma _tgamma", "#undef tgamma", 1u << 8 }
+};
+
+unsigned repl_export_math_collision_mask(void) {
+    unsigned mask = 0;
+
+    for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
+        const char *name = g_predef_vars[var_idx].name;
+        for (size_t wrapper_idx = 0;
+             wrapper_idx < sizeof(g_math_collision_wrappers) /
+                           sizeof(g_math_collision_wrappers[0]);
+             wrapper_idx++) {
+            if (strcmp(name, g_math_collision_wrappers[wrapper_idx].name) == 0) {
+                mask |= g_math_collision_wrappers[wrapper_idx].bit;
+                break;
+            }
+        }
+    }
+    return mask;
+}
+
+int repl_export_header_pre_line_visible(int line_idx,
+                                        unsigned collision_mask) {
+    const char *line;
+
+    if (line_idx < 0 || !(line = g_header_pre[line_idx]))
+        return 0;
+    for (size_t wrapper_idx = 0;
+         wrapper_idx < sizeof(g_math_collision_wrappers) /
+                       sizeof(g_math_collision_wrappers[0]);
+         wrapper_idx++) {
+        const MathCollisionWrapper *wrapper =
+            &g_math_collision_wrappers[wrapper_idx];
+        if (strcmp(line, wrapper->define_line) == 0 ||
+            strcmp(line, wrapper->undef_line) == 0)
+            return (collision_mask & wrapper->bit) != 0;
+    }
+    return 1;
+}
 
 /* display() opening: shared by the code panel header and by
  * emit_export_display_begin. Keeping these as literal strings in one
@@ -701,7 +756,10 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
      * straddle render3d_draw_scene() and would diverge. Resolve once
      * into UiRenderSnapshot instead. See docs/ARCHITECTURE.md, "Rule — where
      * a per-frame dynamic value is resolved". */
+    unsigned collision_mask = repl_export_math_collision_mask();
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
+        if (!repl_export_header_pre_line_visible(line_idx, collision_mask))
+            continue;
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
             if (angle_line[0])
                 export_write_c89_line(f, angle_line);

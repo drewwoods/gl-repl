@@ -1494,7 +1494,7 @@ values through these seams:
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
-| [`ReplExportLayout`](../src/repl/export.h#L234) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+| [`ReplExportLayout`](../src/repl/export.h#L242) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
 #### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
 
@@ -1719,7 +1719,7 @@ Per the rule above:
   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) directly — a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
-  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L234)-style export context is the
+  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L242)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L143) is the *nearest-steady* projection: the

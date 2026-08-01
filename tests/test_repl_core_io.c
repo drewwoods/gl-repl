@@ -1605,19 +1605,12 @@ int main(void) {
                     count_substr(buf, "glPushAttrib(GL_LIGHTING_BIT)") == 0);
     }
 
-    /* (E) <math.h> namespace-collision wrappers.
+    /* (E) Conditional <math.h> namespace-collision wrappers.
      *
-     * A user predef whose name matches a <math.h> identifier would
-     * collide with the function symbol at C compile time. The export
-     * header brackets `#include <math.h>` with `#define X _X` / `#undef
-     * X` pairs that rename the math.h symbols out of the way while
-     * leaving the user's bare name intact for the `static float X = …;`
-     * declarations that follow.
-     *
-     * The y0/y1 pair was the original motivator (commit landed long
-     * before this audit). After the #7 audit jn / yn / gamma / lgamma
-     * / tgamma got the same treatment defensively — all single-or-
-     * two-letter math.h symbols that are plausible variable names. */
+     * A user predef whose name matches a <math.h> identifier would collide
+     * with the function symbol at C compile time. Emit a wrapper pair only
+     * for names the current scene actually declares: ordinary exports stay
+     * clean while collision cases remain portable. */
     {
         const char *math_collision_path = "/tmp/repl_core_math_collisions.c";
         glr_ctrl_reset_all(); declare_test_vars();
@@ -1627,36 +1620,73 @@ int main(void) {
         char buf[16384];
         read_text_file(math_collision_path, buf, sizeof(buf));
 
-        ASSERT_TRUE("math wrapper: y0 defined before include",
+        ASSERT_TRUE("math wrapper: absent without collisions",
+                    strstr(buf, "#define y0 _y0") == NULL &&
+                    strstr(buf, "#undef y0") == NULL &&
+                    strstr(buf, "#define jn _jn") == NULL &&
+                    strstr(buf, "#undef jn") == NULL &&
+                    strstr(buf, "#define gamma _gamma") == NULL &&
+                    strstr(buf, "#undef gamma") == NULL);
+
+        glr_ctrl_reset_all();
+        {
+            char err[128];
+            repl_eval_declare_predef_var("y0", err, sizeof(err));
+        }
+        repl_export_save_output(math_collision_path,
+                                source_document_view(), NULL);
+        read_text_file(math_collision_path, buf, sizeof(buf));
+        ASSERT_TRUE("math wrapper: lone y0 defined before include",
                     appears_before(buf, "#define y0 _y0",
                                    "#include <math.h>"));
-        ASSERT_TRUE("math wrapper: y0 undefined after include",
+        ASSERT_TRUE("math wrapper: lone y0 undefined after include",
                     appears_before(buf, "#include <math.h>", "#undef y0"));
+        ASSERT_TRUE("math wrapper: unrelated pairs absent for lone y0",
+                    strstr(buf, "#define j0 _j0") == NULL &&
+                    strstr(buf, "#undef j0") == NULL &&
+                    strstr(buf, "#define gamma _gamma") == NULL &&
+                    strstr(buf, "#undef gamma") == NULL);
 
-        ASSERT_TRUE("math wrapper: y1 protected",
-                    strstr(buf, "#define y1 _y1") != NULL &&
-                    strstr(buf, "#undef y1") != NULL);
-        ASSERT_TRUE("math wrapper: yn protected",
-                    strstr(buf, "#define yn _yn") != NULL &&
-                    strstr(buf, "#undef yn") != NULL);
-        ASSERT_TRUE("math wrapper: j0 protected",
-                    strstr(buf, "#define j0 _j0") != NULL &&
-                    strstr(buf, "#undef j0") != NULL);
-        ASSERT_TRUE("math wrapper: j1 protected",
-                    strstr(buf, "#define j1 _j1") != NULL &&
-                    strstr(buf, "#undef j1") != NULL);
-        ASSERT_TRUE("math wrapper: jn protected",
+        glr_ctrl_reset_all();
+        {
+            char err[128];
+            repl_eval_declare_predef_var("j0", err, sizeof(err));
+            repl_eval_declare_predef_var("j1", err, sizeof(err));
+            repl_eval_declare_predef_var("jn", err, sizeof(err));
+            repl_eval_declare_predef_var("y1", err, sizeof(err));
+            repl_eval_declare_predef_var("yn", err, sizeof(err));
+            repl_eval_declare_predef_var("gamma", err, sizeof(err));
+            repl_eval_declare_predef_var("lgamma", err, sizeof(err));
+            repl_eval_declare_predef_var("tgamma", err, sizeof(err));
+        }
+        repl_export_save_output(math_collision_path,
+                                source_document_view(), NULL);
+        read_text_file(math_collision_path, buf, sizeof(buf));
+        ASSERT_TRUE("math wrapper: multiple jn protected",
                     strstr(buf, "#define jn _jn") != NULL &&
                     strstr(buf, "#undef jn") != NULL);
-        ASSERT_TRUE("math wrapper: gamma protected",
+        ASSERT_TRUE("math wrapper: multiple j0/j1 protected",
+                    strstr(buf, "#define j0 _j0") != NULL &&
+                    strstr(buf, "#undef j0") != NULL &&
+                    strstr(buf, "#define j1 _j1") != NULL &&
+                    strstr(buf, "#undef j1") != NULL);
+        ASSERT_TRUE("math wrapper: multiple y1 protected",
+                    strstr(buf, "#define y1 _y1") != NULL &&
+                    strstr(buf, "#undef y1") != NULL);
+        ASSERT_TRUE("math wrapper: multiple yn protected",
+                    strstr(buf, "#define yn _yn") != NULL &&
+                    strstr(buf, "#undef yn") != NULL);
+        ASSERT_TRUE("math wrapper: multiple gamma protected",
                     strstr(buf, "#define gamma _gamma") != NULL &&
                     strstr(buf, "#undef gamma") != NULL);
-        ASSERT_TRUE("math wrapper: lgamma protected",
+        ASSERT_TRUE("math wrapper: multiple lgamma/tgamma protected",
                     strstr(buf, "#define lgamma _lgamma") != NULL &&
-                    strstr(buf, "#undef lgamma") != NULL);
-        ASSERT_TRUE("math wrapper: tgamma protected",
+                    strstr(buf, "#undef lgamma") != NULL &&
                     strstr(buf, "#define tgamma _tgamma") != NULL &&
                     strstr(buf, "#undef tgamma") != NULL);
+        ASSERT_TRUE("math wrapper: multiple leaves unrelated y0 absent",
+                    strstr(buf, "#define y0 _y0") == NULL &&
+                    strstr(buf, "#undef y0") == NULL);
 
         remove(math_collision_path);
     }

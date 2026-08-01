@@ -496,8 +496,13 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 
     fprintf(dst, "--- header_pre ---\n");
     /* Dump pre-header lines (includes, setup). */
-    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
-        fprintf(dst, "%s\n", g_header_pre[line_idx]);
+    {
+        unsigned collision_mask = repl_export_math_collision_mask();
+        for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
+            if (repl_export_header_pre_line_visible(line_idx, collision_mask))
+                fprintf(dst, "%s\n", g_header_pre[line_idx]);
+        }
+    }
 
     fprintf(dst, "--- display_header ---\n");
     /* Dump display() opening lines (shared with export). */

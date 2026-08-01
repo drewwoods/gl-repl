@@ -124,6 +124,9 @@ typedef struct UiRenderSnapshot {
     /* Pointer-shaped read-only views (storage owned by src/repl/state.c) */
     EditorInputView         editor_input;
     ReplImportExportView        import_export;
+    /* Frozen once per frame so conditional <math.h> wrapper rows agree
+     * between the code panel's layout and render passes. */
+    unsigned                    math_collision_mask;
 
     /* UI-facing variable rows. Names are copied into the snapshot; values
      * point at the live source values for this frame. */

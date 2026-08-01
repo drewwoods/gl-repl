@@ -247,8 +247,14 @@ static int code_panel_header_row_count(void) {
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i],
                                                    text_x, panel_w);
-    for (int i = 0; g_header_pre[i]; i++)
-        rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
+    {
+        unsigned collision_mask = repl_export_math_collision_mask();
+        for (int i = 0; g_header_pre[i]; i++) {
+            if (repl_export_header_pre_line_visible(i, collision_mask))
+                rows += test_code_panel_row_count_for_text(
+                    g_header_pre[i], text_x, panel_w);
+        }
+    }
     for (int i = 0; g_display_header[i]; i++)
         rows += test_code_panel_row_count_for_text(g_display_header[i], text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
