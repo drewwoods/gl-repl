@@ -45,7 +45,13 @@ static void assign_plot_series_clear_samples(AssignPlotSeries *s) {
 /* Drop every series' history. The plot-wide capture bookkeeping goes with it:
  * "captured" and the rate clock describe the window the buffers cover. */
 static void assign_plot_clear_samples(void) {
-    for (int i = 0; i < g_series_count; i++)
+    /* The `i < MAX_ASSIGN_PLOT_SERIES` half is redundant — the only append
+     * guards on it and the prune loop can only shrink the count — but the
+     * invariant is whole-file, and GCC 15 can't carry it through the memset
+     * inlined from assign_plot_series_clear_samples: without a bound it can
+     * see here, it reports the clear as running one series past g_series[]
+     * (-Warray-bounds). Cheap to state, so state it. */
+    for (int i = 0; i < g_series_count && i < MAX_ASSIGN_PLOT_SERIES; i++)
         assign_plot_series_clear_samples(&g_series[i]);
     g_captured = 0;
     g_last_capture_us = 0.0;
