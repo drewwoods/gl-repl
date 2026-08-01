@@ -63,6 +63,7 @@ static GLfloat g_fb[FB_CAP];
 static float g_vx[VERT_CAP];
 static float g_vy[VERT_CAP];
 static int g_bitmap_count;
+static float g_bitmap_min_y, g_bitmap_max_y;
 
 /* Extract every vertex (x, y) from a GL_2D feedback buffer of `n` values into
  * g_vx/g_vy. Returns the vertex count (clamped to VERT_CAP). Token layout is
@@ -70,6 +71,8 @@ static int g_bitmap_count;
 static int parse_gl2d_vertices(const GLfloat *fb, int n) {
     int i = 0, count = 0;
     g_bitmap_count = 0;
+    g_bitmap_min_y = 1.0e30f;
+    g_bitmap_max_y = -1.0e30f;
     while (i < n) {
         int tok = (int)fb[i++];
         int nverts;
@@ -93,6 +96,10 @@ static int parse_gl2d_vertices(const GLfloat *fb, int n) {
         }
         for (int k = 0; k < nverts; k++) {
             if (i + 1 >= n) return count;
+            if (tok == GL_BITMAP_TOKEN) {
+                if (fb[i + 1] < g_bitmap_min_y) g_bitmap_min_y = fb[i + 1];
+                if (fb[i + 1] > g_bitmap_max_y) g_bitmap_max_y = fb[i + 1];
+            }
             if (count < VERT_CAP) {
                 g_vx[count] = fb[i];
                 g_vy[count] = fb[i + 1];
@@ -302,6 +309,23 @@ static void test_long_left_anchored_caption_renders(void) {
                 g_bitmap_count > 0);
 }
 
+/* Caption `\n` is script syntax, not a glyph for GLUT to interpret. It must be
+ * decoded by the pointer parser and rendered as two separately positioned
+ * bitmap lines. "Top" + "Bottom" emits nine glyph tokens at two baselines. */
+static void test_caption_newline_renders_two_lines(void) {
+    const char *lines[] = {
+        "echo scene:0.25,0.76 24 3.6 Top\\nBottom"
+    };
+    start_tour(lines, 1);
+    glr_pointer_script_frame();
+
+    ASSERT_TRUE("multiline caption overlay captured", capture_overlay() > 0);
+    ASSERT_INT("caption newline is not rendered as two glyphs",
+               g_bitmap_count, 9);
+    ASSERT_TRUE("caption glyphs occupy two baselines",
+                g_bitmap_max_y - g_bitmap_min_y > 10.0f);
+}
+
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
  * top-left inset and its captured width matches tour_hud_panel_width(scene_w)
  * exactly — tying the real GL output to the pure width function whose clamp is
@@ -374,6 +398,7 @@ int main(int argc, char **argv) {
     test_backstep_restores_live_caption();
     test_backstep_expired_caption_not_shown();
     test_long_left_anchored_caption_renders();
+    test_caption_newline_renders_two_lines();
     test_hud_render_matches_width_helper();
     return test_harness_report(&g_harness, "tour_overlay_feedback");
 }

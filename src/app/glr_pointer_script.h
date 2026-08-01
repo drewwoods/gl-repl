@@ -84,7 +84,8 @@
  *                             # delay the next event; use `pause` when a
  *                             # caption needs an exclusive reading beat.
  *                             # The px size picks the nearest fixed GLUT
- *                             # bitmap font (10/12/18/24)
+ *                             # bitmap font (10/12/18/24); `\n` starts a
+ *                             # new centered caption line
  *
  * The same actions can be completion-driven by omitting timestamps:
  *

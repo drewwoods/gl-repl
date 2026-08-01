@@ -200,7 +200,7 @@ an unintended interaction.
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
 | Modified key | `chord <mods> <key>` | Sends one key press with a declared modifier mask, reaching shortcuts `key`/`skey` cannot (Shift is not carried in a plain key byte). See the rules below. |
 | Spotlight | `ring <point> <seconds>` | Shows a pulsing highlight ring for a positive duration. |
-| Caption | `echo <point> <height-px> <seconds> <text>` | Shows text on a translucent dark plate for the positive on-screen duration, without delaying the next event. A later caption replaces it. The requested height chooses the nearest fixed bitmap font. |
+| Caption | `echo <point> <height-px> <seconds> <text>` | Shows text on a translucent dark plate for the positive on-screen duration, without delaying the next event. A later caption replaces it. The requested height chooses the nearest fixed bitmap font; `\n` starts a new centered line. |
 | Wait | `pause <seconds>` | Delays later events for a positive duration. |
 
 To show a caption without concurrent actions, follow it with a matching (or

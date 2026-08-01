@@ -252,6 +252,25 @@ static void ps_unescape(const char *src, char *dst, size_t cap) {
     dst[o] = '\0';
 }
 
+/* Caption payloads are display text, not keyboard input: `\n` is a visual
+ * line break rather than the carriage return emitted by the key verb. Keep
+ * unknown escapes verbatim so captions can still show paths and notation. */
+static void ps_unescape_caption(const char *src, char *dst, size_t cap) {
+    size_t o = 0;
+    for (; *src && o + 1 < cap; src++) {
+        if (*src == '\\' && src[1] == 'n') {
+            dst[o++] = '\n';
+            src++;
+        } else if (*src == '\\' && src[1] == '\\') {
+            dst[o++] = '\\';
+            src++;
+        } else {
+            dst[o++] = *src;
+        }
+    }
+    dst[o] = '\0';
+}
+
 /* Special-key names for the `skey` verb -> GLUT_KEY_* codes. */
 static int ps_special_from_name(const char *name) {
     static const struct { const char *name; int key; } k_map[] = {
@@ -509,8 +528,10 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         size_t n = strlen(txt);
         while (n > 0 && (txt[n - 1] == '\n' || txt[n - 1] == '\r')) n--;
         if (n == 0 || n >= sizeof(ev->text)) return -1;
-        memcpy(ev->text, txt, n);
-        ev->text[n] = '\0';
+        char raw[PS_MAX_KEY_TEXT];
+        memcpy(raw, txt, n);
+        raw[n] = '\0';
+        ps_unescape_caption(raw, ev->text, sizeof(ev->text));
         return 1;
     }
     if (strcmp(verb, "pause") == 0) {
@@ -1710,21 +1731,22 @@ static PsEchoFont ps_echo_font(float cap_px) {
     return k_fonts[best].f;
 }
 
-/* Draw a NUL-terminated string with its baseline left edge at (x, y) in
- * window pixels (2D ortho is already active). */
-static void ps_bitmap_text(float x, float y, void *font, const char *s) {
+/* Draw one byte span with its baseline left edge at (x, y) in window pixels
+ * (2D ortho is already active). */
+static void ps_bitmap_text(float x, float y, void *font, const char *s,
+                           size_t len) {
     glRasterPos2f(x, y);
-    for (; *s; s++)
-        glutBitmapCharacter(font, (unsigned char)*s);
+    for (size_t i = 0; i < len; i++)
+        glutBitmapCharacter(font, (unsigned char)s[i]);
 }
 
-/* Total advance width of a string in the given bitmap font, in pixels.
+/* Total advance width of a byte span in the given bitmap font, in pixels.
  * Summed per glyph via glutBitmapWidth (core GLUT; the no-op stubs supply
  * it too) so it stays portable across the real and stubbed builds. */
-static float ps_bitmap_width(void *font, const char *s) {
+static float ps_bitmap_width(void *font, const char *s, size_t len) {
     float w = 0.0f;
-    for (; *s; s++)
-        w += (float)glutBitmapWidth(font, (unsigned char)*s);
+    for (size_t i = 0; i < len; i++)
+        w += (float)glutBitmapWidth(font, (unsigned char)s[i]);
     return w;
 }
 
@@ -1849,7 +1871,19 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                                                     g_echo_dur, clock_frozen);
         PsEchoFont font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
-        float w = ps_bitmap_width(font.font, g_echo_text);
+        float w = 0.0f;
+        int line_count = 1;
+        const char *line = g_echo_text;
+        for (const char *p = g_echo_text;; p++) {
+            if (*p == '\n' || *p == '\0') {
+                float line_w = ps_bitmap_width(font.font, line,
+                                               (size_t)(p - line));
+                if (line_w > w) w = line_w;
+                if (*p == '\0') break;
+                line_count++;
+                line = p + 1;
+            }
+        }
         /* Center the caption horizontally on its anchor point rather than
          * left-aligning at it, so the label sits symmetrically over the
          * target it annotates. Keep its raster origin inside the viewport:
@@ -1862,16 +1896,40 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         if (cx < pad_x) cx = pad_x;
         if (max_cx >= pad_x && cx > max_cx) cx = max_cx;
 
+        /* Center a multiline block vertically around the old single-line
+         * baseline, then keep every line's raster origin in the viewport too. */
+        float line_step = font.ascent + font.descent + 4.0f;
+        float first_cy = cy + (float)(line_count - 1) * line_step * 0.5f;
+        float plate_bottom = first_cy - (float)(line_count - 1) * line_step -
+                             font.descent - pad_y;
+        float plate_top = first_cy + font.ascent + pad_y;
+        if (plate_bottom < 0.0f) first_cy -= plate_bottom;
+        plate_top = first_cy + font.ascent + pad_y;
+        if (plate_top > (float)win_h) first_cy -= plate_top - (float)win_h;
+        plate_bottom = first_cy - (float)(line_count - 1) * line_step -
+                       font.descent - pad_y;
+        plate_top = first_cy + font.ascent + pad_y;
+
         glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.72f);
         glBegin(GL_QUADS);
-        glVertex2f(cx - pad_x,     cy - font.descent - pad_y);
-        glVertex2f(cx + w + pad_x, cy - font.descent - pad_y);
-        glVertex2f(cx + w + pad_x, cy + font.ascent + pad_y);
-        glVertex2f(cx - pad_x,     cy + font.ascent + pad_y);
+        glVertex2f(cx - pad_x,     plate_bottom);
+        glVertex2f(cx + w + pad_x, plate_bottom);
+        glVertex2f(cx + w + pad_x, plate_top);
+        glVertex2f(cx - pad_x,     plate_top);
         glEnd();
 
         glColor4f(0.98f, 0.98f, 0.99f, alpha);
-        ps_bitmap_text(cx, cy, font.font, g_echo_text);
+        line = g_echo_text;
+        for (int row = 0; row < line_count; row++) {
+            const char *end = strchr(line, '\n');
+            size_t len = end ? (size_t)(end - line) : strlen(line);
+            float line_w = ps_bitmap_width(font.font, line, len);
+            ps_bitmap_text(cx + (w - line_w) * 0.5f,
+                           first_cy - (float)row * line_step,
+                           font.font, line, len);
+            if (!end) break;
+            line = end + 1;
+        }
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);
