@@ -33,7 +33,7 @@ starting one of those tasks; what stays below is the always-on trip-wire set.
 
 GNU sed is available as `gsed` on macOS (`brew install gnu-sed`).
 
-## Linux / real-gcc verification (gracemont)
+## Linux / real-gcc verification (gracemont, jasper-lake)
 
 Local dev is macOS (`gcc` = Apple clang). Portability-sensitive changes
 (build, sanitizer flags, C99) should be cross-checked under real GCC:
@@ -44,10 +44,23 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
   make check-c99 && make test-stubs'
 ```
 
-Host: Ubuntu 24.04, gcc 13.x. Repo path there has **no `src/` segment**
-(`~/code/openGL/samples/gen-ai/gl-repl`). `test-stubs` needs no GL dev libs
-(headless-safe, picks up ASan+UBSan); `make test` only if GL/GLUT dev
-packages are installed; `make debug-msan` for MemorySanitizer.
+Two hosts, **same repo path** — no `src/` segment
+(`~/code/openGL/samples/gen-ai/gl-repl`) — so the command above works on
+either by swapping the host name:
+
+| Host | OS | gcc |
+|------|----|-----|
+| `gracemont` (default) | Ubuntu 24.04 | 13.x |
+| `jasper-lake` | Clear Linux | 15.1.1 |
+
+**Default to `gracemont`.** Use `jasper-lake` only when gracemont is
+unreachable, or when explicitly asked — it is the slower machine, and its
+much newer gcc is the reason to reach for it (newer diagnostics, forward
+portability), not a general substitute.
+
+`test-stubs` needs no GL dev libs (headless-safe, picks up ASan+UBSan);
+`make test` only if GL/GLUT dev packages are installed; `make debug-msan`
+for MemorySanitizer.
 
 ## Build
 
