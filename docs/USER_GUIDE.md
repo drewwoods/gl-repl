@@ -50,7 +50,7 @@ rendering, recording, and every environment variable, see
 - [Exporting & Importing](#exporting--importing)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
 - [Performance & Scope](#performance--scope)
-- [Design Goals & Deliberate Limitations](#design-goals--deliberate-limitations)
+- [Scope & Current Limitations](#scope--current-limitations)
 - [Profiling & Diagnostics](#profiling--diagnostics)
 - [Music](#music)
 - [Command-Line Options](#command-line-options)
@@ -91,12 +91,13 @@ Top to bottom:
 - **Status bar** — command count, current line, the accumulation indicator
   (`AA 1x` / `Blur 16x` — the shot above is under motion blur, which is why the
   torus smears), and clickable controls for undo/redo, copy/cut,
-  clearing all commands, *focus* ([code focus](#keeping-the-buffer-tidy)),
-  and *F1 help*.
+  resetting the scene to its five display defaults, *focus* ([code
+  focus](#keeping-the-buffer-tidy)), and *F1 help*.
 - **3D viewport** — your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
-- **Variable panel** — bottom-right overlay listing every declared variable
-  with a draggable slider (see [The Variable Panel](#the-variable-panel)).
+- **Variable panel** — bottom-right overlay listing `t` and every program-wide
+  variable with a draggable slider (see [The Variable
+  Panel](#the-variable-panel)). Function locals do not appear there.
 - **Floating panels** — what right-clicking a row opens. Above: the
   [assignment value plot](#plotting-an-assignments-values) tracking both angle
   rows that drive the torus, and the help card for `glutSolidSphere`.
@@ -357,84 +358,43 @@ panel. Click it to open the floating picker:
 ### Plotting an assignment's values
 
 Right-click a `var = expr;` (or `A[i] = expr;`) row to plot what it actually
-computed. This is a debugging tool: the point is a feel for the numbers, not
-sample-accurate capture. It is off until you ask for it, and costs nothing
-while closed.
+computed. The plot is a debugging aid rather than sample-accurate capture, and
+costs nothing while closed.
 
-**The X axis follows the row.** A row inside a `for` loop runs many times per
-frame, so X is the execution number within one frame — the whole sweep of
-values the loop produced, in order. A top-level row runs exactly once per
-frame, which would be a single point; there X becomes successive captures
-instead, giving you the value drifting over time.
+**X follows the row.** Inside a `for` loop it is the execution number within
+one frame; for a top-level row that runs once per frame it is successive
+captures over time.
 
 ![Left: a loop row, X is the execution index within one frame. Right: a top-level row, X is successive captures](images/assign-plot.png)
 
-The caption under the plot always says which one you are looking at, along with
-the executions found this frame (`160/frame` above left) and the total number
-of samples behind the statistics.
-
-**Y is signed by default, and does not force a zero baseline.** A variable
-oscillating between 100 and 101 shows its shape rather than flattening against
-the top of a 0–101 axis. When the range does cross zero, the zero line is drawn
-brighter, because a sign change is usually what you are hunting for.
-
-The `log` chip switches Y to log₁₀ spacing, for values spread over orders of
-magnitude. Strictly positive values get a plain log axis. Anything that is
-entirely negative, crosses zero, or touches zero — every sinusoid does one of
-the latter two — gets a *symmetric* log axis instead: magnitudes below a small
-floor read as zero, and above it the distance from the center is the number of
-decades, carrying the sign.
+The caption names the mode and reports executions per frame. **Y** fits the
+data without forcing a zero baseline; when the range crosses zero, that line
+is brighter. The `log` chip uses ordinary log₁₀ for positive-only data and a
+symmetric log axis when negative values or a zero crossing are present.
 
 ![The same two traces on a linear axis and on the symmetric log axis](images/assign-plot-log.png)
 
-`small` is a hundredth of `big`. Linear Y (left) flattens it onto the zero
-line; symmetric log (right) lifts it to its own decades while both still cross
-a real zero. The floor scales with the largest value on the plot, so a trace
-living at `1e-6` plots like one living at `1` — what you give up is resolution
-near zero, where a value dipping to `1e-11` on its way through a crossing draws
-as zero rather than diving off the bottom. A trace pinned at exactly zero is
-the one thing no log axis can show: there the chip greys out and Y stays
-linear.
+Log spacing separates traces of different magnitudes while keeping their
+signs. Near-zero values collapse onto the center line; an all-zero trace has no
+logarithmic range, so the chip is disabled. **Min**, **max**, **mean**, and
+**sd** use every captured value for the selected series — hover its legend entry,
+or move away to select the first. Visual decimation affects only the curve, not
+these statistics.
 
-Under the plot: **min**, **max**, **mean** and **sd** (sample standard
-deviation). These are fed from every captured value. When a frame produces more
-executions than the plot has columns, the *curve* is decimated into min/max
-bands — the shape and the extremes survive, individual samples do not — but the
-statistics never are.
+Everything is mouse-driven. A setting appears as its current bare value in a
+sunken box; a bracketed word is a one-shot button.
 
-Everything is driven by the mouse, from the panel itself. Two kinds of control,
-and you can tell them apart at a glance: a **setting sits in a sunken box and
-shows the value it is on** — click it to change that value. A **bracketed word
-is a button** — click it and that happens.
-
-| Setting | Shows | Click to |
-|---|---|---|
-| rate | `once` / `1 Hz` / `frame` | Cycle the capture rate. Right-click cycles backward |
-| Y scale | `lin` / `log` | Switch between linear and log₁₀ |
-| zoom | `1x` / `2x` | Double the panel, for a closer look at the curve |
-
-| Button | Action |
+| Control | Action |
 |---|---|
-| `[x]` | Close the plot (right-clicking the plotted row again does the same) |
-| `[reset]` | Drop the collected samples and statistics, keeping the rows and rate |
+| `once` / `1 Hz` / `frame` | Cycle capture rate; right-click cycles backward |
+| `lin` / `log` | Switch Y between linear and logarithmic spacing |
+| `1x` / `2x` | Toggle normal and double-size panels |
+| `[reset]` | Clear samples and statistics, keeping the plotted rows and rate |
+| `[x]` | Close the plot |
 
-**once** freezes after a single capture — useful for pinning down one frame
-while you edit around it. **1 Hz** (the default) is the low-cost live view.
-**frame** captures every frame, for watching a value respond to a drag.
-Changing the rate clears the window, since it redefines what the numbers cover.
-
-A **once** snapshot is always one frame read across every plotted row, so the
-numbers can be compared directly. Two things follow from that: adding a series
-to a frozen plot re-arms it, so the next snapshot covers all the rows together;
-and a frame in which some row has not run — a guard still closed, a `goto`
-still jumping over it — is not taken, because it could not be compared. The
-plot keeps saying *(collecting)* until a frame arrives where every plotted row
-ran, and freezes on that one.
-
-Right-clicking a different assignment retargets the panel to that row alone.
-Editing a plotted row re-titles it and keeps plotting it; deleting it, or
-replacing it with something that is not an assignment, drops it rather than
-silently plotting its neighbour — and when the last one goes, the panel closes.
+**once** freezes one comparable frame, **1 Hz** is the default live view, and
+**frame** captures every frame. With several rows, **once** waits for a frame
+in which they all execute; changing the rows or rate starts a new collection.
 
 **Comparing several rows.** **Shift**+right-click adds an assignment to the open
 plot instead of replacing what is there, up to four at once; Shift+right-click a
@@ -442,21 +402,14 @@ plotted row again to remove it.
 
 ![Three assignments from one loop body overlaid, with the legend naming them](images/assign-plot-series.png)
 
-The title counts the extra rows (`wave +2`), each series gets its own color,
-and the legend names them. The statistics describe **one** series at a time —
-hover a legend entry to read that row's numbers, otherwise you get the first
-one, drawn lit so you always know whose numbers are on screen.
+The legend identifies each color. X comes from the first row, so another row
+must have the same executions per frame or it is refused; a row that skips a
+later capture leaves a gap. Y spans every series — use `log` for widely different
+magnitudes and `2x` for more drawing room.
 
-Both axes are shared, which is what makes the comparison meaningful and also
-what limits it:
-
-- **X** comes from the first row you plotted, so a row that runs a different
-  number of times per frame cannot join — adding it is refused with a message
-  rather than drawn misleadingly. On the capture axis, a row that does not run
-  in some frame leaves a visible gap.
-- **Y** spans every series, so values of very different size flatten each
-  other — that is what the `log` chip above is for. The per-series statistics
-  carry the exact numbers either way, and `2x` gives the curves more room.
+Plain right-click retargets the plot to one row. Editing a plotted row keeps
+tracking it; deleting it removes that series and closes the panel when none
+remain.
 
 ### Inspecting OpenGL state
 
@@ -891,15 +844,20 @@ x = 1.5;                // assign (any expression)
 glVertex3f(x, y, z);    // use anywhere a number is expected
 ```
 
-- Declarations are hoisted to the top of the program automatically, so every
+- Program-wide declarations are hoisted to the top automatically, so every
   reference follows its declaration.
-- Up to 31 user variables (plus the predefined `t`).
-- Variables persist across commits and are saved/loaded with the scene.
-- Initializers are allowed: `float n = 1;`.
+- Up to 31 program-wide user variables; the predefined `t` occupies a separate
+  reserved slot.
+- Program-wide variable values persist across commits and are saved/loaded
+  with the scene.
+- Program-wide initializers are allowed: `float n = 1;`.
 
-That is what `float` means at the top level. Typed *inside* a function body it
-declares something narrower — a value private to one call, costing no slot from
-the 31: see [Function-scoped locals](#function-scoped-locals).
+That is what `float` means at the top level; `static float` is also
+program-wide even when typed inside a function. A plain `float` inside a
+function instead declares a value private to each call. Locals consume none of
+the 31 program-wide slots and use a separate 32-binding frame shared with that
+function's parameters and deepest active loop nesting; see [Function-scoped
+locals](#function-scoped-locals).
 
 ### Scratch arrays
 
@@ -1218,10 +1176,11 @@ sits and how export lifts it.
 
 ### The Variable Panel
 
-![The variable panel: t plus three declared variables, each with its value and slider](images/variable-panel.png)
+![The variable panel: t plus three program-wide variables, each with its value and slider](images/variable-panel.png)
 
-The variable panel (bottom-right) lists `t` plus every declared variable with
-its current value and a slider:
+The variable panel (bottom-right) lists `t` plus every program-wide variable
+declared by the scene, with its current value and a slider. Function locals
+have no panel row.
 
 - **Left-click drag** on a row scrubs the value linearly (0.1 units/px).
 - **Right-click drag** is the *fast* scrub: the same linear scrub at 10×
@@ -1762,10 +1721,10 @@ Neon (saturated magenta/cyan/lime triad).
 > the four light slots — your program still chooses which ones are on via
 > `glEnable(GL_LIGHT0..3)`.
 
-**A theme is the only way to move a light.** There is no `glLightfv` in the
-command set: positions and colors are not yours to write, and picking a
-different rig is the whole of the control you have over them. That is a
-deliberate limit — see [Design Goals](#design-goals--deliberate-limitations).
+**Themes are the in-app control for light positions and colors.** The REPL
+command set does not include `glLightfv`, so you choose a preset rig and use
+`glEnable` / `glDisable` to select its slots rather than editing each light.
+See [Scope & Current Limitations](#scope--current-limitations).
 
 **Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
 (labelled `L0..L3`, with *off* noted for disabled lights), so you can see
@@ -1775,18 +1734,16 @@ in a soft halo of its own color — on or off, so it also finds the light you
 are about to switch on. It tracks the line you are typing, not just committed
 ones.
 
-**Reading the numbers.** The rig's actual values are not hidden, they are just
-not the point: turn code focus off (**Ctrl+Shift+F**) and the generated C
-appears around your program. The positions sit at the top of `display()` —
-they are re-issued every frame, after the camera, so the rig stays anchored in
-world space — and the colors sit in `init()`, three per light.
+**Reading the numbers.** Turn code focus off (**Ctrl+Shift+F**) to show the
+generated C around your program. Each light's diffuse, ambient, and specular
+colors appear in `init()`. Positions are re-issued in `display()` every frame:
+eye-space positions before the camera transform, and world-space positions
+after it.
 
 ![The generated light-position block in display(), and the per-light color block in init()](images/light-theme-inspect.png)
 
-Switch themes and both blocks are rewritten. Reading them is also the honest
-way to answer "what is light 2 doing?" — and the exported program carries
-exactly these lines, so a scene lit here is lit the same way once it is a
-standalone C file.
+Switching themes updates both blocks. The exported program carries the same
+lines, where they can be inspected or edited as ordinary C.
 
 ### Rendering quality
 
@@ -2222,62 +2179,38 @@ The export is the product; the REPL is where it is born.
 
 ---
 
-## Design Goals & Deliberate Limitations
+## Scope & Current Limitations
 
-gl-repl is deliberately smaller than the OpenGL it teaches. A few of the
-things it does not do are not gaps waiting to be filled — they are the shape
-of the tool, and they are what keeps the rest of it coherent. Knowing which
-is which saves you hunting for a feature that was never coming.
+gl-repl currently focuses on fixed-function, immediate-mode geometry. The
+following features are intentionally outside that scope so the editor,
+visualizations, and exported C all describe the same small language.
 
-**The code is the only interface to the geometry.** As the
-[introduction](#gl-repl-user-guide-draft) says, there is no click-to-select,
-no drag-a-vertex, no in-scene gizmo; the mouse moves the camera and nothing
-else. This is not a modeler and not a CAD program — the source *is* the
-model. A second way to move a vertex would mean a second source of truth,
-and the moment the two disagree the code panel stops being a trustworthy
-description of the scene and the exported C stops being the thing you
-edited. Every editing aid here therefore points the same direction: from a
-line of code out to the pixels it produced (the
-[cursor guides](#cursor-guides--vertex-overlays),
-[transform guides](#transform-guides), the
-[assignment plot](#plotting-an-assignments-values)).
+- **Geometry is edited through code.** There is no click-to-select,
+  drag-a-vertex, or in-scene transform gizmo; viewport input moves only the
+  camera. Keeping edits in the code panel preserves one source of truth for
+  the scene and its export. Cursor guides, transform guides, and assignment
+  plots help connect those lines to their visible results.
+- **Textures are not supported.** There is no `glTexCoord`, texture binding,
+  or image loading. Texture coordinates, sampling state, image assets, and
+  their interactions would substantially broaden the language and its
+  visualizations beyond the current focus on geometry, color, lighting, and
+  fixed-function state.
+- **Shaders and buffered drawing are not supported.** There are no shaders,
+  vertex buffers, or draw-array APIs. Immediate-mode `glBegin`/`glEnd` calls
+  keep individual source lines directly visible while editing and replaying.
+- **Individual lights use presets.** A light theme supplies the four slots'
+  positions and colors; scene code enables or disables the slots it needs.
+  Per-light editing would require a larger set of position, color, attenuation,
+  and spotlight controls, so it remains outside the current REPL language. The
+  generated and exported C still exposes the underlying `glLightfv` calls; see
+  [Lighting](#lighting).
+- **The REPL is not an application framework.** It is intended for authoring,
+  inspecting, and learning from scenes. Exported C is the path for scaling a
+  scene further or integrating it into a larger program; see [Performance &
+  Scope](#performance--scope).
 
-**No textures.** There is no `glTexCoord`, no texture binding, no image
-loading, and this is a decision rather than an omission. Texturing is a
-domain at least as large as geometry itself: texture coordinates and wrap
-modes, alpha testing and alpha masks, multitexturing and combiners, light
-maps, normal / bump / emboss mapping, projected shadow maps — plus the
-combinations of all of the above, which is where most of the interesting
-technique actually lives. Admitting any of it invites all of it, and the
-center of gravity of the app shifts from *watch immediate-mode geometry,
-lighting, and pipeline state respond line by line* to *manage texture
-units*. What a scene is made of here is vertices, color, lighting, and
-state — and those are exactly what the overlays, the
-[diagnostic views](#diagnostic-views), and the guides are built to explain.
-
-**Lights are a preset, not a parameter.** The four light slots come from the
-[theme](#lighting) you pick and nothing in the command set moves or recolors
-them. A light rig is a scene of its own — position, three color channels,
-attenuation, spot cone and exponent, per light — and once those are editable
-the interesting question quietly becomes *where should this light go*, which
-is a lighting tool's question, not a geometry tool's. Five rigs that each
-read clearly on arbitrary geometry are worth more here than a full set of
-controls that every scene has to re-solve. The generated C they produce is
-right there to read, and to change once a scene has left for standalone C.
-
-**Fixed-function immediate mode only.** No shaders, no vertex buffers, no
-draw-array batching. The fixed-function pipeline is the subject of the
-tool, not an implementation detail of it; `glBegin`/`glEnd` is what makes a
-single line of code have a single visible consequence, which is the whole
-premise of typing into a REPL and watching the frame change.
-
-**Not a platform to build an application on.** Covered above under
-[Performance & Scope](#performance--scope), and the same principle: the REPL
-is where a scene is born, the exported C is where it grows up.
-
-None of these are permanent laws of nature — but any of them changing would
-be a change of scope, argued through a design brief first, not a feature
-request quietly granted.
+These points describe the current release scope, not commitments about future
+versions.
 
 ---
 
