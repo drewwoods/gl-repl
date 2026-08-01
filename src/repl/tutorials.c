@@ -714,6 +714,8 @@ static const char *const g_tutorial_fog_setup[] = {
     "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(22.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "// Depth testing so the near rings occlude the ones behind them.",
+    "glEnable(GL_DEPTH_TEST)",
     "// A locked row of toruses receding away from the camera.",
     ":draw",
     "for(i, 0, 8) {",
@@ -788,35 +790,120 @@ static const TutorialStep g_tutorial_materials_steps[] = {
     STEP_SENTINEL,
 };
 
-static const char *const g_tutorial_normals_setup[] = {
-    "// Lighting scaffold for the normal and shade-model demonstration.",
+static const char *const g_tutorial_shade_model_setup[] = {
+    "// Lighting scaffold for the shade-model comparison.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.75, 0.78, 0.85)",
     NULL,
 };
 
+/* A flat quad cannot show the difference between GL_FLAT and GL_SMOOTH — the
+ * two agree exactly on a single-normal polygon, which is why the old combined
+ * tutorial demonstrated nothing. The comparison needs curvature the shading
+ * can either hide or expose, so this draws a COARSE sphere (16x12: few enough
+ * facets that flat shading reads as an obvious faceted hull, dense enough that
+ * smooth shading reads as round). The lesson is the before/after on the SAME
+ * geometry: the sphere is drawn first under the default GL_SMOOTH, then a
+ * label-placement step splices glShadeModel(GL_FLAT) in above it. */
+static const TutorialStep g_tutorial_shade_model_steps[] = {
+    STEP_APPEND("sphere_draw",
+        "// Draw a coarse sphere - few enough facets to count, under the default GL_SMOOTH.",
+        "glutSolidSphere(1.4, 16, 12)"),
+    STEP_NOTE(
+        "// GL_SMOOTH interpolates the per-vertex lighting across each facet, so the seams disappear."),
+    STEP_AT(NULL,
+        "// Now go back above the sphere and switch the shade model to flat.",
+        "glShadeModel(GL_FLAT)", "sphere_draw"),
+    STEP_NOTE(
+        "// One lighting result per facet: identical geometry, but the hull's facets are now visible."),
+    STEP_NOTE(
+        "// GL_FLAT takes that result from the polygon's provoking vertex - shading, not tessellation, changed."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_normals_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -9.00f);",
+    "glRotatef(25.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "// Lighting scaffold for the surface-normal demonstration.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.75, 0.78, 0.85)",
+    NULL,
+};
+
+/* Normals alone, no shade model in sight. The point a single lit quad cannot
+ * make is that a normal is SUPPLIED data rather than something derived from
+ * the vertices, so the lesson draws two geometrically identical quads side by
+ * side and gives them different normals. GL_LIGHT0's default position is the
+ * directional (0, 0, 1, 0), so the +Z quad lights fully and the tilted one
+ * ends up at roughly 0.6 of that - visibly dimmer without going black.
+ *
+ * The overlay scope MUST be widened to WHOLE_SCENE before the normal-vector
+ * overlay goes on. edit_overlays' normal-arrow pass honors cursor_overlay_scope
+ * like every other overlay, so under the CFG_DEFAULT_OVERLAY_SCOPE
+ * (LAST_INSTANCE) it would arrow only the cursor's own block - and the whole
+ * lesson is the SIDE-BY-SIDE comparison of two blocks' normals. Turning the
+ * overlay on is a REQUIRE_KEY rather than a SET so the learner presses the
+ * binding themselves; the comment interpolates it from keymap.h via
+ * KM_KEY/KM_MODS instead of spelling out a key that a rebind would falsify.
+ *
+ * The camera's PITCH is 25 and its YAW is deliberately 0. Head-on, both normals
+ * point at the eye and their overlay arrows foreshorten to dots; pitching tilts
+ * them into legible arrows. Yaw would too - and would also break the lesson.
+ * GL_LIGHT0's default position is never re-specified here, so it stays fixed in
+ * EYE space while the camera rotates the geometry under it: at yaw 35 the
+ * tilted quad's eye-space n.z reaches 0.95 against the flat quad's 0.82 and the
+ * dim quad becomes the BRIGHT one. Pitch is safe only because both normals have
+ * n.y = 0, so a rotation about X scales both dots by cos(pitch) and leaves
+ * their ratio at 0.6. Change either normal's Y and this camera stops being
+ * neutral. */
 static const TutorialStep g_tutorial_normals_steps[] = {
     STEP_APPEND(NULL,
-        "// Flat shading uses one provoking-vertex result across each polygon.",
-        "glShadeModel(GL_FLAT)"),
-    STEP_APPEND(NULL,
-        "// Open a quad batch for one lit surface.",
+        "// Open a quad batch for the first lit surface.",
         "glBegin(GL_QUADS)"),
     STEP_APPEND(NULL,
-        "// Point the surface normal toward +Z so lighting can orient the face.",
+        "// Point this face's normal straight at the light, toward +Z.",
         "glNormal3f(0, 0, 1)"),
-    STEP_CMD(NULL, "glVertex3f(-2, -2, 0)"),
-    STEP_CMD(NULL, "glVertex3f(2, -2, 0)"),
-    STEP_CMD(NULL, "glVertex3f(2, 2, 0)"),
-    STEP_CMD(NULL, "glVertex3f(-2, 2, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-3.2, -1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.2, -1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.2, 1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-3.2, 1.5, 0)"),
     STEP_CMD(NULL, "glEnd()"),
-    STEP_SET(NULL,
-        "// Normal-vector overlays reveal the direction supplied by glNormal3f.",
-        "normal_vectors", 1),
     STEP_NOTE(
-        "// GL_SMOOTH interpolates vertex lighting; Auto-normals can synthesize missing face normals."),
+        "// A normal is per-vertex state: every vertex after it uses it until the next glNormal3f."),
+    STEP_APPEND(NULL,
+        "// Start a second quad, the same size and in the same plane as the first.",
+        "glBegin(GL_QUADS)"),
+    STEP_APPEND(NULL,
+        "// Tilt only its normal away from the light - the geometry stays flat-on.",
+        "glNormal3f(-0.8, 0, 0.6)"),
+    STEP_CMD(NULL, "glVertex3f(0.2, -1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(3.2, -1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(3.2, 1.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.2, 1.5, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_SET_SYM(NULL,
+        "// hello",
+        "vertex_labels", "OVERLAY_VERTEX_LABEL_OFF"),
+    STEP_SET_SYM(NULL,
+        "// Widen the overlay scope to Whole scene so BOTH quads get arrows, not just the cursor's block.",
+        "overlay_scope", "OVERLAY_SCOPE_WHOLE_SCENE"),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to draw the normal-vector overlay for every face in the scene.",
+        "normal_vectors", 1,
+        KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0),
+    STEP_NOTE(
+        "// Same geometry, different normals, different brightness - lighting reads the normal, not the vertices."),
+    STEP_NOTE(
+        "// Omit glNormal3f entirely and the Auto-normals setting synthesizes a face normal for you."),
     STEP_SENTINEL,
 };
 
@@ -855,13 +942,12 @@ static const TutorialStep g_tutorial_culling_steps[] = {
     STEP_CMD(NULL, "glVertex3f(2, 2, 0)"),
     STEP_CMD(NULL, "glVertex3f(4, -2, 0)"),
     STEP_CMD(NULL, "glEnd()"),
-    STEP_SET_SYM(NULL,
-        "// Plain wireframe makes the submitted triangle edges easier to compare.",
-        "wireframe", "WIREFRAME_PLAIN"),
     STEP_REQUIRE_KEY(NULL,
         "// Press %s to show the winding-direction overlay.",
         "winding", 1,
         KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
+    STEP_NOTE(
+        "// With winding enabled the green shaded faces are front facing and the red are back."),
     STEP_NOTE(
         "// Reverse the vertex order or glFrontFace mode to decide which side survives culling."),
     STEP_SENTINEL,
@@ -1168,7 +1254,15 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Intermediate",
     },
     {
-        .name       = "Normals & Shade Model",
+        .name       = "Flat & Smooth Shading",
+        .steps      = g_tutorial_shade_model_steps,
+        .setup      = g_tutorial_shade_model_setup,
+        .cfg        = g_tutorial_dense_solid_cfg,
+        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Normals",
         .steps      = g_tutorial_normals_steps,
         .setup      = g_tutorial_normals_setup,
         .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,

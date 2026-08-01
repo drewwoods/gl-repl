@@ -1198,6 +1198,7 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Depth Mask & Draw Order") == 0 ||
                      strcmp(name, "Clip Planes") == 0 ||
                      strcmp(name, "Materials & Shininess") == 0 ||
+                     strcmp(name, "Flat & Smooth Shading") == 0 ||
                      strcmp(name, "Functions") == 0 ||
                      strcmp(name, "Scratch Arrays") == 0))
             continue;
@@ -2228,7 +2229,8 @@ static void test_phase_c_catalog_full_walk(void) {
         "Fog",
         "Clip Planes",
         "Materials & Shininess",
-        "Normals & Shade Model",
+        "Flat & Smooth Shading",
+        "Normals",
         "Culling & Winding",
         "Bitmap Text",
         "Functions",
@@ -2236,8 +2238,10 @@ static void test_phase_c_catalog_full_walk(void) {
         "Scratch Arrays",
     };
 
-    ASSERT_INT("Phase C expands the catalog from 8 to 23 tutorials",
-               repl_tutorial_count(), 23);
+    /* 23 after the Phase C expansion, 24 once "Normals & Shade Model" split
+     * into "Flat & Smooth Shading" + "Normals". */
+    ASSERT_INT("Phase C expands the catalog from 8 to 24 tutorials",
+               repl_tutorial_count(), 24);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];

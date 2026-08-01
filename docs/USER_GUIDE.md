@@ -203,8 +203,8 @@ variable slider to a target.
   and *First Loop*.
 - **Intermediate:** *Depth Test Triangle*, *Lighting Basics*, *Color
   Interpolation*, *Line Stipple*, *Blending & Transparency*, *Depth Mask &
-  Draw Order*, *Fog*, *Clip Planes*, *Materials & Shininess*, *Normals & Shade
-  Model*, *Culling & Winding*, and *Bitmap Text*.
+  Draw Order*, *Fog*, *Clip Planes*, *Materials & Shininess*, *Flat & Smooth
+  Shading*, *Normals*, *Culling & Winding*, and *Bitmap Text*.
 - **Advanced:** *Functions*, *If & Conditionals*, and *Scratch Arrays*.
 
 ---
