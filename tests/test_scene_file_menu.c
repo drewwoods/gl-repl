@@ -12,6 +12,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_defaults.h"
+#include "app/glr_modal.h"
 #include "app/glr_paths.h"
 #include "source_document.h"
 #include "editor/inline_rename.h"
@@ -20,6 +21,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_views.h"
+#include "repl/workspace_io.h"
 #include "ui/app/snapshot.h"
 #include "ui/app/state.h"
 #include "support/test_harness.h"
@@ -406,6 +408,114 @@ static void test_app_save_falls_back_to_user_workspace(void) {
     repl_set_workspace_dir(NULL);
 }
 
+/* Delete a managed workspace directory: its manifest scenes, the manifest,
+ * then the directory itself. */
+static void remove_managed_workspace(const char *dir) {
+    WorkspaceManifest manifest;
+    char path[GLR_PATH_MAX + WORKSPACE_IO_FILE_MAX + 8];
+
+    if (workspace_io_manifest_read(dir, &manifest, NULL, 0)) {
+        for (int i = 0; i < manifest.scene_count; i++)
+            if (workspace_io_path_join(dir, manifest.scene_files[i],
+                                       path, sizeof(path)))
+                unlink(path);
+    }
+    if (workspace_io_path_join(dir, WORKSPACE_IO_MANIFEST_FILE,
+                               path, sizeof(path)))
+        unlink(path);
+    rmdir(dir);
+}
+
+/* File -> New Workspace on an unbound session adopts the in-memory scenes
+ * instead of leaving them behind: before the fix the new (empty) workspace was
+ * opened, which reset the catalog and left the collection reachable only in the
+ * hidden recovery workspace. Creating a workspace while a managed one is bound
+ * still starts empty — those scenes remain saved in the old workspace. */
+static void test_new_workspace_adopts_unbound_scenes(void) {
+    char cwd_tmpl[] = "/tmp/glr_newws_XXXXXX";
+    char prev_cwd[1024];
+    char ws_dir[GLR_PATH_MAX];
+    char err[256];
+    WorkspaceManifest manifest;
+    char *root = mkdtemp(cwd_tmpl);
+    int have_cwd = getcwd(prev_cwd, sizeof(prev_cwd)) != NULL;
+
+    ASSERT_TRUE("mkdtemp new-workspace cwd", root != NULL);
+    ASSERT_TRUE("getcwd before new workspace", have_cwd);
+    if (!root || !have_cwd)
+        return;
+    ASSERT_INT_EQ("chdir new-workspace cwd", chdir(root), 0);
+
+    reset_fixture();
+    repl_set_workspace_dir(NULL);
+    int slot = seed_user_scene();
+    ASSERT_TRUE("new-workspace seeded scene", slot >= 0);
+    repl_user_scene_rename(slot, "Carried Scene");
+    ASSERT_TRUE("second slot for new workspace",
+                repl_scenes_create_empty_user_scene() >= 0);
+    repl_user_scene_rename(repl_active_user_scene(), "Carried Two");
+    int count_before = repl_user_scene_count();
+
+    ASSERT_INT_EQ("New Workspace handled",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_NEW_WORKSPACE), 1);
+    ASSERT_TRUE("New Workspace opened the prompt",
+                glr_modal_kind() == GLR_MODAL_WORKSPACE_NEW);
+    const char *name = "Carried";
+    for (int i = 0; name[i]; i++)
+        glr_modal_handle_key((unsigned char)name[i]);
+    glr_modal_handle_key('\r');
+    ASSERT_TRUE("New Workspace prompt closed on commit", !glr_modal_active());
+
+    ASSERT_TRUE("New Workspace resolves the created dir",
+                glr_paths_workspace_dir_for_name(name, ws_dir, sizeof(ws_dir)));
+    ASSERT_TRUE("New Workspace binds the created dir",
+                strcmp(repl_workspace_dir(), ws_dir) == 0);
+    ASSERT_INT_EQ("New Workspace keeps the in-memory scenes",
+                  repl_user_scene_count(), count_before);
+    ASSERT_TRUE("New Workspace manifest reloads",
+                workspace_io_manifest_read(ws_dir, &manifest,
+                                           err, sizeof(err)));
+    ASSERT_INT_EQ("New Workspace carried every scene",
+                  manifest.scene_count, count_before);
+
+    /* Second New Workspace, now from a managed one: starts empty. */
+    ASSERT_INT_EQ("New Workspace (bound) handled",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_NEW_WORKSPACE), 1);
+    const char *name2 = "Fresh";
+    for (int i = 0; name2[i]; i++)
+        glr_modal_handle_key((unsigned char)name2[i]);
+    glr_modal_handle_key('\r');
+    ASSERT_TRUE("New Workspace (bound) prompt closed", !glr_modal_active());
+    ASSERT_INT_EQ("New Workspace from a managed one starts empty",
+                  repl_user_scene_count(), 1);
+
+    repl_set_workspace_dir(NULL);
+    reset_fixture();
+    {
+        char fresh_dir[GLR_PATH_MAX];
+        char ws_root[GLR_PATH_MAX];
+        char state_path[GLR_PATH_MAX];
+        if (glr_paths_workspace_dir_for_name(name2, fresh_dir,
+                                             sizeof(fresh_dir)))
+            remove_managed_workspace(fresh_dir);
+        remove_managed_workspace(ws_dir);
+        if (glr_paths_workspaces_root(ws_root, sizeof(ws_root)))
+            rmdir(ws_root);
+        /* The second (bound) New Workspace goes through the switch path, which
+         * rescues the live document to the recovery file. */
+        if (glr_paths_app_state_path(QUIT_RECOVERY_FILE,
+                                     state_path, sizeof(state_path)))
+            unlink(state_path);
+        if (glr_paths_app_state_path("recovery-workspace",
+                                     state_path, sizeof(state_path)))
+            remove_managed_workspace(state_path);
+    }
+    ASSERT_INT_EQ("restore cwd after new workspace", chdir(prev_cwd), 0);
+    rmdir(root);
+}
+
 /* Rename Scene (now under File) keeps the active-slot guard. */
 static void test_rename_scene_guard(void) {
     reset_fixture();
@@ -456,6 +566,7 @@ int main(void) {
     test_new_scene_creates_active_tab();
     test_save_scene_uses_scene_name();
     test_app_save_falls_back_to_user_workspace();
+    test_new_workspace_adopts_unbound_scenes();
     test_rename_scene_guard();
     test_scene_menu_is_selector();
     test_save_glr_writes_scene_source();

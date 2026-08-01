@@ -1563,11 +1563,28 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
     char err[REPL_STATUS_TEXT_MAX];
     ReplExportLayout layout;
     switch (kind) {
-    case GLR_MODAL_WORKSPACE_NEW:
+    case GLR_MODAL_WORKSPACE_NEW: {
+        /* An unbound collection has no managed home yet, so opening the fresh
+         * (empty) workspace would clear it from view — glr_action_open_-
+         * workspace_path() keeps the bytes in the recovery workspace, but
+         * nothing surfaces them. Adopt those scenes into the new workspace
+         * instead. Creating a workspace *from* a managed one still starts
+         * empty: those scenes stay saved where they already live. */
+        int adopt = !repl_workspace_is_managed() && repl_user_scene_count() > 0;
         if (!glr_workspaces_create(text, path, sizeof(path),
                                    err, sizeof(err))) {
             glr_modal_set_error(err);
             return 0;
+        }
+        if (adopt) {
+            glr_ctrl_fill_export_layout(&layout);
+            if (save_workspace_including_visible_scene(path, &layout) < 0) {
+                (void)glr_workspaces_discard_empty(path);
+                glr_modal_set_error("Could not move scenes into the new workspace");
+                return 0;
+            }
+            glr_workspaces_refresh();
+            return 1;
         }
         if (!glr_action_open_workspace_path(path)) {
             (void)glr_workspaces_discard_empty(path);
@@ -1575,6 +1592,7 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
             return 0;
         }
         return 1;
+    }
     case GLR_MODAL_WORKSPACE_SAVE_AS:
         if (!glr_workspaces_create(text, path, sizeof(path),
                                    err, sizeof(err))) {

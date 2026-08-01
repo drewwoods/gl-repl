@@ -81,8 +81,15 @@ previous manifest may be pruned after the new manifest commits.
 
 Switching away from a bound managed workspace first saves all in-memory scenes.
 If that save fails, the switch is cancelled. An unbound collection is not
-silently overwritten; New/Open first writes a complete recovery workspace under
+silently overwritten; Open first writes a complete recovery workspace under
 the app-state root, rather than recovering only the live scene.
+
+New Workspace on an *unbound* session does not go through that switch at all:
+the new workspace is created and the in-memory collection is saved straight
+into it, so the scenes stay visible under their new home instead of surviving
+only as an unadvertised recovery copy. New Workspace from a bound managed
+workspace keeps the original behavior — the old scenes are already saved where
+they live, so the new one opens empty.
 
 ### Path policy
 

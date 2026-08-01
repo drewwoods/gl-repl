@@ -1862,7 +1862,7 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
 | File → Load Scene | Load a `.c` file into a new scene slot |
 | File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
-| File → New Workspace… | Create and open a named managed workspace |
+| File → New Workspace… | Create and open a named managed workspace; scenes from a session with no workspace bound come along into it, while a workspace created from an already-bound one starts empty |
 | File → Save Workspace | Save every open tab at once, the visible example included |
 | File → Save Workspace As… | Save the whole set of tabs into a new named workspace |
 | File → Open Workspace → *name* | Switch to a managed workspace |
