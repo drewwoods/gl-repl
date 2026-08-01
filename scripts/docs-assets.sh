@@ -87,6 +87,7 @@ VO_CODE_CROP=600x206+8+44     # vertex-overlays: the whole ten-line program
 VO_SCENE_CROP=600x300+300+435 # vertex-overlays: scene pane around the annotated quad
 GT_CODE_CROP=664x220+8+46     # glu-tess: code rows 17..28 (comment + both gluBegins)
 GT_SCENE_CROP=664x265+268+448 # glu-tess: scene pane around the tessellated arrow
+VP_CROP=265x122+935+653       # variable-panel: the panel, header row to last slider
 AP_CROP=270x175+933+602       # assign-plot: the bottom-right value panel, one series
 APS_CROP=270x189+933+588      # assign-plot-series: same panel, three series + legend
 
@@ -140,7 +141,7 @@ PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
     winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
-    tune-badges export-c-grass export-c-knobs
+    export-c-grass export-c-knobs
     motion-blur xform-guide-montage xform-guide-mode
     single-polygon-scope label-placement
     vertex-guides cursor-highlight clip-plane autocomplete
@@ -1729,20 +1730,18 @@ if want transform-stress; then
     still "$OUT/transform-stress.png" 16 --example "$EX_XFORM" --time 1
 fi
 
-if want variable-panel || want tune-badges; then
-    (
-    WARM=$WARM_SPLASH
-    still "$WORK/variable-panel.png" 16 "$(stage_tune)"
-    if want variable-panel; then
-        cp "$WORK/variable-panel.png" "$OUT/variable-panel.png"
-        echo "docs-assets: wrote $OUT/variable-panel.png"
-    fi
-    if want tune-badges; then
-        magick "$WORK/variable-panel.png" -crop 265x122+935+653 +repage \
-            "$OUT/tune-badges.png"
-        echo "docs-assets: wrote $OUT/tune-badges.png"
-    fi
-    )
+# The panel itself, cropped out of the full window: everything the guide's
+# panel section and its knob section point at is inside those 265x122 px --
+# `t` plus three declared rows, the two @tune ones carrying their accent mark
+# against the two that don't. This crop used to be a second asset
+# (tune-badges.png) taken from the same still; one image serves both sections,
+# since the accent mark only means anything beside a row without one.
+if want variable-panel; then
+    ( WARM=$WARM_SPLASH
+      still "$WORK/variable-panel-full.png" 16 "$(stage_tune)" )
+    write_png "$WORK/variable-panel-full.png" "$OUT/variable-panel.png" \
+        -crop "$VP_CROP" +repage
+    echo "docs-assets: wrote $OUT/variable-panel.png"
 fi
 
 # --- Exported-C stills -----------------------------------------------------

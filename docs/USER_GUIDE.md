@@ -1218,7 +1218,7 @@ sits and how export lifts it.
 
 ### The Variable Panel
 
-![Variable panel with sliders](images/variable-panel.png)
+![The variable panel: t plus three declared variables, each with its value and slider](images/variable-panel.png)
 
 The variable panel (bottom-right) lists `t` plus every declared variable with
 its current value and a slider:
@@ -2071,7 +2071,7 @@ Tagged variables are still normal REPL variables while you are authoring. In
 the variable panel, tagged rows get an accent mark so you can see which
 values will export as knobs:
 
-![Tagged rows get an accent mark](images/tune-badges.png)
+![Tagged rows get an accent mark: amp and freq carry it, t and spread do not](images/variable-panel.png)
 
 ### Exported controls
 
