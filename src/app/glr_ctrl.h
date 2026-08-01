@@ -36,6 +36,11 @@ void glr_ctrl_set_accum_passes(int count);
  * document; no-op unless the line is a picker-editable color command).
  * Startup hook for GLR_OPEN_COLOR_PICKER: the picker only opens via a
  * swatch click, so a headless capture can't otherwise pose it. */
+/* Capture affordance (GLR_CODE_SCROLL): park the code panel's first visible
+ * row and stop follow-scroll from pulling it back. Panel rows, not document
+ * lines — with code focus off the generated C fills rows no cursor can reach. */
+void glr_ctrl_set_code_panel_scroll(int top_row);
+
 void glr_ctrl_open_color_picker(int line);
 
 /* Right-click the visible code-panel row for source line `line`, through the

@@ -11,6 +11,7 @@
 #include "app/glr_pointer_script.h" /* glr_pointer_script_load_env / _active */
 #include "app/boot/splash.h"             /* splash_skip */
 #include "app/glr_config.h"         /* accum-effect state lookup */
+#include "app/glr_state.h"          /* code-focus level check */
 #include "subsystems/assign_plot/assign_plot.h"  /* plot presentation chips */
 
 #include <ctype.h>                  /* tolower */
@@ -230,6 +231,29 @@ static void maybe_capture_open_command_help(void) {
         done = 1;   /* else the row is not on screen yet — retry next frame */
 }
 
+/* Capture affordance, sibling of GLR_EDIT_LINE: GLR_CODE_SCROLL=<row> parks
+ * the code panel's first visible row. Cursor parking cannot reach the
+ * generated C that code focus normally hides (init(), the display() prologue)
+ * — those rows belong to no document line — so a capture that wants to
+ * photograph them scrolls instead. Applied per frame until it lands, since the
+ * row count depends on a laid-out panel. */
+static void maybe_capture_code_scroll(void) {
+    static int done = 0;
+    const char *s;
+    int row;
+
+    if (done) return;
+    s = getenv("GLR_CODE_SCROLL");
+    if (!s || !*s) {
+        done = 1;
+        return;
+    }
+    row = capture_env_line(s, "GLR_CODE_SCROLL");
+    if (row >= 0)
+        glr_ctrl_set_code_panel_scroll(row);
+    done = 1;
+}
+
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
  * opens the F1 help overlay on the given tab index (0-based, clamped by
  * the tab-advance action) on the first displayed frame. The overlay
@@ -252,6 +276,7 @@ void glr_capture_env_frame_hook(void) {
     maybe_capture_open_gl_state();
     maybe_capture_open_assign_plot();
     maybe_capture_open_command_help();
+    maybe_capture_code_scroll();
     /* Keep the picker last: a real code-panel right-click closes it, so when
      * both capture hooks are requested in one frame the final posed state
      * should still include the picker requested by the caller. */
@@ -333,6 +358,21 @@ void glr_capture_env_apply(const char *time_arg) {
         const char *p_src = getenv("GLR_ACCUM_PASSES");
         if (p_src && *p_src)
             glr_ctrl_set_accum_passes(atoi(p_src));
+    }
+    /* Code focus: GLR_CODE_FOCUS=0 shows the generated C the focused view
+     * hides (init(), the display() prologue) — where the light rig's positions
+     * and colors are actually written, and the only place to read them, since
+     * no REPL command sets them. Toggle-only in the app and bound to a
+     * Shift-modified key GLR_TYPE_KEYS cannot deliver, so a capture needs
+     * this. Compared against the live state so the var is a level, not an
+     * edge. */
+    {
+        const char *f_src = getenv("GLR_CODE_FOCUS");
+        if (f_src && *f_src) {
+            int want_focus = atoi(f_src) != 0;
+            if (want_focus != (glr_state_presentation().code_focus != 0))
+                glr_ctrl_toggle_code_focus();
+        }
     }
     /* Accumulation effect: GLR_ACCUM_EFFECT=<state name> picks the Config
      * row's state by its own label (off/aa/blur/blur cam, case- and

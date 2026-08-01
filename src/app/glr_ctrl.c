@@ -3902,6 +3902,18 @@ void glr_ctrl_set_edit_line(int line) {
     editor_scroll_follow_cursor_set(1);
 }
 
+void glr_ctrl_set_code_panel_scroll(int top_row) {
+    /* Capture affordance: park the panel's first visible row. Cancels
+     * follow-scroll first — GLR_EDIT_LINE requests it, and a follow pass would
+     * drag the view straight back to the cursor. Rows here are panel rows, not
+     * document lines: with code focus off the generated C occupies rows the
+     * cursor cannot address at all, which is the reason to scroll instead of
+     * parking a cursor. */
+    if (top_row < 0) return;
+    editor_scroll_follow_cursor_set(0);
+    editor_scroll_set(top_row);
+}
+
 void glr_ctrl_open_color_picker(int line) {
     int count = repl_state_document_count();
     int sy = 0, sh = 0;

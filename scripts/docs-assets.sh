@@ -87,6 +87,11 @@ VO_CODE_CROP=600x206+8+44     # vertex-overlays: the whole ten-line program
 VO_SCENE_CROP=600x300+300+435 # vertex-overlays: scene pane around the annotated quad
 GT_CODE_CROP=664x220+8+46     # glu-tess: code rows 17..28 (comment + both gluBegins)
 GT_SCENE_CROP=664x265+268+448 # glu-tess: scene pane around the tessellated arrow
+LTS_CROP=1200x436+0+0         # light-theme-studio: indicators + teapot, no empty floor
+LI_POS_SCROLL=95              # light-theme-inspect: display()'s light-position block
+LI_COL_SCROLL=172             # light-theme-inspect: init()'s per-light color block
+LI_POS_CROP=870x94+8+46       # light-theme-inspect: the comment + four GL_POSITION rows
+LI_COL_CROP=870x184+8+46      # light-theme-inspect: the comment + GL_LIGHT0/1 color rows
 VP_CROP=265x122+935+653       # variable-panel: the panel, header row to last slider
 AP_CROP=270x175+933+602       # assign-plot: the bottom-right value panel, one series
 APS_CROP=270x189+933+588      # assign-plot-series: same panel, three series + legend
@@ -139,7 +144,8 @@ GIF_ASSETS=(
 
 PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
-    winding-view depth-view light-theme-studio grid-themes backdrops axes-compass
+    winding-view depth-view light-theme-studio light-theme-inspect
+    grid-themes backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     export-c-grass export-c-knobs
     motion-blur xform-guide-montage xform-guide-mode
@@ -743,14 +749,36 @@ stage_lights() { stage lights <<'EOF'
 /* @cfg light_indicators = 1 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
-/* @cfg code_panel = 3 */
+/* @cfg code_panel = 0 */
 /* @cfg variable_panel = 0 */
-glTranslatef(0.0000f, 0.0000f, -7.0409f);
+glTranslatef(0.0000f, 0.0000f, -10.0000f);
 glRotatef(15.5000f, 1.0f, 0.0f, 0.0f);
 glRotatef(-118.0000f, 0.0f, 1.0f, 0.0f);
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+glTranslatef(-0.0000f, 1.0000f, -0.0000f);
 // Snippet start
 glClearColor(0.0, 0.0, 0.0, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glEnable(GL_COLOR_MATERIAL);
+glColor3f(0.8, 0.7, 0.6);
+glutSolidTeapot(1);
+// Snippet end
+EOF
+}
+
+# Lit teapot with the code panel LEFT VISIBLE (unlike stage_lights, which hides
+# it): the light-theme-inspect asset photographs generated C, so it needs the
+# panel. Studio theme, because the guide names it beside the montage.
+stage_light_inspect() { stage light_inspect <<'EOF'
+/* @cfg light_theme = LIGHT_THEME_STUDIO */
+/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg light_indicators = 1 */
+/* @cfg variable_panel = 0 */
+// Snippet start
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -1621,8 +1649,38 @@ if want window-tour; then
       still "$OUT/window-tour.png" 16 "$(stage_window_tour_dir)" )
 fi
 
+# The rig, cropped to the half of the frame it occupies: the four indicators
+# and the teapot they light. Everything below the teapot was empty black.
+# GLR_EDIT_LINE=6 is the glEnable(GL_LIGHT1) row, so L1 carries the
+# cursor-follows-the-light halo the guide describes.
 if want light-theme-studio; then
-    still "$OUT/light-theme-studio.png" 16 "$(stage_lights)"
+    ( export GLR_EDIT_LINE=6
+      still "$WORK/lts-full.png" 16 "$(stage_lights)" )
+    write_png "$WORK/lts-full.png" "$OUT/light-theme-studio.png" \
+        -crop "$LTS_CROP" +repage
+    echo "docs-assets: wrote $OUT/light-theme-studio.png"
+fi
+
+# Where the rig's numbers actually live. No REPL command sets a light, so the
+# only place to read one is the generated C that code focus hides:
+# GLR_CODE_FOCUS=0 shows it, and GLR_CODE_SCROLL parks the two blocks that
+# matter -- positions in the display() prologue, colors in init(). Two runs
+# because they are ~75 rows apart. Those row numbers count generated lines, so
+# they move if the staged scene's own length changes; re-probe with
+# GLR_CODE_SCROLL before assuming a shifted crop is a rendering bug.
+if want light-theme-inspect; then
+    for li_scroll in "$LI_POS_SCROLL" "$LI_COL_SCROLL"; do
+        ( export GLR_NO_SPLASH=1 GLR_CODE_FOCUS=0
+          export GLR_CODE_SCROLL=$li_scroll
+          still "$WORK/li-$li_scroll.png" 16 "$(stage_light_inspect)" )
+    done
+    write_png "$WORK/li-$LI_POS_SCROLL.png" "$WORK/li-pos.png" \
+        -crop "$LI_POS_CROP" +repage
+    write_png "$WORK/li-$LI_COL_SCROLL.png" "$WORK/li-col.png" \
+        -crop "$LI_COL_CROP" +repage
+    montage2x1 "$WORK/li-pair.png" "$WORK/li-pos.png" "$WORK/li-col.png"
+    write_png "$WORK/li-pair.png" "$OUT/light-theme-inspect.png"
+    echo "docs-assets: wrote $OUT/light-theme-inspect.png"
 fi
 
 if want grid-themes; then

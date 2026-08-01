@@ -45,6 +45,8 @@ Line numbers are the code panel's own (1-based); below 1 is refused.
 | `GLR_OPEN_COMMAND_HELP=<line>[,<dx>]` | right-click a GL row for its help card; `dx` slides it right — pose it after the plot, which closes it |
 | `GLR_ASSIGN_PLOT_RATE=once/1hz/frame` | plot capture rate — `frame` is what makes a plotted shot deterministic |
 | `GLR_ASSIGN_PLOT_LOG=1` / `_EXPANDED=1` | the plot's `log` and `2x` chips |
+| `GLR_CODE_FOCUS=0/1` | code focus as a level — `0` shows the generated C (`init()`, `display()` prologue) |
+| `GLR_CODE_SCROLL=<row>` | park the panel's top row (panel rows, so it reaches generated C no cursor can) |
 | `GLR_ACCUM_PASSES=1/2/4/8/12/16` | accumulation passes |
 | `GLR_ACCUM_EFFECT=off/aa/blur/'blur cam'` | accum effect by Config-menu name — the only capture route to motion blur |
 | `GLR_TICK_PER_FRAME=1` | fixed-dt sim advances per rendered frame — **deterministic offline capture** |

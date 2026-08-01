@@ -1750,7 +1750,7 @@ see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
 
 ### Lighting
 
-![Studio light theme on the teapot, with a light indicator](images/light-theme-studio.png)
+![The light rig on a teapot: indicators at each light, L1 haloed because the cursor is on its glEnable line](images/light-theme-studio.png)
 
 **Light themes** (**F9**) are preset light rigs: Default (three colored
 keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
@@ -1762,9 +1762,31 @@ Neon (saturated magenta/cyan/lime triad).
 > the four light slots — your program still chooses which ones are on via
 > `glEnable(GL_LIGHT0..3)`.
 
+**A theme is the only way to move a light.** There is no `glLightfv` in the
+command set: positions and colors are not yours to write, and picking a
+different rig is the whole of the control you have over them. That is a
+deliberate limit — see [Design Goals](#design-goals--deliberate-limitations).
+
 **Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
 (labelled `L0..L3`, with *off* noted for disabled lights), so you can see
-where the rig sits.
+where the rig sits. Park the cursor on a light's own
+`glEnable`/`glDisable(GL_LIGHTn)` line and that light's indicator is wrapped
+in a soft halo of its own color — on or off, so it also finds the light you
+are about to switch on. It tracks the line you are typing, not just committed
+ones.
+
+**Reading the numbers.** The rig's actual values are not hidden, they are just
+not the point: turn code focus off (**Ctrl+Shift+F**) and the generated C
+appears around your program. The positions sit at the top of `display()` —
+they are re-issued every frame, after the camera, so the rig stays anchored in
+world space — and the colors sit in `init()`, three per light.
+
+![The generated light-position block in display(), and the per-light color block in init()](images/light-theme-inspect.png)
+
+Switch themes and both blocks are rewritten. Reading them is also the honest
+way to answer "what is light 2 doing?" — and the exported program carries
+exactly these lines, so a scene lit here is lit the same way once it is a
+standalone C file.
 
 ### Rendering quality
 
@@ -2232,6 +2254,16 @@ lighting, and pipeline state respond line by line* to *manage texture
 units*. What a scene is made of here is vertices, color, lighting, and
 state — and those are exactly what the overlays, the
 [diagnostic views](#diagnostic-views), and the guides are built to explain.
+
+**Lights are a preset, not a parameter.** The four light slots come from the
+[theme](#lighting) you pick and nothing in the command set moves or recolors
+them. A light rig is a scene of its own — position, three color channels,
+attenuation, spot cone and exponent, per light — and once those are editable
+the interesting question quietly becomes *where should this light go*, which
+is a lighting tool's question, not a geometry tool's. Five rigs that each
+read clearly on arbitrary geometry are worth more here than a full set of
+controls that every scene has to re-solve. The generated C they produce is
+right there to read, and to change once a scene has left for standalone C.
 
 **Fixed-function immediate mode only.** No shaders, no vertex buffers, no
 draw-array batching. The fixed-function pipeline is the subject of the
