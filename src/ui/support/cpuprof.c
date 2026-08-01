@@ -1447,10 +1447,10 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     gl2d_draw_string((float)tx, (float)ty, "Section Histograms", FONT_SMALL);
     {
         char meta[40];
+        /* An action chip (ui/core/gl_2d.h): a verb, and it owns no state. */
         int reset_w = FONT_SMALL_W * (int)strlen(HIST_RESET_LABEL) + 2;
-        ui_clr(UI_TOK_TEXT_MUTED);
-        gl2d_draw_string((float)(panel_x + HIST_PANEL_W - reset_w), (float)ty,
-                         HIST_RESET_LABEL, FONT_SMALL);
+        gl2d_chip_action((float)(panel_x + HIST_PANEL_W - reset_w), (float)ty,
+                         HIST_RESET_LABEL);
         snprintf(meta, sizeof(meta), "peak %lu", peak);
         int mw = (int)strlen(meta) * FONT_SMALL_W;
         gl2d_draw_string(

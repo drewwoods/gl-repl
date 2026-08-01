@@ -248,13 +248,19 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
                 "Variables (declared)", FONT_SMALL);
 
     /* Collapse/expand chip: "[-]" collapses to just this title bar, "[+]"
-     * restores the slider rows. Mouse-only — there is no keymap slot for it. */
+     * restores the slider rows. Mouse-only — there is no keymap slot for it.
+     *
+     * An action chip by the grammar in ui/core/gl_2d.h — bracketed, muted, no
+     * well. It names the move, not the state, which is the documented
+     * exemption for single-glyph disclosure controls: +/- cannot be misread
+     * as a value, and the panel's own collapsed shape already shows which way
+     * it is. Drawn through the shared helper so the color cannot drift from
+     * the other action chips. */
     {
         int chip_x0, chip_x1, chip_y0, chip_y1;
         var_panel_collapse_chip_rect(view, &chip_x0, &chip_x1, &chip_y0, &chip_y1);
-        ui_clr(UI_TOK_TEXT_SECTION);
-        gl2d_draw_string((float)chip_x0, (float)title_baseline,
-                         view->collapsed ? "[+]" : "[-]", FONT_SMALL);
+        gl2d_chip_action((float)chip_x0, (float)title_baseline,
+                         view->collapsed ? "[+]" : "[-]");
     }
 
     if (view->collapsed) {

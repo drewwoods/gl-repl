@@ -9,6 +9,7 @@
  */
 #ifdef GL_STUBS
 #include "ui/support/assign_plot.h"
+#include "ui/core/gl_2d.h"        /* gl2d_chip_state_w — the chips' own width */
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #endif
@@ -109,6 +110,38 @@ static int render_series_trace_y(const UiAssignPlotPanelView *v, int series,
     }
     fclose(trace);
     return count;
+}
+
+/* Chip wells recovered from the trace. A state chip's well is the only rect
+ * in the panel exactly GL2D_CHIP_H tall: the panel and plot frames are far
+ * larger, the legend swatches are square and smaller. Counting the shape
+ * rather than the call means an action chip that grew a background, or a
+ * state chip that lost one, moves the number. */
+typedef struct {
+    int wells;
+} ApChipShapes;
+
+static ApChipShapes count_chip_shapes(const UiAssignPlotPanelView *v) {
+    ApChipShapes out;
+    FILE *trace;
+    char line[128];
+
+    out.wells = 0;
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return out;
+    while (fgets(line, sizeof(line), trace)) {
+        float x0, y0, x1, y1;
+        if (sscanf(line, "glRectf %f %f %f %f", &x0, &y0, &x1, &y1) != 4)
+            continue;
+        if (fabsf((y1 - y0) - (float)GL2D_CHIP_H) < 0.5f)
+            out.wells++;
+    }
+    fclose(trace);
+    return out;
 }
 
 /* The panel's own size for the view's zoom state — every geometry assertion
@@ -384,11 +417,12 @@ static void test_hit_rate_chip_tracks_label_width(void) {
     int ctrl_dy = panel_h - 28;
     int mx, my;
 
-    /* "[frame]" is 7 chars; "[once]" is 6. Column 6 (0-based) is inside the
-     * wider chip and outside the narrower one. */
+    /* State chips are their label plus the well's padding: "frame" is 46px
+     * wide, "once" 38. A point at 50px from the pad is inside the wider one
+     * and in the gap after the narrower one. */
     v.plot.rate = ASSIGN_PLOT_RATE_FRAME;
-    panel_point(&v, 8 + 6 * 8 + 4, ctrl_dy, &mx, &my);
-    ASSERT_INT("wide chip covers its seventh column",
+    panel_point(&v, 8 + 42, ctrl_dy, &mx, &my);
+    ASSERT_INT("wide chip covers its last column",
                ui_assign_plot_panel_hit_test(&v, mx, my),
                UI_ASSIGN_PLOT_HIT_RATE);
 
@@ -396,6 +430,33 @@ static void test_hit_rate_chip_tracks_label_width(void) {
     ASSERT_INT("narrow chip does not",
                ui_assign_plot_panel_hit_test(&v, mx, my),
                UI_ASSIGN_PLOT_HIT_NONE);
+}
+
+/* The chip grammar (ui/core/gl_2d.h): a setting shows its value in a sunken
+ * well, an action is bare bracketed text. Pinned here because the whole point
+ * is that the two are told apart *visually*, so a future chip that reverts to
+ * bare text — or wraps a verb in a well — has to fail something. */
+static void test_chip_grammar(void) {
+    UiAssignPlotPanelView v = make_view(10, 1.0f, 100.0f);
+    ApChipShapes shapes;
+
+    /* Every stateful chip labels itself with a value, never a verb. */
+    ASSERT_TRUE("the rate chip shows a value",
+                strchr(ui_assign_plot_rate_label(ASSIGN_PLOT_RATE_1HZ), '[')
+                == NULL);
+
+    shapes = count_chip_shapes(&v);
+    /* Three settings (rate, Y scale, zoom) each get a well; the two actions
+     * ([reset], [x]) get none. A well is a filled rect plus a border loop. */
+    ASSERT_INT("one well per state chip", shapes.wells, 3);
+
+    /* Toggling a setting keeps its well — the well marks the category, not
+     * one particular value. */
+    v.plot.y_log = 1;
+    v.plot.expanded = 1;
+    v.plot.rate = ASSIGN_PLOT_RATE_FRAME;
+    shapes = count_chip_shapes(&v);
+    ASSERT_INT("still one well per state chip", shapes.wells, 3);
 }
 
 /* The Y-scale and zoom chips sit between the rate chip and [reset]. Their
@@ -422,10 +483,14 @@ static void test_hit_yscale_and_expand(void) {
     ASSERT_TRUE("the Y-scale chip is reachable", seen_yscale > 0);
     ASSERT_TRUE("the zoom chip is reachable",    seen_expand > 0);
     ASSERT_TRUE("the reset control is reachable", seen_reset > 0);
-    /* Each chip is exactly as wide as its label — a chip that swallowed the
-     * whole row would still satisfy the assertions above. */
-    ASSERT_INT("Y-scale chip is [lin] wide", seen_yscale, 5 * 8);
-    ASSERT_INT("zoom chip is [expand] wide", seen_expand, 8 * 8);
+    /* Each chip is exactly its label plus the state well's padding — a chip
+     * that swallowed the whole row would still satisfy the assertions above.
+     * Going through the shared width helper is the point: the hit region has
+     * to be the well the renderer drew, not the text inside it. */
+    ASSERT_INT("Y-scale chip is a \"lin\" well wide",
+               seen_yscale, gl2d_chip_state_w("lin"));
+    ASSERT_INT("zoom chip is a \"1x\" well wide",
+               seen_expand, gl2d_chip_state_w("1x"));
 }
 
 /* Expanding moves every control, because the panel it is measured against
@@ -894,6 +959,7 @@ int main(void) {
     test_hit_close();
     test_hit_rate_and_reset();
     test_hit_rate_chip_tracks_label_width();
+    test_chip_grammar();
     test_hit_yscale_and_expand();
     test_hit_tracks_expanded_geometry();
     test_hit_plot_body_is_inert();

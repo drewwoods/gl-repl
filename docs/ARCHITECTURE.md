@@ -1054,7 +1054,7 @@ plotted row again closes the panel, mirroring the GL-state inspector toggle.
 
 Chip geometry is resolved once by `ap_ctrl_layout()` and consumed by both the
 renderer and the hit-test — four chips whose widths change with their own state
-(`[1 Hz]` vs `[frame]`, `[expand]` vs `[shrink]`) is more mirrored arithmetic
+(`1 Hz` vs `frame`, `1x` vs `2x`) is more mirrored arithmetic
 than two code paths keep in step. The legend hit region works the same way, and
 is hover-only: it selects whose statistics the stats block reports (resolved
 from `pointer_x/_y` exactly as the histogram panel's tooltip is), so the lit

@@ -458,8 +458,8 @@ is a flat-program scan that early-outs when closed. `PROF_ASSIGN_PLOT` spans
 both phases via `prof_accum_*` (the scan and the draw sit at opposite ends of
 the frame); the reset and the commit are both gated on the panel being open, so
 never reset one without the other. Controls are mouse-only (no keymap slot, no
-`GlrConfigKey`, so no `@cfg`/golden churn) — the rate, `[lin]`/`[log]` and
-`[expand]` chips plus the legend all live in the panel.
+`GlrConfigKey`, so no `@cfg`/golden churn) — the rate, `lin`/`log` and
+`1x`/`2x` chips plus the legend all live in the panel.
 
 Up to `MAX_ASSIGN_PLOT_SERIES` = 4 rows plot together (**Shift**+right-click
 adds/removes a series; plain right-click retargets to one row). Two axes are
@@ -475,7 +475,7 @@ shared and that drives the rules:
   stretched across captures it never saw.
 - **Y is shared** — that is the point of overlaying — so series of wildly
   different magnitudes flatten each other; the per-series stats carry the real
-  numbers. `[log]` resolves per data: plain log10 for strictly-positive values,
+  numbers. The `log` chip resolves per data: plain log10 for strictly-positive values,
   **symmetric** log10 (`AP_Y_SYMLOG`) for anything crossing or touching zero —
   magnitudes under a peak-derived floor read as zero, above it the position is
   signed decades, so sinusoids of different amplitude separate instead of one
@@ -532,6 +532,27 @@ rebuild fails, so a rejected replace leaves no trace.
 Replace-current addresses its match by **occurrence ordinal within the row**,
 not char offset: search rows read the unindented input buffer for the edit
 line while the document row carries its indentation.
+
+### Mouse chips (state vs action)
+
+Panel chips come in exactly two kinds, and the distinction is a **rule, not a
+per-panel choice** ([`src/ui/core/gl_2d.h`](src/ui/core/gl_2d.h)):
+
+- **State chip** — owns a setting and displays its *current value* (`1 Hz`,
+  `log`, `2x`). Drawn by `gl2d_chip_state()`: a bare value in a sunken well,
+  `UI_TOK_TEXT_SECTION`. Clicking cycles/toggles it.
+- **Action chip** — fires a one-shot, so there is nothing to display but the
+  verb (`[reset]`, `[x]`). Drawn by `gl2d_chip_action()`: bracketed, muted, no
+  well.
+
+**Anything with persistent state shows the state; a verb means clicking does
+that thing now.** A verb-labelled chip must not have a mode — that was the bug
+the old `[expand]`/`[shrink]` had. Single-glyph disclosure controls (`[+]` /
+`[-]`) are the documented exemption: they cannot be misread as a value and the
+panel's own shape already shows the state. Width comes from
+`gl2d_chip_state_w()` so the hit region is the well that was drawn;
+`test_chip_grammar` in `test_ui_assign_plot.c` counts wells from the GL-stub
+trace, so a chip that reverts to bare text fails.
 
 ### Config / Tutorials menus (shared flyout engine)
 

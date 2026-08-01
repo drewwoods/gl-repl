@@ -20,7 +20,7 @@
  * 0..101 axis. (This is the opposite call from the section histogram next
  * door, whose durations span decades and so want log spacing.)
  *
- * The [lin]/[log] chip requests log10 spacing for the runs where that is the
+ * The lin/log chip requests log10 spacing for the runs where that is the
  * right question — values spread over orders of magnitude. Which log axis that
  * means is decided by the data, not by the user:
  *
@@ -45,7 +45,7 @@
  * the controller says so — an unexpectedly linear axis is visibly explained
  * rather than silently ignored.
  *
- * The [expand] chip doubles the panel's width and its plot well. Everything
+ * The zoom chip (1x / 2x) doubles the panel's width and its plot well. Everything
  * else about the drawing is scale-independent, so both sizes run the same
  * code — only ui_assign_plot_panel_size() and the plot rect change.
  *

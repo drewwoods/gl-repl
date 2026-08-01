@@ -1,5 +1,7 @@
 #ifndef GL_2D_H
 #define GL_2D_H
+#include <string.h>          /* strlen — chip label measurement */
+
 #include "gl_includes.h"
 #include "ui/core/theme.h"
 
@@ -96,6 +98,67 @@ static inline void gl2d_panel_frame(float x, float y, float w, float h,
     glVertex2f(x + w, y + h);
     glVertex2f(x,     y + h);
     glEnd();
+}
+
+/* --- Mouse chips -------------------------------------------------------
+ *
+ * The panels carry two kinds of clickable text, and they are not the same
+ * thing even though both used to be bracketed words:
+ *
+ *   A *state* chip owns a setting and shows that setting's current value —
+ *   "1 Hz", "log", "2x". Clicking it changes the value (cycling, or toggling
+ *   for a two-state one).
+ *
+ *   An *action* chip fires a one-shot — "[reset]", "[x]". It owns no state,
+ *   so there is nothing for it to display but the verb.
+ *
+ * The rule for authors is therefore: **anything with persistent state shows
+ * the state; a verb means clicking does that thing, now.** A chip labelled
+ * with a verb must not have a mode. (Single-glyph disclosure controls —
+ * "[+]" / "[-]" — are the one exemption: they are a universal idiom, they
+ * cannot be misread as a value, and the panel's own collapsed shape already
+ * shows the state.)
+ *
+ * The two are drawn differently so the distinction survives without knowing
+ * the rule: a state chip sits in a sunken well like a form field showing a
+ * value, an action chip is bare bracketed text. Brackets mean "press me";
+ * a well means "this is the current setting".
+ *
+ * Both take the text *baseline* y, the same coordinate gl2d_draw_string
+ * takes, so a chip drops into an existing text row without new arithmetic.
+ * Expect blending enabled, as with gl2d_panel_frame. */
+#define GL2D_CHIP_PAD_X 3   /* inset between a state well and its text */
+/* Vertical fit. FONT_SMALL is the X11 8x13 cell: glyphs rise ~11px above the
+ * baseline and descend ~2 below it, so a well anchored at the baseline has to
+ * reach FONT_SMALL_H above it, not FONT_SMALL_H total, or ascenders sit
+ * outside the box. One pixel of air on each side of the glyph box. */
+#define GL2D_CHIP_DROP  3            /* well bottom, below the baseline */
+#define GL2D_CHIP_H     (FONT_SMALL_H + 2)
+
+/* Width of a state chip's well, for layout and hit-testing. `label` is the
+ * bare value — no brackets. Fixed-width font, so this is a character count. */
+static inline int gl2d_chip_state_w(const char *label) {
+    return (label ? (int)strlen(label) : 0) * FONT_SMALL_W + 2 * GL2D_CHIP_PAD_X;
+}
+
+/* A setting showing its value. `tok` is the text token, so a caller can draw
+ * an inert one (a request the data cannot honor) in the placeholder color
+ * while keeping the well. */
+static inline void gl2d_chip_state(float x, float baseline_y,
+                                   const char *label, int tok) {
+    float w = (float)gl2d_chip_state_w(label);
+    gl2d_panel_frame(x, baseline_y - (float)GL2D_CHIP_DROP, w,
+                     (float)GL2D_CHIP_H,
+                     UI_TOK_SUNKEN, 0.85f, UI_TOK_BORDER, 0.7f);
+    ui_clr((UiThemeToken)tok);
+    gl2d_draw_string(x + (float)GL2D_CHIP_PAD_X, baseline_y, label, FONT_SMALL);
+}
+
+/* A one-shot. `label` carries its own brackets, since that is the affordance. */
+static inline void gl2d_chip_action(float x, float baseline_y,
+                                    const char *label) {
+    ui_clr(UI_TOK_TEXT_MUTED);
+    gl2d_draw_string(x, baseline_y, label, FONT_SMALL);
 }
 
 #endif /* GL_2D_H */

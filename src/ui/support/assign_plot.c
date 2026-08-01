@@ -4,7 +4,7 @@
  * Layout, top to bottom:
  *
  *   header   target label, right-aligned [x]
- *   controls [once|1 Hz|frame] rate, [lin|log], [expand|shrink], then [reset]
+ *   controls rate / Y-scale / zoom settings, then the [reset] button
  *   plot     Y over a gutter of value labels, X = execs or captures
  *   x-axis   which of the two X axes this is, and how many executions
  *   legend   one swatch + name per series (only when there is more than one)
@@ -24,7 +24,7 @@
  *
  * The control row is laid out once, by ap_ctrl_layout(), which both the
  * renderer and the hit-test consume — four chips whose widths change with
- * their own state (`[1 Hz]` vs `[frame]`, `[expand]` vs `[shrink]`) is more
+ * their own state (`1 Hz` vs `frame`, `1x` vs `2x`) is more
  * mirrored arithmetic than two code paths can be trusted to keep in step.
  */
 #include "ui/support/assign_plot.h"
@@ -58,12 +58,18 @@
  * re-formatted with fewer significant digits rather than run into the key. */
 #define AP_STAT_MIN_GAP   8
 
+/* Actions carry their brackets; state chips are bare values in a well. See
+ * the chip grammar in ui/core/gl_2d.h. */
 #define AP_CLOSE_LABEL  "[x]"
 #define AP_RESET_LABEL  "[reset]"
-#define AP_LIN_LABEL    "[lin]"
-#define AP_LOG_LABEL    "[log]"
-#define AP_EXPAND_LABEL "[expand]"
-#define AP_SHRINK_LABEL "[shrink]"
+#define AP_LIN_LABEL    "lin"
+#define AP_LOG_LABEL    "log"
+/* The zoom is a two-state setting, so it names the state it is in — "1x" or
+ * "2x" — rather than the move available from here. A verb there would be the
+ * one chip in the row whose label meant something different from its
+ * neighbours'. */
+#define AP_ZOOM_1X_LABEL "1x"
+#define AP_ZOOM_2X_LABEL "2x"
 
 /* Gap between adjacent left-aligned chips in the control row. */
 #define AP_CHIP_GAP      6
@@ -153,7 +159,7 @@ static int ap_control_w(const char *label) {
 }
 
 static void ap_rate_chip_text(char *buf, size_t buf_sz, int rate) {
-    snprintf(buf, buf_sz, "[%s]", ui_assign_plot_rate_label(rate));
+    snprintf(buf, buf_sz, "%s", ui_assign_plot_rate_label(rate));
 }
 
 /* Resolved control-row geometry: each chip's label plus its left edge and
@@ -178,25 +184,24 @@ static void ap_ctrl_layout(const UiAssignPlotPanelView *view, int panel_w,
     ap_rate_chip_text(out->rate_buf, sizeof(out->rate_buf), view->plot.rate);
     out->rate.label = out->rate_buf;
 
-    /* The Y-scale chip names the mode it is *in*, not the one it switches to
-     * — same reading as the rate chip beside it. */
+    /* Every one of these three owns a setting, so each shows the value it is
+     * on — the chip grammar in ui/core/gl_2d.h. Only [reset] is a verb, and
+     * it is the only one of the four that has no mode. */
     out->yscale.label = view->plot.y_log ? AP_LOG_LABEL : AP_LIN_LABEL;
-    /* The zoom chip names the action instead: there is no "you are small"
-     * state worth reporting, only the move available from here. */
-    out->expand.label = view->plot.expanded ? AP_SHRINK_LABEL
-                                            : AP_EXPAND_LABEL;
+    out->expand.label = view->plot.expanded ? AP_ZOOM_2X_LABEL
+                                            : AP_ZOOM_1X_LABEL;
     out->reset.label  = AP_RESET_LABEL;
 
     out->rate.x = x;
-    out->rate.w = (int)strlen(out->rate.label) * FONT_SMALL_W;
+    out->rate.w = gl2d_chip_state_w(out->rate.label);
     x += out->rate.w + AP_CHIP_GAP;
 
     out->yscale.x = x;
-    out->yscale.w = (int)strlen(out->yscale.label) * FONT_SMALL_W;
+    out->yscale.w = gl2d_chip_state_w(out->yscale.label);
     x += out->yscale.w + AP_CHIP_GAP;
 
     out->expand.x = x;
-    out->expand.w = (int)strlen(out->expand.label) * FONT_SMALL_W;
+    out->expand.w = gl2d_chip_state_w(out->expand.label);
 
     /* Reset stays pinned to the right edge in both sizes. */
     out->reset.w = ap_control_w(out->reset.label);
@@ -680,29 +685,30 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
                                       fit_buf, sizeof(fit_buf)),
                          FONT_SMALL);
     }
-    ui_clr(UI_TOK_TEXT_MUTED);
-    gl2d_draw_string((float)(panel_x + panel_w - close_w),
-                     (float)ty, AP_CLOSE_LABEL, FONT_SMALL);
+    gl2d_chip_action((float)(panel_x + panel_w - close_w), (float)ty,
+                     AP_CLOSE_LABEL);
     ty -= AP_CTRL_H;
 
-    /* Control row: rate / Y-scale / zoom chips from the left, reset right. */
+    /* Control row: three settings showing their values, then the one verb.
+     * The wells need blending, which the panel frame above turned off. */
     log_ok = ui_assign_plot_y_log_available(view);
     ap_ctrl_layout(view, panel_w, &ctrl);
-    ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)(panel_x + ctrl.rate.x), (float)ty,
-                     ctrl.rate.label, FONT_SMALL);
-    /* A log request the data cannot support draws inert, so the axis being
-     * linear anyway is visibly accounted for rather than looking like a dead
-     * chip. */
-    ui_clr(view->plot.y_log && !log_ok ? UI_TOK_TEXT_PLACEHOLDER
-                                       : UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)(panel_x + ctrl.yscale.x), (float)ty,
-                     ctrl.yscale.label, FONT_SMALL);
-    ui_clr(UI_TOK_TEXT_MUTED);
-    gl2d_draw_string((float)(panel_x + ctrl.expand.x), (float)ty,
-                     ctrl.expand.label, FONT_SMALL);
-    gl2d_draw_string((float)(panel_x + ctrl.reset.x), (float)ty,
-                     ctrl.reset.label, FONT_SMALL);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_chip_state((float)(panel_x + ctrl.rate.x), (float)ty,
+                    ctrl.rate.label, UI_TOK_TEXT_SECTION);
+    /* A log request the data cannot support draws inert inside its well, so
+     * the axis being linear anyway is visibly accounted for rather than
+     * looking like a dead chip. */
+    gl2d_chip_state((float)(panel_x + ctrl.yscale.x), (float)ty,
+                    ctrl.yscale.label,
+                    view->plot.y_log && !log_ok ? UI_TOK_TEXT_PLACEHOLDER
+                                                : UI_TOK_TEXT_SECTION);
+    gl2d_chip_state((float)(panel_x + ctrl.expand.x), (float)ty,
+                    ctrl.expand.label, UI_TOK_TEXT_SECTION);
+    glDisable(GL_BLEND);
+    gl2d_chip_action((float)(panel_x + ctrl.reset.x), (float)ty,
+                     ctrl.reset.label);
 
     /* Plot rect: gutter on the left for value labels, x-axis + stats below. */
     plot_x = panel_x + AP_PLOT_GUTTER + 4;

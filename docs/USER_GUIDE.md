@@ -381,7 +381,7 @@ oscillating between 100 and 101 shows its shape rather than flattening against
 the top of a 0–101 axis. When the range does cross zero, the zero line is drawn
 brighter, because a sign change is usually what you are hunting for.
 
-`[log]` switches Y to log₁₀ spacing, for values spread over orders of
+The `log` chip switches Y to log₁₀ spacing, for values spread over orders of
 magnitude. What that means depends on the data:
 
 - **Strictly positive** values get a plain log axis — decade gridlines, nothing
@@ -408,14 +408,20 @@ executions than the plot has columns, the *curve* is decimated into min/max
 bands — the shape and the extremes survive, individual samples do not — but the
 statistics never are.
 
-Everything is driven by the mouse, from the panel itself:
+Everything is driven by the mouse, from the panel itself. Two kinds of control,
+and you can tell them apart at a glance: a **setting sits in a sunken box and
+shows the value it is on** — click it to change that value. A **bracketed word
+is a button** — click it and that happens.
 
-| Control | Action |
+| Setting | Shows | Click to |
+|---|---|---|
+| rate | `once` / `1 Hz` / `frame` | Cycle the capture rate. Right-click cycles backward |
+| Y scale | `lin` / `log` | Switch between linear and log₁₀ |
+| zoom | `1x` / `2x` | Double the panel, for a closer look at the curve |
+
+| Button | Action |
 |---|---|
 | `[x]` | Close the plot (right-clicking the plotted row again does the same) |
-| `[1 Hz]` | Cycle the capture rate: **once** → **1 Hz** → **frame**. Right-click cycles backward |
-| `[lin]` / `[log]` | Switch the Y axis between linear and log₁₀ |
-| `[expand]` / `[shrink]` | Double the panel, for a closer look at the curve |
 | `[reset]` | Drop the collected samples and statistics, keeping the rows and rate |
 
 **once** freezes after a single capture — useful for pinning down one frame
@@ -455,7 +461,7 @@ comparison meaningful and also what limits it:
 - **The Y axis** spans every series. That is the point when you are comparing
   values of similar size; when they are not, the smaller one flattens toward
   the baseline. The per-series statistics still carry the exact numbers, and
-  `[expand]` gives the curve more room.
+  the `2x` zoom gives the curve more room.
 
 ### Inspecting OpenGL state
 
