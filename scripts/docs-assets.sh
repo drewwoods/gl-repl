@@ -1343,7 +1343,7 @@ EOF
 
 # ---- example names (stable; never reference examples by index) ----------
 
-EX_HERO="Teapot carousel (transform stacks + glow points)"
+EX_HERO="Ringed planet"
 EX_ORRERY="Orrery (labels track 3D orbits)"
 EX_GLU="GLU concave arrow"
 EX_GLOW="Glow sprites (blend + point attenuation)"
@@ -1353,7 +1353,10 @@ EX_RING="Animated ring (for + t)"
 # ---- core assets --------------------------------------------------------
 
 if want hero; then
+    (
+    WARM=${WARM_SPLASH}
     still "$OUT/hero.png" 16 --example "$EX_HERO" --time 3
+    )
 fi
 
 if want first-triangle; then
