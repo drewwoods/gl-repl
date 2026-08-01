@@ -1690,6 +1690,16 @@ Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
 brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
 changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
 
+![Grid brightness against a bright cube — Dim, Normal (top), Bright, Bold (bottom)](images/grid-brightness.png)
+
+Grid brightness is at its most useful where the grid crosses **bright
+geometry**, as above: a near-white cube sunk below the grid plane, so the
+whole graticule draws over its faces. Dim all but drops the lines there,
+while Bright and Bold keep them readable — those two levels give every line a
+dark contrast casing, because past a point raising the line's opacity alone
+stops helping: a blended line converges toward its own color, and a pale gray
+line on a pale surface has nowhere left to go.
+
 Nine axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
 Gizmo, Ruler, Arrow, Fountain.
 

@@ -87,6 +87,7 @@ VO_CODE_CROP=600x206+8+44     # vertex-overlays: the whole ten-line program
 VO_SCENE_CROP=600x300+300+435 # vertex-overlays: scene pane around the annotated quad
 GT_CODE_CROP=664x220+8+46     # glu-tess: code rows 17..28 (comment + both gluBegins)
 GT_SCENE_CROP=664x265+268+448 # glu-tess: scene pane around the tessellated arrow
+GB_CROP=600x420+320+250       # grid-brightness: the cube and the lines crossing it
 LTS_CROP=1200x436+0+0         # light-theme-studio: indicators + teapot, no empty floor
 LI_POS_SCROLL=95              # light-theme-inspect: display()'s light-position block
 LI_COL_SCROLL=172             # light-theme-inspect: init()'s per-light color block
@@ -145,7 +146,7 @@ GIF_ASSETS=(
 PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
     winding-view depth-view light-theme-studio light-theme-inspect
-    grid-themes backdrops axes-compass
+    grid-themes grid-brightness backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     export-c-grass export-c-knobs
     motion-blur xform-guide-montage xform-guide-mode
@@ -808,6 +809,41 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glutSolidCube(0.8);
+// Snippet end
+EOF
+}
+
+# The Grid brightness levels, staged against the case that makes the setting
+# visible: a near-white lit cube sunk BELOW the grid plane, so the whole
+# graticule draws over its faces. Raising brightness only raises line alpha,
+# and alpha converges a line toward its own color -- over a bright surface the
+# contrast tops out no matter the setting, which is why Bright/Bold add the
+# dark contrast casing (GRID_CASING_* in src/render3d/grid.c). The cube has to
+# be under y=0, not straddling it: geometry above the plane wins the depth
+# test and no line reaches it. Default XZ Ruler theme on purpose -- it is what
+# a user sees before touching F2.
+stage_grid_brightness() {  # $1 = GRID_BRIGHTNESS_<NAME>
+    stage "gridb-$1" <<EOF
+/* @cfg grid_brightness = $1 */
+/* @cfg code_panel = 3 */
+/* @cfg variable_panel = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg light_indicators = 0 */
+// camera
+glTranslatef(0.0f, 0.0f, -6.80f);
+glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(25.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+// Snippet start
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColor3f(0.97, 0.95, 0.90);
+glTranslatef(0, -1.05, 0);
+glutSolidCube(2.0);
 // Snippet end
 EOF
 }
@@ -1695,6 +1731,26 @@ if want grid-themes; then
     montage2x2 "$WORK/grid-m.png" "${files[@]}"
     write_png "$WORK/grid-m.png" "$OUT/grid-themes.png" -resize "$W"
     echo "docs-assets: wrote $OUT/grid-themes.png"
+fi
+
+# Reading order is the F4 cycle order. Each tile is cropped to GB_CROP and
+# tiled at 1:1 with no final -resize: the whole subject is 1-3px lines and the
+# casing that edges them, and even the ~0.3% downscale that would square this
+# montage to $W blurs exactly the pixels the asset exists to show.
+if want grid-brightness; then
+    levels=(DIM NORMAL BRIGHT BOLD)
+    gb_files=()
+    for level in "${levels[@]}"; do
+        ( WARM=$WARM_FADE
+          still "$WORK/gridb_$level.png" 16 \
+              "$(stage_grid_brightness GRID_BRIGHTNESS_$level)" )
+        write_png "$WORK/gridb_$level.png" "$WORK/gridb_${level}_c.png" \
+            -crop "$GB_CROP" +repage
+        gb_files+=("$WORK/gridb_${level}_c.png")
+    done
+    montage2x2 "$WORK/gridb-m.png" "${gb_files[@]}"
+    write_png "$WORK/gridb-m.png" "$OUT/grid-brightness.png"
+    echo "docs-assets: wrote $OUT/grid-brightness.png"
 fi
 
 if want backdrops; then
