@@ -75,6 +75,8 @@ XG_CODE_CROP=596x112+8+46     # xform-guide-montage: code rows 1..6 (the whole p
 XG_SCENE_CROP=596x280+400+420 # xform-guide-montage: scene pane around origin + guide
 XM_CODE_CROP=800x150+8+46     # xform-guide-mode: code rows 1..8 (the whole program)
 XM_SCENE_CROP=800x240+28+368  # xform-guide-mode: scene pane spanning both anchors
+AC_CROP=600x275+8+44          # autocomplete: the typed line, the popup and its hint
+GLS_CROP=760x630+8+44         # gl-state-inspector: source rows, popup, and the teapot under it
 SP_CODE_CROP=600x258+8+44     # single-polygon-scope: the whole two-quad program
 SP_SCENE_CROP=600x270+280+450 # single-polygon-scope: scene pane around both quads
 WV_CODE_CROP=600x190+8+44     # winding-view: the whole two-triangle program
@@ -1921,11 +1923,15 @@ if want vertex-guides; then
 fi
 
 # Autocomplete: the popup + inline ghost exist only mid-typing, so
-# GLR_TYPE_KEYS poses them (same trick as the vertex-entry guides). The
-# full window keeps the popup in context beside the scene.
+# GLR_TYPE_KEYS poses them (same trick as the vertex-entry guides). Cropped to
+# the code panel: the popup hangs off the typed line and the scene behind it
+# has nothing to do with completing an enum.
 if want autocomplete; then
     ( export GLR_TYPE_KEYS='glEnable(GL_LI'
-      still "$OUT/autocomplete.png" 16 "$(stage_autocomplete)" )
+      still "$WORK/ac-full.png" 16 "$(stage_autocomplete)" )
+    write_png "$WORK/ac-full.png" "$OUT/autocomplete.png" \
+        -crop "$AC_CROP" +repage
+    echo "docs-assets: wrote $OUT/autocomplete.png"
 fi
 
 # Color picker: opened via the GLR_OPEN_COLOR_PICKER capture hook (the
@@ -1948,12 +1954,15 @@ if want numeric-stepper; then
 fi
 
 # Open the state inspector on the committed blank row following the staged
-# state changes. The full-window shot keeps both the source boundary and the
-# floating comparison table in view.
+# state changes. Cropped to the popup plus the source rows that wrote the state
+# it lists -- and far enough down to keep the teapot those rows are drawing,
+# since the table describes the GL that renders it.
 if want gl-state-inspector; then
     ( export GLR_EDIT_LINE=9 GLR_OPEN_GL_STATE=9
-      still "$OUT/gl-state-inspector.png" 16 \
-          "$(stage_gl_state_inspector)" )
+      still "$WORK/gls-full.png" 16 "$(stage_gl_state_inspector)" )
+    write_png "$WORK/gls-full.png" "$OUT/gl-state-inspector.png" \
+        -crop "$GLS_CROP" +repage
+    echo "docs-assets: wrote $OUT/gl-state-inspector.png"
 fi
 
 # Right-click an assignment row to plot its values. The asset is a 1x2 montage
