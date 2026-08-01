@@ -41,10 +41,10 @@ typedef enum {
 } ReplayNormalDisplayMode;
 
 /* Code-panel detail during replay. The middle mode keeps live value
- * annotations on assignments, loop headers, function definitions, and other
- * commands. It leaves vertex, color, and normal source rows as a single line
- * with the evaluated call appended as a comment instead of adding substituted
- * + evaluated virtual rows beneath them. */
+ * annotations on assignments, loop headers, function definitions, and every
+ * other command — all of them appended inline as a `//` comment, so a source
+ * row stays exactly one row. Verbose is the only mode that adds substituted +
+ * evaluated virtual rows beneath the source row. */
 typedef enum {
     REPLAY_EXPAND_OFF = 0,
     REPLAY_EXPAND_EXPANDED,

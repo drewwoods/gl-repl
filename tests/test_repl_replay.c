@@ -501,7 +501,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
 }
 
 /* Regression: single-argument GLUT shapes must still emit an EVAL
- * annotation row during replay. The bug dropped CMD_GLUT_CUBE and
+ * annotation row during Verbose replay. The bug dropped CMD_GLUT_CUBE and
  * CMD_GLUT_TEAPOT because the formatter only handled nargs 2..6. */
 static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     int t_idx;
@@ -526,6 +526,7 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
 
     SourceTextView text = source_document_view();
     ReplReplayAnnotationOutput out;
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
     replay_annotations_prepare(text, &out);
 
     int eval_found = 0;
@@ -537,6 +538,142 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
                     strstr(out.items[i].text, "glutSolidCube(0.25);") != NULL);
     }
     ASSERT_TRUE("single-arg shape produced eval annotation", eval_found);
+
+    replay_stop();
+}
+
+/* Verbose is the *only* mode that turns one source row into several.
+ * Expanded shows the same evaluated call, but appended inline — for every
+ * command with an evaluated form, not just the vertex emitters that first
+ * got the treatment. Regression: glutSolid* and the transforms kept
+ * emitting virtual rows in Expanded, and the color/normal families emitted
+ * both the rows *and* the inline comment. */
+static void test_replay_expanded_never_splits_a_source_row(void) {
+    static const struct {
+        const char *line;
+        const char *inline_eval;
+    } k_cases[] = {
+        { "glVertex3f(t, 0, 0);",      "// glVertex3f(0.25, 0, 0);" },
+        { "glColor3f(t, 0, 0);",       "// glColor3f(0.25, 0, 0);" },
+        { "glNormal3f(t, 0, 0);",      "// glNormal3f(0.25, 0, 0);" },
+        { "glutSolidCube(t);",         "// glutSolidCube(0.25);" },
+        { "glutSolidSphere(t, 8, 8);", "// glutSolidSphere(0.25, 8, 8);" },
+        { "glutSolidTorus(t, 1, 8, 8);",
+                                       "// glutSolidTorus(0.25, 1, 8, 8);" },
+        { "glutSolidCone(t, 1, 8, 8);","// glutSolidCone(0.25, 1, 8, 8);" },
+        { "glutSolidTeapot(t);",       "// glutSolidTeapot(0.25);" },
+        { "glTranslatef(t, 0, 0);",    "// glTranslatef(0.25, 0, 0);" },
+        { "glRotatef(t, 0, 1, 0);",    "// glRotatef(0.25, 0, 1, 0);" },
+        { "glScalef(t, 1, 1);",        "// glScalef(0.25, 1, 1);" },
+    };
+    char label[128];
+    char display[256];
+
+    for (int c = 0; c < (int)(sizeof(k_cases) / sizeof(k_cases[0])); c++) {
+        ReplReplayAnnotationOutput out;
+        SourceTextView text;
+        int t_idx;
+        int safety = 1024;
+
+        glr_ctrl_reset_all();
+        t_idx = repl_eval_find_predef_var_idx("t");
+        g_predef_vars_mut[t_idx].value = 0.25f;
+        editor_feed_line(k_cases[c].line);
+        repl_state_mark_flat_dirty();
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+
+        replay_start();
+        while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+            replay_advance(repl_state_flat_program_view());
+        ASSERT_TRUE("one-line replay reached end", safety > 0);
+
+        text = source_document_view();
+
+        g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
+        replay_annotations_prepare(text, &out);
+        snprintf(label, sizeof(label), "expanded emits no virtual row for %s",
+                 k_cases[c].line);
+        ASSERT_TRUE(label, out.count == 0);
+        replay_code_panel_get_command_display_text(text, 0, display,
+                                                   sizeof(display));
+        snprintf(label, sizeof(label), "expanded appends %s inline",
+                 k_cases[c].inline_eval);
+        ASSERT_TRUE(label, strstr(display, k_cases[c].inline_eval) != NULL);
+
+        /* Verbose is the mode that splits: rows carry the readout and the
+         * source row stays bare. */
+        g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+        replay_annotations_prepare(text, &out);
+        snprintf(label, sizeof(label), "verbose emits virtual rows for %s",
+                 k_cases[c].line);
+        ASSERT_TRUE(label, out.count == 2);
+        replay_code_panel_get_command_display_text(text, 0, display,
+                                                   sizeof(display));
+        snprintf(label, sizeof(label), "verbose leaves %s un-annotated",
+                 k_cases[c].line);
+        ASSERT_TRUE(label, strstr(display, "//") == NULL);
+
+        replay_stop();
+    }
+}
+
+/* The gluVertex / gluNormal tessellator twins take the same path as their
+ * immediate-mode counterparts: inline in Expanded, rows in Verbose. */
+static void test_replay_tess_vertex_expand_modes(void) {
+    static const char *k_lines[] = {
+        "gluBegin(GLU_POLYGON);",
+        "gluBegin(GLU_CONTOUR);",
+        "gluVertex(t, 0, 0);",
+        "gluVertex(t + 1, 1, 0);",
+        "gluVertex(t + 1, 0, 1);",
+        "gluEnd();",
+        "gluEnd();",
+    };
+    const int vertex_line = 4;   /* the third gluVertex */
+    ReplReplayAnnotationOutput out;
+    SourceTextView text;
+    char display[256];
+    int t_idx;
+    int safety = 4096;
+
+    glr_ctrl_reset_all();
+    t_idx = repl_eval_find_predef_var_idx("t");
+    g_predef_vars_mut[t_idx].value = 0.25f;
+    for (int i = 0; i < (int)(sizeof(k_lines) / sizeof(k_lines[0])); i++)
+        editor_feed_line(k_lines[i]);
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    replay_start();
+    /* Step only as far as the focus line under test — running to the end
+     * parks src_line_idx past the polygon. */
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0) {
+        replay_advance(repl_state_flat_program_view());
+        if (g_replay_src_line == vertex_line)
+            break;
+    }
+    ASSERT_TRUE("tess replay focused the gluVertex row",
+                g_replay_src_line == vertex_line);
+
+    text = source_document_view();
+
+    g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
+    replay_annotations_prepare(text, &out);
+    ASSERT_TRUE("expanded emits no virtual row for gluVertex", out.count == 0);
+    replay_code_panel_get_command_display_text(text, vertex_line, display,
+                                               sizeof(display));
+    ASSERT_TRUE("expanded appends evaluated gluVertex inline",
+                strstr(display, "// gluVertex(1.25, 0, 1);") != NULL);
+
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    replay_annotations_prepare(text, &out);
+    ASSERT_TRUE("verbose emits virtual rows for gluVertex", out.count == 2);
+    replay_code_panel_get_command_display_text(text, vertex_line, display,
+                                               sizeof(display));
+    ASSERT_TRUE("verbose leaves the gluVertex row un-annotated",
+                strstr(display, "//") == NULL);
 
     replay_stop();
 }
@@ -578,6 +715,12 @@ static void test_replay_expanded_color_and_normal_values_inline(void) {
                                                display, sizeof(display));
     ASSERT_TRUE("expanded glNormal3f appends evaluated call",
                 strstr(display, "// glNormal3f(0.25, -0.25, 0.5);") != NULL);
+
+    /* The inline comment is the *whole* readout in Expanded: the color and
+     * normal families used to get the virtual rows on top of it. */
+    ReplReplayAnnotationOutput out;
+    replay_annotations_prepare(source_document_view(), &out);
+    ASSERT_TRUE("expanded color/normal rows are inline only", out.count == 0);
 
     replay_stop();
 }
@@ -1469,6 +1612,8 @@ int main(void) {
     test_replay_for_header_crosses_recursive_call();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_expanded_color_and_normal_values_inline();
+    test_replay_expanded_never_splits_a_source_row();
+    test_replay_tess_vertex_expand_modes();
     test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
     test_replay_cursor_sync_and_unrecognized_keys();

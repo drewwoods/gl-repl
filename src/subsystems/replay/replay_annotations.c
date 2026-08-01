@@ -1065,10 +1065,15 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
         /* No has_vars gate: the loop variable is dynamic even when the
          * bounds are literals, so the iteration readout is still useful. */
         build_replay_for_inline_comment(cmd_idx, comment, sizeof(comment));
-    } else if (replay.expand_args == REPLAY_EXPAND_EXPANDED &&
-               (repl_cmd_emits_vertex(type) ||
-                repl_cmd_sets_current_color(type) ||
-                repl_cmd_sets_current_normal(type))) {
+    } else if (replay.expand_args == REPLAY_EXPAND_EXPANDED) {
+        /* Expanded is the strictly-one-line mode: every command whose args
+         * have an evaluated form gets it appended as a `//` comment, and
+         * replay_annotations_refresh_output emits no virtual rows at all.
+         * No command-type gate here — format_evaluated_cmd answers "is
+         * there an evaluated form?" for the whole set (vertex / color /
+         * normal, their gluVertex / gluColor / gluNormal twins, glutSolid*
+         * shapes, transforms, glClearColor), and returns 0 for the rest,
+         * which then render unannotated rather than splitting the row. */
         char evaluated[REPL_REPLAY_ANNOTATION_TEXT_MAX];
         int flat_idx;
         if (!has_vars)
@@ -1300,7 +1305,10 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
     memset(out, 0, sizeof(*out));
 
     ReplayRuntimeState replay = replay_state_view();
-    if (!replay.active || !replay.expand_args)
+    /* Virtual rows are Verbose's alone. Expanded keeps every readout inline
+     * on the source row (replay_code_panel_get_command_display_text), so
+     * Verbose is the only mode in which one source line becomes several. */
+    if (!replay.active || replay.expand_args != REPLAY_EXPAND_VERBOSE)
         return;
     int cmd_idx = replay.src_line_idx;
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
@@ -1308,9 +1316,6 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
     const GLCmd *cmd = repl_state_document_cmd_at(cmd_idx);
     if (!cmd || !cmd->has_vars || cmd->type == CMD_VAR_ASSIGN ||
         cmd->type == CMD_SCRATCH_ASSIGN)
-        return;
-    if (replay.expand_args == REPLAY_EXPAND_EXPANDED &&
-        repl_cmd_emits_vertex(cmd->type))
         return;
     int flat_idx = replay_annotation_flat_cmd_for_source(cmd_idx);
     if (flat_idx < 0)

@@ -1825,11 +1825,14 @@ The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand**. Its middle
-**Expanded** mode keeps live assignment, loop, function, and other annotations
-while leaving vertex, color, and normal calls on one line with their evaluated
-call appended as a `//` comment; **Verbose** instead adds substituted and
-evaluated rows beneath the source row. Evaluated `glColor`/`gluColor` comments
-use the RGB color they set (kept opaque so zero-alpha values remain readable).
+**Expanded** mode annotates every line in place — assignments, loop and
+function headers, and any call with an evaluated form (`glVertex`/`gluVertex`,
+`glColor`/`gluColor`, `glNormal`/`gluNormal`, the `glutSolid*` shapes, the
+transforms) keeps its evaluated call appended as a `//` comment, so one source
+line stays one line. **Verbose** is the only mode that splits a source row,
+adding substituted and evaluated rows beneath it. Evaluated
+`glColor`/`gluColor` comments use the RGB color they set (kept opaque so
+zero-alpha values remain readable).
 
 ---
 
