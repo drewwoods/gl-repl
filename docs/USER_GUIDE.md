@@ -613,7 +613,7 @@ compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) and
 
 ### GLU tessellator (concave / complex polygons)
 
-![GLU tessellated concave arrow with a cutout](images/glu-tess.png)
+![The contour rows of the GLU concave arrow example above the shape they tessellate into](images/glu-tess.png)
 
 `gluTess` polygons handle concave outlines, and multiple contours in one
 polygon create holes (odd winding rule). A polygon wraps one or more contours,
@@ -1350,7 +1350,7 @@ through a `glBegin` block and the crosshair steps from vertex to vertex.
 
 The overlay toggles annotate geometry scene-wide:
 
-![Normal vectors, vertex points and outlines on a quad](images/vertex-overlays.png)
+![The cursor on the glNormal3f row, and the quad below it carrying vertex labels, points, outlines, normals and the polygon highlight](images/vertex-overlays.png)
 
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,

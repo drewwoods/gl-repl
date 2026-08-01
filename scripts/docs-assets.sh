@@ -75,6 +75,10 @@ XG_CODE_CROP=596x112+8+46     # xform-guide-montage: code rows 1..6 (the whole p
 XG_SCENE_CROP=596x280+400+420 # xform-guide-montage: scene pane around origin + guide
 XM_CODE_CROP=800x150+8+46     # xform-guide-mode: code rows 1..8 (the whole program)
 XM_SCENE_CROP=800x240+28+368  # xform-guide-mode: scene pane spanning both anchors
+VO_CODE_CROP=600x206+8+44     # vertex-overlays: the whole ten-line program
+VO_SCENE_CROP=600x300+300+435 # vertex-overlays: scene pane around the annotated quad
+GT_CODE_CROP=664x220+8+46     # glu-tess: code rows 17..28 (comment + both gluBegins)
+GT_SCENE_CROP=664x265+268+448 # glu-tess: scene pane around the tessellated arrow
 AP_CROP=270x175+933+602       # assign-plot: the bottom-right value panel, one series
 APS_CROP=270x189+933+588      # assign-plot-series: same panel, three series + legend
 
@@ -1423,8 +1427,23 @@ if want first-triangle; then
     still "$OUT/first-triangle.png" 16 "$(stage_triangle)"
 fi
 
+# Overlay toggles: the ten-line program above the quad it annotates, cropped to
+# both and stacked. GLR_EDIT_LINE=4 parks the cursor on the glNormal3f row --
+# the overlays are cursor-block bound, so with the cursor on the trailing blank
+# row (the old shot) there is no block and the normals, labels and highlight
+# the asset exists to show are simply not drawn. WARM outlasts the splash,
+# which otherwise dims the bottom of the scene crop.
 if want vertex-overlays; then
-    still "$OUT/vertex-overlays.png" 16 "$(stage_overlays)"
+    ( WARM=$((WARM_SPLASH + 30))
+      export GLR_EDIT_LINE=4
+      still "$WORK/vo-full.png" 16 "$(stage_overlays)" )
+    write_png "$WORK/vo-full.png" "$WORK/vo-code.png" \
+        -crop "$VO_CODE_CROP" +repage
+    write_png "$WORK/vo-full.png" "$WORK/vo-scene.png" \
+        -crop "$VO_SCENE_CROP" +repage
+    montage2x1 "$WORK/vo-pair.png" "$WORK/vo-code.png" "$WORK/vo-scene.png"
+    write_png "$WORK/vo-pair.png" "$OUT/vertex-overlays.png"
+    echo "docs-assets: wrote $OUT/vertex-overlays.png"
 fi
 
 if want single-polygon-scope; then
@@ -1590,8 +1609,25 @@ if want labels-orrery; then
     still "$OUT/labels-orrery.png" 16 --example "$EX_ORRERY" --time 4
 fi
 
+# GLU tessellator: the contour structure above the shape it tessellates into,
+# stacked the way the app stacks them. A full-window shot spent two thirds of
+# its pixels on empty grid and on the gluColor/gluVertex tail, which says
+# nothing the head of the polygon doesn't. GLR_EDIT_LINE scrolls the panel to
+# the `// Arrow shape` comment; parking on a gluBegin instead would light the
+# cursor-block vertex labels, which belong to the overlay section, not here.
+# WARM_FADE: the Tron grid theme cross-fades in, and the old shot was captured
+# mid-fade.
 if want glu-tess; then
-    still "$OUT/glu-tess.png" 16 --example "$EX_GLU"
+    ( WARM=$WARM_FADE
+      export GLR_EDIT_LINE=16
+      still "$WORK/glu-full.png" 16 --example "$EX_GLU" )
+    write_png "$WORK/glu-full.png" "$WORK/glu-code.png" \
+        -crop "$GT_CODE_CROP" +repage
+    write_png "$WORK/glu-full.png" "$WORK/glu-scene.png" \
+        -crop "$GT_SCENE_CROP" +repage
+    montage2x1 "$WORK/glu-pair.png" "$WORK/glu-code.png" "$WORK/glu-scene.png"
+    write_png "$WORK/glu-pair.png" "$OUT/glu-tess.png"
+    echo "docs-assets: wrote $OUT/glu-tess.png"
 fi
 
 if want glow-sprites; then

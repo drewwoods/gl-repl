@@ -497,7 +497,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <tr>
 <td width="33%" align="center">
 
-<img src="images/glu-tess.png" alt="GLU tessellated concave arrow" width="100%">
+<img src="images/glu-tess.png" alt="GLU tessellator contour rows and the concave arrow they tessellate into" width="100%">
 
 **[GLU tessellator](../examples/scenes/glu-concave-arrow.glr)**
 <br><sub>concave polygon (+ [cutout](../examples/scenes/glu-concave-arrow-cutout.glr) and [extrusion](../examples/scenes/glu-concave-arrow-extrusion.glr) variants)</sub>
