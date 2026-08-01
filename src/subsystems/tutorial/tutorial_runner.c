@@ -842,11 +842,32 @@ void tutorial_teardown(void) {
      * pending baseline (tutorial_end_keep_view) — this is the flush. */
     if (!tutorial_active() && !tutorial_state_view().baseline_valid)
         return;
+    /* A COMPLETED tutorial parks its index here so F11 can continue from
+     * that lesson (tutorial_end_keep_view). Promoting the retained document
+     * into a user scene runs this teardown as its baseline flush, and the
+     * reset below would take the parked index with it — so pressing Enter
+     * once more after finishing a lesson (which is all promotion takes) sent
+     * F11 back to tutorial 1. Teardown is a document-replacement flush, not
+     * an abandonment of the user's place in the catalog, so carry the index
+     * across the reset.
+     *
+     * Only for an already-INACTIVE tutorial. An explicit exit has already
+     * zeroed the index via tutorial_end_keep_view(0), so it stays lost; a
+     * still-ACTIVE tutorial is being torn down mid-lesson (scene / example /
+     * workspace load, reset-all, the next tutorial_start), and those keep
+     * clearing it — tutorial_start overwrites the index immediately after
+     * anyway. */
+    int retained_idx = tutorial_active()
+                           ? -1
+                           : tutorial_state_view().tutorial_idx;
+
     /* Deactivate active status BEFORE restoring config to prevent step
      * auto-advancement side effects during config restore writes. */
     tutorial_state_mut()->active = 0;
     tutorial_baseline_restore();
     tutorial_state_reset();
+    if (retained_idx >= 0)
+        tutorial_state_mut()->tutorial_idx = retained_idx;
 }
 
 /* End a tutorial the user saw through — completed, or exited on purpose —

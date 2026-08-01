@@ -4518,6 +4518,54 @@ static void test_post_tutorial_edit_promotes_once(void) {
                repl_active_user_scene(), slot);
 }
 
+/* 5b. Promotion must not cost the user their place in the catalog. Finishing
+ *     a lesson and pressing Enter once more is all it takes to promote the
+ *     retained document, and the promotion's baseline flush runs the same
+ *     tutorial_teardown() that resets the runtime state — which used to take
+ *     the completed tutorial's parked index with it, sending the next F11
+ *     back to tutorial 1. */
+static void test_promotion_keeps_place_for_next_tutorial(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    ASSERT_TRUE("tutorial walks to completion", walk_tutorial_to_completion(idx));
+    ASSERT_INT("completed tutorial parks its index",
+               tutorial_state_view().tutorial_idx, idx);
+
+    commit_free_form_line("glColor3f(0.9, 0.4, 0.2)");
+    ASSERT_INT("edit promoted the document", repl_user_scene_count(), 1);
+    ASSERT_INT("promotion keeps the parked tutorial index",
+               tutorial_state_view().tutorial_idx, idx);
+
+    /* The payoff: F11 continues to the NEXT lesson rather than restarting. */
+    glr_ctrl_tutorial_cycle_next();
+    ASSERT_INT("F11 after promotion advances past the completed lesson",
+               tutorial_state_view().tutorial_idx,
+               (idx + 1) % repl_tutorial_count());
+}
+
+/* An explicit exit is a different intent from finishing: it drops the place,
+ * so F11 restarts the catalog. Guards the "only when already inactive"
+ * condition on the carry-over above from being widened by accident. */
+static void test_explicit_exit_still_drops_place(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("Color & Transform");
+    ASSERT_TRUE("Color & Transform in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+    tutorial_stop();
+    ASSERT_INT("explicit exit clears the index",
+               tutorial_state_view().tutorial_idx, -1);
+
+    glr_ctrl_tutorial_cycle_next();
+    ASSERT_INT("F11 after an explicit exit starts from the first tutorial",
+               tutorial_state_view().tutorial_idx, 0);
+}
+
 /* 6. Configuration semantics: the promoted scene owns the tutorial-mutated
  *    PER-SCENE cfg, while tutorial-only / global slugs go back to their
  *    pre-tutorial values.
@@ -4840,6 +4888,8 @@ int main(void) {
     test_stop_establishes_tutorial_origin();
     test_failed_tutorial_start_leaves_no_origin();
     test_post_tutorial_edit_promotes_once();
+    test_promotion_keeps_place_for_next_tutorial();
+    test_explicit_exit_still_drops_place();
     test_promotion_keeps_scene_cfg_and_restores_globals();
     test_slots_full_promotion_is_retryable();
     test_wholesale_replacement_discards_unedited_result();
