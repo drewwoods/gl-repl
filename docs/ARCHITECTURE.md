@@ -1233,8 +1233,9 @@ Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
 env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L124)
-enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a persistent
-Done; env capture is never canceled and never auto-stops.
+enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a Done linger
+that auto-closes after the final caption expires; env capture is never canceled
+and never auto-stops.
 
 At the Tours-menu boundary, a successful launch stops any active REPL replay
 before the next frame captures the controlled tour's rewind baseline. Tours

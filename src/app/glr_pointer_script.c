@@ -34,7 +34,7 @@
 #endif
 
 #define PS_MAX_EVENTS   256
-#define PS_MAX_KEY_TEXT 128
+#define PS_MAX_KEY_TEXT 512
 #define PS_MAX_TARGET   64
 /* Rendered-frame clock rate: script seconds -> frames (GLR_FRAME_DT_SECS). */
 #define PS_FPS          60.0f
@@ -120,7 +120,8 @@ typedef struct {
 /* Which run kind is active (see the header). Two kinds only: the env-driven
  * capture hook (GLR_POINTER_SCRIPT — never canceled, never auto-stops, may be
  * timed or untimed) and the menu-driven controlled tour (untimed, transport
- * controls, HUD, persistent Done). Replaces the old g_tour flag. */
+ * controls, HUD, and a brief Done linger for the final caption). Replaces the
+ * old g_tour flag. */
 typedef enum {
     PS_RUN_NONE = 0,
     PS_RUN_ENV_CAPTURE,
@@ -153,6 +154,7 @@ static int   g_current_event = -1;      /* in-flight event index, or -1     */
 static int   g_completed_events = 0;    /* events driven to completion      */
 static int   g_speed_idx = PS_TOUR_SPEED_DEFAULT;
 static float g_frame_credit = 0.0f;     /* virtual-frame accumulator        */
+static int   g_done_until = -1;         /* final-caption expiry; Done only  */
 static const char *g_tour_name = NULL;  /* borrowed HUD metadata            */
 static const char *g_tour_file = NULL;
 static int   g_tour_hud_expanded = 0;   /* compact by default; not rewound  */
@@ -629,6 +631,7 @@ static void ps_reset_runtime(void) {
     g_current_event = -1;
     g_completed_events = 0;
     g_frame_credit = 0.0f;
+    g_done_until = -1;
     g_suppress_app_tick = 0;
     g_pause_until = -1;
     g_step_wait = PS_WAIT_NONE;
@@ -1058,7 +1061,7 @@ static void ps_advance_one_virtual_frame(void) {
     g_frame++;
     /* No auto-stop on this path: env-driven capture keeps the overlay up until
      * the recorder exits (the clip should never end cursor-less). Controlled
-     * tours run ps_tour_frame() and enter a persistent Done instead. */
+     * tours run ps_tour_frame() and auto-close after their Done linger. */
 }
 
 /* --- controlled-tour transport engine ----------------------------------- */
@@ -1228,9 +1231,10 @@ static void ps_force_current_complete(void) {
     /* A ring/echo overlay simply keeps running out on its own clock. */
 }
 
-/* Enter persistent Done: release any held button, clear in-flight wait/
- * release/typing state, but retain the baseline, HUD, cursor, and any
- * still-live decorative overlay. Never calls glr_pointer_script_stop(). */
+/* Enter Done: release any held button and clear in-flight state, but retain
+ * the HUD/cursor until the currently visible final caption reaches its authored
+ * expiry. With no live caption, Done is presented for this frame and the tour
+ * closes on the next one. */
 static void ps_tour_enter_done(void) {
     if (g_release_frame >= 0) {
         g_release_frame = -1;
@@ -1244,7 +1248,31 @@ static void ps_tour_enter_done(void) {
     g_current_event = -1;
     g_step_wait = PS_WAIT_NONE;
     g_frame_credit = 0.0f;
+    g_done_until = (g_echo_start >= 0 &&
+                    g_frame < g_echo_start + g_echo_dur)
+                 ? g_echo_start + g_echo_dur : g_frame;
     g_tour_state = GLR_TOUR_DONE;
+}
+
+/* Advance only the overlay clock while Done. Application time and REPL replay
+ * remain owned by the normal frame path, so closing the tour never stops a
+ * replay the script launched. */
+static void ps_tour_advance_done(void) {
+    if (g_frame >= g_done_until) {
+        glr_pointer_script_stop();
+        return;
+    }
+    g_frame_credit += k_tour_speeds[g_speed_idx];
+    while (g_active && g_frame_credit >= 1.0f) {
+        if (g_frame >= g_done_until) {
+            glr_pointer_script_stop();
+            return;
+        }
+        g_frame++;
+        g_frame_credit -= 1.0f;
+    }
+    if (g_active && g_frame >= g_done_until)
+        glr_pointer_script_stop();
 }
 
 /* One virtual tour frame under normal playback: complete the in-flight event,
@@ -1598,9 +1626,11 @@ static void ps_tour_frame(void) {
         g_suppress_app_tick = 1;
         ps_tour_seek_step();
         break;
+    case GLR_TOUR_DONE:
+        ps_tour_advance_done();
+        break;
     case GLR_TOUR_PAUSED:
     case GLR_TOUR_STEPPING:
-    case GLR_TOUR_DONE:
     case GLR_TOUR_OFF:
     default:
         break;
@@ -1809,7 +1839,8 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
      * tour is an inspection view, so render captions at full alpha then. Env-
      * capture always advances its clock, so its fades are untouched. */
     int clock_frozen = (g_run_kind == PS_RUN_CONTROLLED_TOUR &&
-                        g_tour_state != GLR_TOUR_PLAYING);
+                        g_tour_state != GLR_TOUR_PLAYING &&
+                        g_tour_state != GLR_TOUR_DONE);
 
     /* The overlay pass runs after glr_ctrl_display_frame, mirroring
      * splash_render: 2D ortho, blending on, y flipped from mouse space. */

@@ -942,11 +942,11 @@ static void test_tours_menu_dispatch(void) {
                glr_pointer_script_tour_active(), 0);
 }
 
-/* A controlled tour does not auto-stop: once its last event completes it enters
- * a persistent Done (the baseline, HUD, and cursor stay up), so the user can
- * restart or step back. It only leaves via Esc / cancel. */
-static void test_tour_reaches_done(void) {
+/* Done is presented at least once, then a tour with no final caption closes on
+ * the next frame. A final caption keeps Done alive for its authored lifetime. */
+static void test_tour_done_auto_closes(void) {
     static const char *const tiny[] = { "move 10 10" };
+    static const char *const caption[] = { "echo 10 10 18 0.1 Finished" };
     glr_ctrl_reset_all();
 
     ASSERT_INT("tiny tour script loads",
@@ -960,13 +960,36 @@ static void test_tour_reaches_done(void) {
     for (int i = 0; i < 5 &&
                     glr_pointer_script_tour_view().state != GLR_TOUR_DONE; i++)
         glr_pointer_script_frame();
-    ASSERT_INT("tour reached persistent Done",
+    ASSERT_INT("tour reached Done",
                glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
-    ASSERT_INT("controlled tour stays active in Done",
+    ASSERT_INT("controlled tour active for Done presentation",
                glr_pointer_script_tour_active(), 1);
-    ASSERT_INT("overlay still up in Done",
-               glr_pointer_script_active(), 1);
-    glr_pointer_script_stop();
+    glr_pointer_script_frame();
+    ASSERT_INT("captionless Done auto-closes next frame",
+               glr_pointer_script_tour_active(), 0);
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glEnd();");
+    ASSERT_INT("caption tour loads",
+               glr_pointer_script_start_tour("Caption", "caption.pointer",
+                                             caption, 1), 1);
+    for (int i = 0; i < 5 &&
+                    glr_pointer_script_tour_view().state != GLR_TOUR_DONE; i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("caption tour reaches Done",
+               glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
+    glr_pointer_script_frame();
+    ASSERT_INT("final caption keeps Done active",
+               glr_pointer_script_tour_active(), 1);
+    replay_start();
+    ASSERT_INT("replay running during Done linger", replay_active(), 1);
+    for (int i = 0; i < 10 && glr_pointer_script_tour_active(); i++)
+        glr_pointer_script_frame();
+    ASSERT_INT("tour closes when final caption expires",
+               glr_pointer_script_tour_active(), 0);
+    ASSERT_INT("tour auto-close leaves replay running", replay_active(), 1);
+    replay_stop();
 }
 
 /* `key@<cps>` paces the payload at chars/sec on the frame clock instead of
@@ -1014,8 +1037,8 @@ static void test_tour_paced_key(void) {
 /* Controlled tours advance from completion rather than an absolute schedule,
  * and `pause` supplies an intentional delay between otherwise immediate steps.
  * Timestamped lines are rejected (untimed-only). Frame 1 always captures the
- * rewind baseline, so each sub-sequence starts with an extra frame; completion
- * enters Done rather than auto-stopping, and echo/ripple never delay Done. */
+ * rewind baseline, so each sub-sequence starts with an extra frame. Completion
+ * enters Done immediately; a live final echo delays auto-close, not Done. */
 static void test_tour_sequential_steps_and_pause(void) {
     static const char *const paced[] = {
         "key@30 abc",
@@ -2566,7 +2589,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
-    test_tour_reaches_done();
+    test_tour_done_auto_closes();
     test_tour_paced_key();
     test_tour_sequential_steps_and_pause();
     test_compute_profile_mode_names();

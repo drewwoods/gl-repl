@@ -16,8 +16,8 @@
  * Esc exit; see src/app/glr_pointer_script.h). A real key/click/wheel event
  * that is not a transport control cancels the tour (intercepted in gl_repl.c's
  * GLUT callbacks — scripted events bypass those, so only the user can trigger
- * the cancel), and a tour that plays to the end enters a persistent Done
- * rather than stopping.
+ * the cancel), and a tour that plays to the end enters Done until its final
+ * caption expires, then closes automatically.
  *
  * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: — grammar
  * in glr_pointer_script.h) resolved against the live layout when each

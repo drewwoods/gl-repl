@@ -105,8 +105,8 @@
  * env-driven capture (glr_pointer_script_load_env). It layers replay-style
  * transport controls on top of an untimed script: play/pause, immediate
  * forward step, backstep (via one whole-app baseline plus prefix replay), a
- * discrete speed ladder, and a persistent Done state at the end (no
- * auto-stop). The env-capture kind is never canceled, never auto-stops, and
+ * discrete speed ladder, and a Done state that auto-closes after the final
+ * caption expires. The env-capture kind is never canceled, never auto-stops, and
  * never gets a HUD or transport. */
 typedef enum {
     GLR_TOUR_OFF = 0,          /* no controlled tour                       */
@@ -115,7 +115,7 @@ typedef enum {
     GLR_TOUR_PAUSED,           /* held; Right steps one event at a time    */
     GLR_TOUR_STEPPING,         /* transient: executing one immediate step  */
     GLR_TOUR_SEEKING,          /* resumable backstep prefix replay          */
-    GLR_TOUR_DONE              /* reached the end; awaits restart/exit      */
+    GLR_TOUR_DONE              /* reached end; lingering for final caption */
 } GlrTourPlaybackState;
 
 /* Read-only playback view for the HUD / tests. `active` is nonzero only for a
@@ -177,7 +177,8 @@ int glr_pointer_script_handle_tour_special(int key);
 /* Caption (echo) alpha for a given age/duration in frames. Eases in over the
  * first ~9 frames and out over the last ~30 during playback; returns full
  * opacity when `clock_frozen` (a paused/stepped tour is an inspection view, and
- * the frozen virtual clock can't advance a fade). Pure; exposed for the
+ * the frozen virtual clock can't advance a fade). Done is not frozen: its final
+ * caption fades and the tour closes at expiry. Pure; exposed for the
  * overlay-alpha guard test. */
 float glr_pointer_script_echo_alpha(int age, int dur, int clock_frozen);
 

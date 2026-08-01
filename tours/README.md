@@ -85,9 +85,12 @@ and audio-position changes. Keep rewindable tours free of those actions.
 Speed affects only pointer-script timing, never animation `t`, camera easing,
 REPL replay, status message lifetimes, or audio.
 
-A tour that reaches its last event enters a persistent **Done** state (it does
-not auto-stop): the HUD stays up so you can backstep, restart with `Space`, or
-exit with `Esc`. Environment-driven recording scripts
+A tour that reaches its last event enters **Done** while any final caption
+finishes its authored lifetime, then closes automatically. During that linger
+you can still backstep, restart with `Space`, or exit early with `Esc`. A tour
+with no live final caption closes on the frame after reaching Done. Closing the
+tour does not stop REPL replay or another app action the script launched.
+Environment-driven recording scripts
 (`GLR_POINTER_SCRIPT=`) get no HUD or transport and are never canceled by input.
 
 ## File structure and timing
@@ -265,7 +268,7 @@ key@20 glRotatef(t * 40, 0, 1, 0)
 key ;
 ```
 
-The parser currently allows up to 256 events per script and up to 127 bytes
+The parser currently allows up to 256 events per script and up to 511 bytes
 of text or caption payload per event. Keep captions short enough to fit the
 scene area at the tour's smallest supported window size.
 
