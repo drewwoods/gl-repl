@@ -3,7 +3,7 @@
  *
  * Pure renderer over UiCommandDescriptionPanelView. The controller resolves
  * the authored/embedded catalog entry and owns popup lifetime; this module
- * only wraps text, clamps the card into the code panel, and draws it.
+ * only wraps text, clamps the card into the window, and draws it.
  */
 #include "ui/app/command_description_panel.h"
 
@@ -111,16 +111,23 @@ static int cdp_solve(const UiCommandDescriptionPanelView *view,
     memset(out, 0, sizeof(*out));
     if (!view || !view->visible || !view->title || !view->body)
         return 0;
-    if (view->window_w <= 0 || view->window_h <= 0 ||
-        view->panel_w <= 0 || view->panel_h <= 0)
+    if (view->window_w <= 0 || view->window_h <= 0)
         return 0;
 
-    left = view->panel_x + CDP_EDGE_MARGIN;
-    right = view->panel_x + view->panel_w - CDP_EDGE_MARGIN;
-    bottom = view->panel_y + CDP_EDGE_MARGIN;
+    /* The card is clamped to the window, not to the code panel it describes a
+     * row of — same box as the state inspector next door. It used to stop at
+     * the panel's bottom edge, which meant a card anchored on one of the last
+     * rows was pushed *up* over the code the reader had just right-clicked in;
+     * hanging down over the scene hides nothing they were reading. Nothing
+     * routes through the card either — it has no hit-test surface and the next
+     * key or click dismisses it — so overlapping the viewport cannot swallow a
+     * camera drag. The menu bar stays the ceiling. */
+    left = CDP_EDGE_MARGIN;
+    right = view->window_w - CDP_EDGE_MARGIN;
+    bottom = CDP_EDGE_MARGIN;
     ui_layout_menu_bar_rect(NULL, &menu_y, NULL, NULL);
-    top = menu_y > bottom ? menu_y - 2
-                          : view->panel_y + view->panel_h - CDP_EDGE_MARGIN;
+    top = (menu_y > bottom && menu_y < view->window_h)
+              ? menu_y - 2 : view->window_h - CDP_EDGE_MARGIN;
     if (right <= left || top <= bottom)
         return 0;
 

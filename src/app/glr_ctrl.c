@@ -3236,8 +3236,6 @@ glr_ctrl_build_command_description_panel_view(void) {
     memset(&view, 0, sizeof(view));
     view.window_w = vp.window_w;
     view.window_h = vp.window_h;
-    ui_layout_code_panel_rect(&view.panel_x, &view.panel_y,
-                              &view.panel_w, &view.panel_h);
     if (!state.visible)
         return view;
 

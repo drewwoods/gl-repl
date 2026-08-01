@@ -626,14 +626,14 @@ and each contour is a run of vertices:
 
 ```c
 gluBegin(GLU_POLYGON);
-gluNormal(0, 0, 1);
-gluBegin(GLU_CONTOUR);        // outer outline, may be concave
-gluColor(0.98, 0.76, 0.36);
-gluVertex(-1, -1, 0);
-gluVertex(1, -1, 0);
-gluVertex(0, 1, 0);
-gluEnd();                     // close the contour
-gluEnd();                     // close the polygon
+  gluNormal(0, 0, 1);
+  gluBegin(GLU_CONTOUR);         // outer outline, may be concave
+    gluColor(0.98, 0.76, 0.36);
+    gluVertex(-1, -1, 0);
+    gluVertex(1, -1, 0);
+    gluVertex(0, 1, 0);
+  gluEnd();                      // close the contour
+gluEnd();                        // close the polygon
 ```
 
 Add a second `gluBegin(GLU_CONTOUR)` block inside the same polygon to punch a
