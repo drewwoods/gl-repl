@@ -103,6 +103,15 @@ static const char *k_ap_rate_labels[ASSIGN_PLOT_RATE_COUNT] = {
     "once", "1 Hz", "frame"
 };
 
+static int ui_rate_label_max_width() {
+    int max = 0;
+    for (int i = 0; i < ASSIGN_PLOT_RATE_COUNT; i++) {
+        int len = strlen(k_ap_rate_labels[i]);
+        if (len > max) max = len;
+    }
+    return max;
+}
+
 const char *ui_assign_plot_rate_label(int rate) {
     if (rate < 0 || rate >= ASSIGN_PLOT_RATE_COUNT) return "?";
     return k_ap_rate_labels[rate];
@@ -159,7 +168,7 @@ static int ap_control_w(const char *label) {
 }
 
 static void ap_rate_chip_text(char *buf, size_t buf_sz, int rate) {
-    snprintf(buf, buf_sz, "%s", ui_assign_plot_rate_label(rate));
+    snprintf(buf, buf_sz, "%*s", ui_rate_label_max_width(), ui_assign_plot_rate_label(rate));
 }
 
 /* Resolved control-row geometry: each chip's label plus its left edge and
