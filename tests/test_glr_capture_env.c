@@ -8,6 +8,9 @@
  * GLR_ACCUM_PASSES -> glr_config_get(GLR_CONFIG_ACCUM_PASSES),
  * GLR_EDIT_LINE    -> editor_state_edit_line() + follow-scroll request.
  *
+ * Line-valued hooks take the code panel's own 1-based numbering and convert at
+ * the env boundary, so every expectation here is one lower than what is set.
+ *
  * Values are set explicitly and compared against what was set (never against
  * a shipped default), so retuning the defaults cannot silently pass this.
  *
@@ -78,10 +81,12 @@ static void test_frame_hooks_combined(void) {
     clear_capture_env();
     int initial_view = glr_config_get(GLR_CONFIG_ORTHO_MODE);
 
-    /* Set up target state for the four one-shot frame hooks */
+    /* Set up target state for the four one-shot frame hooks. The line-valued
+     * hooks are spelled the way the code panel numbers rows (1-based), so the
+     * document indices they land on are one lower. */
     setenv("GLR_VIEW_TOGGLE_AT", "0.0", 1);
-    setenv("GLR_OPEN_COLOR_PICKER", "0", 1);
-    setenv("GLR_OPEN_GL_STATE", "4", 1);
+    setenv("GLR_OPEN_COLOR_PICKER", "1", 1);
+    setenv("GLR_OPEN_GL_STATE", "5", 1);
     setenv("GLR_OPEN_HELP", "2", 1);
 
     glr_capture_env_apply(NULL);
@@ -94,9 +99,10 @@ static void test_frame_hooks_combined(void) {
     glr_capture_env_frame_hook();
 
     ASSERT_TRUE("view mode toggled", glr_config_get(GLR_CONFIG_ORTHO_MODE) != initial_view);
-    ASSERT_INT("picker opened", color_picker_active_line(), 0);
+    ASSERT_INT("picker opened on the panel's line 1", color_picker_active_line(), 0);
     ASSERT_INT("inspector opened", ui_state_gl_state_inspector().visible, 1);
-    ASSERT_INT("inspector line", ui_state_gl_state_inspector().source_line_idx, 4);
+    ASSERT_INT("inspector line is the panel's 5, index 4",
+               ui_state_gl_state_inspector().source_line_idx, 4);
     pointer = ui_state_pointer();
     ASSERT_INT("inspector anchor follows routed pointer x",
                ui_state_gl_state_inspector().anchor_px, pointer.mouse_x);
@@ -155,11 +161,24 @@ static void test_edit_line_hook(void) {
     editor_scroll_follow_cursor_set(0);
     ASSERT_INT("edit line seeded at 0", editor_state_edit_line(), 0);
 
-    setenv("GLR_EDIT_LINE", "2", 1);
+    setenv("GLR_EDIT_LINE", "3", 1);
     glr_capture_env_apply(NULL);
-    ASSERT_INT("GLR_EDIT_LINE parks the cursor", editor_state_edit_line(), 2);
+    ASSERT_INT("GLR_EDIT_LINE parks the cursor on the panel's line 3",
+               editor_state_edit_line(), 2);
     ASSERT_INT("GLR_EDIT_LINE requests scroll follow",
                editor_scroll_follow_cursor(), 1);
+
+    /* The numbering is the code panel's, so 0 names no row at all: refused,
+     * rather than quietly parking on the first line. */
+    setenv("GLR_EDIT_LINE", "0", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_EDIT_LINE=0 is refused, not treated as line 1",
+               editor_state_edit_line(), 2);
+
+    setenv("GLR_EDIT_LINE", "-1", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("a negative GLR_EDIT_LINE is refused too",
+               editor_state_edit_line(), 2);
 
     /* Unset leaves the cursor where it was rather than resetting it. */
     clear_capture_env();

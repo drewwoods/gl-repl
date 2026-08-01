@@ -18,6 +18,31 @@
 #include <stdlib.h>                 /* getenv, atoi, atof, strtof */
 #include <string.h>                 /* strchr, strcmp */
 
+/* Every GLR_* hook that names a source row spells it the way the code panel's
+ * gutter does: 1-based, so what a reader sees beside the line is what the
+ * script sets. The controller entry points stay 0-based document indices, and
+ * this is the one place that converts. Returns -1 for a line that is not a
+ * positive number, which every caller treats as "ignore this hook" rather than
+ * silently acting on row 0 — an off-by-one that pointed at real geometry was
+ * exactly the failure this numbering is meant to stop. */
+static int capture_env_line(const char *s, const char *var) {
+    int line;
+
+    if (!s || *s < '0' || *s > '9') {
+        fprintf(stderr, "gl-repl: %s=%s ignored (want a line number)\n",
+                var, s ? s : "");
+        return -1;
+    }
+    line = atoi(s);
+    if (line < 1) {
+        fprintf(stderr,
+                "gl-repl: %s=%d ignored (code-panel lines start at 1)\n",
+                var, line);
+        return -1;
+    }
+    return line - 1;
+}
+
 /* Config state labels are user-facing ("Blur Cam"); an env var should not have
  * to reproduce the capitalization or the space. Compare on letters only. */
 static int accum_effect_name_eq(const char *label, const char *arg) {
@@ -73,8 +98,8 @@ static void maybe_capture_view_toggle(void) {
 }
 
 /* Capture affordance, sibling of GLR_VIEW_TOGGLE_AT: GLR_OPEN_COLOR_PICKER=
- * <line> opens the floating color picker on that source line (0-based,
- * clamped; no-op unless the line is a picker-editable color command). The
+ * <line> opens the floating color picker on that source line (1-based like the
+ * code panel; no-op unless the line is a picker-editable color command). The
  * picker only opens via a swatch click, which a capture run has no mouse to
  * deliver. Applied on the first display callback — not at bootstrap —
  * because the popup placement clamps against the live viewport, which
@@ -85,16 +110,18 @@ static void maybe_capture_open_color_picker(void) {
     done = 1;
     const char *s = getenv("GLR_OPEN_COLOR_PICKER");
     if (s && *s)
-        glr_ctrl_open_color_picker(atoi(s));
+        glr_ctrl_open_color_picker(
+            capture_env_line(s, "GLR_OPEN_COLOR_PICKER"));
 }
 
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_GL_STATE=
  * <line> routes a real synthetic right-click to that visible source row
- * (0-based; must be a visually blank committed or live editor row). A
+ * (1-based; must be a visually blank committed or live editor row). A
  * headless capture run has no physical mouse to deliver the click. */
 static void maybe_capture_open_gl_state(void) {
     static int done = 0;
     const char *s;
+    int line;
 
     if (done) return;
     s = getenv("GLR_OPEN_GL_STATE");
@@ -105,7 +132,8 @@ static void maybe_capture_open_gl_state(void) {
     /* GLR_EDIT_LINE follow-scroll lands during the display pass. If the
      * requested row is initially off-screen, leave the hook pending and try
      * its real routed right-click again on the next frame. */
-    if (glr_ctrl_open_gl_state_popup(atoi(s)))
+    line = capture_env_line(s, "GLR_OPEN_GL_STATE");
+    if (line < 0 || glr_ctrl_open_gl_state_popup(line))
         done = 1;
 }
 
@@ -127,6 +155,7 @@ static void maybe_capture_open_assign_plot(void) {
     static int done = 0;
     const char *s;
     const char *p;
+    int line;
 
     if (done) return;
     s = getenv("GLR_OPEN_ASSIGN_PLOT");
@@ -134,11 +163,19 @@ static void maybe_capture_open_assign_plot(void) {
         done = 1;
         return;
     }
-    if (!glr_ctrl_open_assign_plot(atoi(s)))
+    line = capture_env_line(s, "GLR_OPEN_ASSIGN_PLOT");
+    if (line < 0) {
+        done = 1;
+        return;
+    }
+    if (!glr_ctrl_open_assign_plot(line))
         return;   /* row not on screen yet — retry next frame */
 
-    for (p = strchr(s, ','); p; p = strchr(p + 1, ','))
-        glr_ctrl_add_assign_plot_series(atoi(p + 1));
+    for (p = strchr(s, ','); p; p = strchr(p + 1, ',')) {
+        int series = capture_env_line(p + 1, "GLR_OPEN_ASSIGN_PLOT");
+        if (series >= 0)
+            glr_ctrl_add_assign_plot_series(series);
+    }
 
     {
         const char *expanded = getenv("GLR_ASSIGN_PLOT_EXPANDED");
@@ -178,6 +215,7 @@ static void maybe_capture_open_command_help(void) {
     const char *s;
     const char *comma;
     int dx;
+    int line;
 
     if (done) return;
     s = getenv("GLR_OPEN_COMMAND_HELP");
@@ -187,7 +225,8 @@ static void maybe_capture_open_command_help(void) {
     }
     comma = strchr(s, ',');
     dx = comma ? atoi(comma + 1) : 0;
-    if (glr_ctrl_open_command_description(atoi(s), dx))
+    line = capture_env_line(s, "GLR_OPEN_COMMAND_HELP");
+    if (line < 0 || glr_ctrl_open_command_description(line, dx))
         done = 1;   /* else the row is not on screen yet — retry next frame */
 }
 
@@ -252,7 +291,7 @@ void glr_capture_env_apply(const char *time_arg) {
                                     (view_toggle && *view_toggle) ||
                                     glr_pointer_script_active());
     }
-    /* Cursor line override: GLR_EDIT_LINE=<line> (0-based, clamped)
+    /* Cursor line override: GLR_EDIT_LINE=<line> (1-based, clamped)
      * parks the cursor on a committed source line and loads it into the
      * input buffer, then requests follow-scroll so the next frame makes
      * that line visible, exactly as arrowing to it would. Headless-
@@ -261,8 +300,11 @@ void glr_capture_env_apply(const char *time_arg) {
      * Applied after the file/example load so the line exists. */
     {
         const char *l_src = getenv("GLR_EDIT_LINE");
-        if (l_src && *l_src)
-            glr_ctrl_set_edit_line(atoi(l_src));
+        if (l_src && *l_src) {
+            int line = capture_env_line(l_src, "GLR_EDIT_LINE");
+            if (line >= 0)
+                glr_ctrl_set_edit_line(line);
+        }
     }
     /* Typed-input override: GLR_TYPE_KEYS=<text> feeds each character
      * through the keyboard dispatch exactly as typing would (guides,

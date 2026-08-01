@@ -446,8 +446,12 @@ int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
     glr_ctrl_build_ui_snapshot(&snap);
 
     if (spec[0] >= '0' && spec[0] <= '9') {
-        int line = atoi(spec);
-        if (line >= count)
+        /* Numeric targets are the code panel's own line numbers, 1-based, the
+         * same as the GLR_* capture hooks — a script says what the reader sees
+         * in the gutter. 0 addresses no row, so it fails the target rather
+         * than aiming at the first line. */
+        int line = atoi(spec) - 1;
+        if (line < 0 || line >= count)
             return 0;
         return ui_repl_code_panel_source_line_point(&snap, line, mx, my);
     }

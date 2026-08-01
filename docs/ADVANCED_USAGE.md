@@ -107,16 +107,20 @@ When both a command-line flag and an env var exist, the flag wins.
 
 ### gl-repl runtime
 
+Every hook that names a source row takes the line number the **code panel's
+gutter shows** — 1-based, so the number in the script is the number on screen.
+A value below 1 is refused with a note on stderr rather than acted on.
+
 | Variable | Values / default | Effect |
 |---|---|---|
 | `GLR_ASSETS_DIR` | Directory path; default `./assets`; `--assets` wins. | Primary music directory scanned for `*.mp3`. |
 | `GLR_TIME` | Seconds; default `0`; `--time` wins. | Initial animation time `t`, applied after any example/file load. |
-| `GLR_EDIT_LINE` | 0-based line index; clamped. | Parks the cursor after load and scrolls it into view so cursor-bound overlays render in captures. |
+| `GLR_EDIT_LINE` | Line number as the code panel shows it (1-based); clamped. | Parks the cursor after load and scrolls it into view so cursor-bound overlays render in captures. |
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |
-| `GLR_OPEN_COLOR_PICKER` | 0-based line index of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
-| `GLR_OPEN_GL_STATE` | 0-based line index of a blank source row. | Routes a synthetic right-click to that visible row and opens the GL-state popup; retries after `GLR_EDIT_LINE` follow-scroll. |
-| `GLR_OPEN_ASSIGN_PLOT` | Comma-separated 0-based line indices of assignment rows. | Routes a synthetic right-click to the first (visible) row and opens its value plot; same retry-until-on-screen behavior. Further rows are added as extra series, up to four, as Shift+right-click would. No-op if a row is not a `var = expr;` / `A[i] = expr;`, or if its X axis cannot match the first row's. |
-| `GLR_OPEN_COMMAND_HELP` | `<line>[,<dx>]` — 0-based line index of a committed GL-family row, plus an optional horizontal offset in screen px (right positive). | Right-clicks that row to raise its authored help card; same retry-until-on-screen behavior. No-op on a row with no description record. `dx` slides the opened card along x, since the click must land on the row being explained while the card may need to sit clear of something else; the renderer clamps it into the window. Pose it *after* `GLR_OPEN_ASSIGN_PLOT` — a right-click on an assignment row closes the card. |
+| `GLR_OPEN_COLOR_PICKER` | Line number of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
+| `GLR_OPEN_GL_STATE` | Line number of a blank source row. | Routes a synthetic right-click to that visible row and opens the GL-state popup; retries after `GLR_EDIT_LINE` follow-scroll. |
+| `GLR_OPEN_ASSIGN_PLOT` | Comma-separated line numbers of assignment rows. | Routes a synthetic right-click to the first (visible) row and opens its value plot; same retry-until-on-screen behavior. Further rows are added as extra series, up to four, as Shift+right-click would. No-op if a row is not a `var = expr;` / `A[i] = expr;`, or if its X axis cannot match the first row's. |
+| `GLR_OPEN_COMMAND_HELP` | `<line>[,<dx>]` — line number of a committed GL-family row, plus an optional horizontal offset in screen px (right positive). | Right-clicks that row to raise its authored help card; same retry-until-on-screen behavior. No-op on a row with no description record. `dx` slides the opened card along x, since the click must land on the row being explained while the card may need to sit clear of something else; the renderer clamps it into the window. Pose it *after* `GLR_OPEN_ASSIGN_PLOT` — a right-click on an assignment row closes the card. |
 | `GLR_ASSIGN_PLOT_EXPANDED` | Any non-empty value; default off. | Opens the assignment plot in its doubled size (the `2x` zoom chip, otherwise mouse-only). |
 | `GLR_ASSIGN_PLOT_LOG` | Any non-empty value; default off. | Requests the log₁₀ Y axis (the `log` chip). Ignored only when the trace is pinned at exactly zero; signed data lands on the symmetric log axis. |
 | `GLR_ASSIGN_PLOT_RATE` | `once`, `1hz`, `frame`; default `1hz`. | Sets the capture-rate chip (mouse-only otherwise). `frame` is what makes a plotted capture deterministic: at `1hz` the samples land on wall-clock, so the shot depends on how fast the machine renders. |
@@ -236,10 +240,11 @@ capture from a later point in the timeline, set the initial `t` with
 
 **Posing the cursor.** Cursor-bound overlays (transform guides, vertex
 labels) need the cursor parked on the relevant line — `GLR_EDIT_LINE=<n>`
-does that at startup, as if you had arrowed to source line *n*:
+does that at startup, as if you had arrowed to the line the code panel numbers
+*n*:
 
 ```bash
-GLR_EDIT_LINE=4 ./build/release-osmesa/gl-repl scene.c --no-audio &
+GLR_EDIT_LINE=5 ./build/release-osmesa/gl-repl scene.c --no-audio &
 ```
 
 ### Recording GIFs / MP4s

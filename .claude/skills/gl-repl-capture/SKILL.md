@@ -33,6 +33,8 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 
 ## Headless capture env hooks
 
+Line numbers are the code panel's own (1-based); below 1 is refused.
+
 | Var | Effect |
 |---|---|
 | `GLR_EDIT_LINE=<n>` | park cursor and scroll it into view → cursor-bound overlays render headlessly |

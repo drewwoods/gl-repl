@@ -639,7 +639,7 @@ EOF
 
 
 # Two quads in one glBegin/glEnd block. GLR_EDIT_LINE parks the cursor on
-# the second quad's second vertex (line 10) so Single polygon scope narrows
+# the second quad's second vertex (line 11) so Single polygon scope narrows
 # the highlight/labels to just that quad, not the whole shared block.
 stage_single_polygon() { stage single_polygon <<'EOF'
 /* @cfg poly_highlight = 1 */
@@ -898,7 +898,7 @@ glPopMatrix();
 EOF
 }
 
-# Cursor parks on line 5 (glTranslatef) via GLR_EDIT_LINE.
+# Cursor parks on line 6 (glTranslatef) via GLR_EDIT_LINE.
 stage_guide() { stage guide <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
@@ -917,7 +917,7 @@ glPopMatrix();
 EOF
 }
 
-# One transform-guide kind per tiny program, cursor on line 4 (GLR_EDIT_LINE=3
+# One transform-guide kind per tiny program, cursor on line 4 (GLR_EDIT_LINE=4
 # at the call site) — the transform whose guide is on show. Four programs rather
 # than four cursor stops in one, so every tile's code strip is the whole program
 # at the same crop and every guide anchors at the same place: the cursor line is
@@ -975,7 +975,7 @@ EOF
 }
 
 # World vs Frame guide mode, same program and same cursor line both times
-# (the second glTranslatef, GLR_EDIT_LINE=6) so only the anchor moves: World
+# (the second glTranslatef, GLR_EDIT_LINE=7) so only the anchor moves: World
 # draws from the world origin, Frame from where the pre-cursor modelview left
 # it — the first cube — which puts the Frame arrow's tip on the second cube and
 # the World arrow's tip in empty space. That contrast is the whole asset.
@@ -1043,7 +1043,7 @@ glBegin(GL_TRIANGLES);
 EOF
 }
 
-# Clip plane: cursor parks on the glClipPlane line (GLR_EDIT_LINE=5 at the
+# Clip plane: cursor parks on the glClipPlane line (GLR_EDIT_LINE=6 at the
 # call site) so the clip-plane guide renders — gridded disc, ghost rim,
 # kept-half-space arrow with the P0 readout.
 stage_clip_plane() { stage clip_plane <<'EOF'
@@ -1337,7 +1337,7 @@ EOF
 }
 
 # OpenGL state inspector: the blank row after the authored state changes is
-# line 9 after @cfg headers/snippet markers are stripped and the authored
+# line 10 after @cfg headers/snippet markers are stripped and the authored
 # light position is lifted into generated display setup. The GLR_OPEN_GL_STATE
 # capture hook opens the same popup a right-click would.
 stage_gl_state_inspector() { stage gl_state_inspector <<'EOF'
@@ -1468,14 +1468,14 @@ if want first-triangle; then
 fi
 
 # Overlay toggles: the ten-line program above the quad it annotates, cropped to
-# both and stacked. GLR_EDIT_LINE=4 parks the cursor on the glNormal3f row --
+# both and stacked. GLR_EDIT_LINE=5 parks the cursor on the glNormal3f row --
 # the overlays are cursor-block bound, so with the cursor on the trailing blank
 # row (the old shot) there is no block and the normals, labels and highlight
 # the asset exists to show are simply not drawn. WARM outlasts the splash,
 # which otherwise dims the bottom of the scene crop.
 if want vertex-overlays; then
     ( WARM=$((WARM_SPLASH + 30))
-      export GLR_EDIT_LINE=4
+      export GLR_EDIT_LINE=5
       still "$WORK/vo-full.png" 16 "$(stage_overlays)" )
     write_png "$WORK/vo-full.png" "$WORK/vo-code.png" \
         -crop "$VO_CODE_CROP" +repage
@@ -1492,7 +1492,7 @@ fi
 # and the scene, and nothing else in the window.
 if want single-polygon-scope; then
     ( WARM=$((WARM_SPLASH + 30))
-      export GLR_EDIT_LINE=10
+      export GLR_EDIT_LINE=11
       still "$WORK/sps-full.png" 16 "$(stage_single_polygon)" )
     write_png "$WORK/sps-full.png" "$WORK/sps-code.png" \
         -crop "$SP_CODE_CROP" +repage
@@ -1508,7 +1508,7 @@ fi
 # transform stacks, so parking the cursor on each call in turn moves the
 # highlight between two triangles that are far apart on screen and different
 # colours -- which is the point the User Guide's overlay section is making.
-# GLR_EDIT_LINE is a 0-BASED document index, so 53/59 are panel lines 54/60.
+# The lines are the code panel's own numbers -- 54 and 60, the two tri() calls.
 #
 # Each tile is a code strip above a scene strip (same width, so -append needs
 # no padding), montaged at NATIVE resolution: the code rows have to stay
@@ -1520,7 +1520,7 @@ fi
 # use a long warm to wait for the camera crosshair to fade
 if want cursor-highlight; then
     ( export GLR_NO_SPLASH=1 GLR_TICK_PER_FRAME=1
-      for line in 53 59; do
+      for line in 54 60; do
           ( export GLR_EDIT_LINE=$line
             WARM=220 still "$WORK/ch-$line.png" 16 \
                 --example "$EX_XFORM" --time 1 )
@@ -1548,7 +1548,7 @@ fi
 # montage1x2's output exactly -- (545 + 2*2) * 2 == 1094 + 2*2 -- so the
 # vertical append needs no padding.
 if want label-placement; then
-    ( export GLR_EDIT_LINE=8
+    ( export GLR_EDIT_LINE=9
       still "$WORK/lp-declutter.png" 16 \
             "$(stage_label_placement OVERLAY_LABEL_PLACEMENT_DECLUTTERED)"
       still "$WORK/lp-at-vertex.png" 16 \
@@ -1614,9 +1614,9 @@ fi
 if want window-tour; then
     ( WARM=200
       export GLR_ACCUM_EFFECT=blur
-      export GLR_EDIT_LINE=9 GLR_OPEN_ASSIGN_PLOT=6,7
+      export GLR_EDIT_LINE=10 GLR_OPEN_ASSIGN_PLOT=7,8
       export GLR_ASSIGN_PLOT_RATE=frame
-      export GLR_OPEN_COMMAND_HELP=9,330
+      export GLR_OPEN_COMMAND_HELP=10,330
       still "$OUT/window-tour.png" 16 "$(stage_window_tour_dir)" )
 fi
 
@@ -1697,7 +1697,7 @@ fi
 # mid-fade.
 if want glu-tess; then
     ( WARM=$WARM_FADE
-      export GLR_EDIT_LINE=16
+      export GLR_EDIT_LINE=17
       still "$WORK/glu-full.png" 16 --example "$EX_GLU" )
     write_png "$WORK/glu-full.png" "$WORK/glu-code.png" \
         -crop "$GT_CODE_CROP" +repage
@@ -1896,7 +1896,7 @@ fi
 if want xform-guide-montage; then
     xg_tiles=()
     for kind in translate rotate scale scale-origin; do
-        ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=3
+        ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=4
           still "$WORK/xg-$kind.png" 16 "$(stage_xform_guide "$kind")" )
         magick "$WORK/xg-$kind.png" -crop "$XG_CODE_CROP" +repage \
             "$WORK/xg-c-$kind.png"
@@ -1917,7 +1917,7 @@ fi
 # widths are picked to match montage2x1's output exactly -- 800 + 2*2 both ways
 # -- so the vertical append needs no padding.
 if want xform-guide-mode; then
-    ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=6
+    ( export GLR_NO_SPLASH=1 GLR_EDIT_LINE=7
       still "$WORK/xgm-world.png" 16 "$(stage_xform_guide_mode 1)"
       still "$WORK/xgm-frame.png" 16 "$(stage_xform_guide_mode 2)" )
     magick "$WORK/xgm-world.png" -crop "$XM_CODE_CROP" +repage \
@@ -1983,7 +1983,7 @@ fi
 # Color picker: opened via the GLR_OPEN_COLOR_PICKER capture hook (the
 # picker otherwise needs a swatch click). Line 7 = the glColor3f.
 if want color-picker; then
-    ( export GLR_EDIT_LINE=7 GLR_OPEN_COLOR_PICKER=7
+    ( export GLR_EDIT_LINE=8 GLR_OPEN_COLOR_PICKER=8
       still "$OUT/color-picker.png" 16 "$(stage_color_picker)" )
 fi
 
@@ -1992,7 +1992,7 @@ fi
 # stepper shows at the panel's right edge. Cropped to the code-panel top:
 # the widget is 16px, a full-window shot would reduce it to a speck.
 if want numeric-stepper; then
-    ( export GLR_EDIT_LINE=0
+    ( export GLR_EDIT_LINE=1
       still "$WORK/numeric-stepper-full.png" 16 "$(stage_stepper)" )
     write_png "$WORK/numeric-stepper-full.png" "$OUT/numeric-stepper.png" \
         -crop 1200x110+0+28 +repage
@@ -2004,7 +2004,7 @@ fi
 # it lists -- and far enough down to keep the teapot those rows are drawing,
 # since the table describes the GL that renders it.
 if want gl-state-inspector; then
-    ( export GLR_EDIT_LINE=9 GLR_OPEN_GL_STATE=9
+    ( export GLR_EDIT_LINE=10 GLR_OPEN_GL_STATE=10
       still "$WORK/gls-full.png" 16 "$(stage_gl_state_inspector)" )
     write_png "$WORK/gls-full.png" "$OUT/gl-state-inspector.png" \
         -crop "$GLS_CROP" +repage
@@ -2017,12 +2017,12 @@ fi
 # differs is the axis caption and the trace under it; two full-window stills
 # would be two near-identical 1200x800 pages of mostly grid.
 #
-# Left tile: index 5 is the `wave = ...` assignment inside the loop (0-based,
-# counted after the @cfg headers and the snippet markers are stripped, same as
-# GLR_EDIT_LINE). WARM outlasts the splash (WARM_SPLASH) rather than taking the
-# house-default 30: this panel lands bottom-right, exactly where the splash
-# strip dims the frame, and the min/max/mean/sd rows the shot exists to show
-# are unreadable underneath it.
+# Left tile: line 6 is the `wave = ...` assignment inside the loop (the code
+# panel's own numbering, counted after the @cfg headers and the snippet markers
+# are stripped, same as GLR_EDIT_LINE). WARM outlasts the splash (WARM_SPLASH)
+# rather than taking the house-default 30: this panel lands bottom-right,
+# exactly where the splash strip dims the frame, and the min/max/mean/sd rows
+# the shot exists to show are unreadable underneath it.
 #
 # Right tile: the frames axis needs several capture *instants*, not one frame:
 # the 1 Hz capture rate is gated on wall clock, not on frame count, so what it
@@ -2030,14 +2030,14 @@ fi
 # for a duration — which means, like profile-panels, the sample count in the
 # shot reflects the machine that generated it. Regenerate on an otherwise idle
 # one, and expect n= to move. 600 frames also clears the splash.
-# Index 6 is the `angle = ...` row — the four glEnable rows above it are part
+# Line 7 is the `angle = ...` row — the four glEnable rows above it are part
 # of the scene.
 if want assign-plot; then
     ( WARM=$((WARM_SPLASH + 30))
-      export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5
+      export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6
       still "$WORK/ap-exec-full.png" 16 "$(stage_assign_plot)" )
     ( WARM=600
-      export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6
+      export GLR_EDIT_LINE=7 GLR_OPEN_ASSIGN_PLOT=7
       still "$WORK/ap-frames-full.png" 16 "$(stage_assign_plot_frames)" )
     write_png "$WORK/ap-exec-full.png" "$WORK/ap-exec.png" \
         -crop "$AP_CROP" +repage
@@ -2049,13 +2049,13 @@ if want assign-plot; then
 fi
 
 # Several rows on one plot: Shift+right-click adds a series, and the hook's
-# comma list is that same add path. Row 7 (`wave = ...`) leads, so it owns the
-# X axis; 5 and 6 are its two components. Cropped like the pair above, one row
+# comma list is that same add path. Line 8 (`wave = ...`) leads, so it owns the
+# X axis; 6 and 7 are its two components. Cropped like the pair above, one row
 # taller because the legend band only exists past one series -- and wider,
 # since the legend spreads the three names across the panel.
 if want assign-plot-series; then
     ( WARM=$((WARM_SPLASH + 30))
-      export GLR_EDIT_LINE=7 GLR_OPEN_ASSIGN_PLOT=7,5,6
+      export GLR_EDIT_LINE=8 GLR_OPEN_ASSIGN_PLOT=8,6,7
       still "$WORK/aps-full.png" 16 "$(stage_assign_plot_series)" )
     write_png "$WORK/aps-full.png" "$OUT/assign-plot-series.png" \
         -crop "$APS_CROP" +repage
@@ -2064,11 +2064,11 @@ fi
 
 # lin | log on the same two traces, side by side -- the claim the prose used to
 # make in three paragraphs. GLR_ASSIGN_PLOT_LOG flips the chip that is
-# otherwise mouse-only. Rows 5 and 6 are `big` and `small`; `big` leads.
+# otherwise mouse-only. Lines 6 and 7 are `big` and `small`; `big` leads.
 if want assign-plot-log; then
     for ap_log in 0 1; do
         ( WARM=$((WARM_SPLASH + 30))
-          export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5,6
+          export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6,7
           [ "$ap_log" = 1 ] && export GLR_ASSIGN_PLOT_LOG=1
           still "$WORK/apl-$ap_log-full.png" 16 "$(stage_assign_plot_log)" )
         write_png "$WORK/apl-$ap_log-full.png" "$WORK/apl-$ap_log.png" \
@@ -2090,17 +2090,17 @@ if want profile-panels; then
 fi
 
 if want clip-plane; then
-    ( export GLR_EDIT_LINE=5
+    ( export GLR_EDIT_LINE=6
       still "$OUT/clip-plane.png" 16 "$(stage_clip_plane)" )
 fi
 
 if want clip-plane-sweep; then
-    ( export GLR_EDIT_LINE=5
+    ( export GLR_EDIT_LINE=6
       gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
-    ( export GLR_EDIT_LINE=5
+    ( export GLR_EDIT_LINE=6
       gif "$OUT/xform-guide.gif" 120 1 20 720 "$(stage_guide)" )
 fi
 
@@ -2226,7 +2226,7 @@ fi
 
 # Transforms & GL state.
 if want sc-planar-shadows; then
-    ( export GLR_EDIT_LINE=2
+    ( export GLR_EDIT_LINE=3
     gif "$SHOW/planar-shadows.gif" 200 2 20 560 \
         --example "Planar shadows (glMultMatrixf)" )
 fi

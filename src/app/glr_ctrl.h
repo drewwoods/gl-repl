@@ -313,8 +313,8 @@ void glr_ctrl_help_scroll_by(int delta);                            /* clamped h
  * coordinates and return 0 when the target is not currently on screen — the
  * help overlay is closed, the label matches no tab, or no matching code row
  * is on screen. A text `code:` spec takes the first visible row whose
- * canonical text it prefixes; a numeric one addresses a source line
- * directly. */
+ * canonical text it prefixes; a numeric one addresses a source line by the
+ * code panel's own 1-based number. */
 int glr_ctrl_help_tab_point(const char *label, int *mx, int *my);
 int glr_ctrl_code_line_point(const char *spec, int *mx, int *my);
 int glr_ctrl_router_handle_scene_cycle_special(int key);            /* F12 */
