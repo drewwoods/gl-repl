@@ -581,8 +581,8 @@ Pieces, all in [`src/render3d/grid.c`](../src/render3d/grid.c):
 
 * `render3d_grid_theme_uses_edge_fade(theme)` — the membership predicate
   (declared in [`grid.h`](../src/render3d/grid.h), pure, test-visible). True for the table-driven
-  line themes (minus FOG) plus the two custom-path line grids (XZ Ruler,
-  Star Chart).
+  line themes (minus FOG, and including XZ Ruler since it joined the spec
+  table) plus the custom-path Star Chart.
 * `grid_edge_fade_build()` — once per frame, caches `fade_end` / `band`
   and the offset-0 breakpoint ramp (used by the origin axes, which run
   through the origin so radius == |along|). `fade_end = extent` steady,
@@ -634,8 +634,8 @@ with — keep this current when adding a theme):
 
 | Theme(s) | Dissolve mechanism |
 |---|---|
-| Classic, Tron, Ember, Faint, Aurora, Synthwave | World-radial alpha (spec-table, via `draw_grid_line_pair`) |
-| XZ Ruler, Star Chart | World-radial alpha (custom path, but lines route through `draw_grid_line_pair`; in the edge-fade predicate) |
+| Classic, Tron, Ember, Faint, Aurora, Synthwave, XZ Ruler | World-radial alpha (spec-table, via `draw_grid_line_pair`) |
+| Star Chart | World-radial alpha (custom path, but lines route through `draw_grid_line_pair`; in the edge-fade predicate) |
 | Focus | Own alpha fade by distance from the focus point (bounded magnifier) |
 | Adaptive Planes | Own alpha fade by camera orientation (vertical planes) |
 | Ocean, Frozen Lake | Intentional **environment fog/tint** to their *own* color (underwater teal / glacial), full-frame — not the clear color |
@@ -662,7 +662,7 @@ camera looks down −Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L137), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L143), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 

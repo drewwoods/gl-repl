@@ -131,7 +131,13 @@ typedef struct GridLineColors {
 typedef void (*GridLineColorFn)(float v, int is_major,
                                 const GridDrawContext *ctx,
                                 GridLineColors *out);
-typedef Render3dRgba (*GridOriginColorFn)(const GridDrawContext *ctx);
+/* Fills the X-axis / Z-axis origin colors. A pair rather than one color
+ * because XZ Ruler codes direction into its meridians (warm key on X, cool
+ * key on Z) — that difference is why it used to own a duplicate of
+ * draw_grid_origin_axes. Themes with one origin color fill both slots via
+ * grid_line_colors_same, matching GridLineColors' x_const/z_const naming. */
+typedef void (*GridOriginColorFn)(const GridDrawContext *ctx,
+                                  GridLineColors *out);
 typedef void (*GridPassFn)(const GridDrawContext *ctx);
 
 typedef struct GridThemeSpec {
@@ -217,6 +223,14 @@ static void grid_color_rgba(const GridDrawContext *ctx, Render3dRgba c) {
 static void grid_line_colors_same(GridLineColors *out, Render3dRgba color) {
     out->x_const = color;
     out->z_const = color;
+}
+
+/* By-value twin, for passing a single color where an x/z pair is expected
+ * (the origin-axes call sites of the custom themes). */
+static GridLineColors grid_line_colors_of(Render3dRgba color) {
+    GridLineColors out;
+    grid_line_colors_same(&out, color);
+    return out;
 }
 
 /* Build the per-frame dissolve front and cache fade_end/band on the
@@ -504,18 +518,21 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
     }
 }
 
-/* Emit the two origin axes at `color`, honoring whichever fade path is
- * live. Split out of draw_grid_origin_axes so the casing pass can reuse it
- * verbatim; the caller owns line width, depth mask and the GL_LINES block. */
+/* Emit the two origin axes — X at colors.x_const, Z at colors.z_const —
+ * honoring whichever fade path is live. Split out of draw_grid_origin_axes
+ * so the casing pass can reuse it verbatim; the caller owns line width,
+ * depth mask and the GL_LINES block. */
 static void emit_grid_origin_axes(const GridDrawContext *ctx,
-                                  Render3dRgba color) {
+                                  GridLineColors colors) {
+    Render3dRgba cx = colors.x_const, cz = colors.z_const;
     if (grid_reveal_active(ctx)) {
-        grid_reveal_line(ctx, color, 1, 0.0f);  /* X axis, runs along X */
-        grid_reveal_line(ctx, color, 0, 0.0f);  /* Z axis, runs along Z */
+        grid_reveal_line(ctx, cx, 1, 0.0f);  /* X axis, runs along X */
+        grid_reveal_line(ctx, cz, 0, 0.0f);  /* Z axis, runs along Z */
     } else if (!ctx->edge_fade) {
-        grid_color_rgba(ctx, color);
+        grid_color_rgba(ctx, cx);
         glVertex3f(-ctx->extent, 0, 0);
         glVertex3f( ctx->extent, 0, 0);
+        grid_color_rgba(ctx, cz);
         glVertex3f(0, 0, -ctx->extent);
         glVertex3f(0, 0,  ctx->extent);
     } else {
@@ -523,20 +540,20 @@ static void emit_grid_origin_axes(const GridDrawContext *ctx,
         for (int i = 0; i + 1 < ctx->ef_n; i++) {
             float m0 = ctx->ef_mul[i], m1 = ctx->ef_mul[i + 1];
             float p0 = ctx->ef_bp[i],  p1 = ctx->ef_bp[i + 1];
-            grid_color(ctx, color.r, color.g, color.b, color.a * m0);
+            grid_color(ctx, cx.r, cx.g, cx.b, cx.a * m0);
             glVertex3f(p0, 0, 0);
-            grid_color(ctx, color.r, color.g, color.b, color.a * m1);
+            grid_color(ctx, cx.r, cx.g, cx.b, cx.a * m1);
             glVertex3f(p1, 0, 0);
-            grid_color(ctx, color.r, color.g, color.b, color.a * m0);
+            grid_color(ctx, cz.r, cz.g, cz.b, cz.a * m0);
             glVertex3f(0, 0, p0);
-            grid_color(ctx, color.r, color.g, color.b, color.a * m1);
+            grid_color(ctx, cz.r, cz.g, cz.b, cz.a * m1);
             glVertex3f(0, 0, p1);
         }
     }
 }
 
-static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color,
-                                  float line_width) {
+static void draw_grid_origin_axes(const GridDrawContext *ctx,
+                                  GridLineColors colors, float line_width) {
     /* Casing first, and with the depth mask still FALSE: the axes are the
      * one grid pass that writes depth, and a casing that wrote it would sit
      * at exactly the core's depth and fail the core's GL_LESS test. The
@@ -544,11 +561,15 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color
     float casing_a = grid_casing_alpha(ctx);
     if (casing_a > 0.0f) {
         GridDrawContext cctx = grid_casing_ctx(ctx);
-        Render3dRgba cc = grid_casing_color(ctx, casing_a, color.a);
+        GridLineColors casing;
+        casing.x_const = grid_contrast_color(
+            grid_casing_color(ctx, casing_a, colors.x_const.a), colors.x_const);
+        casing.z_const = grid_contrast_color(
+            grid_casing_color(ctx, casing_a, colors.z_const.a), colors.z_const);
         glLineWidth(line_width + GRID_CASING_WIDTH_ADD);
         grid_contrast_blend_begin();
         glBegin(GL_LINES);
-        emit_grid_origin_axes(&cctx, grid_contrast_color(cc, color));
+        emit_grid_origin_axes(&cctx, casing);
         glEnd();
         grid_contrast_blend_end();
     }
@@ -559,7 +580,7 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color
     else if (casing_a > 0.0f)
         glLineWidth(1.0f);
     glBegin(GL_LINES);
-    emit_grid_origin_axes(ctx, color);
+    emit_grid_origin_axes(ctx, colors);
     glEnd();
     if (line_width != 1.0f)
         glLineWidth(1.0f);
@@ -613,8 +634,10 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
     }
     glEnd();
 
-    Render3dRgba origin_c = spec->origin_color(ctx);
-    origin_c.a = fminf(origin_c.a * ctx->alpha_scale, 1.0f);
+    GridLineColors origin_c;
+    spec->origin_color(ctx, &origin_c);
+    origin_c.x_const.a = fminf(origin_c.x_const.a * ctx->alpha_scale, 1.0f);
+    origin_c.z_const.a = fminf(origin_c.z_const.a * ctx->alpha_scale, 1.0f);
     draw_grid_origin_axes(ctx, origin_c, spec->origin_line_width);
 
     if (spec->end_pass)
@@ -630,9 +653,10 @@ static void grid_classic_line_color(float v, int is_major,
                                     is_major ? 0.22f : 0.08f));
 }
 
-static Render3dRgba grid_classic_origin_color(const GridDrawContext *ctx) {
+static void grid_classic_origin_color(const GridDrawContext *ctx,
+                                      GridLineColors *out) {
     (void)ctx;
-    return rgba(0.50f, 0.50f, 0.60f, 0.45f);
+    grid_line_colors_same(out, rgba(0.50f, 0.50f, 0.60f, 0.45f));
 }
 
 static void grid_fog_end(const GridDrawContext *ctx) {
@@ -652,9 +676,10 @@ static void grid_tron_line_color(float v, int is_major,
                                     base * fade * glow));
 }
 
-static Render3dRgba grid_tron_origin_color(const GridDrawContext *ctx) {
+static void grid_tron_origin_color(const GridDrawContext *ctx,
+                                   GridLineColors *out) {
     float glow = 0.7f + ctx->breath * 0.3f;
-    return rgba(0.0f, 0.8f, 1.0f, 0.25f * glow);
+    grid_line_colors_same(out, rgba(0.0f, 0.8f, 1.0f, 0.25f * glow));
 }
 
 static void grid_ember_line_color(float v, int is_major,
@@ -671,11 +696,11 @@ static void grid_ember_line_color(float v, int is_major,
                                     0.05f, a));
 }
 
-static Render3dRgba grid_ember_origin_color(const GridDrawContext *ctx) {
-    (void)ctx;
+static void grid_ember_origin_color(const GridDrawContext *ctx,
+                                    GridLineColors *out) {
     float ripple0 = -sinf(ctx->anim_time * 2.5f) * 0.5f + 0.5f;
-    return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
-                0.7f * (0.6f + ripple0 * 0.4f));
+    grid_line_colors_same(out, rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
+                                    0.7f * (0.6f + ripple0 * 0.4f)));
 }
 
 /* Aurora: an arctic night. The floor is frosty ice-blue lines with a slow
@@ -699,9 +724,10 @@ static void grid_aurora_line_color(float v, int is_major,
                                     base * fade * (0.7f + shimmer * 0.3f)));
 }
 
-static Render3dRgba grid_aurora_origin_color(const GridDrawContext *ctx) {
+static void grid_aurora_origin_color(const GridDrawContext *ctx,
+                                     GridLineColors *out) {
     float s0 = sinf(ctx->anim_time * 0.7f) * 0.5f + 0.5f;
-    return rgba(0.50f, 0.80f + 0.10f * s0, 0.95f, 0.50f);
+    grid_line_colors_same(out, rgba(0.50f, 0.80f + 0.10f * s0, 0.95f, 0.50f));
 }
 
 
@@ -729,10 +755,11 @@ static void grid_synthwave_line_color(float v, int is_major,
                         base * fade * (0.65f + 0.55f * wave) * glow);
 }
 
-static Render3dRgba grid_synthwave_origin_color(const GridDrawContext *ctx) {
+static void grid_synthwave_origin_color(const GridDrawContext *ctx,
+                                        GridLineColors *out) {
     /* Cyan accent against the pink field, pulsing with the same breath. */
     float glow = 0.75f + ctx->breath * 0.25f;
-    return rgba(0.15f, 0.85f, 1.0f, 0.40f * glow);
+    grid_line_colors_same(out, rgba(0.15f, 0.85f, 1.0f, 0.40f * glow));
 }
 
 static void grid_ruler_line_color(float v, int is_major,
@@ -746,6 +773,42 @@ static void grid_ruler_line_color(float v, int is_major,
      * pile up into a saturated orange/blue wash (accent-palette rework). */
     out->x_const = rgba(0.62f, 0.56f, 0.50f, a);
     out->z_const = rgba(0.50f, 0.56f, 0.66f, a);
+}
+
+/* Origin meridians, directionally coded: warm key on X, cool key on Z, from
+ * the shared accent palette's role map (accent_palette.h) so the ruler
+ * retunes with the examples. This two-color pair is the reason
+ * GridOriginColorFn fills a GridLineColors instead of returning one color. */
+static void grid_ruler_origin_color(const GridDrawContext *ctx,
+                                    GridLineColors *out) {
+    (void)ctx;
+    const float *ax = palette_anchor_rgb(PAL_ROLE_WARM_KEY);
+    const float *az = palette_anchor_rgb(PAL_ROLE_COOL_KEY);
+    out->x_const = rgba(ax[0], ax[1], ax[2], 0.60f);
+    out->z_const = rgba(az[0], az[1], az[2], 0.60f);
+}
+
+/* Ruler tick marks at major-line intervals on both axes, in the same warm/
+ * cool coding as the meridians they cross. Rides end_pass, so it lands after
+ * the origin axes exactly as it did on the old custom path. */
+static void grid_ruler_end_pass(const GridDrawContext *ctx) {
+    const float *ax = palette_anchor_rgb(PAL_ROLE_WARM_KEY);
+    const float *az = palette_anchor_rgb(PAL_ROLE_COOL_KEY);
+    float extent = ctx->extent, major = ctx->major, as = ctx->alpha_scale;
+    float tick = 0.06f;
+    glBegin(GL_LINES);
+    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += major) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        float ta = (fabsf(v) <= major * 2.5f) ? 0.44f : 0.20f;
+        ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(ctx, v);
+        /* Ticks crossing the X axis in the Z direction — warm key */
+        grid_color(ctx, ax[0], ax[1], ax[2], ta);
+        glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
+        /* Ticks crossing the Z axis in the X direction — cool key */
+        grid_color(ctx, az[0], az[1], az[2], ta);
+        glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
+    }
+    glEnd();
 }
 
 static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
@@ -765,6 +828,10 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     [GRID_THEME_SYNTHWAVE] = {
         grid_synthwave_line_color, grid_synthwave_origin_color, NULL, NULL,
         2.0f
+    },
+    [GRID_THEME_XZRULER] = {
+        grid_ruler_line_color, grid_ruler_origin_color, NULL,
+        grid_ruler_end_pass, 2.0f
     },
 };
 
@@ -1090,7 +1157,8 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
     /* Origin axes: brighter frozen seams (depth-written like every
      * theme's origin pass). */
     draw_grid_origin_axes(grid_ctx,
-                          rgba(0.80f, 0.92f, 1.0f, fminf(0.55f * as, 1.0f)),
+                          grid_line_colors_of(
+                              rgba(0.80f, 0.92f, 1.0f, fminf(0.55f * as, 1.0f))),
                           1.5f);
 
     /* ---- Ice sheet ----
@@ -1453,86 +1521,12 @@ static void render3d_grid_render_starchart_theme(const GridDrawContext *grid_ctx
     /* Origin meridians: parchment-gold rules, depth-written like every
      * theme's origin pass. */
     draw_grid_origin_axes(grid_ctx,
-                          rgba(0.92f, 0.80f, 0.52f, fminf(0.40f * as, 1.0f)),
+                          grid_line_colors_of(
+                              rgba(0.92f, 0.80f, 0.52f, fminf(0.40f * as, 1.0f))),
                           1.5f);
 
     grid_chart_draw_links(grid_ctx);
     grid_chart_draw_nodes(grid_ctx, config);
-}
-
-static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
-    float extent = grid_ctx->extent;
-    float major = grid_ctx->major;
-    float step = grid_ctx->step;
-    float major_tol = grid_ctx->major_tol;
-    float as = grid_ctx->alpha_scale;
-    /* Axis + tick colors come from the shared accent palette's role map
-     * (accent_palette.h) so the ruler retunes with the examples: warm key
-     * on X, cool key on Z. The field lines above stay derived
-     * near-neutrals; the overlay tokens stay in render3d/palette.h. */
-    const float *ax = palette_anchor_rgb(PAL_ROLE_WARM_KEY);
-    const float *az = palette_anchor_rgb(PAL_ROLE_COOL_KEY);
-
-    /* Non-origin grid lines with directional colour coding */
-    glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += step) {
-        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-        int is_major = grid_is_major_line(v, major, major_tol);
-        GridLineColors colors;
-        grid_ruler_line_color(v, is_major, grid_ctx, &colors);
-        colors.x_const.a = fminf(colors.x_const.a * as, 1.0f);
-        colors.z_const.a = fminf(colors.z_const.a * as, 1.0f);
-        draw_grid_line_pair(v, grid_ctx, colors);
-    }
-    glEnd();
-
-    /* Origin axes - bright, wider. Edge-fade subdivides each axis so it
-     * dissolves into the backdrop at the rim like the grid lines. */
-    glDepthMask(GL_TRUE);
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    if (grid_ctx->edge_fade) {
-        for (int i = 0; i + 1 < grid_ctx->ef_n; i++) {
-            float m0 = grid_ctx->ef_mul[i], m1 = grid_ctx->ef_mul[i + 1];
-            float p0 = grid_ctx->ef_bp[i],  p1 = grid_ctx->ef_bp[i + 1];
-            /* X axis (z=0, along X) — warm key */
-            grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f * m0);
-            glVertex3f(p0, 0, 0);
-            grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f * m1);
-            glVertex3f(p1, 0, 0);
-            /* Z axis (x=0, along Z) — cool key */
-            grid_color(grid_ctx, az[0], az[1], az[2], 0.60f * m0);
-            glVertex3f(0, 0, p0);
-            grid_color(grid_ctx, az[0], az[1], az[2], 0.60f * m1);
-            glVertex3f(0, 0, p1);
-        }
-    } else {
-        /* X axis (z=0, runs along X) — warm key */
-        grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f);
-        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        /* Z axis (x=0, runs along Z) — cool key */
-        grid_color(grid_ctx, az[0], az[1], az[2], 0.60f);
-        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
-    }
-    glEnd();
-    glLineWidth(1.0f);
-    glDepthMask(GL_FALSE);
-
-    /* Ruler tick marks at major-line intervals on both axes */
-    float tick = 0.06f;
-    glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += major) {
-        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-        float ta = (fabsf(v) <= major * 2.5f) ? 0.44f : 0.20f;
-        ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(grid_ctx, v);
-        /* Ticks crossing the X axis in the Z direction — warm key */
-        grid_color(grid_ctx, ax[0], ax[1], ax[2], ta);
-        glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
-        /* Ticks crossing the Z axis in the X direction — cool key */
-        grid_color(grid_ctx, az[0], az[1], az[2], ta);
-        glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
-    }
-    glEnd();
 }
 
 static void render3d_grid_render_planes_theme(const Render3dRenderConfig *config,
@@ -2358,10 +2352,6 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     case GRID_THEME_STARCHART:
         render3d_grid_render_starchart_theme(grid_ctx, frame_ctx);
-        break;
-
-    case GRID_THEME_XZRULER:
-        render3d_grid_render_xzruler_theme(grid_ctx);
         break;
 
     case GRID_THEME_SKETCH:
