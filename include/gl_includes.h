@@ -19,7 +19,9 @@
         #include <GL/freeglut.h>
     #endif
 #else
+    #ifndef GL_GLEXT_PROTOTYPES
     #define GL_GLEXT_PROTOTYPES
+    #endif
     #include <GL/gl.h>
     #include <GL/glext.h>
     #include <GL/glu.h>
