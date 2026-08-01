@@ -60,8 +60,12 @@ void glr_workspaces_refresh(void) {
             !S_ISDIR(st.st_mode) ||
             !workspace_io_manifest_read(path, &manifest, NULL, 0))
             continue;
+        /* A directory name can be far longer than this menu label; clipping
+         * it is intended. The precision says so explicitly, which keeps the
+         * copy provably in-bounds and silences -Wformat-truncation. */
         snprintf(g_entries[g_count].name, sizeof(g_entries[g_count].name),
-                 "%s", manifest.name[0] ? manifest.name : ent->d_name);
+                 "%.*s", (int)sizeof(g_entries[g_count].name) - 1,
+                 manifest.name[0] ? manifest.name : ent->d_name);
         snprintf(g_entries[g_count].path, sizeof(g_entries[g_count].path),
                  "%s", path);
         g_count++;

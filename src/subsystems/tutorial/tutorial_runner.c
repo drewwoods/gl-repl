@@ -165,6 +165,13 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
+/* Width the status formats reserve for the prefix. It is only non-empty on
+ * step 0 ("<name> Tutorial [n/m]: "), and capping it there is what keeps the
+ * instruction after it from being the part that gets truncated away. It is
+ * also the bound GCC needs to see, so applying it as a "%.*s" precision at
+ * every call site silences -Wformat-truncation. */
+#define TUTORIAL_PREFIX_CLIP 48
+
 static void get_tutorial_prefix(char *out, size_t out_size) {
     TutorialRuntimeState state = tutorial_state_view();
     if (state.active && state.step == 0) {
@@ -182,8 +189,8 @@ static void format_step_entry_hint(int step, int total,
     char prefix[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(out, out_size,
-             "%sstep %d/%d - type the command or press Tab to autocomplete",
-             prefix, step + 1, total);
+             "%.*sstep %d/%d - type the command or press Tab to autocomplete",
+             TUTORIAL_PREFIX_CLIP, prefix, step + 1, total);
 }
 
 static void format_step_commit_hint(int step, int total,
@@ -191,8 +198,8 @@ static void format_step_commit_hint(int step, int total,
     char prefix[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(out, out_size,
-             "%sstep %d/%d - press Enter or ';' to commit",
-             prefix, step + 1, total);
+             "%.*sstep %d/%d - press Enter or ';' to commit",
+             TUTORIAL_PREFIX_CLIP, prefix, step + 1, total);
 }
 
 /* Status emitted on COMMAND-step entry. The trailing affordance hint
@@ -353,7 +360,8 @@ static void tutorial_set_status_ack_set(void) {
     char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
-    snprintf(msg, sizeof(msg), "%sPress Enter / Tab / Space to continue", prefix);
+    snprintf(msg, sizeof(msg), "%.*sPress Enter / Tab / Space to continue",
+             TUTORIAL_PREFIX_CLIP, prefix);
     repl_set_status(msg);
 }
 
@@ -361,7 +369,8 @@ static void tutorial_set_status_require(const char *slug, int target) {
     char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
-    snprintf(msg, sizeof(msg), "%sSet %s = %d to continue", prefix, slug ? slug : "?", target);
+    snprintf(msg, sizeof(msg), "%.*sSet %s = %d to continue",
+             TUTORIAL_PREFIX_CLIP, prefix, slug ? slug : "?", target);
     repl_set_status(msg);
 }
 
@@ -370,8 +379,8 @@ static void tutorial_set_status_require_var(const char *name, float target) {
     char msg[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(msg, sizeof(msg),
-             "%sSet %s = %g (type %s = ...; or drag the slider) to continue",
-             prefix, name ? name : "?", (double)target, name ? name : "?");
+             "%.*sSet %s = %g (type %s = ...; or drag the slider) to continue",
+             TUTORIAL_PREFIX_CLIP, prefix, name ? name : "?", (double)target, name ? name : "?");
     repl_set_status(msg);
 }
 
@@ -385,8 +394,8 @@ static void tutorial_set_status_declare_var(const char *name) {
     char msg[TUTORIAL_STATUS_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
     snprintf(msg, sizeof(msg),
-             "%sDeclare %s: type the line shown (or press Tab) to continue",
-             prefix, name ? name : "?");
+             "%.*sDeclare %s: type the line shown (or press Tab) to continue",
+             TUTORIAL_PREFIX_CLIP, prefix, name ? name : "?");
     repl_set_status(msg);
 }
 
@@ -999,7 +1008,8 @@ int tutorial_status_is_hint(const char *text) {
     char prefix[REPL_STATUS_TEXT_MAX];
     get_tutorial_prefix(prefix, sizeof(prefix));
     char full_prefix[REPL_STATUS_TEXT_MAX + 8];
-    snprintf(full_prefix, sizeof(full_prefix), "%sstep ", prefix);
+    snprintf(full_prefix, sizeof(full_prefix), "%.*sstep ",
+             TUTORIAL_PREFIX_CLIP, prefix);
     return strncmp(text, full_prefix, strlen(full_prefix)) == 0;
 }
 

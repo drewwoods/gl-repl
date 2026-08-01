@@ -113,8 +113,12 @@ static void manifest_err(char *err, size_t err_sz, const char *msg) {
         snprintf(err, err_sz, "%s", msg ? msg : "Workspace manifest error");
 }
 
+/* The length bound is part of validity, not just buffer hygiene: a manifest
+ * line longer than the field it lands in used to be copied truncated, which
+ * silently renames the scene to a prefix of itself. */
 static int manifest_scene_file_valid(const char *leaf) {
-    return leaf && leaf[0] && !strchr(leaf, '/') && !strchr(leaf, '\\') &&
+    return leaf && leaf[0] && strlen(leaf) < WORKSPACE_IO_FILE_MAX &&
+           !strchr(leaf, '/') && !strchr(leaf, '\\') &&
            leaf[0] != '.' && workspace_io_has_c_ext(leaf);
 }
 
@@ -182,7 +186,11 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
                              "Workspace manifest has an invalid name");
                 return 0;
             }
-            snprintf(out->name, sizeof(out->name), "%s", line + 5);
+            /* workspace_io_workspace_name_valid() already rejected anything
+             * that doesn't fit; the precision restates that bound where the
+             * compiler can see it, silencing -Wformat-truncation. */
+            snprintf(out->name, sizeof(out->name), "%.*s",
+                     (int)sizeof(out->name) - 1, line + 5);
             saw_name = 1;
         } else if (!strncmp(line, "scene=", 6)) {
             const char *leaf = line + 6;
@@ -202,8 +210,10 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
                              "Workspace manifest lists a scene twice");
                 return 0;
             }
+            /* Length-validated above, same as the name field — the
+             * precision silences -Wformat-truncation. */
             snprintf(out->scene_files[out->scene_count], WORKSPACE_IO_FILE_MAX,
-                     "%s", leaf);
+                     "%.*s", WORKSPACE_IO_FILE_MAX - 1, leaf);
             out->scene_count++;
         } else if (line[0] && line[0] != '#') {
             fclose(f);

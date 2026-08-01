@@ -465,7 +465,10 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
 
     if (!workspace_io_ensure_dir(dir)) {
         char msg[REPL_STATUS_TEXT_MAX];
-        snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
+        /* Clip the path, not the sentence — same rule as the success
+         * status, and it silences -Wformat-truncation. */
+        snprintf(msg, sizeof(msg),
+                 "Workspace save: cannot create %.200s", dir);
         repl_set_status_error(msg);
         return -1;
     }
@@ -500,7 +503,11 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     }
     manifest.version = 1;
     const char *base = strrchr(dir, '/');
-    snprintf(manifest.name, sizeof(manifest.name), "%s",
+    /* A path component can outrun the name field; clipping it is fine because
+     * the validity check below turns anything unusable into "Workspace". The
+     * precision makes that bound explicit and silences -Wformat-truncation. */
+    snprintf(manifest.name, sizeof(manifest.name), "%.*s",
+             (int)sizeof(manifest.name) - 1,
              had_old_manifest ? old_manifest.name
                               : ((base && base[1]) ? base + 1 : dir));
     if (!workspace_io_workspace_name_valid(manifest.name))
@@ -582,7 +589,10 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     scene_snapshot_scratch_free(stash);
 
     char msg[REPL_STATUS_TEXT_MAX];
-    snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
+    /* Clip the path rather than let it push the sentence out of the status
+     * line; the leading words are the part worth keeping. Also silences
+     * -Wformat-truncation. */
+    snprintf(msg, sizeof(msg), "Saved %d scene%s to %.200s",
              written, written == 1 ? "" : "s", dir);
     repl_set_status(msg);
     return written;
@@ -593,9 +603,14 @@ fail:
     cleanup_unpublished_scene_files(
         dir, &manifest, had_old_manifest ? &old_manifest : NULL,
         committed_count);
+    /* Row-for-row restore of names that came out of identically-sized
+     * fields, so this cannot truncate; the precision restates the row width
+     * that GCC loses when it flattens previous_file_names[][], silencing
+     * -Wformat-truncation. */
     for (int i = 0; i < MAX_USER_SCENES; i++)
         snprintf(g_user_scenes[i].file_name,
-                 sizeof(g_user_scenes[i].file_name), "%s",
+                 sizeof(g_user_scenes[i].file_name), "%.*s",
+                 (int)sizeof(previous_file_names[i]) - 1,
                  previous_file_names[i]);
     restore_live_from_stash(stash);
     scene_snapshot_scratch_free(stash);
@@ -857,7 +872,7 @@ ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
     snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
     char msg[REPL_STATUS_TEXT_MAX];
-    snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
+    snprintf(msg, sizeof(msg), "Loaded %d scene%s from %.200s",
              result.scenes_loaded, result.scenes_loaded == 1 ? "" : "s", dir);
     repl_set_status(msg);
     result.ok = 1;

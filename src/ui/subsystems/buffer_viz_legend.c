@@ -27,7 +27,10 @@
 #define BVL_COL_GAP      8
 #define BVL_RULE_H       5   /* vertical room a divider rule occupies */
 
-#define BVL_LEFT_MAX    12
+/* Wide enough for the longest left-column string, "+<int> more" (16 chars at
+ * INT_MAX), so the count can't be silently clipped — which is also what
+ * -Wformat-truncation was pointing at. */
+#define BVL_LEFT_MAX    20
 #define BVL_RIGHT_MAX   16
 /* Listed values + "+N more" + zero + total. */
 #define BVL_LINE_MAX    (UI_BUFFER_VIZ_LEGEND_MAX_ROWS + 3)

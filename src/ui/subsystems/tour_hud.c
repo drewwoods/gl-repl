@@ -84,7 +84,11 @@ static void tour_hud_fit(char *dst, size_t dstsz, int max_chars,
                          char cand[][256], int n) {
     for (int i = 0; i < n; i++) {
         if ((int)strlen(cand[i]) <= max_chars) {
-            snprintf(dst, dstsz, "%s", cand[i]);
+            /* Each candidate is one 256-byte row, so it always fits `dst`,
+             * but GCC only sees the flattened cand[][] object and assumes the
+             * string may run to its end (-Wformat-truncation). The precision
+             * restates the row width and silences it. */
+            snprintf(dst, dstsz, "%.*s", (int)sizeof(cand[0]) - 1, cand[i]);
             return;
         }
     }
