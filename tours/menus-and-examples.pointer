@@ -1,5 +1,5 @@
 # Menus & Examples - menu walk mirroring scripts/video/menu-tour.pointer:
-# browse the Scene example flyouts, load the Whale showcase, peek at
+# browse the Scene example flyouts, load the Sierpinski sponge, peek at
 # Tutorials, toggle a Config overlay (and toggle it back), then run Replay
 # on the result.
 #
@@ -11,9 +11,9 @@
 
 move scene:0.55,0.30
 echo scene:0.25,0.76 24 3.2 Welcome! This tour drives gl-repl.
-pause 3.2
+pause 2.5
 echo scene:0.25,0.76 24 2.8 Press any key or click to stop it.
-pause 2.8
+pause 2.5
 echo scene:0.25,0.76 24 3.6 The Scene menu holds the examples.
 glide menu:scene 0.9         # up to the Scene menu
 click
@@ -24,7 +24,7 @@ echo scene:0.25,0.76 24 3.2 Hover a tag; slide into its flyout.
 glide sub:3d:animated_ring 0.5   # hover highlight follows
 glide sub:3d:torus_knot 0.7
 ring sub:3d:torus_knot 1.2       # spotlight it
-glide sub:3d:whale 1.1           # down to the showcase
+glide sub:3d:sierpinski_sponge 1.1   # down to the recursion showcase
 echo scene:0.25,0.76 24 2.6 Click loads the example.
 click                        # load it; camera eases in
 pause 3.5
@@ -41,11 +41,15 @@ click
 glide item:rendering 0.6     # hover Rendering
 glide item:overlays 0.7      # walk down to Overlays
 glide subenter:overlays 0.4
-glide sub:overlays:vertex_points 0.5
-ring sub:overlays:vertex_points 1.2
-click                        # Vertex points ON (whale lights up)
-echo scene:0.25,0.76 24 2.8 Toggles apply live.
+glide sub:overlays:vertex_outlines 0.5
+ring sub:overlays:vertex_outlines 1.2
+click                        # Vertex outlines ON (sponge faces outlined)
+echo scene:0.25,0.76 24 2.8 Toggles apply live, for example vertex outlines.
+pause 2.8
+echo scene:0.25,0.76 24 2.8 Turning vertex outlines back OFF again.
+ring sub:overlays:vertex_outlines 1.2
 click                        # ...and back OFF
+pause 0.25
 click scene:0.55,0.30        # dismiss the menu
 echo scene:0.25,0.76 24 3.2 Replay rebuilds the scene call by call.
 glide pin:replay 1.2
@@ -53,6 +57,4 @@ click                        # start replay
 glide scene:0.70,0.40 1.0    # park; watch it build
 pause 5.0                    # let replay build the scene
 # Ctrl+R exits the replay (the pin click would only pause it)
-key \cr
-glide scene:0.55,0.30 0.8
-echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
+echo scene:0.25,0.76 18 3.6 Tour finished - it's all yours!\nWatch the replay finish, or press Escape to take control now.\nThen move the camera and explore the scene.
