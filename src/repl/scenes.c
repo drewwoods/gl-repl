@@ -453,6 +453,16 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         return -1;
     }
 
+    /* Callers routinely pass repl_workspace_dir(), so `dir` aliases
+     * g_workspace_dir — which this function rewrites below and restores on the
+     * failure path. snprintf with overlapping source and destination is
+     * undefined; glibc terminates the destination before copying, so the alias
+     * empties `dir` mid-save and every later path join fails. Work from an
+     * owned copy. */
+    char dir_owned[REPL_WORKSPACE_DIR_MAX];
+    snprintf(dir_owned, sizeof(dir_owned), "%s", dir);
+    dir = dir_owned;
+
     if (!workspace_io_ensure_dir(dir)) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
@@ -762,6 +772,13 @@ ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
         repl_set_status_error("Workspace load: no folder provided");
         return result;
     }
+
+    /* Same aliasing hazard as repl_save_workspace(): `dir` may point at
+     * g_workspace_dir, which the snapshot restores and the final assignment
+     * below both rewrite. */
+    char dir_owned[REPL_WORKSPACE_DIR_MAX];
+    snprintf(dir_owned, sizeof(dir_owned), "%s", dir);
+    dir = dir_owned;
 
     result.managed = workspace_io_manifest_exists(dir);
     if (!result.managed) {
@@ -1204,6 +1221,10 @@ const char *repl_workspace_dir(void) {
 
 void repl_set_workspace_dir(const char *dir) {
     if (!dir) { g_workspace_dir_writable[0] = '\0'; return; }
+    /* repl_set_workspace_dir(repl_workspace_dir()) is a no-op, and letting it
+     * through would be a self-overlapping snprintf (undefined; glibc empties
+     * the buffer). */
+    if (dir == g_workspace_dir_writable) return;
     snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 }
 
