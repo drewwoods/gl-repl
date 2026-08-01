@@ -1141,7 +1141,7 @@ Color falls into three buckets:
 single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
-build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
+build-overridable, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`;
 [`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L69)
 enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L123) / [`ui_theme_active()`](../src/ui/core/theme.h#L124) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)

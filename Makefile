@@ -701,7 +701,21 @@ MUSIC_SRC_DIR ?= $(if $(FAVORITE_MP3S),assets/favorite,assets)
 # Emscripten .data preload bundle. The web audio backend streams these URLs via
 # the browser's media stack, so startup no longer waits for the playlist.
 WEB_MUSIC_SRC_DIR ?= $(MUSIC_SRC_DIR)
-OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
+# Reaches every compile: the pattern rules at $(OBJDIR)/%.o and
+# $(HOT_OBJDIR)/%.o are the only places a .c is compiled.
+#
+# **CFLAGS is the documented hook** for the compile-time knobs
+# (UI_THEME_DEFAULT, GLR_AUDIO_NO_THREAD, …) — this is a C project, so
+# `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` is what help and the docs
+# advertise and what a reader will not misread as a C++ setting.
+#
+# CPPFLAGS is honored but deliberately not advertised: it is the GNU-standard
+# home for preprocessor flags, so a toolchain that injects it through the
+# environment (emmake forwards it into the web build) still gets its defines
+# through. It used to be advertised while nothing referenced it, which meant
+# `make gl-repl CPPFLAGS=-DFOO` silently dropped the define and built the
+# default. Both append in order, so an explicit CFLAGS wins on a conflict.
+OBJ_CFLAGS = $(BUILD_CFLAGS) $(CPPFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
 SAMPLE_OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
@@ -2490,14 +2504,14 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 off. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Startup & Audio-Worker Diagnostics.\n"
 	@printf "Build options:   UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
 	@printf "                 (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
-	@printf "                 e.g. make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
+	@printf "                 e.g. make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
 	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
 	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
 	@printf "                 NO_SAN=1 (or NOSAN=1) disables debug-build sanitizers.\n"
-	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
+	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
 	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"
 	@printf "                 glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"

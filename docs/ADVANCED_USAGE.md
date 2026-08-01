@@ -161,8 +161,8 @@ These are make variables or script/test env vars. Pass make variables as
 | Variable | Where | Effect |
 |---|---|---|
 | `CC` | Makefile, `scripts/check/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
-| `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode. |
-| `CPPFLAGS` | Makefile compile rules. | Extra preprocessor flags, commonly `-DUI_THEME_DEFAULT=N` or `-DGLR_AUDIO_NO_THREAD=1`. |
+| `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode — **the hook for the compile-time defines**, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` or `CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. |
+| `CPPFLAGS` | Makefile compile rules. | Also honored, for toolchains that inject preprocessor flags through the environment (`emmake` forwards it into the web build). Prefer `CFLAGS` when passing defines by hand; this is a C project and the `CPP` reads as C++. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, `coverage`, or `quick` (`-O0 -g0`, no sanitizers). Tests default to debug; app/bench/demo targets default to release. |
 | `DEBUG_INFO_CFLAGS` | Makefile. | Debug-info flags. Defaults to `-ggdb -g3` everywhere except the `WEB=1` release link, which defaults to `-g0`: emcc keeps DWARF inside the `.wasm` and drops to limited binaryen optimizations when it is present (5.4 MB vs 1.8 MB `index.wasm`, with no measurable runtime difference). Override to force either way, e.g. `make web DEBUG_INFO_CFLAGS=-g2` for named frames in a browser profile. |
 | `SAN` | Makefile. | Debug sanitizer selector used by `make debug-msan` / `make test-msan`: `address` (default ASan+UBSan) or `memory` (MSan with origin tracking; uses `build/debug-msan*`). |
