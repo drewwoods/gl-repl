@@ -10,10 +10,29 @@
 #include "app/glr_ctrl.h"           /* glr_ctrl_* capture entry points */
 #include "app/glr_pointer_script.h" /* glr_pointer_script_load_env / _active */
 #include "app/boot/splash.h"             /* splash_skip */
+#include "app/glr_config.h"         /* accum-effect state lookup */
 #include "subsystems/assign_plot/assign_plot.h"  /* plot presentation chips */
 
+#include <ctype.h>                  /* tolower */
+#include <stdio.h>                  /* fprintf */
 #include <stdlib.h>                 /* getenv, atoi, atof, strtof */
-#include <string.h>                 /* strchr */
+#include <string.h>                 /* strchr, strcmp */
+
+/* Config state labels are user-facing ("Blur Cam"); an env var should not have
+ * to reproduce the capitalization or the space. Compare on letters only. */
+static int accum_effect_name_eq(const char *label, const char *arg) {
+    while (*label && *arg) {
+        while (*label == ' ' || *label == '_') label++;
+        while (*arg   == ' ' || *arg   == '_') arg++;
+        if (!*label || !*arg) break;
+        if (tolower((unsigned char)*label) != tolower((unsigned char)*arg))
+            return 0;
+        label++; arg++;
+    }
+    while (*label == ' ' || *label == '_') label++;
+    while (*arg   == ' ' || *arg   == '_') arg++;
+    return *label == 0 && *arg == 0;
+}
 
 /* Capture affordance (doc GIFs), sibling of GLR_TIME / GLR_EDIT_LINE:
  * GLR_VIEW_TOGGLE_AT="t1,t2,..." toggles the 2D/3D view mode once as the
@@ -98,8 +117,12 @@ static void maybe_capture_open_gl_state(void) {
  * popup above — only the first row needs to be on screen, since the rest do
  * not go through the code panel's hit model.
  *
- * GLR_ASSIGN_PLOT_EXPANDED=1 and GLR_ASSIGN_PLOT_LOG=1 set the panel's two
- * presentation chips, which are otherwise mouse-only. */
+ * GLR_ASSIGN_PLOT_EXPANDED=1, GLR_ASSIGN_PLOT_LOG=1 and
+ * GLR_ASSIGN_PLOT_RATE=once|1hz|frame set the panel's chips, which are
+ * otherwise mouse-only. The rate matters to a capture beyond convenience: at
+ * the default 1 Hz a capture run's plot fills at wall-clock speed, so how many
+ * samples land in the shot depends on how fast the machine renders. `frame`
+ * makes it one column per rendered frame, and the asset deterministic. */
 static void maybe_capture_open_assign_plot(void) {
     static int done = 0;
     const char *s;
@@ -120,8 +143,21 @@ static void maybe_capture_open_assign_plot(void) {
     {
         const char *expanded = getenv("GLR_ASSIGN_PLOT_EXPANDED");
         const char *log_y    = getenv("GLR_ASSIGN_PLOT_LOG");
+        const char *rate     = getenv("GLR_ASSIGN_PLOT_RATE");
         if (expanded && *expanded) assign_plot_toggle_expanded();
         if (log_y && *log_y)       assign_plot_toggle_y_log();
+        if (rate && *rate) {
+            if (!strcmp(rate, "once"))
+                assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+            else if (!strcmp(rate, "1hz"))
+                assign_plot_set_rate(ASSIGN_PLOT_RATE_1HZ);
+            else if (!strcmp(rate, "frame"))
+                assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
+            else
+                fprintf(stderr,
+                        "gl-repl: GLR_ASSIGN_PLOT_RATE=%s ignored"
+                        " (want once/1hz/frame)\n", rate);
+        }
     }
     done = 1;
 }
@@ -225,5 +261,30 @@ void glr_capture_env_apply(const char *time_arg) {
         const char *p_src = getenv("GLR_ACCUM_PASSES");
         if (p_src && *p_src)
             glr_ctrl_set_accum_passes(atoi(p_src));
+    }
+    /* Accumulation effect: GLR_ACCUM_EFFECT=<state name> picks the Config
+     * row's state by its own label (off/aa/blur/blur cam, case- and
+     * space-insensitive), so the env var spells what the menu spells. Unlike
+     * the pass count this is not scene metadata — no @cfg slug reaches it —
+     * and its keyboard binding carries a Shift the synthetic-key path cannot
+     * deliver, so a capture has no other route to Blur. */
+    {
+        const char *e_src = getenv("GLR_ACCUM_EFFECT");
+        if (e_src && *e_src) {
+            int n = glr_config_state_count(GLR_CONFIG_ACCUM_EFFECT);
+            int found = 0;
+            for (int i = 0; i < n && !found; i++) {
+                const char *name = glr_config_state_name(
+                    GLR_CONFIG_ACCUM_EFFECT, i);
+                if (name && accum_effect_name_eq(name, e_src)) {
+                    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, i);
+                    found = 1;
+                }
+            }
+            if (!found)
+                fprintf(stderr,
+                        "gl-repl: GLR_ACCUM_EFFECT=%s ignored"
+                        " (want off/aa/blur/'blur cam')\n", e_src);
+        }
     }
 }

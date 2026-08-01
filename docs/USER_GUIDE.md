@@ -71,15 +71,16 @@ printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 
 ### The window
 
-![The window: scene tabs, code panel, status bar, viewport, variable panel](images/window-tour.png)
+![The window: scene tabs, code panel, status bar, viewport, variable panel and an assignment plot, over a motion-blurred spinning torus](images/window-tour.png)
 
 Top to bottom:
 
 - **Menu bar** — *File*, *Scene*, *Tutorials*, *Tours*, *Config*, *Audio*
   dropdowns, a *search...* slot (same as Ctrl+F), and the *Replay* button at
   the far right.
-- **Scene tabs** — one tab per open scene (here *First Triangle* and *Ring
-  Sketch*). Click to switch.
+- **Scene tabs** — one tab per open scene (here *Spinning Torus* and *Ring
+  Sketch*), behind the name of the managed workspace they came from (*Tour*).
+  Click to switch.
 - **Code panel** — the live, editable list of GL commands. By default it sits
   above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
   **Ctrl+B** or the *Code panel* config item. When a document is taller than
@@ -88,13 +89,17 @@ Top to bottom:
   jumps the thumb there and keeps dragging — moves through a long document in
   one gesture.
 - **Status bar** — command count, current line, the accumulation indicator
-  (`AA 1x` / `Blur 8x`), and clickable controls for undo/redo, copy/cut,
+  (`AA 1x` / `Blur 16x` — the shot above is under motion blur, which is why the
+  torus smears), and clickable controls for undo/redo, copy/cut,
   clearing all commands, *focus* ([code focus](#keeping-the-buffer-tidy)),
   and *F1 help*.
 - **3D viewport** — your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
 - **Variable panel** — bottom-right overlay listing every declared variable
   with a draggable slider (see [The Variable Panel](#the-variable-panel)).
+- **Floating panels** — overlays you open on a row stack above it; here the
+  [assignment value plot](#plotting-an-assignments-values), tracking both
+  angle rows that drive the torus.
 - **Message line** — the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
   history.

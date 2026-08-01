@@ -39,7 +39,11 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 | `GLR_TYPE_KEYS='...'` | feed keystrokes after load |
 | `GLR_OPEN_COLOR_PICKER=<line>` | open the floating picker on frame 1 |
 | `GLR_OPEN_GL_STATE=<line>` | open the GL-state popup on frame 1 |
+| `GLR_OPEN_ASSIGN_PLOT=<line>[,<line>…]` | open the value plot; extra lines join as series (max 4) |
+| `GLR_ASSIGN_PLOT_RATE=once/1hz/frame` | plot capture rate — `frame` is what makes a plotted shot deterministic |
+| `GLR_ASSIGN_PLOT_LOG=1` / `_EXPANDED=1` | the plot's `log` and `2x` chips |
 | `GLR_ACCUM_PASSES=1/2/4/8/12/16` | accumulation passes |
+| `GLR_ACCUM_EFFECT=off/aa/blur/'blur cam'` | accum effect by Config-menu name — the only capture route to motion blur |
 | `GLR_TICK_PER_FRAME=1` | fixed-dt sim advances per rendered frame — **deterministic offline capture** |
 | `GLR_VIEW_TOGGLE_AT=<t1,t2,…>` | 2D/3D swatch transition; implies tick-per-frame |
 | `GLR_POINTER_SCRIPT=<file>` | scripted pointer/keyboard + cursor overlay |

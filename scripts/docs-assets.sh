@@ -1382,20 +1382,43 @@ EOF
 # Window tour: a two-scene workspace so the scene-tab strip shows, with the
 # variable panel on — one shot covering every piece of window chrome the
 # guide's "The window" section names.
+#
+# The visible scene is a lit torus tumbling about two axes, captured under the
+# Blur accum effect at 16 passes (GLR_ACCUM_EFFECT/GLR_ACCUM_PASSES at the call
+# site), so the shot shows what the status bar's `Blur 16x` indicator means
+# rather than naming it over a static triangle. Both angles are expressions in
+# `t`, which buys three things at once: the blur has something to smear, the
+# variable panel has live rows to list, and the two rows can be plotted
+# together — a top-level assignment runs once per frame, so both share the
+# captures X axis and the panel overlays them.
 stage_window_tour_dir() {
     local ws="$WORK/tour-ws"
     mkdir -p "$ws"
-    cat > "$ws/triangle.c" <<'EOF'
-// @scene-name First Triangle
+    # A managed workspace is its manifest: a directory of .c files with no
+    # .glr-workspace is rejected outright and the app falls back to a fresh
+    # scene, which is how this asset quietly lost its scene tabs once the
+    # manifest became mandatory.
+    cat > "$ws/.glr-workspace" <<'EOF'
+version=1
+name=Tour
+scene=torus.c
+scene=ring.c
+EOF
+    cat > "$ws/torus.c" <<'EOF'
+// @scene-name Spinning Torus
 // Snippet start
-float lift = 1;
+float ang0, ang1;
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glColor3f(1, 0.85, 0.15);
-glBegin(GL_TRIANGLES);
-glVertex3f(0, lift, 0);
-glVertex3f(-1, -1, 0);
-glVertex3f(1, -1, 0);
-glEnd();
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+ang0 = rem(t * 200, 360);
+ang1 = rem(t * 130, 360);
+glRotatef(ang0, 1, 0, 0);
+glRotatef(ang1, 0, 1, 0);
+glColor3f(0.35, 0.8, 1);
+glutSolidTorus(0.3, 0.8, 24, 48);
 // Snippet end
 EOF
     cat > "$ws/ring.c" <<'EOF'
@@ -1567,10 +1590,16 @@ if want depth-view; then
     echo "docs-assets: wrote $OUT/depth-view.png"
 fi
 
-# WARM=200: past the ~186-frame splash fade, so the wordmark doesn't
-# occlude the variable panel this shot is naming.
+# WARM=200: past the ~186-frame splash fade, so the wordmark doesn't occlude
+# the variable panel this shot is naming — and, at the frame capture rate, 200
+# columns of plot history. The rate is the reason the shot is reproducible:
+# 1 Hz fills the plot on wall clock, so the sample count would track how fast
+# this machine renders 16 accumulation passes.
 if want window-tour; then
     ( WARM=200
+      export GLR_ACCUM_EFFECT=blur
+      export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6,7
+      export GLR_ASSIGN_PLOT_RATE=frame
       still "$OUT/window-tour.png" 16 "$(stage_window_tour_dir)" )
 fi
 
