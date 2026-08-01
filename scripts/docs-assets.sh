@@ -827,7 +827,7 @@ stage_grid_brightness() {  # $1 = GRID_BRIGHTNESS_<NAME>
 /* @cfg grid_brightness = $1 */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 0 */
 /* @cfg light_indicators = 0 */
 // camera
@@ -840,10 +840,9 @@ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
-glEnable(GL_COLOR_MATERIAL);
-glColor3f(0.97, 0.95, 0.90);
-glTranslatef(0, -1.05, 0);
-glutSolidCube(2.0);
+//glColor3f(0.97, 0.95, 0.90);
+glutSolidCube(1.0);
+//glutSolidCube(0.8);
 // Snippet end
 EOF
 }
@@ -1156,6 +1155,7 @@ EOF
 stage_replay() { stage replay <<'EOF'
 /* @cfg replay = 1 */
 /* @cfg variable_panel = 0 */
+/* @cfg vertex_points = 0 */
 // Snippet start
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
@@ -1741,7 +1741,7 @@ if want grid-brightness; then
     levels=(DIM NORMAL BRIGHT BOLD)
     gb_files=()
     for level in "${levels[@]}"; do
-        ( WARM=$WARM_FADE
+        (
           still "$WORK/gridb_$level.png" 16 \
               "$(stage_grid_brightness GRID_BRIGHTNESS_$level)" )
         write_png "$WORK/gridb_$level.png" "$WORK/gridb_${level}_c.png" \
@@ -2220,7 +2220,7 @@ fi
 if want replay; then
     # Replay advances a few commands per second; 500 frames subsampled
     # 3x shows the whole pinwheel assembling at a watchable pace.
-    gif "$OUT/replay.gif" 500 3 24 720 "$(stage_replay)"
+    gif "$OUT/replay.gif" 575 3 24 720 "$(stage_replay)"
 fi
 
 if want animated-ring; then
