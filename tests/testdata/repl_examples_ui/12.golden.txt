@@ -26,13 +26,13 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -92,7 +92,7 @@ void display(void) {
 --- lights_pre_camera ---
 --- camera ---
   // camera
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);
+  glTranslatef(0.0000f, 0.0000f, -4.5000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
@@ -102,45 +102,9 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  // Recursive triangle tree: child calls shrink and rotate from the parent
-  branch(depth, size, spin) {
-    glColor3f(0.62 - 0.065*depth, 0.52 + 0.045*depth, 0.95 + 0.0075*depth);
-    glBegin(GL_LINE_LOOP);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, size, 0);
-      glVertex3f(-0.866*size, -0.5*size, 0);
-      glVertex3f(0.866*size, -0.5*size, 0);
-    glEnd();
-    // Base case vs recursive case as a complementary if pair (an if/else):
-    // depth 0 caps the branch with a filled leaf; otherwise recurse into 3
-    // children.
-    if(depth <= 0) {
-      glColor3f(1, 0.85, 0.15);
-      glBegin(GL_TRIANGLES);
-        glNormal3f(0, 0, 1);
-        glVertex3f(0, size*0.55, 0);
-        glVertex3f(-0.48*size, -0.25*size, 0);
-        glVertex3f(0.48*size, -0.25*size, 0);
-      glEnd();
-    }
-    if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, size*1.02, 0);
-        glRotatef(18 + spin*14, 0, 0, 1);
-        branch(depth - 1, size*0.62, spin + 0.15);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(-size*0.9, -size*0.38, 0);
-        glRotatef(-30 - spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(size*0.9, -size*0.38, 0);
-        glRotatef(30 + spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-    }
-  }
+  static float dist = 0.5; // @tune
+  static float n = 400; // @tune
+  static float x, y, ang, s; // s = palette mix in [0,1]
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -149,7 +113,13 @@ void display(void) {
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
   glClearColor(0.05, 0.06, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glRotatef(sin(t*0.35)*12, 0, 0, 1);
-  branch(4, 1.05, sin(t*0.4));
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      x = dist * cos(t*ang) + cos(ang);
+      y = dist * sin(t*ang) + sin(ang);
+      s = 0.5 + 0.5*sin(ang + t);
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      glVertex3f(x, y, 0);
+    }
+  glEnd();

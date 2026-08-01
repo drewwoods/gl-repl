@@ -150,27 +150,26 @@ lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
 
 ```
- 1  gl-repl logo                                        19  Annotated orbit plot (labels)
- 2  Rotating cube                                       20  GLU concave arrow
- 3  Animated ring (for + t)                             21  GLU concave arrow cutout
- 4  Conditional colors (if + t)                         22  GLU concave arrow extrusion
- 5  Transform stress (translate/rotate/scale guides)    23  Glow sprites (blend + point attenuation)
- 6  Parametric torus (nested for)                       24  Snowfall particles
- 7  Animated wave surface (analytic normals)            25  Swaying grass field (rand + t)
- 8  Torus knot (animated)                               26  Jellyfish (glDepthMask translucency)
- 9  2D assignment sketch (vars only)                    27  Dusk lighthouse atoll (stress test)
-10  Function demo (named func)                          28  Lantern festival (additive glow + reflections)
-11  Function polygons (args + for)                      29  Orrery (labels track 3D orbits)
-12  Function branching (args + if)                      30  Whale (particle system + lit model)
-13  Recursive triangle tree (func + recursion)          31  Teapot carousel (transform stacks + glow points)
-14  Sierpinski carpet (2D recursion)                    32  Ringed planet (nebula skies)
-15  Sierpinski sponge (3D recursion)                    33  Aurora observatory (dish tracks the sky)
-16  Animated spirograph curve                           34  Pulse bars (easing)
-17  Traveling ripple ring                               35  Bubble sort (scratch arrays)
-18  Bezier curve with guides                            36  Clip planes carve solids (glClipPlane)
-                                                        37  Fog ring tunnel (glFog)
-                                                        38  Planar shadows (glMultMatrixf)
-                                                        39  Stencil mask window (glStencilOp)
+ 1  gl-repl logo                                        21  GLU concave arrow cutout
+ 2  Rotating cube                                       22  GLU concave arrow extrusion
+ 3  Animated ring (for + t)                             23  Glow sprites (blend + point attenuation)
+ 4  Conditional colors (if + t)                         24  Snowfall particles
+ 5  Transform stress (translate/rotate/scale guides)    25  Swaying grass field (rand + t)
+ 6  Parametric torus (nested for)                       26  Jellyfish (glDepthMask translucency)
+ 7  Animated wave surface (analytic normals)            27  Dusk lighthouse atoll (stress test)
+ 8  Torus knot (animated)                               28  Lantern festival (additive glow + reflections)
+ 9  2D assignment sketch (vars only)                    29  Orrery (labels track 3D orbits)
+10  Function demo (named func)                          30  Whale (particle system + lit model)
+11  Function polygons (args + for)                      31  Teapot carousel (transform stacks + glow points)
+12  Function branching (args + if)                      32  Ringed planet (nebula skies)
+13  Animated spirograph curve                           33  Aurora observatory (dish tracks the sky)
+14  Traveling ripple ring                               34  Pulse bars (easing)
+15  Bezier curve with guides                            35  Bubble sort (scratch arrays)
+16  Annotated orbit plot (labels)                       36  Clip planes carve solids (glClipPlane)
+17  Recursive triangle tree (func + recursion)          37  Fog ring tunnel (glFog)
+18  Sierpinski carpet (2D recursion)                    38  Planar shadows (glMultMatrixf)
+19  Sierpinski sponge (3D recursion)                    39  Stencil mask window (glStencilOp)
+20  GLU concave arrow
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
