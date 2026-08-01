@@ -313,8 +313,9 @@ static void emit_export_header_section(FILE *f,
 
 static void emit_export_glfloat_helpers_section(FILE *f,
                                                 const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    write_glfloat_vector_helpers(f);
+    if (!ctx)
+        return;
+    write_glfloat_vector_helpers(f, &ctx->needs);
 }
 
 static void emit_export_predef_globals_section(FILE *f,

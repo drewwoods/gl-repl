@@ -243,9 +243,20 @@ static void test_export_prologue_direct(void) {
     /* 5. write_glfloat_vector_helpers */
     FILE *f4 = tmpfile();
     if (f4) {
-        write_glfloat_vector_helpers(f4);
+        ExportNeeds helper_needs = {0};
+        helper_needs.needs_glfloat4 = 1;
+        write_glfloat_vector_helpers(f4, &helper_needs);
         char *str = slurp_stream(f4);
-        ASSERT_TRUE("glfloat helpers written", str && strstr(str, "repl_glfloat4_buf") != NULL);
+        ASSERT_TRUE("requested glfloat helper written",
+                    str && strstr(str, "static GLfloat *repl_glfloat4") != NULL);
+        ASSERT_TRUE("glfloat helper buffer is function-local static",
+                    str && strstr(str,
+                        "static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {\n"
+                        "  static GLfloat repl_glfloat4_buf[4];") != NULL);
+        ASSERT_TRUE("unrequested gldouble helper omitted",
+                    str && strstr(str, "repl_gldouble4") == NULL);
+        ASSERT_TRUE("unrequested glfloat16 helper omitted",
+                    str && strstr(str, "repl_glfloat16") == NULL);
         free(str);
         fclose(f4);
     }
@@ -696,11 +707,17 @@ int main(void) {
     ASSERT_TRUE("export avoids C99 compound GLfloat literals",
                 strstr(export_text, "(GLfloat[]){") == NULL);
     ASSERT_TRUE("export emits C89 GLfloat vector helpers",
-                strstr(export_text, "static GLfloat *repl_glfloat4") != NULL);
+                strstr(export_text, "static GLfloat *repl_glfloat1") != NULL &&
+                strstr(export_text, "static GLfloat *repl_glfloat3") != NULL &&
+                strstr(export_text, "static GLfloat *repl_glfloat4") != NULL &&
+                strstr(export_text, "static GLfloat *repl_glfloat16") != NULL);
     ASSERT_TRUE("export avoids C99 compound GLdouble literals",
                 strstr(export_text, "(GLdouble[]){") == NULL);
     ASSERT_TRUE("export emits C89 GLdouble vector helper",
                 strstr(export_text, "static GLdouble *repl_gldouble4") != NULL);
+    ASSERT_TRUE("export keeps vector buffers inside their helper functions",
+                strstr(export_text, "\nstatic GLfloat repl_glfloat") == NULL &&
+                strstr(export_text, "\nstatic GLdouble repl_gldouble") == NULL);
     ASSERT_TRUE("export uses prototyped display",
                 strstr(export_text, "void display(void)") != NULL &&
                 strstr(export_text, "void display()") == NULL);

@@ -321,6 +321,24 @@ int main(void) {
                     count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 0);
         ASSERT_TRUE("saved init point attenuation line once",
                     count_substr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == 1);
+        ASSERT_TRUE("export emits generated glfloat3 helper",
+                    strstr(buf, "static GLfloat *repl_glfloat3(") != NULL);
+        ASSERT_TRUE("export emits generated glfloat4 helper",
+                    strstr(buf, "static GLfloat *repl_glfloat4(") != NULL);
+        ASSERT_TRUE("export omits unused vector helpers",
+                    strstr(buf, "static GLfloat *repl_glfloat1(") == NULL &&
+                    strstr(buf, "static GLdouble *repl_gldouble4(") == NULL &&
+                    strstr(buf, "static GLfloat *repl_glfloat16(") == NULL);
+        ASSERT_TRUE("vector helper buffers are not file-scope globals",
+                    strstr(buf, "\nstatic GLfloat repl_glfloat") == NULL &&
+                    strstr(buf, "\nstatic GLdouble repl_gldouble") == NULL);
+        ASSERT_TRUE("vector helper buffers are function-local statics",
+                    strstr(buf,
+                        "static GLfloat *repl_glfloat3(GLfloat a, GLfloat b, GLfloat c) {\n"
+                        "  static GLfloat repl_glfloat3_buf[3];") != NULL &&
+                    strstr(buf,
+                        "static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {\n"
+                        "  static GLfloat repl_glfloat4_buf[4];") != NULL);
     }
 
     /* @cfg toggle path: neutralized (still emitted today by the
@@ -334,6 +352,8 @@ int main(void) {
         read_text_file(path, buf, sizeof(buf));
         ASSERT_TRUE("saved init omits point attenuation when disabled",
                     strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
+        ASSERT_TRUE("saved export omits glfloat3 helper when attenuation disabled",
+                    strstr(buf, "static GLfloat *repl_glfloat3(") == NULL);
     }
     g_init_attenuate_points = 1;
 

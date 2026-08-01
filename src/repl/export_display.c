@@ -168,7 +168,21 @@ ExportNeeds export_collect_needs(void) {
         .needs_scratch_a = 0,
         .needs_scratch_b = 0,
         .needs_scratch_c = 0,
+        .needs_glfloat1 = 0,
+        .needs_glfloat3 = 0,
+        /* The generated glLightModelfv initialization always uses this
+         * helper, independently of the user document. */
+        .needs_glfloat4 = 1,
+        .needs_gldouble4 = 0,
+        .needs_glfloat16 = 0,
     };
+
+    /* The generated point-attenuation bootstrap is conditional on both the
+     * runtime entry point and its export toggle, matching export_setup.c's
+     * emission gates. */
+    if (repl_executor_point_parameter_supported() &&
+        repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION, 1))
+        needs.needs_glfloat3 = 1;
 
     /* Check each command for rand() / scratch-array / label
      * references. Detection is intentionally a textual scan over
@@ -181,6 +195,29 @@ ExportNeeds export_collect_needs(void) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
         if (cmd->type == CMD_LABEL) needs.needs_label = 1;
+        switch (cmd->type) {
+        case CMD_MATERIALFV:
+            if (cmd->num_args == 3)
+                needs.needs_glfloat1 = 1;
+            else
+                needs.needs_glfloat4 = 1;
+            break;
+        case CMD_POINT_PARAMETER_FV:
+            needs.needs_glfloat3 = 1;
+            break;
+        case CMD_CLIP_PLANE:
+            needs.needs_gldouble4 = 1;
+            break;
+        case CMD_MULT_MATRIXF:
+            if (!repl_cmd_mult_matrix_from_array(cmd))
+                needs.needs_glfloat16 = 1;
+            break;
+        case CMD_FOG_FV:
+            needs.needs_glfloat4 = 1;
+            break;
+        default:
+            break;
+        }
         /* glMultMatrixf(A) names its scratch array without subscripting it,
          * so the "A[" text scan below cannot see it; the command type says
          * which array exactly, so key off that instead of widening the

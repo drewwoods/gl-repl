@@ -52,6 +52,14 @@ typedef struct ExportNeeds {
     int needs_scratch_a;
     int needs_scratch_b;
     int needs_scratch_c;
+    /* C89 stand-ins for compound vector literals. Keep these separate so
+     * exported files do not trigger -Wunused-function for helpers whose
+     * corresponding command shape never appears. */
+    int needs_glfloat1;
+    int needs_glfloat3;
+    int needs_glfloat4;
+    int needs_gldouble4;
+    int needs_glfloat16;
     int tune_count;
     int tune_total;
     const char *tune_names[REPL_TUNE_MAX_KNOBS];
@@ -119,7 +127,7 @@ void write_predef_var_globals(FILE *f);
 void write_save_restore_helpers(FILE *f);
 void write_rand_helper(FILE *f);
 void write_shape_helpers(FILE *f, const ExportNeeds *needs);
-void write_glfloat_vector_helpers(FILE *f);
+void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs);
 void write_label_helper(FILE *f);
 void write_render_helper_as_c(FILE *f, const char *name);
 void write_func_defs_as_c(FILE *f);
