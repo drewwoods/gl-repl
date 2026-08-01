@@ -62,21 +62,26 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 static GLfloat g_fb[FB_CAP];
 static float g_vx[VERT_CAP];
 static float g_vy[VERT_CAP];
+static int g_bitmap_count;
 
 /* Extract every vertex (x, y) from a GL_2D feedback buffer of `n` values into
  * g_vx/g_vy. Returns the vertex count (clamped to VERT_CAP). Token layout is
  * the classic feedback grammar: a token float, then that token's operands. */
 static int parse_gl2d_vertices(const GLfloat *fb, int n) {
     int i = 0, count = 0;
+    g_bitmap_count = 0;
     while (i < n) {
         int tok = (int)fb[i++];
         int nverts;
         switch (tok) {
         case GL_PASS_THROUGH_TOKEN: i += 1; continue;  /* one scalar operand */
         case GL_POINT_TOKEN:
-        case GL_BITMAP_TOKEN:
         case GL_DRAW_PIXEL_TOKEN:
         case GL_COPY_PIXEL_TOKEN:   nverts = 1; break;
+        case GL_BITMAP_TOKEN:
+            g_bitmap_count++;
+            nverts = 1;
+            break;
         case GL_LINE_TOKEN:
         case GL_LINE_RESET_TOKEN:   nverts = 2; break;
         case GL_POLYGON_TOKEN:
@@ -280,6 +285,23 @@ static void test_backstep_expired_caption_not_shown(void) {
                count_near(verts, ECHO_CX, ECHO_CY, ECHO_R), 0);
 }
 
+/* A long caption centered near the scene's left edge used to put glRasterPos
+ * outside the viewport. Legacy GL then marks the raster position invalid and
+ * silently discards every following bitmap glyph, making the final tour event
+ * look as though it was dropped. The exact reported ending must retain a valid
+ * raster origin and therefore emit bitmap feedback tokens. */
+static void test_long_left_anchored_caption_renders(void) {
+    const char *lines[] = {
+        "echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours! Press any escape to exit or watch the replay to the end!"
+    };
+    start_tour(lines, 1);
+    glr_pointer_script_frame();       /* fire echo; tour enters Done */
+
+    ASSERT_TRUE("long caption overlay captured", capture_overlay() > 0);
+    ASSERT_TRUE("long left-anchored caption emits bitmap glyphs",
+                g_bitmap_count > 0);
+}
+
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
  * top-left inset and its captured width matches tour_hud_panel_width(scene_w)
  * exactly — tying the real GL output to the pure width function whose clamp is
@@ -351,6 +373,7 @@ int main(int argc, char **argv) {
     test_step_past_ring_clears_overlay();
     test_backstep_restores_live_caption();
     test_backstep_expired_caption_not_shown();
+    test_long_left_anchored_caption_renders();
     test_hud_render_matches_width_helper();
     return test_harness_report(&g_harness, "tour_overlay_feedback");
 }

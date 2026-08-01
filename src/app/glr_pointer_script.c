@@ -1772,7 +1772,6 @@ float glr_pointer_script_echo_alpha(int age, int dur, int clock_frozen) {
 
 void glr_pointer_script_render_overlay(int win_w, int win_h) {
     if (!g_active) return;
-    (void)win_w;
 
     /* This pass owns its own profile row rather than leaving the host to
      * bracket it: the caption's bitmap text can cost more than the entire 3D
@@ -1853,8 +1852,15 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         float w = ps_bitmap_width(font.font, g_echo_text);
         /* Center the caption horizontally on its anchor point rather than
          * left-aligning at it, so the label sits symmetrically over the
-         * target it annotates. */
+         * target it annotates. Keep its raster origin inside the viewport:
+         * legacy GL invalidates a raster position outside the clip volume,
+         * which silently drops the entire bitmap string. If a caption is
+         * wider than the viewport, preserve a valid left edge and let GL clip
+         * only the tail instead of losing every glyph. */
         float cx = g_echo_x - w * 0.5f;
+        float max_cx = (float)win_w - pad_x - w;
+        if (cx < pad_x) cx = pad_x;
+        if (max_cx >= pad_x && cx > max_cx) cx = max_cx;
 
         glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.72f);
         glBegin(GL_QUADS);
