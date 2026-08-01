@@ -409,27 +409,36 @@ static void test_hit_rate_and_reset(void) {
                UI_ASSIGN_PLOT_HIT_NONE);
 }
 
-/* The rate chip is as wide as its label, which changes with the rate. The
- * hit test has to track that rather than assuming a fixed box. */
-static void test_hit_rate_chip_tracks_label_width(void) {
+/* The rate chip is padded to its widest label ("frame") so cycling the rate
+ * doesn't shove the chips to its right back and forth. The hit test has to use
+ * that same constant box: sweeping the control row must give byte-identical
+ * results for every rate, and the chip has to still be hittable. */
+static void test_hit_rate_chip_is_constant_width(void) {
     UiAssignPlotPanelView v = make_view(10, 0.0f, 1.0f);
     int panel_h = view_h(&v);
     int ctrl_dy = panel_h - 28;
     int mx, my;
+    int drift = 0;
 
-    /* State chips are their label plus the well's padding: "frame" is 46px
-     * wide, "once" 38. A point at 50px from the pad is inside the wider one
-     * and in the gap after the narrower one. */
-    v.plot.rate = ASSIGN_PLOT_RATE_FRAME;
+    for (int dx = 0; dx < ASSIGN_PLOT_PANEL_W; dx++) {
+        panel_point(&v, dx, ctrl_dy, &mx, &my);
+        v.plot.rate = ASSIGN_PLOT_RATE_FRAME;
+        int wide = ui_assign_plot_panel_hit_test(&v, mx, my);
+        for (int rate = 0; rate < ASSIGN_PLOT_RATE_COUNT; rate++) {
+            v.plot.rate = rate;
+            if (ui_assign_plot_panel_hit_test(&v, mx, my) != wide)
+                drift++;
+        }
+    }
+    ASSERT_INT("control row hit-tests the same at every rate", drift, 0);
+
+    /* Anchor the sweep: a point inside the chip really is a rate hit, so the
+     * agreement above can't be every column agreeing on "nothing here". */
+    v.plot.rate = ASSIGN_PLOT_RATE_ONCE;
     panel_point(&v, 8 + 42, ctrl_dy, &mx, &my);
-    ASSERT_INT("wide chip covers its last column",
+    ASSERT_INT("padded chip covers its last column",
                ui_assign_plot_panel_hit_test(&v, mx, my),
                UI_ASSIGN_PLOT_HIT_RATE);
-
-    v.plot.rate = ASSIGN_PLOT_RATE_ONCE;
-    ASSERT_INT("narrow chip does not",
-               ui_assign_plot_panel_hit_test(&v, mx, my),
-               UI_ASSIGN_PLOT_HIT_NONE);
 }
 
 /* The chip grammar (ui/core/gl_2d.h): a setting shows its value in a sunken
@@ -958,7 +967,7 @@ int main(void) {
     test_hit_outside_and_hidden();
     test_hit_close();
     test_hit_rate_and_reset();
-    test_hit_rate_chip_tracks_label_width();
+    test_hit_rate_chip_is_constant_width();
     test_chip_grammar();
     test_hit_yscale_and_expand();
     test_hit_tracks_expanded_geometry();
