@@ -50,6 +50,11 @@ int glr_ctrl_open_gl_state_popup(int line);
  * off-screen (caller should retry next frame) or is not an assignment. */
 int glr_ctrl_open_assign_plot(int line);
 
+/* Third sibling: the authored help card a right-click opens over a committed
+ * GL-family row. Returns 1 once the card is up on that row, 0 if the row is
+ * off-screen (retry next frame) or carries no description. */
+int glr_ctrl_open_command_description(int line);
+
 /* Add `line` to the open assignment plot as an extra series (the
  * Shift+right-click gesture). Returns non-zero once that row is plotted. */
 int glr_ctrl_add_assign_plot_series(int line);

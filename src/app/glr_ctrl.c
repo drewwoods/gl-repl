@@ -3964,6 +3964,32 @@ int glr_ctrl_open_assign_plot(int line) {
     return assign_plot_is_open() && assign_plot_source_line() == line;
 }
 
+int glr_ctrl_open_command_description(int line) {
+    UiRenderSnapshot snap;
+    int x;
+    int y;
+
+    if (line < 0)
+        return 0;
+
+    /* Third of the same shape (see glr_ctrl_open_gl_state_popup): the real
+     * right-click path decides which of the three right-click popups a row
+     * gets, so a capture cannot ask for the help card directly — it clicks the
+     * row and checks which popup came up. A row with no authored description
+     * therefore returns 0 rather than opening something else. Note the routing
+     * closes the description when a later right-click lands on an assignment
+     * row, so a capture posing both wants this hook last. */
+    glr_ctrl_build_ui_snapshot(&snap);
+    if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
+        return 0;
+
+    glr_ctrl_passive_motion(x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    return ui_state_command_description().visible &&
+           ui_state_command_description().source_line_idx == line;
+}
+
 int glr_ctrl_add_assign_plot_series(int line) {
     /* The Shift+right-click path has no synthetic-modifier route through
      * glr_ctrl_mouse (modifiers are read from GLUT, not passed in), so this

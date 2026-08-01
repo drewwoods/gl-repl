@@ -40,6 +40,7 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 | `GLR_OPEN_COLOR_PICKER=<line>` | open the floating picker on frame 1 |
 | `GLR_OPEN_GL_STATE=<line>` | open the GL-state popup on frame 1 |
 | `GLR_OPEN_ASSIGN_PLOT=<line>[,<line>…]` | open the value plot; extra lines join as series (max 4) |
+| `GLR_OPEN_COMMAND_HELP=<line>` | right-click a GL row for its help card — pose it after the plot, which closes it |
 | `GLR_ASSIGN_PLOT_RATE=once/1hz/frame` | plot capture rate — `frame` is what makes a plotted shot deterministic |
 | `GLR_ASSIGN_PLOT_LOG=1` / `_EXPANDED=1` | the plot's `log` and `2x` chips |
 | `GLR_ACCUM_PASSES=1/2/4/8/12/16` | accumulation passes |
@@ -56,7 +57,8 @@ fallback path — runtime-gated, no build flag), `GLR_NO_GPU_PROF=1`,
 Implementation: `src/app/boot/glr_capture_env.{c,h}` — `_apply` handles
 bootstrap hooks (time / pointer-script / splash / tick-per-frame / edit-line /
 type-keys / accum), `_frame_hook` handles per-frame ones (color-picker /
-GL-state / help / view-toggle).
+GL-state / assign-plot / command-help / help / view-toggle) — and their order
+there is load-bearing where two popups fight.
 
 ## Headless OSMesa build
 

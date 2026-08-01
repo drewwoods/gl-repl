@@ -162,6 +162,25 @@ static void maybe_capture_open_assign_plot(void) {
     done = 1;
 }
 
+/* Capture affordance, sibling of GLR_OPEN_ASSIGN_PLOT: GLR_OPEN_COMMAND_HELP=
+ * <line> right-clicks a committed GL-family row to raise its authored help
+ * card. Ordered after the assign-plot hook in the frame hook because the
+ * routing closes the card when a right-click lands on an assignment row —
+ * posing both means opening the plot first. */
+static void maybe_capture_open_command_help(void) {
+    static int done = 0;
+    const char *s;
+
+    if (done) return;
+    s = getenv("GLR_OPEN_COMMAND_HELP");
+    if (!s || !*s) {
+        done = 1;
+        return;
+    }
+    if (glr_ctrl_open_command_description(atoi(s)))
+        done = 1;   /* else the row is not on screen yet — retry next frame */
+}
+
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
  * opens the F1 help overlay on the given tab index (0-based, clamped by
  * the tab-advance action) on the first displayed frame. The overlay
@@ -183,6 +202,7 @@ void glr_capture_env_frame_hook(void) {
     maybe_capture_view_toggle();
     maybe_capture_open_gl_state();
     maybe_capture_open_assign_plot();
+    maybe_capture_open_command_help();
     /* Keep the picker last: a real code-panel right-click closes it, so when
      * both capture hooks are requested in one frame the final posed state
      * should still include the picker requested by the caller. */

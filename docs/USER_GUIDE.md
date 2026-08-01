@@ -71,7 +71,7 @@ printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 
 ### The window
 
-![The window: scene tabs, code panel, status bar, viewport, variable panel and an assignment plot, over a motion-blurred spinning torus](images/window-tour.png)
+![The window: scene tabs, code panel with a command help card, status bar, viewport, variable panel and an assignment plot, over a motion-blurred spinning torus](images/window-tour.png)
 
 Top to bottom:
 
@@ -97,9 +97,9 @@ Top to bottom:
   scroll to zoom.
 - **Variable panel** — bottom-right overlay listing every declared variable
   with a draggable slider (see [The Variable Panel](#the-variable-panel)).
-- **Floating panels** — overlays you open on a row stack above it; here the
-  [assignment value plot](#plotting-an-assignments-values), tracking both
-  angle rows that drive the torus.
+- **Floating panels** — what right-clicking a row opens. Above: the
+  [assignment value plot](#plotting-an-assignments-values) tracking both angle
+  rows that drive the torus, and the help card for `glutSolidSphere`.
 - **Message line** — the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
   history.

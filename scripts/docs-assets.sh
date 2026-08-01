@@ -1406,6 +1406,11 @@ scene=ring.c
 EOF
     cat > "$ws/torus.c" <<'EOF'
 // @scene-name Spinning Torus
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg poly_highlight = 0 */
+/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 // Snippet start
 float ang0, ang1;
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1413,12 +1418,16 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glEnable(GL_COLOR_MATERIAL);
-ang0 = rem(t * 200, 360);
-ang1 = rem(t * 130, 360);
-glRotatef(ang0, 1, 0, 0);
-glRotatef(ang1, 0, 1, 0);
-glColor3f(0.35, 0.8, 1);
-glutSolidTorus(0.3, 0.8, 24, 48);
+ang0 = rem(t * 750, 360);
+ang1 = rem(t * 2000, 360);
+glColor3f(1, 0.85, 0.15);
+glutSolidSphere(0.4, 32, 24);
+glPushMatrix();
+  glRotatef(ang0, 1, 0, 0);
+  glRotatef(ang1, 0, 1, 0);
+  glColor3f(0.35, 0.8, 1);
+  glutSolidTorus(0.2, 0.8, 24, 48);
+glPopMatrix();
 // Snippet end
 EOF
     cat > "$ws/ring.c" <<'EOF'
@@ -1595,11 +1604,17 @@ fi
 # columns of plot history. The rate is the reason the shot is reproducible:
 # 1 Hz fills the plot on wall clock, so the sample count would track how fast
 # this machine renders 16 accumulation passes.
+#
+# GLR_OPEN_COMMAND_HELP goes last of the three popup hooks by construction, not
+# by luck: right-clicking an assignment row closes the help card, so posing the
+# plot after it would take the card back down (glr_capture_env.c orders the
+# frame hooks the same way).
 if want window-tour; then
     ( WARM=200
       export GLR_ACCUM_EFFECT=blur
-      export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6,7
+      export GLR_EDIT_LINE=0 GLR_OPEN_ASSIGN_PLOT=6,7
       export GLR_ASSIGN_PLOT_RATE=frame
+      export GLR_OPEN_COMMAND_HELP=9
       still "$OUT/window-tour.png" 16 "$(stage_window_tour_dir)" )
 fi
 
