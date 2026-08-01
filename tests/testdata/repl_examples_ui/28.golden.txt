@@ -66,6 +66,31 @@
 static float g_angle = 0.0f;
 static int   g_rotating = 0;
 
+--- gl_vector_helpers ---
+/* C89 replacements for C99 compound GL literals. */
+
+static GLfloat *repl_glfloat1(GLfloat a) {
+  static GLfloat repl_glfloat1_buf[1];
+  repl_glfloat1_buf[0] = a;
+  return repl_glfloat1_buf;
+}
+
+static GLfloat *repl_glfloat3(GLfloat a, GLfloat b, GLfloat c) {
+  static GLfloat repl_glfloat3_buf[3];
+  repl_glfloat3_buf[0] = a;
+  repl_glfloat3_buf[1] = b;
+  repl_glfloat3_buf[2] = c;
+  return repl_glfloat3_buf;
+}
+
+static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
+  static GLfloat repl_glfloat4_buf[4];
+  repl_glfloat4_buf[0] = a;
+  repl_glfloat4_buf[1] = b;
+  repl_glfloat4_buf[2] = c;
+  repl_glfloat4_buf[3] = d;
+  return repl_glfloat4_buf;
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();

@@ -66,6 +66,41 @@
 static float g_angle = 0.0f;
 static int   g_rotating = 0;
 
+--- gl_vector_helpers ---
+/* C89 replacements for C99 compound GL literals. */
+
+static GLfloat *repl_glfloat3(GLfloat a, GLfloat b, GLfloat c) {
+  static GLfloat repl_glfloat3_buf[3];
+  repl_glfloat3_buf[0] = a;
+  repl_glfloat3_buf[1] = b;
+  repl_glfloat3_buf[2] = c;
+  return repl_glfloat3_buf;
+}
+
+static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
+  static GLfloat repl_glfloat4_buf[4];
+  repl_glfloat4_buf[0] = a;
+  repl_glfloat4_buf[1] = b;
+  repl_glfloat4_buf[2] = c;
+  repl_glfloat4_buf[3] = d;
+  return repl_glfloat4_buf;
+}
+
+static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
+                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,
+                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,
+                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {
+  static GLfloat repl_glfloat16_buf[16];
+  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;
+  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;
+  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;
+  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;
+  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;
+  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;
+  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;
+  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
+  return repl_glfloat16_buf;
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();

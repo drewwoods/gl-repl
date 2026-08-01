@@ -694,6 +694,13 @@ int main(void) {
     /* Capture code before export */
     code_before = dump_code_panel();
     ASSERT_TRUE("code before export captured", code_before != NULL);
+    ASSERT_TRUE("code panel dump includes needed vector helpers",
+                code_before &&
+                strstr(code_before, "static GLfloat *repl_glfloat1") != NULL &&
+                strstr(code_before, "static GLfloat *repl_glfloat3") != NULL &&
+                strstr(code_before, "static GLfloat *repl_glfloat4") != NULL &&
+                strstr(code_before, "static GLdouble *repl_gldouble4") != NULL &&
+                strstr(code_before, "static GLfloat *repl_glfloat16") != NULL);
 
     /* First export to file */
     repl_export_save_output(path1, source_document_view(), NULL);

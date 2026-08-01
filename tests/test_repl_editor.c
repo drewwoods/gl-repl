@@ -179,6 +179,16 @@ static int current_active_indent_chars(void) {
     return snap.active_indent_chars;
 }
 
+static int snapshot_gl_helper_contains(const UiRenderSnapshot *snap,
+                                       const char *needle) {
+    if (!snap || !needle)
+        return 0;
+    for (int i = 0; i < snap->gl_vector_helper_line_count; i++)
+        if (strstr(snap->gl_vector_helper_lines[i], needle))
+            return 1;
+    return 0;
+}
+
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 
@@ -253,6 +263,16 @@ static int code_panel_header_row_count(void) {
             if (repl_export_header_pre_line_visible(i, collision_mask))
                 rows += test_code_panel_row_count_for_text(
                     g_header_pre[i], text_x, panel_w);
+        }
+    }
+    {
+        unsigned helper_mask = repl_export_gl_vector_helper_mask();
+        int n = repl_export_gl_vector_helper_line_count(helper_mask);
+        char line[MAX_LINE_LEN];
+        for (int i = 0; i < n; i++) {
+            repl_export_gl_vector_helper_line(helper_mask, i,
+                                              line, sizeof(line));
+            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
         }
     }
     for (int i = 0; g_display_header[i]; i++)
@@ -348,6 +368,26 @@ int main() {
     editor_set_line_comment_prefix("// ");
     editor_input_set_code_panel_layout_provider(glr_ctrl_code_panel_layout_provider);
     printf("--- repl_editor tests ---\n");
+
+    /* The expanded editor is a view of the standalone C program, so its
+     * generated preamble must include exactly the vector helpers that export
+     * would write for the same document. */
+    {
+        UiRenderSnapshot snap;
+
+        glr_ctrl_reset_all();
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_TRUE("code panel includes generated repl_glfloat4 helper",
+                    snapshot_gl_helper_contains(&snap, "repl_glfloat4("));
+        ASSERT_TRUE("code panel omits unused repl_gldouble4 helper",
+                    !snapshot_gl_helper_contains(&snap, "repl_gldouble4("));
+
+        editor_feed_line(
+            "glClipPlane(GL_CLIP_PLANE0, 1, 0, 0, 0);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_TRUE("code panel adds repl_gldouble4 helper when needed",
+                    snapshot_gl_helper_contains(&snap, "repl_gldouble4("));
+    }
 
     /* Commit chain ordering: float declarations must run before assignment
      * parsing, otherwise `float name` is misclassified as an assignment. */

@@ -212,6 +212,22 @@ unsigned repl_export_math_collision_mask(void);
 int      repl_export_header_pre_line_visible(int line_idx,
                                              unsigned collision_mask);
 
+/* Conditional C89 stand-ins for compound GL vector literals. The mask and
+ * line API are shared by standalone export, the expanded live code panel,
+ * and --dump-code so all three surfaces show the same helper definitions. */
+enum {
+    REPL_EXPORT_GL_VECTOR_FLOAT1  = 1u << 0,
+    REPL_EXPORT_GL_VECTOR_FLOAT3  = 1u << 1,
+    REPL_EXPORT_GL_VECTOR_FLOAT4  = 1u << 2,
+    REPL_EXPORT_GL_VECTOR_DOUBLE4 = 1u << 3,
+    REPL_EXPORT_GL_VECTOR_FLOAT16 = 1u << 4
+};
+enum { REPL_EXPORT_GL_VECTOR_HELPER_MAX_LINES = 49 };
+unsigned repl_export_gl_vector_helper_mask(void);
+int      repl_export_gl_vector_helper_line_count(unsigned mask);
+int      repl_export_gl_vector_helper_line(unsigned mask, int line_idx,
+                                           char *out, size_t out_size);
+
 /* Stringify a macro value (compose-time only). Used to inject
  * REPL_SCRATCH_ARRAY_LEN into the literal scratch-decl line shown in
  * the live editor + exported file, so changing the array length

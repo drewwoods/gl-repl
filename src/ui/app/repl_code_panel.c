@@ -226,6 +226,9 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
             rows += repl_code_panel_row_count(
                 snap, g_header_pre[i], text_x, panel_w);
     }
+    for (int i = 0; i < snap->gl_vector_helper_line_count; i++)
+        rows += repl_code_panel_row_count(
+            snap, snap->gl_vector_helper_lines[i], text_x, panel_w);
     for (int i = 0; g_display_header[i]; i++)
         rows += repl_code_panel_row_count(snap, g_display_header[i], text_x, panel_w);
     for (int i = 0; i < snap->lights_pre_camera_count; i++)
@@ -2002,6 +2005,11 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         sizeof(snap->import_export.workspace_header_lines[0]),
         snap->import_export.workspace_header_lines);
     repl_code_panel_add_header_pre_lines(builder);
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        snap->gl_vector_helper_line_count,
+        sizeof(snap->gl_vector_helper_lines[0]),
+        snap->gl_vector_helper_lines);
     repl_code_panel_add_static_null_terminated_lines(
         builder, g_display_header);
 

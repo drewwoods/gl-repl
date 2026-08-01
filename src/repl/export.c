@@ -505,6 +505,19 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
         }
     }
 
+    fprintf(dst, "--- gl_vector_helpers ---\n");
+    {
+        unsigned helper_mask = repl_export_gl_vector_helper_mask();
+        int helper_line_count =
+            repl_export_gl_vector_helper_line_count(helper_mask);
+        for (int i = 0; i < helper_line_count; i++) {
+            char line[MAX_LINE_LEN];
+            repl_export_gl_vector_helper_line(
+                helper_mask, i, line, sizeof(line));
+            fprintf(dst, "%s\n", line);
+        }
+    }
+
     fprintf(dst, "--- display_header ---\n");
     /* Dump display() opening lines (shared with export). */
     for (int line_idx = 0; g_display_header[line_idx]; line_idx++)

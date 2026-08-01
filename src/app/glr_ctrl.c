@@ -1658,6 +1658,9 @@ STATIC_ASSERT(UI_RESHAPE_PROJ_LINES == REPL_EXPORT_PROJ_LINES,
               "snapshot reshape-projection line count must match repl/export");
 STATIC_ASSERT(UI_RESHAPE_PROJ_LINE_MAX == REPL_EXPORT_PROJ_LINE_MAX,
               "snapshot reshape-projection line width must match repl/export");
+STATIC_ASSERT(UI_GL_VECTOR_HELPER_MAX ==
+              REPL_EXPORT_GL_VECTOR_HELPER_MAX_LINES,
+              "snapshot GL vector helper line count must match repl/export");
 
 /* Derive the scene tab strip each frame from existing state — no persistent
  * model. One tab per occupied user-scene slot (dense slot order, matching
@@ -1991,6 +1994,18 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->math_collision_mask = repl_export_math_collision_mask();
+    {
+        unsigned helper_mask = repl_export_gl_vector_helper_mask();
+        int helper_lines = repl_export_gl_vector_helper_line_count(helper_mask);
+        if (helper_lines < 0) helper_lines = 0;
+        if (helper_lines > UI_GL_VECTOR_HELPER_MAX)
+            helper_lines = UI_GL_VECTOR_HELPER_MAX;
+        snap->gl_vector_helper_line_count = helper_lines;
+        for (int i = 0; i < helper_lines; i++) {
+            repl_export_gl_vector_helper_line(
+                helper_mask, i, snap->gl_vector_helper_lines[i], MAX_LINE_LEN);
+        }
+    }
     flat_program         = repl_state_flat_program_view();
     predef = repl_eval_predef_view();
     glr_ctrl_fill_ui_variable_panel_vars(snap, predef);

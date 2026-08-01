@@ -119,83 +119,161 @@ void write_shape_helpers(FILE *f, const ExportNeeds *needs) {
             "}\n");
 }
 
+static const char *const g_glfloat1_helper_lines[] = {
+    "static GLfloat *" REPL_EXPORT_GLFLOAT1_HELPER "(GLfloat a) {",
+    "  static GLfloat repl_glfloat1_buf[1];",
+    "  repl_glfloat1_buf[0] = a;",
+    "  return repl_glfloat1_buf;",
+    "}",
+    NULL
+};
+
+static const char *const g_glfloat3_helper_lines[] = {
+    "static GLfloat *" REPL_EXPORT_GLFLOAT3_HELPER
+        "(GLfloat a, GLfloat b, GLfloat c) {",
+    "  static GLfloat repl_glfloat3_buf[3];",
+    "  repl_glfloat3_buf[0] = a;",
+    "  repl_glfloat3_buf[1] = b;",
+    "  repl_glfloat3_buf[2] = c;",
+    "  return repl_glfloat3_buf;",
+    "}",
+    NULL
+};
+
+static const char *const g_glfloat4_helper_lines[] = {
+    "static GLfloat *" REPL_EXPORT_GLFLOAT4_HELPER
+        "(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {",
+    "  static GLfloat repl_glfloat4_buf[4];",
+    "  repl_glfloat4_buf[0] = a;",
+    "  repl_glfloat4_buf[1] = b;",
+    "  repl_glfloat4_buf[2] = c;",
+    "  repl_glfloat4_buf[3] = d;",
+    "  return repl_glfloat4_buf;",
+    "}",
+    NULL
+};
+
+static const char *const g_gldouble4_helper_lines[] = {
+    "static GLdouble *" REPL_EXPORT_GLDOUBLE4_HELPER
+        "(GLdouble a, GLdouble b, GLdouble c, GLdouble d) {",
+    "  static GLdouble repl_gldouble4_buf[4];",
+    "  repl_gldouble4_buf[0] = a;",
+    "  repl_gldouble4_buf[1] = b;",
+    "  repl_gldouble4_buf[2] = c;",
+    "  repl_gldouble4_buf[3] = d;",
+    "  return repl_gldouble4_buf;",
+    "}",
+    NULL
+};
+
+/* Sixteen named parameters rather than varargs: exported C remains C89 and
+ * type-checked, and the glMultMatrixf call site always passes exactly 16. */
+static const char *const g_glfloat16_helper_lines[] = {
+    "static GLfloat *" REPL_EXPORT_GLFLOAT16_HELPER
+        "(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,",
+    "                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,",
+    "                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,",
+    "                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {",
+    "  static GLfloat repl_glfloat16_buf[16];",
+    "  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;",
+    "  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;",
+    "  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;",
+    "  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;",
+    "  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;",
+    "  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;",
+    "  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;",
+    "  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;",
+    "  return repl_glfloat16_buf;",
+    "}",
+    NULL
+};
+
+typedef struct {
+    unsigned bit;
+    const char *const *lines;
+} ExportGlVectorHelper;
+
+static const ExportGlVectorHelper g_gl_vector_helpers[] = {
+    { REPL_EXPORT_GL_VECTOR_FLOAT1,  g_glfloat1_helper_lines },
+    { REPL_EXPORT_GL_VECTOR_FLOAT3,  g_glfloat3_helper_lines },
+    { REPL_EXPORT_GL_VECTOR_FLOAT4,  g_glfloat4_helper_lines },
+    { REPL_EXPORT_GL_VECTOR_DOUBLE4, g_gldouble4_helper_lines },
+    { REPL_EXPORT_GL_VECTOR_FLOAT16, g_glfloat16_helper_lines },
+};
+
+static unsigned export_gl_vector_mask_from_needs(const ExportNeeds *needs) {
+    unsigned mask = 0;
+    if (!needs) return 0;
+    if (needs->needs_glfloat1)  mask |= REPL_EXPORT_GL_VECTOR_FLOAT1;
+    if (needs->needs_glfloat3)  mask |= REPL_EXPORT_GL_VECTOR_FLOAT3;
+    if (needs->needs_glfloat4)  mask |= REPL_EXPORT_GL_VECTOR_FLOAT4;
+    if (needs->needs_gldouble4) mask |= REPL_EXPORT_GL_VECTOR_DOUBLE4;
+    if (needs->needs_glfloat16) mask |= REPL_EXPORT_GL_VECTOR_FLOAT16;
+    return mask;
+}
+
+unsigned repl_export_gl_vector_helper_mask(void) {
+    ExportNeeds needs = export_collect_needs();
+    return export_gl_vector_mask_from_needs(&needs);
+}
+
+int repl_export_gl_vector_helper_line_count(unsigned mask) {
+    int count = mask ? 1 : 0; /* Section comment. */
+    for (size_t i = 0; i < sizeof(g_gl_vector_helpers) /
+                           sizeof(g_gl_vector_helpers[0]); i++) {
+        if (!(mask & g_gl_vector_helpers[i].bit))
+            continue;
+        count++; /* Blank separator before each helper. */
+        for (int j = 0; g_gl_vector_helpers[i].lines[j]; j++)
+            count++;
+    }
+    return count;
+}
+
+int repl_export_gl_vector_helper_line(unsigned mask, int line_idx,
+                                      char *out, size_t out_size) {
+    const char *line = NULL;
+
+    if (!out || out_size == 0 || line_idx < 0)
+        return 0;
+    if (mask && line_idx-- == 0)
+        line = "/* C89 replacements for C99 compound GL literals. */";
+    for (size_t i = 0; !line && i < sizeof(g_gl_vector_helpers) /
+                                    sizeof(g_gl_vector_helpers[0]); i++) {
+        if (!(mask & g_gl_vector_helpers[i].bit))
+            continue;
+        if (line_idx-- == 0) {
+            line = "";
+            break;
+        }
+        for (int j = 0; g_gl_vector_helpers[i].lines[j]; j++) {
+            if (line_idx-- == 0) {
+                line = g_gl_vector_helpers[i].lines[j];
+                break;
+            }
+        }
+    }
+    if (!line) {
+        out[0] = '\0';
+        return 0;
+    }
+    snprintf(out, out_size, "%s", line);
+    return 1;
+}
+
 void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs) {
-    int has_any;
+    unsigned mask = export_gl_vector_mask_from_needs(needs);
+    int line_count;
 
-    if (!f || !needs)
+    if (!f || !mask)
         return;
-    has_any = needs->needs_glfloat1 || needs->needs_glfloat3 ||
-              needs->needs_glfloat4 || needs->needs_gldouble4 ||
-              needs->needs_glfloat16;
-    if (!has_any)
-        return;
-
-    fprintf(f, "\n/* C89 replacements for C99 compound GL literals. */\n");
-    if (needs->needs_glfloat1)
-        fprintf(f,
-        "static GLfloat *%s(GLfloat a) {\n"
-        "  static GLfloat repl_glfloat1_buf[1];\n"
-        "  repl_glfloat1_buf[0] = a;\n"
-        "  return repl_glfloat1_buf;\n"
-        "}\n",
-        REPL_EXPORT_GLFLOAT1_HELPER);
-    if (needs->needs_glfloat3)
-        fprintf(f,
-        "\n"
-        "static GLfloat *%s(GLfloat a, GLfloat b, GLfloat c) {\n"
-        "  static GLfloat repl_glfloat3_buf[3];\n"
-        "  repl_glfloat3_buf[0] = a;\n"
-        "  repl_glfloat3_buf[1] = b;\n"
-        "  repl_glfloat3_buf[2] = c;\n"
-        "  return repl_glfloat3_buf;\n"
-        "}\n",
-        REPL_EXPORT_GLFLOAT3_HELPER);
-    if (needs->needs_glfloat4)
-        fprintf(f,
-        "\n"
-        "static GLfloat *%s(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {\n"
-        "  static GLfloat repl_glfloat4_buf[4];\n"
-        "  repl_glfloat4_buf[0] = a;\n"
-        "  repl_glfloat4_buf[1] = b;\n"
-        "  repl_glfloat4_buf[2] = c;\n"
-        "  repl_glfloat4_buf[3] = d;\n"
-        "  return repl_glfloat4_buf;\n"
-        "}\n",
-        REPL_EXPORT_GLFLOAT4_HELPER);
-    if (needs->needs_gldouble4)
-        fprintf(f,
-        "\n"
-        "static GLdouble *%s(GLdouble a, GLdouble b, GLdouble c, GLdouble d) {\n"
-        "  static GLdouble repl_gldouble4_buf[4];\n"
-        "  repl_gldouble4_buf[0] = a;\n"
-        "  repl_gldouble4_buf[1] = b;\n"
-        "  repl_gldouble4_buf[2] = c;\n"
-        "  repl_gldouble4_buf[3] = d;\n"
-        "  return repl_gldouble4_buf;\n"
-        "}\n",
-        REPL_EXPORT_GLDOUBLE4_HELPER);
-    if (needs->needs_glfloat16)
-        fprintf(f,
-        "\n"
-        /* glMultMatrixf's compound-literal form. Sixteen named parameters
-         * rather than a varargs list: this has to compile as C89 and stay
-         * type-checked, and the call site always passes exactly 16. */
-        "static GLfloat *%s(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,\n"
-        "                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,\n"
-        "                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,\n"
-        "                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {\n"
-        "  static GLfloat repl_glfloat16_buf[16];\n"
-        "  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;\n"
-        "  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;\n"
-        "  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;\n"
-        "  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;\n"
-        "  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;\n"
-        "  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;\n"
-        "  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;\n"
-        "  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;\n"
-        "  return repl_glfloat16_buf;\n"
-        "}\n",
-        REPL_EXPORT_GLFLOAT16_HELPER);
+    line_count = repl_export_gl_vector_helper_line_count(mask);
+    fprintf(f, "\n");
+    for (int i = 0; i < line_count; i++) {
+        char line[MAX_LINE_LEN];
+        repl_export_gl_vector_helper_line(mask, i, line, sizeof(line));
+        fprintf(f, "%s\n", line);
+    }
 }
 /* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
  * string and substitutes each `%f` with `%g`-formatted output (matching

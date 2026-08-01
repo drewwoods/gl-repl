@@ -55,6 +55,9 @@ enum { UI_RESHAPE_PROJ_LINE_MAX = 96 };/* == REPL_EXPORT_PROJ_LINE_MAX */
 
 enum { UI_LIGHTS_DISPLAY_MAX = 8 };
 enum { UI_INIT_SECTION_MAX = 32 };
+/* Worst-case conditional helper stanza, repeated locally for UI purity and
+ * checked against REPL_EXPORT_GL_VECTOR_HELPER_MAX_LINES in glr_ctrl.c. */
+enum { UI_GL_VECTOR_HELPER_MAX = 49 };
 
 /* Workspace binding the tab strip's leading chip names. `name` is "" when no
  * managed workspace is bound — the chip renders that absence rather than
@@ -127,6 +130,9 @@ typedef struct UiRenderSnapshot {
     /* Frozen once per frame so conditional <math.h> wrapper rows agree
      * between the code panel's layout and render passes. */
     unsigned                    math_collision_mask;
+    char                        gl_vector_helper_lines[UI_GL_VECTOR_HELPER_MAX]
+                                                      [MAX_LINE_LEN];
+    int                         gl_vector_helper_line_count;
 
     /* UI-facing variable rows. Names are copied into the snapshot; values
      * point at the live source values for this frame. */
