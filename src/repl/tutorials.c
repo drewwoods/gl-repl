@@ -70,6 +70,34 @@
       .cfg_value = 0, .cfg_value_name = (val_name), .var_name = NULL, \
       .var_target = 0.0f }
 
+/* Staging step: apply cfg_slug=val and advance immediately — no
+ * instruction row, no ack key, no pause. Comment-less on purpose (the
+ * validator rejects a comment here), so a run of them stacks without an
+ * Enter apiece:
+ *
+ *     STEP_SET_QUIET("vertex_points", 0),
+ *     STEP_SET_QUIET_SYM("overlay_scope", "OVERLAY_SCOPE_WHOLE_SCENE"),
+ *     STEP_NOTE("// Overlays are staged; here is what they show."),
+ *
+ * `cfg_slug` doubles as the discriminator that keeps these out of the
+ * step-array sentinel (repl_tutorial_step_is_sentinel). Reach for
+ * TutorialEntry.cfg instead when the settings can be applied at
+ * tutorial start — this is for staging that must happen mid-lesson. */
+#define STEP_SET_QUIET(slug, val) \
+    { .label = NULL, .comment = NULL, .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_SET_QUIET, .cfg_slug = (slug), \
+      .cfg_value = (val), .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
+
+/* Symbolic-value variant of STEP_SET_QUIET — see STEP_SET_SYM. */
+#define STEP_SET_QUIET_SYM(slug, val_name) \
+    { .label = NULL, .comment = NULL, .expected = NULL, \
+      .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
+      .kind = TUTORIAL_STEP_KIND_SET_QUIET, .cfg_slug = (slug), \
+      .cfg_value = 0, .cfg_value_name = (val_name), .var_name = NULL, \
+      .var_target = 0.0f }
+
 /* Check step: advance when the user themselves makes cfg_slug == cfg_value
  * (via F-key/menu/etc.). Auto-advances if already satisfied on entry.
  * `expected` is NULL. */
@@ -108,10 +136,11 @@
       .cfg_value = 0, .cfg_value_name = NULL, .var_name = (var), \
       .var_target = (target) }
 
-/* Sentinel: comment AND expected both NULL (repl_tutorial_step_is_sentinel).
- * Every real step carries at least one of the two — SET/REQUIRE/NOTE have
- * NULL `expected` but a comment; comment-less COMMAND steps have NULL
- * `comment` but an expected. */
+/* Sentinel: comment, expected AND cfg_slug all NULL
+ * (repl_tutorial_step_is_sentinel). Every real step carries at least one of
+ * the three — SET/REQUIRE/NOTE have NULL `expected` but a comment;
+ * comment-less COMMAND steps have NULL `comment` but an expected; SET_QUIET
+ * has neither but always a cfg_slug. */
 #define STEP_SENTINEL \
     { .label = NULL, .comment = NULL, .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -890,12 +919,8 @@ static const TutorialStep g_tutorial_normals_steps[] = {
     STEP_CMD(NULL, "glVertex3f(3.2, 1.5, 0)"),
     STEP_CMD(NULL, "glVertex3f(0.2, 1.5, 0)"),
     STEP_CMD(NULL, "glEnd()"),
-    STEP_SET_SYM(NULL,
-        "// hello",
-        "vertex_labels", "OVERLAY_VERTEX_LABEL_OFF"),
-    STEP_SET_SYM(NULL,
-        "// Widen the overlay scope to Whole scene so BOTH quads get arrows, not just the cursor's block.",
-        "overlay_scope", "OVERLAY_SCOPE_WHOLE_SCENE"),
+    STEP_SET_QUIET_SYM("vertex_labels", "OVERLAY_VERTEX_LABEL_OFF"),
+    STEP_SET_QUIET_SYM("overlay_scope", "OVERLAY_SCOPE_WHOLE_SCENE"),
     STEP_REQUIRE_KEY(NULL,
         "// Press %s to draw the normal-vector overlay for every face in the scene.",
         "normal_vectors", 1,
@@ -1921,6 +1946,34 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                              entry->name ? entry->name : "?", i,
                              step->kind == TUTORIAL_STEP_KIND_SET
                                  ? "SET" : "REQUIRE");
+                return 0;
+            }
+        } else if (step->kind == TUTORIAL_STEP_KIND_SET_QUIET) {
+            if (step->expected) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d SET_QUIET must leave "
+                             "expected NULL",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (label_is_empty(step->cfg_slug)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d SET_QUIET needs non-empty "
+                             "cfg_slug",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            /* A SET_QUIET never renders an instruction row, so a comment
+             * on one is dead text the author expected to see. Reject it
+             * rather than swallow it — the fix is a SET step. */
+            if (step->comment) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d SET_QUIET must leave "
+                             "comment NULL (use SET to show one)",
+                             entry->name ? entry->name : "?", i);
                 return 0;
             }
         } else if (step->kind == TUTORIAL_STEP_KIND_REQUIRE_VAR) {

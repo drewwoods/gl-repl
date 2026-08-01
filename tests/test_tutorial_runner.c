@@ -2663,11 +2663,75 @@ static void test_validate_accepts_set_and_require_steps(void) {
                 repl_tutorial_validate_entry(&entry, err, sizeof(err)));
     ASSERT_STR("err empty on success", err, "");
     /* Step count must include the non-command steps too — the sentinel
-     * needs BOTH comment and expected NULL, so SET/REQUIRE rows (NULL
-     * expected, non-NULL comment) don't terminate the walk. */
+     * needs comment, expected AND cfg_slug all NULL, so SET/REQUIRE rows
+     * (NULL expected, non-NULL comment) don't terminate the walk. */
     int n = 0;
     while (!repl_tutorial_step_is_sentinel(&steps[n])) n++;
     ASSERT_INT("mixed entry has 3 steps", n, 3);
+}
+
+/* SET_QUIET is the one step kind with neither a comment nor an expected,
+ * so cfg_slug is the only thing keeping it out of the sentinel. Walk a
+ * run of them: if the sentinel test ever drops its cfg_slug term the
+ * count collapses to 0 and every tutorial using them silently ends at
+ * the first staging step. */
+static void test_validate_accepts_set_quiet_steps(void) {
+    static const TutorialStep steps[] = {
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET_QUIET, "vertex_points", 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET_QUIET, "vertex_outlines", 0 },
+        { NULL, "// now look at the shape", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_NOTE, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "quiet_ok", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("stacked SET_QUIET + NOTE validates",
+                repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+    int n = 0;
+    while (!repl_tutorial_step_is_sentinel(&steps[n])) n++;
+    ASSERT_INT("comment-less SET_QUIET rows do not read as the sentinel",
+               n, 3);
+}
+
+static void test_validate_rejects_set_quiet_with_comment(void) {
+    /* A SET_QUIET never renders an instruction row, so a comment on one
+     * is dead text — the author wanted SET. */
+    static const TutorialStep steps[] = {
+        { NULL, "// this would never render", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET_QUIET, "vertex_points", 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "quiet_with_comment", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("SET_QUIET carrying a comment rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error points the author at SET",
+                err[0] != '\0' && strstr(err, "comment NULL") != NULL);
+}
+
+static void test_validate_rejects_set_quiet_with_empty_slug(void) {
+    /* Without a slug the row IS the sentinel, so the walk ends before
+     * the validator ever sees it — an empty-string slug is the only
+     * reachable form of this mistake, and it must still be rejected. */
+    static const TutorialStep steps[] = {
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET_QUIET, "", 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "quiet_bad_slug", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("SET_QUIET with empty slug rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions cfg_slug",
+                err[0] != '\0' && strstr(err, "cfg_slug") != NULL);
 }
 
 static void test_validate_rejects_set_with_empty_slug(void) {
@@ -3739,6 +3803,27 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     ASSERT_TRUE("REQUIRE typo diagnostic names the bad symbol",
                 strstr(err, "AXES_THEME_COMPSS") != NULL);
 
+    /* Synthetic entry: SET_QUIET with typo'd value name. Staging steps
+     * apply their cfg with no comment and no ack, so a silently-wrong
+     * one is the hardest kind to notice at runtime — the bridge
+     * validator must cover them alongside SET / REQUIRE. */
+    static const TutorialStep typo_quiet_steps[] = {
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET_QUIET, "grid", 0, "GRID_THEME_RADRA" },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL },
+    };
+    TutorialEntry typo_quiet_entry = {
+        .name = "typo_quiet", .steps = typo_quiet_steps,
+        .cfg = NULL, .tags = 0, .subheading = NULL,
+    };
+    err[0] = '\0';
+    ASSERT_TRUE("SET_QUIET typo rejected",
+                !tutorial_validate_entry_against_bridge(&typo_quiet_entry,
+                                                       err, sizeof err));
+    ASSERT_TRUE("SET_QUIET typo diagnostic names the bad symbol",
+                strstr(err, "GRID_THEME_RADRA") != NULL);
+
     /* Synthetic entry: entry-level @cfg line with typo'd value name. */
     static const TutorialStep cmd_only_steps[] = {
         { NULL, "// trivial", "glPointSize(1)", TUTORIAL_STEP_APPEND, NULL,
@@ -4710,6 +4795,9 @@ int main(void) {
     test_require_ignores_unrelated_config_changes();
     test_validate_accepts_set_and_require_steps();
     test_validate_rejects_set_with_empty_slug();
+    test_validate_accepts_set_quiet_steps();
+    test_validate_rejects_set_quiet_with_comment();
+    test_validate_rejects_set_quiet_with_empty_slug();
     test_validate_rejects_require_with_expected();
     test_first_animation_starts_on_ctrl_t();
     /* Relaxed step shapes: NOTE kind + comment-less COMMAND steps. */

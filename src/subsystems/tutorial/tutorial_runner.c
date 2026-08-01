@@ -105,7 +105,8 @@ static void tutorial_baseline_capture(int idx) {
     int n = repl_tutorial_step_count(idx);
     for (int s = 0; s < n; s++) {
         TutorialStepKind k = repl_tutorial_step_kind(idx, s);
-        if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_REQUIRE)
+        if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_REQUIRE ||
+            k == TUTORIAL_STEP_KIND_SET_QUIET)
             tutorial_cfg_baseline_record_one(repl_tutorial_step_cfg_slug(idx, s));
     }
     state->baseline_valid = 1;
@@ -613,7 +614,8 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
     for (int s = 0; !repl_tutorial_step_is_sentinel(&entry->steps[s]); s++) {
         const TutorialStep *step = &entry->steps[s];
         if (step->kind != TUTORIAL_STEP_KIND_SET &&
-            step->kind != TUTORIAL_STEP_KIND_REQUIRE)
+            step->kind != TUTORIAL_STEP_KIND_REQUIRE &&
+            step->kind != TUTORIAL_STEP_KIND_SET_QUIET)
             continue;
         const char *step_slug = step->cfg_slug;
         if (!step_slug || !repl_cfg_known(step_slug)) {
@@ -1072,6 +1074,24 @@ static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruc
     return TUTORIAL_STEP_PAUSED;
 }
 
+/* Staging sibling of tutorial_enter_step_set: apply the cfg and hand the
+ * advance loop AUTOADVANCE, so a run of these collapses into a single
+ * frame with no instruction row, no cursor park and no ack. Nothing here
+ * touches the document, so there is no locked line to track and no
+ * expected_commit_line to clear. */
+static TutorialStepResult tutorial_enter_step_set_quiet(int idx, int step) {
+    const char *slug       = repl_tutorial_step_cfg_slug(idx, step);
+    const char *value_name = repl_tutorial_step_cfg_value_name(idx, step);
+    int         value      = repl_tutorial_step_cfg_value(idx, step);
+
+    if (value_name)
+        repl_cfg_set_text(slug, value_name);
+    else
+        repl_cfg_set_int(slug, value);
+
+    return TUTORIAL_STEP_AUTOADVANCE;
+}
+
 static int tutorial_cfg_matches_target(const char *slug, int target) {
     if (!slug || !repl_cfg_known(slug))
         return 0;
@@ -1236,6 +1256,8 @@ static TutorialStepResult tutorial_enter_step(int step) {
         return tutorial_enter_step_note(instruction_line, state);
     case TUTORIAL_STEP_KIND_SET:
         return tutorial_enter_step_set(idx, step, instruction_line, state);
+    case TUTORIAL_STEP_KIND_SET_QUIET:
+        return tutorial_enter_step_set_quiet(idx, step);
     case TUTORIAL_STEP_KIND_REQUIRE:
         return tutorial_enter_step_require(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_REQUIRE_VAR:

@@ -44,12 +44,15 @@
  *                user can type the assignment. `expected` MUST be NULL
  *                and `var_name` MUST be non-empty.
  *
- * The sentinel that terminates a step array has BOTH `comment == NULL`
- * and `expected == NULL` (see repl_tutorial_step_is_sentinel). Every
- * real step carries at least one of the two: COMMAND requires
- * `expected`; every other kind requires `comment`. (Before COMMAND
- * comments became optional the sentinel was `comment == NULL` alone —
- * a comment-less COMMAND step would have read as the terminator.)
+ * The sentinel that terminates a step array has `comment`, `expected`
+ * AND `cfg_slug` all NULL (see repl_tutorial_step_is_sentinel). Every
+ * real step carries at least one of the three: COMMAND requires
+ * `expected`; SET_QUIET requires `cfg_slug` and forbids `comment`;
+ * every other kind requires `comment`. The definition has widened twice,
+ * each time because a new comment-less shape would otherwise have read
+ * as the terminator — first `comment == NULL` alone (until COMMAND
+ * comments became optional), then the comment/expected pair (until
+ * SET_QUIET, which has neither).
  *
  * Catalog validation runs once at tutorial_start before any state
  * mutation; see repl_tutorial_validate(). Slug validity for
@@ -113,6 +116,16 @@ typedef enum {
      * key (Enter/Tab/Space), advance. SET's showcase flow without the
      * cfg write; the document is frozen while it waits. */
     TUTORIAL_STEP_KIND_NOTE,
+    /* Staging — apply cfg_slug=cfg_value and advance IMMEDIATELY: no
+     * instruction row, no ack, no pause. SET without the showcase, for
+     * settings that are scaffolding rather than lesson content, so a run
+     * of them stacks without a comment and an Enter apiece. `comment`
+     * MUST be NULL (there is no row to put one on) and `cfg_slug` MUST
+     * be non-empty — that slug is also what distinguishes the step from
+     * the array sentinel. Prefer TutorialEntry.cfg when the settings can
+     * be applied at tutorial start; this kind is for staging that has to
+     * happen partway through a lesson. */
+    TUTORIAL_STEP_KIND_SET_QUIET,
 } TutorialStepKind;
 
 typedef struct {
@@ -150,15 +163,17 @@ typedef struct {
     int                       comment_binding_is_special;
 } TutorialStep;
 
-/* The step-array terminator: a record with NEITHER comment NOR expected.
- * Every real step has at least one (COMMAND requires expected, all other
- * kinds require a comment), so the pair-NULL record is unambiguous even
- * now that COMMAND comments are optional. Single definition — every
- * walker (accessors, validators, the runner) must use this rather than
- * open-coding a `!comment` test, which would misread a comment-less
- * COMMAND step as the terminator. */
+/* The step-array terminator: a record with NO comment, NO expected and
+ * NO cfg_slug. Every real step has at least one of the three (COMMAND
+ * requires expected, SET_QUIET requires cfg_slug and forbids a comment,
+ * all other kinds require a comment), so the triple-NULL record stays
+ * unambiguous. Single definition — every walker (accessors, validators,
+ * the runner) must use this rather than open-coding a `!comment` test,
+ * which would misread a comment-less COMMAND step as the terminator;
+ * the cfg_slug term is what keeps a SET_QUIET step from doing the same. */
 static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
-    return step->comment == NULL && step->expected == NULL;
+    return step->comment == NULL && step->expected == NULL &&
+           step->cfg_slug == NULL;
 }
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
@@ -360,8 +375,8 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).
  *
  * Rules enforced:
- *   - Sentinel: first step with both `comment == NULL` and
- *     `expected == NULL` terminates the array
+ *   - Sentinel: first step with `comment`, `expected` and `cfg_slug`
+ *     all NULL terminates the array
  *     (repl_tutorial_step_is_sentinel).
  *   - COMMAND steps require non-null expected (comment is optional),
  *     and each expected parses to a single source command and lands at
@@ -385,6 +400,10 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  *   - SET / REQUIRE steps require non-empty comment and cfg_slug,
  *     and expected == NULL. Slug *validity* is checked at runtime in
  *     tutorial_start once the config bridge is installed.
+ *   - SET_QUIET steps require non-empty cfg_slug, expected == NULL and
+ *     comment == NULL (a comment it would never render is an authoring
+ *     mistake, not a harmless extra). Slug validity is checked at
+ *     tutorial_start alongside SET / REQUIRE.
  *   - Every non-empty label is unique within the tutorial AND does not
  *     collide with a `:name` goto label defined in the setup scaffold.
  *   - TUTORIAL_STEP_APPEND has no non-empty target_label.
