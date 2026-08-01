@@ -45,6 +45,14 @@
  * the controller says so — an unexpectedly linear axis is visibly explained
  * rather than silently ignored.
  *
+ * While replay is scrubbing, a vertical rule per series marks how far its
+ * program counter has run through that series' executions. It is per-series
+ * because in X_EXEC mode each series spans the full width as its own execution
+ * percentage, so one PC is two positions for two rows of different lengths.
+ * The rule is only meaningful over a trace from the frame the PC is walking,
+ * which is what the controller's live-capture override buys — and the rate
+ * chip greys while that override is in force. See assign_plot_exec_progress().
+ *
  * The zoom chip (1x / 2x) doubles the panel's width and its plot well. Everything
  * else about the drawing is scale-independent, so both sizes run the same
  * code — only ui_assign_plot_panel_size() and the plot rect change.
@@ -91,7 +99,14 @@ enum {
  * to the primary series — the same rectangle the legend draws, resolved by the
  * hit test, so what is highlighted is what is being described. A view left
  * zero-initialized reports a pointer at the window's top-left corner, which is
- * outside any panel the overlay layout places. */
+ * outside any panel the overlay layout places.
+ *
+ * `replay_active` and `replay_frac` carry the replay program counter's position
+ * within each series' executions (see assign_plot_exec_progress()). They live
+ * here rather than on AssignPlotView because the capture subsystem has no
+ * replay dependency and should not grow one — the controller is what knows
+ * both. A zero-initialized view draws no marker, which is what every caller
+ * that only wants a hit-test wants. */
 typedef struct {
     int window_w, window_h;
     int visible;
@@ -99,6 +114,8 @@ typedef struct {
     const char *titles[MAX_ASSIGN_PLOT_SERIES];
     int pointer_x, pointer_y;
     AssignPlotView plot;
+    int replay_active;      /* replay is scrubbing the program */
+    float replay_frac[MAX_ASSIGN_PLOT_SERIES];  /* 0..1, or <0 for no marker */
 } UiAssignPlotPanelView;
 
 void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view);

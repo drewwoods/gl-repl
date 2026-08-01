@@ -620,6 +620,33 @@ static void ap_draw_trace(const AssignPlotColumn *cols, int count,
     }
 }
 
+/* --- replay program-counter markers ---
+ *
+ * One vertical rule per series, at the execution the replay PC has reached.
+ * Per-series rather than one shared rule because in X_EXEC mode each series is
+ * spread across the full width as its *own* execution percentage: a 64-iteration
+ * row and a 16-iteration row put the same PC at different fractions, and a
+ * single rule would be wrong for every series but one.
+ *
+ * Drawn in the series color, under half alpha — it is an annotation on the
+ * trace, not data, and it must not be mistaken for one at a glance. Drawn after
+ * the traces so it stays visible where it crosses one. */
+static void ap_draw_replay_markers(const UiAssignPlotPanelView *view,
+                                   int series_count, int plot_x, int plot_y,
+                                   int plot_w, int plot_h) {
+    for (int s = 0; s < series_count; s++) {
+        float rgb[3], mx;
+        if (!(view->replay_frac[s] >= 0.0f)) continue;
+        ui_assign_plot_series_color(s, rgb);
+        mx = (float)plot_x + (float)plot_w * view->replay_frac[s];
+        glColor4f(rgb[0], rgb[1], rgb[2], 0.55f);
+        glBegin(GL_LINES);
+        glVertex2f(mx, (float)plot_y);
+        glVertex2f(mx, (float)(plot_y + plot_h));
+        glEnd();
+    }
+}
+
 /* One "key   value" pair inside a half-width stats cell: key left, value right,
  * formatted to whatever room the key leaves it. */
 static void ap_draw_stat(int x, int y, int cell_w,
@@ -707,8 +734,16 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     ap_ctrl_layout(view, panel_w, &ctrl);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    /* Replay captures every frame so the trace stays the one its PC marker is
+     * drawn over, which overrides this chip — so the chip says so, in the same
+     * placeholder color the log chip uses for a setting that is understood but
+     * not in force. ONCE is exempt from the override and so from the graying:
+     * a frozen one-shot is still frozen. */
     gl2d_chip_state((float)(panel_x + ctrl.rate.x), (float)ty,
-                    ctrl.rate.label, UI_TOK_TEXT_SECTION);
+                    ctrl.rate.label,
+                    (view->replay_active
+                     && view->plot.rate != ASSIGN_PLOT_RATE_ONCE)
+                        ? UI_TOK_TEXT_PLACEHOLDER : UI_TOK_TEXT_SECTION);
     /* A log request the data cannot support draws inert inside its well, so
      * the axis being linear anyway is visibly accounted for rather than
      * looking like a dead chip. */
@@ -774,6 +809,14 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
                           view->plot.series[s].col_count,
                           plot_x, plot_y, plot_w, plot_h, &ax, rgb);
         }
+
+        /* The marker only means anything over a trace from the frame the PC is
+         * walking, which is what the controller's live-capture override buys.
+         * X_FRAME has no within-frame position, and the capture side already
+         * refuses to produce a fraction there. */
+        if (view->replay_active && view->plot.x_mode == ASSIGN_PLOT_X_EXEC)
+            ap_draw_replay_markers(view, series_count,
+                                   plot_x, plot_y, plot_w, plot_h);
     }
     glDisable(GL_BLEND);
 

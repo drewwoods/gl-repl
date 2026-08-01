@@ -587,6 +587,11 @@ static ReplayFadePlan g_replay_fade_plan;
  * ReplFlatProgramState.cmd_count; UI/snapshot code should still see the
  * full flattened program. */
 static int g_frame_replay_exec_limit = -1;
+/* Frame-local assignment-plot replay markers: where the clamp above falls
+ * within each plotted series' executions. Computed once the clamp is resolved
+ * and read by the panel's view builder later in the same frame. */
+static float g_assign_plot_replay_frac[MAX_ASSIGN_PLOT_SERIES];
+static int   g_assign_plot_replay_marker = 0;
 
 static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int replaying) {
     ReplayFadeBatchView fade_batches;
@@ -2221,6 +2226,13 @@ static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
     v.pointer_x = snap->pointer.mouse_x;
     v.pointer_y = snap->pointer.mouse_y;
     v.plot     = snap->assign_plot;
+    /* replay_active drives the overridden-rate chip and so is on for the whole
+     * of replay; the markers themselves only exist for the frames and series
+     * the progress scan could place one on. */
+    v.replay_active = replay_active();
+    for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++)
+        v.replay_frac[i] = g_assign_plot_replay_marker
+                         ? g_assign_plot_replay_frac[i] : -1.0f;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_ASSIGN_PLOT,
                                 &v.panel_x, &v.panel_y);
@@ -2521,6 +2533,12 @@ void glr_ctrl_display_frame(void) {
         prof_accum_reset(PROF_ASSIGN_PLOT);
         prof_begin(PROF_ASSIGN_PLOT);
         prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
+        /* While replay is scrubbing, the plot's PC marker is only truthful over
+         * a trace from the frame the PC is walking — so capture every frame
+         * regardless of the rate chip. Set unconditionally, so the override
+         * lifts the moment replay stops. (ASSIGN_PLOT_RATE_ONCE ignores it; see
+         * assign_plot_set_live_capture.) */
+        assign_plot_set_live_capture(replay_active());
         /* GLUT_ELAPSED_TIME is milliseconds since glutInit and monotonic,
          * which is all the 1 Hz gate needs — no second clock to keep. */
         assign_plot_capture((double)glutGet(GLUT_ELAPSED_TIME) * 1000.0);
@@ -2594,6 +2612,19 @@ void glr_ctrl_display_frame(void) {
     } else {
         g_frame_replay_exec_limit = saved_flat_count;
         g_last_replay_follow_src_line = -1;
+    }
+
+    /* Assignment-plot replay markers, once the frame's exec limit is known.
+     * Its own accumulate bracket rather than a silent rider on SNAPSHOT_PREP:
+     * this is a flat-program scan, and per-frame work inside someone else's
+     * span shows up only as unattributed remainder. */
+    g_assign_plot_replay_marker = 0;
+    if (replay_active() && assign_plot_is_open()) {
+        prof_begin(PROF_ASSIGN_PLOT);
+        g_assign_plot_replay_marker =
+            assign_plot_exec_progress(g_frame_replay_exec_limit,
+                                      g_assign_plot_replay_frac);
+        prof_accum_end(PROF_ASSIGN_PLOT);
     }
 
     repl_refresh_render_state_strings();

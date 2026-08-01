@@ -784,6 +784,10 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
         if (id == UI_OVERLAY_PANEL_ASSIGN_PLOT) {
             UiAssignPlotPanelView plot_view;
             int plot_hit;
+            /* Only the geometry fields matter to the hit test; zeroing the
+             * rest keeps the presentation-only ones (the replay markers) from
+             * being read uninitialized if that ever changes. */
+            memset(&plot_view, 0, sizeof(plot_view));
             plot_view.window_w = win_w;
             plot_view.window_h = win_h;
             plot_view.visible  = panel->visible;

@@ -948,6 +948,211 @@ static void test_hit_plot_body_is_inert(void) {
                UI_ASSIGN_PLOT_HIT_NONE);
 }
 
+/* ------------------------------------------------------------------ *
+ * Replay program-counter markers.
+ * ------------------------------------------------------------------ */
+
+/* One marker recovered from the trace: its x, and the span it covers. */
+typedef struct {
+    float x, y0, y1;
+} ApMarker;
+
+/* Markers for `series`, identified by that series' color at the marker alpha —
+ * which is what separates them from the trace (0.95) and the envelope (0.30)
+ * drawn in the same hue. */
+static int find_markers(const UiAssignPlotPanelView *v, int series,
+                        ApMarker *out, int cap) {
+    float rgb[3];
+    FILE *trace;
+    char line[128];
+    int active = 0, count = 0, verts = 0;
+
+    ui_assign_plot_series_color(series, rgb);
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        float r, g, b, a, x, y;
+        if (sscanf(line, "glColor4f %f %f %f %f", &r, &g, &b, &a) == 4) {
+            active = fabsf(r - rgb[0]) < 1e-4f
+                  && fabsf(g - rgb[1]) < 1e-4f
+                  && fabsf(b - rgb[2]) < 1e-4f
+                  && fabsf(a - 0.55f) < 1e-4f;
+            verts = 0;
+        } else if (active && sscanf(line, "glVertex2f %f %f", &x, &y) == 2) {
+            if (count < cap) {
+                if (verts == 0) {
+                    out[count].x  = x;
+                    out[count].y0 = y;
+                    out[count].y1 = y;
+                } else {
+                    out[count].y1 = y;
+                }
+            }
+            if (++verts == 2) { count++; verts = 0; }
+        }
+    }
+    fclose(trace);
+    return count;
+}
+
+static void test_replay_marker_is_placed_by_fraction(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    ApMarker m[4];
+    float left, right, height;
+
+    v.replay_active = 1;
+
+    /* The two ends give the plot well's span without the test having to know
+     * the panel's internal geometry; the midpoint then has to land between
+     * them, which is the only claim the marker actually makes. */
+    v.replay_frac[0] = 0.0f;
+    ASSERT_INT("one marker at the start", find_markers(&v, 0, m, 4), 1);
+    left = m[0].x;
+    height = m[0].y1 - m[0].y0;
+    ASSERT_TRUE("the marker is a vertical rule", height > 10.0f);
+
+    v.replay_frac[0] = 1.0f;
+    ASSERT_INT("one marker at the end", find_markers(&v, 0, m, 4), 1);
+    right = m[0].x;
+    ASSERT_TRUE("the end is right of the start", right > left);
+
+    v.replay_frac[0] = 0.5f;
+    ASSERT_INT("one marker at the midpoint", find_markers(&v, 0, m, 4), 1);
+    ASSERT_FLOAT("halfway through is halfway across",
+                 m[0].x, (left + right) * 0.5f);
+    /* The rule spans the plot well, so its height does not depend on where
+     * along the axis it sits. */
+    ASSERT_FLOAT("marker height is position-independent",
+                 m[0].y1 - m[0].y0, height);
+}
+
+static void test_replay_marker_absent_without_replay(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    ApMarker m[4];
+
+    /* A fraction left over from an earlier frame must not draw on its own:
+     * replay_active is the gate. */
+    v.replay_frac[0] = 0.5f;
+    ASSERT_INT("no marker when replay is off", find_markers(&v, 0, m, 4), 0);
+
+    /* And a zero-initialized view — every hit-test-only caller — draws none. */
+    memset(&v, 0, sizeof(v));
+    v.window_w = WIN_W;
+    v.window_h = WIN_H;
+    v.visible = 1;
+    ASSERT_INT("a zeroed view draws no marker", find_markers(&v, 0, m, 4), 0);
+}
+
+/* A negative fraction is "this series has no marker" — a series that has not
+ * run yet must not be drawn as if the PC were at its first execution. */
+static void test_replay_marker_skips_unrun_series(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    ApMarker m[4];
+
+    set_series(&v, 1, "beta", 16, 0.0f, 2.0f);
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.25f;
+    v.replay_frac[1] = -1.0f;
+
+    ASSERT_INT("the running series is marked", find_markers(&v, 0, m, 4), 1);
+    ASSERT_INT("the unrun series is not", find_markers(&v, 1, m, 4), 0);
+}
+
+/* Each series is spread across the full width as its own execution
+ * percentage, so one PC is two different positions. */
+static void test_replay_markers_are_per_series(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    ApMarker a[4], b[4];
+
+    set_series(&v, 1, "beta", 16, 0.0f, 2.0f);
+    v.replay_active = 1;
+    v.replay_frac[0] = 1.0f;
+    v.replay_frac[1] = 0.25f;
+
+    ASSERT_INT("first series has a marker", find_markers(&v, 0, a, 4), 1);
+    ASSERT_INT("second series has its own", find_markers(&v, 1, b, 4), 1);
+    ASSERT_TRUE("the two sit at different positions", a[0].x > b[0].x);
+}
+
+/* X_FRAME columns are whole captures: there is no within-frame position to
+ * point at, so the renderer refuses even a fraction that was handed to it. */
+static void test_replay_marker_absent_in_frame_mode(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    ApMarker m[4];
+
+    v.plot.x_mode = ASSIGN_PLOT_X_FRAME;
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.5f;
+    ASSERT_INT("no marker on the captures axis", find_markers(&v, 0, m, 4), 0);
+}
+
+/* An empty plot has no trace to annotate. */
+static void test_replay_marker_absent_without_data(void) {
+    UiAssignPlotPanelView v = make_view(0, 0.0f, 0.0f);
+    ApMarker m[4];
+
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.5f;
+    ASSERT_INT("no marker over an empty plot", find_markers(&v, 0, m, 4), 0);
+}
+
+/* Read the color the rate chip's label is drawn in. The chip is the first
+ * thing in the control row, so its text color is the glColor* immediately
+ * preceding the first glRasterPos2f at the control row's baseline — simpler to
+ * pin by comparing whole renders, which is what the caller does. */
+static int trace_render(const UiAssignPlotPanelView *v, char *buf, size_t cap) {
+    FILE *trace;
+    size_t n;
+
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return 0;
+    n = fread(buf, 1, cap - 1, trace);
+    buf[n] = '\0';
+    fclose(trace);
+    return (int)n;
+}
+
+static char g_trace_a[1 << 20];
+static char g_trace_b[1 << 20];
+
+/* The rate chip is drawn inert while replay overrides it — and is *not* at
+ * ASSIGN_PLOT_RATE_ONCE, which replay leaves frozen and therefore in force. */
+static void test_replay_grays_the_overridden_rate_chip(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+
+    /* No marker in either render, so the chip color is the only thing that can
+     * differ between them. */
+    v.replay_frac[0] = -1.0f;
+    v.plot.rate = ASSIGN_PLOT_RATE_1HZ;
+    v.replay_active = 0;
+    ASSERT_TRUE("baseline render captured",
+                trace_render(&v, g_trace_a, sizeof(g_trace_a)) > 0);
+    v.replay_active = 1;
+    trace_render(&v, g_trace_b, sizeof(g_trace_b));
+    ASSERT_TRUE("an overridden rate chip renders differently",
+                strcmp(g_trace_a, g_trace_b) != 0);
+
+    /* ONCE is exempt from the override, so nothing about the panel changes.
+     * The capture side produces no fraction for a frozen one-shot, so this is
+     * what the controller hands the renderer in that case. */
+    v.plot.rate = ASSIGN_PLOT_RATE_ONCE;
+    v.replay_frac[0] = -1.0f;
+    v.replay_active = 0;
+    trace_render(&v, g_trace_a, sizeof(g_trace_a));
+    v.replay_active = 1;
+    trace_render(&v, g_trace_b, sizeof(g_trace_b));
+    ASSERT_INT("a frozen one-shot's chip stays in force",
+               strcmp(g_trace_a, g_trace_b), 0);
+}
+
 int main(void) {
     printf("--- ui_assign_plot tests ---\n\n");
     test_metrics();
@@ -979,6 +1184,13 @@ int main(void) {
     test_render_gap_columns();
     test_legend_hover_selects_series();
     test_render_tiny_exponent_stats();
+    test_replay_marker_is_placed_by_fraction();
+    test_replay_marker_absent_without_replay();
+    test_replay_marker_skips_unrun_series();
+    test_replay_markers_are_per_series();
+    test_replay_marker_absent_in_frame_mode();
+    test_replay_marker_absent_without_data();
+    test_replay_grays_the_overridden_rate_chip();
     return test_harness_report(&g_harness, "test_ui_assign_plot");
 }
 #else

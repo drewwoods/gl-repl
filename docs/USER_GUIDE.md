@@ -396,6 +396,15 @@ sunken box; a bracketed word is a one-shot button.
 **frame** captures every frame. With several rows, **once** waits for a frame
 in which they all execute; changing the rows or rate starts a new collection.
 
+**During [replay](#replay)** a vertical rule marks how far the
+replay has run through each plotted row's executions this frame. So that the
+rule sits over the values the replay is actually stepping through, the plot
+captures every frame while replay is active regardless of the rate — the rate
+chip greys out to show it is not in force. **once** is the exception: it stays
+frozen, and a frozen snapshot gets no rule, since the replay is not walking the
+frame it holds. A top-level row plotted against successive captures gets no
+rule either — there is no position within a frame to mark.
+
 **Comparing several rows.** **Shift**+right-click adds an assignment to the open
 plot instead of replacing what is there, up to four at once; Shift+right-click a
 plotted row again to remove it.

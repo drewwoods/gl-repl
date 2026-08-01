@@ -474,6 +474,14 @@ never reset one without the other. Controls are mouse-only (no keymap slot, no
 `GlrConfigKey`, so no `@cfg`/golden churn) — the rate, `lin`/`log` and
 `1x`/`2x` chips plus the legend all live in the panel.
 
+**Replay draws a PC marker per series** (`assign_plot_exec_progress`), and that
+forces per-frame capture: the rule is only true of the frame it was computed
+from, and `t` keeps advancing under replay unless the sim is paused, so
+`assign_plot_set_live_capture()` bypasses the rate gate for the duration (rate
+chip greys). `ASSIGN_PLOT_RATE_ONCE` is exempt from both — a frozen snapshot
+stays frozen and gets no marker. X_FRAME gets none either: no within-frame
+position to mark.
+
 Up to `MAX_ASSIGN_PLOT_SERIES` = 4 rows plot together (**Shift**+right-click
 adds/removes a series; plain right-click retargets to one row). Two axes are
 shared and that drives the rules:

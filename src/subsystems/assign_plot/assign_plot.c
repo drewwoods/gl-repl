@@ -31,6 +31,7 @@ static int    g_captured = 0;
 static double g_last_capture_us = 0.0;
 static int    g_expanded = 0;
 static int    g_y_log = 0;
+static int    g_live_capture = 0;
 
 static AssignPlotSeries g_series[MAX_ASSIGN_PLOT_SERIES];
 static int              g_series_count = 0;
@@ -127,7 +128,11 @@ static int assign_plot_rate_allows(double now_us) {
         case ASSIGN_PLOT_RATE_ONCE:
             return !g_captured;
         case ASSIGN_PLOT_RATE_1HZ:
-            return !g_captured
+            /* Live capture overrides the clock but not the one-shot above: a
+             * marker drawn over a second-old trace points at the right
+             * execution ordinal of the wrong frame's values. */
+            return g_live_capture
+                || !g_captured
                 || (now_us - g_last_capture_us) >= ASSIGN_PLOT_1HZ_PERIOD_US;
         case ASSIGN_PLOT_RATE_FRAME:
         default:
@@ -489,6 +494,62 @@ void assign_plot_capture(double now_us) {
     g_last_capture_us = now_us;
 }
 
+void assign_plot_set_live_capture(int on) {
+    g_live_capture = on ? 1 : 0;
+}
+
+int assign_plot_exec_progress(int exec_limit,
+                              float out_frac[MAX_ASSIGN_PLOT_SERIES]) {
+    const GLCmd *flat = repl_state_flat_program_cmds();
+    int n = repl_state_flat_program_count();
+    int total[MAX_ASSIGN_PLOT_SERIES];
+    int done[MAX_ASSIGN_PLOT_SERIES];
+    int any = 0;
+
+    if (!out_frac) return 0;
+    for (int s = 0; s < MAX_ASSIGN_PLOT_SERIES; s++)
+        out_frac[s] = -1.0f;
+
+    /* X_FRAME has no within-frame axis to place a marker on; see the header. */
+    if (!g_open || !flat || g_x_mode != ASSIGN_PLOT_X_EXEC) return 0;
+    /* A one-shot is exempt from the live-capture override, so its columns are
+     * some earlier frame's. A marker over them would be a position in this
+     * frame drawn on another one's values — the same lie the override exists
+     * to prevent, so the frozen case simply has no marker. */
+    if (g_rate == ASSIGN_PLOT_RATE_ONCE) return 0;
+
+    memset(total, 0, sizeof(total));
+    memset(done, 0, sizeof(done));
+
+    /* One pass for every series rather than one pass each: the series list is
+     * at most MAX_ASSIGN_PLOT_SERIES long, so the inner walk is cheaper than
+     * re-reading the flat program four times. */
+    for (int i = 0; i < n; i++) {
+        if (!assign_plot_type_is_assign(flat[i].type)) continue;
+        for (int s = 0; s < g_series_count; s++) {
+            if (flat[i].src_cmd_idx != g_series[s].source_line_idx) continue;
+            total[s]++;
+            if (exec_limit < 0 || i < exec_limit) done[s]++;
+            break;
+        }
+    }
+
+    for (int s = 0; s < g_series_count; s++) {
+        int last;
+        /* A series that has not run yet gets no marker rather than one pinned
+         * to the left edge, which would read as "the PC is at its first
+         * execution". A single-execution series has no span to place one on. */
+        if (total[s] < 2 || done[s] <= 0) continue;
+        /* The marker sits on the last execution that has *run*, and the trace
+         * puts execution i at i/(total-1) of the plot width. */
+        last = done[s] - 1;
+        if (last > total[s] - 1) last = total[s] - 1;
+        out_frac[s] = (float)last / (float)(total[s] - 1);
+        any = 1;
+    }
+    return any;
+}
+
 AssignPlotView assign_plot_view(void) {
     AssignPlotView v;
     memset(&v, 0, sizeof(v));
@@ -517,6 +578,7 @@ void assign_plot_reset_all(void) {
     g_expanded = 0;
     g_y_log = 0;
     g_captured = 0;
+    g_live_capture = 0;
     g_last_capture_us = 0.0;
     for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++) {
         g_series[i].source_line_idx = -1;

@@ -206,6 +206,43 @@ int  assign_plot_is_expanded(void);
  * ASSIGN_PLOT_RATE_ONCE for one more capture. */
 void assign_plot_reset(void);
 
+/* --- Replay coupling ---------------------------------------------------
+ *
+ * Replay walks a program counter through the flat program while the rest of
+ * the app keeps running, so unless the simulation clock is paused the program
+ * is re-flattened under the PC every frame. A marker saying "the PC is here"
+ * is only true of the frame it was computed from, which means the trace it is
+ * drawn over has to be that same frame's.
+ *
+ * Hence the two calls below, and the division of labor between them: this
+ * module knows nothing about replay (it takes a flat index and a flag), and
+ * the controller knows nothing about capture rates. */
+
+/* Capture every frame regardless of the rate gate. ASSIGN_PLOT_RATE_ONCE is
+ * deliberately exempt: a one-shot is a snapshot the user asked to freeze, and
+ * overriding it would destroy the thing being looked at. The panel draws the
+ * rate chip inert while this is on, so a 1 Hz setting that is not in force is
+ * visible rather than silently ignored. */
+void assign_plot_set_live_capture(int on);
+
+/* Where a replay program counter falls within each series' executions.
+ * `exec_limit` is the flat index the executor is rendering up to (negative for
+ * "no clamp"); `out_frac` receives a 0..1 position along that series' own
+ * execution span, or -1 for a series with no marker to draw. Returns 1 if any
+ * series produced one.
+ *
+ * X_FRAME mode produces nothing: there a column is a whole capture, so a
+ * position *within* a frame has no column to point at. Neither does
+ * ASSIGN_PLOT_RATE_ONCE, whose frozen columns are some earlier frame's — a
+ * marker there would put this frame's position on another frame's values,
+ * which is exactly what the live-capture override exists to prevent.
+ *
+ * Counts come from the flat program as it stands now, numerator and
+ * denominator both, so the fraction is self-consistent even if the capture
+ * that filled the columns saw a different frame. */
+int assign_plot_exec_progress(int exec_limit,
+                              float out_frac[MAX_ASSIGN_PLOT_SERIES]);
+
 /* Capture if the rate gate allows. `now_us` is supplied by the caller rather
  * than read from a clock here, which keeps this module free of any timing
  * dependency and makes the gate exactly reproducible under test.

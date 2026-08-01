@@ -989,6 +989,29 @@ The scan walks the **full** flat count rather than
 replay must not truncate the plot, because the question is "what does this row
 do over a frame", not "what has run so far".
 
+**Replay markers.** Where the replay PC *is* shows as a vertical rule per
+series instead, from
+[`assign_plot_exec_progress()`](../src/subsystems/assign_plot/assign_plot.h) —
+the same scan counting executions before the clamp. One rule per series, not
+one shared: in `X_EXEC` mode each series spans the full width as its own
+execution percentage, so a 64-iteration row and a 16-iteration row put one PC
+at two different fractions.
+
+The marker is only true of the frame it was computed from, and unless the
+simulation clock is paused the program re-flattens under the PC every frame. So
+the controller turns on
+[`assign_plot_set_live_capture()`](../src/subsystems/assign_plot/assign_plot.h)
+for the duration of replay: the rate gate is bypassed and every frame is
+captured, so the trace under the marker is the frame the PC is walking. The
+panel draws the rate chip in the placeholder color while that override is in
+force, the same way the `log` chip reports a request the data cannot honor.
+
+`ASSIGN_PLOT_RATE_ONCE` is exempt from both. A one-shot is a snapshot the user
+asked to freeze; overriding it would destroy the thing being looked at, and its
+frozen columns are some earlier frame's, so it gets no marker either. The
+capture module owns that rule (it knows the rate), which keeps the controller
+from having to.
+
 **Two X axes.** A row inside a loop runs many times per frame, so X is the
 execution index within the captured frame (`ASSIGN_PLOT_X_EXEC`). A top-level
 row runs exactly once, which would plot a single point — there X becomes

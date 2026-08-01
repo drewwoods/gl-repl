@@ -1003,6 +1003,259 @@ static void test_dead_row_drops_only_its_series(void) {
     ASSERT_INT("and it is the surviving row", assign_plot_source_line(), row_x);
 }
 
+/* ------------------------------------------------------------------ *
+ * Replay coupling: the PC marker and the live-capture override.
+ * ------------------------------------------------------------------ */
+
+/* Flat index just past the `nth` (1-based) execution of `row` — what a replay
+ * clamp would be when exactly that many of the row's assignments have run. */
+static int flat_limit_after_exec(int row, int nth) {
+    const GLCmd *flat = repl_state_flat_program_cmds();
+    int count = repl_state_flat_program_count();
+    int seen = 0;
+    for (int i = 0; i < count; i++) {
+        if (flat[i].src_cmd_idx != row) continue;
+        if (flat[i].type != CMD_VAR_ASSIGN && flat[i].type != CMD_SCRATCH_ASSIGN)
+            continue;
+        if (++seen == nth) return i + 1;
+    }
+    return count;
+}
+
+static void test_replay_progress_tracks_the_pc(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i * 2;",
+        "}",
+        NULL
+    };
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_capture(0.0);
+
+    /* The marker sits on the last execution that has run, and the trace puts
+     * execution i at i/(n-1) of the width: 4 of 8 done is execution 3 of 7. */
+    ASSERT_INT("a marker is produced mid-program",
+               assign_plot_exec_progress(flat_limit_after_exec(row, 4), frac), 1);
+    ASSERT_FLOAT("marker is at the fourth of eight executions",
+                 frac[0], 3.0f / 7.0f);
+
+    ASSERT_INT("a marker is produced at the end",
+               assign_plot_exec_progress(flat_limit_after_exec(row, 8), frac), 1);
+    ASSERT_FLOAT("a finished pass sits at the right edge", frac[0], 1.0f);
+
+    /* Before the row's first execution there is nothing to point at: a marker
+     * pinned to the left edge would read as "the first execution has run". */
+    ASSERT_INT("no marker before the row has run",
+               assign_plot_exec_progress(0, frac), 0);
+    ASSERT_TRUE("unrun series reports no position", frac[0] < 0.0f);
+
+    /* No clamp is the whole frame. */
+    ASSERT_INT("an unclamped program is fully executed",
+               assign_plot_exec_progress(-1, frac), 1);
+    ASSERT_FLOAT("unclamped sits at the right edge", frac[0], 1.0f);
+}
+
+/* Each series is spread across the full width as its own execution
+ * percentage, so one PC lands at a different fraction on each. */
+static void test_replay_progress_is_per_series(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "float y;",
+        "for(i, 0, 8) {",
+        "x = i;",
+        "}",
+        "for(j, 0, 4) {",
+        "y = j;",
+        "}",
+        NULL
+    };
+    const GLCmd *cmds;
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    int n, first = -1, second = -1;
+
+    load_scene(k_scene);
+    cmds = repl_state_document_cmds();
+    n = repl_state_document_count();
+    for (int i = 0; i < n; i++) {
+        if (!cmds[i].valid || cmds[i].type != CMD_VAR_ASSIGN) continue;
+        if (first < 0) first = i;
+        else if (second < 0) second = i;
+    }
+    ASSERT_TRUE("scene has two assignment rows", first >= 0 && second >= 0);
+
+    assign_plot_open(first);
+    ASSERT_INT("second row joins the plot",
+               assign_plot_toggle_series(second), ASSIGN_PLOT_SERIES_ADDED);
+    assign_plot_capture(0.0);
+
+    /* A PC past the whole first loop but before the second starts: the first
+     * series is finished, the second has not begun. */
+    ASSERT_INT("markers exist for the first loop",
+               assign_plot_exec_progress(flat_limit_after_exec(first, 8), frac), 1);
+    ASSERT_FLOAT("finished series is at its right edge", frac[0], 1.0f);
+    ASSERT_TRUE("series that has not run has no marker", frac[1] < 0.0f);
+
+    /* Halfway through the second loop the first is still done, so the two
+     * markers sit at different fractions from the same PC. */
+    assign_plot_exec_progress(flat_limit_after_exec(second, 2), frac);
+    ASSERT_FLOAT("first series stays finished", frac[0], 1.0f);
+    ASSERT_FLOAT("second series is at its own second of four",
+                 frac[1], 1.0f / 3.0f);
+}
+
+/* X_FRAME columns are whole captures, so a position within one frame has no
+ * column to point at. */
+static void test_replay_progress_absent_in_frame_mode(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "x = t * 10;",
+        NULL
+    };
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_capture(0.0);
+
+    ASSERT_INT("capture derived the frame axis",
+               assign_plot_view().x_mode, ASSIGN_PLOT_X_FRAME);
+    ASSERT_INT("no marker on the captures axis",
+               assign_plot_exec_progress(-1, frac), 0);
+    ASSERT_TRUE("and no position for the series", frac[0] < 0.0f);
+}
+
+/* A frozen one-shot's columns are some earlier frame's, so there is no
+ * this-frame position to draw on them. */
+static void test_replay_progress_absent_for_a_one_shot(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i;",
+        "}",
+        NULL
+    };
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+    assign_plot_capture(0.0);
+
+    ASSERT_INT("no marker over a frozen one-shot",
+               assign_plot_exec_progress(-1, frac), 0);
+    ASSERT_TRUE("and no position for the series", frac[0] < 0.0f);
+
+    /* The same plot at a live rate does get one, so it is the freeze that
+     * suppresses the marker and not the scene. */
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
+    assign_plot_capture(0.0);
+    ASSERT_INT("a live rate is marked",
+               assign_plot_exec_progress(-1, frac), 1);
+}
+
+static void test_replay_progress_needs_an_open_plot(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i;",
+        "}",
+        NULL
+    };
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+
+    load_scene(k_scene);
+    ASSERT_INT("a closed plot produces no markers",
+               assign_plot_exec_progress(-1, frac), 0);
+    ASSERT_TRUE("and leaves no stale position", frac[0] < 0.0f);
+}
+
+/* Live capture defeats the 1 Hz clock: a marker is only truthful over a trace
+ * from the frame the PC is walking. */
+static void test_live_capture_overrides_the_1hz_gate(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i + t;",
+        "}",
+        NULL
+    };
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_1HZ);
+
+    repl_state_time_set(0.0f);
+    reflatten();
+    assign_plot_capture(0.0);
+    ASSERT_FLOAT("first capture lands", S0(assign_plot_view()).stats.max, 7.0);
+
+    /* A tenth of a second later the gate would normally still be shut. */
+    repl_state_time_set(100.0f);
+    reflatten();
+    assign_plot_capture(US_PER_SEC / 10.0);
+    ASSERT_FLOAT("the clock still gates a normal capture",
+                 S0(assign_plot_view()).cols[7].hi, 7.0);
+
+    assign_plot_set_live_capture(1);
+    assign_plot_capture(US_PER_SEC / 10.0);
+    ASSERT_FLOAT("live capture takes this frame's values",
+                 S0(assign_plot_view()).cols[7].hi, 107.0);
+
+    /* And the override lifts cleanly — the gate is the clock again. */
+    assign_plot_set_live_capture(0);
+    repl_state_time_set(200.0f);
+    reflatten();
+    assign_plot_capture(US_PER_SEC / 10.0 + 1.0);
+    ASSERT_FLOAT("the clock gates again once replay stops",
+                 S0(assign_plot_view()).cols[7].hi, 107.0);
+}
+
+/* A one-shot is a snapshot the user asked to freeze; replay does not get to
+ * overwrite it. */
+static void test_live_capture_does_not_thaw_a_one_shot(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i + t;",
+        "}",
+        NULL
+    };
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_set_rate(ASSIGN_PLOT_RATE_ONCE);
+
+    repl_state_time_set(0.0f);
+    reflatten();
+    assign_plot_capture(0.0);
+    ASSERT_FLOAT("the shot lands", S0(assign_plot_view()).cols[7].hi, 7.0);
+
+    assign_plot_set_live_capture(1);
+    for (int frame = 1; frame < 4; frame++) {
+        repl_state_time_set((float)frame * 100.0f);
+        reflatten();
+        assign_plot_capture((double)frame * US_PER_SEC);
+    }
+    ASSERT_FLOAT("live capture leaves the frozen shot alone",
+                 S0(assign_plot_view()).cols[7].hi, 7.0);
+    ASSERT_INT("and does not add samples",
+               (int)S0(assign_plot_view()).stats.count, 8);
+}
+
 int main(void) {
     printf("--- assign_plot tests ---\n\n");
     test_exec_mode_captures_loop_values();
@@ -1034,5 +1287,12 @@ int main(void) {
     test_frame_mode_keeps_series_aligned();
     test_frame_secondary_stats_include_every_execution();
     test_dead_row_drops_only_its_series();
+    test_replay_progress_tracks_the_pc();
+    test_replay_progress_is_per_series();
+    test_replay_progress_absent_in_frame_mode();
+    test_replay_progress_absent_for_a_one_shot();
+    test_replay_progress_needs_an_open_plot();
+    test_live_capture_overrides_the_1hz_gate();
+    test_live_capture_does_not_thaw_a_one_shot();
     return test_harness_report(&g_harness, "test_assign_plot");
 }
