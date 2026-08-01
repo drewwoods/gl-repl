@@ -57,7 +57,9 @@ glEnd();
 &nbsp;
 <a href="docs/SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="31%"></a>
 
-<sub>**[The full showcase →](docs/SHOWCASE.md)** — 39 built-in scenes, each one a screenful of typed GL.</sub>
+<sub>**[Read the User Guide →](docs/USER_GUIDE.md)** — every feature, with screenshots. Start here.</sub>
+
+<sub>These three are from the [showcase](docs/SHOWCASE.md): 39 built-in scenes, each a screenful of typed GL.</sub>
 
 </div>
 
@@ -100,9 +102,10 @@ make web-serve             # serve it at http://localhost:8000/
 
 <sub>Details and the emsdk setup: [packaging/web/README.md](packaging/web/README.md).</sub>
 
-Press **F1** in-app for the full command and key reference. There are
-guided tutorials under the **Tutorials** menu — *First Triangle* takes
-about a minute.
+Press **F1** in-app for the full command and key reference, and read the
+[**User Guide**](docs/USER_GUIDE.md) for the rest — it is the manual, and the
+best place to go after this page. There are guided tutorials under the
+**Tutorials** menu too; *First Triangle* takes about a minute.
 
 ### The 30-second demo
 
