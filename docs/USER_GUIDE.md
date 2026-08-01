@@ -358,23 +358,15 @@ while closed.
 
 **The X axis follows the row.** A row inside a `for` loop runs many times per
 frame, so X is the execution number within one frame — the whole sweep of
-values the loop produced, in order.
+values the loop produced, in order. A top-level row runs exactly once per
+frame, which would be a single point; there X becomes successive captures
+instead, giving you the value drifting over time.
 
-![Assignment value plot on a loop row: X is the execution index within one frame](images/assign-plot.png)
-
-Above, the plotted `wave = ...` row runs 160 times per frame, and the panel's
-trace is the same shape the loop is drawing in the scene — read off the
-variable rather than off the geometry.
-
-A top-level row runs exactly once per frame, which would be a single point;
-there X becomes successive captures instead, giving you the value drifting over
-time.
-
-![The same panel on a once-per-frame row: X becomes successive captures](images/assign-plot-frames.png)
+![Left: a loop row, X is the execution index within one frame. Right: a top-level row, X is successive captures](images/assign-plot.png)
 
 The caption under the plot always says which one you are looking at, along with
-the executions found this frame and the total number of samples behind the
-statistics.
+the executions found this frame (`160/frame` above left) and the total number
+of samples behind the statistics.
 
 **Y is signed by default, and does not force a zero baseline.** A variable
 oscillating between 100 and 101 shows its shape rather than flattening against
@@ -382,25 +374,22 @@ the top of a 0–101 axis. When the range does cross zero, the zero line is draw
 brighter, because a sign change is usually what you are hunting for.
 
 The `log` chip switches Y to log₁₀ spacing, for values spread over orders of
-magnitude. What that means depends on the data:
+magnitude. Strictly positive values get a plain log axis. Anything that is
+entirely negative, crosses zero, or touches zero — every sinusoid does one of
+the latter two — gets a *symmetric* log axis instead: magnitudes below a small
+floor read as zero, and above it the distance from the center is the number of
+decades, carrying the sign.
 
-- **Strictly positive** values get a plain log axis — decade gridlines, nothing
-  clipped.
-- **Values that are entirely negative, cross zero, or touch zero** — every
-  sinusoid does the latter two — get a *symmetric* log axis: magnitudes below a
-  small floor read as zero, and above it the distance from the center is the
-  number of decades, carrying the sign. Two sine waves an order of magnitude
-  apart then sit a decade apart at their peaks instead of the smaller one
-  flattening against the baseline, and both still cross a real zero line.
+![The same two traces on a linear axis and on the symmetric log axis](images/assign-plot-log.png)
 
-The floor scales with the largest value on the plot, so a trace living at
-`1e-6` plots the same shape as one living at `1`. What you give up is
-resolution near zero: a value dipping to `1e-11` on its way through a zero
-crossing is drawn as zero rather than diving off the bottom of the plot, which
-is the trade you are asking for by choosing log.
-
-The one thing no log axis can show is a trace pinned at exactly zero — there
-the chip greys out and the plot stays linear.
+`small` is a hundredth of `big`. Linear Y (left) flattens it onto the zero
+line; symmetric log (right) lifts it to its own decades while both still cross
+a real zero. The floor scales with the largest value on the plot, so a trace
+living at `1e-6` plots like one living at `1` — what you give up is resolution
+near zero, where a value dipping to `1e-11` on its way through a crossing draws
+as zero rather than diving off the bottom. A trace pinned at exactly zero is
+the one thing no log axis can show: there the chip greys out and Y stays
+linear.
 
 Under the plot: **min**, **max**, **mean** and **sd** (sample standard
 deviation). These are fed from every captured value. When a frame produces more
@@ -444,24 +433,25 @@ silently plotting its neighbour — and when the last one goes, the panel closes
 
 **Comparing several rows.** **Shift**+right-click adds an assignment to the open
 plot instead of replacing what is there, up to four at once; Shift+right-click a
-plotted row again to remove it. Each series gets its own color, and a legend
-under the plot names them. The statistics below describe **one** series at a
-time — hover a legend entry to read that row's numbers, otherwise you get the
-first one, which is drawn lit so you always know whose numbers are on screen.
+plotted row again to remove it.
 
-Two things are shared by everything on the plot, which is what makes the
-comparison meaningful and also what limits it:
+![Three assignments from one loop body overlaid, with the legend naming them](images/assign-plot-series.png)
 
-- **The X axis** comes from the first row you plotted. A row that runs a
-  different number of times per frame cannot share it — a once-per-frame value
-  and a value from inside a 64-iteration loop have no common X — so adding one
-  is refused with a message rather than drawn misleadingly. On the
-  capture axis, a row that does not run in some frame leaves a visible gap
-  instead of a line drawn across values it never produced.
-- **The Y axis** spans every series. That is the point when you are comparing
-  values of similar size; when they are not, the smaller one flattens toward
-  the baseline. The per-series statistics still carry the exact numbers, and
-  the `2x` zoom gives the curve more room.
+The title counts the extra rows (`wave +2`), each series gets its own color,
+and the legend names them. The statistics describe **one** series at a time —
+hover a legend entry to read that row's numbers, otherwise you get the first
+one, drawn lit so you always know whose numbers are on screen.
+
+Both axes are shared, which is what makes the comparison meaningful and also
+what limits it:
+
+- **X** comes from the first row you plotted, so a row that runs a different
+  number of times per frame cannot join — adding it is refused with a message
+  rather than drawn misleadingly. On the capture axis, a row that does not run
+  in some frame leaves a visible gap.
+- **Y** spans every series, so values of very different size flatten each
+  other — that is what the `log` chip above is for. The per-series statistics
+  carry the exact numbers either way, and `2x` gives the curves more room.
 
 ### Inspecting OpenGL state
 

@@ -75,6 +75,8 @@ XG_CODE_CROP=596x112+8+46     # xform-guide-montage: code rows 1..6 (the whole p
 XG_SCENE_CROP=596x280+400+420 # xform-guide-montage: scene pane around origin + guide
 XM_CODE_CROP=800x150+8+46     # xform-guide-mode: code rows 1..8 (the whole program)
 XM_SCENE_CROP=800x240+28+368  # xform-guide-mode: scene pane spanning both anchors
+AP_CROP=270x175+933+602       # assign-plot: the bottom-right value panel, one series
+APS_CROP=270x189+933+588      # assign-plot-series: same panel, three series + legend
 
 # Warm-up frames. Every capture helper reads the WARM env var as its warm-up
 # length in frames (~1/60 s of simulation each); set it in a ( subshell )
@@ -131,7 +133,7 @@ PNG_ASSETS=(
     single-polygon-scope label-placement
     vertex-guides cursor-highlight clip-plane autocomplete
     color-picker numeric-stepper gl-state-inspector profile-panels
-    assign-plot assign-plot-frames
+    assign-plot assign-plot-series assign-plot-log
     sc-parametric-torus sc-bezier sc-orbit-plot sc-gl-repl-logo sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
@@ -1236,6 +1238,64 @@ glEnd();
 EOF
 }
 
+# Three series on one plot. All three rows sit in the same loop body, so they
+# share an execution count and therefore an X axis (a row with a different one
+# is refused at add time — that rule is what this scene has to satisfy). The
+# two components and their sum are deliberately the same order of magnitude:
+# the shot is about the legend and the overlay, not about the shared-Y
+# flattening the prose warns of.
+stage_assign_plot_series() { stage assign_plot_series <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_labels = 0 */
+/* @cfg auto_normals = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+float base, ripple, wave;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glColor3f(0.35, 0.8, 1);
+glBegin(GL_LINE_STRIP);
+for(i, 0, 160) {
+base = sin(i * 0.05 + t) * 0.5;
+ripple = cos(i * 0.17 - t * 1.3) * 0.25;
+wave = base + ripple;
+glVertex3f(i * 0.0125 - 1, wave, 0);
+}
+glEnd();
+// Snippet end
+EOF
+}
+
+# The symmetric-log axis, which is only legible against its linear twin: two
+# sinusoids an order of magnitude apart, plotted together. Shared linear Y
+# flattens `small` onto the zero line; log lifts it a decade below `big` while
+# both still cross a real zero. Same scene, captured twice with
+# GLR_ASSIGN_PLOT_LOG toggling the chip.
+stage_assign_plot_log() { stage assign_plot_log <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_labels = 0 */
+/* @cfg auto_normals = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+float big, small;
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glColor3f(0.35, 0.8, 1);
+glBegin(GL_LINE_STRIP);
+for(i, 0, 160) {
+big = sin(i * 0.05 + t) * 0.6;
+small = sin(i * 0.05 + t) * 0.006;
+glVertex3f(i * 0.0125 - 1, big + small, 0);
+}
+glEnd();
+// Snippet end
+EOF
+}
+
 # Same panel on its other X axis: a top-level row runs exactly once per frame,
 # so the plot becomes a time series over successive captures. That needs real
 # elapsed seconds rather than a single frame, which is what the long WARM at
@@ -1820,32 +1880,72 @@ if want gl-state-inspector; then
           "$(stage_gl_state_inspector)" )
 fi
 
-# Right-click an assignment row to plot its values. Index 5 is the `wave = ...`
-# assignment inside the loop (0-based, counted after the @cfg headers and the
-# snippet markers are stripped); the panel lands in the floating overlay column.
-# WARM outlasts the splash (WARM_SPLASH) rather than taking the house-default
-# 30: this panel lands bottom-right, exactly where the splash strip dims the
-# frame, and the min/max/mean/sd rows the shot exists to show are unreadable
-# underneath it.
-if want assign-plot; then
-    ( WARM=$((WARM_SPLASH + 30))
-      export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5
-      still "$OUT/assign-plot.png" 16 "$(stage_assign_plot)" )
-fi
-
-# The frames axis needs several capture *instants*, not one frame: the 1 Hz
-# capture rate is gated on wall clock, not on frame count, so what this asset
+# Right-click an assignment row to plot its values. The asset is a 1x2 montage
+# of the panel on its two X axes -- a loop row (exec index within one frame)
+# beside a top-level row (successive captures) -- because the only thing that
+# differs is the axis caption and the trace under it; two full-window stills
+# would be two near-identical 1200x800 pages of mostly grid.
+#
+# Left tile: index 5 is the `wave = ...` assignment inside the loop (0-based,
+# counted after the @cfg headers and the snippet markers are stripped, same as
+# GLR_EDIT_LINE). WARM outlasts the splash (WARM_SPLASH) rather than taking the
+# house-default 30: this panel lands bottom-right, exactly where the splash
+# strip dims the frame, and the min/max/mean/sd rows the shot exists to show
+# are unreadable underneath it.
+#
+# Right tile: the frames axis needs several capture *instants*, not one frame:
+# the 1 Hz capture rate is gated on wall clock, not on frame count, so what it
 # needs is ~20 s of elapsed time. WARM is therefore a frame budget standing in
 # for a duration — which means, like profile-panels, the sample count in the
 # shot reflects the machine that generated it. Regenerate on an otherwise idle
-# one, and expect n= to move. 600 frames also clears the splash, which would
-# otherwise dim the bottom-right corner this panel occupies.
-# Index 6 is the `angle = ...` row (0-based, after headers and markers are
-# stripped) — the four glEnable rows above it are part of the scene.
-if want assign-plot-frames; then
+# one, and expect n= to move. 600 frames also clears the splash.
+# Index 6 is the `angle = ...` row — the four glEnable rows above it are part
+# of the scene.
+if want assign-plot; then
+    ( WARM=$((WARM_SPLASH + 30))
+      export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5
+      still "$WORK/ap-exec-full.png" 16 "$(stage_assign_plot)" )
     ( WARM=600
       export GLR_EDIT_LINE=6 GLR_OPEN_ASSIGN_PLOT=6
-      still "$OUT/assign-plot-frames.png" 16 "$(stage_assign_plot_frames)" )
+      still "$WORK/ap-frames-full.png" 16 "$(stage_assign_plot_frames)" )
+    write_png "$WORK/ap-exec-full.png" "$WORK/ap-exec.png" \
+        -crop "$AP_CROP" +repage
+    write_png "$WORK/ap-frames-full.png" "$WORK/ap-frames.png" \
+        -crop "$AP_CROP" +repage
+    montage1x2 "$WORK/ap-pair.png" "$WORK/ap-exec.png" "$WORK/ap-frames.png"
+    write_png "$WORK/ap-pair.png" "$OUT/assign-plot.png"
+    echo "docs-assets: wrote $OUT/assign-plot.png"
+fi
+
+# Several rows on one plot: Shift+right-click adds a series, and the hook's
+# comma list is that same add path. Row 7 (`wave = ...`) leads, so it owns the
+# X axis; 5 and 6 are its two components. Cropped like the pair above, one row
+# taller because the legend band only exists past one series -- and wider,
+# since the legend spreads the three names across the panel.
+if want assign-plot-series; then
+    ( WARM=$((WARM_SPLASH + 30))
+      export GLR_EDIT_LINE=7 GLR_OPEN_ASSIGN_PLOT=7,5,6
+      still "$WORK/aps-full.png" 16 "$(stage_assign_plot_series)" )
+    write_png "$WORK/aps-full.png" "$OUT/assign-plot-series.png" \
+        -crop "$APS_CROP" +repage
+    echo "docs-assets: wrote $OUT/assign-plot-series.png"
+fi
+
+# lin | log on the same two traces, side by side -- the claim the prose used to
+# make in three paragraphs. GLR_ASSIGN_PLOT_LOG flips the chip that is
+# otherwise mouse-only. Rows 5 and 6 are `big` and `small`; `big` leads.
+if want assign-plot-log; then
+    for ap_log in 0 1; do
+        ( WARM=$((WARM_SPLASH + 30))
+          export GLR_EDIT_LINE=5 GLR_OPEN_ASSIGN_PLOT=5,6
+          [ "$ap_log" = 1 ] && export GLR_ASSIGN_PLOT_LOG=1
+          still "$WORK/apl-$ap_log-full.png" 16 "$(stage_assign_plot_log)" )
+        write_png "$WORK/apl-$ap_log-full.png" "$WORK/apl-$ap_log.png" \
+            -crop "$APS_CROP" +repage
+    done
+    montage1x2 "$WORK/apl-pair.png" "$WORK/apl-0.png" "$WORK/apl-1.png"
+    write_png "$WORK/apl-pair.png" "$OUT/assign-plot-log.png"
+    echo "docs-assets: wrote $OUT/assign-plot-log.png"
 fi
 
 # Profile panels reflect live performance, so generate this on an otherwise
