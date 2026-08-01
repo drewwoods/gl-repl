@@ -1674,7 +1674,6 @@ int main(void) {
         const float loop_step = 0.0001234567f;
         char start_s[REPL_SOURCE_FLOAT_TEXT_MAX], end_s[REPL_SOURCE_FLOAT_TEXT_MAX];
         char step_s[REPL_SOURCE_FLOAT_TEXT_MAX], x_s[REPL_SOURCE_FLOAT_TEXT_MAX];
-        char expected_var[128];
         char expected_loop[256];
         char buf[16384];
 

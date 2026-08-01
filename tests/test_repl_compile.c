@@ -73,14 +73,12 @@ static ComputeFingerprint capture_fingerprint(void) {
     fp.num_predef_vars = g_num_predef_vars;
 
     UiStatusState st = ui_state_status();
-    strncpy(fp.status_text, st.text, sizeof(fp.status_text) - 1);
-    fp.status_text[sizeof(fp.status_text) - 1] = '\0';
+    snprintf(fp.status_text, sizeof(fp.status_text), "%s", st.text);
     fp.status_ttl = st.ttl;
 
     fp.buffer_count = editor_buffer_count();
     const char *line0 = editor_buffer_line(0);
-    strncpy(fp.first_line, line0 ? line0 : "", sizeof(fp.first_line) - 1);
-    fp.first_line[sizeof(fp.first_line) - 1] = '\0';
+    snprintf(fp.first_line, sizeof(fp.first_line), "%s", line0 ? line0 : "");
 
     return fp;
 }

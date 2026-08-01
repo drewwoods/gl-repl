@@ -4,6 +4,7 @@
 #include "ui/app/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 /* Defaults preserve the behavior the pre-migration
@@ -86,8 +87,16 @@ static void ui_state_status_history_push(const char *message, int kind) {
     }
 
     e = &h->entries[h->head];
-    strncpy(e->text, message, sizeof(e->text) - 1);
-    e->text[sizeof(e->text) - 1] = '\0';
+    /* Clip explicitly rather than with strncpy (which leaves termination to
+     * the next line, -Wstringop-truncation) or snprintf: the caller normally
+     * passes g_ui_state.status.text, and source and destination are then two
+     * fields of one object, which GCC can only see as "may overlap"
+     * (-Wrestrict). They never do, and memmove is defined even if they did. */
+    size_t n = strlen(message);
+    if (n >= sizeof(e->text))
+        n = sizeof(e->text) - 1;
+    memmove(e->text, message, n);
+    e->text[n] = '\0';
     e->kind = kind;
     e->dup_count = 1;
     e->seq = h->next_seq++;
@@ -111,9 +120,13 @@ static void ui_state_status_set_kind(const char *message, int kind) {
                  g_ui_state.status.kind == kind &&
                  strcmp(g_ui_state.status.text, message) == 0;
 
-    strncpy(g_ui_state.status.text, message,
-            sizeof(g_ui_state.status.text) - 1);
-    g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
+    /* A caller re-emitting the live status can hand us the buffer itself.
+     * Copying it onto itself is undefined (glibc's snprintf clears the
+     * destination first, so the status would go blank), and it is a no-op
+     * worth skipping anyway. GCC flags the unguarded form as -Wrestrict. */
+    if (message != g_ui_state.status.text)
+        snprintf(g_ui_state.status.text, sizeof(g_ui_state.status.text),
+                 "%s", message);
     g_ui_state.status.ttl = UI_STATUS_MESSAGE_TTL;
     g_ui_state.status.kind = kind;
 

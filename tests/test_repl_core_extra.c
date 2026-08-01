@@ -225,7 +225,6 @@ void test_initial_load_starts_on_lit_cube_example() {
                  strcmp(repl_example_name(repl_state_scenes().active_example_idx),
                         "gl-repl logo") == 0);
 
-    SourceTextView text = source_document_view();
     int saw_color_material = 0;
     int saw_color = 0;
     for (int i = 0; i < repl_state_document_count(); i++) {
@@ -597,6 +596,51 @@ static void test_workspace_manifest_capacity_rejected(void) {
         ReplWorkspaceLoadResult result = repl_load_workspace_ex(dir);
         ASSERT_INT("over-capacity manifest rejected", result.ok, 0);
         ASSERT_INT("capacity error distinguished", result.capacity_exceeded, 1);
+    }
+    unlink(path);
+    rmdir(dir);
+}
+
+/* A `scene=` leaf longer than the field it lands in used to be copied
+ * truncated, which silently renamed the scene to a prefix of itself: the
+ * manifest then pointed at a file name that no longer matched anything on
+ * disk. Length is part of manifest validity, so the load has to be rejected
+ * outright rather than quietly rewritten. */
+static void test_workspace_manifest_long_scene_name_rejected(void) {
+    char temp_dir[] = "/tmp/repl_long_leaf_workspace.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("long-leaf workspace created", dir != NULL);
+    if (!dir) return;
+
+    /* One char too long for the field, still a legal .c name otherwise, and
+     * short enough that the manifest reader's own line buffer isn't the thing
+     * doing the rejecting. */
+    char leaf[WORKSPACE_IO_FILE_MAX + 4];
+    memset(leaf, 'a', WORKSPACE_IO_FILE_MAX);
+    leaf[WORKSPACE_IO_FILE_MAX] = '\0';
+    snprintf(leaf + WORKSPACE_IO_FILE_MAX - 2, 3, ".c");
+    ASSERT_INT("long leaf is exactly one over the field",
+               (int)strlen(leaf), WORKSPACE_IO_FILE_MAX);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, WORKSPACE_IO_MANIFEST_FILE);
+    FILE *f = fopen(path, "w");
+    ASSERT_TRUE("long-leaf manifest opened", f != NULL);
+    if (f) {
+        fprintf(f, "version=1\nname=Long Leaf\nscene=%s\n", leaf);
+        fclose(f);
+
+        WorkspaceManifest manifest;
+        char err[256];
+        err[0] = '\0';
+        ASSERT_INT("over-long scene leaf rejected by the reader",
+                   workspace_io_manifest_read(dir, &manifest, err, sizeof(err)),
+                   0);
+        ASSERT_TRUE("rejection names the scene path", strstr(err, "scene") != NULL);
+
+        ReplWorkspaceLoadResult result = repl_load_workspace_ex(dir);
+        ASSERT_INT("over-long scene leaf fails the load", result.ok, 0);
+        ASSERT_INT("over-long scene leaf loads no scenes", result.scenes_loaded, 0);
     }
     unlink(path);
     rmdir(dir);
@@ -2251,6 +2295,7 @@ int main(int argc, char **argv) {
     test_workspace_round_trip();
     test_managed_workspace_contract();
     test_workspace_manifest_capacity_rejected();
+    test_workspace_manifest_long_scene_name_rejected();
     test_workspace_initial_load_activates_first_slot();
     test_markerless_raw_scene_import();
     test_initial_missing_file_starts_new_scene();

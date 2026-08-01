@@ -257,6 +257,29 @@ static void test_size_widens_for_large_counts(void) {
     AT("size: an eight-digit count widens the panel", big_w > small_w);
 }
 
+/* The "+N more" row is built into a fixed left-column buffer, and that buffer
+ * used to be too small to hold the string for a large remainder — so the count
+ * was silently clipped and the solved width described the clipped text rather
+ * than what the panel draws. Two remainders that differ only past the old
+ * 12-byte cap have to produce two different widths. */
+static void test_size_tracks_a_large_truncation_count(void) {
+    UiBufferVizLegendView narrow = drawable_view(2);
+    UiBufferVizLegendView wide = drawable_view(2);
+    int narrow_w = 0, wide_w = 0;
+
+    /* Short title so the left column, not the header, drives the width. */
+    narrow.title = "S";
+    wide.title = "S";
+    narrow.hidden_rows = 2000000;    /* "+2000000 more"  — 13 chars */
+    wide.hidden_rows = 20000000;     /* "+20000000 more" — 14 chars */
+    narrow.hidden_px = 4000u;
+    wide.hidden_px = 4000u;
+
+    ui_buffer_viz_legend_size(&narrow, &narrow_w, NULL);
+    ui_buffer_viz_legend_size(&wide, &wide_w, NULL);
+    AT("size: a longer \"+N more\" widens the panel", wide_w > narrow_w);
+}
+
 /* Refuse rather than spill: a scene rect too small for the solved panel
  * draws nothing. */
 static void test_size_refuses_a_scene_too_small(void) {
@@ -300,6 +323,7 @@ int main(void) {
     test_size_zero_when_not_drawn();
     test_size_grows_with_rows_and_stays_bounded();
     test_size_widens_for_large_counts();
+    test_size_tracks_a_large_truncation_count();
     test_size_refuses_a_scene_too_small();
     test_view_absent_while_viz_is_off();
     return test_harness_report(&g_h, "buffer_viz_legend");

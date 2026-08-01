@@ -41,8 +41,7 @@ static int parse_cmd_with_text(const char *line, GLCmd *cmd,
     int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
     if (cmd) *cmd = pl.cmd;
     if (text_out && text_sz > 0) {
-        strncpy(text_out, pl.text, (size_t)(text_sz - 1));
-        text_out[text_sz - 1] = '\0';
+        snprintf(text_out, (size_t)text_sz, "%s", pl.text);
     }
     return ok;
 }
@@ -99,8 +98,7 @@ static int parse_cmd_with_text_and_vars(const char *line, GLCmd *cmd,
 
     if (cmd) *cmd = pl.cmd;
     if (text_out && text_sz > 0) {
-        strncpy(text_out, pl.text, (size_t)(text_sz - 1));
-        text_out[text_sz - 1] = '\0';
+        snprintf(text_out, (size_t)text_sz, "%s", pl.text);
     }
     return ok;
 }

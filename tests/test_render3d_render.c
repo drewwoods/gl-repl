@@ -66,8 +66,7 @@ static void trace_end(TraceLog *log) {
         size_t len = strlen(buf);
         if (len && buf[len - 1] == '\n')
             buf[--len] = '\0';
-        strncpy(log->lines[log->n], buf, sizeof(log->lines[0]) - 1);
-        log->lines[log->n][sizeof(log->lines[0]) - 1] = '\0';
+        snprintf(log->lines[log->n], sizeof(log->lines[0]), "%s", buf);
         log->n++;
     }
     fclose(f);
