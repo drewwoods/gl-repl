@@ -78,9 +78,9 @@ static void get_expected_hint(int tutorial_idx, int step, int total, int is_comm
         int curr = tutorial_idx + 1;
         int tot_tuts = repl_tutorial_count();
         if (is_commit) {
-            snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - press Enter or ';' to commit", name, curr, tot_tuts, step, total);
+            snprintf(out, out_size, "[%d/%d] %s Tutorial: step %d/%d - press Enter or ';' to commit", curr, tot_tuts, name, step, total);
         } else {
-            snprintf(out, out_size, "%s Tutorial [%d/%d]: step %d/%d - type the command or press Tab to autocomplete", name, curr, tot_tuts, step, total);
+            snprintf(out, out_size, "[%d/%d] %s Tutorial: step %d/%d - type the command or press Tab to autocomplete", curr, tot_tuts, name, step, total);
         }
     } else {
         if (is_commit) {
@@ -3171,7 +3171,7 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
     ASSERT_INT("document unchanged after rejected commit",
                repl_state_document_count(), 3);
     char expected_status[256];
-    snprintf(expected_status, sizeof(expected_status), "%s Tutorial [%d/%d]: Press Enter / Tab / Space to continue", repl_tutorial_name(idx), idx + 1, repl_tutorial_count());
+    snprintf(expected_status, sizeof(expected_status), "[%d/%d] %s Tutorial: Press Enter / Tab / Space to continue", idx + 1, repl_tutorial_count(), repl_tutorial_name(idx));
     ASSERT_STR("ack hint shown for NOTE",
                status_text(), expected_status);
 

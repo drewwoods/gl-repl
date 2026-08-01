@@ -167,7 +167,7 @@ static int tutorial_append_locked_line(int line_idx) {
 }
 
 /* Width the status formats reserve for the prefix. It is only non-empty on
- * step 0 ("<name> Tutorial [n/m]: "), and capping it there is what keeps the
+ * step 0 ("[n/m] <name> Tutorial: "), and capping it there is what keeps the
  * instruction after it from being the part that gets truncated away. It is
  * also the bound GCC needs to see, so applying it as a "%.*s" precision at
  * every call site silences -Wformat-truncation. */
@@ -179,7 +179,7 @@ static void get_tutorial_prefix(char *out, size_t out_size) {
         const char *name = repl_tutorial_name(state.tutorial_idx);
         int curr = state.tutorial_idx + 1;
         int total = repl_tutorial_count();
-        snprintf(out, out_size, "%s Tutorial [%d/%d]: ", name, curr, total);
+        snprintf(out, out_size, "[%d/%d] %s Tutorial: ", curr, total, name);
     } else {
         out[0] = '\0';
     }
