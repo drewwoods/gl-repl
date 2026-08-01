@@ -37,6 +37,7 @@ extern "C" {
     X(glCopyTexSubImage2D)             \
     X(glTexParameteri)                 \
     X(glBlendFunc)                     \
+    X(glBlendEquation)                 \
     X(glClear)                         \
     X(glClearColor)                    \
     X(glClearDepth)                    \

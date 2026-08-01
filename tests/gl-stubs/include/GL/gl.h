@@ -216,6 +216,8 @@ typedef double GLclampd;
 #define GL_ONE_MINUS_DST_COLOR 0x0307
 #define GL_SRC_ALPHA_SATURATE 0x0308
 #define GL_ONE 1
+#define GL_FUNC_ADD 0x8006
+#define GL_FUNC_REVERSE_SUBTRACT 0x800B
 
 #define GL_POINT_DISTANCE_ATTENUATION 0x8129
 
@@ -286,6 +288,7 @@ static inline void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GL
 static inline void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) { GL_STUB_TRACE_LINE("glCopyTexSubImage2D %u %d %d %d %d %d %d %d\n", (unsigned)target, (int)level, (int)xoffset, (int)yoffset, (int)x, (int)y, (int)width, (int)height); gl_stub_tick(GL_STUB_glCopyTexSubImage2D); }
 static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glTexParameteri %u %u %d\n", (unsigned)target, (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glTexParameteri); }
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
+static inline void glBlendEquation(GLenum mode) { GL_STUB_TRACE_LINE("glBlendEquation %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glBlendEquation); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
 static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDepth %g\n", (double)depth); gl_stub_tick(GL_STUB_glClearDepth); }
 static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil %d\n", (int)s); gl_stub_tick(GL_STUB_glClearStencil); }

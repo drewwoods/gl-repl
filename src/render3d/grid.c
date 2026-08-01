@@ -352,6 +352,108 @@ static void grid_reveal_line(const GridDrawContext *ctx, Render3dRgba c,
     }
 }
 
+/* ---- Contrast casing (Bright / Bold grid brightness) ----
+ *
+ * grid_brightness only scales alpha, and alpha converges a blended line
+ * toward its own color: over bright geometry a mid-gray Classic line tops
+ * out near |line_color - bg| however bold the setting, so raising the
+ * multiplier past Bold buys nothing. The fix is the cartographic one — a
+ * wider near-black casing drawn under the real line, giving every line its
+ * own local dark edge regardless of what is behind it. Same idiom as the
+ * Frozen theme's wide-faint-under-bright-core cracks below.
+ *
+ * The casing is a shadow and deliberately NOT keyed to the backdrop: over
+ * the dark backdrops this codebase ships it is invisible (the lines already
+ * read there, and alpha_scale already boosts them), and it earns its pixels
+ * only where something bright sits behind the grid. It also never applies
+ * alpha_scale, whose whole job is the opposite case.
+ *
+ * Restricted to major lines + origin axes: casing Classic's five minor
+ * subdivisions per cell too would double the vertex count and read as mud.
+ */
+#define GRID_CASING_WIDTH_ADD   2.0f  /* px added to the cased line's width  */
+#define GRID_CASING_ALPHA       0.55f /* casing alpha at the top of the ramp */
+#define GRID_CASING_RAMP_START  1.5f  /* grid_brightness where it fades in   */
+#define GRID_CASING_RAMP_FULL   3.0f  /* ...and reaches GRID_CASING_ALPHA    */
+
+/* Casing strength for the current brightness setting; 0 at or below the
+ * ramp start, so Dim (0.25) and Normal (1.2) draw byte-identically to
+ * before and only Bright (2.5) / Bold (4.0) pay for the extra pass. */
+static float grid_casing_alpha(const GridDrawContext *ctx) {
+    float b = ctx->grid_brightness;
+    if (b <= GRID_CASING_RAMP_START) return 0.0f;
+    float u = (b - GRID_CASING_RAMP_START) /
+              (GRID_CASING_RAMP_FULL - GRID_CASING_RAMP_START);
+    if (u > 1.0f) u = 1.0f;
+    return GRID_CASING_ALPHA * u;
+}
+
+/* Context clone for a casing pass: the brightness multiplier is
+ * neutralized because the casing alpha is already derived from it, and
+ * grid_color / grid_reveal_vertex would otherwise scale it a second time.
+ * Everything else — xn_alpha, the edge-fade front, the reveal wipe — is
+ * inherited, so the casing dissolves in and out with its line for free. */
+static GridDrawContext grid_casing_ctx(const GridDrawContext *ctx) {
+    GridDrawContext c = *ctx;
+    c.grid_brightness = 1.0f;
+    return c;
+}
+
+/* Casing color for a line whose core renders at alpha `core_a` (pre-
+ * brightness, as the theme's line_color returned it). Scaling by the core's
+ * effective opacity is load-bearing: the line themes fade toward the extent,
+ * and a uniform-alpha casing would leave a black line hanging out past the
+ * rim where its core has already faded to nothing. */
+static Render3dRgba grid_casing_color(const GridDrawContext *ctx,
+                                      float casing_a, float core_a) {
+    return rgba(0.0f, 0.0f, 0.0f,
+                casing_a * fminf(core_a * ctx->grid_brightness, 1.0f));
+}
+
+/* ---- GRID_CASING_SUBTRACT: destination-dependent casing (experiment) ----
+ *
+ * Off by default; flip to 1 to A/B it against the black casing on identical
+ * geometry. The casing pass switches to GL_FUNC_REVERSE_SUBTRACT and carries
+ * the *core line's own color* instead of black, so the framebuffer gets
+ * `dst - line_rgb * a`: a complement shadow that is guaranteed to move every
+ * channel the line is made of, even against geometry already saturated in
+ * that channel (where the alpha-blended black casing only scales toward the
+ * clear color and a bright cyan surface can still swallow a cyan Tron line).
+ *
+ * Two known costs, which are why it is not the default. It shifts hue rather
+ * than just darkening — subtracting Synthwave's pink from a white surface
+ * leaves a green trace, so a theme's identity color can come back as its
+ * complement. And glBlendEquation is GL 1.4 / EXT_blend_subtract; before
+ * enabling this for real it needs the same runtime capability gate as
+ * nv_fog_distance_supported (config->nv_fog_distance_supported) rather than
+ * being assumed present. The blend equation is restored to GL_FUNC_ADD by
+ * hand — the surrounding glPushAttrib(GL_ALL_ATTRIB_BITS) covers
+ * GL_COLOR_BUFFER_BIT, but this is the same class of not-in-the-original-
+ * spec state as GL_FOG_DISTANCE_MODE_NV, so it does not rely on it. */
+#ifndef GRID_CASING_SUBTRACT
+#define GRID_CASING_SUBTRACT 0   /* override from the build: -DGRID_CASING_SUBTRACT=1 */
+#endif
+
+#if GRID_CASING_SUBTRACT
+static void grid_contrast_blend_begin(void) {
+    glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+}
+static void grid_contrast_blend_end(void) {
+    glBlendEquation(GL_FUNC_ADD);
+}
+/* Subtract the core's color, keep the casing's ramped alpha. */
+static Render3dRgba grid_contrast_color(Render3dRgba casing, Render3dRgba core) {
+    return rgba(core.r, core.g, core.b, casing.a);
+}
+#else
+static void grid_contrast_blend_begin(void) { }
+static void grid_contrast_blend_end(void) { }
+static Render3dRgba grid_contrast_color(Render3dRgba casing, Render3dRgba core) {
+    (void)core;
+    return casing;
+}
+#endif
+
 static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
                                 GridLineColors colors) {
     if (!ctx->edge_fade) {
@@ -402,12 +504,11 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
     }
 }
 
-static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color,
-                                  float line_width) {
-    glDepthMask(GL_TRUE);
-    if (line_width != 1.0f)
-        glLineWidth(line_width);
-    glBegin(GL_LINES);
+/* Emit the two origin axes at `color`, honoring whichever fade path is
+ * live. Split out of draw_grid_origin_axes so the casing pass can reuse it
+ * verbatim; the caller owns line width, depth mask and the GL_LINES block. */
+static void emit_grid_origin_axes(const GridDrawContext *ctx,
+                                  Render3dRgba color) {
     if (grid_reveal_active(ctx)) {
         grid_reveal_line(ctx, color, 1, 0.0f);  /* X axis, runs along X */
         grid_reveal_line(ctx, color, 0, 0.0f);  /* Z axis, runs along Z */
@@ -432,6 +533,33 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color
             glVertex3f(0, 0, p1);
         }
     }
+}
+
+static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color,
+                                  float line_width) {
+    /* Casing first, and with the depth mask still FALSE: the axes are the
+     * one grid pass that writes depth, and a casing that wrote it would sit
+     * at exactly the core's depth and fail the core's GL_LESS test. The
+     * core below still writes, so the axes keep occluding as before. */
+    float casing_a = grid_casing_alpha(ctx);
+    if (casing_a > 0.0f) {
+        GridDrawContext cctx = grid_casing_ctx(ctx);
+        Render3dRgba cc = grid_casing_color(ctx, casing_a, color.a);
+        glLineWidth(line_width + GRID_CASING_WIDTH_ADD);
+        grid_contrast_blend_begin();
+        glBegin(GL_LINES);
+        emit_grid_origin_axes(&cctx, grid_contrast_color(cc, color));
+        glEnd();
+        grid_contrast_blend_end();
+    }
+
+    glDepthMask(GL_TRUE);
+    if (line_width != 1.0f)
+        glLineWidth(line_width);
+    else if (casing_a > 0.0f)
+        glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    emit_grid_origin_axes(ctx, color);
     glEnd();
     if (line_width != 1.0f)
         glLineWidth(1.0f);
@@ -442,6 +570,35 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
                                      const GridThemeSpec *spec) {
     if (spec->begin_pass)
         spec->begin_pass(ctx);
+
+    /* Contrast casing under the major lines (see GRID_CASING_*). Walks the
+     * same v sequence as the core loop rather than stepping by ctx->major,
+     * so "which lines are major" is decided by one predicate and the casing
+     * can never land half a tolerance off its line. */
+    float casing_a = grid_casing_alpha(ctx);
+    if (casing_a > 0.0f) {
+        GridDrawContext cctx = grid_casing_ctx(ctx);
+        glLineWidth(1.0f + GRID_CASING_WIDTH_ADD);
+        grid_contrast_blend_begin();
+        glBegin(GL_LINES);
+        for (float v = -ctx->extent; v <= ctx->extent + GRID_LOOP_EPSILON;
+             v += ctx->step) {
+            if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+            if (!grid_is_major_line(v, ctx->major, ctx->major_tol)) continue;
+            GridLineColors colors, casing;
+            spec->line_color(v, 1, ctx, &colors);
+            casing.x_const = grid_contrast_color(
+                grid_casing_color(ctx, casing_a, colors.x_const.a),
+                colors.x_const);
+            casing.z_const = grid_contrast_color(
+                grid_casing_color(ctx, casing_a, colors.z_const.a),
+                colors.z_const);
+            draw_grid_line_pair(v, &cctx, casing);
+        }
+        glEnd();
+        grid_contrast_blend_end();
+        glLineWidth(1.0f);
+    }
 
     glBegin(GL_LINES);
     for (float v = -ctx->extent; v <= ctx->extent + GRID_LOOP_EPSILON;
