@@ -75,6 +75,12 @@ XG_CODE_CROP=596x112+8+46     # xform-guide-montage: code rows 1..6 (the whole p
 XG_SCENE_CROP=596x280+400+420 # xform-guide-montage: scene pane around origin + guide
 XM_CODE_CROP=800x150+8+46     # xform-guide-mode: code rows 1..8 (the whole program)
 XM_SCENE_CROP=800x240+28+368  # xform-guide-mode: scene pane spanning both anchors
+SP_CODE_CROP=600x258+8+44     # single-polygon-scope: the whole two-quad program
+SP_SCENE_CROP=600x270+280+450 # single-polygon-scope: scene pane around both quads
+WV_CODE_CROP=600x190+8+44     # winding-view: the whole two-triangle program
+WV_SCENE_CROP=600x220+290+465 # winding-view: scene pane around both triangles
+GS_CODE_CROP=830x76+8+46      # glow-sprites: the four point-sprite setup rows
+GS_SCENE_CROP=830x280+100+450 # glow-sprites: scene pane around the sprite cloud
 VO_CODE_CROP=600x206+8+44     # vertex-overlays: the whole ten-line program
 VO_SCENE_CROP=600x300+300+435 # vertex-overlays: scene pane around the annotated quad
 GT_CODE_CROP=664x220+8+46     # glu-tess: code rows 17..28 (comment + both gluBegins)
@@ -1446,9 +1452,21 @@ if want vertex-overlays; then
     echo "docs-assets: wrote $OUT/vertex-overlays.png"
 fi
 
+# Single-polygon scope: the cursor's row in the code above the one quad it
+# narrows the overlays down to. Cropped to both -- the claim is that the two
+# quads share a glBegin and only one of them lights up, which needs the code
+# and the scene, and nothing else in the window.
 if want single-polygon-scope; then
-    ( export GLR_EDIT_LINE=10
-      still "$OUT/single-polygon-scope.png" 16 "$(stage_single_polygon)" )
+    ( WARM=$((WARM_SPLASH + 30))
+      export GLR_EDIT_LINE=10
+      still "$WORK/sps-full.png" 16 "$(stage_single_polygon)" )
+    write_png "$WORK/sps-full.png" "$WORK/sps-code.png" \
+        -crop "$SP_CODE_CROP" +repage
+    write_png "$WORK/sps-full.png" "$WORK/sps-scene.png" \
+        -crop "$SP_SCENE_CROP" +repage
+    montage2x1 "$WORK/sps-pair.png" "$WORK/sps-code.png" "$WORK/sps-scene.png"
+    write_png "$WORK/sps-pair.png" "$OUT/single-polygon-scope.png"
+    echo "docs-assets: wrote $OUT/single-polygon-scope.png"
 fi
 
 # Cursor-follow demo: the SAME asset twice, differing only in which line the
@@ -1520,8 +1538,20 @@ if want wireframe-hidden-line; then
     echo "docs-assets: wrote $OUT/wireframe-hidden-line.png"
 fi
 
+# Winding view: two triangles listing their vertices in opposite orders, above
+# the green/red the view paints them. The point is the ORDER in the code beside
+# the color in the scene, so both crops are the asset; the rest of the window
+# was grid.
 if want winding-view; then
-    still "$OUT/winding-view.png" 16 "$(stage_winding)"
+    ( WARM=$((WARM_SPLASH + 30))
+      still "$WORK/wv-full.png" 16 "$(stage_winding)" )
+    write_png "$WORK/wv-full.png" "$WORK/wv-code.png" \
+        -crop "$WV_CODE_CROP" +repage
+    write_png "$WORK/wv-full.png" "$WORK/wv-scene.png" \
+        -crop "$WV_SCENE_CROP" +repage
+    montage2x1 "$WORK/wv-pair.png" "$WORK/wv-code.png" "$WORK/wv-scene.png"
+    write_png "$WORK/wv-pair.png" "$OUT/winding-view.png"
+    echo "docs-assets: wrote $OUT/winding-view.png"
 fi
 
 # Depth view montage: Scene mode (full-rect scene-normalized grayscale)
@@ -1630,11 +1660,21 @@ if want glu-tess; then
     echo "docs-assets: wrote $OUT/glu-tess.png"
 fi
 
+# Glow sprites: the four point-sprite setup rows above the cloud they produce.
+# WARM stays 12 with --time 2 -- the cloud's look is a tuned moment of the
+# animation, not a settled state, so this one keeps its short warm-up and the
+# scene crop stops above the splash strip instead of outlasting it.
 if want glow-sprites; then
-    (
-    WARM=12
-    still "$OUT/glow-sprites.png" 16 --example "$EX_GLOW" --time 2
-    )
+    ( WARM=12
+      still "$WORK/glow-full.png" 16 --example "$EX_GLOW" --time 2 )
+    write_png "$WORK/glow-full.png" "$WORK/glow-code.png" \
+        -crop "$GS_CODE_CROP" +repage
+    write_png "$WORK/glow-full.png" "$WORK/glow-scene.png" \
+        -crop "$GS_SCENE_CROP" +repage
+    montage2x1 "$WORK/glow-pair.png" "$WORK/glow-code.png" \
+        "$WORK/glow-scene.png"
+    write_png "$WORK/glow-pair.png" "$OUT/glow-sprites.png"
+    echo "docs-assets: wrote $OUT/glow-sprites.png"
 fi
 
 if want transform-stress; then

@@ -280,7 +280,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <tr>
 <td width="33%" align="center">
 
-<img src="images/glow-sprites.png" alt="Additive glow sprites" width="100%">
+<img src="images/glow-sprites.png" alt="Point-sprite setup rows and the additive glow cloud they draw" width="100%">
 
 **[Glow sprites](../examples/scenes/glow-sprites-blend-point-attenuation.glr)**
 <br><sub>additive blend + point attenuation</sub>

@@ -1786,7 +1786,7 @@ where the rig sits.
   without the entry point the REPL falls back to a distance-based
   `glPointSize` approximation.
 
-  ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
+  ![The point-size and attenuation setup rows above the sprite cloud they draw](images/glow-sprites.png)
 
 - **Post FX Scope** (F10 forward / Shift+F10 backward) — where the selected
   effect applies: Off / 3D View / Frame.
