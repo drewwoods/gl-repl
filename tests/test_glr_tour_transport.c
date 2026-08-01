@@ -499,6 +499,21 @@ static void test_normal_click_waits_release(void) {
     ASSERT_INT("click counted once", glr_pointer_script_tour_view().completed_events, 1);
 }
 
+/* Modified clicks accept the chord modifier grammar ahead of an optional
+ * point and retain the normal synthesized-release timing. */
+static void test_modified_clicks(void) {
+    const char *lines[] = {
+        "click shift scene:0.5,0.5",
+        "rightclick ctrl+shift scene:0.6,0.5"
+    };
+    start_tour(lines, 2);
+    ASSERT_INT("modified clicks parse", glr_pointer_script_tour_view().active, 1);
+    ASSERT_INT("modified click event count",
+               glr_pointer_script_tour_view().total_events, 2);
+    ASSERT_TRUE("modified clicks reach Done",
+                run_until_state(GLR_TOUR_DONE, 30));
+}
+
 /* Space / Left / Right are consumed but no-op while the baseline is still
  * pending, and cannot corrupt the subsequent Playing run. */
 static void test_controls_during_baseline_pending_noop(void) {
@@ -639,6 +654,36 @@ static void test_backstep_reconstructs_camera_drag(void) {
                  glr_camera_mut()->ry, ry0);
 }
 
+/* Held right-button events use the same motion path as a real camera pan, and
+ * the tour baseline still restores the translated orbit target on backstep. */
+static void test_right_drag_pans_camera_and_rewinds(void) {
+    const char *lines[] = {
+        "rightdown scene:0.5,0.5",
+        "glide scene:0.75,0.65 0.2",
+        "rightup",
+        "rightdown shift scene:0.75,0.65",
+        "glide scene:0.75,0.35 0.2",
+        "rightup"
+    };
+    start_tour(lines, 6);
+    frames(1);   /* baseline captured */
+    float tx0 = glr_camera_mut()->tx;
+    float ty0 = glr_camera_mut()->ty;
+    float tz0 = glr_camera_mut()->tz;
+
+    ASSERT_TRUE("right-drag tour reaches Done",
+                run_until_state(GLR_TOUR_DONE, 40));
+    ASSERT_TRUE("right drag changed the camera pan target",
+                glr_camera_mut()->tx != tx0 || glr_camera_mut()->tz != tz0);
+    ASSERT_TRUE("Shift+right drag changed camera pan Y",
+                glr_camera_mut()->ty != ty0);
+
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);
+    ASSERT_FLOAT("backstep restored camera pan X", glr_camera_mut()->tx, tx0);
+    ASSERT_FLOAT("backstep restored camera pan Y", glr_camera_mut()->ty, ty0);
+    ASSERT_FLOAT("backstep restored camera pan Z", glr_camera_mut()->tz, tz0);
+}
+
 /* The HUD panel width is the scene width minus margins, NEVER forced to a
  * minimum that would push it past a narrow scene (the overflow bug). This is
  * the render path's actual width function; feedback can't see off-window
@@ -717,6 +762,7 @@ int main(void) {
     test_normal_ring_delays_done();
     test_stepped_ring_immediate_done_and_backstep();
     test_normal_click_waits_release();
+    test_modified_clicks();
     test_controls_during_baseline_pending_noop();
     test_controls_during_seeking_noop();
     test_final_down_releases_button_at_done();
@@ -731,6 +777,7 @@ int main(void) {
     test_seek_suppresses_application_and_camera_ticks();
     test_backstep_reconstructs_repl_commit();
     test_backstep_reconstructs_camera_drag();
+    test_right_drag_pans_camera_and_rewinds();
     test_hud_panel_width_clamp();
     test_echo_alpha_frozen_is_full();
     test_view_inactive_after_stop();

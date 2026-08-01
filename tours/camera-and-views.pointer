@@ -13,6 +13,24 @@ down
 glide scene:0.50,0.42 1.2
 up
 pause 0.5
+echo scene:0.25,0.76 24 3.0 Right-click and drag to pan across the ground plane.
+rightdown scene:0.58,0.30
+glide scene:0.72,0.42 1.4
+rightup
+pause 0.6
+rightdown
+glide scene:0.50,0.30 1.2
+rightup
+pause 0.5
+echo scene:0.25,0.76 24 3.0 Shift+right-click and drag to pan up and down.
+rightdown shift scene:0.58,0.34
+glide scene:0.58,0.18 1.2
+rightup
+pause 0.5
+rightdown shift
+glide scene:0.58,0.34 1.0
+rightup
+pause 0.5
 echo scene:0.25,0.76 24 2.8 The mouse wheel zooms.
 wheel 20
 pause 0.9

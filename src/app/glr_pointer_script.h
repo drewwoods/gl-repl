@@ -56,9 +56,14 @@
  *   1.0  glide menu:scene 0.8 # ease the pointer onto the Scene button
  *   2.0  click                # left press at the pointer (+ release ~0.1s on)
  *   2.2  click item:all       # optional point: move, then click there
- *   2.6  rightclick           # right press + release
- *   3.0  down / 3.4 up        # explicit press / release (drags; while held,
- *                             # moves route through glr_ctrl_motion)
+ *   2.4  click shift item:all # optional modifiers precede the point
+ *   2.6  rightclick ctrl      # right press + release with Ctrl held
+ *   3.0  down / 3.4 up        # held left-button drag; while held, moves
+ *                             # route through glr_ctrl_motion
+ *   3.5  rightdown            # held right-button drag (camera ground pan)
+ *   3.9  rightup
+ *   4.0  rightdown shift      # modifiers precede the optional point;
+ *                             # Shift+right-drag pans camera vertically
  *   3.8  wheel -1             # mouse wheel, +1/-1
  *   4.0  ring sub:3d:torus_knot 1.5   # pulsing highlight ring for 1.5s
  *   5.0  key glColor3f(       # feed text through the keyboard dispatch

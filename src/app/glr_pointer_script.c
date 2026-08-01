@@ -103,6 +103,7 @@ typedef struct {
     char   target[PS_MAX_TARGET];  /* symbolic point token ("" = use     */
                                    /* x/y); resolved at fire time        */
     int    dur_frames;             /* glide/ring/echo duration           */
+    int    button;                 /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    special;                /* skey/chord: GLUT_KEY_* code, or    */
                                    /* -1 for a chord's printable path    */
@@ -296,7 +297,8 @@ static int ps_special_from_name(const char *name) {
 
 /* Parse a `+`-joined modifier token ("ctrl", "shift", "alt", combos like
  * "ctrl+shift", order-free, case-insensitive) into a GLUT_ACTIVE_* mask for
- * the `chord` verb. Returns -1 on any empty component (leading/trailing/doubled
+ * modified key and mouse verbs. Returns -1 on any empty component
+ * (leading/trailing/doubled
  * `+`), a repeated modifier, or an unknown name — so a typo fails at load. */
 static int ps_parse_mods(const char *tok) {
     int mask = 0;
@@ -412,10 +414,33 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         return 1;
     }
     if (strcmp(verb, "click") == 0 || strcmp(verb, "rightclick") == 0 ||
-        strcmp(verb, "down") == 0 || strcmp(verb, "up") == 0) {
-        ev->verb = (verb[0] == 'c') ? PS_CLICK
-                 : (verb[0] == 'r') ? PS_RIGHTCLICK
-                 : (verb[0] == 'd') ? PS_DOWN : PS_UP;
+        strcmp(verb, "down") == 0 || strcmp(verb, "up") == 0 ||
+        strcmp(verb, "rightdown") == 0 || strcmp(verb, "rightup") == 0) {
+        if (strcmp(verb, "click") == 0) {
+            ev->verb = PS_CLICK;
+        } else if (strcmp(verb, "rightclick") == 0) {
+            ev->verb = PS_RIGHTCLICK;
+        } else {
+            ev->verb = (strcmp(verb, "down") == 0 ||
+                        strcmp(verb, "rightdown") == 0) ? PS_DOWN : PS_UP;
+            ev->button = (strncmp(verb, "right", 5) == 0)
+                       ? GLUT_RIGHT_BUTTON : GLUT_LEFT_BUTTON;
+        }
+        /* Clicks and a held right press may declare modifiers before their
+         * optional point: `click shift item:foo`. A token that is not a
+         * modifier remains the point, preserving the short form. */
+        if (ev->verb == PS_CLICK || ev->verb == PS_RIGHTCLICK ||
+            (ev->verb == PS_DOWN && ev->button == GLUT_RIGHT_BUTTON)) {
+            char modtok[32];
+            int modread = 0;
+            if (sscanf(args, "%31s%n", modtok, &modread) == 1) {
+                int mods = ps_parse_mods(modtok);
+                if (mods >= 0) {
+                    ev->mods = mods;
+                    args += modread;
+                }
+            }
+        }
         /* Point is optional (press/release at the current pointer), but a
          * present-yet-malformed one is an error, not a bare click: only
          * blank args or a trailing `#` comment may fall through. */
@@ -704,8 +729,10 @@ static void ps_dispatch_move(float x, float y) {
         glr_ctrl_passive_motion((int)(x + 0.5f), (int)(y + 0.5f));
 }
 
-static void ps_press(int button) {
-    glr_ctrl_mouse(button, GLUT_DOWN, (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+static void ps_press(int button, int mods) {
+    glr_ctrl_mouse_with_modifiers(button, GLUT_DOWN,
+                                  (int)(g_px + 0.5f),
+                                  (int)(g_py + 0.5f), mods);
     g_button_held = button;
     g_ripple_frame = g_frame;
     g_ripple_x = g_px;
@@ -889,7 +916,7 @@ static void ps_fire(const PsEvent *ev) {
             g_ripple_y = g_py;
             break;
         }
-        ps_press(button);
+        ps_press(button, ev->mods);
         g_release_frame = g_frame + PS_CLICK_RELEASE_FRAMES;
         g_release_button = button;
         break;
@@ -899,7 +926,7 @@ static void ps_fire(const PsEvent *ev) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
         }
-        ps_press(GLUT_LEFT_BUTTON);
+        ps_press(ev->button, ev->mods);
         break;
     case PS_UP:
         /* Drag release: the button is still held, so a coordinate move
@@ -910,7 +937,7 @@ static void ps_fire(const PsEvent *ev) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
         }
-        ps_release(GLUT_LEFT_BUTTON);
+        ps_release(ev->button);
         break;
     case PS_WHEEL:
         glr_ctrl_mousewheel(0, ev->wheel_dir,
@@ -1131,7 +1158,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
             }
             break;
         }
-        ps_press(button);   /* press + release synchronously (no wait) */
+        ps_press(button, ev->mods); /* press + release synchronously (no wait) */
         ps_release(button);
         if (!allow_overlays)
             g_ripple_frame = -1;   /* ps_press armed a ripple; suppress it */
@@ -1142,7 +1169,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
         }
-        ps_press(GLUT_LEFT_BUTTON);   /* leave held (drag reproduction) */
+        ps_press(ev->button, ev->mods);   /* leave held (drag reproduction) */
         if (!allow_overlays)
             g_ripple_frame = -1;
         break;
@@ -1151,7 +1178,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
         }
-        ps_release(GLUT_LEFT_BUTTON);
+        ps_release(ev->button);
         break;
     case PS_WHEEL:
         glr_ctrl_mousewheel(0, ev->wheel_dir,

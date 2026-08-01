@@ -2447,6 +2447,13 @@ void glr_ctrl_special_with_modifiers(int key, int x, int y, int mods) {
     editor_input_pop_scripted_modifiers();
 }
 
+void glr_ctrl_mouse_with_modifiers(int button, int state, int x, int y,
+                                   int mods) {
+    editor_input_push_scripted_modifiers(mods);
+    glr_ctrl_mouse(button, state, x, y);
+    editor_input_pop_scripted_modifiers();
+}
+
 /* Mouse routing: hit-test to decide owner before dispatching.
  *
  * UP cleanup: the editor first releases its own UP-side state

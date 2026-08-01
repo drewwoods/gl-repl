@@ -193,10 +193,12 @@ an unintended interaction.
 | --- | --- | --- |
 | Move | `move <point>` | Moves the pointer immediately. |
 | Glide | `glide <point> <seconds>` | Smoothly moves the pointer over a positive duration. |
-| Left click | `click [point]` | Optionally moves, then presses and releases the left button. |
-| Right click | `rightclick [point]` | Optionally moves, then presses and releases the right button. |
-| Drag press | `down [point]` | Optionally moves, then holds the left button. Subsequent moves and glides use the normal drag path. |
-| Drag release | `up [point]` | Optionally moves, then releases the left button. |
+| Left click | `click [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then presses and releases the left button. |
+| Right click | `rightclick [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then presses and releases the right button. |
+| Left-drag press | `down [point]` | Optionally moves, then holds the left button. Subsequent moves and glides use the normal drag path. |
+| Left-drag release | `up [point]` | Optionally moves, then releases the left button. |
+| Right-drag press | `rightdown [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then holds the right button. Subsequent moves and glides use the normal drag path; `rightdown shift` takes the camera's vertical-pan branch. |
+| Right-drag release | `rightup [point]` | Optionally moves, then releases the right button. |
 | Wheel | `wheel <nonzero-integer>` | Sends a wheel event at the current pointer. `1` and `-1` are the usual directions. |
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
@@ -214,10 +216,12 @@ echo scene:0.25,0.76 18 2.5 Take a moment to notice the grid.
 pause 2.5
 ```
 
-`click`, `rightclick`, `down`, and `up` use the current pointer when their
-point is omitted. A synthetic click releases roughly 0.1 seconds after its
-press. While `down` is active, the engine sends motion rather than passive
-motion, so camera and slider drags behave like real ones.
+`click`, `rightclick`, `down`, `up`, `rightdown`, and `rightup` use the current
+pointer when their point is omitted. Click and right-button press modifiers use
+the same `ctrl`, `shift`, `alt`, and `+`-joined combinations as `chord`. A
+synthetic click releases roughly 0.1 seconds after its press. While a button is
+held, the engine sends motion rather than passive motion, so camera and slider
+drags behave like real ones.
 
 `skey` accepts `f1` through `f12`, `up`, `down`, `left`, `right`, `home`,
 `end`, `pageup`, and `pagedown` (case-insensitive).
