@@ -103,10 +103,13 @@ static const char *k_ap_rate_labels[ASSIGN_PLOT_RATE_COUNT] = {
     "once", "1 Hz", "frame"
 };
 
-static int ui_rate_label_max_width() {
+/* `(void)`, not `()`: everything here compiles -std=c99 for old-GCC
+ * portability, where an empty list declares an unprototyped function rather
+ * than a no-argument one. */
+static int ui_rate_label_max_width(void) {
     int max = 0;
     for (int i = 0; i < ASSIGN_PLOT_RATE_COUNT; i++) {
-        int len = strlen(k_ap_rate_labels[i]);
+        int len = (int)strlen(k_ap_rate_labels[i]);
         if (len > max) max = len;
     }
     return max;
