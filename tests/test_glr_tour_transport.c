@@ -489,6 +489,8 @@ static void test_normal_click_waits_release(void) {
     GlrTourPlaybackView v = glr_pointer_script_tour_view();
     ASSERT_INT("click in flight, still Playing", v.state, GLR_TOUR_PLAYING);
     ASSERT_INT("click not counted on the fire frame", v.completed_events, 0);
+    ASSERT_INT("click owns pointer motion until release",
+               glr_pointer_script_owns_pointer_motion(), 1);
 
     frames(3);   /* still before the ~6-frame release */
     ASSERT_INT("still waiting for release",
@@ -497,6 +499,8 @@ static void test_normal_click_waits_release(void) {
     ASSERT_TRUE("click completes and enters Done",
                 run_until_state(GLR_TOUR_DONE, 20));
     ASSERT_INT("click counted once", glr_pointer_script_tour_view().completed_events, 1);
+    ASSERT_INT("click releases pointer-motion ownership",
+               glr_pointer_script_owns_pointer_motion(), 0);
 }
 
 /* Modified clicks accept the chord modifier grammar ahead of an optional
@@ -684,6 +688,29 @@ static void test_right_drag_pans_camera_and_rewinds(void) {
     ASSERT_FLOAT("backstep restored camera pan Z", glr_camera_mut()->tz, tz0);
 }
 
+static void test_drag_pointer_motion_ownership(void) {
+    const char *lines[] = {
+        "rightdown scene:0.5,0.5",
+        "rightup"
+    };
+    start_tour(lines, 2);
+    frames(2);   /* baseline; rightdown fires */
+    ASSERT_INT("scripted drag owns physical pointer motion",
+               glr_pointer_script_owns_pointer_motion(), 1);
+
+    frames(1);   /* rightup fires */
+    ASSERT_INT("rightup releases physical pointer motion",
+               glr_pointer_script_owns_pointer_motion(), 0);
+
+    start_tour(lines, 2);
+    frames(2);
+    ASSERT_INT("second drag owns pointer motion",
+               glr_pointer_script_owns_pointer_motion(), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("stopping a drag releases pointer motion",
+               glr_pointer_script_owns_pointer_motion(), 0);
+}
+
 /* The HUD panel width is the scene width minus margins, NEVER forced to a
  * minimum that would push it past a narrow scene (the overflow bug). This is
  * the render path's actual width function; feedback can't see off-window
@@ -778,6 +805,7 @@ int main(void) {
     test_backstep_reconstructs_repl_commit();
     test_backstep_reconstructs_camera_drag();
     test_right_drag_pans_camera_and_rewinds();
+    test_drag_pointer_motion_ownership();
     test_hud_panel_width_clamp();
     test_echo_alpha_frozen_is_full();
     test_view_inactive_after_stop();

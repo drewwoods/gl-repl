@@ -196,6 +196,12 @@ int glr_pointer_script_load_env(void);
 /* Nonzero once a script has loaded. */
 int glr_pointer_script_active(void);
 
+/* Nonzero while a synthetic mouse button is held. Host GLUT motion callbacks
+ * use this to ignore physical pointer movement for the duration of a scripted
+ * drag/click; scripted motion dispatches directly to glr_ctrl_* and therefore
+ * bypasses that guard. */
+int glr_pointer_script_owns_pointer_motion(void);
+
 /* Stop a running script now: release any scripted-held mouse button so the
  * app never sees a stuck drag, clear the overlay, and deactivate. Used by
  * the tour cancel path (real user input hands control back) and by the

@@ -200,10 +200,18 @@ static void mouse_func(int button, int state, int x, int y) {
 }
 
 static void motion_func(int x, int y) {
+    /* Scripted drags call glr_ctrl_motion directly. Ignore the physical GLUT
+     * stream while their synthetic button is held, or a real mouse nudge
+     * rewrites the camera's previous-pointer baseline and turns the next
+     * scripted sample into a large delta. */
+    if (glr_pointer_script_owns_pointer_motion()) return;
     glr_ctrl_motion(x, y);
 }
 
 static void passive_motion_func(int x, int y) {
+    /* Passive motion also updates the camera baseline, so it shares the same
+     * narrow synthetic-hold guard as active motion. */
+    if (glr_pointer_script_owns_pointer_motion()) return;
     glr_ctrl_passive_motion(x, y);
 }
 

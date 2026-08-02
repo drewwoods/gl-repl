@@ -628,6 +628,10 @@ int glr_pointer_script_active(void) {
     return g_active;
 }
 
+int glr_pointer_script_owns_pointer_motion(void) {
+    return g_active && g_button_held >= 0;
+}
+
 int glr_pointer_script_tour_active(void) {
     return g_active && g_run_kind == PS_RUN_CONTROLLED_TOUR;
 }
