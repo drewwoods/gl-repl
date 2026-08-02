@@ -200,6 +200,7 @@ an unintended interaction.
 | Right-drag press | `rightdown [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then holds the right button. Subsequent moves and glides use the normal drag path; `rightdown shift` takes the camera's vertical-pan branch. |
 | Right-drag release | `rightup [point]` | Optionally moves, then releases the right button. |
 | Wheel | `wheel <nonzero-integer>` | Sends a wheel event at the current pointer. `1` and `-1` are the usual directions. |
+| View mode | `view 3d` or `view 2d` | Idempotently selects a view mode. If a change is needed, autoplay waits for the normal animated transition to settle. |
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |

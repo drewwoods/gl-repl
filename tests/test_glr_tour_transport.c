@@ -16,6 +16,8 @@
 #include "app/glr_pointer_script.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_camera.h"        /* glr_camera_mut (drag reconstruction) */
+#include "app/glr_config.h"        /* GLR_CONFIG_ORTHO_MODE */
+#include "render3d/view_mode.h"
 #include "ui/app/state.h"
 #include "ui/subsystems/tour_hud.h" /* tour_hud_panel_width (clamp guard) */
 #include "repl/state_owners.h"
@@ -42,6 +44,11 @@ static void start_tour(const char *const *lines, int n) {
 static void frames(int n) {
     for (int i = 0; i < n; i++)
         glr_pointer_script_frame();
+}
+
+static void settle_view_transition(void) {
+    for (int i = 0; i < 500 && glr_ctrl_view_transition_active(); i++)
+        glr_ctrl_tick();
 }
 
 /* Advance rendered frames until the tour reaches `want` (or max exhausted).
@@ -711,6 +718,59 @@ static void test_drag_pointer_motion_ownership(void) {
                glr_pointer_script_owns_pointer_motion(), 0);
 }
 
+static void test_view_event_ensures_3d_and_reconstructs(void) {
+    const char *lines[] = {
+        "view 3d # idempotent tour precondition",
+        "move scene:0.5,0.5"
+    };
+
+    /* Already-3D scenes proceed without starting a transition. */
+    start_tour(lines, 2);
+    frames(2);   /* baseline; view event fires */
+    ASSERT_INT("view 3d keeps a 3D scene in 3D",
+               glr_config_get(GLR_CONFIG_ORTHO_MODE), RENDER3D_VIEW_3D);
+    ASSERT_INT("view 3d is a no-op when already settled",
+               glr_ctrl_view_transition_active(), 0);
+    ASSERT_TRUE("already-3D view event reaches Done",
+                run_until_state(GLR_TOUR_DONE, 20));
+
+    /* Start from a fully settled 2D scene, matching a tour launched after the
+     * user has been working in 2D rather than a raw config-only test state. */
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1200, 800);
+    ui_state_pointer_set(100, 100, -1);
+    glr_config_set(GLR_CONFIG_ORTHO_MODE, RENDER3D_VIEW_2D);
+    settle_view_transition();
+    ASSERT_INT("2D fixture settled",
+               glr_ctrl_view_transition_active(), 0);
+    glr_pointer_script_start_tour("Test Tour", "test.pointer", lines, 2);
+    frames(2);   /* baseline; view event requests 3D */
+    ASSERT_INT("view event selects 3D from 2D",
+               glr_config_get(GLR_CONFIG_ORTHO_MODE), RENDER3D_VIEW_3D);
+    ASSERT_INT("2D to 3D transition is active",
+               glr_ctrl_view_transition_active(), 1);
+
+    for (int i = 0; i < 500 &&
+         glr_pointer_script_tour_view().state != GLR_TOUR_DONE; i++) {
+        frames(1);
+        glr_ctrl_tick();
+    }
+    ASSERT_INT("view event waits for transition before Done",
+               glr_pointer_script_tour_view().state, GLR_TOUR_DONE);
+    ASSERT_INT("3D transition settled before later events completed",
+               glr_ctrl_view_transition_active(), 0);
+
+    /* Backstep to the prefix containing only `view 3d`. Prefix replay cannot
+     * tick application time, so it resolves the transition synchronously. */
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);
+    ASSERT_TRUE("view-event backstep settles",
+                run_until_state(GLR_TOUR_PAUSED, 20));
+    ASSERT_INT("reconstructed prefix remains 3D",
+               glr_config_get(GLR_CONFIG_ORTHO_MODE), RENDER3D_VIEW_3D);
+    ASSERT_INT("reconstructed view transition is settled",
+               glr_ctrl_view_transition_active(), 0);
+}
+
 /* The HUD panel width is the scene width minus margins, NEVER forced to a
  * minimum that would push it past a narrow scene (the overflow bug). This is
  * the render path's actual width function; feedback can't see off-window
@@ -806,6 +866,7 @@ int main(void) {
     test_backstep_reconstructs_camera_drag();
     test_right_drag_pans_camera_and_rewinds();
     test_drag_pointer_motion_ownership();
+    test_view_event_ensures_3d_and_reconstructs();
     test_hud_panel_width_clamp();
     test_echo_alpha_frozen_is_full();
     test_view_inactive_after_stop();

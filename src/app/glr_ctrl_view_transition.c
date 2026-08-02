@@ -213,6 +213,21 @@ void glr_ctrl_tick_view_transition(float dt) {
     glr_ctrl_sync_camera_control_mode();
 }
 
+int glr_ctrl_view_transition_active(void) {
+    int target_ortho = glr_state_presentation().ortho_mode ? 1 : 0;
+    return target_ortho != g_view_mode_target_ortho ||
+           g_view_xn_phase != GLR_VIEW_XN_IDLE;
+}
+
+void glr_ctrl_view_transition_finish_reconstruction(void) {
+    /* Tour prefix replay has already entered the camera reconstruction scope,
+     * so any camera ease started here snaps to its destination. Two generous
+     * transition ticks cover both sequential legs (projection, then camera)
+     * without advancing application/replay time through glr_ctrl_tick(). */
+    for (int i = 0; i < 4 && glr_ctrl_view_transition_active(); i++)
+        glr_ctrl_tick_view_transition(GLR_VIEW_PROJECTION_TRANSITION_SECS);
+}
+
 float glr_ctrl_view_projection_mix(void) {
     return smoothstep01(g_projection_mix);
 }

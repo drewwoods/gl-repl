@@ -429,4 +429,12 @@ void glr_ctrl_set_init_log_elapsed_fn(GlrCtrlElapsedSecondsFn fn);
  * authoritative). */
 void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz);
 
+/* View-mode transition state used by completion-driven pointer scripts.
+ * `_active` includes a config change not yet observed by the transition tick.
+ * `_finish_reconstruction` is for tour prefix replay while the camera's
+ * reconstruction scope is active; it resolves the transition without
+ * advancing application time. */
+int  glr_ctrl_view_transition_active(void);
+void glr_ctrl_view_transition_finish_reconstruction(void);
+
 #endif /* GLR_CTRL_H */

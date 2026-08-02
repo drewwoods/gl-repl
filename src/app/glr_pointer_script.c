@@ -8,7 +8,9 @@
  * visible in the recorded frames.
  */
 #include "app/glr_pointer_script.h"
+#include "app/glr_actions.h"      /* idempotent view-mode selection */
 #include "app/glr_camera.h"       /* deterministic camera reconstruction scope */
+#include "app/glr_config.h"       /* GLR_CONFIG_ORTHO_MODE */
 #include "app/glr_ctrl.h"
 #include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
@@ -16,6 +18,7 @@
 #include "ui/app/layout.h"       /* ui_layout_scene_rect (scene: targets) */
 #include "ui/app/menu_bar.h"     /* ui_menu_bar_target_* (menu/item/sub/pin) */
 #include "ui/app/state.h"        /* ui_state_viewport (GL->mouse y flip) */
+#include "render3d/view_mode.h"  /* RENDER3D_VIEW_2D / _3D */
 
 #include <ctype.h>
 #include <math.h>
@@ -86,6 +89,7 @@ typedef enum {
     PS_DOWN,
     PS_UP,
     PS_WHEEL,
+    PS_VIEW,
     PS_KEY,
     PS_SKEY,
     PS_CHORD,
@@ -105,6 +109,7 @@ typedef struct {
     int    dur_frames;             /* glide/ring/echo duration           */
     int    button;                 /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
     int    wheel_dir;              /* wheel: +1 / -1                     */
+    int    view_mode;              /* view: RENDER3D_VIEW_2D / _3D       */
     int    special;                /* skey/chord: GLUT_KEY_* code, or    */
                                    /* -1 for a chord's printable path    */
     int    mods;                   /* chord: GLUT_ACTIVE_* override mask  */
@@ -179,6 +184,7 @@ typedef enum {
     PS_WAIT_CLICK,
     PS_WAIT_TYPE,
     PS_WAIT_RING,
+    PS_WAIT_VIEW,
     PS_WAIT_PAUSE
 } PsWait;
 static PsWait g_step_wait = PS_WAIT_NONE;
@@ -458,6 +464,26 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         ev->verb = PS_WHEEL;
         return (sscanf(args, "%d", &ev->wheel_dir) == 1 &&
                 ev->wheel_dir != 0) ? 1 : -1;
+    }
+    if (strcmp(verb, "view") == 0) {
+        char mode[8];
+        int mode_read = 0;
+        if (sscanf(args, "%7s%n", mode, &mode_read) != 1)
+            return -1;
+        const char *rest = args + mode_read;
+        while (*rest == ' ' || *rest == '\t' ||
+               *rest == '\n' || *rest == '\r')
+            rest++;
+        if (*rest != '\0' && *rest != '#')
+            return -1;
+        ev->verb = PS_VIEW;
+        if (strcmp(mode, "3d") == 0)
+            ev->view_mode = RENDER3D_VIEW_3D;
+        else if (strcmp(mode, "2d") == 0)
+            ev->view_mode = RENDER3D_VIEW_2D;
+        else
+            return -1;
+        return 1;
     }
     if (strncmp(verb, "key", 3) == 0 &&
         (verb[3] == '\0' || verb[3] == '@')) {
@@ -748,6 +774,11 @@ static void ps_release(int button) {
     g_button_held = -1;
 }
 
+static void ps_ensure_view_mode(int view_mode) {
+    if (glr_config_get(GLR_CONFIG_ORTHO_MODE) != view_mode)
+        glr_action_toggle_view_mode();
+}
+
 /* Feed paced-typing characters up to index `upto` (exclusive). */
 static void ps_type_send(int upto) {
     while (g_type_text[g_type_sent] && g_type_sent < upto) {
@@ -947,6 +978,9 @@ static void ps_fire(const PsEvent *ev) {
         glr_ctrl_mousewheel(0, ev->wheel_dir,
                             (int)(g_px + 0.5f), (int)(g_py + 0.5f));
         break;
+    case PS_VIEW:
+        ps_ensure_view_mode(ev->view_mode);
+        break;
     case PS_KEY:
         ps_type_flush();
         if (ev->cps > 0.0f) {
@@ -1014,6 +1048,7 @@ static void ps_wait_for_event(const PsEvent *ev) {
         g_step_wait = ev->cps > 0.0f ? PS_WAIT_TYPE : PS_WAIT_NONE;
         break;
     case PS_RING:       g_step_wait = PS_WAIT_RING; break;
+    case PS_VIEW:       g_step_wait = PS_WAIT_VIEW; break;
     case PS_ECHO:       g_step_wait = PS_WAIT_NONE; break;
     case PS_PAUSE:      g_step_wait = PS_WAIT_PAUSE; break;
     default:            g_step_wait = PS_WAIT_NONE; break;
@@ -1028,6 +1063,7 @@ static int ps_step_complete(void) {
     case PS_WAIT_TYPE:  return !g_type_active;
     case PS_WAIT_RING:
         return g_ring_start < 0 || g_frame - g_ring_start >= g_ring_dur;
+    case PS_WAIT_VIEW:  return !glr_ctrl_view_transition_active();
     case PS_WAIT_PAUSE: return g_pause_until < 0;
     }
     return 1;
@@ -1187,6 +1223,11 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
     case PS_WHEEL:
         glr_ctrl_mousewheel(0, ev->wheel_dir,
                             (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        break;
+    case PS_VIEW:
+        ps_ensure_view_mode(ev->view_mode);
+        if (g_tour_state == GLR_TOUR_SEEKING)
+            glr_ctrl_view_transition_finish_reconstruction();
         break;
     case PS_KEY:
         ps_type_flush();
