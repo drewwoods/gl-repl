@@ -211,6 +211,13 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
         sinf(snapshot->anim_time * GEOMETRY_GUIDE_VERTEX_MARK_BREATH_RATE);
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
+    /* Unconditional, not part of the #else below: desktop GL rasterizes points
+     * as circles under multisample rasterization, so the native build barely
+     * needs this — gl4es has no such implicit path and honours GL_POINT_SMOOTH
+     * only when it is explicitly enabled. Keeping it outside the branch is
+     * what lets the GL_POINTS form ever be restored on the web target. */
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 #if defined(__EMSCRIPTEN__)
     /* A sphere projects with the same useful 1/d camera-distance behavior as
      * the app's point-parameter attenuation, but stays triangle geometry all
@@ -241,9 +248,6 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
                     GEOMETRY_GUIDE_VERTEX_MARK_SPHERE_STACKS);
     glPopMatrix();
 #else
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-
     /* Halo: large, faint, swelling with the breath. */
     render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK,
                    fminf((0.15f + 0.25f * breath) * as, 1.0f));
@@ -260,8 +264,8 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
     glEnd();
 
     glPointSize(1.0f);
-    glDisable(GL_POINT_SMOOTH);
 #endif
+    glDisable(GL_POINT_SMOOTH);
     if (depth) glEnable(GL_DEPTH_TEST);
 }
 

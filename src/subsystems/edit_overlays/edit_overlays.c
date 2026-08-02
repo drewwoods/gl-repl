@@ -1160,13 +1160,17 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    /* Unconditional, not part of the #if below: desktop GL rasterizes points as
+     * circles under multisample rasterization, so the native build barely needs
+     * this — gl4es has no such implicit path and honours GL_POINT_SMOOTH only
+     * when it is explicitly enabled. Keeping it outside the branch is what lets
+     * the GL_POINTS form ever be restored on the web target. */
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 #if defined(__EMSCRIPTEN__)
     /* The octahedron markers respect scene depth testing but must not add
      * their own translucent surface to it. GL_ALL_ATTRIB_BITS restores this. */
     glDepthMask(GL_FALSE);
-#else
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 #endif
 
     if (ctx->replay_vertex_points)
