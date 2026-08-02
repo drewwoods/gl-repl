@@ -691,7 +691,9 @@ static void test_menu_bar(void) {
      */
     ASSERT_TRUE("pin hit", ui_menu_bar_hit_test(380, 10).kind == UI_HIT_PIN_BUTTON);
 
-    /* Test dropdown */
+    /* Test dropdown. Web build exempt: menu_visible() hides menu 0 (File)
+     * under __EMSCRIPTEN__, so it never opens and renders no rows. */
+#if !defined(__EMSCRIPTEN__)
     ui_menu_bar_set_open_menu(0, 0.0f); // File menu
     ASSERT_TRUE("dropdown open", ui_menu_bar_menu_dropdown_is_open());
 
@@ -701,6 +703,7 @@ static void test_menu_bar(void) {
 
     /* Dropdown item hit */
     ASSERT_TRUE("dropdown item hit", ui_menu_bar_hit_test(20, 100).kind == UI_HIT_MENU_ITEM);
+#endif
 
     /* Test config menu */
     ui_menu_bar_open_config(0.0f);
@@ -874,6 +877,7 @@ static void test_ui_menu_bar_hit_test(void) {
     /* Open a menu, then a click on a dropdown row reports
      * UI_HIT_MENU_ITEM with cmd_idx = open_menu_id and item_idx =
      * row. */
+#if !defined(__EMSCRIPTEN__)  /* menu 0 (File) is hidden on the web build */
     ui_menu_bar_set_open_menu(0, 0.0f); /* File menu */
     UiHit h_row = ui_menu_bar_hit_test(20, 100);
     ASSERT_TRUE("dropdown row hit kind",
@@ -882,6 +886,7 @@ static void test_ui_menu_bar_hit_test(void) {
                 h_row.cmd_idx == 0);
     ASSERT_TRUE("dropdown row item_idx populated", h_row.item_idx >= 0);
     ui_menu_bar_close();
+#endif
 }
 
 static void test_ui_color_picker_hit_test(void) {

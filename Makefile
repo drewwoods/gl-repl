@@ -873,36 +873,36 @@ TEST_BINS += test_buffer_viz_legend
 TEST_BINS += test_assign_plot
 TEST_BINS += test_ui_assign_plot
 
-# `make test-web` runs TEST_BINS as wasm under node. These are the ones that
-# do not survive that move, each for a stated reason -- the rest (67 of 76) run
-# unmodified. Every exclusion here is a test asserting behavior the web build
-# deliberately does not have; none is a wasm defect. Re-check the list when a
-# __EMSCRIPTEN__ branch is added or removed, and prefer making the test
-# web-aware over extending this list.
+# `make test-web` runs TEST_BINS as wasm under node. These two do not survive
+# that move; the other 74 do. Every exclusion here is a test asserting behavior
+# the web build deliberately does not have -- none is a wasm defect. Prefer
+# making a test web-aware (a `#if defined(__EMSCRIPTEN__)` arm around the
+# affected assertions, as test_ui / test_glr_ctrl / test_ui_scene_tabs /
+# test_repl_core_extra now carry, or an assertion on the web form the way
+# test_render3d_guides counts glutSolidSphere) over extending this list.
 #
-#   test_audio            miniaudio's device backend is native-only; the web
-#                         build swaps in an entirely separate HTMLAudioElement
-#                         implementation, so the hitch-threshold and device
-#                         assertions have no web counterpart.
-#   test_ui_menu_bar      menu_bar.c's menu_visible() hides MENU_FILE under
-#   test_ui_scene_tabs    __EMSCRIPTEN__ (the shell supplies its own New/Open
-#   test_ui               chrome). ~36 assertions across these four drive that
-#   test_glr_ctrl         hidden File menu and its dropdown geometry.
-#   test_edit_overlays    edit_overlays.c / geometry_guides.c draw vertex
-#   test_render3d_guides  markers as an octahedron under __EMSCRIPTEN__ instead
-#                         of an attenuated GL_POINT; these count the native
-#                         point/halo submissions in the stub trace.
-#   test_repl_core_extra  two cases feed the document over stdin, which node
-#                         hands to wasm differently than a native pipe does.
+#   test_audio        miniaudio's device backend is native-only; the web build
+#                     swaps in an entirely separate HTMLAudioElement
+#                     implementation, so the hitch-threshold and device
+#                     assertions have no web counterpart at all. Guarding it
+#                     out assertion-by-assertion would leave an empty binary.
+#   test_edit_overlays  draw_vertex_point_overlay() emits a scaled octahedron
+#                     under __EMSCRIPTEN__ instead of an attenuated GL_POINT.
+#                     12 assertions across 6 sites match the marker's *world
+#                     coordinates* in the stub trace ("glVertex3f 1 0 0"), and
+#                     the octahedron emits unit-corner coords under a
+#                     glTranslatef/glScalef -- so this needs a marker-form-aware
+#                     trace helper, not a guard. Worth doing: it is the only
+#                     uncovered __EMSCRIPTEN__ render path left.
+#   test_ui_menu_bar  25 assertions across ~8 sites drive the File menu that
+#                     menu_visible() hides under __EMSCRIPTEN__. Guarding each
+#                     is mechanical but would gut the binary's File-menu
+#                     coverage for no web gain; a browser lane covers the
+#                     shell's replacement chrome instead.
 WEB_TEST_EXCLUDE = \
 	test_audio \
-	test_ui_menu_bar \
-	test_ui_scene_tabs \
-	test_ui \
-	test_glr_ctrl \
 	test_edit_overlays \
-	test_render3d_guides \
-	test_repl_core_extra
+	test_ui_menu_bar
 WEB_TEST_BINS = $(filter-out $(WEB_TEST_EXCLUDE),$(TEST_BINS))
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))

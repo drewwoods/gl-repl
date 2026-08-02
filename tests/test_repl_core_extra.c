@@ -748,6 +748,13 @@ void test_initial_missing_file_starts_new_scene() {
 }
 
 void test_initial_load_reads_stdin_pipe() {
+#if defined(__EMSCRIPTEN__)
+    /* `make test-web` (node): dup2()-ing a pipe onto STDIN_FILENO does not
+     * reach the stdio FILE* that repl_load_initial_commands("-") reads, so the
+     * fixture never arrives. Nothing web-specific is under test here -- the
+     * `-` path is a native CLI affordance. */
+    printf("--- Initial load reads stdin pipe (skipped: no wasm stdin) ---\n");
+#else
     printf("--- Initial load reads stdin pipe ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
 
@@ -798,6 +805,7 @@ void test_initial_load_reads_stdin_pipe() {
                repl_active_user_scene(), 0);
     ASSERT_STR("stdin load fallback scene name",
                repl_user_scene_name(0), "Scene");
+#endif  /* !__EMSCRIPTEN__ */
 }
 
 void test_scene_text_load_as_new_slot() {

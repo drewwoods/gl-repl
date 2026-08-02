@@ -155,18 +155,38 @@ call goes anywhere — the same blind spot as `bench-web`, and the reason the
 recent gl4es polygon-line and vertex-label regressions would not have been
 caught here. That still needs a browser lane.
 
-### The exclusion list
+### Web-aware tests, and the exclusion list
 
-68 of the 76 binaries run unmodified. The 8 in `WEB_TEST_EXCLUDE` (see the
-Makefile for the per-binary reason) are all tests asserting behavior the web
-build deliberately does not have — the File menu that `menu_visible()` hides
-under `__EMSCRIPTEN__`, the octahedron vertex markers that replace attenuated
-`GL_POINT`s, the native miniaudio device. None is a wasm defect.
+73 of the 76 binaries run under node. Where a test asserted behavior the web
+build deliberately does not have, the fix is a `__EMSCRIPTEN__` arm around the
+affected assertions rather than dropping the binary — `test_ui`,
+`test_ui_scene_tabs`, `test_glr_ctrl` (the File menu `menu_visible()` hides)
+and `test_repl_core_extra` (a `dup2`'d stdin pipe, which does not reach wasm's
+stdio) each carry one.
 
-That makes the list a useful artifact in its own right: it is the inventory of
-web-specific behavior that currently has no test anywhere. Prefer making a
-test web-aware over adding to the list, and re-check it whenever an
-`__EMSCRIPTEN__` branch is added or removed.
+Better still, assert the web form where one exists. `test_render3d_guides`
+counts two `glutSolidSphere` calls under `__EMSCRIPTEN__` where native counts
+two `glVertex3f` — the marker is drawn either way, and that is the only
+coverage the web geometry-guide path has. Reach for a skip only when the web
+build genuinely does nothing.
+
+Three binaries remain in `WEB_TEST_EXCLUDE`; see the Makefile for the
+per-binary reason. None is a wasm defect:
+
+- `test_audio` — the whole binary is the native miniaudio device backend, down
+  to the hitch-threshold accessor that returns `0.0` on web. Guarding it out
+  assertion-by-assertion leaves an empty binary.
+- `test_edit_overlays` — 12 assertions across 6 sites match the vertex
+  marker's *world coordinates* in the stub trace (`"glVertex3f 1 0 0"`), and
+  the Emscripten octahedron emits unit-corner coords under a
+  `glTranslatef`/`glScalef`. Needs a marker-form-aware trace helper, not a
+  guard. **This is the last uncovered `__EMSCRIPTEN__` render path and is
+  worth doing.**
+- `test_ui_menu_bar` — 25 assertions across ~8 sites drive the hidden File
+  menu; guarding each would gut the binary's File-menu coverage for no web
+  gain. A browser lane should cover the shell's replacement chrome instead.
+
+Re-check the list whenever an `__EMSCRIPTEN__` branch is added or removed.
 
 ## Headless verification
 

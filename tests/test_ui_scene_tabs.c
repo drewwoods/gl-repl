@@ -222,7 +222,11 @@ static void test_workspace_chip(void) {
     ASSERT_STR("chip names the bound workspace", snap.workspace.name,
                "Chip Test");
 
-    /* Click leads to the workspace list rather than switching anything. */
+    /* Click leads to the workspace list rather than switching anything.
+     * Web build exempt: menu_bar.c's menu_visible() hides MENU_FILE under
+     * __EMSCRIPTEN__ (the shell supplies its own New/Open chrome), so there is
+     * no File menu for the chip to open and no flyout to expand. */
+#if !defined(__EMSCRIPTEN__)
     ui_menu_bar_close();
     h.kind = UI_HIT_CODE_PANEL_WORKSPACE_CHIP;
     glr_ctrl_router_handle_code_panel_hit(h, 0, 0);
@@ -240,6 +244,7 @@ static void test_workspace_chip(void) {
     glr_ctrl_router_handle_code_panel_hit(h, 0, 0);
     ui_menu_bar_runtime_capture(&menu);
     ASSERT_INT_EQ("second chip click closes the menu", menu.open_menu, -1);
+#endif
 
     repl_set_workspace_dir(NULL);
     {

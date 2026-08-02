@@ -4899,7 +4899,14 @@ static void test_mouse_routing_and_hit_testing(void) {
     hit.cmd_idx = GLR_MENU_FILE;
     int rc = route_menu_button_hit(&hit);
     ASSERT_INT("menu button hit consumed", rc, 1);
+#if defined(__EMSCRIPTEN__)
+    /* menu_visible() hides MENU_FILE on the web build, so routing a hit at its
+     * button stays inert rather than opening a menu the shell replaced. */
+    ASSERT_INT("File menu stays closed on the web build",
+               ui_menu_bar_open_menu_id(), -1);
+#else
     ASSERT_INT("menu opened", ui_menu_bar_open_menu_id(), GLR_MENU_FILE);
+#endif
 
     // Close menu button
     rc = route_menu_button_hit(&hit);
@@ -5464,6 +5471,12 @@ static void test_post_filter_key_cycling(void) {
 }
 
 static void test_refresh_window_title(void) {
+#if defined(__EMSCRIPTEN__)
+    /* glr_ctrl_refresh_window_title() returns early under __EMSCRIPTEN__:
+     * Emscripten's glutSetWindowTitle is a no-op, so the formatting is skipped
+     * on purpose and there is no title to assert on. */
+    return;
+#else
     g_last_window_title[0] = '\0';
     repl_state_scenes_set_active_example_idx(0);
     glr_ctrl_refresh_window_title();
@@ -5473,6 +5486,7 @@ static void test_refresh_window_title(void) {
     ASSERT_TRUE("window title is set", g_last_window_title[0] != '\0');
     ASSERT_TRUE("window title omits '(no workspace)' when no workspace is active",
                 strstr(g_last_window_title, "(no workspace)") == NULL);
+#endif  /* !__EMSCRIPTEN__ */
 }
 
 int main(void) {

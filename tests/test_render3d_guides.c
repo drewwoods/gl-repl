@@ -571,10 +571,22 @@ static void test_geometry_guides_render(void) {
 
         gl_stub_counts_reset();
         render3d_geometry_guides_render_for_cursor(&snapshot);
+#if defined(__EMSCRIPTEN__)
+        /* Same marker, different primitive: draw_vertex_point_marker() swaps
+         * the attenuated GL_POINTS pair for two glutSolidSphere calls, because
+         * gl4es' large-smoothed-point path is unreliable. Assert on that form
+         * rather than skipping -- the marker is drawn either way, and this is
+         * the only coverage the web geometry-guide path has. */
+        ASSERT_TRUE("raster-pos guide renders point marker",
+                    gl_stub_counts[GL_STUB_glutSolidSphere] > 0);
+        ASSERT_INT("raster-pos marker emits halo and core spheres",
+                   (int)gl_stub_counts[GL_STUB_glutSolidSphere], 2);
+#else
         ASSERT_TRUE("raster-pos guide renders point marker",
                     gl_stub_counts[GL_STUB_glBegin] > 0);
         ASSERT_INT("raster-pos marker emits halo and core vertices",
                    (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
+#endif
     }
 
     /* 5. Normal guide with valid source search fallback */

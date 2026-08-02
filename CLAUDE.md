@@ -121,11 +121,14 @@ gitignored, survives `make clean`).
   invisible. See `packaging/web/README.md`.
   `make test-web` is the wasm twin of `make test-stubs` — `WEB=1
   USE_GL_STUBS=1`, so **emcc against the no-op GL stubs, no gl4es, no
-  `web-deps.sh`, no browser**. 68 of the 76 test binaries run unmodified under
-  node; the 8 in `WEB_TEST_EXCLUDE` each assert behavior the web build
-  deliberately does not have (hidden File menu, octahedron vertex markers,
-  native audio device), and that list is the map of what a browser lane still
-  has to cover. Its value over `make test` is the `__EMSCRIPTEN__` side of
+  `web-deps.sh`, no browser**. 73 of the 76 test binaries run there; the 3 in
+  `WEB_TEST_EXCLUDE` each assert behavior the web build deliberately does not
+  have (native audio device, octahedron vertex markers, hidden File menu), and
+  that list is the map of what a browser lane still has to cover. A handful of
+  tests carry a `__EMSCRIPTEN__` arm for the same reason — **guard the
+  assertions, don't exclude the binary**, and assert the web form where one
+  exists (`test_render3d_guides` counts `glutSolidSphere` where native counts
+  `glVertex3f`). Its value over `make test` is the `__EMSCRIPTEN__` side of
   every `#ifdef` plus wasm's 32-bit pointers; like `bench-web` it links no GL,
   so **the gl4es→WebGL2 draw path stays invisible**.
 - **Sanitizers**: test targets default `BUILD=debug` = ASan + UBSan
