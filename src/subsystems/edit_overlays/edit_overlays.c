@@ -1076,9 +1076,8 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
         repl_executor_draw_glut_solid(&cmds[i]);
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    /* Size reset deliberately omitted - see draw_vertex_point_overlay's
-     * caller: the enclosing glPushAttrib(GL_ALL_ATTRIB_BITS) restores it,
-     * and resetting here would shrink this pass's own points under gl4es. */
+    /* Size reset deliberately omitted - see edit_overlays_render_vertex_points:
+     * the enclosing glPushAttrib(GL_ALL_ATTRIB_BITS) restores it. */
     overlay_gl_reset(&trk.st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
@@ -1182,12 +1181,12 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                                           flat_cmds[i].args[2], is_line);
             }
         }
-        /* No glPointSize(1) reset here: the pass is bracketed by
-         * glPushAttrib(GL_ALL_ATTRIB_BITS), which restores the size, and
-         * gl4es applies the *last* size set before its flush to every point
-         * already recorded in the batch - so an explicit reset shrank every
-         * marker this walk had just drawn to a single pixel on the web
-         * build. */
+        /* No glPointSize(1) reset here: the enclosing
+         * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, so the call was
+         * redundant - and it used to shrink every marker this walk had just
+         * drawn to one pixel on web, back when gl4es applied the last size
+         * before its flush to the whole pending batch (fixed by
+         * packaging/web/patches/gl4es-point-size-batch.patch). */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */

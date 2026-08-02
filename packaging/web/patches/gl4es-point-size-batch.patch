@@ -1,0 +1,113 @@
+Apply glPointSize to the batch it was called on, not to whatever is pending.
+
+gl4es defers immediate-mode geometry into a renderlist and draws it later, and
+the point size reaches the GLES2 fixed-pipeline shader as the gl_Point.size
+uniform, uploaded from glstate at draw time (fpe.c's builtin_pointsprite.size).
+gl4es_glPointSize therefore only wrote glstate and returned: a size set after a
+glBegin/glEnd batch but before its flush was applied to the points already in
+that batch. The last size before the flush won, for every point in it.
+
+That is a conformance break with desktop GL, where point size is fixed per
+primitive when the primitive is issued, and it is easy to hit: a pass that
+draws points and then politely restores glPointSize(1.0f) shrinks its own
+points to one pixel. gl-repl's vertex-marker overlays did exactly that, and
+looked like "gl4es cannot draw points" until the trailing reset was isolated as
+the trigger -- points render fine with no reset, and collapse with one.
+
+glPointParameterfv in the same file already handles this correctly, so follow
+it exactly rather than inventing a mechanism:
+
+  - when compiling a display list, record the size as a renderlist op
+    (pointsize_op / pointsize_val, set by rlPointSizeOp, replayed in
+    listdraw.c beside the pointparam op) and return;
+  - otherwise flush the pending immediate-mode batch before the state changes.
+
+The op shares STAGE_POINTPARAM, which is an exclusive stage, so a second size
+in one list starts a new renderlist rather than overwriting the first; the
+merge-compatibility test in list.c refuses to merge a list carrying the op, for
+the same reason it refuses one carrying a pointparam op.
+
+Verified in headless Chrome (ANGLE/SwiftShader, WebGL2): a scene drawing four
+16px GL_POINTS and then calling glPointSize(1) renders one-pixel dots before
+the patch and four full-size round points after it, with GL_POINT_SMOOTH
+enabled or not.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+--- a/src/gl/pointsprite.c
++++ b/src/gl/pointsprite.c
+@@ -121,6 +121,18 @@
+         errorShim(GL_INVALID_VALUE);
+         return;
+     }
++    // The point size reaches the shader as the gl_Point.size uniform, uploaded
++    // from glstate at draw time -- so a size set while a renderlist is pending
++    // would apply to points already recorded in it. Handle the list exactly as
++    // glPointParameterfv above does: record it when compiling, flush the
++    // pending immediate-mode batch otherwise.
++    if (glstate->list.active) {
++        if (glstate->list.compiling) {
++            NewStage(glstate->list.active, STAGE_POINTPARAM);
++            rlPointSizeOp(glstate->list.active, size);
++            return;
++        } else gl4es_flush();
++    }
+     glstate->pointsprite.size = size;
+     errorGL();
+     LOAD_GLES_FPE(glPointSize);
+--- a/src/gl/list.h
++++ b/src/gl/list.h
+@@ -229,6 +229,9 @@
+ 
+     int     pointparam_op;
+     GLfloat pointparam_val[4];
++
++    int     pointsize_op;
++    GLfloat pointsize_val;
+ 
+     int     linestipple_op;
+     GLuint  linestipple_factor, linestipple_pattern;
+@@ -338,6 +341,7 @@
+ void rlRasterOp(renderlist_t *list, int op, GLfloat x, GLfloat y, GLfloat z) FASTMATH;
+ void rlFogOp(renderlist_t *list, int op, const GLfloat* v);
+ void rlPointParamOp(renderlist_t *list, int op, const GLfloat* v);
++void rlPointSizeOp(renderlist_t *list, GLfloat size);
+ void rlFogCoordf(renderlist_t *list, GLfloat coord);
+ void rlEnd(renderlist_t *list);
+ 
+--- a/src/gl/list.c
++++ b/src/gl/list.c
+@@ -88,6 +88,8 @@
+     if (list->instanceCount!=1)
+         return false;
+     if (list->pointparam_op)
++        return false;
++    if (list->pointsize_op)
+         return false;
+     if (list->mode_init == 0)
+         return false;
+--- a/src/gl/listrl.c
++++ b/src/gl/listrl.c
+@@ -413,6 +413,11 @@
+     list->pointparam_val[3] = v[3];
+ }
+ 
++void rlPointSizeOp(renderlist_t *list, GLfloat size) {
++    list->pointsize_op = 1;
++    list->pointsize_val = size;
++}
++
+ void rlPushCall(renderlist_t *list, packed_call_t *data) {
+     call_list_t *cl = &list->calls;
+     if (!cl->calls) {
+--- a/src/gl/listdraw.c
++++ b/src/gl/listdraw.c
+@@ -540,6 +540,9 @@
+                     break;
+             }
+         }
++        if (list->pointsize_op) {
++            gl4es_glPointSize(list->pointsize_val);
++        }
+         if (list->matrix_op) {
+             switch (list->matrix_op) {
+                 case 1: // load

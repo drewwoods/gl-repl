@@ -27,6 +27,7 @@ listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`.
 | `gl4es-accum-fbo.patch` | Implement the accumulation buffer with an internal FBO. |
 | `gl4es-point-smooth.patch` | Emulate round antialiased points in the GLES2 fixed-pipeline shader. |
 | `gl4es-polygon-line-drawarrays.patch` | Avoid Emscripten's client-index upload and scan for polygon-mode lines. |
+| `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
 
 See each older patch's leading prose for the detail that is available.
 
@@ -75,17 +76,58 @@ like "gl4es still can't draw points".
 
 The resets were redundant anyway - all three sites sit inside a
 `glPushAttrib(GL_ALL_ATTRIB_BITS)` / `glPopAttrib()` bracket that restores the
-size - so they are gone rather than patched around. `glPopAttrib()` restoring
-the size does **not** retro-shrink the batch (verified by the push/pop row
-above); only an explicit `glPointSize` call does. Anything new that draws
-`GL_POINTS` on this target should follow the same rule: **do not reset the
-point size inside the pass that drew them.**
+size - so they are gone. `glPopAttrib()` restoring the size does **not**
+retro-shrink the batch (verified by the push/pop row above); only an explicit
+`glPointSize` call did.
+
+Dropping the resets fixed the two marker sites, but not the bug: the same trap
+was set at 18 other `glPointSize(1.0f)` calls in `axes.c`, `render.c`,
+`overlays.c` and `transform_guides.c`, and at every user scene that restores a
+point size. So the underlying gl4es behavior is now patched too -
+`gl4es-point-size-batch.patch`, below.
 
 Fallout worth knowing: `test_edit_overlays` leaves `WEB_TEST_EXCLUDE` (it was
 excluded *only* because the octahedron emitted unit-corner coords instead of
 the marker's world coordinates), so `make test-web` covers 74 of 76 binaries
 instead of 73, and `test_render3d_guides` / `test_render3d_render` drop their
 `glutSolidSphere` arms.
+
+## 2026-08-02: `glPointSize` applies to the batch it was called on
+
+Patch: [`gl4es-point-size-batch.patch`](gl4es-point-size-batch.patch)
+
+The finding above, fixed at the source instead of routed around.
+
+gl4es defers immediate-mode geometry into a renderlist and draws it later; the
+point size reaches the GLES2 fixed-pipeline shader as the `gl_Point.size`
+uniform, uploaded from `glstate` at draw time (`fpe.c`'s
+`builtin_pointsprite.size`). `gl4es_glPointSize` only wrote `glstate`, so the
+last size set before the flush applied to every point in the pending batch -
+a conformance break with desktop GL, where the size is fixed per primitive when
+the primitive is issued.
+
+`gl4es_glPointParameterfv`, ten lines up in the same file, already gets this
+right, so the patch copies it rather than inventing a mechanism:
+
+- compiling a display list -> record the size as a renderlist op
+  (`pointsize_op` / `pointsize_val` via `rlPointSizeOp`, replayed in
+  `listdraw.c` next to the pointparam op) and return;
+- otherwise -> `gl4es_flush()` the pending batch before the state changes.
+
+The op reuses `STAGE_POINTPARAM`, an exclusive stage, so a second size within
+one list starts a new renderlist instead of overwriting the first, and
+`list.c`'s merge-compatibility test refuses to merge a list carrying the op -
+both mirroring the pointparam op exactly.
+
+Oracle: a scene drawing four 16px `GL_POINTS` and then calling
+`glPointSize(1)`. One-pixel dots before, four full-size round points after,
+with `GL_POINT_SMOOTH` on or off. The patch reverse-applies against the built
+tree and forward-applies against the pinned checkout with the earlier patches
+on it (it is last in `GL4ES_PATCHES`).
+
+Not fixed here, and worth knowing: `glLineWidth` is not wrapped by gl4es at all
+(it goes straight to GLES), so it has the same deferral exposure with no
+client-side state to flush on. No symptom chased down yet.
 
 ## 2026-08-02: polygon-mode lines via `glDrawArrays`
 

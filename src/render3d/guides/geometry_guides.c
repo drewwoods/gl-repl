@@ -225,9 +225,10 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
     glEnd();
 
     /* No glPointSize(1) reset: both callers bracket this in
-     * geometry_guides_push_state()'s glPushAttrib(GL_ALL_ATTRIB_BITS), and
-     * gl4es applies the last size set before its flush to every point already
-     * recorded - a reset here shrank the marker to one pixel on web. */
+     * geometry_guides_push_state()'s glPushAttrib(GL_ALL_ATTRIB_BITS), which
+     * restores the size. It also used to shrink the marker to one pixel on
+     * web, back when gl4es applied the last size before its flush to the whole
+     * pending batch (packaging/web/patches/gl4es-point-size-batch.patch). */
     glDisable(GL_POINT_SMOOTH);
     if (depth) glEnable(GL_DEPTH_TEST);
 }
