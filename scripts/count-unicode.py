@@ -3,10 +3,11 @@
 
 By default this reports every non-ASCII character in project-owned tracked
 ``*.c``, ``*.h``, ``*.md``, and ``*.glr`` files (vendored ``third_party/``
-sources are excluded). C, header, and Markdown Unicode is allowed unless a
-character appears in ``REPLACEMENT_RULES``. Scene ``*.glr`` files are
-ASCII-only. ``--check`` fails when a replacement is required or a scene has
-Unicode; ``--fix`` applies every declared replacement in place.
+sources and planning documents under ``docs/plans/`` are excluded). C, header,
+and Markdown Unicode is allowed unless a character appears in
+``REPLACEMENT_RULES``. Scene ``*.glr`` files are ASCII-only. ``--check`` fails
+when a replacement is required or a scene has Unicode; ``--fix`` applies every
+declared replacement in place.
 
 Use ``--c-files``, ``--md-files``, and/or ``--glr-files`` to limit the scan
 to one or more file groups. Without a file-group option, all supported types
@@ -33,6 +34,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EXCLUDED_PATH_PREFIXES = ("third_party/", "docs/plans/")
 CYAN = "\033[36m" if sys.stdout.isatty() else ""
 RESET = "\033[0m" if sys.stdout.isatty() else ""
 FILE_GROUP_SUFFIXES = {
@@ -94,8 +96,9 @@ def selected_suffixes(args: argparse.Namespace) -> set[str]:
 def tracked_sources(suffixes: set[str]) -> list[Path]:
     """Return project-owned tracked C, Markdown, and scene files, in stable order.
 
-    Vendored sources remain under their upstream encoding and style policy;
-    this guard intentionally applies only to the project's own C sources.
+    Vendored sources remain under their upstream encoding and style policy.
+    Planning documents are intentionally free-form. This guard applies to all
+    other project-owned matching files.
     """
     patterns = [f"*{suffix}" for suffix in sorted(suffixes)]
     result = subprocess.run(
@@ -108,7 +111,7 @@ def tracked_sources(suffixes: set[str]) -> list[Path]:
         raise RuntimeError(f"could not list tracked source files: {stderr}")
     names = result.stdout.decode("utf-8").split("\0")
     return [ROOT / name for name in names
-            if name and not name.startswith("third_party/")]
+            if name and not name.startswith(EXCLUDED_PATH_PREFIXES)]
 
 
 def unicode_counts(
