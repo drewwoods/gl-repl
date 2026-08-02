@@ -355,7 +355,7 @@ void repl_state_time_advance(float dt) {
     if (g_repl_state.variables.time_playing &&
         g_repl_state.variables.time_var_idx >= 0) {
         g_predef_vars_mut[g_repl_state.variables.time_var_idx].value += dt;
-        /* Route by the flat program's dep masks (phase 3), not the textual
+        /* Route by the flat program's dependency masks, not the textual
          * source_uses_time scan: t may be value-only, structural, or unused. */
         repl_state_notify_predef_value_changed(
             g_repl_state.variables.time_var_idx);

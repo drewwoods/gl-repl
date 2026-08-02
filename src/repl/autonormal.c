@@ -93,7 +93,7 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
         return;
     /* Caller-owned cursor: threaded down from
      * repl_recompute_autonormals's edit_line_inout parameter so the
-     * read/write lives at the controller (β: REPL files do not call
+     * read/write lives at the controller (boundary: REPL files do not call
      * editor_state_*). */
     ReplStoreMutOpts opts = {
         .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
@@ -571,8 +571,7 @@ int repl_strip_auto_normals(int *edit_line_inout) {
 /* The `autonormal` toggle moved out of REPL state onto `glr_state`. The
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
- * by passing the toggle explicitly (implemented as step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md). */
+ * by passing the toggle explicitly. */
 void repl_recompute_autonormals(int autonormal_mode,
                                 int *edit_line_inout) {
     if (autonormal_mode == REPL_AUTONORMAL_OFF) return;

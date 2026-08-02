@@ -95,9 +95,8 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
      * Pass NULL opts for the pre-delete to preserve the historical
      * behavior where the delete did not shift the cursor.
      * Forwarding the caller pointer to both delete and insert
-     * would change the composed cursor delta for in-place replace
-     * paths (overwrite replacements, toggle-comment batches)
-     * (see docs/plans/done/edit-line-ownership.md §1.3). */
+     * would apply two cursor shifts to in-place replace paths
+     * (overwrite replacements and toggle-comment batches). */
     if (change->delete_count > 0) {
         if (!repl_command_store_delete_range(&store, change->delete_pos,
                                              change->delete_count, NULL))

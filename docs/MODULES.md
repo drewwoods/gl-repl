@@ -249,7 +249,7 @@ lists to make the layer boundaries observable.
   wires the REPL pipeline **and** the variable-panel peer together under a real
   external-editor workflow. It imports scene `.c` files (edited in vim, watched
   by mtime, re-imported on save) via `repl_export_load_from_file`, applies each
-  scene's `// camera` block through a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L84), runs
+  scene's `// camera` block through a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L83), runs
   the executor each frame under a manual orbit camera, and drives predefined-
   variable sliders live. Reuses `repl_demo`'s editor-free `source_document`
   backend; its link set is `REPL_DEMO_DEP_SRCS` + the four variable-panel TUs,
@@ -346,7 +346,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
   deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L122), [`CmdType`](../src/repl/command.h#L44), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
   [`TessVertex`](../src/repl/executor.h#L67), [`FlatCmdLocalVars`](../src/repl/flatten.h#L43), [`FlatProgramView`](../src/repl/flatten.h#L58),
-  [`CmdSyntaxCategory`](../src/repl/command_spec.h#L153), and the `cmd_type_name` thin alias.
+  [`CmdSyntaxCategory`](../src/repl/command_spec.h#L152), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
 - **Root neutral helpers**: [`src/ui/core/gl_2d.h`](../src/ui/core/gl_2d.h) `gl2d_*` (2D primitives + the state/action mouse-chip grammar), [`src/repl/transform_utils.h`](../src/repl/transform_utils.h)
   `apply_tracked_transform` / `unwind_transform_stack`, and
@@ -570,7 +570,7 @@ controllers; UI may render them; their input routes to them through
 | `edit_overlays` | Peer subsystem ([`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), extracted from [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)): owns the cursor edit-guide snapshot (`cursor_guide_snapshot_with_flat_args`) and the flat-program walk (`edit_overlays_render_cursor_guides`) that drives the 3D overlay primitives (`render3d_draw_vertex_label_text` / `render3d_draw_normal_vector_arrow`) at each visited vertex/normal |
 | `hidden_lines` | Peer subsystem ([`src/subsystems/hidden_lines/hidden_lines.c`](../src/subsystems/hidden_lines/hidden_lines.c)): hidden-line wireframe execution; drives the REPL execution cursor through the render3d renderer's hidden/depth/visible wireframe passes while skipping pass-local state commands |
 | `buffer_viz` | Peer subsystem ([`src/subsystems/buffer_viz/buffer_viz.c`](../src/subsystems/buffer_viz/buffer_viz.c)): framebuffer *inspection* - reads a buffer back and composites a false-colour view of it. [`depth_viz.c`](../src/subsystems/buffer_viz/depth_viz.c) provides linear / scene-relative / split-screen depth visualization; [`stencil_viz.c`](../src/subsystems/buffer_viz/stencil_viz.c) provides palette / ramp / split stencil visualization plus the raw histogram consumed by the legend. Each has a GL-free conversion core and a thin GL shell. render3d still *executes* the passes but is agnostic to them: the subsystem subscribes the neutral [`Render3dRenderConfig`](../src/render3d/render_types.h#L140) buffer hooks (`buffer_read_fn` / `buffer_pass_overlay_fn` / `buffer_resolve_overlay_fn`) through the controller, which owns the modes and the readback-capability mask |
-| `repl_help_text` | REPL-side producer of the neutral help-overlay text. Walks `k_func_completions[]`, groups by [`ReplHelpGroup`](../src/repl/command_spec.h#L104), emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27); renderer ([`src/ui/core/tabbed_overlay.c`](../src/ui/core/tabbed_overlay.c)) is feature-agnostic |
+| `repl_help_text` | REPL-side producer of the neutral help-overlay text. Walks `k_func_completions[]`, groups by [`ReplHelpGroup`](../src/repl/command_spec.h#L103), emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27); renderer ([`src/ui/core/tabbed_overlay.c`](../src/ui/core/tabbed_overlay.c)) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not

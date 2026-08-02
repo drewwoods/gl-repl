@@ -1,9 +1,8 @@
 /*
  * src/repl/import.c - Reader half of the export/import file format.
  *
- * Split out of src/repl/export.c (audit #69 in
- * docs/plans/done/src-repl-code-smell-audit-2.md). The writer (file emit,
- * code-panel dump, header-line refresh) stays in export.c. This file
+ * The writer (file emit, code-panel dump, header-line refresh) stays in
+ * export.c. This file
  * owns:
  *
  *   - The file-import state machine (line accumulation, handler dispatch,
@@ -31,7 +30,7 @@
 #include "repl/export.h"          /* public reader API */
 #include "repl/export_format_shared.h"
 #include "source_document.h"      /* source_document_insert_line */
-#include "repl/load.h"            /* repl_load_apply_line - step 5b */
+#include "repl/load.h"            /* repl_load_apply_line */
 #include "config.h"
 #include "repl/command_store.h"
 #include <string.h>
@@ -97,7 +96,7 @@ struct ImportState {
     int active_staged_func_slot;       /* pre-snippet function currently buffered */
     int loaded;
     int warnings;
-    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
+    int edit_line;                    /* caller-owned cursor */
     ImportWorkspaceAccum workspace;
     char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
     int  pending_comment_count;
@@ -407,7 +406,7 @@ static int parse_cfg(ImportWorkspaceAccum *accum, const char *args) {
     if (*p != '=') return 0;
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
-    /* Copy the raw value token (trimmed). Used to be strtol →
+    /* Copy the raw value token (trimmed). Used to be strtol ->
      * snprintf("%d") here; now passed through verbatim so the bridge
      * can resolve symbolic enum names like "GRID_THEME_RADAR"
      * alongside legacy integer-form workspaces. The bridge's
@@ -483,10 +482,9 @@ int repl_state_parse_workspace_header_line(const char *line) {
     return import_parse_workspace_header_line(&g_public_workspace_accum, line);
 }
 
-/* The camera-block parser state machine lives in the bridge
- * implementation (glr_camera_export.c). src/repl/import.c just delegates
- * import-side line consumption and reset to the bridge (implemented in
- * step 4a). */
+/* The camera-block parser state machine lives in the bridge implementation
+ * (glr_camera_export.c). src/repl/import.c delegates import-side line
+ * consumption and reset to the bridge. */
 static void import_cam_parser_reset(void) {
     const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
     if (bridge && bridge->reset_import)
@@ -785,9 +783,7 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
             if (s) s->warnings++;
             return 1;
         }
-        /* Caller-owned cursor threaded through ImportState
-         * (implemented in phase 3.6.4; see the
-         * edit-line-ownership plan doc). */
+        /* Thread the caller-owned cursor through ImportState. */
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
             .cursor_inout = s ? &s->edit_line : NULL,
@@ -1846,8 +1842,8 @@ static void import_feed_one_line(ImportState *s, const char *line) {
 
     /* Feed lines through the non-editor source-load API
      * (repl_load_apply_line in src/repl/compile.c) instead of
-     * editor_feed_line. Same compile + apply, no editor input dispatch
-     * (implemented in step 5b). */
+     * editor_feed_line. The same compile + apply path runs without editor
+     * input dispatch. */
     char load_err[REPL_STATUS_TEXT_MAX] = "";
     import_translate_repl_line(line, repl_line, sizeof(repl_line));
     handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
@@ -1940,7 +1936,7 @@ static int import_try_camera(const char *p) {
     /* Both the g_angle preamble and the body lines flow
      * through a single bridge entry point. The bridge's stateful
      * parser dispatches internally based on which line shape it
-     * sees (implemented in step 4a). */
+     * sees. */
     return import_parse_cam_line(p);
 }
 
@@ -2798,9 +2794,7 @@ static int import_finish_load(ImportState *state,
          * snapshots via repl_dispatch_edit_line_get right after this
          * returns) see the pre-import value - leaving Load Scene From
          * File parked at line 0 with insert mode off, so the next
-         * commit replaces the first imported command instead of
-         * appending (implemented in phase 4; see the
-         * edit-line-ownership plan doc). */
+         * commit replaces the first imported command instead of appending. */
         repl_dispatch_edit_line_set(state->edit_line);
         char msg[REPL_STATUS_TEXT_MAX];
         if (state->warnings > 0)

@@ -10,16 +10,9 @@
  * only edit-line hooks, clearing the ui_state_status_set / editor / tutorial
  * stubs from tools/repl_demo/stubs.c.
  *
- * These started as individual callbacks; the six installers were consolidated into
- * one struct per docs/plans/partial/src-repl-simplicity-review.md item 2.
- *
- * The status callback's long-term preferred shape is still per-function
- * out-params (err_buf / ReplDiagnostic) on each pipeline entry point.
- * The callback is the "or a callback" branch the decouple plan allows,
- * chosen because the alternative is 48+ test call-site updates for
- * high-traffic public APIs (export_save_output, save_workspace, etc.).
- * Bundling it in the bridge doesn't block that migration (introduced in
- * step 3 of feature/decouple-repl-from-gl-repl-alt.md). */
+ * The bridge bundles the callbacks needed by the pipeline while keeping
+ * controller and UI state out of src/repl. Callers install only the hooks
+ * they need; a NULL hook is a no-op. */
 static const ReplHostEffects *g_host_effects = 0;
 
 void repl_install_host_effects(const ReplHostEffects *effects) {

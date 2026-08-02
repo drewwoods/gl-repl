@@ -20,14 +20,14 @@ int repl_find_matching_push_matrix(int line_idx);
 int repl_find_matching_pop_matrix(int line_idx);
 
 /* Attribute-stack (glPushAttrib/glPopAttrib) analogues of the matrix bracket
- * matchers above, using the same source-order LIFO heuristic. push→pop when
- * the cursor is on a CMD_POP_ATTRIB; pop→push when on a CMD_PUSH_ATTRIB.
+ * matchers above, using the same source-order LIFO heuristic. push->pop when
+ * the cursor is on a CMD_POP_ATTRIB; pop->push when on a CMD_PUSH_ATTRIB.
  * Returns -1 for the wrong cursor line or no partner. */
 int repl_find_matching_push_attrib(int line_idx);
 int repl_find_matching_pop_attrib(int line_idx);
 
 /* Primitive-block (glBegin/glEnd) analogues of the same bracket matchers.
- * begin→end when the cursor is on a CMD_BEGIN; end→begin when on a CMD_END.
+ * begin->end when the cursor is on a CMD_BEGIN; end->begin when on a CMD_END.
  * Returns -1 for the wrong cursor line or no partner. */
 int repl_find_matching_begin(int line_idx);
 int repl_find_matching_end(int line_idx);

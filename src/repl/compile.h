@@ -139,7 +139,7 @@ typedef struct ReplCompiledChange_s {
      * deletes `delete_count` source commands starting at
      * `delete_pos` BEFORE running the main change. The combined
      * shape is "delete a range, then INSERT_MANY at a new
-     * position" expressed as one atomic plan.
+     * position" expressed as one atomic change.
      *
      * Important convention: `pos` is interpreted in the
      * **post-delete** document. compile is responsible for
@@ -225,7 +225,7 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
  * `kept_names` lists names that survive the replacement and are therefore
  * exempt. Pass kept_count 0 for the routes that drop every name - and note
  * that a name kept *textually* while its storage changes is not kept:
- * local→global conversion must run the check on it like a dropped one. */
+ * local->global conversion must run the check on it like a dropped one. */
 int repl_compile_decl_replacement_allowed(const ReplCompileContext *ctx,
                                           int pos,
                                           const char *const *kept_names,
@@ -277,8 +277,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
  * generic-command parser" (e.g. repl_load_apply_line punts back to
  * repl_parser_parse_command) or "no commit happened".
  *
- * Coverage: float_decl → var_assign → if_branch → close_brace →
- * for_loop → func_def → if_block.
+ * Coverage: float_decl -> var_assign -> if_branch -> close_brace ->
+ * for_loop -> func_def -> if_block.
  *
  * Handler order is load-bearing: `repl_compile_float_decl` must run
  * before `repl_compile_var_assign`, otherwise `float x;` would parse
@@ -300,8 +300,7 @@ ReplCompileResult repl_compile_dispatch(const char *text,
  * loading, where a single source line either inserts one command or fails.
  * They do NOT handle the editor's edit-time branches (header replace, oneliner
  * body, matched-existing-end close-brace) since those only arise in the live
- * editor commit path. This split became explicit in step 5a/5b of
- * feature/decouple-repl-from-gl-repl-alt.md.
+ * editor commit path.
  *
  * Each returns:
  *   REPL_COMPILE_OK + INSERT_ONE         valid block-structure line
@@ -544,7 +543,7 @@ ReplCompileResult repl_compile_persist_predef_value(const char *name,
  * Pure: never mutates state, never calls set_status.
  *
  * Returns:
- *   REPL_COMPILE_OK + REPL_COMPILED_DELETE_RANGE  delete plan ready
+ *   REPL_COMPILE_OK + REPL_COMPILED_DELETE_RANGE  delete change ready
  *   REPL_COMPILE_OK + REPL_COMPILED_NO_CHANGE     range was empty after
  *                                                 clamping (count<=0)
  *   REPL_COMPILE_ERROR                            still-referenced name
@@ -593,7 +592,7 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
  *     other end; for every line in [head..end] inclusive, build
  *     prefix-prepended text and a CMD_COMMENT cmd. Returns
  *     INSERT_MANY at `head` with `delete_pos=head, delete_count=N`
- *     (combined replace-range plan; uses ReplCompiledChange's
+ *     (combined replace-range change; uses ReplCompiledChange's
  *     pre-insert delete fields). commit_message "Commented out N
  *     lines". Block size is capped at MAX_COMMIT_CMDS; larger blocks
  *     are rejected with a diagnostic.

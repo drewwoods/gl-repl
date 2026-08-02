@@ -56,17 +56,16 @@
  * camera_rotate footgun: the slug is included in the bridge's
  * scene-subset fill, so per-scene snapshots still capture/restore it
  * without src/repl/scenes.c having to call glr_config_*.
- * (Bridge introduced in Step 4 of
- * feature/decouple-repl-from-gl-repl-alt.md, which replaced the
- * former static N_SCENE_CFG_KEYS subset list.) */
+ * The bridge replaces a static scene-config key list, so this module remains
+ * independent of the controller's configuration table. */
 
 /* User scene slots for the workspace / example-promotion system.
  *
  *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds()[]
  *                        == -1 => an example or fresh workspace is active
  *
- *   last_touch is retained for stable snapshot compatibility and future
- *   explicit close/reopen ordering; capacity is currently a hard 8 scenes.
+ *   last_touch is retained for stable snapshot compatibility; capacity is
+ *   currently a hard 8 scenes.
  *
  * The per-scene snapshot is embedded on UserScene (the `snapshot`
  * field) so cfg, camera, variables, source text, and aliases travel
@@ -260,11 +259,9 @@ void repl_scenes_reset_for_transient(void) {
     /* repl_state_document_reset doesn't touch the edit-line cursor -
      * storage now lives outside ReplState (see the helper's contract
      * in state.c). The transient-scene boundary is a wholesale
-     * reset, so the cursor goes back to 0 alongside the document
-     * clear; routes through the host-effects sink for the same β
-     * reason repl_dispatch_input_reset does.
-     * (Storage moved out of ReplState in phase 4 of the
-     * edit-line-ownership plan.) */
+     * reset, so the cursor goes back to 0 alongside the document clear; it
+     * routes through the host-effects sink for the same boundary reason as
+     * repl_dispatch_input_reset does. */
     repl_dispatch_edit_line_set(0);
     repl_state_flat_program_set_count(0);
     repl_dispatch_input_reset();

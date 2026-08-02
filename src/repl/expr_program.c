@@ -13,9 +13,7 @@
  * on the text path for that expression, so mismatches can only manifest as
  * "no speedup", never as a different value.
  *
- * See expr_program.h for the cache/dependency-mask contract and
- * docs/plans/in-review/flatten-performance-without-vm.md (Phase 2) for the
- * design rationale.
+ * See expr_program.h for the cache and dependency-mask contract.
  */
 #include <ctype.h>
 #include <stdlib.h>
@@ -721,8 +719,8 @@ ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
         case EXPR_OP_SCRATCH: {
             float v = 0.0f;
             /* Out-of-range reads yield 0, matching eval_primary's
-             * error-and-0.0f. Dependency stays the index's - see the
-             * value-position rationale in expr_program.h / the plan. */
+             * error-and-0.0f. The dependency remains that of the index;
+             * see the value-position rules in expr_program.h. */
             (void)repl_eval_scratch_get(ins->a, (int)stack[sp - 1], &v);
             stack[sp - 1] = v;
             break;

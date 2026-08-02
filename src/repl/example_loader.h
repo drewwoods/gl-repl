@@ -29,10 +29,8 @@
  *
  * Returns the post-load cursor target (= document line count after
  * the example body emits). Callers that care about cursor placement
- * apply the value via editor_state_edit_line_set() above the β
- * boundary; tests that just want the body loaded can ignore the
- * return (implemented in phase 3.6.4; see the edit-line-ownership
- * plan doc). */
+ * apply the value via editor_state_edit_line_set() at the editor boundary;
+ * tests that only need the body loaded can ignore the return. */
 int repl_load_example(int idx);
 int repl_load_example_lines_for_test(const char *const *lines);
 

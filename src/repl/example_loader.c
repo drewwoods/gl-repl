@@ -1,7 +1,7 @@
 /*
  * src/repl/example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "repl/load.h"           /* repl_load_apply_line - step 5b */
+#include "repl/load.h"           /* repl_load_apply_line */
 #include "repl/export.h"         /* ReplExportCameraBridge */
 #include "repl/command_store.h"
 #include "repl/examples.h"
@@ -171,7 +171,7 @@ static int try_apply_example_camera_header(const char *const *lines) {
      * `glRotatef(g_angle, 0, 1, 0)` animation hook, target
      * translate. Examples ship the 4-line variant without the
      * animation hook; inject a synthetic hook line so the bridge
-     * advances through state 3 → state 4 between lines 3 and 4. */
+     * advances from state 3 to state 4 between lines 3 and 4. */
     if (bridge->reset_import) bridge->reset_import();
     if (!bridge->try_consume_import_line(lines[1])) return 0;
     if (!bridge->try_consume_import_line(lines[2])) return 0;
@@ -201,7 +201,7 @@ int repl_example_consume_camera_header(const char *const *lines) {
 }
 
 static void reset_example_presentation_defaults(unsigned int tag_mask) {
-    /* presentation slice moved to glr_state.c in step 7a; the
+    /* Presentation state lives in glr_state.c; the
      * controller-installed sink does the actual reset. The demo
      * leaves the sink unset and ships without example presentation
      * resets, which is fine because the demo doesn't load examples
@@ -486,15 +486,11 @@ static void reset_example_load_state(unsigned int tag_mask) {
     /* Editor-input cleanup (insert mode off, input buffer wipe, cursor
      * home, pending newline clear) routes through the controller-
      * installed sink so the REPL pipeline doesn't reach into
-     * EditorState (implemented in Phase 3 of
-     * feature/source-document-port.md). */
+     * EditorState. */
     repl_dispatch_input_reset();
     /* Editor-side transient reset (camera drag / menu / picker /
-     * code-panel-drag) is the controller's responsibility - see
-     * cycle_example_or_user_scene in glr_ctrl.c and the
-     * example-load menu handler in glr_actions.c. The call moved out
-     * of this REPL-side loader (implemented in step 2 of the decouple
-     * plan). */
+     * code-panel-drag) remains the controller's responsibility; the
+     * example-cycle and example-load handlers perform that reset. */
     repl_eval_init_predef_vars();
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */
@@ -516,9 +512,7 @@ static int load_example_lines(const char *const *lines,
     }
     /* Drain the @cfg accumulator: the leading example metadata is
      * parsed into the bag by parse_workspace_header_line; the bridge
-     * applies it to live state. This moved out of an inline
-     * glr_config_set chain (implemented in step 4 of the decouple
-     * plan). */
+     * applies it to live state. */
     repl_export_apply_pending_cfg();
 
     int metadata_blank_count = 0;
@@ -558,9 +552,7 @@ static int load_example_lines(const char *const *lines,
      * the cursor through each per-line apply via a local int
      * starting at 0 (load policy: cursor begins at the top before
      * the body emits). The post-load value is returned to the
-     * caller, which lands it on EditorState above the β boundary
-     * (implemented as step 5b and in phase 3.6.4 / 3.6.5; see the
-     * edit-line-ownership plan doc). */
+     * caller, which applies it to EditorState at the editor boundary. */
     int loader_edit_line = 0;
     if (!emit_example_body_two_pass(body, &loader_edit_line)) {
         reset_example_load_state(tag_mask);

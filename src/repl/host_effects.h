@@ -27,9 +27,8 @@ void repl_set_status_error(const char *msg);
  * a no-op.
  *
  * This mirrors the export cfg/camera bridges: the REPL asks for an effect by
- * purpose, without naming editor/UI implementation details. Phases 3 + 6 of
- * feature/source-document-port.md consolidated the older per-effect installers
- * into this single struct.
+ * purpose, without naming editor/UI implementation details. The callbacks
+ * are grouped here so the pipeline has one host boundary to install.
  *
  * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
  * caller's responsibility - repl_compile_context_from_live() defaults
@@ -81,11 +80,9 @@ typedef struct {
     /* Read/write the edit-line cursor. Cursor storage moved
      * to EditorState; REPL code that previously called
      * repl_state_edit_line() / _set() goes through these hooks so
-     * the beta invariant (REPL -> editor symbol references forbidden)
-     * stays intact. Higher-level pipeline entry points (scenes.c)
-     * use this; the parse / compile / flatten / load layers take
-     * cursor as an explicit parameter instead (see phase 3.6.x;
-     * implemented in phase 4 of docs/plans/done/edit-line-ownership.md).
+     * stays intact. Higher-level pipeline entry points (scenes.c) use this;
+     * the parse, compile, flatten, and load layers take the cursor as an
+     * explicit parameter instead.
      *
      * Default behavior when the hook is NULL: edit_line_get
      * returns 0; edit_line_set is a no-op. The demo / pure REPL

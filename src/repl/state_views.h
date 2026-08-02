@@ -62,7 +62,7 @@ typedef struct {
     int              current_block_begin_idx;
     int              current_block_end_idx;
     int              current_block_source_line_idx;
-    /* Dependency-routing state (flatten plan phase 3). The two dep masks
+    /* Dependency-routing state. The two dep masks
      * describe the CURRENT flat program - refreshed by every full flatten:
      * structural_dep_mask holds the predef roots that can change topology
      * or frozen local snapshots (loop bounds, if conditions, call args);

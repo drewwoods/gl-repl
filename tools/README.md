@@ -68,7 +68,7 @@ snapshot of the variables in scope when it was emitted:
 <img src="../docs/images/demos/repl-live.png" alt="repl_live_demo: a whale scene rendered from a watched .c file, with a 26-row variable slider panel" width="100%">
 
 The *composition* counterpart to `repl_demo`: pipeline + variable-panel peer +
-a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L84), driven by
+a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L83), driven by
 whatever editor you like over file-watch - and still no app shell. Shown with
 the bundled `scenes/whale-full-c.c`, whose 26 declared variables fill the
 slider panel; drag a row and the geometry reshapes.

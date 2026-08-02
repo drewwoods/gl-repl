@@ -569,8 +569,8 @@ static void format_enum_command_text(char *out, int out_sz,
         return;
     }
 
-    /* Current specs top out at 4 slots; keep a generic join so a future
-     * enum command stays readable even before it gets a dedicated fmt. */
+    /* Current specs top out at 4 slots; keep a generic join so any enum
+     * command without a dedicated format string stays readable. */
     off = snprintf(out, (size_t)out_sz, "%s%s(", indent, def->name);
     for (int slot = 0; slot < num_slots && off < out_sz - 4; slot++) {
         off += snprintf(out + off, (size_t)(out_sz - off),

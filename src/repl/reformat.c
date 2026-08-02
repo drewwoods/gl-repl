@@ -197,8 +197,7 @@ void repl_reformat_program(void) {
     const GLCmd *document_cmds = repl_state_document_cmds();
     /* Source text reads route through a SourceTextView so the
      * dependency is declared at function scope rather than via a
-     * scattered global accessor. Phase D will replace this entry-time
-     * fetch with a view threaded from the controller. */
+     * scattered global accessor. */
     SourceTextView text = source_document_view();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {

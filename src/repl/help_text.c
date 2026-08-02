@@ -4,11 +4,8 @@
  * Pulled out of ui_help_overlay.c so the renderer carries no REPL
  * knowledge. The Commands tab is fully static; the Keys tab
  * interleaves a static base with dynamic F-key entries supplied via
- * a controller-installed ReplHelpFkeyProvider (see help_text.h).
- * Pre-audit-#1 this module #included app/glr_config.h directly -
- * the only src/repl/ file that did so - and walked g_cfg_items[]
- * inline. The provider hook keeps the F-key labels dynamic without
- * reaching into the app shell.
+ * a controller-installed ReplHelpFkeyProvider (see help_text.h). The provider
+ * keeps the F-key labels dynamic without reaching into the app shell.
  */
 #include "repl/help_text.h"
 #include "repl/command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
@@ -225,7 +222,7 @@ static char        g_key_strbuf[HELP_KEYS_MAX][HELP_KEY_LINE_BUF];
 static const char *g_tab_keys[HELP_KEYS_MAX];
 
 /* Commands tab: per-command rows generated from k_func_completions[];
- * the language-tail (Math, Variables, …) lives in
+ * the language-tail (Math, Variables, ...) lives in
  * k_lang_sections_tail above. Buffer is sized for current spec entries
  * plus a few hundred-byte cushion; raise both if a new help-grouped
  * command runs out of room. */

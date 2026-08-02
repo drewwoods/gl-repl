@@ -16,9 +16,9 @@ const ReplExportLightBridge *repl_export_light_bridge(void) {
     return g_export_light_bridge;
 }
 
-/* Camera bridge - same shape as the cfg bridge. Step 4a moved camera-block
- * emission and parsing through this interface so src/repl/export.c no longer
- * references glr_camera_*. The default bridge is installed by
+/* Camera bridge - same shape as the cfg bridge. Camera-block emission and
+ * parsing go through this interface, so src/repl/export.c does not reference
+ * glr_camera_*. The default bridge is installed by
  * glr_ctrl_install_app_services. */
 static const ReplExportCameraBridge *g_export_camera_bridge = NULL;
 

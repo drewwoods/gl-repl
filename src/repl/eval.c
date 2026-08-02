@@ -1140,8 +1140,8 @@ static float expr_rand_signed(float seed, float iter) {
 /* The `primary` production of the recursive-descent grammar - the leaf
  * dispatcher under repl_eval_expr's operator-precedence chain. In match
  * order: unary -/+/!, parenthesised subexpression, numeric literal,
- * then identifier resolution (named constant → scratch-array subscript
- * → loop/param var → predef var → builtin function call). Errors report
+ * then identifier resolution (named constant -> scratch-array subscript
+ * -> loop/param var -> predef var -> builtin function call). Errors report
  * through expr_write_err and yield 0.0f so evaluation always completes. */
 static float eval_primary(ExprCtx *ctx) {
     expr_skip_ws(ctx);

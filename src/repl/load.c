@@ -113,8 +113,8 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
     repl_compiled_change_init(&change);
 
     /* All structured/decl compile validators run in canonical order
-     * via repl_compile_dispatch (#16): float_decl → var_assign →
-     * if_branch → close_brace → for_loop → func_def → if_block. The first
+     * via repl_compile_dispatch: float_decl -> var_assign -> if_branch ->
+     * close_brace -> for_loop -> func_def -> if_block. The first
      * matching grammar wins. */
     {
         ReplCompileResult r = repl_compile_dispatch(line, &ctx, &change,

@@ -16,9 +16,8 @@
  * deletes that shift the document can mechanically shift a caller-owned
  * cursor; pass an optional `int *cursor_inout` to have the store apply the
  * standard insert/delete math to the caller's int in place. NULL means "no
- * cursor mutation - pure data op." The store's previous `int *edit_line`
- * pointer was dropped in favour of this per-call parameter (implemented in
- * phase 1 of docs/plans/done/edit-line-ownership.md).
+ * cursor mutation - pure data op." The cursor pointer is supplied per call,
+ * so the store does not retain editor state.
  *
  * Only insert ops also honour REPL_COMMAND_STORE_ADJUST_EDIT_LINE as the
  * intent flag (so callers can pass a non-NULL `cursor_inout` for capacity
@@ -108,8 +107,7 @@ int  repl_command_store_normalize_range(const ReplCommandStore *store,
  *
  * This API mutates only the GLCmd array. Callers that need parallel text
  * writes pair the call with `editor_buffer_insert_lines(pos, lines, count)`
- * (typically inside one undo transaction). The text-aware overload removed
- * in Phase B commit 17. */
+ * (typically inside one undo transaction). */
 int  repl_command_store_insert_many(ReplCommandStore *store, int pos,
                                     const GLCmd *cmds, int count,
                                     const ReplStoreMutOpts *opts);
@@ -139,9 +137,7 @@ int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
  * unchanged; cursors inside it snap to `start`; cursors past it move
  * back by `count`. The result is clamped to [0, post-delete line count].
  * `opts->flags` is ignored - delete callers gate via NULL/non-NULL
- * `cursor_inout` directly. Cursor-aware delete is net-new store
- * behavior; earlier versions had no cursor shift in delete
- * (implemented in Phase 1 of docs/plans/done/edit-line-ownership.md). */
+ * `cursor_inout` directly. */
 int  repl_command_store_delete_range(ReplCommandStore *store, int start,
                                      int count,
                                      const ReplStoreMutOpts *opts);

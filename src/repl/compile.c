@@ -1166,7 +1166,7 @@ static int format_decl_text(const FloatDeclParse *parsed,
     return !names_truncated;
 }
 
-/* Build the predef-op plan for the decl change. Three cases per
+/* Build the predef operations for the decl change. Three cases per
  * name:
  *   - dropped (in old_decl, not in new) -> UNDECLARE
  *   - new (not currently in predef table) -> DECLARE [+ value]
@@ -1630,7 +1630,7 @@ static int compile_rebase_var_assign_slot_after_undeclares(
     return shifted_slot;
 }
 
-/* CONTRACT (audit #11): context-pure for document data. The
+/* CONTRACT: context-pure for document data. The
  * ReplCompileContext snapshot is authoritative for document_cmds /
  * _count / edit_line, and visible-var collection now runs through
  * collect_visible_vars_in over that same context view (no live
@@ -1857,7 +1857,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     }
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), assign_text);
 
-    /* Overwrite-feasibility check + UNDECLARE op plan. Mirrors the
+    /* Overwrite-feasibility check + UNDECLARE operations. Mirrors the
      * float-decl overwrite check; the in-use predicate skips the line
      * being replaced. SET_VALUE and UNDECLARE ordering is irrelevant:
      * repl_apply_predef_ops runs independent passes per op kind. When
@@ -1910,10 +1910,9 @@ ReplCompileResult repl_compile_var_assign(const char *input,
  * `emit_predef_op` stages the live REPL_PREDEF_OP_SET_VALUE side effect;
  * `emit_source_rewrite` stages the REPL_COMPILED_REPLACE_ONE that rewrites the
  * declaration's initializer. The combined entry sets both; the variable-panel
- * drag uses one during motion and the other on release (see the drag
- * transaction split in docs/plans/in-review/flatten-performance-without-vm.md).
- * They share this one lookup + rewrite so the emitted declaration text cannot
- * drift between them. */
+ * drag uses one during motion and the other on release. Both paths use the
+ * same lookup and rewrite, so the emitted declaration text cannot drift
+ * between them. */
 static ReplCompileResult compile_predef_value_change(const char *name,
                                                      float value,
                                                      const ReplCompileContext *ctx,
@@ -2349,7 +2348,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
         return REPL_COMPILE_OK;
     }
 
-    /* Plain non-comment, non-structural: prepend prefix → CMD_COMMENT. */
+    /* Plain non-comment, non-structural: prepend prefix -> CMD_COMMENT. */
     {
         const char *orig = source_text_line(ctx->text, line_idx);
 
@@ -2381,23 +2380,21 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 }
 
 /* ===== Pure structured-block validators =====
- * (implemented as step 5a of the decouple plan)
  *
  * These are the REPL-pipeline-side counterparts to the editor's
  * editor_compile_close_brace / _if_block / _func_def / _for_loop in
  * src/editor/commit.c. The editor versions handle edit-time semantics
  * (cursor target, insert mode, header-replace branch, oneliner body,
  * matched-existing-end close-brace). These pure versions cover only
- * the line-by-line load case the lean source loader (step 5b) needs:
- * single line of input → single CMD_* command appended.
+ * the line-by-line load case: a single line of input produces one appended
+ * CMD_* command.
  *
  * For the lean loader, ctx->edit_line == ctx->document_count and
  * ctx->insert_mode == 0; the new command lands at the end of the
  * document. The editor's edit-time branches don't arise here.
  *
- * Some parsing logic duplicates the editor versions. Step 5c (deferred)
- * can refactor the editor wrappers to call these pure versions and
- * attach editor effects on top.
+ * Some parsing logic duplicates the editor versions because the editor path
+ * also carries cursor and input-buffer effects.
  */
 
 /* Compute the dedented (one-block-out) indent for a close-brace.

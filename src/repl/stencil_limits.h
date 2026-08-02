@@ -1,5 +1,5 @@
 /*
- * stencil_limits.h - Shared scalar policy for Phase-1 stencil commands.
+ * stencil_limits.h - Shared scalar policy for stencil commands.
  *
  * GLCmd stores args as float, so keep the REPL surface within the exactly
  * representable 8-bit range. The helper deliberately truncates like C's

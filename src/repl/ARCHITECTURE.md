@@ -244,7 +244,7 @@ entries. [`command.h`](command.h) also exposes the *control-flow taxonomy* as in
 predicates (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`,
 `repl_cmd_is_block_head/_end`, `repl_cmd_is_glut_solid`,
 `repl_cmd_starts_geometry_emit`, `repl_cmd_consumes_current_color`).
-These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L153) in [`command_spec.h`](command_spec.h),
+These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L152) in [`command_spec.h`](command_spec.h),
 which is the *visual* (syntax-highlight) taxonomy - don't fold one
 through the other.
 
@@ -607,7 +607,7 @@ dependency accumulation, and compiled-only rebake lookups.
 ordinal)` and does not manipulate program handles or cache entries.
 
 The live cache is ephemeral process state returned by
-[`repl_expr_cache_live()`](expr_program.h#L106); it is deliberately outside
+[`repl_expr_cache_live()`](expr_program.h#L105); it is deliberately outside
 [`ReplRuntimeState`](state.h#L18), undo snapshots, scene snapshots, and saved
 workspaces. Its allocation is capped by `REPL_EXPR_CACHE_MAX_BYTES` (16 MiB by
 default), and a warm evaluation allocates nothing. Each source line is in one
@@ -792,7 +792,7 @@ actions (clear the input buffer, scroll the panel, set a status message,
 read/write the cursor). The bridge ([`host_effects.h`](host_effects.h)) is how it asks for
 those *by purpose* without naming an implementation.
 
-The controller installs a [`ReplHostEffects`](host_effects.h#L38) table once at startup; REPL
+The controller installs a [`ReplHostEffects`](host_effects.h#L37) table once at startup; REPL
 code calls dispatchers (`repl_dispatch_*`, `repl_set_status`,
 `repl_set_status_error`). **Any unset callback is a no-op** - which is
 exactly why pure REPL tests and the standalone demo "just work" with no
@@ -805,7 +805,7 @@ scroll-to-line, tutorial teardown, edit-line get/set, cursor parking,
 completion clear/update, input read, and time-playing toggle.
 
 The export path uses the same pattern with dedicated bridges
-([`ReplExportLightBridge`](export.h#L175), cfg/camera bridges) so [`export.c`](export.c) can emit
+([`ReplExportLightBridge`](export.h#L176), cfg/camera bridges) so [`export.c`](export.c) can emit
 live light/config/camera state without including any render3d or app
 header - verified by `check-repl-export-via-bridge`.
 

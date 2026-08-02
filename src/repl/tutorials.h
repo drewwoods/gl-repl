@@ -144,7 +144,7 @@ typedef struct {
      * controller-installed bridge at apply time (SET) or compare time
      * (REQUIRE) instead of using the raw `cfg_value` integer. Lets the
      * catalog name the enum constant rather than encoding magic
-     * numbers - see docs/plans/done/src-repl-code-smell-audit-2.md #41. */
+     * numbers. */
     const char               *cfg_value_name;
     /* Predef-variable target (REQUIRE_VAR only). `var_name` names a
      * predefined variable that must exist when the step is entered;
@@ -182,13 +182,12 @@ static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
  * the mask by repl_tutorial_tag_mask), so the menu's first flyout lists
  * every tutorial once.
  *
- * The enum is in the header so app-layer code (e.g. an eventual tutorial
- * tag-default bridge) can name tags symbolically. The bit-shifted
+ * The enum is in the header so app-layer code can name tags symbolically.
+ * The bit-shifted
  * TUTORIAL_TAG_* macros used inside g_tutorials[] stay private to
  * tutorials.c. Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS /
- * DEPTH_LIGHTING / ANIMATION / REPL_LANGUAGE / EFFECTS. Unused future
- * tags stay filtered out by repl_tutorial_visible_tag_count() until a
- * catalog entry carries them. */
+ * DEPTH_LIGHTING / ANIMATION / REPL_LANGUAGE / EFFECTS. Tags without a
+ * catalog entry stay filtered out by repl_tutorial_visible_tag_count(). */
 enum {
     REPL_TUTORIAL_TAG_ALL = 0,
     REPL_TUTORIAL_TAG_GEOMETRY,
@@ -222,8 +221,7 @@ typedef struct {
      * loader. Every loaded row is LOCKED (read-only for the duration
      * of the tutorial). Body lines may define `:name` goto labels;
      * label-placement steps can target those (see target_label).
-     * NULL = start from an empty scene (the default). See
-     * docs/plans/active/tutorial-setup-scaffold.md for the design. */
+     * NULL = start from an empty scene (the default). */
     const char *const  *setup;
     /* Tag bitmask for menu grouping (REPL_TUTORIAL_TAG_* bits OR-ed
      * via the private TUTORIAL_TAG_* macros in tutorials.c). The
@@ -258,7 +256,7 @@ const TutorialEntry      *repl_tutorial_entry(int idx);
  * multiple fields off the same step should hold this pointer rather
  * than re-querying via the per-field shims below (rendering a tutorial
  * row touches 5+ fields - without this entry point each accessor would
- * re-walk, making paint O(N²) per tutorial). */
+ * re-walk, making paint O(N^2) per tutorial). */
 const TutorialStep       *repl_tutorial_step_get(int idx, int step_idx);
 
 /* Per-field shims. Each is one walk + one field read. Use the bulk
@@ -308,11 +306,11 @@ static inline float repl_tutorial_step_var_target(int idx, int step_idx) {
 }
 
 /* The tutorial's leading `@cfg` strings (NULL-terminated array), or NULL
- * when it has none. Out-of-range idx → NULL. */
+ * when it has none. Out-of-range idx -> NULL. */
 const char *const        *repl_tutorial_cfg_lines(int idx);
 
 /* The tutorial's preloaded scaffold lines (NULL-terminated array), or
- * NULL when it starts from an empty scene. Out-of-range idx → NULL.
+ * NULL when it starts from an empty scene. Out-of-range idx -> NULL.
  * See TutorialEntry.setup. */
 const char *const        *repl_tutorial_setup_lines(int idx);
 

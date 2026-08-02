@@ -414,14 +414,14 @@ The active edit-line cursor is **editor-owned**: it lives in
 `EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L195)) and is read
 and written through [`editor_state_edit_line()`](../src/editor/state.h#L392) / `_set()` / `_clamp()`.
 There is no `repl_state_edit_line()` and no cursor pointer inside
-[`ReplCommandStore`](../src/repl/command_store.h#L47). The REPL pipeline never reaches into editor cursor
+[`ReplCommandStore`](../src/repl/command_store.h#L46). The REPL pipeline never reaches into editor cursor
 storage:
 
 * The parse / compile / flatten / load layers take the cursor as an
   **explicit `int` parameter** (and cursor-shifting store/apply ops update
   a caller-owned `int *cursor_inout`).
 * Higher-level pipeline entry points that genuinely need to move the
-  cursor (e.g. [`scenes.c`](../src/repl/scenes.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L38)
+  cursor (e.g. [`scenes.c`](../src/repl/scenes.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L37)
   `edit_line_get` / `edit_line_set` hooks (`repl_dispatch_edit_line_*`),
   which are no-ops when no host bridge is installed.
 
@@ -949,9 +949,9 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 
 **Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
-[`ReplTutorialTagMask`](../src/repl/tutorials.h#L203); the synthetic `ALL` tag is folded into every entry's
+[`ReplTutorialTagMask`](../src/repl/tutorials.h#L202); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L330)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L328)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -1539,9 +1539,9 @@ All source-text reads and mutations use `source_document_*`. The full app links
 in [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c). This keeps editor state and
 logic out of the core link set.
 
-#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L38))
+#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L37))
 
-The controller-installed [`ReplHostEffects`](../src/repl/host_effects.h#L38) bridge routes status
+The controller-installed [`ReplHostEffects`](../src/repl/host_effects.h#L37) bridge routes status
 updates, example and input resets, scrolling, follow-scroll, and cursor parking
 to the UI, editor, and peer subsystems. The demo installs only edit-line hooks;
 status, editor, and tutorial hooks remain no-ops.
@@ -1557,7 +1557,7 @@ values through these seams:
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
-| [`ReplExportLayout`](../src/repl/export.h#L258) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+| [`ReplExportLayout`](../src/repl/export.h#L256) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
 #### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
 
@@ -1720,12 +1720,12 @@ mechanisms:
    does not format text or know about export.
 
 2. **Controller-installed projection bridge** (same shape as
-   [`ReplExportCameraBridge`](../src/repl/export.h#L84)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
+   [`ReplExportCameraBridge`](../src/repl/export.h#L83)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
    adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L143) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
-   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) returns the canonical
+   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
 
 **Rule - where a per-frame dynamic value is resolved.** Apply this test
@@ -1779,10 +1779,10 @@ Per the rule above:
   `REPL_EXPORT_PROJ_*` source-of-truth in [`glr_ctrl.c`](../src/app/glr_ctrl.c) (same pattern as
   the scene-tab dims).
 * **File save (discrete action):** `repl_export_save_output()` calls
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) directly - a single pass on
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186) directly - a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
-  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L258)-style export context is the
+  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L256)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L143) is the *nearest-steady* projection: the
@@ -1799,13 +1799,13 @@ snapshot for the panel, special-case in the consumers.
 `check-state-ownership` gate):
 
 * `check-ui-no-export-resolver` - no `src/ui/` file may call
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187); the panel reads the
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186); the panel reads the
   snapshot-frozen block. This is the structural backstop for the rule
   above: the mistake fails the build, not just review.
 * `check-repl-export-via-bridge` - [`src/repl/export.c`](../src/repl/export.c) may not include
   `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
-  ([`ReplExportProjectionBridge`](../src/repl/export.h#L149), [`ReplExportCameraBridge`](../src/repl/export.h#L84),
+  ([`ReplExportProjectionBridge`](../src/repl/export.h#L150), [`ReplExportCameraBridge`](../src/repl/export.h#L83),
   [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
@@ -2447,7 +2447,7 @@ header, your `help_group` is wrong.
 
 A new help group (beyond `TOP` / `LIGHTING` / `GLUT_SHAPES` / `GLU_TESS`
 / `MATH` / `NONE`) requires:
-- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L104) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
+- a new enum value in [`ReplHelpGroup`](../src/repl/command_spec.h#L103) in [`src/repl/command_spec.h`](../src/repl/command_spec.h)
 - a `help_group_header` case in [`src/repl/help_text.c`](../src/repl/help_text.c)
 
 The hand-written language-level sections in [`src/repl/help_text.c`](../src/repl/help_text.c)
@@ -2647,7 +2647,7 @@ label-placement steps target to splice commands into the scaffold
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L109)
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L106)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in

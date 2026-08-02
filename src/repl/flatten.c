@@ -843,11 +843,11 @@ static int flatten_eval_std_cmd(const GLCmd *src_cmd, const char *text,
 
 /* Re-parse a source line into the flat buffer, evaluating expressions
  * against the current variable bindings.  Four paths converge here:
- *   0. src_cmd->has_vars == 0 → literal line: append the committed command
+ *   0. src_cmd->has_vars == 0 -> literal line: append the committed command
  *      verbatim, no parse (see below)
- *   1. local vars present  → pass vars to the parser, keep src has_vars
- *   2. no local vars but src has predefined-var refs → re-eval, force has_vars=1
- *   3. no vars at all      → re-parse for fresh args, clear has_vars
+ *   1. local vars present  -> pass vars to the parser, keep src has_vars
+ *   2. no local vars but src has predefined-var refs -> re-eval, force has_vars=1
+ *   3. no vars at all      -> re-parse for fresh args, clear has_vars
  * On parse failure in path 3, the original src_cmd is copied through
  * unchanged (the line was already invalid at commit time).
  *
@@ -1396,8 +1396,8 @@ static int flatten_cmd_emits_nothing(CmdType type) {
  * flat buffer named by FlattenContext. For-loops are unrolled, function calls
  * are inlined, and if-blocks with loop-variable conditions are evaluated.
  * `vars`/`nv` carry loop-variable and function-parameter bindings from
- * enclosing scopes; `var_deps` (parallel to `vars`, NULL ⇒ all zero) carries
- * each binding's predef dependency mask for phase-3 dep propagation. */
+ * enclosing scopes; `var_deps` (parallel to `vars`, NULL => all zero) carries
+ * each binding's predef dependency mask for dependency propagation. */
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx,
                           ExprVar *vars, ReplExprDepMask *var_deps,
@@ -1638,7 +1638,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     return result->ok;
 }
 
-/* ---- In-place rebake (flatten plan phase 3b) --------------------------- */
+/* ---- In-place rebake ---------------------------------------------------- */
 
 /* Re-bake one flat command's baked values in place. `line` is its owning
  * source line (src_cmd_idx). Assignments update the live predef/scratch

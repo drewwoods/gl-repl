@@ -33,7 +33,7 @@
 
 #include "repl/flatten.h"
 #include "repl/attrib_bits.h"  /* REPL_ATTRIB_STACK_CAP */
-#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h"  /* SourceTextView */
 
 #ifndef APIENTRY
 #define APIENTRY

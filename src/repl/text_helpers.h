@@ -18,7 +18,7 @@ int repl_comment_alpha_payload_equals(const char *line, const char *word);
  * after skipping leading whitespace and dropping trailing whitespace
  * plus any trailing ';' characters. `*out_start` aliases src (no
  * allocation); `*out_len` is the length of the canonical content (0
- * if empty after trimming). Used by the editor input ↔ committed
+ * if empty after trimming). Used by the editor input <-> committed
  * line comparison sites where the canonical content is the same
  * whether or not the source carries the optional trailing ';'. */
 void repl_canonical_input_view(const char *src,

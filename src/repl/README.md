@@ -102,7 +102,7 @@ the `float x;` / `x = expr;` / typed-as-text `for(...) {` flows live in
 [`src/editor/commit.c`](../editor/commit.c) (editor business), so the demo hand-constructs commands
 instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty - the pipeline has zero
 backfill dependencies once host effects flow through the one
-[`ReplHostEffects`](host_effects.h#L38) bridge.
+[`ReplHostEffects`](host_effects.h#L37) bridge.
 
 ## In the REPL app
 

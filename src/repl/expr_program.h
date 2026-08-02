@@ -3,8 +3,7 @@
  *
  * Postfix compiler/evaluator for the REPL expression grammar (the exact
  * grammar of repl_eval_expr in src/repl/eval.c), plus the per-source-line
- * cache the flatten pipeline reads on its warm path
- * (docs/plans/in-review/flatten-performance-without-vm.md, Phase 2).
+ * cache the flatten pipeline reads on its warm path.
  *
  * This is not a control-flow VM: flatten still owns loops, calls, branches,
  * assignments, output materialization, and resource budgets. A program here
@@ -27,7 +26,7 @@
  * REPL_EXPR_CACHE_MAX_BYTES; on allocation/cap/compile failure the affected
  * line simply stays on the text path. Warm evaluation performs no allocation.
  *
- * Dependency masks (Phase 3): every evaluation also returns the set of
+ * Dependency masks: every evaluation also returns the set of
  * predefined-variable roots the value depends on, as one bit per predef
  * slot. Constants contribute no bits; a predef read contributes its current
  * dependency mask (supplied by the caller, so assignment dataflow like

@@ -61,8 +61,7 @@
  * (e.g. "GRID_THEME_RADAR") through the controller-installed bridge's
  * resolve_text at apply time so the catalog reads the enum constant
  * rather than encoding a magic number. `cfg_value` stays 0 here as
- * the back-compat fallback in case a future caller resolves the name
- * and writes the int back. */
+ * the back-compat fallback if a caller writes the resolved integer back. */
 #define STEP_SET_SYM(step_label, c, slug, val_name) \
     { .label = (step_label), .comment = (c), .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -262,7 +261,7 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
  * triangle (five append steps), then a sixth step splices
  * glEnable(GL_DEPTH_TEST) above the original glBegin so the
  * batch renders with depth testing already enabled. The label
- * "triangle_begin" anchors the insertion (implemented in Phase 2). */
+ * "triangle_begin" anchors the insertion above the original glBegin. */
 static const TutorialStep g_tutorial_depth_triangle_steps[] = {
     STEP_APPEND("triangle_begin",
         "// Start the triangle batch; the label here anchors a later insert.",
@@ -465,7 +464,7 @@ static const char *const g_tutorial_first_animation_cfg[] = {
 
 /* "Color Interpolation" - the first tutorial that BUILDS ON prior work
  * via a preloaded `setup` scaffold instead of making the user re-type
- * it (see docs/plans/active/tutorial-setup-scaffold.md). The scaffold
+ * it. The scaffold
  * is the flat triangle from "First Triangle" drawn in one solid color,
  * loaded locked before step 0; its leading `// @cfg` header uses the
  * example metadata vocabulary. The `:left` / `:right` goto-label rows
@@ -500,7 +499,7 @@ static const TutorialStep g_tutorial_color_interp_steps[] = {
     STEP_SENTINEL,
 };
 
-/* Phase C catalog expansion -------------------------------------------------
+/* Additional catalog entries -----------------------------------------------
  * These tutorials deliberately mix narrated STEP_APPEND rows with compact
  * STEP_CMD runs. The former explain a new idea; the latter let the ghost text
  * carry repetitive geometry so the resulting source stays readable. */
@@ -1129,7 +1128,7 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
 /* Subheading labels here are catalog-author choices, not a fixed
  * vocabulary - the menu just emits `### subheading` chrome rows when
  * the subheading changes. The current catalog uses Beginner,
- * Intermediate, and Advanced; future catalogs can use any labels that
+ * Intermediate, and Advanced; catalogs can use any labels that
  * group sensibly within each tag flyout.
  *
  * Catalog order matters: entries sharing a subheading should be
@@ -1165,7 +1164,7 @@ static const TutorialEntry g_tutorials[] = {
          * flyout walks Beginner-only entries first, then transitions
          * once to Intermediate at the tail - the subheading contiguity
          * test (test_catalog_subheading_metadata) requires a single
-         * Beginner→Intermediate transition across the whole catalog. */
+         * Beginner->Intermediate transition across the whole catalog. */
         .name       = "Variable Slider",
         .steps      = g_tutorial_variable_slider_steps,
         .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
@@ -1226,8 +1225,8 @@ static const TutorialEntry g_tutorials[] = {
     {
         /* Builds on First Triangle via a preloaded setup scaffold -
          * the learner colors the corners without re-drawing the
-         * triangle. It closes the original Intermediate trio while the
-         * global catalog continues with Phase C's Intermediate entries. */
+         * triangle. It closes the original Intermediate trio; the catalog
+         * continues with more Intermediate entries. */
         .name       = "Color Interpolation",
         .steps      = g_tutorial_color_interp_steps,
         .setup      = g_tutorial_color_interp_setup,
@@ -1607,11 +1606,9 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
 
 /* v1 catalog rule: each `expected` must parse to exactly one
  * source-document change AND land at the runner's chosen
- * expected_commit_line on commit. The full guarantee would require
- * driving the live parser/compile seam against a temp document
- * snapshot, which the catalog validator can't easily do without
- * dragging REPL state into Phase 1. Until that lands, this checker
- * is a best-effort syntactic filter focused on the patterns that
+ * expected_commit_line on commit. The validator stays independent of
+ * live parser state, so it applies a best-effort syntactic filter focused
+ * on the patterns that
  * actively break label-line bookkeeping:
  *
  *   - empty / whitespace-only text;
@@ -1635,8 +1632,7 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  * Known-shallow gaps (commit-time failures, not catastrophic): an
  * unknown GL call or one with wrong arity validates here but fails
  * at commit time, leaving the tutorial unrunnable at that step.
- * Catalog authors notice immediately. Promoting this to a real
- * parser-driven check is tracked as future work. */
+ * Catalog authors see those failures when the tutorial starts. */
 static int expected_is_single_command(const char *expected,
                                       TutorialExpectedShape shape,
                                       char *err, int err_size) {

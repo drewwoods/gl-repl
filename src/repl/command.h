@@ -141,7 +141,7 @@ typedef struct {
     int      has_vars;              /* Source must be preserved/re-evaluated from text */
     /* Tagged-union payload for cmd-type-specific fields. Saves ~64 bytes
      * per command vs. keeping the decl-name table and label format
-     * string side-by-side as separate top-level fields (audit #37).
+     * string side-by-side as separate top-level fields.
      *
      * Active member is keyed by `type`:
      *   CMD_VAR_DECLARE  -> payload.decl
@@ -292,7 +292,7 @@ static inline int repl_cmd_is_glut_solid(CmdType type) {
 /* True for the commands that *start* GL primitive emission with the
  * current modelview: glBegin (opens a vertex stream), every glutSolid*
  * primitive (renders a closed shape from current matrix state), and
- * the tess-polygon opener. Used by transform-guide planning to
+ * the tess-polygon opener. Used by transform-guide logic to
  * decide "something just got drawn here - further transforms
  * shouldn't factor into the cursor-line guide".
  *

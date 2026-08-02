@@ -18,8 +18,8 @@
  * Coverage: Bessel functions (j0/j1/jn, y0/y1/yn) and the gamma
  * family (gamma/lgamma/tgamma) - all single- or two-letter math.h
  * functions that are plausible user variable names. The y0/y1 pair
- * was the original motivator; jn/yn/gamma/lgamma/tgamma are added
- * defensively after the audit in #7 of the bug investigation.
+ * was the original motivator; jn/yn/gamma/lgamma/tgamma cover the
+ * other supported collisions.
  *
  * The template contains every supported pair, but consumers filter it through
  * repl_export_header_pre_line_visible(), so ordinary scenes pay no preamble
@@ -235,8 +235,8 @@ static void emit_cfgs(int *n) {
                  "/* @cfg %s = %s */", cfg.items[i].key, cfg.items[i].value);
     }
     /* The header budget is sized (export_state.h) so this never trips,
-     * but warn loudly rather than silently dropping presentation state
-     * if a future cfg/var/func growth ever overflows it. */
+     * but warn loudly rather than silently dropping presentation state if the
+     * current metadata exceeds that budget. */
     if (i < cfg.count) {
         fprintf(stderr,
                 "repl_export: workspace header full (%d lines) - dropped %d "
@@ -780,7 +780,7 @@ void emit_export_cam_lines(FILE *f) {
     /* The bridge owns the camera-line format. Without a
      * bridge (demo case) the // camera block is omitted from the
      * exported file - that's fine, the demo doesn't export
-     * (implemented in step 4a of the decouple plan). */
+     * through the controller bridge. */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
     if (!camera_bridge || !camera_bridge->fill_save_block)
         return;
@@ -799,8 +799,7 @@ void repl_refresh_render_state_strings(void) {
      * via the bridge's slug-keyed get_int - same opaque path the rest
      * of the export pipeline uses for cfg state. The demo doesn't
      * install a bridge, so the toggles fall back to "Enable" /
-     * "Disable" defaults below; the demo never exports anyway
-     * (implemented in step 7a). */
+     * "Disable" defaults below; the demo never exports anyway. */
     int msaa_on = repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_MSAA, 1);
     int line_smooth_on = repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_LINE_SMOOTH, 0);
     snprintf(g_render_state_lines_writable[0], sizeof(g_render_state_lines_writable[0]),
@@ -811,10 +810,9 @@ void repl_refresh_render_state_strings(void) {
              line_smooth_on ? "Enable" : "Disable");
 }
 
-/* The camera-block parser state machine moved to the bridge
- * implementation (glr_camera_export.c). src/repl/import.c delegates
- * import-side line consumption and reset to the bridge (implemented in
- * step 4a). */
+/* The camera-block parser state machine lives in the bridge implementation
+ * (glr_camera_export.c). src/repl/import.c delegates import-side line
+ * consumption and reset to the bridge. */
 
 void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the 4-line block from

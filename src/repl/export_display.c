@@ -189,8 +189,8 @@ ExportNeeds export_collect_needs(void) {
      * source lines (not a CmdType check) so that reads inside arg
      * expressions - e.g. `glVertex3f(A[i], B[i], C[i])` - count
      * alongside writes (`A[0] = ...`). The label wrapper is keyed
-     * off the command type rather than text in case a future
-     * codegen path emits `label(...)` indirectly. */
+     * off the command type rather than text, so indirect label codegen is
+     * classified consistently. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
@@ -292,7 +292,7 @@ static void emit_export_point_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_LIGHTING);\n");
 }
 
-/* Build the actual display() pass plan. Multipass scaffolding must count
+/* Build the display() pass list. Multipass scaffolding must count
  * these enabled flags, not raw cfg toggles, because cfg-backed overlay
  * passes may be intentionally disabled in export. */
 static size_t export_build_display_passes(
@@ -306,18 +306,9 @@ static size_t export_build_display_passes(
     passes[0].enabled = policy.include_fill;
     passes[0].emit_setup = NULL;
 
-    /* Standalone export currently emits the scene geometry only. Live overlay
-     * cfg flags are intentionally not mirrored here until the generated C can
-     * share the same overlay codegen path as the app.
-     *
-     * TODO: adapt both the REPL and export outline passes to use a
-     * shared codegen path so they stay in sync and the export can
-     * emit a matching outline pass setup.  Possibly using a stencil
-     * buffer approach of drawing without color buffer with
-     * polygonmode line and points and then fill the stencil in a
-     * second pass, which would be more robust and simpler than the
-     * current approach of using LIGHTING and setting lights to black
-     * for the outline pass. */
+    /* Standalone export currently emits scene geometry only. Live overlay
+     * cfg flags are not mirrored because generated C does not share the
+     * app's overlay code-generation path. */
     passes[1].label = "Vertex Outline Pass";
     passes[1].enabled = policy.include_vertex_outlines;
     passes[1].emit_setup = emit_export_outline_pass_setup;
@@ -398,8 +389,8 @@ static void emit_export_display_begin(FILE *f) {
      * into init() - see emit_export_init_section_to_file.
      *
      * Lights are emitted before g_header_post to match the panel's
-     * rendering order; both consumers walk: display_header → cam →
-     * lights → header_post → render_state → user code. */
+     * rendering order; both consumers walk: display_header -> cam ->
+     * lights -> header_post -> render_state -> user code. */
     {
         int n_pos = repl_export_lights_display_line_count();
         for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
@@ -715,8 +706,8 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
     /* Use the actual scene rect so the exported window preserves the REPL
      * viewport's aspect ratio and geometry is never clipped. Fall back to
      * 800x600 when dimensions aren't available (headless / demo export).
-     * Read from the explicit ReplExportLayout struct rather than
-     * calling ui_layout_scene_rect directly (implemented in step 7c). */
+     * Read from the explicit ReplExportLayout struct rather than calling
+     * ui_layout_scene_rect directly. */
     int sw = layout ? layout->render3d_w : 0;
     int sh = layout ? layout->render3d_h : 0;
     if (sw <= 0) sw = 800;

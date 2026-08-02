@@ -9,9 +9,9 @@
  * F-key bindings live in the controller's g_cfg_items table; this
  * module pulls labels through a controller-installed
  * ReplHelpFkeyProvider so help_text.c doesn't need to #include
- * app/glr_config.h (the layering inversion the prior baseline
- * tracked as audit #1). The standalone render3d_demo doesn't install a
- * provider - the F-Key section just renders empty there.
+ * app/glr_config.h, preserving the REPL/UI layering boundary. The standalone
+ * render3d_demo doesn't install a provider, so the F-Key section renders
+ * empty there.
  */
 #ifndef REPL_HELP_TEXT_H
 #define REPL_HELP_TEXT_H

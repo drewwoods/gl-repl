@@ -26,7 +26,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/expr_program.h" /* ReplExprCache (optional compiled-expression cache) */
-#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h"  /* SourceTextView */
 #include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
 /* Local variable snapshot for a single flat command. Captured when the
@@ -118,7 +118,7 @@ typedef struct {
     int  required_flat_capacity;
     int  user_lighting_enabled;
     /* Per-predef-root dependency masks for the produced flat program
-     * (flatten plan phase 3): structural roots can change flat-stream
+     * structural roots can change flat-stream
      * topology or frozen local snapshots (loop bounds, if/else-if
      * conditions, call args - plus everything conservatively widened to
      * all-bits: scratch reads in structural positions, uncached/failed
@@ -146,7 +146,7 @@ int  repl_flatten_program(const ReplFlattenOptions *options,
  * suppress the stencil-view clear warning. */
 int repl_flat_clears_stencil(const GLCmd *flat_cmds, int flat_count);
 
-/* ---- In-place rebake (flatten plan phase 3b) -----------------------------
+/* ---- In-place rebake ----------------------------------------------------
  *
  * Re-evaluate the VALUES of an existing flat command stream without
  * re-expanding it: baked argument slots and assignment results are

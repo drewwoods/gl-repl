@@ -260,14 +260,14 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
 - **New GL commands** → skill `gl-repl-new-command` (five required edits:
   [`CmdType`](src/repl/command.h#L44), parser, executor, `flatten_range()`, spec tables).
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** - its
-  absence is the invariant). Per-slot [`ReplEnumSlotKind`](src/repl/command_spec.h#L77): `ENUM_ONLY`
+  absence is the invariant). Per-slot [`ReplEnumSlotKind`](src/repl/command_spec.h#L76): `ENUM_ONLY`
   (default), `ENUM_OR_CONST_VALUE` (bool masks, 0/1 reverse-mapped),
   `ENUM_OR_EXPR` (only `glLightModeli` slot 1). Spec tables stay **alphabetical
   by GL name**.
 - [`CmdType`](src/repl/command.h#L44) set tests use the inline predicates in [`command.h`](src/repl/command.h)
   (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`, `repl_cmd_is_block_head`
   / `_end`), never ad-hoc `||` chains. That's the *control-flow* taxonomy;
-  [`CmdSyntaxCategory`](src/repl/command_spec.h#L153) is the separate *visual* one - don't fold one through
+  [`CmdSyntaxCategory`](src/repl/command_spec.h#L152) is the separate *visual* one - don't fold one through
   the other. A drift test in [`tests/test_replay_walk.c`](tests/test_replay_walk.c) asserts agreement.
 - Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L438) from
   [`src/repl/eval.h`](src/repl/eval.h), never bare `strchr(s, ',')` - those
@@ -379,7 +379,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   `payload.matrix.m[]`); other types must not read it. A flat local assignment
   captures its pre-write target value in the assignment arm because the
   ordinary `FlatCmdLocalVars` snapshot is post-write.
-- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L557) which
+- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L556) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing

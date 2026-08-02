@@ -39,8 +39,7 @@ typedef struct {
 
 /* Maximum number of positional enum arguments a single enum-backed GL
  * command can declare. Sized to GLCmd.args[8] so the enum path and the
- * std path share one storage width and a future wider enum command does
- * not force another struct-shape change. */
+ * std path share one storage width, matching the fixed GLCmd.args[] shape. */
 #define MAX_ENUM_ARGS 8
 
 /* How one positional enum argument resolves a typed token. The three
@@ -135,7 +134,7 @@ typedef struct {
 
 /* Syntax-highlighting category for code-panel rendering. Each CmdType maps
  * to exactly one category; the renderer (ui_panels.c) translates the
- * category into an RGB color via a category→color palette. Living in the
+ * category into an RGB color via a category->color palette. Living in the
  * spec means a new CmdType picks up the right highlight automatically - the
  * UI doesn't need to grow another switch case.
  *
@@ -302,7 +301,7 @@ const ReplEnumEntry *repl_fog_mode_entries(void);
 const ReplEnumEntry *repl_attrib_bit_entries(void);
 
 /* Convert a GL_TRIANGLES, GL_QUADS, etc. constant to its string name (e.g.,
- * GL_TRIANGLES → "GL_TRIANGLES"). Used for display and diagnostic output. */
+ * GL_TRIANGLES -> "GL_TRIANGLES"). Used for display and diagnostic output. */
 const char *repl_begin_mode_name(GLenum mode);
 
 #endif
