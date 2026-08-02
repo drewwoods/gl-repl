@@ -27,6 +27,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CYAN = "\033[36m" if sys.stdout.isatty() else ""
+RESET = "\033[0m" if sys.stdout.isatty() else ""
 FILE_GROUP_SUFFIXES = {
     "c_files": (".c", ".h"),
     "md_files": (".md",),
@@ -123,14 +125,33 @@ def show_per_file_report(per_file: dict[Path, Counter[str]]) -> None:
     if not per_file:
         return
 
+    tree: dict[str, object] = {}
+    for path, chars in per_file.items():
+        node = tree
+        parts = path.relative_to(ROOT).parts
+        for part in parts[:-1]:
+            child = node.setdefault(part, {})
+            assert isinstance(child, dict)
+            node = child
+        node[parts[-1]] = chars
+
+    def print_tree(node: dict[str, object], depth: int) -> None:
+        for name in sorted(node):
+            value = node[name]
+            indent = "  " * (depth + 1)
+            if isinstance(value, Counter):
+                summary = ", ".join(
+                    f"U+{ord(char):04X} {char!r}={value[char]}"
+                    for char in sorted(value, key=ord)
+                )
+                print(f"{indent}{name}: {summary}")
+            else:
+                assert isinstance(value, dict)
+                print(f"{indent}{CYAN}{name}/{RESET}")
+                print_tree(value, depth + 1)
+
     print("\nUnicode by file:")
-    for path in sorted(per_file):
-        chars = per_file[path]
-        summary = ", ".join(
-            f"U+{ord(char):04X} {char!r}={chars[char]}"
-            for char in sorted(chars, key=ord)
-        )
-        print(f"  {path.relative_to(ROOT)}: {summary}")
+    print_tree(tree, 0)
 
 
 def apply_replacements(paths: list[Path]) -> tuple[Counter[str], Counter[str]]:

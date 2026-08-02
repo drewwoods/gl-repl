@@ -213,7 +213,7 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
     if (depth) glDisable(GL_DEPTH_TEST);
     /* Unconditional, not part of the #else below: desktop GL rasterizes points
      * as circles under multisample rasterization, so the native build barely
-     * needs this — gl4es has no such implicit path and honours GL_POINT_SMOOTH
+     * needs this - gl4es has no such implicit path and honours GL_POINT_SMOOTH
      * only when it is explicitly enabled. Keeping it outside the branch is
      * what lets the GL_POINTS form ever be restored on the web target. */
     glEnable(GL_POINT_SMOOTH);
