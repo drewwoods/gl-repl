@@ -250,19 +250,37 @@ void glr_frame_begin(void);
 void glr_frame_work_end(void);
 void glr_frame_ended(void);
 
+/* Controller-owned guided-input stages. The host schedules them inside its
+ * frame lifecycle but does not reach into the tour/pointer-script subsystem. */
+void glr_ctrl_run_scripted_input_frame(void);
+void glr_ctrl_render_script_overlay(int win_w, int win_h);
+int  glr_ctrl_start_tour(int tour_idx);
+
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
+/* Physical host input entry points. The controller gives controlled-tour
+ * transport/cancellation/motion ownership first refusal before normal routing. */
 void glr_ctrl_keyboard(unsigned char key, int x, int y);
 void glr_ctrl_special(int key, int x, int y);
-/* Scripted-modifier variants: dispatch one key, special-key, or mouse event
- * with a declared modifier mask (GLUT_ACTIVE_*) authoritative for its duration. */
-void glr_ctrl_keyboard_with_modifiers(unsigned char key, int x, int y, int mods);
-void glr_ctrl_special_with_modifiers(int key, int x, int y, int mods);
-void glr_ctrl_mouse_with_modifiers(int button, int state, int x, int y, int mods);
 void glr_ctrl_mouse(int button, int state, int x, int y);
 void glr_ctrl_motion(int x, int y);
 void glr_ctrl_passive_motion(int x, int y);
 void glr_ctrl_mousewheel(int wheel, int direction, int x, int y);
+
+/* Scripted input entry points bypass physical tour arbitration but share the
+ * exact normal dispatch paths below it. Modifier variants make the declared
+ * GLUT_ACTIVE_* mask authoritative for one event. */
+void glr_ctrl_scripted_keyboard(unsigned char key, int x, int y);
+void glr_ctrl_scripted_special(int key, int x, int y);
+void glr_ctrl_scripted_mouse(int button, int state, int x, int y);
+void glr_ctrl_scripted_motion(int x, int y);
+void glr_ctrl_scripted_passive_motion(int x, int y);
+void glr_ctrl_scripted_mousewheel(int wheel, int direction, int x, int y);
+void glr_ctrl_scripted_keyboard_with_modifiers(unsigned char key, int x, int y,
+                                                 int mods);
+void glr_ctrl_scripted_special_with_modifiers(int key, int x, int y, int mods);
+void glr_ctrl_scripted_mouse_with_modifiers(int button, int state, int x, int y,
+                                              int mods);
 void glr_ctrl_on_frame_timer(void);
 
 /* Optional offline/capture scheduling mode. Normally the host frame timer

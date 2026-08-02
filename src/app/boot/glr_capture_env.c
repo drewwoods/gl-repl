@@ -342,7 +342,7 @@ void glr_capture_env_apply(const char *time_arg) {
         const char *k_src = getenv("GLR_TYPE_KEYS");
         if (k_src)
             for (const char *k = k_src; *k; k++)
-                glr_ctrl_keyboard((unsigned char)*k, 0, 0);
+                glr_ctrl_scripted_keyboard((unsigned char)*k, 0, 0);
     }
     /* GLR_OPEN_COLOR_PICKER is applied on the first display callback
      * (glr_capture_env_frame_hook), not here: the picker clamps its

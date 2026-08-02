@@ -168,8 +168,9 @@ int glr_pointer_script_toggle_tour_hud(void);
  * and camera motion from contaminating deterministic reconstruction. */
 int glr_pointer_script_tour_suppresses_app_tick(void);
 
-/* Host transport-key handlers, dispatched by gl_repl.c BEFORE the tour-cancel
- * intercept. Only consume keys while a controlled tour is running: Space
+/* Controller transport-key handlers, dispatched by the physical glr_ctrl
+ * keyboard entry point BEFORE the tour-cancel intercept. Only consume keys
+ * while a controlled tour is running: Space
  * (play/pause/resume/restart), +/=/- (speed), Esc (stop). Return 1 when the
  * key was consumed as a transport action, 0 to let the caller fall through to
  * cancellation / normal input. Never consume anything for the legacy or
@@ -197,11 +198,17 @@ int glr_pointer_script_load_env(void);
 /* Nonzero once a script has loaded. */
 int glr_pointer_script_active(void);
 
-/* Nonzero while a synthetic mouse button is held. Host GLUT motion callbacks
- * use this to ignore physical pointer movement for the duration of a scripted
- * drag/click; scripted motion dispatches directly to glr_ctrl_* and therefore
- * bypasses that guard. */
+/* Nonzero while a synthetic mouse button is held. The physical controller
+ * motion entry points use this to ignore pointer movement for the duration of
+ * a scripted drag/click; scripted motion uses glr_ctrl_scripted_* and bypasses
+ * that guard. */
 int glr_pointer_script_owns_pointer_motion(void);
+
+/* True when physical controller motion entry points must ignore the pointer.
+ * Controlled tours own motion for their whole lifetime so real hover cannot
+ * disturb scripted menus; env-capture scripts own it only during a synthetic
+ * button hold. Scripted motion bypasses this arbitration. */
+int glr_pointer_script_blocks_physical_motion(void);
 
 /* Stop a running script now: release any scripted-held mouse button so the
  * app never sees a stuck drag, clear the overlay, and deactivate. Used by

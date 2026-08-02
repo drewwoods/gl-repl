@@ -2278,6 +2278,19 @@ static void route_wheel(int x, int y, int delta) {
  * ===========================================================================
  */
 
+/* Physical-input tour arbitration lives at the controller boundary. Scripted
+ * entry points below bypass it and join the same dispatch functions after
+ * provenance has been resolved. */
+static int g_tour_swallow_release = 0;
+
+static int glr_ctrl_cancel_tour_for_physical_input(void) {
+    if (!glr_pointer_script_tour_active())
+        return 0;
+    glr_pointer_script_stop();
+    repl_set_status("Tour stopped");
+    return 1;
+}
+
 static void keyboard_dispatch(unsigned char key, int x, int y) {
     /* The command help card is intentionally ephemeral: the next key event
      * resumes editing and dismisses it without swallowing that key. */
@@ -2328,7 +2341,7 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
 }
 
-void glr_ctrl_keyboard(unsigned char key, int x, int y) {
+static void keyboard_input(unsigned char key, int x, int y) {
     glr_audio_on_user_gesture();
 
     /* macOS Cmd+letter normalization happens before any dispatch so
@@ -2342,6 +2355,20 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
     editor_reset_input_effects();
     keyboard_dispatch(key, x, y);
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+void glr_ctrl_keyboard(unsigned char key, int x, int y) {
+    /* Transport wins; any other physical key stops the tour and is swallowed.
+     * Env-capture scripts never report as controlled tours. */
+    if (glr_pointer_script_handle_tour_key(key))
+        return;
+    if (glr_ctrl_cancel_tour_for_physical_input())
+        return;
+    keyboard_input(key, x, y);
+}
+
+void glr_ctrl_scripted_keyboard(unsigned char key, int x, int y) {
+    keyboard_input(key, x, y);
 }
 
 static void special_dispatch(int key, int x, int y) {
@@ -2419,7 +2446,7 @@ static int glr_ctrl_special_is_modifier_event(int key) {
     }
 }
 
-void glr_ctrl_special(int key, int x, int y) {
+static void special_input(int key, int x, int y) {
     glr_audio_on_user_gesture();
 
     if (glr_ctrl_special_is_modifier_event(key))
@@ -2430,27 +2457,43 @@ void glr_ctrl_special(int key, int x, int y) {
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 }
 
+void glr_ctrl_special(int key, int x, int y) {
+    /* Modifier-transition notifications are inert and must not cancel a tour. */
+    if (glr_ctrl_special_is_modifier_event(key))
+        return;
+    if (glr_pointer_script_handle_tour_special(key))
+        return;
+    if (glr_ctrl_cancel_tour_for_physical_input())
+        return;
+    special_input(key, x, y);
+}
+
+void glr_ctrl_scripted_special(int key, int x, int y) {
+    special_input(key, x, y);
+}
+
 /* Scripted-chord entry points: dispatch a single key/special press while a
  * caller-declared modifier mask is authoritative, so a pointer script can
  * fire Shift/Ctrl+Shift shortcuts the physical-modifier path can't synthesize.
  * The editor override is pushed and popped here — the controller stays the
  * sole input-event mutation gate; the pointer script only calls these. */
-void glr_ctrl_keyboard_with_modifiers(unsigned char key, int x, int y, int mods) {
+void glr_ctrl_scripted_keyboard_with_modifiers(unsigned char key, int x, int y,
+                                                 int mods) {
     editor_input_push_scripted_modifiers(mods);
-    glr_ctrl_keyboard(key, x, y);
+    glr_ctrl_scripted_keyboard(key, x, y);
     editor_input_pop_scripted_modifiers();
 }
 
-void glr_ctrl_special_with_modifiers(int key, int x, int y, int mods) {
+void glr_ctrl_scripted_special_with_modifiers(int key, int x, int y, int mods) {
     editor_input_push_scripted_modifiers(mods);
-    glr_ctrl_special(key, x, y);
+    glr_ctrl_scripted_special(key, x, y);
     editor_input_pop_scripted_modifiers();
 }
 
-void glr_ctrl_mouse_with_modifiers(int button, int state, int x, int y,
-                                   int mods) {
+void glr_ctrl_scripted_mouse_with_modifiers(int button, int state, int x, int y,
+                                              int mods) {
     editor_input_push_scripted_modifiers(mods);
-    glr_ctrl_mouse(button, state, x, y);
+    glr_ctrl_scripted_mouse(button, state, x, y);
     editor_input_pop_scripted_modifiers();
 }
 
@@ -2557,12 +2600,36 @@ static void mouse_dispatch(int button, int state, int x, int y) {
     glr_ctrl_router_handle_camera_mouse(button, state, x, y);
 }
 
-void glr_ctrl_mouse(int button, int state, int x, int y) {
+static void mouse_input(int button, int state, int x, int y) {
     glr_audio_on_user_gesture();
 
     editor_reset_input_effects();
     mouse_dispatch(button, state, x, y);
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+void glr_ctrl_mouse(int button, int state, int x, int y) {
+    /* The tour HUD remains interactive without handing control back. Every
+     * other physical DOWN stops the tour and is swallowed, along with its
+     * paired UP, so the click cannot leak into whatever the tour left below. */
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
+        glr_ctrl_router_point_on_tour_hud(x, y)) {
+        mouse_input(button, state, x, y);
+        return;
+    }
+    if (state == GLUT_DOWN && glr_ctrl_cancel_tour_for_physical_input()) {
+        g_tour_swallow_release = 1;
+        return;
+    }
+    if (state == GLUT_UP && g_tour_swallow_release) {
+        g_tour_swallow_release = 0;
+        return;
+    }
+    mouse_input(button, state, x, y);
+}
+
+void glr_ctrl_scripted_mouse(int button, int state, int x, int y) {
+    mouse_input(button, state, x, y);
 }
 
 /* Motion routing: UI overlay (color picker drag), variable-panel drag
@@ -2620,6 +2687,14 @@ static void motion_dispatch(int x, int y) {
 }
 
 void glr_ctrl_motion(int x, int y) {
+    if (glr_pointer_script_blocks_physical_motion())
+        return;
+    editor_reset_input_effects();
+    motion_dispatch(x, y);
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+void glr_ctrl_scripted_motion(int x, int y) {
     editor_reset_input_effects();
     motion_dispatch(x, y);
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
@@ -2652,12 +2727,20 @@ static void passive_motion_dispatch(int x, int y) {
 }
 
 void glr_ctrl_passive_motion(int x, int y) {
+    if (glr_pointer_script_blocks_physical_motion())
+        return;
     editor_reset_input_effects();
     passive_motion_dispatch(x, y);
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 }
 
-void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+void glr_ctrl_scripted_passive_motion(int x, int y) {
+    editor_reset_input_effects();
+    passive_motion_dispatch(x, y);
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+static void mousewheel_input(int wheel, int direction, int x, int y) {
 #ifndef USE_GLUT
     /* freeglut wheel callback. direction is inverted relative to
      * route_wheel's delta convention (positive = toward later rows). */
@@ -2668,6 +2751,16 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #else
     (void)wheel; (void)direction; (void)x; (void)y;
 #endif
+}
+
+void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+    if (glr_ctrl_cancel_tour_for_physical_input())
+        return;
+    mousewheel_input(wheel, direction, x, y);
+}
+
+void glr_ctrl_scripted_mousewheel(int wheel, int direction, int x, int y) {
+    mousewheel_input(wheel, direction, x, y);
 }
 
 /* Deferred quit, consumed on the normal frame-tick path. SIGINT only sets

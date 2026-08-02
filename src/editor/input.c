@@ -109,7 +109,7 @@ static EditorInputDispatchEffects g_pending_input_effects = {0};
 
 /* Script-side modifier override. The controller pushes the scripted chord's
  * modifier mask around a single synchronous keyboard/special dispatch (see
- * glr_ctrl_keyboard_with_modifiers) so downstream shortcut matching sees the
+ * glr_ctrl_scripted_keyboard_with_modifiers) so downstream shortcut matching sees the
  * declared Shift/Ctrl/Alt even though no physical key is held. Authoritative
  * over both the test provider and glutGetModifiers while active. */
 static int g_scripted_mods = 0;

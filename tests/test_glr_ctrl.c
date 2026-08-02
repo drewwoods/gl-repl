@@ -5197,8 +5197,8 @@ static void test_special_key_shortcuts(void) {
 /* Drive one untimed pointer-script line and fire its single event. The
  * scripted `chord` verb is the only production path that synthesizes a Shift
  * modifier, so these tests install NO modifier provider — the scripted override
- * pushed by glr_ctrl_*_with_modifiers is the sole modifier source, exactly as
- * in a real capture/tour run. */
+ * pushed by glr_ctrl_scripted_*_with_modifiers is the sole modifier source,
+ * exactly as in a real capture/tour run. */
 static void run_pointer_script_line(const char *line) {
     const char *lines[1];
     lines[0] = line;

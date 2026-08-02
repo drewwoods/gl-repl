@@ -64,7 +64,7 @@ type.
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L253):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L259):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
@@ -74,12 +74,16 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L85) and fans it out to the `ui_*_render`
    functions.
 
-On input, `glr_ctrl_keyboard` / `_mouse` normalize the event, ask UI to
-hit-test, and route the result: non-editor concerns (replay, audio, config,
-save, camera, variable panel, scene press, scroll-wheel zoom) go through the
-`glr_ctrl_router_*` helpers *before* the editor dispatch entry points run.
-The controller is the only input-event mutation gate, and it relays
-diagnostics from the REPL to the editor/status line. A guard
+On input, the physical `glr_ctrl_keyboard` / `_mouse` family first arbitrates
+controlled-tour transport, cancellation, and pointer ownership, then
+normalizes the event, asks UI to hit-test, and routes the result. Synthetic
+tour/capture input enters through `glr_ctrl_scripted_*`, bypassing only that
+physical-input arbitration and joining the same dispatch beneath it.
+Non-editor concerns (replay, audio, config, save, camera, variable panel,
+scene press, scroll-wheel zoom) go through the `glr_ctrl_router_*` helpers
+*before* the editor dispatch entry points run. The controller is the only
+input-event mutation gate, and it relays diagnostics from the REPL to the
+editor/status line. A guard
 (`check-glr-ctrl-not-editor-mirror`) keeps it from accreting one wrapper per
 editor operation.
 

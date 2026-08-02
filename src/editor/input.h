@@ -80,7 +80,8 @@ int                      editor_input_active_modifiers(void);
 void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider);
 
 /* Script-side modifier override. The controller brackets a single scripted
- * keyboard/special dispatch with these (see glr_ctrl_keyboard_with_modifiers)
+ * keyboard/special dispatch with these
+ * (see glr_ctrl_scripted_keyboard_with_modifiers)
  * so a scripted chord's declared Shift/Ctrl/Alt is visible to shortcut
  * matching even though no physical modifier key is held. Push sets the mask
  * and marks it active (authoritative over the test provider and

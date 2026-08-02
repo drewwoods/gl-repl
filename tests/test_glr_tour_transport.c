@@ -718,6 +718,72 @@ static void test_drag_pointer_motion_ownership(void) {
                glr_pointer_script_owns_pointer_motion(), 0);
 }
 
+static void test_tour_blocks_physical_motion_throughout(void) {
+    const char *lines[] = {
+        "move scene:0.4,0.4",
+        "move scene:0.6,0.6"
+    };
+    start_tour(lines, 2);
+    ASSERT_INT("baseline-pending tour blocks physical motion",
+               glr_pointer_script_blocks_physical_motion(), 1);
+
+    frames(1);
+    ASSERT_INT("playing tour blocks physical motion",
+               glr_pointer_script_blocks_physical_motion(), 1);
+    glr_pointer_script_handle_tour_key(' ');
+    ASSERT_INT("paused tour blocks physical motion",
+               glr_pointer_script_blocks_physical_motion(), 1);
+    glr_pointer_script_handle_tour_key(' ');
+
+    ASSERT_TRUE("motion-blocking tour reaches Done",
+                run_until_state(GLR_TOUR_DONE, 20));
+    ASSERT_INT("Done linger blocks physical motion",
+               glr_pointer_script_blocks_physical_motion(), 1);
+    frames(1);   /* no final caption: Done auto-closes on the next frame */
+    ASSERT_INT("tour close restores physical motion",
+               glr_pointer_script_blocks_physical_motion(), 0);
+}
+
+static void test_controller_arbitrates_physical_and_scripted_input(void) {
+    const char *lines[] = {
+        "move scene:0.4,0.4",
+        "move scene:0.6,0.6"
+    };
+    start_tour(lines, 2);
+
+    glr_ctrl_passive_motion(900, 700);
+    ASSERT_INT("physical motion is inert during tour (x)",
+               ui_state_pointer().mouse_x, 100);
+    ASSERT_INT("physical motion is inert during tour (y)",
+               ui_state_pointer().mouse_y, 100);
+
+    glr_ctrl_scripted_passive_motion(220, 230);
+    ASSERT_INT("scripted motion bypasses tour arbitration (x)",
+               ui_state_pointer().mouse_x, 220);
+    ASSERT_INT("scripted motion bypasses tour arbitration (y)",
+               ui_state_pointer().mouse_y, 230);
+    ASSERT_INT("scripted motion keeps tour active",
+               glr_pointer_script_tour_active(), 1);
+
+    frames(1);
+    glr_ctrl_keyboard(' ', 0, 0);
+    ASSERT_INT("physical Space pauses through controller",
+               glr_pointer_script_tour_view().state, GLR_TOUR_PAUSED);
+    glr_ctrl_keyboard(' ', 0, 0);
+    ASSERT_INT("physical Space resumes through controller",
+               glr_pointer_script_tour_view().state, GLR_TOUR_PLAYING);
+
+    glr_ctrl_scripted_keyboard(' ', 0, 0);
+    ASSERT_INT("scripted key bypasses physical cancellation",
+               glr_pointer_script_tour_active(), 1);
+
+    glr_ctrl_keyboard('x', 0, 0);
+    ASSERT_INT("ordinary physical key cancels tour in controller",
+               glr_pointer_script_tour_active(), 0);
+    ASSERT_INT("physical motion routes again after cancellation",
+               glr_pointer_script_blocks_physical_motion(), 0);
+}
+
 static void test_view_event_ensures_3d_and_reconstructs(void) {
     const char *lines[] = {
         "view 3d # idempotent tour precondition",
@@ -866,6 +932,8 @@ int main(void) {
     test_backstep_reconstructs_camera_drag();
     test_right_drag_pans_camera_and_rewinds();
     test_drag_pointer_motion_ownership();
+    test_tour_blocks_physical_motion_throughout();
+    test_controller_arbitrates_physical_and_scripted_input();
     test_view_event_ensures_3d_and_reconstructs();
     test_hud_panel_width_clamp();
     test_echo_alpha_frozen_is_full();

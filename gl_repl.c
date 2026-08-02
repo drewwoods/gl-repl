@@ -8,10 +8,7 @@
 #include "app/boot/glr_init_trace.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
-#include "app/glr_pointer_script.h"
-#include "app/glr_tours.h"
 #include "app/boot/splash.h"
-#include "repl/host_effects.h"   /* repl_set_status (tour cancel notice) */
 #include "support/cpuprof.h"     /* the two callback stages that span the
                                   * boot/controller seam are bracketed here;
                                   * every other stage self-times */
@@ -49,9 +46,9 @@ static void display_func(void) {
     glr_capture_env_frame_hook();
     /* Scripted pointer/keyboard input (GLR_POINTER_SCRIPT): fire this
      * frame's events before the frame renders so it reflects them. The
-     * synthesized keys/clicks dispatch straight into glr_ctrl_*, so a
+     * synthesized keys/clicks dispatch through glr_ctrl_scripted_*, so a
      * scripted commit's parse/flatten cost lands in this section. */
-    glr_pointer_script_frame();
+    glr_ctrl_run_scripted_input_frame();
     prof_end(PROF_SCRIPTED_INPUT);
     /* Trace the first two frames separately (gated on the init-trace
      * detailed flag — see --detailed-prof / GLR_DETAILED_PROF). The first frame
@@ -97,7 +94,8 @@ static void display_func(void) {
      * and the tour overlay must land after the compositor to stay topmost).
      * The aggregate row is bracketed here because it is the only place that can
      * span both — a boot-band pass and a controller-band one. Its children are
-     * self-timed where they can be (see glr_pointer_script_render_overlay);
+     * self-timed where they can be (see the controller's scripted overlay
+     * stage);
      * splash_render() is bracketed from here to keep the profiler out of
      * test_splash's deliberately minimal link. */
     prof_begin(PROF_HOST_OVERLAYS);
@@ -112,9 +110,8 @@ static void display_func(void) {
     /* Tour narration overlay (caption, cursor arrow, click ripple,
      * highlight ring) so a tour — or a recorded video — shows what is being
      * said and where the synthetic mouse is. Self-timed as PROF_TOUR_OVERLAY. */
-    if (glr_pointer_script_active())
-        glr_pointer_script_render_overlay(glutGet(GLUT_WINDOW_WIDTH),
-                                          glutGet(GLUT_WINDOW_HEIGHT));
+    glr_ctrl_render_script_overlay(glutGet(GLUT_WINDOW_WIDTH),
+                                   glutGet(GLUT_WINDOW_HEIGHT));
     prof_end(PROF_HOST_OVERLAYS);
 
     /* Close the frame's *work* span: everything the callback does to produce
@@ -143,81 +140,29 @@ static void reshape_func(int w, int h) {
     glr_ctrl_reshape(w, h);
 }
 
-/* Real user input during a menu-started guided tour hands control back:
- * the canceling event is swallowed (an accidental click shouldn't also
- * click through whatever the tour left under the pointer). Only genuine
- * input can trip this — scripted events dispatch straight into the
- * glr_ctrl_* entry points and never pass through these GLUT callbacks.
- * Pointer motion deliberately does NOT cancel (a nudged mouse shouldn't
- * kill the tour), and env-driven capture runs are never canceled. */
-static int g_tour_swallow_release = 0;
-
-static int tour_cancel_intercept(void) {
-    if (!glr_pointer_script_tour_active())
-        return 0;
-    glr_pointer_script_stop();
-    repl_set_status("Tour stopped");
-    return 1;
-}
-
 static void keyboard_func(unsigned char key, int x, int y) {
     splash_skip(); /* any keypress dismisses the startup banner */
-    /* Controlled-tour transport (Space/+/=/-/Esc) wins over the cancel
-     * intercept so play/pause/speed/exit drive the tour instead of stopping
-     * it. Only a controlled tour consumes here; env-capture never does. */
-    if (glr_pointer_script_handle_tour_key(key)) return;
-    if (tour_cancel_intercept()) return;
     glr_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
-    /* Left = backstep, Right = forward step during a controlled tour. Same
-     * transport-before-cancel ordering as keyboard_func. */
-    if (glr_pointer_script_handle_tour_special(key)) return;
-    if (tour_cancel_intercept()) return;
     glr_ctrl_special(key, x, y);
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    /* A left press on the visible tour HUD is transport UI, not an attempt to
-     * take over the scene. Let the normal controller hit route toggle its
-     * compact/expanded presentation. All other real presses retain the
-     * established stop-and-swallow behavior. */
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
-        glr_ctrl_router_point_on_tour_hud(x, y)) {
-        glr_ctrl_mouse(button, state, x, y);
-        return;
-    }
-    if (state == GLUT_DOWN && tour_cancel_intercept()) {
-        g_tour_swallow_release = 1; /* eat the paired release too */
-        return;
-    }
-    if (state == GLUT_UP && g_tour_swallow_release) {
-        g_tour_swallow_release = 0;
-        return;
-    }
     glr_ctrl_mouse(button, state, x, y);
 }
 
 static void motion_func(int x, int y) {
-    /* Scripted drags call glr_ctrl_motion directly. Ignore the physical GLUT
-     * stream while their synthetic button is held, or a real mouse nudge
-     * rewrites the camera's previous-pointer baseline and turns the next
-     * scripted sample into a large delta. */
-    if (glr_pointer_script_owns_pointer_motion()) return;
     glr_ctrl_motion(x, y);
 }
 
 static void passive_motion_func(int x, int y) {
-    /* Passive motion also updates the camera baseline, so it shares the same
-     * narrow synthetic-hold guard as active motion. */
-    if (glr_pointer_script_owns_pointer_motion()) return;
     glr_ctrl_passive_motion(x, y);
 }
 
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
-    if (tour_cancel_intercept()) return;
     glr_ctrl_mousewheel(wheel, direction, x, y);
 }
 
@@ -342,7 +287,7 @@ int main(int argc, char **argv) {
      * live layout once the main loop is drawing. Any real key/click cancels. */
     if (opts.tour_index >= 0) {
         splash_skip();       /* start clean — no splash band over the tour */
-        glr_tours_start(opts.tour_index);
+        glr_ctrl_start_tour(opts.tour_index);
     }
     glr_init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(opts.use_accum);

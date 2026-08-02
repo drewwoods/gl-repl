@@ -131,7 +131,7 @@ belongs to the controller:
 ```mermaid
 flowchart TD
     cb["gl_repl.c GLUT display callback"] --> fb["glr_frame_begin<br/><i>opens PROF_FRAME_TOTAL + PROF_FRAME_WORK</i>"]
-    fb --> si["scripted input / capture hooks<br/><i>PROF_SCRIPTED_INPUT</i>"]
+    fb --> si["capture hook + glr_ctrl scripted-input stage<br/><i>PROF_SCRIPTED_INPUT</i>"]
     si --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
     frame --> s1["tick profiling"]
     s1 --> s2["rebuild autonormals if dirty"]
@@ -147,7 +147,7 @@ flowchart TD
     s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_PANELS</i>"]
     s12 --> s13["ui_profile_panel_render(&ui_snap)"]
     s13 --> s14["restore flat count & predefined variable values"]
-    s14 --> h1["splash + tour narration overlays<br/><i>PROF_HOST_OVERLAYS</i>"]
+    s14 --> h1["splash + glr_ctrl scripted-overlay stage<br/><i>PROF_HOST_OVERLAYS</i>"]
     h1 --> fe["glr_frame_work_end<br/><i>closes PROF_FRAME_WORK</i>"]
     fe --> h2["glFinish + glutSwapBuffers<br/><i>unbracketed</i>"]
     h2 --> fx["glr_frame_ended<br/><i>closes PROF_FRAME_TOTAL,<br/>derives PROF_PRESENT</i>"]
@@ -166,8 +166,9 @@ callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
 frame itself: real per-frame work runs on *both sides* of
-`glr_ctrl_display_frame()` — scripted-tour input before it, the post-composite
-splash / tour overlays after it. A bracket around the controller alone
+`glr_ctrl_display_frame()` — a controller-owned scripted-input stage before
+it, then the post-composite splash and controller-owned scripted overlay after
+it. A bracket around the main controller render alone
 understated the frame by however much those stages cost: a guided tour's
 caption overlay measured ~10 ms/frame (plus ~4 ms of `glFinish` draining its
 GPU work) while the frame reported a comfortable ~1.5 ms and no row named the
@@ -176,7 +177,7 @@ reason — a stage inside the bracket with no row of its own is only visible as
 unattributed work.
 
 Where that section's bracket goes follows the band split: a stage whose work
-sits in one callee is timed *inside* it (`glr_pointer_script_render_overlay`),
+sits in one callee is timed *inside* it (the scripted-overlay controller stage),
 so the host callback names the stage and nothing more. Only
 `PROF_SCRIPTED_INPUT` and `PROF_HOST_OVERLAYS` are bracketed in `gl_repl.c`
 itself, because each spans a boot-band call plus a controller-band one and
@@ -1244,8 +1245,10 @@ cannot restore it.
 
 Runtime shape:
 
-* **Virtual clock vs rendered frames.** [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L229) (called
-  once per rendered frame) forks on run kind. A playing tour accumulates
+* **Virtual clock vs rendered frames.** The host schedules
+  `glr_ctrl_run_scripted_input_frame()` once per rendered frame; that controller
+  stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L236),
+  which forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
   without touching animation `t`, camera easing, REPL replay, status TTL, or
@@ -1308,15 +1311,16 @@ centralized keymap.
 
 ### Dispatch order (who wins a contested key)
 
-Before the controller sees a key, the GLUT host callbacks in
-[`gl_repl.c`](../gl_repl.c) give a running controlled tour first refusal: the
-transport handler (Space/`+`/`=`/`-`/Esc, Left/Right) runs, then the tour-cancel
-intercept (any other real key, a mouse click outside the tour HUD, or a wheel
-event stops the tour). A left press canonically classified as
-`UI_HIT_TOUR_HUD` reaches the controller first and toggles compact/expanded
-instead of canceling. Only input neither consumes reaches the remaining normal
-routes. Synthetic script events call `glr_ctrl_*` directly and bypass this host
-layer.
+The GLUT callbacks in [`gl_repl.c`](../gl_repl.c) only forward physical input
+to the controller. The physical `glr_ctrl_*` entry points give a running
+controlled tour first refusal: the transport handler
+(Space/`+`/`=`/`-`/Esc, Left/Right) runs, then the tour-cancel intercept (any
+other real key, a mouse click outside the tour HUD, or a wheel event stops the
+tour). A left press canonically classified as `UI_HIT_TOUR_HUD` toggles
+compact/expanded instead of canceling. Only input neither consumes reaches the
+remaining normal routes. Synthetic input uses the explicit
+`glr_ctrl_scripted_*` entry points, which bypass physical-tour arbitration and
+join the same controller dispatch beneath it.
 
 `glr_ctrl_keyboard` and `glr_ctrl_special` in
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) route keys. An earlier layer that consumes a key
@@ -1701,7 +1705,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L253) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L259) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one

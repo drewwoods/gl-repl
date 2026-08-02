@@ -14,9 +14,10 @@
  * glr_pointer_script_start_tour, which plays it as a controlled tour with
  * replay-style transport (Space play/pause, arrows step/back, +/- speed,
  * Esc exit; see src/app/glr_pointer_script.h). A real key/click/wheel event
- * that is not a transport control cancels the tour (intercepted in gl_repl.c's
- * GLUT callbacks — scripted events bypass those, so only the user can trigger
- * the cancel), and a tour that plays to the end enters Done until its final
+ * that is not a transport control cancels the tour at the controller's
+ * physical-input boundary. Scripted events enter through explicit bypass
+ * entry points, so only the user can trigger the cancel. A tour that plays to
+ * the end enters Done until its final
  * caption expires, then closes automatically.
  *
  * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: — grammar

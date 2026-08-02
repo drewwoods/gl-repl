@@ -279,7 +279,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L253) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L259) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
@@ -327,9 +327,9 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` —
   handlers must accept input without a trailing `;`.
-- **[`editor_feed_line()`](src/editor/input.h#L188)** (file/example loading): copies the full line
+- **[`editor_feed_line()`](src/editor/input.h#L189)** (file/example loading): copies the full line
   *including* `;`, then runs the same chain.
-- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L182) strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L183) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path — handlers checking for `;` must also accept end-of-string.
 
@@ -426,7 +426,7 @@ Export ([`src/repl/export.c`](src/repl/export.c)) writes standalone C:
 header directives (`@cfg`, `@scene-name`, `@workspace-dir`), camera as raw
 transforms, predefs + scratch arrays as globals, funcs, `display()` body.
 Import ([`src/repl/import.c`](src/repl/import.c)) reverses it line-by-line,
-feeding geometry through [`editor_feed_line()`](src/editor/input.h#L188). The `IMPORT_EXPORT_STATE`
+feeding geometry through [`editor_feed_line()`](src/editor/input.h#L189). The `IMPORT_EXPORT_STATE`
 macro block is deliberately duplicated verbatim across the two TUs.
 `repl_cfg_get_int`/`_set_int` etc. go through the installed config bridge
 only (`check-repl-export-via-bridge`).

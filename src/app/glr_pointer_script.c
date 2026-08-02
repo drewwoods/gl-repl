@@ -658,6 +658,11 @@ int glr_pointer_script_owns_pointer_motion(void) {
     return g_active && g_button_held >= 0;
 }
 
+int glr_pointer_script_blocks_physical_motion(void) {
+    return glr_pointer_script_tour_active() ||
+           glr_pointer_script_owns_pointer_motion();
+}
+
 int glr_pointer_script_tour_active(void) {
     return g_active && g_run_kind == PS_RUN_CONTROLLED_TOUR;
 }
@@ -754,15 +759,16 @@ static void ps_dispatch_move(float x, float y) {
     /* While a scripted button is held this is a drag: route through the
      * motion callback (orbit/slider handlers), not passive motion. */
     if (g_button_held >= 0)
-        glr_ctrl_motion((int)(x + 0.5f), (int)(y + 0.5f));
+        glr_ctrl_scripted_motion((int)(x + 0.5f), (int)(y + 0.5f));
     else
-        glr_ctrl_passive_motion((int)(x + 0.5f), (int)(y + 0.5f));
+        glr_ctrl_scripted_passive_motion((int)(x + 0.5f),
+                                         (int)(y + 0.5f));
 }
 
 static void ps_press(int button, int mods) {
-    glr_ctrl_mouse_with_modifiers(button, GLUT_DOWN,
-                                  (int)(g_px + 0.5f),
-                                  (int)(g_py + 0.5f), mods);
+    glr_ctrl_scripted_mouse_with_modifiers(button, GLUT_DOWN,
+                                           (int)(g_px + 0.5f),
+                                           (int)(g_py + 0.5f), mods);
     g_button_held = button;
     g_ripple_frame = g_frame;
     g_ripple_x = g_px;
@@ -770,7 +776,8 @@ static void ps_press(int button, int mods) {
 }
 
 static void ps_release(int button) {
-    glr_ctrl_mouse(button, GLUT_UP, (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+    glr_ctrl_scripted_mouse(button, GLUT_UP,
+                            (int)(g_px + 0.5f), (int)(g_py + 0.5f));
     g_button_held = -1;
 }
 
@@ -782,8 +789,9 @@ static void ps_ensure_view_mode(int view_mode) {
 /* Feed paced-typing characters up to index `upto` (exclusive). */
 static void ps_type_send(int upto) {
     while (g_type_text[g_type_sent] && g_type_sent < upto) {
-        glr_ctrl_keyboard((unsigned char)g_type_text[g_type_sent++],
-                          (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        glr_ctrl_scripted_keyboard((unsigned char)g_type_text[g_type_sent++],
+                                   (int)(g_px + 0.5f),
+                                   (int)(g_py + 0.5f));
     }
     if (!g_type_text[g_type_sent])
         g_type_active = 0;
@@ -975,8 +983,9 @@ static void ps_fire(const PsEvent *ev) {
         ps_release(ev->button);
         break;
     case PS_WHEEL:
-        glr_ctrl_mousewheel(0, ev->wheel_dir,
-                            (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        glr_ctrl_scripted_mousewheel(0, ev->wheel_dir,
+                                     (int)(g_px + 0.5f),
+                                     (int)(g_py + 0.5f));
         break;
     case PS_VIEW:
         ps_ensure_view_mode(ev->view_mode);
@@ -993,25 +1002,27 @@ static void ps_fire(const PsEvent *ev) {
             snprintf(g_type_text, sizeof(g_type_text), "%s", ev->text);
         } else {
             for (const char *c = ev->text; *c; c++)
-                glr_ctrl_keyboard((unsigned char)*c,
-                                  (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+                glr_ctrl_scripted_keyboard((unsigned char)*c,
+                                           (int)(g_px + 0.5f),
+                                           (int)(g_py + 0.5f));
         }
         break;
     case PS_SKEY:
         ps_type_flush();
-        glr_ctrl_special(ev->special,
-                         (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        glr_ctrl_scripted_special(ev->special,
+                                  (int)(g_px + 0.5f),
+                                  (int)(g_py + 0.5f));
         break;
     case PS_CHORD:
         ps_type_flush();
         if (ev->special >= 0)
-            glr_ctrl_special_with_modifiers(ev->special,
-                                            (int)(g_px + 0.5f),
-                                            (int)(g_py + 0.5f), ev->mods);
+            glr_ctrl_scripted_special_with_modifiers(
+                ev->special, (int)(g_px + 0.5f),
+                (int)(g_py + 0.5f), ev->mods);
         else
-            glr_ctrl_keyboard_with_modifiers(ev->key_byte,
-                                             (int)(g_px + 0.5f),
-                                             (int)(g_py + 0.5f), ev->mods);
+            glr_ctrl_scripted_keyboard_with_modifiers(
+                ev->key_byte, (int)(g_px + 0.5f),
+                (int)(g_py + 0.5f), ev->mods);
         break;
     case PS_RING:
         if (!ps_fire_point(ev, &x, &y)) break;
@@ -1221,8 +1232,9 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         ps_release(ev->button);
         break;
     case PS_WHEEL:
-        glr_ctrl_mousewheel(0, ev->wheel_dir,
-                            (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        glr_ctrl_scripted_mousewheel(0, ev->wheel_dir,
+                                     (int)(g_px + 0.5f),
+                                     (int)(g_py + 0.5f));
         break;
     case PS_VIEW:
         ps_ensure_view_mode(ev->view_mode);
@@ -1233,22 +1245,26 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         ps_type_flush();
         /* Deliver the whole payload synchronously (ignore key@N pacing). */
         for (const char *c = ev->text; *c; c++)
-            glr_ctrl_keyboard((unsigned char)*c,
-                              (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+            glr_ctrl_scripted_keyboard((unsigned char)*c,
+                                       (int)(g_px + 0.5f),
+                                       (int)(g_py + 0.5f));
         break;
     case PS_SKEY:
         ps_type_flush();
-        glr_ctrl_special(ev->special,
-                         (int)(g_px + 0.5f), (int)(g_py + 0.5f));
+        glr_ctrl_scripted_special(ev->special,
+                                  (int)(g_px + 0.5f),
+                                  (int)(g_py + 0.5f));
         break;
     case PS_CHORD:
         ps_type_flush();
         if (ev->special >= 0)
-            glr_ctrl_special_with_modifiers(ev->special, (int)(g_px + 0.5f),
-                                            (int)(g_py + 0.5f), ev->mods);
+            glr_ctrl_scripted_special_with_modifiers(
+                ev->special, (int)(g_px + 0.5f),
+                (int)(g_py + 0.5f), ev->mods);
         else
-            glr_ctrl_keyboard_with_modifiers(ev->key_byte, (int)(g_px + 0.5f),
-                                             (int)(g_py + 0.5f), ev->mods);
+            glr_ctrl_scripted_keyboard_with_modifiers(
+                ev->key_byte, (int)(g_px + 0.5f),
+                (int)(g_py + 0.5f), ev->mods);
         break;
     case PS_RING:
         if (!allow_overlays) break;   /* create overlay only when permitted */

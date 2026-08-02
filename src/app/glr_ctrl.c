@@ -83,6 +83,7 @@
 #include "ui/subsystems/replay_hud.h"
 #include "ui/subsystems/tour_hud.h"
 #include "app/glr_pointer_script.h"   /* glr_pointer_script_tour_view */
+#include "app/glr_tours.h"            /* glr_tours_start */
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
@@ -2479,6 +2480,19 @@ void glr_frame_ended(void) {
         glr_ctrl_tick();
 }
 
+void glr_ctrl_run_scripted_input_frame(void) {
+    glr_pointer_script_frame();
+}
+
+void glr_ctrl_render_script_overlay(int win_w, int win_h) {
+    if (glr_pointer_script_active())
+        glr_pointer_script_render_overlay(win_w, win_h);
+}
+
+int glr_ctrl_start_tour(int tour_idx) {
+    return glr_tours_start(tour_idx);
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];
@@ -3998,9 +4012,9 @@ int glr_ctrl_open_gl_state_popup(int line) {
     if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
         return 0;
 
-    glr_ctrl_passive_motion(x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    glr_ctrl_scripted_passive_motion(x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     return ui_state_gl_state_inspector().visible &&
            ui_state_gl_state_inspector().source_line_idx == line;
 }
@@ -4022,9 +4036,9 @@ int glr_ctrl_open_assign_plot(int line) {
     if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
         return 0;
 
-    glr_ctrl_passive_motion(x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    glr_ctrl_scripted_passive_motion(x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     return assign_plot_is_open() && assign_plot_source_line() == line;
 }
 
@@ -4047,9 +4061,9 @@ int glr_ctrl_open_command_description(int line, int anchor_dx) {
     if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
         return 0;
 
-    glr_ctrl_passive_motion(x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    glr_ctrl_scripted_passive_motion(x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     if (!ui_state_command_description().visible ||
         ui_state_command_description().source_line_idx != line)
         return 0;
