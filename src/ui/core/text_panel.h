@@ -8,8 +8,8 @@
  *
  * The purity contract is enforced by `check-ui-text-panel-pure`: this header and
  * implementation stay free of higher-level REPL/editor symbols. The file was
- * introduced during the editor-demo split, but its day-to-day purpose is simply
- * “generic text panel, adapter-owned content”.
+ * introduced for the editor demo, but its day-to-day purpose is simply
+ * "generic text panel, adapter-owned content".
  */
 #ifndef UI_TEXT_PANEL_H
 #define UI_TEXT_PANEL_H

@@ -19,8 +19,7 @@
 #include "ui/support/memprof.h"            /* ui_memory_panel_width/height */
 
 /* Stack geometry. BASE_Y / RIGHT_MARGIN / EDGE_PAD preserve the variable
- * panel's historical anchor so an unticked solve reproduces the old
- * bottom-right placement exactly. */
+ * panel's established bottom-right placement when no easing tick runs. */
 enum {
     OVL_BASE_Y       = 8,  /* gap between the inset (or band) and the stack */
     OVL_RIGHT_MARGIN = 8,  /* gap from the scene's right edge */
@@ -29,7 +28,7 @@ enum {
     OVL_EDGE_PAD     = 4,  /* min inset from scene edges after clamping */
 };
 
-/* Same glide feel as the old variable-panel replay lift. */
+/* Same glide feel as the variable-panel replay lift. */
 #define OVL_EASE     0.22f
 #define OVL_SNAP_PX  0.25f
 

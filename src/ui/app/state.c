@@ -7,9 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Defaults preserve the behavior the pre-migration
- * src/repl/state_defaults.inc enshrined: pointer button starts at -1
- * (no button held); cursor starts visible so the renderer's blink
+/* Defaults: pointer button starts at -1 (no button held); cursor starts
+ * visible so the renderer's blink
  * phase begins ON; camera faces the same orbit/distance the example
  * loader expects on a fresh session; other slices zeroed.
  *
@@ -293,8 +292,7 @@ UiCodePanelRuntimeState *ui_state_code_panel_mut(void) {
 }
 
 
-/* Camera accessors moved to glr_camera.c. Storage lives there too;
- * the UiState.camera field is gone (see src/ui/app/state.h). */
+/* Camera state is owned by glr_camera.c; UiState does not store it. */
 
 /* The `repl_state_*` forwarders for these UI slices are defined in
  * src/repl/state.c rather than here so the check-state-boundaries

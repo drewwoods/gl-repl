@@ -1096,7 +1096,7 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
     }
 
     /* The actively-revealing head character: bright white, alpha
-     * ramping 0 → 1 across its slot. */
+     * ramping 0 -> 1 across its slot. */
     if (front < line_len &&
         row->color_segment_count < UI_TEXT_PANEL_MAX_COLOR_SEGMENTS) {
         UiTextPanelColor highlight = { 1.0f, 1.0f, 1.0f, base_a, 1 };
@@ -2271,8 +2271,8 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
  * (window / GL coords, bottom-left origin), with no arithmetic
  * duplicated across passes. */
 
-/* The left-aligned status segments ("N/M cmds", "Ln …", optional
- * "AA …"), built once so the renderer (drawing) and the hints
+/* The left-aligned status segments ("N/M cmds", "Ln ...", optional
+ * "AA ..."), built once so the renderer (drawing) and the hints
  * (collision test) share one width. `right_edge` is the window-x just
  * past the last left glyph. STATUSBAR_SEP_W mirrors the two +8 nudges
  * in repl_code_panel_statusbar_sep. */
@@ -2507,7 +2507,7 @@ typedef struct {
 /* Fill one tooltip: "<label>  <shortcut>", where the shortcut is
  * formatted live from the action's keymap binding (same pure formatter
  * src/ui/app/menu_bar.c uses for menu-row accelerators). Keeping the
- * label→binding mapping here mirrors the chip→label mapping the hit
+ * label->binding mapping here mirrors the chip->label mapping the hit
  * switch already owns, so no shortcut plumbing crosses the snapshot. */
 static void repl_code_panel_statusbar_tooltip_set(
         ReplStatusbarTooltip *tooltip, const char *label,
@@ -2659,7 +2659,7 @@ static void repl_code_panel_draw_bitmap_icon(int kx, int ky, int kw, int kh,
 
 static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
     /* 13x12  1bpp trash-can glyph, drawn with glBitmap so it matches
-     * the crisp pixel-art style of the ⇧ shift glyph and the bitmap
+     * the crisp pixel-art style of the Shift glyph and the bitmap
      * font.  Rows are bottom-to-top (glBitmap scan order); bit 0x80
      * of byte 0 = leftmost pixel (col 0).  The three interior slats
      * are inset a pixel from both rims so they read as ribs inside
@@ -2964,7 +2964,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Hard backstop: clip every statusbar primitive to the panel slot.
-     * The left status text ("N/M cmds", "Ln …", "AA …") is laid out
+     * The left status text ("N/M cmds", "Ln ...", "AA ...") is laid out
      * left-to-right with no width clamp, so on a narrow split-layout
      * panel it would otherwise bleed past the panel's right edge onto
      * the 3D scene. gl2d uses gluOrtho2D(0,w,0,h) over the full-window
@@ -3163,8 +3163,7 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     /* Draw the scene tab strip before the menu bar so the closed menu row
      * stays the topmost chrome; the example dropdown is a later controller
-     * overlay pass (glr_ctrl.c) and still overpaints both (implemented
-     * per plan §4). */
+     * overlay pass (glr_ctrl.c) and still overpaints both. */
     prof_begin(PROF_CODE_PANEL_OVERLAY_TABS);
     ui_scene_tabs_render(snap);
     prof_end(PROF_CODE_PANEL_OVERLAY_TABS);
@@ -3439,7 +3438,7 @@ int ui_repl_code_panel_input_row_has_color_swatch(
     return 0;
 }
 
-/* Test-only: clear the render→hit-test row builder cache. Lets a test
+/* Test-only: clear the render->hit-test row builder cache. Lets a test
  * exercise the cache from a known-empty initial state so a regression
  * that fails to refresh the cache becomes observable. */
 void ui_repl_code_panel_invalidate_row_cache_for_test(void) {

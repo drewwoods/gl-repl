@@ -58,7 +58,7 @@ void ui_color_picker_render(const ColorPickerView *view,
     /* All colors below are computed picker DATA (the HSV gradient,
      * crosshair, preview swatch) - not UI chrome, so intentionally not
      * theme tokens (theme.h bucket 3). */
-    /* SV square: white→hue left-right, hue→black top-bottom */
+    /* SV square: white->hue left-right, hue->black top-bottom */
     float hr,hg,hb; color_picker_hsv_to_rgb(view->hue,1,1,&hr,&hg,&hb);
     glBegin(GL_QUADS);
     glColor3f(1,1,1);    glVertex2f(px,    py);

@@ -5,8 +5,8 @@
  * renderer, hit-testing, search/cursor positioning, tests, and visual text
  * dumps. Keep wrapping math here so those paths do not grow separate copies.
  *
- * No dependency on repl, editor, or app headers (originally lived in
- * src/editor/code_layout.c; moved here for the editor-demo SRP split).
+ * No dependency on repl, editor, or app headers. This module owns the shared
+ * wrapping math used by the editor demo and the full application.
  */
 #include "ui/core/text_layout.h"
 

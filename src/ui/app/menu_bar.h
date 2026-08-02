@@ -41,7 +41,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap);
 
 /* Hit-test the find bar's interactive parts, in paint order:
  *   - the replace row hanging below the bar (Replace / All buttons, the
- *     whole-word chip, and the field itself → UI_HIT_SEARCH_REPLACE,
+ *     whole-word chip, and the field itself -> UI_HIT_SEARCH_REPLACE,
  *     UI_HIT_SEARCH_WORD_TOGGLE, UI_HIT_SEARCH_FOCUS),
  *   - the match stepper at the right of the search box (UI_HIT_SEARCH_NAV,
  *     item_idx = +1 next / -1 previous),

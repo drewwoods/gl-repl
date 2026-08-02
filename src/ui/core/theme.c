@@ -2,7 +2,7 @@
 
 const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT] = {
     /* GREEN - the project's selected scheme. DROPDOWN_ITEM_HOVER_BG is
-     * the hue-shifted twin of the old #2e4a6e blue (Issue 1 fix):
+     * the hue-shifted twin of the blue hover color #2e4a6e:
      * same luminance/saturation, hue rotated blue -> green. */
     [UI_THEME_GREEN] = {
         UI_THEME_NEUTRAL_COLUMNS,
@@ -13,8 +13,7 @@ const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT] = {
         [UI_TOK_ACCENT_ALT_DIM]         = { 0.550f, 0.450f, 0.200f, 1.0f }, /* dim amber  #8c7333ff */
     },
     /* The remaining rows reuse the same neutral chrome; only the accent,
-     * a dark accent-tinted hover band, and the HUD glow band differ
-     * (--accent-h values from docs/plans/done/design-rework). */
+     * a dark accent-tinted hover band, and the HUD glow band differ. */
     [UI_THEME_WARM] = {
         UI_THEME_NEUTRAL_COLUMNS,
         [UI_TOK_ACCENT]                 = { 0.851f, 0.424f, 0.310f, 1.0f }, /* #d96c4fff */

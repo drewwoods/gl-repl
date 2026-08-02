@@ -32,7 +32,7 @@ static const char *tour_hud_state_text(GlrTourPlaybackState state) {
     }
 }
 
-/* Displayed step number, per the plan: current_event+1 while an event is
+/* Displayed step number: current_event+1 while an event is
  * active, completed_events+1 at a paused between-event boundary, total in Done.
  * Clamped to [1, total]. */
 static int tour_hud_step_number(const GlrTourPlaybackView *v) {
@@ -126,7 +126,7 @@ static void tour_hud_build_line1(char *dst, size_t dstsz, int max_chars,
 static void tour_hud_build_line2(char *dst, size_t dstsz, int max_chars) {
     char cand[3][256];
     int n = 0;
-    /* « / » are Latin-1 0xAB / 0xBB, matching the replay HUD's step glyphs. */
+    /* The back/step markers are Latin-1 0xAB / 0xBB, matching the replay HUD. */
     snprintf(cand[n++], 256,
              "Space play | %c back | %c step | +/- speed | Esc exit",
              (char)0xAB, (char)0xBB);
@@ -275,7 +275,7 @@ UiHit tour_ui_hud_hit_test(const struct UiRenderSnapshot *snap,
  * +---------------------------------------------------------------------------+
  * | Tour  <name> | <State> | <speed>x | Step n / total | <file>:<line>        |
  * | [==|==|==|== segmented step bar (one cell per event) ==|==|==|==|==|==|=] |
- * | Space play | « back | » step | +/- speed | Esc exit                       |
+ * | Space play | back | step | +/- speed | Esc exit                          |
  * +---------------------------------------------------------------------------+
  */
 void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {

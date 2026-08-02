@@ -145,7 +145,7 @@ static void draw_col_value(int col_x, float y, const char *s, int placeholder) {
     gl2d_draw_string((float)(col_x + pad), y, s, FONT_SMALL);
 }
 
-/* Format µs as "1234 us" or "12.3 ms", whichever is more readable. */
+/* Format microseconds as "1234 us" or "12.3 ms", whichever is more readable. */
 static void fmt_us(char *buf, int buf_sz, double us) {
     if (us < 1000.0)
         snprintf(buf, (size_t)buf_sz, "%.0f us", us);

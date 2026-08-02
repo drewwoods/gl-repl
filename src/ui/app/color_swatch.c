@@ -1,9 +1,8 @@
 /*
  * ui_app_color_swatch.c - Inline code-panel color swatch renderer.
  *
- * Relocated out of src/ui/subsystems/color_picker.c: it is the only piece
- * that needed the app-owned UiTransformer, so moving it here lets the
- * floating-picker renderer/hit-test stay ui/app-free.
+ * This is the app-level piece that consumes the app-owned UiTransformer;
+ * the floating-picker renderer and hit-test remain ui/app-free.
  */
 #include "ui/app/color_swatch.h"
 #include "gl_includes.h"

@@ -400,8 +400,8 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
          * The +1 is owned here in the menu layer - the pure
-         * glr_config_section_count() never counts All (implemented per
-         * plan Finding #2). */
+         * glr_config_section_count() never counts All; the synthetic row is
+         * owned by this menu layer. */
         return glr_config_section_count() + 1;
     case MENU_AUDIO: {
         int group_count = audio_visible_group_count();
@@ -603,7 +603,7 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         return NULL;
     }
     /* Config: top-level rows are section parents - no shortcut at this
-     * level; the per-item shortcut renders inside the flyout (Step 8). */
+     * level; the per-item shortcut renders inside the flyout. */
     (void)i;
     return NULL;
 }
@@ -2565,7 +2565,7 @@ UiHit ui_menu_bar_search_hit_test(const UiRenderSnapshot *snap,
         dir = ui_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
                              mx, (float)gl_y);
         if (dir != 0) {
-            /* Up arrow (dir +1) = previous match → navigate(-1). */
+            /* Up arrow (dir +1) = previous match -> navigate(-1). */
             h.kind = UI_HIT_SEARCH_NAV;
             h.item_idx = (dir > 0) ? -1 : +1;
             return h;
@@ -2845,8 +2845,8 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
             gl2d_draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
 
-        /* Config item state now renders inside each section's flyout
-         * (Step 8), not on the top-level section rows. */
+        /* Config item state renders inside each section's flyout, not on
+         * the top-level section rows. */
 
         ey -= LINE_H;
     }

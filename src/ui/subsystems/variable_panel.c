@@ -89,7 +89,7 @@ static const char *truncate_var_name(const char *name, size_t max_len) {
  * response is logarithmic.  Zero always maps to 0.5 (centre). */
 static float val_to_slider_t(float val, float scale) {
     float eps  = scale * 0.05f;               /* linear knee */
-    float norm = asinhf(scale / eps);          /* ≈ asinh(20) ≈ 4.0 - fixed for scale */
+    float norm = asinhf(scale / eps);          /* ~asinh(20) ~4.0 - fixed for scale */
     float t    = 0.5f + 0.5f * asinhf(val / eps) / norm;
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;

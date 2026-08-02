@@ -20,7 +20,7 @@ typedef enum {
     UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
     UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
     UI_HIT_CODE_SCROLLBAR,       /* code-panel scrollbar track / thumb */
-    UI_HIT_PANEL_DIVIDER,        /* draggable code-panel ↔ scene divider */
+    UI_HIT_PANEL_DIVIDER,        /* draggable code-panel <-> scene divider */
     UI_HIT_CORE_COUNT
 } UiHitKind;
 

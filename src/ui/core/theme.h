@@ -7,7 +7,7 @@
  * runtime theme switch (ui_theme_select) updates exactly one storage
  * site rather than one copy per TU.
  *
- * Three buckets of color (see docs/plans/done/UI-Color-Theming-Infrastructure.md):
+ * Three buckets of color:
  *   1. Theme token    -> ui_clr(UI_TOK_*) here.
  *   2. Named constant  -> a local #define / static const at the use site
  *                         (fixed, non-theme one-offs; not table slots).
@@ -20,8 +20,8 @@
  *
  * Neutral chrome tokens are identical across every theme row; only the
  * three accent-derived tokens vary. Swap schemes by changing
- * g_ui_theme (the design-rework bundle defines warm/cyan/amber/violet/
- * green/mono; green is the project's selected scheme).
+ * g_ui_theme. The available rows are warm/cyan/amber/violet/green/mono;
+ * green is the project's selected scheme.
  */
 #ifndef UI_THEME_H
 #define UI_THEME_H
