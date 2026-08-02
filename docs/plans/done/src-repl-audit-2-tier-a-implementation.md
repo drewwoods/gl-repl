@@ -14,7 +14,7 @@ and build-safe:
 | Batch | Findings | Net LOC | Risk |
 |---|---|---|---|
 | B1 - Real bugs | #3, #9, #11, #13 | +60 / -20 | low for #9/#11/#13; **moderate** for #3 - the cascade through `ReplayRuntimeState` + `ReplayFadePlan` touches 5 files. May split as B1.1a / B1.1b - see B1.1 sizing note |
-| B2 - Dead-code sweep | #53–#67 | +20 / -350 | near-zero (every deletion verified zero callers) |
+| B2 - Dead-code sweep | #53-#67 | +20 / -350 | near-zero (every deletion verified zero callers) |
 | B3 - Naming + duplication + couplings | #34, #38, #39, #40, #46, #52 | +40 / -80 | low (mechanical; B3.2 churn-check first) |
 
 (An earlier draft contained a "B4 - apply.c hardening" batch
@@ -39,7 +39,7 @@ deferred below; the real `#46` lives in B3 now.)
   audit's tier list (line 1273). The clean fix introduces
   `repl_eval_declare_predef_var_with_value(...)`, which is an API
   shape change worth isolating; defer to a Tier B plan.
-- All structural items #68–#82 - Tier B/C.
+- All structural items #68-#82 - Tier B/C.
 
 ## Verify gates
 
@@ -268,7 +268,7 @@ Recompile sanity-check is enough.
 
 ---
 
-## Batch 2 - Dead-code sweep (#53–#67)
+## Batch 2 - Dead-code sweep (#53-#67)
 
 Mechanical removals. Bundle these as ONE commit per cluster so the
 sweep is auditable without paper-cut commits. The big one is #53

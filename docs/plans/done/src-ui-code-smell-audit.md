@@ -100,9 +100,9 @@ and triaged them by **the same Tier system used in the sibling
 `src-repl-code-smell-audit.md`** (reproduced here for stand-alone
 reading):
 
-- **Tier A - small, real fix, near-zero risk.** 5–30 line changes,
+- **Tier A - small, real fix, near-zero risk.** 5-30 line changes,
   no architectural exposure.
-- **Tier B - moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50-200 line changes,
   one or two files of churn, a real test impact.
 - **Tier C - defer (high cost, low payoff).** Real wins but touch
   a wide surface; revisit when the surrounding code is being
@@ -135,7 +135,7 @@ Sorted into action tiers, the still-open items landed as:
     readers only touch fields `replay_prepare_frame` doesn't write
     (`src_line_idx`, `active`).
 - **Tier C (deferred at the time of this backlog pass):** #30, plus
-  the structural cluster #45–#55 + #58, #63. *Most of these were
+  the structural cluster #45-#55 + #58, #63. *Most of these were
   closed in the 2026-05-25 follow-up pass - see the next section
   for the running status.*
 - **Tier D (still kept):** #37, #44.

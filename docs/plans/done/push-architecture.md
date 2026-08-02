@@ -592,7 +592,7 @@ second entry point would just be redundant ceremony.
 **Plan:** 11 staged commits, including a separate executor refactor step
 (Step 3: "make executor options carry fade context").
 
-**Implementation:** 9 commits (Steps 1–9) plus a final verification, skipping the
+**Implementation:** 9 commits (Steps 1-9) plus a final verification, skipping the
 separate executor refactor. The config-building and scene-module decoupling
 stages were consolidated rather than split into separate steps.
 

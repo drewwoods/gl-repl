@@ -1,6 +1,6 @@
 # Stencil buffer support + `buffer_viz` subsystem
 
-## Status - LANDED, Phases 0–2 (2026-07-25 … 2026-07-27)
+## Status - LANDED, Phases 0-2 (2026-07-25 … 2026-07-27)
 
 - **Phase 0 - buffer_viz extraction:** landed. `14fbc58b` replaced the hardcoded
   depth-viz call sites with the three neutral render3d hooks; `8b9f8c3c`

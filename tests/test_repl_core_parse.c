@@ -859,7 +859,7 @@ int main(void) {
     /* Positive coverage: the four valid input shapes the parser
      * accepts (scalar flat, vector flat, scalar compound literal,
      * vector compound literal) were exercised above for the
-     * GL_FRONT × {GL_SHININESS, GL_DIFFUSE} corner. Broaden the
+     * GL_FRONT x {GL_SHININESS, GL_DIFFUSE} corner. Broaden the
      * positive surface so a future change can't quietly drop a face
      * type, pname, expression evaluator path, or whitespace-handling
      * concern - each pulled out as its own ASSERT so a regression

@@ -617,7 +617,7 @@ Pieces, all in [`src/render3d/grid.c`](../src/render3d/grid.c):
 
 The underlying failure is alpha overdraw. Standard
 `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blending of N stacked layers of
-color C over background B converges to `C + (B − C)·(1−a)^N → C`. At a
+color C over background B converges to `C + (B - C)·(1-a)^N → C`. At a
 grazing angles, many far-field lines collapse into a few pixels and converge
 on the line color instead of the backdrop. Radial alpha bounds that accumulation.
 `GL_MIN`/`GL_MAX` would also bound it but would discard soft alpha and
@@ -659,7 +659,7 @@ clear-color fog on `backdrop == OFF` would close the gap.
 Unlike every other theme - which draws its graticule in the XZ ground
 plane - these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
 z=0 user geometry), so they read as a flat, front-facing grid when the
-camera looks down −Z. In 3D they render as a vertical wall at z=0;
+camera looks down -Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
@@ -1250,7 +1250,7 @@ Runtime shape:
   stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L236),
   which forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
-  (`0.25×`–`16×` discrete ladder), so speed rescales pointer-script timing
+  (`0.25×`-`16×` discrete ladder), so speed rescales pointer-script timing
   without touching animation `t`, camera easing, REPL replay, status TTL, or
   audio. Paused / Done / baseline-pending / seeking tours advance no virtual
   frames.
@@ -1364,11 +1364,11 @@ shadows every later one:
 - **ASCII keys:** Cmd→Ctrl normalization → rename modal → file-prompt modal
   → Esc router (color-picker/help close) → config menu (`` ` ``) → config
   ASCII shortcut → replay → save (Ctrl+S) → debug dump (Ctrl+Shift+D) →
-  accumulation jitter (Ctrl+= / Ctrl+−) → code focus (Ctrl+Shift+F) →
+  accumulation jitter (Ctrl+= / Ctrl+-) → code focus (Ctrl+Shift+F) →
   tutorial acknowledgment → quit (Ctrl+Q) → editor fallback
   (`editor_handle_key`).
 - **Special keys (F-keys/arrows):** replay → config special shortcut
-  (F2–F10) → audio (Ctrl+Left/Right) → help tab/scroll → help toggle (F1)
+  (F2-F10) → audio (Ctrl+Left/Right) → help tab/scroll → help toggle (F1)
   → scene cycle (F11/F12) → editor fallback (`editor_handle_special`).
 
 Because config routing precedes the editor, the config table wins any
@@ -1689,7 +1689,7 @@ loaded:
   full caveat lives in [`src/support/gpuprof.h`](../src/support/gpuprof.h)).
 
 Either way results are harvested asynchronously - a 4-deep ring of
-per-frame query slots polled with `GL_QUERY_RESULT_AVAILABLE`, read 1–3
+per-frame query slots polled with `GL_QUERY_RESULT_AVAILABLE`, read 1-3
 frames later - never a `glFinish`. How much gets queried per frame
 follows the profile panel: hidden → no queries at all, ON → top-level
 sections, DETAILS → the full GPU subset (`glr_prof_set_gpu_capture_mode`,
@@ -2291,9 +2291,9 @@ shapes.
 > **What kind of thing am I adding?** The path branches at step 0.
 >
 > - **Bound GL/GLU/GLUT command** (most common - `glutSolidCube`,
->   `glRasterPos3f`, `glColor3f`, etc.) → steps 1–8 in order.
+>   `glRasterPos3f`, `glColor3f`, etc.) → steps 1-8 in order.
 > - **REPL primitive** that compiles down to a custom helper at export time
->   (`label` is the only example today) → steps 1–4, 5 (with extra emphasis on
+>   (`label` is the only example today) → steps 1-4, 5 (with extra emphasis on
 >   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
 >   helper because the line is not a real GL symbol.
 > - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) - these are
@@ -2303,7 +2303,7 @@ shapes.
 > - **Structured / control-flow syntax** (a new block construct, branch
 >   separator, or context-sensitive statement the generic parser can't own -
 >   `for`, `if`, `} else if(...) {`) → the shared wiring here still applies
->   (steps 1–2, and 8 to verify), but the parse/validate, dispatch-order,
+>   (steps 1-2, and 8 to verify), but the parse/validate, dispatch-order,
 >   source-scope, and flatten-lowering work lives in the compile + flatten path,
 >   not in a single `command_spec` row. Read
 >   [Adding New REPL Commands](#structured--control-flow-command-pipeline) first - it is the
@@ -2573,7 +2573,7 @@ and a worked `else if` example, read
 > when those two levels get mixed.
 
 Beyond the shared [`CmdType`](../src/repl/command.h#L44) + `command_spec` wiring already covered by the
-checklist above (its steps 1–2), a structured command touches:
+checklist above (its steps 1-2), a structured command touches:
 
 1. **Predicates vs. categories** (when you do that shared wiring). Update the
    inline predicates in [`command.h`](../src/repl/command.h) only when the command truly belongs to that

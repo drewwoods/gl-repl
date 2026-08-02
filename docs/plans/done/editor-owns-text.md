@@ -1,10 +1,10 @@
-# Plan: Editor-Owns-Text Redesign - Steps 2–6
+# Plan: Editor-Owns-Text Redesign - Steps 2-6
 
 ## Context
 
 Step 1 (spike, commit a8a6569) validated the editor-buffer approach: flatten on 3,580 largest example ≤ 4.2 ms (invisible at edit time). The spike added `ReplEditorBuffer` to `ReplRuntimeState` and mirrors every parser write of `cmd->source` text into `editor_buffer.lines[]`.
 
-**Goal of Steps 2–6**: Make `GLCmd` a pure parse-result struct (type, args[], flags only) - delete `source[256]` field and move all text ownership to the editor buffer. This completes the spike and unblocks future phases (UI-driven transformers, virtual annotations, replay snapshots).
+**Goal of Steps 2-6**: Make `GLCmd` a pure parse-result struct (type, args[], flags only) - delete `source[256]` field and move all text ownership to the editor buffer. This completes the spike and unblocks future phases (UI-driven transformers, virtual annotations, replay snapshots).
 
 ---
 
@@ -82,9 +82,9 @@ Direct and helper-level reads:
 
 - **Lines 715, 1296, 1313** (helper function args, e.g. `export_command_text()`): Trace callers to get cmd_idx context, add parameter if needed, switch reads.
 
-- **Line 1250–1252** (`format_cmd_source_as_c`): arg to `repl_eval_expr_to_c(cmd->source, ...)` - update to pass buffer text instead.
+- **Line 1250-1252** (`format_cmd_source_as_c`): arg to `repl_eval_expr_to_c(cmd->source, ...)` - update to pass buffer text instead.
 
-- **Lines 1587–1618** (@declare reconstruction): keep as-is; builds temporary normalized text for new insertion, not reading the store.
+- **Lines 1587-1618** (@declare reconstruction): keep as-is; builds temporary normalized text for new insertion, not reading the store.
 
 ### 2c - Fix ui_panels.c:567
 
@@ -258,7 +258,7 @@ Update all parser call sites:
 
 **Commit path** (repl_commit.c, repl_command_store.c):
 
-- In `repl_commit.c` (lines ~308–317), after parsing with `if (repl_parser_parse_command_ctx(..., &parsed_line) == 1)`, pass both cmd and text to `repl_command_store_insert_one()` or `replace_one()`.
+- In `repl_commit.c` (lines ~308-317), after parsing with `if (repl_parser_parse_command_ctx(..., &parsed_line) == 1)`, pass both cmd and text to `repl_command_store_insert_one()` or `replace_one()`.
 
 - In `repl_command_store.c`, extend APIs write to `editor_buffer.lines[]` in parallel with array movement.
 
@@ -338,7 +338,7 @@ After 3a.7: scene/clipboard operations work with both cmds and lines. Source[] r
    **repl_executor.c** / **repl_replay_annotations.c** (flat command text):
    - Lines reading flat_cmd->source → use `repl_flat_cmd_text(flat_cmd)` (from 3a.5)
 
-   **repl_core.c:230–236** (reads indent from source):
+   **repl_core.c:230-236** (reads indent from source):
    - Pass indent as separate `int` return value from parse helper instead
 
    **repl_debug.c** (debug prints):
@@ -492,7 +492,7 @@ Update both drag/pick call sites in `ui_color_picker.c` to check `ui_color_picke
 
 ### Cleanup
 
-Delete `repl_command_store_write_color_source()` (repl_command_store.c:97–164).
+Delete `repl_command_store_write_color_source()` (repl_command_store.c:97-164).
 Delete `repl_command_store_set_color()` and `repl_command_store_set_clear_color()` declarations and definitions.
 
 ### Verification for Step 4
@@ -755,4 +755,4 @@ Step 5 (highlights snapshot) ← can run in parallel with Step 4
 Step 6 (config extraction + virtual lines as layout model)
 ```
 
-Steps 2–2.5–3a–3a.5–3a.7–3b are sequential (structural change affecting parser, store, and all persistent command stores). Steps 3c–3d can overlap. Steps 4–6 can be re-ordered or combined.
+Steps 2-2.5-3a-3a.5-3a.7-3b are sequential (structural change affecting parser, store, and all persistent command stores). Steps 3c-3d can overlap. Steps 4-6 can be re-ordered or combined.

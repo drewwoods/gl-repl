@@ -147,9 +147,9 @@ to this audit shows almost nothing left to bite off:
 
 Used during the 2026-05-24 backlog review to triage what was left:
 
-- **Tier A - small, real fix, near-zero risk.** 5–30 line changes
+- **Tier A - small, real fix, near-zero risk.** 5-30 line changes
   with no architectural exposure. Always worth doing once identified.
-- **Tier B - moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50-200 line changes,
   one or two files of churn, a real test impact. Worth doing as a
   focused pass when next in the area.
 - **Tier C - defer (high cost, low payoff).** Real wins but touch a

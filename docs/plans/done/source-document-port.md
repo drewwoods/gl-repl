@@ -2,7 +2,7 @@
 
 ## Status
 
-Done. Phases 0–7 landed on `feature/source-document-port`. The hard-zero
+Done. Phases 0-7 landed on `feature/source-document-port`. The hard-zero
 `check-repl-no-direct-editor`, `check-repl-demo-no-editor`, and
 `check-source-document-port-owners` guards live in
 `scripts/check-repl-no-direct-editor.sh`,

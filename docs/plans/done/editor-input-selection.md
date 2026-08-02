@@ -604,7 +604,7 @@ testable:
 8. **G** focused tests can land alongside each behavior phase; the
    new `test_editor_input_selection.c` should appear with Phase A.
 
-Each commit is small (~50–150 LOC) and individually buildable. The
+Each commit is small (~50-150 LOC) and individually buildable. The
 risk is concentrated in Phase B's 37-site audit - every miss there
 leaves a stale anchor. Lean on the test in Phase A that asserts
 "after any default cursor_pos_set, anchor is `-1`."

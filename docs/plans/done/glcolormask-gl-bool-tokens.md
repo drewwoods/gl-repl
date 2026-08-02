@@ -36,7 +36,7 @@ Commits (in order):
   `glLightModeli` slot-2 strict-compat pins and the contract test.
 - `cc0f7de` - end-to-end GL-trace regression net (parser→executor) for
   the P1 arg-shift class; closes the count-only test gap.
-- `d8849e0` steps 9–10 - docs (CLAUDE.md); step 9 documented as a no-op
+- `d8849e0` steps 9-10 - docs (CLAUDE.md); step 9 documented as a no-op
   (invariant is compiler-enforced by the field deletion).
 - `0a915f4` - post-review fixes: **P2** the `ENUM_OR_CONST_VALUE`
   numeric fallback used the non-consuming evaluator (`glDepthMask(1+)`

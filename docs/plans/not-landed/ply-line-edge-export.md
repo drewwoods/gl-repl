@@ -131,7 +131,7 @@ change, fully unit-testable with synthetic buffers (no GL context).
   purposes; the RESET flag only signals stipple-counter reset and needs
   no special handling here.
 
-**Effort: ~2–3 hrs.** The defer-and-resolve plumbing across both shading
+**Effort: ~2-3 hrs.** The defer-and-resolve plumbing across both shading
 paths (not "stop skipping, weld inline") is the bulk of it, plus the
 existing-test rewrite below. Includes new `test_mesh_ply.c` cases (a
 `GL_LINES` segment between two non-face points → 1 edge, correct
@@ -153,7 +153,7 @@ Mirror the vertex-outline overlay look. Also pure-writer.
   - Critical: take edges from the **polygon loop, not the triangles.**
     Deriving from the fan-triangulated corners would add spurious
     diagonals across quads / n-gons (e.g. a quad → triangles (0,1,2),
-    (0,2,3) → bogus diagonal 0–2).
+    (0,2,3) → bogus diagonal 0-2).
 - Resolve + dedup into the same Pass-2 edge set as Tier A (and the same
   "edges always weld" decision applies).
 - Gate it: a `MeshPlyOptions.emit_edges` (or `edge_mode`) flag, exposed
@@ -162,7 +162,7 @@ Mirror the vertex-outline overlay look. Also pure-writer.
   *pure writer* config-free; the controller decides and sets the flag -
   same split as `srgb_decode`.)
 
-**Effort: ~1–2 hrs** once Tier A's defer-and-resolve plumbing exists
+**Effort: ~1-2 hrs** once Tier A's defer-and-resolve plumbing exists
 (Tier B only adds the perimeter-capture source). A + B together ≈ **4
 hrs.**
 

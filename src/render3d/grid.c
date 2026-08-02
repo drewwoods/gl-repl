@@ -1240,7 +1240,7 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
  * gets a near-black earth filter - underground you see almost
  * nothing, which is the point. */
 
-#define GRID_SOIL_FURROW_HALF_FRAC 0.22f  /* furrow half-width, × major */
+#define GRID_SOIL_FURROW_HALF_FRAC 0.22f  /* furrow half-width, x major */
 #define GRID_SOIL_DEPTH 0.30f             /* furrow depth, world units */
 
 /* Furrow cross-section: smoothstep dip around each constant-z major
@@ -2019,7 +2019,7 @@ static void graphplane_lines(const GridDrawContext *ctx, int iaxis, int jaxis, i
 /* Coordinate labels for the head-on plane (`haxis` = screen-horizontal in-plane
  * axis, `vaxis` = screen-vertical, `kaxis` pinned to 0). The view is centred on
  * the camera focus (`ch`,`cv` = the in-plane components of cam_tx/ty/tz), so
- * under pan the labelled span [ch±Lh] × [cv±Lv] tracks what's actually visible.
+ * under pan the labelled span [ch±Lh] x [cv±Lv] tracks what's actually visible.
  * h-values run along the screen-bottom edge, v-values down the screen-left edge;
  * Lh/Lv are the visible half-extents, so both axes stay on screen. */
 static void graphplane_labels(int haxis, int vaxis, int kaxis,

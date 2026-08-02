@@ -84,8 +84,8 @@ These are the load-bearing facts; they shape the whole implementation.
    - Set a **known containing orthographic projection** `glOrtho(-R,R, -R,R, -R,R)`
      with `R = 1000`, and a known `glViewport` + depth range. Then invert that
      fixed transform analytically per vertex on the CPU:
-     `world = R · (2·(win−vp_origin)/vp_size − 1)` per axis (z negated, per
-     glOrtho's z mapping; depth range `[0,1]` → `ndc_z = 2·win_z − 1`).
+     `world = R · (2·(win-vp_origin)/vp_size - 1)` per axis (z negated, per
+     glOrtho's z mapping; depth range `[0,1]` → `ndc_z = 2·win_z - 1`).
    - **Why ortho, not identity projection:** feedback **clips to the view
      frustum**. Identity projection clips to the eye-space `[-1,1]` cube - which
      would truncate normal scenes (vertices at 2, 3, …). The `±1000` ortho cube
@@ -166,7 +166,7 @@ classic feedback-parsing bug). For `GL_3D_COLOR` (`FB_FLOATS_PER_VERTEX = 7`):
 | `GL_PASS_THROUGH_TOKEN` | `1` (passthrough value) - skip |
 
 Notes:
-- A `GL_POLYGON_TOKEN` with `n` vertices is fan-triangulated to `n−2` faces; for
+- A `GL_POLYGON_TOKEN` with `n` vertices is fan-triangulated to `n-2` faces; for
   `n=3` (the GLUT-solid / triangle case) that's one face.
 - An unrecognized token marker is a hard parse error (don't guess a length - bail
   with an error status), so a corrupt/misaligned stream fails loudly.
@@ -257,7 +257,7 @@ end_header
   catching off-by-N skip bugs)**; an unknown/misaligned token (→ negative return);
   empty buffer (0/0). Assert vertex/face counts, that a known window-coord input
   under a known `MeshPlyCapture` (including `depth_near/far`) inverts to the
-  expected world coords, color 0–1→0–255, and normal direction/winding. Register in
+  expected world coords, color 0-1→0-255, and normal direction/winding. Register in
   `Makefile`: add `test_mesh_ply` to `TEST_BINS`/`CORE_TEST_BINS` with
   `test_mesh_ply_OBJS = $(OBJDIR)/$(TEST_DIR)/test_mesh_ply.o $(OBJDIR)/src/support/mesh_ply.o`
   and `test_mesh_ply_LDLIBS = -lm` (minimal, like `test_format`). Token macros are
@@ -312,7 +312,7 @@ end_header
 run *pre-context* (`gl_repl.c` parses before `glutInit`), but feedback needs a
 live context. So a flag would set a deferred request performed in the **first
 `display_func`** (after `glr_ctrl_init_gl`), then exit. Useful for scripting;
-not required for the core feature. Keep out of Phases 1–3.
+not required for the core feature. Keep out of Phases 1-3.
 
 ## Files to create / modify
 

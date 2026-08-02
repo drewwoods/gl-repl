@@ -321,7 +321,7 @@ int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out,
 
 ## Review follow-up (2026-07-18)
 
-A source-level review of phases 1–5 found three defects plus a duplication
+A source-level review of phases 1-5 found three defects plus a duplication
 concern; all addressed on the branch:
 
 - **Overlay scoping was glBegin-pass-only (P1).** The push/pop snapshot stack

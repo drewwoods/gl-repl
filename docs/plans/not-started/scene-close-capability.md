@@ -3,9 +3,9 @@
 ## 2026-05-23 audit
 
 No "Close active scene" item in the File menu (`GLR_FILE_ITEM_*` enum
-in `src/app/glr_actions.h:33–42` is still NEW / SAVE / LOAD / RENAME /
+in `src/app/glr_actions.h:33-42` is still NEW / SAVE / LOAD / RENAME /
 SAVE_WORKSPACE / LOAD_WORKSPACE). No close/evict API in
-`src/repl/scenes.c`. Open questions 1–4 below are unresolved. Stays
+`src/repl/scenes.c`. Open questions 1-4 below are unresolved. Stays
 deferred in `not-started/`.
 
 ## Context
@@ -78,7 +78,7 @@ parked here until the open questions are decided.
 
 ## Effort
 
-Moderate, **gated on the decisions above** (1–4). The mechanics are a
+Moderate, **gated on the decisions above** (1-4). The mechanics are a
 few focused edits; the cost is getting the semantics right and the
 destructive-edge (Q2) decision. Estimate once decided: ~half a day for
 the File-menu v1; the per-tab × follow-up is a separate, similar-sized
@@ -86,5 +86,5 @@ piece.
 
 ## Status
 
-Deferred. Not started. Resolve open questions 1–4, then promote to an
+Deferred. Not started. Resolve open questions 1-4, then promote to an
 active plan (sequenced after the Scene/File menu rework).

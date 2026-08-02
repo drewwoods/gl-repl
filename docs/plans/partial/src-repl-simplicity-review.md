@@ -97,7 +97,7 @@ stale; re-derive them before acting.
 helpers around float-decl parsing alone - `parse_float_name_list`,
 `validate_decl_names`, `format_decl_text`, `build_decl_predef_ops`,
 `build_decl_commit_message` - total ~250 lines for one command form.
-`repl_compile_toggle_comment` is at lines 1289–1473. The four
+`repl_compile_toggle_comment` is at lines 1289-1473. The four
 structured-block validators (`close_brace`, `if_block`, `func_def`,
 `for_loop`) are each ~140 lines.
 
@@ -173,7 +173,7 @@ risk in this directory.
 
 **Proposed shape.** Collect the sinks into one `ReplHostEffects` struct
 installed in a single call, mirroring `ReplExportConfigBridge` /
-`ReplExportCameraBridge` (already in `export.h`, lines ~91–105). This
+`ReplExportCameraBridge` (already in `export.h`, lines ~91-105). This
 is the **already-present** idiom for "controller installs vtable into
 pipeline" - the sinks should match it rather than invent their own
 shape.
@@ -228,7 +228,7 @@ point.
 - **`core.h` still publishes `editor_navigate_to_line` /
   `editor_feed_line`** on the REPL public facade. RESOLVED
   (2026-06-20) - neither symbol is on `core.h` anymore (R10 work).
-- **`eval.h:38–88` comment drift.** RESOLVED (2026-06-20) - the
+- **`eval.h:38-88` comment drift.** RESOLVED (2026-06-20) - the
   header comment was rewritten to reference `MAX_PREDEF_VARS` /
   `MAX_EXPR_VARS` symbolically; the stale "silent truncation at 16"
   literal is gone and the truncation is now documented as intended
@@ -261,19 +261,19 @@ triggering change arrives.
 ## Files cited (review snapshot, 2026-05-14)
 
 - `src/repl/command.h`
-- `src/repl/command_spec.c` (lines 313–376 - `CMD_TYPE_SPEC` macro and
+- `src/repl/command_spec.c` (lines 313-376 - `CMD_TYPE_SPEC` macro and
   `g_command_type_specs[]`)
 - `src/repl/compile.c` (1914 lines; split candidates ~717, 816, 1289,
   1487, 1540, 1648, 1794)
 - `src/repl/compile.h` (401 lines)
-- `src/repl/apply.c` (lines 121–124 - `num_args` cascade)
+- `src/repl/apply.c` (lines 121-124 - `num_args` cascade)
 - `src/repl/command_store.c`
 - `src/repl/state_views.h` / `state_owners.h` / `state.h`
 - `src/repl/core.c` (six sink installers; flagged for dissolution under
   R10)
 - `src/repl/core.h` (`editor_*` symbols still on this facade)
-- `src/repl/export.h` (lines ~91–105 - bridge pattern to mirror in
+- `src/repl/export.h` (lines ~91-105 - bridge pattern to mirror in
   `core.c`)
 - `src/repl/export.c` (3633 lines; R9 split deferred)
-- `src/repl/eval.h` (lines 38–88 - `MAX_EXPR_VARS` / `MAX_PREDEF_VARS`
+- `src/repl/eval.h` (lines 38-88 - `MAX_EXPR_VARS` / `MAX_PREDEF_VARS`
   comment drift)

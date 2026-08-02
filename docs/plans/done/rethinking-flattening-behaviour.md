@@ -30,7 +30,7 @@ comment at `executor.c:677-679` states it outright: "The flatten pass keeps
 args[] in sync with current variable values for has_vars commands, so we use
 them directly." The per-frame flatten **is** the animation mechanism.
 (ARCHITECTURE.md previously claimed the executor re-evaluated `has_vars` args
-each frame; §3.4, §5.3, §13.3–13.5 and the same stale claim in the
+each frame; §3.4, §5.3, §13.3-13.5 and the same stale claim in the
 `executor.h` / `flatten.h` header comments have been corrected to match the
 code, in the same commit that added this plan.)
 

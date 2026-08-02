@@ -2,7 +2,7 @@
 
 ## Status (2026-04-29)
 
-Stages 1–11 of this plan have all landed at the strategic level:
+Stages 1-11 of this plan have all landed at the strategic level:
 
 - ✅ Stage 1 - baseline stable; all 2541 tests pass.
 - ✅ Stage 2 - globals consolidated into `ReplRuntimeState` (one struct,
@@ -32,7 +32,7 @@ Stages 1–11 of this plan have all landed at the strategic level:
 
 Outstanding items now live in `feature/push-architecture-refinement.md`
 (controller-first Phase 2 - R10 / R11 / R12 / R8) and in
-`feature/gold-standard-state-ownership.md` (state-ownership Stages 4–8).
+`feature/gold-standard-state-ownership.md` (state-ownership Stages 4-8).
 This document is retained as the high-level history; new strategic
 direction should land in those active feature docs.
 

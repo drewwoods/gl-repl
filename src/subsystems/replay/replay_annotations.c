@@ -32,7 +32,7 @@
 /* ========================================================================= */
 
 /* Per-frame replay annotation cache.
- * Rebuilt once at the start of render_code_panel to avoid O(N × replay_pc)
+ * Rebuilt once at the start of render_code_panel to avoid O(N x replay_pc)
  * work when annotating variable assignments during replay. */
 static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
 static int   s_replay_flat_map[MAX_EDITOR_COMMANDS];         /* src_cmd_idx → flat_idx */

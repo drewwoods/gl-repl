@@ -1,7 +1,7 @@
 # Plan: Editor as Text Model/Controller
 
 > **Status: landed.** The corrected M/V/C+compiler+router contract
-> defined here was implemented across Phases A–I of
+> defined here was implemented across Phases A-I of
 > [`editor-owns-text-completion.md`](editor-owns-text-completion.md).
 > Hit-tests return passive `UiHit` results; `imrepl_ctrl` routes;
 > editor / peer subsystems / scene each own their behavior; REPL

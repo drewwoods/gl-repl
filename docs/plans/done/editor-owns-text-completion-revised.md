@@ -1,7 +1,7 @@
 # Plan: Editor-Owned Text Completion - Revised
 
 > **Status: landed.** This revised sibling's direction shipped via
-> Phases A–I of
+> Phases A-I of
 > [`editor-owns-text-completion.md`](editor-owns-text-completion.md).
 > The corrected controller boundary (no `UiAction` dispatch enum;
 > passive `UiHit` results routed by `imrepl_ctrl`) is in place;

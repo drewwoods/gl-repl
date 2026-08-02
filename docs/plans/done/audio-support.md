@@ -104,9 +104,9 @@ did, tested against, and ship as a single header. Not worth reinventing.
 
 |---|---|---|---|---|---|
 
-| **miniaudio** (recommended) | ALSA/PA/CoreAudio/WASAPI/Web Audio | WAV+MP3+FLAC built-in | Native (Web Audio) | 1 header (`miniaudio.h`) | ~1–2 hours |
+| **miniaudio** (recommended) | ALSA/PA/CoreAudio/WASAPI/Web Audio | WAV+MP3+FLAC built-in | Native (Web Audio) | 1 header (`miniaudio.h`) | ~1-2 hours |
 
-| raylib `raudio` | Same (uses miniaudio) | WAV/MP3/OGG/FLAC/XM/MOD | Works via raylib's existing web path | ~6 files (`raudio.c` + dr_*.h + stb_vorbis + jar_*) | ~2–3 hours |
+| raylib `raudio` | Same (uses miniaudio) | WAV/MP3/OGG/FLAC/XM/MOD | Works via raylib's existing web path | ~6 files (`raudio.c` + dr_*.h + stb_vorbis + jar_*) | ~2-3 hours |
 
 | SDL2 + SDL_mixer | Cross-platform | WAV/MP3/OGG/MIDI | Yes (`-s USE_SDL=2`) | External libs (`-lSDL2 -lSDL2_mixer`) | Medium; conflicts with freeglut main loop model |
 
@@ -176,7 +176,7 @@ that have to be synthesized. Two single-header libraries make this tractable:
 
 These feed PCM into miniaudio just like any other source. A small SoundFont
 
-(2–10 MB) handles general-MIDI playback. Same author as `dr_mp3`/miniaudio,
+(2-10 MB) handles general-MIDI playback. Same author as `dr_mp3`/miniaudio,
 
 same code style.
 
@@ -510,7 +510,7 @@ New files in `src/immediate-mode-repl/claude4.6-opus-thinking/`:
 
   SoundFont, and adding a `repl_audio_play_midi()` entry point that feeds
 
-  synthesized PCM into the same `ma_engine`. No changes to the Step 1–6 work
+  synthesized PCM into the same `ma_engine`. No changes to the Step 1-6 work
 
   would be needed.
 

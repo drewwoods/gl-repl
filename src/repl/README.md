@@ -12,7 +12,7 @@
 
 ## What this is, in general
 
-A **REPL** (read–eval–print loop) is the classic shape of an interactive
+A **REPL** (read-eval-print loop) is the classic shape of an interactive
 language tool: read source text, turn it into a structured form, evaluate
 it, show the result, repeat. Strip away the editor and the screen and what
 remains is an ordinary **interpreter pipeline**:

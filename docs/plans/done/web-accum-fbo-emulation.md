@@ -16,7 +16,7 @@ startup path.
 Emscripten canvas has no accumulation buffer to begin with. The app has **no
 runtime detection** - `use_accum` is only the `--noaccum` CLI flag
 (`gl_repl.c`), and the accum loop in `render3d_draw_scene`
-(`src/render3d/render.c`, the `do_accum` block around lines 839–897) trusts
+(`src/render3d/render.c`, the `do_accum` block around lines 839-897) trusts
 it. Consequences on web today:
 
 - **Accum AA** (the default effect, 2 passes): every frame renders the whole
@@ -162,7 +162,7 @@ The risky machinery already exists in-tree:
 New code is essentially an `accum.c`: glstate fields (accum texture + FBO +
 scratch texture + dims), lazy creation sized to the drawable, recreate on
 canvas resize, the ops, the clear hook, and replacing the `STUB(glAccum)`
-export. Estimated **300–400 lines** - larger than the attrib-stack patches,
+export. Estimated **300-400 lines** - larger than the attrib-stack patches,
 smaller than color-material. Ships as local patch #7
 (`packaging/web/patches/gl4es-accum-fbo.patch`), registered last in
 `scripts/web-deps.sh` `GL4ES_PATCHES` and listed in
@@ -177,7 +177,7 @@ smaller than color-material. Ships as local patch #7
   probe (extension check, or a one-time FBO-completeness test).
 - **RGBA8 fallback** when float renderability is absent: fine at the AA
   default (2 passes; each contribution quantizes to 1/255), visibly bands at
-  8–16-pass Blur. Acceptable as a degraded mode.
+  8-16-pass Blur. Acceptable as a degraded mode.
 - **Report `GL_ACCUM_RED/GREEN/BLUE/ALPHA_BITS`** (16 or 8) from gl4es's
   getter when the emulation is live. This is the tie-in that makes Part 1
   self-healing: the app's detection sees nonzero bits and re-enables accum on

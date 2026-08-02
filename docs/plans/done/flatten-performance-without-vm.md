@@ -2,7 +2,7 @@
 
 ## Status - DONE (2026-07-17)
 
-Phases 0–3 landed on `main`: representative benchmarks, direct evaluation,
+Phases 0-3 landed on `main`: representative benchmarks, direct evaluation,
 the slider transaction split, compiled-expression programs, dependency-aware
 dirty routing, and in-place rebaking. Phase 3 was initially deferred because a
 single-refresh benchmark showed only a modest gain. Subsequent Accum Blur
@@ -81,7 +81,7 @@ Existing `make bench` results:
 | Workload | Flat commands | Mean full flatten |
 |---|---:|---:|
 | Fixed wave fixture (`flatten_examples`) | 3579 | 10.37 ms |
-| Grass, selected by current largest-flat spike | 4063 | 4.98–5.43 ms |
+| Grass, selected by current largest-flat spike | 4063 | 4.98-5.43 ms |
 
 A temporary 16-sample corpus sweep found the slowest current built-ins:
 
@@ -115,13 +115,13 @@ Therefore:
 - `rand`/`rand2` are deterministic pure functions of their arguments and do
   not independently make topology dynamic.
 
-### Results after Phases 1C–3
+### Results after Phases 1C-3
 
 Phase 1C supplies an intentionally cache-free comparison point. On the same
 machine, its always-full direct evaluator reduced Grass from roughly 4.5 ms to
 2.06 ms and Orrery from roughly 5.2 ms to 2.63 ms. Phase 2's warm compiled full
-flatten then reduced the current scenes to roughly 0.63–0.67 ms for Grass and
-0.55–0.62 ms for Orrery. These figures vary with host load; use the committed
+flatten then reduced the current scenes to roughly 0.63-0.67 ms for Grass and
+0.55-0.62 ms for Orrery. These figures vary with host load; use the committed
 bench rows, not the prose, for future comparisons.
 
 `flatten_refresh` now measures the production route rather than presuming a

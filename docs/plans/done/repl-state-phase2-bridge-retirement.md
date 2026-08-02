@@ -8,7 +8,7 @@ includes or depends on it. All 2551 tests pass.
 
 ## What Landed
 
-### Storage migration (slices 3.1–3.10)
+### Storage migration (slices 3.1-3.10)
 - `ReplEditorState` and `ReplViewState` bundle helpers removed.
 - Immutable export scaffold declarations moved to `repl_export.h`.
 - Render-resource bridge backed by `repl_state_render()`.

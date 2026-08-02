@@ -154,7 +154,7 @@ iterate the *same* static arrays as the emit block in
   `GlrConfigKey` enum (before `GLR_CONFIG_COUNT`; placing it next to
   `GLR_CONFIG_SYNTAX_HIGHLIGHT` keeps the INTERFACE group together).
 - `src/app/glr_actions.c:132-133` - add a descriptor row in the
-  `### INTERFACE` block, menu-only (no key binding - F2–F12 and the Ctrl
+  `### INTERFACE` block, menu-only (no key binding - F2-F12 and the Ctrl
   shortcuts are taken; matches `Wrap at commas`/`Vertex outlines`):
   ```c
   { "Code focus",       0, 0,  GLR_CONFIG_CODE_FOCUS,          2, NULL,                 0 },

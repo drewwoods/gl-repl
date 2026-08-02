@@ -21,9 +21,9 @@ tests).
 
 Status by finding:
 
-- **🔴 Bugs:** all 11 (#1–#11) done in the original passes.
-- **🟡 Drift hazards:** all 12 (#12–#23) done.
-- **🟢 Dead code:** all 12 (#24–#35) done.
+- **🔴 Bugs:** all 11 (#1-#11) done in the original passes.
+- **🟡 Drift hazards:** all 12 (#12-#23) done.
+- **🟢 Dead code:** all 12 (#24-#35) done.
 - **🔵 Structural:** #36 already done before the audit ran (the
   declared mutator had moved to `state_owners.h`); #37, #38 done in
   the original passes; **#41 + #42 + #43 + #45 + #46 done in the
@@ -34,10 +34,10 @@ Status by finding:
 
 Used during the 2026-05-24 backlog review to triage what was left:
 
-- **Tier A - small, real fix, near-zero risk.** 5–30 line changes
+- **Tier A - small, real fix, near-zero risk.** 5-30 line changes
   with no architectural exposure. Always worth doing once they're
   identified; no reason to defer.
-- **Tier B - moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50-200 line changes,
   one or two files of churn, a real test impact. Worth doing when
   next in the area, or as a focused pass.
 - **Tier C - defer (high cost, low payoff).** Real wins but touch

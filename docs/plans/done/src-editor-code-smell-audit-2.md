@@ -110,7 +110,7 @@ After this residual pass, every Tier A item from the audit
 classification block has landed; **the audit is ready to
 graduate to `plans/done/`**. The remaining open items are all
 Tier B / Tier C work that should be tracked in their own future
-plans (notably `#34` inline-overlay re-entry semantics, `#48–#57`
+plans (notably `#34` inline-overlay re-entry semantics, `#48-#57`
 structural work).
 
 ## Status update - 2026-05-26 (`editor-smells-2`)

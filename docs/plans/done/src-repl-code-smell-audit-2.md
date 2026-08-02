@@ -16,11 +16,11 @@
 > included).
 >
 > **Context - what landed since 2026-05-23:** 35 findings closed in
-> the original closeout (#1–#35); Tier A 2026-05-24 closed #36, #42,
+> the original closeout (#1-#35); Tier A 2026-05-24 closed #36, #42,
 > #43, #45, #46; Tier B 2026-05-24 closed #41 and #44; the
 > follow-up [P2]/[P3] pass swept the `var_idx`/parallel-cfg leftovers.
 > Tier A follow-up 2026-05-27 closed #13, #18, #34, #35, #36, #38,
-> #39, #40, #46, #52, #53, and #54–#67.
+> #39, #40, #46, #52, #53, and #54-#67.
 > Two helpers landed during this work: `src/repl/text_helpers.c` (from
 > the original #38) and `src/repl/cfg_baseline.{c,h}` (from the
 > subsystems audit's #30). `export.c` is still the heaviest file at
@@ -437,12 +437,12 @@ assertions fail, post-fix all 221 pass.
 `GLCmd cmds[MAX_COMMANDS]` (4096 entries) and
 `char lines[MAX_COMMANDS][MAX_LINE_LEN]` (4096 × 256 = 1 MB on its
 own), plus predef/scratch/func-alias arrays. `sizeof(UserScene)` is
-already on the order of ~1–1.5 MB *before* any cfg work.
+already on the order of ~1-1.5 MB *before* any cfg work.
 `repl_load_scene_as_new_slot` holds two stashes at once (`stash +
-evicted_stash` ≈ ~2–3 MB on the frame); `try_evict_lru` adds a
+evicted_stash` ≈ ~2-3 MB on the frame); `try_evict_lru` adds a
 `live_temp` (third); the caller frame may already carry a fourth via
 `repl_promote_example_if_needed`. Default macOS/Linux main-thread
-stack is 8 MB; POSIX worker threads often 512 KB – 2 MB.
+stack is 8 MB; POSIX worker threads often 512 KB - 2 MB.
 
 **Why it matters:** Real overflow risk on smaller-stack threads;
 ASan bait on the main thread. This is the same shape as the

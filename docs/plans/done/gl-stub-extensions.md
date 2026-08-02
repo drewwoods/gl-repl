@@ -8,7 +8,7 @@ The trace facility shipped. Spot checks:
   `tests/gl-stubs/include/` (every stubbed call has its argument line).
 - Storage definition `FILE *gl_stub_trace_fp = NULL;` lives at
   `tests/gl-stubs/gl_stub_counts.c:24`; the env-var open helper is at
-  lines 48–54 of the same file.
+  lines 48-54 of the same file.
 - `tests/test_export_trace_parity.c` consumes the new trace pathway -
   `--keep-traces` flag at line 234, `/tmp/test_trace_*.repl.tr`
   filename template at line 325, and the child compile cmd at line

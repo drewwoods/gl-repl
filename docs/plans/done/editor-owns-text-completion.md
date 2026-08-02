@@ -1,7 +1,7 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
-> **Status: landed (2026-05-03 → 2026-05-05).** Phases A–J shipped
-> on `feature/editor-ownership-gap-cleanup` - commits 1–49 plus the
+> **Status: landed (2026-05-03 → 2026-05-05).** Phases A-J shipped
+> on `feature/editor-ownership-gap-cleanup` - commits 1-49 plus the
 > J2.x / J3 / J3.1 / J4 / J5 / J6 / J7 / J8 / J9 follow-ups. The
 > M/V/C+compiler+router contract is enforced by 32 hard guards
 > under `make check` (30 sub-targets in `check-state-ownership` +
@@ -14,7 +14,7 @@
 > end of this document under **Deferred from Phase H** and the
 > post-Phase-I bullets in `MODULES.md`.
 
-> **Direction note (2026-05-02).** Commits 1–11 of this plan have
+> **Direction note (2026-05-02).** Commits 1-11 of this plan have
 > landed and remain correct. Phase 4's broad `UiAction` enum direction
 > has been **superseded** by
 > [`feature/editor-text-model-controller.md`](editor-text-model-controller.md),
@@ -39,7 +39,7 @@
 > marked **(superseded)** are kept for historical reference but should
 > not be implemented as written.
 >
-> The migration history (commits 1–11) recorded in *Implementation
+> The migration history (commits 1-11) recorded in *Implementation
 > Status* and *Phase 1.2 Slice migration order* below remains accurate.
 > Where remaining destinations have shifted under the new contract, the
 > *Implementation Status* table for commit 12+ has been updated.
@@ -214,8 +214,8 @@ enum.)
 ## Why The Spirit Wasn't Realized (Pre-Commit-1)
 
 This section is preserved as the *original problem statement* before
-commits 1–11 landed. **All four items are now resolved**: item 1 by
-commits 4–11 (the EditorState/UiState carve-out), item 2 by Phase B
+commits 1-11 landed. **All four items are now resolved**: item 1 by
+commits 4-11 (the EditorState/UiState carve-out), item 2 by Phase B
 (`EditorBufferView` + single-writer commit transaction), item 3 by
 Phases E + J2 + J3 + J4 (UI is hit-test only; controller dispatches
 on `UiHit.kind`; render-side discoveries flow back through
@@ -223,7 +223,7 @@ on `UiHit.kind`; render-side discoveries flow back through
 deleted; input dispatch split between `imrepl_ctrl.c` and
 `editor_input.c`).
 
-### 1. Editor state lives inside REPL state ✅ resolved (commits 4–11)
+### 1. Editor state lives inside REPL state ✅ resolved (commits 4-11)
 
 `ReplRuntimeState` *used to* hold editor-owned slices:
 
@@ -859,7 +859,7 @@ The phases below group related commits. Each phase ends with the
 audit / ratchet / test signal that drives toward zero or hard-guards
 the boundary.
 
-### Pre-existing scaffolding (Phase 0–1) - landed
+### Pre-existing scaffolding (Phase 0-1) - landed
 
 | # | Commit | Status |
 |---|---|---|
@@ -930,7 +930,7 @@ undo transaction.
 | # | Commit | Status |
 |---|---|---|
 | 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators (parse + source-structure + var-decl validation; produces source-command changes, **not** flat program); migrate `try_commit_float_decl` and `try_assign_variable` first | ✅ landed (57763d0, 2026-05-03) |
-| 20 | refactor: add `repl_apply_compiled_change` (writes ReplState only) + `editor_buffer_apply_compiled_change` (writes EditorState only); route float-decl + var-assign through them. Block-structured handlers (for-loop / func-def / if-block / close-brace) deferred to Phase D commits 26b–26e - they need cursor/mode fields on ReplCompiledChange that don't exist yet | ✅ landed (f191886, 2026-05-03) |
+| 20 | refactor: add `repl_apply_compiled_change` (writes ReplState only) + `editor_buffer_apply_compiled_change` (writes EditorState only); route float-decl + var-assign through them. Block-structured handlers (for-loop / func-def / if-block / close-brace) deferred to Phase D commits 26b-26e - they need cursor/mode fields on ReplCompiledChange that don't exist yet | ✅ landed (f191886, 2026-05-03) |
 | 21 | refactor: introduce `editor_commit_apply_compiled_change` orchestration helper wrapping the three apply halves in lockstep | ✅ landed (34b3d57, 2026-05-03) |
 | 22 | test: commit-transaction invariants (failed validation leaves buffer + store + status + undo untouched; success updates both atomically; reformat keeps buffer + store aligned) | ✅ landed (213b286, 2026-05-03) |
 | 23 | refactor: preflight cmd-store capacity/ranges before any mutation (`repl_apply_can_apply_compiled_change`); editor_commit_apply_compiled_change rejects atomically on overflow with all three halves untouched | ✅ landed (1234c07, 2026-05-03) |
@@ -955,7 +955,7 @@ Phase C signals:
 
 ### Phase D - Carve `editor_input.c` / `editor_commit.c`
 
-The original 4-commit plan compressed too much into commits 24–25.
+The original 4-commit plan compressed too much into commits 24-25.
 Revised here based on review: split the structured-block migration
 across multiple commits, keep service-table ownership tight, and
 defer `UiHit` dispatch wiring to Phase E.
@@ -1166,7 +1166,7 @@ and retired the legacy forwarder bodies they tracked.
 
 | # | Commit | Status |
 |---|---|---|
-| 44–48 | refactor (J1): replace `editor_input.c` shims with real editor handlers; carve non-editor routing (replay / audio / config / save / camera / variable panel / scene press / scroll-wheel zoom) into `imrepl_ctrl_router_*` helpers; delete `repl_editor.{c,h}`; inline timer dispatch into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`; add `check-no-repl-editor-input-shim` hard guard | done (2026-05-03) |
+| 44-48 | refactor (J1): replace `editor_input.c` shims with real editor handlers; carve non-editor routing (replay / audio / config / save / camera / variable panel / scene press / scroll-wheel zoom) into `imrepl_ctrl_router_*` helpers; delete `repl_editor.{c,h}`; inline timer dispatch into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`; add `check-no-repl-editor-input-shim` hard guard | done (2026-05-03) |
 | 49 | fix (J1 follow-up): `imrepl_ctrl_mouse` UP path releases the camera button; motion path no longer clobbers the camera pointer before the camera router computes its delta | done (2026-05-03) |
 | J2.1 | refactor: payload-complete `ui_panels_hit_test` - emit `UI_HIT_PANEL_DIVIDER`, `UI_HIT_INLINE_COLOR_SWATCH`, `UI_HIT_CODE_INSERT_LINE`, `UI_HIT_MENU_BUTTON`; populate `UI_HIT_CODE_TEXT.char_idx` so the controller no longer reimplements wrap/segment math; document per-kind field semantics in `ui_hit.h` | done (2026-05-03) |
 | J2.2 | refactor: route press / drag / release / menu activation / pin-button / inline-color-swatch / floating-picker control / panel-divider through `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` + `_router_handle_code_panel_drag(x, y)` + `_router_reset_code_panel_drag()`; delete `ui_panels_handle_code_panel_press / _click / _drag / _release / _scene_press / _motion / _mouse_release / _escape`; move drag-anchor state into `imrepl_ctrl.c`; lower `check-ui-returns-hits-only` baseline 8 → 5; migrate impacted tests to call the controller helpers directly | done (2026-05-03) |
@@ -1198,7 +1198,7 @@ which run alongside; `check-public-api-usage` is informational).
 
 - **Each commit is buildable.** `make test && make test-stubs` runs
   green at every commit.
-- **Behavior preservation first.** Phases A–C are pure restructuring
+- **Behavior preservation first.** Phases A-C are pure restructuring
   with no UX delta. UX-visible regressions are tracked manually using
   the smoke checklist in `editor-ownership-gap-cleanup.md` and at the
   bottom of this document.
@@ -1212,7 +1212,7 @@ which run alongside; `check-public-api-usage` is informational).
 
 ### Phase notes (revised commit destinations)
 
-- **Phase A (commits 12–14, landed).** The original plan put cursor
+- **Phase A (commits 12-14, landed).** The original plan put cursor
   blink fields on `UiState`. The corrected contract puts them on
   `EditorState` because the editor is the cursor's controller -
   Phase A only moves the render-chrome bits (panel_frac,
@@ -1230,9 +1230,9 @@ which run alongside; `check-public-api-usage` is informational).
   any mutation. Failure is now atomic: 0 ⇒ no mutation; 1 ⇒ all
   three halves landed.
 - **Phase D split.** The original 4-commit Phase D compressed too
-  much into commits 24–25. The revised plan above splits the
+  much into commits 24-25. The revised plan above splits the
   `editor_input` carve and structured-block migration across
-  commits 26a–26e (close_brace → if_block → func_def → for_loop)
+  commits 26a-26e (close_brace → if_block → func_def → for_loop)
   and tightens the service-table surface so it carries REPL
   semantics only (`compile`, `apply_repl_change`,
   `apply_predef_ops`, `context`) - the editor half of the apply
@@ -1299,7 +1299,7 @@ which run alongside; `check-public-api-usage` is informational).
   "successful commit" risks capturing post-state; tying it to the
   pre-mutation moment is the transaction boundary the rest of the
   shape needs.
-- **Phases D–E reshape (UiAction → UiHit).** The original Phase 4
+- **Phases D-E reshape (UiAction → UiHit).** The original Phase 4
   was three commits of `UiAction` dispatch wiring. The corrected
   plan replaces the enum with a passive `UiHit` struct that UI
   returns; `imrepl_ctrl` routes on `UiHit.kind`. Phase D commit 27
@@ -1384,11 +1384,11 @@ repl_editor.c include count:                  20
 Known intentional exceptions:                  0
 ```
 
-**Per-phase target.** Phase 1 (commits 3–7) drives the editor/ui-like
+**Per-phase target.** Phase 1 (commits 3-7) drives the editor/ui-like
 `repl_state_*` count toward zero outside `repl_state.c`, `editor_state.c`,
 `ui_state.c`, and forwarder shims. Phase 2 (commit 8) drives the
 `_with_line[s]` count to 0. Phase 2 (commit 9) drives REPL direct
-editor-buffer reads to 0. Phase 4 (commits 13–14) drives UI live
+editor-buffer reads to 0. Phase 4 (commits 13-14) drives UI live
 mutation hits to 0. Phase 5 (commit 15) splits `repl_editor.c` so the
 include-surface signal becomes structural rather than sized.
 
@@ -1466,7 +1466,7 @@ Each migration is a separate commit with passing tests at the end:
    `test_capture_restore_round_trip` in `tests/test_repl_state.c` gained
    a paired `editor_state_capture/restore` since the editor session is
    now its own snapshot domain. Audit deltas vs. commit 3 baseline:
-   section-1 1509 → 1460 (−49); section-3 36 → 29 (−7, now reports
+   section-1 1509 → 1460 (-49); section-3 36 → 29 (-7, now reports
    only true text-line reads since `_count / _set_*` accessors are no
    longer in the regex's union).
 2. `editor_input` (typing buffer / cursor / edit-line / insert mode /
@@ -1487,7 +1487,7 @@ Each migration is a separate commit with passing tests at the end:
    `editor_state.h`. `edit_line_idx` stays on `ReplDocumentState`
    (the canonical home); the input view builder forward-declares
    `repl_state_edit_line()` to populate the view's
-   `edit_line_idx` field. Audit deltas: section-1 1460 → 1363 (−97);
+   `edit_line_idx` field. Audit deltas: section-1 1460 → 1363 (-97);
    `repl_state.c` shrank from 970 → 872 lines.
 3. `selection` + `clipboard`.
    ✅ **Landed (commit 6).** `ReplSelectionState` and `ReplClipboardState`
@@ -1501,7 +1501,7 @@ Each migration is a separate commit with passing tests at the end:
    migrated mechanically. `repl_state.c` g_clipboard / g_sel_*
    macros removed. `repl_debug.c` runtime-state-layout dump dropped
    the `selection` and `clipboard` rows. Audit delta: section-1
-   1363 → 1307 (−56).
+   1363 → 1307 (-56).
 4. `search` + `autocomplete`.
    ✅ **Landed (commit 7).** `ReplSearchState` and
    `ReplAutocompleteState` typedefs moved to `editor_state.h`; the
@@ -1515,7 +1515,7 @@ Each migration is a separate commit with passing tests at the end:
    shared `EDITOR_STATE_INITIAL` macro in `editor_state.c` so the
    live singleton and the defaults snapshot stay in sync.
    `repl_debug.c` runtime-state-layout dump dropped both rows.
-   Audit delta: section-1 1307 → 1263 (−44); `repl_state.c` shrank
+   Audit delta: section-1 1307 → 1263 (-44); `repl_state.c` shrank
    from 872 → 799 lines.
 5. transformer / highlight / virtual-line snapshot lists.
    ✅ **Landed (commit 9 - bundled with variable_drag).** Storage moves
@@ -1532,7 +1532,7 @@ Each migration is a separate commit with passing tests at the end:
    `repl_state_defaults.inc` lost the `.variable_drag` block;
    defaults captured in `editor_state.c`'s `EDITOR_STATE_INITIAL`.
    `repl_debug.c` runtime-state-layout dump dropped the
-   variable_drag row. Audit delta: section-1 1260 → 1209 (−51).
+   variable_drag row. Audit delta: section-1 1260 → 1209 (-51).
    `repl_state.c` 826 → 748 lines.
 6. `code_panel` scroll + scroll-follow → `EditorState.scroll`.
    ✅ **Landed (commit 11).** `ReplCodePanelRuntimeState` shrunk by
@@ -1548,7 +1548,7 @@ Each migration is a separate commit with passing tests at the end:
    getter/setter pair). `repl_state_defaults.inc` lost the scroll
    fields from its `.code_panel` block. `repl_state.c`'s `g_scroll` /
    `g_scroll_follow_cursor` macros removed. Audit delta: section-1
-   1209 → 1194 (−15).
+   1209 → 1194 (-15).
 
    Commit 11 also lands ownership-budget guardrails per the user's
    directive that transitional couplings must not become permanent.
@@ -1599,7 +1599,7 @@ Each migration is a separate commit with passing tests at the end:
    `.viewport` blocks; defaults moved to
    `UI_STATE_INITIAL` in `ui_state.c`. `repl_debug.c`'s
    runtime-state-layout dump dropped six rows. Audit delta:
-   section-1 1263 → 1260 (−3 only - the forwarders preserve the
+   section-1 1263 → 1260 (-3 only - the forwarders preserve the
    matching name shape; the architectural prize is the storage
    move). `repl_state.c` 799 → 826 (+27 lines net: impls moved out,
    24 forwarders moved in). `ui_state.c` 24 → 133.
@@ -1938,7 +1938,7 @@ compile-and-apply transaction.
 
 ### 4.4 Tighten UI guards
 
-After 4.1–4.3 land, two guards strengthen the contract:
+After 4.1-4.3 land, two guards strengthen the contract:
 
 - `check-ui-returns-hits-only` (replaces the original
   `check-ui-emits-actions-only`) - `ui_*.c` input helpers do not call
@@ -2095,7 +2095,7 @@ Branch name:
 feature/editor-ownership-gap-cleanup
 ```
 
-The original 17-commit list below was the *initial* plan. Commits 1–11
+The original 17-commit list below was the *initial* plan. Commits 1-11
 matched it; commit 12+ has been retargeted under the corrected
 contract (see *Implementation Status*). The list is preserved for
 historical reference.
@@ -2295,7 +2295,7 @@ Those are separate tracks.
   `feature/push-architecture-ui.md` - the input-handler work is folded
   in here as Phase 4 (now framed as `UiHit` routing rather than a
   `UiAction` enum).
-- **Builds on** `feature/editor-owns-text.md` Steps 2–6 (data shape) and
+- **Builds on** `feature/editor-owns-text.md` Steps 2-6 (data shape) and
   `feature/gold-standard-state-ownership.md` Stage 7 (UI snapshot
   purity).
 - **Companion** to `feature/editor-ownership-gap-cleanup.md` - that doc

@@ -162,7 +162,7 @@ Two separable effects, and the second one was not predicted:
    (`EARTH_RATE` was *already* structural before the conversion - it feeds the
    date if-chain, and a selected condition is a structural dep - which is why
    converting it changed the route for nothing.)
-2. **The full flatten itself got 3–23% slower** where the route did not change.
+2. **The full flatten itself got 3-23% slower** where the route did not change.
    That is the per-call `flatten_bind_func_locals` body scan plus a scope array
    that roughly doubles in size, and `eval_primary` searches it linearly before
    falling through to predefs - so every *global* reference inside a converted
@@ -187,7 +187,7 @@ three scene files reverted to their pre-conversion text. Identical corpus
 
 Numbers below are from **gracemont** (Linux, gcc 14.2) rather than the mac-mini:
 the mac's mean was too noisy to quote and even its minima moved several percent
-between runs, while gracemont holds 0.3–0.6% on the rows that matter. Per-op
+between runs, while gracemont holds 0.3-0.6% on the rows that matter. Per-op
 figures are `min_sec × iters / ops` - the best iteration's per-operation time.
 The mac-mini agrees directionally on everything below, with a *larger* machinery
 tax (+13% orrery / +21% grass full flatten), so that part is toolchain-sensitive
@@ -196,22 +196,22 @@ while the route behaviour is not.
 | case | A: pre-Phase-1 | B: Phase 5 | Δ |
 |---|---|---|---|
 | `parse_lines` | 0.74 µs/line | 0.74 | ±0% |
-| `feed_examples` | 4.94 µs/line | 4.81 | −3% |
+| `feed_examples` | 4.94 µs/line | 4.81 | -3% |
 | `slider_value_motion` | 13.2 µs | 13.3 | ±0% |
 | `refresh_wave` (rebake route) | 577 µs | 578 | ±0% |
-| `refresh_grass` (rebake route) | 2007 µs | 1947 | −3% |
+| `refresh_grass` (rebake route) | 2007 µs | 1947 | -3% |
 | `flatten_orrery` (full flatten) | 1155 µs | 1215 | **+5%** |
 | `flatten_grass` (full flatten) | 2702 µs | 2959 | **+10%** |
 
 So: **the compile path is free, the rebake path is free, and the full flatten is
-5–10% slower here (13–21% on macOS) for every program - whether or not it
+5-10% slower here (13-21% on macOS) for every program - whether or not it
 declares a single local.**
 
 `flatten_phases` localises it to one place, and it is not the local binding:
 
 | phase | A: pre-Phase-1 | B: Phase 5 | Δ |
 |---|---|---|---|
-| grass reparse | 1077 µs | 1042 | −3% |
+| grass reparse | 1077 µs | 1042 | -3% |
 | grass **var_assign** | 1209 µs | 1481 | **+23%** |
 | grass remainder | 411 µs | 421 | +2% |
 | orrery **var_assign** | 264 µs | 340 | **+29%** |
@@ -221,7 +221,7 @@ The cause is rev 9's lexical LHS re-derivation. `flatten_var_assign` now calls
 visit, and that runs `repl_extract_assignment_parts()` - a text parse of the
 source line - plus an O(nv) scope scan. Its only early-out is `nv <= 0`, which
 is false for any assignment inside a function body or a loop. Grass pays it
-3645 times per flatten (135 calls × 27 assignments): (1481 − 1209) µs / 3645 ≈
+3645 times per flatten (135 calls × 27 assignments): (1481 - 1209) µs / 3645 ≈
 **75 ns** per visit.
 
 This is *required for correctness* as written - a persisted `var_idx` must not
@@ -230,7 +230,7 @@ Two ways to make it pay-for-use. They are independent, each carries a
 one-paragraph correctness argument, and together they are one small change:
 
 **Fix 1 - skip when the frame holds no LOCAL binding.** With no local in scope
-the resolution provably returns −1, so the persisted `var_idx` is authoritative.
+the resolution provably returns -1, so the persisted `var_idx` is authoritative.
 
 - *Be precise about what this buys.* It restores the pay-for-what-you-use
   property for **unconverted** programs - the ±0% corpus rows above - and does
@@ -315,15 +315,15 @@ box is as noisy as the plan already records, so these are minima):
 
 | case | pre | post | Δ |
 |---|---|---|---|
-| `flatten_examples` (whole 38-scene corpus) | 18.01 ms | 15.46 | **−14%** |
-| `flatten_grass` | 22.72 ms | 21.22 | −6.6% |
-| `flatten_orrery` | 8.79 ms | 8.51 | −3.2% |
-| `phase_grass_var_assign` | 11.47 ms | 9.85 | **−14%** |
-| `phase_orrery_var_assign` | 2.31 ms | 1.76 | **−24%** |
-| `refresh_grass` | 46.32 ms | 42.78 | −7.6% |
+| `flatten_examples` (whole 38-scene corpus) | 18.01 ms | 15.46 | **-14%** |
+| `flatten_grass` | 22.72 ms | 21.22 | -6.6% |
+| `flatten_orrery` | 8.79 ms | 8.51 | -3.2% |
+| `phase_grass_var_assign` | 11.47 ms | 9.85 | **-14%** |
+| `phase_orrery_var_assign` | 2.31 ms | 1.76 | **-24%** |
+| `refresh_grass` | 46.32 ms | 42.78 | -7.6% |
 | `feed_examples`, `parse_lines` | - | - | ±0% |
 
-The corpus row is fix 1 doing what it was predicted to do: −14% across 38
+The corpus row is fix 1 doing what it was predicted to do: -14% across 38
 scenes, nearly all of them unconverted. The per-scene rows for the two
 converted scenes are fix 2, and land where the sketch guessed - "roughly half
 the tax back" - with grass's var_assign phase giving back 1.6 µs of the 2.7 µs
@@ -487,7 +487,7 @@ first place - so fix 2's saving survives fix 3 rather than being absorbed by it.
    targeting the route regression, with the Emscripten measurement as its
    motivating number.
 
-Keeping the two apart is the point: fixes 1–2 barely move grass, because its hot
+Keeping the two apart is the point: fixes 1-2 barely move grass, because its hot
 bodies genuinely do have locals, and fix 3 is the only one that recovers the
 route. Not escalating fix 3 now is defensible on the native number - 1.6 ms
 worst case in a 16.7 ms frame - but the web build is a supported target
@@ -1790,9 +1790,9 @@ Status of these after Phase 5:
 None blocking; all are accepted costs with a defined trip-wire, recorded so a
 future maintainer does not have to rediscover the trade-off. [rev 7]
 
-**0. The full flatten is 5–21% slower for programs that use no locals.**
-Measured in Phase 5 (tables above): `flatten_var_assign` grew 23–29% on Linux
-and 54–74% on macOS, because rev 9's lexical LHS re-derivation re-parses every
+**0. The full flatten is 5-21% slower for programs that use no locals.**
+Measured in Phase 5 (tables above): `flatten_var_assign` grew 23-29% on Linux
+and 54-74% on macOS, because rev 9's lexical LHS re-derivation re-parses every
 assignment's source text on every visit. The compile path, the rebake path and
 slider drags are unaffected.
 

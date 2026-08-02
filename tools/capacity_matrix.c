@@ -54,7 +54,7 @@ static const CapRow rows[] = {
         + MAX_LINE_LEN * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
         + MAX_LINE_LEN * 1 /* editor_buffer */
         + (sizeof(GLCmd) + MAX_LINE_LEN) * MAX_USER_SCENES,
-      "undo+redo rings (×64) + document + editor_buffer + user scenes (×8)" },
+      "undo+redo rings (x64) + document + editor_buffer + user scenes (x8)" },
 
     /* Flat-program capacity (split from the source cap 2026-07-10).
      * One live array pair - no undo/scene fan-out. */
@@ -71,7 +71,7 @@ static const CapRow rows[] = {
         + MAX_EDITOR_COMMANDS * MAX_USER_SCENES
         + MAX_WORKSPACE_HEADER_LINES
         + MAX_INPUT_LEN /* editor input + ghost + hint scratch ≈ a few input slots */,
-      "editor_buffer + undo/redo (×64) + user scenes (×8) lines, all multiplied by MAX_EDITOR_COMMANDS" },
+      "editor_buffer + undo/redo (x64) + user scenes (x8) lines, all multiplied by MAX_EDITOR_COMMANDS" },
 
     /* Single-line input buffer + a small handful of scratch buffers. */
     { "MAX_INPUT_LEN", MAX_INPUT_LEN,
@@ -84,7 +84,7 @@ static const CapRow rows[] = {
         + (sizeof(float) + 16) * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
         + (sizeof(float) + 16) * MAX_USER_SCENES
         + sizeof(float) /* replay baseline */,
-      "ExprVar tables + undo/redo rings × 64 × (vals + 16-char names) + user scenes × 8" },
+      "ExprVar tables + undo/redo rings x 64 x (vals + 16-char names) + user scenes x 8" },
 
     /* Per-expression visible-scope size. Mostly transient. */
     { "MAX_EXPR_VARS", MAX_EXPR_VARS,
@@ -205,7 +205,7 @@ int main(void) {
     printf("g_repl_state + g_undo_buf + g_redo_buf + g_user_scenes.\n\n");
 
     /* Quick "what if I bumped this?" examples for the most common
-     * tweaks. Hand-coded delta: per-unit × (target - current). */
+     * tweaks. Hand-coded delta: per-unit x (target - current). */
     printf("Common tweaks:\n");
     {
         const long predef_at = MAX_PREDEF_VARS;

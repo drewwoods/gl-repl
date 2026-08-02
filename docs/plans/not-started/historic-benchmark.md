@@ -154,7 +154,7 @@ The bench file's `git log` (and the pre-hoist root-level `bench_repl.c` history)
    `trend_runs.csv` schema: `sha,iters,bench_names,run_started_iso,run_completed_iso`. Tiny file (one line per measured SHA). Gitignored alongside `trend_results.csv`.
 4. **Sample.** For each work-set SHA: run the historical build, exec the binary, parse CSV stdout. If a SHA is being re-measured at a new `iters`, drop its old rows first so the file doesn't accumulate duplicates. On any failure, append `<sha> <reason>` to `trend_broken.txt` and continue.
 5. **Bisect via a worklist (not recursion).** Push every adjacent measured pair `(A, B)` (sorted by date) onto a FIFO. Pop one at a time:
-   - Compute the per-benchmark relative delta `|B.per_op_us − A.per_op_us| / A.per_op_us` for every shared `bench_name`.
+   - Compute the per-benchmark relative delta `|B.per_op_us - A.per_op_us| / A.per_op_us` for every shared `bench_name`.
    - If no benchmark trips the threshold, drop the pair.
    - Otherwise pick the midpoint commit (median commit by date in the first-parent slice strictly between A and B). If no such commit exists, or if the resulting `(A,M)` or `(M,B)` gap would fall below the min-gap, drop the pair - gap floor reached.
    - Otherwise measure M, then push **both** `(A, M)` and `(M, B)` back onto the worklist. Both sides must be re-checked: a regression bracketed inside A→M can coexist with another bracketed inside M→B, and skipping the still-tripping side silently leaves an unresolved high-delta gap.
@@ -226,7 +226,7 @@ If load exceeds `MAX_SAMPLES`, drop the oldest samples and print one stderr line
 ```
 
 - **X axis (time mode).** Linear from `g_samples[0].date_epoch` to `g_samples[n-1].date_epoch`. Tick every ~80 px, labeled with `YYYY-MM-DD` (from each sample's pre-rendered `date_label`).
-- **X axis (sha-index mode).** Linear from 0 to n−1. Tick every ~80 px, labeled with the short SHA.
+- **X axis (sha-index mode).** Linear from 0 to n-1. Tick every ~80 px, labeled with the short SHA.
 - **Y axis.** Linear, auto-scaled to `[0, 1.1 * max(per_op_us across visible benches)]`. Tick every ~50 px, labeled in µs.
 - **Series.** For each visible benchmark, one `GL_LINE_STRIP` connecting the samples (in date order) whose `per_op_us` for that benchmark is not `NAN`, plus a small `GL_POINTS` marker at each sample. NaN samples break the strip into segments so older SHAs that predate a benchmark don't get a misleading sloped line down to zero.
 - **Color palette.** Fixed table of up to `MAX_BENCHES` (16) saturated RGB triples chosen for distinguishability on the dark UI (red, orange, yellow, green, cyan, blue, magenta, plus muted variants). The first `g_bench_count` slots are used in load order.
@@ -237,7 +237,7 @@ If load exceeds `MAX_SAMPLES`, drop the oldest samples and print one stderr line
 |-----|--------|
 | `t` | Switch X-axis to date |
 | `s` | Switch X-axis to chronological SHA index |
-| `1`–`9` | Show only the Nth benchmark (no-op if `N > g_bench_count`) |
+| `1`-`9` | Show only the Nth benchmark (no-op if `N > g_bench_count`) |
 | `0` | Show all benchmarks |
 | `n` / `p` | Next / previous benchmark filter (covers past 9) |
 | `r` | Reload CSV (viewer can stay open during a long sampling run) |
@@ -316,7 +316,7 @@ C99 ratchet: the `tools/bench_trend_*/` sources and `tests/test_bench_trend_samp
 
 - **New** `tools/bench_trend_sample/main.c` - argv parsing, popen orchestration, CSV I/O, work loop (~300 lines).
 - **New** `tools/bench_trend_sample/logic.c` + `logic.h` - pure decision functions (~200 lines).
-- **New** `tools/bench_trend_view/bench_trend_view.c` - GLUT viewer (single file, ~300–400 lines).
+- **New** `tools/bench_trend_view/bench_trend_view.c` - GLUT viewer (single file, ~300-400 lines).
 - **New** `tests/test_bench_trend_sample.c` - C unittest exercising `logic.c` (~150 lines).
 - **Edit** `Makefile` - build rules for both binaries and the test (near existing `scene_demo` rules around line 1068); append both binary names to `ROOT_BIN_LINKS` (line 881); add their `.dSYM` paths to `clean` (line 1754); add `test_bench_trend_sample` to `TEST_BINS` and filter it out of `CORE_TEST_BINS` so `make test` runs it with its custom objects.
 - **Edit** `.gitignore` - add the seven entries above.

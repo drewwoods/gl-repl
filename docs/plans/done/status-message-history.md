@@ -36,7 +36,7 @@ All architectural claims verified against the live codebase. The plan
 is feasible, low-risk, and well-described. Key corrections applied
 below (stale paths, missing error-kind detail). UX recommendation
 (persistent button + slide animation + inline list) adopted as the
-direction - forks 1–4 resolved.
+direction - forks 1-4 resolved.
 
 ## 2026-05-23 audit
 
@@ -53,9 +53,9 @@ on demand.
 
 Verified chokepoint: `repl_set_status` / `repl_set_status_error` are
 wired via the sink table to `ui_state_status_set()` /
-`ui_state_status_set_error()` (`src/app/glr_ctrl.c:1720–1722`,
+`ui_state_status_set_error()` (`src/app/glr_ctrl.c:1720-1722`,
 `.status = ui_state_status_set`, `.status_error =
-ui_state_status_set_error`; impl `src/ui/app/state.c:58–75`). Both
+ui_state_status_set_error`; impl `src/ui/app/state.c:58-75`). Both
 delegate to the private `ui_state_status_set_kind(msg, kind)` helper -
 **every** message funnels through that one function. A ring pushed
 there captures all of them (both INFO and ERROR), no call-site sweep.
@@ -70,7 +70,7 @@ A reusable scrollable text overlay already exists
 `src/ui/core/tabbed_overlay.{c,h}`, the F1 help shell - explicitly
 feature-agnostic per its header comment).
 
-## Effort (≈ 1–2 days, low architectural risk)
+## Effort (≈ 1-2 days, low architectural risk)
 
 - Ring buffer in `src/ui/app/state.c` (fixed N × `REPL_STATUS_TEXT_MAX`
   (256, from `config.h`) + kind + anim_time), pushed in
@@ -83,7 +83,7 @@ feature-agnostic per its header comment).
   respects `check-ui-*` purity guards.
 - Viewer: reuse `ui_tabbed_overlay_render` (single tab, lines = history)
   → mostly plumbing; or a bespoke inline list above the bar (nicer for a
-  transient peek, ~80–120 render lines).
+  transient peek, ~80-120 render lines).
 
 No new layering or boundary-guard exposure (reuses status chokepoint,
 snapshot-view pattern, pointer-hover pattern, existing overlay renderer).

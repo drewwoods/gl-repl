@@ -105,7 +105,7 @@ Implemented: all 15 entries, their cfg/setup scaffolds, tags, and difficulty
 metadata are in the catalog. The focused full-walk regression verifies command
 commitability (including named calls, arrays, and `} else {`) and completion.
 
-Order constraint (enforced by `test_catalog_subheading_metadata`): each subheading is one contiguous global run - final order = existing Beginner run (0–4) + new Beginner (3), existing Intermediate (Depth Test Triangle, Lighting Basics, Color Interpolation) + new Intermediate (9), then a new **Advanced** run (3). Multi-tag entries keep one subheading everywhere.
+Order constraint (enforced by `test_catalog_subheading_metadata`): each subheading is one contiguous global run - final order = existing Beginner run (0-4) + new Beginner (3), existing Intermediate (Depth Test Triangle, Lighting Basics, Color Interpolation) + new Intermediate (9), then a new **Advanced** run (3). Multi-tag entries keep one subheading everywhere.
 
 **Beginner (insert after "First Animation"):**
 

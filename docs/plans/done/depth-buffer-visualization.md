@@ -204,7 +204,7 @@ good structural coverage. Then verify all three builds per CLAUDE.md:
   - EMA snap: range jump >2x resets rather than lags;
   - ortho branch: `L = z` path.
 - `tests/test_render3d_render.c`: each `depth_viz` mode renders OK in
-  single-pass and accum branches; out-of-range value → validate fails (−1).
+  single-pass and accum branches; out-of-range value → validate fails (-1).
   (The stub `glReadPixels` fills 1.0, so these only exercise the empty-scene
   path - the synthetic tests above carry the math coverage.)
 - `tests/test_glr_actions.c`: "Depth view" row exists, 4 states, expected
@@ -258,7 +258,7 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && git pull --ff-only ori
 **Measured (2026-07-17, implementation landed):** native Cocoa, 1200×800
 window (retina 2× framebuffer), torus example, Depth view = Scene:
 Render 3D CPU 5.27 ms vs 1.23 ms baseline → **~4.0 ms attributable**,
-FPS holds ~57–60, frame total 7.5 ms. Within budget; no downsampling
+FPS holds ~57-60, frame total 7.5 ms. Within budget; no downsampling
 lever needed. OSMesa headless: functional (all four modes captured).
 
 **Performance acceptance (on-mode cost is real: at 2400×1600 each frame

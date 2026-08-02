@@ -13,7 +13,7 @@ Already landed:
 - Step 3, `37aa1d30`: `PsEvent.source_line`, catalog filename metadata, and
   catalog-time rejection of timestamped tours.
 - Step 4, `fdf8e8b9`: `ps_advance_one_virtual_frame()` refactor.
-- Steps 5–8, `17206ba4`: controlled-tour state machine, completion fork,
+- Steps 5-8, `17206ba4`: controlled-tour state machine, completion fork,
   baseline/restart lifecycle, immediate execution, and resumable backstep
   seeking. This commit also removes `glr_pointer_script_start_lines()` and
   migrates its still-relevant tests.
@@ -436,12 +436,12 @@ Requirements:
 
 ### Already landed; do not reimplement
 
-- Steps 1–2 (`8721a4b9`, `e30df777`): owner snapshot APIs,
+- Steps 1-2 (`8721a4b9`, `e30df777`): owner snapshot APIs,
   `GlrTourSnapshot`, `test_glr_tour_snapshot`, and
   `glr_ctrl_after_tour_restore()`.
 - Step 3 (`37aa1d30`): source-line/catalog metadata and generator validation.
 - Step 4 (`fdf8e8b9`): virtual-frame extraction.
-- Steps 5–8 (`17206ba4`): run kinds, state machine, virtual clock, controls,
+- Steps 5-8 (`17206ba4`): run kinds, state machine, virtual clock, controls,
   immediate execution, seeking, Done, controlled-tour entrypoint, and removal
   of `glr_pointer_script_start_lines()`.
 

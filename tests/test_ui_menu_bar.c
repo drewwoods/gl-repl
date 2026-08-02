@@ -1141,7 +1141,7 @@ static void test_dropdown_geometry_cache_invariants(void) {
                 ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
                                                   &sx_a1, &sy_a1, &sw_a1, &sh_a1));
 
-    /* Tight pin: flyout height equals section's item count × LINE_H plus
+    /* Tight pin: flyout height equals section's item count x LINE_H plus
      * the dropdown padding constants. Use the exact value the cache
      * returns the first time so a stale-cache regression would surface
      * a mismatch on subsequent calls. */

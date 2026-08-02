@@ -38,7 +38,7 @@ typedef enum {
     PROF_RENDER3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
     PROF_RENDER3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
     PROF_RENDER3D_HELPERS,      /* backdrop/grid/axes/orbit-target/lights aggregate */
-    PROF_RENDER3D_BACKDROP,     /* render3d_backdrop_render() – stale when off */
+    PROF_RENDER3D_BACKDROP,     /* render3d_backdrop_render() - stale when off */
     PROF_RENDER3D_GRID,         /* render3d_grid_render() */
     PROF_RENDER3D_AXES,         /* render3d_axes_render() */
     PROF_RENDER3D_ORBIT_TARGET, /* draw_orbit_target() */

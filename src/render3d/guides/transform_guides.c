@@ -649,7 +649,7 @@ static void build_rotate_arc(const float p_start[3],
 }
 
 /* Perpendicular {u, v} basis for a unit rotation axis (ax, ay, az):
- * u is computed from a world-up helper and normalized, then v = a × u.
+ * u is computed from a world-up helper and normalized, then v = a x u.
  * Used to place the synthetic dial start point for on-axis anchors. */
 static void rotate_axis_basis(float ax, float ay, float az,
                               float u[3], float v[3]) {

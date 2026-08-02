@@ -1769,7 +1769,7 @@ lines, where they can be inspected or edited as ordinary C.
 
 - **MSAA** (Ctrl+U) - hardware multisampling on/off.
 - **Line smooth** - GL line antialiasing.
-- **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+−) - the
+- **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+-) - the
   accumulation buffer drives antialiasing and motion blur:
   - **AA** *(default, 1 pass)* - jitters the camera frustum per pass.
   - **Blur** - re-renders the scene per pass across the frame's
@@ -1812,7 +1812,7 @@ loop-variable values substituted into the displayed text.
 |---|---|
 | **Ctrl+R** (or the Replay button) | Start / stop replay |
 | **Space** | Pause / resume |
-| **+** / **−** | Faster / slower |
+| **+** / **-** | Faster / slower |
 | **Left** / **Right** | Step backward / forward (while paused) |
 | **Ctrl+K** | Jump the replay to the cursor line (first geometry at/after it) |
 | **m** / **M** | Toggle replay mode: Polygon / Vertex granularity |
@@ -2419,7 +2419,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
-| Ctrl+= / Ctrl+− | Accum passes up/down |
+| Ctrl+= / Ctrl+- | Accum passes up/down |
 | Ctrl+Shift+X | Transform guides |
 | Ctrl+N | Normal vectors |
 | Ctrl+Shift+O | Vertex outlines |
@@ -2428,7 +2428,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
-| F2–F10 | Config cycles (Shift steps backward) - see [The Config menu](#the-config-menu) |
+| F2-F10 | Config cycles (Shift steps backward) - see [The Config menu](#the-config-menu) |
 | F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |

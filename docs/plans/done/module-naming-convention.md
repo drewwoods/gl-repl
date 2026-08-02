@@ -306,7 +306,7 @@ user wants the cleanup landed without new gates.
    and trigger autocomplete (the renamed completion fn).
 6. Per-symbol absence check (**not** a blanket `grep 'Repl'`, which
    correctly still matches borrowed-API types): for each stale name in
-   the Phase 1–3 tables, assert it no longer appears as a
+   the Phase 1-3 tables, assert it no longer appears as a
    `typedef`/`} <Name>;`/prototype in its old home -
    e.g. `! grep -RnE 'typedef .*\b(ReplEditorBuffer|ReplMenuId|…)\b|}
    (ReplEditorBuffer|…);' src/editor src/ui src/app src/widgets`.

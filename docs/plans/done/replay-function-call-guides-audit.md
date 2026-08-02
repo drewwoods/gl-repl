@@ -25,7 +25,7 @@ This audit covers six requested improvements:
   show the live animated guide there; this **replaces** req 3's static frame
   axes.
 
-**Implementation status (2026-06-06).** Reqs 1–3 are implemented and committed
+**Implementation status (2026-06-06).** Reqs 1-3 are implemented and committed
 on `main` (`34df87f3` call-site highlight, `fd571604` call depth, `0cb8c6d4`
 frame axes, `4b5d050e` stale-`pc` clamp for replay vertex focus), verified via
 headless OSMesa capture. Req 3's static frame axes are an interim visual that

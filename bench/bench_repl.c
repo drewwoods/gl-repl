@@ -1713,7 +1713,7 @@ static BenchResult bench_fade_batches(int iters) {
 #ifdef GL_STUBS
     /* Reset right before the timed region so the counter dump below
      * reflects only the per-batch repl_execute_program work across the
-     * full iters×inner call count. */
+     * full itersxinner call count. */
     gl_stub_counts_reset();
 #endif
 

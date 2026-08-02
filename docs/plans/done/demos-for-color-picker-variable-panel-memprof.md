@@ -152,7 +152,7 @@ modeled on the `scene_demo` block (Makefile ~782).
   NULL-view fallback or update the ~8 `(NULL, ...)` test call sites.
 
 **Demo `tools/variable_panel_demo/variable_panel_demo.c`:** a `glutSolidTorus`
-whose params/transform are driven by 3–4 named floats in a local
+whose params/transform are driven by 3-4 named floats in a local
 `{char name[16]; float value;}` array; demo installs the value-source over
 it. Mouse press → `ui_variable_panel_hit_test(&view, ...)` → if
 `UI_HIT_VARIABLE_SLIDER`, `variable_panel_handle_drag_begin`; motion →

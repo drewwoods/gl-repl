@@ -16,7 +16,7 @@ The real work is now (B) a verified dead-code sweep, (C) duplication
 hoists, and optionally (D) complexity refactors; the Phase A scanner
 fixes and acceptance run are complete.
 
-- **A - Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5;
+- **A - Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0-A5;
   A6's CPD baseline is now unblocked and still open)
 - **B - Dead-code sweep.** ✅ DONE - facade-symmetry retains annotated,
   non-facade candidate functions deleted (2026-07-16).
@@ -61,7 +61,7 @@ Do these first; they make every later re-scan trustworthy.
    from `--dir` to `--file-list`), and churn applies the same explicit
    2026-05-23 cutoff to both the root file and post-reorg `src/` paths.
 6. **After B/C land:** keep `MIN_TOKENS=80` (raising it would blind
-   CPD to new 80–119-token duplicates). Instead, check in a baseline
+   CPD to new 80-119-token duplicates). Instead, check in a baseline
    of the accepted residual blocks (file-pair + token-count
    fingerprints, same remove-only ratchet pattern as
    `scripts/baselines/palette-coverage.txt`) and have the summary
@@ -176,7 +176,7 @@ Original findings:
      (`export_line_comment_start`) - adjacent to the documented
      `IMPORT_EXPORT_STATE` macro-block duplication; movable to a
      shared TU if desired, but same-family policy applies.
-5. **Accepted small residue** (~81–108-token two-site repeats inside
+5. **Accepted small residue** (~81-108-token two-site repeats inside
    single files): `eval.c` scratch-subscript rewriters + for-header
    parsers, `backdrop.c` sky domes, `scene_tabs.c` rounded-rect loops,
    `editor/input.c` commit paths (1591↔1735), `commit.c` 949↔992,

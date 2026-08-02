@@ -83,9 +83,9 @@ sample/product translation units found these known blockers for a
    that as a C11 typedef-redefinition extension, but rejects it under
    `-std=c99 -pedantic-errors`.
 4. **Old-style function-pointer casts for GLU tessellation callbacks** -
-   `src/repl/executor.c:137`–`:146` casts callback functions to
+   `src/repl/executor.c:137`-`:146` casts callback functions to
    `void (*)()`. Clang diagnoses that as a strict-prototypes error under
-   the C99 pedantic bar. `src/repl/export.c:561`–`:566` emits the same
+   the C99 pedantic bar. `src/repl/export.c:561`-`:566` emits the same
    cast shape into exported C; update it too if exported output is covered
    by the C99 promise.
 
@@ -211,7 +211,7 @@ Audit result: **every** `WRITE_TEXT(...)` / `WRITE_TEXT_APPEND(...)` call
 passes at least one variadic argument after the format string (verified
 across all ~20 call sites; no `WRITE_TEXT(fmt)`-only call exists). So the
 `##` is never functionally needed - replace `, ##__VA_ARGS__` with
-`, __VA_ARGS__` in both macro definitions (lines 257–264). Zero
+`, __VA_ARGS__` in both macro definitions (lines 257-264). Zero
 behavioral change in either standard mode.
 
 - `WRITE_TEXT_APPEND` is **defined but unused** (only the `#define`
@@ -290,7 +290,7 @@ typedefs must be named/prototyped rather than old-style `void (*)()`;
   with a named C99-clean callback typedef.
 - `src/repl/export.c` - update exported tessellation callback setup so
   generated C does not emit old-style `void (*)()` casts.
-- `src/repl/parser.c` - lines 257–264: drop `, ##`; delete unused
+- `src/repl/parser.c` - lines 257-264: drop `, ##`; delete unused
   `WRITE_TEXT_APPEND`.
 - `Makefile` - make sample objects/binary use C99, keep test objects on
   C2x, prevent cross-standard object reuse, add `c99` / `check-c99`, and

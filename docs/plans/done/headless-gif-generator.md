@@ -24,7 +24,7 @@ freeglut backend, and a `--time`/`GLR_TIME` knob for the initial animation
 clock. Animation runs headless: `t` is a *fixed-timestep* clock advancing
 exactly `1/60 s` per **rendered frame** (decoupled from wall-clock -
 `GLR_FRAME_DT_SECS` in `src/app/glr_ctrl.c`), so capturing every frame and
-playing back at ~50–60 fps gives smooth motion regardless of the software
+playing back at ~50-60 fps gives smooth motion regardless of the software
 renderer's speed (Mac ~2.7 fps, gracemont ~21 fps generation).
 
 The missing piece for animations is a reliable way to grab a *sequence* of

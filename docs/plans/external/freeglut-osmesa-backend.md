@@ -255,10 +255,10 @@ but it is **gl-repl** work, tracked separately; this plan stops at freeglut.
 ## Effort estimate
 
 - Context provider + window create/make-current/destroy (mirror `src/egl/`): ~1 day.
-- Null event loop + initial-callback synthesis (the fiddly part): ~1–2 days.
+- Null event loop + initial-callback synthesis (the fiddly part): ~1-2 days.
 - Stubs + CMake/option/find-OSMesa wiring: ~0.5 day.
 - Self-test demos + cross-platform shakeout (Linux + macOS): ~1 day.
-- **Total: ~3.5–5 days**, most of the risk concentrated in the event-loop /
+- **Total: ~3.5-5 days**, most of the risk concentrated in the event-loop /
   first-frame-callback synthesis. The context half is mechanical (OSMesa's API
   is tiny and the egl provider is a direct template).
 

@@ -205,9 +205,9 @@ fall-through, scope `CMD_BREAK` explicitly.
 | Scope | Estimate |
 |---|---|
 | Parse + flatten prototype for `else` only (no execute changes - flatten selects the arm) | A few hours |
-| Parse + flatten prototype for first-class `else` + `else if` | **0.5–1 day** |
+| Parse + flatten prototype for first-class `else` + `else if` | **0.5-1 day** |
 | Clean implementation with editor structural behavior (compile ordering, separator indent, block extent / copy / comment) and tests | **About 2 focused days** |
-| Full polish including import/export round-trip, reformatting, dead-code cleanup in executor/replay, and edge cases | **2–3 days** |
+| Full polish including import/export round-trip, reformatting, dead-code cleanup in executor/replay, and edge cases | **2-3 days** |
 
 Overall rating: **moderate** - lower than a first read suggests. First-class
 `else if` turns a two-arm conditional into a branch chain that the
@@ -240,7 +240,7 @@ flatten + structural editing, not in the executor/replay walkers.
    `replay_annotations.c` and add the separators to
    `replay_cmd_is_focus_candidate`. No new runtime branch logic.
 7. Add reformat / completion support (incl. separator-line indent and the
-   `command_spec` / drift-test wiring from implications 6–7).
+   `command_spec` / drift-test wiring from implications 6-7).
 8. Add export/import round-trip coverage.
 9. Lock tests *as each stage lands* - at minimum a flatten arm-selection test
    and a compile-recognition test before the structural-editor work - rather

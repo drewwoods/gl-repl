@@ -1,6 +1,6 @@
 # Plan: Editor Ownership Gap Audit and Cleanup Companion
 
-> **Status: landed (extended through 2026-05-05).** Phases A–J of
+> **Status: landed (extended through 2026-05-05).** Phases A-J of
 > the companion plan
 > [`editor-owns-text-completion.md`](editor-owns-text-completion.md)
 > closed the audit. Every audit this document specified is now a
@@ -251,7 +251,7 @@ mirrors the gates that have come online.
 | 1.2 (input rename) | editor-input convenience getters renamed `repl_state_*` → `editor_*` (commit 10, 2026-05-02); audit section 1 unchanged (these names never matched the slice-name pattern); architectural prize is namespace consistency |
 | 1.2 (code_panel scroll) | scroll + scroll_follow_cursor split off into EditorState.scroll (commit 11, 2026-05-02); audit section 1: 1209→1194 |
 | 1.2 (ratchet) | `make check-editor-ownership-budget` ratchets transitional couplings downward only: ui-forwarder line count (baseline 21) and ui_state.h→repl_state_views.h include (baseline 1) (commit 11, 2026-05-02) |
-| 1.3–5 | camera placement + chrome accessor migration + later phases pending |
+| 1.3-5 | camera placement + chrome accessor migration + later phases pending |
 
 ## Phase 0: Add Audits Before Moving Code
 

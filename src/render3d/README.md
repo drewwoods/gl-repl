@@ -51,7 +51,7 @@ make render3d-demo     # opens a window: "render3d teapot demo"
 ```
 
 Controls cover the renderer's whole config surface: `V` blends
-perspective↔orthographic, `L`/`1`–`4` toggle global lighting and individual
+perspective↔orthographic, `L`/`1`-`4` toggle global lighting and individual
 lights, `W` wireframe, `G`/`X` cycle grid/axes themes, `B` cycles the
 backdrop, `I` toggles light indicators. A bitmap HUD prints the live config.
 

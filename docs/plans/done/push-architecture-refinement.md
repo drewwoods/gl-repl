@@ -399,7 +399,7 @@ emission.
 | Code | What it really is |
 |------|-------------------|
 | Main geometry pass clamped to `replay_base_limit` | Already executor-driven - just `execute_fn(1.0f, 0, pc, ...)`. No problem. |
-| Fade batch loop (`render_3d_scene_pass` lines 424–480) | Multiple *additional* calls to `execute_fn`, each with different alpha/skip-limit, plus full GL state setup (push attrib, re-setup lighting, materials, blend) between each one. |
+| Fade batch loop (`render_3d_scene_pass` lines 424-480) | Multiple *additional* calls to `execute_fn`, each with different alpha/skip-limit, plus full GL state setup (push attrib, re-setup lighting, materials, blend) between each one. |
 | `replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample - so animated geometry looks consistent across passes. |
 | `ui_replay_hud_render()` | Pure 2D UI, now in `ui_replay_hud.c`. |
 | `draw_replay_tess_preview()` | 3D wireframe overlay - same family as `scene_overlays.c`. |
@@ -764,7 +764,7 @@ Concrete consequences observed in the current tree:
   (lines 187, 212, 222, 576). Architecturally identical to the pre-facade
   globals - just typed.
 - `ui_color_picker.c` mutates `repl_state_document_cmds_mut()[line].args[0..3]`
-  and `.source` in ~30 places (lines 63–145, 307–393). A UI renderer is editing
+  and `.source` in ~30 places (lines 63-145, 307-393). A UI renderer is editing
   REPL-owned source commands in place, with no undo hook, no validation, no
   observer. The `_mut()` wrapper makes this look sanctioned when it is not.
 - `Makefile` boundary checks see only the include graph plus one specific
@@ -824,7 +824,7 @@ if (config->use_accum && config->accum_aa_enabled && config->accum_samples > 1) 
 ```
 
 Remove `#include "repl_state.h"` from `scene_render.c` only after the later
-steps have cleared the remaining `repl_state_*` uses (lines 187, 212–223).
+steps have cleared the remaining `repl_state_*` uses (lines 187, 212-223).
 
 Exit criterion: `scene_render.c` no longer calls `repl_state_render()`.
 
@@ -832,7 +832,7 @@ Exit criterion: `scene_render.c` no longer calls `repl_state_render()`.
 
 **R1b - Build a `ReplayFadePlan` snapshot in the controller; scene iterates it**
 
-`render_3d_scene_pass()` (scene_render.c:424–481) calls three `repl_replay_*`
+`render_3d_scene_pass()` (scene_render.c:424-481) calls three `repl_replay_*`
 functions and `replay_restore_baseline_predef_values()` between batches.
 The fix is to build the plan once in the controller so the scene only needs to
 iterate it.
@@ -948,13 +948,13 @@ The three offenders and their fixes:
 
 **R2a - `ui_color_picker.c`: direct source-command mutation (~30 sites)**
 
-`color_picker_write_cmd()` (ui_color_picker.c:60–130) writes directly to
+`color_picker_write_cmd()` (ui_color_picker.c:60-130) writes directly to
 `repl_state_document_cmds_mut()[g_cp_line].args[0..3]`, `.num_args`, and
 `.source`, then calls `repl_state_mark_flat_dirty()`. This bypasses
 `repl_command_store`, bypasses undo, and requires `ui_color_picker.c` to
 include `repl_state.h` and `repl_core_internal.h`.
 
-The reads in `ui_color_picker_open()` (lines 137–146) also use `_mut()` purely
+The reads in `ui_color_picker_open()` (lines 137-146) also use `_mut()` purely
 for read access - a symptom of there being no `const` version of
 `repl_state_document_cmds()` at those call sites.
 
@@ -1000,7 +1000,7 @@ Exit criterion: `ui_color_picker.c` contains zero `repl_state_*_mut()` calls.
 
 Two distinct patterns:
 
-*Cursor blink reset* - lines 1123–1124 and 1240–1241:
+*Cursor blink reset* - lines 1123-1124 and 1240-1241:
 
 ```c
 *repl_state_code_panel_mut()->cursor_visible = 1;
@@ -1018,7 +1018,7 @@ void repl_action_cursor_blink_reset(void);
 
 Implement in `repl_actions.c` (two lines). Replace both sites in `ui_panels.c`.
 
-*Replay pin-button mutation* - line 1131 and 1148–1149:
+*Replay pin-button mutation* - line 1131 and 1148-1149:
 
 ```c
 ReplReplayRuntimeState *replay = repl_state_replay_mut();
@@ -1038,7 +1038,7 @@ void replay_toggle_play_pause(void);
 ```
 
 Implement in `repl_replay.c`. Replace the three-branch switch in
-`ui_panels.c::ui_panels_handle_code_panel_press()` (lines 1148–1154) with a
+`ui_panels.c::ui_panels_handle_code_panel_press()` (lines 1148-1154) with a
 single `replay_toggle_play_pause()` call. Remove the
 `repl_state_replay_mut()` fetch on line 1131.
 
@@ -1052,7 +1052,7 @@ returns only legitimate read-via-const-accessor patterns or nothing.
 **R2c - `ui_panels.c` reads via `_mut()`: switch to const accessor**
 
 `ui_panels.c` calls `repl_state_document_cmds_mut()` in ~15 read-only
-contexts (lines 397, 539–715) - it uses the mutable accessor where the const
+contexts (lines 397, 539-715) - it uses the mutable accessor where the const
 one would do. This matters because R6 (facade split) will make
 `repl_state_document_cmds_mut()` importable only from `repl_state_owners.h`,
 so `ui_panels.c` would need the owners header just to read cmd types.
@@ -1086,7 +1086,7 @@ Exit criterion: `grep "_mut()" ui_help_overlay.c` returns empty.
 
 **R2 combined exit criterion**
 
-After R2a–R2d:
+After R2a-R2d:
 
 ```
 grep -rn "repl_state_[A-Za-z0-9_]*_mut()" ui_*.c
@@ -1099,7 +1099,7 @@ or `repl_core_internal.h`. The `check-ui-no-repl-state-mut` Makefile rule
 
 #### R3. Extract layout geometry out of `ui_panels.c`
 
-`ui_panels_scene_rect` and `ui_panels_code_panel_rect` (`ui_panels.c:50–110`)
+`ui_panels_scene_rect` and `ui_panels_code_panel_rect` (`ui_panels.c:50-110`)
 are pure window-geometry functions: no GL, no rendering, no UI state. They
 compute pixel rectangles from window dimensions, the current layout mode, and
 `panel_frac`. Because they live in `ui_panels.c`, every non-UI caller -
@@ -1275,7 +1275,7 @@ No implementation files change in this step - only header membership.
 
 **R4b - Add `repl_eval_predef_view()` to `repl_eval.h` to hide global access**
 
-`imrepl_ctrl.c:65–66` reads two file-scoped globals from `repl_eval.c` directly:
+`imrepl_ctrl.c:65-66` reads two file-scoped globals from `repl_eval.c` directly:
 
 ```c
 guide_snapshot.predef_vars     = g_predef_vars;
@@ -1309,7 +1309,7 @@ ReplPredefView repl_eval_predef_view(void) {
 }
 ```
 
-Replace `imrepl_ctrl.c:65–66` with:
+Replace `imrepl_ctrl.c:65-66` with:
 
 ```c
 ReplPredefView predef = repl_eval_predef_view();
@@ -1794,7 +1794,7 @@ Once `repl_core.c` is empty, stop treating `repl_core.h` as the accidental
 one concise public REPL API header grouped by implementation file, with
 implementation detail kept out of the public surface.
 
-R10 is independent of R1–R7 and can be done in parallel with them. Phase 1 of
+R10 is independent of R1-R7 and can be done in parallel with them. Phase 1 of
 R10 (deleting dead declarations) should be the very first commit in any session
 touching `repl_core.c`, since it eliminates noise that misleads readers.
 
@@ -1910,7 +1910,7 @@ R8          (sample → imrepl rename - mechanical, last)
 R9          (optional: split repl_export.c)
 ```
 
-R10 phases 2–5 are independent of R1–R7 and can be interleaved freely; only
+R10 phases 2-5 are independent of R1-R7 and can be interleaved freely; only
 R10-phase1 has a strong "do it first" signal because it removes noise that
 misleads every reader. R4 and R10-phase2 are natural companions: R4 creates
 `repl_pipeline.h` as a proper public surface for the symbols the controller
@@ -1927,7 +1927,7 @@ Most of Phase 2 has now landed. Current completion:
 | Recommendation | Status | Notes |
 |---|---|---|
 | **R1** - Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` and `repl_state_*` calls |
-| **R2** - UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; `check-ui-no-repl-state-mut` passes |
+| **R2** - UI → REPL mutation hole | ✅ Complete | R2a-R2d all done; `check-ui-no-repl-state-mut` passes |
 | **R3** - Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
 | **R4** - Controller off `repl_core_internal.h` | ⚠️ Mostly complete | R4a/R4b/R4d done; R4c clean for controller; only `bench_repl.c` remains (intentional, R4c-out-of-scope) |
 | **R5** - Slim `SceneRenderConfig` | ✅ Complete | Six HUD fields removed (now on `UiReplayHudState`); `ReplayFadePlan` + accum-AA fields landed; struct reorganized into labeled sections |

@@ -32,12 +32,12 @@ Today the `scene_*` layer is snapshot-driven: the controller
 The `ui_*` layer is half-converted:
 
 - `replay_ui_hud.c` already takes a `UiReplayHudState` snapshot
-  (`replay_ui_hud.h:10–25`). Zero live state reads. This was the proven
+  (`replay_ui_hud.h:10-25`). Zero live state reads. This was the proven
   pattern that the rest of `ui_*` extended in Phase B.
 - Every other `ui_*.c` file still pulls live state through
   `repl_state_views.h` - 127 read sites across 8 files
   (~70 in `ui_panels.c`, ~26 in `ui_menu_bar.c`).
-- A single render-time mutation remains: `ui_panels.c:250–251` writes the
+- A single render-time mutation remains: `ui_panels.c:250-251` writes the
   computed cursor pixel position back into REPL state from inside the line
   draw loop. Color picker render also caches hit rects in file-statics
   (`ui_color_picker.c:151,187,207`) - same shape, different storage.
@@ -91,7 +91,7 @@ is the same shape and worth fixing in the same pass.
 **A3. Verify the full set.** Grep for `*[a-z_]\+ =` inside every render
 function in `ui_*.c`. Anything writing through a pointer that came from
 `repl_state_*_mut()` is in scope. The other render-time mutation
-(`ui_variable_panel.c:81–87`, replay-lift easing animation) writes to
+(`ui_variable_panel.c:81-87`, replay-lift easing animation) writes to
 file-local statics for a UI-local effect; leave it alone but document.
 
 Exit criterion: every `ui_*` render function takes only `const`
@@ -141,7 +141,7 @@ Residual scope (intentional, Phase C territory):
 
 The historical plan follows below; Phase A and Phase C remain as written.
 
-#### Original plan (medium, ~5–8 commits)
+#### Original plan (medium, ~5-8 commits)
 
 Mirror what `SceneRenderConfig` did for `scene_*`. The controller builds
 one per frame from REPL state; UI render functions consume it; UI files
@@ -180,7 +180,7 @@ re-inventing.
 
 **B2. Add `imrepl_ctrl_build_ui_snapshot()` in `imrepl_ctrl.c`.**
 Same shape as `imrepl_ctrl_build_scene_config()`
-(`imrepl_ctrl.c:145–246`). Built once per frame after the scene config,
+(`imrepl_ctrl.c:145-246`). Built once per frame after the scene config,
 before any `ui_*_render()` call. This is the only function that reads
 `repl_state_*` for UI rendering.
 
@@ -225,7 +225,7 @@ depends on appetite. Concrete trade-off:
 - **Con:** The action APIs (`repl_action_*`, `repl_command_store_*`)
   already centralise the mutation surface; converting to a deferred
   output adds indirection without changing what state actually moves.
-  Likely 15–25 distinct `UiAction` variants given the current handler
+  Likely 15-25 distinct `UiAction` variants given the current handler
   surface.
 
 If pursued: define a `UiAction` tagged union, change every
@@ -237,11 +237,11 @@ Phase A and Phase B can ship without Phase C.
 
 | File | Phase | Role |
 |------|-------|------|
-| `ui_panels.c:250–251` | A | The named cursor-px write-back |
+| `ui_panels.c:250-251` | A | The named cursor-px write-back |
 | `ui_color_picker.c:151,187,207` | A | Render-time hit-rect cache |
 | `ui_replay_hud.h` | B | Existing snapshot precedent - extend, don't re-invent |
-| `imrepl_ctrl.c:145–246` | B | `imrepl_ctrl_build_scene_config()` shape to mirror |
-| `imrepl_ctrl.c:248–333` | B | `imrepl_ctrl_display_frame()` - add snapshot build before UI calls |
+| `imrepl_ctrl.c:145-246` | B | `imrepl_ctrl_build_scene_config()` shape to mirror |
+| `imrepl_ctrl.c:248-333` | B | `imrepl_ctrl_display_frame()` - add snapshot build before UI calls |
 | `repl_state_views.h` | B | Source of every field the snapshot needs |
 | `ui_snapshot.h` (new) | B | `UiRenderSnapshot` struct |
 | `Makefile` | B | New `check-ui-no-repl-state-read` guard |
@@ -286,7 +286,7 @@ For each phase:
 
 ## Sizing note
 
-Phase A is half a day. Phase B is the bulk - call it 2–4 days,
+Phase A is half a day. Phase B is the bulk - call it 2-4 days,
 front-loaded by `ui_panels.c` (largest file, owns the code panel).
 Phase C is open-ended; defer until A+B prove the pattern works at scale.
 

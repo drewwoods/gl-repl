@@ -152,7 +152,7 @@ during the source-document-port work; the root-level files no
 longer exist, so the guard's `nullglob` finds zero files and exits
 "repl-no-direct-editor OK (no repl_* sources found)" *regardless
 of what's actually in `src/repl/`*. Verified by reading the
-script (lines 23–28).
+script (lines 23-28).
 
 That means right now `make check-state-ownership` passes even if
 REPL code calls editor accessors. The migration cannot rely on

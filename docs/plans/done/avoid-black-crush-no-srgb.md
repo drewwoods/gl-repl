@@ -67,13 +67,13 @@
 4. Add `float alpha_scale` to `SceneGuideSnapshot` in scene_guides_shared.h
 5. Copy `config->alpha_scale` into it in `scene_build_guide_snapshot()` in scene_render.c
 
-### Phase 3 - Apply in scene_grid.c custom themes (*parallel with Phase 4–6*)
+### Phase 3 - Apply in scene_grid.c custom themes (*parallel with Phase 4-6*)
 
 All four custom themes receive `GridDrawContext *grid_ctx`; add a local `float as = grid_ctx->alpha_scale` and wrap inline alpha literals with `fminf(literal * as, 1.0f)`. Affected calls:
 
 | Theme | Low-alpha literals to boost |
 |---|---|
-| FOCUS | `base * fx` / `base * fz` (0.06–0.18), crosshair `0.25f` |
+| FOCUS | `base * fx` / `base * fz` (0.06-0.18), crosshair `0.25f` |
 | PLANES | floor `0.04f`/`0.10f`, origin `0.30f`, XY/ZY `0.05f`/`0.14f`, origins `0.42f` |
 | XZRULER | origin axes `0.70f`, ticks `0.22f`/`0.48f` - high enough to skip, but RULER line colors go through `grid_ruler_line_color` callback which already is in `GridLineColors` → those already go through the existing scaler in `draw_grid_standard_theme`... wait, XZRULER is a custom case that calls `grid_ruler_line_color` directly - it needs the same treatment |
 | OCEAN | `base_a` (`0.28f`/`0.55f`), origin `a_o` - the water surface `0.62f * edge` is intentionally transparent, can leave alone |
@@ -90,7 +90,7 @@ All four custom themes receive `GridDrawContext *grid_ctx`; add a local `float a
 | NEON outer glow | `0.12f * glow` | boost |
 | PULSE trail start | `0.05f` | low but intentional design - optional |
 | COMPASS origin dot | `0.6f` | skip (fine) |
-| Main axes + labels | `0.85f–1.0f` | skip |
+| Main axes + labels | `0.85f-1.0f` | skip |
 
 ### Phase 5 - Apply in scene_geometry_guides.c (*parallel with Phase 3*)
 
@@ -101,7 +101,7 @@ All four custom themes receive `GridDrawContext *grid_ctx`; add a local `float a
 | `draw_guide_yz/xz/xy_plane` | `0.72f` fill, `0.45f` border | boost (add `as` param) |
 | Normal guide face normal lines ~L258 | `0.4f` | boost |
 | Normal guide arrows L270/277/289/292 | `0.75f`, `0.85f` | optional, skip |
-| 2-vertex line guides L125–147 | `0.9f` | skip, already fine |
+| 2-vertex line guides L125-147 | `0.9f` | skip, already fine |
 
 ### Phase 6 - Apply in scene_transform_guides.c (*parallel with Phase 3*)
 
@@ -114,7 +114,7 @@ Same: `snapshot->alpha_scale` after Phase 2. Add `float as = snapshot->alpha_sca
 | Scale/rotate guide: dim connector L359 | `0.45f` | boost |
 | Rotate arc line L511 | `0.30f` | boost |
 | Rotate trail L541 | `0.05f` | boost |
-| Arrow shafts/heads (0.7–1.0) | fine | skip |
+| Arrow shafts/heads (0.7-1.0) | fine | skip |
 
 ---
 

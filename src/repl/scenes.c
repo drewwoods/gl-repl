@@ -295,7 +295,7 @@ static void install_scene_into_live(int slot) {
  * cmds[4096] + lines[4096][256] dominate). Stack allocation is a
  * real overflow hazard because workspace/load flows can keep multiple
  * snapshots can be live together during transactional loads; putting them on
- * the stack exceeds the default POSIX worker stack (512 KB – 2 MB)
+ * the stack exceeds the default POSIX worker stack (512 KB - 2 MB)
  * and pressures the 8 MB main stack alongside ASan/UBSan redzones.
  * Every successful scene_snapshot_scratch_alloc must be paired with
  * scene_snapshot_scratch_free at every exit path. Returns NULL on OOM. */

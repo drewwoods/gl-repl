@@ -250,7 +250,7 @@ Order matters; each step builds + passes tests before the next.
    - **Step 4 ↔ 5 coupling found:** plan-Step-5 option (a) ("hit-test
      never emits `UI_HIT_MENU_ITEM` for parent rows") is **not viable**
      - `ui_menu_bar_dropdown_item_hit` is shared with the hover path,
-     and returning −1 there would stop Config sections from
+     and returning -1 there would stop Config sections from
      hover-opening. So Step 5 collapses to **option (b) only**: the
      `glr_action_menu_item_activate(MENU_CONFIG, …)` guard. At Step 4
      the scene-tabs row-0 case is already a safe no-op (row 0 aliases

@@ -91,7 +91,7 @@ to find which slot the cursor is in.
 | Relax `:258` guard to "cursor at end of *current token*" not "end of input" | Moderate - must not regress POINT_PARAM / FUNC_PREFIX / ENUM modes |
 | Cursor-relative accept + ghost rendered at cursor (mid-buffer splice) | Moderate - touches the editor input buffer and the active-input ghost renderer (assumes draw-after-cursor) |
 
-Overall **moderate, ≈ half a day** for the scoped option; **≈ 1–1.5
+Overall **moderate, ≈ half a day** for the scoped option; **≈ 1-1.5
 days** for the fully general mid-line splice. The enum table matching is
 a few lines; the cost is entirely the three end-anchored assumptions.
 

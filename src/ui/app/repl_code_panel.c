@@ -2658,7 +2658,7 @@ static void repl_code_panel_draw_bitmap_icon(int kx, int ky, int kw, int kh,
 }
 
 static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
-    /* 13×12  1bpp trash-can glyph, drawn with glBitmap so it matches
+    /* 13x12  1bpp trash-can glyph, drawn with glBitmap so it matches
      * the crisp pixel-art style of the ⇧ shift glyph and the bitmap
      * font.  Rows are bottom-to-top (glBitmap scan order); bit 0x80
      * of byte 0 = leftmost pixel (col 0).  The three interior slats

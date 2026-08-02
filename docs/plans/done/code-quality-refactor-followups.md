@@ -5,7 +5,7 @@
 Captured 2026-05-19 from the "final pass" audits behind PR #41 - four
 parallel read-only passes (smells / inconsistencies / dense uncommented
 code) over `src/app`+root, `src/repl`, `src/editor`, and
-`src/scene`+`src/ui`+`src/widgets`, calibrated to the #36–#40 cleanup
+`src/scene`+`src/ui`+`src/widgets`, calibrated to the #36-#40 cleanup
 bar.
 
 The **clear-wins** from those audits have already landed and are NOT in
@@ -255,7 +255,7 @@ export/import round-trip) is the safety net.
 **Problem.** `src/repl/parser.c` (`:404, :441, :933`) open-codes
 `spaces = 2 + 2*td + 2*kd; memset(ind,' ',spaces)` for the glBegin-style
 indent and `src/repl/core.c` (`:514-528`) open-codes the close-brace
-"indent − 2" dedent, despite `format.c` (`repl_format_indent`,
+"indent - 2" dedent, despite `format.c` (`repl_format_indent`,
 `repl_format_end_indent`, `repl_format_tess_end_indent`) and
 `source_scope.c` (`repl_source_scope_cmd_indent`) already centralizing
 the formula. The bare `2`/`+2`/`-2` are duplicated across 4 files.
@@ -282,7 +282,7 @@ where it is paired. Low risk, ~30 lines removed.
 ### 10. Duplicated trailing-`;`/whitespace strip primitive - Not started
 
 `input.c` (`:322, :387, :517`, + label variants `:308`) hand-rolls
-"strip trailing `;` and whitespace, return new length" 3–4×. A
+"strip trailing `;` and whitespace, return new length" 3-4×. A
 `static int strip_trailing_semicolon_ws(...)` centralizes the
 end-of-string/`;` terminator contract documented in CLAUDE.md. Call
 sites differ in buffer ownership - report-only granularity.
@@ -399,7 +399,7 @@ drift check.
 
 ## Recommended sequencing
 
-Executed as **one PR per item** (chosen over the original A–E
+Executed as **one PR per item** (chosen over the original A-E
 batching) so each is independently reviewable; see the Status table
 for live state. Order actually followed: 1, 3, 6, 17, 5, 16, 11, 13,
 2 (all done/in-review) → then the remaining dedup in this order:

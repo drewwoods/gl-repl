@@ -53,7 +53,7 @@ New mode: vertical split - code panel **top** (`g_win_h × g_panel_frac`), scene
 | Scroll/visible_lines | `visible_lines` is derived from `g_win_h`; in vertical mode panel height shrinks | ui_panels.c | Easy |
 | Hotkey/config entry | Config menu entry or `Ctrl+L` / `Ctrl+T` | `repl_core.c`, `ui_panels.c` | Easy |
 
-**Total estimated effort: ~3–5 hours.** The core change is straightforward (one flag), but the mouse Y-coordinate math, all the sub-panel placements, and the scroll height accounting need careful adjustment across ~6 locations in 3 files.
+**Total estimated effort: ~3-5 hours.** The core change is straightforward (one flag), but the mouse Y-coordinate math, all the sub-panel placements, and the scroll height accounting need careful adjustment across ~6 locations in 3 files.
 
 ---
 

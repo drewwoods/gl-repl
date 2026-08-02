@@ -40,7 +40,7 @@ glEnd();
 |---|---|
 | **Immediate mode, immediately** | The geometry lives in your code. Edit a `glVertex3f`, see the vertex move. |
 | **Time as a variable** | `Ctrl+T` toggles `t`. Reference it anywhere - animation with no boilerplate. |
-| **AA and motion blur** | Accumulation effects provide edge AA, animation-time blur, and camera blur over 2–16 samples. Stable animations rebake values without rebuilding their command topology, keeping Blur practical-including in the web build. |
+| **AA and motion blur** | Accumulation effects provide edge AA, animation-time blur, and camera blur over 2-16 samples. Stable animations rebake values without rebuilding their command topology, keeping Blur practical-including in the web build. |
 | **See what your code means** | Cursor on a `glRotatef` line? An arc guide shows the rotation in the scene. Vertex labels, normal arrows, and polygon highlights follow your cursor. |
 | **Scope GL state visibly** | `glPushAttrib(mask)` and `glPopAttrib()` save and restore the ten state groups the REPL can change. Use `GL_ALL_ATTRIB_BITS` for all of them; cursor highlights show which setters a push saves or a pop reverts. |
 | **Replay your draws** | `Ctrl+R` steps through the command stream; watch the scene assemble call by call, loop variables substituted live in the code panel. |

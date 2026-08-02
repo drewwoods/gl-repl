@@ -43,7 +43,7 @@ Footprint (additive, contained):
 - Per-frame `tick(dt)` in the controller pre-frame prep (with flatten/
   replay), driven by existing `anim_time`.
 
-Effort ≈ 1–1.5 days incl. the state-machine tests. Risk low (config
+Effort ≈ 1-1.5 days incl. the state-machine tests. Risk low (config
 path untouched; rendering opacity is the only GL change).
 
 ## State model (settled via Q&A)

@@ -256,7 +256,7 @@ Call sites (each re-derives the comment from the relevant source text):
 
 ### Effort
 
-~1 helper + ~4–6 call sites + tests. Low-to-moderate, well-precedented
+~1 helper + ~4-6 call sites + tests. Low-to-moderate, well-precedented
 (decl/assign already do it), but genuinely spans the
 parse/reformat/swatch/export paths - so "straightforward" only in the
 sense that the pattern exists, not that it is a single edit.

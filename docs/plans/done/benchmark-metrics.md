@@ -176,7 +176,7 @@ public surface is severely limited:
     parse the resulting `.trace` bundle, or
   - skip Tier 2 on macOS entirely.
 
-  **Effort: 2–3 days minimum, fragile across OS upgrades, requires
+  **Effort: 2-3 days minimum, fragile across OS upgrades, requires
   privilege escalation. Not recommended unless macOS becomes a primary
   perf target.**
 

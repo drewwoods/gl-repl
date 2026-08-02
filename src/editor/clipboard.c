@@ -544,7 +544,7 @@ void editor_clipboard_paste_current(void) {
     /* Snapshot the clipboard text before any state mutation - defensive
      * against any path that could mutate the clipboard mid-loop, and
      * sized by count so the snapshot doesn't allocate the 1 MB
-     * MAX_EDITOR_COMMANDS × MAX_LINE_LEN worst case on the stack. Allocated
+     * MAX_EDITOR_COMMANDS x MAX_LINE_LEN worst case on the stack. Allocated
      * before the undo push so a malloc failure leaves no side effects. */
     char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN);
     if (!buf) {

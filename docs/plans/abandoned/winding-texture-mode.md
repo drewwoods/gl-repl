@@ -126,7 +126,7 @@ render3d GL resources):
   `GL_MODULATE` lets the green/red material tint the lettering and the
   background.
 - Rasterize the strings by stamping a tiny built-in 5×7 bitmap glyph set into
-  the RGBA buffer (we don't have FreeType; a minimal A–Z/0–9 stamp covers
+  the RGBA buffer (we don't have FreeType; a minimal A-Z/0-9 stamp covers
   "FRONT"/"BACK"). Keep the glyph table local to the winding module.
 - `GL_LINEAR` min/mag; `GL_REPEAT` wrap so eye-linear tiling reads cleanly.
 - Lives in `src/render3d/` (pure GL, REPL-agnostic). Likely a small
@@ -176,7 +176,7 @@ letting a fixed-function combiner pick the texture:
     with `SOURCE0 = GL_PREVIOUS` (front), `SOURCE1 = GL_TEXTURE` (back),
     `SOURCE2 = GL_PRIMARY_COLOR` operand `GL_SRC_ALPHA` - so the per-face
     material alpha selects front-vs-back texture (`out = front*α +
-    back*(1−α)`).
+    back*(1-α)`).
   - **Unit 2** `GL_COMBINE` / `GL_MODULATE` of `GL_PREVIOUS` × the
     `GL_PRIMARY_COLOR` lighting RGB, tinting the chosen texture green/red.
 - One geometry walk; `glTexCoord`/texgen coords broadcast to all active

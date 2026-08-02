@@ -2,17 +2,17 @@
 
 ## Status - DONE (2026-05-23 audit)
 
-All seven phases landed; the named V1–V5 violations are closed. Spot
+All seven phases landed; the named V1-V5 violations are closed. Spot
 checks against current code:
 
 - **Phase 1 - Comment-prefix config seam.** `editor_set_line_comment_prefix`
-  and `editor_line_comment_prefix` live in `src/editor/state.{h,c}` (state.h:458–459,
-  state.c:773–777). Controller registers `"// "` at
+  and `editor_line_comment_prefix` live in `src/editor/state.{h,c}` (state.h:458-459,
+  state.c:773-777). Controller registers `"// "` at
   `src/app/glr_ctrl.c:2317`.
 - **Phase 2 - `repl_compile_toggle_comment`.** Declared
   `src/repl/compile.h:397`, implemented `src/repl/compile.c:1290`.
 - **Phase 3 - Handler rewrite.** `handle_comment_toggle_key_route` at
-  `src/editor/input.c:1127–1172` matches the plan body almost line for
+  `src/editor/input.c:1127-1172` matches the plan body almost line for
   line: prefix lookup → `repl_compile_toggle_comment` →
   `editor_commit_apply_external_change`. No `CMD_*` reads, no inline
   `GLCmd` construction, no `g_predef_vars[]` writes, no
@@ -38,7 +38,7 @@ checks against current code:
   `repl_user_scene_*` API.
 - **Phase 7 - Search line-count source.** Done: `src/editor/search.c`
   uses `editor_buffer_view()`; the only `repl_state_document_count()`
-  appearances are doc-comments at lines 9–10.
+  appearances are doc-comments at lines 9-10.
 
 V2 (clipboard) was handled by the sibling
 `done/repl-agnostic-clipboard.md` as the plan documented.
@@ -97,7 +97,7 @@ the following editor files still do REPL work:
 
 ### V1 - Comment-toggle handler bypasses every guardrail
 
-`editor_input.c::handle_comment_toggle_key_route` (lines 1006–1156)
+`editor_input.c::handle_comment_toggle_key_route` (lines 1006-1156)
 is the worst remaining offender. The single function:
 
 - Reads `cur->type == CMD_COMMENT` (line 1012) and `cur->type != CMD_FOR_BEGIN
@@ -106,13 +106,13 @@ is the worst remaining offender. The single function:
   GLCmd construction.
 - On uncomment fallback, reaches into `repl_eval_find_predef_var_idx`,
   `repl_eval_validate_expression_idents`, `repl_eval_input_has_predef_vars`,
-  `repl_eval_expr` (lines 1068–1100) - inline grammar evaluation.
+  `repl_eval_expr` (lines 1068-1100) - inline grammar evaluation.
 - Sets `new_cmd.type = CMD_VAR_ASSIGN` (line 1096) and writes
   `g_predef_vars[var_idx].value = val` (line 1106) - direct cmd construction
   + direct predef-table write.
 - Calls `repl_command_store_replace_one` directly (lines 1118, 1144) -
   bypasses the compile/apply seam entirely.
-- Hardcodes `// ` (lines 1017–1020 strip; line 1138 prepend) - should be
+- Hardcodes `// ` (lines 1017-1020 strip; line 1138 prepend) - should be
   config.
 
 ### V2 - Clipboard (separate plan)
@@ -145,7 +145,7 @@ Cursor migration (`edit_line_idx` canonical on EditorState), broader
 `repl_state_document_count()` reads in `editor_input.c`, and the
 two-ring undo split are bigger structural moves. They don't block the
 contract - the contract is "editor doesn't interpret REPL grammar",
-and that's met once V1–V5 are closed.
+and that's met once V1-V5 are closed.
 
 ## Phases
 
@@ -213,7 +213,7 @@ parse failure during uncomment.
 
 ### Phase 3 - Rewrite `handle_comment_toggle_key_route` (~2 hr)
 
-Replace the body (lines 1006–1156) with ~25 lines:
+Replace the body (lines 1006-1156) with ~25 lines:
 
 ```c
 static int handle_comment_toggle_key_route(unsigned char key) {

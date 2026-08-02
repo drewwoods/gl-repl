@@ -752,7 +752,7 @@ Files to **modify**:
      immediately with **live text rows** (current RSS/VSZ, baseline RSS/VSZ,
      Δ) and an **empty plot area** (no history pushed yet - first sample
      lands at the 5 s mark; that gap is intentional, see Module 1).
-   - Wait ~30 s. Confirm 5–6 samples plotted, newest pinned to the right
+   - Wait ~30 s. Confirm 5-6 samples plotted, newest pinned to the right
      edge, X-axis labels reading `-85m … -42m … now`. Confirm Y-axis tick
      labels formatted as MB/GB and the line is visible (not clipped).
    - Press Ctrl+W to toggle CPU profile. Confirm both panels render side by

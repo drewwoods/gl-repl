@@ -152,7 +152,7 @@ stale texture name.
 
    - red-only pass: `glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE)` and
      draw the same textured quad translated `+dx` px in X
-     (`dx` ≈ `1.5f`–`2.0f`)
+     (`dx` ≈ `1.5f`-`2.0f`)
    - blue-only pass: `glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_FALSE)` and
      draw the same textured quad translated `-dx` px in X
    - restore full color writes with

@@ -28,13 +28,13 @@ reuse), so it must be **off by default**. The "Accum AA" setting is reworked
 into two config items:
 
 - **Accum effect**: `Off | AA | Blur` (3 states, F2)
-- **Accum passes**: `1 | 2 | 4 | 8 | 12 | 16` (6 states, Ctrl+= / Ctrl+−)
+- **Accum passes**: `1 | 2 | 4 | 8 | 12 | 16` (6 states, Ctrl+= / Ctrl+-)
 
 Blur behavior per frame:
 - **Camera blur** - if the camera matrix changed since last frame, interpolate
   the previous↔current camera pose across the N passes.
 - **Time blur** - otherwise, if `t` is playing, sample `t` over the trailing
-  16 ms window `[t−dt, t]`, one sub-step per pass.
+  16 ms window `[t-dt, t]`, one sub-step per pass.
 - **Fallback** - if `t` is paused *and* the camera is unchanged, fall back to
   AA jitter (desired, low-cost; falls out of the design for free).
 
@@ -43,7 +43,7 @@ The final image is an equal-weight blend of the N accumulated passes.
 ## Decisions (from user)
 
 - **Keybinding:** F2 cycles the *effect* (Off→AA→Blur; Shift+F2 reverse).
-  Repurpose the existing Ctrl+= / Ctrl+− accum fine-adjust to step *passes*.
+  Repurpose the existing Ctrl+= / Ctrl+- accum fine-adjust to step *passes*.
 - **Backward compat:** legacy `@cfg accum_aa = Nx` lines are silently ignored
   on load (unknown-key behavior). No alias code. Note the break in the PR.
 - **Default effect:** `Off` (blur and AA both cost per frame).
@@ -250,7 +250,7 @@ re-executes N times. Inherent to motion blur; gated off by default.
   and passes (no key, 6 states).
 - **`keymap.h`** (line 106): rename `GLR_ACCUM_AA` → `GLR_ACCUM_EFFECT` (keeps
   `GLUT_KEY_F2, 0`); update the nearby comment.
-- **`src/app/glr_ctrl_router.c`** (192-218): repoint the Ctrl+= / Ctrl+− accum
+- **`src/app/glr_ctrl_router.c`** (192-218): repoint the Ctrl+= / Ctrl+- accum
   fine-adjust from `GLR_CONFIG_ACCUM_AA` to `GLR_CONFIG_ACCUM_PASSES`; gate on
   `use_accum && accum_effect != OFF`; status string "Accum passes: %s".
 
@@ -263,7 +263,7 @@ golden fixtures - regen, below.)
 
 ### 8. Docs
 
-`CLAUDE.md` F2 key-table row (1174), the "accum-AA Ctrl+=/−" mention (428), and
+`CLAUDE.md` F2 key-table row (1174), the "accum-AA Ctrl+=/-" mention (428), and
 the jitter-sample comment (698); `src/repl/help_text.c:160-161` ("Accumulation
 Buffer AA … On by default") - rewrite for Off/AA/Blur + passes and the corrected
 default.
@@ -293,7 +293,7 @@ across the compiled tests:
   uses (124, 1428), and the `// @cfg accum_aa = 0` strings (1409, 1451) →
   the new effect/passes slugs/fields.
 - `tests/test_repl_editor.c`: the F2-cycles-Accum-AA block (565-571) → effect;
-  the Ctrl+=/− fine-adjust block (3231-3278, `glr_ctrl_router_handle_accum_samples_key`)
+  the Ctrl+=/- fine-adjust block (3231-3278, `glr_ctrl_router_handle_accum_samples_key`)
   → drive `GLR_CONFIG_ACCUM_PASSES` and assert `accum_passes` over the
   `{1,2,4,8,12,16}` ladder (note the ladder now includes 12).
 - `tests/test_scene_render.c:57`: `cfg.accum_aa_enabled = 1;` →
@@ -320,7 +320,7 @@ New unit tests:
 2. `make check-c99` and `make check-state-ownership` (keymap-no-dup, include
    style, ownership guards) stay green.
 3. `make gl-repl` then `./gl-repl --example torus`: F2 cycles Off→AA→Blur;
-   Ctrl+= / Ctrl+− steps passes; drag the camera with effect=Blur and confirm
+   Ctrl+= / Ctrl+- steps passes; drag the camera with effect=Blur and confirm
    camera-direction smear; with the camera still and `t` playing (Ctrl+T)
    confirm temporal smear on animated geometry; pause `t` with a still camera
    and confirm it falls back to clean AA. Start replay (Ctrl+R) with effect=Blur

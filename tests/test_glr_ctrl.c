@@ -4306,7 +4306,7 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
     editor_undo_pop_snapshot();
     editor_undo_pop_snapshot();
     buf = editor_buffer_view();
-    ASSERT_STR("undo×3 restores the original line",
+    ASSERT_STR("undox3 restores the original line",
                editor_buffer_view_line(buf, 0), before);
 }
 

@@ -59,7 +59,7 @@ void runstats_read(const RunStats *s, RunStatsSummary *out);
 ```
 
 Body is the Welford update lifted verbatim from `src/support/histogram.c:57-65`
-and the n−1 read from `:88-102` (keep the `m2 > 0.0` guard and the comments).
+and the n-1 read from `:88-102` (keep the `m2 > 0.0` guard and the comments).
 Then **`histogram.c` delegates**: replace `Histogram`'s
 `count/min_us/max_us/sum/mean/m2` fields with a single `RunStats stats;` and have
 `histogram_record` / `_clear` / `_read_stats` call through. Those fields are
@@ -136,7 +136,7 @@ ASSIGN_PLOT_BOTTOM_PAD  8
   `ui_pixel_center`, and the "sunken plot well" idiom (a second `panel_frame` at
   `UI_TOK_SUNKEN 0.4` / `UI_TOK_BORDER 0.6`).
 - Y scale: min/max over plotted columns, 5 % pad, rounded outward to a
-  1/2/5×10^k step; 3–4 gridlines, right-aligned labels in the gutter; a brighter
+  1/2/5×10^k step; 3-4 gridlines, right-aligned labels in the gutter; a brighter
   rule at y=0 when 0 is in range. **No forced zero baseline** - a value living in
   `[100, 101]` must still show its shape.
 - Draw: `GL_QUADS` envelope band (`lo`→`hi`, additive, alpha 0.30) then a

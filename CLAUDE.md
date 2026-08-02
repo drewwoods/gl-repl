@@ -115,7 +115,7 @@ gitignored, survives `make clean`).
   Release web links with `-g0` (`DEBUG_INFO_CFLAGS`) - DWARF in the `.wasm`
   costs 3x payload and blocks binaryen opts for no runtime gain.
   `make bench-web` runs `bench_repl` as wasm under node: wasm cost is **not**
-  a fixed multiple of native (1.2x–2.2x per-op across sub-benchmarks), so
+  a fixed multiple of native (1.2x-2.2x per-op across sub-benchmarks), so
   `make bench` alone mis-ranks web hot spots. CPU pipeline only - no GPU
   under node, so `fade_batches` skips and the gl4es→WebGL2 draw cost is
   invisible. See `packaging/web/README.md`.

@@ -39,7 +39,7 @@ historical context and are not in the table below.
 | `repl-state-phase2-step-3.md` | 2026-04-23 | 10 domain-at-a-time storage migrations (document, flat program, camera, config, etc.) with per-slice verification. |
 | `repl-state-phase2-substeps.md` | 2026-04-24 | Per-domain migration plan backing `repl-state-phase2-step-3`. |
 | `repl-state-phase2-bridge-retirement.md` | 2026-04-24 | Completed storage migration and deleted `repl_state_compat.h` bridge after converting all callers to typed accessors. |
-| `repl-cleanup-punch-list.md` | 2026-04-29 | Tiers 1–3 of mechanical / pattern / structural extractions. Preserved as historical context per the doc itself. |
+| `repl-cleanup-punch-list.md` | 2026-04-29 | Tiers 1-3 of mechanical / pattern / structural extractions. Preserved as historical context per the doc itself. |
 | `push-architecture-ui.md` | 2026-04-29 | `ui_*_render*()` consumes `const UiRenderSnapshot *snap` built once per frame; render-time write-backs via `UiCodePanelOutput`; replay HUD moved to `replay_ui_hud.{c,h}` under feature-UI prefix. |
 | `push-architecture.md` | superseded | Original generic-scene-plugin sketch. Superseded by `push-architecture-refinement.md`; kept as design history. |
 | `push-architecture-refinement.md` | 2026-04-29 + follow-ups | Option B controller layer: frame orchestration + scene-config into `glr_ctrl.c`, scene/UI off REPL globals. Phase 1 + most of Phase 2 landed; archived because the architectural goal shipped. |
@@ -49,7 +49,7 @@ historical context and are not in the table below.
 | `editor-owns-text-spike-results.md` | 2026-05-01 | Spike results: re-parsing all commands from editor buffer on flatten runs under 4.2 ms - acceptable. |
 | `editor-owns-text.md` | 2026-05-01 | Design for migrating canonical command text to editor buffer and deleting `GLCmd.source`. |
 | `editor-text-model-controller.md` | 2026-05-03 → -05 | M/V/C+compiler+router contract: passive `UiHit`, `imrepl_ctrl` routes, editor / peers / scene each own behavior, `repl_compile`/`repl_apply` pure. |
-| `editor-owns-text-completion.md` | 2026-05-03 → -05 | Three-layer ownership split (Editor / REPL / UI). Phases A–J: input-dispatch boundary, code-panel hit, color-picker writeback, cursor-pixel output, forwarder ratchets, macOS Cmd, metadata highlight. |
+| `editor-owns-text-completion.md` | 2026-05-03 → -05 | Three-layer ownership split (Editor / REPL / UI). Phases A-J: input-dispatch boundary, code-panel hit, color-picker writeback, cursor-pixel output, forwarder ratchets, macOS Cmd, metadata highlight. |
 | `editor-owns-text-completion-revised.md` | 2026-05-05 | Sibling correcting the controller boundary (no `UiAction` dispatch enum). |
 | `editor-ownership-gap-cleanup.md` | 2026-05-05 | Audit / ratchet branch that delivered the J-phase work. Hard guards: 32. |
 | `add-fixed-array-support.md` | 2026-05-06 | Fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]` end-to-end - REPL state, parser/eval/flatten/executor, export round-trip, autocomplete + help. |

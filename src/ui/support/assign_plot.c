@@ -397,7 +397,7 @@ static int ap_y_axis_linear(double lo, double hi, ApYAxis *out) {
  *
  * The absolute term is a ceiling on the floor, not a floor on it: it only
  * binds above unit scale, where it says "keep resolving down to 0.01 anyway".
- * That is deliberate. Values here are usually O(1)–O(100) - angles, positions,
+ * That is deliberate. Values here are usually O(1)-O(100) - angles, positions,
  * color channels - and for a trace peaking at 100 the hundredths are still
  * worth a gridline, so it opens a fourth decade rather than stopping at 0.1.
  * Far above that the axis does get tall in decades, which is compressed but

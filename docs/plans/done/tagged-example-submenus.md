@@ -6,8 +6,8 @@ All eleven steps are implemented in the tree; spot checks:
 
 - **Step 1/2 - Registry + tag API.** `ReplExampleEntry` /
   `ReplExampleTagMask` / `g_example_entries[]` live in
-  `src/repl/examples.c:1294–1331`. The full query surface is exposed
-  in `src/repl/examples.h:71–89`: `REPL_EXAMPLE_TAG_*` enum
+  `src/repl/examples.c:1294-1331`. The full query surface is exposed
+  in `src/repl/examples.h:71-89`: `REPL_EXAMPLE_TAG_*` enum
   (`ALL/2D/3D/POLYGONS/LINES/COUNT`), `repl_example_tag_count`,
   `repl_example_tag_label`, `repl_example_tag_mask`,
   `repl_example_visible_tag_count`, `repl_example_visible_tag_at`,
@@ -27,16 +27,16 @@ All eleven steps are implemented in the tree; spot checks:
   `ui_menu_bar_scene_example_submenu_rect_for_test`
   (`src/ui/menu_bar.h:87`, `src/ui/menu_bar.c:589`) is in place.
 - **Step 8 - Controller routing.** `route_submenu_item_hit` at
-  `src/app/glr_ctrl.c:3285–3293` dispatches to
+  `src/app/glr_ctrl.c:3285-3293` dispatches to
   `glr_scene_load_example`; dropdown-dismiss guard at line 3407
   whitelists `UI_HIT_SUBMENU_ITEM`.
 - **Step 9 - Legacy parent-activation safety.** Tag-row no-op branch
   at `src/app/glr_actions.c:644` is annotated with the route comment
   the plan recommended.
 - **Step 10 - Tests.** `tests/test_repl_core_examples.c` (lines
-  577–771) exercises the tag API, `repl_example_tag_bit`, visible-tag
+  577-771) exercises the tag API, `repl_example_tag_bit`, visible-tag
   layer, and multi-tag examples. `tests/test_ui_menu_bar.c` (lines
-  291–406) drives the submenu render → hit-test sequence via the
+  291-406) drives the submenu render → hit-test sequence via the
   test seam and asserts `UI_HIT_SUBMENU_ITEM` payloads.
 
 The implementation cleanly absorbed the related Config-flyout submenu

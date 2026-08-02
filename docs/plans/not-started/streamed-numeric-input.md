@@ -978,13 +978,13 @@ flatten, and several multipass consumers that must agree.
 
 | Area | Estimate |
 |---|---:|
-| Pure parser, queue, tape model, unit tests | 1–2 days |
-| Evaluator/cache/validation integration | 2–3 days |
-| Flatten/rebake threading and atomic publication | 2–4 days |
-| Native CLI/descriptor lifecycle and diagnostics | 1–2 days |
-| Accumulation/replay integration | 1–2 days |
-| Export/import/docs/full verification | 2–3 days |
-| **Total** | **9–16 developer days** |
+| Pure parser, queue, tape model, unit tests | 1-2 days |
+| Evaluator/cache/validation integration | 2-3 days |
+| Flatten/rebake threading and atomic publication | 2-4 days |
+| Native CLI/descriptor lifecycle and diagnostics | 1-2 days |
+| Accumulation/replay integration | 1-2 days |
+| Export/import/docs/full verification | 2-3 days |
+| **Total** | **9-16 developer days** |
 
 A non-transactional prototype with stdin, brackets, one active group, and no
 export/replay polish could be demonstrated much sooner. Do not merge that

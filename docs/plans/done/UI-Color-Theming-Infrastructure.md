@@ -57,7 +57,7 @@ Breakdown of the 15 commits:
 2. Phase B (9 commits): replay_hud.c, tabbed_overlay.c, autocomplete_panel.c, scene_tabs.c, menu_bar.c remainder, panels.c, text_panel.c, metrics.h deletion of `UI_ACCENT_GREEN_*`, test gates
 3. Phase C: Pointer comments added to excluded data palettes (color_picker.c, repl_code_panel.c, profile_panel.c, text_panel.c)
 4. Phase D (2 commits): `variable_panel.c` + `profile_panel.c` chrome tokenization (user-initiated scope extension)
-5. Config integration: `config.h` `UI_THEME_DEFAULT` knob (build-time, 0–5, range-checked)
+5. Config integration: `config.h` `UI_THEME_DEFAULT` knob (build-time, 0-5, range-checked)
 6. Documentation: `ARCHITECTURE.md` "### UI Color Theming" subsection + `Makefile` help note
 
 **Metrics:**
@@ -81,7 +81,7 @@ Breakdown of the 15 commits:
 
 - Build-time swap: `UI_THEME_DEFAULT` in `config.h`
   - Bare int, #ifndef-guarded, build-overridable (e.g. `make sample UI_THEME_DEFAULT=3` for amber)
-  - Range-checked by STATIC_ASSERT in theme.h (0–5)
+  - Range-checked by STATIC_ASSERT in theme.h (0-5)
   - Documented in `ARCHITECTURE.md` and `Makefile` help
 
 - Comprehensive migration (15 commits):
@@ -97,7 +97,7 @@ Breakdown of the 15 commits:
 
 - Documentation:
   - `ARCHITECTURE.md` "### UI Color Theming" subsection (under UI Layer, line ~461) - token model, 6-row table, 3-bucket classification, UI_THEME_DEFAULT knob, test guards
-  - `Makefile` help note "Build options:" section - UI_THEME_DEFAULT 0–5 mapping, override example, ARCHITECTURE.md reference
+  - `Makefile` help note "Build options:" section - UI_THEME_DEFAULT 0-5 mapping, override example, ARCHITECTURE.md reference
 
 **Design decisions preserved:**
 - Single compile-time swap point (no runtime picker yet; seam via `ui_theme_select/active` for future Config cycle)
@@ -146,7 +146,7 @@ Every literal under review falls into exactly one bucket:
    surfaces, borders, dividers, text tiers, accent, hover/selection,
    status semantics.
 2. **Named constant** (`#define`/`static const` near use) - a fixed,
-   non-theme-varying color used in 1–2 places that today is a bare
+   non-theme-varying color used in 1-2 places that today is a bare
    literal. Give it a name; do **not** add a table slot. (e.g. the
    menubar's pure-black bottom rule `#000`, picker chrome grays.)
 3. **Leave as-is** - computed or deliberate domain palettes:
@@ -333,7 +333,7 @@ line comment at each pointing to `theme.h`'s rationale block.
 
 **Core infrastructure:**
 - `src/ui/theme.h` - **new**, header-only, 170 lines
-- `config.h` - added UI_THEME_DEFAULT (0–5 knob, #ifndef-guarded, build-overridable)
+- `config.h` - added UI_THEME_DEFAULT (0-5 knob, #ifndef-guarded, build-overridable)
 - `tests/test_ui_theme.c` - **new**, header-only, 444 assertions
 - `Makefile` - added theme.h to HDRS, test wiring; help note for UI_THEME_DEFAULT
 - `ARCHITECTURE.md` - added "### UI Color Theming" subsection (UI Layer)
@@ -368,12 +368,12 @@ the `test_repl_code_panel_layout` precedent:
   green-dominant (`g>r && g>b`); neutral tokens identical across all 6
   rows; `ui_theme_select`/`active` round-trip.
 
-Makefile wiring (mirror lines 519–523 / 575 / 614–616):
+Makefile wiring (mirror lines 519-523 / 575 / 614-616):
 - add `test_ui_theme` to `TEST_BINS`;
 - add it to the `CORE_TEST_BINS` `filter-out` at line 575 (pure test);
 - add `test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o`,
   `test_ui_theme_LDLIBS =`, `test_ui_theme_RUN ?=
-  $(BINDIR)/test_ui_theme` next to 614–616 (the `built_binary` foreach at
+  $(BINDIR)/test_ui_theme` next to 614-616 (the `built_binary` foreach at
   697 auto-creates the link rule).
 
 Gates: `make test_ui_theme`, `make test`, `make check-c99`,

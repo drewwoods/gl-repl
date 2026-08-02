@@ -92,7 +92,7 @@ make keymap-list          # current bindings + free slots
 make check-keymap-no-dup  # guard
 ```
 
-F2–F10 cycle bound configs forward (Shift+F = backward) - that binding lives in
+F2-F10 cycle bound configs forward (Shift+F = backward) - that binding lives in
 the descriptor row, not in a switch.
 
 ## Verify

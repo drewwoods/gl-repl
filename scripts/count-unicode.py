@@ -13,7 +13,13 @@ to one or more file groups. Without a file-group option, all supported types
 are scanned.
 
 Current policy:
+  U+2013 EN DASH -> ASCII hyphen-minus (``-``)
   U+2014 EM DASH -> ASCII hyphen-minus (``-``)
+  U+2212 MINUS SIGN -> ASCII hyphen-minus (``-``)
+  U+00D7 MULTIPLICATION SIGN -> ``x`` in ``*.c`` and ``*.glr`` files
+  U+201C LEFT DOUBLE QUOTATION MARK -> ``"`` in ``*.c`` and ``*.glr`` files
+  U+201D RIGHT DOUBLE QUOTATION MARK -> ``"`` in ``*.c`` and ``*.glr`` files
+  U+2019 RIGHT SINGLE QUOTATION MARK -> ``'`` in ``*.c`` and ``*.glr`` files
 """
 
 from __future__ import annotations
@@ -42,13 +48,32 @@ class ReplacementRule:
 
     replacement: str
     reason: str
+    suffixes: tuple[str, ...] = ()
+
+    def applies_to(self, path: Path) -> bool:
+        """Return whether this rule applies to a file path."""
+        return not self.suffixes or path.suffix in self.suffixes
+
+    def scope_description(self) -> str:
+        """Return a user-facing description of this rule's file scope."""
+        if not self.suffixes:
+            return "disallowed globally"
+        suffixes = ", ".join(f"*{suffix}" for suffix in self.suffixes)
+        return f"disallowed in {suffixes} files"
 
 
 # Add future normalization rules here. Characters not listed remain legal and
 # are still included in the report. They are legal in C, headers, and Markdown
-# but not in ASCII-only .glr scene files.
+# but not in ASCII-only .glr scene files. A rule can optionally limit itself to
+# particular filename suffixes.
 REPLACEMENT_RULES = {
+    "\u2013": ReplacementRule("-", "use ASCII hyphen-minus"),
     "\u2014": ReplacementRule("-", "use ASCII hyphen-minus"),
+    "\u2212": ReplacementRule("-", "use ASCII hyphen-minus"),
+    "\u00D7": ReplacementRule("x", "use ASCII x", (".c", ".glr")),
+    "\u201C": ReplacementRule("\"", "use ASCII double quote", (".c", ".glr")),
+    "\u201D": ReplacementRule("\"", "use ASCII double quote", (".c", ".glr")),
+    "\u2019": ReplacementRule("'", "use ASCII apostrophe", (".c", ".glr")),
 }
 
 
@@ -112,7 +137,8 @@ def show_report(counts: Counter[str], files: Counter[str]) -> None:
     for char in sorted(counts, key=ord):
         rule = REPLACEMENT_RULES.get(char)
         policy = (
-            f"replace with {rule.replacement!r} ({rule.reason}; disallowed globally)"
+            f"replace with {rule.replacement!r} ({rule.reason}; "
+            f"{rule.scope_description()})"
             if rule
             else "allowed outside ASCII-only .glr files"
         )
@@ -162,7 +188,7 @@ def apply_replacements(paths: list[Path]) -> tuple[Counter[str], Counter[str]]:
         text = path.read_text(encoding="utf-8")
         updated = text
         for char, rule in REPLACEMENT_RULES.items():
-            count = updated.count(char)
+            count = updated.count(char) if rule.applies_to(path) else 0
             if count:
                 replaced[char] += count
                 changed_files[char] += 1
@@ -172,15 +198,32 @@ def apply_replacements(paths: list[Path]) -> tuple[Counter[str], Counter[str]]:
     return replaced, changed_files
 
 
+def replacement_violations(
+        per_file: dict[Path, Counter[str]],
+) -> Counter[str]:
+    """Return configured replacement-rule violations across scanned files."""
+    violations: Counter[str] = Counter()
+    for path, chars in per_file.items():
+        for char, count in chars.items():
+            rule = REPLACEMENT_RULES.get(char)
+            if rule and rule.applies_to(path):
+                violations[char] += count
+    return violations
+
+
 def glr_unicode_violations(
         per_file: dict[Path, Counter[str]],
 ) -> dict[Path, Counter[str]]:
     """Return all Unicode characters in .glr files not handled by a rule."""
     return {
         path: Counter({char: count for char, count in chars.items()
-                       if char not in REPLACEMENT_RULES})
+                       if (rule := REPLACEMENT_RULES.get(char)) is None
+                       or not rule.applies_to(path)})
         for path, chars in per_file.items()
-        if path.suffix == ".glr" and any(char not in REPLACEMENT_RULES for char in chars)
+        if path.suffix == ".glr" and any(
+            (rule := REPLACEMENT_RULES.get(char)) is None or not rule.applies_to(path)
+            for char in chars
+        )
     }
 
 
@@ -217,15 +260,16 @@ def main() -> int:
     show_report(counts, files)
     if args.per_file:
         show_per_file_report(per_file)
-    forbidden = [char for char in counts if char in REPLACEMENT_RULES]
+    forbidden = replacement_violations(per_file)
     glr_violations = glr_unicode_violations(per_file)
     if args.check and (forbidden or glr_violations):
         print("ERROR: prohibited Unicode found in tracked project sources:",
               file=sys.stderr)
         for char in sorted(forbidden, key=ord):
             rule = REPLACEMENT_RULES[char]
-            print(f"  U+{ord(char):04X} {char!r}: {counts[char]} occurrence(s); "
-                  f"replace with {rule.replacement!r} ({rule.reason})",
+            print(f"  U+{ord(char):04X} {char!r}: {forbidden[char]} occurrence(s); "
+                  f"replace with {rule.replacement!r} ({rule.reason}; "
+                  f"{rule.scope_description()})",
                   file=sys.stderr)
         for path in sorted(glr_violations):
             chars = glr_violations[path]

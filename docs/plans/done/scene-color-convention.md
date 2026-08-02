@@ -63,7 +63,7 @@ structure exactly but scene-scoped:
 | `SCENE_CLR_GUIDE_NORMAL` | `0.95,0.2,0.2` red | geometry_guides.c:283/298 |
 | `SCENE_CLR_GUIDE_NEUTRAL` | `0.8,0.8,0.8` | geometry_guides.c:264 |
 | `SCENE_CLR_GUIDE_REF` | `0.55,0.55,0.55` | transform_guides.c:375 |
-| `SCENE_CLR_GUIDE_REF_BRIGHT` | `0.9–0.95 gray` | transform_guides.c:312/320/382/391 |
+| `SCENE_CLR_GUIDE_REF_BRIGHT` | `0.9-0.95 gray` | transform_guides.c:312/320/382/391 |
 | `SCENE_CLR_ORBIT_GLOW_OUTER` / `_MID` / `_INNER` | `1.0,0.70,0.25` / `1.0,0.90,0.55` / `1.0,0.95,0.75` | render.c:413/421/430 |
 | `SCENE_CLR_LIGHT_CORE` | `1,1,1` | lights.c:84 |
 | `SCENE_CLR_LIGHT_FIXTURE` | `0.4,0.4,0.4` | lights.c:127 |

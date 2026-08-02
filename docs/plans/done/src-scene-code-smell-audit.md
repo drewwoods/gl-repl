@@ -1380,7 +1380,7 @@ push/pop bug fixed.
 ### One-week pass - god-function cluster (deferred)
 
 Every item in this pass remains open. The duplication helpers landed
-in `709455f` (#49–#51) and `c2e7009` (#53) are partial scaffolding
+in `709455f` (#49-#51) and `c2e7009` (#53) are partial scaffolding
 that each split would extract anyway, so the splits are slightly
 smaller than the original line counts suggest.
 

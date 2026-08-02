@@ -2,7 +2,7 @@
 
 ## Status - ACTIVE (2026-07-16)
 
-The "Provenance" stages 0–5 have all landed (that's the section
+The "Provenance" stages 0-5 have all landed (that's the section
 below). The remaining work is tracked below:
 
 - **A - `state_views.h` / `state_owners.h` split and header cleanup.**
@@ -26,7 +26,7 @@ a 9-stage state-ownership migration drafted 2026-04-29. Between then
 and 2026-05-11 the codebase moved files into `src/repl/`,
 `src/editor/`, and `src/ui/`, renamed several modules (`imrepl_ctrl`
 → `glr_ctrl`, `repl_actions` → `glr_actions`, `repl_undo` →
-`src/editor/undo`), and shipped or overtook Stages 0–7. The 990-line
+`src/editor/undo`), and shipped or overtook Stages 0-7. The 990-line
 plan was retired because its file paths, status table, and Stage-1+
 bookkeeping no longer match the code shape. This document keeps only
 what is still genuinely actionable.
@@ -35,7 +35,7 @@ If you need the full design rationale or the original stage
 inventory, see the git history for `feature/gold-standard-state-ownership.md`
 on or before commit `edc682e`.
 
-### What landed (Stages 0–5)
+### What landed (Stages 0-5)
 
 - **Stage 0/1** - `check-state-ownership` ratchets wired into
   `make test`. `ReplRuntimeState` is the real aggregate;
@@ -73,7 +73,7 @@ on or before commit `edc682e`.
   [`done/push-architecture-ui.md`](../done/push-architecture-ui.md)).**
   Explicitly optional in the original plan; not pursued. UI input
   handlers stay as direct action calls rather than returning
-  `UiAction` lists. The trade-off (15–25 new variants for limited
+  `UiAction` lists. The trade-off (15-25 new variants for limited
   testability gain on synchronous handlers) hasn't shifted, so this
   is parked indefinitely. The render boundary side of Stage 7 *is*
   complete and is the load-bearing half.

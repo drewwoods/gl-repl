@@ -294,7 +294,7 @@ static void postprocess_filter_render_vignette(int sx, int sy,
  * scene is captured and redrawn on a POST_SURFACE_GRID barrel grid so the
  * image bulges toward the viewer like a CRT tube, then dark scanlines are
  * bent onto the same surface and multiplicatively blended via
- * GL_DST_COLOR × GL_ZERO (darkens existing pixels, never adds light). The
+ * GL_DST_COLOR x GL_ZERO (darkens existing pixels, never adds light). The
  * dim-gray line color (0.75) dims the bright scanline rows ~25% while the
  * gaps stay untouched - the classic phosphor mask, now curving with the
  * tube. The convex barrel pulls the corners inward, so the rectangular

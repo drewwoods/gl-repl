@@ -14,13 +14,13 @@ Everything in Tiers 1, 2, and 3 of this punch list is complete:
   ordered importer handlers, typed export scaffold).
 - ✅ Tier 3 - Structural extractions (parse_command → repl_parser,
   repl_flatten_program API, command-store escape hatches, prof
-  module split, GL/GLUT segregation 11a–11f, layer-coupling guards).
+  module split, GL/GLUT segregation 11a-11f, layer-coupling guards).
 - ✅ Strategic completions - function naming consistency, comprehensive
   per-header documentation.
 
 The active follow-up tracks are now:
 
-- `feature/push-architecture-refinement.md` - R10 phases 2–5 (dissolve
+- `feature/push-architecture-refinement.md` - R10 phases 2-5 (dissolve
   `repl_core.c`), R11 allowlist shrink, R12 (single public REPL header),
   R8 (sample → imrepl rename).
 - `feature/gold-standard-state-ownership.md` - Stage 4 cursor-pixel
@@ -209,7 +209,7 @@ live in `ui_menu_bar.c`. Side effects remain in `repl_actions.c`.
 
 ---
 
-## Tier 2 - Pattern consolidation (1–2 days, medium impact)
+## Tier 2 - Pattern consolidation (1-2 days, medium impact)
 
 ### 4. Data-drive grid + axes themes into `scene_grid.c` / `scene_axes.c` ✅ DONE
 
