@@ -186,9 +186,13 @@ client-indexed draw:
 3. The expanded arrays are submitted with `glDrawArrays(GL_LINES, ...)`.
 4. GLES1 retains the original indexed path because it may synthesize final
    colors and texture coordinates later in `draw_renderlist()`.
-5. If an allocation fails, the draw falls back to the original indexed path.
-6. Temporary client arrays do not overwrite a persistent display list's VBO
-   placement decision.
+5. A missing vertex array or any allocation failure falls back to the original
+   indexed path.
+6. Immediate-mode lists use temporary client arrays and do not overwrite a
+   display list's existing VBO placement decision.
+7. Compiled display lists cache the expanded arrays and a matching VBO. Their
+   expansion and GPU upload happen once, while later frames use VBO offsets
+   with `glDrawArrays`.
 
 This trades duplicated edge vertices and small CPU copies for the client-array
 upload class that profiling showed to be cheap. More importantly, the generated
@@ -218,6 +222,73 @@ logo and the mixed immediate-mode/GLUT Aurora scene both retained their
 geometry. This specifically guards against the blank-frame failure of the
 element-only VBO attempt.
 
+### Upstream hardening follow-up
+
+An end-to-end review after the first gl-repl fix identified four non-blocking
+concerns worth addressing before proposing the change upstream:
+
+1. named display lists re-expanded their line arrays on every frame;
+2. immediate lists can perform as many as `5 + maxtex` allocation/free pairs
+   per renderlist;
+3. `build_line_arrays()` could report success without a vertex array; and
+4. expanded attributes use substantially more transient memory than the old
+   index-only representation for a pathological large shape.
+
+The final patch handles the display-list and missing-vertex cases directly.
+`glEndList` marks the stored renderlist nodes as cacheable. Their first
+polygon-line draw builds the CPU expansion and uploads it to a dedicated VBO;
+subsequent draws reuse both. Deleting or recompiling the list releases the
+expanded arrays and buffer alongside `ind_lines`.
+
+`append_calllist()` deserves special treatment because it begins with a
+shallow `memcpy` of the stored renderlist. The base vertex/index arrays have
+their own sharing protocol, but the derived line caches do not. The copy now
+clears `ind_lines`, the expanded-array pointer, and the cacheable flag. It
+therefore derives its own transient data and cannot retain or double-free the
+source display list's cache. This also keeps a temporary called-list copy from
+creating a fresh persistent VBO just because it inherited a non-zero list
+name.
+
+`build_line_arrays()` now rejects a missing vertex array before allocating.
+Triangle renderlists with a non-zero length should already have vertices, but
+the helper's contract no longer relies on that external invariant.
+
+The immediate-mode allocation behavior is deliberately unchanged. Aurora
+still reaches the 60 FPS cap despite roughly 700-1000 allocation/free pairs
+per frame, so replacing them with `gl4es_scratch()` would be speculative. The
+memory tradeoff is documented rather than hidden: each generated line endpoint
+stores 64 bytes when all five non-texture attributes are present, plus 16 bytes
+for every texture-coordinate set. A near-60,000-vertex triangle list can
+therefore create several MiB—and with many texture units, tens of MiB—of CPU
+data, with a compiled list retaining a similarly sized VBO. That is acceptable
+for the measured workloads but is the limit to investigate if a pathological
+scene appears.
+
+Two separate browser workloads verified the two lifetime strategies. The
+reproducible microbenchmarks live in
+[`../bench/gl4es_polygon_line.c`](../bench/gl4es_polygon_line.c) and build with
+`make bench-web-gl4es`. One binary emits 128 short-lived immediate renderlists
+per frame. The other warms a source display list, compiles a second list by
+calling it, deletes the source, and measures the surviving copy. Both read back
+their first frame and change the page title to `FAIL` below 1,000 covered
+pixels, so an empty frame cannot produce an accepted timing.
+
+| Workload | Result |
+|---|---:|
+| Aurora immediate renderlists, plain wireframe | 60.0 FPS |
+| 16,000 triangles / 128 immediate lists, first draw | 11.60 ms |
+| Same immediate workload, subsequent draws | 5.071 ms average |
+| 16,000-triangle source display-list warm-up | 9.40 ms |
+| Copied display list after source deletion, first draw | 1.10 ms |
+| Same copied display list, subsequent draws | 0.032 ms average |
+
+Both microbenchmarks reported 130,500 covered pixels in the 640x480 canvas.
+The display-list result exercises the exact shallow-copy and source-deletion
+boundary which would otherwise risk stale pointers, stale VBO names, or a
+double free. The timings are browser/machine-specific; the stable contract is
+substantial coverage, a one-time compiled-list expansion/upload, and no
+per-frame element-index uploads.
+
 ### Verification procedure and harness lessons
 
 The implementation was verified with:
@@ -226,6 +297,7 @@ The implementation was verified with:
 . "$HOME/src/emsdk/emsdk_env.sh"
 emmake make -C third_party/web/gl4es/build_wasm -j4
 make web
+make bench-web-gl4es
 make web-serve
 ```
 

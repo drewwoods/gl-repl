@@ -1644,7 +1644,7 @@ TEST_TARGETS = \
 	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS)
 
 BENCH_TARGETS = \
-	bench bench-csv bench-web bench-web-csv $(BENCH_TARGET_NAMES) \
+	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
 	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
 	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib
 
@@ -2239,6 +2239,38 @@ bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machin
 	@for b in $(BENCH_BINS); do \
 		node $(WEB_BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
 	done
+
+# Browser-only companion to bench-web. Unlike the node benchmarks above, this
+# exercises gl4es -> WebGL2 and guards against the "fast because blank" failure
+# mode. The two builds separate short-lived immediate renderlists from the
+# compiled display-list cache and its append/copy/delete lifetime.
+GL4ES_POLYGON_LINE_BENCH_SRC = packaging/web/bench/gl4es_polygon_line.c
+GL4ES_POLYGON_LINE_BENCH_BINS = \
+	$(WEB_BINDIR)/gl4es-polygon-line-immediate.html \
+	$(WEB_BINDIR)/gl4es-polygon-line-display-list.html
+
+bench-web-gl4es: require-emcc ## Build browser gl4es polygon-line immediate/display-list benchmarks.
+	scripts/web-deps.sh
+	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS)
+	@echo "Serve with: python3 scripts/web-serve.py $(WEB_BINDIR)"
+	@echo "Immediate:   http://localhost:8000/gl4es-polygon-line-immediate.html"
+	@echo "Display list: http://localhost:8000/gl4es-polygon-line-display-list.html"
+
+ifeq ($(WEB),1)
+$(WEB_BINDIR)/gl4es-polygon-line-immediate.html: $(GL4ES_POLYGON_LINE_BENCH_SRC) \
+		packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES)
+	@mkdir -p $(dir $@)
+	$(CC) $(GL_HEADER_CFLAGS) -DGL4ES_BENCH_DISPLAY_LIST=0 \
+		$(GL4ES_POLYGON_LINE_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
+		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
+
+$(WEB_BINDIR)/gl4es-polygon-line-display-list.html: $(GL4ES_POLYGON_LINE_BENCH_SRC) \
+		packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES)
+	@mkdir -p $(dir $@)
+	$(CC) $(GL_HEADER_CFLAGS) -DGL4ES_BENCH_DISPLAY_LIST=1 \
+		$(GL4ES_POLYGON_LINE_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
+		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
+endif
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and header files.
