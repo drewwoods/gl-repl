@@ -115,6 +115,7 @@ void display(void) {
   glDisable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glEnable(GL_POINT_SMOOTH);
   glLineWidth(1.4);
   // Annotation demo: geometry plus live numeric labels.
   phase = fmod(t*0.2, 1);

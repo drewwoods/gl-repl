@@ -27,6 +27,7 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glEnable(GL_NORMALIZE);
+glEnable(GL_POINT_SMOOTH);
 glShadeModel(GL_SMOOTH);
 
 // banded gas giant: quad strips over latitude, bands swirled by t

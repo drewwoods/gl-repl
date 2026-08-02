@@ -30,6 +30,7 @@ glClearColor(0.05, 0.06, 0.08, 1.0);
 // time slider or replay to scrub the sort.
 glDisable(GL_LIGHTING);
 glEnable(GL_DEPTH_TEST);
+glEnable(GL_POINT_SMOOTH);
 period = 225/rate + hold;
 cycle = floor(t/period);
 steps = fmod(t, period)*rate;
