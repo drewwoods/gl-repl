@@ -1727,7 +1727,7 @@ BENCH_TARGETS = \
 
 MAINTENANCE_TARGETS = \
 	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
-	keymap-list palette-list capacity-matrix lines lines-test coverage analyze \
+	keymap-list palette-list unicode-count fix-unicode capacity-matrix lines lines-test coverage analyze \
 	clean distclean freeglut-clean install-hooks install-completions \
 	render3d-hot-lib require-emcc \
 	callgraph-static callgraph-static-entry callgraph-profile \
@@ -2076,8 +2076,18 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 	fi; \
 	echo "trailing-whitespace OK"
 
+unicode-count: ## Report Unicode in project C and Markdown sources and its normalization policy.
+	@python3 scripts/count-unicode.py
+
+fix-unicode: ## Replace configured Unicode in project C and Markdown sources.
+	@python3 scripts/count-unicode.py --fix
+
+check-unicode: ## Hard guard: apply configured Unicode replacements in project C and Markdown sources.
+	@python3 scripts/count-unicode.py --check
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
+	check-unicode \
 	check-doc-links \
 	check-user-guide-keymap \
 	check-user-guide-examples \
