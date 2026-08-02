@@ -1717,7 +1717,7 @@ Gizmo, Ruler, Arrow, Fountain.
 
 ### Backdrops
 
-Cube enjoying the view:
+The primordial cube enjoying the view:
 ![Backdrops: Polar Day+Snow, Nebula, Sunset, Aurora](images/backdrops.png)
 
 **F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
