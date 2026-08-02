@@ -137,6 +137,12 @@ typedef enum {
      * are a few dozen vertices. (The same overlay renders for env-driven
      * capture runs, which have no HUD and nobody watching a profile panel.) */
     PROF_TOUR_OVERLAY,
+    /* glr_ctrl_render_tour_presence(): the ambient "you are in a tour" layer —
+     * four gradient edge bands plus, during the first ~1.4 s, a title card.
+     * Separate from the overlay above because it has a different lifetime (it
+     * outlives the tour by the length of its exit collapse) and a different
+     * cost profile (no bitmap text at all once the card is gone). */
+    PROF_TOUR_PRESENCE,
     /* The three summary rows, in display order. The application owns the frame
      * boundary (glr_frame_begin / glr_frame_ended in gl_repl.c's display
      * callback), and the whole span between them is the frame:

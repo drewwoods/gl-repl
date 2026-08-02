@@ -1882,7 +1882,7 @@ static void ps_draw_cursor(float px, float py) {
 
     /* Fill: the arrow polygon is star-shaped from a point inside the
      * head, so a triangle fan anchored there fills it correctly. */
-    glColor4f(0.97f, 0.97f, 0.98f, 0.96f);
+    ui_clr_a(UI_TOK_TEXT_ON_HILITE, 0.96f);
     glBegin(GL_TRIANGLE_FAN);
     glVertex2f(px + 2.6f, py - 8.5f);
     for (i = 0; i < n; i++)
@@ -1890,8 +1890,10 @@ static void ps_draw_cursor(float px, float py) {
     glVertex2f(px + pts[0][0], py - pts[0][1]);
     glEnd();
 
-    /* Dark outline so the cursor reads on light and dark panels alike. */
-    glColor4f(0.08f, 0.09f, 0.11f, 0.9f);
+    /* Dark outline so the cursor reads on light and dark panels alike — the
+     * scrim token, since what it has to survive is arbitrary scene content
+     * rather than any particular piece of chrome. */
+    ui_clr_a(UI_TOK_SCRIM, 0.9f);
     glLineWidth(1.5f);
     glBegin(GL_LINE_LOOP);
     for (i = 0; i < n; i++)
@@ -1950,9 +1952,9 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         if (left < 30.0f) alpha *= left / 30.0f;
         float cy = (float)win_h - g_ring_y;
         glLineWidth(2.5f);
-        glColor4f(1.0f, 0.72f, 0.30f, alpha);
+        ui_clr_a(UI_TOK_ACCENT_ALT, alpha);
         ps_circle(g_ring_x, cy, 17.0f + 2.0f * pulse, 0);
-        glColor4f(1.0f, 0.72f, 0.30f, alpha * 0.5f);
+        ui_clr_a(UI_TOK_ACCENT_ALT, alpha * 0.5f);
         ps_circle(g_ring_x, cy, 23.0f + 3.0f * pulse, 0);
     }
 
@@ -1960,7 +1962,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     if (g_ripple_frame >= 0 && g_frame - g_ripple_frame < PS_RIPPLE_FRAMES) {
         float t = (float)(g_frame - g_ripple_frame) / (float)PS_RIPPLE_FRAMES;
         glLineWidth(2.0f);
-        glColor4f(0.55f, 0.78f, 1.0f, 0.8f * (1.0f - t));
+        /* The primary accent rather than the tour's alternate amber: the ring
+         * marks where the tour is *pointing*, the ripple marks that a click
+         * happened, and a click is the app's own interaction color. */
+        ui_clr_a(UI_TOK_ACCENT, 0.8f * (1.0f - t));
         ps_circle(g_ripple_x, (float)win_h - g_ripple_y,
                   4.0f + 18.0f * t, 0);
     }
@@ -2029,7 +2034,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                        font.descent - pad_y;
         plate_top = first_cy + font.ascent + pad_y;
 
-        glColor4f(0.06f, 0.07f, 0.09f, alpha * 0.72f);
+        ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
         glBegin(GL_QUADS);
         glVertex2f(cx - pad_x,     plate_bottom);
         glVertex2f(cx + w + pad_x, plate_bottom);
@@ -2037,7 +2042,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         glVertex2f(cx - pad_x,     plate_top);
         glEnd();
 
-        glColor4f(0.98f, 0.98f, 0.99f, alpha);
+        ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         line = g_echo_text;
         for (int row = 0; row < line_count; row++) {
             const char *end = strchr(line, '\n');

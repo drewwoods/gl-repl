@@ -254,6 +254,13 @@ void glr_frame_ended(void);
  * frame lifecycle but does not reach into the tour/pointer-script subsystem. */
 void glr_ctrl_run_scripted_input_frame(void);
 void glr_ctrl_render_script_overlay(int win_w, int win_h);
+/* Ambient guided-tour presence layer (title card + breathing border + exit
+ * collapse). Must be called EVERY frame, tour or not: it advances the presence
+ * clock, and the exit collapse it draws runs after the tour has already
+ * stopped. Belongs last in the host's overlay stage — after the compositor
+ * post-process, so a user's own whole-frame Post FX cannot paint over the
+ * chrome that says which mode the app is in. */
+void glr_ctrl_render_tour_presence(int win_w, int win_h);
 int  glr_ctrl_start_tour(int tour_idx);
 
 void glr_ctrl_display_frame(void);

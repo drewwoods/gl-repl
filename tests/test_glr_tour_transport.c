@@ -17,6 +17,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_camera.h"        /* glr_camera_mut (drag reconstruction) */
 #include "app/glr_config.h"        /* GLR_CONFIG_ORTHO_MODE */
+#include "app/glr_tour_presence.h" /* ambient presence phase machine */
 #include "render3d/view_mode.h"
 #include "ui/app/state.h"
 #include "ui/subsystems/tour_hud.h" /* tour_hud_panel_width (clamp guard) */
@@ -898,6 +899,139 @@ static void test_view_inactive_after_stop(void) {
     ASSERT_INT("source line -1 with no tour", v.source_line, -1);
 }
 
+/* --- ambient presence layer --------------------------------------------
+ *
+ * The phase machine in glr_tour_presence.c is what makes a running tour
+ * visible in peripheral vision, and every property worth pinning is arithmetic
+ * over a frame counter — no drawing required. What it must get right: the
+ * intro announces before anything moves, the border keeps breathing while the
+ * tour is paused (a paused tour is still a tour you are inside), and the exit
+ * collapse OUTLIVES the tour, which is the whole reason this state does not
+ * live in the UI band.
+ */
+static GlrTourPresenceView presence_frames(int tour_active,
+                                           const char *name, int n) {
+    GlrTourPresenceView v = glr_tour_presence_tick(tour_active, name);
+    for (int i = 1; i < n; i++)
+        v = glr_tour_presence_tick(tour_active, name);
+    return v;
+}
+
+static void test_presence_intro_then_active(void) {
+    GlrTourPresenceView v;
+
+    glr_tour_presence_reset();
+    v = glr_tour_presence_tick(0, NULL);
+    ASSERT_INT("no tour: presence off", v.phase, GLR_TOUR_PRESENCE_OFF);
+    ASSERT_FLOAT("no tour: border invisible", v.border_alpha, 0.0f);
+
+    v = glr_tour_presence_tick(1, "Start Here");
+    ASSERT_INT("tour starts: intro", v.phase, GLR_TOUR_PRESENCE_INTRO);
+    ASSERT_STR("intro latches the name", v.name, "Start Here");
+    /* Frame zero of the ease: the card has not arrived yet, which is what
+     * makes it read as an animation rather than a popup. */
+    ASSERT_FLOAT("card starts fully transparent", v.card_alpha, 0.0f);
+
+    v = presence_frames(1, "Start Here", GLR_TOUR_PRESENCE_CARD_IN_FRAMES);
+    ASSERT_TRUE("card is up once eased in", v.card_alpha > 0.9f);
+    ASSERT_TRUE("border is up once eased in", v.border_alpha > 0.0f);
+    ASSERT_INT("still intro mid-card", v.phase, GLR_TOUR_PRESENCE_INTRO);
+
+    v = presence_frames(1, "Start Here", GLR_TOUR_PRESENCE_INTRO_FRAMES);
+    ASSERT_INT("intro ends at ACTIVE", v.phase, GLR_TOUR_PRESENCE_ACTIVE);
+    ASSERT_FLOAT("card gone in ACTIVE", v.card_alpha, 0.0f);
+    ASSERT_TRUE("border persists in ACTIVE", v.border_alpha > 0.0f);
+}
+
+static void test_presence_breathes_and_stays_within_range(void) {
+    float lo = 2.0f, hi = -1.0f;
+
+    glr_tour_presence_reset();
+    presence_frames(1, "Tour", GLR_TOUR_PRESENCE_INTRO_FRAMES + 1);
+    /* One full breath cycle in ACTIVE: it must sweep a visible range (a border
+     * pinned at one alpha reads as static chrome) without ever going opaque
+     * enough to compete with the captions it frames. */
+    for (int i = 0; i < GLR_TOUR_PRESENCE_BREATHE_FRAMES; i++) {
+        GlrTourPresenceView v = glr_tour_presence_tick(1, "Tour");
+        if (v.border_alpha < lo) lo = v.border_alpha;
+        if (v.border_alpha > hi) hi = v.border_alpha;
+    }
+    ASSERT_TRUE("breath never dips below the floor",
+                lo >= GLR_TOUR_PRESENCE_ALPHA_MIN - 0.001f);
+    ASSERT_TRUE("breath never exceeds the ceiling",
+                hi <= GLR_TOUR_PRESENCE_ALPHA_MAX + 0.001f);
+    ASSERT_TRUE("breath actually moves", hi - lo > 0.2f);
+}
+
+static void test_presence_outro_outlives_the_tour(void) {
+    GlrTourPresenceView v;
+    float first_outro_alpha;
+
+    glr_tour_presence_reset();
+    presence_frames(1, "Camera & Views", GLR_TOUR_PRESENCE_INTRO_FRAMES + 5);
+
+    /* The tour is gone and its metadata pointers with it — pass NULL, exactly
+     * as glr_pointer_script_tour_view() reports it after a stop. */
+    v = glr_tour_presence_tick(0, NULL);
+    ASSERT_INT("stopping enters the outro", v.phase, GLR_TOUR_PRESENCE_OUTRO);
+    ASSERT_STR("outro still knows the name", v.name, "Camera & Views");
+    ASSERT_TRUE("outro still draws", v.border_alpha > 0.0f);
+    first_outro_alpha = v.border_alpha;
+
+    v = presence_frames(0, NULL, GLR_TOUR_PRESENCE_OUTRO_FRAMES / 2);
+    ASSERT_TRUE("outro fades", v.border_alpha < first_outro_alpha);
+    ASSERT_TRUE("outro collapses the band", v.band_scale < 1.0f);
+
+    v = presence_frames(0, NULL, GLR_TOUR_PRESENCE_OUTRO_FRAMES);
+    ASSERT_INT("outro ends at OFF", v.phase, GLR_TOUR_PRESENCE_OFF);
+    ASSERT_FLOAT("nothing drawn once off", v.border_alpha, 0.0f);
+
+    v = glr_tour_presence_tick(0, NULL);
+    ASSERT_INT("stays off with no tour", v.phase, GLR_TOUR_PRESENCE_OFF);
+}
+
+static void test_presence_restarts_intro_for_a_new_tour(void) {
+    GlrTourPresenceView v;
+
+    glr_tour_presence_reset();
+    presence_frames(1, "Editing Basics", GLR_TOUR_PRESENCE_INTRO_FRAMES + 5);
+    ASSERT_INT("settled into ACTIVE",
+               glr_tour_presence_tick(1, "Editing Basics").phase,
+               GLR_TOUR_PRESENCE_ACTIVE);
+
+    /* Starting a tour from the Tours menu during a tour never passes through
+     * inactive, so the name change is the only edge available — and the card
+     * has to replay, because the thing being announced changed. */
+    v = glr_tour_presence_tick(1, "Getting Help");
+    ASSERT_INT("new tour name replays the intro",
+               v.phase, GLR_TOUR_PRESENCE_INTRO);
+    ASSERT_STR("card announces the new tour", v.name, "Getting Help");
+}
+
+static void test_presence_reset_skips_the_outro(void) {
+    GlrTourPresenceView v;
+
+    glr_tour_presence_reset();
+    presence_frames(1, "Tour", GLR_TOUR_PRESENCE_INTRO_FRAMES + 5);
+    glr_tour_presence_reset();
+    v = glr_tour_presence_tick(0, NULL);
+    ASSERT_INT("reset drops straight to OFF", v.phase, GLR_TOUR_PRESENCE_OFF);
+    ASSERT_FLOAT("reset leaves nothing drawn", v.border_alpha, 0.0f);
+}
+
+/* The compact strip is what a tour actually runs under (the HUD defaults
+ * collapsed), so it — not just the expanded transport line — has to carry the
+ * way out. */
+static void test_hud_compact_strip_carries_the_exit_key(void) {
+    ASSERT_TRUE("compact layout names Esc",
+                strstr(TOUR_HUD_COMPACT_FMT, "Esc") != NULL);
+    /* The chrome count drives the compact panel's width, so a drift between
+     * the format string and the constant silently truncates the hint. */
+    ASSERT_INT("chrome char count matches the format",
+               TOUR_HUD_COMPACT_CHROME_CHARS,
+               (int)strlen(TOUR_HUD_COMPACT_FMT) - 2);
+}
+
 int main(void) {
     printf("--- glr_tour_transport tests ---\n");
     test_baseline_pending_then_playing();
@@ -938,6 +1072,12 @@ int main(void) {
     test_hud_panel_width_clamp();
     test_echo_alpha_frozen_is_full();
     test_view_inactive_after_stop();
+    test_presence_intro_then_active();
+    test_presence_breathes_and_stays_within_range();
+    test_presence_outro_outlives_the_tour();
+    test_presence_restarts_intro_for_a_new_tour();
+    test_presence_reset_skips_the_outro();
+    test_hud_compact_strip_carries_the_exit_key();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

@@ -23,6 +23,7 @@
 #include "app/glr_compositor.h"      /* whole-frame post-process hook */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
 #include "app/glr_state.h"
+#include "app/glr_tour_presence.h"   /* ambient tour-presence phase machine */
 #include "editor/commit.h"
 #include "editor/completion.h"
 #include "editor/help_session.h"
@@ -82,6 +83,7 @@
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
 #include "ui/subsystems/tour_hud.h"
+#include "ui/subsystems/tour_presence.h"
 #include "app/glr_pointer_script.h"   /* glr_pointer_script_tour_view */
 #include "app/glr_tours.h"            /* glr_tours_start */
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
@@ -2489,6 +2491,24 @@ void glr_ctrl_render_script_overlay(int win_w, int win_h) {
         glr_pointer_script_render_overlay(win_w, win_h);
 }
 
+void glr_ctrl_render_tour_presence(int win_w, int win_h) {
+    /* Ticked unconditionally, drawn conditionally: the presence clock has to
+     * keep running for the length of the exit collapse after the tour itself
+     * is gone, so the phase machine — not the caller — decides when there is
+     * nothing left to draw. */
+    GlrTourPlaybackView tour = glr_pointer_script_tour_view();
+    GlrTourPresenceView presence =
+        glr_tour_presence_tick(tour.active, tour.name);
+
+    if (presence.phase == GLR_TOUR_PRESENCE_OFF)
+        return;
+    /* Self-timed, like the narration overlay it follows: the row stays honestly
+     * stale outside a tour rather than reporting a per-frame zero. */
+    prof_begin(PROF_TOUR_PRESENCE);
+    tour_ui_presence_render(&presence, win_w, win_h);
+    prof_end(PROF_TOUR_PRESENCE);
+}
+
 int glr_ctrl_start_tour(int tour_idx) {
     return glr_tours_start(tour_idx);
 }
@@ -3511,6 +3531,9 @@ void glr_ctrl_reset_all(void) {
     variable_panel_state_reset();
     replay_state_reset();
     color_picker_state_reset();
+    /* Hard reset rather than an outro: a wholesale world reset is not a tour
+     * the user chose to leave, so there is no exit to animate. */
+    glr_tour_presence_reset();
     /* tutorial_teardown (rather than tutorial_state_reset) so an active
      * tutorial's cfg baseline gets restored before any presentation cfg
      * that follows this reset locks the tutorial-mutated state in. */

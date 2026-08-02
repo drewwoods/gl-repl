@@ -198,11 +198,17 @@ static void draw_step_bar(int x, int y, int w, float progress, int total) {
 static void tour_hud_build_compact(char *dst, size_t dstsz, int max_chars,
                                    const GlrTourPlaybackView *v) {
     const char *name = (v->name && v->name[0]) ? v->name : "Untitled";
-    char cand[2][256];
+    char cand[3][256];
 
-    snprintf(cand[0], sizeof(cand[0]), "Tour | %s | [+]", name);
-    snprintf(cand[1], sizeof(cand[1]), "Tour | [+]");
-    tour_hud_fit(dst, dstsz, max_chars, cand, 2);
+    /* "Esc exit" is in the COMPACT strip, not just the expanded transport
+     * line: the compact strip is what a tour actually runs under, and a mode
+     * has to keep saying how to leave it. First thing dropped when the scene
+     * is too narrow to carry it, since the presence border still marks the
+     * mode even when this strip has room for nothing but a label. */
+    snprintf(cand[0], sizeof(cand[0]), TOUR_HUD_COMPACT_FMT, name);
+    snprintf(cand[1], sizeof(cand[1]), "Tour | %s | [+]", name);
+    snprintf(cand[2], sizeof(cand[2]), "Tour | [+]");
+    tour_hud_fit(dst, dstsz, max_chars, cand, 3);
 }
 
 int tour_ui_hud_rect(const struct UiRenderSnapshot *snap,
@@ -227,7 +233,7 @@ int tour_ui_hud_rect(const struct UiRenderSnapshot *snap,
     } else {
         const char *name = (snap->tour.name && snap->tour.name[0])
                          ? snap->tour.name : "Untitled";
-        int desired_chars = (int)strlen("Tour |  | [+]") + (int)strlen(name);
+        int desired_chars = TOUR_HUD_COMPACT_CHROME_CHARS + (int)strlen(name);
         hud_w = desired_chars * FONT_SMALL_W + 2 * TOUR_HUD_TEXT_PAD_X;
         if (hud_w > avail_w)
             hud_w = avail_w;

@@ -112,6 +112,14 @@ static void display_func(void) {
      * said and where the synthetic mouse is. Self-timed as PROF_TOUR_OVERLAY. */
     glr_ctrl_render_script_overlay(glutGet(GLUT_WINDOW_WIDTH),
                                    glutGet(GLUT_WINDOW_HEIGHT));
+
+    /* Ambient tour presence (title card, breathing border, exit collapse) —
+     * dead last, so nothing paints over the one piece of chrome that says the
+     * app is in a mode, and so it survives a user's whole-frame Post FX.
+     * Called unconditionally: it owns the clock its exit animation runs on,
+     * which outlives the tour itself. Self-timed as PROF_TOUR_PRESENCE. */
+    glr_ctrl_render_tour_presence(glutGet(GLUT_WINDOW_WIDTH),
+                                  glutGet(GLUT_WINDOW_HEIGHT));
     prof_end(PROF_HOST_OVERLAYS);
 
     /* Close the frame's *work* span: everything the callback does to produce

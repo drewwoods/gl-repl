@@ -57,6 +57,19 @@ int main(void) {
                     h[1] > h[0] && h[1] > h[2]);
     }
 
+    /* 4b. SCRIM exists to be tunable independently of SUNKEN: one backs text
+     * over a user's 3D scene, the other is a form-field well on known chrome.
+     * Collapsing them back to the same value would quietly re-couple the two. */
+    {
+        const float *scrim  = g_ui_theme_table[UI_THEME_GREEN][UI_TOK_SCRIM];
+        const float *sunken = g_ui_theme_table[UI_THEME_GREEN][UI_TOK_SUNKEN];
+        ASSERT_TRUE("scrim is not just a copy of sunken",
+                    scrim[0] != sunken[0] || scrim[1] != sunken[1] ||
+                    scrim[2] != sunken[2]);
+        ASSERT_TRUE("scrim is dark enough to carry light text",
+                    scrim[0] < 0.2f && scrim[1] < 0.2f && scrim[2] < 0.2f);
+    }
+
     /* 5. Accent rows are actually distinct (table not all-green). */
     ASSERT_TRUE("WARM accent differs from GREEN accent",
                 g_ui_theme_table[UI_THEME_WARM][UI_TOK_ACCENT][0] !=

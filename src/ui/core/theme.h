@@ -37,6 +37,14 @@ typedef enum {
     UI_TOK_SURFACE = 0,            /* menubar / tab strip bg     #1d1d1d */
     UI_TOK_RAISED,                 /* dropdown / overlay panel   #222222 */
     UI_TOK_SUNKEN,                 /* sunken field bg            #141414 */
+    UI_TOK_SCRIM,                  /* translucent plate under text drawn
+                                    * over ARBITRARY content — the tour
+                                    * caption's backing, the pointer arrow's
+                                    * outline. Distinct from SUNKEN, which is
+                                    * a form-field background sitting on known
+                                    * chrome: retuning field wells must not
+                                    * change what stays legible over a user's
+                                    * 3D scene. Callers supply the alpha */
     UI_TOK_BORDER,                 /* panel border               #3a3a3a */
     UI_TOK_DIVIDER,                /* separator / rule           #333333 */
     UI_TOK_MENU_LABEL_HOVER_BG,    /* top-bar label hover (gray) #2a2a2a */
@@ -78,12 +86,13 @@ typedef enum {
     UI_THEME_COUNT
 } UiTheme;
 
-/* The 17 neutral columns, shared verbatim by every theme row so a new
+/* The 18 neutral columns, shared verbatim by every theme row so a new
  * scheme only fills the 3 accent tokens below it. */
 #define UI_THEME_NEUTRAL_COLUMNS \
     [UI_TOK_SURFACE]              = { 0.114f, 0.114f, 0.114f, 1.0f }, \
     [UI_TOK_RAISED]               = { 0.133f, 0.133f, 0.133f, 1.0f }, \
     [UI_TOK_SUNKEN]               = { 0.078f, 0.078f, 0.078f, 1.0f }, \
+    [UI_TOK_SCRIM]                = { 0.063f, 0.071f, 0.090f, 1.0f }, \
     [UI_TOK_BORDER]               = { 0.227f, 0.227f, 0.227f, 1.0f }, \
     [UI_TOK_DIVIDER]              = { 0.200f, 0.200f, 0.200f, 1.0f }, \
     [UI_TOK_MENU_LABEL_HOVER_BG]  = { 0.165f, 0.165f, 0.165f, 1.0f }, \
@@ -123,7 +132,7 @@ static inline void ui_clr_a(UiThemeToken t, float a) {
 static inline void ui_theme_select(UiTheme th) { g_ui_theme = (int)th; }
 static inline UiTheme ui_theme_active(void) { return (UiTheme)g_ui_theme; }
 
-STATIC_ASSERT(UI_TOK_COUNT == 22,
+STATIC_ASSERT(UI_TOK_COUNT == 23,
               "UiThemeToken count changed - update g_ui_theme_table and test_ui_theme");
 STATIC_ASSERT(UI_THEME_COUNT == 8,
               "UiTheme row count changed - update g_ui_theme_table and test_ui_theme");

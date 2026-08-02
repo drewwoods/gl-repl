@@ -107,6 +107,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_HOST_OVERLAYS]                     = { "Host Overlays",   0, 0 },
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
+    [PROF_TOUR_PRESENCE]                     = { "tour presence",   1, 0 },
     /* The three summary rows under the divider: the whole frame, then the two
      * parts it splits into. "Frame Time" carries is_total (the divider above
      * it and the full-budget thresholds) plus is_frame_total (refresh-boundary

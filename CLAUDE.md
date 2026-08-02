@@ -292,7 +292,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L259) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L266) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy — render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
@@ -307,7 +307,10 @@ brackets its display callback with `glr_frame_begin()` / `glr_frame_work_end()`
 / `glr_frame_ended()` (which own the staleness/FPS tick, the GPU slot rotation
 and the capture-mode sim tick) and runs scripted-tour input before
 `glr_ctrl_display_frame()` plus the splash/tour overlays and `glFinish`+swap
-after it. Three summary rows come out of two spans: **Frame Time** (whole
+after it. The tour **presence** layer (title card + breathing border + exit
+collapse, `glr_tour_presence` → `ui/subsystems/tour_presence`) is last of all,
+after the compositor, and is called every frame even with no tour — its exit
+animation outlives the tour that triggered it. Three summary rows come out of two spans: **Frame Time** (whole
 callback), **Frame Work** (the same up to the present), and **Present**, which
 is *derived* as the difference rather than bracketed. **Per-frame work added to
 the host callback needs its own `ProfSection`** — inside the work span but

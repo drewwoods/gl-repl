@@ -21,6 +21,13 @@
 /* Feature-owned hit kind in the reserved subsystem range. */
 enum { UI_HIT_TOUR_HUD = UI_HIT_CORE_COUNT + 66 };
 
+/* Widest compact-strip layout, and the single source of truth for both the
+ * text and the width the panel is sized to hold. `%s` is the tour name;
+ * everything else is chrome, so (sizeof - 3) is the chrome's character count
+ * (drop the NUL, drop the two-character conversion). */
+#define TOUR_HUD_COMPACT_FMT        "Tour | %s | Esc exit | [+]"
+#define TOUR_HUD_COMPACT_CHROME_CHARS ((int)sizeof(TOUR_HUD_COMPACT_FMT) - 3)
+
 /* HUD footprint, shared with any helper that positions relative to it. */
 #define TOUR_HUD_MARGIN_X     18
 #define TOUR_HUD_MARGIN_Y     18   /* gap from the scene's top edge */

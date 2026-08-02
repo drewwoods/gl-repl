@@ -1166,8 +1166,8 @@ single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`;
-[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L69)
-enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L123) / [`ui_theme_active()`](../src/ui/core/theme.h#L124) seam keeps call
+[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L75)
+enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L132) / [`ui_theme_active()`](../src/ui/core/theme.h#L133) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no
@@ -1300,7 +1300,42 @@ Runtime shape:
   `UI_HIT_TOUR_HUD` over its exact compact/expanded bounds; controller routing
   toggles the transport-owned `hud_expanded` bit. That bit is intentionally
   outside `GlrTourSnapshot`, so Back reconstruction cannot rewind presentation
-  choice. Every new tour resets it to compact.
+  choice. Every new tour resets it to compact. The compact strip carries
+  `Esc exit` as well as the name — the HUD defaults collapsed, so the collapsed
+  form is what a tour actually runs under, and it is the only place a keyboard
+  way out is stated for most of a tour's life.
+* **Ambient presence.** A 26px strip is easy to miss in both directions: at the
+  start you can watch a still frame and conclude nothing happened, and mid-tour
+  you can forget you are in a mode and quit it by reflex. Three layers answer
+  that, split across
+  [`src/app/glr_tour_presence.c`](../src/app/glr_tour_presence.c) (phase
+  machine) and
+  [`src/ui/subsystems/tour_presence.c`](../src/ui/subsystems/tour_presence.c)
+  (pure render):
+  * an **entry title card** naming the tour plus `Esc exits / Space pauses`,
+    eased in and back out inside ~1.4 s so it is gone before the first caption;
+  * a **breathing amber border** — four gradient bands inset from the window
+    edges over a ~3 s cycle — for as long as the tour runs. It keeps breathing
+    while the tour is paused, because a paused tour is still a mode you are
+    inside;
+  * an **exit collapse**: the band thins to nothing over ~0.4 s once the tour
+    stops, so leaving is something you watch happen.
+
+  Two placement rules make it work. It is drawn **last in the host band**,
+  after `glr_compositor_postprocess_frame`, so a user's own whole-frame Post FX
+  cannot paint over the chrome that says which mode the app is in. And the
+  phase state lives in the **app** band, not the UI band, because the outro has
+  to outlive the tour: `glr_pointer_script_tour_view()` reports `active == 0`
+  and drops its `name`/`file` pointers the instant a tour stops, so
+  `glr_tour_presence` latches the name into its own storage and keeps ticking.
+  `glr_ctrl_render_tour_presence()` is therefore called **every frame**, tour or
+  not, and self-times as `PROF_TOUR_PRESENCE`.
+
+  It deliberately does not reuse the Post FX effect enum, which is the obvious
+  wiring: that is a user setting the Config menu owns and that a tour may itself
+  be demonstrating, and the two capture-based effects (chromatic aberration,
+  scanlines) read the frame back every frame and smear the code panel a tour is
+  asking you to read. Nothing here samples the framebuffer.
 
 ## Keyboard Shortcut Definition Sites
 
@@ -1705,7 +1740,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L259) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L266) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
