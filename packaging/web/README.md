@@ -6,7 +6,7 @@ Files owned by this directory, plus their build-system entry points:
 |------|------|
 | [`gl4es_bootstrap.c`](gl4es_bootstrap.c) | Compiled at **link time** (listed in `GL_LDFLAGS`, not `$(SRCS)`), so it never joins the `-std=c99` ratchet. Provides `glutExtensionSupported` (Emscripten's built-in JS GLUT lacks it; gl-repl's runtime GL capability detection calls it) and gl4es init/config. |
 | `shell.html` | The themed Emscripten shell (`--shell-file`) — dark + amber, monospace, loading overlay, collapsible console drawer, canvas resize handling, browser scene open/download/fullscreen controls. |
-| `patches/*.patch` | Local fixes to gl4es/GLU not yet upstream (or in a public fork). Applied by `scripts/web-deps.sh` after cloning, before building — see each patch's header comment for what it fixes and why. |
+| [`patches/*.patch`](patches/) | Local fixes to gl4es/GLU not yet upstream (or in a public fork). Applied by `scripts/web-deps.sh` after cloning, before building — see each patch's header comment and the running [`patches/README.md`](patches/README.md) investigation log. |
 
 Both [`gl4es_bootstrap.c`](gl4es_bootstrap.c) and `shell.html` carry their full history from the
 original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*`).
