@@ -1057,10 +1057,10 @@ static int route_code_text_hit(const UiHit *hit) {
 
     /* Shift+click extends a selection from the current cursor to the
      * clicked location, mirroring shift+arrow keys:
-     *   - same row as the cursor → per-character input-buffer selection
+     *   - same row as the cursor -> per-character input-buffer selection
      *     (the substring between the two columns), via the same anchor
      *     machinery as shift+Left/Right and click-drag;
-     *   - a different row → whole-line range selection from the cursor's
+     *   - a different row -> whole-line range selection from the cursor's
      *     line to the clicked line (the shift+Up/Down model). Partial
      *     first/last lines across a multi-line span are not represented
      *     by either selection model, so the cross-line case selects full
@@ -1137,8 +1137,7 @@ static int route_code_text_hit(const UiHit *hit) {
         /* Record the press column so a drag that stays on the active
          * edit row can build a per-character input-buffer selection.
          * The press itself moved the cursor to hit->char_idx (and
-         * cleared any anchor as the Phase B default of the
-         * editor-input-selection plan), so on the first drag-motion
+         * cleared any anchor, so on the first drag-motion
          * the extend helper pins this column. */
         g_code_panel_drag_char_anchor = hit->char_idx;
     } else {
@@ -1257,7 +1256,7 @@ static int route_help_toggle_hit(void) {
 
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
  * for the swatch's source line. Undo capture is owned by the picker's
- * writeback path (color_picker_write_cmd → editor_commit_apply_external_change
+ * writeback path (color_picker_write_cmd -> editor_commit_apply_external_change
  * with capture_undo on the first slider edit per session), so
  * a session that opens and closes without editing leaves the undo ring
  * untouched. */
@@ -1564,16 +1563,16 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
 /* Right-press dispatch (GLUT_DOWN only - UP runs the shared release path).
  * Mirrors the left-button model: one canonical hit-test, then a switch on
  * the hit kind. Right-button owners, in the hit-test's z-order:
- *   - numeric swatch arrow → coarse (x10) step;
- *   - Config flyout row → backward-cycle, dropdown stays open;
- *   - variable slider row → log-mode drag begin;
- *   - histogram legend entry → solo that series (left toggles one, right
+ *   - numeric swatch arrow -> coarse (x10) step;
+ *   - Config flyout row -> backward-cycle, dropdown stays open;
+ *   - variable slider row -> log-mode drag begin;
+ *   - histogram legend entry -> solo that series (left toggles one, right
  *     narrows the plot to one);
- *   - scene / no hit → camera (right-drag pan);
- *   - code text → command help card / OpenGL-state inspector
+ *   - scene / no hit -> camera (right-drag pan);
+ *   - code text -> command help card / OpenGL-state inspector
  *     (route_right_code_panel_hit);
  *   - anything else (menu chrome, tabs, statusbar, pickers, modal help)
- *     → consumed inert so a right press on 2D chrome never pans the
+ *     -> consumed inert so a right press on 2D chrome never pans the
  *     camera behind it. */
 static void route_right_press(int x, int y) {
     UiRenderSnapshot ui_snap;
@@ -1763,19 +1762,19 @@ static int route_menu_item_hit(const UiHit *hit) {
 
 /* UI_HIT_SUBMENU_ITEM: a flyout row. cmd_idx is the owning menu_id;
  * item_idx is the absolute target index the provider resolved.
- *  - MENU_SCENE: item_idx = global flat example index → load it and
+ *  - MENU_SCENE: item_idx = global flat example index -> load it and
  *    dismiss the menu (a scene pick is a one-shot action).
- *  - MENU_TUTORIALS: item_idx = global tutorial index → start it via
+ *  - MENU_TUTORIALS: item_idx = global tutorial index -> start it via
  *    tutorial_start (REPL-side; sidesteps glr_action_menu_item_activate,
  *    whose MENU_TUTORIALS branch only owns the top-level tag-row /
  *    Restart / Exit dispatch) and dismiss the menu.
- *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index → cycle the
+ *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index -> cycle the
  *    item forward via glr_cfg_cycle_row (NOT through
  *    glr_action_menu_item_activate, whose Config branch is the inert
  *    parent-row guard) and KEEP the dropdown + flyout open so repeated
- *    toggles work, matching the old flat Config dropdown. (Parent-row
- *    guard added in Step 5 of config-menu-submenu-sections.md.)
- *  - MENU_AUDIO: item_idx = playlist track index → request playback and
+ *    toggles work, matching the old flat Config dropdown. The parent row
+ *    itself remains inert while its flyout is open.
+ *  - MENU_AUDIO: item_idx = playlist track index -> request playback and
  *    KEEP the dropdown + flyout open (like Config) so the active-track
  *    highlight follows the pick and the user can switch again. */
 static int route_submenu_item_hit(const UiHit *hit) {
@@ -2505,7 +2504,7 @@ void glr_ctrl_scripted_mouse_with_modifiers(int button, int state, int x, int y,
  *
  * DOWN, left button: modal help overlay first, then the reverse-z pass for
  * panels painted over the OpenGL-state popup, then the popup, then the
- * canonical ui_panels_hit_test → UiHit.kind switch
+ * canonical ui_panels_hit_test -> UiHit.kind switch
  * (glr_ctrl_router_handle_code_panel_hit); non-chrome kinds fall
  * through to scene press (color picker overlay) and camera. Right
  * button: route_right_press - the same canonical hit-test with

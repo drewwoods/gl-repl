@@ -4,7 +4,7 @@
  * Composes the focused per-owner capture/restore surfaces into one opaque
  * baseline. Capture heap-allocates the whole struct plus the two opaque
  * sub-snapshots (scene catalog, undo history); restore replays the owner
- * restores in the plan's order (steps 3-10). Derived state (flat program,
+ * restores in dependency order. Derived state (flat program,
  * renderer resources, controller frame caches) is intentionally not stored.
  */
 #include "app/glr_tour_snapshot.h"
@@ -84,27 +84,27 @@ int glr_tour_snapshot_restore(const GlrTourSnapshot *s) {
     if (!s)
         return 0;
 
-    /* Step 3: scene catalog (before the live document so an active-slot
+    /* Scene catalog first, so an active-slot
      * restore observes the catalog it belongs to). */
     repl_scenes_snapshot_restore(s->scenes);
-    /* Step 4: app-side presentation/render/grid state. */
+    /* App-side presentation, render, and grid state. */
     glr_state_restore(&s->glr_state);
-    /* Step 5: REPL checkpoint (leaves the flat program dirty). */
+    /* REPL checkpoint; this leaves the flat program dirty. */
     repl_state_checkpoint_restore(&s->repl);
-    /* Step 6: editor session (buffer restores in lockstep with the doc). */
+    /* Editor session; the buffer restores in lockstep with the document. */
     editor_state_session_restore(&s->editor);
-    /* Step 7: undo/redo history. */
+    /* Undo/redo history. */
     editor_undo_history_restore(s->undo);
-    /* Step 8: camera + view transition. */
+    /* Camera and view transition. */
     glr_camera_runtime_restore(&s->camera);
     glr_ctrl_view_transition_restore(&s->view_transition);
-    /* Step 9: replay, tutorial, variable-panel, color-picker, help session. */
+    /* Replay, tutorial, variable-panel, color-picker, and help session. */
     replay_state_restore(&s->replay);
     *tutorial_state_mut() = s->tutorial;
     variable_panel_state_restore(&s->variable_panel);
     color_picker_runtime_restore(&s->color_picker);
     editor_help_session_restore(&s->help_session);
-    /* Step 10: UI chrome, menu state, overlay layout. */
+    /* UI chrome, menu state, and overlay layout. */
     ui_state_restore(&s->ui_state);
     ui_menu_bar_runtime_restore(&s->menu_bar);
     ui_overlay_layout_restore(&s->overlay_layout);

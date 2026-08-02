@@ -89,14 +89,13 @@ void glr_ctrl_reset_all(void);
 /* Drop camera / menu / picker / code-panel-drag transient state in
  * addition to the editor commit transients. Called from
  * glr_ctrl_reset_all() and from controller paths that switch examples /
- * scenes so the editor returns to a clean idle posture. Hoisted out
- * of src/editor/input.c per audit #8 - the body reaches into
- * camera / UI / picker / controller state, not editor-text state. */
+ * scenes so the editor returns to a clean idle posture. The body reaches
+ * into camera / UI / picker / controller state, not editor-text state. */
 void glr_ctrl_reset_transients(void);
 
 /* Re-sync controller-derived chrome and refresh the export/render/camera text
- * caches after a tour baseline restore (glr_tour_snapshot_restore). Steps 11-12
- * of the plan's restore order. Deliberately does NOT call
+ * caches after a tour baseline restore (glr_tour_snapshot_restore). Deliberately
+ * does NOT call
  * glr_ctrl_reset_transients() - that would erase the just-restored camera
  * defaults, open menus, and peer state. */
 void glr_ctrl_after_tour_restore(void);
@@ -111,8 +110,7 @@ int glr_ctrl_code_panel_layout_provider(void);
  * request via the restore_hidden_code_panel effect flag the
  * controller actualizes after editor_handle_*. Returns 1 if the
  * layout was hidden (and is now restored), 0 if it was already
- * visible. Hoisted out of src/editor/input.c per audit #8 - the
- * body writes glr_state and runs glr_ctrl_sync_ui_chrome. */
+ * visible. The body writes glr_state and runs glr_ctrl_sync_ui_chrome. */
 int glr_ctrl_restore_hidden_code_panel(void);
 
 /* Mirror chrome-relevant presentation fields from REPL state into
@@ -323,7 +321,7 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+Shif
 int glr_ctrl_router_handle_time_reset_key(unsigned char key);       /* Ctrl+Shift+T */
 
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
-int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
+int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick -> config menu */
 int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface excluding config-owned Ctrl+R */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */

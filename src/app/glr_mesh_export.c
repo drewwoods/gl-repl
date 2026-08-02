@@ -7,8 +7,6 @@
  * glRenderMode(GL_FEEDBACK), then hands the raw float buffer to the pure
  * writer (src/support/mesh_ply.c). All GL state is saved/restored so the
  * visible frame is undisturbed (feedback produces no fragments).
- *
- * See docs/plans/.../ply-feedback-export.md.
  */
 
 #include "app/glr_mesh_export.h"

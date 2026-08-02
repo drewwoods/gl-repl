@@ -126,9 +126,9 @@ typedef enum {
 
 /* Read-only playback view for the HUD / tests. `active` is nonzero only for a
  * controlled tour (the legacy + env kinds always report inactive here, so the
- * HUD never shows for them). `source_line` follows the plan's rule: the active
- * event's line while playing/stepping, the next event's line while paused
- * before it, the final event's line in Done, and -1 with no controlled tour. */
+ * HUD never shows for them). `source_line` reports the active event's line
+ * while playing/stepping, the next event's line while paused before it, the
+ * final event's line in Done, and -1 with no controlled tour. */
 typedef struct {
     int                  active;
     GlrTourPlaybackState state;

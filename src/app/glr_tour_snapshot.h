@@ -20,12 +20,12 @@
  * large lands on the stack. A partially-constructed snapshot is fully cleaned
  * up on allocation failure.
  *
- * Restore covers steps 3-10 of the plan's restore order (scene catalog, glr
- * state, repl checkpoint, editor session, undo history, camera + view
- * transition, peer states, ui/menu/overlay state). The pointer engine handles
- * releasing held buttons + clearing in-flight glide/typing state (steps 1-2)
- * before calling this, and glr_ctrl_after_tour_restore() re-syncs derived
- * chrome + refreshes export strings (steps 11-12) after.
+ * Restore covers the scene catalog, glr state, REPL checkpoint, editor
+ * session, undo history, camera and view transition, peer states, and
+ * UI/menu/overlay state. The pointer engine releases held buttons and clears
+ * in-flight glide/typing state before calling this. Then
+ * glr_ctrl_after_tour_restore() re-syncs derived chrome and refreshes export
+ * strings.
  */
 #ifndef GLR_TOUR_SNAPSHOT_H
 #define GLR_TOUR_SNAPSHOT_H
@@ -37,7 +37,7 @@ typedef struct GlrTourSnapshot GlrTourSnapshot;
  * leaks). Destroy it with glr_tour_snapshot_destroy(). */
 GlrTourSnapshot *glr_tour_snapshot_capture(void);
 
-/* Restore owner state (steps 3-10) from `snapshot`. Leaves the flat program
+/* Restore owner state from `snapshot`. Leaves the flat program
  * dirty (rebuilt next frame). Returns 1 on success, 0 for a NULL snapshot.
  * The caller owns the pointer-engine reset before and the controller chrome
  * re-sync after (see the header comment). */

@@ -11,8 +11,7 @@
  * pipeline TUs do not include this header, while app-shell, editor, UI, and
  * scene files may.
  *
- * (Relocated from the old mixed ReplRuntimeState layout into this app-side
- * owner as step 7a of feature/decouple-repl-from-gl-repl-alt.md.)
+ * This is the app-side owner of presentation and render-policy state.
  */
 #ifndef GLR_STATE_H
 #define GLR_STATE_H

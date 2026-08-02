@@ -1623,7 +1623,8 @@ static void ps_tour_step_forward(void) {
         g_tour_state = GLR_TOUR_PAUSED;
 }
 
-/* Left Arrow: compute the backstep target (plan's formula) and seek to it. */
+/* Left Arrow: compute the backstep target using the prefix-replay formula
+ * below and seek to it. */
 static void ps_tour_backstep(void) {
     int target;
     if (g_tour_state == GLR_TOUR_DONE) {

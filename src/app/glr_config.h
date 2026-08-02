@@ -191,8 +191,7 @@ int  glr_config_grid_user_selectable(Render3dGridTheme grid);
  * synthetic "All" view (the full flat list, chrome included) is a
  * menu-layer concern and is deliberately NOT counted here - single
  * ownership, no double-count. "---" separator rows are excluded from
- * every named section's item range. (Rationale: Finding #2 of the
- * config-menu-submenu-sections plan.) */
+ * every named section's item range. */
 
 /* Number of "### " section headers present in g_cfg_items[]. */
 int  glr_config_section_count(void);
@@ -202,8 +201,8 @@ int  glr_config_section_count(void);
  * range. */
 const char *glr_config_section_label(int section);
 
-/* Sentence-cased display label: "RENDERING" → "Rendering",
- * "TIME & REPLAY" → "Time & replay". Pre-computed once; the UI layer
+/* Sentence-cased display label: "RENDERING" -> "Rendering",
+ * "TIME & REPLAY" -> "Time & replay". Pre-computed once; the UI layer
  * renders this directly without per-frame string work. NULL if out of
  * range. */
 const char *glr_config_section_display_label(int section);
@@ -216,8 +215,7 @@ int  glr_config_section_range(int section, int *start, int *count);
 
 /* Row classification for g_cfg_items[idx], used by the generic submenu
  * provider so the "All" flyout (which spans the whole table) keeps
- * header/separator rows as inert chrome. (Rationale: Finding #4 of
- * the config-menu-submenu-sections plan.) */
+ * header/separator rows as inert chrome. */
 typedef enum GlrConfigRowKind {
     GLR_CFG_ROW_ITEM = 0,   /* an actionable toggle/cycle row */
     GLR_CFG_ROW_HEADER,     /* a "### " section header */

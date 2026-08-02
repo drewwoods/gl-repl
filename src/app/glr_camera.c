@@ -30,15 +30,15 @@
 #define CAM_DIST_MAX 50.0f
 #define CAM_AUTO_ROTATE_SPEED 0.3f
 
-/* Drag-to-motion conversion (pointer-pixel deltas → world/camera units)
+/* Drag-to-motion conversion (pointer-pixel deltas -> world/camera units)
  * and the orbit/pan momentum coupling. CAM_ROT_SENSITIVITY (degrees per
  * pixel of left-drag) and CAM_MOMENTUM_COUPLE (fraction of the same delta
  * fed into velocity) are distinct knobs that merely share a default today. */
 #define CAM_PAN_SCALE 0.005f          /* world units / pixel, scaled by dist */
 #define CAM_ZOOM_SCALE 0.02f          /* dist units / pixel (middle-drag)     */
 #define CAM_ROT_SENSITIVITY 0.5f      /* degrees / pixel (left-drag orbit)    */
-#define CAM_MOMENTUM_COUPLE 0.5f      /* pan delta → velocity fraction        */
-#define CAM_ROT_MOMENTUM_COUPLE 0.25f /* orbit delta → velocity fraction      */
+#define CAM_MOMENTUM_COUPLE 0.5f      /* pan delta -> velocity fraction        */
+#define CAM_ROT_MOMENTUM_COUPLE 0.25f /* orbit delta -> velocity fraction      */
 
 /* Motion-glow gizmo brightness (0..1): full while actively dragging, a
  * lower level while momentum/ease coasts the target, decayed each frame and
@@ -300,13 +300,9 @@ void glr_camera_reconstruction_end(void) {
         g_reconstruction_depth--;
 }
 
-/* Pure GL modelview load. Audit #11: this used to live in
- * src/scene/render.c as render3d_apply_camera; scene called it,
- * scene readme insisted "scene does not own camera state", and the
- * scene renderer refused to invoke it on its own. Moved here so
- * the function and the camera type both sit with the app's camera
- * owner. render3d_draw_scene now documents the precondition
- * (modelview populated) without naming a specific helper. */
+/* Pure GL modelview load. The function and camera type live with the app's
+ * camera owner. render3d_draw_scene documents the precondition (modelview
+ * populated) without depending on a specific helper. */
 GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state) {
     GlrCameraPose pose = {0};
 

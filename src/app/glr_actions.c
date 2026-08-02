@@ -444,15 +444,14 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
  *
  * Lets src/repl/export.c emit/parse @cfg header lines without touching
  * glr_config_* directly; src/repl/scenes.c uses the same bridge for
- * per-scene cfg snapshots. (Originally step 4 of
- * feature/decouple-repl-from-gl-repl-alt.md.) */
+ * per-scene cfg snapshots. The controller owns the bridge so the REPL
+ * modules can stay independent of app config storage. */
 
 #include "repl/cfg_baseline.h"
 
 /* Subset of cfg keys saved per-scene: presentation toggles plus
  * camera_rotate. The controller owns this knowledge so src/repl/scenes.c
- * stays neutral. (Mirrors the keys covered by the pre-step-4
- * k_scene_cfg_keys list.) */
+ * stays neutral. */
 static int cfg_key_in_scene_subset(GlrConfigKey key) {
     switch (key) {
     case GLR_CONFIG_WIREFRAME:
@@ -604,13 +603,13 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
     return slug && strcmp(slug, "audio") == 0;
 }
 
-/* Symbolic-name → enum-value tables. Built-in catalogs (examples,
+/* Symbolic-name -> enum-value tables. Built-in catalogs (examples,
  * tutorials) record values like "GRID_THEME_RADAR" rather than the raw
  * `10`; this lookup resolves them at apply time so reordering the
  * underlying enum (src/scene/themes.h) doesn't silently shift which
  * value the catalog selects.
  *
- * The slug→table map below covers every enum-valued slug the catalogs
+ * The slug->table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
  * light_theme / view_mode / overlay_scope / vertex_labels / vertex_outline_style).
  * Other enum-shaped slugs - replay, code_panel_layout, etc. - stay integer-only
@@ -717,7 +716,7 @@ static const char *cfg_post_fx_effect_symbols[GLR_POST_FX_EFFECT_COUNT] = {
 #undef POST_FX_EFFECT_SYMBOL_ENTRY
 };
 
-/* The slug→table map shared by the symbolic resolver (read side) and the
+/* The slug->table map shared by the symbolic resolver (read side) and the
  * value-to-string emitter (write side). Returns NULL (count untouched)
  * for slugs with no symbolic form. */
 static const char *const *cfg_symbol_table_for_slug(const char *slug,
@@ -1733,7 +1732,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
          *     [t+5]      "Exit Tutorial". */
         int tag_count = repl_tutorial_visible_tag_count();
         if (item_idx < tag_count)
-            return 0;   /* tag row → keep menu open, no action */
+            return 0;   /* tag row -> keep menu open, no action */
         int active = tutorial_active();
         if (item_idx == tag_count + GLR_TUTORIAL_OFF_NEXT) {
             glr_ctrl_tutorial_cycle_next();

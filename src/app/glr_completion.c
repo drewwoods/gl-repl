@@ -77,7 +77,7 @@ static int ac_prefix_match_ci(const char *cand, const char *pre, int n) {
 
 /* Gate for mid-line completion. Accepts a cursor tail that is nothing
  * but the remainder of the current call's argument list -
- * `[ws] [, args…] ) [;] [ws]` - so completion can finish a prior enum
+ * `[ws] [, args...] ) [;] [ws]` - so completion can finish a prior enum
  * arg (`glColorMaterial(GL_FR|, GL_DIFFUSE);`) without firing inside
  * arbitrary expressions. The closing `)` may be absent (call still
  * being typed). Depth covers nested (), {}, [] the same way the
@@ -96,7 +96,7 @@ static int tail_is_only_trailing_args(const char *p) {
         else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
     }
     if (*p == '\0')
-        return 1; /* still-unclosed call: `, GL_…` with no `)` yet */
+        return 1; /* still-unclosed call: `, GL_...` with no `)` yet */
     p++; /* past the top-level ')' */
     while (*p == ' ' || *p == '\t') p++;
     if (*p == ';') p++;
@@ -526,7 +526,7 @@ static void update_autocomplete(void) {
      * count of top-level commas between '(' and the cursor; the token
      * being completed is the segment after the last such comma, ending
      * at the cursor (== end of input in the historic case; mid-line the
-     * trailing `, args…)` text is left alone and the accept path
+     * trailing `, args...)` text is left alone and the accept path
      * splices at the cursor). Matches come from def->args[slot].enums plus
      * an optional bitfield-all alias.
      * the accept suffix is ")" for the last enum slot, ", " otherwise,

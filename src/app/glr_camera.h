@@ -10,16 +10,14 @@
  * separately through ui_state; glr_camera intentionally does not reach into
  * UI state.
  *
- * Older storage/accessor and drag-math splits are now secondary history;
- * callers should treat this as the single camera owner.
+ * Callers should treat this as the single camera owner.
  */
 #ifndef GLR_CAMERA_H
 #define GLR_CAMERA_H
 
 /* The 3D scene-camera pose. Render builds the modelview from these
  * fields each frame; drag/pan/zoom controls mutate them. The name
- * preserves the legacy `Repl` prefix until a broader type-rename
- * sweep lands. */
+ * preserves the established `Repl` prefix for compatibility. */
 typedef struct {
     float rx;
     float ry;
@@ -132,14 +130,9 @@ void glr_camera_runtime_restore(const GlrCameraRuntimeSnapshot *snapshot);
  * position. Used as the input to glr_camera_load_modelview so the C
  * type system can tell six adjacent floats apart at the boundary.
  *
- * The audit's #11 finding was that render3d_apply_camera lived in
- * src/scene/render.c but the renderer refused to call it - a
- * scene-namespaced public function that scene code wouldn't touch
- * was hidden temporal coupling enforced by convention. The fix is
- * to move both the type and the helper into glr_camera (the app's
- * camera owner) so the scene module is purely the renderer and
- * callers are responsible for populating GL_MODELVIEW before each
- * render3d_draw_scene call. */
+ * The type and helper live with the app's camera owner. The scene module
+ * remains purely the renderer, and callers populate GL_MODELVIEW before
+ * each render3d_draw_scene call. */
 typedef struct GlrCameraPose {
     float rx, ry;       /* orbit pitch and yaw, degrees */
     float dist;         /* distance from target along the local Z axis */

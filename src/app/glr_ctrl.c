@@ -582,7 +582,7 @@ static Render3dGuideSnapshot glr_ctrl_build_guide_snapshot(const Render3dRenderC
     return snapshot;
 }
 
-/* Per-frame replay-fade plan, owned by the controller. Used by the main
+/* Per-frame replay-fade state, owned by the controller. Used by the main
  * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
@@ -893,7 +893,7 @@ static void glr_ctrl_push_highlights(void) {
 
 /* Push per-line text overrides for source lines whose displayed text
  * should differ from the buffer text. Today only replay's expansion-mode
- * annotations produce overrides (e.g. `x = 0.4` → `x = 0.4 // = 0.4`
+ * annotations produce overrides (e.g. `x = 0.4` -> `x = 0.4 // = 0.4`
  * with the evaluated form appended). The list stays empty outside
  * active replay, and is sparse during it (only has_vars cmds of the
  * applicable kinds get entries). */
@@ -955,7 +955,7 @@ int glr_ctrl_code_panel_layout_provider(void) {
     return glr_state_presentation().code_panel_layout;
 }
 
-/* Hoisted out of src/editor/input.c per audit #8: the action
+/* The action
  * writes glr_state_presentation_mut(), runs glr_ctrl_sync_ui_chrome,
  * and closes the menu / picker - all controller / UI concerns the
  * editor module should not be reaching into. The editor signals
@@ -971,7 +971,7 @@ int glr_ctrl_restore_hidden_code_panel(void) {
     return 1;
 }
 
-/* Hoisted out of src/editor/input.c per audit #8: the body reaches
+/* The body reaches
  * the camera, menu bar, color picker, and the controller's own
  * code-panel-drag reset - none of which are editor-text concerns.
  * The editor still owns the commit-side state reset via
@@ -1120,8 +1120,8 @@ static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
  * glr_ctrl_display_frame restores predef + scratch only, not the
  * persistent render-state struct).
  *
- * Render3dExecutePurpose is a forward-compatible enum; future probe-like
- * purposes (fade-overlay, picking pass, etc.) take the same
+ * Render3dExecutePurpose is a forward-compatible enum; additional
+ * probe-like purposes (fade-overlay, picking pass, etc.) take the same
  * snapshot/restore path automatically. */
 static void scene_execute_adapter(const Render3dExecuteContext *ctx,
                                   void *user_data) {
@@ -1186,7 +1186,7 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
     }
 }
 
-/* Grid/axes in-out fade machines (docs/plans/.../grid-axes-transitions.md).
+/* Grid/axes in-out fade machines.
  * The config path is untouched: toggling still just flips
  * presentation.grid_theme/axes_theme. Each frame the diff feeds these
  * machines and the renderer draws the effective {theme, opacity}. */
@@ -1348,7 +1348,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->execute_user_data = NULL;
 
     /* --- Post-fill hook (replay-fade overlay) ---
-     * Wired up further below after the fade plan is built; left NULL when
+     * Wired up further below after the fade state is built; left NULL when
      * there are no fades to overlay. */
     config->post_fill_fn = NULL;
     config->post_fill_user_data = NULL;
@@ -1418,7 +1418,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->cam_motion_glow = cam.motion_glow;
     /* Two independent projection blends combined by min() (0 = ortho, 1 =
      * perspective): the 2D/3D view-mode transition and the free-camera
-     * Projection toggle. Min ⇒ ortho wins - the scene is orthographic if
+     * Projection toggle. Min => ortho wins - the scene is orthographic if
      * EITHER control asks for it. The view-mode 2D path additionally
      * flattens/locks the camera; the toggle leaves the camera free. */
     config->projection_mix = fminf(glr_ctrl_view_projection_mix(),
@@ -1553,7 +1553,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
     /* --- Replay overlays ---
-     * Build the controller-private fade plan from REPL replay state, and
+     * Build the controller-private fade state from REPL replay state, and
      * if there's anything to overlay on the main fill (fading batches or
      * the polygon-mode tess-preview wireframe) install our post_fill_fn
      * so the scene calls back between the user-geometry fill and the
@@ -1680,8 +1680,8 @@ STATIC_ASSERT(UI_GL_VECTOR_HELPER_MAX ==
 /* Derive the scene tab strip each frame from existing state - no persistent
  * model. One tab per occupied user-scene slot (dense slot order, matching
  * the Scene menu / F12), plus one example tab iff an example is active.
- * Transient/"neither active" (Scene→New, tutorial) leaves active_idx == -1
- * with no synthetic tab (plan decision #6). */
+ * Transient/"neither active" (Scene->New, tutorial) leaves active_idx == -1
+ * with no synthetic tab. */
 static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
     int active_slot = repl_active_user_scene();
     int example_idx = repl_state_scenes().active_example_idx;
@@ -2343,7 +2343,7 @@ static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
          * sub-step t (the modelview stays at the current camera pose). The
          * last sample (f==1) bakes at exactly t_end, so the flat program is
          * left at the true frame time. Route by the `t` bit like the frame
-         * gate: when t is value-only (rebake_ok and t ∉ structural mask) an
+         * gate: when t is value-only (rebake_ok and t not in the structural mask) an
          * in-place rebake suffices per sample; otherwise re-flatten fully.
          * The per-sample baseline reset above already restored the frame's
          * predef/scratch, so both paths thread assignments from the same
@@ -3441,9 +3441,8 @@ static void glr_ctrl_tick_overlay_xn(void) {
 
 /* Look up the label of the config row currently bound to F<fn>.
  * Used by the help overlay's F-Key Toggles section through the
- * controller-installed ReplHelpFkeyProvider - closes audit #1's
- * layering inversion where src/repl/help_text.c reached into
- * src/app/glr_config.h directly. */
+ * controller-installed ReplHelpFkeyProvider, so src/repl/help_text.c can
+ * obtain labels without reaching into src/app/glr_config.h. */
 static const char *glr_ctrl_help_fkey_label(int fn) {
     int cfg_count = 0;
     int key_code = GLUT_KEY_F1 + fn - 1;
@@ -3498,7 +3497,7 @@ static void glr_ctrl_install_app_services(void) {
     /* Light bridge: feeds the app-owned theme-seeded light data to the exporter's glLightfv blocks. */
     repl_export_install_light_bridge(&g_export_light_bridge_impl);
     /* Help-overlay F-key label provider so src/repl/help_text.c can
-     * walk F2..F10 labels without including app/glr_config.h (audit #1). */
+     * walk F2..F10 labels without including app/glr_config.h. */
     repl_help_text_install_fkey_provider(&g_glr_help_fkey_provider);
     /* Seed the grid/axes overlay transition machines. */
     glr_ctrl_seed_overlay_xn();
@@ -3568,9 +3567,8 @@ void glr_ctrl_reset_all(void) {
 }
 
 void glr_ctrl_after_tour_restore(void) {
-    /* Steps 11-12 of the tour-restore order. The owner restores in
-     * glr_tour_snapshot_restore() put presentation/camera/menu/peer state back;
-     * here we re-derive the app-side caches that hang off them. NOT
+    /* glr_tour_snapshot_restore() puts presentation/camera/menu/peer state
+     * back; here we re-derive the app-side caches that hang off them. NOT
      * glr_ctrl_reset_transients() - that would clear the restored camera scene
      * default, close the restored menu, and stop the restored color picker. */
     repl_state_refresh_workspace_header_lines();
@@ -3931,9 +3929,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * export-config bridge would otherwise be missing here and any
      * @cfg in imported files would be silently dropped.
      * glr_ctrl_install_app_services is idempotent so the windowed path
-     * (which already installed via glr_ctrl_reset_all) is unaffected.
-     * (Originally the Step 4 [P2] fix in
-     * feature/decouple-repl-from-gl-repl-alt.md.) */
+     * (which already installed via glr_ctrl_reset_all) is unaffected. */
     glr_ctrl_install_app_services();
     /* The windowed path patches REPL-state sentinels via
      * glr_ctrl_init_gl -> glr_ctrl_reset_all -> repl_state_reset_program
@@ -4027,7 +4023,7 @@ int glr_ctrl_open_gl_state_popup(int line) {
 
     /* Resolve through the live code-panel row model, then take the exact
      * production input path. This keeps capture placement, blank-row
-     * validation, popup toggling, pointer state, and future right-click
+     * validation, popup toggling, pointer state, and right-click
      * behavior identical to a user's click. GLR_EDIT_LINE may have requested
      * follow-scroll before the main loop; until a rendered frame applies it,
      * an off-screen row deliberately returns 0 so the capture hook retries. */

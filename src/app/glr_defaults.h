@@ -109,8 +109,8 @@
 
 /* Neutral default clear color used by the controller when the flat
  * program contains no user glClearColor command. Keep the luminance
- * helper in sync with these channel values so overlay alpha scaling
- * tracks any future default-background change. */
+ * helper in sync with these channel values; overlay alpha scaling uses
+ * this luminance to stay calibrated to the default background. */
 #define CFG_DEFAULT_CLEAR_R           0.10f
 #define CFG_DEFAULT_CLEAR_G           0.10f
 #define CFG_DEFAULT_CLEAR_B           0.10f
