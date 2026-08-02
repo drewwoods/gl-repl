@@ -761,6 +761,17 @@ void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn) {
 int glr_audio_init(void) {
     if (g_inited)
         return 0;
+    /* Parity with the native backend's GLR_AUDIO_NO_DEVICE (miniaudio's
+     * noDevice mode): initialization SUCCEEDS and nothing is audible. Here
+     * that means never reaching `new Audio()` or the manifest fetch(), neither
+     * of which exists under node -- `new Audio()` threw straight out of main()
+     * before a single assertion ran. Leaving Module.glrAudio unset is what
+     * silences the rest of the backend: every other EM_JS below already guards
+     * on it, because a caller can reach them before init on the real page. */
+    if (getenv("GLR_AUDIO_NO_DEVICE") != NULL) {
+        g_inited = 1;
+        return 0;
+    }
     if (web_audio_js_init() != 0)
         return -1;
     g_inited = 1;

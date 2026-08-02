@@ -68,7 +68,10 @@ FREEGLUT_OSMESA     ?= 0
 # of a native GL backend: CC becomes emcc, and GL/GLU/freeglut all come from
 # the toolchain-built archives in third_party/web/ (scripts/web-deps.sh) plus
 # the vendored freeglut's Emscripten backend. Mutually exclusive with
-# FREEGLUT_OSMESA / USE_GL_STUBS -- don't combine them. See `make web`.
+# FREEGLUT_OSMESA -- don't combine them. See `make web`.
+#
+# WEB=1 USE_GL_STUBS=1 IS supported and is what `make test-web` uses: emcc
+# against the no-op GL stubs, no gl4es, no browser. See WEB_TEST_LDFLAGS.
 WEB                 ?= 0
 ifeq ($(WEB),1)
   CC := emcc
@@ -421,6 +424,35 @@ GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
 #     status. That is what lets bench-web fail a run loudly.
 BENCH_WEB_LDFLAGS = \
 	$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -sEXIT_RUNTIME=1
+
+# WEB=1 USE_GL_STUBS=1 -- the `make test-web` lane. Re-assert the stub headers
+# and drop the whole gl4es stack, because the two flags above set GL_HEADER_CFLAGS
+# and this block runs second. That combination is deliberate, not an accident:
+# `make test` is already a stubs build, so compiling the same TUs under emcc
+# against the same no-op headers is the wasm twin of the native gate, and it
+# needs neither scripts/web-deps.sh nor a browser. It compiles the
+# __EMSCRIPTEN__ side of every #ifdef in the tree, which is the coverage the
+# native suite structurally cannot reach.
+ifeq ($(USE_GL_STUBS),1)
+GL_HEADER_CFLAGS = -I$(GL_STUB_INCLUDE) -DGL_STUBS -std=gnu99
+# Three link differences from BENCH_WEB_LDFLAGS:
+#   - NODERAWFS=1: tests fopen() real paths (build/*_trace.txt, tests/testdata
+#     fixtures, /tmp workspaces). MEMFS has none of them, and fopen() failing
+#     silently turns into confusing assertion diffs rather than an error.
+#   - EXIT_RUNTIME=1 on EVERY binary, not just the ones that opt in: without it
+#     main()'s non-zero return never reaches node and a failing test exits 0.
+#   - no -sUSE_WEBGL2/FULL_ES2: the stubs are the GL layer here.
+WEB_TEST_LDFLAGS = \
+	-sEXIT_RUNTIME=1 -sNODERAWFS=1 \
+	-sINITIAL_MEMORY=536870912 -sSTACK_SIZE=8388608
+# All three, not just GL_LDFLAGS: the test binaries that sit outside
+# CORE_TEST_BINS name GL_STUB_LDFLAGS directly, and a link that misses
+# NODERAWFS above fails as a handful of stub-trace assertions reading 0 rather
+# than as a link or a startup error.
+GL_STUB_LDFLAGS = $(WEB_TEST_LDFLAGS)
+GL_LDFLAGS = $(WEB_TEST_LDFLAGS)
+GLUT_GL_LDFLAGS = $(WEB_TEST_LDFLAGS)
+endif
 endif
 
 ifeq ($(BUILD),coverage)
@@ -487,14 +519,18 @@ HDRS = \
 	gl_repl.h \
 	source_document.h
 
-ifeq ($(WEB),1)
+# The trimmed emscripten catalog belongs to the shipping web build only. The
+# `make test-web` lane (WEB=1 USE_GL_STUBS=1) keeps the native catalog: the
+# example goldens are keyed by catalog index, so the trimmed set would fail
+# test_repl_core_examples for a reason that has nothing to do with wasm.
+ifeq ($(WEB)$(USE_GL_STUBS),1)
 EXAMPLES_CATALOG ?= examples/catalog-emscripten.ini
 else
 EXAMPLES_CATALOG ?= examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.glr) $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
-ifeq ($(WEB),1)
+ifeq ($(WEB)$(USE_GL_STUBS),1)
 TOURS_CATALOG = tours/catalog-emscripten.ini
 else
 TOURS_CATALOG = tours/catalog.ini
@@ -837,6 +873,38 @@ TEST_BINS += test_buffer_viz_legend
 TEST_BINS += test_assign_plot
 TEST_BINS += test_ui_assign_plot
 
+# `make test-web` runs TEST_BINS as wasm under node. These are the ones that
+# do not survive that move, each for a stated reason -- the rest (67 of 76) run
+# unmodified. Every exclusion here is a test asserting behavior the web build
+# deliberately does not have; none is a wasm defect. Re-check the list when a
+# __EMSCRIPTEN__ branch is added or removed, and prefer making the test
+# web-aware over extending this list.
+#
+#   test_audio            miniaudio's device backend is native-only; the web
+#                         build swaps in an entirely separate HTMLAudioElement
+#                         implementation, so the hitch-threshold and device
+#                         assertions have no web counterpart.
+#   test_ui_menu_bar      menu_bar.c's menu_visible() hides MENU_FILE under
+#   test_ui_scene_tabs    __EMSCRIPTEN__ (the shell supplies its own New/Open
+#   test_ui               chrome). ~36 assertions across these four drive that
+#   test_glr_ctrl         hidden File menu and its dropdown geometry.
+#   test_edit_overlays    edit_overlays.c / geometry_guides.c draw vertex
+#   test_render3d_guides  markers as an octahedron under __EMSCRIPTEN__ instead
+#                         of an attenuated GL_POINT; these count the native
+#                         point/halo submissions in the stub trace.
+#   test_repl_core_extra  two cases feed the document over stdin, which node
+#                         hands to wasm differently than a native pipe does.
+WEB_TEST_EXCLUDE = \
+	test_audio \
+	test_ui_menu_bar \
+	test_ui_scene_tabs \
+	test_ui \
+	test_glr_ctrl \
+	test_edit_overlays \
+	test_render3d_guides \
+	test_repl_core_extra
+WEB_TEST_BINS = $(filter-out $(WEB_TEST_EXCLUDE),$(TEST_BINS))
+
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
@@ -1114,6 +1182,14 @@ TEST_BINS_ORDERED = \
 	$(foreach test,$(TEST_SLOW_FIRST),$(filter $(test),$(TEST_BINS))) \
 	$(filter-out $(TEST_SLOW_FIRST),$(TEST_BINS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS_ORDERED),'$(test):::$($(test)_RUN)')
+
+# Same runner, same LPT ordering, with `node ` spliced in front of each case.
+# The *_RUN values already carry per-test arguments (test_eval --run-tests), so
+# reusing them is what keeps the two lanes from drifting apart.
+WEB_TEST_BINS_ORDERED = $(filter $(WEB_TEST_BINS),$(TEST_BINS_ORDERED))
+WEB_TEST_RUNNER_CASES = \
+	$(foreach test,$(WEB_TEST_BINS_ORDERED),'$(test):::node $($(test)_RUN)')
+
 TEST_TARGET_NAMES = $(subst _,-,$(TEST_BINS))
 RUN_TEST_TARGETS = $(addprefix run-,$(TEST_TARGET_NAMES))
 BENCH_TARGET_NAMES = $(subst _,-,$(BENCH_BINS))
@@ -1640,6 +1716,7 @@ PACKAGE_TARGETS = \
 
 TEST_TARGETS = \
 	test test-detailed test-stubs test-asan-ubsan test-msan test-full \
+	test-web internal-test-suite-web \
 	rebuild-golden internal-test-suite internal-test-case \
 	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS)
 
@@ -2083,6 +2160,37 @@ else
 	GLR_AUDIO_NO_DEVICE=1 $(MAKE) internal-test-suite \
 		USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
 endif
+
+# The wasm twin of `make test-stubs`: the same test binaries, the same no-op GL
+# stubs, the same parallel runner -- compiled by emcc and run under node. What
+# it adds over the native gate is the __EMSCRIPTEN__ side of every #ifdef in
+# the tree (menu_bar, edit_overlays, geometry_guides, glr_audio, glr_clipboard,
+# glr_web_io, memprof, help_text ...), plus wasm's own 32-bit pointers and
+# stricter alignment, none of which a native x86/arm64 run can reach.
+#
+# What it does NOT cover: gl4es -> WebGL2. This lane links the GL stubs, so no
+# GL call goes anywhere. A regression in the draw path is invisible here
+# exactly as it is in `make bench-web` -- that needs a browser.
+#
+# Unlike `make web` / `make bench-web` this needs no scripts/web-deps.sh and no
+# third_party/web checkout, because there is no gl4es in the link.
+#
+# Deliberately absent from the BUILD=debug goal list up top: this runs release
+# wasm, like `make bench-web` and like the shipping web build. `make test`
+# already owns the sanitizer gate, and it runs the same C.
+test-web: require-emcc ## Build and run the test suite as wasm under node (CPU pipeline + __EMSCRIPTEN__ branches; needs emcc + node).
+	@command -v node >/dev/null 2>&1 || { \
+		echo "ERROR: node not found on PATH -- test-web runs the wasm tests under node."; \
+		exit 1; \
+	}
+	+$(MAKE) --no-print-directory internal-test-suite-web WEB=1 USE_GL_STUBS=1
+
+internal-test-suite-web: $(addprefix $(BINDIR)/,$(WEB_TEST_BINS))
+	@GLR_AUDIO_NO_DEVICE=1 \
+	REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
+	REPL_EXPORT_CC="cc" \
+	TEST_JOBS="$(TEST_JOBS)" \
+	bash scripts/run-tests.sh $(WEB_TEST_RUNNER_CASES)
 
 test-full: ## Run the full build, test, sanitizer, benchmark, and real-GL gate.
 	@set -e; for target in $(HEADLESS_DEMO_TARGETS); do \

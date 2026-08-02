@@ -69,6 +69,7 @@ make gl-repl          # Main binary (vendored static freeglut, macOS Cocoa)
 make glut             # Fallback: system GLUT (Apple framework)
 make test             # Build + run all tests (debug: ASan + UBSan)
 make test-stubs       # Tests against bundled no-op GL stubs (no GL libs needed)
+make test-web         # The same suite as wasm under node (needs emcc + node)
 make test-msan        # Stubbed tests under MemorySanitizer
 make debug-msan       # Everything under MSan (Clang/runtime permitting)
 make check-c99        # C99 ratchet (sample + demos + bench)
@@ -118,6 +119,15 @@ gitignored, survives `make clean`).
   `make bench` alone mis-ranks web hot spots. CPU pipeline only — no GPU
   under node, so `fade_batches` skips and the gl4es→WebGL2 draw cost is
   invisible. See `packaging/web/README.md`.
+  `make test-web` is the wasm twin of `make test-stubs` — `WEB=1
+  USE_GL_STUBS=1`, so **emcc against the no-op GL stubs, no gl4es, no
+  `web-deps.sh`, no browser**. 68 of the 76 test binaries run unmodified under
+  node; the 8 in `WEB_TEST_EXCLUDE` each assert behavior the web build
+  deliberately does not have (hidden File menu, octahedron vertex markers,
+  native audio device), and that list is the map of what a browser lane still
+  has to cover. Its value over `make test` is the `__EMSCRIPTEN__` side of
+  every `#ifdef` plus wasm's 32-bit pointers; like `bench-web` it links no GL,
+  so **the gl4es→WebGL2 draw path stays invisible**.
 - **Sanitizers**: test targets default `BUILD=debug` = ASan + UBSan
   (`-fno-sanitize-recover`). `make debug-msan`/`test-msan` = MSan + origin
   tracking (Clang; test run sets `GLR_AUDIO_NO_DEVICE=1`). `NO_SAN=1`

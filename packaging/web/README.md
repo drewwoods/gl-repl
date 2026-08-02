@@ -119,6 +119,55 @@ sends no COOP/COEP headers, so a page it serves has `performance.now()`
 clamped to 100 µs and cannot resolve sub-100 µs work. Read the header comment
 in `bench/bench_repl.c` before comparing web numbers against native ones.
 
+## Testing the web build (`make test-web`)
+
+`make test-web` builds the ordinary test binaries with `WEB=1 USE_GL_STUBS=1`
+and runs them as wasm under node, through the same `scripts/run-tests.sh`
+runner and the same per-test arguments as `make test-stubs`.
+
+The `WEB=1 USE_GL_STUBS=1` combination is the whole trick. `make test` is
+already a stubs build, so the wasm twin needs no GL stack at all: no gl4es, no
+`scripts/web-deps.sh`, no `third_party/web/` checkout, no browser, and none of
+`packaging/web/gl4es_bootstrap.c` — whose constructor calls
+`document.querySelector` and throws before `main()` outside a browser. Only
+`emcc` and `node` are required. From clean it takes about 35 s.
+
+Link differences from `BENCH_WEB_LDFLAGS` live in `WEB_TEST_LDFLAGS`:
+
+- `-sNODERAWFS=1`. Tests `fopen()` real paths — `build/*_trace.txt` stub
+  traces, `tests/testdata/` fixtures, `/tmp` workspaces — and MEMFS has none
+  of them. Without it, `fopen()` fails silently and roughly 150 assertions
+  fail as "expected 6, got 0" rather than as an error. It also makes the
+  `system()` calls in `test_export_trace_parity` work.
+- `-sEXIT_RUNTIME=1` on **every** binary. Without it `main()`'s non-zero
+  return never reaches node and a failing test exits 0.
+
+### What it does and does not cover
+
+It covers what the native suite structurally cannot reach: the
+`__EMSCRIPTEN__` branch of every `#ifdef` in the tree (`menu_bar.c`,
+`edit_overlays.c`, `geometry_guides.c`, `glr_audio.c`, `glr_clipboard.c`,
+`glr_web_io.c`, `memprof.c`, `help_text.c`, …), plus wasm's 32-bit pointers
+and stricter alignment.
+
+It does **not** cover gl4es -> WebGL2. This lane links the GL stubs, so no GL
+call goes anywhere — the same blind spot as `bench-web`, and the reason the
+recent gl4es polygon-line and vertex-label regressions would not have been
+caught here. That still needs a browser lane.
+
+### The exclusion list
+
+68 of the 76 binaries run unmodified. The 8 in `WEB_TEST_EXCLUDE` (see the
+Makefile for the per-binary reason) are all tests asserting behavior the web
+build deliberately does not have — the File menu that `menu_visible()` hides
+under `__EMSCRIPTEN__`, the octahedron vertex markers that replace attenuated
+`GL_POINT`s, the native miniaudio device. None is a wasm defect.
+
+That makes the list a useful artifact in its own right: it is the inventory of
+web-specific behavior that currently has no test anywhere. Prefer making a
+test web-aware over adding to the list, and re-check it whenever an
+`__EMSCRIPTEN__` branch is added or removed.
+
 ## Headless verification
 
 The 40MB+ `.wasm`/`.data` payload makes `--screenshot`-style headless capture
