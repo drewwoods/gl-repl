@@ -2076,13 +2076,13 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 	fi; \
 	echo "trailing-whitespace OK"
 
-unicode-count: ## Report Unicode in project C and Markdown sources and its normalization policy.
+unicode-count: ## Report Unicode in project C, Markdown, and scene sources and its normalization policy.
 	@python3 scripts/count-unicode.py
 
-fix-unicode: ## Replace configured Unicode in project C and Markdown sources.
+fix-unicode: ## Replace configured Unicode in project C, Markdown, and scene sources.
 	@python3 scripts/count-unicode.py --fix
 
-check-unicode: ## Hard guard: apply configured Unicode replacements in project C and Markdown sources.
+check-unicode: ## Hard guard: apply configured Unicode replacements in project C, Markdown, and scene sources.
 	@python3 scripts/count-unicode.py --check
 
 CHECK_TARGETS = \
