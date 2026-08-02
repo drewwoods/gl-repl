@@ -1076,46 +1076,22 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
         repl_executor_draw_glut_solid(&cmds[i]);
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glPointSize(1.0f);
+    /* Size reset deliberately omitted - see draw_vertex_point_overlay's
+     * caller: the enclosing glPushAttrib(GL_ALL_ATTRIB_BITS) restores it,
+     * and resetting here would shrink this pass's own points under gl4es. */
     overlay_gl_reset(&trk.st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
 
-/* Draw one authored vertex-point overlay. WebGL's gl4es compatibility path
- * cannot reliably render the point-smooth GL_POINTS form at these sizes, so
- * Emscripten uses a direct eight-triangle octahedron instead. Its perspective
- * projection supplies the same distance behavior as native point attenuation,
- * without making a GLUT call for every authored vertex. */
+/* Draw one authored vertex-point overlay: a single attenuated, point-smoothed
+ * GL_POINT, sized by whether the enclosing primitive is a line mode. */
 static void draw_vertex_point_overlay(float x, float y, float z, int is_line) {
-#if defined(__EMSCRIPTEN__)
-    float radius = is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_OCTAHEDRON_RADIUS
-                           : EDIT_OVERLAY_VERTEX_POINT_OCTAHEDRON_RADIUS;
-
-    glDisable(GL_CULL_FACE);  /* vertex points are never cullable */
-    glPushMatrix();
-    glTranslatef(x, y, z);
-    glScalef(radius, radius, radius);
-    glBegin(GL_TRIANGLES);
-    /* +Y cap, around the XZ ring (+X, -Z, -X, +Z). */
-    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f);
-    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f); glVertex3f(-1.0f, 0.0f,  0.0f);
-    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f(-1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f);
-    glVertex3f(0.0f,  1.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f); glVertex3f( 1.0f, 0.0f,  0.0f);
-    /* -Y cap, with the opposite winding. */
-    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f); glVertex3f( 1.0f, 0.0f,  0.0f);
-    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f(-1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f, -1.0f);
-    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f); glVertex3f(-1.0f, 0.0f,  0.0f);
-    glVertex3f(0.0f, -1.0f,  0.0f); glVertex3f( 1.0f, 0.0f,  0.0f); glVertex3f( 0.0f, 0.0f,  1.0f);
-    glEnd();
-    glPopMatrix();
-#else
     glPointSize(is_line ? EDIT_OVERLAY_VERTEX_LINE_POINT_SIZE
                         : EDIT_OVERLAY_VERTEX_POINT_SIZE);
     glBegin(GL_POINTS);
     glVertex3f(x, y, z);
     glEnd();
-#endif
 }
 
 void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
@@ -1160,18 +1136,13 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    /* Unconditional, not part of the #if below: desktop GL rasterizes points as
-     * circles under multisample rasterization, so the native build barely needs
-     * this - gl4es has no such implicit path and honours GL_POINT_SMOOTH only
-     * when it is explicitly enabled. Keeping it outside the branch is what lets
-     * the GL_POINTS form ever be restored on the web target. */
+    /* Desktop GL rasterizes points as circles under multisample rasterization,
+     * so the native build barely needs this - gl4es has no such implicit path
+     * and honours GL_POINT_SMOOTH only when it is explicitly enabled (its
+     * fixed-pipeline shader derives coverage from gl_PointCoord; see
+     * packaging/web/patches/gl4es-point-smooth.patch). */
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-#if defined(__EMSCRIPTEN__)
-    /* The octahedron markers respect scene depth testing but must not add
-     * their own translucent surface to it. GL_ALL_ATTRIB_BITS restores this. */
-    glDepthMask(GL_FALSE);
-#endif
 
     if (ctx->replay_vertex_points)
         render3d_clr_a(RENDER3D_CLR_VERTEX_POINT_REPLAY, 0.75f);
@@ -1211,9 +1182,12 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                                           flat_cmds[i].args[2], is_line);
             }
         }
-#if !defined(__EMSCRIPTEN__)
-        glPointSize(1.0f);
-#endif
+        /* No glPointSize(1) reset here: the pass is bracketed by
+         * glPushAttrib(GL_ALL_ATTRIB_BITS), which restores the size, and
+         * gl4es applies the *last* size set before its flush to every point
+         * already recorded in the batch - so an explicit reset shrank every
+         * marker this walk had just drawn to a single pixel on the web
+         * build. */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */

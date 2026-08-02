@@ -30,6 +30,63 @@ listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`.
 
 See each older patch's leading prose for the detail that is available.
 
+## 2026-08-02: the point-smooth workarounds come out
+
+`gl4es-point-smooth.patch` is what the two chrome vertex-marker sites were
+waiting on. Both had forked by target to avoid gl4es' square points:
+`draw_vertex_point_overlay()` (edit_overlays.c) drew a scaled eight-triangle
+octahedron per authored vertex, and `draw_vertex_point_marker()`
+(geometry_guides.c) drew a `glutSolidSphere` halo/core pair. Commit 9b284167
+then hoisted `glEnable(GL_POINT_SMOOTH)` out of the native-only arm at both
+sites - the enable had never fired on the target that needs it.
+
+With the patch in and the enable reaching gl4es, both fallbacks are gone: every
+target draws the same attenuated, point-smoothed `GL_POINTS`. gl4es carries the
+other half of the parity too - its fixed-pipeline vertex shader implements
+`GL_POINT_DISTANCE_ATTENUATION` (`fpe_shader.c`, the `gl_PointSize = clamp(...
+inversesqrt(...))` line), so web point markers shrink with camera distance the
+way native ones do. The triangle proxies only approximated that: their world
+radii were tuned to match at one camera distance and drifted either side of it.
+
+Native GL is untouched by construction - the native arm became the only arm at
+both sites, and the enable/disable keep their relative order.
+
+### The second bug the swap uncovered: point size is applied at flush
+
+Flipping the markers to `GL_POINTS` first produced markers that were drawn but
+**exactly one pixel wide**, on every vertex, at every camera distance. Ruled out
+by direct experiment in headless Chrome (SwiftShader reports
+`ALIASED_POINT_SIZE_RANGE` `[1, 1023]`, so no driver cap was involved):
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| `GL_POINT_SMOOTH` discards everything | scene with `glPointSize(16)` + smooth | round 16px points - works |
+| gl4es drops single-vertex point batches | one `glBegin/glEnd` per point vs. two points in one | both render |
+| `glPushAttrib(GL_ALL_ATTRIB_BITS)` loses the size | same scene wrapped in push/pop | still 16px |
+| point *attenuation* shrinks them | `@cfg point_attenuation = 0` | still 1px |
+| a later `glPointSize` retro-applies | same scene + a trailing `glPointSize(1)` | **all four points collapse to 1px** |
+
+gl4es takes the point size from its state at *flush* time, not at the time the
+primitive is recorded, so one `glPointSize(1)` at the end of a pass shrinks
+every point that pass already drew. Both overlay passes ended with exactly that
+reset (`edit_overlays_render_vertex_points`, its glut `GL_POINT` polygon-mode
+sibling, and `draw_vertex_point_marker`), which is why the first swap looked
+like "gl4es still can't draw points".
+
+The resets were redundant anyway - all three sites sit inside a
+`glPushAttrib(GL_ALL_ATTRIB_BITS)` / `glPopAttrib()` bracket that restores the
+size - so they are gone rather than patched around. `glPopAttrib()` restoring
+the size does **not** retro-shrink the batch (verified by the push/pop row
+above); only an explicit `glPointSize` call does. Anything new that draws
+`GL_POINTS` on this target should follow the same rule: **do not reset the
+point size inside the pass that drew them.**
+
+Fallout worth knowing: `test_edit_overlays` leaves `WEB_TEST_EXCLUDE` (it was
+excluded *only* because the octahedron emitted unit-corner coords instead of
+the marker's world coordinates), so `make test-web` covers 74 of 76 binaries
+instead of 73, and `test_render3d_guides` / `test_render3d_render` drop their
+`glutSolidSphere` arms.
+
 ## 2026-08-02: polygon-mode lines via `glDrawArrays`
 
 Patch: [`gl4es-polygon-line-drawarrays.patch`](gl4es-polygon-line-drawarrays.patch)

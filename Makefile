@@ -874,34 +874,28 @@ TEST_BINS += test_assign_plot
 TEST_BINS += test_ui_assign_plot
 
 # `make test-web` runs TEST_BINS as wasm under node. These two do not survive
-# that move; the other 74 do. Every exclusion here is a test asserting behavior
+# that move; the other 75 do. Every exclusion here is a test asserting behavior
 # the web build deliberately does not have -- none is a wasm defect. Prefer
 # making a test web-aware (a `#if defined(__EMSCRIPTEN__)` arm around the
 # affected assertions, as test_ui / test_glr_ctrl / test_ui_scene_tabs /
-# test_repl_core_extra now carry, or an assertion on the web form the way
-# test_render3d_guides counts glutSolidSphere) over extending this list.
+# test_repl_core_extra now carry) over extending this list.
 #
 #   test_audio        miniaudio's device backend is native-only; the web build
 #                     swaps in an entirely separate HTMLAudioElement
 #                     implementation, so the hitch-threshold and device
 #                     assertions have no web counterpart at all. Guarding it
 #                     out assertion-by-assertion would leave an empty binary.
-#   test_edit_overlays  draw_vertex_point_overlay() emits a scaled octahedron
-#                     under __EMSCRIPTEN__ instead of an attenuated GL_POINT.
-#                     12 assertions across 6 sites match the marker's *world
-#                     coordinates* in the stub trace ("glVertex3f 1 0 0"), and
-#                     the octahedron emits unit-corner coords under a
-#                     glTranslatef/glScalef -- so this needs a marker-form-aware
-#                     trace helper, not a guard. Worth doing: it is the only
-#                     uncovered __EMSCRIPTEN__ render path left.
 #   test_ui_menu_bar  25 assertions across ~8 sites drive the File menu that
 #                     menu_visible() hides under __EMSCRIPTEN__. Guarding each
 #                     is mechanical but would gut the binary's File-menu
 #                     coverage for no web gain; a browser lane covers the
 #                     shell's replacement chrome instead.
+#
+# test_edit_overlays was excluded until the vertex-point markers stopped
+# forking by target: both now draw the same attenuated GL_POINTS, so its
+# world-coordinate trace assertions hold under wasm too.
 WEB_TEST_EXCLUDE = \
 	test_audio \
-	test_edit_overlays \
 	test_ui_menu_bar
 WEB_TEST_BINS = $(filter-out $(WEB_TEST_EXCLUDE),$(TEST_BINS))
 

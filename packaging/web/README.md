@@ -157,34 +157,29 @@ caught here. That still needs a browser lane.
 
 ### Web-aware tests, and the exclusion list
 
-73 of the 76 binaries run under node. Where a test asserted behavior the web
+74 of the 76 binaries run under node. Where a test asserted behavior the web
 build deliberately does not have, the fix is a `__EMSCRIPTEN__` arm around the
 affected assertions rather than dropping the binary - `test_ui`,
 `test_ui_scene_tabs`, `test_glr_ctrl` (the File menu `menu_visible()` hides)
 and `test_repl_core_extra` (a `dup2`'d stdin pipe, which does not reach wasm's
-stdio) each carry one.
+stdio) each carry one. Better still, assert the web form where one exists;
+reach for a skip only when the web build genuinely does nothing.
 
-Better still, assert the web form where one exists. `test_render3d_guides`
-counts two `glutSolidSphere` calls under `__EMSCRIPTEN__` where native counts
-two `glVertex3f` - the marker is drawn either way, and that is the only
-coverage the web geometry-guide path has. Reach for a skip only when the web
-build genuinely does nothing.
-
-Three binaries remain in `WEB_TEST_EXCLUDE`; see the Makefile for the
-per-binary reason. None is a wasm defect:
+Two binaries remain in `WEB_TEST_EXCLUDE`; see the Makefile for the
+per-binary reason. Neither is a wasm defect:
 
 - `test_audio` - the whole binary is the native miniaudio device backend, down
   to the hitch-threshold accessor that returns `0.0` on web. Guarding it out
   assertion-by-assertion leaves an empty binary.
-- `test_edit_overlays` - 12 assertions across 6 sites match the vertex
-  marker's *world coordinates* in the stub trace (`"glVertex3f 1 0 0"`), and
-  the Emscripten octahedron emits unit-corner coords under a
-  `glTranslatef`/`glScalef`. Needs a marker-form-aware trace helper, not a
-  guard. **This is the last uncovered `__EMSCRIPTEN__` render path and is
-  worth doing.**
 - `test_ui_menu_bar` - 25 assertions across ~8 sites drive the hidden File
   menu; guarding each would gut the binary's File-menu coverage for no web
   gain. A browser lane should cover the shell's replacement chrome instead.
+
+`test_edit_overlays` and `test_render3d_guides` used to carry marker-form
+forks (an Emscripten octahedron and a `glutSolidSphere` pair standing in for
+GL_POINTS). Both markers are plain attenuated `GL_POINTS` on every target now
+that `gl4es-point-smooth.patch` makes gl4es honour `GL_POINT_SMOOTH`, so the
+world-coordinate trace assertions hold under wasm and the exclusion is gone.
 
 Re-check the list whenever an `__EMSCRIPTEN__` branch is added or removed.
 

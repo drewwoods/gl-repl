@@ -1185,13 +1185,8 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_n_filled = 3;
     gl_stub_counts_reset();
     render3d_geometry_guides_render_for_cursor(&snap);
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("vertex3f(1,2,3): web guide draws halo and core spheres",
-               gl_stub_counts[GL_STUB_glutSolidSphere], 2);
-#else
     unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
     ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
-#endif
 
     const char *input2f = "glVertex2f(1, 2)";
     snap.input          = input2f;
@@ -1202,13 +1197,8 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_n_filled = 2;
     gl_stub_counts_reset();
     render3d_geometry_guides_render_for_cursor(&snap);
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("vertex2f(1,2): web guide draws halo and core spheres",
-               gl_stub_counts[GL_STUB_glutSolidSphere], 2);
-#else
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
-#endif
 
     /* Partial entry: only one 2D arg. z is implicit, so only y remains free:
      * this is a line guide, not the 3D one-arg plane guide. */

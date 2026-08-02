@@ -279,9 +279,8 @@ static void test_build_vertex_walk_context(void) {
 }
 
 /* edit_overlays_render_vertex_points: walks the flat program and emits one
- * GL_POINTS marker per vertex on native GL, or an Emscripten direct octahedron
- * marker. Native point sizes are keyed on whether the enclosing primitive is
- * a line mode. Validate the exact coordinates and marker form via the call
+ * GL_POINTS marker per vertex, sized by whether the enclosing primitive is a
+ * line mode. Validate the exact coordinates and marker form via the call
  * trace. */
 static void test_render_vertex_points(void) {
     printf("--- edit_overlays edit_overlays_render_vertex_points ---\n");
@@ -299,23 +298,10 @@ static void test_render_vertex_points(void) {
     ctx.show_vertex_points = 1;
 
     TraceLog log;
-#if defined(__EMSCRIPTEN__)
-    char begin_triangles[64];
-    snprintf(begin_triangles, sizeof(begin_triangles), "glBegin %u",
-             (unsigned)GL_TRIANGLES);
-#endif
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
 
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web triangle vertices draw one octahedron each",
-               trace_count_line(&log, begin_triangles), 2);
-    ASSERT_INT("web triangle octahedra emit eight faces each",
-               (int)gl_stub_counts[GL_STUB_glVertex3f], 48);
-    ASSERT_INT("web triangle markers avoid GLUT",
-               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
-#else
     ASSERT_INT("emits glVertex3f for the 3f vertex",
                trace_count_line(&log, "glVertex3f 1 2 3"), 1);
     ASSERT_INT("emits glVertex3f for the 2f vertex (z=0)",
@@ -326,7 +312,6 @@ static void test_render_vertex_points(void) {
                trace_count_line(&log, "glPointSize 6"), 2);
     ASSERT_INT("counter agrees with trace",
                (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
-#endif
 
     /* Neither show_vertex_points nor replay_vertex_points -> early return. */
     ctx.show_vertex_points = 0;
@@ -350,15 +335,10 @@ static void test_render_vertex_points(void) {
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web line-mode vertex uses an octahedron",
-               trace_count_line(&log, begin_triangles), 1);
-#else
     ASSERT_INT("line-mode vertex uses the small point size",
                trace_count_line(&log, "glPointSize 3"), 1);
     ASSERT_INT("line-mode vertex coords emitted",
                trace_count_line(&log, "glVertex3f 4 5 6"), 1);
-#endif
 
     /* A leading transform is tracked during the walk (the matrix is the
      * point's modelview, even though the no-op stub doesn't transform the
@@ -393,10 +373,6 @@ static void test_render_vertex_points(void) {
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web replay-only draws one anchor octahedron",
-               trace_count_line(&log, begin_triangles), 1);
-#else
     ASSERT_INT("replay-only draws exactly one vertex",
                trace_count_sym(&log, "glVertex3f"), 1);
     ASSERT_INT("replay-only draws the anchor vertex",
@@ -405,20 +381,14 @@ static void test_render_vertex_points(void) {
                trace_count_line(&log, "glVertex3f 1 0 0"), 0);
     ASSERT_INT("replay-only skips non-anchor vertex (0,0,1)",
                trace_count_line(&log, "glVertex3f 0 0 1"), 0);
-#endif
 
     /* replay_anchor_flat_idx = -1 -> no anchor -> no dots drawn. */
     ctx.replay_anchor_flat_idx = -1;
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
-#if defined(__EMSCRIPTEN__)
-    ASSERT_INT("web replay-only with no anchor emits no octahedra",
-               trace_count_line(&log, begin_triangles), 0);
-#else
     ASSERT_INT("replay-only with no anchor emits no vertices",
                trace_count_sym(&log, "glVertex3f"), 0);
-#endif
 }
 
 /* glutSolid* shapes generate their mesh vertices inside GLUT, so the manual
