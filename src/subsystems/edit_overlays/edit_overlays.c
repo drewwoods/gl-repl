@@ -2008,7 +2008,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
                                          int scope,
-                                         int placement) {
+                                         int placement,
+                                         int depth_readback_supported) {
     ReplayVertexWalkContext ctx;
     /* Big label store (the all-instances walk can collect a whole looped
      * surface); keep it off the render stack. Render is single-threaded and
@@ -2063,10 +2064,12 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     /* Snapshot the scene depth buffer once (one readback, not a per-vertex GL
      * round-trip) so the callback can cull occluded vertices. The scene
      * geometry has already drawn its depths by the time overlays run. Indexed
-     * viewport-local (bottom-up), matching project_to_screen. Unconditional:
-     * occlusion culling applies in every scope, so the readback is the price
-     * of having vertex labels on at all. */
-    if (label_ctx.vw > 0 && label_ctx.vh > 0) {
+     * viewport-local (bottom-up), matching project_to_screen. Occlusion
+     * applies in every scope when the context supports this readback. WebGL
+     * forbids reading default-framebuffer depth and gl4es may silently no-op,
+     * so the controller's capability probe must gate both the allocation and
+     * read; without a valid snapshot, labels deliberately remain visible. */
+    if (depth_readback_supported && label_ctx.vw > 0 && label_ctx.vh > 0) {
         size_t n = (size_t)label_ctx.vw * (size_t)label_ctx.vh;
         depthbuf = malloc(n * sizeof(float));
         if (depthbuf) {
@@ -2513,7 +2516,8 @@ void edit_overlays_post_resolve_overlays(void *user_data) {
                                             pack->vertex_label_mode,
                                             pack->ortho_mode,
                                             pack->overlay_scope,
-                                            pack->vertex_label_placement);
+                                            pack->vertex_label_placement,
+                                            pack->depth_readback_supported);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->walk.replay_vertex_label) {

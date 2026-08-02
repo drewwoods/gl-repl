@@ -1342,9 +1342,11 @@ The overlay toggles annotate geometry scene-wide:
   emits, not just the block you are editing. The highlight stays on the
   cursor's block there.
 
-  Vertex labels are always culled against the depth buffer — a vertex hidden
-  behind solid geometry gets no label, in every scope. The polygon highlight is
-  exempt and still draws through, so the cursor's shape stays findable.
+  Vertex labels are culled against the depth buffer when the GL context
+  supports reading it — a vertex hidden behind solid geometry gets no label,
+  in every scope. WebGL cannot read the default framebuffer's depth, so the web
+  build shows every in-scope label instead. The polygon highlight is exempt and
+  still draws through, so the cursor's shape stays findable.
 - **Vertex label placement**: Decluttered / At vertex — *where* each label
   sits, independent of which vertices get one. Decluttered floats labels onto
   clear rows with leader lines; At vertex pins each to its own vertex, exact

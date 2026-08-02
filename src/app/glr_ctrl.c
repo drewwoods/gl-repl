@@ -631,6 +631,7 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
                                                       int *out_start,
                                                       int *out_end);
 
+static int glr_ctrl_depth_readback_is_supported(void);
 static OverlaySnapshotPack g_overlay_pack;
 
 static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
@@ -689,6 +690,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;
     pack->overlay_scope = presentation.overlay_scope;
     pack->vertex_label_placement = presentation.vertex_label_placement;
+    pack->depth_readback_supported = glr_ctrl_depth_readback_is_supported();
     pack->ortho_mode = presentation.ortho_mode;
     pack->show_normal_vectors = presentation.show_normal_vectors;
     pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;
@@ -1205,12 +1207,17 @@ static int g_nv_fog_distance_supported = 0;
  * it, so the web build hard-disables. When unsupported the interactive
  * Depth view cycle (Ctrl+N / Config row) refuses with a status message
  * (glr_cfg_cycle_row), while @cfg header loads still write the stored
- * value (round-trip, point-parameter philosophy) and build_scene_config
- * forces the render-config copy to Off. Defaults to 1: tests that never
- * run init-GL keep the feature exercisable. */
+ * value (round-trip, point-parameter philosophy), build_scene_config forces
+ * the render-config copy to Off, and vertex labels remain visible without
+ * attempting an occlusion readback. Defaults to 1: tests that never run
+ * init-GL keep the feature exercisable. */
 static int g_depth_readback_supported = 1;
 static int g_stencil_readback_supported = 1;
 static int g_stencil_clear_warning_active = 0;
+
+static int glr_ctrl_depth_readback_is_supported(void) {
+    return g_depth_readback_supported;
+}
 
 /* "The context has an accumulation buffer, but it is a CPU emulation" —
  * probed once in glr_ctrl_init_gl from the renderer string, consumed by

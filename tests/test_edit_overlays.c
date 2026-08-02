@@ -2552,7 +2552,8 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     trace_begin();
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
                                         OVERLAY_SCOPE_ALL_INSTANCES,
-                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED);
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        1);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -2605,7 +2606,8 @@ static void test_render_via_repl_program(void) {
 
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
                                         OVERLAY_SCOPE_ALL_INSTANCES,
-                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED);
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        1);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);
@@ -2659,6 +2661,7 @@ static void test_render_via_repl_program(void) {
     pack.walk.show_vertex_points = 1;
     pack.snapshot.show_guides = 0;
     pack.vertex_label_mode = OVERLAY_VERTEX_LABEL_INDEX;
+    pack.depth_readback_supported = 1;
     pack.show_normal_vectors = 1;
     trace_begin();
     edit_overlays_post_overlays(&pack);
@@ -2675,6 +2678,20 @@ static void test_render_via_repl_program(void) {
     edit_overlays_post_resolve_overlays(&pack);
     trace_end(&log);
     ASSERT_INT("post_resolve_overlays draws vertex-number labels",
+               trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
+    ASSERT_INT("supported label pass snapshots scene depth",
+               trace_count_sym(&log, "glReadPixels"), 1);
+
+    /* WebGL cannot read the default framebuffer's depth. Its gl4es shim may
+     * silently leave the destination untouched, so unsupported contexts must
+     * skip the read rather than cull against indeterminate heap contents. */
+    pack.depth_readback_supported = 0;
+    trace_begin();
+    edit_overlays_post_resolve_overlays(&pack);
+    trace_end(&log);
+    ASSERT_INT("unsupported label pass skips depth readback",
+               trace_count_sym(&log, "glReadPixels"), 0);
+    ASSERT_INT("unsupported label pass keeps vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
 
     /* NULL pack is a safe no-op. */

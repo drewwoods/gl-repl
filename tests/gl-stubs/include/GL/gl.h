@@ -298,7 +298,10 @@ static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil 
  * one-byte-per-pixel buffer, and writing floats into it overruns by 4x. */
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                                 GLenum format, GLenum type, void *pixels) {
-    (void)x; (void)y; (void)format;
+    GL_STUB_TRACE_LINE("glReadPixels %d %d %d %d %u %u\n",
+                       (int)x, (int)y, (int)width, (int)height,
+                       (unsigned)format, (unsigned)type);
+    (void)format;
     if (pixels && width > 0 && height > 0) {
         long n = (long)width * (long)height, i;
         if (type == GL_UNSIGNED_BYTE) {

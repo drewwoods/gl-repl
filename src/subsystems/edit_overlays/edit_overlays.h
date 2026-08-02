@@ -58,11 +58,13 @@ typedef enum OverlayLabelPlacement {
  * distinguishes nothing.
  *
  * A scope answers "which vertices get a label", nothing else. Two things that
- * once lived in this list and do not belong to it: occlusion, which is now
- * unconditional (a label you can see for a vertex you cannot is a lie about
- * where the geometry is; the polygon highlight is deliberately exempt and
- * still draws through hidden geometry so the cursor's shape stays findable),
- * and at-vertex placement, which is OverlayLabelPlacement above. */
+ * once lived in this list and do not belong to it: occlusion, which applies
+ * whenever the GL context supports depth readback (a label you can see for a
+ * vertex you cannot is a lie about where the geometry is; WebGL cannot read
+ * the default framebuffer's depth, so it falls back to showing all in-scope
+ * labels), and at-vertex placement, which is OverlayLabelPlacement above. The
+ * polygon highlight is deliberately exempt from occlusion and still draws
+ * through hidden geometry so the cursor's shape stays findable. */
 #define OVERLAY_SCOPE_LIST(X) \
     X(LAST_INSTANCE, "Cursor block, last instance")  \
     X(ALL_INSTANCES, "Cursor block, all instances")  \
@@ -163,6 +165,7 @@ typedef struct OverlaySnapshotPack {
     OverlayVertexLabelMode vertex_label_mode;
     int overlay_scope;          /* OverlayScope           */
     int vertex_label_placement; /* OverlayLabelPlacement  */
+    int depth_readback_supported;
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
@@ -179,7 +182,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
                                          int scope,
-                                         int placement);
+                                         int placement,
+                                         int depth_readback_supported);
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 
