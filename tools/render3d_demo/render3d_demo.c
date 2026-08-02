@@ -1,8 +1,8 @@
 /*
- * tools/render3d_demo/render3d_demo.c - independent binary that drives the scene
- * module with a non-REPL geometry callback (a single glutSolidTeapot).
+ * tools/render3d_demo/render3d_demo.c - independent binary that drives the
+ * render3d module with a non-REPL geometry callback (a single glutSolidTeapot).
  *
- * Demonstrates that scene/ has no hard dependency on the REPL editor or
+ * Demonstrates that src/render3d/ has no hard dependency on the REPL editor or
  * controller. Adds a small interactive shell:
  *
  *   - mouse drag (orbit / pan) + wheel (zoom)
@@ -617,10 +617,10 @@ static void render_hot_banner(void) {
 
 /* Populate GL_MODELVIEW with the orbit-camera transform. The scene
  * module documents this as the caller's responsibility - see the
- * comment block in src/scene/render.h above render3d_draw_scene.
+ * comment block in src/render3d/render.h above render3d_draw_scene.
  * Inlined here (instead of importing src/app/glr_camera.h's
- * glr_camera_load_modelview) because render3d_demo's whole purpose is
- * proving src/scene/ has no hard dependency on app code. */
+ * glr_camera_load_modelview) because render3d_demo's purpose is proving
+ * src/render3d/ has no hard dependency on app code. */
 static void apply_camera_modelview(const Render3dRenderConfig *cfg) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();

@@ -105,7 +105,7 @@ static void demo_stage_keep_warm(void) {
 
 /* --- GLUT callbacks ------------------------------------------------------ */
 static void display_func(void) {
-    memprof_frame_tick();           /* real monotonic clock → truthful X axis */
+    memprof_frame_tick();           /* real monotonic clock -> truthful X axis */
     demo_stage_alloc_tick();
     demo_stage_keep_warm();
 

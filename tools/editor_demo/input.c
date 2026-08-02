@@ -6,7 +6,7 @@
  * autocomplete, tutorials, comment toggle, reformat, etc. are all
  * REPL-feature concerns and stay out of this dispatcher.
  *
- * v1.1 surface (Phase 8b):
+ * Current input surface:
  *   - Printable ASCII -> edit_op_type_char.
  *   - Backspace / Delete -> edit_op_backspace; at cursor
  *     column 0 with no selection, merges the input row into the
@@ -37,7 +37,7 @@
  *     Esc cancels the find bar - the search dispatcher intercepts
  *     before the exit path).
  *
- * Out of scope (deferred): word jumps, scroll wheel, undo/redo,
+ * Not implemented in this demo: word jumps, scroll wheel, undo/redo,
  * multi-line / line-range copy, system clipboard
  * (NSPasteboard / X11 selections), find-and-replace.
  */
@@ -54,11 +54,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Edit-line cursor lives on EditorState.document.edit_line_idx
- * (Phase 4 of docs/plans/done/edit-line-ownership.md). The demo reads /
- * writes it through editor_state_edit_line / _set - the same API
- * the REPL editor uses; the shim that previously backed this is
- * gone (Phase 5). */
+/* Edit-line cursor lives on EditorState.document.edit_line_idx. The demo
+ * reads and writes it through editor_state_edit_line / _set, the same API
+ * used by the REPL editor. */
 
 static int key_is_printable_ascii(unsigned char key) {
     return key >= 32 && key < 127;
@@ -436,7 +434,7 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
      * selection / deletes one char left). Cursor at column 0
      * with no selection: merge the input row into the end of
      * the previous buffer line - inverse of demo_handle_enter.
-     * Forward delete is a separate primitive - deferred. */
+     * Forward delete is not part of this demo's editing surface. */
     if (key == 8 || key == 127) {
         if (editor_cursor_pos() == 0 && !editor_input_selection_active())
             demo_handle_backspace_at_line_start();
@@ -548,7 +546,7 @@ void demo_input_handle_special(int key, int x, int y) {
         demo_search_next((glutGetModifiers() & GLUT_ACTIVE_SHIFT) ? -1 : +1);
         break;
     default:
-        /* Other special keys ignored in v1. */
+        /* Other special keys are ignored. */
         break;
     }
 }

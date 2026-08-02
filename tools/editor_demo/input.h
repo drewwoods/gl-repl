@@ -17,8 +17,8 @@
 #define EDITOR_DEMO_INPUT_H
 
 /* Route a printable / control ASCII key (the GLUT keyboard
- * callback's `key` argument). Mouse coordinates carried for
- * symmetry; not used in v1. */
+ * callback's `key` argument). Mouse coordinates are carried for
+ * symmetry but are not used by this dispatcher. */
 void demo_input_handle_key(unsigned char key, int x, int y);
 
 /* Route a GLUT special key (arrows, Home, End, F-keys). */

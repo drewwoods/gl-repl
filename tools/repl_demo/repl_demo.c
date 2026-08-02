@@ -5,10 +5,10 @@
  * from a hard-coded static-text program. Proves the pipeline modules link
  * cleanly without the editor input dispatch (src/editor/input.c), the
  * controller (glr_ctrl.c and the glr_ctrl_router_* family), or the UI
- * (src/ui/, replay_ui_hud.c).
+ * (src/ui/).
  *
- * The mirror of tools/render3d_demo/render3d_demo.c: that one proves src/scene/
- * has no hard dependency on REPL editor / controller / UI; this one
+ * The mirror of tools/render3d_demo/render3d_demo.c: that one proves
+ * src/render3d/ has no hard dependency on REPL editor / controller / UI; this one
  * proves the REPL pipeline has no hard dependency on the editor input
  * dispatch / controller / UI.
  *
@@ -18,19 +18,16 @@
  *     export, examples, replay annotations, replay, load.
  *   - State singleton: src/repl/state.c.
  *   - tools/repl_demo/source_document.c: standalone static line store
- *     implementing the source_document_* contract (Phase 6 of
- *     feature/source-document-port.md). The demo does NOT link
+ *     implementing the source_document_* contract. The demo does NOT link
  *     src/editor/state.c, glr_source_document.c, or any other editor
  *     translation unit.
  *   - tools/repl_demo/stubs.c: deliberately empty. After every
- *     REPL-pipeline → editor/UI/controller edge was routed through a
+ *     REPL-pipeline -> editor/UI/controller edge was routed through a
  *     controller-installed sink/bridge or an opaque parameter, there
  *     are zero stubs to backfill. Pipeline diagnostics and the editor
  *     host effects flow through the one ReplHostEffects bridge in
  *     src/repl/host_effects.h; the demo leaves most callbacks unset, so every
- *     dispatch silently no-ops. The dependency ledger and removal plan live in
- *     feature/decouple-repl-from-gl-repl-alt.md and
- *     feature/source-document-port.md.
+ *     dispatch silently no-ops.
  *
  * Headless by design: this demo opens no window and creates no GL context.
  * Its windowed counterpart is tools/repl_live_demo/, which wires the same
@@ -105,11 +102,9 @@
 
 /* --- Demo-local edit-line cursor ------------------------------------- */
 
-/* Phase 4 of docs/plans/done/edit-line-ownership.md moved edit-line
- * storage out of ReplState. The REPL pipeline reads/writes the
- * cursor through a controller-installed host-effects sink; the
- * demo backs the sink with a file-local int since it doesn't link
- * src/editor/state.c (where the canonical EditorState storage lives). */
+/* The REPL pipeline accesses edit-line through the host-effects sink. This
+ * demo backs that sink with a file-local int because it does not link
+ * src/editor/state.c. */
 static int g_demo_edit_line = 0;
 
 static int demo_edit_line_get(void) { return g_demo_edit_line; }

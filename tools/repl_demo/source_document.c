@@ -2,14 +2,9 @@
  * tools/repl_demo/source_document.c -- Standalone source-document
  * backend for repl_demo.
  *
- * Phase 6 of feature/source-document-port.md: prove the REPL pipeline
- * works without the editor by linking the demo against this tiny
- * static line store instead of glr_source_document.c (which forwards
- * to EditorState).
- *
- * The store is a fixed MAX_EDITOR_COMMANDS x MAX_LINE_LEN array. The
- * full-app adapter and this demo backend implement the same
- * source_document_* surface; pipeline TUs cannot tell them apart.
+ * This fixed line store implements the same source_document_* surface as
+ * the full-app adapter, so pipeline TUs cannot tell the backends apart and
+ * the demo stays independent of editor state.
  */
 
 #include "source_document.h"

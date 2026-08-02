@@ -29,7 +29,7 @@
  * generic cpuprof objects, so the timer's slot capacity is fixed at
  * PROF_SECTION_COUNT (gl-repl's count, force-included via prof_sections.h); the
  * demo simply uses the first CP_COUNT of those slots and labels the rest as
- * absent (prof_section_info returns {NULL} → the panel omits the row). depth is
+ * absent (prof_section_info returns {NULL} -> the panel omits the row). depth is
  * carried explicitly per section; the panel derives each row's indentation from
  * it. gl-repl's own labels live in src/app/glr_prof.c.
  *

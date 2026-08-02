@@ -81,7 +81,7 @@ scene=scenes/torus.c
 ## Scene file format
 
 Scenes are in the app's **save/export `.c` format** - exactly what
-`./gl-repl scene.c` reads and what File → Save (`Ctrl+S`) writes.
+`./gl-repl scene.c` reads and what File -> Save (`Ctrl+S`) writes.
 
 **Full standalone exports load directly.** A complete `output.c` - with its
 `#include` / `display()` / `main()` scaffold, global variable declarations,

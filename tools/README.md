@@ -1,13 +1,13 @@
 # `tools/` - standalone demos + developer tooling
 
 Every binary here is built from the repo root Makefile and lands at the repo
-root (`./repl_demo`, `./render3d_demo`, …). Nothing in `tools/` is linked into
+root (`./repl_demo`, `./render3d_demo`, ...). Nothing in `tools/` is linked into
 `gl-repl` itself.
 
 The demos are not samples: each one is the **executable proof that a module
 links without its upper layers**, enforced by a guard in
 `make check-state-ownership`. That is why they live outside `src/` - the
-isolation guards match on path prefixes (`src/app/`, `src/repl/`, …), and a
+isolation guards match on path prefixes (`src/app/`, `src/repl/`, ...), and a
 demo TU with its own `main()` inside one of those trees would need a carve-out
 in every guard that scans the module.
 
@@ -63,7 +63,7 @@ each flat command remembers its source line (src_idx) and a frozen
 snapshot of the variables in scope when it was emitted:
 ```
 
-### `repl_live_demo` - [`README`](repl_live_demo/README.md) · [`src/repl/README.md`](../src/repl/README.md#the-demo-repl_demo)
+### `repl_live_demo` - [`README`](repl_live_demo/README.md) | [`src/repl/README.md`](../src/repl/README.md#the-demo-repl_demo)
 
 <img src="../docs/images/demos/repl-live.png" alt="repl_live_demo: a whale scene rendered from a watched .c file, with a 26-row variable slider panel" width="100%">
 
@@ -73,7 +73,7 @@ whatever editor you like over file-watch - and still no app shell. Shown with
 the bundled `scenes/whale-full-c.c`, whose 26 declared variables fill the
 slider panel; drag a row and the geometry reshapes.
 
-### `editor_demo` - [`src/editor/README.md`](../src/editor/README.md#the-demo-editor_demo) · [`src/ui/README.md`](../src/ui/README.md#how-it-is-exercised)
+### `editor_demo` - [`src/editor/README.md`](../src/editor/README.md#the-demo-editor_demo) | [`src/ui/README.md`](../src/ui/README.md#how-it-is-exercised)
 
 <img src="../docs/images/demos/editor.png" alt="editor_demo: a plain-text document with line numbers, a File menu, and the cursor on the last row" width="100%">
 
@@ -133,7 +133,7 @@ object list.
 ```bash
 make render3d-demo repl-live-demo editor-demo variable-panel-demo \
      color-picker-demo cpuprof-demo memprof-demo
-scripts/docs-assets.sh --demos          # or one: demo-render3d, demo-memprof, …
+scripts/docs-assets.sh --demos          # or one: demo-render3d, demo-memprof, ...
 ```
 
 Assets land in `docs/images/demos/` (Git LFS, like the rest of `docs/images/`).

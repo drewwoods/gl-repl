@@ -1,37 +1,26 @@
 /*
  * tools/editor_demo/editor_demo.c -- Standalone generic text editor demo.
  *
- * Per the Phase 8 cleavage in docs/plans/done/editor-demo.md, this demo
- * does NOT reuse the REPL editor's controller (src/editor/input.c,
- * commit.c, clipboard.c, undo.c, reformat.c, search.c, completion.c,
- * and the inline overlays - all REPL-flavored). It runs entirely on:
+ * This demo uses the generic editor state and edit primitives without the
+ * REPL editor's controller or its REPL-specific commit and overlay code. It
+ * runs entirely on:
  *
  *   - src/editor/state.c     : text buffer + cursor + selection data model.
- *   - src/editor/edit_ops.c  : generic text-editing primitives shared with
- *                              src/editor/input.c (REPL dispatcher).
+ *   - src/editor/edit_ops.c  : generic text-editing primitives.
  *   - src/ui/core/text_panel.c    : generic wrapped text renderer.
  *   - src/ui/core/text_layout.c   : wrap math.
- *   - src/ui/core/text_search.c   : case-insensitive text find (linked for the
- *                              text_panel's search-row machinery - find is
- *                              not bound to a key in v1).
+ *   - src/ui/core/text_search.c   : case-insensitive text search.
  *   - src/support/cpuprof.c  : profiling.
  *   - tools/editor_demo/input.c : the demo's own generic key dispatcher.
  *   - tools/editor_demo/menu.c  : the demo's own File menu.
  *
- * What does NOT link: anything under src/repl, src/app, src/scene, or
- * src/subsystems, plus the REPL-flavored editor controller files listed
- * above. There is no fake REPL service layer, no per-symbol REPL /
- * glr / ui / tutorial stub block, and (since Phase 4 of
- * docs/plans/done/edit-line-ownership.md flipped storage and Phase 5
- * deleted the shim file) no repl_shim.c either - the editor now
- * owns its edit-line cursor on EditorState.document.edit_line_idx.
+ * The demo does not link src/repl, src/app, src/render3d, or
+ * src/subsystems. It owns its input and menu dispatchers, and the edit-line
+ * cursor is stored on EditorState.document.edit_line_idx.
  *
- * v1 behavior: type characters into the input row, backspace to delete,
- * arrow keys / Home / End to move within the row, click the File menu
- * for Load / Save (unimplemented handlers) / Quit. Cross-line nav, undo,
- * find, word jumps, selection clipboard, and File menu handlers are
- * deferred to follow-up phases - see docs/plans/done/editor-demo.md "What's
- * still open".
+ * Current behavior: type and edit text, navigate across lines, select and
+ * copy/cut/paste text within the demo, search with Ctrl/Cmd+F, and use the
+ * File menu to load, save, or quit.
  *
  * Run:
  *   make editor-demo USE_GL_STUBS=1   # link check only (no GL needed)
@@ -63,8 +52,7 @@ static int  g_demo_scroll = 0;
 /* Build a UiTextPanelSnapshot from EditorState. One TEXT row per
  * buffer line plus one INPUT row at the active edit position.
  * Caller-owned rows[] storage stays valid for the duration of the
- * render/hit-test call. Edit-line lives on EditorState.document
- * (Phase 4 of docs/plans/done/edit-line-ownership.md); read it via
+ * render/hit-test call. Edit-line lives on EditorState.document; read it via
  * editor_state_edit_line(). */
 static void demo_fill_text_row(UiTextPanelRow *row, const char *text,
                                int line_idx) {
@@ -261,9 +249,8 @@ static void demo_handle_code_panel_click(int mx, int glut_y) {
 /* Single-line drag-selection bookkeeping. The active line is read
  * from editor_state_edit_line at the moment of the initial mouse
  * down (after demo_handle_code_panel_click navigates to it), so
- * the drag stays clamped to the line the user clicked on - cross-
- * line drag would need either snap-to-start-line or a buffer-line-
- * range selection mode, both deferred. */
+ * the drag is intentionally clamped to the line the user clicked on; the
+ * demo exposes character-range selection within that line. */
 static int g_demo_drag_active = 0;
 
 /* Extend the input-row character-range selection to the hit
@@ -341,9 +328,8 @@ static void demo_reshape_func(int w, int h) {
 }
 
 static void demo_keyboard_func(unsigned char key, int x, int y) {
-    /* The demo's own generic dispatcher - does not route through
-     * src/editor/input.c (the REPL editor's dispatcher). v1 covers
-     * printable chars, backspace, and ESC; see
+    /* The demo's own generic dispatcher does not route through
+     * src/editor/input.c (the REPL editor's dispatcher). See
      * tools/editor_demo/input.c for the full key map. */
     demo_input_handle_key(key, x, y);
     glutPostRedisplay();

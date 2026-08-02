@@ -70,7 +70,7 @@ static const CapRow rows[] = {
         + MAX_EDITOR_COMMANDS
         + MAX_EDITOR_COMMANDS * MAX_USER_SCENES
         + MAX_WORKSPACE_HEADER_LINES
-        + MAX_INPUT_LEN /* editor input + ghost + hint scratch ≈ a few input slots */,
+        + MAX_INPUT_LEN /* editor input + ghost + hint scratch ~ a few input slots */,
       "editor_buffer + undo/redo (x64) + user scenes (x8) lines, all multiplied by MAX_EDITOR_COMMANDS" },
 
     /* Single-line input buffer + a small handful of scratch buffers. */
@@ -218,9 +218,9 @@ int main(void) {
         format_bytes(per * 16,  buf32,  sizeof(buf32));
         format_bytes(per * 48,  buf64,  sizeof(buf64));
         format_bytes(per * 240, buf256, sizeof(buf256));
-        printf("  MAX_PREDEF_VARS %ld → 32  : +%s\n", predef_at, buf32);
-        printf("  MAX_PREDEF_VARS %ld → 64  : +%s\n", predef_at, buf64);
-        printf("  MAX_PREDEF_VARS %ld → 256 : +%s\n", predef_at, buf256);
+        printf("  MAX_PREDEF_VARS %ld -> 32  : +%s\n", predef_at, buf32);
+        printf("  MAX_PREDEF_VARS %ld -> 64  : +%s\n", predef_at, buf64);
+        printf("  MAX_PREDEF_VARS %ld -> 256 : +%s\n", predef_at, buf256);
     }
     {
         char dbl[32], quad[32];
@@ -230,9 +230,9 @@ int main(void) {
                 per = rows[i].per_unit_bytes;
         format_bytes(per * MAX_EDITOR_COMMANDS,     dbl,  sizeof(dbl));
         format_bytes(per * MAX_EDITOR_COMMANDS * 3, quad, sizeof(quad));
-        printf("  MAX_EDITOR_COMMANDS %d → %d : +%s\n",
+        printf("  MAX_EDITOR_COMMANDS %d -> %d : +%s\n",
                MAX_EDITOR_COMMANDS, MAX_EDITOR_COMMANDS * 2, dbl);
-        printf("  MAX_EDITOR_COMMANDS %d → %d : +%s\n",
+        printf("  MAX_EDITOR_COMMANDS %d -> %d : +%s\n",
                MAX_EDITOR_COMMANDS, MAX_EDITOR_COMMANDS * 4, quad);
     }
     {
@@ -242,7 +242,7 @@ int main(void) {
             if (__builtin_strcmp(rows[i].name, "MAX_FLAT_COMMANDS") == 0)
                 per = rows[i].per_unit_bytes;
         format_bytes(per * MAX_FLAT_COMMANDS, dbl, sizeof(dbl));
-        printf("  MAX_FLAT_COMMANDS %d → %d : +%s\n",
+        printf("  MAX_FLAT_COMMANDS %d -> %d : +%s\n",
                MAX_FLAT_COMMANDS, MAX_FLAT_COMMANDS * 2, dbl);
     }
     printf("\n");
