@@ -118,7 +118,7 @@
 /* The REPL pipeline tracks light-enable state for REPL_LIGHT_SLOT_COUNT
  * slots (state_views.h, scene-include-free); the scene render contract sizes
  * its light table by MAX_LIGHTS. The controller is the one TU that sees both,
- * so it pins the two counts together — the per-frame merge in
+ * so it pins the two counts together - the per-frame merge in
  * glr_ctrl_build_scene_config indexes both by the same i. */
 STATIC_ASSERT(REPL_LIGHT_SLOT_COUNT == MAX_LIGHTS,
               "REPL light-slot count must match scene MAX_LIGHTS");
@@ -263,7 +263,7 @@ glr_ctrl_load_point_parameter_proc(int has_core, int has_arb, int has_ext) {
  * entries come back NULL and gpu_prof_init rejects the table.
  *
  * has_timestamp gates the optional glQueryCounter slot (GL_ARB_timer_query
- * / GL 3.3 only — never advertised by EXT_timer_query, so e.g. Apple's GL
+ * / GL 3.3 only - never advertised by EXT_timer_query, so e.g. Apple's GL
  * 2.1 stays in elapsed mode). It must be capability-gated rather than
  * load-and-see: GLX's GetProcAddress can return a callable stub for any
  * name, supported or not. */
@@ -324,11 +324,11 @@ const UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void) {
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     /* glVertex2f counts too: args[2] is zero on a well-formed 2D vertex
      * (parser leaves the slot zero-initialised), so building focus.pos
-     * from args[0..2] gives (x, y, 0) — the right point to focus on. */
+     * from args[0..2] gives (x, y, 0) - the right point to focus on. */
     return cmd->valid && repl_cmd_emits_vertex(cmd->type);
 }
 
-/* Last unrolled draw emitted by `line_idx` — the copy the last-instance
+/* Last unrolled draw emitted by `line_idx` - the copy the last-instance
  * scopes highlight, and the one whose loop-body variable values the
  * variable panel still reports after the frame. */
 static int glr_ctrl_last_flat_color_consumer_for_source_line(int line_idx) {
@@ -530,7 +530,7 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
                 snapshot->clip_plane_args, cp_filled, 4);
         }
         /* Net enable state for this plane's cap: last glEnable/glDisable
-         * in document order wins. Loop/if nesting is ignored — this is a
+         * in document order wins. Loop/if nesting is ignored - this is a
          * hint for the guide's dimmed "cap off" styling, not execution. */
         {
             GLenum cap = (GLenum)(GL_CLIP_PLANE0 + snapshot->clip_plane_idx);
@@ -809,7 +809,7 @@ static void glr_ctrl_push_highlights(void) {
              * the replay block below push it. Prefer the flat-accurate
              * resolver so a vertex inside a funcN body picks up the
              * calling-scope transforms too; fall back to the source walk only
-             * when the flat program is empty/unbuilt (e.g. a flatten error) —
+             * when the flat program is empty/unbuilt (e.g. a flatten error) -
              * by this point in the frame flatten has already run and cleared
              * its dirty flag. */
             if (!replay_active()) {
@@ -828,7 +828,7 @@ static void glr_ctrl_push_highlights(void) {
 
     /* Always-on: flag structurally unbalanced bracket commands
      * (unmatched glPushMatrix/glBegin, orphan glPopMatrix/glEnd). Not
-     * cursor-gated — the relaxed REPL tolerates these but export
+     * cursor-gated - the relaxed REPL tolerates these but export
      * auto-balances them, so make them visible in the gutter. */
     {
         int unbalanced[MAX_HIGHLIGHTS];
@@ -847,7 +847,7 @@ static void glr_ctrl_push_highlights(void) {
      * also light up the call site(s) so a reused or recursive function shows
      * which invocation is live (the PC line above is the body line inside the
      * function). call_src_cmd_idx is the immediate caller; root_call_src_cmd_idx
-     * the outermost caller of a nested chain — push it only when distinct. */
+     * the outermost caller of a nested chain - push it only when distinct. */
     if (replay_active()) {
         int focus = replay_focus_flat_idx();
         FlatProgramView flat = repl_state_flat_program_view();
@@ -865,8 +865,8 @@ static void glr_ctrl_push_highlights(void) {
 
     /* Affecting-transform highlight anchored on the replay-focused draw
      * (req 5). replay_focus_anchor_flat_idx() is a flat index (vertex mode
-     * only; -1 otherwise) of the draw the step emitted — a glVertex/gluVertex
-     * or a glutSolid* — so feed it straight to the req-4 exact-flat resolver,
+     * only; -1 otherwise) of the draw the step emitted - a glVertex/gluVertex
+     * or a glutSolid* - so feed it straight to the req-4 exact-flat resolver,
      * which already accepts any repl_cmd_consumes_current_color target. This
      * shows the transforms shaping the draw currently being replayed,
      * independent of where the edit cursor sits, and composes with the replay
@@ -957,7 +957,7 @@ int glr_ctrl_code_panel_layout_provider(void) {
 
 /* Hoisted out of src/editor/input.c per audit #8: the action
  * writes glr_state_presentation_mut(), runs glr_ctrl_sync_ui_chrome,
- * and closes the menu / picker — all controller / UI concerns the
+ * and closes the menu / picker - all controller / UI concerns the
  * editor module should not be reaching into. The editor signals
  * the intent via the restore_hidden_code_panel effect flag, which
  * apply_input_effects below actualizes by calling this. */
@@ -973,7 +973,7 @@ int glr_ctrl_restore_hidden_code_panel(void) {
 
 /* Hoisted out of src/editor/input.c per audit #8: the body reaches
  * the camera, menu bar, color picker, and the controller's own
- * code-panel-drag reset — none of which are editor-text concerns.
+ * code-panel-drag reset - none of which are editor-text concerns.
  * The editor still owns the commit-side state reset via
  * editor_commit_reset_transients(); this wraps that with the
  * cross-subsystem cleanup the app-frame paths actually want. */
@@ -1016,15 +1016,15 @@ static void glr_ctrl_clear_strip(int x, int y, int w, int h) {
 
 /* The frame's clear, minus the scene rect.
  *
- * Ownership split: the scene rect is cleared by the *program* — a user
+ * Ownership split: the scene rect is cleared by the *program* - a user
  * glClear, which render3d scissors to that rect. Nothing clears it on the
  * program's behalf, so deleting the glClear line smears, exactly as it
  * would in the exported C. That is the point: a renderer-side clear would
  * run whether or not the source said so, leaving the source's glClear
  * decorative and the real clear invisible.
  *
- * What the program cannot reach is the chrome around the scene — menu bar,
- * status bar, code-panel backdrop — which the 2D overlays paint over
+ * What the program cannot reach is the chrome around the scene - menu bar,
+ * status bar, code-panel backdrop - which the 2D overlays paint over
  * afterwards but still need cleared first. That is this function, and it
  * lives here rather than in render3d because chrome is a controller
  * concept: render3d knows the scene rect, not the window layout (same
@@ -1041,14 +1041,14 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
         return;
 
     /* render3d applies the clear color itself, but not until inside
-     * render3d_draw_scene — after this runs. Set it here so the chrome
+     * render3d_draw_scene - after this runs. Set it here so the chrome
      * clears to the scene's color on the frame it changes, not the frame
      * after (which is what reusing the stale GL clear color would give). */
     glClearColor(config->clear_color[0], config->clear_color[1],
                  config->clear_color[2], config->clear_color[3]);
     /* The chrome strips clear depth too, and a program glClearDepth leaves
      * its value live in GL after the scene walk. Own the value here rather
-     * than inheriting last frame's leftover — same reason as the clear
+     * than inheriting last frame's leftover - same reason as the clear
      * color above. (The view-mode swatch does the same for its cell.) */
     glClearDepth(1.0);
     glPushAttrib(GL_SCISSOR_BIT);
@@ -1065,7 +1065,7 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
  * render.c owns a two-sided-lighting setup (front green / back red); these
  * program commands would clobber it, so suppress their GL emission while the
  * geometry, transforms and normals still execute normally. glColor passes
- * through — with lighting on and color-material off, GL ignores it anyway.
+ * through - with lighting on and color-material off, GL ignores it anyway.
  *
  * glPushAttrib/glPopAttrib are intentionally NOT listed: the executor
  * dispatches them in their own case block before the repl_apply_state_cmd
@@ -1101,7 +1101,7 @@ static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
 }
 
 /* Scene's geometry callback for the main-fill and depth-probe passes.
- * The signature is intentionally opaque to scene — the controller
+ * The signature is intentionally opaque to scene - the controller
  * pulls live program / count / text from REPL state here, and clamps
  * the count to the pre-fade base limit when replay-fade overlays are
  * active so the fade pass can layer on top of an unmodified prefix.
@@ -1194,7 +1194,7 @@ static Render3dXnState g_grid_xn;
 static Render3dXnState g_axes_xn;
 
 /* Per-renderer scene state (formerly file-static in src/scene/render.c).
- * The single-renderer assumption is now an instance, not a global —
+ * The single-renderer assumption is now an instance, not a global -
  * glr_ctrl is one renderer, render3d_demo is another, and tests own
  * theirs. Initialized in glr_ctrl_init_gl. */
 static Render3dState g_scene_renderer;
@@ -1202,7 +1202,7 @@ static Render3dState g_scene_renderer;
 /* Runtime GL_NV_fog_distance capability, probed once in glr_ctrl_init_gl
  * (the GL context is current there) and mirrored into each frame's
  * Render3dRenderConfig. Lets the city backdrop and ocean/radar grid themes
- * opt into radial fog. 0 until detection runs — the safe default. */
+ * opt into radial fog. 0 until detection runs - the safe default. */
 static int g_nv_fog_distance_supported = 0;
 
 /* Runtime depth-readback capability (glReadPixels GL_DEPTH_COMPONENT from
@@ -1222,7 +1222,7 @@ static int glr_ctrl_depth_readback_is_supported(void) {
     return g_depth_readback_supported;
 }
 
-/* "The context has an accumulation buffer, but it is a CPU emulation" —
+/* "The context has an accumulation buffer, but it is a CPU emulation" -
  * probed once in glr_ctrl_init_gl from the renderer string, consumed by
  * glr_ctrl_set_accum's AUTO mode. Distinct from accum_bits == 0 (no accum
  * buffer at all): Mesa reports a real width and glAccum genuinely works,
@@ -1232,7 +1232,7 @@ static int glr_ctrl_depth_readback_is_supported(void) {
  * init GL (tests, render3d_demo, dump-only runs) keep accum armed. */
 static int g_accum_is_software = 0;
 
-/* GL_RENDERER, or a placeholder when the context refuses the query — only
+/* GL_RENDERER, or a placeholder when the context refuses the query - only
  * ever used for human-readable diagnostics. */
 static const char *glr_ctrl_gl_renderer_name(void) {
     const char *renderer = (const char *)glGetString(GL_RENDERER);
@@ -1241,14 +1241,14 @@ static const char *glr_ctrl_gl_renderer_name(void) {
 
 /* Does this context accumulate on the CPU? Mesa is the whole story in
  * practice: its state tracker implements glAccum by mapping the color
- * buffer and doing the arithmetic host-side, on every driver it ships —
+ * buffer and doing the arithmetic host-side, on every driver it ships -
  * hardware Intel/AMD/nouveau included, not just llvmpipe/softpipe/swrast.
  * So the vendor/renderer string, not a capability bit, is the signal. */
 #if defined(__EMSCRIPTEN__)
 /* The web build is deliberately exempt: gl4es has no accumulation buffer to
- * emulate badly — packaging/web/patches/gl4es-accum-fbo.patch implements
+ * emulate badly - packaging/web/patches/gl4es-accum-fbo.patch implements
  * glAccum against a real GPU-side FBO, and the app picks that up through the
- * accum_bits probe — while the browser's underlying WebGL renderer string
+ * accum_bits probe - while the browser's underlying WebGL renderer string
  * often names Mesa and would misfire the test below. */
 static int glr_ctrl_accum_is_software_renderer(void) { return 0; }
 #else
@@ -1328,7 +1328,7 @@ static BufferVizFrameConfig g_buffer_viz_frame;
  * src/app/glr_ctrl_view_transition.c (carved out of this file). The frame
  * loop ticks it via glr_ctrl_tick_view_transition; the scene-config builder
  * reads the blend via glr_ctrl_view_projection_mix; reset_all calls
- * glr_ctrl_view_reset — all declared in glr_ctrl_internal.h. */
+ * glr_ctrl_view_reset - all declared in glr_ctrl_internal.h. */
 
 static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRenderConfig *config) {
     GlrRenderState render = glr_state_render();
@@ -1360,7 +1360,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * pack itself is built at the END of this function (see
      * "Build overlay snapshot pack" below) so it reads the fully-
      * populated config fields (multisample_enabled, line_smooth_enabled,
-     * user_lighting_enabled, alpha_scale) — those are assigned later in
+     * user_lighting_enabled, alpha_scale) - those are assigned later in
      * this function, so building the pack here would read stack garbage. */
     config->post_overlays_fn        = edit_overlays_post_overlays;
     config->post_overlays_user_data = &g_overlay_pack;
@@ -1418,7 +1418,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->cam_motion_glow = cam.motion_glow;
     /* Two independent projection blends combined by min() (0 = ortho, 1 =
      * perspective): the 2D/3D view-mode transition and the free-camera
-     * Projection toggle. Min ⇒ ortho wins — the scene is orthographic if
+     * Projection toggle. Min ⇒ ortho wins - the scene is orthographic if
      * EITHER control asks for it. The view-mode 2D path additionally
      * flattens/locks the camera; the toggle leaves the camera free. */
     config->projection_mix = fminf(glr_ctrl_view_projection_mix(),
@@ -1596,7 +1596,7 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     int tuned_count = repl_collect_tuned_vars(
         repl_state_document_cmds(), repl_state_document_count(),
         source_document_view(), tuned_names, MAX_PREDEF_VARS, NULL);
-    /* Vars on a `// @config` decl line stay bright even when assigned —
+    /* Vars on a `// @config` decl line stay bright even when assigned -
      * the tag says the writes are bounds-keeping (clamp/floor), not
      * program state, so the panel keeps presenting them as knobs. */
     const char *config_names[MAX_PREDEF_VARS];
@@ -1677,7 +1677,7 @@ STATIC_ASSERT(UI_GL_VECTOR_HELPER_MAX ==
               REPL_EXPORT_GL_VECTOR_HELPER_MAX_LINES,
               "snapshot GL vector helper line count must match repl/export");
 
-/* Derive the scene tab strip each frame from existing state — no persistent
+/* Derive the scene tab strip each frame from existing state - no persistent
  * model. One tab per occupied user-scene slot (dense slot order, matching
  * the Scene menu / F12), plus one example tab iff an example is active.
  * Transient/"neither active" (Scene→New, tutorial) leaves active_idx == -1
@@ -1727,7 +1727,7 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
  * would not survive the trip on Linux.
  *
  * Called every frame, but glutSetWindowTitle only fires when the composed
- * string actually changes — the per-frame cost is two snprintfs and a strcmp,
+ * string actually changes - the per-frame cost is two snprintfs and a strcmp,
  * with no filesystem work (glr_workspaces_active_name memoizes its manifest
  * read) and no window-system traffic. */
 static void glr_ctrl_refresh_window_title(void) {
@@ -1927,7 +1927,7 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
 /* Label for one assignment-plot series: the left-hand side of its row, as
  * the user wrote it ("angle", "A[i]"). Derived from the editor buffer rather
  * than from the GLCmd because per-line canonical text lives there and nowhere
- * else — and because re-deriving it every frame means an edited row retitles
+ * else - and because re-deriving it every frame means an edited row retitles
  * its plot instead of stranding the label it opened with.
  *
  * `line_idx` is -1 when nothing is plotted, in which case the title is empty
@@ -2035,7 +2035,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->can_redo            = editor_undo_can_redo();
     /* Cursor budget readout: resolve the attribution kind to the short
      * statusbar prefix. A plain line costing <= 1 is suppressed (every
-     * ordinary top-level line costs exactly 1 — noise, not signal). */
+     * ordinary top-level line costs exactly 1 - noise, not signal). */
     {
         ReplFlatCost cost = repl_flatten_cost_at_line(snap->edit_line);
         static const char *const k_cost_labels[] = {
@@ -2133,7 +2133,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
      * row-count and render passes (which straddle render3d_draw_scene)
      * read one frozen value. This is the previous frame's scene
-     * projection — build_ui_snapshot runs before scene render — which is
+     * projection - build_ui_snapshot runs before scene render - which is
      * exactly the consistency the panel needs; a 1-frame text lag during
      * a 2D/3D transition is invisible. */
     {
@@ -2223,7 +2223,7 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
 }
 
 /* Assignment-value plot: same overlay-layout slot resolution as the other
- * floating panels. Visibility is the capture side's own open flag — this
+ * floating panels. Visibility is the capture side's own open flag - this
  * panel has no config key, because it is opened by right-clicking a row. */
 static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
         const UiRenderSnapshot *snap) {
@@ -2265,7 +2265,7 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
 }
 
 /* Compute-profile section listing: same overlay-layout slot resolution as
- * the memory panel — mirrors glr_ctrl_build_memory_panel_view. */
+ * the memory panel - mirrors glr_ctrl_build_memory_panel_view. */
 static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapshot *snap) {
     UiProfilePanelView v;
     v.window_w = snap->viewport.window_w;
@@ -2377,7 +2377,7 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
      * the per-object (time) blur. */
     GlrBlurMode mode = GLR_BLUR_NONE;
     if (config->accum_effect == RENDER3D_ACCUM_EFFECT_BLUR) {
-        /* Full "Blur" is per-object (time) blur only — even while the camera
+        /* Full "Blur" is per-object (time) blur only - even while the camera
          * moves. Runs even when t is paused: the trailing shutter
          * [t_end - dt, t_end] still samples a frame's worth of motion, so a
          * paused scene that uses t stays motion-blurred. Scenes that don't
@@ -2414,7 +2414,7 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
 
 /* Set between glr_frame_begin() and glr_frame_ended() so an unpaired end (a
  * test driving glr_ctrl_display_frame() directly) cannot close spans that were
- * never opened — prof_end() on an unstarted section would record the whole
+ * never opened - prof_end() on an unstarted section would record the whole
  * epoch as one frame. Work closes first and independently, so it gets its own
  * flag rather than sharing the frame's. */
 static int g_frame_open = 0;
@@ -2426,13 +2426,13 @@ void glr_frame_begin(void) {
     /* Dial GPU timer-query capture to what the profile panel can show this
      * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
      * query boundaries aren't free, so don't issue ones nobody can see.
-     * Then open the frame's query slot — this must precede the first
+     * Then open the frame's query slot - this must precede the first
      * prof_begin of a GPU-bracketed section (FRAME_WORK, below).
      * Both no-op while gpu_prof is disabled. */
     {
         UiProfilePanelMode prof_mode =
             (UiProfilePanelMode)ui_state_profile_panel().mode;
-        /* OFF and FPS issue no timer queries — the FPS plot needs no
+        /* OFF and FPS issue no timer queries - the FPS plot needs no
          * per-section GPU data, and query boundaries cost real GPU time. */
         glr_prof_set_gpu_capture_mode(
             (prof_mode == PROFILE_PANEL_OFF ||
@@ -2464,7 +2464,7 @@ void glr_frame_ended(void) {
         /* Present is what the frame spent outside its work: the glFinish drain
          * and the swap, plus anything else the callback does after
          * glr_frame_work_end(). Derived rather than bracketed so nothing in
-         * that stretch can go unattributed — see prof_sections.h. A frame that
+         * that stretch can go unattributed - see prof_sections.h. A frame that
          * never closed its work span leaves the difference at the full total,
          * which is the honest reading of "none of this was accounted for". */
         prof_section_record_us(PROF_PRESENT,
@@ -2494,7 +2494,7 @@ void glr_ctrl_render_script_overlay(int win_w, int win_h) {
 void glr_ctrl_render_tour_presence(int win_w, int win_h) {
     /* Ticked unconditionally, drawn conditionally: the presence clock has to
      * keep running for the length of the exit collapse after the tour itself
-     * is gone, so the phase machine — not the caller — decides when there is
+     * is gone, so the phase machine - not the caller - decides when there is
      * nothing left to draw. */
     GlrTourPlaybackView tour = glr_pointer_script_tour_view();
     GlrTourPresenceView presence =
@@ -2575,13 +2575,13 @@ void glr_ctrl_display_frame(void) {
         prof_begin(PROF_ASSIGN_PLOT);
         prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
         /* While replay is scrubbing, the plot's PC marker is only truthful over
-         * a trace from the frame the PC is walking — so capture every frame
+         * a trace from the frame the PC is walking - so capture every frame
          * regardless of the rate chip. Set unconditionally, so the override
          * lifts the moment replay stops. (ASSIGN_PLOT_RATE_ONCE ignores it; see
          * assign_plot_set_live_capture.) */
         assign_plot_set_live_capture(replay_active());
         /* GLUT_ELAPSED_TIME is milliseconds since glutInit and monotonic,
-         * which is all the 1 Hz gate needs — no second clock to keep. */
+         * which is all the 1 Hz gate needs - no second clock to keep. */
         assign_plot_capture((double)glutGet(GLUT_ELAPSED_TIME) * 1000.0);
         prof_end(PROF_ASSIGN_PLOT_CAPTURE);
         prof_accum_end(PROF_ASSIGN_PLOT);
@@ -2710,8 +2710,8 @@ void glr_ctrl_display_frame(void) {
     /* Resolve motion-blur mode for this frame now that the current pose is
      * captured; installs the per-sample hook on scene_config when active. */
     glr_ctrl_resolve_blur_subframe(&scene_config);
-    /* Confine the whole scene render — including the program's own
-     * glClear, the one thing the viewport does not bound — to the scene
+    /* Confine the whole scene render - including the program's own
+     * glClear, the one thing the viewport does not bound - to the scene
      * rect, so it cannot repaint the chrome cleared just above. This
      * module owns the window layout, so it owns this scissor;
      * render3d_draw_scene sets none of its own (see
@@ -2769,7 +2769,7 @@ void glr_ctrl_display_frame(void) {
      * env-capture scripts and when no controlled tour is running. Rendered
      * before the compositor pass; the tour narration overlay still composits
      * on top afterward in gl_repl.c, staying visually topmost (and is timed
-     * there as PROF_TOUR_OVERLAY — this section is the HUD alone). */
+     * there as PROF_TOUR_OVERLAY - this section is the HUD alone). */
     prof_begin(PROF_TOUR_HUD);
     tour_ui_hud_render(&ui_snap);
     prof_end(PROF_TOUR_HUD);
@@ -2786,7 +2786,7 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_UI_PANELS);
     /* Stencil legend first in the panel block: it is scene chrome parked
      * in a corner, so every popup below draws over it rather than under
-     * it. Drawing here — after render3d_draw_scene returned — is also why
+     * it. Drawing here - after render3d_draw_scene returned - is also why
      * the panel is never clipped by the stencil test it reports on. */
     {
         UiBufferVizLegendView legend_view = glr_ctrl_build_buffer_viz_legend_view();
@@ -2795,7 +2795,7 @@ void glr_ctrl_display_frame(void) {
     /* Autocomplete popup anchors under the editor cursor. When the
      * active input row didn't render this frame (code panel hidden,
      * row scrolled offscreen) cp_out.cursor_valid is 0 and we skip
-     * the popup — there's no visible cursor to anchor to. Same
+     * the popup - there's no visible cursor to anchor to. Same
      * semantic as the legacy mid-render publish, which simply didn't
      * fire on those frames. */
     if (cp_out.cursor_valid)
@@ -2968,7 +2968,7 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
      * cannot reach render3d_lights_apply_theme), so the app-state lights[]
      * positions/colors/eye-space flags are left on the *previous*
      * theme. Re-seed them from whatever theme the reset + tag defaults
-     * settled on — same call reset_all makes. An example's own leading
+     * settled on - same call reset_all makes. An example's own leading
      * `@cfg light_theme = X` runs after this through glr_config_set,
      * which re-applies via the same path (idempotent). */
     render3d_lights_apply_theme(glr_state_render_mut()->lights,
@@ -3047,7 +3047,7 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
  * light data (GlrRenderState.lights) into the exporter's neutral float
  * struct so src/repl/export.c can emit the glLightfv init/display blocks
  * without including scene/app headers. Enable state is intentionally not
- * carried — the export bootstrap disables every slot and the program's own
+ * carried - the export bootstrap disables every slot and the program's own
  * glEnable(GL_LIGHTn) re-enables in display(). */
 static void glr_ctrl_export_fill_light(int slot, ReplExportLightInfo *out) {
     if (slot < 0 || slot >= MAX_LIGHTS) return;  /* out is pre-zeroed by caller */
@@ -3246,7 +3246,7 @@ void glr_ctrl_buffer_viz_legend_select_rows(
     view->zero_px = hist->counts[0];
 
     /* Top-N by pixel count, ties broken by ascending value (the scan
-     * keeps the first — lowest — value at a given count). A linear
+     * keeps the first - lowest - value at a given count). A linear
      * re-scan per slot rather than a sort: 8 x 255 comparisons per frame
      * is cheaper than sorting 256 bins, and it needs no scratch array of
      * pairs. */
@@ -3397,7 +3397,7 @@ static const ReplHostEffects g_glr_host_effects = {
 static void glr_ctrl_seed_overlay_xn(void) {
     GlrPresentationState p = glr_state_presentation();
     /* Bind each overlay's curve plugin once; from here the controller only
-     * feeds the machines dt and reads opacity back — the grid/axes module
+     * feeds the machines dt and reads opacity back - the grid/axes module
      * owns the durations + per-theme speed. */
     render3d_xn_init(&g_grid_xn, p.grid_theme, &render3d_grid_reveal);
     render3d_xn_init(&g_axes_xn, p.axes_theme, &render3d_axes_reveal);
@@ -3441,7 +3441,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
 
 /* Look up the label of the config row currently bound to F<fn>.
  * Used by the help overlay's F-Key Toggles section through the
- * controller-installed ReplHelpFkeyProvider — closes audit #1's
+ * controller-installed ReplHelpFkeyProvider - closes audit #1's
  * layering inversion where src/repl/help_text.c reached into
  * src/app/glr_config.h directly. */
 static const char *glr_ctrl_help_fkey_label(int fn) {
@@ -3571,7 +3571,7 @@ void glr_ctrl_after_tour_restore(void) {
     /* Steps 11-12 of the tour-restore order. The owner restores in
      * glr_tour_snapshot_restore() put presentation/camera/menu/peer state back;
      * here we re-derive the app-side caches that hang off them. NOT
-     * glr_ctrl_reset_transients() — that would clear the restored camera scene
+     * glr_ctrl_reset_transients() - that would clear the restored camera scene
      * default, close the restored menu, and stop the restored color picker. */
     repl_state_refresh_workspace_header_lines();
     repl_refresh_render_state_strings();
@@ -3717,7 +3717,7 @@ void glr_ctrl_init_gl(void) {
     /* Always log the outcome (both branches) through glr_ctrl_init_log, so
      * the active point-sizing path shows up as an `[init +N.NNNs]` line in
      * the boot trace without a repro. On the unsupported branch it names
-     * which of the reasons applies — a deliberate env override vs. a GL
+     * which of the reasons applies - a deliberate env override vs. a GL
      * context that genuinely lacks the entry point (the gl4es/WebGL case:
      * the extension is advertised but glutGetProcAddress -> eglGetProcAddress
      * yields no callable glPointParameterfv, so the software glPointSize
@@ -3765,7 +3765,7 @@ void glr_ctrl_init_gl(void) {
      * GL 3.3+). Feeds the profile panel's GPU column: GL_TIME_ELAPSED
      * queries bracket the GPU-relevant prof sections (table in
      * src/app/glr_prof.c, routed through the cpuprof section hooks) with
-     * results read back asynchronously a few frames later — never a
+     * results read back asynchronously a few frames later - never a
      * glFinish. Unsupported context or GLR_NO_GPU_PROF=1 (any non-empty
      * value) leaves gpu_prof disabled and the panel column reads "--". */
     {
@@ -3810,7 +3810,7 @@ void glr_ctrl_init_gl(void) {
      * the fringes pop in and out as the camera orbits. When the NV
      * extension is present, those passes switch to true radial eye
      * distance; every other (eye-plane-tuned) theme is left alone.
-     * Mirrored into Render3dRenderConfig per frame and applied per-pass —
+     * Mirrored into Render3dRenderConfig per frame and applied per-pass -
      * NOT set globally, which would fog out the tuned grid themes. */
     g_nv_fog_distance_supported =
         glutExtensionSupported("GL_NV_fog_distance") ? 1 : 0;
@@ -3848,8 +3848,8 @@ void glr_ctrl_init_gl(void) {
     /* Probe depth readback once (same probe-and-mask pattern as the
      * accum-bits check above): read one depth pixel and see whether the
      * context objects. WebGL cannot read GL_DEPTH_COMPONENT from the
-     * default framebuffer at all — and gl4es may silently no-op instead
-     * of raising an error — so the web build is hard-disabled too. */
+     * default framebuffer at all - and gl4es may silently no-op instead
+     * of raising an error - so the web build is hard-disabled too. */
     {
         GLfloat probe_depth = 0.0f;
         (void)glGetError();
@@ -3894,13 +3894,13 @@ void glr_ctrl_init_gl(void) {
      * restore. */
     editor_input_set_code_panel_layout_provider(glr_ctrl_code_panel_layout_provider);
     /* App-level config: tell the editor what comment prefix to use
-     * for Ctrl+/ toggle. Editor itself has no default — tests that
+     * for Ctrl+/ toggle. Editor itself has no default - tests that
      * exercise the toggle key path set the prefix explicitly. */
     editor_set_line_comment_prefix("// ");
 
     /* Capture the memory baseline after REPL bootstrap so it reflects
      * "REPL ready and idle" rather than the bare process at main()
-     * entry — the more useful baseline for leak attribution. */
+     * entry - the more useful baseline for leak attribution. */
     memprof_init();
 }
 
@@ -3940,7 +3940,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * before reaching here. The dump-only paths skip init_gl, so without
      * this the document/flat capacities stay 0 (raw BSS) and every load
      * insert is rejected with a misleading "command store at capacity"
-     * — i.e. --dump-code / --dump-flat would print an empty buffer for any
+     * - i.e. --dump-code / --dump-flat would print an empty buffer for any
      * non-empty file. Idempotent, so the windowed path is unaffected. */
     repl_state_ensure_sentinels();
     repl_state_variables_reset_predefs();
@@ -3956,9 +3956,9 @@ void glr_ctrl_set_accum(int mode) {
     GlrRenderState *render = glr_state_render_mut();
     /* GLR_CLI_ACCUM_AUTO (-1): no explicit --accum / --no-accum, so let the
      * renderer decide. A software accumulation buffer (Mesa) satisfies every
-     * capability probe and still makes the effect a net loss — each pass is a
+     * capability probe and still makes the effect a net loss - each pass is a
      * full-scene re-render plus a CPU-side read/add/write of the color buffer
-     * — so AUTO leaves it off there and says how to override. */
+     * - so AUTO leaves it off there and says how to override. */
     int enabled = (mode != 0);
     if (mode < 0 && g_accum_is_software) {
         fprintf(stderr, "accum: %s emulates the accumulation buffer in "
@@ -3970,7 +3970,7 @@ void glr_ctrl_set_accum(int mode) {
     /* accum_bits == 0 means glr_ctrl_init_gl probed the context and found
      * no accumulation buffer at all: each accum pass would re-render the
      * scene at full cost while glAccum stays a no-op, so force the feature
-     * off — this one overrides even an explicit --accum. -1 (never probed:
+     * off - this one overrides even an explicit --accum. -1 (never probed:
      * tests, dump-only paths) leaves the caller's choice untouched. */
     if (enabled && render->accum_bits == 0) {
         fprintf(stderr, "accum: GL context has no accumulation buffer; "
@@ -3995,7 +3995,7 @@ void glr_ctrl_set_edit_line(int line) {
 
 void glr_ctrl_set_code_panel_scroll(int top_row) {
     /* Capture affordance: park the panel's first visible row. Cancels
-     * follow-scroll first — GLR_EDIT_LINE requests it, and a follow pass would
+     * follow-scroll first - GLR_EDIT_LINE requests it, and a follow pass would
      * drag the view straight back to the cursor. Rows here are panel rows, not
      * document lines: with code focus off the generated C occupies rows the
      * cursor cannot address at all, which is the reason to scroll instead of
@@ -4052,7 +4052,7 @@ int glr_ctrl_open_assign_plot(int line) {
 
     /* Same shape as glr_ctrl_open_gl_state_popup: resolve the row through the
      * live code-panel model, then take the real right-click path, so a capture
-     * run exercises exactly the routing a user's click does — including the
+     * run exercises exactly the routing a user's click does - including the
      * "row is not an assignment" rejection. Returns 0 for an off-screen row so
      * the capture hook retries after follow-scroll lands. */
     glr_ctrl_build_ui_snapshot(&snap);
@@ -4075,7 +4075,7 @@ int glr_ctrl_open_command_description(int line, int anchor_dx) {
 
     /* Third of the same shape (see glr_ctrl_open_gl_state_popup): the real
      * right-click path decides which of the three right-click popups a row
-     * gets, so a capture cannot ask for the help card directly — it clicks the
+     * gets, so a capture cannot ask for the help card directly - it clicks the
      * row and checks which popup came up. A row with no authored description
      * therefore returns 0 rather than opening something else. Note the routing
      * closes the description when a later right-click lands on an assignment
@@ -4092,7 +4092,7 @@ int glr_ctrl_open_command_description(int line, int anchor_dx) {
         return 0;
     /* Re-anchor rather than clicking somewhere else: the click has to land on
      * the row to pick the right card, but where the card then sits is a
-     * curation choice for a capture — the row fixes its y, and this slides it
+     * curation choice for a capture - the row fixes its y, and this slides it
      * along x, away from whatever it would otherwise cover. The renderer
      * clamps into the window, so an offset past the edge simply pins there. */
     if (anchor_dx) {
@@ -4141,7 +4141,7 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
 /* ===========================================================================
  * Router helpers: non-editor input concerns
  *
- * glr_ctrl is the controller — it owns routing of raw GLUT input to
+ * glr_ctrl is the controller - it owns routing of raw GLUT input to
  * the subsystem that owns each concern (replay, audio, config, save,
  * scene cycle, variable panel, scene press, camera, scroll wheel,
  * help). The editor's keyboard_func / special_func / mouse_func /
@@ -4230,7 +4230,7 @@ void glr_ctrl_tick(void) {
     {
         /* Ease all floating scene panels (variable / profile / memory)
          * toward their overlay-layout slots. Replay reserves a bottom band
-         * so the whole stack lifts above the HUD — the old variable-panel-
+         * so the whole stack lifts above the HUD - the old variable-panel-
          * only replay_lift_px, generalized (Smell #21/#22/#40). */
         int band_h = replay_active()
                    ? REPLAY_HUD_BOTTOM_Y + GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX
@@ -4276,7 +4276,7 @@ void glr_ctrl_tick(void) {
 
         /* Tutorial COMMAND-step hint persistence: while a COMMAND step
          * is active, keep the affordance hint visible by re-emitting it
-         * each frame — but only when the status slot is empty (TTL has
+         * each frame - but only when the status slot is empty (TTL has
          * fully expired) or already shows one of our hint variants
          * (recognised by the "Tutorial: step " prefix via
          * tutorial_status_is_hint). Non-tutorial messages (parse

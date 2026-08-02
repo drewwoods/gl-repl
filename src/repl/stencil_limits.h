@@ -12,8 +12,8 @@
  *
  * That clamp is the one place the REPL and its exported C differ at the API
  * boundary: export writes the expression verbatim, so the standalone program
- * hands glStencilFunc the raw value. The rendered results still agree —
- * GL clamps ref to [0, 2^bits - 1] itself — so this is a difference in the
+ * hands glStencilFunc the raw value. The rendered results still agree -
+ * GL clamps ref to [0, 2^bits - 1] itself - so this is a difference in the
  * call trace only, and is why the truncation parity tests compare values
  * rather than going through test_export_trace_parity (which compares call
  * counts and would be blind to it either way).

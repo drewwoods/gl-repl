@@ -1,6 +1,6 @@
 # Clang AST Mutation-Analysis Pass
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status - NOT STARTED (2026-05-23 audit)
 
 No clang AST tool / LibTooling executable exists in `scripts/` or
 elsewhere in the tree. The shipped boundary enforcement is still grep-

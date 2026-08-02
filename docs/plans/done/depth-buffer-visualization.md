@@ -3,7 +3,7 @@
 ## Context
 
 gl-repl renders fixed-function GL geometry but gives no insight into the depth
-buffer — useful for teaching depth testing, debugging z-fighting, and
+buffer - useful for teaching depth testing, debugging z-fighting, and
 understanding depth precision. This adds a **"Depth view"** config cycle that
 visualizes the depth buffer as a grayscale image, with linearized depth and a
 scene-normalized mode (user geometry only, grid/backdrop excluded), plus a
@@ -14,17 +14,17 @@ Split`; Split shows the normal render with the right half overlaid by the
 scene-normalized depth image (pixel-aligned). Shortcut: **plain Ctrl+N** (the
 one free Ctrl slot, noted unbound at `keymap.h:114`; pairs with Ctrl+Shift+N =
 Normal vectors). Ctrl-ASCII cfg shortcuts dispatch before replay forwarding
-(`glr_ctrl_router.c` keyboard_dispatch), so it works mid-replay — F-keys would
+(`glr_ctrl_router.c` keyboard_dispatch), so it works mid-replay - F-keys would
 cancel replay and are all taken anyway.
 
 ## Design summary
 
 - **One readback, placed for free grid exclusion.** Read the scene-rect depth
-  buffer (`glReadPixels(..., GL_DEPTH_COMPONENT, GL_FLOAT, ...)` — precedent:
+  buffer (`glReadPixels(..., GL_DEPTH_COMPONENT, GL_FLOAT, ...)` - precedent:
   `edit_overlays.c:1474`) at the **end of `render3d_pass_fill`**, i.e. after
   user geometry + replay-fade `post_fill_fn`, before `render3d_pass_helpers`
   draws backdrop/grid (which write depth). The same buffer serves as both the
-  image source and the scene min/max scan — no feedback probe needed.
+  image source and the scene min/max scan - no feedback probe needed.
 - **Linearize** via the cached `Render3dProjectionDesc`
   (`render3d_get_active_projection`, computed once per frame in `render.c`):
   perspective `L = n*f / (f - z*(f-n))` with `n/f = desc->near_z/far_z`
@@ -39,7 +39,7 @@ cancel replay and are all taken anyway.
     samples outside the smoothed range. If the (smoothed) span is below an
     epsilon (`span < 1e-6f`), map every in-range pixel to mid-gray
     (`d01 = 0.5`) instead of dividing; and always **clamp `d01` to [0,1]**
-    after the range division, before the byte conversion — never rely on the
+    after the range division, before the byte conversion - never rely on the
     range containing the sample.
   - **Mapping:** near = bright; `lum = 1 - d01` (Linear), `1 - 0.9*d01`
     (Scene, so the farthest user pixel stays distinguishable from background).
@@ -61,30 +61,30 @@ cancel replay and are all taken anyway.
 - **Draw order:** depth quad renders **before** `render3d_postprocess_filter_render`
   (between the `post_resolve_overlays_fn` block and the post-filter block in
   `render3d_draw_scene`), so Post FX (grain/scanlines) applies uniformly across
-  both halves of a split — no seam.
+  both halves of a split - no seam.
 - **Web gating (accum-bits pattern):** WebGL can't read depth from the default
   framebuffer. Probe once in `glr_ctrl_init_gl` (clear GL error, 1×1 depth
   read, check `glGetError()`), plus hard-off under `#if defined(__EMSCRIPTEN__)`;
   one stderr line when disabled. Controller forces `config->depth_viz = 0`
   when unsupported; the cfg row stays settable (point-parameter philosophy).
-- **@cfg / reset policy — winding_view parity:** the slug `depth_view`
+- **@cfg / reset policy - winding_view parity:** the slug `depth_view`
   auto-derives from the label and round-trips through workspace @cfg headers,
   but the key is **not** added to `cfg_key_in_scene_subset()` and **not**
-  reset per example load — like Winding, it's a debugging view that should
+  reset per example load - like Winding, it's a debugging view that should
   survive F12 example cycling. (Optional follow-up if examples should set it
   in headers: add the switch case + example reset seed.)
 - **Replay:** replay uses the same `render3d_draw_scene` call (only the flat
   exec limit differs), so the visualization works mid-replay automatically;
   cfg-row cycling does not stop replay (pinned by `test_cfg_cycle_stops_replay`).
 - **2D view / ortho:** handled by the ortho branch of the linearization; no
-  special-casing (transient mid-transition frames use the snapped projection —
+  special-casing (transient mid-transition frames use the snapped projection -
   acceptable).
 
 ## Implementation steps
 
 ### 1. New module `src/render3d/depth_viz.{c,h}`
 Picked up automatically by the Makefile wildcard (`RENDER3D_SRCS`); must stay
-pure GL (no repl/app includes — `check-pure-render3d-no-repl-state` guard,
+pure GL (no repl/app includes - `check-pure-render3d-no-repl-state` guard,
 and it links into `render3d_demo`).
 
 ```c
@@ -123,7 +123,7 @@ Rename static `postprocess_filter_begin_2d/_end_2d`
 (`src/render3d/postprocess_filter.c:106/:141`) to exported
 `render3d_post_2d_begin/_end` in `postprocess_filter.h`; update the ~4
 internal callers. (They already handle matrix-mode snapshot + `glPushAttrib`
-+ ortho setup — exactly what the depth quad needs.)
++ ortho setup - exactly what the depth quad needs.)
 
 ### 3. render.c / render_types.h integration
 - `render_types.h`: add `int depth_viz;` to `Render3dRenderConfig` near
@@ -158,20 +158,20 @@ internal callers. (They already handle matrix-mode snapshot + `glPushAttrib`
   `{ .label = "Depth view", .key = GLR_CONFIG_DEPTH_VIZ, .state_count = ARRAY_LEN(depth_viz_names), .state_names = depth_viz_names, .key_code = KM_KEY(GLR_DEPTH_VIZ), .modifiers = KM_MODS(GLR_DEPTH_VIZ) }`
 - `keymap.h`: `#define GLR_DEPTH_VIZ  KEY_CTRL_N, 0  /* pairs w/ Normal vectors */`;
   update the stale "plain Ctrl+N is unbound" comment on `GLR_NORMAL_VECTORS`.
-- **Claiming Ctrl+N breaks existing assertions/docs — update in the same
+- **Claiming Ctrl+N breaks existing assertions/docs - update in the same
   change** (guaranteed `make test-stubs` failure otherwise):
-  - `tests/test_glr_actions.c:1629` — flip
+  - `tests/test_glr_actions.c:1629` - flip
     `ASSERT_INT("plain Ctrl+N not claimed by cfg", ..., 0)` to assert plain
     Ctrl+N **is** claimed and cycles `depth_viz` (leave the Ctrl+E / Ctrl+L
     fall-through assertions alone); adjust the comment above it.
-  - `tests/test_glr_ctrl.c:4127-4132` — the "Ctrl+N is a complete no-op"
+  - `tests/test_glr_ctrl.c:4127-4132` - the "Ctrl+N is a complete no-op"
     comment is now stale: it still must not touch
     `post_filter_mode`/`compositor_filter_mode` (assertions stand), but
     reword the comment and add an assertion that the keystroke cycled
     `glr_state_presentation().depth_viz` instead.
   - `docs/USER_GUIDE.md` "Scene & rendering" shortcut table (~:1425): add
     `| Ctrl+N | Depth view |`. Also add the row to CLAUDE.md's Key Controls
-    table. The F1 help overlay needs **no** edit — `help_text.c` walks
+    table. The F1 help overlay needs **no** edit - `help_text.c` walks
     `g_cfg_items[]`, so the row appears automatically.
 - `src/app/glr_ctrl.c`:
   - `static int g_depth_readback_supported = 1;` + init-GL probe next to the
@@ -185,13 +185,13 @@ internal callers. (They already handle matrix-mode snapshot + `glPushAttrib`
 `GL_DEPTH_COMPONENT` / `GL_LUMINANCE`; **add a no-op `glTexSubImage2D`**
 (follow the `glTexImage2D` stub pattern + `gl_stub_counts.h` entry). Verify
 `GL_UNPACK_ALIGNMENT` token exists; add if missing. The stub `glReadPixels`
-fills 1.0 → depth viz sees "empty scene" and takes the Linear fallback —
+fills 1.0 → depth viz sees "empty scene" and takes the Linear fallback -
 good structural coverage. Then verify all three builds per CLAUDE.md:
 `make test-stubs`, `make gl-repl USE_GL_STUBS=1`, `make gl-repl`.
 
 ### 6. Tests
 - **Synthetic depth-map tests** (new `tests/test_depth_viz.c`, linked against
-  the stub-built `depth_viz.o` with an explicit per-test OBJS list — the
+  the stub-built `depth_viz.o` with an explicit per-test OBJS list - the
   `test_render3d_transition` Makefile pattern): drive
   `render3d_depth_viz_map()` with hand-built float buffers and a fixed
   `Render3dProjectionDesc`:
@@ -206,7 +206,7 @@ good structural coverage. Then verify all three builds per CLAUDE.md:
 - `tests/test_render3d_render.c`: each `depth_viz` mode renders OK in
   single-pass and accum branches; out-of-range value → validate fails (−1).
   (The stub `glReadPixels` fills 1.0, so these only exercise the empty-scene
-  path — the synthetic tests above carry the math coverage.)
+  path - the synthetic tests above carry the math coverage.)
 - `tests/test_glr_actions.c`: "Depth view" row exists, 4 states, expected
   names; slug is `depth_view` (`glr_config_item_slug`); extend
   `test_cfg_cycle_stops_replay` to cycle the depth-view row and assert replay
@@ -219,7 +219,7 @@ good structural coverage. Then verify all three builds per CLAUDE.md:
 Add `PROF_RENDER3D_DEPTH_VIZ` to `prof_sections.h` and its
 `{ label, depth, is_total }` row in `src/app/glr_prof.c` (depth 1 under the
 render3d total, like the accum/overlays subsections; **not** in
-`k_gpu_sections[]` — the readback is a CPU-side stall, the CPU column is
+`k_gpu_sections[]` - the readback is a CPU-side stall, the CPU column is
 what we want to see). Bracket the capture and the render/upload with
 `prof_begin`/`prof_end` so the cost is visible in the Ctrl+W Sections panel
 and the demos' `prof_section_info` tables stay untouched (they're
@@ -238,10 +238,10 @@ make gl-repl FREEGLUT_OSMESA=1
 GLR_TYPE_KEYS=$'\x0e' ./build/release-osmesa/gl-repl --example torus --no-audio &   # Ctrl+N ×1 = Linear
 sleep 2; kill -USR1 $!; sleep 1; magick freeglut-0000.ppm depth-linear.png
 # ×2 = Scene (full-contrast, no grid), ×3 = Split (left normal / right depth,
-# pixel-aligned at the divider — verify with an odd --window width too).
-# Replay: GLR_TYPE_KEYS=$'\x12\x0e\x0e' (Ctrl+R then Ctrl+N×2) — replay HUD
+# pixel-aligned at the divider - verify with an odd --window width too).
+# Replay: GLR_TYPE_KEYS=$'\x12\x0e\x0e' (Ctrl+R then Ctrl+N×2) - replay HUD
 # visible + depth view active.
-# Accum: GLR_ACCUM_PASSES=16 + Split — left half stays antialiased.
+# Accum: GLR_ACCUM_PASSES=16 + Split - left half stays antialiased.
 
 # Ortho/2D headless: GLR_TYPE_KEYS cannot carry GLUT_ACTIVE_SHIFT, so
 # Ctrl+Shift+E/V are NOT reachable this way. Instead:
@@ -263,13 +263,13 @@ lever needed. OSMesa headless: functional (all four modes captured).
 
 **Performance acceptance (on-mode cost is real: at 2400×1600 each frame
 synchronously reads ~15 MB of depth, scans ~3.8M pixels, and uploads ~3.8 MB
-— a pipeline stall plus ~1 GB/s of transfers at 60 FPS):**
+- a pipeline stall plus ~1 GB/s of transfers at 60 FPS):**
 - Native (Cocoa, default window size): with Depth view = Scene on the torus
   example, the Ctrl+W Sections panel's `PROF_RENDER3D_DEPTH_VIZ` row (step 7)
   must stay under **~4 ms** CPU, and the FPS plot must hold 60 FPS. Record
   the measured number in the PR description.
 - Native at a large window (~2400×1600): degradation is acceptable but must
-  be *attributed* — the depth-viz row should own the cost, not smear into
+  be *attributed* - the depth-viz row should own the cost, not smear into
   other sections.
 - OSMesa: functional only (software rasterizer; no frame-rate criterion).
 - If the native budget is blown, the fallback lever is documented in
@@ -279,16 +279,16 @@ synchronously reads ~15 MB of depth, scans ~3.8M pixels, and uploads ~3.8 MB
 - Buffer cost: ~15 MB float + ~4 MB bytes at 2400×1600, persistent while the
   feature has ever run; freed by `_reset`. Zero per-frame cost when Off.
 - Per-frame cost when On: synchronous `glReadPixels` stalls the pipeline and
-  the CPU convert scans every pixel — see the performance acceptance criteria
+  the CPU convert scans every pixel - see the performance acceptance criteria
   in Verification. If the budget is blown at default window size, the fallback
   lever is capturing at half resolution (read every-other row/col or
   `glPixelZoom`-free box sampling on the CPU side) and letting the LINEAR
-  texture filter stretch it — a quality/cost knob, deferred unless needed.
-- Scene-normalized range breathes with animation despite EMA — acceptable;
+  texture filter stretch it - a quality/cost knob, deferred unless needed.
+- Scene-normalized range breathes with animation despite EMA - acceptable;
   Linear mode is the stable-reference alternative. Zero-span and EMA-overshoot
   are handled by the epsilon fallback + clamp (Design summary) and pinned by
   the synthetic tests.
-- Mid 2D↔3D transition frames linearize with the snapped projection desc —
+- Mid 2D↔3D transition frames linearize with the snapped projection desc -
   momentary, invisible in practice.
 
 ## Critical files

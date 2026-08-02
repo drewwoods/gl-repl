@@ -1,7 +1,7 @@
 # Plan: Three-Layer Ownership Split (Editor / REPL / UI)
 
 > **Status: landed (2026-05-03 → 2026-05-05).** Phases A–J shipped
-> on `feature/editor-ownership-gap-cleanup` — commits 1–49 plus the
+> on `feature/editor-ownership-gap-cleanup` - commits 1–49 plus the
 > J2.x / J3 / J3.1 / J4 / J5 / J6 / J7 / J8 / J9 follow-ups. The
 > M/V/C+compiler+router contract is enforced by 32 hard guards
 > under `make check` (30 sub-targets in `check-state-ownership` +
@@ -60,7 +60,7 @@ below should land as small commits with `make test`,
 `make test-stubs`, and `make check-state-ownership` green after each
 commit.
 
-### J1 — Replace `editor_input.c` Shims With Real Editor Handlers
+### J1 - Replace `editor_input.c` Shims With Real Editor Handlers
 
 **Goal:** make the live path `imrepl_ctrl -> editor_handle_*` execute
 editor-owned code directly. `editor_input.c` must not call
@@ -124,7 +124,7 @@ Manual smoke:
 - Programmatic load / example / `feed_line` paths still commit through
   the same editor transaction boundary.
 
-### J2 — Route Code-Panel Press Side Effects Through `UiHit`
+### J2 - Route Code-Panel Press Side Effects Through `UiHit`
 
 **Goal:** UI input files classify where the event landed; they do not
 open pickers, toggle replay, start search, activate menus, clear
@@ -191,13 +191,13 @@ The P1 issues are closed only when both are true:
 The load-bearing definition is now in
 [`editor-text-model-controller.md`](editor-text-model-controller.md).
 The original three-line summary below is preserved because it is still
-correct as a high-level shape — it just under-describes how input
+correct as a high-level shape - it just under-describes how input
 routes through the system.
 
 ```
 Editor owns editable text, cursor, selection, navigation, and undo
 transactions. (Plus search, autocomplete, clipboard, and read-only
-text documents — see editor-text-model-controller.md.)
+text documents - see editor-text-model-controller.md.)
 
 REPL owns validation / compilation of committed editor text into
 command / state changes. (Pure compiler; no editor state, no UI state.)
@@ -240,18 +240,18 @@ UI render-time slices (`status`, `help.visible`, `variable_panel.visible`,
 `profile_panel.mode`, `viewport`, `pointer`) moved to `UiState` in
 commit 8. The remaining `code_panel` chrome (`cursor_visible`,
 `blink_tick`, `cursor_px/py`, `panel_frac`, `resizing_panel`) and
-`camera` are in commit 12 — with cursor blink revised to land on
+`camera` are in commit 12 - with cursor blink revised to land on
 `EditorState` (editor controls the cursor) rather than `UiState`.
 
-### 2. REPL modules read and write editor text ⚠️ partial — commit 13 finishes
+### 2. REPL modules read and write editor text ⚠️ partial - commit 13 finishes
 
 - `repl_command_store_*_with_line[s]` *still* writes
-  `editor_buffer.lines[]` in lockstep with the cmd array — drops in
+  `editor_buffer.lines[]` in lockstep with the cmd array - drops in
   commit 13.
 - `repl_replay_annotations.c::replay_visible_text(cmd_idx)` still
-  reaches into the editor buffer — converts to `EditorBufferView`
+  reaches into the editor buffer - converts to `EditorBufferView`
   parameter in commit 13.
-- `repl_export.c` and `repl_parser.c` reparse paths same — same
+- `repl_export.c` and `repl_parser.c` reparse paths same - same
   commit.
 
 In the corrected contract, REPL is *given* text by the editor on
@@ -261,7 +261,7 @@ commit. It does not own a buffer; it does not write to one.
 
 Fully closed across four phases.
 
-- **Phase E** carved the passive `UiHit` surface — `ui_panels_hit_test`,
+- **Phase E** carved the passive `UiHit` surface - `ui_panels_hit_test`,
   `ui_menu_bar_hit_test`, `ui_color_picker_hit_test`,
   `ui_variable_panel_hit_test` all classify regions and return neutral
   `UiHit` values without mutating.
@@ -279,7 +279,7 @@ Fully closed across four phases.
   retired in the J2 P2 follow-up.
 - **Phase J4** retired the last render-time mutator
   (`repl_action_set_cursor_pixel` inside `render_active_input_rows`)
-  by introducing `UiCodePanelOutput` — a per-frame render-output
+  by introducing `UiCodePanelOutput` - a per-frame render-output
   struct the controller actualizes after the render call. Cursor
   pixel is no longer state; it's a frame transient passed directly
   to `ui_autocomplete_panel_render`.
@@ -310,7 +310,7 @@ shape returning. `editor_input.c` carries no `repl_*_func` calls.
 ## Target State Shape
 
 ```c
-/* The user's program — what the REPL parses, flattens, executes,
+/* The user's program - what the REPL parses, flattens, executes,
  * replays, exports. */
 typedef struct {
     ReplDocumentState           document;
@@ -324,7 +324,7 @@ typedef struct {
 } ReplState;
 
 /* Editable text, cursor, selection, navigation, undo, AND cursor-blink
- * — the *editor controls when the cursor is visible*, so blink is
+ * - the *editor controls when the cursor is visible*, so blink is
  * editor session state, not UI chrome. UI just renders whatever
  * `cursor_visible` says.
  *
@@ -340,7 +340,7 @@ typedef struct {
     ReplSearchState             search;
     ReplAutocompleteState       autocomplete;
     EditorScrollState           scroll;       /* doc-line + follow flag */
-    EditorCursorBlinkState      cursor_blink; /* cursor_visible + blink_tick — corrected from UiState */
+    EditorCursorBlinkState      cursor_blink; /* cursor_visible + blink_tick - corrected from UiState */
     ReplVariableDragState       variable_drag;/* transitional; moves to variable-panel subsystem */
     EditorUndoRing              undo;         /* transaction snapshots */
 } EditorState;
@@ -359,8 +359,8 @@ typedef struct {
     ReplViewportState           viewport;
     ReplPointerState            pointer;
     ReplStatusState             status;        /* transient message; controller-written */
-    ReplHelpState               help;          /* visibility — until help becomes a read-only editor session, see below */
-    ReplVariablePanelState      variable_panel;/* visibility — variable_panel subsystem owns its own model */
+    ReplHelpState               help;          /* visibility - until help becomes a read-only editor session, see below */
+    ReplVariablePanelState      variable_panel;/* visibility - variable_panel subsystem owns its own model */
     ReplProfilePanelState       profile_panel; /* visibility */
     PanelDividerState           divider;       /* panel_frac + resizing_panel: window-divider geometry, not text */
     ReplCameraState             camera;        /* viewport pose; mouse handlers route to scene/viewport controller */
@@ -375,9 +375,9 @@ typedef struct { /* variable-panel subsystem */
 } VariablePanelSystem;
 
 typedef struct { /* replay subsystem (already exists as ReplReplayRuntimeState
-                  * + repl_replay.c — promoted to first-class peer; the
+                  * + repl_replay.c - promoted to first-class peer; the
                   * field on ReplState above stays during transition) */
-    /* mode, pc, speed, fade batches, etc. — see repl_replay.h */
+    /* mode, pc, speed, fade batches, etc. - see repl_replay.h */
 } ReplaySystem;
 ```
 
@@ -391,7 +391,7 @@ code-editing session is the modifiable instance backed by
 *read-only* session whose content provider returns the help text and
 whose commit path is empty. That collapses today's `ui_help_overlay.c`
 + `ReplHelpState.scroll` / `tab_idx` into per-session editor state.
-The `ReplHelpState.visible` flag stays on `UiState` as a chrome bit —
+The `ReplHelpState.visible` flag stays on `UiState` as a chrome bit -
 it's "is the help overlay shown?", not "what page is it on?".
 
 ### Autocomplete completion-provider seam
@@ -429,7 +429,7 @@ editor commit path (the only thing that crosses into REPL):
   if (repl_compile(text, ctx, &change, err, sizeof(err)) != REPL_COMPILE_OK) {
       editor_record_diagnostic(err);    /* editor stores rejected state */
       /* imrepl_ctrl forwards the diagnostic to ui_state_status_set
-       * — REPL doesn't, editor doesn't. */
+       * - REPL doesn't, editor doesn't. */
       /* nothing applied; no undo entry */
   } else {
       editor_undo_begin_transaction();      /* captures BEFORE snapshot */
@@ -449,7 +449,7 @@ frame render
 Most input flows do **not** cross subsystem boundaries. Mouse-wheel
 over code text → editor scrolls. Ctrl+G → editor opens search. Tab →
 editor accepts autocomplete. None of these need a structured
-"action" — they're function calls into editor APIs once `imrepl_ctrl`
+"action" - they're function calls into editor APIs once `imrepl_ctrl`
 has dispatched on `UiHit.kind`.
 
 ### Settled questions: presentation / camera placement
@@ -631,7 +631,7 @@ typedef struct {
 
 `imrepl_ctrl` wires this service table at startup. The editor calls
 the services when it needs source semantics. Most editor operations
-do not touch the services at all — they're editor-local
+do not touch the services at all - they're editor-local
 (scroll, cursor, search, autocomplete navigation, clipboard buffer).
 
 This pattern lets the editor be unit-tested with a stub
@@ -684,7 +684,7 @@ ReplCompileResult repl_compile(const char *line,
  * call. */
 void repl_apply_compiled_change(const ReplCompiledChange *change);
 
-/* Lower-level primitives — used by repl_apply_compiled_change and by
+/* Lower-level primitives - used by repl_apply_compiled_change and by
  * import / load paths that already hold parsed cmds. */
 void repl_apply_insert(int pos, const GLCmd *cmd);
 void repl_apply_replace(int pos, const GLCmd *cmd);
@@ -721,7 +721,7 @@ editor_undo_commit_transaction();        /* atomic boundary */
 > direction does **not** introduce a giant `UiAction` enum. Most of
 > the entries below are editor-internal (search, autocomplete,
 > clipboard, undo, cursor, selection) and don't cross any subsystem
-> boundary — they should be plain function calls into editor APIs
+> boundary - they should be plain function calls into editor APIs
 > once `imrepl_ctrl` has dispatched on a neutral `UiHit`.
 >
 > The remaining entries fall into three small buckets that *do* cross
@@ -729,15 +729,15 @@ editor_undo_commit_transaction();        /* atomic boundary */
 >
 > ```text
 > Editor → REPL: repl_compile(text, ctx, &change, err)
->                — for commit / reformat / paste of source / load.
+>                - for commit / reformat / paste of source / load.
 >
 > imrepl → REPL-side: save, load_file, load_example
->                — direct function calls; no enum needed.
+>                - direct function calls; no enum needed.
 >
 > imrepl → peer subsystem: replay_toggle, replay_step,
 >                          variable_panel_drag_*,
 >                          camera_orbit / pan / zoom
->                — direct function calls into the peer; no enum.
+>                - direct function calls into the peer; no enum.
 > ```
 >
 > `UiHit` (a passive struct) replaces the dispatch enum. UI reports
@@ -754,7 +754,7 @@ typedef enum {
     UI_ACTION_MOVE_CURSOR, UI_ACTION_NAVIGATE_LINE,
     UI_ACTION_COMMIT_LINE, UI_ACTION_TOGGLE_INSERT_MODE,
 
-    /* REPL transactional change-set actions — same dispatch path as
+    /* REPL transactional change-set actions - same dispatch path as
      * COMMIT_LINE: controller calls repl_compile and applies the
      * resulting ReplCompiledChange in one editor_undo transaction.
      * Reformat is *not* a UI-only action; it rewrites editor text and
@@ -814,7 +814,7 @@ typedef struct { UiAction items[MAX_UI_ACTIONS]; int count; } UiActionList;
 
 /* Input-handler signatures uniformly take a snapshot. The handler
  * does not reach into live state for hit-test geometry, document
- * counts, scroll position, virtual-line layout, or anything else —
+ * counts, scroll position, virtual-line layout, or anything else -
  * everything it needs is on the snapshot or comes in via the event.
  * This is what prevents Phase 4 from preserving the old live-state
  * coupling under a new action-list wrapper. */
@@ -859,7 +859,7 @@ The phases below group related commits. Each phase ends with the
 audit / ratchet / test signal that drives toward zero or hard-guards
 the boundary.
 
-### Pre-existing scaffolding (Phase 0–1) — landed
+### Pre-existing scaffolding (Phase 0–1) - landed
 
 | # | Commit | Status |
 |---|---|---|
@@ -875,7 +875,7 @@ the boundary.
 | 10 | refactor: rename editor-input convenience getters to editor_* namespace | ✅ landed (2026-05-02) |
 | 11 | refactor: code_panel slice split (scroll → EditorState) + ownership ratchet for transitional couplings | ✅ landed (2026-05-02) |
 
-### Phase A — Finish state placement (ratchet to zero forwarders)
+### Phase A - Finish state placement (ratchet to zero forwarders)
 
 | # | Commit | Status |
 |---|---|---|
@@ -884,10 +884,10 @@ the boundary.
 | 14 | refactor: drop transitional repl_state forwarders for UI/editor slices | ✅ landed (354e39f, 2026-05-03) |
 
 Phase A signal: `ui_forwarder_count` ratchet drops to 3 (the three
-remaining matches are non-forwarder `ui_state_*` calls — documented
+remaining matches are non-forwarder `ui_state_*` calls - documented
 in the baseline). Every UI/editor slice is on its true owner.
 
-### Phase B — Editor-buffer single writer + view parameters
+### Phase B - Editor-buffer single writer + view parameters
 
 | # | Commit | Status |
 |---|---|---|
@@ -900,12 +900,12 @@ Phase B signal: `repl_command_store_*_with_line[s]` calls = 0 outside
 tests; `editor_buffer_line` reads in non-`editor_*` files = 0 except
 explicit `EditorBufferView` consumers.
 
-### Phase C — `repl_compile` / `repl_apply` split
+### Phase C - `repl_compile` / `repl_apply` split
 
 The smell this phase attacks: today's commit code mixes parse +
 validation + editor-text mutation + command-store mutation + status
 mutation + undo into one tangle. Phase C separates those concerns.
-The naming convention is load-bearing — get it wrong here and a
+The naming convention is load-bearing - get it wrong here and a
 later commit will quietly merge text mutation back into the REPL
 side:
 
@@ -930,14 +930,14 @@ undo transaction.
 | # | Commit | Status |
 |---|---|---|
 | 19 | refactor: introduce `ReplCompiledChange` and pure `repl_compile` validators (parse + source-structure + var-decl validation; produces source-command changes, **not** flat program); migrate `try_commit_float_decl` and `try_assign_variable` first | ✅ landed (57763d0, 2026-05-03) |
-| 20 | refactor: add `repl_apply_compiled_change` (writes ReplState only) + `editor_buffer_apply_compiled_change` (writes EditorState only); route float-decl + var-assign through them. Block-structured handlers (for-loop / func-def / if-block / close-brace) deferred to Phase D commits 26b–26e — they need cursor/mode fields on ReplCompiledChange that don't exist yet | ✅ landed (f191886, 2026-05-03) |
+| 20 | refactor: add `repl_apply_compiled_change` (writes ReplState only) + `editor_buffer_apply_compiled_change` (writes EditorState only); route float-decl + var-assign through them. Block-structured handlers (for-loop / func-def / if-block / close-brace) deferred to Phase D commits 26b–26e - they need cursor/mode fields on ReplCompiledChange that don't exist yet | ✅ landed (f191886, 2026-05-03) |
 | 21 | refactor: introduce `editor_commit_apply_compiled_change` orchestration helper wrapping the three apply halves in lockstep | ✅ landed (34b3d57, 2026-05-03) |
 | 22 | test: commit-transaction invariants (failed validation leaves buffer + store + status + undo untouched; success updates both atomically; reformat keeps buffer + store aligned) | ✅ landed (213b286, 2026-05-03) |
 | 23 | refactor: preflight cmd-store capacity/ranges before any mutation (`repl_apply_can_apply_compiled_change`); editor_commit_apply_compiled_change rejects atomically on overflow with all three halves untouched | ✅ landed (1234c07, 2026-05-03) |
 
 Phase C signals:
 
-- `repl_compile()` is pure — no editor mutation, no command-store
+- `repl_compile()` is pure - no editor mutation, no command-store
   mutation, no status mutation, no undo entry. Compile produces a
   source-command change description; flattening still happens later.
 - `repl_apply_compiled_change()` writes only `ReplState` command
@@ -953,7 +953,7 @@ Phase C signals:
   controller / status layer renders the diagnostic after the
   transaction returns.
 
-### Phase D — Carve `editor_input.c` / `editor_commit.c`
+### Phase D - Carve `editor_input.c` / `editor_commit.c`
 
 The original 4-commit plan compressed too much into commits 24–25.
 Revised here based on review: split the structured-block migration
@@ -961,7 +961,7 @@ across multiple commits, keep service-table ownership tight, and
 defer `UiHit` dispatch wiring to Phase E.
 
 The naming convention for the service table is load-bearing in the
-same way the apply-name discipline is in Phase C — the services
+same way the apply-name discipline is in Phase C - the services
 provide REPL semantics, not generic app callbacks:
 
 ```text
@@ -987,7 +987,7 @@ typedef struct {
 ```
 
 The editor half of the apply (`editor_buffer_apply_compiled_change`)
-stays inside the editor — services do not carry an `apply` that
+stays inside the editor - services do not carry an `apply` that
 mutates editor text. That keeps the service surface to "REPL
 semantics in" and prevents the table from drifting into a generic
 backdoor.
@@ -1008,16 +1008,16 @@ typedef struct {
 ```
 
 Undo capture inside the orchestration sits AFTER successful compile
-+ preflight but BEFORE the first mutation — it is a transaction
++ preflight but BEFORE the first mutation - it is a transaction
 boundary tied to the act of mutating, not to "successful commit"
 which would risk capturing post-state.
 
 | # | Commit | Status |
 |---|---|---|
-| 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context — not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | done |
-| 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure — diagnostic flows through `EditorCommitResult.diagnostic` | done |
+| 24 | refactor: introduce `EditorServices` table (compile / apply_repl_change / apply_predef_ops / context - not a generic callback bag); `imrepl_ctrl` wires services. Behaviour-preserving indirection only | done |
+| 25 | refactor: carve `editor_commit.c` shell with `editor_commit_current_input` returning `EditorCommitResult` (explicit `*_valid` flags, not empty-string sentinels). Undo capture moves into the orchestration AFTER successful compile + preflight, BEFORE first mutation. Migrated handlers (float-decl, var-assign) stop calling `set_status` on compile failure - diagnostic flows through `EditorCommitResult.diagnostic` | done |
 | 26a | refactor: carve `editor_input.c` shell with `editor_handle_key/mouse/scroll`. Move keyboard / mouse / scroll handlers that don't need structured-commit migration. Route `;`-key / Enter / `feed_line` through `editor_commit_current_input` for the already-migrated simple commit paths. Structured `try_commit_*` stay in place. `repl_editor.c` becomes a transitional shim | done |
-| 26b | refactor: introduce `EditorCommitPostEffects` + `EditorCommitPlan` (editor-side, NOT on `ReplCompiledChange`); migrate `try_commit_close_brace` first — simplest cursor / mode model — to prove the shape | done |
+| 26b | refactor: introduce `EditorCommitPostEffects` + `EditorCommitPlan` (editor-side, NOT on `ReplCompiledChange`); migrate `try_commit_close_brace` first - simplest cursor / mode model - to prove the shape | done |
 | 26c | refactor: migrate `try_commit_if_block` to compile/apply through `EditorCommitPlan` | done |
 | 26d | refactor: migrate `try_commit_func_def` overwrite-header branch to compile/apply through `EditorCommitPlan` | done |
 | 26e | refactor: migrate `try_commit_for_loop` to compile/apply (one-liner-body branch + inline body parse) | done |
@@ -1028,7 +1028,7 @@ Phase D signals:
 
 - `EditorServices` is the only seam through which the editor calls
   REPL semantics. Editor code stops including `repl_compile.h` /
-  `repl_apply.h` directly — only `editor_commit.c` and the service
+  `repl_apply.h` directly - only `editor_commit.c` and the service
   registration site (in `imrepl_ctrl`) do.
 - `editor_commit_current_input` is the single transaction boundary
   for editor-text-mutating commits. Undo snapshot, preflight,
@@ -1051,7 +1051,7 @@ Phase D signals:
   wrappers. Real `UiHit.kind` dispatch is Phase E's job; the
   router does not stub a placeholder enum.
 
-### Phase E — UI returns `UiHit` instead of mutating
+### Phase E - UI returns `UiHit` instead of mutating
 
 | # | Commit | Status |
 |---|---|---|
@@ -1060,25 +1060,25 @@ Phase D signals:
 | 30 | checks: introduce `check-ui-returns-hits-only` hard guard with ratchet-down baseline (8 residual mutator calls scheduled for Phase F+ cleanup) | done |
 
 Phase E signal: `check-ui-returns-hits-only` is enforced; UI input
-handlers compute hits and return — they don't call mutators.
+handlers compute hits and return - they don't call mutators.
 
-### Phase F — Peer subsystems carved out
+### Phase F - Peer subsystems carved out
 
 | # | Commit | Status |
 |---|---|---|
 | 31 | refactor: extract `variable_panel` peer subsystem shell (visibility flag + drag-state bytes moved off EditorState/UiState into VariablePanelState; legacy accessors forward) | done |
 | 32 | refactor: route variable-panel hits to `variable_panel_handle_*` (editor / ui_variable_panel / imrepl_ctrl / repl_config / repl_var_drag use peer accessors; legacy editor_state_variable_drag / ui_state_variable_panel kept as forwarders) | done |
-| 32b | checks: ratchet legacy variable_panel forwarder API uses (`editor_state_variable_drag*`, `ui_state_variable_panel*`, `repl_var_drag_*`) — baseline 87 (test fixtures only) | done |
+| 32b | checks: ratchet legacy variable_panel forwarder API uses (`editor_state_variable_drag*`, `ui_state_variable_panel*`, `repl_var_drag_*`) - baseline 87 (test fixtures only) | done |
 | 33 | refactor: promote `replay` to peer subsystem shell (move `ReplReplayRuntimeState` off `ReplState` into replay_state.c; legacy repl_state_replay* accessors forward) | done |
 | 34 | refactor: route replay hits to `replay_handle_*`; production callers read via `replay_state_view` / `replay_active` (UI renders snapshot only, imrepl_ctrl routes only) | done |
-| 34b | checks: ratchet legacy `repl_state_replay*` forwarder API uses — baseline 37 (bench + test fixtures only) | done |
+| 34b | checks: ratchet legacy `repl_state_replay*` forwarder API uses - baseline 37 (bench + test fixtures only) | done |
 
 Phase F signal: variable panel and replay each own their state;
 neither lives on EditorState or UiState. Hits route through
 `variable_panel_handle_*` / `replay_handle_*` instead of through
 the editor or ui state slices.
 
-### Phase G — Read-only document seam + completion provider
+### Phase G - Read-only document seam + completion provider
 
 | # | Commit | Status |
 |---|---|---|
@@ -1091,7 +1091,7 @@ documents and read-only documents through the same scroll/search/
 cursor model. Completion semantics live behind a registered
 provider, not a global call.
 
-### Phase H — Renames
+### Phase H - Renames
 
 | # | Commit | Status |
 |---|---|---|
@@ -1104,26 +1104,26 @@ editor-session state; no `editor_*` files own replay state.
 **Deferred from Phase H** (each blocked on a prerequisite, not in
 the rename list):
 
-- `repl_camera_controls.c/h` — final namespace depends on the
+- `repl_camera_controls.c/h` - final namespace depends on the
   eventual `scene_*` vs `viewport_*` split (whichever ends up
   owning the orbit/pan/zoom state). Forcing a rename now risks
   bouncing it twice.
-- `repl_actions.c/h` — controller / app-action glue (menu activation,
+- `repl_actions.c/h` - controller / app-action glue (menu activation,
   key shortcuts, config table) rather than REPL grammar. Right
   destination (`controller_actions` / `app_actions` / etc.) depends
   on how `imrepl_ctrl` itself gets re-namespaced when the app shell
   carves out from REPL.
-- `repl_commit.c/h` — its **existence** is transitional. The
+- `repl_commit.c/h` - its **existence** is transitional. The
   architectural target is: REPL parses and returns a structured
   result; editor commits. Renaming would calcify a structure
   Phase H.5 dissolves.
 
-### Phase H.5 — Dissolve repl_commit into editor_commit
+### Phase H.5 - Dissolve repl_commit into editor_commit
 
 The corrected M/V/C+compiler+router contract has the editor attempt
 a commit and the REPL act as a pure parser/validator. Today
 `repl_commit.c` still hosts `try_commit_*` dispatchers as thin
-wrappers around `editor_compile_*` — they live on the REPL side and
+wrappers around `editor_compile_*` - they live on the REPL side and
 pretend the REPL owns commit dispatch. Phase H.5 inverts this so the
 editor truly drives, and the REPL only parses + reports errors.
 
@@ -1138,7 +1138,7 @@ editor is the sole entry point for committing input; REPL parse
 errors flow back through return values, not side effects on
 `set_status`.
 
-### Phase I — Close the parser fallback + hard guards + docs
+### Phase I - Close the parser fallback + hard guards + docs
 
 Phase H.5 commit 40 introduced the `ReplParseContext.err_buf` seam
 but kept a `set_status()` fallback inside `parser_emit_error_v` so
@@ -1147,17 +1147,17 @@ runs the boundary-audit sweep and the docs refresh.
 
 | # | Commit | Status |
 |---|---|---|
-| 42a | refactor: migrate the 6 remaining `repl_parser_parse_command_ctx` callers (`repl_core.c`, `repl_flatten.c`, `repl_replay_annotations.c`, `ui_color_picker.c`, `repl_export.c`, `repl_editor.c`) to provide an `err_buf` and decide explicitly — surface (commit chain, color picker), log to stderr (export bootstrap), or document deliberate drop (flatten / replay annotations / Ctrl+/ uncomment) | done |
+| 42a | refactor: migrate the 6 remaining `repl_parser_parse_command_ctx` callers (`repl_core.c`, `repl_flatten.c`, `repl_replay_annotations.c`, `ui_color_picker.c`, `repl_export.c`, `repl_editor.c`) to provide an `err_buf` and decide explicitly - surface (commit chain, color picker), log to stderr (export bootstrap), or document deliberate drop (flatten / replay annotations / Ctrl+/ uncomment) | done |
 | 42b | refactor: `parser_emit_error_v` writes to `ctx->err_buf` or no-ops; the legacy no-ctx wrappers (`repl_parser_parse_command` / `_with_vars`) surface via `set_status` themselves so the test harness still observes status, but `parse_command` and its internal helpers stop calling `set_status` directly | done |
 | 42c | checks: `check-no-set-status-in-repl-parser` hard guard with baseline 1 (the surviving call site is the legacy no-ctx wrappers' `parser_legacy_surface_to_status` bridge); ratchets to 0 once the test harness migrates off the no-ctx entries | done |
-| 42 | checks: broader hard-guard sweep — add `check-no-set-status-in-compile-apply` symmetric to the parser guard so repl_compile/apply purity is locked in; tighten `state-c-shrinking` baseline from 1315 → 600 (current line count is 586 with 14-line headroom); refresh stale parser doc comments to reflect the err_buf seam | done |
+| 42 | checks: broader hard-guard sweep - add `check-no-set-status-in-compile-apply` symmetric to the parser guard so repl_compile/apply purity is locked in; tighten `state-c-shrinking` baseline from 1315 → 600 (current line count is 586 with 14-line headroom); refresh stale parser doc comments to reflect the err_buf seam | done |
 | 43 | docs: refresh MODULES (drop legacy-name annotations, replace stale "Current Status" section with the post-Phase-I shape), CLAUDE (add boundary-checks summary), callgraph groups (rename + delete repl_commit), and mark `editor-ownership-gap-cleanup`, `editor-text-model-controller`, `editor-owns-text-completion(-revised)` plans as landed | done |
 
 Phase I signal: the parser never calls `set_status`; every boundary
 the plan articulates is enforced by a hard guard; the North Star
 MODULES.md and the build checks describe the same shape.
 
-### Phase J — Close the input boundary
+### Phase J - Close the input boundary
 
 The P1 review on 2026-05-03 (above, *P1 Review Follow-Up: Finish The
 Input Boundary*) flagged two open completion blockers. Phase J went
@@ -1168,23 +1168,23 @@ and retired the legacy forwarder bodies they tracked.
 |---|---|---|
 | 44–48 | refactor (J1): replace `editor_input.c` shims with real editor handlers; carve non-editor routing (replay / audio / config / save / camera / variable panel / scene press / scroll-wheel zoom) into `imrepl_ctrl_router_*` helpers; delete `repl_editor.{c,h}`; inline timer dispatch into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`; add `check-no-repl-editor-input-shim` hard guard | done (2026-05-03) |
 | 49 | fix (J1 follow-up): `imrepl_ctrl_mouse` UP path releases the camera button; motion path no longer clobbers the camera pointer before the camera router computes its delta | done (2026-05-03) |
-| J2.1 | refactor: payload-complete `ui_panels_hit_test` — emit `UI_HIT_PANEL_DIVIDER`, `UI_HIT_INLINE_COLOR_SWATCH`, `UI_HIT_CODE_INSERT_LINE`, `UI_HIT_MENU_BUTTON`; populate `UI_HIT_CODE_TEXT.char_idx` so the controller no longer reimplements wrap/segment math; document per-kind field semantics in `ui_hit.h` | done (2026-05-03) |
+| J2.1 | refactor: payload-complete `ui_panels_hit_test` - emit `UI_HIT_PANEL_DIVIDER`, `UI_HIT_INLINE_COLOR_SWATCH`, `UI_HIT_CODE_INSERT_LINE`, `UI_HIT_MENU_BUTTON`; populate `UI_HIT_CODE_TEXT.char_idx` so the controller no longer reimplements wrap/segment math; document per-kind field semantics in `ui_hit.h` | done (2026-05-03) |
 | J2.2 | refactor: route press / drag / release / menu activation / pin-button / inline-color-swatch / floating-picker control / panel-divider through `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` + `_router_handle_code_panel_drag(x, y)` + `_router_reset_code_panel_drag()`; delete `ui_panels_handle_code_panel_press / _click / _drag / _release / _scene_press / _motion / _mouse_release / _escape`; move drag-anchor state into `imrepl_ctrl.c`; lower `check-ui-returns-hits-only` baseline 8 → 5; migrate impacted tests to call the controller helpers directly | done (2026-05-03) |
 | J2.3 | checks: add `check-ui-panels-no-mutators` hard guard (no allowlist) and wire it into `make check-state-ownership`; inline `ui_panels_close_menus` / `ui_panels_open_config` wrappers at their callers and delete the wrappers | done (2026-05-03) |
-| J2 P2 fixes | fix: 4 P2 regressions in code-panel hit-test + drag — dismiss-click consumed by dropdown close, pin-before-menu hit ordering in narrow panels, insert-row drag preserves `edit_line` target, off-panel drag clamps to nearest visible row | done (2026-05-04) |
+| J2 P2 fixes | fix: 4 P2 regressions in code-panel hit-test + drag - dismiss-click consumed by dropdown close, pin-before-menu hit ordering in narrow panels, insert-row drag preserves `edit_line` target, off-panel drag clamps to nearest visible row | done (2026-05-04) |
 | J3 | refactor (`ui_color_picker`): route source-line writeback through `editor_commit_apply_external_change(REPL_COMPILED_REPLACE_ONE)`; capture undo on the first slider edit per session via the picker's `g_cp_undo_captured` flag; baseline 5 → 1 | done (2026-05-04) |
 | J3.1 | rename: `ui_replay_hud.{c,h}` → `replay_ui_hud.{c,h}` introducing the **feature-UI prefix discipline**. Generic `ui_*` modules stay feature-agnostic; feature-owned UI lives under the feature prefix (`replay_ui_*`). Add `scripts/check-replay-ui-isolation.sh` lighter guard; drop `ui_replay_hud_render` from the `ui-renderers-signature` and `renderer-purity` allowlists | done (2026-05-04) |
-| J4 | refactor (`UiCodePanelOutput`): publish the editor cursor pixel through a per-frame render-output struct that `imrepl_ctrl` actualizes; pass coords directly to `ui_autocomplete_panel_render` (no snapshot staleness). Delete the `cursor_px / cursor_py` fields from `ReplCodePanelRuntimeState`, the `repl_action_set_cursor_pixel` setter, and the `check-cursor-px-encapsulated` migration guard. UI is now mutator-free — `check-ui-returns-hits-only` reaches 0/0 and `check-output-actualization` actively scans `UiCodePanelOutput` | done (2026-05-04) |
-| J5 | refactor (parser + replay): retire `repl_parser_parse_command` / `_with_vars` and the `parser_legacy_surface_to_status` bridge — the parser core is now `set_status`-free (`check-no-set-status-in-repl-parser` 1 → 0). Bulk-migrate every `bench/` + `tests/` site from `repl_state_replay()` / `_mut()` to `replay_state_view()` / `replay_state_mut()` (`check-replay-forwarders` 37 → 0) | done (2026-05-04) |
-| J6 | refactor (variable_panel): bulk-migrate every fixture site from `editor_state_variable_drag*` / `ui_state_variable_panel*` / `repl_var_drag_*` to the canonical peer accessors (`variable_panel_drag` / `_view` / `_handle_drag_*`) — `check-variable-panel-forwarders` 87 → 0. The picker undo session-flag is now the sole capture point: opening a swatch and closing without dragging leaves the undo ring untouched | done (2026-05-04) |
+| J4 | refactor (`UiCodePanelOutput`): publish the editor cursor pixel through a per-frame render-output struct that `imrepl_ctrl` actualizes; pass coords directly to `ui_autocomplete_panel_render` (no snapshot staleness). Delete the `cursor_px / cursor_py` fields from `ReplCodePanelRuntimeState`, the `repl_action_set_cursor_pixel` setter, and the `check-cursor-px-encapsulated` migration guard. UI is now mutator-free - `check-ui-returns-hits-only` reaches 0/0 and `check-output-actualization` actively scans `UiCodePanelOutput` | done (2026-05-04) |
+| J5 | refactor (parser + replay): retire `repl_parser_parse_command` / `_with_vars` and the `parser_legacy_surface_to_status` bridge - the parser core is now `set_status`-free (`check-no-set-status-in-repl-parser` 1 → 0). Bulk-migrate every `bench/` + `tests/` site from `repl_state_replay()` / `_mut()` to `replay_state_view()` / `replay_state_mut()` (`check-replay-forwarders` 37 → 0) | done (2026-05-04) |
+| J6 | refactor (variable_panel): bulk-migrate every fixture site from `editor_state_variable_drag*` / `ui_state_variable_panel*` / `repl_var_drag_*` to the canonical peer accessors (`variable_panel_drag` / `_view` / `_handle_drag_*`) - `check-variable-panel-forwarders` 87 → 0. The picker undo session-flag is now the sole capture point: opening a swatch and closing without dragging leaves the undo ring untouched | done (2026-05-04) |
 | J7 | refactor: delete the now-dead legacy forwarder bodies in `repl_state.c` (`repl_state_replay` / `_mut` / `_reset`), `editor_state.c` (`editor_state_variable_drag` / `_mut` / `_reset`), `ui_state.c` (`ui_state_variable_panel` / `_mut`), and rename the implementations in `variable_panel_drag.c` to their canonical `variable_panel_drag_*` / `variable_panel_handle_drag_*` names. Drop the corresponding declarations from `repl_state_owners.h`, `repl_state_views.h`, `editor_state.h`, `ui_state.h`, `variable_panel_drag.h` | done (2026-05-04) |
-| J8 | feat: macOS Cmd-key support — `editor_input_normalize_super_to_ctrl(key)` translates Cmd+letter at the controller entry (`imrepl_ctrl_keyboard`) so every cfg-shortcut / replay / save / quit / debug-dump dispatcher reaches its `KEY_CTRL_*` form. The translation is a no-op on platforms where `GLUT_ACTIVE_SUPER` is undefined (mainline freeglut). Add `editor_input_enable_glut_modifier_reads()` so test fixtures that don't install a modifier seam see "no modifiers held" instead of aborting freeglut for being called pre-init | done (2026-05-05) |
+| J8 | feat: macOS Cmd-key support - `editor_input_normalize_super_to_ctrl(key)` translates Cmd+letter at the controller entry (`imrepl_ctrl_keyboard`) so every cfg-shortcut / replay / save / quit / debug-dump dispatcher reaches its `KEY_CTRL_*` form. The translation is a no-op on platforms where `GLUT_ACTIVE_SUPER` is undefined (mainline freeglut). Add `editor_input_enable_glut_modifier_reads()` so test fixtures that don't install a modifier seam see "no modifiers held" instead of aborting freeglut for being called pre-init | done (2026-05-05) |
 | J9 | refactor (highlight): drive code-panel syntax colors from a per-`CmdType` `CmdSyntaxCategory` field on `ReplCommandTypeSpec`. Replace the 50-line hand-curated switch in `ui_panels.c::color_for_type` with a 16-entry category→RGB palette + 4-line lookup. Fixes `CMD_LINE_WIDTH` falling through to the default gray (now `CMD_CAT_STATE`, lavender like `glPointSize`); future commands pick up the right highlight automatically | done (2026-05-05) |
 
 Phase J signal: every active migration ratchet sits at **0/0**
 (`check-ui-returns-hits-only`, `check-no-set-status-in-repl-parser`,
 `check-replay-forwarders`, `check-variable-panel-forwarders`).
-The legacy forwarder bodies that fed those ratchets are deleted —
+The legacy forwarder bodies that fed those ratchets are deleted -
 the canonical peer accessors are the only entry points.
 `editor_input.c` owns text-document input; `imrepl_ctrl.c` owns
 cross-subsystem routing; `ui_panels.c` is hit-test only;
@@ -1207,14 +1207,14 @@ which run alongside; `check-public-api-usage` is informational).
 - **Renames last.** All file renames batch in Phase H so review noise
   (rename diffs) stays out of behavior commits.
 - **Out of scope:** `sample.c → imrepl.c` rename, `repl_core.c`
-  dissolution, syntax-theme work — separate tracks per the doc's
+  dissolution, syntax-theme work - separate tracks per the doc's
   *Non-goals* section.
 
 ### Phase notes (revised commit destinations)
 
 - **Phase A (commits 12–14, landed).** The original plan put cursor
   blink fields on `UiState`. The corrected contract puts them on
-  `EditorState` because the editor is the cursor's controller —
+  `EditorState` because the editor is the cursor's controller -
   Phase A only moves the render-chrome bits (panel_frac,
   resizing_panel, cursor_px / cursor_py, plus the transitional
   `cursor_visible` / `blink_tick` fields that the editor will reclaim
@@ -1235,7 +1235,7 @@ which run alongside; `check-public-api-usage` is informational).
   commits 26a–26e (close_brace → if_block → func_def → for_loop)
   and tightens the service-table surface so it carries REPL
   semantics only (`compile`, `apply_repl_change`,
-  `apply_predef_ops`, `context`) — the editor half of the apply
+  `apply_predef_ops`, `context`) - the editor half of the apply
   stays inside the editor. The `EditorCommitResult` uses explicit
   `*_valid` flags rather than empty-string sentinels.
 - **Editor side-effects do NOT live on `ReplCompiledChange`.**
@@ -1267,12 +1267,12 @@ which run alongside; `check-public-api-usage` is informational).
   ```
 
   The apply path becomes:
-  - `editor_commit_apply_plan(plan)` — preflights `plan->change`,
+  - `editor_commit_apply_plan(plan)` - preflights `plan->change`,
     captures undo, applies the REPL change halves, then applies
     `plan->effects` (cursor / mode / input / load_line / func-decl-
     resume).
   - Pure-REPL handlers (float-decl, var-assign) keep returning
-    `ReplCompiledChange` — they have no editor post-effects beyond
+    `ReplCompiledChange` - they have no editor post-effects beyond
     "clear input + reset cursor" which the existing
     `editor_commit_current_input` covers.
   - Structured-block handlers (close_brace, if_block, func_def,
@@ -1304,7 +1304,7 @@ which run alongside; `check-public-api-usage` is informational).
   plan replaces the enum with a passive `UiHit` struct that UI
   returns; `imrepl_ctrl` routes on `UiHit.kind`. Phase D commit 27
   promotes `check-imrepl-not-editor-mirror` as a hard guard but
-  does NOT stub a `UiHit` enum — Phase E introduces the real type
+  does NOT stub a `UiHit` enum - Phase E introduces the real type
   and wires the dispatch. Variable panel and replay become peer
   subsystems (Phase F), not editor slices.
 - **Phase G.** Adds the read-only document seam: help becomes an
@@ -1314,10 +1314,10 @@ which run alongside; `check-public-api-usage` is informational).
   seam so the editor stops reaching into `repl_eval` for variable
   names.
 
-## Phase 0 — Audits Before Moving Code
+## Phase 0 - Audits Before Moving Code
 
 This phase lands before structural changes so every later phase has a
-measurable exit criterion. The first goal is *not* zero — it is making
+measurable exit criterion. The first goal is *not* zero - it is making
 drift visible.
 
 ### 0.1 Add `scripts/audit_editor_ownership.sh`
@@ -1402,7 +1402,7 @@ Use a searchable annotation so the audit can count knowns vs. unknowns:
 
 ---
 
-## Phase 1 — Carve `EditorState` and `UiState` out of `ReplRuntimeState`
+## Phase 1 - Carve `EditorState` and `UiState` out of `ReplRuntimeState`
 
 Mechanical storage movement. No behavior change. Lands as a series of
 slice-by-slice migrations rather than one giant rename, with
@@ -1454,12 +1454,12 @@ have been migrated.
 
 Each migration is a separate commit with passing tests at the end:
 
-1. `editor_buffer` — most central; everything else builds on it.
+1. `editor_buffer` - most central; everything else builds on it.
    ✅ **Landed (commit 4).** Storage moved from `g_repl_state.editor_buffer`
    to `g_editor_state.buffer`. New API: `editor_state_buffer / _mut` for
    the whole struct, `editor_buffer_line / set_line / count / set_count`
    for slice-level access. The legacy `repl_state_editor_buffer*`
-   accessors are deleted entirely (Path A — no transitional forwarder
+   accessors are deleted entirely (Path A - no transitional forwarder
    cruft); 29 production files and 11 test files were migrated as one
    atomic commit. The `ReplEditorBuffer` typedef moved from
    `repl_state_views.h` to `editor_state.h` alongside its owning struct.
@@ -1518,7 +1518,7 @@ Each migration is a separate commit with passing tests at the end:
    Audit delta: section-1 1307 → 1263 (−44); `repl_state.c` shrank
    from 872 → 799 lines.
 5. transformer / highlight / virtual-line snapshot lists.
-   ✅ **Landed (commit 9 — bundled with variable_drag).** Storage moves
+   ✅ **Landed (commit 9 - bundled with variable_drag).** Storage moves
    for four slices: `EditorTransformerList`, `EditorHighlightList`,
    `EditorVirtualLineList`, and `ReplVariableDragState` all migrated
    from `ReplRuntimeState` to `EditorState`. New canonical names:
@@ -1562,7 +1562,7 @@ Each migration is a separate commit with passing tests at the end:
 7. `status` / `help` / `profile_panel` / `variable_panel` →
    `UiState`.
 8. `viewport` / `pointer` → `UiState`.
-   ✅ **Landed (commit 8 — slices 7+8 batched).** `ReplStatusState`,
+   ✅ **Landed (commit 8 - slices 7+8 batched).** `ReplStatusState`,
    `ReplHelpState`, `ReplVariablePanelState`, `ReplProfilePanelState`,
    `ReplViewportState`, `ReplPointerState` storage moved from
    `ReplRuntimeState` to `UiState`. New canonical API:
@@ -1587,7 +1587,7 @@ Each migration is a separate commit with passing tests at the end:
    (they're shared with `ui_snapshot.h`); `ui_state.h` includes
    `repl_state_views.h` to embed them as fields. That requires
    adding `ui_state.h` to the
-   `scripts/allowlists/facade-includes-in-views.txt` allowlist —
+   `scripts/allowlists/facade-includes-in-views.txt` allowlist -
    cleared away in Phase 5 when typedefs migrate to their owning
    state header.
 
@@ -1599,7 +1599,7 @@ Each migration is a separate commit with passing tests at the end:
    `.viewport` blocks; defaults moved to
    `UI_STATE_INITIAL` in `ui_state.c`. `repl_debug.c`'s
    runtime-state-layout dump dropped six rows. Audit delta:
-   section-1 1263 → 1260 (−3 only — the forwarders preserve the
+   section-1 1263 → 1260 (−3 only - the forwarders preserve the
    matching name shape; the architectural prize is the storage
    move). `repl_state.c` 799 → 826 (+27 lines net: impls moved out,
    24 forwarders moved in). `ui_state.c` 24 → 133.
@@ -1640,7 +1640,7 @@ grep -E 'repl_state_(editor_|clipboard|selection|autocomplete|search|status|vari
 
 ---
 
-## Phase 2 — REPL stops touching editor text
+## Phase 2 - REPL stops touching editor text
 
 The most important boundary fix after state extraction.
 
@@ -1732,7 +1732,7 @@ grep -l '#include "editor_state.h"' repl_*.c | grep -v repl_state.c
 
 ---
 
-## Phase 3 — `repl_compile` is the validation gate
+## Phase 3 - `repl_compile` is the validation gate
 
 The editor proposes a text change; the REPL compiles it without
 mutation; the editor applies the result as a transaction.
@@ -1777,7 +1777,7 @@ ReplCompileResult repl_compile(const char *line,
                                ReplCompiledChange *out,
                                char *err_msg, int err_size);
 
-/* Apply side (REPL) — applies a compiled change atomically; never
+/* Apply side (REPL) - applies a compiled change atomically; never
  * mutates editor or UI state. */
 void repl_apply_compiled_change(const ReplCompiledChange *change);
 
@@ -1849,7 +1849,7 @@ grep -E 'try_commit_(float_decl|for_loop|func_def|if_block|close_brace|var)' \
 
 ---
 
-## Phase 4 — Route input to the owning subsystem (corrected)
+## Phase 4 - Route input to the owning subsystem (corrected)
 
 > Replaces the original Phase 4 `UiAction` migration. The corrected
 > goal: UI is a view + hit-test layer; `imrepl_ctrl` routes raw input
@@ -1933,7 +1933,7 @@ void scene_camera_handle_zoom(float dz);
 `imrepl_ctrl` dispatches to these based on `UiHit.kind` for mouse
 events and on focus / mode for keyboard events. Color picker (when it
 rewrites source text) is the one peer that crosses back into the
-editor commit path — it's the only true "action" that needs the
+editor commit path - it's the only true "action" that needs the
 compile-and-apply transaction.
 
 ### 4.4 Tighten UI guards
@@ -1941,11 +1941,11 @@ compile-and-apply transaction.
 After 4.1–4.3 land, two guards strengthen the contract:
 
 - `check-ui-returns-hits-only` (replaces the original
-  `check-ui-emits-actions-only`) — `ui_*.c` input helpers do not call
+  `check-ui-emits-actions-only`) - `ui_*.c` input helpers do not call
   `repl_action_*`, `repl_command_store_*`, `editor_*_mut*`,
   `repl_state_*_mut*`, or peer-subsystem mutators directly. They
   compute a `UiHit` and return it.
-- `check-imrepl-not-editor-mirror` (new) — `imrepl_ctrl` must not
+- `check-imrepl-not-editor-mirror` (new) - `imrepl_ctrl` must not
   accumulate one wrapper per editor operation
   (`imrepl_ctrl_editor_search_next`,
   `imrepl_ctrl_editor_scroll`, `imrepl_ctrl_editor_move_cursor`, …).
@@ -1988,7 +1988,7 @@ Manual smoke required (see Verification Matrix).
 
 ---
 
-## Phase 5 — Rename to match ownership
+## Phase 5 - Rename to match ownership
 
 Lands only after behavior + ownership have already moved. Renames are
 mechanical with redirect headers during transition.
@@ -2006,19 +2006,19 @@ collapses into a read-only editor session.
 | `repl_clipboard.c` | `editor_clipboard.c` | editor |
 | `repl_search.c` | `editor_search.c` | editor |
 | `repl_inline_rename.c` | `editor_inline_rename.c` | editor |
-| `repl_var_drag.c` | `variable_panel_drag.c` (peer subsystem, NOT editor — was the wrong destination in the prior plan) | variable-panel subsystem |
+| `repl_var_drag.c` | `variable_panel_drag.c` (peer subsystem, NOT editor - was the wrong destination in the prior plan) | variable-panel subsystem |
 | `repl_autocomplete.c` | `editor_autocomplete.c`; gains a `EditorCompletionProvider` registration seam so the editor stops reaching into `repl_eval` directly | editor |
 | `repl_layout.c` | `ui_layout.c` | UI |
 | `repl_code_panel_layout.c` | `ui_code_panel_layout.c` (pure wrap iterator) | UI |
 | `repl_code_panel_document.c` | `editor_code_panel_document.c` (owns scroll / hit-test, editor-state-shaped) | editor |
 | `repl_actions.c` | split: menu activation routing → `imrepl_actions.c`; editor actions → `editor_actions.c`; REPL-side stays in repl_* | mixed |
 | `repl_camera_controls.c` | `scene_camera_controls.c` (transform application reads `UiState.camera`); the mouse-input half is a `imrepl_ctrl` route into `scene_camera_handle_*` | scene/UI |
-| `ui_help_overlay.c` | `editor_help_session.c` — a read-only editor session whose content provider returns help text. `ReplHelpState.scroll` and `tab_idx` move out of `UiState` into per-session editor state. `ReplHelpState.visible` stays on `UiState` as a chrome bit. | editor |
+| `ui_help_overlay.c` | `editor_help_session.c` - a read-only editor session whose content provider returns help text. `ReplHelpState.scroll` and `tab_idx` move out of `UiState` into per-session editor state. `ReplHelpState.visible` stays on `UiState` as a chrome bit. | editor |
 
 ### 5.0 The `repl_editor.c` three-way split
 
 Today `repl_editor.c` mixes three responsibilities. Each goes to a
-different home — corrected for the M/V/C+router contract:
+different home - corrected for the M/V/C+router contract:
 
 ```text
 repl_editor.c (today)
@@ -2029,7 +2029,7 @@ repl_editor.c (today)
                                                       based on UiHit.kind / focus)
 
   editor-side text-document behavior                -> editor_input.c
-   (cursor moves, insert text, delete text,           (the text-document model/controller —
+   (cursor moves, insert text, delete text,           (the text-document model/controller -
     navigate line, toggle insert mode, scroll,        receives raw events from imrepl_ctrl
     search-key handling, autocomplete navigation,     once dispatched here, mutates
     clipboard cut/copy/paste keys, undo/redo keys)    EditorState directly. It IS the editor.
@@ -2046,7 +2046,7 @@ controller. It receives raw key/mouse events that `imrepl_ctrl` has
 routed to it (via `UiHit.kind == UI_HIT_CODE_TEXT` for mouse, or via
 focus state for keyboard). It mutates `EditorState`. It does **not**
 register GLUT callbacks; that's `imrepl_ctrl`'s job. It does **not**
-go through a `UiAction` dispatch table — the dispatch happens at the
+go through a `UiAction` dispatch table - the dispatch happens at the
 `imrepl_ctrl` boundary, not inside the editor.
 
 ### 5.2 Redirect headers during transition
@@ -2082,12 +2082,12 @@ make callgraph-files
 ls editor_*.c
 # matches the table above
 ls repl_*.c | wc -l
-# strictly fewer than before — only true REPL files remain
+# strictly fewer than before - only true REPL files remain
 ```
 
 ---
 
-## Suggested Branch / Commit Breakdown **(historical — see Implementation Status above for current sequence)**
+## Suggested Branch / Commit Breakdown **(historical - see Implementation Status above for current sequence)**
 
 Branch name:
 
@@ -2112,9 +2112,9 @@ historical reference.
 9.  refactor: pass EditorBufferView to REPL text consumers
 10. test: cover failed validation and commit transaction invariants
 11. refactor: split repl_compile validation from editor_commit application
-12. refactor: introduce UiAction dispatch gate            (REPLACED — UiHit routing instead)
-13. refactor: migrate keyboard input handlers to UiAction (REPLACED — direct editor calls)
-14. refactor: migrate mouse/menu/color/camera input handlers to UiAction (REPLACED — direct peer calls)
+12. refactor: introduce UiAction dispatch gate            (REPLACED - UiHit routing instead)
+13. refactor: migrate keyboard input handlers to UiAction (REPLACED - direct editor calls)
+14. refactor: migrate mouse/menu/color/camera input handlers to UiAction (REPLACED - direct peer calls)
 15. refactor: rename editor-owned modules
 16. docs: refresh MODULES and ARCHITECTURE after ownership split
 17. checks: promote editor ownership audits to hard guards
@@ -2244,7 +2244,7 @@ The split is complete when:
 
 - Three-layer contract is enforceable mechanically (Makefile guards).
 - A "headless REPL" / "embedded REPL in another editor" / "scripted
-  REPL test harness" becomes feasible — drop `EditorState` / `UiState`
+  REPL test harness" becomes feasible - drop `EditorState` / `UiState`
   entirely.
 - `ReplState` shrinks dramatically; `repl_state_capture/restore` get
   cheaper; clipboard's 1.88 MB lines sidecar moves off `ReplState`.
@@ -2282,28 +2282,28 @@ Those are separate tracks.
 
 - **Authoritative current contract:**
   [`feature/editor-text-model-controller.md`](editor-text-model-controller.md)
-  — defines the M/V/C+compiler+router framing. Read first.
+  - defines the M/V/C+compiler+router framing. Read first.
 - **Sibling revision:**
   [`feature/editor-owns-text-completion-revised.md`](editor-owns-text-completion-revised.md)
-  — a cleaner, history-light version of *this* doc. The
+  - a cleaner, history-light version of *this* doc. The
   architectural sections of this file (Target Contract, Who Drives,
   imrepl_ctrl Non-Goals, Avoid Bubbling, Editor Services Boundary,
   Phase 4 corrected) are kept synchronized with that sibling. The
   detailed migration history (Implementation Status table, per-slice
   Phase 0/1 notes with audit deltas) lives only here.
 - **Supersedes** the deferred Phase C of
-  `feature/push-architecture-ui.md` — the input-handler work is folded
+  `feature/push-architecture-ui.md` - the input-handler work is folded
   in here as Phase 4 (now framed as `UiHit` routing rather than a
   `UiAction` enum).
 - **Builds on** `feature/editor-owns-text.md` Steps 2–6 (data shape) and
   `feature/gold-standard-state-ownership.md` Stage 7 (UI snapshot
   purity).
-- **Companion** to `feature/editor-ownership-gap-cleanup.md` — that doc
+- **Companion** to `feature/editor-ownership-gap-cleanup.md` - that doc
   is the audit/landing-sequence checklist; the contract lives in
   `editor-text-model-controller.md` plus the architectural sections
   of this doc. Read all three together.
 - **Reflected in:**
   [`feature/modules-editor-view-update.md`](modules-editor-view-update.md)
-  — the focused MODULES.md update plan applied via the prior commit.
+  - the focused MODULES.md update plan applied via the prior commit.
 - **Independent** of `push-architecture-refinement.md` R10 (dissolve
   `repl_core.c`) and R8 (`sample → imrepl`).

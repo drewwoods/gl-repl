@@ -2,7 +2,7 @@
 
 ## Context
 
-The current architecture stores the canonical text of every committed line as `GLCmd.source[256]` — a 256-byte char array baked directly into the command struct. Every display, export, search, undo snapshot, replay annotation, and re-indent pass reads this field. The color picker is the only code that modifies `source[]` of an already-committed command (in `repl_command_store_write_color_source`), doing so by reading the indent out of the existing source before overwriting.
+The current architecture stores the canonical text of every committed line as `GLCmd.source[256]` - a 256-byte char array baked directly into the command struct. Every display, export, search, undo snapshot, replay annotation, and re-indent pass reads this field. The color picker is the only code that modifies `source[]` of an already-committed command (in `repl_command_store_write_color_source`), doing so by reading the indent out of the existing source before overwriting.
 
 The redesign direction: make the **editor own the text**. Committed lines live in a text buffer inside `ReplRuntimeState`; `GLCmd` drops `source[]` and becomes a pure parse-result struct. `GLCmd.args[]` becomes derived (re-parsed from text at flatten time, already the path for `has_vars` commands). Cross-line highlights (feeding normal/color lines), color picker mutations, and replay annotations become controller-pushed decorators/transformers/virtual-lines that the editor renders from configuration.
 
@@ -17,7 +17,7 @@ This plan covers **Step 1 only: the spike**. The spike proves out the load-beari
 1. Adds `char lines[MAX_COMMANDS][MAX_LINE_LEN]` to `ReplEditorBuffer` inside `ReplRuntimeState`, alongside the existing `GLCmd[]` array.
 2. On every commit (`;` key, `feed_line()`, paste, undo restore), writes the raw pre-normalization text into `editor_buffer.lines[idx]`.
 3. Changes `GLCmd.args[]` to be re-derived at flatten time for ALL commands (not just `has_vars`), using `repl_parser_parse_command_ctx()` reading from `editor_buffer.lines[idx]`.
-4. Keeps `GLCmd.source[]` alive (no struct change yet) but stops using it as the read path for display — code panel reads from `editor_buffer.lines[idx]` instead.
+4. Keeps `GLCmd.source[]` alive (no struct change yet) but stops using it as the read path for display - code panel reads from `editor_buffer.lines[idx]` instead.
 5. Instruments: measure time spent in `flatten_commands()` per frame on the largest built-in example under worst-case replay (every command is `has_vars`-style re-parse).
 6. Sets a pass/fail bar: frame budget at 120fps is ~8ms. Flatten must stay under 4ms (half-budget) on the worst-case example.
 
@@ -45,11 +45,11 @@ The spike is independently revertable in one commit.
 
 What you're describing
 
-Today the REPL owns GLCmd[] — parsed arrays with cmd.source[] text and cmd.args[] floats kept in sync. The code panel renders that. Editing is "navigate to a line, retype it, hit ;, parser rebuilds the
+Today the REPL owns GLCmd[] - parsed arrays with cmd.source[] text and cmd.args[] floats kept in sync. The code panel renders that. Editing is "navigate to a line, retype it, hit ;, parser rebuilds the
 GLCmd."
 
 Your proposal inverts this: the editor owns a buffer of text, and the REPL queries the editor for current text when it needs to re-parse. Highlighting, color swatches, vertex-index labels become
-configuration the editor consumes. Color picker becomes a transformer — a widget anchored to a span that can rewrite that span when manipulated.
+configuration the editor consumes. Color picker becomes a transformer - a widget anchored to a span that can rewrite that span when manipulated.
 
 This is approximately the architecture of:
 - VS Code / LSP: editor owns buffer; language server queries via documentSymbol/foldingRange/codeLens; CodeLens is the "decorator" pattern; LSP commands are the transformer dispatch.
@@ -90,7 +90,7 @@ Today: cmd.source (text) and cmd.args[] (floats) are coupled. Parser writes both
 glColor3f(0.4, …)) without touching args.
 
 Tomorrow: only text exists. args[] becomes a derived projection from text, computed by the parser on demand. That's fine for execution (you re-parse anyway). It's harder for things that need args now
-without re-parsing — e.g., the autonormal computation, replay's expression-substitution annotation, save/load.
+without re-parsing - e.g., the autonormal computation, replay's expression-substitution annotation, save/load.
 
 The honest answer: re-parsing is cheap (microseconds per line). Make args derived; don't store it.
 
@@ -144,7 +144,7 @@ editor_set_highlights(&editor, [
 ]);
 - Editor renders highlights according to its color scheme config.
 
-The editor doesn't know why those lines are related. It just knows "draw these in this style." That's the right separation — and it generalizes: any cross-line relationship (matching for/end, function call
+The editor doesn't know why those lines are related. It just knows "draw these in this style." That's the right separation - and it generalizes: any cross-line relationship (matching for/end, function call
 site → definition, search match positions) follows the same pattern.
 
 4. Replay annotations
@@ -266,19 +266,19 @@ That's the "editor is configurable" promise. Everything specific to the REPL is 
 What this costs
 
 - repl_editor.c becomes the editor. It owns the buffer, cursor, selection, autocomplete UI, search UI. ~3-4kLOC of new code, replacing the current ~67kLOC repl_editor.c (which is mostly cross-layer routing
-today, not editor logic — that's at least a sign the work isn't strictly additive).
+today, not editor logic - that's at least a sign the work isn't strictly additive).
 - GLCmd.source goes away. The parsed model holds only type, args[], references to source line numbers. Text lives in the editor.
 - Re-parse model. Every text edit triggers an incremental re-parse. Today's commit-driven parsing becomes edit-driven, with a debounce. Manageable but a real change.
 - Persistence. Save/load currently round-trips via cmd.source. Tomorrow it round-trips via editor_line_text(). Same shape, different source. Probably easier actually.
 - Tests. A lot of test_repl_core_*.c poke cmd.source directly. Those tests need updating to drive the editor instead. ~50% of test setup code.
 - The replay system needs to learn virtual lines. Right now it directly edits cmd.source in some paths (via the replay-annotations module). That has to become "push virtual line below line N" instead.
-- Undo. Today undoes GLCmd[] snapshots. Tomorrow it undoes editor text + cursor. Either two undo stacks (editor undo, REPL undo) — surprisingly common in real systems — or one unified one rooted in the
+- Undo. Today undoes GLCmd[] snapshots. Tomorrow it undoes editor text + cursor. Either two undo stacks (editor undo, REPL undo) - surprisingly common in real systems - or one unified one rooted in the
 editor.
 
-Sequencing — how I'd actually do this
+Sequencing - how I'd actually do this
 Don't try to land this in one branch. Sequence:
 Step 1: Make text the source of truth for GLCmd.source already. Today cmd.source is computed by the parser and reflects the normalized form, not the user's typed text. Make cmd.source strictly mirror the
-editor's line text — kill normalization-on-commit, keep normalization-on-display only. This forces the existing system to treat text as primary without changing architecture. ~1 week.
+editor's line text - kill normalization-on-commit, keep normalization-on-display only. This forces the existing system to treat text as primary without changing architecture. ~1 week.
 Step 2: Introduce a thin editor wrapper around repl_state text. editor_line_text(idx) just returns cmd.source for now. editor_set_line(idx, str) updates cmd.source and triggers re-parse. Same data, new
 façade. ~3 days.
 Step 3: Move text storage into the editor. Now EditorBuffer owns char text[]; GLCmd drops source[] and stores (line_idx, char_start, char_end) references instead. ~2 weeks. This is the big diff.
@@ -295,14 +295,14 @@ Two thoughts, separately:
 On whether to do it at all: Yes, this direction is genuinely cleaner than what's there now. The current cmd.source/cmd.args coupling is awkward, the color-picker writing both halves separately is a bug
 magnet, and having "text → parse → execute" be one-way (instead of "text owns; parse derives") makes future features (refactoring, multi-cursor, find-and-replace, vim mode, etc.) much easier. You're
 describing a real improvement.
-On whether the existing C-1/C-2 work helps: Mostly no. UiAction doesn't survive this redesign — when the editor owns text and emits EditorEvent, the action vocabulary is "edit happened, here's the new
-text", not "the user pressed the up arrow." Phase B (the snapshot pattern) does survive — the editor would still consume a render snapshot. The Phase C work was solving a problem (UI mutation indirection)
+On whether the existing C-1/C-2 work helps: Mostly no. UiAction doesn't survive this redesign - when the editor owns text and emits EditorEvent, the action vocabulary is "edit happened, here's the new
+text", not "the user pressed the up arrow." Phase B (the snapshot pattern) does survive - the editor would still consume a render snapshot. The Phase C work was solving a problem (UI mutation indirection)
 that this redesign deletes the premise of.
 Where to start: I'd suggest starting with Step 1 (text as source of truth) on a feature branch before committing to the full redesign. It's the smallest move that proves out the assumption "re-parsing on
-every edit is cheap enough" — and if it turns out re-parsing has performance issues with a 1000-line example, you discover that at the cheapest possible point, before any architecture work.
+every edit is cheap enough" - and if it turns out re-parsing has performance issues with a 1000-line example, you discover that at the cheapest possible point, before any architecture work.
 Specifically, write a one-day spike: stop normalizing cmd.source at commit, route every keystroke through "rewrite line text → re-parse." Profile it. If frame time stays under 4ms on the worst built-in
 example, you have evidence the rest of the redesign is viable. If it doesn't, you need an incremental-parse story before going further, and that's a much bigger commitment.
-The transformers idea, the cross-line highlights, the configurable color scheme — they all naturally fall out after the text-as-truth move. Don't design them in isolation; let the foundation prove out
+The transformers idea, the cross-line highlights, the configurable color scheme - they all naturally fall out after the text-as-truth move. Don't design them in isolation; let the foundation prove out
 first.
 
 ## Critical Files
@@ -321,11 +321,11 @@ first.
 
 ## Key Existing Functions to Reuse
 
-- `repl_parser_parse_command_ctx()` — `repl_parser.c:700` — re-parse a line of text into a `GLCmd`. Already called in `flatten_range()` for `has_vars` commands; the spike extends this to all commands.
-- `flatten_range()` — `repl_flatten.c` — the main flatten pass; the spike instruments it.
-- `repl_command_store_load()` — `repl_command_store.c` — bulk restore used by undo; must also restore `editor_buffer.lines[]`.
-- `load_line_to_input()` — `repl_editor.c` — already the canonical "sync g_input from source" function; read direction stays, but write direction now also updates `editor_buffer.lines[]`.
-- `repl_state_capture()` / `repl_state_restore()` — `repl_state.c` — must include `editor_buffer` to keep round-trip tests passing.
+- `repl_parser_parse_command_ctx()` - `repl_parser.c:700` - re-parse a line of text into a `GLCmd`. Already called in `flatten_range()` for `has_vars` commands; the spike extends this to all commands.
+- `flatten_range()` - `repl_flatten.c` - the main flatten pass; the spike instruments it.
+- `repl_command_store_load()` - `repl_command_store.c` - bulk restore used by undo; must also restore `editor_buffer.lines[]`.
+- `load_line_to_input()` - `repl_editor.c` - already the canonical "sync g_input from source" function; read direction stays, but write direction now also updates `editor_buffer.lines[]`.
+- `repl_state_capture()` / `repl_state_restore()` - `repl_state.c` - must include `editor_buffer` to keep round-trip tests passing.
 
 ## Invariants to Maintain
 
@@ -336,9 +336,9 @@ first.
 
 ## Implementation Steps
 
-1. **Add `ReplEditorBuffer` to `ReplRuntimeState`** (repl_state.h, repl_state_views.h, repl_state.c). Wire into capture/restore. Run `make test` — should be green (no behavior change yet).
+1. **Add `ReplEditorBuffer` to `ReplRuntimeState`** (repl_state.h, repl_state_views.h, repl_state.c). Wire into capture/restore. Run `make test` - should be green (no behavior change yet).
 
-2. **Write into `editor_buffer.lines[]` on every commit** (repl_editor.c: `;` handler, `feed_line()`, `load_line_to_input`, undo restore; repl_command_store.c: insert_one, replace_one, load). Write the text BEFORE normalization — what the user typed, same as what `load_line_to_input` currently loads back from `cmd.source` after stripping the semicolon. Run `make test` green.
+2. **Write into `editor_buffer.lines[]` on every commit** (repl_editor.c: `;` handler, `feed_line()`, `load_line_to_input`, undo restore; repl_command_store.c: insert_one, replace_one, load). Write the text BEFORE normalization - what the user typed, same as what `load_line_to_input` currently loads back from `cmd.source` after stripping the semicolon. Run `make test` green.
 
 3. **Switch flatten to re-parse from `editor_buffer.lines`** for ALL commands (repl_flatten.c). Add a `prof_begin(PROF_FLATTEN_REPARSE)` / `prof_end` bracket around this path. Build and run the largest example; compare visual output to confirm correctness. Run `make test`.
 
@@ -378,8 +378,8 @@ Record the profiling breakdown and document it in `feature/editor-owns-text-spik
 
 If the spike validates the performance assumption, the full redesign proceeds in these stages:
 
-- **Step 2** — Thin editor wrapper façade: `editor_buffer_line_text(idx)` / `editor_buffer_set_line(idx, str)` API hiding the storage. Remove `cmd.source[]` reads from all callers in favor of the API. (~3 days)
-- **Step 3** — Drop `cmd.source[]` from `GLCmd`. Struct shrinks from ~340 bytes to ~84 bytes. Update all 13 test files that write `.source` directly. Update undo snapshot (which currently copies the whole `GLCmd[]` array). (~2 weeks)
-- **Step 4** — Transformer API: `Transformer { line_idx, char_start, char_end, kind, state }`. Convert color picker to a transformer pushed by the controller. (~1 week)
-- **Step 5** — Cross-line highlight API: controller pushes `Highlight[]` to editor after cursor moves. Feeding-line accents, replay PC highlight, selection, search matches all become controller-pushed highlights. (~1 week)
-- **Step 6** — Configuration extraction: color scheme, syntax rules as data structs. Virtual lines for replay annotations. (~3 days)
+- **Step 2** - Thin editor wrapper façade: `editor_buffer_line_text(idx)` / `editor_buffer_set_line(idx, str)` API hiding the storage. Remove `cmd.source[]` reads from all callers in favor of the API. (~3 days)
+- **Step 3** - Drop `cmd.source[]` from `GLCmd`. Struct shrinks from ~340 bytes to ~84 bytes. Update all 13 test files that write `.source` directly. Update undo snapshot (which currently copies the whole `GLCmd[]` array). (~2 weeks)
+- **Step 4** - Transformer API: `Transformer { line_idx, char_start, char_end, kind, state }`. Convert color picker to a transformer pushed by the controller. (~1 week)
+- **Step 5** - Cross-line highlight API: controller pushes `Highlight[]` to editor after cursor moves. Feeding-line accents, replay PC highlight, selection, search matches all become controller-pushed highlights. (~1 week)
+- **Step 6** - Configuration extraction: color scheme, syntax rules as data structs. Virtual lines for replay annotations. (~3 days)

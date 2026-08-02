@@ -17,7 +17,7 @@
 #define APIENTRY
 #endif
 
-/* GL_NV_fog_distance tokens — present in glext.h (Linux/Homebrew and the
+/* GL_NV_fog_distance tokens - present in glext.h (Linux/Homebrew and the
  * macOS SDK) but not on the Apple-GLUT framework path (gl_includes.h pulls
  * only OpenGL/gl.h there) nor in the bundled GL stubs. Define the registry
  * values when absent; guarded so a real glext.h still wins. Consumed by the
@@ -31,7 +31,7 @@
 #define GL_EYE_RADIAL_NV 0x855B
 #endif
 
-/* Defined in render.h, which includes this header — the buffer-inspection
+/* Defined in render.h, which includes this header - the buffer-inspection
  * hooks below only pass it by pointer, so a tag declaration is enough and
  * the include direction stays render.h -> render_types.h. */
 struct Render3dProjectionDesc;
@@ -123,7 +123,7 @@ typedef struct Render3dExecuteContext {
 /* Called by render.c to emit user geometry. May be NULL (geometry
  * is silently skipped; scene background/grid/axes/lights still render).
  * The callback gets only a scene-supplied opaque context plus the user_data
- * the caller stashed when building the config — any REPL state (flat
+ * the caller stashed when building the config - any REPL state (flat
  * program, current PC, alpha overrides for fade passes, etc.) is the
  * caller's responsibility, carried through user_data. */
 typedef void (*Render3dExecuteProgramFn)(const Render3dExecuteContext *ctx,
@@ -159,9 +159,9 @@ typedef struct Render3dRenderConfig {
     void  *post_overlays_user_data;
 
     /* --- Optional post-resolve overlays hook ---
-     * Invoked ONCE per frame on the fully resolved scene image — after
+     * Invoked ONCE per frame on the fully resolved scene image - after
      * the accumulation resolve (glAccum GL_RETURN), or after the single
-     * pass when accumulation is off — with the canonical jitter-free
+     * pass when accumulation is off - with the canonical jitter-free
      * projection re-applied and the caller's camera modelview live.
      * Bitmap-text annotation (vertex-number labels) draws here: inside
      * the accum loop each AA/blur sub-pass would stamp the pixel-snapped
@@ -175,8 +175,8 @@ typedef struct Render3dRenderConfig {
      * slots. render3d fires them and knows nothing about what for; the
      * controller subscribes whatever wants to look at the framebuffer
      * (today the depth/stencil visualizations). All three fire
-     * unconditionally when installed — the subscriber no-ops when its
-     * own modes are off — which is what lets one hook serve a reader
+     * unconditionally when installed - the subscriber no-ops when its
+     * own modes are off - which is what lets one hook serve a reader
      * that wants a single read per frame and one that composites per
      * accumulation pass. */
 
@@ -225,7 +225,7 @@ typedef struct Render3dRenderConfig {
     int render3d_h;
 
     /* --- Camera state (read-only inputs) ---
-     * The actual modelview transform is no longer applied by the scene module —
+     * The actual modelview transform is no longer applied by the scene module -
      * callers populate GL_MODELVIEW themselves before render3d_draw_scene()
      * (the controller uses glr_camera_load_modelview from src/app/glr_camera.h;
      * render3d_demo inlines the matrix calls). These fields are still passed in
@@ -253,7 +253,7 @@ typedef struct Render3dRenderConfig {
     int accum_passes;       /* resolved sample count: 1..MAX_ACCUM_SAMPLES */
     int use_accum_aa_scissors; /* scissor the accum loop to the scene rect
                                 * (skip the dead region under the code panel).
-                                * Off by default — see CFG_DEFAULT_USE_ACCUM_AA_SCISSORS. */
+                                * Off by default - see CFG_DEFAULT_USE_ACCUM_AA_SCISSORS. */
 
     /* --- Optional per-pass blur hook ---
      * Invoked once before each accumulation pass when accum_effect == BLUR
@@ -263,7 +263,7 @@ typedef struct Render3dRenderConfig {
      * the passed-in per-pass config copy so scene helpers blur with the
      * camera. The scene renders these passes with jitter 0. NULL for AA / OFF
      * and for non-REPL callers (BLUR then degrades to the AA jitter path). */
-    /* clang-format off — keep on one line so the flat-view pointer guard
+    /* clang-format off - keep on one line so the flat-view pointer guard
      * skips this function pointer (it ignores lines containing "(*"). */
     void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count, struct Render3dRenderConfig *pass_config);
     void  *setup_subframe_user_data;
@@ -283,20 +283,20 @@ typedef struct Render3dRenderConfig {
      * mirrored from glr_ctrl_init_gl via the REPL executor. The
      * backdrop uses the proc to reset GL_POINT_DISTANCE_ATTENUATION
      * without taking a scene-layer dependency on REPL/controller code.
-     * Non-REPL callers (render3d_demo) leave both zero via memset — the
+     * Non-REPL callers (render3d_demo) leave both zero via memset - the
      * safe default: never call the entry point unless a caller has
      * confirmed support and supplied a callable proc. */
     int point_parameter_supported;
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params);
     /* Runtime GL_NV_fog_distance capability, detected once in
      * glr_ctrl_init_gl and mirrored here. When set, the passes whose
-     * distance fog wraps geometry around the camera — the city backdrop
-     * and the ocean/radar grid themes — switch to true radial eye distance
+     * distance fog wraps geometry around the camera - the city backdrop
+     * and the ocean/radar grid themes - switch to true radial eye distance
      * (GL_EYE_RADIAL_NV) so their fringes stop swimming as the camera
      * orbits. Scoped per-pass and confined by each pass's
      * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop, so the eye-plane-tuned
      * themes are untouched. 0 for non-detecting callers (render3d_demo) via
-     * memset — the safe default. */
+     * memset - the safe default. */
     int nv_fog_distance_supported;
     /* Scene-viewport post-processing.
      * Backed by Config row, persisted via @cfg. */
@@ -318,18 +318,18 @@ typedef struct Render3dRenderConfig {
      * `*_xn_phase` is an advisory direction hint (FADE_IN /
      * FADE_OUT / STEADY) the controller fills in from the transition
      * machine, intended as a future input for fog-direction or
-     * other phase-aware effects. RESERVED — read by tests only
+     * other phase-aware effects. RESERVED - read by tests only
      * today (verifying the controller forwards the value); no scene
      * renderer reads them at runtime. Keep populated so the contract
      * stays observable. */
     int          grid_theme;
     float        grid_opacity;
-    Render3dXnPhase grid_xn_phase;   /* RESERVED — see comment above */
+    Render3dXnPhase grid_xn_phase;   /* RESERVED - see comment above */
     int          grid_extent_idx;
     int          grid_major_idx;
     int          axes_theme;
     float        axes_opacity;
-    Render3dXnPhase axes_xn_phase;   /* RESERVED — see comment above */
+    Render3dXnPhase axes_xn_phase;   /* RESERVED - see comment above */
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 

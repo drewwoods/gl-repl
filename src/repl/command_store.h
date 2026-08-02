@@ -16,13 +16,13 @@
  * deletes that shift the document can mechanically shift a caller-owned
  * cursor; pass an optional `int *cursor_inout` to have the store apply the
  * standard insert/delete math to the caller's int in place. NULL means "no
- * cursor mutation — pure data op." The store's previous `int *edit_line`
+ * cursor mutation - pure data op." The store's previous `int *edit_line`
  * pointer was dropped in favour of this per-call parameter (implemented in
  * phase 1 of docs/plans/done/edit-line-ownership.md).
  *
  * Only insert ops also honour REPL_COMMAND_STORE_ADJUST_EDIT_LINE as the
  * intent flag (so callers can pass a non-NULL `cursor_inout` for capacity
- * accounting while still asking the insert math to skip the cursor — useful
+ * accounting while still asking the insert math to skip the cursor - useful
  * for autocommit-without-advance code paths). Delete and replace ops do not
  * check the flag; delete callers gate by passing NULL/non-NULL directly,
  * replace never shifts the cursor.
@@ -41,7 +41,7 @@
 /* Facade over the live source-command array. Points to the current command
  * buffer, its count, and capacity. Obtained via repl_command_store_live().
  * All mutations take a store reference and update these atomically. Cursor
- * (edit-line) state is no longer held by the store — pass an optional
+ * (edit-line) state is no longer held by the store - pass an optional
  * `int *cursor_inout` to the mutating ops to have the store shift a
  * caller-owned cursor by the standard insert/delete math. */
 typedef struct {
@@ -59,11 +59,11 @@ enum {
 };
 
 /* Options bag for cursor-aware store mutators (insert / delete). Pass
- * NULL for the default (`flags = 0`, `cursor_inout = NULL`) — pure data
+ * NULL for the default (`flags = 0`, `cursor_inout = NULL`) - pure data
  * op, no cursor math.
  *
  * `flags` is consulted only by inserts (delete callers gate by
- * NULL/non-NULL cursor_inout instead — there is no insert-equivalent
+ * NULL/non-NULL cursor_inout instead - there is no insert-equivalent
  * "adjust" flag for delete). `cursor_inout` is the caller-owned cursor
  * the store shifts in place when non-NULL; for inserts the shift is
  * also gated on REPL_COMMAND_STORE_ADJUST_EDIT_LINE. */
@@ -125,7 +125,7 @@ int  repl_command_store_insert_one(ReplCommandStore *store, int pos,
  * Returns 1 on success, 0 if out of bounds. Used for editing existing lines
  * without changing array size. Pair with
  * `editor_buffer_replace_line(pos, line)` when a parallel text write is
- * needed. No opts parameter — replace never shifts the cursor. */
+ * needed. No opts parameter - replace never shifts the cursor. */
 int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
                                     const GLCmd *cmd);
 
@@ -138,7 +138,7 @@ int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
  * math to `*opts->cursor_inout`: cursors before the deleted range are
  * unchanged; cursors inside it snap to `start`; cursors past it move
  * back by `count`. The result is clamped to [0, post-delete line count].
- * `opts->flags` is ignored — delete callers gate via NULL/non-NULL
+ * `opts->flags` is ignored - delete callers gate via NULL/non-NULL
  * `cursor_inout` directly. Cursor-aware delete is net-new store
  * behavior; earlier versions had no cursor shift in delete
  * (implemented in Phase 1 of docs/plans/done/edit-line-ownership.md). */
@@ -151,7 +151,7 @@ int  repl_command_store_delete_range(ReplCommandStore *store, int start,
  * the array doesn't fit. Pair with `editor_buffer_load_lines(lines, count)`
  * for the parallel text bulk load.
  *
- * No cursor parameter — cursor policy after a bulk load is the caller's
+ * No cursor parameter - cursor policy after a bulk load is the caller's
  * concern (scene-restore preserves the saved value, reset zeroes, etc.).
  * Callers that need to update the cursor do so explicitly before/after
  * the call. */

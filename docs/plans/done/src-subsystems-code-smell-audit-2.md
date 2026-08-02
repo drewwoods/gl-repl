@@ -1,10 +1,10 @@
-# `src/subsystems/` — Code-Smell Audit (Round 2)
+# `src/subsystems/` - Code-Smell Audit (Round 2)
 
 > Audit produced 2026-05-26. Findings come from four parallel reviews
 > covering `replay/`, `tutorial/`, `color_picker/`, and
 > `variable_panel/` plus targeted spot-verification of the most
 > actionable claims. File:line references are exact at the time of
-> writing — check `git log` on the cited files before acting if this
+> writing - check `git log` on the cited files before acting if this
 > doc has aged.
 >
 > Scope: `replay/`, `tutorial/`, `color_picker/`, and
@@ -13,24 +13,24 @@
 > findings; #56 (cross-module `time_playing` write) is tracked in the
 > `src/app/` audit and noted here for context but not re-counted.
 > **Deferred to round 3:** `edit_overlays/` (~558 LOC) and
-> `replay/replay_render.{c,h}` (~225 LOC) — both extracted from
+> `replay/replay_render.{c,h}` (~225 LOC) - both extracted from
 > `src/app/` in commit ffda60e after the prior round.
 >
 > **Revision 2 (2026-05-26):** Reviewer corrections applied.
 > #3/#4 downgraded from 🔴 to 🟡: #3's null branch is unreachable
 > (pre-validated by `color_picker_can_edit_cmd`); #4's type-mismatch
 > case bails out via `else { return 0 }`, and scene switches already
-> close the picker via `glr_ctrl_reset_transients` — real residual is
+> close the picker via `glr_ctrl_reset_transients` - real residual is
 > same-type shift on undo/delete only. Fixed function names
 > (`color_picker_start`/`stop`, not open/close; no `g_cp_active`
 > exists). #9 reframed: tutorial.c is a documented exception in
-> `state_owners.h`, not a violation — concern is incomplete include
+> `state_owners.h`, not a violation - concern is incomplete include
 > comment + broad header surface. #11 narrowed: scene/example
 > switches already handled; residual is undo/delete paths. #15
 > withdrawn: `replay_prepare_frame` refreshes `total_flat_cmds` and
 > clamps `pc` every frame. #7's fix corrected: `replay_state_view()`
 > returns by value, so the `ReplayFadeBatchView` pointer would
-> dangle — need a const-ref accessor instead. #1/#2 now note that
+> dangle - need a const-ref accessor instead. #1/#2 now note that
 > two existing test assertions (`test_repl_replay.c:501`,
 > `test_repl_editor.c:2283`) explicitly expect `return 0` and must
 > be updated. Scope corrected: `edit_overlays/` and
@@ -47,7 +47,7 @@
 > moved to Tier D: `src/subsystems/README.md:41` explicitly documents
 > the `replay_lift_px` pattern as intentional. Sequencing revised:
 > #12 (tutorial shadow ↔ match normalization desync) elevated to
-> Priority 1 alongside the replay reds — it's the most
+> Priority 1 alongside the replay reds - it's the most
 > user-triggerable UX bug in the document.
 >
 > **Revision 4 (2026-05-27):** Post-implementation follow-up.
@@ -64,7 +64,7 @@
 > The single most important contract for this directory:
 > **Each peer subsystem owns one runtime state struct, mutates it
 > directly via `_mut()`, exposes a by-value `_view()` for reads, and
-> communicates outward only through its public API — never calling
+> communicates outward only through its public API - never calling
 > into the editor, UI, or app controller directly.** The replay
 > module is the one partial exception (it reaches `repl_dispatch_*`
 > callbacks and `repl_state_variables_mut()`); the tutorial reaches
@@ -74,16 +74,16 @@
 
 Severity grouping mirrors the previous audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or
+- **🔴 Actual bugs / hazards (verified)** - correctness or
   memory-safety issues with a concrete failure mode that exists in
   current production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — layer-crossing reaches, naming
+- **🟡 Drift / boundary hazards** - layer-crossing reaches, naming
   drift, parallel structures, hidden side effects, ambiguous-intent
   code that works today but is one edit away from misbehaving.
-- **🟢 Dead code / dead fields** — code with no callers, unreachable
+- **🟢 Dead code / dead fields** - code with no callers, unreachable
   branches, redundant initializers, unused parameters. Pure surface
   reduction.
-- **🔵 Structural concerns** — long functions, near-duplicate pairs,
+- **🔵 Structural concerns** - long functions, near-duplicate pairs,
   magic numbers, comment archaeology. Bigger refactors; higher cost.
 
 Each finding cites file + line, names the smell, says why it matters,
@@ -91,15 +91,15 @@ and suggests a one-line fix.
 
 ## Headline take
 
-45 findings across four subdirectories (two more — `edit_overlays/`
-and `replay_render.{c,h}` — deferred to round 3). **2 reds** — both
+45 findings across four subdirectories (two more - `edit_overlays/`
+and `replay_render.{c,h}` - deferred to round 3). **2 reds** - both
 in replay (key-leak-after-stop for ASCII and special handlers). The
 most user-visible issue is actually 🟡 #12 (tutorial shadow ↔ match
-normalization desync — every user typing extra whitespace hits it).
+normalization desync - every user typing extra whitespace hits it).
 The remaining 🟡 band covers replay cross-module boundary reaches
 (`time_playing` writes, `repl_dispatch_follow_cursor`), a narrow
 color-picker undo-path gap, and the tutorial's broad
-`state_owners.h` include. The 🟢/🔵 tail is light — one `g_` naming
+`state_owners.h` include. The 🟢/🔵 tail is light - one `g_` naming
 violation, a few dead writes, a handful of structural observations.
 This directory is largely healthy after the prior round.
 
@@ -114,7 +114,7 @@ This directory is largely healthy after the prior round.
 | **B** | Moderate, week-long pass with tests | #4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34 |
 | **C** | High cost or cross-cutting | #35, #36 |
 | **D** | Accepted / kept | #26, #27, #37, #38, #39, #40, #41, #42, #43, #44, #45 |
-| — | Withdrawn / merged | #15, #18 |
+| - | Withdrawn / merged | #15, #18 |
 
 ## Progress Update (2026-05-27)
 
@@ -138,12 +138,12 @@ All 18 Tier A findings, 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #
 | #14 | A | Tutorial `repl_cfg_set_int` called without declaring include path | **[RESOLVED]** | Documented all 6 symbols in the `state_owners.h` include comment. |
 | #16 | B | Replay's `replay_exec_limit` coupling | **[RESOLVED]** | Injected `FlatProgramView` dependency into replay frame-level/tick-level functions to guarantee synchronicity and eliminate mid-frame stale views. |
 | #17 | A | Replay `g_flat_cmds` / `g_num_flat_cmds` use `g_` prefix | **[RESOLVED]** | Renamed local variables to drop misleading `g_` prefixes. |
-| #19 | B | Tutorial `in_enter_step` field — recursive-guard with unclear invariant | **[RESOLVED]** | Removed the vestigial reentrance guard `in_enter_step` from tutorial state and implementation. |
+| #19 | B | Tutorial `in_enter_step` field - recursive-guard with unclear invariant | **[RESOLVED]** | Removed the vestigial reentrance guard `in_enter_step` from tutorial state and implementation. |
 | #20 | A | Variable panel drag `start_x` unused outside begin/motion | **[RESOLVED]** | Moved `start_x` from public struct to static `g_drag_start_x`. |
-| #21 | A | Replay `last_src_line` reset at stop — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
-| #22 | A | Replay `state->accum = 0.0f` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
-| #23 | A | Replay `state->pc = 0` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
-| #24 | A | Replay `state->total_flat_cmds = 0` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #21 | A | Replay `last_src_line` reset at stop - dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #22 | A | Replay `state->accum = 0.0f` in `replay_stop` - dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #23 | A | Replay `state->pc = 0` in `replay_stop` - dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #24 | A | Replay `state->total_flat_cmds = 0` in `replay_stop` - dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
 | #25 | A | Tutorial defaults init loop sets `instruction_line_for_step` to -1 | **[RESOLVED]** | Documented init loop / active example reset invariant. |
 | #28 | A | Replay `replay_handle_key` is ~65 lines of `if (key == ...)` ladder | **[RESOLVED]** | Refactored matching logic to a clean, readable `switch (key)` block. |
 | #29 | B | Replay has two near-identical "unrecognized key stops replay" sites | **[RESOLVED]** | Centralized unrecognized key cancel path via `replay_cancel_on_unrecognized()` in Tier A. |
@@ -159,7 +159,7 @@ All 18 Tier A findings, 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #
 
 ## 🔴 Actual bugs / hazards (verified)
 
-### 1. Replay `replay_handle_key` returns 0 after stopping — key leaks downstream
+### 1. Replay `replay_handle_key` returns 0 after stopping - key leaks downstream
 
 **Where:** `src/subsystems/replay/replay.c:1133-1136`
 
@@ -175,7 +175,7 @@ a line, `d` would type into the input buffer).
 Confirmed: after `replay_stop()` sets state = OFF, the key cascades
 through config shortcuts and editor input.
 
-**Fix:** Return 1 after the `replay_stop()` call — the key was
+**Fix:** Return 1 after the `replay_stop()` call - the key was
 consumed by the "cancel replay" action.
 
 **Test impact:** Two existing assertions explicitly expect `return 0`:
@@ -189,7 +189,7 @@ comment explaining that cancelling replay consumes the key. (Tier A)
 
 ---
 
-### 2. Replay `replay_handle_special` returns 0 after stopping — key leaks downstream
+### 2. Replay `replay_handle_special` returns 0 after stopping - key leaks downstream
 
 **Where:** `src/subsystems/replay/replay.c:1172-1177`
 
@@ -210,14 +210,14 @@ block. Same test-update caveat as #1. (Tier A)
 
 ## 🟡 Drift / boundary hazards
 
-### 3. Color picker `color_picker_start` sets `g_cp_line` before null check — defensive ordering issue
+### 3. Color picker `color_picker_start` sets `g_cp_line` before null check - defensive ordering issue
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c:222-225`
 
 **Smell:** `g_cp_line = cmd_idx` is written at L222 before
 `cmd = cp_cmd_at(cmd_idx)` at L223. If `cp_cmd_at` returns NULL, the
 function returns at L225 with `g_cp_line` pointing at a nonexistent
-command — the picker reads as "open" (`g_cp_line >= 0`) but color
+command - the picker reads as "open" (`g_cp_line >= 0`) but color
 channels were never populated.
 
 In practice this null branch is currently **unreachable**:
@@ -245,7 +245,7 @@ If lines were inserted/deleted while the picker was open (e.g., undo,
 cut, paste), `g_cp_line` may point at a different command.
 
 The type switch at L117-138 has an `else { return 0; }` at L137-138,
-so a shift to a **non-color** command type is caught — the writeback
+so a shift to a **non-color** command type is caught - the writeback
 bails out cleanly. The narrower real concern is a shift to a
 **different color command of the same type** (e.g., after a paste
 shifts indices such that `g_cp_line` now points at a different
@@ -281,13 +281,13 @@ desync. The prior audit (#56) flagged this; it's tracked in the
 
 **Fix:** Route through a `repl_dispatch_set_time_playing(int)` callback
 like other cross-module effects, letting the app controller own the
-write. (Tier B — touches replay + controller + dispatch table)
+write. (Tier B - touches replay + controller + dispatch table)
 
 **Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Declared a `set_time_playing` function pointer in the `ReplHostEffects` callback bridge in `src/repl/core.h` and implemented a routing helper `repl_dispatch_set_time_playing()`. The controller in `src/app/glr_ctrl.c` registers the static callback `glr_ctrl_host_set_time_playing()` which updates mutable `time_playing` under its own domain. All direct writes in `replay_start()` and `replay_stop()` (now in `src/subsystems/replay/replay_playback.c` after the #35 split) have been replaced with this callback dispatch.
 
 ---
 
-### 6. Replay calls `repl_dispatch_follow_cursor(1)` — input-layer dispatch from peer
+### 6. Replay calls `repl_dispatch_follow_cursor(1)` - input-layer dispatch from peer
 
 **Where:** `src/subsystems/replay/replay.c:157`
 
@@ -297,7 +297,7 @@ current replay line. This is an input-dispatch call (it's in the
 `repl_dispatch_*` callback family) invoked from a peer subsystem
 rather than from the app controller.
 
-**Why it matters:** Muddles the subsystem contract — peers shouldn't
+**Why it matters:** Muddles the subsystem contract - peers shouldn't
 drive UI scrolling. If the dispatch table changes or gains
 preconditions, replay would need updating.
 
@@ -322,7 +322,7 @@ instead of `replay_state_view()`.
 communicates write intent to readers; using it for reads erodes that
 signal.
 
-**Fix:** Cannot simply switch to `replay_state_view()` here —
+**Fix:** Cannot simply switch to `replay_state_view()` here -
 `ReplayFadeBatchView` holds a pointer into the live state
 (`const ReplayFadeBatch *batches`), so taking the address of a
 by-value stack copy would dangle. Instead, add a
@@ -338,7 +338,7 @@ intent explicit. (Tier A)
 
 **Where:** `src/subsystems/replay/replay.c:1001`
 
-**Smell:** Same pattern as #7 — a copy-out function that only reads
+**Smell:** Same pattern as #7 - a copy-out function that only reads
 state uses `replay_state_mut()`.
 
 **Fix:** Switch to `replay_state_view()`. (Tier A)
@@ -347,7 +347,7 @@ state uses `replay_state_mut()`.
 
 ---
 
-### 9. Tutorial's `state_owners.h` include — documented exception but broad surface
+### 9. Tutorial's `state_owners.h` include - documented exception but broad surface
 
 **Where:** `src/subsystems/tutorial/tutorial.c:11`
 
@@ -355,7 +355,7 @@ state uses `replay_state_mut()`.
 sanctioned consumer (CLAUDE.md file-layout table documents the cfg
 helpers as "single-slug bridge accessors used by
 `src/subsystems/tutorial/tutorial.c`"). So this is **not** a boundary
-violation — it's a documented exception. The concern is that the
+violation - it's a documented exception. The concern is that the
 header also exposes every `_mut()` accessor and the full mutable
 REPL-state surface. Tutorial only needs 6 symbols:
 `repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`,
@@ -372,7 +372,7 @@ non-owner cfg helpers.
 **Fix:** Either (a) update the L11 comment to document all 6 symbols,
 or (b) extract a `repl/state_notify.h` with the 6 tutorial-facing
 declarations and switch tutorial.c to include only that.
-(Tier B — option (b) touches header split + guard update)
+(Tier B - option (b) touches header split + guard update)
 
 **Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Created a narrow header `src/repl/state_notify.h` containing the declarations of `repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`, and `repl_state_parse_workspace_header_line`, and a separate `src/repl/cfg_baseline.h` for the typed live-cfg helpers (`repl_cfg_get_int` / `_set_int` / `_known` / `_set_text` / `_resolve_text`). `src/subsystems/tutorial/tutorial_runner.c` (post-#36 split) now includes only those two narrow headers. The leftover transitive `repl/state_owners.h` include in `tutorial_internal.h` was removed in audit follow-up so no tutorial TU sees the broad mutable-state surface anymore.
 
@@ -452,7 +452,7 @@ onto the stack, calls `tutorial_state_reset()` (which zeroes it),
 then writes it back. This is a save-around-reset pattern that only
 exists because `tutorial_state_reset` is unconditional.
 
-**Why it matters:** Not a bug, but the idiom is fragile — if more
+**Why it matters:** Not a bug, but the idiom is fragile - if more
 state needs preserving, the pattern grows. A selective reset that
 skips `baseline_bag`/`baseline_valid` would be cleaner.
 
@@ -479,13 +479,13 @@ out, the cfg helpers still anchor the `state_owners.h` dependency.
 A complete fix needs to move those too.
 
 **Fix:** Document the cfg helpers in the include comment, and include
-them in #9's header split. (Tier A — bookkeeping tied to #9)
+them in #9's header split. (Tier A - bookkeeping tied to #9)
 
 **Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Superseded by #9's final form: the 3 mark-dirty/parse helpers moved to `src/repl/state_notify.h` and the 3 cfg helpers moved to `src/repl/cfg_baseline.h`; `tutorial_runner.c` (post-#36 split) includes only those two narrow headers, each with a documenting comment naming every symbol it pulls in.
 
 ---
 
-### 15. ~~Replay `replay_start` caches `num_flat_cmds` but `total_flat_cmds` can drift~~ — WITHDRAWN
+### 15. ~~Replay `replay_start` caches `num_flat_cmds` but `total_flat_cmds` can drift~~ - WITHDRAWN
 
 **Withdrawn.** `replay_prepare_frame()` at
 `src/subsystems/replay/replay.c:966-975` already refreshes
@@ -494,7 +494,7 @@ frame. The start-time snapshot at L860 is immediately superseded.
 
 ---
 
-### 16. Replay's `replay_exec_limit` coupling — flat program dependency without ownership
+### 16. Replay's `replay_exec_limit` coupling - flat program dependency without ownership
 
 **Where:** `src/subsystems/replay/replay.c` (pervasive)
 
@@ -534,7 +534,7 @@ reserved by project convention for file-scoped statics.
 
 ---
 
-### 18. ~~Color picker `CP_DRAG_NONE` defined but not used at all reset sites~~ — merged into #10
+### 18. ~~Color picker `CP_DRAG_NONE` defined but not used at all reset sites~~ - merged into #10
 
 **Merged.** Only one bare-`0` site exists (L257, covered by #10).
 All six other `g_cp_drag =` assignments already use named enum
@@ -543,7 +543,7 @@ values (`CP_DRAG_NONE`, `CP_DRAG_SV`, `CP_DRAG_HUE`,
 
 ---
 
-### 19. Tutorial `in_enter_step` field — recursive-guard with unclear invariant
+### 19. Tutorial `in_enter_step` field - recursive-guard with unclear invariant
 
 **Where:** `src/subsystems/tutorial/tutorial_state.c:21`,
 `src/subsystems/tutorial/tutorial.c` (multiple sites)
@@ -572,7 +572,7 @@ comment naming the path. (Tier B)
 **Smell:** `start_x` is captured in `variable_panel_handle_drag_begin`
 and used in `_motion` to compute delta, but it's also present in the
 `VariablePanelDragState` struct exposed through `variable_panel_drag()`.
-External readers never use it — it's internal to the drag transaction.
+External readers never use it - it's internal to the drag transaction.
 
 **Why it matters:** Exposing transaction-internal fields in the view
 struct clutters the API surface.
@@ -584,7 +584,7 @@ to a file-static in `variable_panel_drag.c`. (Tier A)
 
 ---
 
-### 21. Replay `last_src_line` reset at stop — dead write
+### 21. Replay `last_src_line` reset at stop - dead write
 
 **Where:** `src/subsystems/replay/replay.c:873`
 
@@ -592,21 +592,21 @@ to a file-static in `variable_panel_drag.c`. (Tier A)
 field that is never read when `state->active == 0`. The field only
 matters during playback.
 
-**Why it matters:** Pure noise — the value is re-initialized in
+**Why it matters:** Pure noise - the value is re-initialized in
 `replay_start()` before the next use.
 
-**Fix:** Remove the dead assignment (or keep for defensive clarity —
+**Fix:** Remove the dead assignment (or keep for defensive clarity -
 Tier D candidate). (Tier A)
 
 **Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->src_line_idx = -1` inside `replay_stop()`, since playback fields are fully initialized inside `replay_start()`.
 
 ---
 
-### 22. Replay `state->accum = 0.0f` in `replay_stop` — dead write
+### 22. Replay `state->accum = 0.0f` in `replay_stop` - dead write
 
 **Where:** `src/subsystems/replay/replay.c:871`
 
-**Smell:** Same pattern as #21 — `accum` is re-initialized in
+**Smell:** Same pattern as #21 - `accum` is re-initialized in
 `replay_start()` and never read when state is OFF.
 
 **Fix:** Remove or mark as defensive. (Tier A)
@@ -615,7 +615,7 @@ Tier D candidate). (Tier A)
 
 ---
 
-### 23. Replay `state->pc = 0` in `replay_stop` — dead write
+### 23. Replay `state->pc = 0` in `replay_stop` - dead write
 
 **Where:** `src/subsystems/replay/replay.c:870`
 
@@ -627,7 +627,7 @@ Tier D candidate). (Tier A)
 
 ---
 
-### 24. Replay `state->total_flat_cmds = 0` in `replay_stop` — dead write
+### 24. Replay `state->total_flat_cmds = 0` in `replay_stop` - dead write
 
 **Where:** `src/subsystems/replay/replay.c:874`
 
@@ -649,7 +649,7 @@ two's-complement, but more importantly: this array is only meaningful
 when `active == 1`, and `tutorial_start` reinitializes it before use.
 
 **Why it matters:** The init-time loop is defensive but unreachable
-in practice — `tutorial_state_reset()` → `_init_defaults()` fires
+in practice - `tutorial_state_reset()` → `_init_defaults()` fires
 when the tutorial ends, at which point the array is no longer read.
 
 **Fix:** Keep as defensive initialization (Tier D candidate) or
@@ -670,7 +670,7 @@ during replay. The peer exposes it in the view, but the initial
 frames anyway.
 
 **Why it matters:** The field's home in the peer state struct is
-slightly odd — it's a controller-written display hint stored in a
+slightly odd - it's a controller-written display hint stored in a
 peer's view. Functional but philosophically misplaced.
 
 **Fix:** Accept as-is. `src/subsystems/README.md:41` explicitly
@@ -686,10 +686,10 @@ per-frame easing equations (like `replay_lift_px`)"). (Tier D)
 
 **Smell:** `g_cp_undo_captured` is file-static and only checked/set
 within `color_picker_start` and `color_picker_write_cmd`. It's not
-dead, but it's also not visible through any public API — pure
+dead, but it's also not visible through any public API - pure
 internal bookkeeping that could be a struct field for clarity.
 
-**Fix:** Accept as-is — file-statics for internal flags is the
+**Fix:** Accept as-is - file-statics for internal flags is the
 project convention. (Tier D)
 
 ---
@@ -826,7 +826,7 @@ concerns sharing only the `ReplayRuntimeState` pointer.
 
 **Where:** `src/subsystems/tutorial/tutorial.c`
 
-**Smell:** Similar to #35 — the file covers: cfg baseline,
+**Smell:** Similar to #35 - the file covers: cfg baseline,
 start/exit/teardown, step advancement, fade animation, match logic,
 shadow suffix, commit guard. Separable into runner + animation +
 matching.
@@ -838,7 +838,7 @@ matching.
 
 ---
 
-## Tier D — Accepted / documented
+## Tier D - Accepted / documented
 
 ### 37. Replay's `repl_dispatch_follow_cursor` call from peer
 
@@ -887,7 +887,7 @@ remaining ~20 calls are correct.
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c`
 
-**Rationale:** Same as #27 — internal bookkeeping flag stored as
+**Rationale:** Same as #27 - internal bookkeeping flag stored as
 file-static per project convention. No API surface issue.
 
 ---
@@ -916,7 +916,7 @@ capture/restore/reset/view/mut. No smells to report.
 
 **Where:** `src/subsystems/tutorial/tutorial_state.c`
 
-**Rationale:** Same — minimal peer-state boilerplate with explicit
+**Rationale:** Same - minimal peer-state boilerplate with explicit
 init. Clean.
 
 ---
@@ -934,7 +934,7 @@ init. Clean.
 **Priority 1 (reds + most visible UX bug):** #1 → #2 (extract shared
 cancel helper per #29), then #12 (tutorial shadow ↔ match
 normalization desync). #12 is the most user-triggerable UX issue in
-the document — every tutorial user who types extra whitespace hits it.
+the document - every tutorial user who types extra whitespace hits it.
 
 **Priority 2 (color picker undo gap):** #11 (one-line
 `color_picker_stop()` call in `editor_undo_pop_snapshot`). This is
@@ -944,10 +944,10 @@ the load-bearing fix for the narrowed #4 scenario.
 header split), then #5 (time_playing dispatch), then #6
 (follow_cursor ownership).
 
-**Priority 4 (cleanup):** #3, #7, #8, #10, #13, #17 — all Tier A
+**Priority 4 (cleanup):** #3, #7, #8, #10, #13, #17 - all Tier A
 mechanical fixes.
 
-**Defer:** #35, #36 (file splits) are Tier C — only pursue if the
+**Defer:** #35, #36 (file splits) are Tier C - only pursue if the
 files grow further or if a specific feature needs the separation.
 
 ## Method note

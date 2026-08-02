@@ -3,7 +3,7 @@
  *
  * Pure UI layer over the `ColorPickerView` peer snapshot. The renderer and
  * hit-test perform no live REPL/editor reads, no parse/commit work, and no
- * `_mut()` access — and depend on nothing in ui/app, so this subsystem links
+ * `_mut()` access - and depend on nothing in ui/app, so this subsystem links
  * cleanly in the standalone color_picker_demo. The inline code-panel swatch
  * (which needs ui/app's UiTransformer) lives in src/ui/app/color_swatch.c.
  *

@@ -3,7 +3,7 @@
 ## Context
 
 REPL examples are deliberately capped in command/parameter scale, but the
-**exported standalone C** has no such limit — there a user could crank
+**exported standalone C** has no such limit - there a user could crank
 parameters far higher. Today the only way to drive a value in exported C is to
 hand-edit the source and recompile.
 
@@ -13,13 +13,13 @@ inline `// @tune` comment. On export, each tagged variable becomes a live
 1st tagged var, `w/s` the 2nd, `e/d` the 3rd, and so on down the QWERTY
 columns. Adjustment uses the **same step math as the in-app numeric swatch**
 (`repl_eval_swatch_step`), with **Shift = fine (×0.2)** and **Ctrl = coarse
-(×10)** — mirroring the in-app swatch's modifier scaling. A generated **HUD**
+(×10)** - mirroring the in-app swatch's modifier scaling. A generated **HUD**
 lists each knob's name, current value, and its keys. Tags must **survive
 round-trip** export → import, and the in-app **variable slider panel badges**
 tagged vars so the author can see which are exported as knobs.
 
 Decisions locked with the user:
-- Tag is **bare `// @tune`** — no `min`/`max`/`step` fields; range/step are
+- Tag is **bare `// @tune`** - no `min`/`max`/`step` fields; range/step are
   auto-derived from the value's magnitude (swatch formula).
 - Exported modifiers **mirror the in-app swatch**: Shift ×0.2 (fine),
   Ctrl ×10 (coarse).
@@ -27,7 +27,7 @@ Decisions locked with the user:
 
 **Semantic caveat (document for the user):** a knob only "sticks" if the
 `display()` body does not reassign the var every frame. `@tune` on a variable
-the body overwrites each frame will appear inert — fine for parameter-style
+the body overwrites each frame will appear inert - fine for parameter-style
 vars; just set the expectation.
 
 ## Design
@@ -47,7 +47,7 @@ Ordered by declaration order, then by name order within a multi-name decl.
 Pairs are QWERTY columns, **letters only** (avoids punctuation/modifier
 ambiguity): `q/a w/s e/d r/f t/g y/h u/j i/k o/l`. Beyond 9 tagged vars, export
 the first 9 and emit a `/* … N tagged, capped at 9 */` note (requires the
-collector to report the *total* match count, not just the emitted count — see
+collector to report the *total* match count, not just the emitted count - see
 collector API below).
 
 ### Generated identifier names (must not collide with user symbols)
@@ -61,14 +61,14 @@ is therefore >15 chars**, which structurally cannot collide:
 
 ### Exported keyboard math (mirrors swatch)
 Generate a C helper replicating `repl_eval_swatch_step` (`src/repl/eval.c:1344`)
-— emit `fabsf` (not a manual abs) so the body is genuinely byte-identical:
+- emit `fabsf` (not a manual abs) so the body is genuinely byte-identical:
 ```c
 static float tune_compute_step(float v){ float m=fabsf(v);
   float e=(m<10.0f)?0.0f:floorf(log10f(m)); return 0.05f*powf(10.0f,e); }
 ```
 `fabsf/floorf/log10f/powf` are covered by `<math.h>` (already in the exported
 prologue). In `keyboard()`, decode the key **without `<ctype.h>`** (the prologue
-includes only `<math.h>`/`<stdlib.h>` — adding `tolower` would be an implicit
+includes only `<math.h>`/`<stdlib.h>` - adding `tolower` would be an implicit
 declaration, which project builds make fatal). Use inline ASCII case-fold, and
 **gate the Ctrl control-code decode on the Ctrl modifier** so non-Ctrl control
 keys (Backspace=8→`h`, Tab=9→`i`, Enter→`j`) don't alias onto knob letters:
@@ -85,15 +85,15 @@ glutPostRedisplay();
 ```
 No clamping (bare `@tune` has no range).
 
-### Exported HUD (self-contained 2D pass — model on `replay_hud.c`, NOT `label()`)
+### Exported HUD (self-contained 2D pass - model on `replay_hud.c`, NOT `label()`)
 `label()` relies on a user `glRasterPos3f` in world space; the HUD must set up
 its **own** pass. Generate `static void draw_tunable_overlay(void)` that: pushes
 projection+modelview, loads an ortho matching the window, disables
 lighting+depth, draws one `glRasterPos2f`+`glutBitmapCharacter` line per knob
-(`q/a  amp = 1.23`), then restores all state — mirroring
+(`q/a  amp = 1.23`), then restores all state - mirroring
 `src/ui/subsystems/replay_hud.c`.
 
-**Window size without `glutGet(GLUT_WINDOW_WIDTH/HEIGHT)`** — the stub GLUT
+**Window size without `glutGet(GLUT_WINDOW_WIDTH/HEIGHT)`** - the stub GLUT
 header only defines `GLUT_ELAPSED_TIME` in that query group, so a `glutGet`
 window-size call would fail the stub compile gate. Instead, record dimensions
 in `reshape(w,h)`: add `static int g_tune_window_width = 800,
@@ -110,14 +110,14 @@ edit that flags the export update.
 
 ## Files to modify
 
-### `src/repl/eval.c` / `eval.h` — pure tag predicate only (stays a leaf)
+### `src/repl/eval.c` / `eval.h` - pure tag predicate only (stays a leaf)
 - Add `int repl_eval_line_has_tune_tag(const char *line)`: true iff the line's
   trailing comment (via existing `repl_line_trailing_comment`, `eval.c:1212`)
-  contains a **whole-token** `@tune` (bounded by whitespace/end — must NOT
+  contains a **whole-token** `@tune` (bounded by whitespace/end - must NOT
   match `@tuned=5`). Pure string predicate; no command/state access, preserving
   eval's leaf status (eval.c includes only eval.h today).
 
-### `src/repl/core.c` / `core.h` — document collector (state-aware layer)
+### `src/repl/core.c` / `core.h` - document collector (state-aware layer)
 - Add `int repl_collect_tuned_vars(const GLCmd *cmds, int count,
   SourceTextView text, const char **out, int max, int *total_out)`: walk the
   passed cmd array, for each `CMD_VAR_DECLARE` whose source line (from `text`)
@@ -128,7 +128,7 @@ edit that flags the export update.
   neutral; both export and the controller call it. (core.c already sits above
   the command/state layer and is the right home for a document walk.)
 
-### `src/repl/export.c` — generate knobs + HUD, round-trip the tag
+### `src/repl/export.c` - generate knobs + HUD, round-trip the tag
 1. **Round-trip marker.** In `write_canonical_cmd_as_c` `CMD_VAR_DECLARE` case
    (≈ line 1214), after the `// @declare …` name list, append ` @tune` when the
    decl line carries the tag. Marker becomes e.g. `// @declare amp=1 @tune`.
@@ -138,7 +138,7 @@ edit that flags the export update.
    (helpers must precede `display()`). Gated on collector count `> 0`: emits
    `g_tune_window_width`/`g_tune_window_height` globals, `tune_compute_step()`,
    and `draw_tunable_overlay()`.
-3. **Inject into the SAVE PATH ONLY — do not touch `g_footer_pre_init[]`.**
+3. **Inject into the SAVE PATH ONLY - do not touch `g_footer_pre_init[]`.**
    The shared array is also iterated by the on-screen panel renderer
    (`src/ui/app/repl_code_panel.c:235,1515`), which expands **only** the
    reshape-proj sentinel and would print any new sentinel token verbatim as a
@@ -160,7 +160,7 @@ edit that flags the export update.
    "code panel == export output" parity is explicitly **dropped** (it was a
    nice-to-have, not a requirement); panel + `--dump-code` stay unchanged.
 
-### `src/repl/import.c` — restore the tag
+### `src/repl/import.c` - restore the tag
 In `parse_snippet_declare` (≈ line 373): detect a trailing `@tune` token in the
 `@declare` args (the name loop already stops at `@`), and when reconstructing
 the canonical decl source append `; // @tune` (replacing the bare `;`). The
@@ -203,7 +203,7 @@ the panel badge both see it.
 - Run `make test` and `make check-c99`.
 
 ## End-to-end verification
-1. `make gl-repl && ./gl-repl` — load an example, add `float k = 1; // @tune`,
+1. `make gl-repl && ./gl-repl` - load an example, add `float k = 1; // @tune`,
    confirm the variable panel shows the badge. `Ctrl+S`, inspect `output.c`:
    `// @declare k=1 @tune`, `g_tune_window_width/_height`, a
    `draw_tunable_overlay()`, and `if (k=='q')` in `keyboard()`. Reload

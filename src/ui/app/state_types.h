@@ -61,7 +61,7 @@ typedef struct {
  * against the popup's solved row capacity), whether the default/source
  * detail columns are expanded (collapsed on every open so the popup starts
  * narrow; toggled by clicking the header chip), and whether the generated
- * setup rows are shown (also collapsed on every open — the popup opens on
+ * setup rows are shown (also collapsed on every open - the popup opens on
  * what the program itself wrote, with the harness's own state one click
  * away behind the title-row chip). */
 typedef struct {

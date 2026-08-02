@@ -7,7 +7,7 @@
  * or inline matrix calls in tools/render3d_demo), then call
  * render3d_draw_scene() for one pass. The scene module owns projection
  * setup, clear, helper renderers (backdrop, grid, axes, lights), and the
- * optional callback hooks that bracket the main geometry fill — but does
+ * optional callback hooks that bracket the main geometry fill - but does
  * NOT own a camera type or apply helper.
  *
  * The public surface stays REPL-independent: user geometry and replay-specific
@@ -30,7 +30,7 @@
  * - render3d_lights_init_global_ambient() (baseline ambient term).
  * - render3d_postprocess_filter_reset() (clears the post-process module's
  *   per-renderer caches).
- * No display lists, shaders, or tessellator allocation happen here —
+ * No display lists, shaders, or tessellator allocation happen here -
  * those live elsewhere (the tessellator is owned by the executor). */
 void render3d_init_gl(void);
 
@@ -39,7 +39,7 @@ void render3d_init_gl(void);
  * GL_PROJECTION via render3d_apply_projection and switches back to
  * GL_MODELVIEW for user geometry, but it never overwrites the
  * modelview the caller set. The scene module does not own a camera
- * type, an apply helper, or any camera state — that lives in
+ * type, an apply helper, or any camera state - that lives in
  * src/app/glr_camera.h (glr_camera_load_modelview / GlrCameraPose).
  *
  * For non-app callers (render3d_demo, future scene viewports): inline
@@ -87,7 +87,7 @@ typedef struct Render3dProjectionDesc {
 /* Per-renderer state the scene module needs to persist across frames.
  * Replaces the file-static g_ortho_ref_dist / g_ortho_active /
  * g_active_projection trio in render.c. Each caller (controller,
- * render3d_demo, tests) owns one instance — the single-renderer
+ * render3d_demo, tests) owns one instance - the single-renderer
  * assumption is now an instance count, not a global. Multiple scene
  * viewports become possible later by holding multiple state objects.
  *
@@ -96,7 +96,7 @@ typedef struct Render3dProjectionDesc {
  * frames (the renderer never frees it). */
 typedef struct Render3dState {
     /* 2D ortho scale reference (depth-center of the drawn geometry).
-     * How it's sampled — once at the switch vs. every frame — is
+     * How it's sampled - once at the switch vs. every frame - is
      * selected at compile time by GLR_ORTHO_REF_MODE above.
      * 0 means "no usable measurement" and the projection math falls
      * back to config->cam_dist (the old orbit-target-plane behavior). */
@@ -104,12 +104,12 @@ typedef struct Render3dState {
     /* cam_dist at the instant ortho_ref_dist was sampled. The live 2D
      * scale reference is ortho_ref_dist + (cam_dist - ortho_ref_cam_dist),
      * so mouse-wheel zoom (which drives cam_dist) rescales the ortho view
-     * without re-probing — the same eye-distance shift a re-probe would
+     * without re-probing - the same eye-distance shift a re-probe would
      * measure, but without the per-frame breathing under animation that
      * FROZEN mode exists to avoid. Unused while ortho_ref_dist is 0 (the
      * fallback path reads cam_dist directly). */
     double ortho_ref_cam_dist;
-    /* Edge tracker for the FROZEN sampling mode — true while ortho is
+    /* Edge tracker for the FROZEN sampling mode - true while ortho is
      * contributing. PERFRAME mode doesn't read this. */
     int    ortho_active;
     /* Canonical (zero-jitter) projection resolved by the most recent

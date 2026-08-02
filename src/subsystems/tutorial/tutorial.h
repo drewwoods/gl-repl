@@ -24,7 +24,7 @@
  * second. Per-line total duration is computed at emit time as
  * (line_len + TUTORIAL_FADE_SETTLE_CHARS) / TUTORIAL_FADE_CHARS_PER_SEC,
  * so short instructions reveal quickly and long ones take longer at
- * the same readable pace — instead of every line racing through a
+ * the same readable pace - instead of every line racing through a
  * fixed wall-clock budget. */
 #ifndef TUTORIAL_FADE_CHARS_PER_SEC
 #define TUTORIAL_FADE_CHARS_PER_SEC 50.0f
@@ -71,7 +71,7 @@ void                 tutorial_stop(void);
  * teardown path that called tutorial_state_reset() directly
  * (workspace/scene/example load, glr_ctrl_reset_all) so the workspace-load
  * stash never enshrines tutorial-mutated cfg as the new baseline.
- * Idempotent — no-op when no tutorial is active. */
+ * Idempotent - no-op when no tutorial is active. */
 void                 tutorial_teardown(void);
 int                  tutorial_handle_commit_attempt(const char *input,
                                                     TutorialMatchResult *out);
@@ -80,7 +80,7 @@ int                  tutorial_handle_commit_attempt(const char *input,
  * complete match for the active COMMAND step's expected text (Tab
  * accepted the ghost or the user finished typing), refresh the status
  * bar with a "press Enter or ';' to commit" reminder. No-op for
- * inactive, SET / REQUIRE, or partial input — those let the prior
+ * inactive, SET / REQUIRE, or partial input - those let the prior
  * status fade naturally. */
 void                 tutorial_refresh_input_hint(const char *input);
 
@@ -91,19 +91,19 @@ void                 tutorial_refresh_input_hint(const char *input);
  * the "type or Tab" entry variant). Returns 0 with `out` cleared for
  * inactive, SET, or REQUIRE. Paired with tutorial_status_is_hint to
  * let the controller re-emit the hint each frame without trampling
- * non-tutorial status messages — see glr_ctrl_tick. */
+ * non-tutorial status messages - see glr_ctrl_tick. */
 int                  tutorial_status_hint(char *out, size_t out_size);
 
 /* Returns 1 when `text` is one of the COMMAND-step status hints
  * tutorial_status_hint emits (any "Tutorial: step …" prefix), letting
- * the controller distinguish "this status is mine — refresh it" from
- * "another subsystem owns the slot — let its TTL run out." */
+ * the controller distinguish "this status is mine - refresh it" from
+ * "another subsystem owns the slot - let its TTL run out." */
 int                  tutorial_status_is_hint(const char *text);
 
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
 
-/* Kind of the current step (TUTORIAL_STEP_KIND_COMMAND when inactive — a
+/* Kind of the current step (TUTORIAL_STEP_KIND_COMMAND when inactive - a
  * safe default that lets callers branch on "is the document writable?"
  * without first checking active). */
 TutorialStepKind     tutorial_current_step_kind(void);
@@ -116,7 +116,7 @@ void                 tutorial_notify_state_changed(void);
 
 /* Showcase-step ack: if the current step is SET or NOTE and `key` is
  * Enter / Tab / Space, advance to the next step and return 1
- * (consumed); else return 0 (not consumed — caller continues its
+ * (consumed); else return 0 (not consumed - caller continues its
  * dispatch chain). */
 int                  tutorial_handle_ack_key(unsigned char key);
 
@@ -125,7 +125,7 @@ int                  tutorial_handle_ack_key(unsigned char key);
  * Space …" for SET/NOTE; "Set <slug> = <value> …" for REQUIRE) and
  * return 1 to tell the editor to reject the commit. Returns 0 for
  * COMMAND / inactive (let the normal commit path run). Lives in
- * tutorial.c so input.c gains zero new direct repl_* calls —
+ * tutorial.c so input.c gains zero new direct repl_* calls -
  * check-editor-repl-surface stays at its baseline of 21 unique
  * repl_* symbols. */
 int                  tutorial_reject_noncommand_commit_with_hint(void);

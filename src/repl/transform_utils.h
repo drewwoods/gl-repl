@@ -50,7 +50,7 @@ static inline void apply_tracked_transform(const GLCmd *cmd, int *depth) {
         break;
     case CMD_MULT_MATRIXF:
         /* Values ride on the command (flatten snapshots the scratch array
-         * into payload.matrix), so this stays a pure GLCmd read — no
+         * into payload.matrix), so this stays a pure GLCmd read - no
          * scratch-table lookup, which is what keeps this header linkable
          * from render3d. */
         glMultMatrixf(cmd->payload.matrix.m);
@@ -80,7 +80,7 @@ static inline void unwind_transform_stack(int *depth) {
  * per hit). Init with the index of the anchor command; each _next call
  * returns the index of the closest remaining in-scope glTranslatef /
  * glScalef / glRotatef (deliberately narrower than
- * repl_cmd_is_transform — the stack ops are the scan's bookkeeping,
+ * repl_cmd_is_transform - the stack ops are the scan's bookkeeping,
  * not results), newest first, or -1 when the scan is exhausted. */
 typedef struct TransformScopeScan {
     const GLCmd *cmds;

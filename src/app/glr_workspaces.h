@@ -12,8 +12,8 @@ int         glr_workspaces_active_index(void);
 
 /* Display name of the workspace the live scene set is bound to, or "" when
  * no managed workspace is bound (a plain collection of scenes). Answers the
- * catalog first; falls back to the manifest name — then the directory
- * basename — for a workspace opened through "Other folder...", which has no
+ * catalog first; falls back to the manifest name - then the directory
+ * basename - for a workspace opened through "Other folder...", which has no
  * catalog entry. A bound directory without a manifest is not a workspace and
  * reads as "".
  *

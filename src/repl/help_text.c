@@ -5,8 +5,8 @@
  * knowledge. The Commands tab is fully static; the Keys tab
  * interleaves a static base with dynamic F-key entries supplied via
  * a controller-installed ReplHelpFkeyProvider (see help_text.h).
- * Pre-audit-#1 this module #included app/glr_config.h directly —
- * the only src/repl/ file that did so — and walked g_cfg_items[]
+ * Pre-audit-#1 this module #included app/glr_config.h directly -
+ * the only src/repl/ file that did so - and walked g_cfg_items[]
  * inline. The provider hook keeps the F-key labels dynamic without
  * reaching into the app shell.
  */
@@ -38,11 +38,11 @@ void repl_help_text_install_fkey_provider(const ReplHelpFkeyProvider *provider) 
 /* Leading byte that marks a titled divider row: ui_tabbed_overlay draws
  * it as an accent label + a GL rule out to the right edge (see the 0x13
  * branch there), so the marker glyph never renders as text. Octal \023
- * == 0x13 (DC3) — octal caps at 3 digits, so the following label's
+ * == 0x13 (DC3) - octal caps at 3 digits, so the following label's
  * letters can't extend the escape the way a \x13 hex escape would. */
 #define HELP_SEP "\023"
 
-/* Overview tab: orientation for a first-time user — what the program
+/* Overview tab: orientation for a first-time user - what the program
  * is, what each region of the window is, what the menu bar does, and
  * where to look next. Static/immortal strings (handed to the renderer
  * by pointer like k_lang_sections_tail). Same '\t' left/right column
@@ -104,7 +104,7 @@ static const char *const k_tab_overview[] = {
  * generated at frame-build time from `k_func_completions[]` in
  * src/repl/command_spec.c so adding a new command only touches the spec.
  * The language-level sections below ("Math Expressions:", "Variables:",
- * For-Loops, etc.) stay hand-written — they document REPL syntax, not
+ * For-Loops, etc.) stay hand-written - they document REPL syntax, not
  * commands. */
 static const char *const k_lang_sections_tail[] = {
     "Math Operators / Comparisons:",
@@ -513,7 +513,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     /* F1 - not in g_cfg_items */
     nk = key_emit_binding(nk, "", KM_KEY(GLR_HELP), KM_MODS(GLR_HELP), 1, "", "Help overlay");
 
-    /* F2-F10 — pulled from the controller-installed provider so this
+    /* F2-F10 - pulled from the controller-installed provider so this
      * module stays free of app/ includes. F12 / Shift+F12 are not part
      * of the config table; they drive the example/scene cycle directly
      * (forward, and backward with Shift) and are emitted unconditionally

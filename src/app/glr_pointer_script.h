@@ -2,7 +2,7 @@
 #define GLR_POINTER_SCRIPT_H
 
 /*
- * Scripted synthetic pointer/keyboard input — the capture affordance behind
+ * Scripted synthetic pointer/keyboard input - the capture affordance behind
  * GLR_POINTER_SCRIPT=<file>. A recording run (scripts/record-video.sh) uses
  * it to drive menu navigation headlessly: timed pointer glides open dropdown
  * menus and hover-highlight rows exactly as a real mouse would (all events
@@ -24,13 +24,13 @@
  * `pause <seconds>` delays the next event by the requested duration in either
  * form. A *point* is either literal window pixels
  * "<x> <y>" (origin top-left, the GLUT callback convention) or a symbolic
- * target token resolved against the LIVE layout when the event fires — so
+ * target token resolved against the LIVE layout when the event fires - so
  * symbolic scripts are window-size- and catalog-order-independent:
  *
  *   menu:scene            top-level menu-bar button, by label
  *   item:new_scene        row of the currently open dropdown, by label
  *   subenter:overlays     horizontal entry point into a parent row's flyout
- *                         (enter at the parent's y — a diagonal glide would
+ *                         (enter at the parent's y - a diagonal glide would
  *                         cross sibling rows and swap the flyout)
  *   sub:overlays:vertex_points   flyout row: parent label + row label
  *   pin:replay            pinned button: replay / search / view (2D-3D)
@@ -47,7 +47,7 @@
  * Labels match by normalized prefix: case-insensitive, '_' matches ' '
  * ("torus_knot" matches "Torus knot (animated)"); chrome rows (dividers,
  * headers, flyout subheadings) never match. Row targets need their menu
- * open — click it open first, exactly as a user would. An unresolvable
+ * open - click it open first, exactly as a user would. An unresolvable
  * target aborts a capture run (exit 1) and stops a tour with a status
  * message; a silently mis-aimed script is worse than a failed one.
  *
@@ -191,7 +191,7 @@ float glr_pointer_script_echo_alpha(int age, int dur, int clock_frozen);
 
 /* Read GLR_POINTER_SCRIPT and parse the script it names. Returns nonzero
  * when a script is active (so main() can imply GLR_TICK_PER_FRAME). A parse
- * error reports the offending line on stderr and exits nonzero — a capture
+ * error reports the offending line on stderr and exits nonzero - a capture
  * run silently recording the wrong interaction is worse than failing. */
 int glr_pointer_script_load_env(void);
 
@@ -216,7 +216,7 @@ int glr_pointer_script_blocks_physical_motion(void);
  * auto-stop; safe to call when inactive. */
 void glr_pointer_script_stop(void);
 
-/* Nonzero while a runtime-started (tour) script is playing — as opposed to
+/* Nonzero while a runtime-started (tour) script is playing - as opposed to
  * the env-driven capture mode, which is never canceled by user input. */
 int glr_pointer_script_tour_active(void);
 
@@ -224,7 +224,7 @@ int glr_pointer_script_tour_active(void);
  * or the Emscripten-only "shell:new")
  * against the live layout, filling (*mx, *my) in mouse space. Returns 1 on
  * success, 0 when the target is unknown or currently unresolvable. The same
- * resolver every scripted point goes through — exposed so tests can pin the
+ * resolver every scripted point goes through - exposed so tests can pin the
  * target vocabulary to the real hit-test geometry. */
 int glr_pointer_script_resolve_target(const char *target, int *mx, int *my);
 
@@ -235,15 +235,15 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my);
  * new pointer state. No-op when inactive. */
 void glr_pointer_script_frame(void);
 
-/* Draw the narration overlay over the composited frame — caption plate, cursor
+/* Draw the narration overlay over the composited frame - caption plate, cursor
  * arrow, click ripple, highlight ring; call between glr_ctrl_display_frame()
  * and glutSwapBuffers(), like splash_render(). No-op when inactive.
  *
  * Self-timed as PROF_TOUR_OVERLAY (the bracket is inside, past the inactive
- * guard — callers add nothing): the caption is the only part with any cost, and
+ * guard - callers add nothing): the caption is the only part with any cost, and
  * a tour is when a human is watching. `pointer` in the name is this module's
  * prefix (a script of pointer/keyboard events), not a claim about what the
- * overlay draws — env-driven capture runs render it too. */
+ * overlay draws - env-driven capture runs render it too. */
 void glr_pointer_script_render_overlay(int win_w, int win_h);
 
 #endif /* GLR_POINTER_SCRIPT_H */

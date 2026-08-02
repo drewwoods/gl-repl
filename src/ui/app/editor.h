@@ -130,10 +130,10 @@ typedef struct {
 /* Per-line text overrides. The controller may push a replacement
  * text for a source line (e.g., replay's variable-substituted form);
  * editor row-count and render read this slice with a buffer fallback.
- * Sparse — only lines with a real override appear. */
+ * Sparse - only lines with a real override appear. */
 #define MAX_LINE_OVERRIDE_TEXT 256
 /* Capped at MAX_EDITOR_COMMANDS so the override list can hold one entry per
- * source command — layout and render both index by source line and
+ * source command - layout and render both index by source line and
  * must never disagree on whether a given line carries an override.
  * (When the cap was 512, busy replays exceeded it and layout fell
  * back to buffer text while render kept computing live, drifting

@@ -867,8 +867,8 @@ static void test_hud_panel_width_clamp(void) {
 }
 
 /* Caption alpha: eases in/out during playback, but a frozen (paused/stepped/
- * backstep-settled) clock renders full opacity so a caption caught mid-fade —
- * or reconstructed at a tiny age on backstep — stays readable instead of hung
+ * backstep-settled) clock renders full opacity so a caption caught mid-fade -
+ * or reconstructed at a tiny age on backstep - stays readable instead of hung
  * half-transparent. */
 static void test_echo_alpha_frozen_is_full(void) {
     /* Playing: ease-in ramps from 0 at age 0 to full by age 9. */
@@ -903,7 +903,7 @@ static void test_view_inactive_after_stop(void) {
  *
  * The phase machine in glr_tour_presence.c is what makes a running tour
  * visible in peripheral vision, and every property worth pinning is arithmetic
- * over a frame counter — no drawing required. What it must get right: the
+ * over a frame counter - no drawing required. What it must get right: the
  * intro announces before anything moves, the border keeps breathing while the
  * tour is paused (a paused tour is still a tour you are inside), and the exit
  * collapse OUTLIVES the tour, which is the whole reason this state does not
@@ -970,7 +970,7 @@ static void test_presence_outro_outlives_the_tour(void) {
     glr_tour_presence_reset();
     presence_frames(1, "Camera & Views", GLR_TOUR_PRESENCE_INTRO_FRAMES + 5);
 
-    /* The tour is gone and its metadata pointers with it — pass NULL, exactly
+    /* The tour is gone and its metadata pointers with it - pass NULL, exactly
      * as glr_pointer_script_tour_view() reports it after a stop. */
     v = glr_tour_presence_tick(0, NULL);
     ASSERT_INT("stopping enters the outro", v.phase, GLR_TOUR_PRESENCE_OUTRO);
@@ -1000,7 +1000,7 @@ static void test_presence_restarts_intro_for_a_new_tour(void) {
                GLR_TOUR_PRESENCE_ACTIVE);
 
     /* Starting a tour from the Tours menu during a tour never passes through
-     * inactive, so the name change is the only edge available — and the card
+     * inactive, so the name change is the only edge available - and the card
      * has to replay, because the thing being announced changed. */
     v = glr_tour_presence_tick(1, "Getting Help");
     ASSERT_INT("new tour name replays the intro",
@@ -1020,7 +1020,7 @@ static void test_presence_reset_skips_the_outro(void) {
 }
 
 /* The compact strip is what a tour actually runs under (the HUD defaults
- * collapsed), so it — not just the expanded transport line — has to carry the
+ * collapsed), so it - not just the expanded transport line - has to carry the
  * way out. */
 static void test_hud_compact_strip_carries_the_exit_key(void) {
     ASSERT_TRUE("compact layout names Esc",

@@ -1,30 +1,30 @@
 /*
- * tools/cpuprof_demo/cpuprof_demo.c — standalone driver for the CPU
+ * tools/cpuprof_demo/cpuprof_demo.c - standalone driver for the CPU
  * profiling subsystem, in the shape of a display-list micro-benchmark.
  *
  * Isolation proof: links ONLY src/support/cpuprof.c (the pure wall-time
  * sampler) + src/ui/support/cpuprof.c (the overlay panel) + ui/core theme.
- * No src/ui/app, src/app, src/repl, or src/editor — see CPUPROF_DEMO_DEP_SRCS
+ * No src/ui/app, src/app, src/repl, or src/editor - see CPUPROF_DEMO_DEP_SRCS
  * in the Makefile and check-cpuprof-demo-isolation. Sibling of memprof_demo.
  *
  * What it measures: the same 5 teapots drawn three ways each frame, each way
- * timed as its own profile section so the panel shows them side by side —
+ * timed as its own profile section so the panel shows them side by side -
  *   - Immediate x5:  5x glutSolidTeapot (immediate-mode geometry);
  *   - List reuse:    a list compiled ONCE at startup, then 5x glCallList;
  *   - List rebuild:  glNewList/glEndList every frame (the "compile" span)
  *                    then 5x glCallList of that fresh list.
  * The "compile" sub-row is the number of interest: it is the per-frame display-
- * list compilation overhead — i.e. what you would pay PER accumulation-buffer
+ * list compilation overhead - i.e. what you would pay PER accumulation-buffer
  * AA sample if the scene's list were rebuilt each pass instead of compiled once
  * and reused. "List reuse > call" vs "List rebuild > compile + call" makes the
- * trade legible. (Panel labels stay inside the label column — the renderer
+ * trade legible. (Panel labels stay inside the label column - the renderer
  * clips anything longer, so a name that overruns reads as "Foo bar b...".) 'd' collapses to the three method totals / expands the call+compile
  * breakdown; clicking the histogram header's [reset] control clears the
  * accumulated distribution, and clicking a histogram legend swatch toggles
  * that series in and out of the plot (right-click plots only that series);
  * 'q' quits.
  *
- * Sections: this demo declares its OWN catalog (the CP_* enum below) — it does
+ * Sections: this demo declares its OWN catalog (the CP_* enum below) - it does
  * NOT borrow gl-repl's section names. cpuprof_demo and gl-repl share the
  * generic cpuprof objects, so the timer's slot capacity is fixed at
  * PROF_SECTION_COUNT (gl-repl's count, force-included via prof_sections.h); the
@@ -90,8 +90,8 @@ static int    g_lists_ready    = 0;
 
 /* The demo's half of the cpuprof display contract (gl-repl's half is
  * src/app/glr_prof.c):
- * { bare label, explicit depth, is_total, is_slack, is_frame_total }. depth —
- * not any baked-in indentation — drives how far the panel indents the row,
+ * { bare label, explicit depth, is_total, is_slack, is_frame_total }. depth -
+ * not any baked-in indentation - drives how far the panel indents the row,
  * and depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT
  * are unused: prof_section_info returns {NULL} and the panel omits them. The
  * demo times no slack row; its outer span is a whole-frame total. */
@@ -157,7 +157,7 @@ static void display_func(void) {
     glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
     glMatrixMode(GL_MODELVIEW);
 
-    /* Row 1 — immediate mode. */
+    /* Row 1 - immediate mode. */
     set_row_color(0.55f, 0.80f, 0.65f);
     prof_begin(CP_IMMEDIATE);
     for (int i = 0; i < TEAPOTS_PER_ROW; i++) {
@@ -166,7 +166,7 @@ static void display_func(void) {
     }
     prof_end(CP_IMMEDIATE);
 
-    /* Row 2 — display list compiled once at startup, reused every frame. */
+    /* Row 2 - display list compiled once at startup, reused every frame. */
     set_row_color(0.55f, 0.70f, 0.95f);
     prof_begin(CP_REUSE);
     prof_begin(CP_REUSE_CALL);
@@ -177,7 +177,7 @@ static void display_func(void) {
     prof_end(CP_REUSE_CALL);
     prof_end(CP_REUSE);
 
-    /* Row 3 — display list rebuilt this frame, then called. */
+    /* Row 3 - display list rebuilt this frame, then called. */
     set_row_color(0.95f, 0.72f, 0.45f);
     prof_begin(CP_RECOMPILE);
     prof_begin(CP_RECOMPILE_COMPILE);
@@ -196,7 +196,7 @@ static void display_func(void) {
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
 
-    /* CPU profile panel overlay — anchored top-right (gl2d is y-up), with
+    /* CPU profile panel overlay - anchored top-right (gl2d is y-up), with
      * the section-histogram panel stacked directly beneath it. Two of the
      * three sections above are display-list paths whose per-frame cost is
      * near-constant while the immediate-mode row's is not, so the overlaid
@@ -265,7 +265,7 @@ static void mouse_func(int button, int state, int x, int y) {
     }
 }
 
-/* Track the pointer so the histogram legend's hover statistics work here too —
+/* Track the pointer so the histogram legend's hover statistics work here too -
  * the same view field the gl-repl controller fills from its UI snapshot. */
 static void passive_motion_func(int x, int y) {
     g_hist_view.pointer_x = x;
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(g_window_w, g_window_h);
-    glutCreateWindow("cpuprof_demo — display-list benchmark");
+    glutCreateWindow("cpuprof_demo - display-list benchmark");
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);

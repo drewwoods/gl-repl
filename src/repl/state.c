@@ -41,7 +41,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
      * The REPL pipeline owns only what the executor mutates: the
      * light-enable bitmask, set/cleared in response to glEnable(GL_LIGHTn)
      * / glDisable(GL_LIGHTn) and recomputed each walk (defaults to 0 via
-     * the zero-init above — no light is enabled until the program says so).
+     * the zero-init above - no light is enabled until the program says so).
      * Positions, colors, eye-space, and the active lighting theme are
      * *presentation* concerns owned by the app shell (GlrRenderState.lights,
      * seeded by the controller via render3d_lights_apply_theme). */
@@ -71,7 +71,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
              "  glTranslatef(0.0000f, 0.0000f, 0.0000f);");
 }
 
-/* Lazily-initialised defaults — avoids embedding a 4.6 MB const copy
+/* Lazily-initialised defaults - avoids embedding a 4.6 MB const copy
  * of ReplRuntimeState in the object file. Pure read: just fills the
  * file-static `defaults` buffer on first call and hands back a const
  * pointer to it. Callers that also need the live g_repl_state
@@ -90,7 +90,7 @@ static const ReplRuntimeState *repl_state_defaults(void) {
 /* Patch the live g_repl_state with the sentinel/default field values
  * once per process. Used by callers that may run before an explicit
  * reset_program() and would otherwise see uninitialized state.
- * Idempotent — the second-and-later calls are cheap no-ops. */
+ * Idempotent - the second-and-later calls are cheap no-ops. */
 void repl_state_ensure_sentinels(void) {
     static int patched;
     if (patched) return;
@@ -277,7 +277,7 @@ void repl_state_notify_predef_value_changed(int slot) {
         else
             fp->dirty = 1;
     }
-    /* else: root unused by the current flat program — nothing to do. */
+    /* else: root unused by the current flat program - nothing to do. */
 }
 
 void repl_state_flat_program_set_current_block(int begin_idx, int end_idx,
@@ -304,7 +304,7 @@ void repl_state_mark_source_dirty(void) {
      * - The compiled-expression cache rebuilds lazily per line on the
      *   next full flatten.
      *
-     * Don't try to invalidate caches independently — every source
+     * Don't try to invalidate caches independently - every source
      * mutation goes through here, and that's the contract callers rely
      * on. */
     g_repl_state.document.normals_dirty = 1;
@@ -384,7 +384,7 @@ void repl_state_time_set_playing(int playing) {
 
 void repl_state_time_set_transient(float value) {
     /* Override only the predef 't' binding, leaving the free-running clock
-     * (anim_time) and the flat-dirty flag untouched — unlike
+     * (anim_time) and the flat-dirty flag untouched - unlike
      * repl_state_time_set, this does not perturb the running animation. It
      * lets a caller evaluate the program at an alternate t for a transient
      * purpose (e.g. sampling sub-frame times) without advancing or dirtying
@@ -477,8 +477,8 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
     g_repl_state.document.source_uses_time_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
     /* The restored snapshot carries a different document (and possibly a
-     * reshaped predef table), so compiled expressions — line indices and
-     * compile-time-resolved predef slots — are stale wholesale. */
+     * reshaped predef table), so compiled expressions - line indices and
+     * compile-time-resolved predef slots - are stale wholesale. */
     repl_expr_cache_invalidate(repl_expr_cache_live());
     /* The snapshot's dep-routing state describes its own (now-discarded)
      * flat program and cache. Force a full flatten and drop any inherited
@@ -522,7 +522,7 @@ void repl_state_checkpoint_restore(const ReplCheckpointState *snapshot) {
     g_repl_state.document.source_uses_time_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
     /* The restored document (and possibly a reshaped predef table) makes
-     * every compiled expression — line indices, compile-time predef slots —
+     * every compiled expression - line indices, compile-time predef slots -
      * stale wholesale. */
     repl_expr_cache_invalidate(repl_expr_cache_live());
     /* The flat program is derived and NOT part of this checkpoint. Force a

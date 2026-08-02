@@ -34,7 +34,7 @@
 typedef void (*DemoMenuAction)(void);
 
 /* Demo's persistence path. Relative to the cwd the demo was
- * launched from — keeps the demo self-contained (no /tmp pollution,
+ * launched from - keeps the demo self-contained (no /tmp pollution,
  * no platform-specific user-data dirs). Round-trip workflow:
  * "Save" writes here; later runs "Load" the same file. The status
  * messages print the full path the user typed so it's obvious
@@ -204,7 +204,7 @@ int demo_menu_handle_click(int mx, int my, int vp_w, int vp_h) {
             return 1;
         }
         /* Click elsewhere on the menu bar is "outside the dropdown"
-         * per menu.h — close any open dropdown. Consume the click
+         * per menu.h - close any open dropdown. Consume the click
          * either way so it doesn't fall through to the code panel. */
         g_menu_open = 0;
         return 1;

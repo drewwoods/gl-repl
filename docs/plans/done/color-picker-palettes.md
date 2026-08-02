@@ -1,6 +1,6 @@
-# Color Picker — Palettes (Basic / Full / Harmony)
+# Color Picker - Palettes (Basic / Full / Harmony)
 
-Status: **not-started** — design ready, awaiting implementation slot.
+Status: **not-started** - design ready, awaiting implementation slot.
 
 ## Context
 
@@ -15,9 +15,9 @@ the editor commit pipeline.
 This adds **palettes** beside the freeform sliders so the user can drop
 a known-good color in one click:
 
-1. **Basic** — one row of ~10 common named colors.
-2. **Full** — a hue × tint/shade grid plus a greyscale ramp (~56 cells).
-3. **Harmony** — the chosen color plus 3 *derived* swatches. User-chosen
+1. **Basic** - one row of ~10 common named colors.
+2. **Full** - a hue × tint/shade grid plus a greyscale ramp (~56 cells).
+3. **Harmony** - the chosen color plus 3 *derived* swatches. User-chosen
    scheme: **tetradic / square** (hues at +90°, +180°, +270°, keeping the
    chosen S and V).
 
@@ -29,7 +29,7 @@ height when selected).
 
 - **Layout:** tab strip (`[Basic] Full Harmony`) below the preview
   swatch; active palette grid renders under it. Popup width unchanged.
-- **Harmony scheme:** tetradic / square — base color at hue `h`, three
+- **Harmony scheme:** tetradic / square - base color at hue `h`, three
   derived at `h+0.25`, `h+0.5`, `h+0.75` (wrapping), all sharing the
   base S and V. Swatch 0 is always the base.
 - **Sticky harmony key:** the tetrad's base ("key") is *persistent
@@ -40,7 +40,7 @@ height when selected).
   derived swatch is applied. It auto-seeds from the current color the
   first time the Harmony tab is entered, and re-anchors via a "Set key
   from current" button in the Harmony pane. Cleared by
-  `color_picker_state_reset`. (No copy/paste-color clipboard — explicitly
+  `color_picker_state_reset`. (No copy/paste-color clipboard - explicitly
   out of scope.)
 - **Hex readout (general):** the picker exposes the current color as a
   32-bit `#RRGGBBAA` string (alpha `FF` for RGB-only commands), rendered
@@ -58,7 +58,7 @@ keep passing, and `color_picker_demo` inherits palettes for free:
   the tab/swatch click handling. Palette colors are picker *data*, so
   static tables in the peer keep the demo self-contained.
 - **UI** (`src/ui/subsystems/color_picker.{c,h}`) draws the tab strip +
-  active grid from the `ColorPickerView` and extends the hit-test —
+  active grid from the `ColorPickerView` and extends the hit-test -
   still a pure renderer/hit-test over the view.
 - **Bridge / controller / router** unchanged: palette clicks resolve to
   RGBA and flow through the same `color_picker_write_cmd()` →
@@ -76,12 +76,12 @@ typedef enum {
 } CpPaletteTab;
 ```
 
-- `static CpPaletteTab g_cp_tab` — new session state; reset in
+- `static CpPaletteTab g_cp_tab` - new session state; reset in
   `color_picker_state_reset` / `color_picker_stop` is *not* required
   (tab choice can persist across opens; reset only on full state reset).
-- `static const float CP_BASIC[10][3]` — black, white, mid-grey, red,
+- `static const float CP_BASIC[10][3]` - black, white, mid-grey, red,
   orange, yellow, green, cyan, blue, magenta.
-- `static const float CP_FULL[CP_FULL_COUNT][3]` — 8 hue columns × 6
+- `static const float CP_FULL[CP_FULL_COUNT][3]` - 8 hue columns × 6
   tint→shade rows + an 8-cell greyscale row (56). Either a literal table
   or generated from HSV at first use.
 - Tetradic harmony computed at view time next to `color_picker_hsv_to_rgb`.
@@ -114,7 +114,7 @@ stacked below the preview swatch. New peer constants:
 on-screen vertical clamp. The tab-switch press branch re-runs the clamp
 so switching to the taller Full grid doesn't run off the bottom edge.
 
-### Input — `color_picker_handle_press`
+### Input - `color_picker_handle_press`
 
 Insert two region checks before the existing "inside-popup no-op" and
 "outside → dismiss" fallbacks:

@@ -128,7 +128,7 @@ void glr_state_presentation_reset_example_defaults(void) {
      * roster mirrors the cfg-bridge `fill_scene_subset` whitelist in
      * glr_actions.c; ortho_mode is reset alongside it (rather than in
      * the subset proper) so the 2D/3D view doesn't leak across example
-     * loads in the F12 cycle — an example whose @cfg omits `view_mode`
+     * loads in the F12 cycle - an example whose @cfg omits `view_mode`
      * gets the default 3D, not whatever the prior example set.
      * Fields outside this reset (autonormal, code_panel_layout,
      * wrap_at_comma) keep their current values

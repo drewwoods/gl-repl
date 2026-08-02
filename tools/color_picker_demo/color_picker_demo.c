@@ -1,17 +1,17 @@
 /*
- * tools/color_picker_demo/color_picker_demo.c — standalone driver for the
+ * tools/color_picker_demo/color_picker_demo.c - standalone driver for the
  * color-picker subsystem.
  *
  * Isolation proof: links ONLY the src/subsystems/color_picker peer (state +
  * lifecycle + input) + src/ui/subsystems/color_picker.c (renderer/hit-test) +
- * ui/core theme. No src/ui/app, no src/app, no src/repl, no src/editor — see
+ * ui/core theme. No src/ui/app, no src/app, no src/repl, no src/editor - see
  * COLOR_PICKER_DEMO_DEP_SRCS in the Makefile and
  * check-color-picker-demo-isolation.
  *
  * What it shows: a row of GLUT solid shapes, each with its own RGBA color.
  * Click a shape to open the floating picker on it; drag the SV square / hue
  * bar / alpha bar and the shape recolors live. This exercises the decoupling
- * seam the subsystem grew — a ColorPickerHostBridge the demo installs over an
+ * seam the subsystem grew - a ColorPickerHostBridge the demo installs over an
  * in-memory color array, standing in for the REPL document + editor commit
  * pipeline + ui/app geometry the full app wires up.
  */
@@ -152,7 +152,7 @@ static void mouse_func(int button, int state, int x, int y) {
         if (color_picker_active_line() >= 0) {
             ColorPickerInputResult r = color_picker_handle_press(x, y);
             if (r.consumed) { glutPostRedisplay(); return; }
-            /* r.closed: fell outside the picker — fall through to (re)open
+            /* r.closed: fell outside the picker - fall through to (re)open
              * on whatever shape column was clicked. */
         }
         color_picker_start(shape_at_x(x), y);

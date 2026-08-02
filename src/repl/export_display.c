@@ -187,7 +187,7 @@ ExportNeeds export_collect_needs(void) {
     /* Check each command for rand() / scratch-array / label
      * references. Detection is intentionally a textual scan over
      * source lines (not a CmdType check) so that reads inside arg
-     * expressions — e.g. `glVertex3f(A[i], B[i], C[i])` — count
+     * expressions - e.g. `glVertex3f(A[i], B[i], C[i])` - count
      * alongside writes (`A[0] = ...`). The label wrapper is keyed
      * off the command type rather than text in case a future
      * codegen path emits `label(...)` indirectly. */
@@ -395,7 +395,7 @@ static void emit_export_display_begin(FILE *f) {
      * lights stay anchored in world space as the camera orbits. The
      * Eye-space positions were emitted above, before the camera. The
      * non-positional light state (colors + baseline glDisable) is emitted
-     * into init() — see emit_export_init_section_to_file.
+     * into init() - see emit_export_init_section_to_file.
      *
      * Lights are emitted before g_header_post to match the panel's
      * rendering order; both consumers walk: display_header → cam →
@@ -547,7 +547,7 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
 
 /* Injected into the exported keyboard() body: decode the key (folding Shift
  * uppercase and Ctrl control-codes back to the base letter) and apply the
- * swatch step, Shift = fine and Ctrl = coarse — mirroring the in-app numeric
+ * swatch step, Shift = fine and Ctrl = coarse - mirroring the in-app numeric
  * swatch and variable-panel adjustment multipliers. */
 static void emit_tune_keyboard_decls(FILE *f,
                                      const ExportGeneratedNames *names) {

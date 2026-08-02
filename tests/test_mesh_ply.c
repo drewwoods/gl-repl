@@ -19,7 +19,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_FLT(label, got, exp)     TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-2f)
 
 /* A capture that maps the [-1000,1000]^3 world cube onto an 800x800 viewport
- * with depth range [0,1] — what glr_mesh_export installs. */
+ * with depth range [0,1] - what glr_mesh_export installs. */
 static const MeshPlyCapture CAP = {
     .ortho_r = 1000.0f,
     .vp_x = 0, .vp_y = 0, .vp_w = 800, .vp_h = 800,
@@ -43,8 +43,8 @@ static const MeshPlyOptions OPT_FLAT = {
 };
 
 /* ---- synthetic feedback buffer builders ----------------------------------
- * Forward-project a world point to window coords — the exact inverse of the
- * writer's invert_vertex — so a round trip should reproduce the world coord. */
+ * Forward-project a world point to window coords - the exact inverse of the
+ * writer's invert_vertex - so a round trip should reproduce the world coord. */
 static void push_tok(float *buf, int *n, int tok) { buf[(*n)++] = (float)tok; }
 static void push_val(float *buf, int *n, float v) { buf[(*n)++] = v; }
 
@@ -61,7 +61,7 @@ static void push_vert(float *buf, int *n, float wx, float wy, float wz,
 }
 
 /* GL_3D_COLOR_TEXTURE vertex (11 floats): the 7-float vertex above plus the
- * texcoord channel (s,t,r,q). The encoded world normal goes in (s,t,r) raw —
+ * texcoord channel (s,t,r,q). The encoded world normal goes in (s,t,r) raw -
  * the executor emits it pre-transformed, texture matrix identity, so it is
  * NOT projected. */
 static void push_vert_tex(float *buf, int *n, float wx, float wy, float wz,

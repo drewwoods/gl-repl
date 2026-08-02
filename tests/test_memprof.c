@@ -58,7 +58,7 @@ static void test_baseline_nonzero_on_host(void) {
 
 /* Deterministic (fake-reader) proof of the deferred-baseline contract:
  * pending until the first push, then captured from the pushed sample and
- * sticky thereafter. This is the leak-detector fix — init must track the
+ * sticky thereafter. This is the leak-detector fix - init must track the
  * warmed-up steady state, not the cold process-start reading. */
 static void test_baseline_deferred_to_first_push(void) {
     printf("test_baseline_deferred_to_first_push\n");

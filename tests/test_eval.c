@@ -855,7 +855,7 @@ static void run_tests(void) {
      * ExprCtx.predef_vars when one is supplied (how compile evaluates against
      * its ReplCompileContext snapshot) rather than the live g_predef_vars
      * table. `t` is always live, so a synthetic value distinct from its live
-     * value proves the context view wins — both for a direct eval and for a
+     * value proves the context view wins - both for a direct eval and for a
      * for-header bound, which threads the same view. */
     {
         ExprVar synth[1] = { { "t", 99.0f } };
@@ -1266,7 +1266,7 @@ static void run_tests(void) {
             const char *r = repl_scan_next_arg_delim(s);
             TEST_ASSERT_TRUE(&g_harness, "scan: nested cos(): stops at top ','",
                              *r == ',');
-            /* The top-level comma is right after "*r" — index 20. */
+            /* The top-level comma is right after "*r" - index 20. */
             TEST_ASSERT_TRUE(&g_harness, "scan: nested cos(): correct position",
                              (r - s) == 20);
         }
@@ -1413,8 +1413,8 @@ static void run_tests(void) {
         }
 
         /* Boundary positions inside an arg slot: in front of the digits,
-         * in the middle, and after — with and without surrounding
-         * whitespace. "glVertex3f(1.0, 2.5, 3.0)" — ( at 10, , at 14, ,
+         * in the middle, and after - with and without surrounding
+         * whitespace. "glVertex3f(1.0, 2.5, 3.0)" - ( at 10, , at 14, ,
          * at 19, ) at 24. */
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 11);
         ASSERT_TRUE("cursor in front of first arg", r.found);
@@ -1437,7 +1437,7 @@ static void run_tests(void) {
         TEST_ASSERT_FLOAT(&g_harness, "closing paren value", r.value, 3.0f, 1e-4f);
 
         /* Trailing whitespace inside a slot: "glVertex3f(1.0 , 2.5, 3.0)"
-         * — ( at 10, ' ' at 14, , at 15. */
+         * - ( at 10, ' ' at 14, , at 15. */
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0 , 2.5, 3.0)", 14);
         ASSERT_TRUE("cursor in trailing space after first arg", r.found);
         TEST_ASSERT_FLOAT(&g_harness, "trailing-space value", r.value, 1.0f, 1e-4f);
@@ -1489,7 +1489,7 @@ static void run_tests(void) {
     /* Guards expr_rand01()'s seed offset and overall uniformity: each
      * argument pattern must pass a chi-square goodness-of-fit at the
      * p=.01 level (df=19 critical value 36.19). Sample size is kept at
-     * 2048 deliberately — the float32 hash has only ~5000 distinct
+     * 2048 deliberately - the float32 hash has only ~5000 distinct
      * outputs, so far larger samples saturate that grid and inflate
      * chi-square past the threshold (see `randdist 100000`). At 2048 the
      * worst pattern sits near 23, leaving margin for sinf() ULP

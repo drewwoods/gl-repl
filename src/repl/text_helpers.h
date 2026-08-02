@@ -43,14 +43,14 @@ int  repl_parse_func_name_token(const char **p_inout, int *fn);
 
 /* Scan the `float` declaration keyword at `p`, after skipping leading
  * whitespace and an optional canonical `static ` prefix (see
- * format_decl_text — the exporter emits `static float ...`, so the
+ * format_decl_text - the exporter emits `static float ...`, so the
  * round-trip must accept it). Returns the pointer just past `float`,
  * or NULL when the text is not float-keyword-shaped (including
  * identifiers that merely start with it, e.g. `floatish`). Shared by
  * the compile-side decl parsers and the reformatter.
  *
  * `has_static` (optional) reports whether the prefix was present. That is
- * not decoration: the keyword *selects storage* — `static float x;` is a
+ * not decoration: the keyword *selects storage* - `static float x;` is a
  * global from any cursor position, plain `float x;` is a function-scoped
  * local when typed inside a function body. */
 const char *repl_scan_decl_float_prefix(const char *p, int *has_static);

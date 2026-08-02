@@ -1,10 +1,10 @@
 # Tagged Example Submenus
 
-## Status — DONE (2026-05-23 audit)
+## Status - DONE (2026-05-23 audit)
 
 All eleven steps are implemented in the tree; spot checks:
 
-- **Step 1/2 — Registry + tag API.** `ReplExampleEntry` /
+- **Step 1/2 - Registry + tag API.** `ReplExampleEntry` /
   `ReplExampleTagMask` / `g_example_entries[]` live in
   `src/repl/examples.c:1294–1331`. The full query surface is exposed
   in `src/repl/examples.h:71–89`: `REPL_EXAMPLE_TAG_*` enum
@@ -13,27 +13,27 @@ All eleven steps are implemented in the tree; spot checks:
   `repl_example_visible_tag_count`, `repl_example_visible_tag_at`,
   `repl_example_tag_bit` (the inline mask helper added per the plan).
   A synthetic `REPL_EXAMPLE_TAG_ALL` tag was added beyond the plan's
-  original four — a clean extension.
-- **Step 3 — Loader surface.** `glr_scene_load_example(int)` at
+  original four - a clean extension.
+- **Step 3 - Loader surface.** `glr_scene_load_example(int)` at
   `src/app/glr_actions.c:356` is the shared example-load entry point.
-- **Steps 4/6 — Scene parent rows + render.** Driven by the
+- **Steps 4/6 - Scene parent rows + render.** Driven by the
   visible-tag layer (`repl_example_visible_tag_at` etc.) in both
   `src/ui/menu_bar.c` and `src/app/glr_actions.c`.
-- **Steps 5/7 — Submenu state + hit-test.** Implemented in
+- **Steps 5/7 - Submenu state + hit-test.** Implemented in
   `src/ui/menu_bar.c`; the plan's `UI_HIT_EXAMPLE_SUBMENU_ITEM`
   generalized into a single `UI_HIT_SUBMENU_ITEM`
-  (`src/ui/hit.h:30`) that also serves the Config flyout — a strict
+  (`src/ui/hit.h:30`) that also serves the Config flyout - a strict
   improvement over the plan. Test seam
   `ui_menu_bar_scene_example_submenu_rect_for_test`
   (`src/ui/menu_bar.h:87`, `src/ui/menu_bar.c:589`) is in place.
-- **Step 8 — Controller routing.** `route_submenu_item_hit` at
+- **Step 8 - Controller routing.** `route_submenu_item_hit` at
   `src/app/glr_ctrl.c:3285–3293` dispatches to
   `glr_scene_load_example`; dropdown-dismiss guard at line 3407
   whitelists `UI_HIT_SUBMENU_ITEM`.
-- **Step 9 — Legacy parent-activation safety.** Tag-row no-op branch
+- **Step 9 - Legacy parent-activation safety.** Tag-row no-op branch
   at `src/app/glr_actions.c:644` is annotated with the route comment
   the plan recommended.
-- **Step 10 — Tests.** `tests/test_repl_core_examples.c` (lines
+- **Step 10 - Tests.** `tests/test_repl_core_examples.c` (lines
   577–771) exercises the tag API, `repl_example_tag_bit`, visible-tag
   layer, and multi-tag examples. `tests/test_ui_menu_bar.c` (lines
   291–406) drives the submenu render → hit-test sequence via the
@@ -318,7 +318,7 @@ Reset this state in:
 Mutation contract: `g_scene_open_tag` and `g_scene_submenu_open_time` are
 mutated **only inside the render path**
 (`ui_menu_bar_render_example_dropdown()`), mirroring the existing
-`g_menu_item_hover` pattern. `ui_menu_bar_hit_test()` must stay passive — it
+`g_menu_item_hover` pattern. `ui_menu_bar_hit_test()` must stay passive - it
 reads `g_scene_open_tag` to know which submenu rect to test against, but
 never writes either field. This is what keeps the new submenu code inside
 the `scripts/check-ui-returns-hits-only.sh` boundary.
@@ -331,7 +331,7 @@ During Scene dropdown rendering (write path):
 - If the pointer is inside the currently open submenu, keep
   `g_scene_open_tag` unchanged.
 - If the pointer is on a parent row that is not a tag row (header or
-  user-scene row), close the submenu — the user has moved attention away from
+  user-scene row), close the submenu - the user has moved attention away from
   the tag area.
 - If the pointer is outside both the parent dropdown and the submenu, close the
   submenu but leave the parent dropdown behavior unchanged.
@@ -342,7 +342,7 @@ g_scene_open_tag, ...)` to test against whatever submenu the previous
 render frame opened. With `g_scene_open_tag == -1` no submenu rect exists,
 so hit-test transparently falls through to parent rows. This implies a
 one-frame lag between hovering a tag and the submenu being click-targetable
-— acceptable because the submenu fade is also one frame behind.
+- acceptable because the submenu fade is also one frame behind.
 
 Add local geometry helpers. The parent-row ↔ tag mapping goes through the
 visible-tag layer added in Step 2:
@@ -401,7 +401,7 @@ In the parent Scene dropdown:
 - Do not highlight the parent tag row as the active example; active example
   highlighting belongs in the submenu rows. (UX consequence: when the user
   arrows back via F12, the parent dropdown shows no "you are here" cue
-  unless they hover into the matching tag. Acceptable for v1 — a small
+  unless they hover into the matching tag. Acceptable for v1 - a small
   bullet/dot suffix on tag rows that contain the active example is a
   future polish item.)
 
@@ -611,7 +611,7 @@ or header.
   be added immediately? Suggest starting with the four-tag set; add categories
   once the assignment table proves stable.
 - Should clicking a parent tag row pin/keep the submenu open, or should hover be
-  the only opener? Resolved above (Step 4) — parent tag rows are no-ops and
+  the only opener? Resolved above (Step 4) - parent tag rows are no-ops and
   hover is the only opener.
 - Should a tag row show a count, for example `3D (12)`, or keep the Windows
   menu style minimal? Suggest minimal for v1; the active-example bullet

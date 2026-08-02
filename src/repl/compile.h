@@ -73,7 +73,7 @@ typedef enum {
  * MAX_COMMIT_CMDS lives in config.h (the neutral limits home) so
  * source_document.h can size SourceTextChange.text[] with the same
  * bound. This header pulls it through config.h (already included
- * transitively via src/repl/command.h) — keep the comment block above
+ * transitively via src/repl/command.h) - keep the comment block above
  * for context, but no duplicate define. */
 
 /* Predef-variable side-effects produced by compile. The apply step
@@ -171,7 +171,7 @@ typedef struct ReplCompiledChange_s {
 
 /* Read-only context passed to compile functions. The compile function
  * takes whatever it needs from here; it never reaches back into REPL
- * globals — document, source-scope, function-alias, and predefined-variable
+ * globals - document, source-scope, function-alias, and predefined-variable
  * reads all come from this snapshot, so compile is driven entirely by the
  * context.
  */
@@ -214,16 +214,16 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
  * it declares is still referenced (err receives the diagnostic). A `pos`
  * that is not a live CMD_VAR_DECLARE is trivially allowed.
  *
- * Declaration replacement is reachable five ways — range delete /
+ * Declaration replacement is reachable five ways - range delete /
  * comment-toggle, retyping the row as an assignment, as a GL command, as
- * another declaration, and Enter over it — and each used to decide for
+ * another declaration, and Enter over it - and each used to decide for
  * itself whether to check. Two of them checked nothing at all. That is
  * survivable for a global, whose predef slot outlives the row, but a
  * **local's binding exists only as that prologue row**: remove it and
  * every assignment to it resolves against nothing.
  *
  * `kept_names` lists names that survive the replacement and are therefore
- * exempt. Pass kept_count 0 for the routes that drop every name — and note
+ * exempt. Pass kept_count 0 for the routes that drop every name - and note
  * that a name kept *textually* while its storage changes is not kept:
  * local→global conversion must run the check on it like a dropped one. */
 int repl_compile_decl_replacement_allowed(const ReplCompileContext *ctx,
@@ -251,7 +251,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
 /* Compile a "split this declaration" request for the CMD_VAR_DECLARE at
  * `line_idx`: replace it in place with one single-name CMD_VAR_DECLARE
  * per declared name (`float a, b, c;` -> three lines). Purely a source-
- * representation change — the variables are already declared with their
+ * representation change - the variables are already declared with their
  * current values, so no predef ops are emitted. The original line's
  * trailing comment rides the first emitted line. Same purity contract as
  * repl_compile_float_decl. Returns REPL_COMPILED_NO_CHANGE when line_idx
@@ -273,7 +273,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 /* Compile dispatcher: walks all six per-kind compile validators in
  * canonical order and returns the first one that produces a
  * non-NO_CHANGE result. NO_CHANGE means the input didn't match any
- * handler — the caller decides whether that is "fall through to a
+ * handler - the caller decides whether that is "fall through to a
  * generic-command parser" (e.g. repl_load_apply_line punts back to
  * repl_parser_parse_command) or "no commit happened".
  *
@@ -357,9 +357,9 @@ ReplCompileResult repl_compile_for_loop(const char *input,
  *     via repl_format_source_float otherwise)
  *
  * Returns:
- *   REPL_COMPILE_OK with out->valid == 0 — input wasn't a for-loop.
- *   REPL_COMPILE_OK with out->valid == 1 — parsed; out is fully populated.
- *   REPL_COMPILE_ERROR                   — syntax / format error; err set.
+ *   REPL_COMPILE_OK with out->valid == 0 - input wasn't a for-loop.
+ *   REPL_COMPILE_OK with out->valid == 1 - parsed; out is fully populated.
+ *   REPL_COMPILE_ERROR                   - syntax / format error; err set.
  *
  * Editor-only concerns (header-replace REPLACE_ONE, paired-end
  * INSERT_MANY count=2, one-liner-body count=3, effects, commit_message)
@@ -428,7 +428,7 @@ ReplCompileResult repl_compile_if_branch_kernel(const char *input,
                                                 ReplIfBranchKernel *out,
                                                 char *err, int err_size);
 
-/* Shared kernel for `}`. No expression parse — just the
+/* Shared kernel for `}`. No expression parse - just the
  * open-block scope lookup and the matched-existing-end vs insert-
  * new-end-marker decision. Both wrappers consume:
  *   - end_type to thread label strings and (for the editor) the
@@ -507,7 +507,7 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
                                                 char *err, int err_size);
 
 /* The two halves of the above, for callers that need to separate the live
- * value from its persistence — the variable-panel drag applies the live half
+ * value from its persistence - the variable-panel drag applies the live half
  * on every pointer motion and the source half once, on mouse-up.
  *
  * `_live` emits only REPL_PREDEF_OP_SET_VALUE with REPL_COMPILED_NO_CHANGE:
@@ -571,7 +571,7 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
 
 /* Compile a comment-toggle on `line_idx` using `prefix` as the
  * line-comment marker (e.g., "// "). The REPL fully owns toggle
- * semantics — the editor passes intent, this entry decides.
+ * semantics - the editor passes intent, this entry decides.
  *
  * Behavior by cmd kind at line_idx:
  *
@@ -598,7 +598,7 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
  *     lines". Block size is capped at MAX_COMMIT_CMDS; larger blocks
  *     are rejected with a diagnostic.
  *
- * `prefix` may be NULL or empty — the function returns NO_CHANGE in
+ * `prefix` may be NULL or empty - the function returns NO_CHANGE in
  * that case (toggle disabled). `line_idx` out of range also returns
  * NO_CHANGE.
  *

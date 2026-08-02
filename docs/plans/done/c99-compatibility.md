@@ -1,6 +1,6 @@
 # C99 sample build (tests stay C2x)
 
-Status: **DONE — implemented as a C99 syntax guard (not a binary-standard
+Status: **DONE - implemented as a C99 syntax guard (not a binary-standard
 flip)** on branch `enum-path-generalization`. The design body below is
 the historical record; what actually shipped is summarized next.
 
@@ -10,7 +10,7 @@ After the "make it easier" review, the chosen architecture is the
 **guard** path, not flipping the sample binary's standard:
 
 - **Default build is unchanged C2x** (`make sample`, `make test`, CI).
-  No object-tree split — the §5 binary-flip approach (and its
+  No object-tree split - the §5 binary-flip approach (and its
   OBJDIR-by-standard ripple) was deliberately *not* taken. This is the
   single biggest effort/risk reduction and is behavior-neutral.
 - **`make c99`** (`scripts/check-c99.sh`) syntax-checks the sample
@@ -25,20 +25,20 @@ TUs proved the audit *exhaustive*: exactly the four documented blockers,
 zero extras (no `#warning` issue, no empty-TU in the product set). The
 effort estimate collapsed from a range to a fixed list. Notably this
 **confirmed blocker #4 is a real `-pedantic-errors` error** (6×
-`-Wstrict-prototypes` on the `void (*)()` GLU casts) — correcting the
+`-Wstrict-prototypes` on the `void (*)()` GLU casts) - correcting the
 earlier review note that doubted it.
 
 Fixes landed (all behavior-neutral, valid under both C2x and C99):
 
-1. `include/c_compat.h` — portable `STATIC_ASSERT`; 3 `_Static_assert`
+1. `include/c_compat.h` - portable `STATIC_ASSERT`; 3 `_Static_assert`
    sites switched (`glr_debug.c`, `glr_ctrl.c` ×2); `snapshot.h`
    comment refreshed.
-2. `src/repl/parser.c` — `, ##__VA_ARGS__` → `, __VA_ARGS__` (fixes all
+2. `src/repl/parser.c` - `, ##__VA_ARGS__` → `, __VA_ARGS__` (fixes all
    18 expansions); unused `WRITE_TEXT_APPEND` deleted.
-3. `VariablePanelValueChange` — sole definition moved to
+3. `VariablePanelValueChange` - sole definition moved to
    `variable_panel_drag.h`; `variable_panel_state.h` includes it
    instead of re-typedefing.
-4. `src/repl/executor.c` — self-owned prototyped `ReplGluCallback`
+4. `src/repl/executor.c` - self-owned prototyped `ReplGluCallback`
    typedef replaces the 6 old-style `void (*)()` casts;
    `src/repl/export.c` emits a matching `_GluCb` typedef so generated
    standalone C is C99-clean too.
@@ -58,7 +58,7 @@ simpler. Folder: moved to `plans/done/`.
 
 ---
 
-## Original design (historical record — binary-flip path, not taken)
+## Original design (historical record - binary-flip path, not taken)
 
 ## Context
 
@@ -70,19 +70,19 @@ C11/GNU constructs as extensions in `-std=c2x`. An audit of the
 sample/product translation units found these known blockers for a
 `gcc/clang -std=c99 -pedantic-errors` build/syntax check:
 
-1. **C11 `_Static_assert`** — 3 sites: `src/app/glr_debug.c:107`,
+1. **C11 `_Static_assert`** - 3 sites: `src/app/glr_debug.c:107`,
    `src/app/glr_ctrl.c:1238`, `src/app/glr_ctrl.c:1240`. `_Static_assert`
    is a C11 keyword; under `-std=c99 -pedantic-errors` it errors.
-2. **GNU `, ##__VA_ARGS__`** — `WRITE_TEXT` / `WRITE_TEXT_APPEND` macros
+2. **GNU `, ##__VA_ARGS__`** - `WRITE_TEXT` / `WRITE_TEXT_APPEND` macros
    in `src/repl/parser.c:257` / `:261`. The GNU comma-elision is not ISO
    C and `-pedantic-errors` rejects it.
-3. **C11-compatible duplicate typedef redefinition** —
+3. **C11-compatible duplicate typedef redefinition** -
    `VariablePanelValueChange` is forward-typedefed in
    `src/widgets/variable_panel_drag.h:18` and typedefed again with the
    struct body in `src/widgets/variable_panel_state.h:42`. Clang accepts
    that as a C11 typedef-redefinition extension, but rejects it under
    `-std=c99 -pedantic-errors`.
-4. **Old-style function-pointer casts for GLU tessellation callbacks** —
+4. **Old-style function-pointer casts for GLU tessellation callbacks** -
    `src/repl/executor.c:137`–`:146` casts callback functions to
    `void (*)()`. Clang diagnoses that as a strict-prototypes error under
    the C99 pedantic bar. `src/repl/export.c:561`–`:566` emits the same
@@ -94,15 +94,15 @@ clean for the chosen bar, but `make sample` / `make c99` compiler output
 is authoritative:
 
 - `_Alignof` is already gated (`REPL_HAS_ALIGNOF` in `glr_debug.c`:
-  `_Alignof` under C11+, GNU `__alignof__` otherwise) — C99-safe as-is.
-- `__attribute__((constructor/format/unused))` — GCC/Clang accept these
+  `_Alignof` under C11+, GNU `__alignof__` otherwise) - C99-safe as-is.
+- `__attribute__((constructor/format/unused))` - GCC/Clang accept these
   under `-std=c99 -pedantic-errors` without diagnostic; the behavioral
   `((constructor))` sites (`src/repl/state.c:198`,
   `src/widgets/tutorial_state.c:25`) are already
   `#if defined(__GNUC__) || defined(__clang__)`-gated. **Chosen bar is
   gcc/clang**, so no change and no behavior change.
 - The `union` in `src/ui/editor.h:27` is a *named* member (`} state;`),
-  not a C11 anonymous union — fine.
+  not a C11 anonymous union - fine.
 - Sweep found no statement-expressions, `typeof`, `_Generic`, binary
   literals, case-ranges, `[[attributes]]`, `nullptr`, or VLAs.
 
@@ -120,7 +120,7 @@ regresses.
 
 ## Approach
 
-### 1. Portable `STATIC_ASSERT` shim — new header `include/c_compat.h`
+### 1. Portable `STATIC_ASSERT` shim - new header `include/c_compat.h`
 
 `include/` is the documented home for header-only helpers (CLAUDE.md) and
 is on every TU's `-Iinclude` path.
@@ -131,7 +131,7 @@ is on every TU's `-Iinclude` path.
 
 /* Real _Static_assert under C11+; C99 negative-array-size fallback
  * otherwise. The fallback drops the message text (only the
- * negative-size error shows) — acceptable. Distinct __LINE__ per use
+ * negative-size error shows) - acceptable. Distinct __LINE__ per use
  * keeps typedef names unique; current call sites are all on separate
  * lines. Valid at file and block scope (typedef). */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -210,7 +210,7 @@ emits a named C99-clean callback typedef and uses that typedef in the
 Audit result: **every** `WRITE_TEXT(...)` / `WRITE_TEXT_APPEND(...)` call
 passes at least one variadic argument after the format string (verified
 across all ~20 call sites; no `WRITE_TEXT(fmt)`-only call exists). So the
-`##` is never functionally needed — replace `, ##__VA_ARGS__` with
+`##` is never functionally needed - replace `, ##__VA_ARGS__` with
 `, __VA_ARGS__` in both macro definitions (lines 257–264). Zero
 behavioral change in either standard mode.
 
@@ -262,7 +262,7 @@ behavioral change in either standard mode.
   `-pedantic-errors`; if it errors, gate it the same
   `__GNUC__`/`__clang__` way used nearby). The C99 fallback typedef may
   trip `-Wunused-local-typedefs` at the block-scope site only if
-  `-Wextra` is added — current flags are `-Wall` only, so not expected;
+  `-Wextra` is added - current flags are `-Wall` only, so not expected;
   add `-Wno-unused-local-typedefs` to the `c99` target only if it
   surfaces.
 
@@ -278,24 +278,24 @@ typedefs must be named/prototyped rather than old-style `void (*)()`;
 
 ## Critical files
 
-- `include/c_compat.h` — **new**, portable `STATIC_ASSERT`.
-- `src/app/glr_debug.c` — include shim; line 107 → `STATIC_ASSERT`.
-- `src/app/glr_ctrl.c` — include shim; lines 1238/1240 → `STATIC_ASSERT`.
-- `src/ui/snapshot.h` — line 52 comment refresh.
-- `src/widgets/variable_panel_drag.h` — own the full
+- `include/c_compat.h` - **new**, portable `STATIC_ASSERT`.
+- `src/app/glr_debug.c` - include shim; line 107 → `STATIC_ASSERT`.
+- `src/app/glr_ctrl.c` - include shim; lines 1238/1240 → `STATIC_ASSERT`.
+- `src/ui/snapshot.h` - line 52 comment refresh.
+- `src/widgets/variable_panel_drag.h` - own the full
   `VariablePanelValueChange` typedef.
-- `src/widgets/variable_panel_state.h` — include/use that typedef; remove
+- `src/widgets/variable_panel_state.h` - include/use that typedef; remove
   the duplicate typedef body.
-- `src/repl/executor.c` — replace old-style `void (*)()` callback casts
+- `src/repl/executor.c` - replace old-style `void (*)()` callback casts
   with a named C99-clean callback typedef.
-- `src/repl/export.c` — update exported tessellation callback setup so
+- `src/repl/export.c` - update exported tessellation callback setup so
   generated C does not emit old-style `void (*)()` casts.
-- `src/repl/parser.c` — lines 257–264: drop `, ##`; delete unused
+- `src/repl/parser.c` - lines 257–264: drop `, ##`; delete unused
   `WRITE_TEXT_APPEND`.
-- `Makefile` — make sample objects/binary use C99, keep test objects on
+- `Makefile` - make sample objects/binary use C99, keep test objects on
   C2x, prevent cross-standard object reuse, add `c99` / `check-c99`, and
   wire the C99 guard into aggregator/gate.
-- `CLAUDE.md` — document `make sample` C99 and `make test` C2x.
+- `CLAUDE.md` - document `make sample` C99 and `make test` C2x.
 
 ## Reuse / conventions followed
 

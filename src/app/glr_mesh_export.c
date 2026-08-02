@@ -68,7 +68,7 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
 
     /* Identity texture matrix: the executor encodes per-vertex world-space
      * normals into the texcoord channel, and feedback returns texcoords
-     * transformed by the texture matrix — identity keeps them verbatim.
+     * transformed by the texture matrix - identity keeps them verbatim.
      * (glPushAttrib does not save matrix stacks, so push/pop explicitly.) */
     glMatrixMode(GL_TEXTURE);
     glPushMatrix();
@@ -184,7 +184,7 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
         return -1;
     }
 
-    /* "Exported 12 triangles[, 8 edges][, 3 points] to <path>" — edge/point
+    /* "Exported 12 triangles[, 8 edges][, 3 points] to <path>" - edge/point
      * counts appear only when present; a triangle-less capture still leads
      * with "0 triangles" unless lines/points carried the scene. */
     char prims[96];

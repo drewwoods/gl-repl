@@ -12,13 +12,13 @@
  *     glRectf(0, 0, render3d_w, render3d_h);
  *
  * which puts the rect's eye-space vertices at coordinates up to
- * (render3d_w, render3d_h, 0) — radial distances 0 .. sqrt(W^2+H^2). The
+ * (render3d_w, render3d_h, 0) - radial distances 0 .. sqrt(W^2+H^2). The
  * outer grid pass leaves GL_FOG enabled and, under fb976f0's NV opt-in,
  * has just switched the OCEAN case to GL_EYE_RADIAL_NV. So with linear
  * fog whose end is keyed to a normal world-space grid extent (single
  * digits), every rect pixel except the few near the (0,0) corner is
  * fully past fog-end and ends up at fog colour. The underwater
- * glPushAttrib only saves GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT — fog
+ * glPushAttrib only saves GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT - fog
  * state isn't bracketed, and there's no glDisable(GL_FOG) before the
  * rect.
  *
@@ -31,14 +31,14 @@
  * cam_world_y < 0 and nv_fog_distance_supported = 1, then glReadPixels
  * the framebuffer and asserts the four corners + centre all look
  * teal-tinted. The radial-fog interaction reproduces here because the
- * test sets the config flag itself — no live-pipeline state needed.
+ * test sets the config flag itself - no live-pipeline state needed.
  *
  * Tokens: GL_FOG_DISTANCE_MODE_NV / GL_EYE_RADIAL_NV are defined as
  * registry-value fallbacks in scene/render_types.h when glext isn't
  * pulled in (e.g. the Apple-GLUT framework path), so the test compiles
  * even on machines without the extension. If the runtime driver
  * doesn't support GL_NV_fog_distance, glFogi(0x855A, ...) silently
- * generates GL_INVALID_ENUM and the radial mode never takes effect —
+ * generates GL_INVALID_ENUM and the radial mode never takes effect -
  * in that case the test passes (because the bug can't fire on that
  * machine either) but does NOT prove anything: see SKIP message.
  *
@@ -110,7 +110,7 @@ static void sample_px(int px, int py, int vp_w, int vp_h,
 
 /* The fill is glColor4f(0.05, 0.25, 0.35, 0.75) src-over against the
  * black clear. Post-blend that's roughly (10, 48, 67). Threshold on the
- * green channel — it's the strongest signal and survives small tweaks
+ * green channel - it's the strongest signal and survives small tweaks
  * to the underwater RGBA literal. */
 static int looks_teal(const unsigned char rgb[3]) {
     return rgb[1] > 30 && rgb[2] > rgb[1] && rgb[0] < rgb[1];
@@ -127,7 +127,7 @@ static void test_underwater_fill_covers_viewport(void) {
      * Render3dRenderConfig.nv_fog_distance_supported (set in our config
      * helper). But the radial-fog *effect* only happens if the runtime
      * driver actually honours GL_FOG_DISTANCE_MODE_NV. Probe explicitly
-     * and report skip if not — otherwise a green test on a hardware
+     * and report skip if not - otherwise a green test on a hardware
      * that can't trigger the bug would be a silent false positive. */
     int radial_supported = glutExtensionSupported("GL_NV_fog_distance") ? 1 : 0;
 #if defined(FREEGLUT_OSMESA)
@@ -169,7 +169,7 @@ static void test_underwater_fill_covers_viewport(void) {
     sample_px(W - 9,   H - 9,   W, H, buf, c_tr);
     sample_px(W / 2,   H / 2,   W, H, buf, c_mid);
 
-    /* Always log the samples — the failure mode (only c_bl teal, the
+    /* Always log the samples - the failure mode (only c_bl teal, the
      * others fog colour) is the live bug and worth seeing in CI logs
      * even when it passes. */
     fprintf(stderr,

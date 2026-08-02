@@ -59,7 +59,7 @@ static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
  *
  *   - a radially-fading fill (fan from the sheet center, so the
  *     wash doesn't flood the whole scene like the old uniform quad)
- *   - integer grid chords with mid-peak alpha — the sheet reads as
+ *   - integer grid chords with mid-peak alpha - the sheet reads as
  *     graph paper, so the two open coordinates can be eyeballed;
  *     the two zero lines (the in-plane axes) render brighter
  *   - a solid rim under depth test plus a stippled ghost rim with
@@ -101,7 +101,7 @@ static void draw_guide_axis_plane(const Render3dGuideSnapshot *snapshot,
     glEnd();
 
     /* Integer grid chords, mid-peak alpha fading to 0 at the rim.
-     * The o == 0 pair are the in-plane axes — drawn brighter. */
+     * The o == 0 pair are the in-plane axes - drawn brighter. */
     glLineWidth(1.0f);
     for (int axis = 0; axis < 2; axis++) {
         for (int gi = (int)-sz + 1; gi <= (int)sz - 1; gi++) {
@@ -557,7 +557,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     int found = 0;
 
     /* Prefer the live (flat-program) anchor position when the
-     * controller has supplied one — it's re-evaluated every frame, so
+     * controller has supplied one - it's re-evaluated every frame, so
      * it tracks dynamic vars (e.g. waves' `x = -b/2 + b*j/n` inside a
      * loop). The source-cmd fallback below is parse-time-frozen and
      * lands the arrow at the literal source coords. */
@@ -577,7 +577,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
             if (!cmd->valid) continue;
             if (repl_cmd_emits_vertex(cmd->type)) {
                 /* For glVertex2f, cmd->args[2] is zero (parser leaves
-                 * it default-initialised) — the right z-value for a
+                 * it default-initialised) - the right z-value for a
                  * 2D vertex used as a guide reference. */
                 vx = cmd->args[0];
                 vy = cmd->args[1];
@@ -663,7 +663,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
  *   - a radially-fading translucent disc (additive, so it glows over
  *     the scene rather than dimming it)
  *   - faint in-plane grid chords whose alpha peaks mid-chord and fades
- *     to nothing at the rim — the "gridded glass" read
+ *     to nothing at the rim - the "gridded glass" read
  *   - a solid rim under depth test plus a stippled ghost rim over it
  *     (the shared occluded-ghost dash language: dashes = behind things)
  *   - the focused-normal arrow glyph pointing into the KEPT half-space

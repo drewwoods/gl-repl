@@ -1,10 +1,10 @@
-# `src/ui/` — Code-Smell Audit
+# `src/ui/` - Code-Smell Audit
 
 > Audit produced 2026-05-23. Findings come from four parallel reviews
 > of `src/ui/` (menu-bar + scene-tabs; code-panel adapter + panels;
 > generic `core/` primitives; floating panels + `UiState`) plus
 > targeted spot-verification of the most actionable claims. File:line
-> references are exact at the time of writing — check `git log` on the
+> references are exact at the time of writing - check `git log` on the
 > cited files before acting if this doc has aged.
 >
 > Scope: every file under `src/ui/` (`app/` + `core/`). Tests under
@@ -19,14 +19,14 @@
 
 Severity grouping mirrors the `src-repl` audit:
 
-- **🔴 Actual bugs (verified)** — correctness or memory-safety issues
+- **🔴 Actual bugs (verified)** - correctness or memory-safety issues
   with a concrete failure mode. Pick these up first.
-- **🟡 Drift / boundary hazards** — snapshot-purity violations,
+- **🟡 Drift / boundary hazards** - snapshot-purity violations,
   core/app boundary leaks, hand-duplicated geometry. Working today; a
   one-side edit will silently diverge.
-- **🟢 Dead code / dead fields** — code with no callers, unreachable
+- **🟢 Dead code / dead fields** - code with no callers, unreachable
   branches, unused parameters. Pure surface reduction.
-- **🔵 Structural concerns** — long functions, misnamed entry points,
+- **🔵 Structural concerns** - long functions, misnamed entry points,
   magic numbers. Bigger refactors; higher cost.
 
 Each finding cites file + line, names the smell, says why it matters,
@@ -46,24 +46,24 @@ below):
   #21, #22, #23, #24, #26, #27, #28, #29 (across `a8c911a`, `7f5f782`,
   `4a33445`). #31 done in the closeout commit (locale-safe
   `ascii_tolower` in `text_search.c`).
-- *Done in backlog pass (2026-05-24 second closeout — see below):*
+- *Done in backlog pass (2026-05-24 second closeout - see below):*
   #18 (drag-state slice on snapshot, **Tier B**, commit `783d7e3`),
   #25 (replay HUD takes `const UiRenderSnapshot *`, **Tier B**,
   commit `783d7e3`).
 - *Deferred:* #30 (`glIsEnabled(GL_BLEND)` save/restore in the
-  fake-bold per-segment loop — sorted into **Tier C** by the
+  fake-bold per-segment loop - sorted into **Tier C** by the
   2026-05-24 backlog pass; needs a row-level boolean threaded down).
 
 **🟢 Dead code / dead fields:**
 
 - *Done:* #32, #33, #34, #35, #36, #38, #39, #40, #41, #42, #43 (across
   `cf6157c` and `4a33445`).
-- *Kept on purpose (Tier D):* #37 —
+- *Kept on purpose (Tier D):* #37 -
   `editor_search_find_{next,prev}_in_text` pass-through wrappers
   preserve the `editor_*` ↔ `ui_text_*` prefix boundary; deleting
   them would force editor-namespaced callers (search.c itself,
   `test_repl_core_search_extra.c`) to reach across.
-- *Claim incorrect (Tier D):* #44 — the conditional `resolved_line`
+- *Claim incorrect (Tier D):* #44 - the conditional `resolved_line`
   override for `UI_TEXT_PANEL_ROW_VIRTUAL` is load-bearing.
   `test_ui_text_panel.c:190` ("virtual row keeps line_idx unresolved
   in generic hit") fails without it because the adapter relies on the
@@ -100,30 +100,30 @@ and triaged them by **the same Tier system used in the sibling
 `src-repl-code-smell-audit.md`** (reproduced here for stand-alone
 reading):
 
-- **Tier A — small, real fix, near-zero risk.** 5–30 line changes,
+- **Tier A - small, real fix, near-zero risk.** 5–30 line changes,
   no architectural exposure.
-- **Tier B — moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50–200 line changes,
   one or two files of churn, a real test impact.
-- **Tier C — defer (high cost, low payoff).** Real wins but touch
+- **Tier C - defer (high cost, low payoff).** Real wins but touch
   a wide surface; revisit when the surrounding code is being
   reworked anyway.
-- **Tier D — keep deferred.** Findings the audit landed wrong, or
+- **Tier D - keep deferred.** Findings the audit landed wrong, or
   where the original intent (a kept-on-purpose trampoline, a
   test-pinned bug) makes "fixing" them worse than living with them.
 
 Sorted into action tiers, the still-open items landed as:
 
-- **Tier A:** **#29** confirmed already done before the audit — the
+- **Tier A:** **#29** confirmed already done before the audit - the
   table and active-theme global live in `theme.c` (with `extern`
   declarations in the header) since the original closeout; only the
   stale "Header-only (mirrors gl_2d.h)" claim in the file comment
   was fixed (`f5d0c50`).
-- **Tier B (done — commit `783d7e3`):**
-  - **#18** — Add `UiVariableDragView` slice to `UiRenderSnapshot`;
+- **Tier B (done - commit `783d7e3`):**
+  - **#18** - Add `UiVariableDragView` slice to `UiRenderSnapshot`;
     `ui_variable_panel_render` reads `snap->variable_drag.*` instead
     of calling `variable_panel_drag_active_var()` / `_log_mode()`
     live. Closes the gap left by the original closeout.
-  - **#25** — Reshape `replay_ui_hud_render` to take
+  - **#25** - Reshape `replay_ui_hud_render` to take
     `const UiRenderSnapshot *`. Deletes the 14-field
     `UiReplayHudState` struct (the controller's 1832-1851 block
     collapses to `replay_ui_hud_render(&ui_snap)`); HUD reads
@@ -131,12 +131,12 @@ Sorted into action tiers, the still-open items landed as:
     `snap->viewport.*`, and calls `ui_layout_scene_rect()` itself.
     The "HUD shows pre-prepare replay" contract is preserved by
     briefly overriding `ui_snap.replay` with the pre-prepare
-    `frame_replay` capture across the HUD call — other `snap->replay`
+    `frame_replay` capture across the HUD call - other `snap->replay`
     readers only touch fields `replay_prepare_frame` doesn't write
     (`src_line_idx`, `active`).
 - **Tier C (deferred at the time of this backlog pass):** #30, plus
   the structural cluster #45–#55 + #58, #63. *Most of these were
-  closed in the 2026-05-25 follow-up pass — see the next section
+  closed in the 2026-05-25 follow-up pass - see the next section
   for the running status.*
 - **Tier D (still kept):** #37, #44.
 
@@ -144,7 +144,7 @@ After this pass the only open items in the audit are Tier C (real
 wins, high cost) and Tier D (kept on purpose). No bug-level
 findings remain.
 
-## Progress update — 2026-05-25
+## Progress update - 2026-05-25
 
 Re-verified each Tier C finding against the current source. Most of
 the structural cluster has been quietly closed in the natural course
@@ -155,56 +155,56 @@ to match.
 which were the remaining "Still open" pair until the same-day
 follow-up, plus #50 finished off in a third same-day micro-pass):
 
-- **#30** — `glIsEnabled(GL_BLEND)` is gone from `text_panel.c`; the
+- **#30** - `glIsEnabled(GL_BLEND)` is gone from `text_panel.c`; the
   fake-bold per-segment query/restore has been removed entirely.
-- **#45** — `ui_menu_bar_render` went 140 → 40 lines, factored into
+- **#45** - `ui_menu_bar_render` went 140 → 40 lines, factored into
   `paint_menu_labels` + `paint_pin_buttons` exactly as the audit
   recommended.
-- **#48** — `ui_repl_code_panel_render` was renamed to
+- **#48** - `ui_repl_code_panel_render` was renamed to
   `ui_repl_code_panel_render_with_chrome` (the audit's recommended
   fix word-for-word).
-- **#49** — Hit-test now reuses a cached builder keyed on the
+- **#49** - Hit-test now reuses a cached builder keyed on the
   snapshot pointer (`g_builder_cache`) instead of rebuilding rows
   from scratch.
-- **#51** — Both `menu_dropdown_rect` and `submenu_rect` cache their
+- **#51** - Both `menu_dropdown_rect` and `submenu_rect` cache their
   row-measurements; the per-call `strlen(label) + strlen(shortcut)`
   scan is gone.
-- **#52** — `menu_item_label` no longer returns a `static char buf[48]`;
+- **#52** - `menu_item_label` no longer returns a `static char buf[48]`;
   every branch returns a string literal or a name from another module.
-- **#53** — No more hand-rolled ASCII title-case math in
+- **#53** - No more hand-rolled ASCII title-case math in
   `menu_bar.c`; the menu rows are static literal strings.
-- **#54** — `repl_code_panel_newline_rows` renamed to
+- **#54** - `repl_code_panel_newline_rows` renamed to
   `repl_code_panel_trailing_row_count` (the audit's recommended name).
-- **#55** — `ui_panels_render_scene_status` 118 → 95 lines and
+- **#55** - `ui_panels_render_scene_status` 118 → 95 lines and
   `draw_modal_strip` 44 → 26 via extracted `status_strip_begin` /
   `_paint_bar` / `_end` shared by both call sites.
-- **#63** — Per-frame `g_wrap_cache` in `text_panel.c` populated by
+- **#63** - Per-frame `g_wrap_cache` in `text_panel.c` populated by
   `ui_text_panel_render`; `ui_text_panel_hit_test` and
   `ui_text_panel_input_row_y` now read through
   `text_panel_row_wrap_count_cached(snap, row_idx)`, removing the
   per-row `code_layout_row_count_for_text` walk that the renderer
   already did.
-- **#50** — `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` were named in
+- **#50** - `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` were named in
   earlier work; the `+ 4` row-pad / `+ 8` extra-height are all
-  expressed via `DROPDOWN_PAD_Y`; and the audit's last open piece —
+  expressed via `DROPDOWN_PAD_Y`; and the audit's last open piece -
   the triplicated `(top + h - DROPDOWN_PAD_Y - ry) / LINE_H`
-  ordinal-from-y formula — is now `dropdown_row_for_gl_y(top, h, ry)`,
+  ordinal-from-y formula - is now `dropdown_row_for_gl_y(top, h, ry)`,
   used by `ui_menu_bar_dropdown_item_hit`, `submenu_hit_test`, and
   `submenu_hover_ordinal`.
 
-**Partially closed** (3 of 14) — the function shape improved but
+**Partially closed** (3 of 14) - the function shape improved but
 the underlying smell wasn't fully resolved:
 
-- **#46** — `render_active_submenu` went 106 → 82 lines, but the
+- **#46** - `render_active_submenu` went 106 → 82 lines, but the
   Config-special-case columns (`cfg_max_sc`, `cfg_state_right`) are
   still hardcoded inline. The audit's full fix (a `FlyoutColumns`
   struct + per-provider draw-row-decoration hook) hasn't landed.
-- **#47** — `ui_menu_bar_hit_test` went 87 → 61 lines and the
+- **#47** - `ui_menu_bar_hit_test` went 87 → 61 lines and the
   submenu pass was extracted into `submenu_hit_test`. The "two
   duplicate chrome blocks" finding is mostly resolved (one is now in
   the submenu helper) but the inline `inert_chrome_hit` branch is
   still there.
-- **#58** — `(int)strlen(text)` repetition went from 5+ sites
+- **#58** - `(int)strlen(text)` repetition went from 5+ sites
   (`fade`, `virtual-row build`, `statusbar layout`) down to 1
   remaining site (`repl_code_panel.c:815`). The `UiTextPanelRow`
   text-len cache the audit suggested wasn't added; the other call
@@ -215,34 +215,34 @@ the underlying smell wasn't fully resolved:
 (All Tier C now closed; the two stragglers below were picked up in
 the same 2026-05-25 pass.)
 
-- **#55** — *closed.* Extracted `status_strip_begin` /
+- **#55** - *closed.* Extracted `status_strip_begin` /
   `status_strip_paint_bar` / `status_strip_end` in `panels.c`;
   `draw_modal_strip` and the status banner block both use them.
   `ui_panels_render_scene_status` went 118 → 95 lines;
   `draw_modal_strip` went 44 → 26 lines.
-- **#63** — *closed.* Added a per-frame `g_wrap_cache` to
+- **#63** - *closed.* Added a per-frame `g_wrap_cache` to
   `text_panel.c` keyed on snapshot + cp_w + wrap_at_comma + text_x.
   `ui_text_panel_render` populates the cache as a side effect of its
   row walk; `ui_text_panel_hit_test` and `ui_text_panel_input_row_y`
   read through `text_panel_row_wrap_count_cached(snap, row_idx)`.
   The 5 inline `text_panel_row_layout(snap, row)` calls remain
-  (they're tiny — 1-line layout builds; the hot path was the
+  (they're tiny - 1-line layout builds; the hot path was the
   `code_layout_row_count_for_text` re-walk, which is now cached).
 
-**Tier D — still warranted** (no change):
+**Tier D - still warranted** (no change):
 
-- **#37** — Search pass-through wrappers still kept for the
+- **#37** - Search pass-through wrappers still kept for the
   `editor_*` ↔ `ui_text_*` namespace boundary.
-- **#44** — The conditional `resolved_line = source_line_idx` override
+- **#44** - The conditional `resolved_line = source_line_idx` override
   for `UI_TEXT_PANEL_ROW_VIRTUAL` is still load-bearing
   (`text_panel.c:835-846`), test `test_ui_text_panel.c:190` still
   pins the contract.
 
 Bottom line: 13 of the audit's 63 findings are now closed beyond the
-original closeout (2 in the 2026-05-24 backlog pass — #18, #25 —
+original closeout (2 in the 2026-05-24 backlog pass - #18, #25 -
 plus 11 here, including the 2 stragglers #55 and #63 and the
 finally-finished #50); 3 partially closed (#46, #47, #58); only
-**2 Tier D items remain** (#37, #44) — both kept on purpose. **No
+**2 Tier D items remain** (#37, #44) - both kept on purpose. **No
 Tier C items remain.** The audit is materially complete; the only
 remaining work is the explicit Tier D carve-outs and the 3 partials
 where the structural shape improved but the audit's full fix
@@ -282,7 +282,7 @@ and treats them as hard errors under the project's `make check-c99`
 ratchet.
 
 **Why it matters:** One removed transitive include breaks the C99
-build everywhere this pattern hides — and the project explicitly
+build everywhere this pattern hides - and the project explicitly
 targets old-gcc.
 
 **Fix:** Add the explicit includes.
@@ -333,7 +333,7 @@ replayed (`is_edit==1`), `add_input_row` runs instead of
 `add_command_row`. The green replay background/marker, blue
 feeding-normal marker, line selection band, etc. don't apply.
 
-**Why it matters:** Visible inconsistency — the same source line
+**Why it matters:** Visible inconsistency - the same source line
 draws different decorations depending on whether you're editing it
 or not.
 
@@ -350,10 +350,10 @@ insert-row (-1) unaffected.
 overwrites blue; `highlight_color_idx` overwrites yellow;
 `apply_tutorial_insertion_marker` overwrites pink. The comment
 documents "tutorial-insertion wins over feeding-normal/color" but
-the assignment order *also* makes feeding-normal beat replay —
+the assignment order *also* makes feeding-normal beat replay -
 which is **not** commented and may be unintended.
 
-**Why it matters:** Drift-prone — the implicit ordering can flip
+**Why it matters:** Drift-prone - the implicit ordering can flip
 under a small refactor with no test signal.
 
 **Fix:** Pick the marker with an explicit priority enum
@@ -384,7 +384,7 @@ caller plumb them. Extend the purity guard to cover `layout.c`.
 
 ### 8. `core/hit.h` enumerates 16 app-specific `UiHitKind` values (done in original closeout)
 
-**Where:** `src/ui/core/hit.h` —
+**Where:** `src/ui/core/hit.h` -
 `UI_HIT_REPLAY_BUTTON`, `UI_HIT_HELP_TOGGLE`, `UI_HIT_HELP_PANEL`,
 `UI_HIT_COLOR_SWATCH`, `UI_HIT_INLINE_COLOR_SWATCH`,
 `UI_HIT_VARIABLE_SLIDER`, `UI_HIT_CODE_PANEL_TAB`,
@@ -396,7 +396,7 @@ caller plumb them. Extend the purity guard to cover `layout.c`.
 (NONE, PANEL_DIVIDER, CODE_GUTTER, CODE_INSERT_LINE, CODE_TEXT).
 Header docs explicitly name `glr_ctrl_toggle_help` /
 `glr_ctrl_toggle_code_focus` (file:67, 70) and `g_cfg_items[]`
-(file:99) — those names belong in app/.
+(file:99) - those names belong in app/.
 
 **Why it matters:** `editor_demo` and any future tool reusing
 `core/` carries 14 unused enum values with REPL-app baggage in the
@@ -428,7 +428,7 @@ and `TAB_STRIP_H` from `core/metrics.h`.
 
 **Smell:** `search_row_idx` is documented as "Row index in the
 editor search row space (see `editor_search_row_for_cmd_index`)".
-The whole point of `core/text_panel.h` is to be REPL/editor-free —
+The whole point of `core/text_panel.h` is to be REPL/editor-free -
 even comment-level coupling forces co-edits.
 
 **Fix:** Re-document as "opaque adapter-defined IDs compared for
@@ -442,7 +442,7 @@ equality only"; drop the editor symbol reference.
 **Smell:** Both call `editor_state_line_override_for(line_idx)` and
 `editor_buffer_line(line_idx)` directly (live `g_editor_state` reads
 via `src/editor/state.c:84, 728`). Per-line text is the most basic
-input — it should arrive as a `UiBufferView` field on the snapshot.
+input - it should arrive as a `UiBufferView` field on the snapshot.
 
 **Why it matters:** A mid-render mutation can yield rows that
 disagree with the snapshot's `document_cmds[]`.
@@ -450,7 +450,7 @@ disagree with the snapshot's `document_cmds[]`.
 **Fix:** Thread an `editor_buffer_view` + `editor_line_overrides`
 slice through `UiRenderSnapshot`; drop the live reads.
 
-### 12. Virtual-line list read inconsistently — once from snapshot, once from live state (done in original closeout)
+### 12. Virtual-line list read inconsistently - once from snapshot, once from live state (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:281` (precompute, live read)
 vs. L1083 (add rows, snapshot read)
@@ -481,8 +481,8 @@ function impure in the header.
 **Where:** `src/ui/app/repl_code_panel.c:694, 725, 750, 1066`
 
 **Smell:** Calls `tutorial_step_fade_front/_settle/_alpha`,
-`tutorial_line_is_fading` — each does its own `tutorial_state_view()`.
-`apply_fade_segments` calls `_settle` inside a per-char loop — up
+`tutorial_line_is_fading` - each does its own `tutorial_state_view()`.
+`apply_fade_segments` calls `_settle` inside a per-char loop - up
 to ~6 separate state reads per fading line per frame. No snapshot
 field for tutorial fade exists.
 
@@ -537,7 +537,7 @@ in `glr_ctrl_tick` (`src/app/glr_ctrl.c:3917-3923`) via
 **Fix:** Move both fields to an editor-session slice next to
 `scroll` (which the same comment says is on `EditorState`).
 
-### 18. Variable panel reads peer live state instead of snapshot (done — Tier B, commit `783d7e3`)
+### 18. Variable panel reads peer live state instead of snapshot (done - Tier B, commit `783d7e3`)
 
 **Where:** `src/ui/app/variable_panel.c:113, 195, 273-274, 307-308`
 
@@ -641,12 +641,12 @@ layout_mode)` in `ui/core/layout.{c,h}`.
 
 **Where:**
 `src/ui/app/{variable_panel,profile_panel,replay_hud,autocomplete_panel,color_picker}.c`
-— 9 occurrences of `glRectf` + `glBegin(GL_LINE_LOOP)`.
+- 9 occurrences of `glRectf` + `glBegin(GL_LINE_LOOP)`.
 
 **Fix:** Add `gl2d_panel_frame(x, y, w, h, bg_tok, border_tok,
 bg_alpha, border_alpha)` to `ui/core/gl_2d.{c,h}`; migrate.
 
-### 25. Replay HUD ignores `snap->replay` (done — Tier B, commit `783d7e3`)
+### 25. Replay HUD ignores `snap->replay` (done - Tier B, commit `783d7e3`)
 
 **Where:** `src/ui/app/replay_hud.h:35-50`,
 `src/app/glr_ctrl.c:1699-1714`
@@ -710,12 +710,12 @@ relocate this to one .c TU."
 promote getters/setters to extern; keep `theme.h` for declarations
 only.
 
-### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop (done — Tier C closed 2026-05-25)
+### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop (done - Tier C closed 2026-05-25)
 
 **Where:** `src/ui/core/text_panel.c:113`
 
 **Smell:** `glIsEnabled(GL_BLEND)` save/restore inside the
-fake-bold pass — known to stall some drivers. Called per character
+fake-bold pass - known to stall some drivers. Called per character
 segment, per frame. The row-level path already enables/disables
 BLEND once.
 
@@ -752,7 +752,7 @@ separate.)
 
 **Where:** `src/ui/core/text_panel.c:351-364`
 
-**Smell:** Draws spaces with `gl2d_draw_string` — GLUT bitmap-font
+**Smell:** Draws spaces with `gl2d_draw_string` - GLUT bitmap-font
 spaces paint no pixels. Called twice (L428, L526). `glColor3fv` is
 set but the only effect is advancing raster position, which is
 discarded.
@@ -768,7 +768,7 @@ dotted indent guides if that was the intent.
 **Smell:** `ui_menu_bar_menu_hit`, `_pin_hit`, `_dropdown_item_hit`
 return raw `int` (-1 or index). Header docstrings say "Called by
 ui_panels.c on left-click" but `grep` shows `panels.c` no longer
-calls any of them — only the rich `UiHit` form is used externally;
+calls any of them - only the rich `UiHit` form is used externally;
 the int variants only serve tests + internals.
 
 **Fix:** Demote to `static`; update tests to drive through
@@ -798,7 +798,7 @@ around `ui_menu_bar_submenu_rect_for_test` that just convert
 `scene_parent_row_for_tag` / `tutorial_parent_row_for_tag` and let
 tests compose.
 
-### 37. `editor_search_find_next_in_text` / `_prev_` are pass-through trampolines (Tier D — kept on purpose)
+### 37. `editor_search_find_next_in_text` / `_prev_` are pass-through trampolines (Tier D - kept on purpose)
 
 **Where:** `src/editor/search.c:57-65`
 
@@ -833,7 +833,7 @@ no reader anywhere.
 
 **Where:** `src/ui/app/variable_panel.c:116-120`
 
-**Smell:** The dedupe compares against a monotonic `anim_time` — so
+**Smell:** The dedupe compares against a monotonic `anim_time` - so
 the guard never fires during normal play; it triggers only if a
 frame redraws twice with identical clock. Two file-statics
 (`g_var_panel_lift_update_time`, `g_var_panel_lift_update_target`)
@@ -879,7 +879,7 @@ the UI-chrome value-types header, but ownership is on
 `subsystems/variable_panel/variable_panel_state.h`; have
 `ui/app/snapshot.h` include from there.
 
-### 44. `text_panel.c:818-819` dead override of `resolved_line` for virtual rows (Tier D — claim incorrect; load-bearing)
+### 44. `text_panel.c:818-819` dead override of `resolved_line` for virtual rows (Tier D - claim incorrect; load-bearing)
 
 **Where:** `src/ui/core/text_panel.c:818-819`
 
@@ -891,7 +891,7 @@ if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL) resolved_line = row->source_line_idx
 For virtual rows `source_line_idx == -1`; the first assignment
 falls through to `hit_target_line_idx`, the second reverts it to
 -1. Header L132-137 says: "the generic hit-tester leaves
-line_idx unresolved for these rows" — the conditional contradicts
+line_idx unresolved for these rows" - the conditional contradicts
 the docs.
 
 **Fix:** Drop the conditional override; let `resolved_line` fall
@@ -899,7 +899,7 @@ through to `hit_target_line_idx`.
 
 ## 🔵 Structural concerns
 
-### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs (done — Tier C closed 2026-05-25; now 40 lines via `paint_menu_labels` + `paint_pin_buttons`)
+### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs (done - Tier C closed 2026-05-25; now 40 lines via `paint_menu_labels` + `paint_pin_buttons`)
 
 **Where:** `src/ui/app/menu_bar.c:1375-1514`
 
@@ -912,7 +912,7 @@ Search-vs-Replay-vs-default branching), and the bottom hairline.
 **Fix:** Break into `paint_strip_bg`, `paint_menu_labels(hover)`,
 `paint_pin_buttons(hover, replay)`; precompute hover from snap.
 
-### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns (partial — 106→82 lines as of 2026-05-25; Config column hoisting remains Tier C)
+### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns (partial - 106→82 lines as of 2026-05-25; Config column hoisting remains Tier C)
 
 **Where:** `src/ui/app/menu_bar.c:1153-1258`
 
@@ -925,7 +925,7 @@ function isn't menu-agnostic.
 let each provider expose an optional "draw row right-decoration"
 hook.
 
-### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches (partial — 87→61 lines as of 2026-05-25; one chrome branch now in `submenu_hit_test`, the other is still inline)
+### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches (partial - 87→61 lines as of 2026-05-25; one chrome branch now in `submenu_hit_test`, the other is still inline)
 
 **Where:** `src/ui/app/menu_bar.c:856-942`
 
@@ -935,12 +935,12 @@ L905-912) repeat the same overlay-precedence logic.
 **Fix:** Factor "inside dropdown rect but not on item" into one
 helper returning a chrome-or-item discriminator.
 
-### 48. `ui_repl_code_panel_render` is misnamed — it renders chrome too (done — Tier C closed 2026-05-25; renamed to `ui_repl_code_panel_render_with_chrome`)
+### 48. `ui_repl_code_panel_render` is misnamed - it renders chrome too (done - Tier C closed 2026-05-25; renamed to `ui_repl_code_panel_render_with_chrome`)
 
 **Where:** `src/ui/app/repl_code_panel.c:1599-1645`
 
 **Smell:** Also renders scene tabs, menu bar, search overlay,
-statusbar, color picker — the full chrome layer. Callers expecting
+statusbar, color picker - the full chrome layer. Callers expecting
 "render the code panel" get the whole shop, color picker drawn
 last.
 
@@ -948,7 +948,7 @@ last.
 split into `ui_repl_code_panel_render_chrome(...)` and have
 `panels.c` orchestrate.
 
-### 49. Hit-test rebuilds the entire row set already built by render (done — Tier C closed 2026-05-25; `g_builder_cache` reuses the per-frame builder keyed on snapshot pointer)
+### 49. Hit-test rebuilds the entire row set already built by render (done - Tier C closed 2026-05-25; `g_builder_cache` reuses the per-frame builder keyed on snapshot pointer)
 
 **Where:** `src/ui/app/repl_code_panel.c:1690-1702`
 
@@ -964,7 +964,7 @@ ticked between them.
 pointer + row layout dims; expose a `rebuild_rows()` call the
 controller makes once per frame.
 
-### 50. Magic spacing constants scattered across menu render code (done — Tier C closed 2026-05-25; `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` named, the `+ 4` row-pad / `+ 8` extra-height all expressed via `DROPDOWN_PAD_Y`, and the triplicated ordinal-from-y formula extracted into `dropdown_row_for_gl_y`)
+### 50. Magic spacing constants scattered across menu render code (done - Tier C closed 2026-05-25; `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` named, the `+ 4` row-pad / `+ 8` extra-height all expressed via `DROPDOWN_PAD_Y`, and the triplicated ordinal-from-y formula extracted into `dropdown_row_for_gl_y`)
 
 **Where:** `src/ui/app/menu_bar.c:428, 438, 502, 507, 509, 511,
 724, 786-787, 1176, 1180, 1414, 1452, 1491, 1598, 1605` and
@@ -979,7 +979,7 @@ and submenu.
 `DROPDOWN_ROW_TOP_OFFSET`, `DROPDOWN_INNER_BORDER` to `metrics.h`;
 extract `row_for_y(top, h, gl_y)` shared helper.
 
-### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call (done — Tier C closed 2026-05-25; both functions cache through `g_dropdown_cache` / `g_submenu_cache` with menu+window keys)
+### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call (done - Tier C closed 2026-05-25; both functions cache through `g_dropdown_cache` / `g_submenu_cache` with menu+window keys)
 
 **Where:** `src/ui/app/menu_bar.c:484-498, 705-715`
 
@@ -990,21 +990,21 @@ hit-test, every test helper.
 **Fix:** Cache per-frame keyed on open menu + open submenu;
 invalidate on open / close / hover-change.
 
-### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call (done — Tier C closed 2026-05-25; every branch now returns a string literal or a name owned by another module)
+### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call (done - Tier C closed 2026-05-25; every branch now returns a string literal or a name owned by another module)
 
 **Where:** `src/ui/app/menu_bar.c:312-324`
 (same pattern in `config_item_shortcut`, L341-361)
 
 **Smell:** Two successive calls share the buffer. Works today
 because callers strlen / draw immediately. `menu_dropdown_rect`
-(L488-498) reads `lbl` inside a `for (i = 0; i < n; i++)` loop —
+(L488-498) reads `lbl` inside a `for (i = 0; i < n; i++)` loop -
 would break the moment a future change saves the pointer. Also a
 "renderer mutates file-static state" snapshot violation.
 
 **Fix:** Pass `out_buf, out_sz` (mirrors `cfg_state_str`); or
 title-case at config-section-table init.
 
-### 53. Hand-rolled ASCII title-case in render-time hot path (done — Tier C closed 2026-05-25; folded into #52's static-literal rewrite)
+### 53. Hand-rolled ASCII title-case in render-time hot path (done - Tier C closed 2026-05-25; folded into #52's static-literal rewrite)
 
 **Where:** `src/ui/app/menu_bar.c:313-323`
 
@@ -1017,7 +1017,7 @@ the UI layer when it could live next to
 **Fix:** Pre-compute display labels once in `glr_config.c`
 (or expose `glr_config_section_display_label`); UI just renders.
 
-### 54. `repl_code_panel_newline_rows` is misnamed (done — Tier C closed 2026-05-25; renamed to `repl_code_panel_trailing_row_count`)
+### 54. `repl_code_panel_newline_rows` is misnamed (done - Tier C closed 2026-05-25; renamed to `repl_code_panel_trailing_row_count`)
 
 **Where:** `src/ui/app/repl_code_panel.c:294-304`
 
@@ -1029,14 +1029,14 @@ not a "newline."
 or split into `_trailing_input_rows` / `_trailing_placeholder_rows`
 + thin selector.
 
-### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks (done — Tier C closed 2026-05-25; extracted `status_strip_begin` / `_paint_bar` / `_end` shared by `draw_modal_strip` and the status banner)
+### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks (done - Tier C closed 2026-05-25; extracted `status_strip_begin` / `_paint_bar` / `_end` shared by `draw_modal_strip` and the status banner)
 
 **Where:** `src/ui/app/panels.c:49-92` (rename modal) and L98-151
 (file prompt). The amber/red status banner at L157-244 shares the
 same shell.
 
 **Smell:** Viewport-begin, blend setup, two-color rect+rule,
-font-cell text clamp, `gl2d_end` teardown — duplicated. Only the
+font-cell text clamp, `gl2d_end` teardown - duplicated. Only the
 message format and msg buffer size differ.
 
 **Fix:** Extract
@@ -1065,7 +1065,7 @@ builder. The duplicate guards exist on every helper.
 
 **Fix:** Drop the redundant guards; keep only `init_builder`'s.
 
-### 58. `(int)strlen(text)` repeated for the same row text within a frame (partial — 5+ sites → 1 site as of 2026-05-25; the `UiTextPanelRow.text_len` cache wasn't added but the other call sites were deleted)
+### 58. `(int)strlen(text)` repeated for the same row text within a frame (partial - 5+ sites → 1 site as of 2026-05-25; the `UiTextPanelRow.text_len` cache wasn't added but the other call sites were deleted)
 
 **Where:** `src/ui/app/repl_code_panel.c:690, 1118-1119, 1543, 1549,
 1555`
@@ -1106,7 +1106,7 @@ a shared header is a separate cleanup."
 
 **Where:** `src/ui/core/tabbed_overlay.c:223`
 
-**Smell:** `int tx = hx + 14;` — magic number paired with the same
+**Smell:** `int tx = hx + 14;` - magic number paired with the same
 named constant used at L160 of the same file.
 
 **Fix:** `int tx = hx + MENU_TEXT_INSET_X;`.
@@ -1121,7 +1121,7 @@ block above (12 spaces vs. 15).
 **Fix:** Re-indent. Cosmetic, but a hint that the file isn't being
 auto-formatted under the purity guard.
 
-### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count` (done — Tier C closed 2026-05-25; per-snapshot `g_wrap_cache` populated by render, consumed by hit-test + `ui_text_panel_input_row_y`)
+### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count` (done - Tier C closed 2026-05-25; per-snapshot `g_wrap_cache` populated by render, consumed by hit-test + `ui_text_panel_input_row_y`)
 
 **Where:** `src/ui/core/text_panel.c` (lines 638 vs. 645 inside
 `text_panel_row_wrap_count` declare it twice in the same function
@@ -1139,23 +1139,23 @@ walked).
 
 ### One-afternoon pass
 
-- [x] **#1** — `tabbed_overlay.c` NUL read past short lines. Single
+- [x] **#1** - `tabbed_overlay.c` NUL read past short lines. Single
    conditional, surgical fix.
-- [x] **#2** — Add missing `<math.h>` / `<string.h>` / `<stdio.h>`
+- [x] **#2** - Add missing `<math.h>` / `<string.h>` / `<stdio.h>`
    includes to `variable_panel.c` + `autocomplete_panel.c`. Two-line
    change per file.
-- [x] **#3** — Delete the render-time hover-mutation in
+- [x] **#3** - Delete the render-time hover-mutation in
    `menu_bar_render_example_dropdown` (lines 1525-1527).
-- [x] **#5** + **#6** — Wire `apply_command_overlays` into
+- [x] **#5** + **#6** - Wire `apply_command_overlays` into
    `add_input_row` and replace the marker-color cascade with an
    explicit priority enum.
-- [x] **#32** + **#33** + **#42** + **#34** + **#35** + **#36** —
+- [x] **#32** + **#33** + **#42** + **#34** + **#35** + **#36** -
    Delete dead work: the unused `UiReplCodePanelLayout` build, the
    `text_panel_draw_indent` no-op, the three unused
    `search_overlay` params, the three stale `int`-returning hit-test
    entry points, the test-only alias, the duplicate test rect
    helpers. All mechanical.
-- [x] **#38** + **#39** + **#40** — Delete the five orphan
+- [x] **#38** + **#39** + **#40** - Delete the five orphan
    `ui_state_*` exports, `UiTransformer.color.is_clear`, the dead
    var-panel lift cache.
 
@@ -1164,27 +1164,27 @@ walked).
 The dominant work is **closing the snapshot boundary**:
 
 - [x] **#11** + **#12** + **#13** + **#14** + **#15** + **#16**
-   — Push `editor_buffer_view`, `editor_line_overrides`,
+   - Push `editor_buffer_view`, `editor_line_overrides`,
   `tutorial_fade`, `init_section_lines`, resolved cfg states, replay
-  state into `UiRenderSnapshot`. (`#18` partial — drag-state slice
-  not yet on snapshot; `#25` deferred — replay HUD keeps own state
+  state into `UiRenderSnapshot`. (`#18` partial - drag-state slice
+  not yet on snapshot; `#25` deferred - replay HUD keeps own state
   struct.)
 
 Then **the core/app boundary**:
 
-- [x] **#7** + **#8** + **#9** + **#10** — Move `layout.c` out of
+- [x] **#7** + **#8** + **#9** + **#10** - Move `layout.c` out of
   `core/`, split `hit.h` into `core` + `app` halves, push
   `STATUSBAR_H` / `TAB_STRIP_H` out of `metrics.h`, refresh
   `text_panel.h` docs.
 
 Then **the flyout-engine debt**:
 
-- [x] **#19** — Extend `CatalogFlyoutOps` to cover Config; collapse
+- [x] **#19** - Extend `CatalogFlyoutOps` to cover Config; collapse
   the 21 menu-id branches via `FlyoutProvider` polymorphism.
 
 Then **the panel-frame chrome layer**:
 
-- [x] **#23** + **#24** + **#26** + **#27** + **#28** — Extract
+- [x] **#23** + **#24** + **#26** + **#27** + **#28** - Extract
   `gl2d_panel_frame`, `ui_clamp_panel_y`,
   `ui_layout_menu_bar_rect`, `ui_text_panel_right_action_rect`,
   `ui_repl_code_panel_compute_text_x`. Each is a tiny helper that
@@ -1192,21 +1192,21 @@ Then **the panel-frame chrome layer**:
 
 ### Closeout pass (2026-05-24)
 
-- [x] **#31** — `tolower` → `ascii_tolower` in `text_search.c`
+- [x] **#31** - `tolower` → `ascii_tolower` in `text_search.c`
   (locale-independent ASCII fold).
-- [x] **#56** — `STATIC_ASSERT` linking `TUTORIAL_FADE_SETTLE_CHARS`
+- [x] **#56** - `STATIC_ASSERT` linking `TUTORIAL_FADE_SETTLE_CHARS`
   to `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` so future bumps don't
   silently corrupt the fade.
-- [x] **#59** — Empty-message guard in `ui_state_status_set_kind`
+- [x] **#59** - Empty-message guard in `ui_state_status_set_kind`
   (drop empty banner instead of stamping full TTL).
-- [x] **#60** — Promote `ui_layout_code_panel_layout_mode` to
+- [x] **#60** - Promote `ui_layout_code_panel_layout_mode` to
   `layout.h`; delete the `rvp_code_panel_layout_mode` duplicate.
-- [x] **#62** — Re-indent the stray two-space `if` block in
+- [x] **#62** - Re-indent the stray two-space `if` block in
   `text_panel.c::ui_text_panel_hit_test`.
 
 ### Out of scope
 
-- The `scene_tabs.c` file is clean — the audit's comparand for what
+- The `scene_tabs.c` file is clean - the audit's comparand for what
   a snapshot-pure UI module looks like. Don't touch it except where
   it shares a helper with `menu_bar.c` (e.g. #26).
 - The two-piece code-panel split (`core/text_panel.c` +
@@ -1216,7 +1216,7 @@ Then **the panel-frame chrome layer**:
 - The `replay_ui_*` prefix carve-out for feature-UI is a sanctioned
   exception per `MODULES.md`; the findings are about HUD-specific
   smells, not the prefix.
-- `gl_2d.h` is genuinely tiny and header-only by design — don't
+- `gl_2d.h` is genuinely tiny and header-only by design - don't
   conflate it with `theme.h` (#29), which actually does have a real
   TU-duplication problem.
 
@@ -1224,9 +1224,9 @@ Then **the panel-frame chrome layer**:
 
 This audit was produced by four parallel review agents:
 
-- `menu_bar.{c,h}` (61KB, 1618 lines — the second-biggest file in
+- `menu_bar.{c,h}` (61KB, 1618 lines - the second-biggest file in
   the directory) + `scene_tabs.{c,h}` (used as the clean comparand)
-- `repl_code_panel.{c,h}` (70KB, 1743 lines — the biggest file in
+- `repl_code_panel.{c,h}` (70KB, 1743 lines - the biggest file in
   the directory) + `panels.{c,h}`
 - The full `core/` subtree (`text_panel`, `text_layout`,
   `text_search`, `tabbed_overlay`, `layout`, `hit.h`, `gl_2d.h`,

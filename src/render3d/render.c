@@ -91,7 +91,7 @@ void render3d_state_init(Render3dState *state) {
 /* Reject Render3dRenderConfig values that would cause undefined behavior or
  * never-terminating loops downstream. Returns 0 on valid, sets errno and
  * returns -1 on failure. The grid renderer's `for (v = -extent; v <= extent;
- * v += step)` is the most consequential — step <= 0 hangs the GLUT main
+ * v += step)` is the most consequential - step <= 0 hangs the GLUT main
  * loop, so a zeroed config (the natural memset default) is a hard error
  * the moment the grid is enabled. */
 static int validate_render_config(const Render3dRenderConfig *config) {
@@ -118,7 +118,7 @@ static int validate_render_config(const Render3dRenderConfig *config) {
     }
     /* accum_effect must be a known mode. accum_passes must be a sane sample
      * count in [1, MAX_ACCUM_SAMPLES], but only when accumulation is
-     * actually active (effect != OFF on an accum-capable context) — a
+     * actually active (effect != OFF on an accum-capable context) - a
      * memset(0) config from a non-accum caller (render3d_demo) leaves
      * accum_passes == 0, which is fine while effect is OFF. Mirrors the
      * grid block above (validated only when grid_theme != OFF).
@@ -182,7 +182,7 @@ void render3d_get_active_projection(const Render3dState *state,
  * the camera distance is -z_eye.
  *
  * Returns 0.0 when there is nothing to measure or the feedback buffer
- * overflowed (glRenderMode < 0) — the caller treats 0 as "use cam_dist".
+ * overflowed (glRenderMode < 0) - the caller treats 0 as "use cam_dist".
  * The fixed buffer caps how much geometry can be probed; very dense
  * scenes simply fall back, which is safe. */
 static double render3d_probe_eye_dist(const Render3dRenderConfig *config) {
@@ -283,7 +283,7 @@ static double render3d_probe_eye_dist(const Render3dRenderConfig *config) {
  * FROZEN: capture once on the perspective->ortho edge, release on the
  * ortho->perspective edge. The controller sequences the 3D->2D switch as
  * "flatten camera, THEN blend projection", so by the time mix leaves 1.0
- * the camera is already top-down — exactly the camera ortho will use —
+ * the camera is already top-down - exactly the camera ortho will use -
  * so the one sample is the scene's true on-screen size at the switch and
  * never breathes afterward.
  *
@@ -320,7 +320,7 @@ static void render3d_update_ortho_ref(Render3dState *state,
  * so mouse-wheel zoom (which drives cam_dist) rescales the ortho view.
  * Moving the camera by d shifts every vertex's eye distance by d, so
  * adding (cam_dist - ortho_ref_cam_dist) reconstructs exactly what a
- * re-probe at the current distance would report — without the per-frame
+ * re-probe at the current distance would report - without the per-frame
  * re-probe (and its animation breathing) that FROZEN mode avoids.
  *
  * Falls back to raw cam_dist when there is no usable probe measurement
@@ -346,7 +346,7 @@ static double render3d_effective_ortho_ref(const Render3dState *state,
  * frame and write it into state->active_projection. Called once per
  * render3d_draw_scene before the AA jitter loop so the cached desc
  * always reflects the discrete-mode projection a faithful reshape()
- * would emit — not a transient sample inside the loop. The continuous
+ * would emit - not a transient sample inside the loop. The continuous
  * mix is snapped to the dominant side because reshape() emits one
  * discrete mode, not an interpolation. */
 static void render3d_compute_active_projection(Render3dState *state,
@@ -371,7 +371,7 @@ static void render3d_compute_active_projection(Render3dState *state,
 }
 
 /* Per-AA-sample projection apply. Reads state->ortho_ref_dist for the
- * ortho scale reference but does NOT write back — state is read-only
+ * ortho scale reference but does NOT write back - state is read-only
  * here, all mutations land in render3d_compute_active_projection above. */
 static void render3d_apply_projection(const Render3dState *state,
                                    const Render3dRenderConfig *config,
@@ -495,7 +495,7 @@ static void render3d_execute_user_geometry(const Render3dRenderConfig *config,
                                         Render3dExecutePurpose purpose) {
     /* The program runs unbounded by this module. Rasterization is already
      * viewport-clipped to the scene rect; the one command the viewport does
-     * not bound is a user glClear(), and bounding that is the caller's job —
+     * not bound is a user glClear(), and bounding that is the caller's job -
      * only the caller knows what lies outside the scene rect and whether it
      * is precious. A caller with its own pixels around the scene scissors
      * to the scene rect before calling (gl-repl); a caller whose scene rect
@@ -527,7 +527,7 @@ static void orbit_gizmo_axes(float tx, float ty, float tz, float r) {
  * moving (during drag or while momentum carries it); fades out. REPL-only -
  * never exported. Styled to match the other scene helpers: soft halo line
  * under a bright core, alpha driven by g_cam_motion_glow. Drawn in two
- * passes so it is never fully hidden inside user geometry — pass 0 is a
+ * passes so it is never fully hidden inside user geometry - pass 0 is a
  * depth-disabled stippled ghost at reduced alpha, pass 1 is the solid
  * depth-tested gizmo on top where it isn't occluded. */
 static void draw_orbit_target(const Render3dFrameRenderContext *frame_ctx) {
@@ -709,8 +709,8 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
 static void render3d_pass_winding(const Render3dRenderConfig *config) {
     /* Winding visualization: one two-sided-lighting pass. GL selects the
      * front material for front-facing polygons and the back material for
-     * back-facing ones — purely from window-space winding under the active
-     * glFrontFace — so flipped / inside-out faces read red against green.
+     * back-facing ones - purely from window-space winding under the active
+     * glFrontFace - so flipped / inside-out faces read red against green.
      * The caller's execute_fn must install a state filter that suppresses
      * the program's own material / lighting / cull / color-material commands
      * so this setup survives the geometry walk. */
@@ -794,7 +794,7 @@ static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
     prof_begin(PROF_RENDER3D_ORBIT_TARGET);
     draw_orbit_target(frame_ctx);
     prof_accum_end(PROF_RENDER3D_ORBIT_TARGET);
-    /* Light-slot gizmos are host chrome like the grid and axes — driven by
+    /* Light-slot gizmos are host chrome like the grid and axes - driven by
      * the program's glLight* state, but drawn as the renderer's own
      * indicators, not as a report about user geometry. They render last of
      * the helpers so they sit on top of the ones that write depth (they
@@ -808,14 +808,14 @@ static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
 
 /* Polygon outline overlay, vertex-point overlay, vertex-number /
  * normal-vector labels, and the cursor-edit guide stack all render
- * here through post_overlays_fn — none of them are scene-internal
+ * here through post_overlays_fn - none of them are scene-internal
  * any more (see src/app/glr_ctrl.c for the bodies).
  *
  * This pass is exactly the geometry-reporting layer: everything drawn
  * here describes the user's geometry, and runs after every piece of host
  * chrome (backdrop/grid/axes/orbit target/light gizmos, all in
  * render3d_pass_helpers) so it sits on top. Keeping that split clean
- * matters to callers that must treat the two categories differently —
+ * matters to callers that must treat the two categories differently -
  * a report about masked-away geometry should be masked away too, while
  * chrome never should. */
 static void render3d_pass_overlays(const Render3dFrameRenderContext *frame_ctx) {
@@ -839,7 +839,7 @@ static void render_3d_scene_pass(const Render3dState *state,
     render3d_pass_fill(config);
     /* The buffer-read point sits between fill and helpers on purpose:
      * user geometry (and the replay-fade post_fill hook) has written
-     * its buffers, but the backdrop/grid — which also write depth —
+     * its buffers, but the backdrop/grid - which also write depth -
      * have not, so a reader sees geometry only. Fired on every
      * accumulation pass; `is_final_pass` lets a reader that wants one
      * read per frame take the last one (per-pass clears wipe earlier
@@ -851,7 +851,7 @@ static void render_3d_scene_pass(const Render3dState *state,
     /* Host chrome renders with GL_STENCIL_TEST suspended. A program that
      * enables the stencil test leaves it enabled for everything drawn
      * afterwards, and the frame does not end where the user's geometry
-     * does — without this, a mask meant for the program's own polygons
+     * does - without this, a mask meant for the program's own polygons
      * silently clips the grid, axes, backdrop and light gizmos, which the
      * user never asked to mask. GL_ENABLE_BIT scoping puts the program's
      * enable state back before the overlays run, so the geometry-reporting
@@ -887,14 +887,14 @@ int render3d_draw_scene(Render3dState *state,
                config->render3d_w, config->render3d_h);
     render3d_apply_clear_color(config->clear_color);
 
-    /* Refresh the ortho scale reference. Done here — modelview still
-     * holds the caller's camera, nothing has touched it yet — so the
+    /* Refresh the ortho scale reference. Done here - modelview still
+     * holds the caller's camera, nothing has touched it yet - so the
      * feedback probe sees the right matrix and one update serves every
      * jitter sample below. */
     render3d_update_ortho_ref(state, config);
 
     /* Resolve the canonical active projection ONCE, before the AA
-     * jitter loop. Per-sample apply reads it but no longer writes —
+     * jitter loop. Per-sample apply reads it but no longer writes -
      * the cached desc reflects the discrete-mode projection a faithful
      * reshape() would emit, not a transient sample. */
     render3d_compute_active_projection(state, config);
@@ -909,7 +909,7 @@ int render3d_draw_scene(Render3dState *state,
          * clears here. The color/depth clear is not ours: the caller has
          * already cleared whatever it owns outside the scene rect, and the
          * scene rect itself is cleared per pass by the program's own
-         * glClear. The caller's chrome is not re-cleared per pass — each
+         * glClear. The caller's chrome is not re-cleared per pass - each
          * pass accumulates the same chrome color at `weight`, summing back
          * to that color. */
         prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
@@ -920,7 +920,7 @@ int render3d_draw_scene(Render3dState *state,
          * accumulation work skip the dead region under the code panel
          * instead of scanning the whole window. In theory a smaller scissor
          * region is a strict reduction in pixel-copy work; in practice on
-         * macOS it measured *slower*, so it's off by default — see
+         * macOS it measured *slower*, so it's off by default - see
          * CFG_DEFAULT_USE_ACCUM_AA_SCISSORS in glr_defaults.h. */
         int use_scissor = config->use_accum_aa_scissors;
         if (use_scissor) {
@@ -985,7 +985,7 @@ int render3d_draw_scene(Render3dState *state,
 
     /* Full-rect buffer composites draw on the resolved image BEFORE the
      * post filter, so Post FX (grain/scanlines/CRT warp) applies
-     * uniformly across both halves of a Split view — no seam at the
+     * uniformly across both halves of a Split view - no seam at the
      * divider. The canonical (jitter-free) projection goes along: a
      * depth reader needs it to linearize, and passing it here keeps the
      * hook neutral frame metadata rather than viz vocabulary. */

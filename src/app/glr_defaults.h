@@ -6,7 +6,7 @@
  * helpers and tests reuse these to stay aligned with the app-shell defaults
  * without drifting.
  *
- * This is gl-repl app-shell logic — it knits together scene-render
+ * This is gl-repl app-shell logic - it knits together scene-render
  * enums and the editor's panel layout into a single set of "out of
  * the box" values. The owning enums live in src/scene/themes.h and
  * src/ui/app/layout.h; include them here so the symbolic defaults do
@@ -14,7 +14,7 @@
  *
  * Concept: compile-time defaults. User-toggleable runtime settings
  * (wireframe / grid theme / etc.) live on glr_config.h and the
- * g_cfg_items[] descriptor table in glr_actions.c — different
+ * g_cfg_items[] descriptor table in glr_actions.c - different
  * concept, do not conflate.
  */
 #ifndef GLR_DEFAULTS_H
@@ -72,8 +72,8 @@
  * wins over them.
  *
  * Camera distance + grid extent go together. Tutorial geometry is
- * authored in whole units (see src/repl/tutorials.c) — shapes on +/-1 or
- * +/-2, solid sizes and radii of 1 — because decimal coordinates made
+ * authored in whole units (see src/repl/tutorials.c) - shapes on +/-1 or
+ * +/-2, solid sizes and radii of 1 - because decimal coordinates made
  * lesson shapes small enough that the cursor-bound overlays (vertex
  * labels especially) outweighed the primitive being taught. The built-in
  * dist of 5.0 frames only +/-2.07 vertically, so tutorials pull back far
@@ -122,7 +122,7 @@
 
 /* Render-side config defaults the REPL state initializer feeds into
  * the scene config. These are controller-policy defaults, not
- * scene-internal — the scene module accepts whatever value the caller
+ * scene-internal - the scene module accepts whatever value the caller
  * passes. */
 #define CFG_DEFAULT_MULTISAMPLE       1
 #define CFG_DEFAULT_LINE_SMOOTH       0
@@ -140,11 +140,11 @@
  * in gl_repl.c unconditionally calls glr_ctrl_set_accum(use_accum) at
  * startup, clobbering whatever this default was. Without an explicit
  * --accum / --no-accum that call resolves AUTO against the GL-init
- * probes — off when the context has no accumulation buffer, and off on
+ * probes - off when the context has no accumulation buffer, and off on
  * renderers that emulate one in software (Mesa), else on. So changing
  * this value only affects paths that build state without going through
  * main() (tests, render3d_demo, headless capture). To change the app's
- * default AA behavior, flip CFG_DEFAULT_ACCUM_EFFECT below — that is
+ * default AA behavior, flip CFG_DEFAULT_ACCUM_EFFECT below - that is
  * the user-facing effect selector. */
 #define CFG_DEFAULT_USE_ACCUM         1
 /* Effect defaults to AA (preserving the historic accum-AA-on-by-default
@@ -159,7 +159,7 @@
  * strict win: glClear/glAccum are bounded by the scissor box, not the
  * viewport, so without it the up-to-16x accum work scans the dead region
  * under the code panel every pass. Yet on macOS (Apple's OpenGL over Metal)
- * it measured *slower* in practice — enabling GL_SCISSOR_TEST around the
+ * it measured *slower* in practice - enabling GL_SCISSOR_TEST around the
  * accum path appears to push the driver off a fast clear/accumulate path
  * (e.g. a tile/fast-clear or whole-surface DMA optimization) that more than
  * pays for the extra pixels covered. So it ships OFF; flip to 1 only on a
@@ -170,7 +170,7 @@
  * layered between the global reset and the example's own leading
  * `@cfg` metadata. Each entry is a (tag, GlrConfigKey, value) tuple;
  * the controller applies them via glr_config_set() so the typed
- * config machinery — not a parser path — owns the change.
+ * config machinery - not a parser path - owns the change.
  *
  * Precedence: example `@cfg` > tag default > global default.
  *

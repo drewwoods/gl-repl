@@ -5,7 +5,7 @@
  * frozen UiRenderSnapshot; panel geometry comes through the shared
  * ui_layout_code_panel_rect() helper (single source of truth for panel
  * chrome geometry, exactly as menu_bar.c uses it). No state.h, no
- * repl-layer or editor-layer headers — reads/mutates no REPL/editor state.
+ * repl-layer or editor-layer headers - reads/mutates no REPL/editor state.
  */
 #include "ui/app/scene_tabs.h"
 
@@ -28,8 +28,8 @@ enum {
                          * top isn't clipped by the menu bar */
 };
 
-/* Workspace chip metrics. The chip leads the strip as a breadcrumb root —
- * "<workspace> > [tab][tab]" — so the container is named before the things it
+/* Workspace chip metrics. The chip leads the strip as a breadcrumb root -
+ * "<workspace> > [tab][tab]" - so the container is named before the things it
  * contains. It is deliberately NOT tab-shaped (no rounded top, no outline):
  * it is not selectable and must not read as a ninth scene. */
 enum {
@@ -48,7 +48,7 @@ static const char *chip_label(const UiRenderSnapshot *snap) {
 }
 
 /* Chip width, including its trailing separator glyph and gap. The chip always
- * shows when the strip shows — its absence would be indistinguishable from an
+ * shows when the strip shows - its absence would be indistinguishable from an
  * unbound workspace, which is the very distinction it exists to draw. */
 static int chip_total_w(const UiRenderSnapshot *snap) {
     int lw = (int)strlen(chip_label(snap)) * FONT_SMALL_W + 2 * CHIP_PAD_X;
@@ -162,7 +162,7 @@ int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
     return bh;
 }
 
-/* Fill a rect with rounded TOP corners (square bottom — the tab sits on
+/* Fill a rect with rounded TOP corners (square bottom - the tab sits on
  * the band's lower edge). The current GL color is used. Convex outline,
  * so GL_POLYGON is fine. r is clamped to the rect. */
 static void scene_tabs_fill_round_top(float x, float y, float w, float h,
@@ -216,7 +216,7 @@ static void scene_tabs_stroke_round_top(float x, float y, float w, float h,
     glEnd();
 }
 
-/* Draw label clipped to max_w pixels (hard char truncation, no ellipsis —
+/* Draw label clipped to max_w pixels (hard char truncation, no ellipsis -
  * idiomatic with menu_bar's max_chars hard limit). */
 static void scene_tabs_draw_label(int tx, int ty, const char *name,
                                   int max_w) {
@@ -268,7 +268,7 @@ static void scene_tabs_draw_chip(const UiRenderSnapshot *snap,
     scene_tabs_draw_label(chip_x + CHIP_PAD_X, by + 3, label,
                           chip_w - 2 * CHIP_PAD_X);
 
-    /* Breadcrumb separator, always muted — it is punctuation, not content. */
+    /* Breadcrumb separator, always muted - it is punctuation, not content. */
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)(chip_x + chip_w + 1), (float)(by + 3), ">",
                      FONT_SMALL);
@@ -330,7 +330,7 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
 
         /* Active tab: shade the WHOLE tab with a tinted hue (primary accent
          * for user scenes, alternate accent for the built-in example tab) so
-         * the highlight is unmistakably the tab — not a thin rule that reads
+         * the highlight is unmistakably the tab - not a thin rule that reads
          * as an underline of the menu row directly above. */
         if (active) {
             if (is_example)

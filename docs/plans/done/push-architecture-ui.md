@@ -35,16 +35,16 @@ The `ui_*` layer is half-converted:
   (`replay_ui_hud.h:10–25`). Zero live state reads. This was the proven
   pattern that the rest of `ui_*` extended in Phase B.
 - Every other `ui_*.c` file still pulls live state through
-  `repl_state_views.h` — 127 read sites across 8 files
+  `repl_state_views.h` - 127 read sites across 8 files
   (~70 in `ui_panels.c`, ~26 in `ui_menu_bar.c`).
 - A single render-time mutation remains: `ui_panels.c:250–251` writes the
   computed cursor pixel position back into REPL state from inside the line
   draw loop. Color picker render also caches hit rects in file-statics
-  (`ui_color_picker.c:151,187,207`) — same shape, different storage.
+  (`ui_color_picker.c:151,187,207`) - same shape, different storage.
 - Input-handler mutations are already routed through `repl_action_*`,
   `repl_command_store_*`, and `repl_undo_*` (R2 in
   `feature/push-architecture-refinement.md`). That is the existing
-  "output channel" — the user's "outputs from UI" rule is mostly a
+  "output channel" - the user's "outputs from UI" rule is mostly a
   re-framing of those calls, not a new mechanism.
 
 The goal is to extend the `UiReplayHudState` pattern to every `ui_*` render
@@ -58,10 +58,10 @@ should actualize UI discoveries).
 Three phases, in order. Each phase is independently shippable; later phases
 are optional once the earlier ones land.
 
-### Phase A — Eliminate render-time write-backs (small, ~1 commit)
+### Phase A - Eliminate render-time write-backs (small, ~1 commit)
 
 The named violation and its siblings are the load-bearing change. Without
-this, no snapshot scheme can be enforced — UI render functions still need
+this, no snapshot scheme can be enforced - UI render functions still need
 write access.
 
 **A1. Move cursor pixel computation out of render.**
@@ -77,7 +77,7 @@ and `*cp->cursor_py` while drawing. Two options:
   in `repl_code_panel_document.c` that the controller runs before render;
   render only consumes the result. Cleaner separation, more code to write.
 
-Recommend the first option — symmetric with how scene returns
+Recommend the first option - symmetric with how scene returns
 `SceneFocusVertex` discoveries.
 
 **A2. Extract color-picker hit rects.**
@@ -98,7 +98,7 @@ Exit criterion: every `ui_*` render function takes only `const`
 inputs and (where needed) an `out` struct. No `_mut()` accessors used
 inside any `*_render()` function.
 
-### Phase B — Build `UiRenderSnapshot`, route every UI render through it ✅ Done
+### Phase B - Build `UiRenderSnapshot`, route every UI render through it ✅ Done
 
 Status (2026-05-01): Phase B has landed. Every UI render entry point now
 takes `const UiRenderSnapshot *snap`; the controller builds the snapshot
@@ -108,24 +108,24 @@ renderer. The `check-ui-no-repl-state-read` guard runs as part of
 
 What landed:
 
-- **`ui_snapshot.h`** — `UiRenderSnapshot` bundles the by-value
+- **`ui_snapshot.h`** - `UiRenderSnapshot` bundles the by-value
   `Repl*State` slices, the pointer-shaped read-only views
   (`ReplVariableView`, `ReplEditorInputView`, `ReplImportExportView`,
   `FlatProgramView`, `ReplPredefView`), document/flat-program metadata,
   user-scene names, and grid arrays.
-- **`imrepl_ctrl_build_ui_snapshot()`** — single per-frame builder; the
+- **`imrepl_ctrl_build_ui_snapshot()`** - single per-frame builder; the
   only place that reads `repl_state_*` for UI rendering. Refreshes
   workspace header lines before populating the import/export view so
   renderers stop calling `repl_state_refresh_workspace_header_lines()`
   mid-frame.
-- **Renderer signatures** — every entry point now matches one of the
+- **Renderer signatures** - every entry point now matches one of the
   canonical shapes:
   - `void ui_X_render(const UiRenderSnapshot *snap)`
   - `void ui_X_render(const UiRenderSnapshot *snap, ...extra layout args)`
-- **Allowlists** — `scripts/allowlists/ui-renderers-signature.txt`
+- **Allowlists** - `scripts/allowlists/ui-renderers-signature.txt`
   enumerates the audited render functions; `ui_snapshot.h` is allowed
   to include `repl_state_views.h` because it *is* the UI read boundary.
-- **Tests** — `tests/test_imrepl_ctrl.c` stubs were updated to the new
+- **Tests** - `tests/test_imrepl_ctrl.c` stubs were updated to the new
   signatures; full suite stays green (2974/2974).
 
 Residual scope (intentional, Phase C territory):
@@ -162,7 +162,7 @@ clipboard     : count, summary
 status        : text, ticks_remaining
 search        : active, query, hit_line/char_idx
 autocomplete  : matches[N], selected_idx, ghost, hint, mode
-replay        : already covered by UiReplayHudState — fold it in
+replay        : already covered by UiReplayHudState - fold it in
 help          : visible, active_tab
 variable_pnl  : visible, drag_state snapshot
 profile_pnl   : mode
@@ -175,7 +175,7 @@ flat_program  : FlatProgramView (for replay annotations)
 ```
 
 A few of these are already snapshot-shaped (`UiReplayHudState`,
-`ReplPredefView`, `FlatProgramView`) — embed them by value rather than
+`ReplPredefView`, `FlatProgramView`) - embed them by value rather than
 re-inventing.
 
 **B2. Add `imrepl_ctrl_build_ui_snapshot()` in `imrepl_ctrl.c`.**
@@ -185,11 +185,11 @@ before any `ui_*_render()` call. This is the only function that reads
 `repl_state_*` for UI rendering.
 
 **B3. Convert UI render entry points one file at a time.**
-Order by leverage: `ui_replay_hud.c` (already done — extend signature to
+Order by leverage: `ui_replay_hud.c` (already done - extend signature to
 take the unified snapshot), `ui_help_overlay.c` (5 reads, trivial),
 `ui_profile_panel.c` (5 reads), `ui_autocomplete_panel.c` (5 reads),
 `ui_variable_panel.c` (8 reads), `ui_color_picker.c` (6 reads),
-`ui_menu_bar.c` (26 reads), `ui_panels.c` (70 reads — last and largest).
+`ui_menu_bar.c` (26 reads), `ui_panels.c` (70 reads - last and largest).
 
 Each file: change render signature to
 `void ui_X_render(const UiRenderSnapshot *snap[, UiXOutput *out])`,
@@ -212,7 +212,7 @@ Wire into `make test` alongside the existing `check-views-no-owners`
 Exit criterion: `grep -l 'repl_state_' ui_*.c` returns only files that
 still call `repl_state_status_set()` from input handlers (Phase C scope).
 
-### Phase C — `UiOutput` model for input handlers (large, optional)
+### Phase C - `UiOutput` model for input handlers (large, optional)
 
 This converts UI input handlers from "synchronously call action APIs" to
 "return a list of intended actions; controller dispatches them."
@@ -239,9 +239,9 @@ Phase A and Phase B can ship without Phase C.
 |------|-------|------|
 | `ui_panels.c:250–251` | A | The named cursor-px write-back |
 | `ui_color_picker.c:151,187,207` | A | Render-time hit-rect cache |
-| `ui_replay_hud.h` | B | Existing snapshot precedent — extend, don't re-invent |
+| `ui_replay_hud.h` | B | Existing snapshot precedent - extend, don't re-invent |
 | `imrepl_ctrl.c:145–246` | B | `imrepl_ctrl_build_scene_config()` shape to mirror |
-| `imrepl_ctrl.c:248–333` | B | `imrepl_ctrl_display_frame()` — add snapshot build before UI calls |
+| `imrepl_ctrl.c:248–333` | B | `imrepl_ctrl_display_frame()` - add snapshot build before UI calls |
 | `repl_state_views.h` | B | Source of every field the snapshot needs |
 | `ui_snapshot.h` (new) | B | `UiRenderSnapshot` struct |
 | `Makefile` | B | New `check-ui-no-repl-state-read` guard |
@@ -250,19 +250,19 @@ Phase A and Phase B can ship without Phase C.
 
 ## Existing patterns to reuse
 
-- `UiReplayHudState` (`ui_replay_hud.h`) — proven snapshot pattern; the new
+- `UiReplayHudState` (`ui_replay_hud.h`) - proven snapshot pattern; the new
   `UiRenderSnapshot` should subsume it.
 - `SceneRenderConfig` build sequence in
-  `imrepl_ctrl_build_scene_config()` — mix of by-value copies, struct
+  `imrepl_ctrl_build_scene_config()` - mix of by-value copies, struct
   memcpy, and lazy snapshots (e.g. `imrepl_ctrl_build_guide_snapshot()`).
   Same template applies.
-- `SceneFocusVertex` — example of a render-discovered value handed back
+- `SceneFocusVertex` - example of a render-discovered value handed back
   through config rather than written to live state. Same shape as the
   Phase A cursor-px output struct.
 - `repl_action_cursor_blink_reset()`, `replay_toggle_play_pause()`
-  (R2 outputs) — proven way to expose a one-line action API for what
+  (R2 outputs) - proven way to expose a one-line action API for what
   used to be an inline `_mut()` write.
-- `ReplPredefView` (`repl_eval.h`, R4b) — example of a by-value snapshot
+- `ReplPredefView` (`repl_eval.h`, R4b) - example of a by-value snapshot
   helper that hides global access.
 
 ## Verification
@@ -286,7 +286,7 @@ For each phase:
 
 ## Sizing note
 
-Phase A is half a day. Phase B is the bulk — call it 2–4 days,
+Phase A is half a day. Phase B is the bulk - call it 2–4 days,
 front-loaded by `ui_panels.c` (largest file, owns the code panel).
 Phase C is open-ended; defer until A+B prove the pattern works at scale.
 

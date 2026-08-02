@@ -1,11 +1,11 @@
 # Release Cleanup: Code-Smell Scan Findings & Recommended Work
 
-## Status — ACTIVE (2026-07-16)
+## Status - ACTIVE (2026-07-16)
 
 Pre-release cleanup pass driven by `scripts/code-smells.sh`. All six
 checks have now been run (clangd, clang-tidy, lizard, cppcheck, PMD
 CPD via Docker, churn×size); the raw outputs live in
-`build/code-smells/` (gitignored — regenerate with
+`build/code-smells/` (gitignored - regenerate with
 `./scripts/code-smells.sh --all`). Every finding referenced below was
 manually triaged; false positives are recorded here so the triage does
 not need repeating.
@@ -16,46 +16,46 @@ The real work is now (B) a verified dead-code sweep, (C) duplication
 hoists, and optionally (D) complexity refactors; the Phase A scanner
 fixes and acceptance run are complete.
 
-- **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5;
+- **A - Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5;
   A6's CPD baseline is now unblocked and still open)
-- **B — Dead-code sweep.** ✅ DONE — facade-symmetry retains annotated,
+- **B - Dead-code sweep.** ✅ DONE - facade-symmetry retains annotated,
   non-facade candidate functions deleted (2026-07-16).
-- **C — Duplication hoists (CPD).** ✅ DONE (2026-07-16) — C1, C2, and
+- **C - Duplication hoists (CPD).** ✅ DONE (2026-07-16) - C1, C2, and
   all five C3 pairs hoisted; see the per-item notes below. Validated:
   `make test` (48/48 binaries), `make check-state-ownership`,
   `check-duplicate-api-decls`, native `make gl-repl`, stubs
   `make gl-repl USE_GL_STUBS=1`, web `scripts/build-web.sh`, and
   real-gcc `make check-c99` + `make test-stubs` on gracemont.
-- **D — Complexity refactors (opportunistic).** NOT STARTED
+- **D - Complexity refactors (opportunistic).** NOT STARTED
 
-## A — Scanner fixes (`scripts/code-smells.sh`)
+## A - Scanner fixes (`scripts/code-smells.sh`)
 
 Do these first; they make every later re-scan trustworthy.
 
-0. **Compile-database integrity.** ✅ DONE — `ensure_compile_commands`
+0. **Compile-database integrity.** ✅ DONE - `ensure_compile_commands`
    now compares the normalized unique DB file set against every scanned
    `.c` TU (counts alone cannot catch duplicates masking omissions). An
    incomplete DB is regenerated when allowed or hard-fails the analyzer;
    Bear writes to a same-directory candidate that is validated before the
    atomic rename, so a failed/partial rebuild preserves the previous DB.
-1. **clang-tidy is missing the macOS sysroot.** ✅ DONE — added
+1. **clang-tidy is missing the macOS sysroot.** ✅ DONE - added
    `--extra-arg=-isysroot$(xcrun --show-sdk-path)` to `run_clang_tidy`;
    gated on `xcrun` availability so non-macOS hosts skip it.
-2. **Vendored code drowns the clang-tidy summary.** ✅ DONE — diagnostics
+2. **Vendored code drowns the clang-tidy summary.** ✅ DONE - diagnostics
    grep now filters `miniaudio.h` / `third_party/freeglut` lines; default
    `CLANG_TIDY_CHECKS` extended with
    `-readability-identifier-length,-readability-braces-around-statements,`
    `-readability-uppercase-literal-suffix,-readability-math-missing-parentheses,`
    `-bugprone-easily-swappable-parameters,-misc-include-cleaner`.
-3. **cppcheck `unknownMacro` poisons `unusedFunction`.** ✅ DONE — added
+3. **cppcheck `unknownMacro` poisons `unusedFunction`.** ✅ DONE - added
    `-Isrc` (matches build's include path) so cppcheck resolves project
    headers; added `-D` stubs for `REPL_EXPORT_STRINGIFY{,2}` so the
    `#ifndef` guard in `export.h` skips the stringification definition.
    Excluded `tools/repl_live_demo/scenes/`, whose staged REPL snippets
    (including top-level loops) are not standalone C translation units.
-4. **cppcheck has no platform defines.** ✅ DONE — added `-D__APPLE__`
+4. **cppcheck has no platform defines.** ✅ DONE - added `-D__APPLE__`
    on macOS (detected via `uname -s`).
-5. **Summary-count nits.** ✅ DONE — cppcheck count grep now matches
+5. **Summary-count nits.** ✅ DONE - cppcheck count grep now matches
    trailing `[checkName]` tags; bear comment fixed (`USE_GL_STUBS=1`);
    lizard, CPD, and churn all include root `gl_repl.c` (CPD switched
    from `--dir` to `--file-list`), and churn applies the same explicit
@@ -67,23 +67,23 @@ Do these first; they make every later re-scan trustworthy.
    `scripts/baselines/palette-coverage.txt`) and have the summary
    diff against it, so only *new* duplication surfaces.
 
-## B — Dead-code sweep
+## B - Dead-code sweep
 
 Each candidate verified by whole-repo grep (excluding `third_party/`,
 `build/`): definition + header declaration exist, zero other
-references. Two classes of false positive were hit during triage —
+references. Two classes of false positive were hit during triage -
 account for both before deleting anything further:
 
 - **Macro aliases.** `repl_eval_predef_count_mut` grep-matches nothing
   by name, but backs the heavily used `g_num_predef_vars_mut` macro
-  (`src/repl/eval.h:176`) — it is **live**, not dead. Verification
+  (`src/repl/eval.h:176`) - it is **live**, not dead. Verification
   must grep for `#define`s wrapping the symbol, not just call sites.
   The remaining candidates below were re-checked for aliases (none).
 - **Out-of-language callers.** The `glr_web_*` functions cppcheck
   flagged are `EMSCRIPTEN_KEEPALIVE` exports `ccall`'d from
   `packaging/web/shell.html` (see `Makefile` `EXPORTED_FUNCTIONS`).
 
-**Retained for facade symmetry — DONE (2026-07-16).** These state
+**Retained for facade symmetry - DONE (2026-07-16).** These state
 facade accessors keep the read/mut/reset families complete even while
 uncalled. Each now carries an intent comment plus a
 `cppcheck-suppress unusedFunction` marker (the scanner passes
@@ -97,7 +97,7 @@ uncalled. Each now carries an intent comment plus a
 | `repl_state_flat_program_reset` | `src/repl/state.c` | per-slice reset family |
 | `repl_state_import_export_reset` | `src/repl/state.c` | per-slice reset family |
 
-**Delete candidates (non-facade, alias-checked) — ✅ DELETED (2026-07-16):**
+**Delete candidates (non-facade, alias-checked) - ✅ DELETED (2026-07-16):**
 
 | Function | Definition | Status |
 |---|---|---|
@@ -109,7 +109,7 @@ uncalled. Each now carries an intent comment plus a
 Removals must keep `check-duplicate-api-decls` and `make test-stubs`
 green.
 
-## C — Duplication hoists (PMD CPD, 40 blocks @ 80 tokens) — ✅ DONE (2026-07-16)
+## C - Duplication hoists (PMD CPD, 40 blocks @ 80 tokens) - ✅ DONE (2026-07-16)
 
 Ranked by value; raw locations in `build/code-smells/cpd.txt`. How each
 landed:
@@ -136,7 +136,7 @@ landed:
 
 Original findings:
 
-1. **`src/app/glr_audio.c` native/web split duplication** — the
+1. **`src/app/glr_audio.c` native/web split duplication** - the
    single biggest cluster: five blocks pairing the native half with
    the web half of the same file (69↔925, 320↔1023, 340↔1050,
    600↔1933, 660↔2014; largest 55 lines / 346 tokens). Duplicated
@@ -146,7 +146,7 @@ Original findings:
    `glr_audio_play_music` wrappers. Hoist the shared statics + helpers
    above/outside the `#ifdef` backend split (~120 duplicated lines
    removed, one file).
-2. **`src/repl/import.c` payload-parser clones** — the
+2. **`src/repl/import.c` payload-parser clones** - the
    `glPointParameterfv` / `glClipPlane` / `glMaterialfv` readers
    repeat one "extract payload between outer parens, then read coeffs
    from `{...}` or the helper call" skeleton (blocks 1306↔1393↔1483,
@@ -156,24 +156,24 @@ Original findings:
    `src/repl/export_cmd_writer.c:581/635/679`.
 3. **Cross-module verbatim copies** (need a shared home, not just a
    local helper):
-   - `geometry_guides.c:44` ↔ `transform_guides.c:159` — 43-line
+   - `geometry_guides.c:44` ↔ `transform_guides.c:159` - 43-line
      `*_record_label`; belongs with `guides_shared.h`.
-   - `transform_guides.c:132` ↔ `edit_overlays.c:117` —
+   - `transform_guides.c:132` ↔ `edit_overlays.c:117` -
      `mat4_mul_col_major` / `mat4_point_col_major`; candidate home is
      `src/repl/transform_utils.h` (already the header-only matrix
      helper spot).
-   - `transform_guides.c:1043` ↔ `autonormal.c:474` — backward
+   - `transform_guides.c:1043` ↔ `autonormal.c:474` - backward
      transform-stack walk (pop/push/load-identity accounting).
-   - `parser.c:158` ↔ `text_helpers.c:250` — funcN-name/alias token
+   - `parser.c:158` ↔ `text_helpers.c:250` - funcN-name/alias token
      scan (23 lines).
-   - `compile.c:590` ↔ `reformat.c:74` — `static float` decl-prefix
+   - `compile.c:590` ↔ `reformat.c:74` - `static float` decl-prefix
      scan.
-4. **Known-deliberate — do not "fix":**
-   - `executor.c:195` ↔ `transform_utils.h:42` — documented in
+4. **Known-deliberate - do not "fix":**
+   - `executor.c:195` ↔ `transform_utils.h:42` - documented in
      CLAUDE.md: transform_utils.h deliberately mirrors executor
      transforms to avoid linking executor.h.
    - `export.c:128` ↔ `import.c:2141`
-     (`export_line_comment_start`) — adjacent to the documented
+     (`export_line_comment_start`) - adjacent to the documented
      `IMPORT_EXPORT_STATE` macro-block duplication; movable to a
      shared TU if desired, but same-family policy applies.
 5. **Accepted small residue** (~81–108-token two-site repeats inside
@@ -186,7 +186,7 @@ Original findings:
    363↔621, `compile.c` 2004↔2191. Fine to ship as-is; revisit only
    if touching those files anyway.
 
-## D — Complexity refactors (opportunistic, not release-blocking)
+## D - Complexity refactors (opportunistic, not release-blocking)
 
 lizard: 230 warnings at CCN 15 / length 150 (including root
 `gl_repl.c`). Top offenders by CCN:
@@ -205,41 +205,41 @@ Prioritize by churn overlap: `parse_command`, `commit_current_input`,
 and `update_autocomplete` live in the highest-churn files;
 `mesh_ply_write` is stable and can wait. The churn×size table
 (`churn-size.txt`) puts `src/app/glr_ctrl.c` at 3× the runner-up
-(score 566k vs `src/ui/app/repl_code_panel.c` 189k) — continuing the
+(score 566k vs `src/ui/app/repl_code_panel.c` 189k) - continuing the
 peer-subsystem extractions is the long-term answer there, not a
 release task.
 
 ## Triaged non-findings (do not re-litigate)
 
-- **cppcheck `uninitvar` in `src/`** — all false positives:
+- **cppcheck `uninitvar` in `src/`** - all false positives:
   `export_cmd_writer.c` `step_v` is set (`*cfg->step = 1.0f`) before
   any success return of `repl_eval_parse_for_header`;
   `visible_vars.c` frames are written before `depth++`. The three
   `verr` sites in `compile.c` (2015/2203/2544) rely on the validator's
-  write-on-failure contract — optionally add `verr[0] = '\0';` as
+  write-on-failure contract - optionally add `verr[0] = '\0';` as
   belt-and-suspenders.
-- **cppcheck `nullPointerOutOfResources`** — all 68 are unchecked
+- **cppcheck `nullPointerOutOfResources`** - all 68 are unchecked
   `fopen`/`malloc` in `tests/`; not release-relevant.
-- **62 `uninitvar` in `tests/test_eval.c`** — one `ASSERT_FOR` macro
+- **62 `uninitvar` in `tests/test_eval.c`** - one `ASSERT_FOR` macro
   pattern cppcheck can't follow.
-- **`knownConditionTrueFalse` on platform-gated code** — artifact of
+- **`knownConditionTrueFalse` on platform-gated code** - artifact of
   scanner issue A4.
 - Remaining cppcheck style tiers (41 `variableScope`, 38
   `constVariablePointer`, 47 `staticFunction` in src) are cheap but
-  low-value; some `staticFunction` results may be poisoned by A3 —
+  low-value; some `staticFunction` results may be poisoned by A3 -
   re-scan after the scanner fixes before acting.
 
 ## Validation
 
 Per stage: `make test` (ASan+UBSan) and `make check-state-ownership`
 (includes `check-c99`, include-style, palette, keymap guards). B and C
-touch portability-sensitive files — cross-check on gracemont
+touch portability-sensitive files - cross-check on gracemont
 (`make check-c99 && make test-stubs`) before landing. The
 `glr_audio.c` hoist (C1) must keep both backends building: native
 `make gl-repl`, stubs `make gl-repl USE_GL_STUBS=1`, and web
 `make web` (or `scripts/build-web.sh`).
 
-**A has its own acceptance run** — the make targets above never
+**A has its own acceptance run** - the make targets above never
 invoke the scanner, so after the A fixes land, run
 `./scripts/code-smells.sh --all` and verify directly:
 

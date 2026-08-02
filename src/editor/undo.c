@@ -233,7 +233,7 @@ int editor_undo_can_redo(void) {
 
 void editor_undo_push_snapshot(void) {
     /* First mutation on a promotable TRANSIENT document auto-promotes it to a
-     * user scene, inheriting the origin's name — a loaded example, or the
+     * user scene, inheriting the origin's name - a loaded example, or the
      * retained result of a completed/stopped tutorial. (An ACTIVE tutorial is
      * never promotable: its own step commits arrive here, and promoting would
      * tear the lesson down at step 0.) The snapshot captures the

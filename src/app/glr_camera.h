@@ -45,7 +45,7 @@ int              glr_camera_target_active(void);
 /* The camera's current ease *destination*: the active ease target when a
  * target ease is in flight, otherwise the live pose. Use this (not
  * glr_camera()) when a freshly-issued ease_to must win over the stale live
- * pose — e.g. the view-mode 3D->2D transition fires the frame after an
+ * pose - e.g. the view-mode 3D->2D transition fires the frame after an
  * example's `// camera` block eases toward a new dist, before that ease has
  * ticked into the live pose. Reading glr_camera() there would flatten the
  * previous example's pose into 2D. */
@@ -99,7 +99,7 @@ void glr_camera_clear_scene_default(void);
 /* Capture/restore for state round-trip tests and undo paths. The
  * snapshot is a value copy of the camera struct; restoring overwrites
  * the live state. Pointer cache, target easing, and momentum velocities
- * are NOT part of the snapshot — those are transient session state. */
+ * are NOT part of the snapshot - those are transient session state. */
 void glr_camera_capture(GlrCameraState *out);
 void glr_camera_restore(const GlrCameraState *snapshot);
 
@@ -133,7 +133,7 @@ void glr_camera_runtime_restore(const GlrCameraRuntimeSnapshot *snapshot);
  * type system can tell six adjacent floats apart at the boundary.
  *
  * The audit's #11 finding was that render3d_apply_camera lived in
- * src/scene/render.c but the renderer refused to call it — a
+ * src/scene/render.c but the renderer refused to call it - a
  * scene-namespaced public function that scene code wouldn't touch
  * was hidden temporal coupling enforced by convention. The fix is
  * to move both the type and the helper into glr_camera (the app's
@@ -189,7 +189,7 @@ void glr_camera_mouse_event(int button, int state, int x, int y, int mods);
  * momentum; applied in glr_camera_tick(). */
 void glr_camera_add_zoom_velocity(float delta);
 
-/* Update camera during drag — computes delta from internal pointer
+/* Update camera during drag - computes delta from internal pointer
  * cache, applies rotation/pan/zoom, then advances the pointer cache. */
 void glr_camera_drag_motion(int x, int y);
 

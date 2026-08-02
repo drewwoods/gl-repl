@@ -35,7 +35,7 @@
  * Headless by design: this demo opens no window and creates no GL context.
  * Its windowed counterpart is tools/repl_live_demo/, which wires the same
  * pipeline to a real GL window, an external editor, and the variable panel.
- * Keeping the two apart is the point — repl_demo's link set contains no
+ * Keeping the two apart is the point - repl_demo's link set contains no
  * src/ui/ at all, which is what makes it the tighter isolation proof.
  *
  * Run:
@@ -48,7 +48,7 @@
  * non-editor load path* (repl_load_apply_line, the same entry point the
  * example loader / file importer / tutorial runner use) so the real
  * compile -> apply transaction runs, then narrates each stage the REPL
- * backend goes through — parse/compile/apply -> source program ->
+ * backend goes through - parse/compile/apply -> source program ->
  * flatten -> the per-frame re-evaluation that drives animation. See
  * src/repl/ARCHITECTURE.md for the prose companion to this trace.
  */
@@ -60,7 +60,7 @@
 #include <math.h>
 #include "repl/flatten.h"
 #include "repl/host_effects.h"
-#include "repl/load.h"            /* repl_load_apply_line — non-editor compile+apply */
+#include "repl/load.h"            /* repl_load_apply_line - non-editor compile+apply */
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "repl/normalize.h"
@@ -139,8 +139,8 @@ static const char *const SAMPLE_TRIANGLE[] = {
 
 /* Trace program (--trace mode): one small program that
  * exercises the whole pipeline. Unlike samples 1-3, every line here is
- * driven through repl_load_apply_line() — the real non-editor compile+apply
- * path — so nothing is hand-constructed:
+ * driven through repl_load_apply_line() - the real non-editor compile+apply
+ * path - so nothing is hand-constructed:
  *
  *   - `float r;`          a variable declaration   (compile float_decl  -> predef DECLARE)
  *   - `r = 1.5;`          an assignment            (compile var_assign  -> predef SET_VALUE)
@@ -308,7 +308,7 @@ static int load_text_lines(const char *const *lines) {
 static void seed_variable_driven_program(void) {
     source_document_clear();
     /* Reset the demo-local host cursor (see load_text_lines for the
-     * rationale — the cursor is independent of REPL document /
+     * rationale - the cursor is independent of REPL document /
      * source_document storage). */
     repl_dispatch_edit_line_set(0);
 
@@ -362,14 +362,14 @@ static void seed_variable_driven_program(void) {
 }
 
 /* Real-GL builds (GL_STUBS not defined) emit live OpenGL calls from
- * repl_execute_program. This demo is headless by design — it never
- * bootstraps a GL context — so invoking the executor here would
+ * repl_execute_program. This demo is headless by design - it never
+ * bootstraps a GL context - so invoking the executor here would
  * segfault. The stubs build (USE_GL_STUBS=1) defines GL_STUBS and turns
  * every GL call into a no-op, so the executor path is safe there. Print
  * a one-shot warning and skip the executor call in real-GL builds; the
  * print summaries and --trace still run.
  *
- * To watch the pipeline drive real geometry, use repl_live_demo — the
+ * To watch the pipeline drive real geometry, use repl_live_demo - the
  * composition demo that owns the windowed side of this story. */
 static int headless_executor_safe(void) {
 #ifdef GL_STUBS
@@ -378,7 +378,7 @@ static int headless_executor_safe(void) {
     static int warned = 0;
     if (!warned) {
         fprintf(stderr,
-                "repl_demo: skipping repl_execute_program — no GL context.\n"
+                "repl_demo: skipping repl_execute_program - no GL context.\n"
                 "  Rebuild with USE_GL_STUBS=1 for the headless executor"
                 " path, or run repl_live_demo to render for real.\n");
         warned = 1;
@@ -520,7 +520,7 @@ static int run_trace_mode(void) {
     repl_dispatch_edit_line_set(0);
 
     puts("========================================================================");
-    puts(" REPL pipeline trace  —  one program, end to end");
+    puts(" REPL pipeline trace  -  one program, end to end");
     puts("========================================================================");
     puts("Typed exactly as a user would enter it:\n");
     for (int i = 0; SAMPLE_TRACE[i]; i++)
@@ -557,7 +557,7 @@ static int run_trace_mode(void) {
     puts("\n------------------------------------------------------------------------");
     puts(" STAGE 2   the source program              repl_state_document_cmds()");
     puts("------------------------------------------------------------------------");
-    puts("The parsed source array. Control flow is still folded — the for-loop is");
+    puts("The parsed source array. Control flow is still folded - the for-loop is");
     puts("three commands (FOR_BEGIN / body / FOR_END), not yet unrolled. Note the");
     puts("has_vars body command: its expression is preserved as text, not baked.\n");
     trace_print_source();
@@ -573,7 +573,7 @@ static int run_trace_mode(void) {
            repl_state_document_count(), repl_state_flat_program_count());
     trace_print_flat();
     puts("\nThe loop counter 'i' differs per unrolled vertex (frozen at flatten);");
-    puts("'r' and 't' stay live — re-resolved from the predef table each frame.");
+    puts("'r' and 't' stay live - re-resolved from the predef table each frame.");
 
     /* ---- STAGE 4: the frame loop ----------------------------------- */
     puts("\n------------------------------------------------------------------------");
@@ -581,7 +581,7 @@ static int run_trace_mode(void) {
     puts("------------------------------------------------------------------------");
     puts("Every frame the controller bumps 't' and re-flattens. Because the body");
     puts("is has_vars, the flattener re-evaluates its expression against the live");
-    puts("table, so the baked vertex coordinates move — this is how animation");
+    puts("table, so the baked vertex coordinates move - this is how animation");
     puts("works. The executor then walks the flat program emitting glVertex3f.\n");
     {
         static const float ts[] = { 0.00f, 0.25f, 0.50f, 0.75f };

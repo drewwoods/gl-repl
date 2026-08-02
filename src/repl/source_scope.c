@@ -151,14 +151,14 @@ int repl_source_scope_matrix_scope_depth_at(int pos) {
 }
 
 /* Collect the document indices of structurally unbalanced bracket
- * commands — glPushMatrix/glBegin openers with no matching close, and
+ * commands - glPushMatrix/glBegin openers with no matching close, and
  * orphan glPopMatrix/glEnd closers with no matching open. Matching is
  * linear (a stack per bracket type), the same relaxed model the
  * indentation depth uses, so the flagged lines agree with how the body
  * is indented. Fills `out_lines` (document order for orphans, then the
  * still-open openers) and returns the count, capped at `max`.
  *
- * LIMITATION — linear, block-unaware matching. The walk pairs brackets
+ * LIMITATION - linear, block-unaware matching. The walk pairs brackets
  * purely in source order and does NOT respect for/funcN/if block
  * boundaries. So a glPushMatrix inside a loop/function body pairs with
  * the next glPopMatrix in source order even if that pop sits outside the
@@ -394,7 +394,7 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
  * Same open-block stack as nearest_open_block_at, but read from the
  * innermost frame outward rather than just at the top: an if-block between
  * the statement and its loop is transparent (C's rule), so
- * `for { if { break; } }` is legal. A CMD_FUNC_DEF frame ends the search —
+ * `for { if { break; } }` is legal. A CMD_FUNC_DEF frame ends the search -
  * a callee's break can no more escape into its caller's loop here than it
  * can in C, and flatten enforces the same boundary at the call frame. */
 int repl_source_scope_view_in_loop_at(const ReplSourceScopeView *view,

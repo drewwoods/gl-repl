@@ -608,7 +608,7 @@ int editor_search_handle_key(unsigned char key) {
 
     if (key == '\r' || key == '\n') {
         /* Enter is per-widget: next match from the find field, toggle on
-         * the word chip, and Replace All from the replace field — the
+         * the word chip, and Replace All from the replace field - the
          * rename workflow this row exists for. */
         if (srch->focus == EDITOR_SEARCH_FOCUS_REPLACE)
             editor_replace_all();

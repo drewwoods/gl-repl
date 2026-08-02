@@ -39,7 +39,7 @@
 #include <string.h>
 
 /*
- *  MAX_PREDEF_VARS — global user-declared variables
+ *  MAX_PREDEF_VARS - global user-declared variables
  *  -------------
  *  This sizes the predefined-variable table populated by float t;, float radius;, etc. It's the global identifier table the user sees.
  *
@@ -47,17 +47,17 @@
  *  - One slot is reserved for the built-in t (animation time).
  *  - MAX_PREDEF_VARS - 1 slots remain for user float name; declarations.
  *  - The float-decl compile path rejects new declarations once full with
- *    "variable table full (max <MAX_PREDEF_VARS>)" — the macro value is
+ *    "variable table full (max <MAX_PREDEF_VARS>)" - the macro value is
  *    formatted into the message.
  *  The REPL UI shows all declared variables in the "Predefined Variables" section of the code panel, and they are available for use in expressions.
  *  Used in:
- *  - src/repl/eval.c — the table itself.
- *  - src/editor/undo.c — undo snapshots capture all MAX_PREDEF_VARS slots' names + values.
- *  - replay and controller baselines — mode transitions copy/restore all MAX_PREDEF_VARS values.
- *  - src/repl/state_views.h — the by-value snapshot the UI reads from.
+ *  - src/repl/eval.c - the table itself.
+ *  - src/editor/undo.c - undo snapshots capture all MAX_PREDEF_VARS slots' names + values.
+ *  - replay and controller baselines - mode transitions copy/restore all MAX_PREDEF_VARS values.
+ *  - src/repl/state_views.h - the by-value snapshot the UI reads from.
  *
  *
- *  MAX_EXPR_VARS — local lexical scope at parse time
+ *  MAX_EXPR_VARS - local lexical scope at parse time
  *  -------------
  *  This sizes the per-expression visible-variable list built when compiling a
  *  single expression. It's a lexical scope handed to repl_eval so it can
@@ -65,7 +65,7 @@
  *  without taking out a global lock. Predefined globals are supplied separately
  *  through ReplPredefView / ExprCtx.predef_vars.
  *
- *  - Storage: per-call stack arrays — ExprVar vis[MAX_EXPR_VARS] in src/repl/compile.c,
+ *  - Storage: per-call stack arrays - ExprVar vis[MAX_EXPR_VARS] in src/repl/compile.c,
  *    ExprVar vars[MAX_EXPR_VARS] in src/repl/flatten.c, and params[MAX_EXPR_VARS]
  *    in autocomplete hint generation.
  *  - Populated by collect_visible_vars() walking the active for-loop / function-def scope.
@@ -148,7 +148,7 @@ typedef struct {
     int         err_sz;
     /* Optional predef fallback for identifier resolution. When predef_vars is
      * non-NULL, the evaluator resolves predefined-variable names against it
-     * instead of the live g_predef_vars table — this is how compile evaluates
+     * instead of the live g_predef_vars table - this is how compile evaluates
      * against its ReplCompileContext predef snapshot rather than live state.
      * NULL (the zero-initialized default used by the runtime evaluator) keeps
      * the live table, so existing { p, vars, num, ... } initializers are
@@ -245,7 +245,7 @@ void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst);
 
 /* Non-destructive value-only restore that pairs saved values with the
  * live predef slots whose names match the snapshot. The live table's
- * count / names / slot order stay UNCHANGED — only values for names
+ * count / names / slot order stay UNCHANGED - only values for names
  * present in both snapshot and live table are updated. Saved names
  * no longer in the live table are silently dropped.
  *
@@ -315,7 +315,7 @@ int  repl_eval_find_predef_var_idx_in(const ExprVar *vars, int count,
 /* Declare a new predefined variable; returns 1 on success, 0 on
  * duplicate/error. Errors are written to the err buffer (errsz bytes).
  * Callers that need the slot index should use the _with_value variant
- * below — this one drops it. */
+ * below - this one drops it. */
 int  repl_eval_declare_predef_var(const char *name, char *err, int errsz);
 /* Declare a new predefined variable with a starting value; returns the
  * new slot index, or -1 on duplicate/error. Errors are written to the
@@ -375,7 +375,7 @@ typedef enum {
  * outlive the source/helper buffer). A NULL sink is today's behavior.
  * Return 0 from fn to mark the capture failed (the receiver's line falls
  * back to the text path); nonzero to continue. The span is always the text
- * the expression evaluator actually consumes — for translated inputs
+ * the expression evaluator actually consumes - for translated inputs
  * (C-to-REPL rewrites) that is the translated buffer, not the source line.
  *
  * Every expression-evaluation boundary in the parser must either fire the
@@ -409,7 +409,7 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
  * it through repl_eval_c_expr_to_repl, then through repl_eval_expr with
  * the provided variable scope. Returns `fallback` when the extract step
  * fails (treat as "no eval performed"). Two callers exercise this with
- * different inputs and at different times — compile uses fallback scope
+ * different inputs and at different times - compile uses fallback scope
  * to validate and cache the visible value, while flatten_if_block evaluates
  * against the current flat-local variable scope to select the emitted arm.
  * The kernel is identical, so a shared helper keeps the two sides from
@@ -418,7 +418,7 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
 /* Capture-aware variant: identical evaluation, but when `capture` is
  * non-NULL and the paren payload extracts, fires the sink once with
  * (REPL_EXPR_ROLE_CONDITION, 0) over the translated (C-to-REPL) condition
- * text — the exact string the evaluator consumes. A failed extraction
+ * text - the exact string the evaluator consumes. A failed extraction
  * returns `fallback` and fires nothing, so a cache built from the capture
  * reproduces the fallback by having no condition program. */
 float repl_eval_if_condition_captured(const char *src_text,
@@ -432,7 +432,7 @@ float repl_eval_if_condition_captured(const char *src_text,
  * whole.
  *
  * Use this anywhere you'd reach for strchr(s, ',') to split a function
- * call's args — strchr is paren-naive and finds inner commas inside
+ * call's args - strchr is paren-naive and finds inner commas inside
  * `max(a, b)` etc. Caller advances past the returned delimiter to start
  * the next slot. */
 const char *repl_scan_next_arg_delim(const char *s);
@@ -441,7 +441,7 @@ const char *repl_scan_next_arg_delim(const char *s);
  * the matching `)`. Internal commas at the same paren depth are treated
  * as part of the payload (use repl_scan_next_arg_delim for arg-splitting
  * instead). Returns p at the matching `)` on success, or at the
- * end-of-string when the paren was unmatched — callers test `*p == ')'`
+ * end-of-string when the paren was unmatched - callers test `*p == ')'`
  * to distinguish. */
 const char *repl_scan_to_matching_paren(const char *p);
 
@@ -462,12 +462,12 @@ void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source);
 /* 1 if `line`'s trailing comment carries a whole-token `@tune` marker (the
  * tag that promotes a float decl to an exported keyboard knob), else 0.
  * Token-bounded: matches `// @tune` but NOT `// @tuned=5`. Pure string
- * predicate — no command/state access (keeps eval a leaf). */
+ * predicate - no command/state access (keeps eval a leaf). */
 int repl_eval_line_has_tune_tag(const char *line);
 
 /* 1 if `line`'s trailing comment carries a whole-token `@config` marker (the
  * tag that marks an assigned float decl as a config knob so the variable
- * panel doesn't dim it — e.g. a var the program only clamps in bounds), else
+ * panel doesn't dim it - e.g. a var the program only clamps in bounds), else
  * 0. Token-bounded like `@tune`. Pure string predicate. */
 int repl_eval_line_has_config_tag(const char *line);
 

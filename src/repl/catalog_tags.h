@@ -14,7 +14,7 @@ typedef struct {
 
 /* Catalog-side tag-bit helper. Both per-catalog tag_bit() functions
  * (repl_example_tag_bit, repl_tutorial_tag_bit) reduce to this exact
- * body — caller passes the catalog's tag_count to keep the helper
+ * body - caller passes the catalog's tag_count to keep the helper
  * free of any catalog-specific lookups. */
 static inline unsigned int repl_catalog_tag_bit_for_count(int tag_idx,
                                                           int tag_count) {
@@ -33,7 +33,7 @@ static inline unsigned int repl_catalog_tag_bit_for_count(int tag_idx,
  *
  * Function-pointer arguments must match the prototypes declared in
  * the catalog's header (examples.h, tutorials.h). The macro's
- * synthesized parameter names are deliberately generic — C only
+ * synthesized parameter names are deliberately generic - C only
  * matches signatures at the function level, not by parameter
  * name. */
 #define REPL_DEFINE_CATALOG_TAG_WRAPPERS(prefix, ops_ptr)                \

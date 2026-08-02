@@ -1,7 +1,7 @@
 /*
  * src/repl/example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "repl/load.h"           /* repl_load_apply_line — step 5b */
+#include "repl/load.h"           /* repl_load_apply_line - step 5b */
 #include "repl/export.h"         /* ReplExportCameraBridge */
 #include "repl/command_store.h"
 #include "repl/examples.h"
@@ -272,7 +272,7 @@ static int example_line_is_comment(const char *line) {
 
 static int example_line_is_var_decl(const char *line) {
     while (*line && isspace((unsigned char)*line)) line++;
-    /* Optional `static ` prefix — canonical form per format_decl_text. */
+    /* Optional `static ` prefix - canonical form per format_decl_text. */
     if (strncmp(line, "static", 6) == 0 && isspace((unsigned char)line[6])) {
         line += 6;
         while (*line && isspace((unsigned char)*line)) line++;
@@ -284,7 +284,7 @@ static int example_line_is_var_decl(const char *line) {
 static int example_line_is_func_def(const char *line) {
     /* Match `funcN(...) {` or `name(...) {` shape. The cheap test
      * is "identifier followed by `(`, with the body's opening `{`
-     * as the line's last non-space character" — that distinguishes
+     * as the line's last non-space character" - that distinguishes
      * a definition from a function CALL, and from a command whose
      * argument is a compound literal (`glClipPlane(...,
      * (GLdouble[]){0, 1, 0, 0});` ends with `;`, not `{`).
@@ -379,7 +379,7 @@ static int emit_example_body_two_pass(const char *const *body,
      *                   contiguous depth-0 comments leading up to
      *                   the func_def
      * KIND_OTHER:       setup commands, function calls, non-leading
-     *                   comments — anything that should land below
+     *                   comments - anything that should land below
      *                   the func defs in the canonical layout */
     int n = 0;
     if (!example_body_count(body, &n))
@@ -428,7 +428,7 @@ static int emit_example_body_two_pass(const char *const *body,
             /* Var decls auto-promote to the top of non-decl code
              * inside the lean loader, so a depth-0 comment above
              * `float X;` is still a leading comment for the next
-             * func_def — the decl moves out of the way at apply
+             * func_def - the decl moves out of the way at apply
              * time. Keep the pending comment run alive. */
             kinds[i] = EXAMPLE_KIND_VAR_DECL;
             continue;
@@ -490,7 +490,7 @@ static void reset_example_load_state(unsigned int tag_mask) {
      * feature/source-document-port.md). */
     repl_dispatch_input_reset();
     /* Editor-side transient reset (camera drag / menu / picker /
-     * code-panel-drag) is the controller's responsibility — see
+     * code-panel-drag) is the controller's responsibility - see
      * cycle_example_or_user_scene in glr_ctrl.c and the
      * example-load menu handler in glr_actions.c. The call moved out
      * of this REPL-side loader (implemented in step 2 of the decouple
@@ -628,7 +628,7 @@ int repl_load_example(int idx) {
     int edit_line = load_example(idx);
     if (edit_line > 0) {
         /* The timing histograms are cumulative and describe the *previous*
-         * example's geometry — a heavy scene's spread would haunt a light one
+         * example's geometry - a heavy scene's spread would haunt a light one
          * for the rest of the session. The EMAs re-converge on their own, so
          * only the histograms need clearing. Done here rather than in the
          * callers because every example path (menu, F12 cycle, --example,
@@ -640,7 +640,7 @@ int repl_load_example(int idx) {
 
 int repl_load_example_lines_for_test(const char *const *lines) {
     /* Test/bench harness has no example-index context, so pass a zero
-     * tag mask — the controller's reset still applies global defaults,
+     * tag mask - the controller's reset still applies global defaults,
      * just no tag-default overrides. */
     return load_example_lines(lines, 0u);
 }

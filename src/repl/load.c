@@ -160,7 +160,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         return 1;
     }
 
-    /* (4) Plain GL command path — parse + insert via command store.
+    /* (4) Plain GL command path - parse + insert via command store.
      * Mirrors editor_feed_line's plain-command tail but without writing the
      * editor input buffer. */
     int insert_idx = ctx.edit_line < ctx.document_count

@@ -2,7 +2,7 @@
  * src/repl/export_glr.c -- Scene-source (.glr) writer.
  *
  * repl_export_save_output() writes a standalone C program: banner,
- * includes, globals, helper functions, display()/reshape()/main() — a
+ * includes, globals, helper functions, display()/reshape()/main() - a
  * file you can hand to a compiler. That is the wrong shape for authoring.
  * A built-in example (a .glr under examples/scenes/) is the REPL's own
  * source text and nothing else:
@@ -22,7 +22,7 @@
  * load is the point of the format, so the two files move together.
  *
  * Only the @cfg rows the loader would actually honour are emitted (the
- * bridge's scene subset), and only where they differ from the default —
+ * bridge's scene subset), and only where they differ from the default -
  * an example that pins every slug tells a reader nothing about which
  * ones matter to it.
  */
@@ -49,7 +49,7 @@ static void glr_scene_write_line(FILE *f, const char *line) {
 
 /* Emit `// @cfg slug = value` for every scene-subset slug whose live value
  * differs from its default. A slug the bridge has no default for is emitted
- * unconditionally — better a redundant row than a silently dropped one. */
+ * unconditionally - better a redundant row than a silently dropped one. */
 static void glr_scene_write_cfg_overrides(FILE *f) {
     const ReplConfigBridge *bridge = g_export_cfg_bridge;
     ReplConfigBag live;
@@ -75,7 +75,7 @@ static void glr_scene_write_cfg_overrides(FILE *f) {
 
 /* The camera marker plus the 4-line transform block, in the numeric form the
  * loader parses (fill_display_block, not the saved-C variant that substitutes
- * g_angle). No camera bridge installed — the demo, tests — leaves the block
+ * g_angle). No camera bridge installed - the demo, tests - leaves the block
  * empty, and the scene simply inherits the live camera on load, which is the
  * documented no-header behaviour.
  *

@@ -177,13 +177,13 @@ static void hidden_lines_finish_tess(int *tess_depth) {
     *tess_depth = 0;
 }
 
-/* The program's glClear IS the frame's clear for the scene rect — the host
+/* The program's glClear IS the frame's clear for the scene rect - the host
  * clears the chrome around it and nothing clears the rect on the program's
  * behalf (see CMD_CLEAR in executor.c). This walk replaces the main fill in
  * hidden-line mode, so without emitting it here the rect is never cleared:
  * colour smears and the stale depth buffer defeats the hidden/visible split.
  *
- * Only the first of the three passes — the depth fill — may run it. The
+ * Only the first of the three passes - the depth fill - may run it. The
  * hidden- and visible-line passes replay the same program over the depth seed
  * that pass laid down, so a second clear would wipe both the seed and the
  * lines already drawn.
@@ -223,7 +223,7 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     case CMD_SCRATCH_ASSIGN:
     /* Drive push/pop attrib through the cursor (with suppress_attrib_gl set
      * below) so its saved frames scope the light-enable / clear-color
-     * bookkeeping — including the end-of-prefix unwind — without touching the
+     * bookkeeping - including the end-of-prefix unwind - without touching the
      * live depth/colour/polygon state this pass deliberately owns. */
     case CMD_PUSH_ATTRIB:
     case CMD_POP_ATTRIB:
@@ -260,7 +260,7 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
     options.status_out = ctx->status_out;
     options.status_out_sz = ctx->status_out_sz;
     /* Scope the bookkeeping mirror on push/pop without emitting glPushAttrib/
-     * glPopAttrib — this pass owns its own depth/colour/polygon GL state. */
+     * glPopAttrib - this pass owns its own depth/colour/polygon GL state. */
     options.suppress_attrib_gl = 1;
     cursor = repl_exec_cursor_begin(&options);
     if (cmd_count <= 0) {
@@ -309,8 +309,8 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
         }
 
         /* The clear colour is the one piece of colour state this pass does
-         * not own — it only feeds the clear above, and the caller's
-         * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket contains it — so emit it
+         * not own - it only feeds the clear above, and the caller's
+         * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket contains it - so emit it
          * for real rather than mirroring it into bookkeeping alone. */
         if (cmd->type == CMD_CLEAR_COLOR) {
             glClearColor(cmd->args[0], cmd->args[1],

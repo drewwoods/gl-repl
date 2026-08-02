@@ -47,7 +47,7 @@ typedef struct {
  *
  * `value_changed` / `final_value` record what the motion handler actually
  * applied. Motion only updates the live predef value; the declaration row in
- * the code panel is rewritten once, on mouse-up, from `final_value` — so a
+ * the code panel is rewritten once, on mouse-up, from `final_value` - so a
  * drag performs no source mutation until it ends. `value_changed` also makes
  * a no-motion click (press + release, no move) a complete no-op. */
 typedef struct {
@@ -86,7 +86,7 @@ int  variable_panel_visible(void);
 void variable_panel_set_visible(int visible);
 
 /* Collapse state: 1 = only the title bar renders (rows and drag hit-testing
- * are unavailable while collapsed). Mouse-only — toggled by clicking the
+ * are unavailable while collapsed). Mouse-only - toggled by clicking the
  * title bar's chip, no keymap binding. */
 int  variable_panel_collapsed(void);
 void variable_panel_set_collapsed(int collapsed);

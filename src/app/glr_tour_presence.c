@@ -26,7 +26,7 @@ static float clamp01(float v) {
     return v;
 }
 
-/* Cosine ease over [0,1] — the same shape the pointer script uses for glides,
+/* Cosine ease over [0,1] - the same shape the pointer script uses for glides,
  * so the border's arrival matches the cursor's motion rather than snapping. */
 static float ease(float u) {
     return 0.5f - 0.5f * cosf(clamp01(u) * (float)M_PI);

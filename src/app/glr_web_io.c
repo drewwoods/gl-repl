@@ -88,7 +88,7 @@ int glr_web_export_scene(const char *path) {
 
 /*
  * URL-share bridge. The shell encodes shareable state into location.hash
- * (deflate + base64url, all on the JS side — see shell.html): a full-scene
+ * (deflate + base64url, all on the JS side - see shell.html): a full-scene
  * payload reuses glr_web_export_scene / glr_web_load_scene_text unchanged,
  * while these two exports supply and apply the lighter config-only payload
  * (the same `@cfg slug = value` directive vocabulary the workspace header
@@ -96,7 +96,7 @@ int glr_web_export_scene(const char *path) {
  */
 
 /* Newline-joined `// @cfg slug = value` lines for the current presentation
- * state — the config-only share payload. Rebuilt on every call; the returned
+ * state - the config-only share payload. Rebuilt on every call; the returned
  * pointer stays valid until the next call (ccall copies it out synchronously). */
 EMSCRIPTEN_KEEPALIVE
 const char *glr_web_cfg_share_text(void) {
@@ -127,7 +127,7 @@ const char *glr_web_cfg_share_text(void) {
 }
 
 /* Apply a decoded config-only payload to the current scene. Only @cfg
- * directives are honored — @scene-name / @workspace-dir / @func would stage
+ * directives are honored - @scene-name / @workspace-dir / @func would stage
  * pending import state nothing on this path consumes. Returns the number of
  * directives accepted. */
 EMSCRIPTEN_KEEPALIVE

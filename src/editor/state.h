@@ -19,7 +19,7 @@
 
 /* Per-line canonical text. One slot per source command, indexed by
  * source command index. Text is the user-typed form (no trailing ';',
- * no leading whitespace) — the same shape `editor_load_line_to_input` produces
+ * no leading whitespace) - the same shape `editor_load_line_to_input` produces
  * after stripping. The typedef lives in editor_state.h because
  * EditorState owns the buffer; src/repl/state_views.h no longer defines or
  * declares anything related to it. */
@@ -60,7 +60,7 @@ typedef struct {
 } EditorInputState;
 
 /* Read-only view of EditorInputState.  `input` and `pending_newline`
- * are borrowed pointers into live storage — they track mutations made
+ * are borrowed pointers into live storage - they track mutations made
  * through the mutable API.  The scalar fields (input_len, cursor_pos,
  * anchor_pos, pending_newline_len, insert_mode) are by-value snapshots
  * captured at the time editor_state_input() is called.  Do not stash
@@ -82,7 +82,7 @@ typedef struct {
     int end_idx;
 } EditorSelectionState;
 
-/* Editor clipboard. Text-only — paste re-parses each line through the
+/* Editor clipboard. Text-only - paste re-parses each line through the
  * standard commit chain, so the clipboard never holds REPL-shaped
  * data. Same model as file load.
  *
@@ -203,7 +203,7 @@ typedef struct {
     EditorClipboardState    clipboard;
     EditorSearchState       search;
     EditorAutocompleteState autocomplete;
-    /* Per-frame transient overlay lists — refilled each frame by the
+    /* Per-frame transient overlay lists - refilled each frame by the
      * controller (glr_ctrl). Included in editor_state_capture() (full
      * struct copy) but NOT in EditorUndoSnapshot (undo is document-only).
      * They carry no meaningful state across frames. */
@@ -228,7 +228,7 @@ void editor_state_restore(const EditorState *snapshot);
 void editor_state_reset(void);
 
 /* Persistent editor-session slices, EXCLUDING the per-frame transient overlay
- * lists (transformers, highlights, virtual lines, line overrides) — those are
+ * lists (transformers, highlights, virtual lines, line overrides) - those are
  * refilled by the controller every frame and carry borrowed pointers, so a
  * long-lived baseline (the tour snapshot) must not copy them. The REPL command
  * array and this buffer restore in lockstep; the tour-baseline restore pairs
@@ -262,9 +262,9 @@ void        editor_buffer_set_count(int count);
 
 /* Mutation primitives. Each operates only on the editor buffer
  * (lines + line_count); command-array mutations stay in
- * repl_command_store. Callers pair the two — `repl_command_store_*`
+ * repl_command_store. Callers pair the two - `repl_command_store_*`
  * for the GLCmd shift, then `editor_buffer_*` for the parallel text
- * write — typically inside one undo transaction.
+ * write - typically inside one undo transaction.
  *
  * Semantics:
  *   insert_lines(pos, lines, count)
@@ -309,7 +309,7 @@ EditorBufferView editor_buffer_view(void);
 struct ReplCompiledChange_s;
 
 /* Apply the editor-text portion of a compiled change. Mutates
- * EditorState text only — does not touch ReplState, status, or
+ * EditorState text only - does not touch ReplState, status, or
  * undo. Returns 1 on success, 0 on capacity error.
  *
  * The dual of repl_apply_compiled_change(). The editor commit
@@ -355,7 +355,7 @@ void        editor_cursor_pos_set_keep_anchor(int cursor_pos);
  * the pre-move cursor as the new anchor *before* moving, so the
  * resulting selection is [old, new). If the anchor is already active,
  * just keep it (selection grows / shrinks like _keep_anchor). Prefer
- * this over `_anchor_set + _keep_anchor` for shift-style handlers —
+ * this over `_anchor_set + _keep_anchor` for shift-style handlers -
  * `_anchor_set(cursor_pos)` collapses immediately and would defeat
  * the intended pin. */
 void        editor_cursor_pos_extend_selection(int new_pos);
@@ -488,7 +488,7 @@ void               editor_scroll_follow_cursor_set(int follow);
  *
  * Generic editor feature: the comment-toggle key reads / writes lines
  * using the configured prefix (e.g., "// " for C-like, "# " for shell).
- * The editor itself has no default — the controller registers a prefix
+ * The editor itself has no default - the controller registers a prefix
  * at startup. While unset (NULL or empty), the comment-toggle key is a
  * no-op.
  *

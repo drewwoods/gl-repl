@@ -14,4 +14,4 @@ explicitly deferred) and `not-started/` (no implementation exists yet).
 | Plan | Branch | Why not landed |
 |---|---|---|
 | `windows-port-mingw.md` | `windows-support` | Implemented but **not vetted on a real Windows machine**. The branch is available and the design is complete; landing is gated on a test run under MinGW-w64 on actual Windows hardware. |
-| `ply-line-edge-export.md` | `feature/ply-line-edge-export` | Tests pass but the feature was parked — see the doc's ⚠️ section for the detailed rationale. |
+| `ply-line-edge-export.md` | `feature/ply-line-edge-export` | Tests pass but the feature was parked - see the doc's ⚠️ section for the detailed rationale. |

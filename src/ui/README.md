@@ -1,4 +1,4 @@
-# `src/ui` — the 2D view + hit-test layer (Draft)
+# `src/ui` - the 2D view + hit-test layer (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -33,7 +33,7 @@ each one leaking into the view code.
 
 This split is reflected on the filesystem with two subdirectories:
 
-- **`core/`** — REPL-/editor-/peer-agnostic primitives. [`text_panel.c`](core/text_panel.c)
+- **`core/`** - REPL-/editor-/peer-agnostic primitives. [`text_panel.c`](core/text_panel.c)
   (reusable text panel), [`tabbed_overlay.c`](core/tabbed_overlay.c) (modal paged reference
   card), [`text_layout.c`](core/text_layout.c) (pure wrapping), [`text_search.c`](core/text_search.c)
   (case-insensitive find), plus the header-only helpers ([`gl_2d.h`](core/gl_2d.h),
@@ -42,7 +42,7 @@ This split is reflected on the filesystem with two subdirectories:
   into the standalone `editor_demo` to prove they work without the
   full app. `editor_demo` is the canary here: it should use `src/ui/core`
   only and must not grow a dependency on `src/ui/app`.
-- **`app/`** — feature-UI that knows REPL / editor / peer concepts.
+- **`app/`** - feature-UI that knows REPL / editor / peer concepts.
   The code-panel adapter ([`repl_code_panel.c`](app/repl_code_panel.c)), app geometry
   ([`layout.c`](app/layout.c), [`overlay_layout.c`](app/overlay_layout.c)), the floating-panel view projection
   ([`variable_panel_view.c`](app/variable_panel_view.c)), autocomplete, chrome ([`menu_bar.c`](app/menu_bar.c),
@@ -62,7 +62,7 @@ Dependencies are strictly one-way: `app/` may include from `core/`;
 untested in isolation: the generic text panel ([`text_panel.c`](core/text_panel.c) plus its
 wrapping/search helpers) is linked and driven by
 [`tools/editor_demo/`](../../tools/editor_demo/), the standalone plain-text
-editor — so the reusable view half runs without the REPL, without `src/app`,
+editor - so the reusable view half runs without the REPL, without `src/app`,
 and without `src/ui/app`. The `render3d_demo` HUD shows the same fixed-function
 2D-overlay drawing style this layer uses. There is no `ui_demo` because UI is a
 *view for* other subsystems, not a subsystem with behavior of its own.
@@ -93,12 +93,12 @@ source-line targets.
 | [`core/layout_utils.h`](core/layout_utils.h) | Header-only rectangle helpers shared by layout code |
 | [`core/tabbed_overlay.c`](core/tabbed_overlay.c) / `.h` | Generic modal tabbed text overlay (the F1 help shell) |
 | [`core/gl_2d.h`](core/gl_2d.h) | Header-only 2D OpenGL helpers |
-| [`core/hit.h`](core/hit.h) | [`UiHit`](core/hit.h#L60) / [`UiHitKind`](core/hit.h#L17) — the passive UI → controller result |
+| [`core/hit.h`](core/hit.h) | [`UiHit`](core/hit.h#L60) / [`UiHitKind`](core/hit.h#L17) - the passive UI → controller result |
 | [`core/metrics.h`](core/metrics.h), [`core/theme.h`](core/theme.h) | Shared layout metrics + colors |
 | [`app/layout.c`](app/layout.c) / `.h` | App 3D viewport / code-panel rectangle geometry |
 | [`app/overlay_layout.c`](app/overlay_layout.c) / `.h` | Floating overlay panel placement |
 | [`app/state.c`](app/state.c) / `.h`, [`app/state_types.h`](app/state_types.h) | Owns [`UiState`](app/state.h#L20) (chrome/viewport/pointer/status TTL only) |
-| [`app/snapshot.h`](app/snapshot.h) | [`UiRenderSnapshot`](app/snapshot.h#L85) — the read-only per-frame bundle every renderer takes |
+| [`app/snapshot.h`](app/snapshot.h) | [`UiRenderSnapshot`](app/snapshot.h#L85) - the read-only per-frame bundle every renderer takes |
 | [`app/panels.c`](app/panels.c) / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
 | [`app/repl_code_panel.c`](app/repl_code_panel.c) / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
 | [`app/menu_bar.c`](app/menu_bar.c) / `.h` | Menu bar, dropdowns, flyout submenus, search slot |

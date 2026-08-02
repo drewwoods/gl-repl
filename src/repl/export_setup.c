@@ -5,7 +5,7 @@
 /* File-scope C boilerplate: includes, macros, and the rotation globals.
  * Lines here appear in BOTH the code panel header AND the exported C
  * file's file-scope region (above display()). They never run at REPL
- * time — see g_display_header for the display() opening, and the
+ * time - see g_display_header for the display() opening, and the
  * controller (src/app/glr_ctrl.c) for what actually executes. */
 /* Wrap each common <math.h> identifier so a user-declared predef of
  * the same name doesn't collide with the math.h function symbol at
@@ -16,7 +16,7 @@
  * (now-renamed) `_X`.
  *
  * Coverage: Bessel functions (j0/j1/jn, y0/y1/yn) and the gamma
- * family (gamma/lgamma/tgamma) — all single- or two-letter math.h
+ * family (gamma/lgamma/tgamma) - all single- or two-letter math.h
  * functions that are plausible user variable names. The y0/y1 pair
  * was the original motivator; jn/yn/gamma/lgamma/tgamma are added
  * defensively after the audit in #7 of the bug investigation.
@@ -136,7 +136,7 @@ const char *g_display_header[] = {
 };
 
 /* ========================================================================= */
-/* Workspace header directive table — writer half.                            */
+/* Workspace header directive table - writer half.                            */
 /*                                                                            */
 /* Each entry pairs a directive name with its emit step                       */
 /* (append zero or more lines into g_workspace_header_lines).                 */
@@ -239,7 +239,7 @@ static void emit_cfgs(int *n) {
      * if a future cfg/var/func growth ever overflows it. */
     if (i < cfg.count) {
         fprintf(stderr,
-                "repl_export: workspace header full (%d lines) — dropped %d "
+                "repl_export: workspace header full (%d lines) - dropped %d "
                 "@cfg line(s) starting at '%s'; those scene settings will "
                 "not round-trip. Raise MAX_WORKSPACE_HEADER_LINES.\n",
                 MAX_WORKSPACE_HEADER_LINES, cfg.count - i, cfg.items[i].key);
@@ -289,7 +289,7 @@ const char *g_header_post[] = {
 typedef struct {
     const char *repl_line;
     /* Slug name of the cfg toggle that gates this line, or NULL if
-     * unconditional. Looked up via the export config bridge —
+     * unconditional. Looked up via the export config bridge -
      * src/repl/export.c does not call glr_config_get directly. */
     const char *toggle_slug;
 } InitBootstrapEntry;
@@ -297,7 +297,7 @@ typedef struct {
 /* Bootstrap commands are REPL lines that run once at startup through
  * repl_apply_state_cmd. Each frame's glPushAttrib/glPopAttrib bracket then
  * preserves this state across user commands. Comment entries (// ...)
- * parse as CMD_COMMENT — repl_apply_state_cmd no-ops them, but the editor
+ * parse as CMD_COMMENT - repl_apply_state_cmd no-ops them, but the editor
  * and exporter render them as section headers in the init() body. */
 /* Tiny constant term in the point-attenuation default. Only caps the
  * otherwise-unbounded near-field point blow-up as eye distance d -> 0
@@ -339,8 +339,8 @@ static int init_bootstrap_toggle_get(const char *slug, int fallback) {
     return g_export_cfg_bridge->get_int(slug, fallback);
 }
 
-/* True when a bootstrap entry must be skipped *entirely* — not applied,
- * not emitted, not counted — because the runtime GL context lacks the
+/* True when a bootstrap entry must be skipped *entirely* - not applied,
+ * not emitted, not counted - because the runtime GL context lacks the
  * entry point it depends on. Only the point-attenuation entry has such
  * a dependency (glPointParameterfv). This is deliberately independent
  * of and ahead of the toggle-slug disable path in the loops below:
@@ -514,7 +514,7 @@ static void parse_init_bootstrap(void) {
                                     &pl, &parse_ctx)) {
             fprintf(stderr, "init bootstrap parse failed: %s%s%s\n",
                     g_init_bootstrap_repl[bootstrap_idx].repl_line,
-                    bootstrap_err[0] ? " — " : "",
+                    bootstrap_err[0] ? " - " : "",
                     bootstrap_err);
             abort();
         }
@@ -665,7 +665,7 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
 /* Idea A clear-color hoist: scan the document for the LAST CMD_CLEAR_COLOR
  * and return its (literal, commit-time) args. The exported per-frame glClear
  * runs before render_repl_geometry() and inside the glPushAttrib(GL_ALL)
- * bracket — so a glClearColor in the body can never drive the visible clear
+ * bracket - so a glClearColor in the body can never drive the visible clear
  * (it runs after the clear and is reverted by glPopAttrib). Mirroring the
  * controller's "last clear color wins" pre-scan (src/app/glr_ctrl.c), we
  * emit that value as init()'s glClearColor instead of the bootstrap default,
@@ -736,7 +736,7 @@ void emit_export_init_section_to_file(FILE *f, int include_tess) {
 void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
     /* The label() and @tune helpers need <stdarg.h>/<stdio.h>. Emit them
      * here, grouped with the other system includes, rather than mid-file
-     * at each helper's definition — a stray `#include` below file-scope
+     * at each helper's definition - a stray `#include` below file-scope
      * code reads as a sanitization bug even though it compiles. */
     int needs_stdio = needs && (needs->needs_label || needs->tune_count > 0);
 
@@ -751,10 +751,10 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
 
     /* NOTE: resolving a dynamic boilerplate line at the consumer site
      * (as here) is safe ONLY because this one consumer is the file
-     * writer — a single pass off the frame loop. Do NOT copy this shape
+     * writer - a single pass off the frame loop. Do NOT copy this shape
      * for a line the code panel reads: panel row-count and render
      * straddle render3d_draw_scene() and would diverge. Resolve once
-     * into UiRenderSnapshot instead. See docs/ARCHITECTURE.md, "Rule — where
+     * into UiRenderSnapshot instead. See docs/ARCHITECTURE.md, "Rule - where
      * a per-frame dynamic value is resolved". */
     unsigned collision_mask = repl_export_math_collision_mask();
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
@@ -779,7 +779,7 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
 void emit_export_cam_lines(FILE *f) {
     /* The bridge owns the camera-line format. Without a
      * bridge (demo case) the // camera block is omitted from the
-     * exported file — that's fine, the demo doesn't export
+     * exported file - that's fine, the demo doesn't export
      * (implemented in step 4a of the decouple plan). */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
     if (!camera_bridge || !camera_bridge->fill_save_block)
@@ -796,7 +796,7 @@ void emit_export_cam_lines(FILE *f) {
 
 void repl_refresh_render_state_strings(void) {
     /* Render-config toggles moved to glr_state. Read them
-     * via the bridge's slug-keyed get_int — same opaque path the rest
+     * via the bridge's slug-keyed get_int - same opaque path the rest
      * of the export pipeline uses for cfg state. The demo doesn't
      * install a bridge, so the toggles fall back to "Enable" /
      * "Disable" defaults below; the demo never exports anyway
@@ -820,7 +820,7 @@ void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the 4-line block from
      * current camera state with numeric ry (no g_angle placeholder).
      * Without a bridge installed (the demo case), g_cam_lines stays
-     * empty — the demo doesn't render a code panel. */
+     * empty - the demo doesn't render a code panel. */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
     if (!camera_bridge || !camera_bridge->fill_display_block) {
         for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
@@ -855,7 +855,7 @@ static const char *const k_light_names[REPL_LIGHT_SLOT_COUNT] = {
 #define LIGHT_INIT_LINES_PER_LIGHT 4  /* DIFFUSE, AMBIENT, SPECULAR, glDisable */
 
 /* Section-header comment lines emitted above the generated GL calls.
- * Pure text — the editor renders them as dimmed init/header lines and
+ * Pure text - the editor renders them as dimmed init/header lines and
  * the export writes them verbatim as C comments. */
 static const char *const k_lights_init_header[] = {
     "  // Per-light colors. Positions are set per frame in display() because",
@@ -1055,7 +1055,7 @@ static int generated_parse_command_write(const char *line,
     ctx.err_sz = (int)sizeof(err);
     if (!repl_parser_parse_command_ctx(line, &parsed, &ctx)) {
         fprintf(stderr, "generated state parse failed: %s%s%s\n", line,
-                err[0] ? " — " : "", err);
+                err[0] ? " - " : "", err);
         return 0;
     }
     *out = generated_command_write(parsed.cmd.type);

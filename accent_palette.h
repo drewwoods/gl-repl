@@ -4,18 +4,18 @@
  *
  * Single source of truth for the curated accent family shared by the
  * built-in example scenes, the XZ Ruler grid axes, the color-picker
- * swatch row, and — via the separate brand-mark anchor list below — the
+ * swatch row, and - via the separate brand-mark anchor list below - the
  * startup splash and the SVG logo assets (examples/README.md "Example
  * Color Language"). Three levels:
  *
- *   palette — a named anchor set (PALETTE_NEON_ANCHORS today; the
+ *   palette - a named anchor set (PALETTE_NEON_ANCHORS today; the
  *             earlier PALETTE_DUSK_ANCHORS / PALETTE_DUSK_MAGENTA_ANCHORS
  *             are kept for an easy flip back).
- *   anchor  — a named color inside a set (PAL_CORAL, PAL_AZURE, ...).
- *   role    — a semantic slot consumers bind to (PAL_ROLE_WARM_KEY).
+ *   anchor  - a named color inside a set (PAL_CORAL, PAL_AZURE, ...).
+ *   role    - a semantic slot consumers bind to (PAL_ROLE_WARM_KEY).
  *
- * C consumers bind to ROLES — never raw literals, and normally not
- * anchors — so retuning stays local to this header:
+ * C consumers bind to ROLES - never raw literals, and normally not
+ * anchors - so retuning stays local to this header:
  *
  *   - Reassign a role (say, warm key CORAL -> AMBER): edit that one
  *     PAL_ROLE_* line. Consumers rebind on rebuild. Scene-file literals
@@ -23,7 +23,7 @@
  *   - Swap the whole palette: add a PALETTE_<NAME>_ANCHORS list, repoint
  *     PALETTE_ACTIVE_NAME / PALETTE_ACTIVE_ANCHORS, and remap the roles.
  *     `make check-palette` then fails on every scene file whose literals
- *     are no longer anchors — that failure list is the scene-migration
+ *     are no longer anchors - that failure list is the scene-migration
  *     TODO list (scenes are user-visible source text; they cannot
  *     re-theme themselves).
  *
@@ -36,11 +36,11 @@
  *
  * Deliberately NOT here: the 2D UI chrome theme (src/ui/core/theme.h,
  * runtime token table), the render3d overlay/guide token palette
- * (src/render3d/palette.h — fixed editor-affordance colors, a separate
+ * (src/render3d/palette.h - fixed editor-affordance colors, a separate
  * system this file must not be confused with; its name is also why this
- * header is accent_palette.h — a root palette.h would be shadowed for
+ * header is accent_palette.h - a root palette.h would be shadowed for
  * render3d TUs by quoted-include search order), the grid's derived
- * near-neutral field grays, and the syntax-highlight category colors —
+ * near-neutral field grays, and the syntax-highlight category colors -
  * see theme.h's three-bucket taxonomy. This header is the static
  * scene/brand accent family only.
  *
@@ -99,7 +99,7 @@
 #define PALETTE_ACTIVE_ANCHORS PALETTE_NEON_ANCHORS
 
 /* ---- Brand-mark anchors ---------------------------------------------
- * The adopted identity mark — the open cube. "The logo is what the app
+ * The adopted identity mark - the open cube. "The logo is what the app
  * renders": the source of truth is the shipped scene
  * examples/scenes/glr-logo.glr, and this list is its color vocabulary
  * at both ends of the render. A separate list from the scene accents,
@@ -111,12 +111,12 @@
  * Two tiers, kept in sync by make check-palette:
  *   - _MAT anchors: the raw glColor3f materials glr-logo.glr paints
  *     with (the scene is validated against this list, not just the
- *     active accents — its exterior MIST and CANVAS ink are already
+ *     active accents - its exterior MIST and CANVAS ink are already
  *     scene anchors). The floor briefly sat on Dusk ROSE before the
  *     Dusk Magenta experiment restored the original magenta
  *     (2026-07-11) so the family matches the mark instead.
  *   - Flat + _LO/_HI anchors: the *rendered* colors those materials
- *     produce under the scene's lighting — the canonical chips the
+ *     produce under the scene's lighting - the canonical chips the
  *     startup splash draws with (src/app/splash.c) and the gradient
  *     stops the vector twin shades with (docs/images/logo.svg, held to
  *     exactly this hex vocabulary by the checker).

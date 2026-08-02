@@ -17,7 +17,7 @@
  * key disambiguates within a family (cap enum, face x property, plane index,
  * light-model pname). A cell's covering GL_*_BIT mask is a pure function of its
  * identity (cell_cover below) and matches the attrib_bits repl_attrib_cmd_writes
- * stamps on it — the two must agree so a push saves exactly the cells a pop
+ * stamps on it - the two must agree so a push saves exactly the cells a pop
  * restores. */
 enum {
     ITEM_KIND_COLOR = 1,   /* current color        (CURRENT) */

@@ -123,7 +123,7 @@ static int grid_cycle_user_selectable(int value, int delta, int count) {
  * ladder; like the audio-cfg collapse, config_value_ptr() returns NULL for
  * the passes key and glr_config_get/set special-case it via the helpers
  * below. The step table and its count both derive from GLR_ACCUM_PASS_LADDER
- * (glr_config.h) — the same list the menu labels expand from. */
+ * (glr_config.h) - the same list the menu labels expand from. */
 static const int k_accum_pass_steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
 #define ACCUM_PASS_STATE_COUNT ((int)ARRAY_LEN(k_accum_pass_steps))
 
@@ -207,7 +207,7 @@ const char *glr_config_item_slug(const GlrConfigItem *item) {
 
 /* The key -> backing-storage map: where each config value actually
  * lives (glr_state render/presentation fields, REPL state, replay /
- * variable-panel peer state, UI panels). One arm per key, by design —
+ * variable-panel peer state, UI panels). One arm per key, by design -
  * this switch *is* the ownership declaration, and the compiler flags a
  * new GlrConfigKey that forgot to claim a slot. NULL arms are values
  * with no plain int slot (module-owned, lifecycle-driven, or pure
@@ -438,7 +438,7 @@ void glr_config_set(GlrConfigKey key, int value) {
     } else {
         int *target = config_value_ptr(key);
         if (!target)
-            return;  /* unknown key — nothing changed, no notify */
+            return;  /* unknown key - nothing changed, no notify */
         *target = value;
         /* Light-theme side effect: re-seed the app render-state lights[]
          * from the scene preset and re-push eye-space positions.
@@ -450,7 +450,7 @@ void glr_config_set(GlrConfigKey key, int value) {
             render3d_lights_apply_theme(glr_state_render_mut()->lights, value);
     }
 
-    /* REQUIRE-step listener — slug-scoped and inactive-checked, so this
+    /* REQUIRE-step listener - slug-scoped and inactive-checked, so this
      * is a no-op except when a tutorial is waiting on this key's slug.
      * Placing the hook in the lowest-level setter catches every write
      * path (glr_cfg_cycle_row's normal AND early-return branches, the

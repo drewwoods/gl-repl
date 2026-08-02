@@ -7,7 +7,7 @@ begun. They move to `plans/active/` once implementation starts.
 
 | Plan | Topic |
 |---|---|
-| `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization — browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
+| `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization - browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |

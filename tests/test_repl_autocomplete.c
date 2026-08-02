@@ -158,7 +158,7 @@ int main() {
         glr_ctrl_reset_all(); declare_test_vars();
         set_input_text("if(x == glVer");
         editor_completion_update();
-        /* `glVer` should not match here — the leading `if(x == ` is
+        /* `glVer` should not match here - the leading `if(x == ` is
          * not an assignment context. */
         ASSERT_INT("comparison '==' not treated as assignment",
                    g_ac_count, 0);
@@ -370,7 +370,7 @@ int main() {
     {
         glr_ctrl_reset_all(); declare_test_vars();
 
-        /* Typed "glMaterialfv" — function-prefix hint shows the
+        /* Typed "glMaterialfv" - function-prefix hint shows the
          * 3-arg canonical form rather than the misleading
          * 6-distinct-arg form the old glMaterialf spec rendered. */
         set_input_text("glMaterialfv");
@@ -378,14 +378,14 @@ int main() {
         ASSERT_STR("glMaterialfv func hint",
                    g_ac_hint, "face, pname, (GLfloat[]){r, g, b, a})");
 
-        /* Slot 1 (face) ends with ", " — same as any non-final slot. */
+        /* Slot 1 (face) ends with ", " - same as any non-final slot. */
         set_input_text("glMaterialfv(GL_FR");
         editor_completion_update();
         ASSERT_STR("glMaterialfv slot1 match", g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("glMaterialfv slot1 ghost", g_ac_ghost, "ONT, ");
 
         /* Slot 2 (pname) is the LAST enum slot but NOT the last arg of
-         * the call — bug fix: suffix must be ", " (custom-parser row
+         * the call - bug fix: suffix must be ", " (custom-parser row
          * with trailing compound literal), not ")". */
         set_input_text("glMaterialfv(GL_FRONT, GL_AMB");
         editor_completion_update();
@@ -405,7 +405,7 @@ int main() {
                    g_ac_hint, "(GLfloat[]){r, g, b, a})");
     }
 
-    /* 4c-2. glMaterialf — scalar sibling of glMaterialfv. Function-name
+    /* 4c-2. glMaterialf - scalar sibling of glMaterialfv. Function-name
      * completion must offer glMaterialf( as its own match (not silently
      * steer to glMaterialfv), and the pname slot must be restricted to
      * GL_SHININESS. Same -2 num_args shape, so the pname-slot ghost
@@ -413,7 +413,7 @@ int main() {
     {
         glr_ctrl_reset_all(); declare_test_vars();
 
-        /* Typed exactly "glMaterialf" — the func-completion table has
+        /* Typed exactly "glMaterialf" - the func-completion table has
          * glMaterialf( ordered before glMaterialfv(, so the first
          * (default-selected) match is the scalar variant. */
         set_input_text("glMaterialf");
@@ -427,14 +427,14 @@ int main() {
         ASSERT_STR("glMaterialf func hint shows scalar shape",
                    g_ac_hint, "face, GL_SHININESS, value)");
 
-        /* Slot 1 (face) — same shape as glMaterialfv. */
+        /* Slot 1 (face) - same shape as glMaterialfv. */
         set_input_text("glMaterialf(GL_FR");
         editor_completion_update();
         ASSERT_STR("glMaterialf slot1 match",
                    g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("glMaterialf slot1 ghost", g_ac_ghost, "ONT, ");
 
-        /* Slot 2 (pname) — restricted to GL_SHININESS only. The pname
+        /* Slot 2 (pname) - restricted to GL_SHININESS only. The pname
          * is the last enum slot but NOT the last arg of the call
          * (-2 num_args row, trailing value), so the ghost suffix is
          * ", " (not ")"). */

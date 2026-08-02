@@ -4,8 +4,8 @@
  * The find-bar's replace operations need something the incremental commit
  * path cannot give them: a rewrite that is only ever validated as a whole.
  * Renaming a variable or a funcN alias is invalid at every intermediate
- * step — the declaration cannot be renamed while call sites still use the
- * old name, and no call site can be renamed before the declaration — so
+ * step - the declaration cannot be renamed while call sites still use the
+ * old name, and no call site can be renamed before the declaration - so
  * the editor substitutes text across every row and hands the finished
  * document here.
  *
@@ -27,7 +27,7 @@
  *     user normals.
  *
  * Layering: text matching and substitution belong to the editor's search
- * session (src/editor/replace.c) — this module takes finished lines and
+ * session (src/editor/replace.c) - this module takes finished lines and
  * owns only the document transaction.
  */
 #ifndef REPL_REPLACE_H

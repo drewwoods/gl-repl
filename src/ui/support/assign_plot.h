@@ -10,7 +10,7 @@
  * Two X axes, chosen by the capture side and reported in the view: the
  * execution index within one frame for a row inside a loop, or successive
  * captures for a row that runs once per frame. The renderer only relabels the
- * axis — the shape of the drawing is identical either way, because a column is
+ * axis - the shape of the drawing is identical either way, because a column is
  * a min/max envelope in both modes and simply collapses to a point whenever
  * there is one value per column.
  *
@@ -21,13 +21,13 @@
  * door, whose durations span decades and so want log spacing.)
  *
  * The lin/log chip requests log10 spacing for the runs where that is the
- * right question — values spread over orders of magnitude. Which log axis that
+ * right question - values spread over orders of magnitude. Which log axis that
  * means is decided by the data, not by the user:
  *
  *   Strictly-positive data gets a plain log10 axis: a real bottom end, decade
  *   gridlines, nothing clipped.
  *
- *   Data that crosses or touches zero — every sinusoid does — gets a
+ *   Data that crosses or touches zero - every sinusoid does - gets a
  *   *symmetric* one: magnitudes below a derived floor read as zero, and above
  *   it the axis is log10(|v| / floor) carrying the value's sign. Two sinusoids
  *   an order of magnitude apart then sit a decade apart at their peaks instead
@@ -42,7 +42,7 @@
  *
  * The one thing no log axis can describe is a trace pinned at exactly zero:
  * there the plot stays linear, the chip draws in the placeholder color, and
- * the controller says so — an unexpectedly linear axis is visibly explained
+ * the controller says so - an unexpectedly linear axis is visibly explained
  * rather than silently ignored.
  *
  * While replay is scrubbing, a vertical rule per series marks how far its
@@ -50,12 +50,12 @@
  * because in X_EXEC mode each series spans the full width as its own execution
  * percentage, so one PC is two positions for two rows of different lengths.
  * The rule is only meaningful over a trace from the frame the PC is walking,
- * which is what the controller's live-capture override buys — and the rate
+ * which is what the controller's live-capture override buys - and the rate
  * chip greys while that override is in force. See assign_plot_exec_progress().
  *
  * The zoom chip (1x / 2x) doubles the panel's width and its plot well. Everything
  * else about the drawing is scale-independent, so both sizes run the same
- * code — only ui_assign_plot_panel_size() and the plot rect change.
+ * code - only ui_assign_plot_panel_size() and the plot rect change.
  *
  * Like its siblings in this directory the renderer is pure over a flat view
  * and links from {support, ui/support, ui/core} alone.
@@ -68,7 +68,7 @@
 #include "subsystems/assign_plot/assign_plot.h"
 
 /* Panel width. Matches the FPS and variable panels so the overlay column has
- * one consistent edge. Expanded, it is twice this — wide enough that the
+ * one consistent edge. Expanded, it is twice this - wide enough that the
  * overlay solver will usually spill it into its own column, which is the
  * point. */
 #define ASSIGN_PLOT_PANEL_W 250
@@ -89,14 +89,14 @@ enum {
     UI_ASSIGN_PLOT_HIT_EXPAND = -6
 };
 
-/* Per-frame view. `titles[i]` names series i — caller-owned strings, rebuilt
+/* Per-frame view. `titles[i]` names series i - caller-owned strings, rebuilt
  * by the controller from the live source rows each frame, so an edited row
  * retitles itself. `plot` is the capture side's own flat view.
  *
  * pointer_x/pointer_y are the last known pointer position in GLUT window
  * coords (y down), or negative for "no pointer". With more than one series the
  * stats block reports whichever legend entry the pointer is over, falling back
- * to the primary series — the same rectangle the legend draws, resolved by the
+ * to the primary series - the same rectangle the legend draws, resolved by the
  * hit test, so what is highlighted is what is being described. A view left
  * zero-initialized reports a pointer at the window's top-left corner, which is
  * outside any panel the overlay layout places.
@@ -104,7 +104,7 @@ enum {
  * `replay_active` and `replay_frac` carry the replay program counter's position
  * within each series' executions (see assign_plot_exec_progress()). They live
  * here rather than on AssignPlotView because the capture subsystem has no
- * replay dependency and should not grow one — the controller is what knows
+ * replay dependency and should not grow one - the controller is what knows
  * both. A zero-initialized view draws no marker, which is what every caller
  * that only wants a hit-test wants. */
 typedef struct {
@@ -147,12 +147,12 @@ const char *ui_assign_plot_rate_label(int rate);
 
 /* Format a statistic into `buf`, dropping significant digits until it is at
  * most `max_chars` wide (<= 0 means "no limit"). Public so a test can pin the
- * fit: the numbers that need it — a near-zero mean printing as 1.027e-11 —
+ * fit: the numbers that need it - a near-zero mean printing as 1.027e-11 -
  * only show up as an overlap on screen otherwise. */
 void ui_assign_plot_format_stat(char *buf, size_t buf_sz, double v,
                                 int max_chars);
 
-/* Whether a log-Y request can actually be honored for `view`'s data — which
+/* Whether a log-Y request can actually be honored for `view`'s data - which
  * now means only that some value has a non-zero magnitude, since signed data
  * goes on the symmetric axis. Public so the controller can say so in the
  * status line when the chip is clicked, rather than leaving a chip that

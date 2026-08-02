@@ -21,7 +21,7 @@ typedef struct VariablePanelValueChange_s {
 /* Value source the drag handlers read the declared-variable name + value
  * from at drag-begin. Installed by the host (the controller wires a
  * REPL-backed reader) so the peer needn't reach into the REPL eval table
- * directly — that keeps src/subsystems/variable_panel linkable from the
+ * directly - that keeps src/subsystems/variable_panel linkable from the
  * standalone variable_panel_demo, which installs its own in-memory reader.
  * Unset = drag-begin is a no-op (no variable to grab). */
 typedef struct {

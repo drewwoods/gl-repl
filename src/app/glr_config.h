@@ -104,7 +104,7 @@ typedef struct {
 } GlrConfigItem;
 
 /* The "Accum passes" ladder: the fixed set of accumulation sample counts
- * the cycle steps through, low to high. Single source of truth — the
+ * the cycle steps through, low to high. Single source of truth - the
  * display-name array (glr_actions.c), the int step table (glr_config.c),
  * and the GLR_ACCUM_PASSES startup validator (glr_ctrl.c) all derive
  * from this one list via the X-macro idiom, so the ladder is edited in
@@ -113,7 +113,7 @@ typedef struct {
  *
  * render3d is deliberately NOT a view of this list (it must not depend on
  * src/app): its config validator only range-checks accum_passes against
- * MAX_ACCUM_SAMPLES, so steps may be added freely — but none may exceed it. */
+ * MAX_ACCUM_SAMPLES, so steps may be added freely - but none may exceed it. */
 #define GLR_ACCUM_PASS_LADDER(X) \
     X(1)  \
     X(2)  \
@@ -189,7 +189,7 @@ int  glr_config_grid_user_selectable(Render3dGridTheme grid);
  *
  * Data-faithful: this API counts ONLY real "### " header rows. The
  * synthetic "All" view (the full flat list, chrome included) is a
- * menu-layer concern and is deliberately NOT counted here — single
+ * menu-layer concern and is deliberately NOT counted here - single
  * ownership, no double-count. "---" separator rows are excluded from
  * every named section's item range. (Rationale: Finding #2 of the
  * config-menu-submenu-sections plan.) */

@@ -39,7 +39,7 @@ int repl_load_example_lines_for_test(const char *const *lines);
 /* If `lines` starts with a valid 5-line camera preset block (the marker may
  * be compact `// camera` or decorated `// --- Camera ---`), validate it,
  * apply it through the camera bridge, and return the number of lines consumed
- * (5). Returns 0 — applying nothing — when the block is absent or malformed,
+ * (5). Returns 0 - applying nothing - when the block is absent or malformed,
  * so a truncated header falls through to ordinary line parsing instead of
  * being silently swallowed. Shared with the tutorial setup-scaffold loader,
  * which honors the same header vocabulary. */

@@ -116,7 +116,7 @@ typedef struct {
      * program handles. */
     ReplFlattenExprEngine expr;
     /* 1 while expanding inside a call frame that bound at least one
-     * function-scoped local — a summary of the active `var_kinds` array, not
+     * function-scoped local - a summary of the active `var_kinds` array, not
      * independent state. Assignment target resolution is the only reader
      * (flatten_var_assign); flatten_call is the only writer, because it is
      * the only place a REPL_VISIBLE_VAR_LOCAL binding enters a frame. Loops
@@ -241,7 +241,7 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
      * writes are applied by flatten in stream order (flatten_scratch_assign
      * calls repl_eval_scratch_set), so the array holds exactly what the
      * lines above this one put there. Baking the 16 cells onto the flat
-     * command makes it self-contained for every later walker — including
+     * command makes it self-contained for every later walker - including
      * the ones in render3d, which cannot call into the scratch table.
      * The compound-literal form has no array to read: its payload arrives
      * already filled by the parse (or by the expression-slot refresh in
@@ -286,7 +286,7 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
 
 /* The scope array is threaded as three parallel arrays plus a count:
  * `vars` (name + value), `var_deps` (dep mask per binding) and `var_kinds`
- * (what binds it). The kinds are not diagnostics — assignment resolves its
+ * (what binds it). The kinds are not diagnostics - assignment resolves its
  * target against this array and only a LOCAL is writable, so the tag is
  * what keeps a parameter or a loop iterator constant even when it shadows
  * a writable outer binding. `var_kinds` may be NULL only when nv == 0.
@@ -328,7 +328,7 @@ static void flatten_for_loop(FlattenContext *ctx,
              * bound's deps from the SAME eval (no second dep-only pass).
              * An absent start/end program on a READY line widens to all
              * bits (structural uncertainty); an absent step program means
-             * the source omitted it — the committed args[2] already bakes
+             * the source omitted it - the committed args[2] already bakes
              * the 1.0 default, so it contributes no deps. */
             header_deps |= repl_flatten_expr_header_value(
                 &ctx->expr, i, REPL_EXPR_ROLE_LOOP_START, vars, var_deps, nv,
@@ -433,7 +433,7 @@ static void flatten_for_loop(FlattenContext *ctx,
          * would silently reset every pass. Index 0 is the iterator, which
          * does not survive the body. flatten_if_block needs no equivalent
          * (it shares the caller's arrays) and flatten_call deliberately
-         * does not copy back — a callee frame is not the caller's. */
+         * does not copy back - a callee frame is not the caller's. */
         for (int v = 0; v < outer_n; v++) {
             vars[v] = lvars[1 + v];
             if (var_deps)
@@ -443,7 +443,7 @@ static void flatten_for_loop(FlattenContext *ctx,
          * before the break still happened, and dropping their values would
          * make `for(i,0,n){ acc = acc+i; if(...) break; }` lose the last
          * accumulation. CONTINUE just falls into the next iteration; BREAK
-         * ends the unroll. Either way the signal stops here — this is the
+         * ends the unroll. Either way the signal stops here - this is the
          * innermost loop, so a nested loop's jump never reaches its
          * parent. */
         if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
@@ -463,7 +463,7 @@ static void flatten_for_loop(FlattenContext *ctx,
  * in the middle of the prologue drops a statement ahead of them, and
  * replacing an unused leading declaration does the same. A scan that
  * stopped at the first non-declaration would silently unbind every local
- * after that point — its readers would then resolve to a same-named
+ * after that point - its readers would then resolve to a same-named
  * global, or fail to reparse and vanish from the flat stream, with no
  * diagnostic anywhere. Row position is a formatting convention; the
  * binding must not depend on it.
@@ -630,8 +630,8 @@ static void flatten_call(FlattenContext *ctx,
         /* Scope is lexical, not dynamic: the frame is the callee's
          * parameters followed by the callee's own locals, and nothing of
          * the caller's. Copying caller bindings in would let a caller
-         * local hide a global the callee reads — eval_primary searches
-         * this array before the predef table — while the exported C reads
+         * local hide a global the callee reads - eval_primary searches
+         * this array before the predef table - while the exported C reads
          * the global. The call arguments have already captured every
          * caller value the callee is entitled to receive. Params and
          * locals cannot collide: that is a same-scope redefinition, and
@@ -662,7 +662,7 @@ static void flatten_call(FlattenContext *ctx,
          * with a signal means the document changed under a row that was
          * valid when committed (the enclosing loop was deleted, say).
          * Report it rather than letting the jump escape into whatever loop
-         * the *caller* happens to be in — that would be a silent
+         * the *caller* happens to be in - that would be a silent
          * miscompile against the exported C. */
         if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
             ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
@@ -690,7 +690,7 @@ static int flatten_if_arm_boundary(const FlattenContext *ctx,
 /* Evaluate an if / else-if condition line. Every evaluated condition's deps
  * are structural (they select which arm's commands exist in the flat
  * stream); conditions that were never evaluated this flatten (short-
- * circuited by an earlier taken arm) contribute nothing — a root that only
+ * circuited by an earlier taken arm) contribute nothing - a root that only
  * they read cannot matter until an evaluated condition changes first, and
  * that condition's deps are already in the mask. */
 static float flatten_eval_if_line(FlattenContext *ctx,
@@ -703,7 +703,7 @@ static float flatten_eval_if_line(FlattenContext *ctx,
             vars, var_deps, nv, /*structural=*/1);
         /* No condition program on a READY line: the paren payload failed
          * to extract when the line built, which is the text path's
-         * fallback-to-args[0] case — a baked constant, no deps. */
+         * fallback-to-args[0] case - a baked constant, no deps. */
         if (!v.found)
             return src_cmd->args[0];
         repl_flatten_expr_note_structural(&ctx->expr, v.deps);
@@ -730,7 +730,7 @@ static float flatten_eval_if_line(FlattenContext *ctx,
     }
 }
 
-/* An if-block shares the caller's scope arrays outright — no fresh frame,
+/* An if-block shares the caller's scope arrays outright - no fresh frame,
  * so no copy-back and no kind rewriting; it only forwards them. */
 static void flatten_if_block(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
@@ -782,8 +782,8 @@ static int flatten_cmd_is_source_only_cond_marker(CmdType type) {
 
 /* True for the glMultMatrixf form whose 16 cells are expression slots on
  * the line rather than a scratch array read at bake time. Those slots sit
- * at REPL_EXPR_ROLE_CMD_ARG ordinals 0..15 — past the args[] window every
- * other command re-evaluates — so each of the three refresh paths (warm
+ * at REPL_EXPR_ROLE_CMD_ARG ordinals 0..15 - past the args[] window every
+ * other command re-evaluates - so each of the three refresh paths (warm
  * flatten, dep-note, rebake) needs an extra pass keyed on this. */
 static int flatten_cmd_has_matrix_slots(const GLCmd *cmd) {
     return cmd->type == CMD_MULT_MATRIXF &&
@@ -852,8 +852,8 @@ static int flatten_eval_std_cmd(const GLCmd *src_cmd, const char *text,
  * unchanged (the line was already invalid at commit time).
  *
  * Path 0 is the fast path. `has_vars` is decided at commit time against every
- * variable visible at that source position — predefs plus the enclosing
- * loop/function bindings (input_has_any_visible_vars) — and the source array
+ * variable visible at that source position - predefs plus the enclosing
+ * loop/function bindings (input_has_any_visible_vars) - and the source array
  * is replaced transactionally on each successful edit. So a `has_vars == 0`
  * command's args and payload are already the parse of its current text under
  * bindings that cannot influence it, and re-parsing only reproduces them.
@@ -892,7 +892,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
          * right type / num_args / enum tokens / payload; only the
          * expression-backed arg slots re-evaluate. Slots without a program
          * (enum tokens, omitted defaults like gluColor's alpha) keep their
-         * baked value — every expression slot was captured when the line
+         * baked value - every expression slot was captured when the line
          * built, or the line would be FAILED. */
         GLCmd tmp = *src_cmd;
         int rv;
@@ -936,7 +936,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
             (void)repl_stencil_clamp_ref(tmp.args[0], &clear_value);
             tmp.args[0] = (float)clear_value;
         }
-        /* has_vars stays the committed value — identical to the text
+        /* has_vars stays the committed value - identical to the text
          * branch's rules for a has_vars source command (kept under local
          * bindings, forced 1 otherwise; it is 1 here either way). */
         rv = flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
@@ -1048,9 +1048,9 @@ static int flatten_reparse_line(FlattenContext *ctx,
  * Returns the scope-array slot for a function-scoped target, or -1 when the
  * target is the predef slot the source command carries. The persisted
  * `var_idx` is a commit-time storage *hint*, not the lexical authority: a
- * later legal edit — inserting a local over an existing global — must
+ * later legal edit - inserting a local over an existing global - must
  * retarget older assignment rows without rewriting every one of them. So
- * the LHS is re-derived and resolved here on every visit — from the memo on
+ * the LHS is re-derived and resolved here on every visit - from the memo on
  * the engine, which turns "re-derived" into a copy of an already-parsed
  * name.
  *
@@ -1081,7 +1081,7 @@ static int flatten_resolve_assign_target(ReplFlattenExprEngine *engine,
     for (int v = 0; v < nv; v++) {
         if (strcmp(vars[v].name, lhs) != 0)
             continue;
-        /* First match decides — never skip a matching PARAM/LOOP looking
+        /* First match decides - never skip a matching PARAM/LOOP looking
          * for an outer LOCAL, or a shadowed binding would become
          * assignable. */
         if (var_kinds && var_kinds[v] != REPL_VISIBLE_VAR_LOCAL) {
@@ -1113,7 +1113,7 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     int local_rhs_vars = 0;
     /* Assignment dataflow: the destination slot's mask becomes the RHS's
      * mask (a warm eval yields it directly; build/text visits take one
-     * dep-only pass below). A constant RHS is 0 — `n = 5` correctly makes
+     * dep-only pass below). A constant RHS is 0 - `n = 5` correctly makes
      * a later slider change to n a routing no-op, since any reflatten
      * re-bakes n = 5 over it. */
     ReplExprDepMask rhs_deps = 0;
@@ -1125,14 +1125,14 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
      * A frame with no LOCAL binding provably resolves to -1: the scan
      * refuses a PARAM or LOOP match and there is nothing else in the array
      * to hit, so the persisted var_idx is authoritative. Both builds take
-     * this same decision — the skip is never conditional on the build, or
+     * this same decision - the skip is never conditional on the build, or
      * the suite would not be testing what ships.
      *
      * What the skipped call still produced is diagnostics, and those are
      * worth keeping where they can be seen: GLR_DEBUG_CHECKS (debug /
      * sanitizer / coverage) runs the resolution anyway to look for a
-     * PARAM/LOOP target — defence-in-depth against a bypass of commit's
-     * reverse-binder guards — and to catch a ctx->frame_has_locals that has
+     * PARAM/LOOP target - defence-in-depth against a bypass of commit's
+     * reverse-binder guards - and to catch a ctx->frame_has_locals that has
      * drifted out of step with the frame it summarises. Neither is a
      * reachable state; both would otherwise fail silently. */
     int local_slot = -1;
@@ -1279,7 +1279,7 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
 
     if (warm) {
         /* Warm path. Programs absent on a READY line mean the target
-         * extraction failed when the line built — keep the baked args,
+         * extraction failed when the line built - keep the baked args,
          * like the text branch below. */
         ReplFlattenExprValue vi = repl_flatten_expr_eval(
             &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
@@ -1306,7 +1306,7 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
         repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
         repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
         if (building) {
-            /* Compile the translated index + RHS — the exact texts
+            /* Compile the translated index + RHS - the exact texts
              * evaluated below. */
             repl_flatten_expr_capture_span(
                 &ctx->expr, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
@@ -1372,7 +1372,7 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
  * reasoning lives somewhere it can be read: the statement emits nothing,
  * it only asks the walk to unwind to the innermost enclosing
  * flatten_for_loop, which decides whether to start the next iteration or
- * stop unrolling. A guarded jump needs no dep bookkeeping of its own —
+ * stop unrolling. A guarded jump needs no dep bookkeeping of its own -
  * flatten_eval_if_line already notes the guarding condition's deps as
  * structural, which is what forces a re-flatten (rather than a value-only
  * rebake) when the condition's inputs change. */
@@ -1410,7 +1410,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (ctx->abort) return;
         /* A jump raised by an earlier row (or by a nested if-arm) stops this
-         * range dead — everything after it in the body is unreachable. */
+         * range dead - everything after it in the body is unreachable. */
         if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) return;
         if (--ctx->visit_budget < 0) {
             flatten_fail(ctx, "Recursive expansion exceeded visit budget");
@@ -1488,7 +1488,7 @@ static void flatten_range(FlattenContext *ctx,
     }
 }
 
-/* Walk the *flat* program — the post-expansion command stream — so
+/* Walk the *flat* program - the post-expansion command stream - so
  * that glEnable(GL_LIGHTING) inside `if(0) { }`, `for(i, 0, 0) { }`,
  * an unreferenced funcN body, or a goto-skipped region does not count.
  * Walking the source array (the pre-#10 behavior) treated those as
@@ -1672,7 +1672,7 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
          * merely redundant: `locals` is the snapshot taken *after* the write
          * (flatten_var_assign updates the frame before appending), so a
          * self-referential row like `u = orbitR*sin(u)` would apply itself a
-         * second time. Skipping is also provably lossless — every dep of a
+         * second time. Skipping is also provably lossless - every dep of a
          * local's RHS is reported structural, so a changed input routes to a
          * full flatten and never reaches this walk. There is nothing to write
          * back either: a local has no predef slot. */
@@ -1686,7 +1686,7 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
         if (cmd->has_vars && !ok) {
             /* A has_vars assignment with no RHS program on a READY line is
              * the "no evaluable RHS" case the full flatten also leaves at
-             * the baked args[0] — keep it, don't fail. */
+             * the baked args[0] - keep it, don't fail. */
             return 1;
         }
         if (cmd->var_idx >= 0 && cmd->var_idx < g_num_predef_vars)
@@ -1744,7 +1744,7 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
 
     /* Generic GL command: re-evaluate the expression-backed arg slots.
      * Slots without a program (enum tokens, omitted defaults) keep their
-     * baked value — the same rule flatten_reparse_line's warm path uses. */
+     * baked value - the same rule flatten_reparse_line's warm path uses. */
     for (int a = 0; a < cmd->num_args && a < 8; a++) {
         float v = 0.0f;
         int slot_ok = repl_flatten_expr_rebake_eval(
@@ -1944,7 +1944,7 @@ void repl_ensure_flat_program_with_live_vars(int edit_line_idx) {
      * full flatten and the rebake mutate the live predef/scratch tables as
      * they thread assignments, so both run inside a save/restore of the
      * caller's live values. A rebake that fails restores the baseline
-     * itself and returns 0 — we fall through to the full flatten. */
+     * itself and returns 0 - we fall through to the full flatten. */
     if (!repl_state_flat_program_dirty() &&
         !repl_state_flat_program_args_dirty_mask())
         return;

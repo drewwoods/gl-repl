@@ -40,7 +40,7 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_MULTISAMPLE",     GL_MULTISAMPLE },
     { "GL_NORMALIZE",       GL_NORMALIZE },
     { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
-    /* The three glPolygonOffset switches — one per glPolygonMode fill mode.
+    /* The three glPolygonOffset switches - one per glPolygonMode fill mode.
      * GL_POLYGON_OFFSET_FILL is the one decal passes want; the LINE and
      * POINT variants offset wireframe and point rasterization of polygons. */
     { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL },
@@ -278,7 +278,7 @@ STATIC_ASSERT(REPL_FUNC_SLOT_COUNT == 10,
 /* Help-overlay / autocomplete entries. Source order is load-bearing: it
  * drives F1 help row order and Tab-completion priority, so entries are
  * grouped by category (NOT alphabetized). Section banners below mark the
- * existing contiguous runs — keep a new command inside the run it belongs
+ * existing contiguous runs - keep a new command inside the run it belongs
  * to rather than appending at the end. The trailing REPL_HELP_GROUP_* is
  * the separate F1 section bucket. */
 static const ReplFuncCompletion k_func_completions[] = {
@@ -395,7 +395,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glLoadIdentity()",    "glLoadIdentity()",                                         0, { NULL },
         "Reset the current matrix to identity", REPL_HELP_GROUP_TRANSFORM },
     { "glMultMatrixf(",      "glMultMatrixf((GLfloat[]){m0, ..., m15})",                 1, { "(GLfloat[]){m0, ..., m15}" },
-        "Post-multiply the current matrix by 16 column-major values — the\n"
+        "Post-multiply the current matrix by 16 column-major values - the\n"
         "escape hatch for transforms translate/rotate/scale cannot express,\n"
         "such as a planar shadow projection or a shear.\n"
         "Flat shorthand accepted: glMultMatrixf(m0, ..., m15).\n"
@@ -408,7 +408,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         REPL_HELP_GROUP_DEPTH_MASK },
     { "glPolygonMode(",      "glPolygonMode(face, mode)",                                2, { "face", "mode" },
         "GL_FILL, GL_LINE, or GL_POINT rasterization for GL_FRONT / GL_BACK /\n"
-        "GL_FRONT_AND_BACK faces — per-face wireframe without rebuilding the\n"
+        "GL_FRONT_AND_BACK faces - per-face wireframe without rebuilding the\n"
         "geometry as lines.",
         REPL_HELP_GROUP_DEPTH_MASK },
     { "glPolygonOffset(",    "glPolygonOffset(factor, units)",                           2, { "factor", "units" },
@@ -471,7 +471,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "End contour or polygon", REPL_HELP_GROUP_GLU_TESS },
     { "gluNormal(",          "gluNormal(nx, ny, nz)",                                    3, { "nx", "ny", "nz" },
         "Set per-vertex normal", REPL_HELP_GROUP_GLU_TESS },
-    /* gluColor accepts 3 or 4 floats — the parser defaults alpha to
+    /* gluColor accepts 3 or 4 floats - the parser defaults alpha to
      * 1.0 when omitted. The param-hint walker enumerates everything
      * in `params[]` as mandatory, so we list only the 3 required
      * positions there; the trailing `[, a]` in display_text signals
@@ -511,7 +511,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         REPL_HELP_GROUP_MATH },
     { "atan(",               "atan(x)",                                                  1, { "x" },
         "Arc tangent of x in radians, (-PI/2, PI/2). Takes a slope, so it\n"
-        "cannot tell which quadrant the point was in — use atan2 for that.",
+        "cannot tell which quadrant the point was in - use atan2 for that.",
         REPL_HELP_GROUP_MATH },
     { "atan2(",              "atan2(y, x)",                                              2, { "y", "x" },
         "Angle in radians from +X to the point (x, y), in [-PI, PI].\n"
@@ -568,7 +568,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "rand2(",              "rand2(seed[, iter])",                                      2, { "seed", "iter" },
         "Deterministic pseudo-random float in [-1, 1] (signed variant of rand).\n"
         "Shares the same hash, so rand and rand2 are correlated for the same\n"
-        "(seed, iter) pair — useful for centred jitter and signed offsets.",
+        "(seed, iter) pair - useful for centred jitter and signed offsets.",
         REPL_HELP_GROUP_MATH },
     { "PI",                  "PI",                                                       0, { NULL },
         "3.14159265... (half turn in radians)", REPL_HELP_GROUP_MATH },
@@ -587,17 +587,17 @@ static const ReplFuncCompletion k_func_completions[] = {
  * that each enum command carries an explicit args[] array. */
 #define ENUM_SLOT(tbl_, usage_, kind_) { (tbl_), (usage_), (kind_), NULL }
 
-/* Strict token-only slot — the behavior-neutral baseline for every
+/* Strict token-only slot - the behavior-neutral baseline for every
  * non-bool enum slot (and, until the bool-slot policy lands, for
  * glDepthMask). */
 #define ENUM_SLOT_TOK(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_ONLY)
 
-/* Boolean mask slot — token first, else a constant 0/1 (no runtime
+/* Boolean mask slot - token first, else a constant 0/1 (no runtime
  * vars) reverse-mapped to GL_FALSE/GL_TRUE. The bool-slot policy:
  * glDepthMask and glColorMask. */
 #define ENUM_SLOT_BOOL(usage_) ENUM_SLOT(k_bool_vals, (usage_), REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE)
 
-/* Bitfield mask slot — one or more of the slot's tokens joined by `|`.
+/* Bitfield mask slot - one or more of the slot's tokens joined by `|`.
  * The glClear mask policy. */
 #define ENUM_SLOT_BITS(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_BITFIELD)
 
@@ -617,7 +617,7 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
                                  "GL_STENCIL_BUFFER_BIT, or several OR'd with |") } },
     /* glClearStencil is parsed by a custom branch (num_args -1) because the
      * value is an integer in 0..255 that must be truncated and clamped the
-     * way glStencilFunc's ref is — the std float path would let the warm
+     * way glStencilFunc's ref is - the std float path would let the warm
      * flatten write a raw evaluated float straight into args[]. */
     { "glClearStencil",  CMD_CLEAR_STENCIL, -1, NULL,                        0,
         .args = { { NULL, "value: expression or 0xNN literal in 0..255",
@@ -754,7 +754,7 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     [type_] = { #type_, (display_), (semicolon_), (category_), 0 }
 
 /* Keyed by CmdType via [type_]= designated initializers, so row order is
- * cosmetic (not load-bearing) — they track the CmdType enum order for
+ * cosmetic (not load-bearing) - they track the CmdType enum order for
  * readability. Adding a command: drop one CMD_TYPE_SPEC row next to its
  * enum neighbours; a missing row is a zero-initialized (invalid) spec. */
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
@@ -899,7 +899,7 @@ const char *repl_func_signature_for_name(const char *name) {
     for (i = 0; k_func_completions[i].display_text; i++) {
         const char *disp = k_func_completions[i].display_text;
         /* Exact match (e.g. "gluBegin(GLU_POLYGON)" or a bare constant),
-         * or a `<name>(...)` signature — require the '(' immediately after
+         * or a `<name>(...)` signature - require the '(' immediately after
          * the name so "glClear" does not match "glClearColor(...)". */
         if (strcmp(disp, name) == 0)
             return disp;

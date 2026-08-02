@@ -1,6 +1,6 @@
 # Winding view: add a "Color + Texture" mode (design brief)
 
-## Status — ABANDONED (2026-07-29)
+## Status - ABANDONED (2026-07-29)
 
 Not implemented and not planned. `GLR_CONFIG_WINDING_VIEW` stays the shipped
 2-state Off/Color toggle (`src/app/glr_actions.c`, `.state_count = 2`); nothing
@@ -18,8 +18,8 @@ The winding-visualization view shipped as a 2-state toggle
 (`GLR_CONFIG_WINDING_VIEW`, "Winding" in Config → GEOMETRY): **Off** or
 **Color**. In Color mode `render3d_pass_winding` in
 [`src/render3d/render.c`](../../../src/render3d/render.c) draws one
-two-sided-lighting pass — front material green, back material red, cull
-off — so flipped / inside-out polygons read red against green. The
+two-sided-lighting pass - front material green, back material red, cull
+off - so flipped / inside-out polygons read red against green. The
 controller suppresses the program's own material/lighting/cull commands via
 `winding_state_filter` ([`src/app/glr_ctrl.c`](../../../src/app/glr_ctrl.c))
 through the generic `ReplExecutionOptions.state_filter` hook (see
@@ -31,7 +31,7 @@ This brief extends the toggle into a **3-state cycle**:
 
 In "Color + Texture", front and back faces are additionally textured with
 distinct, labelled images (the words **FRONT** / **BACK**), so a face's
-orientation is unambiguous even in a still frame — the color tells you
+orientation is unambiguous even in a still frame - the color tells you
 winding at a glance, the text confirms it. Texture coordinates are generated
 automatically with **`glTexGen` eye-linear**, because REPL geometry (user
 `glVertex`, GLU tess, GLUT solids) carries no texcoords.
@@ -39,20 +39,20 @@ automatically with **`glTexGen` eye-linear**, because REPL geometry (user
 ## Decisions (already made)
 
 - **Apply method: two-pass cull** (not the single-pass multitexture
-  combiner — see *Alternative* below for why it was considered and rejected
+  combiner - see *Alternative* below for why it was considered and rejected
   for this codebase).
 - **Texture content: literal `FRONT` / `BACK` text** rasterized (tiled) into
   the two textures, tinted by the green/red material so it still reads as
   winding.
 
-## Chosen approach — two-pass cull + eye-linear texgen
+## Chosen approach - two-pass cull + eye-linear texgen
 
 `render3d_pass_winding` branches on the mode. Color stays one pass. Color +
 Texture renders the program **twice**, letting `glCullFace` split front from
 back and binding the matching texture per pass:
 
 ```c
-// shared setup: two-sided lighting OFF is fine here — per-pass culling +
+// shared setup: two-sided lighting OFF is fine here - per-pass culling +
 // per-pass material already separate front/back. Keep GL_LIGHTING on with a
 // headlight for shading; GL_MODULATE lets the green/red material tint the
 // FRONT/BACK text texture.
@@ -78,19 +78,19 @@ Why this fits **this** codebase: we already re-walk the flat program cheaply
 per pass (the hidden-line wireframe walks it three times). A second walk is
 negligible, and in return we get:
 
-- **Core GL 1.1 only** — one texture unit, `glTexGen` (1.0), single
+- **Core GL 1.1 only** - one texture unit, `glTexGen` (1.0), single
   `glBindTexture`. No `glActiveTexture`, no `ARB_multitexture`, no
   `ARB_texture_env_combine`, no runtime proc-loading, no stub-header
   additions, no capability gate / fallback path. Works identically on the
   Apple-legacy GL 2.1, Linux/Mesa, and OSMesa-swrast paths the project
   targets.
-- Per-pass `glCullFace` + per-pass `glBindTexture` is trivially correct —
+- Per-pass `glCullFace` + per-pass `glBindTexture` is trivially correct -
   no material-alpha-as-switch trick, no driver-specific combiner quirks.
 
 `winding_state_filter` is reused unchanged (still suppresses user material /
 lighting / cull / color-material so the pass owns that state). The pass is a
 side-effecting fill replacement, so `scene_execute_adapter`'s
-snapshot/restore must run the program once per visible frame, not per pass —
+snapshot/restore must run the program once per visible frame, not per pass -
 i.e. the predef/scratch/render restore that already brackets auxiliary
 passes needs care here, since Color + Texture issues **two** geometry walks.
 Resolve by either (a) treating only the *first* of the two winding walks as
@@ -112,10 +112,10 @@ glEnable(GL_TEXTURE_GEN_T);
 
 Eye-linear projects the texture in eye space, so the FRONT/BACK lettering
 stays fixed relative to the camera and the geometry slides through it as it
-orbits — a stable, readable label rather than a per-triangle smear. Plane
+orbits - a stable, readable label rather than a per-triangle smear. Plane
 scale sets how many times the word tiles across the view; tune so a few
 repeats are visible. (Object-linear is the alternative if we'd rather pin the
-text to the geometry — open question 4.)
+text to the geometry - open question 4.)
 
 ### The FRONT / BACK textures
 
@@ -145,7 +145,7 @@ render3d GL resources):
 - The config is config-backed: it is emitted in full-workspace `@cfg`
   headers (`glr_export_cfg_fill_all`) but stays **out** of the per-example
   scene subset (`cfg_key_in_scene_subset`) so F12 example switches don't
-  change it — unchanged from the shipped toggle. The full-export `@cfg`
+  change it - unchanged from the shipped toggle. The full-export `@cfg`
   value string becomes `0` / `1` / `2`; no symbol table needed (numeric is
   fine, like other small cycles).
 
@@ -160,7 +160,7 @@ render3d GL resources):
   FRONT/BACK lettering and the green/red tint on a mis-wound example.
 - `make check-c99`, `make check-state-ownership`, full `make test`.
 
-## Alternative considered — single-pass multitexture combiner
+## Alternative considered - single-pass multitexture combiner
 
 The originally-proposed method (kept here for the record) does it in **one**
 walk by encoding the front/back distinction in the **material alpha** and
@@ -174,7 +174,7 @@ letting a fixed-function combiner pick the texture:
   - **Unit 0** samples the FRONT texture, `GL_REPLACE` → passes it down.
   - **Unit 1** samples the BACK texture, `GL_COMBINE` / `GL_INTERPOLATE`
     with `SOURCE0 = GL_PREVIOUS` (front), `SOURCE1 = GL_TEXTURE` (back),
-    `SOURCE2 = GL_PRIMARY_COLOR` operand `GL_SRC_ALPHA` — so the per-face
+    `SOURCE2 = GL_PRIMARY_COLOR` operand `GL_SRC_ALPHA` - so the per-face
     material alpha selects front-vs-back texture (`out = front*α +
     back*(1−α)`).
   - **Unit 2** `GL_COMBINE` / `GL_MODULATE` of `GL_PREVIOUS` × the
@@ -190,7 +190,7 @@ preserved at the end of this file.
 `glMultiTexCoord` (the proc-loader pattern used for `glPointParameterfv` /
 gpuprof), matching additions to the GL stub headers
 (`tests/gl-stubs/include/GL/`), per-unit texgen, and a capability-gated
-**fallback to plain Color** when any of that is missing — across the three
+**fallback to plain Color** when any of that is missing - across the three
 GL backends the project supports. The two-pass cull version reaches the
 identical result with core GL 1.1 and none of that surface area, and the
 extra program walk is free in an engine that already re-walks per pass. If a
@@ -397,10 +397,10 @@ int main(int argc, char** argv) {
    frame, not twice. Decide between bracketing the second walk
    (snapshot/restore) or making both walks non-mutating with a single
    external advance.
-4. **Texgen space.** Eye-linear (decided — text fixed to camera, geometry
+4. **Texgen space.** Eye-linear (decided - text fixed to camera, geometry
    slides through) vs. object-linear (text pinned to the surface). Revisit
    only if eye-linear reads poorly on real scenes.
 5. **Interaction with the existing `winding_state_filter`.** Confirm the
    filter still suppresses exactly the right set when a texture is bound
-   (it should — texturing is pass-owned GL state, and the program emits no
+   (it should - texturing is pass-owned GL state, and the program emits no
    texture commands today).

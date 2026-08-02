@@ -7,14 +7,14 @@
 /* Every workspace-header directive shares this one line buffer, emitted
  * in order (banner, @scene-name, @workspace-dir, @func, @cfg) by
  * repl_state_refresh_workspace_header_lines(). Size it for the worst case
- * so a scene can't crowd the trailing @cfg lines off the end —
+ * so a scene can't crowd the trailing @cfg lines off the end -
  * the old 48-line budget silently truncated them (vertex_outlines among
  * them) once @func filled the buffer first:
  *     1   banner ("@workspace: ..." block-comment directive)
  *     1   @scene-name
  *     1   @workspace-dir
  *    10   @func  (REPL_FUNC_SLOT_COUNT)
- *    48   @cfg   (REPL_CFG_MAX_ITEMS — the cfg bag's own cap)
+ *    48   @cfg   (REPL_CFG_MAX_ITEMS - the cfg bag's own cap)
  *   = 61; rounded up for headroom. A STATIC_ASSERT in src/repl/export.c
  * pins this against the real constants, and emit_cfgs() warns on stderr
  * if it ever still has to drop a @cfg line. */
@@ -22,8 +22,8 @@
 #define WORKSPACE_HEADER_LINE_LEN   96
 /* Camera transform block: one set of names dimensions both the
  * cam_lines[] preview storage (state_views.h) and the
- * ReplExportCameraBlock interchange struct (export.h). Defined here —
- * the bottom of the include chain — because state_views.h needs them
+ * ReplExportCameraBlock interchange struct (export.h). Defined here -
+ * the bottom of the include chain - because state_views.h needs them
  * to declare the state struct and cannot include export.h back. */
 #define REPL_EXPORT_CAMERA_LINES    4
 #define REPL_EXPORT_CAMERA_LINE_MAX 96

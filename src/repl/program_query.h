@@ -11,7 +11,7 @@ const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);
 int         repl_count_vertices(void);
 
-/* Maximum number of exported keyboard knobs — one QWERTY column-pair each
+/* Maximum number of exported keyboard knobs - one QWERTY column-pair each
  * (q/a w/s e/d r/f t/g y/h u/j i/k o/l). */
 #define REPL_TUNE_MAX_KNOBS 9
 

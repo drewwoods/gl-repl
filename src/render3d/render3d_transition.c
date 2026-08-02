@@ -2,7 +2,7 @@
  *
  * The machine is a clock: it tracks `elapsed` seconds into the current fade
  * phase and reads opacity back from the bound Render3dXnReveal. It never names a
- * duration — the reveal owns that — so the controller only feeds dt. */
+ * duration - the reveal owns that - so the controller only feeds dt. */
 #include "render3d_transition.h"
 
 float render3d_xn_opacity(const Render3dXnState *s) {

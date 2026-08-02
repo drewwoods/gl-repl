@@ -10,7 +10,7 @@
 
 /* One edge band: solid along the window edge a--b, transparent along the
  * matching inner pair ia--ib. Written as an explicit quad rather than
- * gl2d_panel_frame because the whole point is the gradient — a flat rule alone
+ * gl2d_panel_frame because the whole point is the gradient - a flat rule alone
  * reads as a UI border someone forgot to remove, while a falloff reads as a
  * glow around the viewport. The inner pair must be given in the SAME order as
  * the edge pair (ia under a, ib under b) or the quad crosses itself. */
@@ -27,7 +27,7 @@ static void presence_band(float ax, float ay, float bx, float by,
     glEnd();
 }
 
-/* Copy `src` into `dst`, elided with ".." past `max_chars` glyphs — the same
+/* Copy `src` into `dst`, elided with ".." past `max_chars` glyphs - the same
  * shape as the HUD's truncation, kept local because the card measures in a
  * different font and shares no layout with it. */
 static void presence_truncate(char *dst, size_t dstsz, const char *src,

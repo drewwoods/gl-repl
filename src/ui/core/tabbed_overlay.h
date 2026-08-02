@@ -12,7 +12,7 @@
  * glr_ctrl from src/repl/help_text.c) but nothing here knows about "help"
  * specifically.
  *
- * Visibility, tab index, and scroll are inputs — callers gate display
+ * Visibility, tab index, and scroll are inputs - callers gate display
  * with `visible = 0` rather than letting the renderer reach into a
  * named state slice.
  */
@@ -59,7 +59,7 @@ typedef struct {
 /* Largest valid scroll offset for the active tab (0 when content fits). */
 int ui_tabbed_overlay_max_scroll(const UiOverlayState *in);
 
-/* Center of tab `tab_idx` in GLUT mouse space (origin top-left) — the
+/* Center of tab `tab_idx` in GLUT mouse space (origin top-left) - the
  * inverse of the tab branch of the hit-test, so a scripted click aimed here
  * lands on exactly that tab. Returns 0 when hidden or out of range. */
 int ui_tabbed_overlay_tab_point(const UiOverlayState *in, int tab_idx,

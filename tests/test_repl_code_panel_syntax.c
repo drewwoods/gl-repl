@@ -259,7 +259,7 @@ int main(void) {
                                        REPL_SYNTAX_VARIABLE) != NULL);
     }
 
-    /* Color model: shades derive from the class color only — same hue,
+    /* Color model: shades derive from the class color only - same hue,
      * three brightness tiers (literal > variable > constant). Variables and
      * literals are boosted above 1.0, so on saturated classes they clamp to
      * the channel ceiling and become indistinguishable; the constant tier
@@ -286,7 +286,7 @@ int main(void) {
                     lit[0] > var[0] + 0.001f && var[0] > con[0] + 0.03f);
 
         /* Colored class (VERTEX green 0.40,0.90,0.40): every kind stays
-         * green-dominant — hue is preserved, only brightness changes. */
+         * green-dominant - hue is preserved, only brightness changes. */
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_LITERAL,
                                            CMD_CAT_VERTEX, lit);
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_CONSTANT,
@@ -309,7 +309,7 @@ int main(void) {
      * actually render must stay legible against the code-panel background
      * (src/ui/core/text_panel.c, glColor4f(0.06, 0.06, 0.10, ...)). Threshold
      * 3.0 ~= WCAG AA large text; guards future palette tweaks. CMD_CAT_COMMENT
-     * is skipped — the wiring never emits syntax spans on comment rows. */
+     * is skipped - the wiring never emits syntax spans on comment rows. */
     {
         const float bg[3] = { 0.06f, 0.06f, 0.10f };
 

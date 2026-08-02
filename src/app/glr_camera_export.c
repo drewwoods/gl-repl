@@ -76,7 +76,7 @@ static void cam_format_save_preamble(char *out, int out_sz) {
  *   state 4  done; later lines are not part of the camera block.
  *
  * The same parser also recognises the `static float g_angle = N.NNNNf;`
- * preamble line — it treats that as a free-standing camera input that
+ * preamble line - it treats that as a free-standing camera input that
  * sets ry. */
 static int g_cam_parse_state = 0;
 
@@ -98,7 +98,7 @@ static int cam_line_read_floats(const char *p, float *out, int n) {
 }
 
 /* The "static float g_angle = N.NNNNf;" preamble may appear before the
- * camera block. Treat it like another camera input — it sets ry. */
+ * camera block. Treat it like another camera input - it sets ry. */
 static int cam_try_parse_angle_preamble(const char *text) {
     const char *p = text;
     while (*p == ' ' || *p == '\t') p++;
@@ -184,7 +184,7 @@ static void cam_reset_import(void) {
 }
 
 /* End-of-import hook: a file whose `// camera` block was fully consumed
- * has an authored pose, so that pose — not the built-in defaults — is
+ * has an authored pose, so that pose - not the built-in defaults - is
  * what "Reset camera" should return to. Example loads get this from
  * apply_example_block; file loads stream the same four lines through
  * try_consume_import_line, which writes live state directly and would
@@ -212,7 +212,7 @@ static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
 }
 
 /* Snap-apply a captured 4-line block to live camera. Used by per-slot
- * stash/restore in src/repl/scenes.c — installs the slot's saved
+ * stash/restore in src/repl/scenes.c - installs the slot's saved
  * camera so the export-side bridge reads it on the very next call,
  * with no easing in between (an ease_to would leave the live
  * camera unchanged until the next tick, so the export would write

@@ -23,7 +23,7 @@ static void transform_guides_pop_state(void) {
  * disabled because the cone arrowheads are open fans the user's
  * glEnable(GL_CULL_FACE) would clip; smooth shading is required for the
  * cones' ring-shaded vertex colors to interpolate. Depth writes are off:
- * the guide is a blended overlay that must not self-occlude — coplanar
+ * the guide is a blended overlay that must not self-occlude - coplanar
  * self-overlaps (a >360° rotate arc lapping itself, the dial/ticks/
  * sector sharing the rotation plane) would otherwise z-fight their own
  * first lap. Depth *testing* against scene geometry still applies in
@@ -59,7 +59,7 @@ static void transform_guides_begin_overlay_state(void) {
 
 /* Arrowheads are filled cones (a fan of TG_CONE_SLICES side triangles
  * plus a base cap). A solid silhouette stays readable at any viewing
- * angle — the old 4-fin wireframe head vanished edge-on — and it
+ * angle - the old 4-fin wireframe head vanished edge-on - and it
  * survives the depth-off ghost pass, where glLineStipple dashes lines
  * but leaves filled triangles whole. */
 #define TG_CONE_SLICES   12
@@ -148,7 +148,7 @@ static float tg_snap_zero(float v) {
  * tuple was character-for-character a glNormal3f argument list). Depth-test
  * off so the text is always legible. Emits the glyphs directly (rather than
  * via render3d overlays) so this TU stays free of an overlays.o link
- * dependency — the isolated guides test links only the guide objects. */
+ * dependency - the isolated guides test links only the guide objects. */
 static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
                                    const float pos[3],
                                    const char *name, const char *detail) {
@@ -171,7 +171,7 @@ static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
 /* Draw the translate endpoint's world position as a small text label at the
  * arrow tip. `tip_local` is the tip in the currently loaded guide frame (so
  * glRasterPos lands it on the arrowhead); `tip_world` is the same point in
- * world space — the position the model matrix leaves the origin at through
+ * world space - the position the model matrix leaves the origin at through
  * this line. Drawn once. */
 static void draw_translate_endpoint_label(const Render3dGuideSnapshot *snapshot,
                                           const float tip_local[3],
@@ -520,7 +520,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
             draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
             draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
 
-            /* Factor readout at the arrow tip, once (solid pass only — the
+            /* Factor readout at the arrow tip, once (solid pass only - the
              * label helper is depth-off, so a ghost-pass copy would just
              * double-print). */
             if (alpha_mul >= 1.0f)
@@ -605,7 +605,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
 
         /* Factor readout at the most-deviating axis tip, once (solid pass
          * only, same double-print rationale as the world branch). No label
-         * for an identity scale — there is no arrow to explain. */
+         * for an identity scale - there is no arrow to explain. */
         if (alpha_mul >= 1.0f && label_axis >= 0) {
             float lp[3] = {
                 axes[label_axis][0] * factors[label_axis],
@@ -624,7 +624,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
  *
  * One geometry generator (build_rotate_arc, Rodrigues rotation of a
  * start point) + one pulse animator. When the anchor point sits on the
- * rotation axis (no orbit circle to sweep — notably the default FRAME
+ * rotation axis (no orbit circle to sweep - notably the default FRAME
  * guide mode, whose anchor is the local origin), the guide substitutes
  * a synthetic start point on the axis-perpendicular plane at a
  * gizmo-sized radius, so the same arc/dial/cone/label path renders a
@@ -729,7 +729,7 @@ static void draw_rotate_pulse(const Render3dGuideSnapshot *snapshot,
 /* Swept-angle text label near the arc midpoint. Mirrors
  * draw_translate_endpoint_label: depth-test off and drawn once (the
  * caller gates it to the solid pass) so the number is always legible.
- * 0xB0 is the ISO-8859-1 degree sign — the GLUT bitmap fonts carry the
+ * 0xB0 is the ISO-8859-1 degree sign - the GLUT bitmap fonts carry the
  * full 8-bit Latin-1 set. */
 static void draw_rotate_angle_label(const Render3dGuideSnapshot *snapshot,
                                     const float pos[3], float angle_deg) {
@@ -788,8 +788,8 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
     glEnd();
 
     /* Effective sweep-start point. When the anchor sits (near) the
-     * rotation axis its orbit circle degenerates — notably the default
-     * FRAME guide mode, whose anchor is the local origin — so substitute
+     * rotation axis its orbit circle degenerates - notably the default
+     * FRAME guide mode, whose anchor is the local origin - so substitute
      * a point on the axis-perpendicular plane through the anchor at a
      * gizmo-sized radius. Everything downstream (arc, dial, cone, label)
      * then renders one uniform design instead of the old screw helix,
@@ -884,7 +884,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
     /* Animated traveling pulse along the arc */
     draw_rotate_pulse(snapshot, arc, segs, rgb, bright, alpha_mul);
 
-    /* Sweep-direction cone at the arc end, along the end tangent — the
+    /* Sweep-direction cone at the arc end, along the end tangent - the
      * arc alone doesn't say which way the rotation goes. Sized from the
      * approximate arc length so short arcs get a proportional nubbin. */
     float tan_dir[3] = {
@@ -902,7 +902,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
         draw_cone_head(arc[segs], tan_dir, head_len, bright, alpha_mul);
     }
 
-    /* Start marker — only for a real off-axis anchor; the synthetic
+    /* Start marker - only for a real off-axis anchor; the synthetic
      * dial start point is not a position the user authored. */
     if (!on_axis) {
         glPointSize(4.0f);
@@ -913,7 +913,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
         glPointSize(1.0f);
     }
 
-    /* Swept-angle label at the arc midpoint, once (solid pass only —
+    /* Swept-angle label at the arc midpoint, once (solid pass only -
      * the label helper is depth-off, so a ghost-pass copy would just
      * double-print). Pushed radially outward from the rotation axis so
      * the text clears the arc stroke and sector fill. */
@@ -944,12 +944,12 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
  * source form for the cursor row (ignoring outer whitespace and the
  * commit semicolon that editor input omits). A whitespace-only
  * difference doesn't change the parsed args but does represent an edit
- * in progress — guides hide until the user commits. The empty-input
+ * in progress - guides hide until the user commits. The empty-input
  * case (no edit yet) is treated as matched.
  *
  * The function name reflects what is actually compared: input vs
  * committed text. It does NOT compare parsed args between input and
- * source — a future enhancement could (see docs/plans/done/
+ * source - a future enhancement could (see docs/plans/done/
  * src-scene-code-smell-audit.md #9). */
 static int transform_input_matches_committed(const Render3dGuideSnapshot *snapshot) {
     const char *source = snapshot->edit_line_committed_text
@@ -987,7 +987,7 @@ static int transform_input_kind(const char *input, int input_len) {
 /* Compose a GLCmd from the live cursor args for `kind`, filling slots the
  * user hasn't typed yet with the transform identity: 1 for scale, 0 for
  * translate/rotate (per the requested "assume defaults while typing"
- * behavior). Only type + args are populated — the draw helpers read
+ * behavior). Only type + args are populated - the draw helpers read
  * nothing else. */
 static GLCmd transform_live_cmd(const Render3dGuideSnapshot *snapshot, int kind) {
     GLCmd c;
@@ -1057,7 +1057,7 @@ static int render3d_replay_transform_focus_flat_idx(const Render3dGuideSnapshot 
         for (int k = 0; k < n; k++)
             if (snapshot->flat_program.cmds[inscope[k]].src_cmd_idx == cursor)
                 return inscope[k];
-        /* Cursor is on a transform that doesn't reach this vertex — fall
+        /* Cursor is on a transform that doesn't reach this vertex - fall
          * through to the default nearest in-scope transform. */
     }
     return inscope[0];
@@ -1081,9 +1081,9 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
     /* Replay path (req 6): instead of the edit cursor, pick the transform
      * shaping the draw the replay step emitted (a glVertex/gluVertex or a
      * glutSolid*) and guide *it* exactly as the live edit-mode guide would. The
-     * plan is shaped identically to the edit path — cursor_flat_idx is the
+     * plan is shaped identically to the edit path - cursor_flat_idx is the
      * chosen transform's flat index, after_flat_idx the first following flat
-     * command from a different source line (WORLD-mode after-cursor anchor) — so
+     * command from a different source line (WORLD-mode after-cursor anchor) - so
      * the shared FRAME/WORLD render path draws it in the transform's own frame,
      * not on the draw (which already sits at its post-transform position). */
     if (snapshot->replaying) {
@@ -1093,7 +1093,7 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
             return 0;
         const GLCmd *flat_cmds = snapshot->flat_program.cmds;
         const GLCmd *acmd = &flat_cmds[anchor];
-        /* The replay anchor is whatever draw the step landed on — a glVertex /
+        /* The replay anchor is whatever draw the step landed on - a glVertex /
          * gluVertex or a glutSolid* (repl_cmd_consumes_current_color). The guide
          * draws in the transform's own frame (not on the anchor's position), so
          * a glut solid, which carries no vertex position, works the same way. */
@@ -1127,10 +1127,10 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
 
     /* Two ways to activate the edit-mode guide:
      *  (live) the input buffer is a transform being typed (glTranslatef( /
-     *         glScalef( / glRotatef() — render live with the cursor args and
+     *         glScalef( / glRotatef() - render live with the cursor args and
      *         identity defaults for untyped slots, even before commit.
      *  (parked) no live transform input, but the cursor sits on a committed
-     *         transform source line whose buffer matches it — the historic
+     *         transform source line whose buffer matches it - the historic
      *         behavior, rendered from the committed flat args. */
     int live_kind = transform_input_kind(snapshot->input, snapshot->input_len);
     if (live_kind < 0) {
@@ -1163,7 +1163,7 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
         /* No flat expansion for the cursor line. For a committed/parked guide
          * that means nothing to anchor on; bail. For a live transform being
          * typed on a brand-new (not-yet-flattened) line, anchor at the
-         * insertion point — the first flat command at/after the cursor's
+         * insertion point - the first flat command at/after the cursor's
          * source position (or the program tail). The shared FRAME/WORLD math
          * walks [0, idx) / [idx, count), so the guide lands in the frame the
          * new line will occupy; it renders via the on_end flush when the
@@ -1211,7 +1211,7 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
 
     /* Choose the command to draw. While the user is actively typing a
      * transform whose buffer diverges from the committed source (or there is
-     * no committed source — a brand-new line), draw from the live cursor args
+     * no committed source - a brand-new line), draw from the live cursor args
      * with identity defaults for untyped slots. When the buffer matches the
      * committed line (incl. the empty no-edit-yet case) we draw the committed
      * flat args exactly as before. Never during replay (it anchors on a

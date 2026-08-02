@@ -7,7 +7,7 @@
  * starts, with explicit `pause` steps for intentional dwell time. The events
  * walk the user through a slice of the app (menus, editing, camera) using the
  * exact same dispatch path as live input. Tour content is file-backed like the
- * example scenes — .pointer files under tours/ listed by tours/catalog.ini
+ * example scenes - .pointer files under tours/ listed by tours/catalog.ini
  * (or catalog-emscripten.ini for the web-safe set) and compiled in by
  * scripts/gen_tours.py. The Tours menu lists the
  * catalog; activating an entry hands the script to
@@ -20,7 +20,7 @@
  * the end enters Done until its final
  * caption expires, then closes automatically.
  *
- * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: — grammar
+ * Tour points are symbolic targets (menu:/item:/sub:/pin:/scene: - grammar
  * in glr_pointer_script.h) resolved against the live layout when each
  * event fires, so tours work at any window size and follow catalog/label
  * reordering.

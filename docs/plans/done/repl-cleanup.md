@@ -4,34 +4,34 @@
 
 Stages 1–11 of this plan have all landed at the strategic level:
 
-- ✅ Stage 1 — baseline stable; all 2541 tests pass.
-- ✅ Stage 2 — globals consolidated into `ReplRuntimeState` (one struct,
+- ✅ Stage 1 - baseline stable; all 2541 tests pass.
+- ✅ Stage 2 - globals consolidated into `ReplRuntimeState` (one struct,
   one owner). Continued under `feature/gold-standard-state-ownership.md`.
-- ✅ Stage 3 — `ReplCommandStore` owns array-level mutation; commit /
+- ✅ Stage 3 - `ReplCommandStore` owns array-level mutation; commit /
   clipboard / autonormal / import / examples / undo paths route through it.
-- ✅ Stage 4 — parser ownership in `repl_parser.c`; command spec table in
+- ✅ Stage 4 - parser ownership in `repl_parser.c`; command spec table in
   `repl_command_spec.c`; source scope/indentation in `repl_source_scope.c`.
-- ✅ Stage 5 — `repl_flatten_program()` takes explicit options;
+- ✅ Stage 5 - `repl_flatten_program()` takes explicit options;
   `repl_execute_program()` runs through `FlatProgramView`.
-- ✅ Stage 6 — editor input is a mode router with focused commit helpers.
-- ✅ Stage 7 — UI layout and rendering split into focused modules
+- ✅ Stage 6 - editor input is a mode router with focused commit helpers.
+- ✅ Stage 7 - UI layout and rendering split into focused modules
   (`ui_panels`, `ui_menu_bar`, `ui_color_picker`, `ui_help_overlay`,
   `ui_variable_panel`, `ui_autocomplete_panel`, `ui_profile_panel`,
   `ui_replay_hud`).
-- ✅ Stage 8 — `SceneRenderConfig` / `FrameRenderContext` are explicit;
+- ✅ Stage 8 - `SceneRenderConfig` / `FrameRenderContext` are explicit;
   scene rendering is split into `scene_grid`, `scene_axes`, `scene_backdrop`,
   `scene_lights`, `scene_overlays`, `scene_geometry_guides`,
   `scene_transform_guides`.
-- ✅ Stage 9 — workspace header / import handlers / typed export scaffold
+- ✅ Stage 9 - workspace header / import handlers / typed export scaffold
   refactor landed.
-- ✅ Stage 10 — naming pass + comprehensive per-header documentation done.
-- ✅ Stage 11 — live GL calls are isolated to `scene_*.c`, `ui_*.c`, and
+- ✅ Stage 10 - naming pass + comprehensive per-header documentation done.
+- ✅ Stage 11 - live GL calls are isolated to `scene_*.c`, `ui_*.c`, and
   `repl_executor.c`; GLUT input is funnelled through `repl_editor.c`
   helpers; `make check-gl-boundaries` / `make check-layer-coupling` enforce
   the boundary.
 
 Outstanding items now live in `feature/push-architecture-refinement.md`
-(controller-first Phase 2 — R10 / R11 / R12 / R8) and in
+(controller-first Phase 2 - R10 / R11 / R12 / R8) and in
 `feature/gold-standard-state-ownership.md` (state-ownership Stages 4–8).
 This document is retained as the high-level history; new strategic
 direction should land in those active feature docs.

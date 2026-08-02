@@ -1,6 +1,6 @@
-# Inline Numeric Swatch — Stateless Up/Down Stepper
+# Inline Numeric Swatch - Stateless Up/Down Stepper
 
-Status: **in-review** — design ready; awaiting greenlight before
+Status: **in-review** - design ready; awaiting greenlight before
 implementation. Pivoted from input-only edits to commit-on-click after
 review (see §Writeback Path below).
 
@@ -13,7 +13,7 @@ The REPL already has stateful inline widgets that mutate source values:
 the color picker (`src/subsystems/color_picker/color_picker_state.c` +
 `src/ui/app/color_picker.c`) opens a floating HSV popup; the variable
 panel (`src/subsystems/variable_panel/`) drags a slider to set predef
-vars. Both carry peer-subsystem state — open flag, drag transaction,
+vars. Both carry peer-subsystem state - open flag, drag transaction,
 session undo coalescing.
 
 When fine-tuning a numeric arg (`glRotatef(45, ...)`,
@@ -22,21 +22,21 @@ When fine-tuning a numeric arg (`glRotatef(45, ...)`,
 one, and on click steps the value by `0.05 × 10^max(0, floor(log10(|v|)))`
 (so `5 ± 0.05`, `10 ± 0.5`, `0.5 ± 0.05`, `100 ± 5`).
 
-Critically, the user wants this **purely stateless** — no peer
+Critically, the user wants this **purely stateless** - no peer
 subsystem, no open/closed flag, no drag transaction. Every frame the
 controller re-derives the swatch from live cursor + input text; every
 click re-derives, applies one discrete step, and commits.
 
 ## User-Confirmed Design Choices
 
-- **Placement:** right edge of the code panel — two stacked 16×12px
+- **Placement:** right edge of the code panel - two stacked 16×12px
   buttons (▲ on top, ▼ below) anchored at the panel's right margin,
   vertically centered on the input row. Avoids overlap with adjacent
   argument text that the original "right of literal" placement caused.
 - **Detection:** pure literal only. `5`, `-0.5`, `1e3` qualify. Skip
   `45*t`, `cos(phase)`, `(5)`, `1+2`. Rewriting expressions would
   mangle them.
-- **Scope:** any function call's numeric args — standard GL/GLU/GLUT,
+- **Scope:** any function call's numeric args - standard GL/GLU/GLUT,
   user `funcN(...)`, math `cos/sin/rand`, etc. Just looks at the
   enclosing paren; no spec lookup required.
 - **Effect on click:** commit the modified line through the normal
@@ -44,7 +44,7 @@ click re-derives, applies one discrete step, and commits.
   immediately (user follow-up: *"please commit the line with the
   adjustment, so that the user can see the effect"*).
 
-## Writeback Path — pivoted from input-only
+## Writeback Path - pivoted from input-only
 
 **Original draft** proposed `editor_undo_push_snapshot()` +
 `edit_op_input_replace_range()` (input-buffer-only edit). This is
@@ -54,7 +54,7 @@ reloads the committed source line back into input via
 `load_line_to_input` (`src/editor/undo.c`). Per-click `Ctrl+Z` would
 either no-op or wipe the entire in-progress line.
 
-**Revised plan:** mirror the color picker's writeback —
+**Revised plan:** mirror the color picker's writeback -
 `editor_commit_apply_external_change(&change, capture_undo=1)`
 (`src/editor/commit.h:63`, used at
 `src/subsystems/color_picker/color_picker_state.c:175`). Each click
@@ -62,7 +62,7 @@ synthesizes a rewritten source line, parses it as one REPL command,
 builds a `REPL_COMPILED_REPLACE_ONE`, and applies that change through
 the commit pipeline immediately. The scene sees the adjusted command on
 the next redraw after the same click. Undo is captured per click (no
-coalescing — clicks are discrete by definition).
+coalescing - clicks are discrete by definition).
 
 **Gating consequence:** the swatch only makes sense on a parseable
 committed line. Show only when the editor is in overwrite/edit mode:
@@ -153,7 +153,7 @@ void                   repl_eval_format_swatch_number(float v, char *out, int ou
 3. Trim whitespace inside the slot to literal text `[t_lo, t_hi)`.
 4. **Pure-literal validator**: optional leading `+`/`-`, digits,
    optional single `.`, more digits, optional `[eE][+-]?digits`.
-   Reject anything else — operators, identifiers, nested parens,
+   Reject anything else - operators, identifiers, nested parens,
    function calls.
 5. Call `repl_eval_expr()` for `value`.
 
@@ -181,7 +181,7 @@ typedef struct {
 `src/ui/app/repl_code_panel.{c,h}`)
 
 With the swatch anchored at the panel's right edge, `anchor_x` is
-trivially `cp_x + cp_w - SWATCH_TOTAL_W - margin` — no character-offset
+trivially `cp_x + cp_w - SWATCH_TOTAL_W - margin` - no character-offset
 math needed. `anchor_y` still requires resolving the input row's pixel
 baseline through the same wrap+scroll+indent layout the renderer uses.
 Add a pure core helper:
@@ -218,18 +218,18 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
 
 1. `editor_state_input()` for cursor + input text.
 2. Suppress (set `visible=0`) when **any** is true:
-   - `editor_insert_mode()` — fresh/insertion input, not an overwrite edit
+   - `editor_insert_mode()` - fresh/insertion input, not an overwrite edit
      of a committed row.
    - `editor_state_edit_line() < 0 ||
-     editor_state_edit_line() >= repl_state_document_count()` — no committed
+     editor_state_edit_line() >= repl_state_document_count()` - no committed
      target row. (`< 0` is defensive; in practice the setter clamps.)
-   - `repl_state_document_cmds()[edit_line].type == CMD_COMMENT` — the
+   - `repl_state_document_cmds()[edit_line].type == CMD_COMMENT` - the
      committed line is a comment. Stepping a number inside a commented-out
      GL call would change the comment text with no scene effect and burn
      an undo slot.
    - The input row carries an inline color swatch
      (`right_action.active != 0` on the `UiTextPanelRow` for the edit
-     line — the same field `repl_code_panel_set_right_action` fills).
+     line - the same field `repl_code_panel_set_right_action` fills).
      The color swatch takes precedence; showing both on the same row
      is redundant (the color picker already handles those args).
      Implementation: the row builder runs before
@@ -237,12 +237,12 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
      `ui_repl_code_panel_input_row_has_color_swatch(snap)` query, or the
      controller can check `color_picker_view()->visible` as a coarser
      gate (suppresses whenever the picker popup is open on any line).
-     Prefer the per-row check — it's more precise and has no ordering
+     Prefer the per-row check - it's more precise and has no ordering
      dependency on the picker subsystem.
-   - `editor_state_autocomplete().match_count > 0` — popup conflict
+   - `editor_state_autocomplete().match_count > 0` - popup conflict
      (ghost/hint alone do NOT suppress; only the visible match list).
-   - `editor_inline_rename_active()` — rename owns keys.
-   - `tutorial_active() && tutorial_block_noncommand_commit()` — the
+   - `editor_inline_rename_active()` - rename owns keys.
+   - `tutorial_active() && tutorial_block_noncommand_commit()` - the
      tutorial guard would reject the mutation (`tutorial.h:107`).
    - Empty input or `cursor_pos < 0`.
 3. Else call `repl_eval_numeric_arg_at_cursor`. If `found`:
@@ -308,7 +308,7 @@ UI_HIT_NUMERIC_SWATCH
 ```
 
 **Explicitly avoid** packing `arg_start`/`arg_end` into `cmd_idx`/`line_idx`
-— those fields have load-bearing meaning elsewhere
+- those fields have load-bearing meaning elsewhere
 (source-command identity / row index). Keep the payload minimal.
 
 ### 8. Route handler (`src/app/glr_ctrl.c`)
@@ -327,7 +327,7 @@ inside `glr_ctrl_router_handle_code_panel_hit` (`glr_ctrl.c:3410`):
  *    (the pre-commit arg_start offset).  Canonical reformatting may
  *    shift whitespace, so scan forward from max(0, hint_start - 4)
  *    through hint_start + 16.  Use strstr on successive sub-offsets.
- * 2. If found, set cursor to match_pos + strlen(literal) — the caret
+ * 2. If found, set cursor to match_pos + strlen(literal) - the caret
  *    sits at the literal's right edge, so the next detection sees the
  *    same slot.
  * 3. If not found (e.g. heavy reformat), fall back to
@@ -377,7 +377,7 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
         return 1;
     }
 
-    /* Reject comments — stepping a number inside "// glVertex3f(5,...)"
+    /* Reject comments - stepping a number inside "// glVertex3f(5,...)"
      * would change comment text with no scene effect. */
     if (pl.cmd.type == CMD_COMMENT) return 1;
 
@@ -387,7 +387,7 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
     change.pos = edit_line;
     change.count = 1;
     change.cmds[0] = pl.cmd;
-    /* Match color_picker_state.c:170-173 — explicit length + memcpy. */
+    /* Match color_picker_state.c:170-173 - explicit length + memcpy. */
     int text_len = (int)strlen(pl.text);
     if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
     memcpy(change.text[0], pl.text, (size_t)text_len);
@@ -413,37 +413,37 @@ ghost text stay consistent with the new input text.
 
 ## Critical Files
 
-- `src/repl/eval.{c,h}` — three new helpers
-- `src/ui/core/text_panel.{c,h}` — new pure
+- `src/repl/eval.{c,h}` - three new helpers
+- `src/ui/core/text_panel.{c,h}` - new pure
   `ui_text_panel_input_row_y` helper over `UiTextPanelSnapshot`
   + input-row index
-- `src/ui/app/repl_code_panel.{c,h}` — new
+- `src/ui/app/repl_code_panel.{c,h}` - new
   `ui_repl_code_panel_input_row_y` adapter wrapper +
   `ui_repl_code_panel_input_row_has_color_swatch` query, plus render
   call inside `ui_repl_code_panel_render` (`:1599`)
-- `src/ui/app/snapshot.h` — new `UiNumericSwatchSnapshot` field
-- `src/app/glr_ctrl.c` — populate fn + route handler, hooked into
+- `src/ui/app/snapshot.h` - new `UiNumericSwatchSnapshot` field
+- `src/app/glr_ctrl.c` - populate fn + route handler, hooked into
   `glr_ctrl_build_ui_snapshot()` and the dispatch inside
   `glr_ctrl_router_handle_code_panel_hit` (`glr_ctrl.c:3410`)
-- `src/ui/app/numeric_swatch.{c,h}` — **new** pure renderer + hit-test
+- `src/ui/app/numeric_swatch.{c,h}` - **new** pure renderer + hit-test
   (mirror `src/ui/app/color_picker.c` shape)
-- `src/ui/app/panels.c` — add hit-test call inside `ui_panels_hit_test`
+- `src/ui/app/panels.c` - add hit-test call inside `ui_panels_hit_test`
   (`:251`)
-- `src/ui/core/hit.h` — new `UI_HIT_NUMERIC_SWATCH` kind + doc block
-- `Makefile` — add `src/ui/app/numeric_swatch.o` to the UI app sources
+- `src/ui/core/hit.h` - new `UI_HIT_NUMERIC_SWATCH` kind + doc block
+- `Makefile` - add `src/ui/app/numeric_swatch.o` to the UI app sources
   list AND register the new test executables (`test_eval_numeric_arg`,
   `test_numeric_swatch_route`, `test_text_panel_input_row_y`) alongside
   existing test target rules
 
 ## What NOT to Do
 
-- **No new `src/subsystems/numeric_swatch_state.c`** — the widget is
+- **No new `src/subsystems/numeric_swatch_state.c`** - the widget is
   stateless; a peer subsystem would be architectural noise.
 - **No open/closed flag, no drag state, no undo coalescing.** Discrete
   clicks each get their own undo step.
 - **No input-only edit primitive** (the original
   `edit_op_input_replace_range` proposal). The undo ring doesn't track
-  input-buffer text — see *Writeback Path* above. We use the commit
+  input-buffer text - see *Writeback Path* above. We use the commit
   pipeline.
 - **No packing offsets into `cmd_idx`/`line_idx`.** Those carry
   semantic meaning. Hit payload is just `item_idx`; route re-derives.
@@ -452,11 +452,11 @@ ghost text stay consistent with the new input text.
 
 ## Verification
 
-**Unit tests** (`make test-stubs` — no GL needed):
+**Unit tests** (`make test-stubs` - no GL needed):
 
-1. `tests/test_eval_numeric_arg.c` (new — add to Makefile test list):
+1. `tests/test_eval_numeric_arg.c` (new - add to Makefile test list):
    - Detection table: `"glVertex3f(1.0, 45*t, cos(x));"` with cursor at
-     various offsets — `found=1` for slot 0; `found=0` for slot 1
+     various offsets - `found=1` for slot 0; `found=0` for slot 1
      (expression) and slot 2 (function call).
    - Signed literal: `"glTranslatef(-0.5, 0, 0)"` → `value=-0.5`.
    - Exponent: `"glPointSize(1e3)"` → `value=1000`.
@@ -468,7 +468,7 @@ ghost text stay consistent with the new input text.
      `format_swatch_number(0.1)` → `"0.1"`; each reparses to the same
      float via `repl_eval_expr`.
 
-2. `tests/test_numeric_swatch_route.c` (new — add to Makefile):
+2. `tests/test_numeric_swatch_route.c` (new - add to Makefile):
    - Drive **through the public entry**
      `glr_ctrl_router_handle_code_panel_hit()`, not the static
      `route_numeric_swatch_hit` directly.
@@ -490,11 +490,11 @@ ghost text stay consistent with the new input text.
      → input row has color swatch → `visible == 0`.
    - Route handler on comment: feed a
      `UiHit{kind=UI_HIT_NUMERIC_SWATCH, item_idx=+1}` while editing a
-     comment line — assert the source line is unchanged (CMD_COMMENT
+     comment line - assert the source line is unchanged (CMD_COMMENT
      guard rejects).
    - `Ctrl+Z` after a click restores the prior committed value.
 
-3. `tests/test_text_panel_input_row_y.c` (new — add to Makefile):
+3. `tests/test_text_panel_input_row_y.c` (new - add to Makefile):
    - Build a `UiTextPanelSnapshot` with a few rows and an input row at
      a known index; call `ui_text_panel_input_row_y` and assert the
      returned y matches expected `cp_y + cp_h - top_chrome_h -
@@ -504,24 +504,24 @@ ghost text stay consistent with the new input text.
    - Scrolled off: set scroll past the input row; assert returns 0.
 
 **Gates** (`make check-state-ownership`):
-- `check-c99` — `powf`/`log10f`/`floorf` are C99 + need `<math.h>` and
+- `check-c99` - `powf`/`log10f`/`floorf` are C99 + need `<math.h>` and
   `-lm` (already linked).
-- `check-include-style` — new headers use quoted form.
+- `check-include-style` - new headers use quoted form.
 
 **End-to-end manual check** (`./gl-repl`):
 
 1. Load `Lit cube` example, navigate to a line containing a numeric
-   arg (e.g. `glRotatef(45, 0, 1, 0)`), put cursor on the `45` —
+   arg (e.g. `glRotatef(45, 0, 1, 0)`), put cursor on the `45` -
    swatch ▲▼ should appear at the right edge of the code panel,
    vertically aligned with the input row.
 2. Click ▲ → number commits to `45.05`, scene rotates accordingly, the
    swatch stays visible (cursor stays inside the new literal).
 3. Move cursor off the number → swatch disappears.
-4. Move cursor into `45*t` (an expression) — swatch does NOT appear.
-5. Navigate to a `glColor3f(...)` line, cursor on a number — swatch
+4. Move cursor into `45*t` (an expression) - swatch does NOT appear.
+5. Navigate to a `glColor3f(...)` line, cursor on a number - swatch
    does NOT appear (color swatch takes precedence).
-6. Navigate to a `// commented-out` line with numbers — swatch does
+6. Navigate to a `// commented-out` line with numbers - swatch does
    NOT appear.
-7. `Ctrl+Z` — last click reverted, scene re-renders at prior value.
-8. Open autocomplete with Tab/ghost — swatch hides while the match
+7. `Ctrl+Z` - last click reverted, scene re-renders at prior value.
+8. Open autocomplete with Tab/ghost - swatch hides while the match
    list is open.

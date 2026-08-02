@@ -23,7 +23,7 @@
 /* Emit `text` glyph-by-glyph at the current raster position. Useful
  * for chaining a second run of glyphs (e.g. detail text) after the
  * primary call has already set glRasterPos. lights.c and render.c go
- * through render3d_draw_bitmap_text below — they're single-string sites
+ * through render3d_draw_bitmap_text below - they're single-string sites
  * that want the raster_pos set in the same call. */
 void render3d_emit_bitmap_text(void *font, const char *text) {
     if (!text) return;

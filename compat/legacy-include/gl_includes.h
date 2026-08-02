@@ -7,7 +7,7 @@
  * OpenGL-Vibe/src/immediate-mode-repl/claude4.6-opus-thinking/) expected
  * a project-wide gl_includes.h at ../../include/. That file used to
  * bundle five OpenGL-Vibe utility headers which transitively pulled in
- * <stdlib.h>, <stdio.h>, <string.h>, <math.h> — and the REPL's exported
+ * <stdlib.h>, <stdio.h>, <string.h>, <math.h> - and the REPL's exported
  * example C files leaned on those transitive includes (exit(), printf()
  * with no explicit #include).
  *

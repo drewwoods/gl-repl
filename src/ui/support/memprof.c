@@ -51,10 +51,10 @@ static int mem_panel_height(void) {
  * MEMPROF_FMT_WIDTH chars (leading-space padded), so the unit suffix
  * lands in the same column for primary / init / delta rows. To keep that
  * column alignment, the sign character overwrites the rightmost
- * leading space rather than prepending — prepending would push the
+ * leading space rather than prepending - prepending would push the
  * digits one column right of the primary / init rows.
  *
- * Either side being zero (reader-failure sentinel — current/baseline
+ * Either side being zero (reader-failure sentinel - current/baseline
  * rows render "--" for that case) propagates as "--" so the delta row
  * does not show a fictitious large negative against zero. */
 static void fmt_delta(char *buf, int buf_sz,
@@ -165,7 +165,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     int tx = panel_x + 8;
     int ty = panel_y + panel_h - MEM_HEADER_H + 2;
 
-    /* No inline hint — the Config menu row carries the Ctrl+Shift+W
+    /* No inline hint - the Config menu row carries the Ctrl+Shift+W
      * shortcut and F1 help duplicates it. Header has just the title. */
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "Memory Profile", FONT_SMALL);
@@ -173,7 +173,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     ty -= MEM_HEADER_H;
 
     /* Text block: current / init / delta plus a platform limit when one is
-     * known. VSZ deliberately dropped — on macOS it counts the whole virtual
+     * known. VSZ deliberately dropped - on macOS it counts the whole virtual
      * address reservation including unmapped pages and renders as GB-scale
      * noise that swamps the graph; RSS is the native leak signal. On
      * Emscripten the primary row is the Wasm sbrk position instead. */
@@ -300,7 +300,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     }
 
     /* Plot the primary memory-signal history. The X axis spans the ACTUAL
-     * stored window — the oldest sample's timestamp through the newest's —
+     * stored window - the oldest sample's timestamp through the newest's -
      * so it adapts to whatever cadence the samples arrived at instead of
      * assuming a fixed MEMPROF_PUSH_INTERVAL_S per slot. The newest sample
      * pins to the right edge ("now"); the oldest pins to the left. */

@@ -11,7 +11,7 @@
  * value-only rebake.
  *
  * Every case loads a scene through the live commit pipeline, runs a full
- * flatten, and reads the emitted flat stream — so an assertion failure
+ * flatten, and reads the emitted flat stream - so an assertion failure
  * means the program a user would see rendered is wrong, not merely that an
  * internal field drifted.
  */
@@ -105,7 +105,7 @@ static int nth_cmd_var_idx(CmdType type, int n) {
     return -99999;
 }
 
-/* Rows of `type` in the committed *source* document (not the flat stream) —
+/* Rows of `type` in the committed *source* document (not the flat stream) -
  * declarations never reach the flat program, so count_cmds cannot see them. */
 static int count_source_cmds(CmdType type) {
     const GLCmd *cmds = repl_state_document_cmds();
@@ -172,7 +172,7 @@ static void test_local_is_per_invocation(void) {
                nth_cmd_var_idx(CMD_VAR_ASSIGN, 0), REPL_VAR_IDX_LOCAL);
 }
 
-/* A local reads 0.0f on entry — the conversion-safety criterion depends on
+/* A local reads 0.0f on entry - the conversion-safety criterion depends on
  * this, so it needs a regression behind it. */
 static void test_local_reads_zero_before_write(void) {
     printf("--- local reads zero before write ---\n");
@@ -219,7 +219,7 @@ static void test_local_shadows_global(void) {
 }
 
 /* A loop iterator is a nested scope, so it shadows a function local inside
- * the loop and the local reappears after it — C's rule, and the reason the
+ * the loop and the local reappears after it - C's rule, and the reason the
  * name collision is accepted rather than rejected. */
 static void test_loop_iterator_shadows_local(void) {
     printf("--- loop iterator shadows local ---\n");
@@ -249,7 +249,7 @@ static void test_loop_iterator_shadows_local(void) {
 }
 
 /* Scope is lexical, not dynamic. A caller's local must not follow the call
- * into a callee that has no such name — the callee reads the global, which
+ * into a callee that has no such name - the callee reads the global, which
  * is what the exported C does. And a callee's *own* local beats the
  * caller's same-named one without disturbing it. */
 static void test_call_frames_are_lexical(void) {
@@ -380,7 +380,7 @@ static void test_prologue_tolerates_a_commented_decl(void) {
     load_scene(lines, 9);
     ASSERT_FLOAT("baseline binds b", nth_cmd_arg0(CMD_VERTEX3F, 0), 4.0f);
 
-    /* Row 1 is `float unused;` — the first of the two decls. */
+    /* Row 1 is `float unused;` - the first of the two decls. */
     ASSERT_INT("row 1 is the unused decl",
                repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ctx = repl_compile_context_from_live(1);
@@ -453,7 +453,7 @@ static void test_new_local_retargets_older_global_assignment(void) {
 /* A global feeding a local must be reported structural. rebake_one_cmd
  * evaluates against a frozen per-command snapshot and writes back only
  * through predef slots, so it cannot thread a local's new value into later
- * commands — a value-only rebake would read stale locals. */
+ * commands - a value-only rebake would read stale locals. */
 static void test_global_feeding_a_local_is_structural(void) {
     printf("--- a global feeding a local routes structurally ---\n");
     float vals[MAX_PREDEF_VARS];
@@ -484,7 +484,7 @@ static void test_global_feeding_a_local_is_structural(void) {
     ASSERT_TRUE("a global feeding a local lands in the structural mask",
                 (repl_state_flat_program_structural_dep_mask() & radius_bit)
                     == radius_bit);
-    /* It is in the value mask as well — the vertex reads the local, whose
+    /* It is in the value mask as well - the vertex reads the local, whose
      * mask is the assignment's RHS. That is fine and not a licence to
      * rebake: routing checks the structural mask first, and the assertions
      * below are the ones that matter. */
@@ -714,7 +714,7 @@ static int commit_line_at(const char *text, int edit_line, int insert) {
 /* Commit hoists declarations to the body top, but nothing keeps them
  * there. Two ordinary edits push a statement ahead of a local, and a
  * binding that depended on the declarations forming a leading run would
- * silently stop resolving — the reads would fall through to a global of
+ * silently stop resolving - the reads would fall through to a global of
  * the same name, or to nothing, with no diagnostic. */
 static void test_locals_bind_regardless_of_row_order(void) {
     printf("--- locals bind regardless of row order ---\n");
@@ -751,7 +751,7 @@ static void test_locals_bind_regardless_of_row_order(void) {
     ASSERT_TRUE("the local after the statement still binds",
                 nth_cmd_arg_n(CMD_VERTEX3F, 0, 1) == 6.0f);
 
-    /* Replace an unused leading declaration with a statement — allowed,
+    /* Replace an unused leading declaration with a statement - allowed,
      * since nothing reads it, and it leaves the survivor out of the
      * prologue. */
     const char *lines2[] = {
@@ -780,7 +780,7 @@ static void test_locals_bind_regardless_of_row_order(void) {
 }
 
 /* A for-header's bounds are evaluated in the enclosing scope, before the
- * iterator exists — `for(x, 0, x + 1)` reads the *outer* x. A delete
+ * iterator exists - `for(x, 0, x + 1)` reads the *outer* x. A delete
  * guard that treats the iterator as bound across the whole header line
  * calls that outer local unreferenced and lets it be deleted; the bound
  * then resolves to the shadowed global instead and the loop silently
@@ -811,7 +811,7 @@ static void test_delete_guard_sees_locals_in_loop_bounds(void) {
     ASSERT_INT("row 3 is the loop header",
                repl_state_document_cmds()[3].type, CMD_FOR_BEGIN);
     /* The bound reads the local (0), not the global (5): one iteration.
-     * That is the whole point — the local is live, and its only reader is
+     * That is the whole point - the local is live, and its only reader is
      * the loop bound. */
     ASSERT_INT("the bound reads the local: one iteration",
                count_cmds(CMD_VERTEX3F), 1);
@@ -992,7 +992,7 @@ static void test_import_rejects_trailing_comma_decl(void) {
 
 /* A declaration line can already sit near MAX_LINE_LEN. Export widens it
  * by strlen(" = 0.0f") per name, so building into a same-sized buffer
- * silently truncates — and what falls off the end is the trailing
+ * silently truncates - and what falls off the end is the trailing
  * comment. The fixture asserts its own premise: the committed row fits,
  * and the widened row would not have. */
 static void test_export_does_not_truncate_long_decl_comment(void) {
@@ -1043,7 +1043,7 @@ static void test_export_does_not_truncate_long_decl_comment(void) {
                 strstr(text, marker) != NULL);
 }
 
-/* The exporter targets C89 — it hoists for-loop variables into a scope
+/* The exporter targets C89 - it hoists for-loop variables into a scope
  * brace for exactly this reason. A local declaration can legitimately sit
  * after a statement in the body (commit hoists, but ordinary insert-mode
  * editing can push a statement ahead of one), so the exported function
@@ -1097,8 +1097,8 @@ static void test_export_hoists_locals_for_c89(void) {
  * last manual step in the plan's Verification list; it is a regression test
  * because the hazard is structural, not visual. A local's binding *is* its
  * prologue row, so an undo that put the row back without also restoring the
- * bodies that read it — or that left a stray predef slot behind, as it would
- * if the local had been mis-filed as a global — would leave the scene
+ * bodies that read it - or that left a stray predef slot behind, as it would
+ * if the local had been mis-filed as a global - would leave the scene
  * referencing a name nothing declares.
  *
  * Both halves go through the *interactive* key routes on purpose. Committing
@@ -1123,7 +1123,7 @@ static void test_undo_after_local_decl_restores_cleanly(void) {
     ASSERT_FLOAT("baseline vertex reads the parameter",
                  nth_cmd_arg0(CMD_VERTEX3F, 0), 2.0f);
 
-    /* Type the declaration inside the body and commit it with `;` — the route
+    /* Type the declaration inside the body and commit it with `;` - the route
      * that owns the undo push. The interactive buffer carries no trailing
      * semicolon, matching the real key path. */
     editor_state_edit_line_set(1);

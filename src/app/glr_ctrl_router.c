@@ -4,7 +4,7 @@
  * Carved out of glr_ctrl.c (the ~1450-line input half): keyboard / special /
  * mouse / motion / wheel entry points, the glr_ctrl_router_* handlers, the
  * UiHit code-panel route_* dispatch + drag/double-click tracking, help-overlay
- * and scene-cycle routing, and the SIGINT-quit lifecycle. Pure routing — it
+ * and scene-cycle routing, and the SIGINT-quit lifecycle. Pure routing - it
  * calls back into glr_ctrl.c only through the seams in glr_ctrl_internal.h
  * (drag snapshot, input-effect apply) and the public glr_ctrl.h surface, and
  * reaches no scene/ headers. It includes ui/ headers, so it is on the
@@ -130,11 +130,11 @@ int glr_ctrl_router_handle_time_reset_key(unsigned char key) {
 
 /* Recovery safeguard: Ctrl+Q, File > Quit, and SIGINT (Ctrl+C), plus
  * Open Workspace (which replaces every in-memory slot), write a recovery
- * copy to a DISTINCT, findable file — never the active scene/workspace. The point
+ * copy to a DISTINCT, findable file - never the active scene/workspace. The point
  * is to rescue an unintended exit / forgotten save / discarded scene
  * without silently clobbering the user's real scene; reload it with
- * `./gl-repl recovery.c`. (Not /tmp — the user would never find it; not
- * the scene file — that would defeat the safeguard.) The filename lives
+ * `./gl-repl recovery.c`. (Not /tmp - the user would never find it; not
+ * the scene file - that would defeat the safeguard.) The filename lives
  * in config.h as QUIT_RECOVERY_FILE. */
 
 static volatile sig_atomic_t g_quit_requested = 0;
@@ -159,7 +159,7 @@ int glr_ctrl_recovery_has_user_work(void) {
 
 /* Write the live scene to the recovery file. Shared by the quit
  * safeguard and Open Workspace. Returns 1 on success, 0 on failure.
- * Callers must check glr_ctrl_recovery_has_user_work() first — this
+ * Callers must check glr_ctrl_recovery_has_user_work() first - this
  * writes unconditionally. */
 int glr_ctrl_save_recovery_file(void) {
     ReplExportLayout layout;
@@ -185,8 +185,8 @@ int glr_ctrl_save_recovery_file(void) {
  * die with the process just the same. Mirror what Open Workspace does
  * when it discards the collection (glr_action_open_workspace_path): dump
  * every occupied slot into a findable recovery workspace. Deliberately
- * NOT the user's bound workspace directory even when one is bound —
- * quitting must not write over files they never asked to save — and no
+ * NOT the user's bound workspace directory even when one is bound -
+ * quitting must not write over files they never asked to save - and no
  * promotion, so the example being *looked at* stays out of it. The
  * workspace binding is restored because repl_save_workspace rebinds on
  * success and callers keep running until exit(). Returns 1 if a
@@ -240,7 +240,7 @@ int glr_ctrl_router_handle_quit_key(unsigned char key) {
  * tutorial_handle_ack_key so REQUIRE / COMMAND steps never have their
  * keys swallowed here. Runs AFTER the existing controller routes (so
  * Ctrl-keys, replay, cfg shortcuts, save, quit keep priority) and
- * BEFORE editor_handle_key — see the chain in glr_ctrl_keyboard. */
+ * BEFORE editor_handle_key - see the chain in glr_ctrl_keyboard. */
 int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key) {
     return tutorial_handle_ack_key(key);
 }
@@ -274,7 +274,7 @@ int glr_ctrl_router_handle_audio_key(unsigned char key) {
 /* Ctrl+= / Ctrl+- step the Config "Accum passes" cycle (1/2/4/8/12/16,
  * clamped, no wrap), so the keyboard and the menu are one coherent model.
  * Gated on use_accum (no accumulation buffer under --no-accum) and on the
- * effect being active — adjusting the sample count is meaningless while the
+ * effect being active - adjusting the sample count is meaningless while the
  * effect is Off. */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     GlrRenderState *rs = glr_state_render_mut();
@@ -319,7 +319,7 @@ void glr_ctrl_toggle_code_focus(void) {
 /* Ctrl+Shift+F: toggle the code-panel focus view. Ctrl+F (no Shift)
  * stays the search shortcut handled downstream in editor_handle_key; the Shift
  * modifier disambiguates, and this router runs ahead of the editor so search
- * never sees the shifted form. Hidden shortcut only — no Config row, no @cfg. */
+ * never sees the shifted form. Hidden shortcut only - no Config row, no @cfg. */
 int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
     if (!keymap_event_is(key, GLR_CODE_FOCUS))
         return 0;
@@ -447,7 +447,7 @@ int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
 
     if (spec[0] >= '0' && spec[0] <= '9') {
         /* Numeric targets are the code panel's own line numbers, 1-based, the
-         * same as the GLR_* capture hooks — a script says what the reader sees
+         * same as the GLR_* capture hooks - a script says what the reader sees
          * in the gutter. 0 addresses no row, so it fails the target rather
          * than aiming at the first line. */
         int line = atoi(spec) - 1;
@@ -676,7 +676,7 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
 /* Mouse-up: write the value the drag settled on back into the variable's
  * declaration, once. Motion applied the live value only (see
  * glr_ctrl_apply_variable_panel_value_change), so this is the drag's single
- * source mutation — one dirty mark, one re-flatten from cold state, and the
+ * source mutation - one dirty mark, one re-flatten from cold state, and the
  * saved source matches what the scene renders.
  *
  * No undo snapshot: the first motion already captured one at the drag-start
@@ -881,7 +881,7 @@ static unsigned int (*g_double_click_clock_ms_for_test)(void) = NULL;
 void glr_ctrl_router_set_double_click_clock_for_test(
     unsigned int (*clock_ms)(void)) {
     g_double_click_clock_ms_for_test = clock_ms;
-    /* Tests typically arrange a fresh clock per case — wipe the
+    /* Tests typically arrange a fresh clock per case - wipe the
      * stored press so prior real-time history can't leak across. */
     g_last_text_press_ms   = 0;
     g_last_text_press_line = -1;
@@ -909,7 +909,7 @@ void glr_ctrl_router_reset_code_panel_drag(void) {
 }
 
 /* Move the code panel to the scroll row the current pointer position maps
- * to. Scrolling by hand cancels cursor-follow for this frame — otherwise the
+ * to. Scrolling by hand cancels cursor-follow for this frame - otherwise the
  * follow pass would immediately drag the view back to the caret and the
  * thumb would fight the drag. Returns 1 when the drag consumed the event. */
 static int glr_ctrl_router_apply_scrollbar_drag(int y) {
@@ -1039,7 +1039,7 @@ void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
     }
     /* Place cursor at word_start, then atomically pin and extend to
      * word_end. Doing it as two steps with editor_input_anchor_set
-     * would collapse immediately (anchor == cursor) — that's the
+     * would collapse immediately (anchor == cursor) - that's the
      * footgun the extend helper was added to avoid. */
     editor_cursor_pos_set(word_start);
     editor_cursor_pos_extend_selection(word_end);
@@ -1149,7 +1149,7 @@ static int route_code_text_hit(const UiHit *hit) {
 
 /* UI_HIT_CODE_INSERT_LINE: insertion virtual row in insert mode. Set
  * cursor column but do not navigate (matches legacy on_insert_line=1
- * behaviour). No drag anchor — the insert row is virtual. */
+ * behaviour). No drag anchor - the insert row is virtual. */
 static int route_code_insert_line_hit(const UiHit *hit) {
     color_picker_stop();
     if (hit->char_idx >= 0)
@@ -1187,7 +1187,7 @@ static int route_code_panel_chrome_hit(void) {
 }
 
 /* UI_HIT_CODE_FOCUS_TOGGLE: the statusbar "focus" keycap. Same action
- * as the Ctrl+Shift+F shortcut — go through the shared toggle so both
+ * as the Ctrl+Shift+F shortcut - go through the shared toggle so both
  * paths sync chrome, request follow-scroll, and post the status line. */
 static int route_code_focus_toggle_hit(void) {
     glr_ctrl_toggle_code_focus();
@@ -1246,7 +1246,7 @@ static int route_code_redo_hit(void) {
 }
 
 /* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
- * the F1 key — go through the shared toggle so the overlay tab/scroll
+ * the F1 key - go through the shared toggle so the overlay tab/scroll
  * reset identically. */
 static int route_help_toggle_hit(void) {
     glr_ctrl_toggle_help();
@@ -1322,7 +1322,7 @@ static void glr_ctrl_router_dismiss_gl_state_for_editor_input(void) {
  * behind it); on the header's "[+]"/"[-]" chip it also expands/collapses the
  * default/source detail columns. A click anywhere else dismisses the popup
  * and is NOT consumed, so it still routes normally afterwards (the color
- * picker's click-away convention). Skipped while a menu dropdown is open —
+ * picker's click-away convention). Skipped while a menu dropdown is open -
  * dropdowns render above the popup, so they win their clicks. */
 static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
     UiGlStatePanelView view;
@@ -1347,8 +1347,8 @@ static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
 }
 
 /* Wheel over the floating OpenGL-state popup scrolls its report rows.
- * Consumed whenever the pointer is over the open popup — even when there
- * is nothing left to scroll — so the wheel never leaks to the code panel /
+ * Consumed whenever the pointer is over the open popup - even when there
+ * is nothing left to scroll - so the wheel never leaks to the code panel /
  * camera behind it (menu-flyout convention). delta > 0 scrolls toward
  * later rows. */
 static int glr_ctrl_router_handle_gl_state_popup_wheel(int x, int y,
@@ -1394,7 +1394,7 @@ static int glr_ctrl_router_hit_is_blank_gl_state_anchor(const UiHit *hit) {
 }
 
 /* UI_HIT_ASSIGN_PLOT_*: the assignment plot's mouse-only controls. Left-press
- * cycles the capture rate forward, right-press backward — the same idiom the
+ * cycles the capture rate forward, right-press backward - the same idiom the
  * config flyout rows use, and the only control path this panel has
  * (deliberately: a capture rate belongs to one plot, not to the keymap). The
  * Y-scale and zoom chips are plain toggles on either button. */
@@ -1417,7 +1417,7 @@ static int route_assign_plot_rate_hit(int dir) {
 /* The chip toggles the *request* unconditionally; whether the axis can honor
  * it depends on the data, so the status line reports what actually happened.
  * Signed data goes on the symmetric axis, so the only refusal left is a trace
- * with no magnitude at all — and a chip that silently did nothing there would
+ * with no magnitude at all - and a chip that silently did nothing there would
  * look broken rather than impossible. */
 static int route_assign_plot_yscale_hit(void) {
     UiAssignPlotPanelView probe;
@@ -1446,7 +1446,7 @@ static int route_assign_plot_expand_hit(void) {
 }
 
 /* Shift+right-click on an assignment row: add it to the open plot, or drop it
- * if it is already there. Every outcome is reported — a refusal that said
+ * if it is already there. Every outcome is reported - a refusal that said
  * nothing would be indistinguishable from a missed click. */
 static int route_assign_plot_series_hit(int line_idx) {
     char msg[REPL_STATUS_TEXT_MAX];
@@ -1500,7 +1500,7 @@ static int route_assign_plot_reset_hit(void) {
     return 1;
 }
 
-/* UI_HIT_HISTOGRAM_SERIES_TOGGLE, right button: "plot only this one" — hide
+/* UI_HIT_HISTOGRAM_SERIES_TOGGLE, right button: "plot only this one" - hide
  * every other series in a single press instead of left-clicking the other
  * eleven off one at a time. Same presentation-only mask as the left-button
  * toggle next door (route_histogram_series_toggle_hit); re-soloing the series
@@ -1537,7 +1537,7 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
     } else if (cmd && (cmd->type == CMD_VAR_ASSIGN ||
                        cmd->type == CMD_SCRATCH_ASSIGN)) {
         /* Ahead of the description lookup because neither assignment type has
-         * an authored description record — without this branch the row falls
+         * an authored description record - without this branch the row falls
          * into the inert `else` below and right-click does nothing at all.
          *
          * Shift adds the row to the open plot (or removes it again) instead of
@@ -1561,7 +1561,7 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
     editor_request_redraw();
 }
 
-/* Right-press dispatch (GLUT_DOWN only — UP runs the shared release path).
+/* Right-press dispatch (GLUT_DOWN only - UP runs the shared release path).
  * Mirrors the left-button model: one canonical hit-test, then a switch on
  * the hit kind. Right-button owners, in the hit-test's z-order:
  *   - numeric swatch arrow → coarse (x10) step;
@@ -1611,10 +1611,10 @@ static void route_right_press(int x, int y) {
     case UI_HIT_SUBMENU_ITEM:
         /* Backward-cycle the Config flyout item under the cursor;
          * item_idx carries the absolute g_cfg_items[] index. The
-         * hit-test resolves actionable ITEM rows only — flyout chrome
+         * hit-test resolves actionable ITEM rows only - flyout chrome
          * ("### "/"---" in the "All" flyout) is skipped via
          * submenu_row_kind, and section/All parent rows own no submenu
-         * row — so a right-press over the section list can never
+         * row - so a right-press over the section list can never
          * mis-cycle a g_cfg_items[] index. */
         if (hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
             glr_cfg_cycle_row(hit.item_idx, -1);
@@ -1819,7 +1819,7 @@ static int route_submenu_item_hit(const UiHit *hit) {
 
 /* UI_HIT_CODE_PANEL_TAB: scene tab strip click. Single click switches
  * scenes through the shared Scene-menu load helpers (reusing the exact
- * load sequence — no duplication); a 2nd click on the same user tab
+ * load sequence - no duplication); a 2nd click on the same user tab
  * within DOUBLE_CLICK_MS opens the existing status-bar inline rename.
  * The display index is resolved against the *live* scene shape so a
  * frame-stale click can't misroute. Always consumed. */
@@ -1837,7 +1837,7 @@ static int route_scene_tab_hit(const UiHit *hit) {
     g_last_tab_press_idx = idx;
 
     if (idx < 0)
-        return 1;  /* stale — consumed no-op */
+        return 1;  /* stale - consumed no-op */
 
     if (idx < user_tab_count) {
         int slot = glr_scene_menu_slot_for_dense_index(idx);
@@ -1860,12 +1860,12 @@ static int route_scene_tab_hit(const UiHit *hit) {
         return 1;
     }
 
-    return 1;  /* out-of-range stale idx — consumed no-op */
+    return 1;  /* out-of-range stale idx - consumed no-op */
 }
 
 /* UI_HIT_CODE_PANEL_WORKSPACE_CHIP: the tab strip's leading workspace chip.
  * Its only job is to lead to the workspace list, so it opens the File menu's
- * Open Workspace flyout — where the active row is already accented — instead
+ * Open Workspace flyout - where the active row is already accented - instead
  * of duplicating any switching logic. Always consumed. */
 static int route_workspace_chip_hit(void) {
     ui_menu_bar_open_workspace_list(repl_state_variables().anim_time);
@@ -1903,7 +1903,7 @@ static int route_variable_slider_hit(int x, int y) {
 
 /* UI_HIT_VARIABLE_COLLAPSE_TOGGLE: title-bar chip that folds the panel down
  * to just its title (or restores it). Mouse-only, left-click, no keymap
- * slot — mirrors the gl-state popup's details/setup chips. */
+ * slot - mirrors the gl-state popup's details/setup chips. */
 static int route_variable_panel_collapse_toggle_hit(void) {
     variable_panel_toggle_collapsed();
     editor_request_redraw();
@@ -1947,7 +1947,7 @@ static int route_histogram_series_toggle_hit(const UiHit *hit) {
 /* Derive a code-panel target line from a hit, mirroring the legacy
  * code_panel_drag_target. Insert-line drags use edit_line (the line
  * the cursor is parked on), only falling back to the last committed
- * line when edit_line is past the document end — preserving the
+ * line when edit_line is past the document end - preserving the
  * insertion-point as the drag endpoint when the user is editing
  * mid-document. Returns -1 if the hit is not a code-panel kind. */
 static int code_panel_target_from_hit(UiHit hit) {
@@ -1983,12 +1983,12 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
 
     /* Inline rename is a hard modal for keystrokes but NOT for the
      * mouse, so a click otherwise moves the cursor / switches tabs
-     * while typed keys still feed the rename buffer — misleading.
+     * while typed keys still feed the rename buffer - misleading.
      * Clicking anywhere cancels the in-progress rename (discard, like
      * Esc), then the click proceeds normally (cursor lands where the
      * user clicked, rename mode exits). Begin-rename routes through a
      * later dispatch in this same call, so rename is not yet active at
-     * entry for the click that starts it — no self-cancel. */
+     * entry for the click that starts it - no self-cancel. */
     if (glr_modal_active())
         glr_modal_cancel();
     if (editor_inline_rename_active())
@@ -1998,7 +1998,7 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
 
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
      * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
-     * dropdown — matches the legacy
+     * dropdown - matches the legacy
      * "click outside dropdown closes it" behaviour from
      * ui_panels_handle_code_panel_press. The workspace chip is exempt for the
      * same reason a menu button is: it is a menu-opening control, so it must
@@ -2118,8 +2118,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
  * the canonical hit-test in mouse_dispatch, and neither is reachable through
  * it: the above-gl-state overlay pass (telemetry panels, status surfaces,
  * variable panel, an open dropdown) and the floating OpenGL-state popup's own
- * surface. Anything that has to promise what a click will do — the GLUT host's
- * tour-HUD intercept, the divider's hover cursor — must consult that same
+ * surface. Anything that has to promise what a click will do - the GLUT host's
+ * tour-HUD intercept, the divider's hover cursor - must consult that same
  * order, or it speaks for pixels another panel already owns.
  *
  * `kind` is an int because UiHit.kind is: the core kinds and the app-band
@@ -2163,7 +2163,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
 
     int target = code_panel_target_from_hit(hit);
     if (target < 0) {
-        /* Drag wandered off the code-panel kinds — clamp the pointer
+        /* Drag wandered off the code-panel kinds - clamp the pointer
          * into the code-panel rect and re-classify so the selection
          * extends to the nearest visible row. Matches legacy
          * code_panel_drag_target's [0, visible_lines-1] vis clamp. */
@@ -2193,7 +2193,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
      * cannot span rows; promoting keeps the ordinary editor gesture
      * (press in the text, drag down) producing the multi-line
      * selection the user is reaching for instead of dead-ending. The
-     * promotion is one-way — dragging back onto the press row narrows
+     * promotion is one-way - dragging back onto the press row narrows
      * the range to that single line rather than restoring the original
      * character span, so the gesture never flips models twice. */
     if (g_code_panel_drag_char_anchor >= 0) {
@@ -2214,7 +2214,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
  * their opposite sign conventions before calling. Priority: modal help
  * overlay, surfaces painted above the OpenGL-state popup (including menu
  * flyouts and inert panel chrome), the popup itself, code panel, then camera
- * zoom velocity — each earlier owner consumes the wheel so it never reaches
+ * zoom velocity - each earlier owner consumes the wheel so it never reaches
  * what's behind it. */
 static void route_wheel(int x, int y, int delta) {
     UiRenderSnapshot ui_snap;
@@ -2261,15 +2261,15 @@ static void route_wheel(int x, int y, int delta) {
  *       glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
  *   }
  *
- * Every route — controller helper or editor — accumulates side effects
+ * Every route - controller helper or editor - accumulates side effects
  * into the shared editor_input pending-effects struct (via
  * editor_request_redraw etc.; editor_handle_* snapshots are folded back
  * in with editor_merge_input_effects), and the shim flushes them through
  * GLUT exactly once per event. Dispatch bodies therefore just `return`
- * when a route consumes the event — no per-branch flushing.
+ * when a route consumes the event - no per-branch flushing.
  *
  * Each dispatch body is a fixed sandwich:
- *   1. Rename / file-prompt modal capture FIRST (hard modal — every
+ *   1. Rename / file-prompt modal capture FIRST (hard modal - every
  *      key/special key goes to the capture buffer).
  *   2. Controller-owned routes: routing helpers above, in priority
  *      order.
@@ -2313,7 +2313,7 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
     if (glr_ctrl_router_handle_escape_key(key))
         return;
 
-    /* Controller-owned routes — config shortcuts run before replay
+    /* Controller-owned routes - config shortcuts run before replay
      * forwarding so Ctrl+R stays owned by the Replay config row while
      * non-config replay keys (Ctrl+K, space, +/- and friends) still
      * forward to replay_handle_key. */
@@ -2332,7 +2332,7 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
 
     /* Ctrl+F opens search downstream in editor_handle_key. Note the
      * rising edge here so the search-overlay fade clock is driven from
-     * the controller — symmetric with the menu-pin path in
+     * the controller - symmetric with the menu-pin path in
      * route_pin_button_hit; the renderer no longer mutates it. */
     int search_was_active = editor_state_search()->active;
     glr_ctrl_router_dismiss_gl_state_for_editor_input();
@@ -2475,7 +2475,7 @@ void glr_ctrl_scripted_special(int key, int x, int y) {
 /* Scripted-chord entry points: dispatch a single key/special press while a
  * caller-declared modifier mask is authoritative, so a pointer script can
  * fire Shift/Ctrl+Shift shortcuts the physical-modifier path can't synthesize.
- * The editor override is pushed and popped here — the controller stays the
+ * The editor override is pushed and popped here - the controller stays the
  * sole input-event mutation gate; the pointer script only calls these. */
 void glr_ctrl_scripted_keyboard_with_modifiers(unsigned char key, int x, int y,
                                                  int mods) {
@@ -2508,7 +2508,7 @@ void glr_ctrl_scripted_mouse_with_modifiers(int button, int state, int x, int y,
  * canonical ui_panels_hit_test → UiHit.kind switch
  * (glr_ctrl_router_handle_code_panel_hit); non-chrome kinds fall
  * through to scene press (color picker overlay) and camera. Right
- * button: route_right_press — the same canonical hit-test with
+ * button: route_right_press - the same canonical hit-test with
  * right-button semantics. Buttons 3/4 (plain GLUT's wheel emulation)
  * route through the shared route_wheel. */
 static void mouse_dispatch(int button, int state, int x, int y) {
@@ -2702,7 +2702,7 @@ void glr_ctrl_scripted_motion(int x, int y) {
 
 static void passive_motion_dispatch(int x, int y) {
     /* Passive motion (no button held) just updates the pointer
-     * position — there's no drag delta to preserve. */
+     * position - there's no drag delta to preserve. */
     glr_ctrl_router_handle_camera_pointer_set(x, y);
     /* Several hover treatments (including the code-statusbar tooltips)
      * are derived purely from snapshot pointer state during rendering.

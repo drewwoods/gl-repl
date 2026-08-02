@@ -59,7 +59,7 @@ int repl_find_affecting_transforms(int line_idx, int *out_line_idx, int out_cap)
  *
  * repl_find_affecting_transforms_flat: live-cursor wrapper keyed on a source
  * line. Finds every flat expansion of that source vertex line and returns the
- * union of affecting transform source lines across them — deterministic even
+ * union of affecting transform source lines across them - deterministic even
  * for reused/recursive function-body vertices with no selected invocation.
  *
  * Both return the number of source lines written; 0 if the target line/index

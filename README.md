@@ -2,8 +2,8 @@
 
 <br>
 
-<img src="docs/images/glrepl-wordmark-dark.svg#gh-dark-mode-only" alt="gl-repl — immediate mode, immediately" width="70%">
-<img src="docs/images/glrepl-wordmark-light.svg#gh-light-mode-only" alt="gl-repl — immediate mode, immediately" width="70%">
+<img src="docs/images/glrepl-wordmark-dark.svg#gh-dark-mode-only" alt="gl-repl - immediate mode, immediately" width="70%">
+<img src="docs/images/glrepl-wordmark-light.svg#gh-light-mode-only" alt="gl-repl - immediate mode, immediately" width="70%">
 
 **gl-repl**
 
@@ -39,8 +39,8 @@ glEnd();
 | | |
 |---|---|
 | **Immediate mode, immediately** | The geometry lives in your code. Edit a `glVertex3f`, see the vertex move. |
-| **Time as a variable** | `Ctrl+T` toggles `t`. Reference it anywhere — animation with no boilerplate. |
-| **AA and motion blur** | Accumulation effects provide edge AA, animation-time blur, and camera blur over 2–16 samples. Stable animations rebake values without rebuilding their command topology, keeping Blur practical—including in the web build. |
+| **Time as a variable** | `Ctrl+T` toggles `t`. Reference it anywhere - animation with no boilerplate. |
+| **AA and motion blur** | Accumulation effects provide edge AA, animation-time blur, and camera blur over 2–16 samples. Stable animations rebake values without rebuilding their command topology, keeping Blur practical-including in the web build. |
 | **See what your code means** | Cursor on a `glRotatef` line? An arc guide shows the rotation in the scene. Vertex labels, normal arrows, and polygon highlights follow your cursor. |
 | **Scope GL state visibly** | `glPushAttrib(mask)` and `glPopAttrib()` save and restore the ten state groups the REPL can change. Use `GL_ALL_ATTRIB_BITS` for all of them; cursor highlights show which setters a push saves or a pop reverts. |
 | **Replay your draws** | `Ctrl+R` steps through the command stream; watch the scene assemble call by call, loop variables substituted live in the code panel. |
@@ -57,7 +57,7 @@ glEnd();
 &nbsp;
 <a href="docs/SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="31%"></a>
 
-<sub>**[Read the User Guide →](docs/USER_GUIDE.md)** — every feature, with screenshots. Start here.</sub>
+<sub>**[Read the User Guide →](docs/USER_GUIDE.md)** - every feature, with screenshots. Start here.</sub>
 
 <sub>These three are from the [showcase](docs/SHOWCASE.md): 39 built-in scenes, each a screenful of typed GL.</sub>
 
@@ -80,14 +80,14 @@ git lfs install             # one-time, per user
 git lfs pull                # already cloned without it? fetch the real bytes
 ```
 
-Nothing in the build or the app depends on those assets — only the docs do.
+Nothing in the build or the app depends on those assets - only the docs do.
 
 ```bash
-# macOS: needs cmake (brew install cmake) — builds the vendored freeglut
+# macOS: needs cmake (brew install cmake) - builds the vendored freeglut
 # Linux: sudo apt install freeglut3-dev
 make gl-repl
 
-./gl-repl                  # fresh session — type GL commands, ; after each
+./gl-repl                  # fresh session - type GL commands, ; after each
 ./gl-repl --example "Torus knot (animated)"  # or start from a built-in (F12 cycles all 39)
 ./gl-repl output.c         # reload a saved session
 printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
@@ -96,14 +96,14 @@ printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 It runs in a browser too. With `emcc` on your `PATH`:
 
 ```bash
-make web                   # Emscripten build — gl4es → WebGL2
+make web                   # Emscripten build - gl4es → WebGL2
 make web-serve             # serve it at http://localhost:8000/
 ```
 
 <sub>Details and the emsdk setup: [packaging/web/README.md](packaging/web/README.md).</sub>
 
 Press **F1** in-app for the full command and key reference, and read the
-[**User Guide**](docs/USER_GUIDE.md) for the rest — it is the manual, and the
+[**User Guide**](docs/USER_GUIDE.md) for the rest - it is the manual, and the
 best place to go after this page. There are guided tutorials under the
 **Tutorials** menu too; *First Triangle* takes about a minute.
 
@@ -121,12 +121,12 @@ glColor3f(0.95, 0.44, 0.66);
 glutSolidTorus(0.3, 0.9, 24, 48);
 ```
 
-Now press `Ctrl+T`. The torus spins. That's the whole loop — the rotation
+Now press `Ctrl+T`. The torus spins. That's the whole loop - the rotation
 rate is just the scalar in front of `t`, and every line stays editable.
 
 `glClear` is load-bearing and yours to keep: nothing wipes the frame on your
 program's behalf, exactly like the C this exports to. Delete the line and the
-torus smears across its own trail — which is sometimes what you want.
+torus smears across its own trail - which is sometimes what you want.
 
 <br>
 
@@ -151,7 +151,7 @@ torus smears across its own trail — which is sometimes what you want.
 ### Design goals
 
 - **Launch pad.** Make it easy to get something going quickly.
-- **Independence.** Export/import is a first-class citizen — take what you
+- **Independence.** Export/import is a first-class citizen - take what you
   build into your own engine or tool.
 - **Immediate mode.** The joy is the locality: the geometry is in the code,
   not hidden behind a data file.
@@ -168,12 +168,12 @@ torus smears across its own trail — which is sometimes what you want.
 
 | | |
 |---|---|
-| [**User Guide**](docs/USER_GUIDE.md) | The manual — every feature, with screenshots. |
+| [**User Guide**](docs/USER_GUIDE.md) | The manual - every feature, with screenshots. |
 | [**Showcase**](docs/SHOWCASE.md) | The built-in scenes and the source that draws them. |
 | [**Advanced Usage**](docs/ADVANCED_USAGE.md) | CLI flags, env vars, headless rendering, recording GIFs, mesh export, music. |
 | [**Contributing**](docs/CONTRIBUTING.md) | Build, test, the guard suite, and how to extend the REPL. |
 | [**Modules**](docs/MODULES.md) | One-page map of the source tree and its ownership rules. |
-| [**Architecture**](docs/ARCHITECTURE.md) | The deep dive — command model, frame pipeline, boundaries. |
+| [**Architecture**](docs/ARCHITECTURE.md) | The deep dive - command model, frame pipeline, boundaries. |
 
 <br>
 

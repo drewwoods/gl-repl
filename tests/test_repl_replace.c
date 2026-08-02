@@ -81,7 +81,7 @@ static int buffer_line_count_containing(const char *needle) {
  * hard-coding widget pixel math that the renderer owns.
  *
  * `band` picks FIND_ROW (the menu-bar row itself) or BOTH_ROWS (adding
- * the replace row hanging below it) — the distinction matters because
+ * the replace row hanging below it) - the distinction matters because
  * the replace row's own surface also reports "focus the replace field". */
 #define BAND_FIND_ROW  0
 #define BAND_BOTH_ROWS 1
@@ -375,7 +375,7 @@ int main(void) {
     type_keys("0");
     {
         /* Replace row closed: the find row offers a "replace" affordance
-         * that focuses the replace field — the discovery path for users
+         * that focuses the replace field - the discovery path for users
          * who never press Tab. */
         UiHit hit;
         ASSERT_TRUE("find row exposes a replace affordance",

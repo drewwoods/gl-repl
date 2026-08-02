@@ -1,10 +1,10 @@
-# `src/subsystems/` — Code-Smell Audit
+# `src/subsystems/` - Code-Smell Audit
 
 > Audit produced 2026-05-24. Findings come from four parallel reviews of
 > `src/subsystems/` (replay; tutorial; variable_panel + color_picker;
 > cross-cutting consistency) plus targeted spot-verification of the
 > most actionable claims. File:line references are exact at the time
-> of writing — check `git log` on the cited files before acting if
+> of writing - check `git log` on the cited files before acting if
 > this doc has aged.
 >
 > Scope: every file under `src/subsystems/`. Tests under `tests/` were
@@ -29,16 +29,16 @@
 
 Severity grouping mirrors the previous audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or
+- **🔴 Actual bugs / hazards (verified)** - correctness or
   reset-completeness issues with a concrete failure mode that exists
   in current production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — layering reaches, naming drift,
+- **🟡 Drift / boundary hazards** - layering reaches, naming drift,
   parallel statics outside the owner struct, ambiguous-intent code
   that works today but is one edit away from misbehaving. Most of the
   cross-peer inconsistency lives here.
-- **🟢 Dead code / dead fields** — code with no callers, unused
+- **🟢 Dead code / dead fields** - code with no callers, unused
   declarations, dead defensive guards. Pure surface reduction.
-- **🔵 Structural concerns** — long functions, magic numbers,
+- **🔵 Structural concerns** - long functions, magic numbers,
   comment archaeology, awkward sub-helpers. Bigger refactors;
   higher cost.
 
@@ -46,7 +46,7 @@ Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Cross-peer findings (where the same
 shape recurs in multiple subsystems) carry a **🔀 cross-peer** tag.
 
-## Progress update — 2026-05-26 (branch `subsystem-smells`, reviewed at `29f8b10`)
+## Progress update - 2026-05-26 (branch `subsystem-smells`, reviewed at `29f8b10`)
 
 Verification during this review: `make check-c99`,
 `make check-module-prefixes`, `make test`, `make test-stubs`, and
@@ -60,13 +60,13 @@ progress block plus the Sequencing section as the live plan.
 
 Closed in the current repo:
 
-- **#1-#14, #16-#18, #20-#22, #24, #27, #28, #33, #34, #36-#48, #50, #55** —
+- **#1-#14, #16-#18, #20-#22, #24, #27, #28, #33, #34, #36-#48, #50, #55** -
   Tutorial editor/completion writes, parallel runtime statics, color-picker
   reset, and variable-panel accessors are resolved. Replay and tutorial
   cleanup, along with documentation and teardown fixes, have landed.
-- **#26, #29, #31, #32, #35** — Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
-- **#23, #25, #49, #51-#54, #57-#59** — Refactored cp_compute_rects to take coords explicitly; documented state_owners.h inclusion; condensed tutorial.c comments; typed color-picker drag states with CpDragTarget enum; documented cp_* shorthand prefix; standardized status buffers with TUTORIAL_STATUS_MAX and REPLAY_STATUS_MSG_LEN; consolidated GLR_FRAME_DT_SECS; simplified color-picker positioning with clamp_popup_x; cleaned up variable-panel alignment drift; swept stale phase, bug, and renamed function comments.
-- **#15, #19, #30** — `29f8b10` closed the remaining lifecycle, type-ownership,
+- **#26, #29, #31, #32, #35** - Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
+- **#23, #25, #49, #51-#54, #57-#59** - Refactored cp_compute_rects to take coords explicitly; documented state_owners.h inclusion; condensed tutorial.c comments; typed color-picker drag states with CpDragTarget enum; documented cp_* shorthand prefix; standardized status buffers with TUTORIAL_STATUS_MAX and REPLAY_STATUS_MSG_LEN; consolidated GLR_FRAME_DT_SECS; simplified color-picker positioning with clamp_popup_x; cleaned up variable-panel alignment drift; swept stale phase, bug, and renamed function comments.
+- **#15, #19, #30** - `29f8b10` closed the remaining lifecycle, type-ownership,
   and cfg-baseline naming work: lifecycle vocabulary is documented in
   `src/subsystems/README.md`; `ReplayRuntimeState` and replay fade-batch
   types live under the replay peer; `UiVariablePanelState` was renamed to
@@ -97,7 +97,7 @@ Compare to the color_picker peer (which writes back through
 the installed `repl_dispatch_follow_cursor` host effect). Tutorial
 bypasses both seams.
 
-**Why it matters:** Concrete coupling — tutorial.c includes
+**Why it matters:** Concrete coupling - tutorial.c includes
 `editor/state.h`, `editor/completion.h`, and `repl/state_owners.h`
 because of these writes. The peer can no longer be lifted into a
 demo without dragging the editor along.
@@ -122,7 +122,7 @@ Two file-statics live in the runner, not in `tutorial_state.c`.
 `TutorialRuntimeState` struct, so the bag and its valid flag survive
 any "reset". The only thing that clears them is
 `tutorial_cfg_baseline_clear()` called from `tutorial_cfg_baseline_restore()`
-— so any external reset path that doesn't fully route through
+- so any external reset path that doesn't fully route through
 `tutorial_teardown()` leaks a stale baseline.
 
 **Why it matters:** Future code paths that call `tutorial_state_reset`
@@ -159,7 +159,7 @@ also incomplete).
 
 **Fix:** Move all four (plus the fade-batches ring) into
 `ReplReplayRuntimeState`. The doc-comment for `replay_state.h`
-explicitly says capture/restore is for full-world snapshots —
+explicitly says capture/restore is for full-world snapshots -
 those snapshots are currently missing this state.
 
 ### 4. Tutorial uses `repl_load_apply_line` instead of the editor commit transaction
@@ -168,7 +168,7 @@ those snapshots are currently missing this state.
 `tutorial_emit_instruction_comment`)
 
 **Smell:** `src/subsystems/README.md:87` claims peers reach the
-program "through the editor *commit* transaction — the one
+program "through the editor *commit* transaction - the one
 sanctioned path." Tutorial writes through `repl_load_apply_line`,
 which is "the non-editor load path" used by file importer / example
 loader / integration tests. It bypasses the editor commit pipeline
@@ -198,7 +198,7 @@ accessors."
 
 **Why it matters:** No external caller of the existing
 capture/restore exists (see #14), so this is mostly contract-drift
-rather than a runtime bug — but it confuses readers comparing the
+rather than a runtime bug - but it confuses readers comparing the
 four peers' shapes. The CLAUDE.md table also implies capture/restore
 exist for every `_state.c`.
 
@@ -250,8 +250,8 @@ return 0;
 ```
 The controller dispatches "any key during active replay" to
 `replay_handle_key`. Returning 0 means "I didn't consume this; pass
-it on" — but the side effect of returning 0 here is `replay_stop()`.
-So Ctrl+C, Ctrl+T, Ctrl+S — the editor's status-quo shortcuts —
+it on" - but the side effect of returning 0 here is `replay_stop()`.
+So Ctrl+C, Ctrl+T, Ctrl+S - the editor's status-quo shortcuts -
 silently tear down replay state.
 
 **Why it matters:** Visible UX surprise. User types Ctrl+S to save
@@ -260,7 +260,7 @@ The peer is also making routing decisions in a leaf function, the
 inverse of the routed-input contract.
 
 **Fix:** Two options:
-1. Stop in only one place — let the controller own the "any
+1. Stop in only one place - let the controller own the "any
    non-replay key during replay stops replay" policy. `replay_handle_key`
    becomes a pure consume-or-not predicate.
 2. Status-message it (`repl_set_status("Replay: cancelled (key)")`)
@@ -279,7 +279,7 @@ implementation at `color_picker_state.c:308-354`
 ```
 There is no such branch in `color_picker_handle_press`. Any press
 outside the SV / hue / alpha slider rects falls into the "dismiss"
-branch at line 348 — including a click on the preview strip *inside
+branch at line 348 - including a click on the preview strip *inside
 the picker frame*. The doc immediately contradicts itself
 ("returns no-consume" vs "today returns the close-fallthrough").
 
@@ -300,7 +300,7 @@ implementation at `color_picker_state.c:324, 333, 343`
 ```
 * - inside a slider rect: { consumed=1, closed=0, changed=1 } (drag begins)
 ```
-But `res.changed = color_picker_write_cmd();` — and `color_picker_write_cmd`
+But `res.changed = color_picker_write_cmd();` - and `color_picker_write_cmd`
 can return 0 (snprintf overflow, parse failure). The header is
 overpromising.
 
@@ -337,7 +337,7 @@ to match). Sync the endif comments.
 
 ### 11. `replay_state_capture/restore` is documented for "full-world snapshots" but never used
 
-**Status:** Resolved (by `subsystem-smells`) — Documented that variable-panel and replay state capture/restore are exclusively test/verification contracts; added the missing `tutorial_state_capture/restore` helper pair.
+**Status:** Resolved (by `subsystem-smells`) - Documented that variable-panel and replay state capture/restore are exclusively test/verification contracts; added the missing `tutorial_state_capture/restore` helper pair.
 
 **Where:** `src/subsystems/replay/replay_state.c:24-32`
 
@@ -346,7 +346,7 @@ snapshot paths. Grep across the codebase: no external caller exists
 for `replay_state_capture` or `replay_state_restore`. Same for
 `variable_panel_state_capture/_restore` (`variable_panel_state.c`).
 `repl_state_capture` (the REPL-owned snapshot) explicitly excludes
-peer state — `src/repl/state.h:33-34` says *"Neither function
+peer state - `src/repl/state.h:33-34` says *"Neither function
 touches controller/editor/UI peer state."* `repl/scenes.c::stash_live_state`
 captures only commands / predef vars / scratch arrays / func
 aliases / cfg.
@@ -409,7 +409,7 @@ when they don't.
 
 **Smell:**
 ```c
-/* replay.c — E key path */
+/* replay.c - E key path */
 if (key == 'e' || key == 'E') {
     g_replay_expand_args = !g_replay_expand_args;
     return 1;
@@ -433,7 +433,7 @@ would fail to advance when toggled via E.
  
 ### 15. 🔀 Lifecycle verbs disagree across all four peers
 
-**Status:** Resolved (by `29f8b10`) — `src/subsystems/README.md` now
+**Status:** Resolved (by `29f8b10`) - `src/subsystems/README.md` now
 documents the accepted lifecycle vocabulary: session/state-machine peers use
 `_start()` / `_stop()`, while display-only panels such as variable_panel use
 the explicit `*_set_visible(int)` setter.
@@ -453,30 +453,30 @@ documented rationale for which subsystem uses which.
 to memorize four naming styles. The
 `variable_panel_set_visible(int)` setter exists but production
 writes the field directly via `_view_mut()->visible` (in
-`glr_config.c:98` and `glr_ctrl.c:1935`) — the setter is used only
+`glr_config.c:98` and `glr_ctrl.c:1935`) - the setter is used only
 by tests. Either the setter is the API or the field write is the API;
 can't be both.
 
-**Fix:** Pick one — `_start`/`_stop` recommended (matches the most
+**Fix:** Pick one - `_start`/`_stop` recommended (matches the most
 common verb pair). Update the variable_panel write sites to call
 the setter. Document the verbs in `subsystems/README.md`.
 
 ### 16. 🔀 Accessor naming: `_mut` vs `_view_mut` vs no-mut
 
-**Status:** Resolved (by `subsystem-smells`) — Aligned variable panel naming to standard `variable_panel_state_mut()` and updated its usages, and documented the design pattern in `src/subsystems/README.md`.
+**Status:** Resolved (by `subsystem-smells`) - Aligned variable panel naming to standard `variable_panel_state_mut()` and updated its usages, and documented the design pattern in `src/subsystems/README.md`.
 
 **Where:** cross-peer:
 - replay: `replay_state_view()` / `replay_state_mut()`
 - tutorial: `tutorial_state_view()` / `tutorial_state_mut()`
 - variable_panel: `variable_panel_view()` / **`variable_panel_view_mut()`**
   (and `variable_panel_drag()` / `variable_panel_drag_mut()`)
-- color_picker: `color_picker_view()` only — **no mutable accessor**
+- color_picker: `color_picker_view()` only - **no mutable accessor**
 
 **Smell:** `variable_panel_view_mut` is the only "view_mut" name in
-the codebase — every other accessor uses `_mut` directly. Reading
+the codebase - every other accessor uses `_mut` directly. Reading
 "view_mut" suggests "mutable view," which is semantically odd: a
 view is by-convention read-only. `color_picker_view()` is a
-different beast entirely — it returns a derived projection
+different beast entirely - it returns a derived projection
 (`ColorPickerView`) rather than the live storage state.
 
 **Fix:** Either (a) rename `variable_panel_view_mut` →
@@ -488,13 +488,13 @@ view."
 
 ### 17. 🔀 `_state.c + *.c` two-file shape is fiction for color_picker
 
-**Status:** Resolved (by `subsystem-smells`) — Updated `src/subsystems/README.md` to legalize co-located single-file architectures (like `color_picker_state.c`) and document peer subsystem layout exceptions.
+**Status:** Resolved (by `subsystem-smells`) - Updated `src/subsystems/README.md` to legalize co-located single-file architectures (like `color_picker_state.c`) and document peer subsystem layout exceptions.
 
 **Where:** `src/subsystems/color_picker/`
 
 **Smell:** README (lines 39-42) asserts every subsystem has a
 two-file shape: `*_state.c` (storage) + `*.c` (runner). Color_picker
-has **only** `color_picker_state.c` (374 lines) — no separate
+has **only** `color_picker_state.c` (374 lines) - no separate
 runner. It mixes storage, lifecycle, input handlers, writeback
 runner, and pure helpers in one file. Variable_panel inverts the
 rule (runner is named `_drag.c`, not `variable_panel.c`).
@@ -506,7 +506,7 @@ variable_panel's `_drag.c` runner naming.
 
 ### 18. 🔀 `glr_ctrl_reset_all` clears three peers explicitly; color_picker is reset transitively
 
-**Status:** Resolved (by `b3af6ca`) — Added explicit reset / teardown for color_picker and documented navigation closing policies.
+**Status:** Resolved (by `b3af6ca`) - Added explicit reset / teardown for color_picker and documented navigation closing policies.
 
 **Where:** `src/app/glr_ctrl.c:2200-2209`
 
@@ -522,14 +522,14 @@ editor_reset_transients();      /* this is where color_picker_close() lives */
 The peer-explicit list calls `replay_state_reset` and
 `variable_panel_state_reset` (peer-owned verbs), then
 `tutorial_teardown` (a peer-owned verb with cfg-baseline restore),
-then `editor_reset_transients` — which transitively calls
+then `editor_reset_transients` - which transitively calls
 `color_picker_close()` (`src/editor/input.c:355`). The editor
 helper's comment at line 29-34 acknowledges the cross-layer fan-out
 as "Known boundary exception."
 
 Color_picker is also closed in **eight other places** (`glr_actions.c:445`,
 `glr_ctrl.c:3188`, `:3242`, `:3253`, `:3271`, `:3307`,
-`editor/input.c:355`, `:942`, `:1003`) — none of the other peers
+`editor/input.c:355`, `:942`, `:1003`) - none of the other peers
 get closed on click/escape/navigate.
 
 **Why it matters:** Color_picker's "close on every navigation"
@@ -543,7 +543,7 @@ the canonical reset verb) and call it explicitly in
 
 ### 19. 🔀 Type ownership of state structs is scattered across four directories
 
-**Status:** Resolved (by `29f8b10`) — `EditorVariableDragState` was renamed
+**Status:** Resolved (by `29f8b10`) - `EditorVariableDragState` was renamed
 and moved to the variable-panel peer as `VariablePanelDragState`;
 `ReplReplayRuntimeState` was moved out of `repl/state_views.h` and renamed
 `ReplayRuntimeState` under the replay peer; and `UiVariablePanelState` was
@@ -558,7 +558,7 @@ renamed to `VariablePanelViewState`.
   (NOT in the peer; owned by the editor module by name only)
 - `UiVariablePanelState` in `src/subsystems/variable_panel/variable_panel_state.h:27-30`
   (has the `Ui*` prefix despite living in subsystems)
-- color_picker: no separate runtime-state struct — file-static
+- color_picker: no separate runtime-state struct - file-static
   scalars only
 
 **Smell:** The replay type sits in `repl/state_views.h` with a
@@ -571,7 +571,7 @@ and tutorial *does* keep its type in the peer header. Inconsistent.
 `Editor*`, lives in `editor/state.h`, but is used **only** by the
 variable_panel peer (and one controller line). `MODULES.md:125`
 explicitly lists "Variable-panel drag (now on the variable_panel
-peer)" under "EditorState NOT-responsible" — but the type itself
+peer)" under "EditorState NOT-responsible" - but the type itself
 never moved.
 
 **Fix:** Move `ReplReplayRuntimeState` into
@@ -585,7 +585,7 @@ consistently). Move `EditorVariableDragState` →
 
 ### 20. 🔀 `_state.h` files include very different things
 
-**Status:** Resolved (by `subsystem-smells`) — Cleaned up circular dependencies in `variable_panel_state.h` by removing upper-layer `"editor/state.h"` and `"ui/app/state_types.h"` includes and replacing them with `"config.h"`.
+**Status:** Resolved (by `subsystem-smells`) - Cleaned up circular dependencies in `variable_panel_state.h` by removing upper-layer `"editor/state.h"` and `"ui/app/state_types.h"` includes and replacing them with `"config.h"`.
 
 **Where:**
 - `replay_state.h:19`: `#include "repl/state_views.h"`
@@ -595,7 +595,7 @@ consistently). Move `EditorVariableDragState` →
 - `color_picker_state.h`: **no includes**
 
 **Smell:** `variable_panel_state.h` reaches into both `editor/state.h`
-AND `ui/app/state_types.h` — a peer header that pulls in two
+AND `ui/app/state_types.h` - a peer header that pulls in two
 upper-layer surfaces. The `variable_panel_drag.h` shim exists ONLY
 to dodge a circular header dependency (acknowledged in the file's
 top comment).
@@ -606,7 +606,7 @@ more than its siblings.
 
 **Fix:** Once `EditorVariableDragState` moves into the peer (see
 #19), `variable_panel_state.h` can drop `editor/state.h`. The
-`UiVariablePanelState` -> snapshot inclusion path needs review —
+`UiVariablePanelState` -> snapshot inclusion path needs review -
 either move that type out, or accept that the peer header is
 serving both purposes and inline the shim.
 
@@ -625,7 +625,7 @@ documents it as not-editor-owned.
 **Fix:** Move to `subsystems/variable_panel/variable_panel_state.h`;
 rename to `VariablePanelDragState`.
 
-### 22. Tutorial's `_state` constructor uses `__attribute__((constructor))` — gcc/clang-only
+### 22. Tutorial's `_state` constructor uses `__attribute__((constructor))` - gcc/clang-only
 
 **Where:** `src/subsystems/tutorial/tutorial_state.c:27-32`
 
@@ -649,7 +649,7 @@ constructor wouldn't fire; `g_tutorial_state` would be BSS-zero,
 giving `tutorial_idx = 0` (not -1), `fade_line_idx = 0` (not -1),
 etc. The chicken-and-egg with `tutorial_active()` (which reads
 `g_tutorial_state.active`) means `tutorial_start` would still see
-"not active" and behave correctly — but the silently-different
+"not active" and behave correctly - but the silently-different
 sentinel values are a footgun if any code path skips
 `tutorial_state_reset` and relies on `-1` defaults.
 
@@ -662,9 +662,9 @@ GCC/clang per CLAUDE.md), or (b) wire `tutorial_state_init_defaults`
 into `glr_ctrl_init_gl()` so first-use correctness doesn't depend on
 `__attribute__((constructor))`. Option (b) is more portable.
 
-### 23. Tutorial includes `repl/state_owners.h` for the cfg-bridge — pulls in the entire mut surface
+### 23. Tutorial includes `repl/state_owners.h` for the cfg-bridge - pulls in the entire mut surface
 
-**Status:** Resolved (by `99abee6`) — the cfg bridge now lives behind
+**Status:** Resolved (by `99abee6`) - the cfg bridge now lives behind
 `repl/cfg_baseline.h`, and the retained `repl/state_owners.h` include is
 documented as broad REPL state access for document-count queries, dirty
 marks, variable-time reads, and workspace-header parsing rather than cfg
@@ -675,7 +675,7 @@ bridge access.
 **Smell:** `repl/state_owners.h` exposes ALL the `_mut()` accessors,
 not just the cfg-bridge ones. CLAUDE.md's row for that header even
 notes the tutorial carve-out: *"single-slug bridge accessors used by
-`src/subsystems/tutorial/tutorial.c`"* — but the whole surface comes
+`src/subsystems/tutorial/tutorial.c`"* - but the whole surface comes
 along.
 
 **Why it matters:** A subsystem reading/writing only its own state
@@ -714,7 +714,7 @@ trampolines.
 
 ### 25. `cp_compute_rects` reads file-globals while taking an output pointer (half-pure)
 
-**Status:** Resolved (by `subsystem-smells`) — `cp_compute_rects` now takes
+**Status:** Resolved (by `subsystem-smells`) - `cp_compute_rects` now takes
 explicit `(px, py, out)` arguments, and each call site passes the picker
 coordinates directly.
 
@@ -737,7 +737,7 @@ sites pass `g_cp_px`/`g_cp_py` explicitly.
 
 ### 26. Variable_panel reads predef table via `_mut` macros for read-only work
 
-**Status:** Resolved (by `subsystem-smells`) — Refactored `variable_panel_drag.c` to use the read-only `repl_eval_predef_view()` instead of the mutable macros.
+**Status:** Resolved (by `subsystem-smells`) - Refactored `variable_panel_drag.c` to use the read-only `repl_eval_predef_view()` instead of the mutable macros.
 
 **Where:** `src/subsystems/variable_panel/variable_panel_drag.c:43, 49, 95`
 
@@ -749,7 +749,7 @@ drag->start_value = g_predef_vars[row].value;
 ```
 `g_predef_vars` / `g_num_predef_vars` are macros over
 `repl_eval_predef_vars_mut()` / `*repl_eval_predef_count_mut()`
-(`src/repl/eval.h:156-157`). The peer reads from these — but
+(`src/repl/eval.h:156-157`). The peer reads from these - but
 `repl_eval_predef_view()` exists for exactly this case.
 
 **Fix:** Route through `repl_eval_predef_view()` (returns
@@ -779,7 +779,7 @@ Two places to update when a new session-state field is added.
 
 ### 28. Replay tess-depth state machine has five inconsistent copies
 
-**Status:** Resolved (by `subsystem-smells`) — Lifted unified `replay_advance_tess_depth(CmdType, int)` helper to `src/subsystems/replay/replay.c` and integrated it across both `replay_compute_fade_skip_limits` and `replay_walk_user_vertices`.
+**Status:** Resolved (by `subsystem-smells`) - Lifted unified `replay_advance_tess_depth(CmdType, int)` helper to `src/subsystems/replay/replay.c` and integrated it across both `replay_compute_fade_skip_limits` and `replay_walk_user_vertices`.
 
 **Where:** `src/subsystems/replay/replay.c:85-116, 213-234, 537-547,
 614-630, 678-694`
@@ -800,7 +800,7 @@ once they share code.
 
 ### 29. `ReplayFadePlan` lives on the peer header but is only used by the controller
 
-**Status:** Resolved (by `subsystem-smells`) — Moved `ReplayFadePlan` out of the public replay peer header into `app/glr_ctrl.h` alongside an explicit include of `repl/state_views.h`.
+**Status:** Resolved (by `subsystem-smells`) - Moved `ReplayFadePlan` out of the public replay peer header into `app/glr_ctrl.h` alongside an explicit include of `repl/state_views.h`.
 
 **Where:** `src/subsystems/replay/replay.h:54-63`,
 used at `src/app/glr_ctrl.c:221-322`
@@ -810,12 +810,12 @@ allocate, write, or read it. The comment "Snapshot the controller
 assembles per frame" acknowledges this is controller-owned.
 
 **Fix:** Move into `src/app/glr_ctrl.c` or a controller-private
-header. The pure peer types — `ReplayFadeBatch`,
-`ReplayFadeBatchView`, `REPLAY_FADE_BATCH_MAX` — stay on `replay.h`.
+header. The pure peer types - `ReplayFadeBatch`,
+`ReplayFadeBatchView`, `REPLAY_FADE_BATCH_MAX` - stay on `replay.h`.
 
 ### 30. Tutorial reaches into `repl/export.h` for the cfg-baseline bag
 
-**Status:** Resolved (by `29f8b10`) — tutorial now includes
+**Status:** Resolved (by `29f8b10`) - tutorial now includes
 `repl/cfg_baseline.h`, and the neutral cfg-baseline surface uses
 `ReplConfigBag`, `ReplConfigBridge`, and `repl_config_*` names instead of
 export-flavored `ReplExportConfig` / `repl_export_config_*` names.
@@ -825,7 +825,7 @@ export-flavored `ReplExportConfig` / `repl_export_config_*` names.
 **Smell:** Tutorial uses `repl_export_config_bridge()`,
 `repl_export_config_clear()`, `repl_export_config_set_int()`,
 `repl_export_extract_cfg_slug()`, plus
-`repl_state_parse_workspace_header_line()` — the *export* surface —
+`repl_state_parse_workspace_header_line()` - the *export* surface -
 to take a baseline snapshot of cfg state and replay it later. The
 bag and the round-trip mechanism were designed for export/import,
 not for tutorial baselines.
@@ -841,11 +841,11 @@ implying export semantics.
 
 ### 31. Tutorial's `tutorial_block_noncommand_commit` is both predicate and status-setter
 
-**Status:** Resolved (by `subsystem-smells`) — Renamed it to `tutorial_reject_noncommand_commit_with_hint` to cleanly reflect its role and document it.
+**Status:** Resolved (by `subsystem-smells`) - Renamed it to `tutorial_reject_noncommand_commit_with_hint` to cleanly reflect its role and document it.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:849-868`
 
-**Smell:** Function name reads as "should I block?" — but the body
+**Smell:** Function name reads as "should I block?" - but the body
 fires `repl_set_status(...)` as a side effect. The header
 acknowledges this dual role. Idempotent re-polls would re-overwrite
 the status.
@@ -856,7 +856,7 @@ separate `tutorial_emit_block_hint` emitter.
 
 ### 32. Tutorial's `tutorial_cancel_pending` clears pending but not `expected_commit_line`
 
-**Status:** Resolved (by `subsystem-smells`) — Added documentation explaining that `expected_commit_line` persists so users can retry the commit without having their work locked.
+**Status:** Resolved (by `subsystem-smells`) - Added documentation explaining that `expected_commit_line` persists so users can retry the commit without having their work locked.
 
 **Where:** `src/subsystems/tutorial/tutorial.c` (cancel vs
 advance/notify/ack pending-reset sites)
@@ -864,7 +864,7 @@ advance/notify/ack pending-reset sites)
 **Smell:** Every other "step transition" path clears both
 `pending.*` and `expected_commit_line`. Cancel clears only pending.
 So after a cancel, `expected_commit_line` still marks a row that no
-in-flight commit will land on — `tutorial_guard_source_change`
+in-flight commit will land on - `tutorial_guard_source_change`
 continues blocking mutations at that row. Plausibly intentional, but
 nowhere documented.
 
@@ -873,7 +873,7 @@ why `expected_commit_line` survives cancellation, or clear it too.
 
 ### 33. Tutorial's `notify_state_changed` can advance during a SET step's own cfg write
 
-**Status:** Resolved (by `subsystem-smells`) — Implemented `in_enter_step` re-entrancy gate to `TutorialRuntimeState` and gated `tutorial_notify_state_changed` to resolve loops.
+**Status:** Resolved (by `subsystem-smells`) - Implemented `in_enter_step` re-entrancy gate to `TutorialRuntimeState` and gated `tutorial_notify_state_changed` to resolve loops.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:808` (notify) +
 `:726` (`repl_cfg_set_int` inside SET branch of `tutorial_enter_step`)
@@ -906,12 +906,12 @@ before the rename. Tutorial's `_state.c` has no leading comment at
 all; replay's is terse-but-correct.
 
 **Fix:** Sync the header comment to the actual filename. Either add
-or remove a leading comment for tutorial_state.c — pick a
+or remove a leading comment for tutorial_state.c - pick a
 convention.
 
 ### 35. Tutorial duplicates the "probe with distinct fallback" pattern twice
 
-**Status:** Resolved (by `subsystem-smells`) — Unified the duplicate checks into a clean `tutorial_cfg_matches_target` helper utilizing the robust `repl_cfg_known` API.
+**Status:** Resolved (by `subsystem-smells`) - Unified the duplicate checks into a clean `tutorial_cfg_matches_target` helper utilizing the robust `repl_cfg_known` API.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:746, 818`
 
@@ -921,7 +921,7 @@ int probe_fb = (target == 0) ? -1 : 0;
 if (repl_cfg_get_int(slug, probe_fb) == target)
 ```
 The trick exists because `repl_cfg_get_int` returns a caller-supplied
-default for unknown slugs — and an unknown slug shouldn't be
+default for unknown slugs - and an unknown slug shouldn't be
 mistaken for "already satisfied." But `repl_cfg_known(slug)` is
 already exposed; using it would replace the magic-fallback trick.
 
@@ -959,7 +959,7 @@ when (and if) v2 ships.
 
 ### 38. Dead/unused setter: `variable_panel_set_visible` never called from production
 
-**Status:** Resolved (by `subsystem-smells`) — Setter adopted at all production write sites (`glr_ctrl.c:1969`), making it active and robust.
+**Status:** Resolved (by `subsystem-smells`) - Setter adopted at all production write sites (`glr_ctrl.c:1969`), making it active and robust.
 
 **Where:** `src/subsystems/variable_panel/variable_panel_state.c:54-56`
 
@@ -992,7 +992,7 @@ concern is float roundoff in `color_picker_hsv_to_rgb`, replace with
 
 ### 40. Dead capture/restore on replay and variable_panel (covered in #11)
 
-**Status:** Resolved (by `subsystem-smells`) — Handled as part of finding #11; documented the capture/restore behaviors as test/verification contracts.
+**Status:** Resolved (by `subsystem-smells`) - Handled as part of finding #11; documented the capture/restore behaviors as test/verification contracts.
 
 Functions exist; no callers. Either wire them in or delete them.
 
@@ -1020,7 +1020,7 @@ over "active vs benchmark mode."
 ```
 A macro that needs `unused` annotations on its outputs is signaling
 that callers regularly use only a subset. `replay_compute_fade_skip_limits:184-187`
-inlines the macro manually — confirming the abstraction is leaky.
+inlines the macro manually - confirming the abstraction is leaky.
 
 **Fix:** Drop the macro; name the locals what the function actually
 uses. The two-line "view + count" boilerplate is short enough to
@@ -1048,7 +1048,7 @@ must provide writable scratch via C99 compound literals.
 
 ### 44. `tutorial_enter_step` is a 90-line god-function with three branches
 
-**Status:** Resolved (by `subsystem-smells`) — Decomposed the god-function into kind-specific helper functions (`tutorial_enter_step_command`, `tutorial_enter_step_set`, `tutorial_enter_step_require`) and a shared host effect cursor-parking dispatcher.
+**Status:** Resolved (by `subsystem-smells`) - Decomposed the god-function into kind-specific helper functions (`tutorial_enter_step_command`, `tutorial_enter_step_set`, `tutorial_enter_step_require`) and a shared host effect cursor-parking dispatcher.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:677-765`
 
@@ -1068,7 +1068,7 @@ makes the existing `1/0/-1` tri-state contract easier to audit.
 
 ### 45. Tutorial's pending-clear copy-paste appears five times verbatim
 
-**Status:** Resolved (by `subsystem-smells`) — Consolidated the duplicate pending reset statements into a single, clean helper `tutorial_pending_reset()`, and unified step advancement via `tutorial_advance_step()`.
+**Status:** Resolved (by `subsystem-smells`) - Consolidated the duplicate pending reset statements into a single, clean helper `tutorial_pending_reset()`, and unified step advancement via `tutorial_advance_step()`.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:793-797, 824-828,
 840-844, 1083-1085, 1107-1109`
@@ -1076,7 +1076,7 @@ makes the existing `1/0/-1` tri-state contract easier to audit.
 **Smell:** Five sites reset the `pending.*` triplet to `-1`; three
 of them also clear `expected_commit_line` and bump `step` before
 calling `tutorial_advance_loop`. The cancel path clears pending only
-(see #32) — no documented invariant explains why.
+(see #32) - no documented invariant explains why.
 
 **Fix:** Add `tutorial_pending_reset()` (one-line clear of pending)
 and `tutorial_advance_step()` (resets pending + expected_commit_line,
@@ -1086,7 +1086,7 @@ narrower semantics by calling only `_pending_reset()`.
 
 ### 46. Tutorial uses three return-code conventions in one file
 
-**Status:** Resolved (by `subsystem-smells`) — Named step flow return values with a descriptive `TutorialStepResult` enum (`TUTORIAL_STEP_TERMINAL`, `_AUTOADVANCE`, `_PAUSE`) and refactored the loops to use it.
+**Status:** Resolved (by `subsystem-smells`) - Named step flow return values with a descriptive `TutorialStepResult` enum (`TUTORIAL_STEP_TERMINAL`, `_AUTOADVANCE`, `_PAUSE`) and refactored the loops to use it.
 
 **Where:** `src/subsystems/tutorial/tutorial.c`
 
@@ -1105,7 +1105,7 @@ loop's `while (1) { if (r != 0) return; }` becomes
 
 ### 47. Tutorial duplicates two status strings across guard and enter-step
 
-**Status:** Resolved (by `subsystem-smells`) — Extracted shared user status messages into reusable `tutorial_set_status_ack_set()` and `tutorial_set_status_require()` helper methods.
+**Status:** Resolved (by `subsystem-smells`) - Extracted shared user status messages into reusable `tutorial_set_status_ack_set()` and `tutorial_set_status_require()` helper methods.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:731 & 854, 756 & 862`
 
@@ -1125,7 +1125,7 @@ Decide on one slug NULL policy.
 
 ### 48. "Tutorial step target label is unresolved" reused for four distinct failures
 
-**Status:** Resolved (by `subsystem-smells`) — Differentiated the unresolved target step errors with precise messages in `tutorial_step_instruction_line()`.
+**Status:** Resolved (by `subsystem-smells`) - Differentiated the unresolved target step errors with precise messages in `tutorial_step_instruction_line()`.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:354, 368, 374, 379`
 
@@ -1140,14 +1140,14 @@ runs).
 ### 49. 🔀 Comment density and rationale style diverge across peers
 
 **Where:**
-- `tutorial.c` — heavy block-comment narrative (~24% of lines).
+- `tutorial.c` - heavy block-comment narrative (~24% of lines).
   Examples: 7-line block at `:101-107` explaining `tutorial_cfg_baseline_restore`
   order sensitivity; 9-line block at `:532-540` repeating the
   reasoning at the teardown site; 20-line block at `:470-489` on
   `tutorial_start`'s teardown-then-baseline-then-reset ordering;
   9-line block at `:505-513` on tag-mask cross-pumping
-- `replay.c` — terse; longest narrative is 3 lines
-- `color_picker_state.c` / `variable_panel_*.c` — medium
+- `replay.c` - terse; longest narrative is 3 lines
+- `color_picker_state.c` / `variable_panel_*.c` - medium
 
 **Smell:** Tutorial's comments are genuinely warranted (the
 cfg-baseline semantics are intricate), but the four peers don't
@@ -1162,7 +1162,7 @@ contracts into the .c.
 
 ### 50. Replay duplicates the "flatten-if-dirty, restore live vars" prologue
 
-**Status:** Resolved (by `subsystem-smells`) — Factored out `repl_ensure_flat_program_with_live_vars()` under `src/repl/flatten.c` and integrated it in `replay_seek_to_src_line` and `replay_start`.
+**Status:** Resolved (by `subsystem-smells`) - Factored out `repl_ensure_flat_program_with_live_vars()` under `src/repl/flatten.c` and integrated it in `replay_seek_to_src_line` and `replay_start`.
 
 **Where:** `src/subsystems/replay/replay.c:771-780, 818-829`
 (plus a similar block without var-preserve at
@@ -1177,7 +1177,7 @@ future "I need a fresh flat program right now" caller use it.
 
 ### 51. Magic numbers in color_picker: `g_cp_drag` is an untyped int for a 4-value enum
 
-**Status:** Resolved (by `subsystem-smells`) — Defined `CpDragTarget` enum and replaced magic integer constants throughout `color_picker_state.c`.
+**Status:** Resolved (by `subsystem-smells`) - Defined `CpDragTarget` enum and replaced magic integer constants throughout `color_picker_state.c`.
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c:36, 322,
 331, 341, 366`
@@ -1194,7 +1194,7 @@ CP_DRAG_ALPHA };`.
 
 ### 52. Color_picker's `cp_*` prefix vs full `color_picker_*` is inconsistent
 
-**Status:** Resolved (by `subsystem-smells`) — Formally accepted `cp_*` as a file-local private prefix convention and explicitly documented it at the top of `color_picker_state.c`.
+**Status:** Resolved (by `subsystem-smells`) - Formally accepted `cp_*` as a file-local private prefix convention and explicitly documented it at the top of `color_picker_state.c`.
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c`
 
@@ -1203,17 +1203,17 @@ CP_DRAG_ALPHA };`.
 public functions use `color_picker_*`. Other peers use full prefix
 for statics (`variable_panel_drag.c` doesn't abbreviate).
 
-**Fix:** Pick one — accept `cp_*` as a documented file-local
+**Fix:** Pick one - accept `cp_*` as a documented file-local
 shorthand (add a one-liner at the top of the file) or rename to
 `color_picker_*` throughout.
 
 ### 53. Magic transient buffer sizes (64, 96, 128, 256)
 
-**Status:** Resolved (by `subsystem-smells`) — Standardized status and message buffers to utilize `TUTORIAL_STATUS_MAX` and introduced `REPLAY_STATUS_MSG_LEN` (64) in `config.h`.
+**Status:** Resolved (by `subsystem-smells`) - Standardized status and message buffers to utilize `TUTORIAL_STATUS_MAX` and introduced `REPLAY_STATUS_MSG_LEN` (64) in `config.h`.
 
 **Where:**
-- `src/subsystems/replay/replay.c:1003, 1024, 925` — `char msg[64]`
-- `src/subsystems/tutorial/tutorial.c:392-393, 592, 755, 861` —
+- `src/subsystems/replay/replay.c:1003, 1024, 925` - `char msg[64]`
+- `src/subsystems/tutorial/tutorial.c:392-393, 592, 755, 861` -
   `char normalized_*[256]`, `char msg[128]`, `char msg[96]`
 
 **Smell:** Tutorial defines `TUTORIAL_STATUS_MAX` (128) on the
@@ -1226,7 +1226,7 @@ add `REPLAY_STATUS_MSG_LEN` and use it.
 
 ### 54. Frame-dt constant duplicated: `REPLAY_FADE_INITIAL_AGE 0.016f`
 
-**Status:** Resolved (by `subsystem-smells`) — Lifted `GLR_FRAME_DT_SECS` (0.016f) to the central `config.h` header and reused it for `REPLAY_FADE_INITIAL_AGE`.
+**Status:** Resolved (by `subsystem-smells`) - Lifted `GLR_FRAME_DT_SECS` (0.016f) to the central `config.h` header and reused it for `REPLAY_FADE_INITIAL_AGE`.
 
 **Where:** `src/subsystems/replay/replay.c:36` and
 `src/app/glr_ctrl.c:2101` (`GLR_FRAME_DT_SECS 0.016f`)
@@ -1239,7 +1239,7 @@ add `REPLAY_STATUS_MSG_LEN` and use it.
 
 ### 55. Stale "scene consumes" doc-comment on `replay.h`
 
-**Status:** Resolved (by `subsystem-smells`) — Rewrote comment to state that the controller consumes batches in its per-frame fade-render hook.
+**Status:** Resolved (by `subsystem-smells`) - Rewrote comment to state that the controller consumes batches in its per-frame fade-render hook.
 
 **Where:** `src/subsystems/replay/replay.h:77-79`
 
@@ -1249,22 +1249,22 @@ add `REPLAY_STATUS_MSG_LEN` and use it.
  * scene module consumes them. */
 ```
 The replay peer is no longer in `src/repl/`, and the consumer is no
-longer `src/scene/` — it's the controller (`glr_ctrl.c::glr_ctrl_render_replay_fade_batches`).
+longer `src/scene/` - it's the controller (`glr_ctrl.c::glr_ctrl_render_replay_fade_batches`).
 
 **Fix:** Rewrite as "The replay peer produces batches; the controller
 consumes them in its per-frame fade-render hook."
 
 ### 56. `static const ReplayTessPreviewCallbacks` / etc. use `g_` prefix
 
-**Status:** Tracked / Deferred — Outside subsystems scope; covered as finding #64 in the `src-app` audit.
+**Status:** Tracked / Deferred - Outside subsystems scope; covered as finding #64 in the `src-app` audit.
 
-This is in `src/app/glr_ctrl.c`, not subsystems — but worth noting
+This is in `src/app/glr_ctrl.c`, not subsystems - but worth noting
 because the peer's callback contract bleeds back into the controller.
 Covered as finding #64 in the `src-app` audit.
 
 ### 57. Color_picker's `color_picker_open` clamp algorithm
 
-**Status:** Resolved (by `subsystem-smells`) — Extracted a clean, convergent `clamp_popup_x()` helper in `color_picker_state.c` and integrated it in `color_picker_start`.
+**Status:** Resolved (by `subsystem-smells`) - Extracted a clean, convergent `clamp_popup_x()` helper in `color_picker_state.c` and integrated it in `color_picker_start`.
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c:222-225`
 
@@ -1284,7 +1284,7 @@ end-clamp.
 
 ### 58. Variable_panel column-alignment drift
 
-**Status:** Resolved (by `subsystem-smells`) — Removed manual alignment spaces to standardize on single space formatting inside `variable_panel_state.h`.
+**Status:** Resolved (by `subsystem-smells`) - Removed manual alignment spaces to standardize on single space formatting inside `variable_panel_state.h`.
 
 **Where:** `src/subsystems/variable_panel/variable_panel_state.h:46-49`
 
@@ -1295,26 +1295,26 @@ lines. Manual column alignment fights an asymmetric type-name length.
 
 ### 59. Stale phase-name references in source comments
 
-**Status:** Resolved (by `subsystem-smells`) — Performed a full sweep of stale comment references, removing phase names, old function rationales, and bug references in `replay.c`, `tutorial.h`, and `color_picker_state.c`.
+**Status:** Resolved (by `subsystem-smells`) - Performed a full sweep of stale comment references, removing phase names, old function rationales, and bug references in `replay.c`, `tutorial.h`, and `color_picker_state.c`.
 
 **Where:** `src/subsystems/variable_panel/variable_panel_drag.c:15-18`,
 `src/subsystems/tutorial/tutorial.c:225`, `tutorial.h:27, 49, 122`,
 `color_picker_state.c:10` (stale rationale: `repl/core.h /* set_status,
-MAX_LINE_LEN */` — function was renamed to `repl_set_status`;
+MAX_LINE_LEN */` - function was renamed to `repl_set_status`;
 `MAX_LINE_LEN` is in `config.h`), plus the newer plan-coupled comments
 in `src/subsystems/replay/replay.c` that say `Bug 7` / `Bug 14`.
 
-**Smell:** "Phase F commit 31" / "Phase J7" / "v1 catalog" — internal
+**Smell:** "Phase F commit 31" / "Phase J7" / "v1 catalog" - internal
 phase nomenclature without git-hash anchors.
 
-**Fix:** Mechanical sweep — drop phase references; keep "why this is
+**Fix:** Mechanical sweep - drop phase references; keep "why this is
 here" notes that survive after the plan is forgotten.
 
 ## Sequencing
 
 ### Remaining tracked item
 
-1. **#56** — `static const ReplayTessPreviewCallbacks` / related controller
+1. **#56** - `static const ReplayTessPreviewCallbacks` / related controller
    callback constants still use a `g_` prefix outside `src/subsystems/`.
    This is intentionally tracked in the `src-app` audit (finding #64), not
    as a subsystem-owned cleanup.
@@ -1338,7 +1338,7 @@ be used as next-step work unless a new regression is found.
   soft contract violation (acknowledged in source comments) that's
   been consciously taken; don't try to "fix" it without rethinking
   the GLCmd → GL split.
-- The peer-to-peer dependency check came up clean — no
+- The peer-to-peer dependency check came up clean - no
   `subsystems/<other>/` includes between peers. The
   `replay_lift_px` coupling-by-name is the controller's
   responsibility, not the peer's.
@@ -1349,7 +1349,7 @@ be used as next-step work unless a new regression is found.
 
 This audit was produced by four parallel review agents:
 
-- `replay/replay.{c,h} + replay_state.{c,h}` (1537 lines total —
+- `replay/replay.{c,h} + replay_state.{c,h}` (1537 lines total -
   the biggest peer)
 - `tutorial/tutorial.{c,h} + tutorial_state.{c,h}` (1408 lines)
 - `variable_panel/*` + `color_picker/*` (761 lines, two smaller peers
@@ -1364,7 +1364,7 @@ the source. The 🟡 / 🟢 / 🔵 findings are reported as the agents
 framed them; spot-check before acting on the more mechanical ones.
 
 The cross-cutting review (#15-#20, #34, #49) is the highest-leverage
-input for the "unify the peer shape" pass — those findings are
+input for the "unify the peer shape" pass - those findings are
 about the README contract being out of sync with what the four
 subsystems actually do, and the fix is largely deciding on a
 canonical shape and migrating the outliers.

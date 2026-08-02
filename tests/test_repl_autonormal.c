@@ -42,7 +42,7 @@ static int auto_normal_count(void) {
     return n;
 }
 
-/* Every generated row, immediate-mode and tessellator alike — the set
+/* Every generated row, immediate-mode and tessellator alike - the set
  * repl_strip_auto_normals() is responsible for. auto_normal_count() above
  * deliberately stays glNormal3f-only: the dedup it measures is a property
  * of vertex runs, which tess contours do not have. */
@@ -60,7 +60,7 @@ static int auto_normal_count_all(void) {
 /* The normal in effect at the `ord`-th glVertex of the document (0-based).
  *
  * A normal is GL state, so a vertex's normal is whatever row most recently
- * set one — a *lookup*, not a fixed row offset. Tests used to index it as
+ * set one - a *lookup*, not a fixed row offset. Tests used to index it as
  * cmds[1 + ord * 2], which silently encoded "every vertex owns a normal
  * row"; that assumption is what the dedup removes. Scanning back keeps the
  * assertions about shading rather than about layout, so they hold whether
@@ -90,7 +90,7 @@ static const GLCmd *normal_at_vertex(int ord) {
 }
 
 /* args[axis] of the normal covering vertex `ord`, or a value no assertion
- * expects when there is none — a missing normal must fail loudly rather
+ * expects when there is none - a missing normal must fail loudly rather
  * than read as 0.0f, which several expectations legitimately want. */
 static float normal_axis_at_vertex(int ord, int axis) {
     const GLCmd *n = normal_at_vertex(ord);
@@ -349,7 +349,7 @@ static void test_autonormal_disabled(void) {
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(0, NULL);  /* disabled — no normals inserted */
+    repl_recompute_autonormals(0, NULL);  /* disabled - no normals inserted */
     ASSERT_INT("disabled: no cmds added", repl_state_document_count(), 5);
 }
 
@@ -401,7 +401,7 @@ static void test_gl_triangles(void) {
 /*
  * The autonormal pass used to skip over the entire body of any
  * CMD_FUNC_DEF / CMD_IF_BEGIN / CMD_FOR_BEGIN block. That left any
- * glBegin block inside a funcN body without normals — vertices got
+ * glBegin block inside a funcN body without normals - vertices got
  * the default GL normal (0, 0, 1) at draw time and lighting was
  * silently wrong for any face not in the XY plane.
  *
@@ -410,7 +410,7 @@ static void test_gl_triangles(void) {
  * (literal coords). Vars-dependent vertices (function params,
  * for-loop counters, predef refs) have parse-time source args that
  * don't reflect the evaluated values, so cross products on them
- * would emit (0, 0, 0) garbage — strictly worse than no normal.
+ * would emit (0, 0, 0) garbage - strictly worse than no normal.
  */
 static void test_autonormal_inside_funcn_literal_coords(void) {
     printf("test_autonormal_inside_funcn_literal_coords\n");
@@ -465,7 +465,7 @@ static void test_autonormal_inside_funcn_literal_coords(void) {
  * When the vertices depend on a function parameter / for-loop
  * counter / any var, source args are parse-time (often 0) and not a
  * reliable basis for cross products. The autonormal pass must NOT
- * insert (0, 0, 0) auto-normals in that case — leave the block
+ * insert (0, 0, 0) auto-normals in that case - leave the block
  * untouched so GL falls back to the default normal (or a previously
  * user-supplied glNormal3f survives).
  */
@@ -527,7 +527,7 @@ static void test_smooth_welds_shared_corners(void) {
     ASSERT_FLOAT("smooth: shared v0 x", normal_axis_at_vertex(0, 0), 0.0f);
     ASSERT_FLOAT("smooth: shared v0 y", normal_axis_at_vertex(0, 1), k);
     ASSERT_FLOAT("smooth: shared v0 z", normal_axis_at_vertex(0, 2), k);
-    /* v1 = (1,0,0), also shared — same average, so it rides v0's row */
+    /* v1 = (1,0,0), also shared - same average, so it rides v0's row */
     ASSERT_FLOAT("smooth: shared v1 y", normal_axis_at_vertex(1, 1), k);
     ASSERT_FLOAT("smooth: shared v1 z", normal_axis_at_vertex(1, 2), k);
     ASSERT_TRUE("smooth: v1 shares v0's row",
@@ -536,7 +536,7 @@ static void test_smooth_welds_shared_corners(void) {
     ASSERT_FLOAT("smooth: lone v2 y", normal_axis_at_vertex(2, 1), 0.0f);
     ASSERT_FLOAT("smooth: lone v2 z", normal_axis_at_vertex(2, 2), 1.0f);
     /* v3 = (0,0,0) again: the same welded average as v0, but not adjacent
-     * to it — v2 sits between — so it needs a row of its own. */
+     * to it - v2 sits between - so it needs a row of its own. */
     ASSERT_FLOAT("smooth: duplicate v3 y", normal_axis_at_vertex(3, 1), k);
     ASSERT_FLOAT("smooth: duplicate v3 z", normal_axis_at_vertex(3, 2), k);
     ASSERT_TRUE("smooth: v3 is not folded into v0's row",
@@ -549,7 +549,7 @@ static void test_smooth_welds_shared_corners(void) {
     ASSERT_FLOAT("smooth: duplicate v5 z", normal_axis_at_vertex(5, 2), k);
 }
 
-/* The same geometry under FACE mode keeps hard edges — the guard that
+/* The same geometry under FACE mode keeps hard edges - the guard that
  * smooth mode is an addition, not a change to the existing behavior. */
 static void test_face_mode_unchanged_by_smooth(void) {
     printf("test_face_mode_unchanged_by_smooth\n");
@@ -587,7 +587,7 @@ static void test_smooth_weld_is_exact(void) {
     editor_feed_line("glEnd();");
     repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
 
-    /* Face 1 keeps a pure +z, face 2 a pure +y — no averaging. */
+    /* Face 1 keeps a pure +z, face 2 a pure +y - no averaging. */
     ASSERT_FLOAT("near-miss: v0 stays +z", normal_axis_at_vertex(0, 2), 1.0f);
     ASSERT_FLOAT("near-miss: v0 has no y", normal_axis_at_vertex(0, 1), 0.0f);
     ASSERT_FLOAT("near-miss: v3 stays +y", normal_axis_at_vertex(3, 1), 1.0f);
@@ -648,7 +648,7 @@ static void test_smooth_front_face_cw(void) {
 /* ------------------------------------------------------------------ */
 
 /* A square contour in the XY plane, wound CCW, gets exactly one
- * gluNormal(0, 0, 1) at the top of the contour — not one per gluVertex.
+ * gluNormal(0, 0, 1) at the top of the contour - not one per gluVertex.
  * The tessellator re-triangulates the contour, so the contour is the only
  * unit a synthesized normal can honestly describe. */
 static void test_tess_contour_gets_one_normal(void) {
@@ -708,7 +708,7 @@ static void test_tess_contour_collinear_start(void) {
                  repl_state_document_cmds()[2].args[2], 1.0f);
 }
 
-/* A hand-written gluNormal owns its contour outright — anywhere in the
+/* A hand-written gluNormal owns its contour outright - anywhere in the
  * contour, not just at the top, because the contour is the unit. */
 static void test_tess_manual_normal_wins(void) {
     printf("test_tess_manual_normal_wins\n");
@@ -817,7 +817,7 @@ static void test_tess_front_face_and_vars(void) {
  * Row count is mode-dependent now that consecutive duplicates collapse:
  * FACE gives the folded pair one normal per triangle (2 rows), SMOOTH
  * averages per vertex and only the adjacent v0/v1 pair still matches
- * (5 rows). So the invariant is not "the count is unchanged" — it is that
+ * (5 rows). So the invariant is not "the count is unchanged" - it is that
  * switching back and forth is stable and never accumulates. */
 static void test_smooth_rewrites_existing_auto_rows(void) {
     printf("test_smooth_rewrites_existing_auto_rows\n");
@@ -836,7 +836,7 @@ static void test_smooth_rewrites_existing_auto_rows(void) {
                  normal_axis_at_vertex(0, 1), 0.70710678f);
 
     /* Re-running a mode is idempotent, and returning to FACE returns to
-     * the exact FACE layout — the delete path has to reclaim the rows
+     * the exact FACE layout - the delete path has to reclaim the rows
      * smooth mode added, not just stop adding more. */
     repl_recompute_autonormals(REPL_AUTONORMAL_SMOOTH, NULL);
     ASSERT_INT("mode switch: smooth is idempotent",
@@ -856,15 +856,15 @@ static void test_smooth_rewrites_existing_auto_rows(void) {
 
 /* Turning auto-normals off has to remove what the pass generated. The pass
  * runs from the display frame, so while the mode is on it re-inserts
- * anything an undo takes away — Off is the only point at which the rows
+ * anything an undo takes away - Off is the only point at which the rows
  * can go, and without it there is no non-manual way to get rid of them. */
 static void test_strip_removes_only_generated_rows(void) {
     printf("test_strip_removes_only_generated_rows\n");
 
     glr_ctrl_reset_all(); declare_test_vars();
     /* The typed normal must survive the strip untouched. Note it shields
-     * only the vertex directly after it — the rest of the block still gets
-     * generated rows (owning the whole block is the *tess* rule) — so this
+     * only the vertex directly after it - the rest of the block still gets
+     * generated rows (owning the whole block is the *tess* rule) - so this
      * document deliberately mixes typed and generated normals inside one
      * glBegin, which is the case the strip has to get right. */
     editor_feed_line("glBegin(GL_TRIANGLES);");
@@ -914,7 +914,7 @@ static void test_strip_removes_only_generated_rows(void) {
     ASSERT_FLOAT("strip: and keeps its value",
                  normal_axis_at_vertex(0, 0), 0.25f);
 
-    /* Stripping again is a no-op, and the pass can rebuild from here — the
+    /* Stripping again is a no-op, and the pass can rebuild from here - the
      * feature is a toggle, not a one-way door. */
     ASSERT_INT("strip: second strip removes nothing",
                repl_strip_auto_normals(NULL), 0);
@@ -923,7 +923,7 @@ static void test_strip_removes_only_generated_rows(void) {
                auto_normal_count_all(), generated);
 }
 
-/* A document with nothing generated in it must come through untouched —
+/* A document with nothing generated in it must come through untouched -
  * the strip keys on is_auto, not on "looks like a normal". */
 static void test_strip_leaves_a_hand_written_document_alone(void) {
     printf("test_strip_leaves_a_hand_written_document_alone\n");

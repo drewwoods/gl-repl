@@ -4,7 +4,7 @@
 #include "grid.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include "accent_palette.h"  /* shared accent palette: ruler axis role colors */
-#include "render3d_hash.h"   /* render3d_hash01 — frozen decoration placement */
+#include "render3d_hash.h"   /* render3d_hash01 - frozen decoration placement */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 #include <stdio.h>    /* snprintf (2D grid label text) */
 
@@ -68,7 +68,7 @@ typedef struct {
 /* Per-theme reveal motion. Only the edge-fade line themes animate a reveal;
  * the environment themes (Ocean / Frozen / Soil / Radar) keep their own
  * atmosphere fade, so their entries are unused. Unlisted entries default to
- * { GRID_REVEAL_RADIAL, head=0 } (designated-init zero) — a plain radial
+ * { GRID_REVEAL_RADIAL, head=0 } (designated-init zero) - a plain radial
  * dissolve with no head wave; that includes XZ Ruler and Star Chart, whose
  * decorations fade radially, so a quiet radial graticule reveal stays cohesive
  * with them. Edit freely. */
@@ -133,7 +133,7 @@ typedef void (*GridLineColorFn)(float v, int is_major,
                                 GridLineColors *out);
 /* Fills the X-axis / Z-axis origin colors. A pair rather than one color
  * because XZ Ruler codes direction into its meridians (warm key on X, cool
- * key on Z) — that difference is why it used to own a duplicate of
+ * key on Z) - that difference is why it used to own a duplicate of
  * draw_grid_origin_axes. Themes with one origin color fill both slots via
  * grid_line_colors_same, matching GridLineColors' x_const/z_const naming. */
 typedef void (*GridOriginColorFn)(const GridDrawContext *ctx,
@@ -234,7 +234,7 @@ static GridLineColors grid_line_colors_of(Render3dRgba color) {
 }
 
 /* Build the per-frame dissolve front and cache fade_end/band on the
- * context. The breakpoint table (ef_bp/ef_mul) is the offset-0 ramp —
+ * context. The breakpoint table (ef_bp/ef_mul) is the offset-0 ramp -
  * used directly only by the origin axes, which run through the origin so
  * their radius == |along|. The main grid lines compute their own radial
  * breakpoints per offset in draw_grid_line_pair; ticks sample the front
@@ -270,7 +270,7 @@ static void grid_edge_fade_build(GridDrawContext *ctx, float fade_end,
 }
 
 /* Edge-fade alpha multiplier for a single point at along-axis position
- * `p` — for short marks / inline axes that don't subdivide. Mirrors the
+ * `p` - for short marks / inline axes that don't subdivide. Mirrors the
  * ramp grid_edge_fade_build samples at its breakpoints. */
 static float grid_edge_fade_mul(const GridDrawContext *ctx, float p) {
     if (!ctx->edge_fade) return 1.0f;
@@ -371,7 +371,7 @@ static void grid_reveal_line(const GridDrawContext *ctx, Render3dRgba c,
  * grid_brightness only scales alpha, and alpha converges a blended line
  * toward its own color: over bright geometry a mid-gray Classic line tops
  * out near |line_color - bg| however bold the setting, so raising the
- * multiplier past Bold buys nothing. The fix is the cartographic one — a
+ * multiplier past Bold buys nothing. The fix is the cartographic one - a
  * wider near-black casing drawn under the real line, giving every line its
  * own local dark edge regardless of what is behind it. Same idiom as the
  * Frozen theme's wide-faint-under-bright-core cracks below.
@@ -383,8 +383,8 @@ static void grid_reveal_line(const GridDrawContext *ctx, Render3dRgba c,
  * alpha_scale, whose whole job is the opposite case.
  *
  * Every line gets one: majors, minors and the origin axes. Minors keep the
- * effect honest — a cased major crossing bare minors reads as two different
- * grids — but they are the dense ones (five subdivisions per cell, and the
+ * effect honest - a cased major crossing bare minors reads as two different
+ * grids - but they are the dense ones (five subdivisions per cell, and the
  * whole graticule again at FAR extent), so they take a narrower casing.
  * Nothing else holds them back: the strength already self-scales with the
  * core's own alpha (see grid_casing_color), so a minor at a quarter of a
@@ -411,7 +411,7 @@ static float grid_casing_alpha(const GridDrawContext *ctx) {
 /* Context clone for a casing pass: the brightness multiplier is
  * neutralized because the casing alpha is already derived from it, and
  * grid_color / grid_reveal_vertex would otherwise scale it a second time.
- * Everything else — xn_alpha, the edge-fade front, the reveal wipe — is
+ * Everything else - xn_alpha, the edge-fade front, the reveal wipe - is
  * inherited, so the casing dissolves in and out with its line for free. */
 static GridDrawContext grid_casing_ctx(const GridDrawContext *ctx) {
     GridDrawContext c = *ctx;
@@ -441,13 +441,13 @@ static Render3dRgba grid_casing_color(const GridDrawContext *ctx,
  * clear color and a bright cyan surface can still swallow a cyan Tron line).
  *
  * Two known costs, which are why it is not the default. It shifts hue rather
- * than just darkening — subtracting Synthwave's pink from a white surface
+ * than just darkening - subtracting Synthwave's pink from a white surface
  * leaves a green trace, so a theme's identity color can come back as its
  * complement. And glBlendEquation is GL 1.4 / EXT_blend_subtract; before
  * enabling this for real it needs the same runtime capability gate as
  * nv_fog_distance_supported (config->nv_fog_distance_supported) rather than
  * being assumed present. The blend equation is restored to GL_FUNC_ADD by
- * hand — the surrounding glPushAttrib(GL_ALL_ATTRIB_BITS) covers
+ * hand - the surrounding glPushAttrib(GL_ALL_ATTRIB_BITS) covers
  * GL_COLOR_BUFFER_BIT, but this is the same class of not-in-the-original-
  * spec state as GL_FOG_DISTANCE_MODE_NV, so it does not rely on it. */
 #ifndef GRID_CASING_SUBTRACT
@@ -493,7 +493,7 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
     /* Radial dissolve by world distance from the origin. A line at
      * perpendicular offset v fades where sqrt(v^2 + a^2) crosses the
      * front, so the breakpoints along the running axis are the radii
-     * where r hits fade_start / fade_end — same for both axes at this
+     * where r hits fade_start / fade_end - same for both axes at this
      * offset. The x-const line runs along z, the z-const line along x. */
     float fe = ctx->ef_fade_end, band = ctx->ef_band, extent = ctx->extent;
     float av = fabsf(v);
@@ -524,7 +524,7 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
     }
 }
 
-/* Emit the two origin axes — X at colors.x_const, Z at colors.z_const —
+/* Emit the two origin axes - X at colors.x_const, Z at colors.z_const -
  * honoring whichever fade path is live. Split out of draw_grid_origin_axes
  * so the casing pass can reuse it verbatim; the caller owns line width,
  * depth mask and the GL_LINES block. */
@@ -634,7 +634,7 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
 
     /* Contrast casing under the whole graticule (see GRID_CASING_*). Both
      * ranks run before the core loop, so every casing stays under every
-     * line — a minor's shadow can never land on top of a major's core at a
+     * line - a minor's shadow can never land on top of a major's core at a
      * crossing. Minors first, so where the two overlap the major's wider,
      * stronger shadow is what survives. */
     float casing_a = grid_casing_alpha(ctx);
@@ -766,7 +766,7 @@ static void grid_synthwave_line_color(float v, int is_major,
     float fade = 1.0f - dist * dist;
     if (fade < 0.0f) fade = 0.0f;
     float glow = 0.75f + ctx->breath * 0.25f;
-    /* Hot bases — the Sunset backdrop's bright horizon glow sits right
+    /* Hot bases - the Sunset backdrop's bright horizon glow sits right
      * behind these lines, so they need to punch well above the
      * Tron-level alphas to read as neon rather than silhouette. */
     float base = is_major ? 0.62f : 0.22f;
@@ -824,10 +824,10 @@ static void grid_ruler_end_pass(const GridDrawContext *ctx) {
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
         float ta = (fabsf(v) <= major * 2.5f) ? 0.44f : 0.20f;
         ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(ctx, v);
-        /* Ticks crossing the X axis in the Z direction — warm key */
+        /* Ticks crossing the X axis in the Z direction - warm key */
         grid_color(ctx, ax[0], ax[1], ax[2], ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
-        /* Ticks crossing the Z axis in the X direction — cool key */
+        /* Ticks crossing the Z axis in the X direction - cool key */
         grid_color(ctx, az[0], az[1], az[2], ta);
         glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
     }
@@ -896,7 +896,7 @@ static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
     glPushMatrix();
     glLoadIdentity();
     /* GL_FOG_BIT is on the push mask because the outer grid pass
-     * leaves fog enabled (linear, end ≈ grid extent) — and after
+     * leaves fog enabled (linear, end ≈ grid extent) - and after
      * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
      * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
      * branch. With identity modelview the rect's eye-space radial
@@ -1019,7 +1019,7 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     }
 }
 
-/* Frozen Lake: a winter pond. Major grid lines are fracture cracks —
+/* Frozen Lake: a winter pond. Major grid lines are fracture cracks -
  * jittered polylines with a wide faint halo, a bright core, and a
  * dimmer echo sunk below the surface so the sheet reads as thick;
  * minor lines stay faint straight etch marks under the ice. The
@@ -1027,11 +1027,11 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
  * translucent blue-white ice sheet just above Y=0 with static
  * frost-heave displacement and a slow sheen drifting across it.
  * Below Y=0 the viewport gets a pale glacial tint (same mechanism as
- * Ocean's underwater fill) — looking up through the ice. */
+ * Ocean's underwater fill) - looking up through the ice. */
 
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
  * the cracks and frost heave stay frozen in place (no swimming).
- * Range adapter over the shared render3d_hash01 — same arithmetic as
+ * Range adapter over the shared render3d_hash01 - same arithmetic as
  * the copy this replaced, so every hashed position is unchanged. */
 static float grid_pos_hash(float a, float b) {
     return render3d_hash01(a, b) * 2.0f - 1.0f;
@@ -1119,7 +1119,7 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
      * dense EXP2 mist in the same colour, so the grid overhead fades
      * into the murk. Above ground the theme carries no fog of its own
      * (the Polar Day backdrop's glacial horizon is the intended
-     * pairing) — but at the FAR extent the generic recede fog is
+     * pairing) - but at the FAR extent the generic recede fog is
      * already enabled and keyed to the clear color, which would fade
      * the far field to black; recolor it glacial so the recede whites
      * out into the same tint instead. (LINEAR params stay; non-FAR
@@ -1143,7 +1143,7 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
     }
 
     /* Minor lines: faint straight etch marks under the ice. Majors
-     * are skipped here — the crack pass below replaces them. */
+     * are skipped here - the crack pass below replaces them. */
     glBegin(GL_LINES);
     for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += step) {
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
@@ -1226,18 +1226,18 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
 
     /* Same teardown as the standard fog theme. Unlike Ocean (which
      * drops fog before its water surface) the sheet above renders
-     * inside the mist on purpose — it whites out toward the horizon. */
+     * inside the mist on purpose - it whites out toward the horizon. */
     grid_fog_end(grid_ctx);
 }
 
 /* Tilled Field: a plowed-earth floor where the grid's two directions
  * are deliberately asymmetric. Constant-z major lines ARE the furrows
- * — V-grooves cut into an opaque soil height-field running along X —
+ * - V-grooves cut into an opaque soil height-field running along X -
  * while constant-x majors stay shallow: pale "planting string" lines
  * laid over the ridges. Minor constant-z lines render as faint rake
  * marks riding the furrow profile. The soil mesh writes depth (it is
  * ground, not a translucent overlay), and a camera below the surface
- * gets a near-black earth filter — underground you see almost
+ * gets a near-black earth filter - underground you see almost
  * nothing, which is the point. */
 
 #define GRID_SOIL_FURROW_HALF_FRAC 0.22f  /* furrow half-width, × major */
@@ -1245,7 +1245,7 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
 
 /* Furrow cross-section: smoothstep dip around each constant-z major
  * line. Depends only on z, so any line running along X sits at one
- * constant height — minor rake lines follow the terrain for free. */
+ * constant height - minor rake lines follow the terrain for free. */
 static float grid_soil_profile(const GridDrawContext *ctx, float z) {
     float w = ctx->major * GRID_SOIL_FURROW_HALF_FRAC;
     float dz = fabsf(remainderf(z, ctx->major));
@@ -1369,7 +1369,7 @@ static void render3d_grid_render_soil_theme(const GridDrawContext *grid_ctx,
             glVertex3f(v, 0.03f, -extent);
             glVertex3f(v, 0.03f,  extent);
         } else {
-            /* Rake marks: constant-z minors only — the along-X
+            /* Rake marks: constant-z minors only - the along-X
              * direction dominates a plowed field, so constant-x
              * minors are deliberately absent. */
             float ym = grid_soil_profile(grid_ctx, v) + 0.02f;
@@ -1382,7 +1382,7 @@ static void render3d_grid_render_soil_theme(const GridDrawContext *grid_ctx,
 
     /* Origin axes: brighter string lines, depth-written like every
      * theme's origin pass. The X axis (constant z=0) sits in a furrow
-     * — lift it to its groove-bottom height so it doesn't vanish. */
+     * - lift it to its groove-bottom height so it doesn't vanish. */
     {
         float y0 = grid_soil_profile(grid_ctx, 0.0f) + 0.02f;
         glDepthMask(GL_TRUE);
@@ -1399,7 +1399,7 @@ static void render3d_grid_render_soil_theme(const GridDrawContext *grid_ctx,
     }
 }
 
-/* Star Chart: the floor as a midnight observatory map — the
+/* Star Chart: the floor as a midnight observatory map - the
  * companion piece to the Nebula backdrop (warm gold chart marks
  * under its violet sky). Minor lines are faint indigo graticule
  * etch and major lines slightly brighter chart rules; the content
@@ -1703,7 +1703,7 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
  * These draw their graticule in the XY plane (z = GRID_2D_Z, just behind the
  * z=0 scene geometry) instead of the XZ ground plane, so they read as a flat,
  * front-facing grid in the 2D ortho view (camera looking down -Z). In 3D they
- * render as a vertical wall at z=0 — acceptable until grids are filtered by
+ * render as a vertical wall at z=0 - acceptable until grids are filtered by
  * view mode. Both use the shared scene accent palette and route line alpha through
  * grid_color() so the show/hide transition fade still applies. Custom themes:
  * no GridThemeSpec entry, so render3d_grid_theme_uses_edge_fade() is false and
@@ -1714,7 +1714,7 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
 
 /* Smooth, frame-stable wobble for the inked sketch strokes. `u` runs along the
  * stroke, `v` is its fixed coordinate, `seed` separates passes/lines. Returns a
- * small world-space offset (~±0.05) — large enough to read as hand-drawn at
+ * small world-space offset (~±0.05) - large enough to read as hand-drawn at
  * unit cell size, small enough not to break the cell corners (callers taper it
  * to zero at the endpoints). Deterministic in space, so the ink doesn't crawl
  * between frames. */
@@ -1777,7 +1777,7 @@ static float grid_nice_step_mul(float ratio) {
     return p;
 }
 
-/* Sketchbook: a hand-drawn coordinate graph that fills the 2D ortho view —
+/* Sketchbook: a hand-drawn coordinate graph that fills the 2D ortho view -
  * wobbly ink cell lines snapped to real world coordinates, each labelled with
  * its value (labels thin to a nice stride when zoomed out). */
 static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config,
@@ -1788,7 +1788,7 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
      *
      * Fit to the live ortho view: in the 2D ortho projection glOrtho's matrix
      * gives the visible world half-extents exactly (half = 1/|proj[diag]|) at
-     * ANY zoom, so they must NOT be clamped to a small band — that snapped the
+     * ANY zoom, so they must NOT be clamped to a small band - that snapped the
      * grid to a fixed box once zoomed out far enough. Only the non-ortho (3D
      * wall) / degenerate case falls back to a fixed size. The view is centred
      * on the camera pan (cam_tx, cam_ty). */
@@ -1862,7 +1862,7 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     }
 
     /* Coordinate labels: x values along the bottom of the view, y values down
-     * the left of the view — each centred on its (coarsened) gridline so it
+     * the left of the view - each centred on its (coarsened) gridline so it
      * lines up with the value. Inset just enough that the glyphs don't clip. */
     float ta = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lbl = fminf(0.0036f, fmaxf(0.0020f, cell * 0.0034f));   /* ~0.3 world units */
@@ -1890,7 +1890,7 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     glLineWidth(1.0f);
 }
 
-/* Neon Graph: a glowing graph-paper grid in the XY plane — faint azure minor
+/* Neon Graph: a glowing graph-paper grid in the XY plane - faint azure minor
  * lines, brighter violet majors, an additive bloom pass, glowing nodes at the
  * major intersections, and a pulsing coral origin cross. Clean, no text. */
 static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
@@ -1955,7 +1955,7 @@ static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
  * the camera faces), but a bounded labelled graph: each plane is a [-R,R] box
  * of `major`-spaced cells, and the plane the camera is *nearly orthogonal* to
  * gets real coordinate labels (GLUT stroke glyphs, billboarded to the camera).
- * Only one plane is labelled at a time — they're chosen by the face weights
+ * Only one plane is labelled at a time - they're chosen by the face weights
  * xy_w / zy_w / xz_w (which sum to 1), and labels only appear above a head-on
  * threshold, fading in as the view squares up. Accent palette: XY azure, ZY
  * amber, XZ floor cool-grey. Custom dispatch arm (no edge-fade).
@@ -2031,7 +2031,7 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
     if (h1 - h0 > 120) h1 = h0 + 120;               /* runaway guard */
     if (v1 - v0 > 120) v1 = v0 + 120;
     /* Anchor both tracks just *inside* the visible edges (text grows toward the
-     * centre) so neither is pushed off screen — edges measured from the focus. */
+     * centre) so neither is pushed off screen - edges measured from the focus. */
     float bottom_v = cv - copysignf(Lv, up[vaxis]);  /* screen-bottom edge */
     float left_h   = ch - copysignf(Lh, right[haxis]); /* screen-left edge */
     /* Per-label edge fade: a value ramps up over the outermost ~band as it
@@ -2098,7 +2098,7 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
 
     /* Visible world half-extents at the origin's depth, from the perspective
      * projection (half = cam_dist / |proj[diag]|). Labels live at these edges
-     * — clamped to the grid extent — so both axes stay on screen at any zoom.
+     * - clamped to the grid extent - so both axes stay on screen at any zoom.
      * Clamp guards the ortho / degenerate case (this is a 3D theme). */
     GLfloat pm[16];
     glGetFloatv(GL_PROJECTION_MATRIX, pm);
@@ -2133,7 +2133,7 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     const float FULL   = 0.985f;
     float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
-    /* Camera focus per world axis — labels centre on it so pan stays correct. */
+    /* Camera focus per world axis - labels centre on it so pan stays correct. */
     float foc[3] = { config->cam_tx, config->cam_ty, config->cam_tz };
     glLineWidth(1.4f);
     if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {           /* XY: x,y */
@@ -2152,7 +2152,7 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
 /* ---- Grid transition curve plugin (Render3dXnReveal, see render3d_transition.h) --
  * The grid owns its fade durations + per-theme speed + opacity shape; the
  * machine just feeds elapsed time and reads opacity back. A linear opacity
- * ramp is intentional — the reveal's spatial shaping (smoothstep wipe, bright
+ * ramp is intentional - the reveal's spatial shaping (smoothstep wipe, bright
  * head) is applied on top of opacity in render3d_grid_render, so opacity itself
  * stays a plain 0..1 progress that inverts cleanly for reversal. */
 
@@ -2197,13 +2197,13 @@ const Render3dXnReveal render3d_grid_reveal = {
 int render3d_grid_theme_uses_edge_fade(Render3dGridTheme grid_theme) {
     /* Pure reference line-grids dissolve their alpha to the backdrop at
      * the rim instead of fogging to the clear color: the table-driven
-     * line themes plus the XZ Ruler and Star Chart — custom-path grids
+     * line themes plus the XZ Ruler and Star Chart - custom-path grids
      * that still emit their graticule through draw_grid_line_pair, so
      * they pick up the per-vertex radial fade once they are in this set.
      * The custom *environment* themes (OCEAN / FROZEN / SOIL) own their
      * own atmosphere, and RADAR owns its distance fog, so all of those
      * are out of scope.
-     * Pure — safe to call from tests. */
+     * Pure - safe to call from tests. */
     if (grid_theme == GRID_THEME_XZRULER ||
         grid_theme == GRID_THEME_STARCHART)
         return 1;
@@ -2298,7 +2298,7 @@ static void grid_apply_far_fog(const Render3dRenderConfig *config,
                                const Render3dOverlayXn *xn) {
     /* Edge-fade themes dissolve to the backdrop via per-vertex alpha
      * (steady rim + animated recede), so they never want clear-color
-     * fog — at any extent or transition phase. Make sure none is left
+     * fog - at any extent or transition phase. Make sure none is left
      * enabled from a prior pass and bail. */
     if (render3d_grid_theme_uses_edge_fade(grid_theme)) {
         glDisable(GL_FOG);
@@ -2469,6 +2469,6 @@ void render3d_grid_render(const Render3dFrameRenderContext *frame_ctx) {
     glPopMatrix();
     /* render3d_grid_pop_state restores GL_ALL_ATTRIB_BITS, covering
      * GL_DEPTH_BUFFER_BIT (depth mask), GL_COLOR_BUFFER_BIT (blend),
-     * GL_FOG_BIT, and GL_LIGHTING_BIT — no manual teardown needed. */
+     * GL_FOG_BIT, and GL_LIGHTING_BIT - no manual teardown needed. */
     render3d_grid_pop_state();
 }

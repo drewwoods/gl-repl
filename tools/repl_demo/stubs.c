@@ -3,7 +3,7 @@
  * entry points that the REPL pipeline used to reach for. The file is
  * empty: every stub the decoupling plan listed has been cleared. It
  * stays in the build (linked into repl_demo) as the visible "no stubs
- * needed" sentinel — adding a new stub here is the canary that a
+ * needed" sentinel - adding a new stub here is the canary that a
  * pipeline TU has acquired a fresh app/editor/UI/peer dependency. See
  * feature/decouple-repl-from-gl-repl-alt.md.
  *

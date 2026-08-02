@@ -1,13 +1,13 @@
 # Flatten Performance Without a Control-Flow VM
 
-## Status — DONE (2026-07-17)
+## Status - DONE (2026-07-17)
 
 Phases 0–3 landed on `main`: representative benchmarks, direct evaluation,
 the slider transaction split, compiled-expression programs, dependency-aware
 dirty routing, and in-place rebaking. Phase 3 was initially deferred because a
 single-refresh benchmark showed only a modest gain. Subsequent Accum Blur
 testing changed that conclusion: time blur refreshes at every accumulation
-sample, making rebaking the practical enabler for most examples—especially in
+sample, making rebaking the practical enabler for most examples-especially in
 the Emscripten build. The completed implementation keeps full flattening as
 the correctness fallback for structurally dynamic programs.
 
@@ -214,7 +214,7 @@ Non-goals:
 - no increase to `MAX_COMMANDS` and no change to overflow behavior;
 - no persistent/cache data in undo snapshots, user scenes, or workspace files.
 
-## Phase 0 — Make the benchmark representative
+## Phase 0 - Make the benchmark representative
 
 Extend `bench/bench_repl.c` before changing runtime code:
 
@@ -250,7 +250,7 @@ counts/status, use release `-O2`, and retain `USE_GL_STUBS=1` support. Default
 `make bench` remains non-gating; saved before/after CSV from the same machine is
 the review artifact.
 
-## Phase 1 — Cheap fast paths and slider transaction split
+## Phase 1 - Cheap fast paths and slider transaction split
 
 ### 1A. Remove needless parsing for literal commands
 
@@ -343,7 +343,7 @@ materialization, provenance, and local snapshots are rebuilt normally. It is
 the understandable no-cache baseline against which Phase 2 must justify its
 additional machinery.
 
-## Phase 2 — Compile expressions once
+## Phase 2 - Compile expressions once
 
 ### Representation and ownership
 
@@ -454,7 +454,7 @@ Preserve evaluation order and float operations so cached and text evaluation
 are bit-identical (allow both values to be NaN as the NaN parity case). On any
 unsupported or invalid compiled program, evaluate the original text instead.
 
-## Phase 3 — Dependency-aware in-place rebake
+## Phase 3 - Dependency-aware in-place rebake
 
 ### Why dependency masks are required
 
@@ -502,9 +502,9 @@ This propagation makes the following cases safe:
 
 Extend `ReplFlatProgramState` with:
 
-- `structural_dep_mask` — roots that can change topology or frozen locals;
-- `value_dep_mask` — roots used by any flattened value/assignment;
-- `args_dirty_mask` — accumulated roots changed since the last refresh.
+- `structural_dep_mask` - roots that can change topology or frozen locals;
+- `value_dep_mask` - roots used by any flattened value/assignment;
+- `args_dirty_mask` - accumulated roots changed since the last refresh.
 
 Full dirty always subsumes/clears args dirty. Source edits and
 declare/undeclare remain full-dirty. For a value change with mask `changed`:
@@ -516,7 +516,7 @@ otherwise                           -> no flat work
 ```
 
 Route `repl_state_time_advance`/`_time_set` through the `t` slot bit. Route
-predef `SET_VALUE`—including every variable-panel motion—through the changed
+predef `SET_VALUE`-including every variable-panel motion-through the changed
 slot bit; declaration-table reshaping never uses the bit fast path. Multiple
 value changes accumulate, and a later structural change escalates to full
 dirty. The mouse-up declaration rewrite is a real source edit and intentionally

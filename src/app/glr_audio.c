@@ -20,7 +20,7 @@
  *
  * The main thread only posts a request into a 1-slot mailbox and
  * signals the worker (latest-wins for track changes: a newer request
- * supersedes a queued one — a load already stuck in the OS can't be
+ * supersedes a queued one - a load already stuck in the OS can't be
  * cancelled, it finishes/errors then the latest request runs). The
  * sound lives in a double buffer (g_slot[2]): the worker loads into
  * the inactive slot with no lock held, then briefly locks to publish
@@ -45,7 +45,7 @@
  * per-frame caller, the lock helpers collapse to no-ops, and no other
  * translation unit changes (glr_audio_tick() is already called once per
  * frame by the controller). This is safe in that configuration because
- * media there lives in MEMFS and never blocks on the filesystem — the
+ * media there lives in MEMFS and never blocks on the filesystem - the
  * very hazard the worker thread exists to absorb on native builds.
  */
 
@@ -1334,7 +1334,7 @@ static void parse_ini_line(const char *line, char *out_track, float *out_offset,
 
 /* Worker-only. Writes the resume-state INI. The atomic temp-file +
  * rename() already guarantees the destination is never torn; we
- * deliberately do NOT fsync() — the only thing lost on an OS crash in
+ * deliberately do NOT fsync() - the only thing lost on an OS crash in
  * the seconds before a flush is a music-resume position, not worth a
  * stall (and this now runs off the render thread anyway). */
 static void worker_save_state(void) {
@@ -1472,7 +1472,7 @@ static int load_state(float *out_offset) {
 
 /* Worker-only. Uninit every inited slot and mark nothing active. The
  * ma_sound_uninit of a stream can block on pending page reads; that's
- * fine here — it is the worker thread, never the render thread. */
+ * fine here - it is the worker thread, never the render thread. */
 static void worker_uninit_all(void) {
     audio_lock();
     g_active = -1;
@@ -1605,7 +1605,7 @@ static int worker_load(int idx, float seek_secs) {
      * right after play_playlist() posts the start) sets g_paused while
      * g_active is still -1, so it can't stop the not-yet-published slot
      * itself. Reading the flag here, atomically with the publish, closes
-     * that window — otherwise the track plays and only the *next* load
+     * that window - otherwise the track plays and only the *next* load
      * observes the pause ("plays one track, then stops"). */
     paused = g_paused;
     if (paused)
@@ -1614,7 +1614,7 @@ static int worker_load(int idx, float seek_secs) {
      * g_load_seek rather than touching the not-yet-published slot. Clear
      * g_loading atomically with capturing it so a seek racing right here
      * either lands in g_load_seek (applied below) or, once g_loading is 0
-     * and g_active is set, takes the direct-seek path — no lost-seek gap. */
+     * and g_active is set, takes the direct-seek path - no lost-seek gap. */
     mid_load_seek = g_load_seek;
     g_load_seek   = GLR_AUDIO_NO_SEEK;
     g_loading             = 0;
@@ -2299,7 +2299,7 @@ int glr_audio_track_count(void) {
  * outlives the lock. Safe because the name/group tables are mutated
  * only by glr_audio_set_playlist_specs() on the main thread and read
  * only on the main thread; the audio worker never touches them (it
- * writes g_playlist_duration_secs[] alone — hence the duration accessor
+ * writes g_playlist_duration_secs[] alone - hence the duration accessor
  * below returns by value). Keep that invariant if the worker ever gains
  * a reason to rewrite track metadata. */
 const char *glr_audio_track_display_name(int idx) {

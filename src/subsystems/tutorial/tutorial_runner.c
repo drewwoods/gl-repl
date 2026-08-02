@@ -30,7 +30,7 @@
  * tutorial promises to restore on teardown. Captured by
  * `tutorial_capture_cfg_baseline()` at `tutorial_start` BEFORE any
  * tutorial machinery (transient-scene entry, presentation reset, entry
- * `@cfg` apply, step SET writes) has touched live cfg — so the baseline
+ * `@cfg` apply, step SET writes) has touched live cfg - so the baseline
  * is the user's true pre-tutorial state. Written back by
  * `tutorial_teardown()` at every teardown path so a tutorial leaves no
  * scene-presentation footprint.
@@ -38,7 +38,7 @@
  * Coverage:
  *   1) Every slug in the bridge's `fill_scene_subset` (the same set
  *      `src/repl/scenes.c::stash_live_state` captures for scene saves)
- *      — so presentation_reset's effects revert too, not just SET/REQUIRE.
+ *      - so presentation_reset's effects revert too, not just SET/REQUIRE.
  *   2) Plus any extra slugs the tutorial references via entry @cfg or
  *      step SET/REQUIRE (e.g. `view_mode`, which is intentionally OUTSIDE
  *      the scene subset since it isn't a per-scene property).
@@ -65,7 +65,7 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
 
 /* Snapshot the user's pre-tutorial cfg into the bag. Two coverage
  * sources, unioned via the bag's slug-dedup:
- *   - `fill_scene_subset` (every per-scene presentation slug — so the
+ *   - `fill_scene_subset` (every per-scene presentation slug - so the
  *     tutorial presentation reset, including its CLOSE grid extent, and
  *     any cascading defaults revert too);
  *   - Tutorial-specific slugs referenced by entry `@cfg` or step
@@ -83,7 +83,7 @@ static void tutorial_baseline_capture(int idx) {
      * intentionally outside the scene-subset (it's a global, not a
      * per-scene property). Without an explicit record, a tutorial whose
      * @cfg / SET steps don't mention view_mode silently leaks the
-     * presentation_reset(→3D) past teardown — e.g. starting "Color &
+     * presentation_reset(→3D) past teardown - e.g. starting "Color &
      * Transform" from 2D would exit in 3D. Capture it unconditionally. */
     tutorial_cfg_baseline_record_one("view_mode");
 
@@ -95,7 +95,7 @@ static void tutorial_baseline_capture(int idx) {
     }
     /* The setup scaffold's leading `// @cfg` header uses the same
      * vocabulary and is applied the same way, so its slugs join the
-     * restore baseline too. Only the leading contiguous run counts —
+     * restore baseline too. Only the leading contiguous run counts -
      * a later `// @cfg` inside the body is an ordinary comment. */
     const char *const *setup = repl_tutorial_setup_lines(idx);
     for (int i = 0; setup && setup[i] &&
@@ -207,7 +207,7 @@ static void format_step_commit_hint(int step, int total,
  * teaches the user the two ways to fill the input row (type, or Tab-
  * accept the autocomplete ghost). The controller's per-frame tick
  * keeps this visible by re-emitting it while no other status owns the
- * slot — see tutorial_status_hint and the glr_ctrl_tick refresh. */
+ * slot - see tutorial_status_hint and the glr_ctrl_tick refresh. */
 static void tutorial_set_step_status(int tutorial_idx, int step) {
     int total = repl_tutorial_step_count(tutorial_idx);
     char msg[REPL_DIAG_TEXT_MAX];
@@ -221,7 +221,7 @@ static void tutorial_set_step_status(int tutorial_idx, int step) {
 /* Shift any tutorial-tracked line at-or-after `pos` by `delta`. Used
  * before a runner-driven instruction-comment insert and after a
  * matched expected-command insert. Deliberately does NOT touch
- * pending.commit_line — that field is the immutable
+ * pending.commit_line - that field is the immutable
  * snapshot of where the in-flight commit attempt targets, and the
  * success bookkeeping relies on reading it back unchanged after the
  * shift pass (the matched-commit path was added in Phase 3). */
@@ -296,7 +296,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
     int loader_edit_line = instruction_line;
     repl_dispatch_insert_mode_off();
     if (!repl_load_apply_line(comment, err, (int)sizeof(err), &loader_edit_line)) {
-        /* Loader failed — undo the speculative shift so tracked
+        /* Loader failed - undo the speculative shift so tracked
          * indices stay consistent with the unchanged document. */
         tutorial_shift_tracked_lines_from(instruction_line, -1);
         repl_set_status(err[0] ? err : "Tutorial instruction load failed");
@@ -309,7 +309,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
     state->fade_start_t = repl_state_variables().anim_time;
     /* Per-line duration at a fixed chars-per-second rate so every
      * instruction reveals at the same readable pace, regardless of
-     * length. (line_len + SETTLE_CHARS) total slots / rate seconds —
+     * length. (line_len + SETTLE_CHARS) total slots / rate seconds -
      * the +SETTLE_CHARS pad keeps the trailing settle wave within the
      * animation window the renderer queries. */
     {
@@ -329,7 +329,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
         state->instruction_line_for_step[state->step] = instruction_line;
 
     /* Cursor + expected_commit_line are set by the COMMAND branch in
-     * tutorial_enter_step — SET/REQUIRE steps have no command for the
+     * tutorial_enter_step - SET/REQUIRE steps have no command for the
      * user to type and don't move the cursor / pin a commit row. */
     return 1;
 }
@@ -340,7 +340,7 @@ typedef enum {
     TUTORIAL_STEP_TERMINAL = -1
 } TutorialStepResult;
 
-/* Forward decls — used inside tutorial_enter_step / advance loop. */
+/* Forward decls - used inside tutorial_enter_step / advance loop. */
 static TutorialStepResult tutorial_enter_step(int step);
 static void tutorial_advance_loop(void);
 
@@ -386,8 +386,8 @@ static void tutorial_set_status_require_var(const char *name, float target) {
 }
 
 /* Status for a REQUIRE_VAR declaration step (the watched variable does
- * not exist yet). The full line to type — `float name = target;` plus
- * the catalog comment as a trailing comment — rides the autocomplete
+ * not exist yet). The full line to type - `float name = target;` plus
+ * the catalog comment as a trailing comment - rides the autocomplete
  * ghost (see tutorial_shadow_suffix), so the status only names the
  * affordance: type it, or Tab to autocomplete the ghost. */
 static void tutorial_set_status_declare_var(const char *name) {
@@ -403,7 +403,7 @@ static void tutorial_set_status_declare_var(const char *name) {
 /* Resolve where the next instruction comment for tutorial `idx`
  * step `step` should be inserted. For append placement that's the
  * current document_count; for label placement it's the row of the
- * target step's INSTRUCTION COMMENT — splicing above the comment
+ * target step's INSTRUCTION COMMENT - splicing above the comment
  * (rather than between the comment and its committed command)
  * keeps the original (instruction, command) pair adjacent in the
  * final document. Returns 1 on success and writes the insertion
@@ -467,7 +467,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         }
     }
     if (target_step < 0) {
-        /* Not a step label — try the setup scaffold's `:name` goto
+        /* Not a step label - try the setup scaffold's `:name` goto
          * labels. Resolved against the LIVE document at step-entry
          * time (not a row recorded at load), so rows shifted by
          * earlier splices are handled by construction. The validator
@@ -519,7 +519,7 @@ static int tutorial_cfg_line_value_resolves(const char *cfg_line,
     const char *p = NULL;
     char tmp[REPL_CFG_VALUE_MAX];
     if (!repl_config_extract_slug(cfg_line, tmp, sizeof tmp, &p))
-        return 1;  /* shouldn't happen — caller already extracted the slug */
+        return 1;  /* shouldn't happen - caller already extracted the slug */
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 1;  /* slug-only line, nothing to validate */
     p++;
@@ -529,7 +529,7 @@ static int tutorial_cfg_line_value_resolves(const char *cfg_line,
         tmp[vi++] = *p++;
     tmp[vi] = '\0';
     if (vi == 0) return 1;
-    /* Numeric literals always resolve via the strtol fallback —
+    /* Numeric literals always resolve via the strtol fallback -
      * only identifier-shaped values go through resolve_text. */
     if (!(isalpha((unsigned char)tmp[0]) || tmp[0] == '_'))
         return 1;
@@ -551,7 +551,7 @@ static int tutorial_cfg_line_value_resolves(const char *cfg_line,
  * Catches both typo'd slugs (`gird` for `grid`) and typo'd enum
  * names (`GRID_THEME_RADRA`) at tutorial_start time, before any
  * state has been mutated, so the runner never silently no-ops a SET
- * or stalls a REQUIRE — and never silently lands the showcase at the
+ * or stalls a REQUIRE - and never silently lands the showcase at the
  * default `*_OFF` value via the strtol fallback path. Returns 1 on
  * success; on failure returns 0 and writes a diagnostic into `err`. */
 int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
@@ -567,7 +567,7 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
     const char *const *cfg = entry->cfg;
     for (int i = 0; cfg && cfg[i]; i++) {
         if (!repl_config_extract_slug(cfg[i], slug, sizeof slug, NULL))
-            continue;  /* mal-shaped @cfg line — repl parser will diag */
+            continue;  /* mal-shaped @cfg line - repl parser will diag */
         if (!repl_cfg_known(slug)) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
@@ -586,7 +586,7 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
         }
     }
     /* The setup scaffold's leading `// @cfg` header run gets the same
-     * slug + symbolic-value validation — it is applied through the
+     * slug + symbolic-value validation - it is applied through the
      * same bridge at tutorial_start. */
     const char *const *setup = entry->setup;
     for (int i = 0; setup && setup[i] &&
@@ -655,7 +655,7 @@ static int setup_line_is_blank(const char *line) {
 }
 
 /* Every tutorial scene opens with a locked glClear so the scene rect is
- * cleared each frame. Nothing clears it on the program's behalf — the
+ * cleared each frame. Nothing clears it on the program's behalf - the
  * scene-rect clear is program-owned (see glr_ctrl_clear_chrome),
  * identical to the exported C and every built-in example scene, all of
  * which lead with this same call. Without it the render3d scene never
@@ -685,14 +685,14 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_scene_prelude) /
 
 /* Preload the tutorial's scene prelude into the just-reset transient
  * scene, before step 0: first the mandatory scene-clear rows
- * (g_tutorial_scene_prelude — the explanatory comment and its glClear,
+ * (g_tutorial_scene_prelude - the explanatory comment and its glClear,
  * every tutorial), then the optional setup scaffold (TutorialEntry.setup).
  * The scaffold honors the example header vocabulary: a leading contiguous
  * `// @cfg` run (parsed into the pending bag, applied through the bridge),
  * optional blank spacing, an optional 5-line `// camera` block, then body
  * lines fed through the non-editor loader. Every loaded row is locked.
  * Returns 1 on success; 0 (with a status message set) on any load failure
- * — tutorial_start unwinds via the baseline restore. Runs BEFORE
+ * - tutorial_start unwinds via the baseline restore. Runs BEFORE
  * `state->active` is set so the cfg writes cannot trigger step
  * auto-advancement, mirroring tutorial_baseline_apply. */
 static int tutorial_load_scene_prelude(int idx) {
@@ -745,7 +745,7 @@ static int tutorial_load_scene_prelude(int idx) {
         }
     }
 
-    /* Lock the whole prelude — the glClear plus the scaffold — read-only
+    /* Lock the whole prelude - the glClear plus the scaffold - read-only
      * for the tutorial's duration, like instruction rows. The range
      * covers every loaded row even where the loader reordered them (float
      * decls auto-promote to the document top). Capacity is validator-
@@ -783,7 +783,7 @@ void tutorial_start(int idx) {
     /* Tear down any predecessor first so the true original configuration
      * baseline is restored before we snapshot a new one. Unconditional
      * (not gated on tutorial_active) because a *finished* tutorial leaves
-     * its baseline pending — without the flush, chaining lesson B off
+     * its baseline pending - without the flush, chaining lesson B off
      * lesson A would capture A's presentation as "the user's" and strand
      * the real pre-tutorial config forever. Idempotent when there is
      * neither an active tutorial nor a pending baseline. */
@@ -801,7 +801,7 @@ void tutorial_start(int idx) {
     tutorial_baseline_apply(idx);
 
     /* Preload the scene prelude (the row-0 glClear plus the setup
-     * scaffold, if any) into the fresh transient scene before step 0 —
+     * scaffold, if any) into the fresh transient scene before step 0 -
      * still before `active = 1`, so its cfg writes cannot auto-advance a
      * REQUIRE step 0. On failure unwind the pieces teardown would (cfg
      * baseline restore + state reset); active was never set, so
@@ -836,16 +836,16 @@ void tutorial_teardown(void) {
      * itself once it has captured the live document), so the retained
      * post-tutorial identity dies here in every one of those cases.
      * Unconditional because the marker must never outlive the baseline it
-     * travels with — see ReplSceneRuntimeState.tutorial_origin_idx. */
+     * travels with - see ReplSceneRuntimeState.tutorial_origin_idx. */
     repl_state_scenes_set_tutorial_origin_idx(-1);
     /* Also runs with no active tutorial when a finished one left a
-     * pending baseline (tutorial_end_keep_view) — this is the flush. */
+     * pending baseline (tutorial_end_keep_view) - this is the flush. */
     if (!tutorial_active() && !tutorial_state_view().baseline_valid)
         return;
     /* A COMPLETED tutorial parks its index here so F11 can continue from
      * that lesson (tutorial_end_keep_view). Promoting the retained document
      * into a user scene runs this teardown as its baseline flush, and the
-     * reset below would take the parked index with it — so pressing Enter
+     * reset below would take the parked index with it - so pressing Enter
      * once more after finishing a lesson (which is all promotion takes) sent
      * F11 back to tutorial 1. Teardown is a document-replacement flush, not
      * an abandonment of the user's place in the catalog, so carry the index
@@ -855,7 +855,7 @@ void tutorial_teardown(void) {
      * zeroed the index via tutorial_end_keep_view(0), so it stays lost; a
      * still-ACTIVE tutorial is being torn down mid-lesson (scene / example /
      * workspace load, reset-all, the next tutorial_start), and those keep
-     * clearing it — tutorial_start overwrites the index immediately after
+     * clearing it - tutorial_start overwrites the index immediately after
      * anyway. */
     int retained_idx = tutorial_active()
                            ? -1
@@ -870,13 +870,13 @@ void tutorial_teardown(void) {
         tutorial_state_mut()->tutorial_idx = retained_idx;
 }
 
-/* End a tutorial the user saw through — completed, or exited on purpose —
+/* End a tutorial the user saw through - completed, or exited on purpose -
  * WITHOUT restoring the cfg baseline. Snapping the presentation back the
  * instant the last step lands reads as the tutorial undoing itself, and
  * throws away the very settings a SET/REQUIRE lesson just taught. The
  * learner stays in the tutorial's transient scene, so its view stays too;
  * the baseline survives in the bag as a pending restore that the next
- * tutorial_teardown() flushes — i.e. when the document is next replaced
+ * tutorial_teardown() flushes - i.e. when the document is next replaced
  * wholesale (scene / example / workspace load, reset-all, or the next
  * tutorial_start). Only the internal-failure paths tear down immediately:
  * a tutorial that broke mid-step has no view worth keeping.
@@ -890,7 +890,7 @@ void tutorial_teardown(void) {
  * The retained document has neither an active user scene nor an active
  * example, so without a marker the undo hook's promotion pass would decline
  * it and the user's post-tutorial edits would be discarded by the next scene
- * switch. Recording the index here — rather than at tutorial_start — is what
+ * switch. Recording the index here - rather than at tutorial_start - is what
  * keeps an ACTIVE tutorial unpromotable: its own step commits run through
  * editor_undo_push_snapshot() and would otherwise promote (and tear down the
  * lesson) on step 0. The marker travels with the pending cfg baseline: both
@@ -945,7 +945,7 @@ int tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out) 
  * the user how to commit. Called from the completion provider on every
  * input change while the cursor is on the expected commit line, so the
  * hint keeps its TTL fresh as long as the user holds at the matched
- * state. No-op for inactive / SET / REQUIRE / partial-input — those
+ * state. No-op for inactive / SET / REQUIRE / partial-input - those
  * paths let any existing status fade naturally. Uses the same
  * tutorial_match normalization the commit path uses, so trailing
  * whitespace or an extra ';' on the input still counts as matched. */
@@ -1069,7 +1069,7 @@ static TutorialStepResult tutorial_enter_step_note(int instruction_line, Tutoria
 static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
     /* Showcase: apply the cfg so the user immediately sees the
      * effect, then wait for an ack key (Enter/Tab/Space). No
-     * typing cursor — the document is read-only on this step
+     * typing cursor - the document is read-only on this step
      * (tutorial_guard_source_change rejects non-COMMAND mutations).
      * Park the editor cursor on the virtual trailing row AFTER the
      * comment we just inserted; otherwise the editor renders the
@@ -1132,7 +1132,7 @@ static int tutorial_var_matches_target(const char *name, float target) {
 static TutorialStepResult tutorial_enter_step_require(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
     /* Check: advance when the user themselves sets the slug to the
      * target. If already satisfied on entry, signal auto-advance to
-     * the surrounding loop (no recursion — a chain of already-
+     * the surrounding loop (no recursion - a chain of already-
      * satisfied REQUIREs can't blow the stack). */
     const char *slug       = repl_tutorial_step_cfg_slug(idx, step);
     const char *value_name = repl_tutorial_step_cfg_value_name(idx, step);
@@ -1146,7 +1146,7 @@ static TutorialStepResult tutorial_enter_step_require(int idx, int step, int ins
     if (tutorial_cfg_matches_target(slug, target))
         return TUTORIAL_STEP_AUTOADVANCE;  /* auto-advance via the loop */
     /* Park the cursor past the locked instruction-comment row so
-     * the editor doesn't render the empty input overlay over it —
+     * the editor doesn't render the empty input overlay over it -
      * same fix as the SET branch above. */
     repl_dispatch_host_cursor_park(instruction_line + 1,
                                    (instruction_line + 1) <
@@ -1162,7 +1162,7 @@ static TutorialStepResult tutorial_enter_step_require_var(int idx, int step,
                                                           TutorialRuntimeState *state) {
     /* Check: advance when the named predefined variable reaches the
      * target value (typed `name = expr;` / `float name = ...;` commit OR
-     * slider drag — both land through repl_apply_predef_ops, which the
+     * slider drag - both land through repl_apply_predef_ops, which the
      * editor commit path notifies after). Auto-advance on entry if
      * already satisfied.
      *
@@ -1201,20 +1201,20 @@ static TutorialStepResult tutorial_enter_step_require_var(int idx, int step,
 /* Enter the step at the CURRENT state->step. The advance loop owns the
  * step pointer; this function emits the instruction, applies any kind-
  * specific side effects, and returns one of:
- *    TUTORIAL_STEP_PAUSED       paused — waiting on user (COMMAND typing, SET ack key,
+ *    TUTORIAL_STEP_PAUSED       paused - waiting on user (COMMAND typing, SET ack key,
  *                               REQUIRE state-change notify).
- *    TUTORIAL_STEP_AUTOADVANCE  auto-advance requested — REQUIRE step found already-satisfied.
+ *    TUTORIAL_STEP_AUTOADVANCE  auto-advance requested - REQUIRE step found already-satisfied.
  *                               The loop bumps state->step and tries again.
- *    TUTORIAL_STEP_TERMINAL     terminal — either the catalog sentinel ("Tutorial complete") or
+ *    TUTORIAL_STEP_TERMINAL     terminal - either the catalog sentinel ("Tutorial complete") or
  *                               an internal failure. teardown() has already run. */
 static TutorialStepResult tutorial_enter_step(int step) {
     TutorialRuntimeState *state = tutorial_state_mut();
     int idx = state->tutorial_idx;
 
     if (!repl_tutorial_step_get(idx, step)) {
-        /* Past the last step — tutorial complete. The lesson's view is
+        /* Past the last step - tutorial complete. The lesson's view is
          * kept (see tutorial_end_keep_view); status set BEFORE ending so
-         * it survives. (Keyed on the step lookup, not a NULL comment —
+         * it survives. (Keyed on the step lookup, not a NULL comment -
          * comment-less COMMAND steps legitimately have no comment.) */
         char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
         char status_msg[REPL_STATUS_TEXT_MAX];
@@ -1243,7 +1243,7 @@ static TutorialStepResult tutorial_enter_step(int step) {
     /* A REQUIRE_VAR step whose watched variable does not exist yet is a
      * DECLARATION step: the satisfying `float name = ...;` is a decl,
      * which the compiler relocates to the top of the document (above any
-     * comment — see compile_insert_pos / decl_pos in src/repl/compile.c).
+     * comment - see compile_insert_pos / decl_pos in src/repl/compile.c).
      * A locked instruction comment emitted there would be stranded above
      * the user's own declaration and would desync the tutorial's
      * locked-line tracking, so skip the code comment for declaration
@@ -1285,7 +1285,7 @@ static TutorialStepResult tutorial_enter_step(int step) {
         return tutorial_enter_step_require_var(idx, step, instruction_line,
                                                declare_step, state);
     }
-    /* Unknown kind — validator should have rejected this. */
+    /* Unknown kind - validator should have rejected this. */
     tutorial_teardown();
     return TUTORIAL_STEP_TERMINAL;
 }
@@ -1308,7 +1308,7 @@ void tutorial_advance_after_successful_commit(void) {
     if (!tutorial_active())
         return;
     /* REQUIRE_VAR uses the predef-writeback notify hook as its sole
-     * advance signal — a successful commit by itself does NOT mean
+     * advance signal - a successful commit by itself does NOT mean
      * the watched variable reached its target (e.g. the user typed
      * `m = 5;` while the step watches `n`). The notify hook fires
      * inside apply_compiled_change_full and advances iff the match
@@ -1436,7 +1436,7 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
      * editor precheck pairs this with a kind-aware commit hint
      * (tutorial_reject_noncommand_commit_with_hint).
      *
-     * REQUIRE_VAR is the exception — the step is satisfied either by a
+     * REQUIRE_VAR is the exception - the step is satisfied either by a
      * slider drag (no source mutation) OR by a typed `name = expr;`
      * commit (a source mutation we must allow). The locked-line /
      * expected_commit_line checks below still apply, so writes are
@@ -1450,8 +1450,8 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
     /* Narrow allow-list for the in-flight matched expected commit:
      * only the matched step may insert at its captured commit row,
      * and only as a pure insert (delete_count == 0). Keying off the
-     * immutable pending.commit_line — rather than the ambient
-     * expected_commit_line — keeps the exception scoped to the one
+     * immutable pending.commit_line - rather than the ambient
+     * expected_commit_line - keeps the exception scoped to the one
      * commit attempt the precheck already authorized. */
     if (state.pending.step_idx >= 0 && delete_count == 0 &&
         insert_count > 0 && pos == state.pending.commit_line)
@@ -1462,7 +1462,7 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
      * other non-precheck mutation (which never set `pending`) at
      * expected_commit_line would slip in untracked when the target
      * label refers to a step whose committed row has no later
-     * locked instruction comment below it — e.g. when the
+     * locked instruction comment below it - e.g. when the
      * label-targeted step's anchor IS the most-recently-committed
      * command. The locked-line check below would see no later
      * locked row and let the insert through. */
@@ -1512,7 +1512,7 @@ int tutorial_note_expected_commit_applied(void) {
      * expected-command attempt (e.g. it was a free-form REQUIRE_VAR
      * commit, whose advance is driven by the predef-writeback notify
      * hook, not the commit). Report 0 so the caller's commit-side
-     * advance stays a no-op — otherwise, when the notify already
+     * advance stays a no-op - otherwise, when the notify already
      * advanced from a REQUIRE_VAR step onto a COMMAND step during this
      * same commit, a second commit-side advance would skip that COMMAND
      * step entirely (its instruction comment emitted, its command never
@@ -1536,7 +1536,7 @@ int tutorial_note_expected_commit_applied(void) {
     /* Comment-less COMMAND steps recorded no instruction row at entry
      * (nothing was emitted). Record the committed command row instead,
      * so a later label-targeted step can anchor on this step, and lock
-     * it — with no instruction comment emitted above later rows, the
+     * it - with no instruction comment emitted above later rows, the
      * transitive locked-line protection the comment-full flow relies
      * on doesn't cover this row. Recorded AFTER the shift above so the
      * value isn't itself shifted (the commit row is where the command
@@ -1551,7 +1551,7 @@ int tutorial_note_expected_commit_applied(void) {
     }
 
     /* Block-shape bookkeeping (indices are final: the delta shift above
-     * already ran). An OPEN commit inserted TWO rows — the header at
+     * already ran). An OPEN commit inserted TWO rows - the header at
      * commit_line and the auto `}` at commit_line + 1; lock both so the
      * block's frame is read-only while its body is typed (the guard's
      * pending-commit exception still lets matched body inserts through

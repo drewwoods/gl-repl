@@ -5,8 +5,8 @@
  * strip at the top of the scene, which is easy to miss in both directions: at
  * the start you can watch a still frame and conclude nothing happened, and
  * mid-tour you can forget you are in a mode and quit it by reflex. This owns
- * the presence signal that fixes both — an entry title card, a persistent
- * breathing border, and an exit collapse — as pure animation state; the
+ * the presence signal that fixes both - an entry title card, a persistent
+ * breathing border, and an exit collapse - as pure animation state; the
  * drawing lives in ui/subsystems/tour_presence.c.
  *
  * App band rather than UI band because the state has a lifetime the UI cannot
@@ -22,7 +22,7 @@
 #ifndef GLR_TOUR_PRESENCE_H
 #define GLR_TOUR_PRESENCE_H
 
-/* Longest tour name the title card retains (copied, never borrowed — see the
+/* Longest tour name the title card retains (copied, never borrowed - see the
  * lifetime note above). Truncation is the renderer's problem, not this one's;
  * this bound only has to be generous. */
 #define GLR_TOUR_PRESENCE_NAME_CAP 64
@@ -52,14 +52,14 @@ typedef enum {
  * pure function of this struct. */
 typedef struct {
     GlrTourPresencePhase phase;
-    float border_alpha;  /* 0..1, breathe * fade — the band's opacity     */
+    float border_alpha;  /* 0..1, breathe * fade - the band's opacity     */
     float band_scale;    /* 1 normally, 1 -> 0 across the outro collapse  */
     float card_alpha;    /* 0..1; nonzero only during the intro           */
     const char *name;    /* latched tour name, never NULL (may be empty)  */
 } GlrTourPresenceView;
 
 /* Advance one rendered frame and return the resulting view. `tour_active` is
- * GlrTourPlaybackView.active (controlled tours only — env-driven capture runs
+ * GlrTourPlaybackView.active (controlled tours only - env-driven capture runs
  * report inactive and correctly get no presence layer); `tour_name` is
  * borrowed for the duration of the call only. */
 GlrTourPresenceView glr_tour_presence_tick(int tour_active,

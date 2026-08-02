@@ -1,12 +1,12 @@
 /*
  * stencil_viz.c - see stencil_viz.h.
  *
- * Conversion core (buffer_viz_stencil_scan / _map — no GL, unit-tested
+ * Conversion core (buffer_viz_stencil_scan / _map - no GL, unit-tested
  * with synthetic buffers) plus a thin GL shell: capture (glReadPixels
  * GL_STENCIL_INDEX into a persistent byte buffer, grown on resize) and
  * render (RGBA conversion + POT texture sub-upload + a blended
  * screen-space quad, reusing postprocess_filter's 2D bracket).
- * GL_NEAREST filtering — the quad is a 1:1 pixel overlay.
+ * GL_NEAREST filtering - the quad is a 1:1 pixel overlay.
  */
 #include "subsystems/buffer_viz/stencil_viz.h"
 
@@ -28,7 +28,7 @@
  * kept HERE rather than in ui_theme: docs/MODULES.md keeps computed and
  * data palettes out of the theme module, and these are data the
  * conversion core indexes, not chrome colours a theme could restyle.
- * Index 0 is the colour of value 16, 32, … — value 0 itself never draws. */
+ * Index 0 is the colour of value 16, 32, … - value 0 itself never draws. */
 static const unsigned char k_stencil_palette[16][3] = {
     { 120, 120, 128 },  /*  0 (only reached by 16, 32, ...) */
     {  84, 196, 255 },  /*  1  cyan-blue    */
@@ -209,7 +209,7 @@ void buffer_viz_stencil_map(const unsigned char *stencil, int count,
         int v = stencil[i];
         unsigned char *out = rgba_out + (size_t)i * 4;
         if (v == 0) {
-            /* Untouched (or explicitly zeroed — indistinguishable, see the
+            /* Untouched (or explicitly zeroed - indistinguishable, see the
              * header): fully transparent, so the scene shows through. */
             out[0] = out[1] = out[2] = 0;
             out[3] = 0;
@@ -350,11 +350,11 @@ static void stencil_viz_render_pass(BufferVizStencilMode mode,
 
     render3d_post_2d_begin(sx, sy, sw, sh, &saved_matrix_mode);
     /* The bracket disables GL_BLEND and selects GL_REPLACE, which is right
-     * for depth's full-rect replacement and fatal for a sparse overlay —
+     * for depth's full-rect replacement and fatal for a sparse overlay -
      * every zero-valued (transparent) pixel would still be written. Turn
      * blending back on here: the bracket opened with
      * glPushAttrib(GL_ALL_ATTRIB_BITS), so its glPopAttrib undoes this.
-     * GL_REPLACE stays correct — it takes RGB *and* alpha from the
+     * GL_REPLACE stays correct - it takes RGB *and* alpha from the
      * texture, which is exactly what drives the composite.
      *
      * The bracket also disables GL_STENCIL_TEST, which matters more than
@@ -365,7 +365,7 @@ static void stencil_viz_render_pass(BufferVizStencilMode mode,
     if (!stencil_viz_upload_texture(sw, sh)) {
         render3d_post_2d_end(saved_matrix_mode);
         prof_accum_end(PROF_BUFFER_VIZ_STENCIL);
-        return; /* texture would exceed the GL limit — skip this pass */
+        return; /* texture would exceed the GL limit - skip this pass */
     }
 
     umax = (float)sw / (float)g_tex_w;
@@ -415,7 +415,7 @@ void buffer_viz_stencil_render(BufferVizStencilMode mode, int is_final_pass,
     stencil_viz_render_pass(mode, sx, sy, sw, sh);
     /* Frame boundary. Done here rather than inside the pass helper so it
      * still runs when the pass bailed early (no capture, texture over the
-     * GL limit) — otherwise one skipped final pass would leave the latch
+     * GL limit) - otherwise one skipped final pass would leave the latch
      * set and the next frame would reuse a stale range forever. */
     if (is_final_pass) {
         g_hist = g_hist_scratch;

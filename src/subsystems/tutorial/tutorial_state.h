@@ -78,7 +78,7 @@ typedef struct {
      * (instruction, command) pair so the comment stays adjacent to
      * the command it describes. For comment-less COMMAND steps it is
      * the COMMITTED COMMAND's row, recorded after the commit lands
-     * (tutorial_note_expected_commit_applied) — the step's only row.
+     * (tutorial_note_expected_commit_applied) - the step's only row.
      * -1 until recorded. Shifted alongside locked_lines and
      * fade_line_idx by tutorial_shift_tracked_lines_from. Sized to
      * TUTORIAL_MAX_STEPS (one slot per catalog step). */

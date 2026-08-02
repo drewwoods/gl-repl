@@ -55,7 +55,7 @@ typedef enum {
  *                thumb reports half the thumb height, which centers the
  *                thumb on the pointer.
  *
- *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
+ *   UI_HIT_PANEL_DIVIDER  - coordinates only, no line / row payload
  */
 typedef struct {
     int kind; /* int kind to allow enum extension by ui/app/hit.h */

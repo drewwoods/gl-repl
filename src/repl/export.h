@@ -12,7 +12,7 @@
  *   3. Flattened system GL/GLUT includes, without depending on gl_includes.h.
  *   4. Global variable declarations for user-defined predefined variables (float x, y, z).
  *   5. Camera state as the raw glTranslatef/glRotatef sequence the REPL uses internally
- *      (not a pose matrix — the exact command history).
+ *      (not a pose matrix - the exact command history).
  *   6. REPL function definitions converted to C function syntax (for reloading as
  *      CMD_FUNC_DEF on import).
  *   7. Geometry commands in the display() function body (user-edited commands).
@@ -22,8 +22,8 @@
  *   2. Extracts camera state (raw glTranslatef/glRotatef lines) via the
  *      controller-installed camera bridge.
  *   3. Detects function definitions (lines matching C function syntax).
- *   4. Feeds remaining geometry lines through repl_load_apply_line() — the
- *      lean non-editor source-load path — for normal parsing.
+ *   4. Feeds remaining geometry lines through repl_load_apply_line() - the
+ *      lean non-editor source-load path - for normal parsing.
  *   5. Stores pending scene-name and workspace-dir for the caller to apply after loading.
  *
  * Header templates: g_header_pre/post and g_footer_pre/post_init are boilerplate
@@ -87,7 +87,7 @@ typedef struct {
      * the file-scope g_angle variable. */
     void (*fill_save_block)(ReplExportCameraBlock *block);
     /* Fill block for the in-app code-panel preview. Line 3 uses the
-     * numeric ry value (no g_angle placeholder — the preview shows
+     * numeric ry value (no g_angle placeholder - the preview shows
      * the current state, not the animation hook). */
     void (*fill_display_block)(ReplExportCameraBlock *block);
     /* Build the "static float g_angle = N.NNNNf;" preamble line for
@@ -110,12 +110,12 @@ typedef struct {
      * import-line consumption so app bridges can animate example
      * switches while save/workspace imports still restore immediately. */
     void (*apply_example_block)(const ReplExportCameraBlock *block);
-    /* Snap-apply a captured camera block to live state — used by the
+    /* Snap-apply a captured camera block to live state - used by the
      * workspace-save iteration to stage each slot's saved camera
      * before the export bridge reads the live state, and by
      * stash/restore around the iteration. Unlike apply_example_block
      * this does NOT ease, does NOT set the scene default, and does
-     * NOT record an external 3D pose — it's the symmetric inverse of
+     * NOT record an external 3D pose - it's the symmetric inverse of
      * fill_display_block. */
     void (*apply_capture_block_snap)(const ReplExportCameraBlock *block);
 } ReplExportCameraBridge;
@@ -182,7 +182,7 @@ const ReplExportLightBridge *repl_export_light_bridge(void);
 /* Resolve the reshape projection lines: the installed bridge, else the
  * canonical perspective default. Fills up to REPL_EXPORT_PROJ_LINES
  * pointers into out[] and returns the count. Returned pointers reference
- * internal static storage valid until the next call — emit/copy them
+ * internal static storage valid until the next call - emit/copy them
  * before calling again. Main-thread only. */
 int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]);
 
@@ -195,7 +195,7 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * init() function. Together they form a valid C program. */
 /* The literal that opens the exported display() function. Used as
  * g_display_header[0] and as the search needle from bootstrap.c's
- * scroll_to_display_function — exposed via this macro so both sides
+ * scroll_to_display_function - exposed via this macro so both sides
  * stay in sync if the line text ever changes. */
 #define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
 extern const char  *g_header_pre[];
@@ -284,7 +284,7 @@ int repl_export_save_output(const char *filename, SourceTextView text,
  * ReplExportLayout passed through to the exporter as opaque integers. */
 int repl_save_default_output(const ReplExportLayout *layout);
 
-/* Write the scene as a `.glr` source file — the authoring format built-in
+/* Write the scene as a `.glr` source file - the authoring format built-in
  * examples ship in (see src/repl/export_glr.c), not a compilable C program.
  * Content is the non-default `@cfg` rows, the `// camera` block, and the
  * document text; nothing else. Symmetric with the example loader, so the

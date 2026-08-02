@@ -862,7 +862,7 @@ int main(void) {
      * GL_FRONT × {GL_SHININESS, GL_DIFFUSE} corner. Broaden the
      * positive surface so a future change can't quietly drop a face
      * type, pname, expression evaluator path, or whitespace-handling
-     * concern — each pulled out as its own ASSERT so a regression
+     * concern - each pulled out as its own ASSERT so a regression
      * names what it broke. */
 
     /* Each face token resolves through the enum table. */
@@ -977,7 +977,7 @@ int main(void) {
      * args[2..5] from the four RGBA floats, AND canonicalize to the
      * compound-literal emit that re-parses unchanged. This is the
      * shape interactive users type most often, and the original
-     * glMaterialf bug silently dropped the round-trip — locking it in. */
+     * glMaterialf bug silently dropped the round-trip - locking it in. */
     {
         glr_ctrl_reset_all();
         GLCmd cmd;
@@ -1017,7 +1017,7 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
-    /* glMaterialf — scalar-only sibling for GL_SHININESS. Distinct
+    /* glMaterialf - scalar-only sibling for GL_SHININESS. Distinct
      * CmdType (CMD_MATERIALF), canonical emit preserves the typed
      * function name (no rewrite to glMaterialfv). */
     {
@@ -1040,7 +1040,7 @@ int main(void) {
                     strstr(cmd_text, "(GLfloat[]){") == NULL);
     }
 
-    /* glMaterialf rejects RGBA pnames — those need 4 floats, only
+    /* glMaterialf rejects RGBA pnames - those need 4 floats, only
      * glMaterialfv accepts them. */
     {
         const char *const cases[] = {
@@ -1103,7 +1103,7 @@ int main(void) {
     }
 
     /* Trailing tokens after the compound literal's closing brace are
-     * silently dropped without this guard — reject so the user sees
+     * silently dropped without this guard - reject so the user sees
      * the typo. */
     {
         glr_ctrl_reset_all();
@@ -1167,7 +1167,7 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
-    /* glMultMatrixf, scratch-array form — the argument is a name, not an
+    /* glMultMatrixf, scratch-array form - the argument is a name, not an
      * expression, so the accept/reject set is unusually narrow. */
     {
         glr_ctrl_reset_all();
@@ -1185,7 +1185,7 @@ int main(void) {
         ASSERT_TRUE("glMultMatrixf num_args", cmd.num_args == 1);
         ASSERT_TRUE("glMultMatrixf array index", cmd.args[0] == 0.0f);
         ASSERT_TRUE("glMultMatrixf has_vars false", cmd.has_vars == 0);
-        /* Identity until flatten snapshots the live cells — never a zero
+        /* Identity until flatten snapshots the live cells - never a zero
          * matrix, which would collapse everything after it. */
         ASSERT_TRUE("glMultMatrixf payload starts identity",
                     cmd.payload.matrix.m[0] == 1.0f &&
@@ -1230,7 +1230,7 @@ int main(void) {
                                         cmd_text, sizeof(cmd_text)) == 0);
     }
 
-    /* glMultMatrixf, compound-literal form — 16 values inline. Unlike the
+    /* glMultMatrixf, compound-literal form - 16 values inline. Unlike the
      * array form these are ordinary expressions, and they live in the
      * payload rather than args[] (which holds 8). */
     {
@@ -1249,7 +1249,7 @@ int main(void) {
             &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glMultMatrixf literal parse ok", ok == 1);
         ASSERT_TRUE("glMultMatrixf literal type", cmd.type == CMD_MULT_MATRIXF);
-        /* num_args 0 is the discriminator the flatten/export paths read —
+        /* num_args 0 is the discriminator the flatten/export paths read -
          * there is no array behind this form. */
         ASSERT_TRUE("glMultMatrixf literal num_args", cmd.num_args == 0);
         ASSERT_TRUE("glMultMatrixf literal is not the array form",
@@ -1568,7 +1568,7 @@ int main(void) {
     }
 
     /* Top-level math expressions get a tailored error instead of the
-     * generic "Unknown cmd" — typing `rand()` or `sin(t)` as a
+     * generic "Unknown cmd" - typing `rand()` or `sin(t)` as a
      * statement is a common mistake (the result has nowhere to go). */
     {
         glr_ctrl_reset_all();
@@ -1621,7 +1621,7 @@ int main(void) {
         ASSERT_TRUE("gluBegin CONTOUR type", cmd.type == CMD_TESS_BEGIN_CONTOUR);
     }
 
-    /* Stencil state — custom mixed enum/expression/literal forms plus the
+    /* Stencil state - custom mixed enum/expression/literal forms plus the
      * generalized three-enum glStencilOp path. */
     {
         glr_ctrl_reset_all();
@@ -1650,7 +1650,7 @@ int main(void) {
                     strstr(cmd_text, "0x2A") != NULL);
     }
     {
-        /* i = 5 so min(i, 3) is 3 — a value the zero-initialized command
+        /* i = 5 so min(i, 3) is 3 - a value the zero-initialized command
          * cannot produce by accident. A paren-naive split would hand the
          * ref slot "min(i" and fail before evaluating anything, and would
          * reassemble the canonical text wrong even if it did. */
@@ -1737,7 +1737,7 @@ int main(void) {
     }
     {
         /* The mask slot is literal-only by policy (a mask is not a quantity
-         * to animate), so a *valid* expression is still a rejection there —
+         * to animate), so a *valid* expression is still a rejection there -
          * unlike the ref slot two blocks up, which takes the same text. */
         glr_ctrl_reset_all();
         GLCmd cmd;

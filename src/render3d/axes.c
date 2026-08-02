@@ -4,7 +4,7 @@
 #include "axes.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include "occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
-#include "render3d_hash.h"   /* render3d_hash01 — Fountain droplet scatter */
+#include "render3d_hash.h"   /* render3d_hash01 - Fountain droplet scatter */
 #include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
 /* ---- Axes transition curve plugin (Render3dXnReveal, see render3d_transition.h).
@@ -52,7 +52,7 @@ typedef struct AxesThemeSpec {
 /* Per-frame axes draw context (audit #3). Resolved once at
  * render3d_axes_render entry via render3d_overlay_xn_resolve; every
  * axes_color call multiplies through xn_alpha. The struct is
- * deliberately small — axes don't carry the breath/anim_time
+ * deliberately small - axes don't carry the breath/anim_time
  * GridDrawContext has because each per-theme renderer that needs
  * those takes them as separate args. Unlike GridDrawContext there is
  * no xn_opacity here: grid needs it for the fog-recede pass, but the
@@ -93,7 +93,7 @@ static Render3dRgba rgba(float r, float g, float b, float a) {
  *
  * Axes sit near the origin where distance fog barely bites, so under
  * the FOG style this mostly amounts to the alpha knee with a faint
- * clear-color haze — an intentionally subtle variant (the strong fog
+ * clear-color haze - an intentionally subtle variant (the strong fog
  * look is the grid's). axes never sets uses_own_fog. */
 
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
@@ -345,7 +345,7 @@ static void render3d_axes_render_pulse_theme(const AxesDrawContext *ctx,
     draw_axis_label_triplet(ctx, len, 0.15f, spec->label, "XYZ", 1);
 }
 
-/* Procedural theme — see the AXES_NEON_LEN note at the top of this
+/* Procedural theme - see the AXES_NEON_LEN note at the top of this
  * file for why NEON, like FOUNTAIN, doesn't sit in the
  * g_axes_theme_specs table. */
 static void render3d_axes_render_neon_theme(const AxesDrawContext *ctx,
@@ -547,7 +547,7 @@ static void draw_axis_cone(const AxesDrawContext *ctx, int axis_idx,
         break;
     case RENDER3D_AXIS_Z:
         glTranslatef(0.0f, 0.0f, len);
-        /* identity rotation — fan already points along +Z */
+        /* identity rotation - fan already points along +Z */
         break;
     }
     /* Cone tip (apex) */
@@ -612,7 +612,7 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
 
 #define FOUNTAIN_DROPLET_COUNT 150
 #define FOUNTAIN_STREAM_SPEED  0.10f          /* axis-lengths per second   */
-#define FOUNTAIN_PHI           0.6180339887f  /* 1/φ — golden ratio fract   */
+#define FOUNTAIN_PHI           0.6180339887f  /* 1/φ - golden ratio fract   */
 #define FOUNTAIN_SPRAY_RADIUS  0.05f          /* base lateral spray amp     */
 #define FOUNTAIN_SPRAY_MIN     0.6f           /* min per-droplet r scale    */
 #define FOUNTAIN_SPRAY_MAX     1.4f           /* max per-droplet r scale    */
@@ -661,7 +661,7 @@ static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
             if (alpha > 1.0f) alpha = 1.0f;
 
             /* Per-droplet spread and swirl, hashed fresh each frame from
-             * (axis, index) alone — same stateless model as the golden-
+             * (axis, index) alone - same stateless model as the golden-
              * ratio phase above and as grid.c's per-vertex hashing. Two
              * independent channels for angle and radius; the swirl takes
              * a third and splits it, scaling by 97 and re-fracting for
@@ -679,7 +679,7 @@ static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
             /* Axial ease-out, so droplets decelerate as they climb the
              * way a real spray slows toward its apex. The lateral spread
              * front-loads via sqrtf, so the stream is already wider than
-             * the gap between droplets while they are still bright — a
+             * the gap between droplets while they are still bright - a
              * linear ramp puts the widest spread exactly where alpha
              * reaches 0, which reads as a solid line fading out rather
              * than as a spray. */

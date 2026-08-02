@@ -1,4 +1,4 @@
-# `src/scene/` — Code-Smell Audit
+# `src/scene/` - Code-Smell Audit
 
 > Audit produced 2026-05-24. Resolution pass landed 2026-05-25
 > (commits `2d1b9b6` through `222054c`; main fast-forwarded to the
@@ -7,16 +7,16 @@
 > doc cleanup). See the **Status** section below for per-finding
 > state. Findings come from four parallel reviews of
 > `src/scene/` (render core; grid + axes + scene_transition;
-> visual-content modules — backdrop/lights/overlays/postprocess +
+> visual-content modules - backdrop/lights/overlays/postprocess +
 > palette/themes/occluded_ghost; the `guides/` subtree) plus targeted
 > spot-verification of the most actionable claims. File:line
-> references are exact at the time of writing — check `git log` on the
+> references are exact at the time of writing - check `git log` on the
 > cited files before acting if this doc has aged.
 
 ## Status (2026-05-25)
 
 **54 of 65 findings done** across the resolution pass:
-- 🔴 **10 / 10** bugs — every red finding closed
+- 🔴 **10 / 10** bugs - every red finding closed
 - 🟡 **20 / 25** boundary/drift items
 - 🟢 **7 / 9** dead-code items
 - 🔵 **17 / 21** structural items (every god-function split closed)
@@ -25,9 +25,9 @@ Tests: 7228 → 7463 (+235 from drift tests, new predicate coverage,
 and the SceneRendererState init/independence/AA-invariant tests).
 `check-state-ownership` green; C99 ratchet green; `make test-full`
 and `make test-stubs` on gracemont (real GCC 13.x) both pass at
-`6a6a4cd` (the #11 camera move). Subsequent commits on main —
+`6a6a4cd` (the #11 camera move). Subsequent commits on main -
 `9c13f60` / `6ccb6d7` (peer-subsystem cleanup, not part of this
-audit) and `f723382` (the audit-doc updates themselves) — don't
+audit) and `f723382` (the audit-doc updates themselves) - don't
 touch scene code, so the green claim still holds at the current
 HEAD by inspection; re-run the gates if any code commit lands on
 top of those.
@@ -48,32 +48,32 @@ top of those.
 | 🟡 #12 scene_apply_projection split | ✅ split into compute (once) + apply (per sample) | `89e2b17` |
 | 🟡 #13 include style sweep | ✅ scene/foo.h → foo.h where in-dir | `d30ff28` |
 | 🟡 #14 lights.c gl_includes | ✅ explicit include added | `5dd0e65` |
-| 🟡 #15 targeted attrib masks | ⏸️ deferred — invasive across modules | — |
+| 🟡 #15 targeted attrib masks | ⏸️ deferred - invasive across modules | - |
 | 🟡 #16 NV_fog save/restore | ✅ explicit getIntegerv + restore | `c2e7009` |
 | 🟡 #17 postprocess g_saved_matrix_mode | ✅ threaded through begin_2d/end_2d | `08fc94b` |
 | 🟡 #18 int → enum sweep | ✅ post_filter_mode, grid_theme | `dc6ed83` |
 | 🟡 #19 viewport_w/h fields | ✅ dropped from SceneRenderConfig | `dc6ed83` |
 | 🟡 #20 grid_xn_phase/axes_xn_phase | ✅ marked RESERVED with explicit doc | `222054c` |
 | 🟡 #21 SceneFrameRenderContext.focus | ✅ duplicate dropped | `dc6ed83` |
-| 🟡 #22 theme spec ABI | ⏸️ deferred — design decision | — |
+| 🟡 #22 theme spec ABI | ⏸️ deferred - design decision | - |
 | 🟡 #23 standard-theme switch | ✅ moved to default arm | `e9225cd` |
 | 🟡 #24 is_geometry_emit_cmd predicate | ✅ promoted to repl_cmd_starts_geometry_emit | `e9225cd` |
-| 🟡 #25 compute_before_cursor_matrix | ⏸️ deferred — CPU-math rewrite would dwarf current GL-stack scaffold | — |
+| 🟡 #25 compute_before_cursor_matrix | ⏸️ deferred - CPU-math rewrite would dwarf current GL-stack scaffold | - |
 | 🟡 #26 snapshot input NULL policy | ✅ documented in guides_shared.h | `655cbef` |
 | 🟡 #27 accum_samples == 1 carve-out | ✅ ladder check, kept | `c2e7009` |
 | 🟡 #28 accum_samples ladder validation | ✅ now {1,2,4,8,16} enforced | `c2e7009` |
 | 🟡 #29 clamp01f helper | ✅ scene_clamp01f in render_types.h | `08fc94b` |
 | 🟡 #30 cityscape y0/y1 shadow | ✅ renamed to y_base/y_top | `9ee978b` |
 | 🟡 #31 M_PI consolidation | ✅ moved to gl_includes.h | `d30ff28` |
-| 🟡 #32 postprocess graduation | ⏸️ deferred — scope question | — |
+| 🟡 #32 postprocess graduation | ⏸️ deferred - scope question | - |
 | 🟡 #33 scene_xn API names | ✅ cheat-sheet in header | `08fc94b` |
 | 🟡 #34 stale filename prefixes | ✅ swept across scene/ | multiple |
-| 🟡 #35 palette token review | ⏸️ deferred — design decision | — |
+| 🟡 #35 palette token review | ⏸️ deferred - design decision | - |
 | 🟢 #36 redundant pre-pop teardown | ✅ removed from lights/grid/axes/render | `905cb0d`, `dc6ed83` |
-| 🟢 #37 inline _push_state wrappers | ⏸️ skipped — keeps the seam for #15 | — |
+| 🟢 #37 inline _push_state wrappers | ⏸️ skipped - keeps the seam for #15 | - |
 | 🟢 #38 dead cityscape clamps | ✅ pruned to the live boundary | `b2739b8` |
 | 🟢 #39 transform_source_unmodified param | ✅ covered by #9 | `5dd0e65` |
-| 🟢 #40 guides_shared flat_program | ⏸️ deferred — accept current trade-off | — |
+| 🟢 #40 guides_shared flat_program | ⏸️ deferred - accept current trade-off | - |
 | 🟢 #41 redundant glEnable(GL_LIGHTING) | ✅ removed from 5 guide draws + axes/grid/lights | `5dd0e65`, `dc6ed83` |
 | 🟢 #42 ACCUM_STEP_COUNT | ✅ removed (unused in scene) | `dc6ed83` |
 | 🟢 #43 stale tess-preview comments | ✅ removed | `dc6ed83` |
@@ -88,13 +88,13 @@ top of those.
 | 🔵 #52 axes per-theme extraction | ✅ extracted to match grid's pattern | `8301ce1` |
 | 🔵 #53 scene_draw_bitmap_text helper | ✅ replaces 4 raster+for loops | `c2e7009` |
 | 🔵 #54 scene_apply_camera 6 floats | ✅ SceneCameraPose struct on render.h | `9ee978b` |
-| 🔵 #55 magic numbers | ⏸️ deferred — large surface | — |
+| 🔵 #55 magic numbers | ⏸️ deferred - large surface | - |
 | 🔵 #56 hoist tan() in scene_apply_projection | ✅ SCENE_DEFAULT_HALF_FOVY_TAN macro | `9ee978b` |
-| 🔵 #57 post_fill_fn / post_overlays_fn names | ⏸️ deferred — naming bikeshed | — |
-| 🔵 #58 goto bad style outlier | ⏸️ deferred — stylistic | — |
+| 🔵 #57 post_fill_fn / post_overlays_fn names | ⏸️ deferred - naming bikeshed | - |
+| 🔵 #58 goto bad style outlier | ⏸️ deferred - stylistic | - |
 | 🔵 #59 SCENE_PROBE_BOX macro chain | ✅ dependency documented in comment | `9ee978b` |
 | 🔵 #60 fb[96*1024] named constant | ✅ SCENE_PROBE_FEEDBACK_FLOATS | `9ee978b` |
-| 🔵 #61 scene_xn_init/show share | ⏸️ deferred — not worth it | — |
+| 🔵 #61 scene_xn_init/show share | ⏸️ deferred - not worth it | - |
 | 🔵 #62 inline decls inside glBegin/glEnd | ✅ lights.c star-burst table hoisted | `9ee978b` |
 | 🔵 #63 STATIC_ASSERT count check | ✅ now sizeof-derived from table | `9ee978b` |
 | 🔵 #64 alias style | ✅ alias cheat-sheet added | `655cbef` |
@@ -106,7 +106,7 @@ top of those.
   (`cc481c2`, `89e2b17`, `6a6a4cd`). Camera apply now lives at
   src/app/glr_camera.c as glr_camera_load_modelview; renderer state
   + projection split + per-renderer ortho ref are all caller-owned.
-  Scene module is purely the renderer now — every "scene does not
+  Scene module is purely the renderer now - every "scene does not
   own X" contract the audit flagged is honored by code shape, not
   convention.
 - **Boundary tightening continued:** #15 (narrow `GL_ALL_ATTRIB_BITS`
@@ -135,7 +135,7 @@ top of those.
 > actions; `scene_*` and `ui_*` do not include each other's headers;
 > scene renderers consume snapshots/configs and never read
 > `ReplState`, `EditorState`, or `UiState` directly; the standalone
-> `scene_demo` binary is the layer-independence proof — if scene code
+> `scene_demo` binary is the layer-independence proof - if scene code
 > grew a hard dep on editor/controller/UI, that binary stops linking.**
 >
 > Headline: **the layering invariant holds**. Zero `editor/`,
@@ -155,17 +155,17 @@ top of those.
 
 Severity grouping mirrors the previous audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or
+- **🔴 Actual bugs / hazards (verified)** - correctness or
   parity-drift issues with a concrete failure mode that exists in
   current production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — module-private mutable state,
+- **🟡 Drift / boundary hazards** - module-private mutable state,
   duplicated patterns across files, missing predicate enforcement,
   ambiguous-intent code that works today but is one edit away from
   misbehaving.
-- **🟢 Dead code / dead fields** — code with no callers, unused
+- **🟢 Dead code / dead fields** - code with no callers, unused
   parameters, redundant cleanups before `glPopAttrib`. Pure surface
   reduction.
-- **🔵 Structural concerns** — god-functions, near-duplicate
+- **🔵 Structural concerns** - god-functions, near-duplicate
   helpers, magic numbers, comment archaeology. Bigger refactors;
   higher cost.
 
@@ -186,19 +186,19 @@ switch over the six transform `CmdType`s
 (`CMD_PUSH_MATRIX` / `CMD_POP_MATRIX` / `CMD_LOAD_IDENTITY` /
 `CMD_TRANSLATE3F` / `CMD_SCALEF` / `CMD_ROTATEF`). The header
 comment says this is *"so they can mirror executor-style matrix
-tracking without depending on src/repl/executor.h"* — but there is
+tracking without depending on src/repl/executor.h"* - but there is
 NO compile-time check, predicate, or drift test linking the two.
 
 **Why it matters:** If a contributor adds `CMD_MULT_MATRIX`,
 `CMD_LOAD_MATRIX`, or `CMD_MATRIX_MODE` to `executor.c` (and updates
 `repl_cmd_is_transform`), the controller's overlay walks and the
-transform-guide walks silently fall into `default: break;` — guides
+transform-guide walks silently fall into `default: break;` - guides
 land at wrong positions, outline/vertex-point overlays drift from
 the live scene. The `repl_cmd_is_transform` predicate (which is the
 peer's iteration filter) would correctly include the new case, so
 the walk *visits* the cmd but does nothing.
 
-**Fix:** Either (a) collapse to one implementation — `transform_utils.h`
+**Fix:** Either (a) collapse to one implementation - `transform_utils.h`
 calls the executor functions (the scene module stays insulated via
 the header), or (b) add a `STATIC_ASSERT` pinning `repl_cmd_is_transform`
 to exactly six known bits plus a coverage test that walks every
@@ -222,7 +222,7 @@ glPopMatrix();
 `SceneExecuteContext` is documented (`render_types.h:44-48`) as a
 placeholder so future scene-to-callback metadata can be added (e.g.
 "why is this callback being invoked: main fill, fade overlay,
-picking pass"). The probe is exactly such a callback purpose — but
+picking pass"). The probe is exactly such a callback purpose - but
 the context is left `{0}` and the callback can't distinguish a real
 fill from a feedback-only probe.
 
@@ -254,7 +254,7 @@ comment block. Hidden coupling between two TUs masquerading as
 "file private."
 
 **Why it matters:** Can't render grid+axes pair where you want to
-override one alpha but not the other — both statics tick together
+override one alpha but not the other - both statics tick together
 because both modules read the same `config->grid_opacity` /
 `axes_opacity` fields. Clamp logic is triplicate (grid, axes, plus
 the FOG-style branch). Any future "one renderer for both" refactor
@@ -282,7 +282,7 @@ boundaries with no parameter.
 early-return or assertion-abort skips the `g_guide_alpha_mul = 1.0f`
 reset on line 759, subsequent guide renders get stuck at 40% alpha
 forever. The `tg_color_tok` helper (`:42-48`) exists *only* because
-`scene_clr_a` would bypass the global — the workaround is what gave
+`scene_clr_a` would bypass the global - the workaround is what gave
 the global away.
 
 **Fix:** Thread `alpha_mul` as a parameter through `draw_translate_guide` /
@@ -304,7 +304,7 @@ that everywhere else accepts a `SceneRenderConfig` snapshot.
 2. `g_active_projection` is updated *inside* the accum-jitter loop
    (per sample via `scene_apply_projection`); `scene_get_active_projection`
    sees a transient snapshot. The cached `ortho_top`/`fovy_deg`
-   doesn't contain jitter terms today — so it's deterministic by
+   doesn't contain jitter terms today - so it's deterministic by
    accident, not design.
 3. `g_ortho_active` is an edge detector for the "frozen" mode. If
    `scene_render_3d_scene` returns early via `validate_render_config`
@@ -353,7 +353,7 @@ if (point_parameter_supported)
     glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION,
                        (GLfloat[]){1, 0, 0.00});
 ```
-Coefficients are `(1, 0, 0)` — identity: `size *= 1/sqrt(1 + 0·d + 0·d²) = 1`.
+Coefficients are `(1, 0, 0)` - identity: `size *= 1/sqrt(1 + 0·d + 0·d²) = 1`.
 There is no attenuation regardless of support. The supported-vs-
 unsupported branch is visually identical, and the gated call is
 pure overhead.
@@ -362,7 +362,7 @@ pure overhead.
 `GLR_NO_POINT_PARAMETER` (capability gate, env-var override,
 fallback comment) is wired into a no-op. The comment that says
 "when unsupported the stars still render at a fixed glPointSize
-(acceptable degradation, no distance attenuation)" lies — there's
+(acceptable degradation, no distance attenuation)" lies - there's
 no degradation because there's no attenuation in either branch.
 
 **Fix:** Either pick non-identity coefficients (e.g.
@@ -392,7 +392,7 @@ if (camera_world_y < 0.0f) {
 }
 ```
 `glDisable(GL_DEPTH_TEST)` at line 385 happens *before* the
-`glPushAttrib(GL_DEPTH_BUFFER_BIT|GL_LIGHTING_BIT)` at line 394 —
+`glPushAttrib(GL_DEPTH_BUFFER_BIT|GL_LIGHTING_BIT)` at line 394 -
 so the pre-push state is already wrong, and the matching
 `glEnable(GL_DEPTH_TEST)` at line 403 has to re-fix it manually
 outside the pushed scope.
@@ -419,7 +419,7 @@ static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
 The parameter is unused (`(void)source_cmd;`). The single call site
 (`:664`) computes `source_cmd` two lines earlier just to pass it
 here. The function's *actual* check is a text-compare between input
-and committed text — wrong for what its name promises.
+and committed text - wrong for what its name promises.
 
 **Why it matters:** If the user retypes a transform with identical
 args but different formatting (`glTranslatef(1,0,0)` vs `glTranslatef(1, 0, 0)`),
@@ -430,7 +430,7 @@ never grew that body.
 
 **Fix:** Either drop the parameter and rename to
 `transform_input_matches_committed` (honest about behavior), or
-actually use it — compare `source_cmd->args` against a re-parse of
+actually use it - compare `source_cmd->args` against a re-parse of
 the input.
 
 ### 10. 🔀 Guide files rely on transitive `<math.h>` / `<string.h>` / `<ctype.h>` via `repl/eval.h`
@@ -447,7 +447,7 @@ includes the math/string/ctype headers).
 
 **Why it matters:** If a future refactor removes those from
 `repl/eval.h`, all guide TUs break with implicit-function-
-declaration errors — and `-std=c99` makes that a hard error. The
+declaration errors - and `-std=c99` makes that a hard error. The
 C99 ratchet won't flag a missing include unless a path actively
 calls the helper.
 
@@ -476,19 +476,19 @@ anyone touching the projection matrix between camera-apply and
 scene-render) corrupts user geometry silently. The 9-line comment
 defending the contract documents fragility rather than fixing it.
 
-**Fix:** Pick one — internalize the camera into `scene_render_3d_scene`
+**Fix:** Pick one - internalize the camera into `scene_render_3d_scene`
 (`SceneRenderConfig` already carries `cam_rx/ry/dist/tx/ty/tz`), or
 move `scene_apply_camera` to `src/app/glr_camera.c`. Don't have a
 scene-namespaced public function that scene code refuses to call.
 
-### 12. `scene_apply_projection` is misnamed — also caches export state
+### 12. `scene_apply_projection` is misnamed - also caches export state
 
 **Where:** `src/scene/render.c:276-379`
 
 **Smell:** The function name says "apply projection" but also writes
 to `g_active_projection` (the export-facing global). The cache happens
 *every* sample of the accum loop (16× per frame), all writes
-producing the same value — idempotent waste.
+producing the same value - idempotent waste.
 
 **Why it matters:** Side effect is buried in a "looks pure" name.
 Future readers tracing "where does `scene_get_active_projection`'s
@@ -537,7 +537,7 @@ files (`overlays.c`, `postprocess_filter.c`) include explicitly.
 **Smell:** Every scene module that pushes attribs uses
 `GL_ALL_ATTRIB_BITS`. Compare to `grid.c:394` (`GL_DEPTH_BUFFER_BIT |
 GL_LIGHTING_BIT`) and `transform_guides.c:738`
-(`GL_DEPTH_BUFFER_BIT`) — narrower and self-documenting.
+(`GL_DEPTH_BUFFER_BIT`) - narrower and self-documenting.
 
 **Why it matters:** Each pass touches a knowable subset (backdrop
 touches FOG/DEPTH/COLOR/POINT/LINE/CURRENT; lights touches
@@ -558,7 +558,7 @@ if (nv_fog_distance_supported)
 ```
 Wrapped in `GL_ALL_ATTRIB_BITS`. Whether `GL_FOG_DISTANCE_MODE_NV`
 is included depends on the driver's interpretation of the NV
-extension — it's not in the Khronos `GL_FOG_BIT` spec.
+extension - it's not in the Khronos `GL_FOG_BIT` spec.
 
 **Why it matters:** State leak across the pop. The existing test in
 `tests/test_scene_render.c:510-519` exists because this leaked
@@ -573,7 +573,7 @@ before pop.
 **Where:** `src/scene/postprocess_filter.c:20, 54, 93`
 
 **Smell:** Module-global `g_saved_matrix_mode` initialized to `0`
-(GL_NONE — invalid). `begin_2d` writes via `glGetIntegerv`; `end_2d`
+(GL_NONE - invalid). `begin_2d` writes via `glGetIntegerv`; `end_2d`
 reads. No assertion the pair is balanced.
 
 **Why it matters:** An unbalanced `end_2d` would silently set
@@ -587,12 +587,12 @@ the tail (matching the pre-existing scene convention).
 ### 18. 🔀 `int` parameters where enum types exist in the same header
 
 **Where:**
-- `src/scene/render_types.h:159` — `int post_filter_mode` (enum
+- `src/scene/render_types.h:159` - `int post_filter_mode` (enum
   `ScenePostFilterMode` exists 4 lines away in
   `postprocess_filter.h`)
-- `src/scene/grid.h:24` — `int scene_grid_theme_uses_fog(int grid_theme)`
+- `src/scene/grid.h:24` - `int scene_grid_theme_uses_fog(int grid_theme)`
   (`themes.h` has `SceneGridTheme`)
-- `src/scene/postprocess_filter.h:26` — `int mode` parameter on
+- `src/scene/postprocess_filter.h:26` - `int mode` parameter on
   `scene_postprocess_filter_mode_name`
 
 **Smell:** Storing typed values as raw `int` weakens type checking
@@ -623,7 +623,7 @@ comment at `:166` admits "advisory direction hint (unused by FADE
 v1, plumbed for fog)."
 
 **Fix:** Either remove (let `grid.c` / `axes.c` accept their own
-phase when they need it) or mark as `/* RESERVED — reads pending */`
+phase when they need it) or mark as `/* RESERVED - reads pending */`
 with an issue link.
 
 ### 21. `SceneFrameRenderContext` duplicates `focus` from `config.focus`
@@ -660,7 +660,7 @@ render functions. No comment explains the rule. The five "ruler" /
 
 Same pattern in axes.c: `AXES_THEME_NEON` is inline (lines 24-31
 explicitly apologize for it). The apologetic comment is itself a
-smell — the abstraction was set up too narrowly.
+smell - the abstraction was set up too narrowly.
 
 **Fix:** Either widen the spec ABI (add `GridPerCellLineColorFn`
 plus optional `setup`/`teardown` hooks) so the custom themes become
@@ -735,7 +735,7 @@ and restoring the GL stack.
 
 **Why it matters:** Depends implicitly on matrix-mode being
 `GL_MODELVIEW`. The scaffolding `glPushMatrix` uses the same
-primitives as user transforms — `depth` only counts user pushes; a
+primitives as user transforms - `depth` only counts user pushes; a
 richer tracker could pop our scaffolding.
 
 **Fix:** Compute the matrix in CPU memory (`mat4_mul_col_major`
@@ -774,11 +774,11 @@ comment the carve-out ("ladder UI stays linear, 1-sample is a valid
 
 **Smell:** Validator checks `accum_samples` only when both
 `use_accum` AND `accum_aa_enabled` are true. The loop defends with
-`g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES]` — the wrong place
+`g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES]` - the wrong place
 to defend.
 
 Also: the jitter table comment (`:32-33`) says "the first N entries
-form a good N-sample set" — true only for N ∈ {1, 2, 4, 8, 16}, but
+form a good N-sample set" - true only for N ∈ {1, 2, 4, 8, 16}, but
 the validator allows any value 1..16.
 
 **Fix:** Validate whenever AA is requested, and constrain
@@ -843,7 +843,7 @@ location.
 /* postprocess_filter.h - Experimental scene-viewport post-processing. ... */
 /* Experimental: not in the Config menu, not persisted via @cfg, no GlrConfigKey. */
 ```
-Three independent admissions of unfinished status. Not bugs — but
+Three independent admissions of unfinished status. Not bugs - but
 "hidden Ctrl+N shortcut, not in Config menu" is unusual.
 
 **Fix:** Either fold into the standard config pipeline or formalize
@@ -890,7 +890,7 @@ table addition, count bump, golden-test churn) for tokens that
 mostly aren't shared.
 
 **Fix:** Keep the central palette only for tokens shared *across*
-files (a handful — `SCENE_CLR_OUTLINE_EDGE`,
+files (a handful - `SCENE_CLR_OUTLINE_EDGE`,
 `SCENE_CLR_ORBIT_GLOW_INNER`, paired normal/guide colors); demote
 single-file tokens to file-local statics. Larger refactor; just
 flagging.
@@ -904,7 +904,7 @@ flagging.
 
 **Smell:**
 ```c
-/* lights.c:158 — before glPopAttrib */
+/* lights.c:158 - before glPopAttrib */
 glPointSize(1.0f);
 glDisable(GL_BLEND);
 glEnable(GL_DEPTH_TEST);
@@ -970,7 +970,7 @@ Pure delete after #9's fix.
 renderers to `repl/flatten.h`. Conversely, `normal_base_pos` /
 `vertex_args` are geometry-only.
 
-**Fix:** Either accept the unified-snapshot trade-off (current —
+**Fix:** Either accept the unified-snapshot trade-off (current -
 fine) or split into `SceneVertexGuideSnapshot` /
 `SceneTransformGuideSnapshot` with a `SceneGuideHeader` for the
 four common fields.
@@ -990,7 +990,7 @@ enable is dead. Some reader will conclude the push doesn't cover
 lighting (wrong) and try to "fix" the asymmetry.
 
 **Fix:** Remove the explicit enable. The `user_lighting_enabled`
-snapshot field may then become unused — verify before dropping it
+snapshot field may then become unused - verify before dropping it
 from the header too.
 
 ### 42. `ACCUM_STEP_COUNT` exported on `render.h` but unused inside scene
@@ -1088,7 +1088,7 @@ axis-aligned threshold is a magic number repeated in all three.
 static helper. Drop the parallel arrowhead loop in `draw_translate_guide`
 (predates `draw_arrow_head`).
 
-### 50. Arrowhead clamp duplicated three times — third copy uses different magic numbers
+### 50. Arrowhead clamp duplicated three times - third copy uses different magic numbers
 
 **Where:** `src/scene/guides/transform_guides.c:214-216, 355-357, 430-432`
 
@@ -1113,7 +1113,7 @@ palette tokens are bound.
 with a `[3][3]` basis table and a `SceneColorToken fill_tok[3]` /
 `edge_tok[3]` indexed by `free_axis`.
 
-### 52. Axes inlines every theme; grid extracts custom themes — pattern split
+### 52. Axes inlines every theme; grid extracts custom themes - pattern split
 
 **Where:** `src/scene/axes.c:266-505` vs `src/scene/grid.c:792-838`
 
@@ -1142,15 +1142,15 @@ Variation is font (`FONT_MONO` vs `FONT_SMALL`) and the format.
 **Fix:** `scene_draw_bitmap_text(font, x, y, z, str)` helper. Also
 forces a decision: `overlays.c::scene_draw_vertex_number_label`
 uses `FONT_MONO` while `lights.c::scene_lights_render` uses
-`FONT_SMALL` for what is essentially the same purpose — neither
+`FONT_SMALL` for what is essentially the same purpose - neither
 file documents why.
 
-### 54. `scene_apply_camera` takes 6 positional floats — easy to swap
+### 54. `scene_apply_camera` takes 6 positional floats - easy to swap
 
 **Where:** `src/scene/render.c:381-389`, `render.h:35-36`
 
 **Smell:** `(float rx, float ry, float dist, float tx, float ty, float tz)`
-— six floats, no compile-time check that `dist` isn't a target
+- six floats, no compile-time check that `dist` isn't a target
 coordinate. The struct fields exist on `SceneRenderConfig`; the
 caller hand-passes six floats out.
 
@@ -1160,19 +1160,19 @@ fields), or a small `SceneCameraPose` struct.
 ### 55. 🔀 Magic numbers everywhere
 
 **Where:**
-- `src/scene/grid.c:318, 459-460, 529, 646, 668, 678, 732` — fade
+- `src/scene/grid.c:318, 459-460, 529, 646, 668, 678, 732` - fade
   radius, surface step, tick lengths, RADAR segments, ping/sweep
   speeds, z-fight nudge
-- `src/scene/axes.c:280, 298, 418, 489` — pulse speed, trail
+- `src/scene/axes.c:280, 298, 418, 489` - pulse speed, trail
   length, gizmo plane size, ruler tick lengths
-- `src/scene/guides/transform_guides.c` — many lines of alpha
+- `src/scene/guides/transform_guides.c` - many lines of alpha
   values (`0.40f * as`, `0.95f`, `0.85f`, ...), point sizes
   (`8.0f`, `6.0f`, `7.0f`, ...), line widths
   (`2.0f`, `3.0f`, `3.5f`, ...), pulse parameters
   (`0.6f`, `0.8f`, `0.2f`)
-- `src/scene/backdrop.c:312` — `(GLfloat[]){1, 0, 0.00}` mixes
+- `src/scene/backdrop.c:312` - `(GLfloat[]){1, 0, 0.00}` mixes
   three numeric forms
-- `src/scene/guides/transform_guides.c:467-468` — `while (angle_deg > 720.0f) angle_deg -= 360.0f;`
+- `src/scene/guides/transform_guides.c:467-468` - `while (angle_deg > 720.0f) angle_deg -= 360.0f;`
   brute-force angle wrap
 
 **Smell:** Per-theme tuning knobs are bare literals. Hard to skim,
@@ -1198,14 +1198,14 @@ Trivially hoisted to a single local.
 
 **Where:** `src/scene/render.c:563-598`
 
-**Smell:** `post_overlays_fn` runs after `scene_lights_render` — but
+**Smell:** `post_overlays_fn` runs after `scene_lights_render` - but
 "overlays" in this codebase canonically means vertex labels, normal
 arrows, polygon outlines, cursor guides. Those used to be in scene
 code but moved upward; the name "post_overlays_fn" now means "where
 the caller installs their own overlays."
 
 **Fix:** Rename to `pre_helpers_fn` (between fill and grid/axes/
-backdrop) and `post_lights_fn` (between lights and final pop) —
+backdrop) and `post_lights_fn` (between lights and final pop) -
 pipeline-position names.
 
 ### 58. `validate_render_config` uses `goto bad` in a file that otherwise uses straight returns
@@ -1216,7 +1216,7 @@ pipeline-position names.
 the file. Stylistic outlier.
 
 **Fix:** Inline `errno = EINVAL; return -1;` or wrap in a `BAD()`
-helper macro for consistency. (Or leave — defensible pattern, just
+helper macro for consistency. (Or leave - defensible pattern, just
 note as outlier.)
 
 ### 59. `SCENE_PROBE_BOX` is `#define`d to `SCENE_DEFAULT_FAR_Z` by chain
@@ -1271,10 +1271,10 @@ Legal C99 + legal GL, but easy to misread as vertex data.
 **Where:** `src/scene/palette.h:166-167`
 
 **Smell:** Requires bumping the literal `32` every time a token is
-added — three places to touch instead of one.
+added - three places to touch instead of one.
 
 **Fix:** `STATIC_ASSERT(sizeof(g_scene_palette)/sizeof(g_scene_palette[0]) == SCENE_CLR_COUNT, ...)`
-— "table matches enum" instead of "enum matches a hand-maintained
+- "table matches enum" instead of "enum matches a hand-maintained
 literal."
 
 ### 64. Inconsistent alias style for matrix elements
@@ -1305,50 +1305,50 @@ no display lists.
 
 ## Sequencing
 
-### One-afternoon pass — ✅ landed (2026-05-25)
+### One-afternoon pass - ✅ landed (2026-05-25)
 
 Every item in this pass shipped across commits `d30ff28`, `b2739b8`,
 `905cb0d`, `5dd0e65`, `dc6ed83`. The original ordering is preserved
 below for reference.
 
-1. **#7** ✅ — `glPointParameterfv` identity coefficients turned out
+1. **#7** ✅ - `glPointParameterfv` identity coefficients turned out
    to be load-bearing (overrides the init bootstrap's non-identity
    default to keep stars at consistent sizes). Comment rewritten;
    call kept.
-2. **#10** ✅ — Explicit `<math.h>` / `<string.h>` / `<ctype.h>` added
+2. **#10** ✅ - Explicit `<math.h>` / `<string.h>` / `<ctype.h>` added
    to guide files; #14 followed with `gl_includes.h` in `lights.c`.
-3. **#9** ✅ — Param dropped, renamed to
+3. **#9** ✅ - Param dropped, renamed to
    `transform_input_matches_committed`.
-4. **#18** ✅ — `post_filter_mode` is `ScenePostFilterMode`;
+4. **#18** ✅ - `post_filter_mode` is `ScenePostFilterMode`;
    `scene_grid_theme_uses_fog` parameter is `SceneGridTheme`;
    `scene_postprocess_filter_*` signatures updated.
-5. **#19** ✅ + **#20** ⏸️ + **#42** ✅ — `viewport_w/h` and
+5. **#19** ✅ + **#20** ⏸️ + **#42** ✅ - `viewport_w/h` and
    `ACCUM_STEP_COUNT` removed. `grid_xn_phase`/`axes_xn_phase` kept
    for tests (referenced-only fields still pass through `glr_ctrl`).
-6. **#21** ✅ — Duplicate `focus` dropped from
+6. **#21** ✅ - Duplicate `focus` dropped from
    `SceneFrameRenderContext`.
-7. **#34** ✅ — Filename-prefix sweep across all scene headers and
+7. **#34** ✅ - Filename-prefix sweep across all scene headers and
    sources (filenames + `scene_render.c` body references).
-8. **#36** ✅ — Trusted `glPopAttrib(GL_ALL_ATTRIB_BITS)` everywhere;
+8. **#36** ✅ - Trusted `glPopAttrib(GL_ALL_ATTRIB_BITS)` everywhere;
    manual teardown removed from lights / grid / axes / orbit
    target.
-9. **#37** ⏸️ — Skipped; the wrappers stay until #15 decides the
+9. **#37** ⏸️ - Skipped; the wrappers stay until #15 decides the
    per-pass attribute mask (inlining now would have to be reverted
    then).
-10. **#38** ✅ — Three unreachable wcols/wrows clamps trimmed; the
+10. **#38** ✅ - Three unreachable wcols/wrows clamps trimmed; the
     one boundary-effective clamp stays.
-11. **#41** ✅ — Redundant `glEnable(GL_LIGHTING)` removed from 5
+11. **#41** ✅ - Redundant `glEnable(GL_LIGHTING)` removed from 5
     transform-guide / geometry-guide draws + lights + grid + axes.
-12. **#30** ⏸️ — `y0`/`y1` shadowing math.h Bessel functions still
+12. **#30** ⏸️ - `y0`/`y1` shadowing math.h Bessel functions still
     open; cosmetic.
-13. **#31** ✅ — `M_PI` fallback moved to `gl_includes.h`; local
+13. **#31** ✅ - `M_PI` fallback moved to `gl_includes.h`; local
     `#ifndef M_PI` blocks dropped from `gl_repl.h`, `glr_camera.c`,
     and all four scene files.
-14. **#13** ✅ — `"scene/foo.h"` → `"foo.h"` swept where in-dir
+14. **#13** ✅ - `"scene/foo.h"` → `"foo.h"` swept where in-dir
     (`lights.c`, `scene_transition.c`). Guides files stay
     `"scene/foo.h"` because palette.h / occluded_ghost.h are
     one directory up.
-15. **#43** ✅ + **#65** ✅ — Stale comments / doc-comments cleaned
+15. **#43** ✅ + **#65** ✅ - Stale comments / doc-comments cleaned
     (tess-preview and replay-fade comment paragraphs removed;
     `scene_render_init_gl` header rewritten to match body).
 
@@ -1356,7 +1356,7 @@ Shipped: ~13 commits, ~150 LOC net reduction. One reframed bug
 (#7's reset is load-bearing, not no-op) plus #8's real underwater
 push/pop bug fixed.
 
-### One-week pass — hidden-state cluster ✅ closed
+### One-week pass - hidden-state cluster ✅ closed
 
 | Item | Status | Notes |
 |---|---|---|
@@ -1368,7 +1368,7 @@ push/pop bug fixed.
 | **#11** scene_apply_camera | ✅ `6a6a4cd` | moved to `src/app/glr_camera.c` as `glr_camera_load_modelview`; `SceneCameraPose` → `GlrCameraPose`; scene_demo inlines its own matrix calls to preserve the boundary proof |
 | **#12** scene_apply_projection split | ✅ `89e2b17` | pure `scene_compute_active_projection` runs once before the AA loop (sole writer to state); per-sample apply is read-only |
 
-### One-week pass — parity-drift cluster (partial)
+### One-week pass - parity-drift cluster (partial)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -1377,25 +1377,25 @@ push/pop bug fixed.
 | **#23** standard-theme switch | ✅ `e9225cd` | custom themes still get explicit cases; standard themes fall through to `default:` which does the spec-table lookup |
 | **#22** theme spec ABI | ⏸️ deferred | Design decision: widen `GridThemeSpec` (per-cell color fn, optional setup/teardown hooks) to absorb the custom themes vs drop the table and have N per-theme functions |
 
-### One-week pass — god-function cluster (deferred)
+### One-week pass - god-function cluster (deferred)
 
 Every item in this pass remains open. The duplication helpers landed
 in `709455f` (#49–#51) and `c2e7009` (#53) are partial scaffolding
 that each split would extract anyway, so the splits are slightly
 smaller than the original line counts suggest.
 
-1. **#45** ⏸️ — Split `scene_grid_render` (156 lines) into
+1. **#45** ⏸️ - Split `scene_grid_render` (156 lines) into
    resolve-alpha / setup / build-ctx / fog / theme-dispatch /
    teardown helpers.
-2. **#46** ⏸️ — Split `draw_cityscape` (224 lines) into city-state /
+2. **#46** ⏸️ - Split `draw_cityscape` (224 lines) into city-state /
    box draw / window draw helpers.
-3. **#47** ⏸️ — Split `draw_rotate_guide` (155 lines) into
+3. **#47** ⏸️ - Split `draw_rotate_guide` (155 lines) into
    arc-builder / helix-builder + shared pulse animator.
-4. **#48** ⏸️ — Split `render_3d_scene_pass` (80 lines, 5 phases).
-5. **#52** ⏸️ — Apply grid's per-theme-function extraction pattern
+4. **#48** ⏸️ - Split `render_3d_scene_pass` (80 lines, 5 phases).
+5. **#52** ⏸️ - Apply grid's per-theme-function extraction pattern
    uniformly to axes.
 
-### One-week pass — duplication cluster (partial)
+### One-week pass - duplication cluster (partial)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -1406,7 +1406,7 @@ smaller than the original line counts suggest.
 | **#29** clamp01f helper | ✅ `08fc94b` | `scene_clamp01f` in `render_types.h`; grid+axes opacity-clamp triplets replaced |
 | **#55** magic numbers | ⏸️ deferred | Large surface; per-theme constants are the natural home but each renderer needs its own pass |
 
-### One-week pass — boundary tightening (partial)
+### One-week pass - boundary tightening (partial)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -1414,7 +1414,7 @@ smaller than the original line counts suggest.
 | **#16** NV_fog save/restore | ✅ `c2e7009` | `glGetIntegerv(GL_FOG_DISTANCE_MODE_NV)` snapshot + tail restore in backdrop *and* grid (the audit only flagged backdrop but grid had the same pattern) |
 | **#27** + **#28** accum_samples ladder | ✅ `c2e7009` | now enforces `{1, 2, 4, 8, 16}` whenever AA is on |
 | **#33** scene_xn API names | ✅ `08fc94b` | Cheat-sheet added to header rather than renaming (audit's lower-cost option) |
-| **#32** postprocess graduation | ⏸️ deferred | Scope question — fold into standard cfg pipeline vs formalize "experimental" |
+| **#32** postprocess graduation | ⏸️ deferred | Scope question - fold into standard cfg pipeline vs formalize "experimental" |
 | **#35** palette token review | ⏸️ deferred | Design decision: which tokens are genuinely shared (worth the central table) vs file-local |
 
 ### Out of scope
@@ -1422,10 +1422,10 @@ smaller than the original line counts suggest.
 - The `scene_demo` boundary proof is doing its job; the audit
   confirmed no `editor/` / `repl/` / `ui/` includes in any scene
   file. Don't introduce them.
-- `scene_transition.c` is **already** pure as advertised — no GL,
+- `scene_transition.c` is **already** pure as advertised - no GL,
   no globals, no stdlib. The naming concern (#33) is the only smell.
 - `occluded_ghost.h` is a tidy 33-line constants header consumed by
-  five modules — earns its centralization. Don't touch.
+  five modules - earns its centralization. Don't touch.
 - `overlays.c` is exactly what its header advertises (per-vertex
   labels + normal arrows). The "ownership escaped upward" history
   is accurately reflected in the file comment. Don't refactor
@@ -1439,16 +1439,16 @@ smaller than the original line counts suggest.
 
 This audit was produced by four parallel review agents:
 
-- `render.{c,h}` + `render_types.h` — the frame orchestration
+- `render.{c,h}` + `render_types.h` - the frame orchestration
   contract
 - `grid.{c,h}` + `axes.{c,h}` + `scene_transition.{c,h}` +
-  `themes.h` — environment + transitions (the biggest file in
+  `themes.h` - environment + transitions (the biggest file in
   the directory, `grid.c` at 846 lines, plus the second-biggest,
   `axes.c` at 514)
 - `backdrop.{c,h}` + `lights.{c,h}` + `overlays.{c,h}` +
-  `postprocess_filter.{c,h}` + `palette.h` + `occluded_ghost.h` —
+  `postprocess_filter.{c,h}` + `palette.h` + `occluded_ghost.h` -
   visual content
-- `guides/` subtree — REPL-aware overlay passes (the biggest file
+- `guides/` subtree - REPL-aware overlay passes (the biggest file
   in `guides/`, `transform_guides.c` at 764 lines, plus
   `geometry_guides.c`, `transform_utils.h`, `guides_shared.h`)
 

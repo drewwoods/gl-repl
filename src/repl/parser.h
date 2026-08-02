@@ -50,8 +50,8 @@ typedef struct {
     int   err_sz;
     /* When set, the parser skips emitting the canonical source text into
      * out->text (out->text is left as ""). Callers that only consume the
-     * parsed GLCmd — notably src/repl/flatten.c, which re-parses every
-     * command on each frame and discards the text — set this to avoid the
+     * parsed GLCmd - notably src/repl/flatten.c, which re-parses every
+     * command on each frame and discards the text - set this to avoid the
      * per-arg %g/snprintf rendering and trailing-comment scan. Default 0
      * (emit text) preserves the behavior for commit / reformat / export. */
     int skip_text;
@@ -74,7 +74,7 @@ typedef struct {
      * text-evaluates an expression, so the compiled-expression cache can
      * compile exactly the spans this parse evaluated. NULL (the default for
      * commit/reformat/tests) is today's behavior. Every parser branch that
-     * evaluates expressions must fire it — a branch that doesn't would make
+     * evaluates expressions must fire it - a branch that doesn't would make
      * the compiled path bake stale args for that command family. */
     const ReplExprCaptureSink *capture;
 } ReplParseContext;
@@ -88,9 +88,9 @@ typedef struct {
 } ReplParsedLine;
 
 /* Context-aware parser entrypoint. The ReplParseContext is required
- * (NULL returns 0 immediately): every caller — flatten.c parsing
+ * (NULL returns 0 immediately): every caller - flatten.c parsing
  * source commands at a known index, replay.c doing a step-back
- * parse, editor commit, the lean loader, tests — already
+ * parse, editor commit, the lean loader, tests - already
  * constructs a context. The former NULL
  * fallback (which read repl_state_edit_line() for source_line_idx)
  * is gone because parser code does not reach back into REPL cursor
@@ -108,7 +108,7 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
 /* Split a `label(...)` arg payload into the format string body
  * (no quotes) and post-string args (substitution exprs).
  *
- * `args` is the raw text between the outer parens — caller is
+ * `args` is the raw text between the outer parens - caller is
  * responsible for paren stripping. Format string must be the first
  * arg (leading whitespace tolerated, but no preceding tokens).
  *

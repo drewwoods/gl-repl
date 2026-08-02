@@ -235,13 +235,13 @@ static void write_cmd_source_as_c(FILE *f, const char *source_text,
 /* A normal the autonormal pass generated, tagged so import can restore
  * is_auto. Without the tag a reloaded scene's normals read as hand-written,
  * and the pass then refuses to touch them (a hand-written normal owns its
- * block) — the normals silently freeze at their exported values.
+ * block) - the normals silently freeze at their exported values.
  *
  * The marker is emitted in REPL `//` form and converted to a C89 block
  * comment by export_write_c89_line, which is also what lets import's
  * block-comment normalizer hand it back as `// @auto`. An is_auto row has
- * no trailing comment of its own to collide with — the pass rewrites the
- * row's text wholesale on every recompute — but a row that somehow carries
+ * no trailing comment of its own to collide with - the pass rewrites the
+ * row's text wholesale on every recompute - but a row that somehow carries
  * one keeps it and goes untagged rather than emitting two comments. */
 static void write_normal_as_c(FILE *f, const GLCmd *cmd,
                               const char *source_text, int translate_exprs) {
@@ -303,14 +303,14 @@ static void write_func_body_marker(FILE *f, int func_idx) {
 
 /* The per-command writer for the exported display() body: emit one
  * source command as standalone C. One independent case per command
- * family — most canonical REPL text is already valid C and passes
+ * family - most canonical REPL text is already valid C and passes
  * through the default arm (expression-to-C translated when the command
  * carries vars); the exceptions each own a case: var declares become
  * `// @declare` markers (locals would shadow the file-scope globals),
  * tess commands expand to the gluTess* call sequences, and label()
  * keeps its format string byte-exact. Block structure (for/func) is the
  * caller's job. The import translators in src/repl/import.c are the
- * inverses of these arms — change them in pairs to keep export/import
+ * inverses of these arms - change them in pairs to keep export/import
  * round-trips lossless. */
 static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                                      int for_depth, int *tess_depth) {
@@ -326,7 +326,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
     case CMD_VAR_DECLARE: {
         if (cmd->var_idx == REPL_VAR_IDX_LOCAL) {
             /* A function-scoped local is a real C automatic written at its
-             * body position — there is no file-scope static for it to
+             * body position - there is no file-scope static for it to
              * shadow, so no marker is needed.
              *
              * The zero-initializers are not cosmetic. The REPL binds every
@@ -334,7 +334,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
              * read 0 in the REPL and be *undefined* in the generated file.
              * docs/ARCHITECTURE.md makes behavior parity a contract rather
              * than a preference, and undefined behavior is precisely the
-             * one thing the REPL cannot reproduce — so "match C" was never
+             * one thing the REPL cannot reproduce - so "match C" was never
              * available as a resolution. Import lowers this form back to
              * `float a;`, which keeps the round-trip idempotent. */
             /* The emitted line is *wider than its source*: the source row
@@ -345,7 +345,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
              * honest if either limit moves. */
             char line[MAX_LINE_LEN * 2];
             /* export_document_text() returns "" for every row it cannot
-             * resolve, never NULL — so this and the indent scan below both
+             * resolve, never NULL - so this and the indent scan below both
              * dereference unconditionally. */
             const char *comment = strstr(source_text, "//");
             int indent = 0;
@@ -546,7 +546,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 break;
             }
         }
-        /* Fallback: emit raw text — the importer handles it via the
+        /* Fallback: emit raw text - the importer handles it via the
          * default repl_eval_c_expr_to_repl path. */
         export_write_c89_line(f, source_text);
         break;
@@ -576,7 +576,7 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
     int tess_depth = 0;
 
     /* C89 has no declaration-after-statement, and this exporter targets
-     * C89 — it already hoists for-loop variables into a scope brace for
+     * C89 - it already hoists for-loop variables into a scope brace for
      * the same reason. A local declaration is normally the body's first
      * row, but nothing keeps it there: ordinary insert-mode editing can
      * push a statement ahead of one, and flatten binds it wherever it
@@ -827,7 +827,7 @@ int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
     return 1;
 }
 
-/* glClipPlane(plane, (GLdouble[]){a, b, c, d}) — compound literals are
+/* glClipPlane(plane, (GLdouble[]){a, b, c, d}) - compound literals are
  * C99, so the exported C89 line routes the equation through the
  * repl_gldouble4 helper instead. */
 int write_clip_plane_as_c89(FILE *f, const char *source_text) {
@@ -849,7 +849,7 @@ int write_clip_plane_as_c89(FILE *f, const char *source_text) {
     return 1;
 }
 
-/* glMultMatrixf((GLfloat[]){m0, ..., m15}) — compound literals are C99,
+/* glMultMatrixf((GLfloat[]){m0, ..., m15}) - compound literals are C99,
  * so the exported C89 line routes the 16 cells through the repl_glfloat16
  * helper instead. Only the literal form comes here; `glMultMatrixf(A)` is
  * already valid C against the exported scratch global and takes the
@@ -878,7 +878,7 @@ int write_mult_matrixf_as_c89(FILE *f, const char *source_text) {
     return 1;
 }
 
-/* glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a}) — compound literals
+/* glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a}) - compound literals
  * are C99, so the exported C89 line routes the color through the
  * repl_glfloat4 helper instead. */
 int write_fog_fv_as_c89(FILE *f, const char *source_text) {

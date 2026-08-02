@@ -1,6 +1,6 @@
 # Accumulation-Buffer Motion Blur
 
-## Status — LANDED (2026-06-09; refined 2026-07-03)
+## Status - LANDED (2026-06-09; refined 2026-07-03)
 
 The implementation shipped the accumulation effect/pass split, per-sample
 camera/time isolation, tests, and documentation. The historical proposal below
@@ -21,7 +21,7 @@ decisions recorded below.
 The REPL already uses the accumulation buffer for antialiasing: a single
 5-state "Accum AA" config (Off/2x/4x/8x/16x, F2) drives a jitter loop inside
 `scene_render_3d_scene()`. We want to reuse that accum machinery for **motion
-blur** — blurring camera movement and/or the `t` animation across sub-frames.
+blur** - blurring camera movement and/or the `t` animation across sub-frames.
 
 Motion blur is expensive (it re-renders the scene N times with no temporal
 reuse), so it must be **off by default**. The "Accum AA" setting is reworked
@@ -31,11 +31,11 @@ into two config items:
 - **Accum passes**: `1 | 2 | 4 | 8 | 12 | 16` (6 states, Ctrl+= / Ctrl+−)
 
 Blur behavior per frame:
-- **Camera blur** — if the camera matrix changed since last frame, interpolate
+- **Camera blur** - if the camera matrix changed since last frame, interpolate
   the previous↔current camera pose across the N passes.
-- **Time blur** — otherwise, if `t` is playing, sample `t` over the trailing
+- **Time blur** - otherwise, if `t` is playing, sample `t` over the trailing
   16 ms window `[t−dt, t]`, one sub-step per pass.
-- **Fallback** — if `t` is paused *and* the camera is unchanged, fall back to
+- **Fallback** - if `t` is paused *and* the camera is unchanged, fall back to
   AA jitter (desired, low-cost; falls out of the design for free).
 
 The final image is an equal-weight blend of the N accumulated passes.
@@ -56,7 +56,7 @@ Two facts, verified in source, that drive the design:
    consumes *baked* `flat_cmds[].args` for nearly all commands (e.g.
    `CMD_VERTEX3F`, executor.c:542); only control-flow conditions re-evaluate at
    execute time. The flat program is rebuilt every frame when `g_flat_dirty` is
-   set — `repl_state_time_advance` sets it each playing frame (glr_ctrl.c:1333 →
+   set - `repl_state_time_advance` sets it each playing frame (glr_ctrl.c:1333 →
    `repl_flatten_commands`). So **a time sub-step must reflatten** at the
    sub-step `t`; merely poking predef `t` will not move baked geometry.
 2. **Main-fill execution is not isolated.** `scene_execute_adapter` snapshots /
@@ -81,18 +81,18 @@ projection from `pass_cfg`, and renders that pass with jitter=0. The controller
 callback:
 - **resets predef/scratch/render to the frame baseline** (per-pass isolation, P2),
 - **camera blur**: writes the interpolated pose into `pass_cfg->cam_*` *and*
-  loads the interpolated modelview — so grid/axes/orbit-target/light-indicators
+  loads the interpolated modelview - so grid/axes/orbit-target/light-indicators
   and the ortho projection (which read `cam_*` / are recomputed from `pass_cfg`)
   **blur with the camera**, per the user's requirement;
 - **time blur**: sets the predef-`t` sub-step and **reflattens** at that `t`
-  (P1) — camera `cam_*` left at the current pose.
+  (P1) - camera `cam_*` left at the current pose.
 
 When the callback is `NULL` (paused + unchanged-camera), the scene uses the AA
-jitter path — that *is* the fallback.
+jitter path - that *is* the fallback.
 
 ## Changes
 
-### 1. Scene render contract — `src/scene/render_types.h`
+### 1. Scene render contract - `src/scene/render_types.h`
 
 Add an effect enum and replace the accum fields:
 ```c
@@ -114,7 +114,7 @@ void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count,
 void  *setup_subframe_user_data;
 ```
 
-### 2. Scene loop — `src/scene/render.c` (`scene_render_3d_scene`, 711-725)
+### 2. Scene loop - `src/scene/render.c` (`scene_render_3d_scene`, 711-725)
 
 Generalize the loop: `do_accum = use_accum && accum_effect != OFF && passes > 1`.
 Per pass clear COLOR|DEPTH; then:
@@ -129,18 +129,18 @@ once-before-loop `scene_compute_active_projection` (render.c:709) stays for the
 AA/non-blur paths; the blur branch recomputes per pass from `pass_cfg`. The
 jitter table already supports 12 (first 12 of 16 entries).
 
-`validate_render_config` (render.c:97) is **reject-only on a const config** — do
+`validate_render_config` (render.c:97) is **reject-only on a const config** - do
 not "clamp". Add: `accum_effect ∉ [0,2]` → fail (always). Validate the
 `accum_passes` ladder `{1,2,4,8,12,16}` **only when accumulation is active**
 (`use_accum && accum_effect != OFF`), mirroring the grid block's
 `grid_theme != GRID_THEME_OFF` guard (render.c:109). This keeps the
-`memset(0)` config path valid for non-accum callers — `tools/scene_demo/scene_demo.c`
+`memset(0)` config path valid for non-accum callers - `tools/scene_demo/scene_demo.c`
 (scene_demo.c:169 builds via memset and never sets accum fields, then calls
 `scene_render_3d_scene` at :361) needs **no change**: effect=OFF ⇒ passes
 unchecked. The existing `tests/test_scene_render.c` setup is the one place that
 turns AA on, so it must set `accum_passes` (see Tests).
 
-### 3. Camera helpers — `src/app/glr_camera.{h,c}`
+### 3. Camera helpers - `src/app/glr_camera.{h,c}`
 
 Reuse the existing static `shortest_angle_delta` (glr_camera.c:148) and the
 `tick_target_ease` lerp math (184-189). Add two exported helpers:
@@ -155,11 +155,11 @@ linearly. `pose_changed` compares with epsilons (reuse the existing
 `CAM_TARGET_*_EPS` values). Keep `shortest_angle_delta` static (both helpers
 are same-TU).
 
-### 4. Transient time setter — impl `src/repl/state.c`, decl `src/repl/state_owners.h`
+### 4. Transient time setter - impl `src/repl/state.c`, decl `src/repl/state_owners.h`
 
 `repl_state_time_set` is unusable here (it overwrites `g_anim_time` and sets
 `g_flat_dirty`). Add a setter that writes only the predef-`t` slot; the **caller
-then reflattens** at that `t` (this is what actually re-bakes geometry — see P1).
+then reflattens** at that `t` (this is what actually re-bakes geometry - see P1).
 Declare it in **`state_owners.h`** alongside the other mutable time accessors
 (`repl_state_time_advance/_reset_to_zero/_set`, state_owners.h:62-64), not the
 read-only `state.h` facade:
@@ -170,7 +170,7 @@ read-only `state.h` facade:
 void repl_state_time_set_transient(float value);  /* writes g_predef_vars_mut[g_t_var_idx].value */
 ```
 
-### 5. Controller wiring — `src/app/glr_ctrl.c`
+### 5. Controller wiring - `src/app/glr_ctrl.c`
 
 - `GlrSubframeCtx` (file-static `g_subframe_ctx`) carries the per-pass policy
   **and the frame baseline** the callback resets to each pass (P2):
@@ -240,7 +240,7 @@ re-executes N times. Inherent to motion blur; gated off by default.
   `accum_passes = 8`.
 - **`src/app/glr_config.c`**: `accum_effect` is a plain backing field
   (`config_value_ptr` + `glr_config_get` switch, no special-casing). `accum_passes`
-  is a cycle — replace `accum_aa_get/set_cycle` (34-55) with
+  is a cycle - replace `accum_aa_get/set_cycle` (34-55) with
   `accum_passes_get/set_cycle` over `k_accum_pass_steps[6] = {1,2,4,8,12,16}`,
   and update the three dispatch sites (NULL ptr / get / set) accordingly.
 - **`src/app/glr_actions.c`**: replace `accum_aa_names` with
@@ -254,32 +254,32 @@ re-executes N times. Inherent to motion blur; gated off by default.
   fine-adjust from `GLR_CONFIG_ACCUM_AA` to `GLR_CONFIG_ACCUM_PASSES`; gate on
   `use_accum && accum_effect != OFF`; status string "Accum passes: %s".
 
-### 7. Status-bar text — `src/ui/app/repl_code_panel.c` (1816-1828)
+### 7. Status-bar text - `src/ui/app/repl_code_panel.c` (1816-1828)
 
 Reads `snap->render.accum_aa_enabled && accum_samples` → `"AA %dx"`. Update to
 the new fields: `off` when `accum_effect==OFF`, else `"AA %dx"` /
 `"Blur %dx"` from `accum_effect` + `accum_passes`. (This text appears in the
-golden fixtures — regen, below.)
+golden fixtures - regen, below.)
 
 ### 8. Docs
 
 `CLAUDE.md` F2 key-table row (1174), the "accum-AA Ctrl+=/−" mention (428), and
 the jitter-sample comment (698); `src/repl/help_text.c:160-161` ("Accumulation
-Buffer AA … On by default") — rewrite for Off/AA/Blur + passes and the corrected
+Buffer AA … On by default") - rewrite for Off/AA/Blur + passes and the corrected
 default.
 
 ## Reused existing code
 
-- `g_jitter_table` + `scene_apply_projection` frustum-shift (render.c) — AA path
+- `g_jitter_table` + `scene_apply_projection` frustum-shift (render.c) - AA path
   is unchanged.
 - `SceneRenderConfig` callback-injection idiom (`execute_fn`, `post_fill_fn`).
 - `shortest_angle_delta` + `tick_target_ease` lerp math (glr_camera.c).
 - `repl_copy_predef_values` / `repl_restore_predef_values` frame bracket
-  (glr_ctrl.c) — gives free per-frame `t` restore.
+  (glr_ctrl.c) - gives free per-frame `t` restore.
 - `cfg_slug_from_label` auto-derives the new `accum_effect`/`accum_passes` @cfg
-  slugs — no export/import bridge edits needed.
+  slugs - no export/import bridge edits needed.
 
-## Tests (full scope — old fields are referenced widely)
+## Tests (full scope - old fields are referenced widely)
 
 Replace `accum_aa` / `accum_samples` / `accum_aa_enabled` / `GLR_CONFIG_ACCUM_AA`
 across the compiled tests:
@@ -299,11 +299,11 @@ across the compiled tests:
 - `tests/test_scene_render.c:57`: `cfg.accum_aa_enabled = 1;` →
   `cfg.accum_effect = SCENE_ACCUM_EFFECT_AA; cfg.accum_passes = …;`.
 - Golden fixtures `tests/testdata/repl_examples_ui/*.golden.txt`: the status-bar "AA …"
-  text changes — regen with a **debug build** (per the golden-regen rule) after
+  text changes - regen with a **debug build** (per the golden-regen rule) after
   the code lands.
 
 New unit tests:
-- `glr_camera_pose_lerp` — f=0→prev, f=1→cur, midpoint, ry wrap (350↔10 → ~0/360,
+- `glr_camera_pose_lerp` - f=0→prev, f=1→cur, midpoint, ry wrap (350↔10 → ~0/360,
   not 180); `glr_camera_pose_changed` epsilon (identical→0, sub-eps→0, supra-eps→1).
 - Config-state round-trips: effect (0/1/2) and passes (cycle index →
   `{1,2,4,8,12,16}`).
@@ -316,7 +316,7 @@ New unit tests:
 
 ## Verification
 
-1. `make test` (debug ASan+UBSan) — config-state + camera-lerp tests pass.
+1. `make test` (debug ASan+UBSan) - config-state + camera-lerp tests pass.
 2. `make check-c99` and `make check-state-ownership` (keymap-no-dup, include
    style, ownership guards) stay green.
 3. `make gl-repl` then `./gl-repl --example torus`: F2 cycles Off→AA→Blur;
@@ -324,7 +324,7 @@ New unit tests:
    camera-direction smear; with the camera still and `t` playing (Ctrl+T)
    confirm temporal smear on animated geometry; pause `t` with a still camera
    and confirm it falls back to clean AA. Start replay (Ctrl+R) with effect=Blur
-   and confirm geometry renders correctly (AA, not blurred — only the replay
+   and confirm geometry renders correctly (AA, not blurred - only the replay
    slice draws, no whole-program leak).
 4. Headless sanity (optional): `make gl-repl FREEGLUT_OSMESA=1` +
    `scripts/record-gif.sh --example 2 --duration 2` with blur on to eyeball the

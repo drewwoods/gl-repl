@@ -7,7 +7,7 @@
 > portion), Phase 7b, Assumptions, and Landing Strategy sections,
 > which are retained as historical context only.
 
-## Summary (historical — superseded by Phase 8)
+## Summary (historical - superseded by Phase 8)
 
 Three steps: (1) split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter; (2) decouple `src/editor/input.c` and `src/editor/commit.c` from the REPL pipeline by **extending** the existing `EditorServices` seam (`src/editor/services.h`, today scoped to compile/apply via `commit.c`) so the editor module set can link without the full REPL. UI chrome (menu bar, help overlay, color picker, tutorial) is treated as **editor-inherent**: any standalone editor binary needs equivalents of those modules, so the editor depends on `src/ui/` and `src/widgets/` directly rather than abstracting them behind a second service table. The residual upward `glr_*` reach (~3-4 sites: camera reset, code-panel presentation, panel-drag router) is small enough to stub as direct symbols rather than abstract; (3) add `editor_demo` as the forcing function that proves the split. Like `scene_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The near-term implementation can stop after Phases 0-4 (plus the relevant Phase 7 docs/guards): that still completes the SRP cleanup for `ui/panels.c`. Phases 5 and 6 are deferred draft work and need a fresh review before implementation.
 
@@ -16,12 +16,12 @@ UI split. Phases 5, 6, 7b describe the EditorServices/large-shim
 approach that the "Updated direction" pivot replaced; treat their
 service-table designs and shim-shrinkage targets as historical.
 
-## Current state (2026-05-20) — Phase 8 v1 landed
+## Current state (2026-05-20) - Phase 8 v1 landed
 
 Phase 8 v1 is implemented and pushed on branch
 `editor-repl-decoupling`. The generic editor demo binary builds,
 renders text via `ui_text_panel`, dispatches its own keys via a
-generic dispatcher, and ships with a working File menu — all
+generic dispatcher, and ships with a working File menu - all
 without linking any REPL-flavored editor controller files.
 
 ### Landed
@@ -30,7 +30,7 @@ without linking any REPL-flavored editor controller files.
 |--------|-------|------|
 | `456c4aa` | (rescope) | Plan moved to `plans/active/`. `EditorChromeServices` dropped: chrome is editor-inherent, residual `glr_*` reach stubbed as direct symbols. |
 | `c1247bf` | Phase 5 entry | Surfaces re-measured against current tree: input.c=22, commit.c=30 unique `repl_*` symbols. input.c `glr_*` reach=6 (vs draft "~3-4", below the 8-symbol reopen threshold). |
-| `a5b6388` | Phase 5 step | `parse_command_ctx` routed through `EditorServices` — 5 call sites migrated as the worked example of the migration pattern. Kept as a worked example for the REPL editor's own testability; not load-bearing for the demo. |
+| `a5b6388` | Phase 5 step | `parse_command_ctx` routed through `EditorServices` - 5 call sites migrated as the worked example of the migration pattern. Kept as a worked example for the REPL editor's own testability; not load-bearing for the demo. |
 | `b6250bc` | **Phase 6** | `tools/editor_demo/editor_demo.c` skeleton + `tools/editor_demo/repl_shim.c` (~85 direct stubs at the time). |
 | `01c60d3` | **Phase 7b** | `scripts/check-editor-repl-surface.sh` ratchet + baseline (input.c=22, commit.c=30). Wired into `make check` and `make check-state-ownership`. |
 | `d5a0407` | **Phase 7b** | `MODULES.md` documents the `editor_demo` binary alongside `repl_demo` and `scene_demo`. |
@@ -39,8 +39,8 @@ without linking any REPL-flavored editor controller files.
 | `1a88444` | (review fixes) | Marked historical sections superseded; narrowed v1 scope (no undo, no search, no status bar); made `check-edit-ops-pure` required. |
 | `28fccb7` | **Phase 8.3** | New `src/editor/edit_ops.{c,h}` library with 5 primitives (buffer insert/delete, selection consume, type-char, backspace). `editor_input_consume_selection` moved into `edit_ops` as `edit_op_consume_input_selection`. Two `src/editor/input.c` handlers (printable, text-delete) migrated. `scripts/check-edit-ops-pure.sh` wired into `make check` + `check-state-ownership`. |
 | `d114512` | **Phase 8.5** | `editor_demo` display callback builds a `UiTextPanelSnapshot` from `EditorState` and calls `ui_text_panel_render`. Adds `text_panel`/`text_layout`/`text_search` to demo link set. |
-| `0c83781` | **Phase 8.6** | `tools/editor_demo/menu.{c,h}` — minimal File menu (Load / Save / Quit). Load/Save are unimplemented; Quit calls exit. |
-| `5c3020d` | **Phase 8.4** | `tools/editor_demo/input.{c,h}` — generic input dispatcher. Demo's GLUT keyboard callbacks route through `demo_input_handle_key` / `demo_input_handle_special` instead of `editor_handle_key`. v1 covers printable ASCII, backspace, Escape, and cursor-within-line nav. |
+| `0c83781` | **Phase 8.6** | `tools/editor_demo/menu.{c,h}` - minimal File menu (Load / Save / Quit). Load/Save are unimplemented; Quit calls exit. |
+| `5c3020d` | **Phase 8.4** | `tools/editor_demo/input.{c,h}` - generic input dispatcher. Demo's GLUT keyboard callbacks route through `demo_input_handle_key` / `demo_input_handle_special` instead of `editor_handle_key`. v1 covers printable ASCII, backspace, Escape, and cursor-within-line nav. |
 | `61407e4` | **Phase 8.7+8.8** | `EDITOR_DEMO_DEP_SRCS` reduced to **6 source files**: `edit_ops.c`, `state.c`, `text_layout.c`, `text_panel.c`, `text_search.c`, `prof.c` (+ `gl_stub_counts.c`). All REPL-flavored controller files dropped. `repl_shim.c` shrunk from ~85 stubs to **1**: `repl_state_edit_line` (the acknowledged `state.c` leak). |
 
 Full regression: 6292/6292 tests across 45 binaries clean; full
@@ -63,17 +63,17 @@ Full regression: 6292/6292 tests across 45 binaries clean; full
 
 ### What's still open (not v1 scope)
 
-These are intentionally deferred from Phase 8 — each is a separate
+These are intentionally deferred from Phase 8 - each is a separate
 follow-up phase:
 
-- **Edit-line ownership cleanup. DONE 2026-05-21** — see
+- **Edit-line ownership cleanup. DONE 2026-05-21** - see
   `plans/done/edit-line-ownership.md`. Option A landed in 7 phases
   (storage flip + accessor migration + scenes/load.c via a
   controller-installed host-effects sink + shim deletion). The
   options below are retained as historical context for the
   decision.
 
-  - **Option A — Full ownership migration.** Move edit-line state
+  - **Option A - Full ownership migration.** Move edit-line state
     out of `ReplState` into `EditorState`. Concretely:
 
     1. Add storage and accessors on the editor side:
@@ -103,8 +103,8 @@ follow-up phase:
     reads edit-line. After migration, those reads become a
     backward dependency (REPL → editor). Either accept that
     framing ("the REPL pipeline takes the editor's cursor
-    position as input") or push the reads up into the caller —
-    the controller / commit code that knows both states — and
+    position as input") or push the reads up into the caller -
+    the controller / commit code that knows both states - and
     pass edit-line through as a parameter. Pick one before
     starting; that choice drives the call-site rewrites.
 
@@ -112,13 +112,13 @@ follow-up phase:
     largest blast radius and needs the design question pinned
     down before execution.
 
-  - **Option B — Targeted view-field cleanup.** Smaller and
+  - **Option B - Targeted view-field cleanup.** Smaller and
     keeps edit-line where it is today. Concretely:
 
     1. Delete `edit_line_idx` from `EditorInputView` (the
        by-value snapshot returned by `editor_state_input()`).
     2. `src/editor/state.c`'s view builder stops calling
-       `repl_state_edit_line()` — the field is gone, the call
+       `repl_state_edit_line()` - the field is gone, the call
        isn't needed.
     3. Anyone reading `input.edit_line_idx` migrates to calling
        `repl_state_edit_line()` directly (it was always the
@@ -126,7 +126,7 @@ follow-up phase:
        Expected: ~5 call sites.
     4. Drop the shim stub; delete `tools/editor_demo/repl_shim.c`.
 
-    Cost: 1-2 commits. No reorganization of edit-line storage —
+    Cost: 1-2 commits. No reorganization of edit-line storage -
     it still lives in `ReplState`. The win is honest: the demo's
     `state.c` link no longer requires a REPL stub, so the demo
     is shim-free.
@@ -139,7 +139,7 @@ follow-up phase:
     goal, B leaves that work undone.
 
   Recommendation: pick B unless and until REPL→editor coupling
-  becomes a real concern (right now it isn't — the REPL pipeline
+  becomes a real concern (right now it isn't - the REPL pipeline
   legitimately needs to know which line it's about to parse). A
   is the right move if the project later decides EditorState
   should own all editing cursors; B is the right move if "the
@@ -161,7 +161,7 @@ follow-up phase:
   locked v1 scope; can be wired against `editor_buffer_load_lines`
   / a path-prompt overlay.
 
-### What the demo currently is — and isn't
+### What the demo currently is - and isn't
 
 The real-GL `editor_demo` build opens a GLUT window driven by the
 demo's own generic dispatcher (`tools/editor_demo/input.c`) and
@@ -176,19 +176,19 @@ that log; Quit calls exit). No `editor_handle_key` /
 `editor_handle_special` from the REPL editor is involved.
 
 The `repl_shim.c` ledger is **one symbol**:
-- `repl_state_edit_line` — the acknowledged `state.c`
+- `repl_state_edit_line` - the acknowledged `state.c`
   `EditorInputView` leak. A follow-up phase moves edit-line
   ownership into `EditorState` and the stub vanishes.
 
 The prior shim's ~85 symbols (REPL state / command_store / compile /
 apply / eval / func_alias / source_scope / line predicates, plus
-tutorial / color_picker / ui_* / glr_*) are gone — those stubs
+tutorial / color_picker / ui_* / glr_*) are gone - those stubs
 existed to satisfy the REPL-flavored editor controller files
 (`input.c`, `commit.c`, `clipboard.c`, `undo.c`, `reformat.c`,
 `search.c`, `completion.c`, and the inline overlays), which Phase
 8.7 dropped from the demo's link set entirely.
 
-## Updated direction (2026-05-20) — generic text editor demo + shared edit_ops
+## Updated direction (2026-05-20) - generic text editor demo + shared edit_ops
 
 Review surfaced a sharper architectural cleavage than the original
 plan named. Restating the goal in the new framing:
@@ -202,8 +202,8 @@ plan named. Restating the goal in the new framing:
   REPL-flavored controllers.** They orchestrate REPL parse →
   compile → apply, validate `CMD_VAR_DECLARE` ranges in clipboard
   ops, snapshot REPL predef vars + scratch arrays in undo, etc.
-- **`src/editor/state.c`** is *mostly* generic — text buffer +
-  cursor + selection storage — with one acknowledged REPL leak
+- **`src/editor/state.c`** is *mostly* generic - text buffer +
+  cursor + selection storage - with one acknowledged REPL leak
   (`EditorInputView` reads `repl_state_edit_line`) that the demo
   handles via a one-line shim until a follow-up phase moves
   edit-line ownership into `EditorState`.
@@ -217,10 +217,10 @@ The cleaner factoring the review converged on:
 
 | Module | Role |
 |--------|------|
-| `src/editor/state.c` (existing) | Data model: text buffer, cursor, selection storage. Mostly generic — has one acknowledged REPL leak (`EditorInputView` reads `repl_state_edit_line` for its `edit_line_idx` field). The demo stubs that one symbol; a follow-up phase moves edit-line ownership into `EditorState`. |
+| `src/editor/state.c` (existing) | Data model: text buffer, cursor, selection storage. Mostly generic - has one acknowledged REPL leak (`EditorInputView` reads `repl_state_edit_line` for its `edit_line_idx` field). The demo stubs that one symbol; a follow-up phase moves edit-line ownership into `EditorState`. |
 | `src/editor/edit_ops.{c,h}` (**new**) | Generic text-editing primitives extracted from `input.c`: cursor moves, character insert/delete, selection extend/clear, text-only clipboard. Strictly REPL-free, locked by `check-edit-ops-pure` (see 8.9). |
-| `src/editor/input.c` (existing, relabelled) | **REPL editor input dispatcher** — REPL key bindings + REPL-specific orchestration on top of `edit_ops` primitives. Stays where it is; demo does *not* link it. |
-| `tools/editor_demo/input.c` (**new**) | **Generic editor input dispatcher** — plain-text key bindings on top of the same `edit_ops` primitives. No REPL. |
+| `src/editor/input.c` (existing, relabelled) | **REPL editor input dispatcher** - REPL key bindings + REPL-specific orchestration on top of `edit_ops` primitives. Stays where it is; demo does *not* link it. |
+| `tools/editor_demo/input.c` (**new**) | **Generic editor input dispatcher** - plain-text key bindings on top of the same `edit_ops` primitives. No REPL. |
 
 `src/editor/{search,undo,commit,clipboard,reformat,completion,
 inline_file_prompt,inline_rename,help_session}.c` are intentionally
@@ -230,7 +230,7 @@ audit) and the demo does not link them.
 
 This is the right answer to the question the demo was forcing.
 "Chrome stays direct" was right for *truly editor-inherent* chrome
-(code panel, file save/load menu, search overlay) — those modules
+(code panel, file save/load menu, search overlay) - those modules
 genuinely don't need REPL. It was wrong for the REPL-feature widgets
 (tutorial, color picker for GL color literals, variable panel for
 predef-vars, replay): those *are* REPL-specific, not editor-inherent,
@@ -238,13 +238,13 @@ and the demo correctly should not link them. The previous shim
 stubbed their APIs because `src/editor/input.c` calls them directly;
 once the demo stops linking input.c, those stubs go away with it.
 
-### Generic editor demo — locked scope (v1, intentionally narrow)
+### Generic editor demo - locked scope (v1, intentionally narrow)
 
 The scope leans hard toward *less, not more*. Every feature
 included below has a clear extraction path through `edit_ops`
 primitives and no REPL/UI side-channels. Anything that requires
 non-trivial cleanup in shared editor files (`state.c`, `search.c`,
-`undo.c`) is **deferred** rather than dragged into Phase 8 — those
+`undo.c`) is **deferred** rather than dragged into Phase 8 - those
 files have known REPL/UI leaks (see "Editor files that aren't yet
 generic" below) that need their own follow-up phases before the
 demo can call them generic.
@@ -261,12 +261,12 @@ What `editor_demo` v1 is:
   Home/End within the input row, Escape to quit. Word jumps,
   Shift+arrow selection, double-click word select, drag selection,
   Ctrl+A/C/X/V, and scroll wheel are listed in "What's still open"
-  below — they need additional `edit_ops` primitives or cross-line
+  below - they need additional `edit_ops` primitives or cross-line
   navigation support and are explicitly *not* in v1.
 - A **menu bar with a File menu**. Load/Save items render and are
   hit-testable but their *handlers can be unimplemented* initially
   (status messages or no-ops). The point is to exercise the
-  ability to *create* menu items in a generic editor — the
+  ability to *create* menu items in a generic editor - the
   semantics come later.
 
 What `editor_demo` v1 is NOT (deferred or out of scope):
@@ -287,8 +287,8 @@ What `editor_demo` v1 is NOT (deferred or out of scope):
 - **No tutorial.** REPL-feature; the demo doesn't link
   `src/widgets/tutorial.c` and doesn't need its API stubs.
 - **No color picker.** Picker exists to edit `glColor3f` / `glColor4f`
-  literals — REPL-feature.
-- **No variable panel / slider.** Predef-var sliders — REPL-feature.
+  literals - REPL-feature.
+- **No variable panel / slider.** Predef-var sliders - REPL-feature.
 - **No replay HUD / annotations.** REPL-feature.
 - **No GL grammar autocomplete.** No grammar to suggest from. The
   completion provider seam stays unregistered (the existing
@@ -303,7 +303,7 @@ The previous "Updated direction" claim that `state.c` and `search.c`
 are genuinely generic was too strong. The actual coupling, as of
 2026-05-20:
 
-- **`src/editor/state.c`** — `EditorInputView` builder forward-declares
+- **`src/editor/state.c`** - `EditorInputView` builder forward-declares
   and calls `repl_state_edit_line()` to populate the view's
   `edit_line_idx` field. The editor doesn't own its own edit-line
   cursor today; it reads it from REPL state. The demo can either
@@ -311,14 +311,14 @@ are genuinely generic was too strong. The actual coupling, as of
   in `repl_shim.c`), or (b) a follow-up phase moves edit-line
   ownership into `EditorState` so the editor owns its own cursor.
   v1 takes path (a); cleanup is deferred.
-- **`src/editor/search.c`** — Includes REPL state views,
+- **`src/editor/search.c`** - Includes REPL state views,
   calls `repl_state_edit_line` throughout, and mutates
   `ui_state_help_mut` directly. Not generic. The demo does not
   link it; Ctrl+F is dropped from v1 scope.
-- **`src/editor/undo.c`** — Snapshots REPL predef vars and scratch
+- **`src/editor/undo.c`** - Snapshots REPL predef vars and scratch
   arrays alongside text. Not generic; demo does not link it.
 - **`src/editor/{commit,clipboard,reformat,completion,
-  inline_file_prompt,inline_rename,help_session}.c`** — All
+  inline_file_prompt,inline_rename,help_session}.c`** - All
   REPL-flavored controllers. Demo does not link.
 
 Future phases (not Phase 8) can clean up state.c's edit-line leak
@@ -333,11 +333,11 @@ would bloat the phase beyond its forcing-function value.
    "REPL editing." Each module has one job.
 2. **The forcing function works the right way.** Anything the
    generic demo needs *must* be in `edit_ops`. If a primitive is
-   missing, the demo can't compile without it — extraction
+   missing, the demo can't compile without it - extraction
    pressure points are obvious.
 3. **The shim shrinks dramatically.** Demo stops linking
    `src/editor/{input,commit,clipboard,undo,reformat,completion}.c`
-   — the files that call most of the REPL surface. The remaining
+   - the files that call most of the REPL surface. The remaining
    shim is whatever `state.c` / `search.c` / new `edit_ops.c`
    still call into REPL, which should be near-zero.
 4. **Code reuse is real, not notional.** Both the REPL app and the
@@ -359,8 +359,8 @@ level.
 - **Phase 5 (EditorServices migrations)** is largely superseded.
   The migration of `parse_command_ctx` (commit `a5b6388`) still
   stands as a worked example for the REPL editor's own
-  testability, but Phase 5's primary goal — shrinking the demo's
-  shim by routing through services — is now met by *not linking
+  testability, but Phase 5's primary goal - shrinking the demo's
+  shim by routing through services - is now met by *not linking
   the controller files at all*. Remaining Phase 5 migrations are
   optional REPL-editor quality improvements, not load-bearing
   for the demo.
@@ -372,16 +372,16 @@ level.
   `text_search.c`, menu helpers as needed).
 - **Phase 7b ratchet** stays useful for the REPL editor (input.c /
   commit.c shouldn't *grow* their REPL coupling), but the demo no
-  longer drives the ratchet down by extraction — it drives the
+  longer drives the ratchet down by extraction - it drives the
   shim down by changing the link set.
 
-## Phase 0 — Baseline And Invariants
+## Phase 0 - Baseline And Invariants
 
 - Record current behavior before refactor:
   - Build `make sample USE_GL_STUBS=1`, `make repl_demo USE_GL_STUBS=1`, `make scene_demo USE_GL_STUBS=1`.
   - Run `make test-stubs` and `make check-state-ownership`.
   - **Capture baseline snapshots** so logical regressions are catchable later:
-    - `tests/testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
+    - `tests/testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture - see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
     - Current `--dump-code` output is useful as a source/export baseline, but it is still logical text: `sample.c` calls `glr_debug_dump_editor()`, which calls `repl_dump_code_panel_text()`, and that path does **not** exercise the wrap iterator. Capture those dumps for structural/source diffs if useful, but do not treat them as visual coverage.
     - For a checkable wrapped-rendering proxy, **do not** revive
       `repl_dump_code_panel_visual_text()` in place. That helper is
@@ -409,42 +409,42 @@ level.
   - `ui_panels_handle_right_press`
 - Code touched: none except later documentation updates.
 
-## Phase 1 — Define Generic Text Panel Contract
+## Phase 1 - Define Generic Text Panel Contract
 
 - Add `src/ui/text_panel.h`.
 - Define generic, REPL-free types:
   - `UiTextPanelColor { float r, g, b, a; int has_alpha; }`
   - `UiTextPanelRowKind`: `STATIC`, `TEXT`, `INPUT`, `PLACEHOLDER`, `VIRTUAL`
-    - `STATIC`: workspace header, render-state, camera, `header_pre/post`, footer scaffolding — chrome the adapter never edits.
+    - `STATIC`: workspace header, render-state, camera, `header_pre/post`, footer scaffolding - chrome the adapter never edits.
     - `TEXT`: a committed source row (one per document command in the REPL adapter).
-    - `INPUT`: the active edit row — the renderer draws cursor, selection, autocomplete ghost/hint here.
+    - `INPUT`: the active edit row - the renderer draws cursor, selection, autocomplete ghost/hint here.
     - `PLACEHOLDER`: scroll-position-only row (e.g., blank insert-mode preview).
-    - `VIRTUAL`: adapter-supplied row not backed by a source line directly (replay annotations, evaluated-arg previews). Carries an optional `hit_target_line_idx` — replay virtual rows map back to their owning source line (current hit-test behavior in `editor_code_panel_document_target_for_doc_line` maps replay extra rows to their owning `cmd_idx`; replay follow-scroll separately uses `replay_src_line()`), while demo-only virtual rows may set it to `-1` for non-hit-testable.
-  - `UiTextPanelRow` decoration slots — *distinct fields, not a single "gutter labels" bag*:
+    - `VIRTUAL`: adapter-supplied row not backed by a source line directly (replay annotations, evaluated-arg previews). Carries an optional `hit_target_line_idx` - replay virtual rows map back to their owning source line (current hit-test behavior in `editor_code_panel_document_target_for_doc_line` maps replay extra rows to their owning `cmd_idx`; replay follow-scroll separately uses `replay_src_line()`), while demo-only virtual rows may set it to `-1` for non-hit-testable.
+  - `UiTextPanelRow` decoration slots - *distinct fields, not a single "gutter labels" bag*:
     - `left_gutter_label`: line number (always the leftmost numeric column).
-    - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` — currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
+    - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` - currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
     - `right_action`: right-edge interactive element. Color swatches go here (drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2`; see `src/ui/panels.c:548-558`). Distinct from `left_aux_label` because the right action is interactive (hit-testable, opens picker) while the left aux is purely visual.
     - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
-  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
+  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings - the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
   - `UiTextPanelSearch`: active flag, query, query length, hit row/char. Preserve current **search-row** semantics: `hit_row` is already in the editor search row space, where insert-mode can add a live input row and shift source rows (`editor_search_row_for_cmd_index` does this today). This is not the same as replay/source-line routing; the adapter assigns each `UiTextPanelRow.search_row_idx` to the search row that should be compared with `hit_row`, or `-1` for rows outside the search model.
   - `UiTextPanelSnapshot`: viewport, panel rect, `const UiTextPanelRow *rows`, row count, scroll, visible chrome flags, input/search/completion state.
     - `rows` is caller-owned storage valid for the render/hit-test call. Do **not** put a generic fixed `UI_TEXT_PANEL_ROW_CAP` in `text_panel.h`; the generic renderer should not bake in REPL document limits or a too-small visible-window assumption.
-    - **Wrapping math is a generic-panel responsibility, not an adapter one.** Today `src/ui/panels.c:417` walks the *full* logical document while maintaining an absolute visual-row cursor — that's the math being moved into the generic panel in Phase 2. If the adapter pre-clips the row set, every subsequent caller has to reason about an offset between "snapshot row index" and "absolute visual row" — which means the wrapping calculation gets duplicated on both sides. Avoid that.
+    - **Wrapping math is a generic-panel responsibility, not an adapter one.** Today `src/ui/panels.c:417` walks the *full* logical document while maintaining an absolute visual-row cursor - that's the math being moved into the generic panel in Phase 2. If the adapter pre-clips the row set, every subsequent caller has to reason about an offset between "snapshot row index" and "absolute visual row" - which means the wrapping calculation gets duplicated on both sides. Avoid that.
     - **Contract: the adapter ships *logical* rows (one entry per source line / virtual / static / input row) covering the entire document; the generic panel does the wrap iteration and visible-row clipping itself, the same way the current `code_panel_draw_command_row` does.** The REPL adapter sizes a temporary row array from live counts (`document_count + editor_virtual_lines->count + chrome/input rows`) or from the known upper bound (`MAX_COMMANDS` from `config.h` plus `MAX_VIRTUAL_LINES` from `src/ui/editor.h` plus chrome/input rows). The editor demo can use a much smaller caller-owned array because its fake document is small.
-    - If profiling later shows a real per-frame cost in walking the full document, add an explicit `visible_row_first_absolute_idx` field on the snapshot so the renderer can resume the wrap walk from a known offset — but defer that until the cost is measured. Today the wrap walker is O(document_count × char_count) and that's not been a bottleneck.
-  - `UiTextPanelOutput`: cursor pixel, cursor-valid, total rows, visible rows, **text-area rect + statusbar-slot rect** so the REPL adapter can overlay its status strip without recomputing layout (statusbar is REPL chrome — see Phase 3).
+    - If profiling later shows a real per-frame cost in walking the full document, add an explicit `visible_row_first_absolute_idx` field on the snapshot so the renderer can resume the wrap walk from a known offset - but defer that until the cost is measured. Today the wrap walker is O(document_count × char_count) and that's not been a bottleneck.
+  - `UiTextPanelOutput`: cursor pixel, cursor-valid, total rows, visible rows, **text-area rect + statusbar-slot rect** so the REPL adapter can overlay its status strip without recomputing layout (statusbar is REPL chrome - see Phase 3).
 - Add APIs:
   - `ui_text_panel_visible_lines_for_height(int panel_h)`
   - `ui_text_panel_render(const UiTextPanelSnapshot *, UiTextPanelOutput *)`
   - `ui_text_panel_hit_test(const UiTextPanelSnapshot *, int mx, int my)`
-- Layout helpers are pure pixel-math, not editor state — **move `src/editor/code_layout.{c,h}` to `src/ui/text_layout.{c,h}`** as part of this phase so the text panel doesn't have to include from a higher-level module. Update every existing caller (`src/editor/code_panel_document.c`, `src/ui/panels.c`, `tests/test_repl_editor.c`, etc.) to the new include path.
-- Also pull the layout-only half of `src/editor/code_panel_document.c` into `src/ui/text_layout.{c,h}`, but **only after removing the hidden app-state dependency**. Today these wrappers call `editor_code_panel_document_text_layout()`, which reads `glr_state_presentation().wrap_at_comma`; that read is not pure and must not move into `src/ui/text_layout`. Phase 1 should parameterize the helpers with an explicit `CodeLayout` / `wrap_at_comma` value, move only the wrapper logic that is then just thin `code_layout_*` forwarding (`wrap_iter_init`/`_next`, `_row_count_for_text`, `_segment_for_row`, `_cursor_row_for_text`, `_visible_lines_for_height`), and leave the production `glr_state_presentation()` lookup adapter-side until Phase 3 absorbs it. The remaining REPL-aware half (`build`, `apply_follow_scroll`, `active_indent_chars`, `target_for_doc_line`) stays in `src/editor/code_panel_document.c` for now and folds into Phase 3's REPL adapter — see Phase 3 below.
+- Layout helpers are pure pixel-math, not editor state - **move `src/editor/code_layout.{c,h}` to `src/ui/text_layout.{c,h}`** as part of this phase so the text panel doesn't have to include from a higher-level module. Update every existing caller (`src/editor/code_panel_document.c`, `src/ui/panels.c`, `tests/test_repl_editor.c`, etc.) to the new include path.
+- Also pull the layout-only half of `src/editor/code_panel_document.c` into `src/ui/text_layout.{c,h}`, but **only after removing the hidden app-state dependency**. Today these wrappers call `editor_code_panel_document_text_layout()`, which reads `glr_state_presentation().wrap_at_comma`; that read is not pure and must not move into `src/ui/text_layout`. Phase 1 should parameterize the helpers with an explicit `CodeLayout` / `wrap_at_comma` value, move only the wrapper logic that is then just thin `code_layout_*` forwarding (`wrap_iter_init`/`_next`, `_row_count_for_text`, `_segment_for_row`, `_cursor_row_for_text`, `_visible_lines_for_height`), and leave the production `glr_state_presentation()` lookup adapter-side until Phase 3 absorbs it. The remaining REPL-aware half (`build`, `apply_follow_scroll`, `active_indent_chars`, `target_for_doc_line`) stays in `src/editor/code_panel_document.c` for now and folds into Phase 3's REPL adapter - see Phase 3 below.
 - Constraints:
   - `src/ui/text_panel.*` must not include `repl/*` or `src/editor/*`.
   - It must not mention `GLCmd`, `CmdType`, or `CMD_*`.
 - Code touched: new `src/ui/text_panel.{c,h}`, renamed `src/ui/text_layout.{c,h}` (was `src/editor/code_layout.{c,h}`), `src/editor/code_panel_document.{c,h}` (pure-half migration; the REPL-aware half stays here until Phase 3 absorbs it), every existing caller of `code_layout_*` for the include rename, `Makefile` source/header lists.
 
-## Phase 2 — Extract Generic Rendering
+## Phase 2 - Extract Generic Rendering
 
 - Move generic code-panel rendering from `src/ui/panels.c` into `src/ui/text_panel.c`:
   - panel background/divider
@@ -464,12 +464,12 @@ level.
   - tutorial fading
   - color swatches
   - REPL statusbar content
-- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`, new `src/ui/text_search.{c,h}` or equivalent neutral helper, `src/editor/search.c`, `tests/test_repl_editor.c` (private `code_panel_header_row_count` helper duplicates the header-row math; any rename/move of those primitives during this phase ripples here — keep the helper aligned in the same patch).
+- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`, new `src/ui/text_search.{c,h}` or equivalent neutral helper, `src/editor/search.c`, `tests/test_repl_editor.c` (private `code_panel_header_row_count` helper duplicates the header-row math; any rename/move of those primitives during this phase ripples here - keep the helper aligned in the same patch).
 
-## Phase 3 — Add REPL Code Panel Adapter
+## Phase 3 - Add REPL Code Panel Adapter
 
 - Add `src/ui/repl_code_panel.{c,h}`.
-- **Absorb the REPL-aware half of `src/editor/code_panel_document.c`** into the new adapter — the document-layout functions that read REPL state, replay state, and `repl_export_*` getters belong on the REPL-adapter side, not in `src/editor/`. After this phase, `src/editor/code_panel_document.c` is gone (its pure half moved to `src/ui/text_layout` in Phase 1; its REPL-aware half is now part of `src/ui/repl_code_panel.c`). This is what makes `code_panel_document` not a Phase 5 / shim concern: it never reaches Phase 5 in the first place.
+- **Absorb the REPL-aware half of `src/editor/code_panel_document.c`** into the new adapter - the document-layout functions that read REPL state, replay state, and `repl_export_*` getters belong on the REPL-adapter side, not in `src/editor/`. After this phase, `src/editor/code_panel_document.c` is gone (its pure half moved to `src/ui/text_layout` in Phase 1; its REPL-aware half is now part of `src/ui/repl_code_panel.c`). This is what makes `code_panel_document` not a Phase 5 / shim concern: it never reaches Phase 5 in the first place.
 - Move REPL-aware code-panel behavior from `src/ui/panels.c` into this adapter:
   - build `UiTextPanelRow[]` from `UiRenderSnapshot`, editor buffer lines, `GLCmd[]`, and import/export header/footer lines.
   - compute command colors from `repl_cmd_type_category`.
@@ -479,10 +479,10 @@ level.
   - insert replay `VIRTUAL` rows **after** their owning source row, with `hit_target_line_idx` set to that source line. TEXT row source-line indices stay sequential; clicks on replay virtual rows route to the owning source line, preserving the current `editor_code_panel_document_target_for_doc_line` replay-extra-row behavior.
   - tutorial fade is **per-character**, not per-row: `src/ui/panels.c:158` calls `tutorial_step_fade_alpha(line_idx, char_idx, line_len, now)` inside the character loop. The implementation has to vary alpha across a row, but the fade math is REPL-specific and the generic text panel must not call out per character.
 
-    **Design** — keep the fade machinery in `ui_repl_code_panel.c` and use a small color-segments array on the row, written by the adapter and walked by the renderer:
+    **Design** - keep the fade machinery in `ui_repl_code_panel.c` and use a small color-segments array on the row, written by the adapter and walked by the renderer:
 
     ```c
-    /* In text_panel.h — generic, no fade-specific naming */
+    /* In text_panel.h - generic, no fade-specific naming */
     #define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 4
     typedef struct {
         int                 char_start;   /* inclusive */
@@ -494,9 +494,9 @@ level.
     int                     color_segment_count;   /* 0 = use row's solid text_color */
     ```
 
-    - Why this avoids a function call per char: the fade is monotonic and produces a typewriter-reveal shape — at any instant, characters before the wipe front are fully visible (α = 1.0), the leading character is mid-ramp (α ∈ (0, 1)), and characters after are hidden (α = 0.0). That's at most **3 segments per fading row**, regardless of row length. The renderer issues one `glColor4f` per segment and batches `glutBitmapCharacter` calls inside — `O(segments)` color changes, not `O(chars)`.
+    - Why this avoids a function call per char: the fade is monotonic and produces a typewriter-reveal shape - at any instant, characters before the wipe front are fully visible (α = 1.0), the leading character is mid-ramp (α ∈ (0, 1)), and characters after are hidden (α = 0.0). That's at most **3 segments per fading row**, regardless of row length. The renderer issues one `glColor4f` per segment and batches `glutBitmapCharacter` calls inside - `O(segments)` color changes, not `O(chars)`.
     - Why this is implementation-specific: the segment field is generic data ("color may vary across char ranges"), but the *fade-aware* code that calls `tutorial_step_fade_alpha` and computes the wipe front lives entirely in `ui_repl_code_panel.c`. The generic text panel never imports `widgets/tutorial.h` and has no `UiTextPanelFadeFn` symbol in its API surface.
-    - Default cost: rows with `color_segment_count == 0` (the 99% case) bypass the segment loop entirely and use the row's `text_color` — no overhead added for non-fading rows.
+    - Default cost: rows with `color_segment_count == 0` (the 99% case) bypass the segment loop entirely and use the row's `text_color` - no overhead added for non-fading rows.
     - Adapter responsibility: for any row where `tutorial_line_is_fading(line_idx, now)` is true, the adapter calls a local helper (e.g. `static void fill_fade_segments(int line_idx, int line_len, float now, UiTextPanelRow *row);`) that resolves the wipe-front character and writes 1-3 segments into the row. The wipe-front position is computed from timing state currently private to `src/widgets/tutorial.c` (fade_start_t, fade_duration, per-char window), so the adapter cannot derive it cheaply from outside. Two acceptable options:
       1. **Expose a tutorial API** (preferred). Add a single helper to `src/widgets/tutorial.h`:
          ```c
@@ -509,7 +509,7 @@ level.
          int tutorial_step_fade_front(int line_idx, int line_len, float now);
          ```
          The tutorial module already has the timing math; surfacing the front position is one helper, O(1), and keeps the fade math owned by the widget.
-      2. **Bounded binary search** over `tutorial_step_fade_alpha`. The function is monotonic in `char_idx` (later characters reveal later), so a binary search on `alpha < 1.0` finds the front in `ceil(log2(line_len))` calls — 7 calls for a 100-char line, 10 for a 1000-char line. The plan's "~3 calls" claim is wrong; it should say `O(log2 line_len)` if option 2 is chosen.
+      2. **Bounded binary search** over `tutorial_step_fade_alpha`. The function is monotonic in `char_idx` (later characters reveal later), so a binary search on `alpha < 1.0` finds the front in `ceil(log2(line_len))` calls - 7 calls for a 100-char line, 10 for a 1000-char line. The plan's "~3 calls" claim is wrong; it should say `O(log2 line_len)` if option 2 is chosen.
 
       Pick option 1 for v1: the API is narrower, the cost is one helper definition, and it doesn't lock the adapter to the current binary-search-friendly shape of the fade math.
   - render REPL-specific statusbar after `ui_text_panel_render()` returns, using the `UiTextPanelOutput.statusbar_slot_rect` so the adapter doesn't recompute layout.
@@ -518,24 +518,24 @@ level.
   - `ui_repl_code_panel_render()` build the generic snapshot and call `ui_text_panel_render()`
 - Code touched: new `src/ui/repl_code_panel.{c,h}`, `src/ui/panels.c`, `src/ui/panels.h`, **delete `src/editor/code_panel_document.{c,h}`** (its pure half lives in `src/ui/text_layout` since Phase 1; its REPL-aware half is now part of `src/ui/repl_code_panel.c`), update `src/editor/state.h`'s include and any test references to the deleted header, `Makefile` source/header lists.
 
-## Phase 4 — Overlay-Priority Hit Routing
+## Phase 4 - Overlay-Priority Hit Routing
 
 - Generic mouse → row mapping already moved in Phase 2 (shares layout math with rendering). Phase 4 finishes the hit-test split by keeping overlay-priority routing in `ui_panels_hit_test` and the REPL-specific routing in `ui_repl_code_panel_hit_test`:
   - help overlay (modal, beats everything)
   - color picker (modal while open)
   - menu bar
   - variable panel
-  - color swatch row action — drawn as `right_action`, routed through the adapter, not the generic panel
+  - color swatch row action - drawn as `right_action`, routed through the adapter, not the generic panel
   - scene fallback when no panel hit lands
 - Generic `ui_text_panel_hit_test` returns only text-panel hit kinds: text row, insert/input row, gutter, panel divider, none.
-- When the generic hit lands on a `VIRTUAL` row with `hit_target_line_idx >= 0`, the adapter rewrites the hit to point at the owning source line before returning to the caller — matches the current `code_panel_document` routing for replay annotations so users can still click replay-evaluated rows to navigate to their source.
+- When the generic hit lands on a `VIRTUAL` row with `hit_target_line_idx >= 0`, the adapter rewrites the hit to point at the owning source line before returning to the caller - matches the current `code_panel_document` routing for replay annotations so users can still click replay-evaluated rows to navigate to their source.
 - Code touched: `src/ui/repl_code_panel.c`, `src/ui/panels.c`.
 
-## Phase 5 — Editor REPL Decoupling (historical — superseded by Phase 8)
+## Phase 5 - Editor REPL Decoupling (historical - superseded by Phase 8)
 
-> **Superseded.** This phase's central claim — that the demo's
+> **Superseded.** This phase's central claim - that the demo's
 > independence requires routing `input.c` / `commit.c` REPL calls
-> through `EditorServices` — was reframed by the "Updated
+> through `EditorServices` - was reframed by the "Updated
 > direction" decision. The demo achieves independence by *not
 > linking* those controller files at all. The
 > `parse_command_ctx` migration in commit `a5b6388` still stands
@@ -544,7 +544,7 @@ level.
 > longer load-bearing for `editor_demo`. Retained here as
 > historical context.
 
-This phase is the load-bearing prerequisite for Phase 6's editor demo. It is **not** about the demo — it's a focused refactor of `src/editor/input.c` and `src/editor/commit.c` that pulls their REPL-pipeline reach behind the registered `EditorServices` table. The demo in Phase 6 is downstream proof that this phase worked.
+This phase is the load-bearing prerequisite for Phase 6's editor demo. It is **not** about the demo - it's a focused refactor of `src/editor/input.c` and `src/editor/commit.c` that pulls their REPL-pipeline reach behind the registered `EditorServices` table. The demo in Phase 6 is downstream proof that this phase worked.
 
 **Deferred status:** Phases 5 and 6 are intentionally not required for the
 SRP split of `ui/panels.c`. Treat the rest of this phase as a draft design
@@ -559,7 +559,7 @@ added a parallel `EditorChromeServices` table to abstract the editor's
 reach into menu bar, help overlay, color picker, tutorial, and the
 app-shell `glr_*` controller. That table is **not** built. Rationale:
 the menu / help-overlay / picker / tutorial modules are *editor-inherent*
-— any standalone editor binary needs equivalents — so the editor module
+- any standalone editor binary needs equivalents - so the editor module
 set legitimately depends on `src/ui/` and `src/widgets/` modules
 directly. That's downward layering, not a violation. What's left after
 removing the editor-inherent surface is a handful (~3-4) of upward
@@ -570,22 +570,22 @@ The demo handles them with direct symbol stubs, the same way
 `repl_shim.c` already plans to stub the smaller editor files' direct
 REPL reach.
 
-### Motivation — measurement table (verified 2026-05-20)
+### Motivation - measurement table (verified 2026-05-20)
 
 REPL-symbol surface of each `src/editor/*.c` file (re-counted at Phase 5
 entry):
 
 | File | REPL functions called | Notes |
 |------|----------------------|-------|
-| `state.c` | 1 (`repl_state_edit_line`) | One-line stub. Per-file stub growth — fine. |
+| `state.c` | 1 (`repl_state_edit_line`) | One-line stub. Per-file stub growth - fine. |
 | `clipboard.c` | ~10 (command_store, source_scope, status) | Moderate; mutators are no-ops in the demo. |
 | `undo.c` | ~10 (command_store, func_alias, eval, promote_example) | Moderate; `repl_promote_example_if_needed` is the only REPL-semantics call. |
-| `input.c` | **23** (parse + compile + command_store + status) | **This phase reduces this to ~5.** Also has chrome reach (`ui_*`, `color_picker_*`, `tutorial_*`) — kept direct as editor-inherent. Residual upward `glr_*` reach (**6 sites verified 2026-05-20**, vs draft "~3-4") stays direct; the demo stubs it. Six is below the 8-symbol reopen threshold. |
-| `commit.c` | **33** (compile / apply / func_alias / eval / source_scope) | **This phase reduces this to ~5.** Already routes some calls through `EditorServices` today — extension target. No chrome reach at all. |
+| `input.c` | **23** (parse + compile + command_store + status) | **This phase reduces this to ~5.** Also has chrome reach (`ui_*`, `color_picker_*`, `tutorial_*`) - kept direct as editor-inherent. Residual upward `glr_*` reach (**6 sites verified 2026-05-20**, vs draft "~3-4") stays direct; the demo stubs it. Six is below the 8-symbol reopen threshold. |
+| `commit.c` | **33** (compile / apply / func_alias / eval / source_scope) | **This phase reduces this to ~5.** Already routes some calls through `EditorServices` today - extension target. No chrome reach at all. |
 
-`code_panel_document.c` is **not in this table** — it was split during Phases 1 and 3 (pure half → `src/ui/text_layout`; REPL-aware half → `src/ui/repl_code_panel.c`) and no longer exists in `src/editor/` by the time Phase 5 starts.
+`code_panel_document.c` is **not in this table** - it was split during Phases 1 and 3 (pure half → `src/ui/text_layout`; REPL-aware half → `src/ui/repl_code_panel.c`) and no longer exists in `src/editor/` by the time Phase 5 starts.
 
-**Verified 2026-05-20 — `glr_*` reach in `input.c` (6 unique symbols):**
+**Verified 2026-05-20 - `glr_*` reach in `input.c` (6 unique symbols):**
 `glr_camera_controls_reset`, `glr_completion_accept_autocomplete`,
 `glr_ctrl_router_reset_code_panel_drag`, `glr_ctrl_sync_ui_chrome`,
 `glr_state_presentation`, `glr_state_presentation_mut`. All stay direct;
@@ -642,7 +642,7 @@ Run this review immediately before implementing Phase 5 or Phase 6:
   counted direct shim.
 - Re-audit the upward `glr_*` reach in `input.c`. Current sites are
   expected to be camera reset, code-panel presentation get/set, and
-  the panel-drag router — roughly 3-4 unique symbols. Confirm the count
+  the panel-drag router - roughly 3-4 unique symbols. Confirm the count
   is small enough to justify direct stubs in the demo; if it has grown
   past ~8 symbols since this plan was written, reopen the
   `EditorChromeServices` decision rather than stubbing each one.
@@ -690,7 +690,7 @@ code lands.
        * folding it into EditorServices removes the parallel install path. */
       void               (*set_status)(const char *msg, void *user);
 
-      /* Dirty-state notifier — both routes call this after a successful
+      /* Dirty-state notifier - both routes call this after a successful
        * commit. */
       void               (*mark_normals_dirty)(void *user);
 
@@ -762,16 +762,16 @@ code lands.
   (`ui_menu_bar_*`, `ui_help_overlay_*`, `color_picker_*`, `tutorial_*`)
   is editor-inherent and stays as direct downward calls into `src/ui/`
   and `src/widgets/`. The residual upward reach (camera controls reset,
-  code-panel presentation get/set, panel-drag router — roughly 3-4 sites
+  code-panel presentation get/set, panel-drag router - roughly 3-4 sites
   in `input.c`) stays as direct `glr_*` calls; the demo provides
   direct-symbol stubs for them in `repl_shim.c` alongside the smaller
   files' REPL stubs.
 - Controller registers production `EditorServices` bindings at app init via the existing `editor_services_default()` path. `input.c` / `commit.c` switch their REPL calls to the registered table. Chrome calls stay direct.
-- The pattern matches existing seams: `repl_set_status_sink`, `repl_install_input_reset_sink`, the existing `EditorServices` — same dispatch shape, same lifecycle.
+- The pattern matches existing seams: `repl_set_status_sink`, `repl_install_input_reset_sink`, the existing `EditorServices` - same dispatch shape, same lifecycle.
 
 ### Direct stub surface (three smaller editor files)
 
-Phase 5 does not touch `state.c`, `clipboard.c`, or `undo.c` — they're
+Phase 5 does not touch `state.c`, `clipboard.c`, or `undo.c` - they're
 already inside the per-file stub-growth budget. They continue to call
 `repl_*` symbols by name. The Phase 6 shim provides these as direct
 symbol definitions in `repl_shim.c`, separate from the service-table
@@ -826,7 +826,7 @@ in Phase 6 must reflect the final measured reality.
 
 - `input.c`: 23 → ~5 REPL function calls (draft target; revalidate in the required review). Chrome reach (`ui_*`, `color_picker_*`, `tutorial_*`) remains direct as editor-inherent; the residual upward `glr_*` reach (~3-4 sites) also stays direct and is stubbed in the demo shim.
 - `commit.c`: 33 → ~5 REPL function calls (draft target; revalidate in the required review).
-- The three smaller editor files stay where they are — they're already within budget.
+- The three smaller editor files stay where they are - they're already within budget.
 
 ### Validation
 
@@ -839,14 +839,14 @@ in Phase 6 must reflect the final measured reality.
 
 ### Code touched
 
-- `src/editor/input.{c,h}` — switch direct REPL calls to the extended `EditorServices` table. Chrome / UI reach (`ui_*`, `color_picker_*`, `tutorial_*`) stays direct (editor-inherent). The residual `glr_*` calls stay direct too; the demo provides stubs.
-- `src/editor/commit.{c,h}` — extend the existing `EditorServices` consumption to cover the rest of the REPL-pipeline surface.
-- `src/editor/services.{c,h}` — add new fields to the `EditorServices` struct; extend `editor_services_default()` to populate them.
-- `src/app/glr_ctrl.c` — production `EditorServices` already comes through `editor_services_default()`; only new field bindings need wiring.
-- new `scripts/check-editor-repl-surface.sh` — REPL surface-count regression gate. Optionally `scripts/check-editor-glr-surface.sh` for the narrow upward-reach ratchet.
-- `Makefile` — wire the check target(s).
+- `src/editor/input.{c,h}` - switch direct REPL calls to the extended `EditorServices` table. Chrome / UI reach (`ui_*`, `color_picker_*`, `tutorial_*`) stays direct (editor-inherent). The residual `glr_*` calls stay direct too; the demo provides stubs.
+- `src/editor/commit.{c,h}` - extend the existing `EditorServices` consumption to cover the rest of the REPL-pipeline surface.
+- `src/editor/services.{c,h}` - add new fields to the `EditorServices` struct; extend `editor_services_default()` to populate them.
+- `src/app/glr_ctrl.c` - production `EditorServices` already comes through `editor_services_default()`; only new field bindings need wiring.
+- new `scripts/check-editor-repl-surface.sh` - REPL surface-count regression gate. Optionally `scripts/check-editor-glr-surface.sh` for the narrow upward-reach ratchet.
+- `Makefile` - wire the check target(s).
 
-## Phase 6 — Add Editor Demo Host (partial — link set superseded by Phase 8)
+## Phase 6 - Add Editor Demo Host (partial - link set superseded by Phase 8)
 
 > **Partially superseded.** The `tools/editor_demo/` skeleton and
 > Makefile target (commit `b6250bc`) still stand. The link-set
@@ -856,7 +856,7 @@ in Phase 6 must reflect the final measured reality.
 > files entirely; add `tools/editor_demo/input.c` + `edit_ops`).
 > Treat the "fake EditorServices" framing here as historical.
 
-This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `commit.c` route their REPL reach through the extended `EditorServices` table, so the demo's job is to populate that table with fake/no-op bindings — not to fight against direct REPL calls. UI chrome (menu bar, help overlay, color picker, tutorial) is editor-inherent: the demo links those modules directly. The handful of upward `glr_*` calls become direct symbol stubs in `repl_shim.c`.
+This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `commit.c` route their REPL reach through the extended `EditorServices` table, so the demo's job is to populate that table with fake/no-op bindings - not to fight against direct REPL calls. UI chrome (menu bar, help overlay, color picker, tutorial) is editor-inherent: the demo links those modules directly. The handful of upward `glr_*` calls become direct symbol stubs in `repl_shim.c`.
 
 Because Phase 5 is deferred, Phase 6 is deferred too. Before implementing
 the demo, rerun the Phase 5 review gate, update the shim ledger with the
@@ -865,7 +865,7 @@ actual service fields and direct symbols, and only then set the
 
 - Add `tools/editor_demo/editor_demo.c`.
   - GLUT window setup and callback registration.
-  - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses — no parallel state instance.
+  - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses - no parallel state instance.
   - Builds a `UiTextPanelSnapshot` directly from `EditorState` and fake document rows.
   - Applies `ReplInputDispatchEffects`: redraw, cursor, timer.
   - Calls `editor_handle_key`, `editor_handle_special`, mouse handlers, and wheel handler.
@@ -873,9 +873,9 @@ actual service fields and direct symbols, and only then set the
   - Static fake document: `GLCmd cmds[MAX_COMMANDS]`, `count`, `edit_line`.
   - Fake parser: empty line -> `CMD_EMPTY`; non-empty text -> inert `CMD_COMMENT`; canonical text is stripped input without trailing `;`.
   - Fake command store/state functions expected by editor input.
-  - No-op source-scope, replay, variable, and export functions in the shim. Tutorial, color picker, help overlay, and menu modules link directly — they no-op naturally when their state is inactive in the demo. Where a module transitively pulls in REPL (likely tutorial or replay annotations), substitute a minimal alternate compilation unit; the choice is per-module and is part of the Phase 5 review.
+  - No-op source-scope, replay, variable, and export functions in the shim. Tutorial, color picker, help overlay, and menu modules link directly - they no-op naturally when their state is inactive in the demo. Where a module transitively pulls in REPL (likely tutorial or replay annotations), substitute a minimal alternate compilation unit; the choice is per-module and is part of the Phase 5 review.
   - Direct `glr_*` stubs in the shim: roughly `glr_camera_controls_reset`, `glr_state_presentation_*` (get/set), and `glr_ctrl_router_reset_code_panel_drag` (3-4 functions). These are simple state-touch operations on app-shell state the demo doesn't have; stubs return defaults or no-op.
-  - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. The demo skips registration entirely — there's no grammar to suggest from, so ghost/hint stay empty and the Tab key path no-ops cleanly.
+  - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. The demo skips registration entirely - there's no grammar to suggest from, so ghost/hint stay empty and the Tab key path no-ops cleanly.
   - Status messages forward to `ui_state_status_set`.
 - Shim-size tripwire (regression gate, **not** entry budget): count
   **unique shim functions / exported symbols**, not raw call sites. The
@@ -885,8 +885,8 @@ actual service fields and direct symbols, and only then set the
   `glr_*` stubs.
 
   Set the tripwire at the measured cap + small headroom (e.g. cap
-  `repl_shim.c` at 45) so future seam regression — a new direct-name
-  call leaking back in — actually trips the gate. The earlier "~12-15
+  `repl_shim.c` at 45) so future seam regression - a new direct-name
+  call leaking back in - actually trips the gate. The earlier "~12-15
   REPL / ~5-7 chrome" figures were aspirational and don't match the
   enumerated surface; using them as gates would either be permanently
   red or force fictitious work to make them green. If a later
@@ -898,30 +898,30 @@ actual service fields and direct symbols, and only then set the
   - Real GL build opens the editor demo window.
 - Code touched: `tools/editor_demo/*`, `Makefile`.
 
-## Phase 7 — Guards And Documentation
+## Phase 7 - Guards And Documentation
 
 Phase 7 splits into two halves by dependency:
 
-- **Phase 7a — lock in the UI split (Phases 1-4).** Lands regardless of whether Phase 5/6 ever land. This is the load-bearing tail of the work already merged.
-- **Phase 7b — gates and polish for the demo (Phases 5-6).** Only meaningful after Phases 5 and 6 land; deferred when those phases are deferred.
+- **Phase 7a - lock in the UI split (Phases 1-4).** Lands regardless of whether Phase 5/6 ever land. This is the load-bearing tail of the work already merged.
+- **Phase 7b - gates and polish for the demo (Phases 5-6).** Only meaningful after Phases 5 and 6 land; deferred when those phases are deferred.
 
-### Phase 7a — Lock in the UI split (done)
+### Phase 7a - Lock in the UI split (done)
 
 1. Add `scripts/check-ui-text-panel-pure.sh` and a `check-ui-text-panel-pure` Makefile target. Wire into `make check`.
    - Fail if `src/ui/text_panel.*` includes `repl/`, `editor/`, `src/repl/`, or `src/editor/`.
    - Fail if it references `GLCmd`, `CmdType`, or `CMD_`.
-   - This is the single most important item in this phase — without it the Phase 1-4 invariants can quietly regress in the next refactor.
-2. `tests/test_ui_text_panel.c` — **already landed** during Phase 3 findings-fix and extended in Phase 4 (virtual-row routing regression). 25 tests under `USE_GL_STUBS=1`. No further work required.
+   - This is the single most important item in this phase - without it the Phase 1-4 invariants can quietly regress in the next refactor.
+2. `tests/test_ui_text_panel.c` - **already landed** during Phase 3 findings-fix and extended in Phase 4 (virtual-row routing regression). 25 tests under `USE_GL_STUBS=1`. No further work required.
 3. Update `MODULES.md`:
    - Replace the `editor_code_panel_document` row (around line 325) with entries for `ui_text_panel` (generic text rendering/hit-test) and `ui_repl_code_panel` (REPL adapter over the generic panel).
    - Fix the rename table near line 883 (`repl_code_panel_document → editor_code_panel_document` references a file that no longer exists).
    - Update any diagram nodes referencing the deleted `src/editor/code_panel_document.c`.
 4. Tighten `src/ui/text_panel.h` field docs (from Phase 3 review nits):
    - Document `background_active` and `left_marker_active` next to their `_color` siblings (currently the `_active` gate fields aren't in the field-doc block, only the `_color` ones).
-   - Add a "when adapters set this" sentence to `UiTextPanelRightAction.emphasized` — the current inline comment explains *what* is drawn but not *when* an adapter would set it.
+   - Add a "when adapters set this" sentence to `UiTextPanelRightAction.emphasized` - the current inline comment explains *what* is drawn but not *when* an adapter would set it.
 - Code touched: `Makefile`, `scripts/check-ui-text-panel-pure.sh`, `MODULES.md`, `src/ui/text_panel.h`, optionally `feature/editor-demo.md` (move this section to `done/` once 7a lands).
 
-### Phase 7b — Demo / decoupling polish (partial — see Phase 8)
+### Phase 7b - Demo / decoupling polish (partial - see Phase 8)
 
 > **Partial.** The `check-editor-repl-surface` ratchet (commit
 > `01c60d3`) still stands and continues to guard the REPL
@@ -939,22 +939,22 @@ These items are gated on Phase 5 (surface guards) and Phase 6 (editor demo binar
 3. Extend the `MODULES.md` update from 7a to also note that `tools/editor_demo/repl_shim.c` is a dependency ledger against `EditorServices` (plus a handful of direct `glr_*` stubs for the residual upward reach and direct REPL stubs for the smaller editor files), not production architecture. **Depends on Phase 6.**
 - Code touched (when unblocked): `Makefile`, `MODULES.md`, docs.
 
-## Phase 8 — Demo refit: generic text editor + shared `edit_ops` (in progress)
+## Phase 8 - Demo refit: generic text editor + shared `edit_ops` (in progress)
 
 Implements the "Updated direction" decision: extract generic
 text-editing primitives into a shared library and rebuild the demo
 as a real generic text editor, dropping the REPL-flavored controller
 files from the demo's link set.
 
-This phase is incremental — each step is independently committable
+This phase is incremental - each step is independently committable
 and leaves the tree green.
 
-### 8.1 — Lock scope and update MODULES.md (this commit)
+### 8.1 - Lock scope and update MODULES.md (this commit)
 
 - Plan update (this section) records the direction.
 - Subsequent MODULES.md edits land alongside the implementation steps.
 
-### 8.2 — Inventory primitives to extract
+### 8.2 - Inventory primitives to extract
 
 Walk every key handler in `src/editor/input.c` and identify the
 generic primitive operations underneath. Scope is limited to
@@ -980,13 +980,13 @@ Each primitive must be:
   dispatcher call.
 - Testable in isolation.
 
-### 8.3 — Extract `src/editor/edit_ops.{c,h}` incrementally
+### 8.3 - Extract `src/editor/edit_ops.{c,h}` incrementally
 
 For each primitive identified in 8.2:
 
 - Add the function to `edit_ops.{c,h}`.
 - Migrate the corresponding inline logic in `src/editor/input.c` to
-  call the new primitive (in-place — same behavior, no demo
+  call the new primitive (in-place - same behavior, no demo
   dependency yet).
 - Add a focused unit test in `tests/test_edit_ops.c` (or similar)
   that exercises the primitive against `EditorState` directly.
@@ -997,7 +997,7 @@ Order: extract the primitives the generic dispatcher will need
 *first* so 8.4 can land soonest. Cursor / character-edit / selection
 come before clipboard / search.
 
-### 8.4 — Build `tools/editor_demo/input.c` (generic dispatcher)
+### 8.4 - Build `tools/editor_demo/input.c` (generic dispatcher)
 
 - New file. Hooks `glutKeyboardFunc` / `glutSpecialFunc` /
   `glutMouseFunc` / `glutMotionFunc` / `glutMouseWheelFunc` /
@@ -1007,19 +1007,19 @@ come before clipboard / search.
   `color_picker_*`.
 - Cursor blink timer if needed.
 
-### 8.5 — Wire the UI code panel into the demo's display callback
+### 8.5 - Wire the UI code panel into the demo's display callback
 
 - Build a `UiTextPanelSnapshot` in `demo_display_func` from
   `EditorState` (`editor_state_buffer_view()`, current cursor,
   selection, scroll, search hit).
 - Call `ui_text_panel_render`.
 - Statusbar chrome flag stays *off* (`UI_TEXT_PANEL_CHROME_STATUSBAR`
-  not set) — explicitly out of scope.
+  not set) - explicitly out of scope.
 - Link `src/ui/{text_panel,text_layout,text_search}.c` into the
   demo's source list. These are REPL-free; should not introduce
   new shim stubs.
 
-### 8.6 — Add the demo's File menu
+### 8.6 - Add the demo's File menu
 
 Two acceptable implementations:
 
@@ -1033,14 +1033,14 @@ Menu items:
 - File → Load (handler: status message "load not implemented yet"
   or a no-op; can be wired to `editor_buffer_load_lines` later
   against a hardcoded path).
-- File → Save (handler: same — print path or no-op).
+- File → Save (handler: same - print path or no-op).
 - File → Quit (calls `exit(0)`).
 
 The scope explicitly allows these handlers to be unimplemented at
 first; the proof is that menu items can be *created* and
 hit-tested in a generic editor without REPL.
 
-### 8.7 — Drop the demo's link of REPL-flavored controller files
+### 8.7 - Drop the demo's link of REPL-flavored controller files
 
 Update `EDITOR_DEMO_DEP_SRCS` in the Makefile:
 
@@ -1051,7 +1051,7 @@ Update `EDITOR_DEMO_DEP_SRCS` in the Makefile:
 
 **Keep:**
 - `src/editor/state.c` (with one stub for `repl_state_edit_line`
-  in the shim — see "Editor files that aren't yet generic" above).
+  in the shim - see "Editor files that aren't yet generic" above).
 - `src/editor/edit_ops.c` (new).
 
 **Add:**
@@ -1060,22 +1060,22 @@ Update `EDITOR_DEMO_DEP_SRCS` in the Makefile:
 - `src/ui/text_panel.c`, `text_layout.c`, `text_search.c`.
 - `src/ui/menu_bar.c` (if option 1 in 8.6).
 
-### 8.8 — Shrink `tools/editor_demo/repl_shim.c`
+### 8.8 - Shrink `tools/editor_demo/repl_shim.c`
 
 Remove every stub that was only needed because `src/editor/input.c`
 or its siblings called the symbol. Expected casualties:
 
-- All `tutorial_*` stubs (10) — `src/widgets/tutorial.c` no longer
+- All `tutorial_*` stubs (10) - `src/widgets/tutorial.c` no longer
   referenced.
-- `color_picker_close` stub (1) — picker no longer called.
-- Most `repl_command_store_*` stubs (5) — only state.c's pure-read
+- `color_picker_close` stub (1) - picker no longer called.
+- Most `repl_command_store_*` stubs (5) - only state.c's pure-read
   callers may remain.
-- Most `repl_compile_*` stubs (6) — compile path no longer
+- Most `repl_compile_*` stubs (6) - compile path no longer
   referenced from the demo's link set.
-- All `repl_apply_*` stubs (4) — apply path gone.
+- All `repl_apply_*` stubs (4) - apply path gone.
 - All `repl_eval_parse_*` / `repl_eval_validate_*` /
   `repl_func_alias_*` / `repl_source_scope_*` / editor-internal
-  helper stubs — controller-side callers gone.
+  helper stubs - controller-side callers gone.
 - All `ui_state_*` / `ui_layout_*` / `ui_menu_bar_close` /
   `glr_completion_accept_autocomplete` /
   `glr_state_presentation*` / `glr_ctrl_*` / `glr_camera_*`
@@ -1083,7 +1083,7 @@ or its siblings called the symbol. Expected casualties:
   called them.
 
 Likely-remaining shim surface (best-guess pre-implementation):
-- `repl_state_edit_line` — the one acknowledged leak from `state.c`'s
+- `repl_state_edit_line` - the one acknowledged leak from `state.c`'s
   `EditorInputView` builder. A future phase moves edit-line
   ownership into `EditorState` and the stub goes away.
 - A handful of `ui_*` symbols if the menu / code-panel rendering
@@ -1091,10 +1091,10 @@ Likely-remaining shim surface (best-guess pre-implementation):
 
 Re-measure post-8.7 and update the shim accordingly. Target: well
 under 20 unique symbols. If the post-8.7 count is still large,
-that's a finding worth recording — likely more REPL leaks hiding
+that's a finding worth recording - likely more REPL leaks hiding
 in `state.c` than just edit-line.
 
-### 8.9 — Update the surface ratchet and add `check-edit-ops-pure`
+### 8.9 - Update the surface ratchet and add `check-edit-ops-pure`
 
 `scripts/baselines/editor-repl-surface.txt` continues to track
 `src/editor/input.c` / `commit.c` for the REPL editor's own
@@ -1107,37 +1107,37 @@ calls REPL by design); the demo's leverage point is now the
 `src/editor/edit_ops.{c,h}` includes any `repl/` header or
 references any `repl_*` symbol. Wire it into `make check` and into
 the `check-state-ownership` block. This guard is **required**, not
-optional — without it the whole edit_ops boundary can regress
+optional - without it the whole edit_ops boundary can regress
 silently in the next refactor, defeating the forcing function.
 
-### 8.10 — Update MODULES.md
+### 8.10 - Update MODULES.md
 
-- Add a row for `src/editor/edit_ops` — "generic text-editing
+- Add a row for `src/editor/edit_ops` - "generic text-editing
   primitives (cursor moves, char edit, selection, text clipboard,
   search input). Library shared by `src/editor/input.c` (REPL
   dispatcher) and `tools/editor_demo/input.c` (generic dispatcher)."
 - Relabel `src/editor/input.c` row to "REPL editor input
-  dispatcher" (or similar) — explicit about its REPL flavor.
+  dispatcher" (or similar) - explicit about its REPL flavor.
 - Update the `editor_demo` standalone-demo entry to describe the
   new link set and the generic-dispatcher pattern.
 
 ### Verification for Phase 8
 
-- `make sample USE_GL_STUBS=1` — REPL editor builds clean.
-- `make editor_demo USE_GL_STUBS=1` — generic editor builds clean
+- `make sample USE_GL_STUBS=1` - REPL editor builds clean.
+- `make editor_demo USE_GL_STUBS=1` - generic editor builds clean
   with the shrunk shim.
-- `make editor_demo` — opens a window with rendered text and a
+- `make editor_demo` - opens a window with rendered text and a
   working File menu (handlers may no-op).
-- `make test-stubs` — full regression green (existing tests pass;
+- `make test-stubs` - full regression green (existing tests pass;
   `test_editor_input_selection` already exercises
   `edit_op_consume_input_selection` against `EditorState`. A focused
   `test_edit_ops` for the `buffer_insert_char_at_cursor` /
   `buffer_delete_left_of_cursor` / `type_char` / `backspace`
-  primitives is deferred — file as a follow-up if a regression
+  primitives is deferred - file as a follow-up if a regression
   motivates it).
-- `make check-state-ownership` — clean, including the required
+- `make check-state-ownership` - clean, including the required
   `check-edit-ops-pure` guard.
-- `tools/editor_demo/repl_shim.c` — substantially smaller; the
+- `tools/editor_demo/repl_shim.c` - substantially smaller; the
   shim file itself acts as the new ledger of "what generic-editor
   code still needs to call into REPL," which should be near-zero.
 
@@ -1161,7 +1161,7 @@ silently in the next refactor, defeating the forcing function.
   - Manual editor-demo smoke:
     - type text, commit lines, navigate, edit existing lines, delete, search, select/copy/paste input text, scroll, resize panel.
 
-## Assumptions (historical — superseded by Phase 8)
+## Assumptions (historical - superseded by Phase 8)
 
 > **Superseded.** The shim-as-EditorServices-ledger framing
 > below predates the Phase 8 pivot. The current shim is a
@@ -1174,21 +1174,21 @@ silently in the next refactor, defeating the forcing function.
 - `src/ui/panels.h` remains the stable public surface for the full app.
 - The fake REPL shim is intentionally demo-local and should not migrate into production code.
 - After Phase 5 lands, the shim is a **dependency ledger against the
-  extended `EditorServices` table, plus a small set of direct stubs** —
+  extended `EditorServices` table, plus a small set of direct stubs** -
   REPL stubs for the three smaller editor files (`state.c`, `clipboard.c`,
   `undo.c`) that keep calling REPL helpers by name, and a handful of
   `glr_*` stubs for the residual upward reach in `input.c`. UI chrome
   (menu bar, help overlay, color picker, tutorial) is treated as
-  editor-inherent — the demo links those modules directly rather than
+  editor-inherent - the demo links those modules directly rather than
   abstracting them behind a second service table. The current draft
   surface (Phase 5 "Draft Total Shim Surface" table) is ~40 unique
   symbols, but the required review is expected to revise that as missing
   document-state surfaces are accounted for. The Phase 6 tripwire should
-  be set at the final measured cap + small headroom — a regression gate,
+  be set at the final measured cap + small headroom - a regression gate,
   not a license for unbounded growth.
 - Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is the long-term direction. Phase 5's seam extraction is the first concrete step; the demo in Phase 6 is the scaffolding that makes the remaining coupling visible and shrinkable.
 
-## Landing Strategy (historical — superseded by Phase 8 sub-steps)
+## Landing Strategy (historical - superseded by Phase 8 sub-steps)
 
 > **Superseded.** Phase 8 sub-steps 8.1-8.10 are the current
 > landing plan. The strategy below predates the pivot and
@@ -1196,8 +1196,8 @@ silently in the next refactor, defeating the forcing function.
 > matches reality. Retained for context.
 
 
-- **Phases 0-2** are the load-bearing UI split: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the first natural pause point — the cleanup is real even without the rest.
+- **Phases 0-2** are the load-bearing UI split: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the first natural pause point - the cleanup is real even without the rest.
 - **Phase 3** is mechanical once Phase 2 lands; **Phase 4** is hit-routing cleanup. Together these complete the SRP split for `ui/panels.c`.
-- **Phase 5** is deferred editor-side decoupling, **scoped to the REPL pipeline only**. UI chrome (menu, help, picker, tutorial) is editor-inherent — the editor depends on `src/ui/` and `src/widgets/` modules directly and that's not a layering violation. The residual upward `glr_*` reach (~3-4 sites) is handled as direct stubs in the demo rather than a second service table, since the cost of abstracting a handful of trivial calls outweighs the maintenance burden of a parallel seam. Before implementation, run the required review in that phase and update the service table, shim ledger, and guard against the current source tree. Useful on its own once it lands: the service table should make the existing test harnesses easier to drive in isolation, but it is not required for the `ui/panels.c` SRP split.
+- **Phase 5** is deferred editor-side decoupling, **scoped to the REPL pipeline only**. UI chrome (menu, help, picker, tutorial) is editor-inherent - the editor depends on `src/ui/` and `src/widgets/` modules directly and that's not a layering violation. The residual upward `glr_*` reach (~3-4 sites) is handled as direct stubs in the demo rather than a second service table, since the cost of abstracting a handful of trivial calls outweighs the maintenance burden of a parallel seam. Before implementation, run the required review in that phase and update the service table, shim ledger, and guard against the current source tree. Useful on its own once it lands: the service table should make the existing test harnesses easier to drive in isolation, but it is not required for the `ui/panels.c` SRP split.
 - **Phase 6** (demo) is deferred and lands only after Phase 5's measured surface reductions land. Its shim and tripwire must be based on the final reviewed ledger, not the current draft counts.
-- **Phase 7** splits along the same boundary: **Phase 7a** (text-panel purity guard, MODULES.md docs, header doc cleanups) lands now as the tail of the UI split — it locks in what Phases 1-4 just achieved. **Phase 7b** (editor REPL-surface guard, `editor_demo` symlink, shim documentation) is gated on the deferred Phase 5 and Phase 6 and lands with them.
+- **Phase 7** splits along the same boundary: **Phase 7a** (text-panel purity guard, MODULES.md docs, header doc cleanups) lands now as the tail of the UI split - it locks in what Phases 1-4 just achieved. **Phase 7b** (editor REPL-surface guard, `editor_demo` symlink, shim documentation) is gated on the deferred Phase 5 and Phase 6 and lands with them.

@@ -1142,7 +1142,7 @@ int main(void) {
     editor_handle_key('\r', 0, 0);
     /* Enter at column 0 inserts a real, persistent blank line ABOVE the
      * current line and keeps the cursor on the original content (it
-     * follows the text down one row) — standard "newline before cursor"
+     * follows the text down one row) - standard "newline before cursor"
      * semantics, not a transient empty insert row that vanishes on a
      * same-index click. */
     ASSERT_TRUE("enter at line start inserts blank above (count)", repl_state_document_count() == 3);
@@ -1893,7 +1893,7 @@ int main(void) {
     ASSERT_TRUE("push line → -1",                repl_find_matching_push_matrix(0) == -1);
     ASSERT_TRUE("oob matching push → -1",        repl_find_matching_push_matrix(-1) == -1);
 
-    /* repl_find_matching_pop_matrix: mirror — cursor-on-Push pairs with
+    /* repl_find_matching_pop_matrix: mirror - cursor-on-Push pairs with
      * its Pop (same document as above). */
     ASSERT_TRUE("outer push matches outer pop",  repl_find_matching_pop_matrix(0) == 6);
     ASSERT_TRUE("inner push matches inner pop",  repl_find_matching_pop_matrix(2) == 4);
@@ -2088,8 +2088,8 @@ int main(void) {
         ASSERT_TRUE("cmd_writes 4 material cells all distinct", distinct);
     }
 
-    /* Collectors: repl_attrib_collect_push_saved ("what's saved" — prior
-     * setters) and _pop_reverted ("what's reverted" — scoped setters). Fold
+    /* Collectors: repl_attrib_collect_push_saved ("what's saved" - prior
+     * setters) and _pop_reverted ("what's reverted" - scoped setters). Fold
      * the source with real nested LIFO semantics. */
     {
         ReplAttribHighlightLine hl[REPL_ATTRIB_HL_MAX];
@@ -2171,7 +2171,7 @@ int main(void) {
     }
 
     /* Fog: glFogi/glFogf/glFogfv ride GL_FOG_BIT (each parameter its own cell),
-     * and glEnable(GL_FOG) rides GL_ENABLE_BIT|GL_FOG_BIT — matching real GL,
+     * and glEnable(GL_FOG) rides GL_ENABLE_BIT|GL_FOG_BIT - matching real GL,
      * where the fog enable flag lives in both bits. */
     {
         ReplAttribHighlightLine hl[REPL_ATTRIB_HL_MAX];
@@ -2312,7 +2312,7 @@ int main(void) {
     /* repl_find_affecting_transforms_flat / _for_flat_vertex: flat-accurate
      * cross-function resolution (req 4). A vertex inside a funcN body called
      * from two transformed call sites must union both call-site transform
-     * source lines — the source walk above can't, because function bodies are
+     * source lines - the source walk above can't, because function bodies are
      * opaque from the call site. */
     {
         int xs[MAX_AFFECTING_TRANSFORMS];
@@ -2378,7 +2378,7 @@ int main(void) {
     }
 
     /* Top-level (non-function) vertices: the flat resolver matches the source
-     * walk exactly — no regression for the common case. */
+     * walk exactly - no regression for the common case. */
     {
         int xs[MAX_AFFECTING_TRANSFORMS];
         int fs[MAX_AFFECTING_TRANSFORMS];
@@ -2484,7 +2484,7 @@ int main(void) {
     ASSERT_TRUE("recursive second x", fabsf(repl_state_flat_program_cmds()[1].args[0] - 2.0f) < 1e-6f);
     ASSERT_TRUE("recursive third x", fabsf(repl_state_flat_program_cmds()[2].args[0] - 1.0f) < 1e-6f);
     ASSERT_TRUE("recursive base x", fabsf(repl_state_flat_program_cmds()[3].args[0] - 0.0f) < 1e-6f);
-    /* call_depth climbs with each recursive entry — func_scope_mask cannot
+    /* call_depth climbs with each recursive entry - func_scope_mask cannot
      * express this since every frame reuses func0's single scope bit. */
     ASSERT_TRUE("recursive call_depth ladder 1", repl_state_flat_program_cmds()[0].call_depth == 1);
     ASSERT_TRUE("recursive call_depth ladder 2", repl_state_flat_program_cmds()[1].call_depth == 2);
@@ -2804,7 +2804,7 @@ int main(void) {
                     repl_state_document_cmds()[3].type == CMD_DEPTH_MASK &&
                     repl_state_document_cmds()[2].type != CMD_DEPTH_MASK);
         /* Core fix: if paste left us in insert mode, the input buffer
-         * must be empty — not pre-loaded with glDepthMask's text. */
+         * must be empty - not pre-loaded with glDepthMask's text. */
         if (editor_insert_mode())
             ASSERT_TRUE("paste-vblank: insert-mode input buffer is clean",
                         editor_state_input().input_len == 0);
@@ -2855,7 +2855,7 @@ int main(void) {
                     editor_state_clipboard_kind() == EDITOR_CLIPBOARD_INPUT_TEXT);
         editor_input_set_text("");
 
-        /* A line-range selection over a float decl is guarded — copy/cut
+        /* A line-range selection over a float decl is guarded - copy/cut
          * must both report 0, and cut must not touch the document. New
          * decls are always inserted at the top of non-decl code (see
          * CMD_VAR_DECLARE's placement rule), so the decl lands at index 0
@@ -2879,7 +2879,7 @@ int main(void) {
         /* Real current line (the non-decl glEnable at index 1, not the
          * still-selected decl at 0), no selection: cut succeeds and
          * deletes. Clear the line-range selection left over from the
-         * blocked attempts above first — cut prioritizes an active
+         * blocked attempts above first - cut prioritizes an active
          * selection over the cursor's current line. */
         editor_selection_clear_line_range();
         int doc_count_before_cut = repl_state_document_count();

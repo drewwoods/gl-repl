@@ -1,4 +1,4 @@
-# Editor Input Selection — Anchor Model
+# Editor Input Selection - Anchor Model
 
 A character-range selection model for the editor's active input buffer
 (`ReplEditorInputState.input[]`). Builds the standard "anchor + cursor"
@@ -26,7 +26,7 @@ Make this work like every other editor:
 | **Click without drag** | Clears the selection and places the cursor. |
 | **Escape** | Clears the selection (in addition to its existing behaviors). |
 
-Mouse selection lives entirely on the **active input row** — the row the
+Mouse selection lives entirely on the **active input row** - the row the
 edit cursor is currently on. Selecting across multiple source lines is
 out of scope; the existing line-range selection (clipboard scope) still
 handles that.
@@ -38,7 +38,7 @@ handles that.
 ```c
 char input[MAX_INPUT_LEN];   /* the editable buffer */
 int  input_len;
-int  cursor_pos;             /* live cursor — char offset into input[] */
+int  cursor_pos;             /* live cursor - char offset into input[] */
 ...
 ```
 
@@ -65,7 +65,7 @@ active input buffer, not through `feed_line()`.
 Cursor mutations are scattered. `grep -n editor_cursor_pos_set` shows
 ~37 call sites across `src/editor/{input,undo,commit,clipboard}.c`,
 `glr_ctrl.c`, `glr_completion.c`. Typed-char insertion happens in one
-place (around `src/editor/input.c:1186` — `memmove` + `inp->input[cur]
+place (around `src/editor/input.c:1186` - `memmove` + `inp->input[cur]
 = (char)key`); backspace lives in `handle_text_delete_key_route`
 (~line 1043). Every cursor move clears the existing line-range
 selection via `editor_clipboard_clear_selection()` calls in
@@ -96,7 +96,7 @@ typedef struct {
 - `anchor_pos == -1` means **no selection**; the cursor behaves normally.
 - `anchor_pos >= 0` means the selection is `[lo, hi)` where
   `lo = min(anchor_pos, cursor_pos)` and `hi = max(anchor_pos, cursor_pos)`.
-- An empty selection (`anchor_pos == cursor_pos`) is **not allowed** —
+- An empty selection (`anchor_pos == cursor_pos`) is **not allowed** -
   the moment they collide, the anchor is cleared. This keeps "has
   selection" a single test (`anchor_pos >= 0`) rather than two.
 - `anchor_pos` is always in `[0, input_len]`. Any mutation that shrinks
@@ -148,7 +148,7 @@ typedef struct {
 
 ## Phase Plan
 
-### Phase A — State, accessors, and clipboard shape
+### Phase A - State, accessors, and clipboard shape
 
 `src/editor/state.h` / `state.c`:
 
@@ -187,9 +187,9 @@ typedef struct {
      current line clipboard behavior, because undo does not snapshot
      clipboard state.
 
-Hard-guard nothing yet — these fields are unused after Phase A.
+Hard-guard nothing yet - these fields are unused after Phase A.
 
-### Phase B — The "clear anchor on cursor move" rule
+### Phase B - The "clear anchor on cursor move" rule
 
 This is the source of every IDE bug in this area: forget to clear, and
 the highlight goes stale; over-eager clear and shift+arrow doesn't
@@ -207,7 +207,7 @@ work. Get it right once, in one place.
    **shift-extended move**: anchor stays, selection grows/shrinks.
 3. Audit all 37 cursor-set call sites:
    - Programmatic cursor moves that should clear the anchor (the
-     vast majority — load_line_to_input, navigate_to_line, undo
+     vast majority - load_line_to_input, navigate_to_line, undo
      restore, autocomplete accept, etc.) keep calling the default
      `editor_cursor_pos_set`.
    - Shift+arrow / shift+home / shift+end handlers in
@@ -215,13 +215,13 @@ work. Get it right once, in one place.
      variants) call `_keep_anchor`. **Before** the move, they set the
      anchor if it's currently `-1` (anchor pinned to the *pre-move*
      cursor position), then move the cursor.
-   - Plain arrow / Home / End keep the default behavior — they clear
+   - Plain arrow / Home / End keep the default behavior - they clear
      the anchor as a side effect of the standard `_set`.
 
 Net effect: every existing cursor move automatically clears the anchor.
 Only the new shift-variants keep it.
 
-### Phase C — Selection-aware text mutations
+### Phase C - Selection-aware text mutations
 
 Two places need to know about the anchor:
 
@@ -245,14 +245,14 @@ In the backspace path: if selection active, just call
 `input_consume_selection()` and return (the existing "delete one char
 left" branch is skipped).
 
-Delete (forward) is symmetric to backspace — same pre-step.
+Delete (forward) is symmetric to backspace - same pre-step.
 
-Tab / Enter / `;`: clear the anchor *without* deleting — the
+Tab / Enter / `;`: clear the anchor *without* deleting - the
 commit-or-accept behavior runs on the input as it stands. This matches
 common editor convention (typing `;` after selecting "foo" inside `bar
 foo;` commits `bar foo;` cleanly, not `bar ;`).
 
-### Phase D — Partial-line clipboard operations
+### Phase D - Partial-line clipboard operations
 
 `src/editor/clipboard.c` should remain the clipboard owner, but it needs
 to understand the new input-buffer selection before falling back to the
@@ -298,9 +298,9 @@ Wire the public routes:
    - Otherwise, run the existing whole-line paste path.
 
 Input-only cut and paste deliberately do not push undo snapshots.
-`ReplUndoSnapshot` does not capture input-buffer bytes — restore
+`ReplUndoSnapshot` does not capture input-buffer bytes - restore
 reloads input via `load_line_to_input(repl_state_edit_line())` from
-the committed source line — so a push cannot rewind the edit. The
+the committed source line - so a push cannot rewind the edit. The
 push would only have the side effect of tripping
 `repl_promote_example_if_needed()` inside `editor_undo_push_snapshot`,
 which would falsely promote a loaded example before any source
@@ -325,12 +325,12 @@ The line-range variable-declaration guards do not apply to partial input
 text, because no source command is removed until the user later commits
 the edited line through the normal validation path.
 
-### Phase E — Mouse and keyboard input handlers
+### Phase E - Mouse and keyboard input handlers
 
 `src/editor/input.c::editor_handle_mouse`:
 
 1. **Single click on a code-panel char**: existing behavior (move
-   cursor) — plus clear the anchor. Already handled by the default
+   cursor) - plus clear the anchor. Already handled by the default
    `editor_cursor_pos_set` from Phase B.
 2. **Double click**: detect via a click-time + click-position record
    stored in a `static struct { unsigned int t_ms; int x, y; }` inside
@@ -352,7 +352,7 @@ the edited line through the normal validation path.
 
 1. **Shift + Arrow Left/Right**: anchor-pin if needed, then move
    cursor by one char with `_keep_anchor`.
-2. **Shift + Arrow Up/Down**: out of scope — vertical motion would
+2. **Shift + Arrow Up/Down**: out of scope - vertical motion would
    mean switching the active edit line, which the existing
    line-range selection already half-owns. Document as "ignored;
    plain Up/Down clears any input selection and changes the edit
@@ -370,12 +370,12 @@ the edited line through the normal validation path.
    Recommend (b): set `anchor_pos = 0; cursor_pos = input_len`. The
    line-start jump is still reachable via Home.
 
-   *Decision deferred — see Open Questions §1.*
+   *Decision deferred - see Open Questions §1.*
 
 2. **Escape**: extend the existing Escape handler to clear the anchor
    along with the other transient states it drops.
 
-### Phase F — Render the selection band
+### Phase F - Render the selection band
 
 `src/ui/panels.c::render_active_input_rows()` already paints the
 active-input row glyph-by-glyph. Extend it to paint a colored
@@ -387,7 +387,7 @@ Implementation shape:
 1. Add `selection_lo` and `selection_hi` to the per-frame input view
    the controller builds for the snapshot (`UiRenderSnapshot.editor_*`
    slice that today carries `input_len`, `cursor_pos`, etc.). Or
-   compute it in panels.c via `editor_input_selection_*()` directly —
+   compute it in panels.c via `editor_input_selection_*()` directly -
    the controller's snapshot pattern is the cleaner long-term shape,
    but a live read is fine for v1 since the UI rendering already
    reads `editor_state_input()` for the active row.
@@ -400,7 +400,7 @@ Implementation shape:
    is one end of the selection range, so visually the user sees the
    highlighted run with a caret at the moving end.
 
-### Phase G — Tests
+### Phase G - Tests
 
 Add focused unit tests under `tests/`:
 
@@ -439,12 +439,12 @@ Add focused unit tests under `tests/`:
    - Tab/Enter/`;` clear without deleting.
    - Double-click selects the expected word in a representative
      input line (use the existing modifier-provider seam plus a
-     small double-click-time-source seam — see Open Questions §2).
+     small double-click-time-source seam - see Open Questions §2).
 3. Touch `tests/test_repl_autocomplete.c` if Tab+selection interaction
    needs explicit coverage (selection clears, then ghost expansion
    runs).
 
-### Phase H — Documentation
+### Phase H - Documentation
 
 1. Update `CLAUDE.md` "Key Controls" with the new shift-modified
    navigation keys, double-click behavior, and input-selection
@@ -482,14 +482,14 @@ file; everything else is small touch-ups.
 
 After this feature lands, the following must always hold:
 
-1. **`anchor_pos == -1` OR `anchor_pos != cursor_pos`** — empty
+1. **`anchor_pos == -1` OR `anchor_pos != cursor_pos`** - empty
    selections collapse immediately. Add an assertion inside
    `editor_input_anchor_set` and the cursor-move helpers.
-2. **`anchor_pos` is always in `[0, input_len]`** — clamp on every
+2. **`anchor_pos` is always in `[0, input_len]`** - clamp on every
    write. Any mutation that shrinks the buffer past `anchor_pos`
    clears the anchor.
 3. **The only path that mutates the cursor without clearing the
-   anchor is `editor_cursor_pos_set_keep_anchor()`** — all other
+   anchor is `editor_cursor_pos_set_keep_anchor()`** - all other
    call sites use the default and inherit auto-clear.
 4. **Clipboard kind matches payload.**
    - `EDITOR_CLIPBOARD_EMPTY`: `line_count == 0`, `input_text_len == 0`.
@@ -501,7 +501,7 @@ After this feature lands, the following must always hold:
 Optional ratchet to consider: a Makefile check that no file outside
 `src/editor/state.c` calls `editor_cursor_pos_set_keep_anchor` from
 more than a documented allowlist (so the "anchor preservation" path
-stays narrow and auditable). Probably overkill for v1 — leave as a
+stays narrow and auditable). Probably overkill for v1 - leave as a
 future hardening.
 
 ## Open Questions
@@ -512,12 +512,12 @@ future hardening.
    - Reinterpret: `cursor=input_len, anchor=0`. Line-start jump moves
      to Home (or stays available as a no-op of "press Ctrl+A then
      press Right" with the bonus that Right collapses the selection
-     to the right end — actually that goes to *end*, not start, so
+     to the right end - actually that goes to *end*, not start, so
      this breaks the existing muscle memory).
    - Conservative: leave Ctrl+A alone; bind macOS Cmd+A → select-all
      via the existing `editor_input_normalize_super_to_ctrl` path
      and add a Ctrl+letter spelling that's currently unused (e.g.
-     no good option — Ctrl+A is the canonical select-all).
+     no good option - Ctrl+A is the canonical select-all).
    - Punt: ship without select-all in the first cut.
    **Recommend: punt for v1.** Land the model without disturbing
    existing shortcuts; add Cmd/Ctrl+A in a follow-up after the
@@ -547,7 +547,7 @@ future hardening.
 4. **Selection across the pending-newline overwrite buffer.** When
    `insert_mode == 0` (overwrite mode), input has the additional
    `pending_newline[]` field. Should selection span both? For v1:
-   no — selection lives in the main `input[]` only. Document the
+   no - selection lives in the main `input[]` only. Document the
    limitation; revisit if users hit it.
 
 5. **Search interaction.** *Resolved.* Search-hit highlighting paints
@@ -598,13 +598,13 @@ testable:
 5. **E-keyboard** (shift+arrow / shift+home / shift+end / Esc) in one
    commit.
 6. **E-double-click** in one commit.
-7. **F** (render band) — could land alongside E-mouse so the drag has
+7. **F** (render band) - could land alongside E-mouse so the drag has
    a visible result, but if it lands later the keyboard cases above
    are still testable via state assertions.
 8. **G** focused tests can land alongside each behavior phase; the
    new `test_editor_input_selection.c` should appear with Phase A.
 
 Each commit is small (~50–150 LOC) and individually buildable. The
-risk is concentrated in Phase B's 37-site audit — every miss there
+risk is concentrated in Phase B's 37-site audit - every miss there
 leaves a stale anchor. Lean on the test in Phase A that asserts
 "after any default cursor_pos_set, anchor is `-1`."

@@ -3,7 +3,7 @@
  *
  * glr_prof.c owns two per-section tables: the display table behind the
  * generic prof_section_info() (declared in support/cpuprof.h), and the
- * GPU-bracketing table behind the accessors here — which prof sections
+ * GPU-bracketing table behind the accessors here - which prof sections
  * get GL_TIME_ELAPSED timer queries issued around them via the cpuprof
  * section hooks (see prof_install_section_hooks). Sections that emit no
  * GL (flatten, snapshot, frame restore) stay CPU-only; so do the
@@ -21,7 +21,7 @@ int glr_prof_section_is_gpu(ProfSection s);
 /* How much of the GPU subset actually gets queried this frame. Every query
  * boundary has a real cost on some stacks (GL-on-Metal can split command
  * encoders at it), and on tile-deferred GPUs more segments also means more
- * overlap inflation (see gpuprof.h) — so the controller dials capture to
+ * overlap inflation (see gpuprof.h) - so the controller dials capture to
  * what the panel can display: Off/FPS = no queries at all, while Sections
  * and Histogram capture the full subset shown by the collapsible tree.
  * Set once per frame, before gpu_prof_frame_begin, so a frame is captured

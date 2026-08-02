@@ -51,7 +51,7 @@ static void face_normal(const float *a, const float *b, const float *c,
 }
 
 /* `type` is CMD_NORMAL3F for immediate-mode geometry and CMD_TESS_NORMAL
- * for a tessellator contour — the two families are otherwise identical
+ * for a tessellator contour - the two families are otherwise identical
  * here, and the executor consumes each as the current normal for the
  * vertices that follow. */
 static GLCmd make_auto_normal(CmdType type, float nx, float ny, float nz) {
@@ -138,9 +138,9 @@ static int delete_cmd_at(int pos, int *edit_line_inout) {
 }
 
 /* Two generated normals are interchangeable when they agree to within a
- * hair. These are computed cross products rather than source literals —
+ * hair. These are computed cross products rather than source literals -
  * the exact-match rule the smooth pass uses for *positions* would leave
- * coplanar faces looking distinct over rounding — so the comparison is
+ * coplanar faces looking distinct over rounding - so the comparison is
  * epsilon-based. */
 #define AUTONORMAL_SAME_EPS 1e-6f
 
@@ -265,7 +265,7 @@ static void accum_face(GLenum front_face, const int *vi, float norms[][3],
 /* Positions weld on an exact match, never a tolerance. Both sides come
  * from parsed source literals, so the same corner written the same way
  * parses to identical bits, and matching on bits keeps the weld a single
- * hash pass — a tolerance would force an O(nv^2) sweep, which does not
+ * hash pass - a tolerance would force an O(nv^2) sweep, which does not
  * survive a large unrolled mesh. A vertex that matches nothing simply
  * keeps its own face normal, i.e. a break in the geometry falls back to
  * flat shading exactly where the break is. */
@@ -293,7 +293,7 @@ static int pos_equal_exact(const float *a, const float *b) {
 }
 
 /* The two arrays behind the weld. They do different jobs and are indexed
- * differently — the distinction is the whole trick, so spelling it out:
+ * differently - the distinction is the whole trick, so spelling it out:
  *
  *   g_weld_slots[]  is the hash table. Indexed by pos_hash() % cap with
  *                   linear probing, each slot holds a *vertex index*
@@ -313,7 +313,7 @@ static int pos_equal_exact(const float *a, const float *b) {
  *                   write-back passes read nothing else.
  *
  * Both are indexed by *local* vertex index (0..nv-1 within the block), not
- * by document command index — vi[] is the indirection to the document row.
+ * by document command index - vi[] is the indirection to the document row.
  * That is also why MAX_EDITOR_COMMANDS bounds g_weld_rep: a block cannot
  * hold more vertices than the document holds commands.
  *
@@ -332,7 +332,7 @@ static int g_weld_rep[MAX_EDITOR_COMMANDS];
 
 /* Join vertices that occupy the same position so a corner spelled as
  * several separate glVertex3f lines (GL_TRIANGLES, GL_QUADS) shades as one
- * — strips and fans already share by index, and accumulate for free.
+ * - strips and fans already share by index, and accumulate for free.
  * Each vertex accumulates into the first vertex at its position, then
  * reads the total back. */
 static void weld_coincident(const int *vi, int nv, float norms[][3]) {
@@ -375,7 +375,7 @@ static void weld_coincident(const int *vi, int nv, float norms[][3]) {
 /* Smooth counterpart of compute_block_normals: every face deposits its
  * area-weighted normal on each of its own vertices, coincident positions
  * are welded, and the sums are normalized. Kept separate from the face
- * walk rather than folded into it — the face pass writes one normal per
+ * walk rather than folded into it - the face pass writes one normal per
  * face and leans on primitive-specific "which vertex owns this face"
  * rules that have no meaning once a vertex can hold several faces. */
 static void compute_block_normals_smooth(GLenum mode, GLenum front_face,
@@ -448,7 +448,7 @@ static void compute_block_normals_smooth(GLenum mode, GLenum front_face,
  * (0,0,0)) or locally concave (which answers with a flipped normal).
  * Summing every edge's contribution is immune to both and costs one pass.
  * The immediate-mode GL_POLYGON case deliberately keeps its first-three
- * cross product — changing it would move existing scenes' normals. */
+ * cross product - changing it would move existing scenes' normals. */
 static void contour_normal_newell(const int *vi, int nv, float *n) {
     const GLCmd *cmds = repl_state_document_cmds();
 
@@ -467,7 +467,7 @@ static void contour_normal_newell(const int *vi, int nv, float *n) {
  * tessellator re-triangulates the contour into faces that have no 1:1
  * correspondence with the gluVertex rows you wrote, so a per-vertex normal
  * would be a claim the geometry cannot honor; the contour is the unit that
- * means something. That is also why Smooth mode routes here unchanged —
+ * means something. That is also why Smooth mode routes here unchanged -
  * a contour is planar by construction, so averaging within it just returns
  * the contour normal. (Averaging *across* contours that share exact
  * positions would be a real feature; it is deliberately not this one.)
@@ -504,7 +504,7 @@ static int autonormal_tess_contour(int begin_idx, GLenum front_face,
 
     /* Same bail-outs as the immediate-mode walk: vars-bearing coordinates
      * carry parse-time values, not evaluated ones, and a hand-written
-     * gluNormal owns its contour outright — anywhere in the contour, not
+     * gluNormal owns its contour outright - anywhere in the contour, not
      * just at the top, because the contour is the unit here. */
     if (nv < 3 || any_vertex_has_vars)
         return contour_end + 1;
@@ -548,7 +548,7 @@ static int autonormal_tess_contour(int begin_idx, GLenum front_face,
  * rather than something repl_recompute_autonormals() does whenever it is
  * called with OFF. Continuous stripping would re-delete rows the moment
  * an undo restored them, and would silently eat the generated normals of
- * any scene imported while the mode happened to be off — which is exactly
+ * any scene imported while the mode happened to be off - which is exactly
  * what the `@auto` export marker exists to preserve. */
 int repl_strip_auto_normals(int *edit_line_inout) {
     int removed = 0;
@@ -586,7 +586,7 @@ void repl_recompute_autonormals(int autonormal_mode,
             continue;
         }
         /* CMD_FUNC_DEF / CMD_IF_BEGIN / CMD_FOR_BEGIN markers are
-         * structural — we don't auto-normal them, but we *do* enter
+         * structural - we don't auto-normal them, but we *do* enter
          * the body. A glBegin inside a funcN body should still pick
          * up an auto-normal as long as its vertices have literal
          * coords (see the has_vars guard below). The matching END
@@ -610,7 +610,7 @@ void repl_recompute_autonormals(int autonormal_mode,
             if (repl_state_document_cmds()[j].type == CMD_END) { block_end = j; break; }
             if (repl_state_document_cmds()[j].type == CMD_BEGIN) { block_end = j; break; }
             /* CMD_TESS_VERTEX is intentionally absent: it never appears
-             * inside a CMD_BEGIN block — tess vertices live between
+             * inside a CMD_BEGIN block - tess vertices live between
              * CMD_TESS_BEGIN_CONTOUR / CMD_TESS_END and use their own
              * normal feeder (CMD_TESS_NORMAL). glVertex2f sets args[2]
              * to 0 (parser default), so its cross product folds into
@@ -625,7 +625,7 @@ void repl_recompute_autonormals(int autonormal_mode,
 
         /* Vertices with `has_vars` carry parse-time args (often the
          * predef default, 0). A cross product on those would emit a
-         * degenerate (0, 0, 0) normal — strictly worse than leaving
+         * degenerate (0, 0, 0) normal - strictly worse than leaving
          * the block alone and letting GL fall back to the default
          * normal or the user's manual glNormal3f. Skip the block as
          * a whole rather than mixing literal-coord and vars-bearing
@@ -644,7 +644,7 @@ void repl_recompute_autonormals(int autonormal_mode,
         int offset = 0;
         /* The normal GL is left holding as the walk reaches each vertex.
          * A vertex whose face normal already matches it needs no row of
-         * its own — the normal is current state, not a per-vertex
+         * its own - the normal is current state, not a per-vertex
          * attribute, so a flat face spelled as four glVertex3f lines
          * needs one glNormal3f, not four identical ones.
          *
@@ -736,7 +736,7 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
      * families consume different state-feeder commands.
      *   - gl vertices    look back for CMD_NORMAL3F + CMD_COLOR3F/4F
      *   - tess vertices  look back for CMD_TESS_NORMAL + CMD_TESS_COLOR
-     *   - glutSolid*     look back for CMD_COLOR3F/4F only — they emit
+     *   - glutSolid*     look back for CMD_COLOR3F/4F only - they emit
      *                    their own normals but draw under the current
      *                    GL color via glColorMaterial / lighting. */
     CmdType target = repl_state_document_cmds()[line_idx].type;
@@ -817,7 +817,7 @@ int repl_find_matching_pop_matrix(int line_idx) {
 }
 
 /* Attribute-stack bracket matching, the exact source-order LIFO mirror of the
- * matrix pair above (same block-unaware heuristic — see the collect_unbalanced
+ * matrix pair above (same block-unaware heuristic - see the collect_unbalanced
  * LIMITATION note). Cursor on a CMD_POP_ATTRIB walks back to the nearest
  * earlier CMD_PUSH_ATTRIB at the same nesting level; cursor on a
  * CMD_PUSH_ATTRIB walks forward to the matching CMD_POP_ATTRIB. Returns -1 when
@@ -897,7 +897,7 @@ int repl_find_affecting_transforms(int line_idx, int *out, int out_cap) {
         } else if (t == CMD_PUSH_MATRIX) {
             /* A push at popped_depth>0 closes one of the popped scopes
              * we crossed walking back. A push at popped_depth==0 is the
-             * cursor's own scope boundary — keep walking into the
+             * cursor's own scope boundary - keep walking into the
              * parent, whose transforms still apply. */
             if (popped_depth > 0) popped_depth--;
         } else if (t == CMD_LOAD_IDENTITY) {

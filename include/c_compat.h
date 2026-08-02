@@ -9,13 +9,13 @@
  * STATIC_ASSERT(expr, msg): real C11 `_Static_assert` when the
  * translation unit is compiled as C11 or newer; a C99 negative-array-
  * size typedef otherwise. The C99 fallback drops the message text (only
- * the negative-size diagnostic shows) — acceptable. A distinct __LINE__
+ * the negative-size diagnostic shows) - acceptable. A distinct __LINE__
  * keeps the fallback typedef names unique; all current call sites are on
  * separate lines. Valid at both file and block scope (it is a typedef).
  *
  * ARRAY_LEN(a): element count of a true C array (NOT a pointer). The
  * result is a compile-time constant, so it is valid in static
- * initializers and STATIC_ASSERT — use it instead of hand-counting a
+ * initializers and STATIC_ASSERT - use it instead of hand-counting a
  * length that a sibling array or table already fixes.
  */
 #ifndef C_COMPAT_H

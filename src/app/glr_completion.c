@@ -76,8 +76,8 @@ static int ac_prefix_match_ci(const char *cand, const char *pre, int n) {
 }
 
 /* Gate for mid-line completion. Accepts a cursor tail that is nothing
- * but the remainder of the current call's argument list —
- * `[ws] [, args…] ) [;] [ws]` — so completion can finish a prior enum
+ * but the remainder of the current call's argument list -
+ * `[ws] [, args…] ) [;] [ws]` - so completion can finish a prior enum
  * arg (`glColorMaterial(GL_FR|, GL_DIFFUSE);`) without firing inside
  * arbitrary expressions. The closing `)` may be absent (call still
  * being typed). Depth covers nested (), {}, [] the same way the
@@ -277,8 +277,8 @@ static int func_slot_signature(int fn, int *count_out,
 }
 
 /* Parameter list for a call being typed at the head of `input`. Accepts
- * both spellings of the callee — bare `func3(` and an alias-named
- * `drawCube(` — via the shared name-token scanner, so aliases get the
+ * both spellings of the callee - bare `func3(` and an alias-named
+ * `drawCube(` - via the shared name-token scanner, so aliases get the
  * same param hint their slot does. Only definitions with at least one
  * parameter report a match; a zero-parameter call has nothing to hint. */
 static int find_defined_func_call_params(const char *input, const char **after_out,
@@ -402,7 +402,7 @@ static void update_autocomplete(void) {
     /* While a tutorial is active AND the cursor sits on the expected
      * commit line, autocomplete matches/hints would compete with the
      * tutorial UI. Suppress normal completion and emit the
-     * expected-command shadow text as the ghost suffix instead — the
+     * expected-command shadow text as the ghost suffix instead - the
      * active-input renderer already draws ghost in dimmed color
      * after the cursor. Empty input + tutorial active yields the
      * full expected line as the ghost. On any other line the user
@@ -412,7 +412,7 @@ static void update_autocomplete(void) {
      * REQUIRE_VAR has no expected_commit_line (the user is free to
      * type the satisfying `name = expr;` anywhere), so the cursor
      * check above doesn't gate it. Show the synthesized ghost on any
-     * row while a REQUIRE_VAR step is active — tutorial_shadow_suffix
+     * row while a REQUIRE_VAR step is active - tutorial_shadow_suffix
      * builds the `name = target` string for that case. */
     int show_tutorial_ghost = 0;
     if (tutorial_active()) {
@@ -440,7 +440,7 @@ static void update_autocomplete(void) {
      * everything after it is only trailing call arguments (e.g.
      * `glColorMaterial(GL_FR|, GL_DIFFUSE);` offers GL_FRONT). The
      * other modes (function names, param hints) keep the historic
-     * end-of-input-only behavior — `interior` gates them off below. */
+     * end-of-input-only behavior - `interior` gates them off below. */
     int cursor = editor_cursor_pos();
     int interior = (cursor != raw_input_len);
     if (interior) {
@@ -551,7 +551,7 @@ static void update_autocomplete(void) {
 
         int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
         if (effective_len < plen)
-            return; /* cursor inside the command name — nothing to complete */
+            return; /* cursor inside the command name - nothing to complete */
 
         /* Depth-aware top-level comma scan up to the cursor, mirroring
          * build_param_hint_text: commas inside nested (), {}, [] (a
@@ -579,7 +579,7 @@ static void update_autocomplete(void) {
             /* Past the last enum slot. For positive num_args the call
              * is done (no more args to suggest). For custom-parser
              * rows (negative num_args) there are still trailing args
-             * the func-prefix param-hint walker can describe — fall
+             * the func-prefix param-hint walker can describe - fall
              * through to it so e.g. glMaterialfv(GL_FRONT, GL_AMBIENT,
              * still shows the compound-literal hint. */
             if (enum_cmds[i].num_args < 0)
@@ -617,7 +617,7 @@ static void update_autocomplete(void) {
             g_ac_token_start = (int)(seg - raw_input);
             if (interior) {
                 /* Mid-line the trailing text already supplies the
-                 * separator / closing paren — accept splices the bare
+                 * separator / closing paren - accept splices the bare
                  * token at the cursor. */
                 g_ac_suffix[0] = '\0';
             } else {
@@ -625,7 +625,7 @@ static void update_autocomplete(void) {
                  * glMaterialfv, num_args = -2) means the function has
                  * *more* args after the last enum slot (e.g. the
                  * compound literal). Always use ", " as the accept
-                 * suffix for those — closing with ")" would strand the
+                 * suffix for those - closing with ")" would strand the
                  * user mid-call. Positive num_args are exhaustive: the
                  * last enum slot IS the last arg. */
                 int more_args_after = (enum_cmds[i].num_args < 0);
@@ -659,7 +659,7 @@ static void update_autocomplete(void) {
     /* Complete user function aliases (`drawCube(`). The bare funcN
      * spellings live in the static completion table; an alias is
      * runtime state, so its candidate text is materialized here. Both
-     * are offered for an aliased slot — the alias sorts under its own
+     * are offered for an aliased slot - the alias sorts under its own
      * initial, so neither hides the other. */
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT && ac->match_count < MAX_AC_MATCHES; slot++) {
         const char *alias = repl_func_alias_get(slot);
@@ -701,7 +701,7 @@ void glr_completion_accept_autocomplete(void) {
          * token with the canonical candidate, not by appending the ghost
          * suffix. The two are identical when the user typed the right
          * case, but replacement also corrects the case (matching is
-         * case-insensitive) — e.g. "glco" -> "glColor3f(",
+         * case-insensitive) - e.g. "glco" -> "glColor3f(",
          * "gl_depth_test" -> "GL_DEPTH_TEST". `already_typed` is the
          * length of the token the candidate replaces, starting at
          * `tok_start`; `suffix` is the post-candidate text (", " / ")"
@@ -750,7 +750,7 @@ void glr_completion_accept_autocomplete(void) {
     } else {
         /* No command/enum match: append the ghost verbatim. This is the
          * tutorial shadow-suffix path (tutorial_shadow_suffix sets
-         * ac->ghost with no matches — e.g. the REQUIRE_VAR declaration's
+         * ac->ghost with no matches - e.g. the REQUIRE_VAR declaration's
          * trailing instruction comment), and any other ghost-only case. */
         int ghost_len = (int)strlen(ac->ghost);
         if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {

@@ -3,7 +3,7 @@
  *
  * Covers the relocated File-menu actions and repl_save_active_scene's
  * filename derivation. Never exercises the no-active-scene fallback
- * (that path writes ./output.c in the repo root — see
+ * (that path writes ./output.c in the repo root - see
  * scripts/check/check-no-test-default-output.sh); the save test always has an
  * active named scene + a mkdtemp workspace dir.
  */
@@ -241,7 +241,7 @@ static void test_save_glr_writes_scene_source(void) {
 
 /* The written file is a loadable example: run it back through the runtime
  * examples-dir catalog and the document plus the off-default cfg return
- * unchanged. This is the property the format exists for — a scene saved
+ * unchanged. This is the property the format exists for - a scene saved
  * here can be dropped into examples/scenes/ as-is. */
 static void test_save_glr_round_trips_through_example_loader(void) {
     char tmpl[] = "/tmp/glr_scene_rt_XXXXXX";
@@ -252,7 +252,7 @@ static void test_save_glr_round_trips_through_example_loader(void) {
     char catalog_text[512];
     char err[512];
     /* Bounded copy of the pre-save document. Sized for a seeded example,
-     * not MAX_EDITOR_COMMANDS — a full-capacity buffer here would be a
+     * not MAX_EDITOR_COMMANDS - a full-capacity buffer here would be a
      * quarter-megabyte of stack. */
     enum { SAVED_LINE_CAP = 128 };
     char saved_lines[SAVED_LINE_CAP][MAX_LINE_LEN];
@@ -430,7 +430,7 @@ static void remove_managed_workspace(const char *dir) {
  * instead of leaving them behind: before the fix the new (empty) workspace was
  * opened, which reset the catalog and left the collection reachable only in the
  * hidden recovery workspace. Creating a workspace while a managed one is bound
- * still starts empty — those scenes remain saved in the old workspace. */
+ * still starts empty - those scenes remain saved in the old workspace. */
 static void test_new_workspace_adopts_unbound_scenes(void) {
     char cwd_tmpl[] = "/tmp/glr_newws_XXXXXX";
     char prev_cwd[1024];
@@ -543,7 +543,7 @@ static void test_scene_menu_is_selector(void) {
     reset_fixture();
     seed_user_scene();
 
-    /* Row 0 is "### EXAMPLES" — inert, no crash, consumed. */
+    /* Row 0 is "### EXAMPLES" - inert, no crash, consumed. */
     int h = glr_action_menu_item_activate(GLR_MENU_SCENE, 0);
     ASSERT_TRUE("Scene header row consumed", h == 1);
 

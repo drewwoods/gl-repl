@@ -34,7 +34,7 @@
  *     Shift+F3 = find prev. Uses ui_text_search primitives;
  *     match highlights are drawn by text_panel via snap->search.
  *   - Escape -> exit (unless search mode is active, in which case
- *     Esc cancels the find bar — the search dispatcher intercepts
+ *     Esc cancels the find bar - the search dispatcher intercepts
  *     before the exit path).
  *
  * Out of scope (deferred): word jumps, scroll wheel, undo/redo,
@@ -56,7 +56,7 @@
 
 /* Edit-line cursor lives on EditorState.document.edit_line_idx
  * (Phase 4 of docs/plans/done/edit-line-ownership.md). The demo reads /
- * writes it through editor_state_edit_line / _set — the same API
+ * writes it through editor_state_edit_line / _set - the same API
  * the REPL editor uses; the shim that previously backed this is
  * gone (Phase 5). */
 
@@ -70,7 +70,7 @@ static int key_is_printable_ascii(unsigned char key) {
  * at the active edit line. editor_buffer_replace_line auto-extends
  * line_count if edit_line was past the end, so a freshly-navigated
  * "virtual" line (edit_line == line_count) becomes a real entry on
- * commit. Non-static — exposed as demo_input_commit_to_buffer so
+ * commit. Non-static - exposed as demo_input_commit_to_buffer so
  * the Save menu action can flush in-progress input before writing
  * the buffer to disk. */
 void demo_input_commit_to_buffer(void) {
@@ -122,7 +122,7 @@ static void demo_handle_enter(void) {
     if (cur < 0) cur = 0;
     if (cur > len) cur = len;
 
-    /* Capture both halves before mutating EditorState — the input
+    /* Capture both halves before mutating EditorState - the input
      * buffer is shared storage, so the right half has to be copied
      * out before we overwrite the row with the left half. */
     char left[MAX_LINE_LEN];
@@ -149,7 +149,7 @@ static void demo_handle_enter(void) {
  * row. Inverse of demo_handle_enter (which splits a line at the
  * cursor). No-op at the top of the buffer (no previous line to
  * merge into). Caller has already verified cursor == 0 and that
- * no input-row selection is active — otherwise the regular
+ * no input-row selection is active - otherwise the regular
  * edit_op_backspace handles it. */
 static void demo_handle_backspace_at_line_start(void) {
     int line = editor_state_edit_line();
@@ -159,7 +159,7 @@ static void demo_handle_backspace_at_line_start(void) {
     int count = editor_buffer_count();
     EditorBufferView buf = editor_buffer_view();
 
-    /* Capture current input text first — the input buffer is
+    /* Capture current input text first - the input buffer is
      * shared storage with the input row, and the merge below
      * overwrites that storage when it sets the merged text back. */
     char curr_text[MAX_LINE_LEN];
@@ -284,7 +284,7 @@ static void demo_search_begin(void) {
     /* Flush any in-progress input row to the buffer first. Without
      * this, content the user typed on the active edit_line is
      * invisible to the find scan (which walks committed buffer
-     * lines only). Same rationale as the Save action — what the
+     * lines only). Same rationale as the Save action - what the
      * user sees on screen is what they expect Find to search. */
     demo_input_commit_to_buffer();
 
@@ -362,7 +362,7 @@ static int demo_search_handle_key(unsigned char key) {
         return 1;
     }
     /* Other keys (modifier-only events, control bytes besides those
-     * above) are swallowed while search is up — typing in the
+     * above) are swallowed while search is up - typing in the
      * editor body while a search bar is open would be confusing. */
     return 1;
 }
@@ -413,7 +413,7 @@ static void demo_handle_paste(void) {
 void demo_input_handle_key(unsigned char key, int x, int y) {
     (void)x; (void)y;
 
-    /* Search mode intercepts the keyboard whole — typing edits
+    /* Search mode intercepts the keyboard whole - typing edits
      * the query, Enter accepts, Esc cancels. Stays first so a
      * stray Esc doesn't exit the demo while the user thinks
      * they're cancelling a find. */
@@ -435,8 +435,8 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
      * non-zero cursor: defer to edit_op_backspace (consumes
      * selection / deletes one char left). Cursor at column 0
      * with no selection: merge the input row into the end of
-     * the previous buffer line — inverse of demo_handle_enter.
-     * Forward delete is a separate primitive — deferred. */
+     * the previous buffer line - inverse of demo_handle_enter.
+     * Forward delete is a separate primitive - deferred. */
     if (key == 8 || key == 127) {
         if (editor_cursor_pos() == 0 && !editor_input_selection_active())
             demo_handle_backspace_at_line_start();
@@ -478,7 +478,7 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
         demo_search_begin(); return;
     }
     if (key == 7  || (ctrl_or_cmd && (key == 'g' || key == 'G'))) {
-        /* Cmd+G next, Cmd+Shift+G prev — mainstream macOS find-
+        /* Cmd+G next, Cmd+Shift+G prev - mainstream macOS find-
          * again convention. Cmd+Shift+G arrives as 'G' (capital)
          * via the shift modifier, hence the case-letter split. */
         demo_search_next(key == 'G' ? -1 : +1); return;
@@ -510,7 +510,7 @@ void demo_input_handle_special(int key, int x, int y) {
     /* Shift extends a character-range selection via the editor's
      * extend-selection primitive (pins the anchor on first
      * extension; subsequent moves grow / shrink in place). Plain
-     * arrow moves clear any active anchor — both behaviors are
+     * arrow moves clear any active anchor - both behaviors are
      * what mainstream editors do. */
     int shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
 

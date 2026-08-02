@@ -19,7 +19,7 @@ int histogram_bin_for_us(double us) {
     /* The epsilon makes a bin's exact lower edge land in that bin rather than
      * the one below: histogram_bin_lo_us() reaches the edge through pow(), and
      * log10(pow(10, x)) comes back a hair under x, so the floor would drop it.
-     * 1e-9 decades is ~1e-9 of a bin — far below any real timing resolution —
+     * 1e-9 decades is ~1e-9 of a bin - far below any real timing resolution -
      * so it can only ever fix that boundary. */
     int bin = (int)(log10(us / HISTOGRAM_MIN_US)
                     / HISTOGRAM_DECADES_PER_BIN + 1e-9);
@@ -51,7 +51,7 @@ void histogram_record(Histogram *h, double elapsed_us) {
 
     /* Statistics take the raw value, so they stay exact where the bins do not:
      * at the two open-ended edge bins, and below the ~1.36% bin width. The bin
-     * saturation above deliberately does not gate this — a saturated bin stops
+     * saturation above deliberately does not gate this - a saturated bin stops
      * counting, the distribution's statistics should not. */
     runstats_record(&h->stats, elapsed_us);
 }

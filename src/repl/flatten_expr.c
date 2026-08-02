@@ -29,7 +29,7 @@ static int capture_expr(void *user_data, ReplExprRole role, int ordinal,
         /* The cap is the widest captured list any command has, not the
          * args[] width: glMultMatrixf's compound literal captures 16 cells
          * into payload.matrix. Commands with narrower lists are unaffected
-         * — they validate their own arity in the parser, and ordinals past
+         * - they validate their own arity in the parser, and ordinals past
          * their arity are never read back. */
         return repl_flatten_expr_compile_active_list(
                    engine, REPL_EXPR_ROLE_CMD_ARG, ordinal, list_text,

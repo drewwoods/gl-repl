@@ -7,7 +7,7 @@
  * live REPL/editor state, and never calls the parser/commit pipeline.
  *
  * The companion guard `check-color-picker-ui-isolation.sh` enforces
- * that surface — anything mutating must live on the peer
+ * that surface - anything mutating must live on the peer
  * (color_picker_state.c) or another module the controller routes to.
  */
 #include "ui/subsystems/color_picker.h"

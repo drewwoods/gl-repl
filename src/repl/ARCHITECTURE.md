@@ -1,4 +1,4 @@
-# `src/repl` — Architecture (Draft)
+# `src/repl` - Architecture (Draft)
 
 > The deep companion to [`README.md`](README.md). The README is the
 > one-screen orientation ("what a REPL pipeline is, what files exist");
@@ -9,12 +9,12 @@
 >
 > Whole-tree context lives in [`../../docs/MODULES.md`](../../docs/MODULES.md)
 > (ownership map) and [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
-> (per-frame app narrative). This file never assumes you've read those —
+> (per-frame app narrative). This file never assumes you've read those -
 > it describes `src/repl` as a self-contained interpreter.
 >
 > To *add* a command or new REPL syntax, see the step-by-step checklist and
 > its structured-syntax companion in
-> [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) — *Adding A New Command* and
+> [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) - *Adding A New Command* and
 > *Adding New REPL Commands*. This file is the why/how-it-works; those are the
 > how-to.
 
@@ -23,8 +23,8 @@
 ## 1. The shape of the thing
 
 `src/repl` is an **interpreter pipeline** for a small domain-specific
-language. The language is a friendly subset of immediate-mode OpenGL —
-`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… — plus light control
+language. The language is a friendly subset of immediate-mode OpenGL -
+`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… - plus light control
 flow (`for`, `if`, `func0..func9`), scalar variables, and fixed scratch
 arrays. The "effects" at the end of the pipeline are live GL calls that
 draw geometry.
@@ -196,10 +196,10 @@ flowchart LR
 
 This is the core data structure. Read this section before anything else.
 
-### 3.1 [`GLCmd`](command.h#L122) — the universal command record
+### 3.1 [`GLCmd`](command.h#L122) - the universal command record
 
 A single [`GLCmd`](command.h#L122) ([`command.h`](command.h)) represents one command in *either* level.
-It is a **pure parse result** — it carries type, evaluated args, flags,
+It is a **pure parse result** - it carries type, evaluated args, flags,
 and provenance, but **no source text**. The per-line canonical text
 lives in the editor's buffer, not here. That omission is what keeps the
 pipeline editor-agnostic (and is what lets the standalone demo supply
@@ -215,7 +215,7 @@ typedef struct {
     int      is_auto;          // synthesized (e.g. auto-normal)
     int      has_vars;         // expr references vars → must re-evaluate from text
     union { … } payload;       // tagged on type: decl / assign / label / matrix
-    // provenance — see 3.3
+    // provenance - see 3.3
     int      src_cmd_idx, call_src_cmd_idx, root_call_src_cmd_idx;
     unsigned func_scope_mask;
     int      call_depth;
@@ -229,7 +229,7 @@ Two design notes worth internalizing:
   branches) stores its GL enums in `args[]` alongside numeric args.
   GLenums in use are `< 2^24`, so `(GLenum)args[i]` round-trips through
   float32 losslessly. The *absence* of the field is the
-  compiler-enforced invariant — no grep guard needed.
+  compiler-enforced invariant - no grep guard needed.
 - **`payload` is a tagged union** keyed on `type`: `payload.decl` for
   `CMD_VAR_DECLARE`, `payload.assign` for `CMD_VAR_ASSIGN`, `payload.label`
   for `CMD_LABEL`, and `payload.matrix` for `CMD_MULT_MATRIXF`; it is zeroed
@@ -239,13 +239,13 @@ Two design notes worth internalizing:
 
 [`CmdType`](command.h#L44) ordering is **append-stable**: switch dispatch in [`executor.c`](executor.c),
 [`flatten.c`](flatten.c), [`parser.c`](parser.c), and [`replay_annotations.c`](../subsystems/replay/replay_annotations.c) keys on these values,
-so a new command goes next to its relatives — never reorder existing
+so a new command goes next to its relatives - never reorder existing
 entries. [`command.h`](command.h) also exposes the *control-flow taxonomy* as inline
 predicates (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`,
 `repl_cmd_is_block_head/_end`, `repl_cmd_is_glut_solid`,
 `repl_cmd_starts_geometry_emit`, `repl_cmd_consumes_current_color`).
 These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L153) in [`command_spec.h`](command_spec.h),
-which is the *visual* (syntax-highlight) taxonomy — don't fold one
+which is the *visual* (syntax-highlight) taxonomy - don't fold one
 through the other.
 
 ### 3.2 Source array vs. flat array
@@ -260,7 +260,7 @@ through the other.
 
 A `for(i, 0, 4) { glVertex3f(i,0,0) }` is **three** source commands
 (`CMD_FOR_BEGIN` / body / `CMD_FOR_END`) but **four** flat commands (one
-`CMD_VERTEX3F` per iteration). The 8192 flat cap is the real budget —
+`CMD_VERTEX3F` per iteration). The 8192 flat cap is the real budget -
 example authors hoist loop-invariant work to stay under it.
 
 ### 3.3 Provenance: mapping flat → source
@@ -269,12 +269,12 @@ Each flat command remembers where it came from so cursor highlighting,
 guides, replay, and cost attribution can map a flat command back to the
 line that produced it:
 
-- `src_cmd_idx` — the owning *source* line.
-- `call_src_cmd_idx` — the immediate call site that expanded it.
-- `root_call_src_cmd_idx` — the outermost call site in nested expansion.
-- `func_scope_mask` — bitset of `funcN` scopes active at flatten time
+- `src_cmd_idx` - the owning *source* line.
+- `call_src_cmd_idx` - the immediate call site that expanded it.
+- `root_call_src_cmd_idx` - the outermost call site in nested expansion.
+- `func_scope_mask` - bitset of `funcN` scopes active at flatten time
   (a *set*, so it can't count repeated recursive entries of one slot).
-- `call_depth` — every call frame counted (so recursion depth *is*
+- `call_depth` - every call frame counted (so recursion depth *is*
   visible, unlike the mask).
 
 [`flatten_query.c`](flatten_query.c) reads these to answer "how much of the flat budget is
@@ -300,12 +300,12 @@ typedef struct {
 
 The re-evaluation itself happens at *flatten* time, not execution time:
 each re-flatten evaluates a `has_vars` command's argument expressions with
-the loop / call bindings live on its own walk — that's how `glVertex3f(i,
+the loop / call bindings live on its own walk - that's how `glVertex3f(i,
 sin(t), 0)` inside a loop gets both the right `i` (per unrolled iteration)
 and the right `t` (live each frame, because a playing `t` re-flattens per
-frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
+frame - §3.5, §13.2). The executor consumes the baked `args[]` untouched
 (§5.3). The stored snapshot array serves consumers that must reconstruct a
-flat command's scope after the fact — replay's value-tracing annotations
+flat command's scope after the fact - replay's value-tracing annotations
 read it to display per-instance bindings. The separate `active_loops` list is
 dynamic ancestry rather than lexical scope: it follows calls so a loop header
 can still show its iterator while replay is executing in a callee, without
@@ -331,16 +331,16 @@ feeding an assignment whose resolved target is a local is reported structural
 Frame flow is gated by a full-dirty flag plus a *value-change* channel, both on
 [`ReplFlatProgramState`](state_views.h#L52) ([`state_views.h`](state_views.h)):
 
-- `ReplDocumentState.normals_dirty` — source-level auto-normals need a
+- `ReplDocumentState.normals_dirty` - source-level auto-normals need a
   rebuild.
-- `ReplDocumentState.source_uses_time` / `_dirty` — lazy whole-source scan for
+- `ReplDocumentState.source_uses_time` / `_dirty` - lazy whole-source scan for
   real `t` identifier references. It no longer gates the flat-program dirty
   decision (see below); it now feeds only the *blur-axis* choice (does the
   scene animate on `t` at all, §Accumulation Motion Blur).
-- `ReplFlatProgramState.dirty` — the flat program is stale and needs a full
+- `ReplFlatProgramState.dirty` - the flat program is stale and needs a full
   re-flatten (source edits, declare/undeclare, structural value changes).
 - `ReplFlatProgramState.args_dirty_mask` / `structural_dep_mask` /
-  `value_dep_mask` / `rebake_ok` — the phase-3 dependency-routing state. Each
+  `value_dep_mask` / `rebake_ok` - the phase-3 dependency-routing state. Each
   full flatten records, per predef root, which roots can change flat-stream
   *topology* (`structural`) versus only baked *values* (`value`), and whether
   every `has_vars` command has compiled programs (`rebake_ok`).
@@ -361,7 +361,7 @@ otherwise                      -> no flat work (root unused by this program)
 
 At frame top the controller re-flattens when `dirty` is set, otherwise re-bakes
 in place when `args_dirty_mask` is non-empty (§Phase-3b rebake), otherwise does
-nothing. A full flatten always clears `args_dirty_mask` — it subsumes any
+nothing. A full flatten always clears `args_dirty_mask` - it subsumes any
 pending value dirt. The source-uses-time cache is still refreshed lazily on the
 next time query, for the blur-axis use.
 
@@ -404,18 +404,18 @@ absolute and machine-checked:
 
 The compiler reads everything it needs from a [`ReplCompileContext`](compile.h#L178)
 snapshot (current cmds, edit line, source-scope view, predef table,
-func aliases) — it never reaches into REPL globals. Build one with
+func aliases) - it never reaches into REPL globals. Build one with
 `repl_compile_context_from_live(edit_line_idx)`; the caller supplies the
 cursor because pipeline code does not call editor accessors.
 
 [`apply.c`](apply.c) is the dual. [`repl_apply_compiled_change()`](apply.h#L74) mutates the
-REPL runtime command array **only** — it does not touch source text,
+REPL runtime command array **only** - it does not touch source text,
 status, undo, predef registrations, or aliases. Those cascades are
 separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
 `repl_apply_alias_ops`) so the orchestrator can sequence them correctly
 relative to undo capture.
 
-### 4.2 [`ReplCompiledChange`](compile.h#L130) — the descriptor
+### 4.2 [`ReplCompiledChange`](compile.h#L130) - the descriptor
 
 A compiled change ([`compile.h`](compile.h)) is a *source-command-level* plan, not a
 flat program. Its `kind` selects the meaningful fields:
@@ -430,15 +430,15 @@ flat program. Its `kind` selects the meaningful fields:
 
 Beyond the source edit it carries replayable side-effect lists:
 
-- `predef_ops[]` — `DECLARE` / `UNDECLARE` / `SET_VALUE` against the
+- `predef_ops[]` - `DECLARE` / `UNDECLARE` / `SET_VALUE` against the
   variable table. Apply runs `UNDECLARE`s first and cascades
   `CMD_VAR_ASSIGN.var_idx` compaction when a slot is freed.
-- `scratch_ops[]` — writes to `A`/`B`/`C[]`.
-- `alias_op` — a pending `funcN` alias publish.
+- `scratch_ops[]` - writes to `A`/`B`/`C[]`.
+- `alias_op` - a pending `funcN` alias publish.
 - An optional **pre-insert delete** (`delete_pos`/`delete_count`) lets a
   single atomic plan express "delete a range, then insert at a new
   position" (used by block comment-toggle). `pos` is in *post-delete*
-  coordinates — compile does that math so apply doesn't.
+  coordinates - compile does that math so apply doesn't.
 
 This descriptor is the seam that decouples validation from mutation:
 tests and the demo can compile-and-inspect without ever mutating state.
@@ -457,7 +457,7 @@ or `float x;` parses as an assignment to an identifier named `float`.
 `if_branch` **must** precede `close_brace`, or `} else ...` lines are
 consumed as plain block closes before the branch-separator grammar sees
 them.
-`NO_CHANGE` from all handlers means "not a statement I own" — the caller
+`NO_CHANGE` from all handlers means "not a statement I own" - the caller
 falls through to the generic GL [`parser.c`](parser.c).
 
 Block constructs share a **kernel** (`repl_compile_*_kernel`) between two
@@ -491,14 +491,14 @@ Lean source loader             (src/repl/load.c)
 comment injector, and tests call [`repl_load_apply_line()`](load.h#L78), which picks an
 insertion index, compiles the line, and applies it without touching any
 editor input widget. Keeping it separate from [`compile.c`](compile.c) preserves the
-purity boundary — [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
+purity boundary - [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
 apply orchestration.
 
 [`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L122) array
 mechanics (insert/replace/delete/load, range normalization, capacity
 checks). It owns array shifting and bounds; callers own parsing, undo,
 variable registration, and cursor policy. Cursor shifting is opt-in per
-call via `ReplStoreMutOpts.cursor_inout` — the store never holds a cursor
+call via `ReplStoreMutOpts.cursor_inout` - the store never holds a cursor
 pointer.
 
 ---
@@ -525,7 +525,7 @@ normal (magnitude = 2x area, so the average is area-weighted) to every one of
 its own vertices, coincident positions within the block are welded so a corner
 repeated as several `glVertex3f` lines shades as one, then each sum is
 normalized. The weld matches positions **exactly**, on the float bit patterns
-(±0 canonicalized), through a per-block open-addressed table — the coordinates
+(±0 canonicalized), through a per-block open-addressed table - the coordinates
 are parsed source literals, so the same corner written the same way is bit-equal,
 and exactness is what keeps the pass linear instead of an O(nv²) tolerance sweep
 that a large unrolled mesh could not afford. A position that matches nothing
@@ -536,20 +536,20 @@ Tessellator contours are a third walk, entered on `CMD_TESS_BEGIN_CONTOUR`.
 They get **one** `is_auto` `CMD_TESS_NORMAL` at the top of the contour, not one
 per `CMD_TESS_VERTEX`: GLU re-triangulates the contour into faces with no 1:1
 correspondence to the `gluVertex` rows, so the contour is the only unit a
-synthesized normal can describe — which is also why `REPL_AUTONORMAL_SMOOTH`
+synthesized normal can describe - which is also why `REPL_AUTONORMAL_SMOOTH`
 routes here unchanged (a contour is planar, so averaging within it returns the
 contour normal). The normal comes from Newell's method over every edge rather
 than a cross product of the first three vertices, because a contour is an
 arbitrary polygon whose leading vertices may be collinear or locally concave;
 the immediate-mode `GL_POLYGON` case deliberately keeps its first-three cross
 product so existing scenes' normals do not move. A hand-written `gluNormal`
-anywhere in the contour suppresses the pass for that whole contour. The two passes stay separate functions — the face walk leans on
+anywhere in the contour suppresses the pass for that whole contour. The two passes stay separate functions - the face walk leans on
 per-primitive "which vertex owns this face" rules that stop meaning anything
 once a vertex can hold several faces. Both modes emit one normal row per
 vertex, so switching modes rewrites the existing `is_auto` rows in place
 rather than inserting a second set.
 
-### 5.2 Flatten — lowering source to flat
+### 5.2 Flatten - lowering source to flat
 
 [`repl_flatten_program()`](flatten.h#L141) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
@@ -557,14 +557,14 @@ flat array:
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
   the body each iteration with the loop var bound. The iterator is prepended to
   a *fresh* scope array per nesting level, and the outer entries are copied back
-  out after each pass — without that, a local accumulated inside the loop would
+  out after each pass - without that, a local accumulated inside the loop would
   reset every iteration;
 - **function calls** (`CMD_CALL`) inline the matching `CMD_FUNC_DEF`
   body into a **lexical** frame: the callee's parameters bound to the actual
   args (evaluated in the caller, before the frame exists), then the callee's own
-  `float` declarations at `0.0f`. Nothing of the caller's scope is copied in —
+  `float` declarations at `0.0f`. Nothing of the caller's scope is copied in -
   a caller local must not hide a global the callee reads, which is what the
-  exported C would do — and the frame is never copied back, so recursion is
+  exported C would do - and the frame is never copied back, so recursion is
   isolated by construction;
 - **if-blocks** evaluate the `if` condition, then same-depth
   `CMD_ELSE_IF` separators in source order, then the optional
@@ -572,8 +572,8 @@ flat array:
 
 Expansion is recursive and **bounded**:
 
-- `MAX_FLATTEN_CALL_DEPTH = 64` — recursion depth ceiling.
-- `MAX_FLATTEN_VISIT_BUDGET = 200000` — total command visits, so one
+- `MAX_FLATTEN_CALL_DEPTH = 64` - recursion depth ceiling.
+- `MAX_FLATTEN_VISIT_BUDGET = 200000` - total command visits, so one
   runaway loop can't hang the frame.
 
 On overflow it returns `ok = 0` with a status message and leaves the
@@ -613,12 +613,12 @@ workspaces. Its allocation is capped by `REPL_EXPR_CACHE_MAX_BYTES` (16 MiB by
 default), and a warm evaluation allocates nothing. Each source line is in one
 of three externally visible states:
 
-- **EMPTY** — not attempted since the last invalidation. The next text/direct
+- **EMPTY** - not attempted since the last invalidation. The next text/direct
   visit installs a capture sink and compiles the exact expression spans that
   visit consumes.
-- **READY** — all captured programs for the line compiled; later full
+- **READY** - all captured programs for the line compiled; later full
   flattens and eligible rebakes use them directly.
-- **FAILED** — parsing, compilation, capture, or the allocation cap failed.
+- **FAILED** - parsing, compilation, capture, or the allocation cap failed.
   Full flatten keeps using the direct/text fallback for that line. Rebake never
   guesses from a FAILED/stale line; it escalates through the refresh boundary
   to a full flatten.
@@ -651,7 +651,7 @@ A scalar assignment resolves its target *lexically* on every flatten visit
 rather than trusting the `var_idx` frozen onto the source command at commit
 time. `var_idx` is a storage hint, not the authority: inserting a legal local
 over an existing global has to retarget older assignment rows without rewriting
-them. The first name match in the ordered scope array decides — LOCAL writes the
+them. The first name match in the ordered scope array decides - LOCAL writes the
 frame slot and its dep mask, PARAM or LOOP fails the flatten defensively (the
 edit guards exist to keep that state unreachable), and no scoped match keeps the
 predef path. When the resolved target is a local, the RHS dependencies are
@@ -659,7 +659,7 @@ reported **structural** (§3.4), so any predef change that can reach a local
 forces a full reflatten rather than a value-only rebake.
 
 Both halves of that resolution are made pay-for-use, because it runs per
-assignment per visit — grass pays it 3645 times per flatten:
+assignment per visit - grass pays it 3645 times per flatten:
 
 - **The scan runs only inside a frame that binds a local.** `flatten_call` is
   the only place a LOCAL binding enters a frame, so it computes
@@ -667,15 +667,15 @@ assignment per visit — grass pays it 3645 times per flatten:
   loops and if-blocks inherit it (they add LOOP bindings and nothing else).
   With no LOCAL in the array the resolution provably yields "no scoped match",
   so the persisted `var_idx` is already the answer. Release and debug take the
-  same branch — `GLR_DEBUG_CHECKS` builds additionally run the full resolution
+  same branch - `GLR_DEBUG_CHECKS` builds additionally run the full resolution
   on the skipped path to keep looking for the unreachable PARAM/LOOP target and
   for a `frame_has_locals` that has drifted from the frame it summarises.
 - **The LHS name itself is memoised per source row** on the expression cache
   (`repl_expr_cache_line_lhs_*`), since it is a pure function of the row's text
   and inherits that cache's single invalidation seam
   (`repl_state_mark_source_dirty`). The memo is deliberately independent of the
-  row's program state — the name is well defined on a cold, failed, or
-  never-compiled row — and the `force_reparse` differential reference never
+  row's program state - the name is well defined on a cold, failed, or
+  never-compiled row - and the `force_reparse` differential reference never
   reads it.
 
 #### Disabling the expression cache
@@ -700,19 +700,19 @@ the engine is reusable: tests and replay tools flatten into a *temporary*
 buffer and pass a [`FlatProgramView`](flatten.h#L58) over it, never touching
 the live arrays.
 
-### 5.3 Execute — flat program to GL
+### 5.3 Execute - flat program to GL
 
 [`repl_execute_program()`](executor.h#L199) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Baked args only.** Every command renders from its flatten-baked
-  `args[]` — the executor never evaluates expression text. `sin(t*speed)`
+  `args[]` - the executor never evaluates expression text. `sin(t*speed)`
   animates because a playing `t` marks the flat program dirty and the
   per-frame re-flatten re-bakes `has_vars` args (§3.5, §13.2), not because
   of any execute-time re-evaluation.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
-  geometry by transform depth. The GL matrix stack — not [`GLCmd`](command.h#L122) — is the
+  geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L122) - is the
   canonical transform truth at execution time.
 - **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
   the replay program counter when replay is active) so only commands up
@@ -738,7 +738,7 @@ emitting GL. Key behaviors:
 
 ## 6. Runtime state and ownership
 
-### 6.1 [`ReplRuntimeState`](state.h#L18) — the owned slices
+### 6.1 [`ReplRuntimeState`](state.h#L18) - the owned slices
 
 [`state.c`](state.c) owns the process-global REPL runtime, exposed as a struct of
 typed slices ([`state_views.h`](state_views.h)):
@@ -753,22 +753,22 @@ typed slices ([`state_views.h`](state_views.h)):
 | [`ReplImportExportState`](state_views.h#L149) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
-slices — and nothing else (no editor, UI, replay, or app presentation
+slices - and nothing else (no editor, UI, replay, or app presentation
 state).
 
 ### 6.2 The views/owners split
 
 State access is intentionally two-tiered:
 
-- **[`state_views.h`](state_views.h)** — read-only, by-value getters
+- **[`state_views.h`](state_views.h)** - read-only, by-value getters
   (`repl_state_document_cmds()`, `repl_state_variables()`, …). Safe to
   include from `render3d_*` and `ui_*`.
-- **[`state_owners.h`](state_owners.h)** — mutable `_mut()` / `_writable()`
+- **[`state_owners.h`](state_owners.h)** - mutable `_mut()` / `_writable()`
   owner accessors, setters, and reset helpers. For owner modules and the
   controller only; broad command-array mutators are intentionally absent.
 
 [`repl_state_ensure_sentinels()`](state_owners.h#L132) patches the non-zero defaults (most
-importantly the array capacities — under raw BSS zero-fill they'd be 0
+importantly the array capacities - under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
 
@@ -776,7 +776,7 @@ and reject every insert). It's idempotent and matters for CLI paths like
 
 The render slice is a tail, not the whole picture. Dimensional light data
 (positions/colors/eye-space), and policy toggles (MSAA, line smoothing,
-accumulation AA, grid/axes visibility) are **app-owned** in `glr_state` —
+accumulation AA, grid/axes visibility) are **app-owned** in `glr_state` -
 the REPL only tracks *which light slots the program enabled* as a
 bitmask. Likewise the **edit-line cursor** is editor-owned; pipeline code
 receives it as a parameter or through the host bridge (§7), never from a
@@ -786,7 +786,7 @@ REPL accessor. These exclusions are enforced by guards (§10).
 
 ## 7. The host-effects bridge
 
-`src/repl` must not link the editor, UI, or app shell — but loader,
+`src/repl` must not link the editor, UI, or app shell - but loader,
 scene-switch, snippet-import, and replay code legitimately need host
 actions (clear the input buffer, scroll the panel, set a status message,
 read/write the cursor). The bridge ([`host_effects.h`](host_effects.h)) is how it asks for
@@ -794,7 +794,7 @@ those *by purpose* without naming an implementation.
 
 The controller installs a [`ReplHostEffects`](host_effects.h#L38) table once at startup; REPL
 code calls dispatchers (`repl_dispatch_*`, `repl_set_status`,
-`repl_set_status_error`). **Any unset callback is a no-op** — which is
+`repl_set_status_error`). **Any unset callback is a no-op** - which is
 exactly why pure REPL tests and the standalone demo "just work" with no
 host: status messages go nowhere, `edit_line_get` returns 0,
 `edit_line_set` does nothing.
@@ -807,7 +807,7 @@ completion clear/update, input read, and time-playing toggle.
 The export path uses the same pattern with dedicated bridges
 ([`ReplExportLightBridge`](export.h#L175), cfg/camera bridges) so [`export.c`](export.c) can emit
 live light/config/camera state without including any render3d or app
-header — verified by `check-repl-export-via-bridge`.
+header - verified by `check-repl-export-via-bridge`.
 
 ---
 
@@ -827,11 +827,11 @@ C:     sinf(t), powf(2,3),  for (float i=0; i<10; i+=0.5) { … }   ← auto-tra
 Two distinct, independent capacity limits live in [`config.h`](../../config.h) (the long
 rationale is in [`eval.h`](eval.h)):
 
-- **`MAX_PREDEF_VARS = 32`** — global `float x;` slots the user can
+- **`MAX_PREDEF_VARS = 32`** - global `float x;` slots the user can
   declare at once. One is reserved for built-in `t`, so 31 user-declarable
   slots remain; the float-decl compiler rejects declarations that would
   exceed the 32-slot table with "variable table full (max 32)".
-- **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
+- **`MAX_EXPR_VARS = 32`** - the lexical scope size for *one* expression
   parse: visible loop iterators, function parameters, and function-scoped
   locals. Predefined globals are
   supplied separately through [`ReplPredefView`](eval.h#L179) / [`ExprCtx`](eval.h#L143), so a full predef
@@ -842,7 +842,7 @@ rationale is in [`eval.h`](eval.h)):
 **Function-scoped locals.** A `float x;` declaration *inside* a function body
 declares a local rather than a predef. The `CMD_VAR_DECLARE` row carries
 `var_idx == REPL_VAR_IDX_LOCAL`, `build_decl_predef_ops` emits nothing, and the
-binding exists only for the duration of one flattened call — so the variable
+binding exists only for the duration of one flattened call - so the variable
 panel, `@tune` knobs, the replay baseline, the export prologue and the
 slot-shift cascade, all keyed on predef slots, never see it. `static float x;`
 selects the global path from *any* cursor position, so the keyword rather than
@@ -850,7 +850,7 @@ the cursor chooses storage, and canonical text (`float` vs `static float`)
 records the choice.
 
 The three binder kinds ride the ordered scope array as a parallel
-[`ReplVisibleVarKind`](visible_vars.h#L20) array — LOOP, PARAM, LOCAL. That tag
+[`ReplVisibleVarKind`](visible_vars.h#L20) array - LOOP, PARAM, LOCAL. That tag
 is not a diagnostic detail: a scalar assignment resolves its target against the
 same array and only a LOCAL is writable, which is what keeps a parameter or a
 loop iterator constant even when it shadows a writable outer binding.
@@ -858,7 +858,7 @@ loop iterator constant even when it shadows a writable outer binding.
 Name collisions follow C rather than a blanket ban. Locals hoist to the
 function-body top, the same scope as the parameter list, so a local colliding
 with a parameter or with another local of that body is a *redefinition* and is
-rejected; shadowing an outer binding — a global, or an enclosing loop iterator —
+rejected; shadowing an outer binding - a global, or an enclosing loop iterator -
 is legal and resolves innermost-first, which [`eval_primary`](eval.c) already
 does by searching `ctx->vars` before the predef table. Capacity is a
 whole-function property, `params + locals + deepest loop nesting <=
@@ -875,7 +875,7 @@ ordinary expression syntax.
 [`state_owners.h`](state_owners.h) advance it (`repl_advance_time`, `+= 1/60 s`/frame when
 playing), reset it, or set it (`--time`/`GLR_TIME`). The transient
 variant (`repl_state_time_set_transient`) overrides only the `t` binding
-without disturbing the free-running clock — used by motion-blur sub-frame
+without disturbing the free-running clock - used by motion-blur sub-frame
 sampling, where the caller re-flattens at the sub-step `t` and restores
 afterward.
 
@@ -895,21 +895,21 @@ it would take to narrow that further.
 | `for(var, start, end[, step]) { … }` | `CMD_FOR_BEGIN` / body / `CMD_FOR_END` | body repeated per iteration, var bound |
 | `funcN(params) { … }` / aliased `NAME { … }` | `CMD_FUNC_DEF` / body / `CMD_FUNC_END` | inlined at each `CMD_CALL`, params bound |
 | `if(expr) { … } else if(expr) { … } else { … }` | `CMD_IF_BEGIN` / arm bodies split by `CMD_ELSE_IF` / `CMD_ELSE` / `CMD_IF_END` | first true arm emitted; optional else arm emitted as fallback |
-| `break;` / `continue;` | `CMD_BREAK` / `CMD_CONTINUE` | nothing — a flatten-time signal consumed by the innermost enclosing `flatten_for_loop` |
+| `break;` / `continue;` | `CMD_BREAK` / `CMD_CONTINUE` | nothing - a flatten-time signal consumed by the innermost enclosing `flatten_for_loop` |
 | `:name` / `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
 
 **Loop jumps** are the one construct that flattens to nothing at all.
 `CMD_BREAK` / `CMD_CONTINUE` raise `FlattenContext.loop_signal` and return;
 every walk that can sit between the statement and its loop unwinds on it
 (`flatten_range` returns, `flatten_if_block` returns through it), and the
-innermost `flatten_for_loop` consumes it — *after* copying loop-body variable
+innermost `flatten_for_loop` consumes it - *after* copying loop-body variable
 writes back, so an assignment that ran before the break is not lost.
 `flatten_call` clears the signal at the frame boundary and fails the frame:
 a callee's break must not reach the caller's loop, which is also why the
 parser rejects a `break` with no loop in the same function body
 (`repl_source_scope_in_loop_at`). Because they never reach the flat program,
 the executor's arms are no-ops, replay never steps them, and no dep
-bookkeeping is needed — the guarding `if` condition is already noted
+bookkeeping is needed - the guarding `if` condition is already noted
 structural, which is what forces a re-flatten rather than a value-only
 rebake when the guard's inputs change.
 
@@ -917,7 +917,7 @@ rebake when the guard's inputs change.
 the load-bearing identity stored in `args[0]`; a user-chosen alias
 (`drawCube`) is a display + parser-recognition layer on top, carried
 per-scene in `ReplVariableState.func_aliases`. The compiler resolves an
-alias to a *pending* `alias_op` and never writes the table — apply
+alias to a *pending* `alias_op` and never writes the table - apply
 publishes it after the source mutation succeeds, so a failed insert can't
 strand an alias pointing at a nonexistent row.
 
@@ -934,24 +934,24 @@ executor and the replay-annotation walker share `REPL_GOTO_LOOP_LIMIT`
 editor state, UI state, replay *runtime* state (a `src/subsystems/` peer),
 or live input dispatch. The only live GL is [`executor.c`](executor.c).
 
-These boundaries are not just convention — they're ratcheted by guards in
+These boundaries are not just convention - they're ratcheted by guards in
 `make check-state-ownership` (and a couple that run standalone):
 
-- `check-repl-export-via-bridge` — [`export.c`](export.c) reaches host data only
+- `check-repl-export-via-bridge` - [`export.c`](export.c) reaches host data only
   through bridges, never via `render3d_*`/`glr_*` includes.
-- `check-repl-state-no-glr-state` — REPL pipeline TUs don't include
+- `check-repl-state-no-glr-state` - REPL pipeline TUs don't include
   [`glr_state.h`](../app/glr_state.h).
-- `check-include-style` — project-local headers use `""`, vendored/system
+- `check-include-style` - project-local headers use `""`, vendored/system
   use `<>`.
 - `check-duplicate-api-decls`, `check-keymap-no-dup`,
-  `check-trailing-whitespace` — hygiene ratchets.
+  `check-trailing-whitespace` - hygiene ratchets.
 - The whole layer compiles `-std=c99` (`make check-c99`); use
   `STATIC_ASSERT` (never raw `_Static_assert`) and prototyped function
   pointer typedefs.
 
 The structural payoff is provable: the standalone demo
 ([`tools/repl_demo/`](../../tools/repl_demo/)) links *only* this
-pipeline — parse → command store → flatten → execute — with no editor,
+pipeline - parse → command store → flatten → execute - with no editor,
 controller, or UI in the link set, and an empty [`stubs.c`](../../tools/repl_demo/stubs.c). If the
 pipeline ever grew a hidden dependency on a peer layer, the demo would
 fail to link. See the README's "demo" section for what it exercises.
@@ -971,7 +971,7 @@ make repl-demo USE_GL_STUBS=1   # headless; no GL dev libs needed
 ```
 
 The program (`SAMPLE_TRACE` in [`tools/repl_demo/repl_demo.c`](../../tools/repl_demo/repl_demo.c)) is chosen
-to touch every part of the pipeline — a declaration, an assignment, a
+to touch every part of the pipeline - a declaration, an assignment, a
 typed-as-text loop, and a `has_vars` body:
 
 ```c
@@ -1066,9 +1066,9 @@ flowchart LR
     class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12 animateF
 ```
 
-### Stage 1 — text → compile → apply  (`repl_load_apply_line`)
+### Stage 1 - text → compile → apply  (`repl_load_apply_line`)
 
-Each line is fed to [`repl_load_apply_line()`](load.h#L78) ([`load.c`](load.c)) — the same
+Each line is fed to [`repl_load_apply_line()`](load.h#L78) ([`load.c`](load.c)) - the same
 non-editor entry the example loader and file importer use (§4.4). For
 each line it builds a [`ReplCompileContext`](compile.h#L178), runs `repl_compile_dispatch`
 (falling back to the GL parser), and applies the resulting
@@ -1086,7 +1086,7 @@ The `[t=… r=…]` readout *is* the predef-variable side-effects (§4.2)
 landing: `r` appears after the decl, gets `1.50` after the assignment.
 This is the compile-is-pure / apply-mutates seam (§4.1) running live.
 
-### Stage 2 — the source program  (`repl_state_document_cmds`)
+### Stage 2 - the source program  (`repl_state_document_cmds`)
 
 The nine source commands, control flow still folded:
 
@@ -1100,10 +1100,10 @@ idx type              has_vars
 The loop is three commands (§3.2); the body carries `has_vars` (§3.1) so
 each re-flatten knows to re-evaluate it from text (§5.2).
 
-### Stage 3 — flatten  (`repl_flatten_commands`)
+### Stage 3 - flatten  (`repl_flatten_commands`)
 
 [`repl_flatten_program()`](flatten.h#L141) (§5.2) lowers the nine source commands to eleven
-flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
+flat ones - the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
 ```
@@ -1115,13 +1115,13 @@ idx type           src_idx depth local-var snapshot
 ```
 
 All six vertices map back to source line 6 (`src_idx`), and each froze
-its own `i` binding. `r` and `t` are *not* in the snapshot — they resolve
+its own `i` binding. `r` and `t` are *not* in the snapshot - they resolve
 live from the predef table at evaluation time.
 
-### Stage 4 — the frame loop  (re-flatten per frame)
+### Stage 4 - the frame loop  (re-flatten per frame)
 
 Bump `t`, re-flatten, and the `has_vars` body re-bakes against the live
-table (§5.2/§8) — the first vertex moves, i.e. the ring rotates:
+table (§5.2/§8) - the first vertex moves, i.e. the ring rotates:
 
 ```
 t=0.00   glVertex3f(  0.000,   1.500,   0.000)
@@ -1133,12 +1133,12 @@ In the live app [`executor.c`](executor.c) walks this flat program emitting the 
 calls (§5.3). `repl_demo` itself never does: it is headless in every build,
 and stage 4 above reads the *baked* flat args rather than executing. To see
 the same parse → flatten → execute path drive a real GL context outside the
-app, run [`repl_live_demo`](../../tools/repl_live_demo/README.md) — same pipeline, plus a
+app, run [`repl_live_demo`](../../tools/repl_live_demo/README.md) - same pipeline, plus a
 GLUT window, a file watcher, and the variable panel.
 
 The demo deliberately leaves the host-effects bridge (§7) mostly unset:
 status messages no-op, the cursor is a file-local int. That's the proof
-the pipeline needs no host — [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty, and
+the pipeline needs no host - [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty, and
 `nm repl_demo` shows zero `editor_*` / `glr_ctrl_*` / `ui_*` symbols.
 
 ### What this example represents
@@ -1204,7 +1204,7 @@ grouping is the mental model.)
 [`export_prologue.c`](export_prologue.c) (globals/predef prologue) ·
 [`export_display.c`](export_display.c) (the `display()` body) ·
 [`export_cmd_writer.c`](export_cmd_writer.c) (per-command C emission) ·
-[`export_glr.c`](export_glr.c) (the `.glr` authoring format — no C scaffold) ·
+[`export_glr.c`](export_glr.c) (the `.glr` authoring format - no C scaffold) ·
 [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h),
 [`export_format_shared.h`](export_format_shared.h)
 
@@ -1228,9 +1228,9 @@ grouping is the mental model.)
 
 Design rationale + future work. This explains why an animated `t` re-flattens
 the whole program every frame, what that buys, and what it would take to stop
-paying for it. A staged implementation plan for both escape routes — the
+paying for it. A staged implementation plan for both escape routes - the
 structure-stable fast path (§13.5) and the control-flow-interpreting VM
-(§13.6) — lives in
+(§13.6) - lives in
 [docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
 
 ### 13.1 The cost, and why the flat-command cap exists
@@ -1238,12 +1238,12 @@ structure-stable fast path (§13.5) and the control-flow-interpreting VM
 The flat program is both **rebuilt** (flatten + assignment evaluation) and
 **walked** (execute) every frame, and both costs scale with the flat command
 count. In practice flatten + variable assignment can run **~8 ms per frame**
-for a large program — over half of a 60 Hz budget. `MAX_FLAT_COMMANDS = 8192`,
+for a large program - over half of a 60 Hz budget. `MAX_FLAT_COMMANDS = 8192`,
 the cap on the flat array, is the lever that bounds it: cap the materialized length
 and you cap the per-frame flatten *and* execute cost at once.
 `MAX_FLATTEN_VISIT_BUDGET = 200000` is the matching guard on flatten's own work
 so one runaway loop can't hang the rebuild. Example authors hoist
-loop-invariant work specifically to stay under the flat cap — the budget is real
+loop-invariant work specifically to stay under the flat cap - the budget is real
 because it is paid every frame.
 
 When expansion exceeds the flat-array capacity, flattening stops producing an
@@ -1261,48 +1261,48 @@ sets `flat_program.dirty = 1`, so the controller rebuilds the flat program. That
 is *required* because flatten is the only stage that resolves **program
 structure**, and structure can depend on `t`:
 
-- **loop bounds** — `for(i, 0, floor(t))` changes the iteration count, hence
+- **loop bounds** - `for(i, 0, floor(t))` changes the iteration count, hence
   the flat length;
-- **`if` / `else if` arm selection** — flatten emits only the taken arm and
+- **`if` / `else if` arm selection** - flatten emits only the taken arm and
   strips the markers (§9), so which body is present changes with the condition;
-- **function-call inlining** — call args that depend on `t` change the inlined
+- **function-call inlining** - call args that depend on `t` change the inlined
   body's local-var snapshots, and can feed loop bounds inside the callee.
 
 The executor cannot do any of these: it is a flat linear walker with no
 control-flow handling. (The dead `CMD_IF_BEGIN` walker was removed precisely
-because branch selection is a flatten-time concern — §9.)
+because branch selection is a flatten-time concern - §9.)
 
 ### 13.3 What re-flattening buys (the simplification)
 
 Re-flattening per frame is a deliberate trade of CPU for simplicity:
 
 - **The executor stays trivial.** It walks `flat_cmds[0..count)` emitting GL
-  straight from the baked `args[]` — no expression evaluation, no loop
+  straight from the baked `args[]` - no expression evaluation, no loop
   counter, no arm skip-scan, no call stack, no execute-time visit budget.
 - **The flat array is correct-by-construction each frame.** There is no
   incremental "patch the flat program when `t` changed" path to get wrong.
 - **One static bound governs per-frame cost.** Because the thing walked every
   frame *is* the materialized flat array, `MAX_FLAT_COMMANDS` is a single,
-  cheap-to-enforce cap — no dynamic emission accounting at execute time.
-- **Downstream consumers read the materialized array for free** — provenance
+  cheap-to-enforce cap - no dynamic emission accounting at execute time.
+- **Downstream consumers read the materialized array for free** - provenance
   (`src_cmd_idx`, `func_scope_mask`, …; §3.3), cursor-block highlight, replay
   PC clamping and fade batches, and `--flat-histogram` cost attribution all
   read a concrete array of resolved commands.
 
 ### 13.4 The redundancy worth noticing
 
-The executor never evaluates expression text — every command renders from the
+The executor never evaluates expression text - every command renders from the
 `args[]` baked by the most recent flatten (§5.3). So when `t` is live, the
 per-frame re-flatten is not an optimization detail; it is the **only**
 mechanism that animates `glVertex3f(sin(t), …)`, `glColor3f(t, …)`,
 `glRotatef(t, …)`. The redundancy is that the full re-flatten conflates two
 jobs, and for the *common* animation case only one of them is needed:
 
-- **Arg re-baking** — re-evaluating leaf `has_vars` expressions against the
+- **Arg re-baking** - re-evaluating leaf `has_vars` expressions against the
   live variable table. This is the part animation actually needs, and its
   inputs (the source line text, the per-command local-var snapshot §3.4, the
   live predef table) all survive from the previous flatten.
-- **Structure resolution** — loop unrolling, `if` / `else if` arm selection,
+- **Structure resolution** - loop unrolling, `if` / `else if` arm selection,
   call inlining, provenance stamping, and re-parsing every line (including
   ones with no variables at all). When `t` appears only in leaf positions,
   this recomputes a byte-identical structure every frame.
@@ -1316,7 +1316,7 @@ them).
 evaluated and baked at flatten time, and the executor deliberately does *not*
 re-evaluate `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` to avoid double-applying
 self-referential updates. Any scheme that skips the full flatten must still
-re-run assignments sequentially — see §13.5 and §13.6.)
+re-run assignments sequentially - see §13.5 and §13.6.)
 
 ### 13.5 Incremental win: a structure-stable fast path
 
@@ -1331,12 +1331,12 @@ sub-frame refreshes.
 
 Phase 3 adds a stricter structure-stability check **paired with an in-place arg
 re-bake pass**. (Skipping the re-flatten outright would
-freeze the animation: the executor consumes baked args and evaluates nothing —
-§13.4 — so something must still re-bake `has_vars` args each frame.)
+freeze the animation: the executor consumes baked args and evaluates nothing -
+§13.4 - so something must still re-bake `has_vars` args each frame.)
 
 - On a variable change (the `t` tick, or a slider drag), decide whether that
-  variable can reach a structural position — a loop bound, branch condition, or
-  a call arg — directly or transitively through assignments.
+  variable can reach a structural position - a loop bound, branch condition, or
+  a call arg - directly or transitively through assignments.
 - If it cannot, **don't re-flatten**; instead walk the *existing* flat array
   in program order, re-evaluating each `has_vars` command's args from its
   source line + its local-var snapshot (§3.4) and re-applying assignments
@@ -1354,8 +1354,8 @@ the classifier: it must be conservative (assignment chains, scratch arrays, and
 freezes an animation. A safe cut is a whole-program property computed once
 per edit (not per frame): re-flatten unless every `for` header, `if` /
 `else if` condition, and call-arg list is free of predef vars, scratch
-arrays, and `rand`/`rand2`. The worked plan — classifier rule, dirty-flag
-routing, the re-bake pass, and its differential test strategy — is Phase A of
+arrays, and `rand`/`rand2`. The worked plan - classifier rule, dirty-flag
+routing, the re-bake pass, and its differential test strategy - is Phase A of
 [docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
 
 ### 13.6 Bigger future work: a control-flow-interpreting executor
@@ -1366,7 +1366,7 @@ interprets control flow over a compiled-once stream:
 
 - **Keep loops / ifs / calls symbolic** in the compiled stream instead of
   unrolling and inlining them. Re-introduce the `if` / `else if` walker (the
-  one removed in §9) — keep the `CMD_IF_BEGIN` / `CMD_ELSE_IF` / `CMD_ELSE` /
+  one removed in §9) - keep the `CMD_IF_BEGIN` / `CMD_ELSE_IF` / `CMD_ELSE` /
   `CMD_IF_END` markers and skip-scan to the selected arm at execute time. Add a
   loop interpreter that re-evaluates the bound and threads a per-iteration
   variable scope, and a call frame for `funcN` inlining / recursion.
@@ -1377,13 +1377,13 @@ interprets control flow over a compiled-once stream:
   symbolic, the compiled program is short (a loop is a few instructions, not N
   copies), so `MAX_FLAT_COMMANDS` as a *storage* limit can relax sharply. But
   per-frame *work* is still O(emitted ops), so a dynamic per-frame
-  emission / visit budget must be checked during execution — the same shape as
+  emission / visit budget must be checked during execution - the same shape as
   today's `REPL_GOTO_LOOP_LIMIT` guard, with clamp + status on overflow
   (mirroring the current flatten-budget overflow handling).
 
 This is where the command-limit logic genuinely complicates, especially with
 `t` in loops: a bound like `for(i, 0, 1000*t)` grows without any source edit,
-so the runtime budget — not a static array length — becomes the thing that must
+so the runtime budget - not a static array length - becomes the thing that must
 clamp it and surface a diagnostic *mid-frame*.
 
 **Trade-off summary.** The VM design pays the flatten / analysis cost once per
@@ -1391,11 +1391,11 @@ edit instead of per frame (removing the ~8 ms for animation) and lets the
 storage limit relax because loops aren't materialized; per-frame cost drops to
 O(emitted GL ops), which is paid anyway. The price is real: control-flow
 complexity moves back into the executor, and every consumer that currently
-reads the materialized flat array — provenance / cursor highlight, replay PC
-and fade batches, `--flat-histogram` — needs a way to attribute work over a
+reads the materialized flat array - provenance / cursor highlight, replay PC
+and fade batches, `--flat-histogram` - needs a way to attribute work over a
 symbolic walk instead of a concrete array. The current design is the deliberate
 opposite bet: pay CPU every frame to keep the executor and all its consumers
-dumb and the cost model a single static cap. A staged design for this VM — with
+dumb and the cost model a single static cap. A staged design for this VM - with
 the "VM is the one flattener" shape, milestones, and per-consumer migration
-stories — is Phase B of
+stories - is Phase B of
 [docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).

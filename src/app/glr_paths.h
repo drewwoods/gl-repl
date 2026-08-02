@@ -26,7 +26,7 @@ const char *glr_paths_default_workspace_dir(void);
 /* Path the audio resume-state file should be written to / read from.
  * Plain GLR_AUDIO_STATE_FILE_NAME (working-directory relative) for a normal
  * dev run; inside the per-user data dir when the working directory is not
- * writable — the macOS .app case, where the CWD is "/". The user data dir is
+ * writable - the macOS .app case, where the CWD is "/". The user data dir is
  * created on demand. Returns a pointer to static storage. */
 const char *glr_paths_default_audio_state_file(void);
 

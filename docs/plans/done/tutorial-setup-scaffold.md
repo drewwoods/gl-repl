@@ -1,6 +1,6 @@
 # Tutorial Composition: Building On Prior Tutorials Without Boilerplate
 
-## Status — LANDED (2026-07-08)
+## Status - LANDED (2026-07-08)
 
 Option A shipped in commit `0a15b86d`: catalog setup scaffolds, locked setup
 rows, header/camera consumption, setup-label placement, validation, and the
@@ -9,8 +9,8 @@ contract that shipped.
 
 ## Problem
 
-Tutorials should be able to build on ideas an earlier tutorial taught —
-e.g. *draw a triangle* → *color interpolation* → *depth testing* —
+Tutorials should be able to build on ideas an earlier tutorial taught -
+e.g. *draw a triangle* → *color interpolation* → *depth testing* -
 without every later tutorial making the learner re-type (and the author
 re-narrate) the shared preamble. Before this plan, every tutorial
 started from an empty transient scene, so "builds on the triangle"
@@ -22,7 +22,7 @@ the decision.
 
 ## Options Considered
 
-### Option A — Preloaded setup lines on `TutorialEntry` (`.setup`)
+### Option A - Preloaded setup lines on `TutorialEntry` (`.setup`)
 
 A NULL-terminated `const char *const *setup` array of REPL source lines
 on the catalog entry, loaded at `tutorial_start` through
@@ -40,11 +40,11 @@ use), each loaded row locked. Steps then run against that scaffold.
   constraints, and a tutorial can start from a state no other tutorial
   produces.
 - **Anchor extension:** `STEP_AT` target labels may also resolve to
-  `:name` goto-label rows (`CMD_GOTO_LABEL` — existing REPL syntax)
+  `:name` goto-label rows (`CMD_GOTO_LABEL` - existing REPL syntax)
   in the preloaded scaffold, so label-targeted steps can splice
   commands *into* the scaffold, not just above earlier steps' rows.
 
-### Option B — Authoring-side sharing with step-block macros
+### Option B - Authoring-side sharing with step-block macros
 
 Shared step runs as C macros pasted into multiple tutorials' arrays
 (`#define STEPS_DRAW_TRIANGLE STEP_APPEND(...), ...`).
@@ -52,18 +52,18 @@ Shared step runs as C macros pasted into multiple tutorials' arrays
 - **Complexity: zero.** Works today, no runtime change.
 - **Flexibility: low for the actual goal.** Removes *author*
   boilerplate but the *learner* still re-types the shared steps in
-  every tutorial — it doesn't stop covering the same ground. Still
+  every tutorial - it doesn't stop covering the same ground. Still
   useful for genuinely-interactive shared runs, and it composes with
   any of the other options.
 
-### Option C — Prologue by reference (`.prologue = "First Triangle"`)
+### Option C - Prologue by reference (`.prologue = "First Triangle"`)
 
 At start, replay another tutorial's COMMAND steps programmatically
-(feed each `expected` — and its comment, as a locked comment — through
+(feed each `expected` - and its comment, as a locked comment - through
 the loader), then begin this tutorial's interactive steps. Could take a
 step range to "start at any point" in the referenced tutorial.
 
-- **Complexity: medium.** The replay loop is small — it is Option A
+- **Complexity: medium.** The replay loop is small - it is Option A
   deriving its setup from another entry's steps. The cost is semantics
   and validation: what to do with non-COMMAND prologue steps (skip
   REQUIRE/NOTE? apply SET's cfg? declare REQUIRE_VAR's variable?),
@@ -71,12 +71,12 @@ step range to "start at any point" in the referenced tutorial.
   `STEP_AT` can target prologue rows, cycle detection if prologues
   chain, and catalog validation of the composed program.
 - **Flexibility: high, with a coupling hazard.** Zero duplication, and
-  editing the base tutorial automatically updates every dependent —
+  editing the base tutorial automatically updates every dependent -
   which is also the risk: a pedagogical edit to A silently changes B's
   starting state and row numbering. The validator catches structural
   breakage but not "B's narration no longer matches what's on screen."
 
-### Option D — Start from a scene/example (`.scene = <example name>`)
+### Option D - Start from a scene/example (`.scene = <example name>`)
 
 Preload a named built-in example (or snippet file) into the transient
 scene using the existing example-loading path, headers included.
@@ -85,7 +85,7 @@ scene using the existing example-loading path, headers included.
   it into `tutorial_start` and deciding the locking policy.
 - **Flexibility: high in one dimension, awkward in another.** Scenes
   can contain things COMMAND steps can't express (loops, funcN bodies,
-  animation with `t`) — a richer scaffold than any replayed tutorial.
+  animation with `t`) - a richer scaffold than any replayed tutorial.
   But authoring splits across two catalogs (examples + tutorials) and
   the "builds on the previous tutorial" relationship becomes implicit.
 
@@ -111,10 +111,10 @@ build.
 
 Policy decisions (both settled):
 
-1. **Preloaded rows are locked** — consistent with instruction rows
+1. **Preloaded rows are locked** - consistent with instruction rows
    ("Tutorial line is read-only" on navigation), and it keeps the
    tutorial line-tracking bookkeeping safe from user edits.
-2. **Setup honors the example header vocabulary** — leading
+2. **Setup honors the example header vocabulary** - leading
    `// @cfg slug = value` lines and an optional 5-line `// camera`
    block are consumed the way examples consume them, so an existing
    example/scene body can be pasted verbatim as a tutorial scaffold.
@@ -143,7 +143,7 @@ Policy decisions (both settled):
   step count must fit the locked-line table
   (`TUTORIAL_LOCKED_LINE_MAX`, raised 64 → 128 since setup rows are
   locked too).
-- Catalog demonstration: **Color Interpolation** tutorial — setup
+- Catalog demonstration: **Color Interpolation** tutorial - setup
   preloads the flat triangle (one red vertex color), steps splice
   per-vertex `glColor3f` calls at setup goto-label anchors so the
   gradient appears without re-typing the triangle.

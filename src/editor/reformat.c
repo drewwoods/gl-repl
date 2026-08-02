@@ -3,8 +3,8 @@
  *
  * `repl_reformat_program()` (REPL pipeline) walks every command and
  * rewrites the editor-buffer line + GLCmd in canonical form. The
- * wrapper here saves/restores five fields — edit_line, insert_mode,
- * input buffer, input_len, cursor_pos — and refreshes the input via
+ * wrapper here saves/restores five fields - edit_line, insert_mode,
+ * input buffer, input_len, cursor_pos - and refreshes the input via
  * editor_load_line_to_input() when the user is not in insert mode.
  *
  * Not saved: selection, search, autocomplete, scroll, pending_newline,

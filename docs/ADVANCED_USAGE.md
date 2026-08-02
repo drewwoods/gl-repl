@@ -35,7 +35,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. Needs a display. |
 | `--export-ply-srgb` | With the above, decode vertex colors sRGB → linear for color-managed viewers. |
 | `--no-accum` | Disable the accumulation buffer (anti-aliasing + motion blur). |
-| `--accum` | Force the accumulation buffer on. Without either flag the feature auto-disables on renderers that emulate `glAccum` on the CPU — anything reporting Mesa / llvmpipe / softpipe / swrast, where each pass costs a full scene re-render *plus* a host-side read-add-write of the color buffer. Hardware renderers and the web build (gl4es accumulates in a real FBO — see [`packaging/web/patches/gl4es-accum-fbo.patch`](../packaging/web/patches/gl4es-accum-fbo.patch)) stay on by default. Needed for accum-AA captures under the headless OSMesa build, which is Mesa by construction. |
+| `--accum` | Force the accumulation buffer on. Without either flag the feature auto-disables on renderers that emulate `glAccum` on the CPU - anything reporting Mesa / llvmpipe / softpipe / swrast, where each pass costs a full scene re-render *plus* a host-side read-add-write of the color buffer. Hardware renderers and the web build (gl4es accumulates in a real FBO - see [`packaging/web/patches/gl4es-accum-fbo.patch`](../packaging/web/patches/gl4es-accum-fbo.patch)) stay on by default. Needed for accum-AA captures under the headless OSMesa build, which is Mesa by construction. |
 | `--assets` *dir* | Scan *dir* for `*.mp3` instead of `./assets`. Beats `GLR_ASSETS_DIR`. |
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
 | `--dump-code` | Load the session and print the editor buffer to stdout, then exit. |
@@ -44,7 +44,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `--dump-state-layout` | Print the `ReplRuntimeState` field layout and exit. |
 | `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). Also via `GLR_DETAILED_PROF`. |
 
-Unrecognized flags are not rejected — the first non-option argument is taken as
+Unrecognized flags are not rejected - the first non-option argument is taken as
 the input file, so a typo lands as `Error: cannot open --typo`. `--help` is the
 authoritative list; the completions in
 [Shell completion](#shell-completion) offer exactly these flags.
@@ -70,13 +70,13 @@ The generated block uses absolute paths to this checkout. Set `ZSHRC=path` to
 install into a different startup file.
 
 ```bash
-# bash — source what you want (a shell rc, or per-session)
+# bash - source what you want (a shell rc, or per-session)
 source scripts/completions/gl-repl.bash
 source scripts/completions/docs-assets.bash
 ```
 
 ```zsh
-# zsh — either put the directory on fpath before compinit…
+# zsh - either put the directory on fpath before compinit…
 fpath=("$PWD/scripts/completions" $fpath)
 autoload -Uz compinit && compinit
 
@@ -108,7 +108,7 @@ When both a command-line flag and an env var exist, the flag wins.
 ### gl-repl runtime
 
 Every hook that names a source row takes the line number the **code panel's
-gutter shows** — 1-based, so the number in the script is the number on screen.
+gutter shows** - 1-based, so the number in the script is the number on screen.
 A value below 1 is refused with a note on stderr rather than acted on.
 
 | Variable | Values / default | Effect |
@@ -117,12 +117,12 @@ A value below 1 is refused with a note on stderr rather than acted on.
 | `GLR_TIME` | Seconds; default `0`; `--time` wins. | Initial animation time `t`, applied after any example/file load. |
 | `GLR_EDIT_LINE` | Line number as the code panel shows it (1-based); clamped. | Parks the cursor after load and scrolls it into view so cursor-bound overlays render in captures. |
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |
-| `GLR_CODE_FOCUS` | `0` / `1`; default is the app's own state. | Sets code focus as a level, not a toggle. `0` reveals the generated C the focused view hides — `init()`, the `display()` prologue — which is the only place a light rig's positions and colors are written down. |
+| `GLR_CODE_FOCUS` | `0` / `1`; default is the app's own state. | Sets code focus as a level, not a toggle. `0` reveals the generated C the focused view hides - `init()`, the `display()` prologue - which is the only place a light rig's positions and colors are written down. |
 | `GLR_CODE_SCROLL` | Code-panel row to park at the top of the panel. | Scrolls the panel and stops follow-scroll from pulling it back. Rows here are panel rows: with code focus off the generated C fills rows that belong to no document line, so a cursor cannot reach them. |
-| `GLR_OPEN_COLOR_PICKER` | Line number of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
+| `GLR_OPEN_COLOR_PICKER` | Line number of an editable color command. | Opens the floating color picker on that line for captures - it otherwise needs a swatch click. |
 | `GLR_OPEN_GL_STATE` | Line number of a blank source row. | Routes a synthetic right-click to that visible row and opens the GL-state popup; retries after `GLR_EDIT_LINE` follow-scroll. |
 | `GLR_OPEN_ASSIGN_PLOT` | Comma-separated line numbers of assignment rows. | Routes a synthetic right-click to the first (visible) row and opens its value plot; same retry-until-on-screen behavior. Further rows are added as extra series, up to four, as Shift+right-click would. No-op if a row is not a `var = expr;` / `A[i] = expr;`, or if its X axis cannot match the first row's. |
-| `GLR_OPEN_COMMAND_HELP` | `<line>[,<dx>]` — line number of a committed GL-family row, plus an optional horizontal offset in screen px (right positive). | Right-clicks that row to raise its authored help card; same retry-until-on-screen behavior. No-op on a row with no description record. `dx` slides the opened card along x, since the click must land on the row being explained while the card may need to sit clear of something else; the renderer clamps it into the window. Pose it *after* `GLR_OPEN_ASSIGN_PLOT` — a right-click on an assignment row closes the card. |
+| `GLR_OPEN_COMMAND_HELP` | `<line>[,<dx>]` - line number of a committed GL-family row, plus an optional horizontal offset in screen px (right positive). | Right-clicks that row to raise its authored help card; same retry-until-on-screen behavior. No-op on a row with no description record. `dx` slides the opened card along x, since the click must land on the row being explained while the card may need to sit clear of something else; the renderer clamps it into the window. Pose it *after* `GLR_OPEN_ASSIGN_PLOT` - a right-click on an assignment row closes the card. |
 | `GLR_ASSIGN_PLOT_EXPANDED` | Any non-empty value; default off. | Opens the assignment plot in its doubled size (the `2x` zoom chip, otherwise mouse-only). |
 | `GLR_ASSIGN_PLOT_LOG` | Any non-empty value; default off. | Requests the log₁₀ Y axis (the `log` chip). Ignored only when the trace is pinned at exactly zero; signed data lands on the symmetric log axis. |
 | `GLR_ASSIGN_PLOT_RATE` | `once`, `1hz`, `frame`; default `1hz`. | Sets the capture-rate chip (mouse-only otherwise). `frame` is what makes a plotted capture deterministic: at `1hz` the samples land on wall-clock, so the shot depends on how fast the machine renders. |
@@ -130,7 +130,7 @@ A value below 1 is refused with a note on stderr rather than acted on.
 | `GLR_ACCUM_EFFECT` | `off`, `aa`, `blur`, `blur cam` (case/space-insensitive); default app setting. | Picks the Config menu's *Accum effect* state by name. Not scene metadata (no `@cfg` slug), and its key binding carries a Shift that `GLR_TYPE_KEYS` cannot deliver, so this is a capture's only route to motion blur. |
 | `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
-| `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay — the video-capture hook behind `scripts/record-video.sh`. Grammar in [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h). |
+| `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay - the video-capture hook behind `scripts/record-video.sh`. Grammar in [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h). |
 | `GLR_NO_SPLASH` | Any non-empty value. | Skips the startup splash banner (captures that should not open on the splash band). |
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
@@ -150,7 +150,7 @@ implements them.
 |---|---|---|
 | `FREEGLUT_CAPTURE_FILE` | Filename prefix; default `freeglut`. | Prefix for `SIGUSR1` screenshots and record-mode PPM frames. |
 | `FREEGLUT_CAPTURE_FRAMES` | Positive frame count. | Record mode: capture N rendered frames as numbered PPMs, then exit. |
-| `FREEGLUT_CAPTURE_STREAM` | Path or `-` (stdout). | Redirects captured frames into one concatenated PPM stream instead of numbered files. Point it at a fifo and an encoder (`ffmpeg -f image2pipe -vcodec ppm`) consumes frames as they render — no on-disk framebuffer dumps. |
+| `FREEGLUT_CAPTURE_STREAM` | Path or `-` (stdout). | Redirects captured frames into one concatenated PPM stream instead of numbered files. Point it at a fifo and an encoder (`ffmpeg -f image2pipe -vcodec ppm`) consumes frames as they render - no on-disk framebuffer dumps. |
 | `DISPLAY` | X display string. | X11 display selection for Linux/X11 freeglut. |
 | `GLUT_FPS` | Millisecond interval. | Enables freeglut FPS statistics printing at the requested interval. |
 | `FREEGLUT_NO_XRANDR` | Any non-empty value. | Disables XRandR use in X11 game-mode display changes. |
@@ -167,7 +167,7 @@ These are make variables or script/test env vars. Pass make variables as
 | Variable | Where | Effect |
 |---|---|---|
 | `CC` | Makefile, `scripts/check/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
-| `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode — **the hook for the compile-time defines**, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` or `CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. |
+| `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode - **the hook for the compile-time defines**, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` or `CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. |
 | `CPPFLAGS` | Makefile compile rules. | Also honored, for toolchains that inject preprocessor flags through the environment (`emmake` forwards it into the web build). Prefer `CFLAGS` when passing defines by hand; this is a C project and the `CPP` reads as C++. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, `coverage`, or `quick` (`-O0 -g0`, no sanitizers). Tests default to debug; app/bench/demo targets default to release. |
 | `DEBUG_INFO_CFLAGS` | Makefile. | Debug-info flags. Defaults to `-ggdb -g3` everywhere except the `WEB=1` release link, which defaults to `-g0`: emcc keeps DWARF inside the `.wasm` and drops to limited binaryen optimizations when it is present (5.4 MB vs 1.8 MB `index.wasm`, with no measurable runtime difference). Override to force either way, e.g. `make web DEBUG_INFO_CFLAGS=-g2` for named frames in a browser profile. |
@@ -210,7 +210,7 @@ These are make variables or script/test env vars. Pass make variables as
 ## Headless rendering (OSMesa)
 
 For CI or any machine with no display, `make ... FREEGLUT_OSMESA=1` builds
-gl-repl against a software, off-screen **OSMesa** backend — it renders into
+gl-repl against a software, off-screen **OSMesa** backend - it renders into
 memory with no window. The real-GL tests and `--export-ply` then run headless
 (`make gl-tests FREEGLUT_OSMESA=1`), and you can grab a **screenshot of a
 running headless process** by sending it `SIGUSR1`:
@@ -241,7 +241,7 @@ capture from a later point in the timeline, set the initial `t` with
 ```
 
 **Posing the cursor.** Cursor-bound overlays (transform guides, vertex
-labels) need the cursor parked on the relevant line — `GLR_EDIT_LINE=<n>`
+labels) need the cursor parked on the relevant line - `GLR_EDIT_LINE=<n>`
 does that at startup, as if you had arrowed to the line the code panel numbers
 *n*:
 
@@ -263,7 +263,7 @@ scripts/record-gif.sh --example "Parametric torus (nested for)" --duration 4 --f
 
 `--duration <secs>` × `--fps` sets the frame count; `--scale <w>` downsizes;
 `--time <t0>` starts later in the animation. The clock advances `1/60 s` per
-frame, so playback is `~fps/60`× natural speed — use `--fps 60` for
+frame, so playback is `~fps/60`× natural speed - use `--fps 60` for
 real-time. Needs `ffmpeg`. (`scripts/record-gif.sh --help` for all flags.)
 
 Native builds support the same `FREEGLUT_CAPTURE_FRAMES=N` contract too: they
@@ -277,7 +277,7 @@ clips are deterministic.
 ### Recording videos with scripted interaction
 
 `scripts/record-video.sh` records a session to an MP4 (H.264 + AAC music),
-optionally driven by a **pointer script** (`GLR_POINTER_SCRIPT`) — synthetic
+optionally driven by a **pointer script** (`GLR_POINTER_SCRIPT`) - synthetic
 mouse and keyboard events with a visible cursor overlay, click ripples, and
 highlight rings. Scripts can use absolute rendered-frame timestamps for a
 fixed recording schedule, or omit timestamps to start each step when the
@@ -300,13 +300,13 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   the track, fade-out over the last 1.5 s; default `assets/sample.mp3`). A
   pointer script can pin its own soundtrack with `# music:` / `# music-seek:`
   header comments.
-- **Colorspace** is declared at encode time — the captured frames are
+- **Colorspace** is declared at encode time - the captured frames are
   display-referred RGB (the app is not color-managed). `--colorspace srgb`
   (default) tags standard sRGB; `--colorspace p3` tags Display P3 (P3-D65
   primaries + sRGB transfer), reproducing how the app looks on a wide-gamut
   Mac display. Either way the RGB→YCbCr conversion uses the BT.709 matrix
   explicitly (ffmpeg's RGB default is BT.601, which players mis-assume for
-  HD), and the tags are set on the frames via `setparams` — on ffmpeg ≥ 7
+  HD), and the tags are set on the frames via `setparams` - on ffmpeg ≥ 7
   the encoder takes color properties from frames, so the old
   `-color_primaries`/`-color_trc` encoder flags no longer stick.
 - **Scripted input** covers the whole input surface: `move`/`glide` pointer
@@ -315,7 +315,7 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   UI element), `key` (typed text, incl. `\cX` control bytes like Ctrl+T;
   `key@<cps>` paces the text at N characters per second so it types out like
   a person instead of appearing at once) and
-  `skey` (F-keys, arrows) — so whole typed demos are re-recordable from a
+  `skey` (F-keys, arrows) - so whole typed demos are re-recordable from a
   script. Untimed scripts are completion-driven; `pause <seconds>` adds an
   intentional delay before the next step. Grammar and examples:
   [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
@@ -350,7 +350,7 @@ scripts/docs-assets.sh --help       # full CLI reference
 ```
 
 The `demo-*` assets are the screenshots in [`tools/README.md`](../tools/README.md),
-captured from the standalone demo binaries rather than from `gl-repl` — they are
+captured from the standalone demo binaries rather than from `gl-repl` - they are
 their own category so `--pngs` still needs only `make gl-repl`. Build the demos
 first (`make render3d-demo repl-live-demo editor-demo variable-panel-demo
 color-picker-demo cpuprof-demo memprof-demo`); `DEMO_BIN_DIR` overrides where
@@ -358,7 +358,7 @@ the script looks for them. Demos with nothing on screen cold are staged through
 the `GLR_DEMO_*` hooks above.
 
 Tab-completion for the flags and the ~60 asset names ships in
-`scripts/completions/` — see [Shell completion](#shell-completion).
+`scripts/completions/` - see [Shell completion](#shell-completion).
 
 GIF generation uses `GLR_TICK_PER_FRAME`, so machine load changes generation
 time without dropping animation states. The `profile-panels` screenshot still
@@ -374,7 +374,7 @@ Every gl-repl asset renders into the same 1x `--window 1200x800`. There is no
 oversize-and-downscale supersampling path: a native window is clamped to the
 visible screen, so an over-size request comes back the wrong size. Antialiasing
 comes from the context's MSAA, and stills raise `GLR_ACCUM_PASSES` on top of it
-— the scene is re-rendered per pass with a sub-pixel frustum jitter and
+- the scene is re-rendered per pass with a sub-pixel frustum jitter and
 accumulated, which the 2D UI draws *outside* of, so bitmap text stays crisp
 while 3D edges and 1px grid/axes hairlines smooth out at full weight. GIFs keep
 stock MSAA only; raising the pass count would multiply the cost of every
@@ -424,8 +424,8 @@ tracks belong in the per-user music folder or a directory passed with
 
 Use **File → Export .ply** to capture the current scene as an
 ASCII PLY mesh, named after the active scene (like Save Scene). The geometry
-— your `glVertex` polygons, GLU-tessellated shapes, and the GLUT solids
-(teapot/sphere/cube/cone/torus) — is captured through a single
+- your `glVertex` polygons, GLU-tessellated shapes, and the GLUT solids
+(teapot/sphere/cube/cone/torus) - is captured through a single
 `glRenderMode(GL_FEEDBACK)` pass, so everything on screen exports the same
 way. Authored per-vertex normals are preserved; the rest are smoothly
 synthesized.
@@ -454,8 +454,8 @@ metadata that round-trips on reload:
 | `// @workspace-dir <path>` | Re-binds the workspace directory. |
 | `// @cfg <slug> = <value>` | Applies a scene-presentation setting (see the slug table below). |
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
-| `// @tune` | Marks a variable as a tunable knob in the exported program — see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
-| `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) — see [Config Variables](#config-variables--config) below. |
+| `// @tune` | Marks a variable as a tunable knob in the exported program - see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
+| `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) - see [Config Variables](#config-variables--config) below. |
 | `// camera` block | A 5-line camera preset applied on load. |
 
 Built-in examples use the same `@cfg` + `// camera` headers, so a saved
@@ -465,7 +465,7 @@ are metadata; the same text later in the file is an ordinary comment.
 ### Authoring an example catalog
 
 **File → Save Scene as .glr** writes the same file shape the built-in examples
-ship in — `@cfg` + `// camera` headers and the commands verbatim, with no C
+ship in - `@cfg` + `// camera` headers and the commands verbatim, with no C
 scaffold (see [User Guide → Scene export](USER_GUIDE.md#scene-export-glr) for
 what the format drops). To turn one into an example:
 
@@ -572,7 +572,7 @@ note on stderr rather than landing at index 0.
 
 ## Config Variables (`// @config`)
 
-The variable panel dims rows for variables the program assigns — a useful
+The variable panel dims rows for variables the program assigns - a useful
 cue separating *state* the scene computes from *config* you are meant to
 tweak. But some config variables are assigned only to keep them in bounds:
 
@@ -588,7 +588,7 @@ bounds-keeping, not state updates, so the row stays bright and reads as the
 slider-friendly knob it is.
 
 Like `// @tune`, the tag is a bare trailing comment token (whole-token
-match — `// @configured` does not count), it applies to every name on the
+match - `// @configured` does not count), it applies to every name on the
 declaration line, extra comment text after the tag is fine, and it survives
 export/import round trips via a marker on the exported `@declare` comment.
 The two tags are independent and can be combined (`// @tune @config`):
@@ -600,16 +600,16 @@ affects panel brightness inside gl-repl.
 gl-repl plays background music: any `*.mp3` it finds at startup, in filename
 order, from three combined sources:
 
-1. **`./assets`** next to where you run it — overridden by `--assets <dir>`
+1. **`./assets`** next to where you run it - overridden by `--assets <dir>`
    or `GLR_ASSETS_DIR` (flag beats env).
-2. **Bundled with the app** — the macOS `gl-repl.app` (from `make app`)
+2. **Bundled with the app** - the macOS `gl-repl.app` (from `make app`)
    ships a sample track inside the bundle.
-3. **Your music folder** — `~/Library/Application Support/gl-repl/Music` on
+3. **Your music folder** - `~/Library/Application Support/gl-repl/Music` on
    macOS, `$XDG_DATA_HOME/gl-repl/music` on Linux. Created on first run;
    drop `.mp3`s there and they join the playlist.
 
 The repository ships only one sample track to stay lightweight. The optional
-**music pack** is attached to the GitHub release tagged `assets-v1` — fetch
+**music pack** is attached to the GitHub release tagged `assets-v1` - fetch
 it into your per-user music folder with:
 
 ```bash
@@ -625,26 +625,26 @@ scripts/fetch-music.sh --dir ./assets   # or anywhere else
 Stderr diagnostics help locate startup stalls, audio-worker hitches, and
 backend audio-device issues:
 
-- **Init trace** — `main()` logs a wall-clock line per startup phase
+- **Init trace** - `main()` logs a wall-clock line per startup phase
   (`[init +N.NNNs] <phase>`). A large gap names the slow phase;
   `--no-audio` isolates whether opening the OS audio device is the cause.
   `--detailed-prof` / `GLR_DETAILED_PROF=1` adds finer phases, including
   per-frame timing triples for the first two frames.
-- **Audio-worker hitch detector** — any blocking audio lifecycle op (track
+- **Audio-worker hitch detector** - any blocking audio lifecycle op (track
   load, stream teardown, advance) over the threshold logs
   `[init +N.NNNs] repl_audio: worker hitch: <op> took N ms`. Tune with
   `GLR_AUDIO_HITCH_MS` (default 50; `0` disables).
-- **Miniaudio backend log** — `GLR_MINIAUDIO_LOG=debug` forwards miniaudio
+- **Miniaudio backend log** - `GLR_MINIAUDIO_LOG=debug` forwards miniaudio
   device/resource-manager logs to stderr with the same `[init +N.NNNs]`
   prefix when available. Leave it at the default warning/error level for
   normal runs; debug/info output is noisy and underrun messages depend on
   the active miniaudio backend.
-- **GPU timer-query override** — `GLR_NO_GPU_PROF=1` leaves the CPU profile
+- **GPU timer-query override** - `GLR_NO_GPU_PROF=1` leaves the CPU profile
   data on but disables GPU timings, useful when a driver advertises timer
   queries unreliably.
 
 In-app, the CPU profiler overlay shows per-frame section timings and the
-memory panel shows RSS history — see
+memory panel shows RSS history - see
 [User Guide → Profiling & Diagnostics](USER_GUIDE.md#profiling--diagnostics).
 
 ## Keyboard map tooling
@@ -668,7 +668,7 @@ CR/Enter rather than distinct app shortcuts.
 ```
 output.c        default save target (a standalone, compilable C file)
 <workspace>/    managed scenes plus the authoritative .glr-workspace manifest
-audio_state.ini persisted audio state (track, position, volume) — in the
+audio_state.ini persisted audio state (track, position, volume) - in the
                 working directory, or in the app state dir when the working
                 directory is not writable (the macOS .app, whose working
                 directory is `/`)

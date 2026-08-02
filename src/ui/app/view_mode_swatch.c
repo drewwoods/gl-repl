@@ -152,7 +152,7 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
                         float t) {
     if (cell_h <= 1 || cell_w <= 1) return;
 
-    /* Render the cube into a centered SQUARE sub-region of the (wide) cell —
+    /* Render the cube into a centered SQUARE sub-region of the (wide) cell -
      * a square viewport + unit-box ortho keeps the cube un-stretched, so it
      * reads as a real turning cube rather than two labels spread apart. The
      * texture is baked over the same square (text centered) so a face-on
@@ -228,7 +228,7 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glBindTexture(GL_TEXTURE_2D, g_tex_2d);
     cube_textured_face(umax, vmax);
 
-    /* +X face: "3D" — same +Z quad rotated -90 about Y into the +X slot. */
+    /* +X face: "3D" - same +Z quad rotated -90 about Y into the +X slot. */
     glPushMatrix();
     glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
     glBindTexture(GL_TEXTURE_2D, g_tex_3d);
@@ -261,7 +261,7 @@ void ui_view_mode_swatch_render(int cell_x, int cell_y, int cell_w,
         draw_label_centered(cell_x, cell_y, cell_w, k_label_2d, accent, 1.0f);
         break;
     case UI_VIEW_SWATCH_CROSSFADE: {
-        /* Sequential hand-off (NOT a simultaneous overlay — two 2-char
+        /* Sequential hand-off (NOT a simultaneous overlay - two 2-char
          * labels share the cell center, so drawing both at once garbles
          * the glyphs): "3D" fades out to the bar bg over the first ~half,
          * then "2D" fades in. Alpha-blended over the surface the menu bar

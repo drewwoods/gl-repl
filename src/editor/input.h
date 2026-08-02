@@ -16,7 +16,7 @@
 
 /* Test seam: editor input reads modifiers through this hook so tests
  * can simulate Ctrl/Shift/Alt without a real GLUT context. Production
- * code installs no provider — `editor_input_active_modifiers()` falls back to
+ * code installs no provider - `editor_input_active_modifiers()` falls back to
  * glutGetModifiers() once `editor_input_enable_glut_modifier_reads()`
  * has been called. */
 typedef int (*EditorModifierProvider)(void);
@@ -42,7 +42,7 @@ typedef struct EditorInputDispatchEffects {
 } EditorInputDispatchEffects;
 
 /* Editor dispatch entry points. Each handles editor-text-model
- * concerns only — text edit / cursor / selection / autocomplete /
+ * concerns only - text edit / cursor / selection / autocomplete /
  * commit / code-panel resize+drag+scroll. Non-editor concerns are
  * already filtered out by the controller before these run. Direct
  * callers (test fixtures) get the same shape: only editor routes
@@ -50,7 +50,7 @@ typedef struct EditorInputDispatchEffects {
  *
  * Effects contract: each runs its route, then drains and returns the
  * pending effects accumulator (including anything the caller
- * accumulated before delegating — no reset at entry). The controller
+ * accumulated before delegating - no reset at entry). The controller
  * folds the snapshot back in via editor_merge_input_effects and
  * flushes once per GLUT event; tests inspect the snapshot directly. */
 EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
@@ -85,7 +85,7 @@ void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider
  * so a scripted chord's declared Shift/Ctrl/Alt is visible to shortcut
  * matching even though no physical modifier key is held. Push sets the mask
  * and marks it active (authoritative over the test provider and
- * glutGetModifiers); pop clears it. Not nestable — one dispatch at a time. */
+ * glutGetModifiers); pop clears it. Not nestable - one dispatch at a time. */
 void editor_input_push_scripted_modifiers(int mods);
 void editor_input_pop_scripted_modifiers(void);
 
@@ -160,7 +160,7 @@ int editor_input_file_prompt_capture_special(int key);
  *
  * These mutate editor state directly (command store, input buffer,
  * cursor, transient state). They are NOT REPL-pipeline helpers and
- * must not be called from repl_*.c pipeline TUs — the hard guards
+ * must not be called from repl_*.c pipeline TUs - the hard guards
  * `check-no-feed-line-in-pipeline` and
  * `check-no-load-line-to-input-in-pipeline` enforce that. */
 
@@ -192,7 +192,7 @@ int editor_feed_line(const char *line);
  * class [A-Za-z0-9_] and return the half-open range [out_start, out_end)
  * covering the word. If text[char_idx] is not a word character, or
  * char_idx is out of range, both outputs are clamped to char_idx (a
- * zero-width range). Pure helper — no globals, no GL — so the
+ * zero-width range). Pure helper - no globals, no GL - so the
  * double-click word-selection path can be tested without faking the
  * click-timing dispatch. */
 void editor_input_word_bounds_at(const char *text, int len, int char_idx,

@@ -1,6 +1,6 @@
 ---
 name: gl-repl-config-toggle
-description: Add or change a gl-repl config toggle / GlrConfigKey — the g_cfg_items[] descriptor row, section placement, keymap binding, and the example-golden regeneration a new key forces. Use when asked to add a setting, toggle, menu option, or config key, or when touching glr_actions.c / glr_config.c / glr_defaults.h.
+description: Add or change a gl-repl config toggle / GlrConfigKey - the g_cfg_items[] descriptor row, section placement, keymap binding, and the example-golden regeneration a new key forces. Use when asked to add a setting, toggle, menu option, or config key, or when touching glr_actions.c / glr_config.c / glr_defaults.h.
 ---
 
 # Adding a config toggle
@@ -9,19 +9,19 @@ description: Add or change a gl-repl config toggle / GlrConfigKey — the g_cfg_
 
 Append a `ReplConfigItem` descriptor to `g_cfg_items[]` in
 `src/app/glr_actions.c`, under the right `### ` section marker. The count
-auto-computes and flyout membership is automatic — do not hand-maintain either.
+auto-computes and flyout membership is automatic - do not hand-maintain either.
 
 `### ` rows define sections. Each becomes one parent menu row plus a synthetic
 trailing **All** row, with hover-opening flyouts (generic engine in
 `src/ui/app/menu_bar.c`, shared with the Scene and Tutorials menus). Parent and
-tag rows are **inert on click** — hover-open only, the activate branches return
+tag rows are **inert on click** - hover-open only, the activate branches return
 0. Flyout item clicks route via `route_submenu_item_hit` → `glr_cfg_cycle_row`;
 right-press cycles backward.
 
 ## Defaults
 
 `CFG_DEFAULT_*` in `src/app/glr_defaults.h` is the single source of truth.
-Reuse the macros — never duplicate the literal value at a second site.
+Reuse the macros - never duplicate the literal value at a second site.
 
 Every example load resets non-camera presentation settings to `CFG_DEFAULT_*`
 before applying the example's `@cfg`, so a new presentation-scoped key needs a
@@ -51,12 +51,12 @@ edits in `src/app/glr_actions.c`:
    ```
 
    Generate `.state_names` (the menu labels) from the same list macro. If the
-   enum has no list macro yet, add one where the enum lives — that is the
+   enum has no list macro yet, add one where the enum lives - that is the
    pattern every other multi-state key follows.
 
 2. A `strcmp` arm in `cfg_symbol_table_for_slug()` keyed on the **slug**, which
    `cfg_slug_from_label()` derives from `.label` (lowercased, non-alnum runs →
-   `_`): "Auto-normals" → `auto_normals`. Old files keep loading — the reader
+   `_`): "Auto-normals" → `auto_normals`. Old files keep loading - the reader
    falls back to an integer literal when the text matches no symbol.
 
 ## Golden-fixture consequence (the step people miss)
@@ -74,7 +74,7 @@ of them. Regenerate rather than hand-editing:
 ## Config bridge
 
 `repl_cfg_get_int` / `_set_int` and friends go through the installed config
-bridge only — guard `check-repl-export-via-bridge` enforces it. Export/import
+bridge only - guard `check-repl-export-via-bridge` enforces it. Export/import
 must not reach around the bridge to touch config state directly.
 
 `glr_config_set`'s tail notifies the tutorial runner; a toggle that a tutorial
@@ -92,7 +92,7 @@ make keymap-list          # current bindings + free slots
 make check-keymap-no-dup  # guard
 ```
 
-F2–F10 cycle bound configs forward (Shift+F = backward) — that binding lives in
+F2–F10 cycle bound configs forward (Shift+F = backward) - that binding lives in
 the descriptor row, not in a switch.
 
 ## Verify

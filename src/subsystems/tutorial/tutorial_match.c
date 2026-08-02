@@ -78,7 +78,7 @@ int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
 
     expected = tutorial_current_expected_text();
     if (!expected) {
-        /* REQUIRE_VAR steps carry no fixed expected text — the user can
+        /* REQUIRE_VAR steps carry no fixed expected text - the user can
          * satisfy them by typing the line OR by dragging the variable-
          * panel slider. Synthesize the line to teach the typing path; the
          * slider remains a parallel option the status hint advertises. */

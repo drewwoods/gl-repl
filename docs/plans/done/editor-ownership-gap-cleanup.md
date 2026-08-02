@@ -59,11 +59,11 @@ This companion should therefore follow that structure exactly.
 
 | Completion-plan phase | Companion-plan role |
 |---|---|
-| Phase 1 — carve `EditorState` / `UiState` out of `ReplRuntimeState` | Add audit script, slice inventory, compatibility-wrapper strategy, per-slice migration order, guards |
-| Phase 2 — REPL stops touching editor text | Add concrete grep targets, call-site transaction pattern, `EditorBufferView` conversion checklist |
-| Phase 3 — `repl_compile` is the validation gate | Add behavior-preservation list and focused commit/reject/undo tests |
-| Phase 4 — UI input handlers emit `UiAction` | Add migration waves, action-count tracking, mutation-call guards |
-| Phase 5 — rename to match ownership | Add file-by-file rename checklist, redirect-header strategy, doc/callgraph update gates |
+| Phase 1 - carve `EditorState` / `UiState` out of `ReplRuntimeState` | Add audit script, slice inventory, compatibility-wrapper strategy, per-slice migration order, guards |
+| Phase 2 - REPL stops touching editor text | Add concrete grep targets, call-site transaction pattern, `EditorBufferView` conversion checklist |
+| Phase 3 - `repl_compile` is the validation gate | Add behavior-preservation list and focused commit/reject/undo tests |
+| Phase 4 - UI input handlers emit `UiAction` | Add migration waves, action-count tracking, mutation-call guards |
+| Phase 5 - rename to match ownership | Add file-by-file rename checklist, redirect-header strategy, doc/callgraph update gates |
 
 ### State-shape alignment
 
@@ -368,7 +368,7 @@ This makes ownership real without creating a giant rename commit.
 
 Suggested order:
 
-1. `editor_buffer` — most central to this cleanup.
+1. `editor_buffer` - most central to this cleanup.
 2. `editor_input` / cursor / edit line / insert mode / pending newline.
 3. selection + clipboard.
 4. search + autocomplete.

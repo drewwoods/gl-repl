@@ -2,7 +2,7 @@
  * glr_compositor.h - App-level compositor post-processing hook.
  *
  * A seam for running a post-process pass over the ENTIRE composited
- * frame — the 3D scene plus every 2D UI layer — after all drawing is
+ * frame - the 3D scene plus every 2D UI layer - after all drawing is
  * done and before the buffer swap. The controller calls the hook at the
  * tail of glr_ctrl_display_frame().
  *
@@ -16,7 +16,7 @@
  * The effect vocabulary is shared (Render3dPostFilterMode). The chromatic
  * aberration pass reuses the scene primitive over the full window rect,
  * so it is literally the same effect the scene applies to its viewport,
- * now spanning the whole frame. No shaders, no FBOs — fixed-function GL.
+ * now spanning the whole frame. No shaders, no FBOs - fixed-function GL.
  */
 #ifndef GLR_COMPOSITOR_H
 #define GLR_COMPOSITOR_H

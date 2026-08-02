@@ -23,7 +23,7 @@ Non-goals: user-declared arrays, dynamic sizes, array parameters, array literals
 
 ## Implementation Steps
 
-### Step 1 — Add Scratch State And Helpers
+### Step 1 - Add Scratch State And Helpers
 Files: `repl_eval.h`, `repl_eval.c`, `repl_state_views.h`, `repl_state.c`, `repl_state_defaults.inc`.
 
 Add:
@@ -57,7 +57,7 @@ Verification:
 - Add `test_eval` coverage for reset/get/set/copy/restore.
 - Run `make test_eval`.
 
-### Step 2 — Reserve Names And Add `lerp`
+### Step 2 - Reserve Names And Add `lerp`
 Files: `repl_eval.c`, `repl_export.c`, commit/for/function tests.
 
 - Add `A`, `B`, `C`, and `lerp` to `s_reserved_idents`.
@@ -72,7 +72,7 @@ Verification:
 - Reserved-name tests for scalar declarations, function params, and loop vars pass.
 - Run `make test_eval && make test_repl_core_commit`.
 
-### Step 3 — Support Scratch Reads In Expressions
+### Step 3 - Support Scratch Reads In Expressions
 Files: `repl_eval.h`, `repl_eval.c`.
 
 Extend `ExprCtx` with optional error fields while keeping existing initializers valid:
@@ -101,7 +101,7 @@ Verification:
 - GL commands using `A[0]` are marked `has_vars`.
 - Run `make test_eval && make test_repl_core_parse`.
 
-### Step 4 — Add `CMD_SCRATCH_ASSIGN` And Compile/Apply Ops
+### Step 4 - Add `CMD_SCRATCH_ASSIGN` And Compile/Apply Ops
 Files: `repl_command.h`, `repl_compile.h`, `repl_compile.c`, `repl_apply.c`, `editor_services.*`, `editor_commit.c`.
 
 Add command type:
@@ -146,7 +146,7 @@ Verification:
 - Scalar `x = 1;` tests remain unchanged.
 - Run `make test_repl_core_commit && make test`.
 
-### Step 5 — Wire Flatten And Execution
+### Step 5 - Wire Flatten And Execution
 Files: `repl_flatten.c`, `repl_executor.c`, replay annotation evaluator call sites.
 
 In `flatten_range()`:
@@ -165,7 +165,7 @@ Verification:
 - Confirm multiple `u` iterations reload control points and produce stable output.
 - Run `make test_repl_core_commit && make test_repl_replay && make test`.
 
-### Step 6 — Preserve Scratch State Across Snapshots
+### Step 6 - Preserve Scratch State Across Snapshots
 Files: `editor_undo.*`, `repl_scenes.c`, `replay.c`, `repl_replay_annotations.c`, `imrepl_ctrl.c`.
 
 Wherever predefined values are copied/restored today, copy/restore scratch arrays too:
@@ -183,7 +183,7 @@ Verification:
 - Replay annotations for commands using `A[i]` use the scratch state before that command.
 - Run `make test_repl_replay && make test_repl_editor && make test`.
 
-### Step 7 — Export/Import Round Trip
+### Step 7 - Export/Import Round Trip
 Files: `repl_export.c`, IO tests.
 
 Export:
@@ -208,7 +208,7 @@ Verification:
 - Generated C compiles in normal and stub builds.
 - Run `make test_repl_core_io && make sample USE_GL_STUBS=1`.
 
-### Step 8 — UI, Completion, Docs, Final Gate
+### Step 8 - UI, Completion, Docs, Final Gate
 Files: `editor_autocomplete.c`, `MODULES.md`, `AGENTS.md` or feature docs.
 
 - Add optional completions for `A[`, `B[`, `C[`, and `lerp(`.

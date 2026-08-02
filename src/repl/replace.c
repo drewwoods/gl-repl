@@ -3,9 +3,9 @@
  *
  * See replace.h for why replace-all cannot go through the incremental
  * commit path. The shape of the transaction here mirrors
- * load_example_lines() in example_loader.c — reset the live document,
+ * load_example_lines() in example_loader.c - reset the live document,
  * replay lines through repl_load_apply_line, reset the editor input sink
- * — with a SceneSnapshot standing in for the example's "reload the
+ * - with a SceneSnapshot standing in for the example's "reload the
  * example on failure" fallback, plus the two carry-overs (predef values,
  * is_auto) that a fresh example load has no reason to preserve.
  */
@@ -86,7 +86,7 @@ static void rebuild_restore_predef_values(const SceneSnapshot *before,
  * count the mapping is the identity; anything else means the loader
  * reshaped the document and the flags are dropped rather than guessed
  * (autonormal_refresh then adopts the rows as user normals, which is
- * inert — it never inserts a second normal in front of an existing one). */
+ * inert - it never inserts a second normal in front of an existing one). */
 static void rebuild_restore_auto_normals(const SceneSnapshot *before) {
     ReplCommandStore store = repl_command_store_live();
     int count = repl_state_document_count();

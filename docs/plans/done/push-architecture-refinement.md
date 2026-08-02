@@ -31,48 +31,48 @@ Implementation status: Phase 1 steps 1-8 are complete and merged. Post-Phase 1
 cleanup (app-shell shim removal) has also been completed. Phase 2 status as of
 2026-04-29:
 
-- ✅ R1 (Replay/HUD migration): Complete — `scene_*.c` files contain zero
+- ✅ R1 (Replay/HUD migration): Complete - `scene_*.c` files contain zero
   `repl_state_*` and `repl_replay_*` calls; `ui_replay_hud.c` owns the HUD;
   `ReplayFadePlan` lives on `SceneRenderConfig`; accumulation-AA fields are
   on the config; `repl_restore_predef_values()` is exported via
   `repl_pipeline.h`.
-- ✅ R2 (UI → REPL mutation hole): Complete — color picker, panels, and
+- ✅ R2 (UI → REPL mutation hole): Complete - color picker, panels, and
   help overlay route mutations through `repl_command_store`/`repl_actions`/
   `replay_toggle_play_pause()`; `check-ui-no-repl-state-mut` passes.
-- ✅ R3 (Extract layout geometry): Complete — `repl_layout.h/c` own
+- ✅ R3 (Extract layout geometry): Complete - `repl_layout.h/c` own
   `repl_layout_scene_rect` / `repl_layout_code_panel_rect`.
 - ⚠️ R4 (Controller off repl_core_internal.h): Mostly complete
   - ✅ R4a (`repl_pipeline.h` created, controller migrated)
   - ✅ R4b (`repl_eval_predef_view()` accessor added)
-  - ⚠️ R4c — controller is clean; `bench_repl.c` is the only remaining
+  - ⚠️ R4c - controller is clean; `bench_repl.c` is the only remaining
     non-`repl_*` non-test file with a `repl_core_internal.h` include and is
     intentionally out of scope for now.
-  - ✅ R4d — public API audit landed (`check-public-api-usage` Makefile target,
+  - ✅ R4d - public API audit landed (`check-public-api-usage` Makefile target,
     misplaced declarations relocated).
-- ✅ R5 (Slim and reorganize `SceneRenderConfig`): Complete — the six HUD-only
+- ✅ R5 (Slim and reorganize `SceneRenderConfig`): Complete - the six HUD-only
   fields are gone (now on `UiReplayHudState`), `ReplayFadePlan` and accum-AA
   fields are present, and the struct is grouped into labeled sections.
-- ✅ R6 (Split state headers by ownership): Complete — `repl_state_views.h`
+- ✅ R6 (Split state headers by ownership): Complete - `repl_state_views.h`
   and `repl_state_owners.h` exist, `repl_state.h` is a compatibility shim,
   and scene/UI files include `repl_state_views.h` only.
-- ✅ R7 (View-side read guards): Complete — `check-pure-scene-no-repl-state`
+- ✅ R7 (View-side read guards): Complete - `check-pure-scene-no-repl-state`
   and `check-ui-no-repl-state-mut` are wired into `make test`.
-- ⚠️ R10-phase1 (delete stale GLUT decls): Out of date — the decls
+- ⚠️ R10-phase1 (delete stale GLUT decls): Out of date - the decls
   (`repl_keyboard_func` / `repl_special_func` / `repl_mouse_func` /
   `repl_motion_func` / `repl_passive_motion_func` / `repl_mousewheel_func` /
   `repl_timer_func`) in `repl_core.h` are *not* stale: they are implemented
   in `repl_editor.c` and called from `imrepl_ctrl.c` for the cross-layer
   input routing chain. The empty `/* GLUT callbacks */` section in
-  `repl_core.c` is, in practice, gone. Re-evaluate R10-phase1 — the original
+  `repl_core.c` is, in practice, gone. Re-evaluate R10-phase1 - the original
   framing assumed those decls were dead post shim-removal; they are alive.
 - ❌ R8 (sample → imrepl rename): Not started.
-- ❌ R9 (split repl_export.c): Not started — optional.
-- ❌ R10-phase2+ (dissolve repl_core.c): Not started — `repl_core.c` (663
+- ❌ R9 (split repl_export.c): Not started - optional.
+- ❌ R10-phase2+ (dissolve repl_core.c): Not started - `repl_core.c` (663
   lines) still contains `repl_parse_and_normalize*`, `normalize_with_indent`,
   `repl_reformat_commands`, `collect_visible_vars`, `load_initial_commands`,
   `scroll_to_display_function`, `repl_debug_dump_*`, `current_begin_mode`,
   `count_vertices`, and several thin wrappers.
-- ❌ R11 (harden file-level boundary checks): Partially landed — the
+- ❌ R11 (harden file-level boundary checks): Partially landed - the
   `check-state-boundaries` / `check-controller-boundaries` /
   `check-views-no-owners` Makefile targets are wired into `test`. The full
   allowlist-shrinking pass described below is not done.
@@ -389,7 +389,7 @@ the old callback/`ReplGeometryRenderPlan` direction.
 ## Expansion: Why scene_render.c deals with replay, and why execute_fn can't absorb it
 
 A natural question when reading the replay cross-talk: the executor already
-renders the main geometry pass — why isn't it responsible for the fade
+renders the main geometry pass - why isn't it responsible for the fade
 batches too? The answer is that replay rendering is actually three distinct
 things that belong in three distinct layers. Only one of them is geometry
 emission.
@@ -398,11 +398,11 @@ emission.
 
 | Code | What it really is |
 |------|-------------------|
-| Main geometry pass clamped to `replay_base_limit` | Already executor-driven — just `execute_fn(1.0f, 0, pc, ...)`. No problem. |
+| Main geometry pass clamped to `replay_base_limit` | Already executor-driven - just `execute_fn(1.0f, 0, pc, ...)`. No problem. |
 | Fade batch loop (`render_3d_scene_pass` lines 424–480) | Multiple *additional* calls to `execute_fn`, each with different alpha/skip-limit, plus full GL state setup (push attrib, re-setup lighting, materials, blend) between each one. |
-| `replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample — so animated geometry looks consistent across passes. |
+| `replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample - so animated geometry looks consistent across passes. |
 | `ui_replay_hud_render()` | Pure 2D UI, now in `ui_replay_hud.c`. |
-| `draw_replay_tess_preview()` | 3D wireframe overlay — same family as `scene_overlays.c`. |
+| `draw_replay_tess_preview()` | 3D wireframe overlay - same family as `scene_overlays.c`. |
 
 ### Why execute_fn can't absorb the fade passes
 
@@ -423,8 +423,8 @@ execute_fn(batch.alpha, skip_limits[batch_idx], batch.new_pc, program, data);
 glPopAttrib();
 ```
 
-That GL state management — push/pop attribs, lighting re-setup, blend mode per
-pass — is scene work. If the executor looped over batches internally it would
+That GL state management - push/pop attribs, lighting re-setup, blend mode per
+pass - is scene work. If the executor looped over batches internally it would
 need to reproduce the lighting model the scene owns, inverting the dependency:
 the executor would have to understand how the scene is configured rather than
 just emitting geometry into whatever GL state the scene prepared. The executor's
@@ -494,20 +494,20 @@ in `repl_editor.c`.
 
 ### The three jobs currently mixed in keyboard_func
 
-1. **Raw GLUT event receipt** — being the function pointer registered with
+1. **Raw GLUT event receipt** - being the function pointer registered with
    `glutKeyboardFunc`. Belongs in `sample.c`.
-2. **Cross-layer routing** — deciding which subsystem gets this event based on
+2. **Cross-layer routing** - deciding which subsystem gets this event based on
    current app state: is help open? is inline rename active? is the color picker
    focused? This is what the `ui_panels.h`, `ui_menu_bar.h`, and
    `ui_variable_panel.h` includes in `repl_editor.c` are actually for. It is
    also the source of the "known boundary exceptions" called out in
    `ARCHITECTURE.md`. Belongs in `imrepl_ctrl.c`.
-3. **REPL-internal input handling** — once routing decides "this goes to the
+3. **REPL-internal input handling** - once routing decides "this goes to the
    REPL editor", dispatching within the REPL layer: commit chain, search,
    autocomplete, undo, navigation. This is the only part that legitimately
    belongs in `repl_editor.c`.
 
-The architecture violation is not that GLUT callbacks are in `repl_editor.c` —
+The architecture violation is not that GLUT callbacks are in `repl_editor.c` -
 it is that #2 lives there. Cross-layer routing requires knowing about all layers
 simultaneously, which is exactly the controller's job. `repl_editor.c` is
 currently misnamed: it is an app-level input multiplexer masquerading as an
@@ -515,7 +515,7 @@ editor module.
 
 ### Recommended split
 
-#### `sample.c` — raw receipt only
+#### `sample.c` - raw receipt only
 
 Registers GLUT callbacks and forwards directly to the controller. No logic:
 
@@ -527,7 +527,7 @@ static void sample_keyboard(unsigned char key, int x, int y) {
 }
 ```
 
-#### `imrepl_ctrl.c` — cross-layer routing
+#### `imrepl_ctrl.c` - cross-layer routing
 
 Owns the priority chain. Calls handlers in focus order, stops at the first
 that returns 1 (consumed):
@@ -544,12 +544,12 @@ void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
 ```
 
 The controller knows which layer-input surfaces exist; it does not know what
-any of them *do* with the event. It never calls `glut*` itself — that stays
+any of them *do* with the event. It never calls `glut*` itself - that stays
 in `sample.c`. With the routing moved here, `repl_editor.c` can legally drop
 its `ui_*.h` includes, closing the boundary exceptions listed in
 `ARCHITECTURE.md`.
 
-#### Each module — focused `handle_key` surface
+#### Each module - focused `handle_key` surface
 
 Each UI component and REPL overlay exposes a consumed/not-consumed handler:
 
@@ -563,7 +563,7 @@ Return 1 if the event was consumed (priority chain stops), 0 if not (chain
 continues). Modules that are currently inactive return 0 immediately. No module
 knows about any other module.
 
-#### `repl_editor.c` — REPL-internal input handling only
+#### `repl_editor.c` - REPL-internal input handling only
 
 After the refactor, `repl_editor.c` is genuinely a REPL editor module:
 
@@ -595,7 +595,7 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
 ```
 
 The controller calls geometry helpers (`editor_point_in_code_panel`,
-`ui_panels_scene_rect`) for spatial dispatch — this is the correct and only
+`ui_panels_scene_rect`) for spatial dispatch - this is the correct and only
 reason the controller needs `ui_panels.h` for input handling. After R3
 (extract layout), the scene-rect call in the frame builder moves out; this
 mouse-routing usage stays.
@@ -604,7 +604,7 @@ mouse-routing usage stays.
 
 | Option | Verdict |
 |--------|---------|
-| Each layer has its own routing core (`ui_input.c`, `scene_input.c`, etc.) | Partially right. The REPL layer does have internal routing in `repl_editor.c`. A separate `ui_input.c` just adds indirection — the controller already knows which UI overlays exist. |
+| Each layer has its own routing core (`ui_input.c`, `scene_input.c`, etc.) | Partially right. The REPL layer does have internal routing in `repl_editor.c`. A separate `ui_input.c` just adds indirection - the controller already knows which UI overlays exist. |
 | Expose handlers to the controller; it does the routing | **Correct for cross-layer routing.** Priority chain lives in the controller; each module exposes a focused handle function. |
 | Controller consumes inputs and updates model state | No. The controller routes; handlers own the behavior. The controller decides *who*; the handler decides *what*. It should not know that Ctrl+Z means undo. |
 
@@ -631,25 +631,25 @@ further.
 
 | Content | Lines | Nature |
 |---------|-------|--------|
-| `normalize_with_indent`, `repl_normalize_from_parsed`, `repl_parse_and_normalize*`, `parse_and_normalize_impl` | ~90 | Parse+normalize pipeline — logically part of the parser |
-| `repl_reformat_commands` | ~160 | Bulk reformatter (Ctrl+R) — walks all source cmds |
-| `collect_visible_vars` | ~60 | Scope query — builds visible-var stack at a position |
+| `normalize_with_indent`, `repl_normalize_from_parsed`, `repl_parse_and_normalize*`, `parse_and_normalize_impl` | ~90 | Parse+normalize pipeline - logically part of the parser |
+| `repl_reformat_commands` | ~160 | Bulk reformatter (Ctrl+R) - walks all source cmds |
+| `collect_visible_vars` | ~60 | Scope query - builds visible-var stack at a position |
 | `load_initial_commands`, `scroll_to_display_function` | ~35 | Startup / session lifecycle |
 | `repl_debug_dump_editor`, `repl_debug_dump_flat_commands` | ~60 | Test/debug dumps |
 | `current_begin_mode`, `count_vertices` | ~20 | Small query helpers over flat/source cmds |
 | Thin wrappers (`set_status`, `mark_normals_dirty`, `repl_flatten_commands`, etc.) | ~30 | One-liners forwarding to internal names |
-| Empty `/* GLUT callbacks */` section | 2 | Dead — gutted in Phase 1 |
+| Empty `/* GLUT callbacks */` section | 2 | Dead - gutted in Phase 1 |
 
 `repl_core.h` still declares `repl_keyboard_func`, `repl_special_func`,
 `repl_mouse_func`, `repl_motion_func`, `repl_passive_motion_func`, and
-`repl_mousewheel_func` — all stale since shim removal. `sample.c` now calls
+`repl_mousewheel_func` - all stale since shim removal. `sample.c` now calls
 `imrepl_ctrl_*` directly.
 
 ### Why it should not become a "REPL main entry point"
 
 The controller is the app entry point. Making `repl_core.c` a second entry
 point recreates the problem Phase 1 solved. The REPL does not have one entry
-point — it has focused modules for parsing, storing, flattening, executing,
+point - it has focused modules for parsing, storing, flattening, executing,
 editing, and scene management. `repl_core.c` becoming a coordinator would pull
 cross-cutting knowledge back into a catch-all, reversing the direction of the
 refactor.
@@ -663,7 +663,7 @@ Each piece has an unambiguous home:
   normalization is the step immediately after in the same pipeline. `repl_parser.h`
   gains the declarations; `repl_core.h` loses them.
 - **`collect_visible_vars`** → `repl_source_scope.c`. It builds a scope stack
-  at a given source position — exactly what `repl_source_scope.c` exists for.
+  at a given source position - exactly what `repl_source_scope.c` exists for.
 - **`repl_reformat_commands`** → a new `repl_reformat.c` / `repl_reformat.h`.
   It is an independent, self-contained operation (one public function, one
   private helper) triggered by Ctrl+R. No existing module owns "bulk source
@@ -686,7 +686,7 @@ that re-exports from the headers above during the transition.
 ### Why not rename rather than dissolve?
 
 Renaming `repl_core.c` to `repl_normalization.c` or `repl_pipeline.c` admits
-the remaining content is a coherent cluster. It is not — normalization, startup,
+the remaining content is a coherent cluster. It is not - normalization, startup,
 scope queries, debug dumps, and thin wrappers do not belong in one file just
 because they survived Phase 1. Renaming `repl_core.h` would require touching
 nearly every `.c` file in the tree for a cosmetic change. A phased dissolve
@@ -697,7 +697,7 @@ each commit can be reviewed independently.
 
 `repl_state.h` exposes ~50 typed accessors (`repl_state_render()`,
 `repl_state_replay()`, `repl_state_document_cmds_mut()`, etc.). It was introduced
-to replace raw extern globals — but the win was only at the type level, not
+to replace raw extern globals - but the win was only at the type level, not
 at the layering level. Any .c file that includes repl_state.h can read or
 mutate any subsystem's state from anywhere. The compiler enforces "you used
 the right type"; nothing enforces "you were allowed to reach into that
@@ -707,11 +707,11 @@ Concretely, three things follow:
 
 1. `scene_render.c` **reads** repl_state_replay/presentation/viewport/render
    **directly** instead of receiving a snapshot. Architecturally this is
-   identical to the pre-facade state of the world where it touched globals —
+   identical to the pre-facade state of the world where it touched globals -
    it's just typed now. The controller exists precisely to broker that data,
    and when scene bypasses it the controller's job is half-done.
 2. `ui_color_picker.c` **calls** `repl_state_document_cmds_mut()[line].args[0] = r;`
-   — a UI renderer reaching across the layering rule and mutating REPL-owned
+   - a UI renderer reaching across the layering rule and mutating REPL-owned
    source commands in place, with no undo hook, no validation, no observer.
    The facade made this look like a typed call (mut() returning a typed
    pointer) instead of what it really is: a UI module editing the REPL's
@@ -725,7 +725,7 @@ Concretely, three things follow:
    "scene * files consume `SceneRenderConfig`...they should not call
    repl_state_* directly").
 
-The facade is still the right primitive — but it should be treated like unsafe
+The facade is still the right primitive - but it should be treated like unsafe
 in Rust: necessary, not the default. The path forward is (a) audit each
 `repl_state_*` call site outside `repl_*.c` and `imrepl_ctrl.c` and replace with
 snapshot reads or narrow store/action APIs, (b) add a make
@@ -735,7 +735,7 @@ so that `repl_state_views.h` (read-only, snapshot-friendly) and
 `repl_state_owners.h` (mutating, owner-only) make the wrong call hard to import
 accidentally.
 
-That is what makes (1) and (2) load-bearing rather than cosmetic — they
+That is what makes (1) and (2) load-bearing rather than cosmetic - they
 convert a layering rule from "documented" to "compiler-enforced".
 
 ## Phase 2 Recommendations (Post-Phase 1 Audit)
@@ -762,7 +762,7 @@ Concrete consequences observed in the current tree:
 - `scene_render.c` reads `repl_state_replay/presentation/viewport/render`
   directly inside `draw_replay_hud` and `scene_render_3d_scene`
   (lines 187, 212, 222, 576). Architecturally identical to the pre-facade
-  globals — just typed.
+  globals - just typed.
 - `ui_color_picker.c` mutates `repl_state_document_cmds_mut()[line].args[0..3]`
   and `.source` in ~30 places (lines 63–145, 307–393). A UI renderer is editing
   REPL-owned source commands in place, with no undo hook, no validation, no
@@ -790,7 +790,7 @@ and as a useful audit trail until the whole Phase 2 checklist is closed.
 The work is three self-contained steps; do them in order since each removes
 one class of REPL read from scene code.
 
-**R1a — Add accumulation-AA fields to `SceneRenderConfig`**
+**R1a - Add accumulation-AA fields to `SceneRenderConfig`**
 
 `scene_render_3d_scene()` currently reads `repl_state_render()` at line 576
 to get `use_accum`, `accum_aa_enabled`, and `accum_samples` for the outer
@@ -830,7 +830,7 @@ Exit criterion: `scene_render.c` no longer calls `repl_state_render()`.
 
 ---
 
-**R1b — Build a `ReplayFadePlan` snapshot in the controller; scene iterates it**
+**R1b - Build a `ReplayFadePlan` snapshot in the controller; scene iterates it**
 
 `render_3d_scene_pass()` (scene_render.c:424–481) calls three `repl_replay_*`
 functions and `replay_restore_baseline_predef_values()` between batches.
@@ -849,7 +849,7 @@ typedef struct {
     float alpha[REPLAY_FADE_PLAN_MAX];
     int   skip_limits[REPLAY_FADE_PLAN_MAX];
     int   batch_count;
-    /* Predefined variable values at replay baseline — restored before each
+    /* Predefined variable values at replay baseline - restored before each
      * fade pass so animated geometry renders consistently */
     float baseline_predef[MAX_PREDEF_VARS];
     int   baseline_count;
@@ -926,7 +926,7 @@ restore calls (lines 460, 587, 597) are all gone.
 
 ---
 
-**R1c — Completed: move `draw_replay_hud()` to `ui_replay_hud.c`**
+**R1c - Completed: move `draw_replay_hud()` to `ui_replay_hud.c`**
 
 `ui_replay_hud_render()` now owns the replay HUD, lives in `ui_replay_hud.c`,
 and is called from `imrepl_ctrl_display_frame()` after `scene_render_3d_scene()`.
@@ -946,7 +946,7 @@ HUD renders from `ui_replay_hud.c`.
 / `repl_command_store` / `repl_var_drag`. The code does not match the doc.
 The three offenders and their fixes:
 
-**R2a — `ui_color_picker.c`: direct source-command mutation (~30 sites)**
+**R2a - `ui_color_picker.c`: direct source-command mutation (~30 sites)**
 
 `color_picker_write_cmd()` (ui_color_picker.c:60–130) writes directly to
 `repl_state_document_cmds_mut()[g_cp_line].args[0..3]`, `.num_args`, and
@@ -955,14 +955,14 @@ The three offenders and their fixes:
 include `repl_state.h` and `repl_core_internal.h`.
 
 The reads in `ui_color_picker_open()` (lines 137–146) also use `_mut()` purely
-for read access — a symptom of there being no `const` version of
+for read access - a symptom of there being no `const` version of
 `repl_state_document_cmds()` at those call sites.
 
 Add two functions to `repl_command_store.h`:
 
 ```c
 /* Replace the color args and source text of an existing color command in
- * place. Marks the flat program dirty. Does not push an undo snapshot —
+ * place. Marks the flat program dirty. Does not push an undo snapshot -
  * callers that want undo should call push_undo_snapshot() before opening the
  * picker session, not on every drag event. Returns 1 on success, 0 if
  * cmd_idx is out of range or the command type is not a color command. */
@@ -996,11 +996,11 @@ Exit criterion: `ui_color_picker.c` contains zero `repl_state_*_mut()` calls.
 
 ---
 
-**R2b — `ui_panels.c`: cursor blink mutation and replay state mutation (3 sites)**
+**R2b - `ui_panels.c`: cursor blink mutation and replay state mutation (3 sites)**
 
 Two distinct patterns:
 
-*Cursor blink reset* — lines 1123–1124 and 1240–1241:
+*Cursor blink reset* - lines 1123–1124 and 1240–1241:
 
 ```c
 *repl_state_code_panel_mut()->cursor_visible = 1;
@@ -1018,7 +1018,7 @@ void repl_action_cursor_blink_reset(void);
 
 Implement in `repl_actions.c` (two lines). Replace both sites in `ui_panels.c`.
 
-*Replay pin-button mutation* — line 1131 and 1148–1149:
+*Replay pin-button mutation* - line 1131 and 1148–1149:
 
 ```c
 ReplReplayRuntimeState *replay = repl_state_replay_mut();
@@ -1049,24 +1049,24 @@ returns only legitimate read-via-const-accessor patterns or nothing.
 
 ---
 
-**R2c — `ui_panels.c` reads via `_mut()`: switch to const accessor**
+**R2c - `ui_panels.c` reads via `_mut()`: switch to const accessor**
 
 `ui_panels.c` calls `repl_state_document_cmds_mut()` in ~15 read-only
-contexts (lines 397, 539–715) — it uses the mutable accessor where the const
+contexts (lines 397, 539–715) - it uses the mutable accessor where the const
 one would do. This matters because R6 (facade split) will make
 `repl_state_document_cmds_mut()` importable only from `repl_state_owners.h`,
 so `ui_panels.c` would need the owners header just to read cmd types.
 
 Replace all read-only uses of `repl_state_document_cmds_mut()[i]` in
 `ui_panels.c` with `repl_state_document_cmds()[i]`. This requires no logic
-change — `repl_state_document_cmds()` returns `const GLCmd *`; field reads
+change - `repl_state_document_cmds()` returns `const GLCmd *`; field reads
 work identically.
 
 Exit criterion: `grep "document_cmds_mut" ui_panels.c` returns empty.
 
 ---
 
-**R2d — `ui_help_overlay.c`: single `_mut()` site**
+**R2d - `ui_help_overlay.c`: single `_mut()` site**
 
 `ui_help_overlay.c:19` fetches `repl_state_help_mut()` to toggle the active
 tab. Add to `repl_actions.h`:
@@ -1102,8 +1102,8 @@ or `repl_core_internal.h`. The `check-ui-no-repl-state-mut` Makefile rule
 `ui_panels_scene_rect` and `ui_panels_code_panel_rect` (`ui_panels.c:50–110`)
 are pure window-geometry functions: no GL, no rendering, no UI state. They
 compute pixel rectangles from window dimensions, the current layout mode, and
-`panel_frac`. Because they live in `ui_panels.c`, every non-UI caller —
-`imrepl_ctrl.c`, `repl_editor.c`, `repl_export.c`, and the test suite — must
+`panel_frac`. Because they live in `ui_panels.c`, every non-UI caller -
+`imrepl_ctrl.c`, `repl_editor.c`, `repl_export.c`, and the test suite - must
 include a UI render header to get layout math. That is the wrong dependency
 direction: layout geometry belongs in a module that `scene_*`, `repl_*`, and
 `ui_*` modules can all include without pulling in UI rendering.
@@ -1114,7 +1114,7 @@ Status: completed on the current branch; `repl_layout.c` / `repl_layout.h` now o
 
 ---
 
-**R3a — Create `repl_layout.h` / `repl_layout.c`**
+**R3a - Create `repl_layout.h` / `repl_layout.c`**
 
 Create `repl_layout.h`:
 
@@ -1138,14 +1138,14 @@ Create `repl_layout.c`. Move the bodies of `ui_panels_scene_rect` and
 `repl_layout_code_panel_rect`. The implementations already read only
 `repl_state.h` accessors (`repl_state_presentation()->code_panel_layout`,
 `repl_state_code_panel()->panel_frac`, `repl_state_viewport()->window_w/h`)
-— that include stays correct in the new file; layout is a REPL-model consumer,
+- that include stays correct in the new file; layout is a REPL-model consumer,
 not a UI renderer.
 
 Add `repl_layout.c` to `SRCS` and `CORE_TEST_SRCS` in the `Makefile`.
 
 ---
 
-**R3b — Update all callers (≈34 call sites)**
+**R3b - Update all callers (≈34 call sites)**
 
 Rename every call from the old function name to the new one and update
 includes. The full caller inventory:
@@ -1172,18 +1172,18 @@ routing, code-panel rendering) keep the include and simply add
 `#include "repl_layout.h"` as well.
 
 `ui_panels.c` itself: add `#include "repl_layout.h"` and change its own
-internal calls to `repl_layout_*`. Remove the old function bodies entirely —
+internal calls to `repl_layout_*`. Remove the old function bodies entirely -
 do not leave stubs. Remove `ui_panels_scene_rect` and
 `ui_panels_code_panel_rect` from `ui_panels.h`.
 
 ---
 
-**R3c — Verify the controller's `ui_panels.h` dependency is correctly scoped**
+**R3c - Verify the controller's `ui_panels.h` dependency is correctly scoped**
 
 After R3b, `imrepl_ctrl.c` still includes `ui_panels.h`. That is correct: the
 controller needs it for mouse input routing (`ui_panels_handle_code_panel_click`,
 `ui_panels_scene_rect` is gone but hit-test calls remain). The include is no
-longer there for config building — `repl_layout_scene_rect` from `repl_layout.h`
+longer there for config building - `repl_layout_scene_rect` from `repl_layout.h`
 handles that now. No behavior change, but the reason for the include is now
 clearly input routing only, which is what `MODULES.md` already says the
 controller-UI include is for.
@@ -1221,7 +1221,7 @@ header used by tests and `repl_*.c` implementation files. There are four steps.
 
 ---
 
-**R4a — Create `repl_pipeline.h` for pipeline and lifecycle operations**
+**R4a - Create `repl_pipeline.h` for pipeline and lifecycle operations**
 
 Create `repl_pipeline.h`:
 
@@ -1269,11 +1269,11 @@ these declarations, add a comment noting they moved, or add
 `#include "repl_pipeline.h"` at the top of `_internal.h` so tests continue
 to compile without changes.
 
-No implementation files change in this step — only header membership.
+No implementation files change in this step - only header membership.
 
 ---
 
-**R4b — Add `repl_eval_predef_view()` to `repl_eval.h` to hide global access**
+**R4b - Add `repl_eval_predef_view()` to `repl_eval.h` to hide global access**
 
 `imrepl_ctrl.c:65–66` reads two file-scoped globals from `repl_eval.c` directly:
 
@@ -1282,7 +1282,7 @@ guide_snapshot.predef_vars     = g_predef_vars;
 guide_snapshot.num_predef_vars = g_num_predef_vars;
 ```
 
-These globals are `static` within `repl_eval.c` — the controller can only reach
+These globals are `static` within `repl_eval.c` - the controller can only reach
 them because `repl_core_internal.h` re-exposes them via `extern` declarations.
 After R4a removes the `_internal.h` include, the controller loses access. Wrap
 the read behind a proper accessor.
@@ -1319,12 +1319,12 @@ guide_snapshot.num_predef_vars = predef.count;
 
 If R1b has already landed, `repl_restore_predef_values` is also called from
 `scene_render.c` (to restore baseline vars before each fade pass). That call
-site uses `repl_pipeline.h` — the scene does not call `repl_eval_predef_view`
+site uses `repl_pipeline.h` - the scene does not call `repl_eval_predef_view`
 and does not see the globals.
 
 ---
 
-**R4c — Verify `repl_core_internal.h` is limited to tests and `repl_` code after R4a + R4b**
+**R4c - Verify `repl_core_internal.h` is limited to tests and `repl_` code after R4a + R4b**
 
 After both steps:
 
@@ -1350,12 +1350,12 @@ headers would bloat the API and make private REPL implementation details look
 stable.
 
 Remove the `extern g_predef_vars` / `extern g_num_predef_vars` declarations
-from `repl_core_internal.h` — they were the only reason the controller
+from `repl_core_internal.h` - they were the only reason the controller
 had to include that header at all.
 
 ---
 
-**R4d — Verify only truly public APIs live in `repl_*.h` headers**
+**R4d - Verify only truly public APIs live in `repl_*.h` headers**
 
 R4c allows `repl_*.c` implementation files to keep using
 `repl_core_internal.h`; R4d makes the other half of that rule explicit. Do not
@@ -1420,7 +1420,7 @@ Do this in two steps.
 
 ---
 
-**R5a — Remove HUD-only fields when R5 begins**
+**R5a - Remove HUD-only fields when R5 begins**
 
 When you slim `SceneRenderConfig`, remove these six declarations from
 `SceneRenderConfig` and from every `imrepl_ctrl.c` assignment in the
@@ -1438,7 +1438,7 @@ its underwater check locally from the camera config.
 
 ---
 
-**R5b — Reorganize `SceneRenderConfig` into labeled sections**
+**R5b - Reorganize `SceneRenderConfig` into labeled sections**
 
 Replace the current flat struct (which ends with the unlabeled "Existing
 fields" block) with a consistently grouped version:
@@ -1553,7 +1553,7 @@ const struct accessors, `_mut()` struct accessors, focused read helpers,
 focused write helpers, `_set_*()` functions, `_reset()` / `_clear()` functions,
 and lifecycle operations. Any file that includes `repl_state.h` picks up all
 of them. The Makefile checks that view files don't call `_mut()`, but they
-still *see* those declarations — nothing stops a developer from adding a
+still *see* those declarations - nothing stops a developer from adding a
 `_mut()` call in a view file and having it compile without an include change.
 
 The fix is to split the header at the ownership boundary so that including the
@@ -1562,13 +1562,13 @@ steps; do them in order.
 
 ---
 
-**R6a — Create `repl_state_owners.h` for the mutating surface**
+**R6a - Create `repl_state_owners.h` for the mutating surface**
 
 Create `repl_state_owners.h`. Move into it every declaration that lets a
 caller mutate REPL state:
 
 - All `*_mut()` struct accessors (`repl_state_document_mut()`,
-  `repl_state_replay_mut()`, etc. — 23 functions)
+  `repl_state_replay_mut()`, etc. - 23 functions)
 - All raw mutable pointer accessors (`repl_state_document_cmds_mut()`,
   `repl_state_document_cmd_at_mut()`, `repl_state_flat_program_cmds_mut()`,
   `repl_state_flat_program_local_vars_mut()`, `repl_state_clipboard_cmds_mut()`)
@@ -1617,7 +1617,7 @@ no reliance on including `repl_state_owners.h`.
 **Compatibility shim**: update `repl_state.h` to:
 
 ```c
-/* repl_state.h — compatibility shim; new code should include the specific
+/* repl_state.h - compatibility shim; new code should include the specific
  * header it needs: repl_state_views.h or repl_state_owners.h */
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
@@ -1629,9 +1629,9 @@ updating in this step.
 
 ---
 
-**R6b — Migrate `scene_*.c` and `ui_*.c` from `repl_state.h` to `repl_state_views.h`**
+**R6b - Migrate `scene_*.c` and `ui_*.c` from `repl_state.h` to `repl_state_views.h`**
 
-This step is only valid after R1 and R2 have landed — both remove all
+This step is only valid after R1 and R2 have landed - both remove all
 `_mut()` and `repl_replay_*` calls from scene and UI files.
 
 For each `scene_*.c` and `ui_*.c` file that currently includes `repl_state.h`,
@@ -1640,7 +1640,7 @@ cleanly, because after R1+R2 it no longer calls any of the mutating functions
 that are only in `repl_state_owners.h`.
 
 If a file fails to compile after the switch, that is a missed mutation from
-R1 or R2 — fix it before committing R6b for that file, not by reverting to
+R1 or R2 - fix it before committing R6b for that file, not by reverting to
 `repl_state.h`.
 
 Do the migration file-by-file, build after each, so failures are isolated.
@@ -1660,11 +1660,11 @@ include `repl_state_views.h`, and owner/controller modules continue to use the
 compatibility shim or `repl_state_owners.h` as appropriate.
 
 Owner modules (`repl_*.c`, `imrepl_ctrl.c`) continue to include
-`repl_state.h` (the shim) or explicitly `repl_state_owners.h` — either works.
+`repl_state.h` (the shim) or explicitly `repl_state_owners.h` - either works.
 
 ---
 
-**R6c — Add the `check-views-no-owners` Makefile guard**
+**R6c - Add the `check-views-no-owners` Makefile guard**
 
 ```makefile
 check-views-no-owners:
@@ -1680,12 +1680,12 @@ check-views-no-owners:
 
 Wire it into `make test`. After R6b, this check passes. From then on, any
 developer who adds a `_mut()` call in a view file must explicitly add
-`#include "repl_state_owners.h"` to make it compile — and the check
+`#include "repl_state_owners.h"` to make it compile - and the check
 immediately flags the include. The wrong call is no longer invisible.
 
 ---
 
-**R6d — Verify and document the ownership boundary**
+**R6d - Verify and document the ownership boundary**
 
 After R6b and R6c:
 
@@ -1747,7 +1747,7 @@ scope queries, startup, debug dumps, and thin wrappers. It should dissolve, not
 be renamed. Do it in phases so each commit is independently reviewable and the
 include-churn from `repl_core.h` is amortized.
 
-**Phase 1 of R10 — delete the dead stale content (one commit, zero risk):**
+**Phase 1 of R10 - delete the dead stale content (one commit, zero risk):**
 
 - Remove the empty `/* GLUT callbacks */` section from `repl_core.c`.
 - Delete the stale `repl_keyboard_func`, `repl_special_func`,
@@ -1755,26 +1755,26 @@ include-churn from `repl_core.h` is amortized.
   `repl_mousewheel_func` declarations from `repl_core.h`. They are dead since
   the shim removal; `sample.c` calls `imrepl_ctrl_*` directly.
 
-**Phase 2 of R10 — move the parse+normalize pipeline to the parser:**
+**Phase 2 of R10 - move the parse+normalize pipeline to the parser:**
 
 - Move `repl_parse_and_normalize*`, `normalize_with_indent`,
   `repl_normalize_from_parsed`, and `parse_and_normalize_impl` into
   `repl_parser.c`. Add declarations to `repl_parser.h`. Remove from
   `repl_core.h`.
 - Move `collect_visible_vars` into `repl_source_scope.c` /
-  `repl_source_scope.h`. It builds a scope stack at a given position — the
+  `repl_source_scope.h`. It builds a scope stack at a given position - the
   textbook scope-query module.
 - Update callers (`repl_reformat_commands`, `repl_commit.c`, tests) to include
   the new headers instead of `repl_core.h` for these symbols.
 
-**Phase 3 of R10 — extract the reformatter:**
+**Phase 3 of R10 - extract the reformatter:**
 
 - Move `repl_reformat_commands` (and its private helper `get_for_var_name`) to
   a new `repl_reformat.c` / `repl_reformat.h`. One public function, one private
-  helper — self-contained. Remove from `repl_core.h`.
+  helper - self-contained. Remove from `repl_core.h`.
 - `repl_editor.c` (which calls it for Ctrl+R) updates its include.
 
-**Phase 4 of R10 — move startup and query helpers:**
+**Phase 4 of R10 - move startup and query helpers:**
 
 - Move `load_initial_commands` and `scroll_to_display_function` into
   `repl_scenes.c`. Session startup belongs with workspace/scene lifecycle.
@@ -1787,7 +1787,7 @@ include-churn from `repl_core.h` is amortized.
   functions to match their public names, or moving them into the module that
   owns the underlying operation.
 
-**Phase 5 of R10 — dissolve repl_core.h:**
+**Phase 5 of R10 - dissolve repl_core.h:**
 
 Once `repl_core.c` is empty, stop treating `repl_core.h` as the accidental
 "include everything" header. R12 below defines the intentional replacement:
@@ -1892,21 +1892,21 @@ Skip if the file is not actively painful to navigate.
 ### Suggested ordering
 
 ```
-R10-phase1  (delete stale GLUT decls — zero risk, do first)
-R1          (replay/HUD migration — highest leverage, unblocks R5 + R6)
-R2          (UI → REPL mutation hole — can run in parallel with R1)
+R10-phase1  (delete stale GLUT decls - zero risk, do first)
+R1          (replay/HUD migration - highest leverage, unblocks R5 + R6)
+R2          (UI → REPL mutation hole - can run in parallel with R1)
 R3          (extract layout from ui_panels)
-R5          (slim SceneRenderConfig — requires R1)
-R6          (split typed-state facade — requires R1 + R2)
-R7          (add view-side grep guards — requires R6)
+R5          (slim SceneRenderConfig - requires R1)
+R6          (split typed-state facade - requires R1 + R2)
+R7          (add view-side grep guards - requires R6)
 R11         (harden file-level guards; start now, shrink allowlists after R2/R4/R6)
 R4          (controller off repl_core_internal.h; public-header audit)
 R10-phase2  (parse+normalize → repl_parser, collect_visible_vars → repl_source_scope)
 R10-phase3  (extract repl_reformat.c)
 R10-phase4  (startup + query helpers to natural owners)
-R10-phase5  (dissolve repl_core.h — feeds into R12)
-R12         (single public repl.h — after R4d + R10)
-R8          (sample → imrepl rename — mechanical, last)
+R10-phase5  (dissolve repl_core.h - feeds into R12)
+R12         (single public repl.h - after R4d + R10)
+R8          (sample → imrepl rename - mechanical, last)
 R9          (optional: split repl_export.c)
 ```
 
@@ -1926,19 +1926,19 @@ Most of Phase 2 has now landed. Current completion:
 
 | Recommendation | Status | Notes |
 |---|---|---|
-| **R1** — Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` and `repl_state_*` calls |
-| **R2** — UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; `check-ui-no-repl-state-mut` passes |
-| **R3** — Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
-| **R4** — Controller off `repl_core_internal.h` | ⚠️ Mostly complete | R4a/R4b/R4d done; R4c clean for controller; only `bench_repl.c` remains (intentional, R4c-out-of-scope) |
-| **R5** — Slim `SceneRenderConfig` | ✅ Complete | Six HUD fields removed (now on `UiReplayHudState`); `ReplayFadePlan` + accum-AA fields landed; struct reorganized into labeled sections |
-| **R6** — Split typed-state facade | ✅ Complete | `repl_state_views.h` / `repl_state_owners.h` split; `repl_state.h` is a shim |
-| **R7** — View-side grep guards | ✅ Complete | `check-pure-scene-no-repl-state` and `check-ui-no-repl-state-mut` wired into `make test` |
-| **R11** — Harden file-level guards | ⚠️ Partial | Core guards live in Makefile and `make test`; shrinking allowlists for the remaining `bench_repl.c` exception still pending |
-| **R10-phase1** — Delete stale GLUT decls | ⚠️ Reassess | Original premise is wrong: the "stale" decls in `repl_core.h` (`repl_keyboard_func` etc.) are actually live — `imrepl_ctrl.c` calls them as the cross-layer input dispatch. They should move to `repl_editor.h` (or stay in `repl_core.h` until R10-phase5), not be deleted. |
-| **R10-phase2+** — Dissolve `repl_core.c` | ❌ Not started | `repl_core.c` is 663 lines: parse+normalize, reformat, scope queries, startup, debug dumps remain |
-| **R12** — Single public REPL header | ❌ Not started | Wait for R10 to finish |
-| **R8** — `sample → imrepl` rename | ❌ Not started | Mechanical; do last |
-| **R9** — Optional: split `repl_export.c` | ❌ Not started | Module hygiene only; skip if not painful |
+| **R1** - Replay/HUD migration | ✅ Complete | R1a, R1b, R1c all done; scene has zero `repl_replay_*` and `repl_state_*` calls |
+| **R2** - UI → REPL mutation hole | ✅ Complete | R2a–R2d all done; `check-ui-no-repl-state-mut` passes |
+| **R3** - Extract layout geometry | ✅ Complete | `repl_layout.h/c` created; ~34 call sites updated |
+| **R4** - Controller off `repl_core_internal.h` | ⚠️ Mostly complete | R4a/R4b/R4d done; R4c clean for controller; only `bench_repl.c` remains (intentional, R4c-out-of-scope) |
+| **R5** - Slim `SceneRenderConfig` | ✅ Complete | Six HUD fields removed (now on `UiReplayHudState`); `ReplayFadePlan` + accum-AA fields landed; struct reorganized into labeled sections |
+| **R6** - Split typed-state facade | ✅ Complete | `repl_state_views.h` / `repl_state_owners.h` split; `repl_state.h` is a shim |
+| **R7** - View-side grep guards | ✅ Complete | `check-pure-scene-no-repl-state` and `check-ui-no-repl-state-mut` wired into `make test` |
+| **R11** - Harden file-level guards | ⚠️ Partial | Core guards live in Makefile and `make test`; shrinking allowlists for the remaining `bench_repl.c` exception still pending |
+| **R10-phase1** - Delete stale GLUT decls | ⚠️ Reassess | Original premise is wrong: the "stale" decls in `repl_core.h` (`repl_keyboard_func` etc.) are actually live - `imrepl_ctrl.c` calls them as the cross-layer input dispatch. They should move to `repl_editor.h` (or stay in `repl_core.h` until R10-phase5), not be deleted. |
+| **R10-phase2+** - Dissolve `repl_core.c` | ❌ Not started | `repl_core.c` is 663 lines: parse+normalize, reformat, scope queries, startup, debug dumps remain |
+| **R12** - Single public REPL header | ❌ Not started | Wait for R10 to finish |
+| **R8** - `sample → imrepl` rename | ❌ Not started | Mechanical; do last |
+| **R9** - Optional: split `repl_export.c` | ❌ Not started | Module hygiene only; skip if not painful |
 
 **Next recommended steps:**
 1. Re-evaluate R10-phase1: the GLUT `repl_*_func` decls are not stale. Either

@@ -14,9 +14,9 @@
  * (PARAM / LOOP). Kept here rather than in a compile-private header because
  * flatten tags its own scope arrays with the same enum. */
 typedef enum {
-    REPL_VISIBLE_VAR_LOOP = 0,  /* for(i, ...) iterator      — not writable */
-    REPL_VISIBLE_VAR_PARAM,     /* funcN(a, b) parameter     — not writable */
-    REPL_VISIBLE_VAR_LOCAL      /* `float x;` in a func body — writable */
+    REPL_VISIBLE_VAR_LOOP = 0,  /* for(i, ...) iterator      - not writable */
+    REPL_VISIBLE_VAR_PARAM,     /* funcN(a, b) parameter     - not writable */
+    REPL_VISIBLE_VAR_LOCAL      /* `float x;` in a func body - writable */
 } ReplVisibleVarKind;
 
 /* Populate `vars` with every loop/function-local visible at source line
@@ -26,7 +26,7 @@ typedef enum {
  * one ReplVisibleVarKind per returned entry, parallel to `vars`.
  *
  * Ordering is innermost scope first, and within a function frame the
- * parameters precede that body's locals — flatten builds its call frames the
+ * parameters precede that body's locals - flatten builds its call frames the
  * same way, so a resolver written against either sees the same winner.
  * Context-driven: reads no live REPL state, so compile passes its
  * ReplCompileContext document view. */

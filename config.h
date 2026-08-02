@@ -14,7 +14,7 @@
  * NOTE: This file is for *compile-time* configuration. User-toggleable
  * runtime settings (wireframe / grid theme / etc.) live on
  * `src/app/glr_config.h` and the `g_cfg_items[]` descriptor table in
- * `src/app/glr_actions.c` — different concept, do not conflate.
+ * `src/app/glr_actions.c` - different concept, do not conflate.
  */
 #ifndef CONFIG_H
 #define CONFIG_H
@@ -36,7 +36,7 @@
  * debug build, so the check keeps its coverage where a violation would be
  * caught, and release stops paying for it.
  *
- * Never gate *behavior* on this — only diagnostics. Two builds that compute
+ * Never gate *behavior* on this - only diagnostics. Two builds that compute
  * different results is a bug factory; a release build that skips a check
  * whose outcome is provably "no finding" is not. */
 #ifndef GLR_DEBUG_CHECKS
@@ -54,7 +54,7 @@
 #define FONT_H          15
 #define FONT_SMALL_W    8
 #define FONT_SMALL_H    13
-/* FONT_TINY is proportional (Helvetica 10) — there is no per-glyph width
+/* FONT_TINY is proportional (Helvetica 10) - there is no per-glyph width
  * constant to match FONT_SMALL_W; measure with gl2d_text_width(). The
  * height is the cap-to-descender box used for vertical centering. */
 #define FONT_TINY_H     10
@@ -91,7 +91,7 @@
  * status bar in `ReplStatusState` mirrors the size end-to-end. */
 #define REPL_STATUS_TEXT_MAX 256
 
-/* Intermediate diagnostic text buffer width — used by validation
+/* Intermediate diagnostic text buffer width - used by validation
  * helpers (verr), arg splitters (split_err), and parse/flatten error
  * messages that get forwarded into the final REPL_STATUS_TEXT_MAX
  * buffer with extra context wrapped around them. Half the size of the
@@ -117,11 +117,11 @@
 /* Storage capacity of the source command document and the matching
  * editor buffer (formerly MAX_COMMANDS, renamed when the flat cap split
  * off as MAX_FLAT_COMMANDS). This constant fans out into every full
- * document copy — the 32x2 undo/redo rings and 8 user-scene slots — so
+ * document copy - the 32x2 undo/redo rings and 8 user-scene slots - so
  * it is kept deliberately small; loops multiply into the flat program,
  * not into source lines, so hand-typed documents don't need more.
  * Surfaces here (not in src/repl/command.h) so neutral boundary headers
- * — source_document.h in particular — can size their structs without
+ * - source_document.h in particular - can size their structs without
  * including REPL grammar types. */
 #ifndef MAX_EDITOR_COMMANDS
 #define MAX_EDITOR_COMMANDS 1024
@@ -144,7 +144,7 @@
 #define MAX_LINE_LEN 256
 #endif
 
-/* Maximum source-command rows touched by a single compiled change —
+/* Maximum source-command rows touched by a single compiled change -
  * insert_many block batches, comment toggles, etc. The neutral
  * SourceTextChange in source_document.h sizes its text[] array by this
  * constant so the translator from ReplCompiledChange.text[] copies
@@ -251,14 +251,14 @@
  * the live app controller (src/app/glr_ctrl.c) and the export path
  * (src/repl/export.c) so both rendering modes use the same depth bias
  * when drawing wire outlines over the filled pass. Dependency-free
- * compile-time constants — folded here from the former
+ * compile-time constants - folded here from the former
  * outline_offset.h, matching this header's cross-layer-constant
  * contract.
  *
  * The FACTOR term must be O(1), not epsilon: a wide outline
  * (glLineWidth > 1) centered on a polygon edge overhangs the polygon
  * boundary by half its width, and those overhang fragments extrapolate
- * the face's plane — landing *behind* an adjacent face's fill by that
+ * the face's plane - landing *behind* an adjacent face's fill by that
  * face's depth slope per pixel. Only the slope-proportional factor term
  * can beat that; with a near-zero factor the depth test clips half the
  * line wherever the neighboring face is steep, making outline widths

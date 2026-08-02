@@ -61,7 +61,7 @@ static void clipboard_publish_to_host(void) {
     }
 
     if (cb->kind == EDITOR_CLIPBOARD_LINES && cb->line_count > 0) {
-        /* Newline-joined, no trailing newline — sized from the payload
+        /* Newline-joined, no trailing newline - sized from the payload
          * rather than the MAX_EDITOR_COMMANDS x MAX_LINE_LEN worst case,
          * same as the paste path below. */
         size_t total = 1;
@@ -91,7 +91,7 @@ static void clipboard_publish_to_host(void) {
 }
 
 /* Splits external text on '\n' (tolerating a '\r' before it) into the
- * line clipboard, dropping empty segments — in particular the trailing one
+ * line clipboard, dropping empty segments - in particular the trailing one
  * a terminal newline produces, which would otherwise fail the whole paste
  * as an empty command. Clamped to the clipboard's capacity. */
 static void clipboard_stage_external_lines(const char *text) {
@@ -269,7 +269,7 @@ static int current_cut_range(int *out_start, int *out_count) {
 }
 
 /* Copy [lo, hi) from the active input buffer into the input-text
- * clipboard. Preserves the visual selection — copy is non-destructive
+ * clipboard. Preserves the visual selection - copy is non-destructive
  * and shouldn't make the user re-select if they want to copy again. */
 static int editor_clipboard_copy_input_selection(void) {
     if (!editor_input_selection_active())
@@ -291,13 +291,13 @@ static int editor_clipboard_copy_input_selection(void) {
 
 /* Cut: copy step then delete the range via the shared
  * edit_op_consume_input_selection helper. Works in any mode because the
- * mutation lives on the active input buffer, not on source commands —
+ * mutation lives on the active input buffer, not on source commands -
  * the line-range insert-mode guard doesn't apply.
  *
  * Intentionally does NOT push an undo snapshot. EditorUndoSnapshot does
  * not capture the input buffer (restore reloads input via
  * editor_load_line_to_input from the committed source line), so a push here
- * cannot rewind the cut — it would only have the side effect of
+ * cannot rewind the cut - it would only have the side effect of
  * tripping the example auto-promotion hook in
  * editor_undo_push_snapshot. This matches typed-char and backspace,
  * which never push undo either; the undo history is reserved for
@@ -327,7 +327,7 @@ static int editor_clipboard_cut_input_selection(void) {
  * cut path uses) so paste replaces the selected range instead of
  * inserting beside it.
  *
- * No undo push here — same reasoning as cut above: the undo snapshot
+ * No undo push here - same reasoning as cut above: the undo snapshot
  * doesn't capture input bytes, so it cannot rewind the paste, and
  * pushing would falsely auto-promote a loaded example before any
  * source command is touched. */
@@ -395,7 +395,7 @@ int editor_clipboard_copy_current_with_result(void) {
     int result = 0;
 
     /* Input-buffer selection wins over line-range / current line.
-     * Works in insert mode too — the cut/copy of a partial input
+     * Works in insert mode too - the cut/copy of a partial input
      * substring is a pure input-buffer mutation. */
     if (editor_clipboard_copy_input_selection())
         return 1;
@@ -533,7 +533,7 @@ void editor_clipboard_paste_current(void) {
 
     /* The tutorial read-only guard MUST run before the undo push: a
      * rejected paste must not push a phantom undo entry, clear the redo
-     * ring, or auto-promote a loaded example to a user scene — all are
+     * ring, or auto-promote a loaded example to a user scene - all are
      * side effects of editor_undo_push_snapshot(). This matches the
      * guard-then-push ordering of every other mutation path (the cut
      * path above, and editor_delete_cmd_range / editor_clear_all_cmds /
@@ -541,7 +541,7 @@ void editor_clipboard_paste_current(void) {
     if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
         return;
 
-    /* Snapshot the clipboard text before any state mutation — defensive
+    /* Snapshot the clipboard text before any state mutation - defensive
      * against any path that could mutate the clipboard mid-loop, and
      * sized by count so the snapshot doesn't allocate the 1 MB
      * MAX_EDITOR_COMMANDS × MAX_LINE_LEN worst case on the stack. Allocated
@@ -602,7 +602,7 @@ void editor_clipboard_paste_current(void) {
     /* Turn off insert mode before the load_line call, even if we are going to
      * restore the entry insert mode: editor_load_line_to_input mirrors a
      * *committed* line into the input buffer for re-editing, which is
-     * contradictory in insert mode — the panel renders an input row
+     * contradictory in insert mode - the panel renders an input row
      * *before* document_cmds[edit_line], so a pre-loaded following line
      * shows as a phantom duplicate and materializes a real duplicate on
      * the next commit. (This is the Enter-virtual-blank paste bug: an

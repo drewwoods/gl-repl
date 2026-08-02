@@ -3,8 +3,8 @@
  *
  * This layer owns the editor half of a commit transaction: ask the REPL
  * compile/apply surface what source-command change should happen, preflight
- * it, then run the shared mutation sequence — predef ops, scratch ops,
- * editor text buffer, cmd-store — and replay any editor-only follow-up
+ * it, then run the shared mutation sequence - predef ops, scratch ops,
+ * editor text buffer, cmd-store - and replay any editor-only follow-up
  * effects (cursor moves, input clearing, etc.).
  *
  * **Undo policy is the caller's, not this layer's.** Both
@@ -40,14 +40,14 @@
  * it leaves undo ownership to the caller.
  *
  * The live dispatch path for typed input uses the
- * `editor_try_commit_*` chain below — each handler runs its own
+ * `editor_try_commit_*` chain below - each handler runs its own
  * compile + preflight + apply transaction and surfaces status text
  * through `repl_set_status` / `_set_status_error`.
  *
  *   Returns 1 if all four halves (predef ops, scratch ops, editor
  *     buffer, cmd store) landed successfully.
  *   Returns 0 if the preflight detected the cmd-store can't
- *     accept the change. On a 0 return no mutation occurred —
+ *     accept the change. On a 0 return no mutation occurred -
  *     predef vars, scratch arrays, editor buffer, and cmd-store
  *     are all unchanged.
  *
@@ -167,7 +167,7 @@ void editor_commit_plan_init(EditorCommitPlan *plan);
  *      clear_autocomplete → func_decl_resume_publish.
  *   4. If `plan->change.commit_message[0]` is non-empty, publish the status text.
  *
- * Undo capture is the caller's responsibility — the ;-key / Enter /
+ * Undo capture is the caller's responsibility - the ;-key / Enter /
  * editor_feed_line dispatch sites push a snapshot before invoking
  * the try_commit_* chain; this helper deliberately does NOT push
  * one (see body comment for rationale).
@@ -246,7 +246,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
  * Each `try_commit_*` inspects the live editor input. Returns 1 if
  * it consumed the line (success or handled error), 0 if the input
  * wasn't in its grammar. Ordering inside the higher-order
- * dispatchers matters — `float` must precede `assign` so `float x`
+ * dispatchers matters - `float` must precede `assign` so `float x`
  * isn't misread as an assignment to "float". */
 
 void editor_commit_reset_transients(void);
@@ -259,7 +259,7 @@ int  editor_commit_apply_swatch_change(int edit_line, int direction, float scale
 /* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
  * delta via the file-static publisher in commit.c; the matching
  * close-brace / Enter-out-of-func consumes it via the file-static
- * read-and-clear. Only `_peek` is public — tests read it without
+ * read-and-clear. Only `_peek` is public - tests read it without
  * mutating the bookkeeping. */
 int  editor_commit_func_decl_resume_peek(void);
 

@@ -1,4 +1,4 @@
-# `src/editor` — the text-document model + controller (Draft)
+# `src/editor` - the text-document model + controller (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -25,7 +25,7 @@ completion", "scroll follows the cursor").
 - **Application-flavored controllers.** [`input.c`](input.c) (key/mouse dispatch with
   this app's bindings), [`commit.c`](commit.c) (the transaction that turns a text edit
   into a validated program change), [`clipboard.c`](clipboard.c), [`undo.c`](undo.c), [`search.c`](search.c),
-  [`completion.c`](completion.c), and the inline overlays. These encode *policy* — what a
+  [`completion.c`](completion.c), and the inline overlays. These encode *policy* - what a
   given keystroke should mean in this app.
 
 The general lesson the layout encodes: the **data model and edit primitives
@@ -36,7 +36,7 @@ are reusable; the key bindings and commit semantics are app-specific.**
 [`tools/editor_demo/`](../../tools/editor_demo/) is a **generic plain-text
 editor** built from the reusable half of this module only. It links
 [`state.c`](state.c) (the document model) and [`edit_ops.c`](edit_ops.c) (the primitives), plus the
-generic text panel from `src/ui/core` — and drives them with its *own* input
+generic text panel from `src/ui/core` - and drives them with its *own* input
 dispatcher ([`tools/editor_demo/input.c`](../../tools/editor_demo/input.c)) and its *own* File menu
 ([`tools/editor_demo/menu.c`](../../tools/editor_demo/menu.c)). It must not link `src/ui/app`: the REPL
 code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L85), [`UiState`](../ui/app/state.h#L20), and app chrome are
@@ -56,7 +56,7 @@ The demo's value is what it *refuses* to link: [`input.c`](input.c), [`commit.c`
 [`clipboard.c`](clipboard.c), [`undo.c`](undo.c), [`reformat.c`](reformat.c), [`search.c`](search.c), and [`completion.c`](completion.c) are all
 recognized as the **REPL editor's** controllers, not generic ones. By
 standing up a working editor without them, the demo proves the document
-model and edit primitives are genuinely application-free — the boundary
+model and edit primitives are genuinely application-free - the boundary
 between "text editing" and "REPL editing" is real, not aspirational. If a new
 editor feature needs `src/ui/app` or `src/app` to make `editor_demo` link, first
 extract a smaller `src/ui/core` primitive or pass a neutral view into the demo.
@@ -70,13 +70,13 @@ Inside the full app this is **layer 2** of the ownership map. The contract:
   consumes neutral [`UiHit`](../ui/core/hit.h#L60) results (from UI hit-testing) to interpret mouse
   input. UI never decides text behavior.
 - A keystroke that can change line text, cursor, scroll, selection,
-  search/autocomplete, or undo history is handled here — after
+  search/autocomplete, or undo history is handled here - after
   [`src/app/glr_ctrl.c`](../app/glr_ctrl.c) has already filtered out non-editor concerns (replay,
   audio, config, save, camera, the variable panel).
 - **Commits are transactions.** [`commit.c`](commit.c) is the only path that crosses
   into the REPL: it calls `repl_compile` (pure validation); on success it
   takes an undo snapshot, writes the editor buffer, and applies the parsed
-  command to REPL runtime state — all inside one undo boundary, so undo restores
+  command to REPL runtime state - all inside one undo boundary, so undo restores
   both sides together. On a validation failure, nothing mutates.
 - Read-only documents are also editor sessions: [`help_session.c`](help_session.c) backs the
   F1 overlay with the same scroll/search/cursor model and no commit path.

@@ -10,7 +10,7 @@
  * Same shape as depth_viz: a GL-free conversion core (buffer_viz_stencil_scan
  * / _map, unit-tested on synthetic buffers) plus a thin GL shell
  * (glReadPixels GL_STENCIL_INDEX, RGBA texture, one screen-space quad).
- * The host drives both halves through render3d's neutral buffer hooks —
+ * The host drives both halves through render3d's neutral buffer hooks -
  * see buffer_viz.h for the fan-out.
  *
  * Conventions:
@@ -20,7 +20,7 @@
  *     paint over the entire viewport.
  *   - **The contract is "zero vs non-zero", never write history.** A
  *     readback cannot distinguish "never written", "cleared to 0" and
- *     "the program explicitly wrote 0" — all three are byte 0 — so an
+ *     "the program explicitly wrote 0" - all three are byte 0 - so an
  *     explicit write of 0 is invisible. Recovering provenance would need
  *     a second coverage buffer; it is not in the stencil data.
  *   - PALETTE maps value -> a fixed 16-entry table indexed `value & 15`,
@@ -39,7 +39,7 @@
  *     pixel-aligned with the untouched render on the left (one integer
  *     split coordinate drives both the quad and the texture crop).
  *
- * Pure fixed-function GL (no shaders, no FBOs, no glDrawPixels — the
+ * Pure fixed-function GL (no shaders, no FBOs, no glDrawPixels - the
  * latter is absent from both the web build and the GL stubs).
  */
 #ifndef BUFFER_VIZ_STENCIL_H
@@ -70,7 +70,7 @@ typedef struct BufferVizStencilHistogram {
 void buffer_viz_stencil_reset(void);
 
 /* Read the scene-rect stencil buffer (GL window coords). Call from
- * buffer_read_fn on EVERY accumulation pass — the overlay composites per
+ * buffer_read_fn on EVERY accumulation pass - the overlay composites per
  * pass, so it needs that pass's own buffer. Buffer-allocation failure
  * degrades to a no-op capture. */
 void buffer_viz_stencil_capture(int sx, int sy, int sw, int sh);
@@ -105,7 +105,7 @@ int buffer_viz_stencil_scan(const unsigned char *stencil, int count,
  * is consulted by RAMP only (a degenerate or invalid span maps every
  * non-zero pixel to the middle of the ramp instead of dividing by ~0);
  * PALETTE and SPLIT ignore it, which is exactly why their colours do not
- * shift as the scene changes. SPLIT maps like PALETTE — the mode differs
+ * shift as the scene changes. SPLIT maps like PALETTE - the mode differs
  * in where it is composited, not in what it contains. */
 void buffer_viz_stencil_map(const unsigned char *stencil, int count,
                             BufferVizStencilMode mode,

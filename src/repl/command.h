@@ -27,7 +27,7 @@
 #define GLUT_BITMAP_MAX_SUB_ARGS 4
 #endif
 
-/* Cells in a CMD_MULT_MATRIXF payload — a 4x4, column-major. Twice the
+/* Cells in a CMD_MULT_MATRIXF payload - a 4x4, column-major. Twice the
  * args[] capacity, which is why the matrix lives in the payload union
  * rather than in args[]. */
 #ifndef REPL_MATRIX_CELL_COUNT
@@ -108,7 +108,7 @@ typedef enum {
     CMD_TYPE_COUNT
 } CmdType;
 
-/* Sentinel `var_idx` for function-scoped storage — no predef slot.
+/* Sentinel `var_idx` for function-scoped storage - no predef slot.
  *
  * On a CMD_VAR_DECLARE row it marks the declaration itself as a local
  * (the row *is* the binding; there is nothing in g_predef_vars to
@@ -126,7 +126,7 @@ typedef struct {
      * GL enum arguments in args[] alongside numeric args. GLenums fit
      * float32 exactly (all in use are < 2^24), so (GLenum)args[i]
      * round-trips losslessly. The absence of this field is the
-     * compiler-enforced invariant — no grep guard needed. */
+     * compiler-enforced invariant - no grep guard needed. */
     float    args[8];
     int      num_args;              /* Number of meaningful entries in args[] */
     int      var_idx;               /* Predef-var slot for CMD_VAR_ASSIGN
@@ -169,18 +169,18 @@ typedef struct {
         } label;
         /* CMD_MULT_MATRIXF carries its 4x4 by value rather than by
          * scratch-array reference. Both argument forms end up here, and
-         * every consumer that walks the flat program — the executor, the
-         * replay and overlay matrix trackers, the transform guides —
+         * every consumer that walks the flat program - the executor, the
+         * replay and overlay matrix trackers, the transform guides -
          * reads only this, with no way to tell the forms apart and no
          * way to read the scratch table. That last part is load-bearing:
          * those trackers share the inline applier in
          * repl/transform_utils.h, which render3d uses in a build that
          * links no src/repl objects at all.
          *
-         *   glMultMatrixf(A)   — args[0] names the array (num_args 1);
+         *   glMultMatrixf(A)   - args[0] names the array (num_args 1);
          *                        flatten snapshots its live cells into
          *                        `m` in stream order.
-         *   glMultMatrixf((GLfloat[]){...}) — no array behind it
+         *   glMultMatrixf((GLfloat[]){...}) - no array behind it
          *                        (num_args 0); the 16 values are parsed
          *                        into `m` directly and re-evaluated from
          *                        the compiled expression slots.
@@ -195,9 +195,9 @@ typedef struct {
     int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */
     unsigned int func_scope_mask;   /* Function scopes active when command was flattened */
     int      call_depth;            /* funcN nesting/recursion depth at flatten time
-                                     * (0 = top-level). Unlike func_scope_mask — which is
+                                     * (0 = top-level). Unlike func_scope_mask - which is
                                      * a set of distinct slots and so cannot count repeated
-                                     * recursive entries of the same funcN — this counts
+                                     * recursive entries of the same funcN - this counts
                                      * every call frame, so recursion depth is visible. */
 } GLCmd;
 
@@ -209,7 +209,7 @@ static inline int repl_cmd_is_transform(CmdType type) {
 
 /* Which of glMultMatrixf's two argument forms this command is: 1 when the
  * matrix comes from the scratch array named in args[0], 0 when the 16
- * values are inline. num_args is the discriminator — the array form
+ * values are inline. num_args is the discriminator - the array form
  * carries one arg, the literal form none. Only the parse, the flatten-time
  * refresh, and export care; everything downstream reads payload.matrix and
  * is form-blind. Callers must have established the type already. */
@@ -222,7 +222,7 @@ static inline int repl_cmd_mult_matrix_from_array(const GLCmd *cmd) {
  * variant). Use this anywhere the question is "does this cmd emit a
  * vertex?". For tess-vs-immediate-mode distinctions (e.g. choosing
  * between CMD_NORMAL3F and CMD_TESS_NORMAL as the feeding state cmd),
- * spell the subset out at the call site — that's intent, not a
+ * spell the subset out at the call site - that's intent, not a
  * uniform predicate. */
 static inline int repl_cmd_emits_vertex(CmdType type) {
     return (type == CMD_VERTEX3F ||
@@ -250,7 +250,7 @@ static inline int repl_cmd_sets_current_normal(CmdType type) {
  * alongside repl_cmd_is_block_end below.
  *
  * Note: these three types live in three separate CmdSyntaxCategory
- * values (CMD_CAT_LOOP / CMD_CAT_FUNCTION / CMD_CAT_CONDITIONAL) — the
+ * values (CMD_CAT_LOOP / CMD_CAT_FUNCTION / CMD_CAT_CONDITIONAL) - the
  * categories are about syntax-highlight color, this predicate is about
  * control-flow shape. Two distinct axes. */
 static inline int repl_cmd_is_block_head(CmdType type) {
@@ -259,7 +259,7 @@ static inline int repl_cmd_is_block_head(CmdType type) {
             type == CMD_IF_BEGIN);
 }
 
-/* Mirror of repl_cmd_is_block_head — the closing commands of REPL
+/* Mirror of repl_cmd_is_block_head - the closing commands of REPL
  * control-flow blocks. */
 static inline int repl_cmd_is_block_end(CmdType type) {
     return (type == CMD_FOR_END ||
@@ -293,7 +293,7 @@ static inline int repl_cmd_is_glut_solid(CmdType type) {
  * current modelview: glBegin (opens a vertex stream), every glutSolid*
  * primitive (renders a closed shape from current matrix state), and
  * the tess-polygon opener. Used by transform-guide planning to
- * decide "something just got drawn here — further transforms
+ * decide "something just got drawn here - further transforms
  * shouldn't factor into the cursor-line guide".
  *
  * Distinct from repl_cmd_emits_vertex: that predicate names commands
@@ -317,7 +317,7 @@ static inline int repl_cmd_starts_geometry_emit(CmdType type) {
  *
  * Color and normal walk-back are intentionally *not* symmetric: glut
  * solids consume the color state but emit their own normals, so they
- * participate in color linking only — keep the normal walk-back keyed
+ * participate in color linking only - keep the normal walk-back keyed
  * on repl_cmd_emits_vertex.
  *
  * The gl-vs-tess color family split (CMD_COLOR3F/4F vs CMD_TESS_COLOR)

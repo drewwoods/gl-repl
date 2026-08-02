@@ -4,7 +4,7 @@
 
 ## Progress
 
-- [x] **Phase A** — infra + Issue 1 fix. `src/ui/theme.h` created (19
+- [x] **Phase A** - infra + Issue 1 fix. `src/ui/theme.h` created (19
   tokens, all 6 theme rows populated, inline `ui_clr`/`ui_clr_a`/
   `ui_rgba` + `ui_theme_select/active`, two `STATIC_ASSERT`s). Wired into
   Makefile `HDRS`. `menu_bar.c` dropdown/submenu hover (`:734`/`:1087`)
@@ -13,27 +13,27 @@
   Gates green: `test_ui_theme 444/444`, `make test 5356/5356`,
   `check-c99 OK`, `check-state-ownership` exit 0, sample builds
   (freeglut + stub).
-- [x] **Phase B** — chrome files tokenized, one commit each:
+- [x] **Phase B** - chrome files tokenized, one commit each:
   replay_hud, tabbed_overlay, autocomplete_panel, scene_tabs,
   menu_bar remainder (`test_ui_menu_bar 71/71`), panels (named consts
-  for the blue rename modal + amber status banner — deliberately
+  for the blue rename modal + amber status banner - deliberately
   non-accent), text_panel chrome (`test_ui_text_panel 25/25`,
   `check-ui-text-panel-pure OK`). scene_tabs' ephemeral example-tab
   amber kept as documented `k_tab_example_*` named consts.
-- [x] **Phase B finalize** — all 9 `UI_ACCENT_GREEN_*` users moved to
+- [x] **Phase B finalize** - all 9 `UI_ACCENT_GREEN_*` users moved to
   `ui_clr(UI_TOK_ACCENT)` during the per-file work; the 3 macros
   deleted from `metrics.h` (now points at theme.h). Gates green: both
   sample builds, `make test 5356/5356`, `check-c99` + `check-state-
   ownership` exit 0.
-- [x] **Phase C** — pointer comments added at the deliberately-excluded
+- [x] **Phase C** - pointer comments added at the deliberately-excluded
   data palettes: `color_picker.c` (computed HSV/preview data),
   `repl_code_panel.c` (`k_category_colors[]` / `k_syntax_shade` syntax
-  palette), `profile_panel.c` (FPS gauge — red must stay red),
+  palette), `profile_panel.c` (FPS gauge - red must stay red),
   `text_panel.c` `k_clr_*` editor sub-palette (commented in Phase B).
   Final gates green: `make sample` (freeglut + stub), `make test`
   37/37 bins · 5356/5356, `check-c99` + `check-state-ownership` exit 0.
 
-- [x] **Phase D** — user opted to extend beyond the approved Phase B.
+- [x] **Phase D** - user opted to extend beyond the approved Phase B.
   `variable_panel.c` chrome tokenized (bg→SUNKEN, border→BORDER,
   title→TEXT_PRIMARY, track→MENU_LABEL_ACTIVE_BG, tick→DIVIDER;
   `test_repl_var_drag 36/36`); variable-row data palette + drag-state
@@ -96,8 +96,8 @@ Breakdown of the 15 commits:
   - All gates green: `test_ui_theme 444/444`, `make test 5356/5356`, `check-c99 OK`, `check-state-ownership OK`, `sample` builds (freeglut + stub)
 
 - Documentation:
-  - `ARCHITECTURE.md` "### UI Color Theming" subsection (under UI Layer, line ~461) — token model, 6-row table, 3-bucket classification, UI_THEME_DEFAULT knob, test guards
-  - `Makefile` help note "Build options:" section — UI_THEME_DEFAULT 0–5 mapping, override example, ARCHITECTURE.md reference
+  - `ARCHITECTURE.md` "### UI Color Theming" subsection (under UI Layer, line ~461) - token model, 6-row table, 3-bucket classification, UI_THEME_DEFAULT knob, test guards
+  - `Makefile` help note "Build options:" section - UI_THEME_DEFAULT 0–5 mapping, override example, ARCHITECTURE.md reference
 
 **Design decisions preserved:**
 - Single compile-time swap point (no runtime picker yet; seam via `ui_theme_select/active` for future Config cycle)
@@ -112,7 +112,7 @@ spread across 11 files. Two concrete problems:
 
 1. **Wrong hue.** `src/ui/menu_bar.c:1087` (and its twin `:734`) draw the
    dropdown / submenu item-hover band with `glColor4f(0.180f, 0.290f,
-   0.431f, alpha)` — blue `#2e4a6e`. The project's selected design scheme
+   0.431f, alpha)` - blue `#2e4a6e`. The project's selected design scheme
    (`plans/done/design-rework/`) is **green** (`#6fb36f`, already used for
    active items). `:1086` literally carries `// TODO: should be based on
    color scheme (green)`. The hover should be green-family.
@@ -127,12 +127,12 @@ swap point, and (c) makes the other five design-rework schemes drop-in.
 ## Decisions locked (from user)
 
 - **Scope = A + B**: build infra, fix Issue 1, migrate the chrome files.
-  **Do not shoehorn** every literal into the table — non-theme one-offs
+  **Do not shoehorn** every literal into the table - non-theme one-offs
   get a named `const`/`#define`; computed/data colors stay as-is.
 - **Swap = all 6 rows, constant swap**: populate green (active) + warm +
   cyan + amber + violet + mono; switch via one variable. No runtime UI now
   (seam left for a later Config cycle).
-- **Hover green = `#2e6e4a` `{0.180f, 0.431f, 0.290f, 1.0f}`** — the
+- **Hover green = `#2e6e4a` `{0.180f, 0.431f, 0.290f, 1.0f}`** - the
   hue-shifted twin of today's `#2e4a6e` (same luminance/saturation, blue→
   green). Lowest-surprise: changes only the hue, keeps the designer's
   chosen prominence; reads clearly next to `#6fb36f` active text.
@@ -141,15 +141,15 @@ swap point, and (c) makes the other five design-rework schemes drop-in.
 
 Every literal under review falls into exactly one bucket:
 
-1. **Theme token** (`ui_clr(UI_TOK_*)`) — accent colors and shared neutral
+1. **Theme token** (`ui_clr(UI_TOK_*)`) - accent colors and shared neutral
    chrome that conceptually *is* the theme and recurs across files:
    surfaces, borders, dividers, text tiers, accent, hover/selection,
    status semantics.
-2. **Named constant** (`#define`/`static const` near use) — a fixed,
+2. **Named constant** (`#define`/`static const` near use) - a fixed,
    non-theme-varying color used in 1–2 places that today is a bare
    literal. Give it a name; do **not** add a table slot. (e.g. the
    menubar's pure-black bottom rule `#000`, picker chrome grays.)
-3. **Leave as-is** — computed or deliberate domain palettes:
+3. **Leave as-is** - computed or deliberate domain palettes:
    `color_picker.c` HSV math, `repl_code_panel.c` `k_category_colors[]` /
    `k_syntax_shade`, `profile_panel.c` FPS red/yellow/green (red must stay
    red regardless of theme), `text_panel.c` editor `k_clr_*` arrays
@@ -169,7 +169,7 @@ through `$(SRCS)` (same as `gl_2d.h`). The per-TU `.rodata` duplication
 already accepts; consistency beats shaving it.
 
 - Include guard `UI_THEME_H`; includes `<gl_includes.h>` and
-  `"c_compat.h"` (for `STATIC_ASSERT` — never raw `_Static_assert`).
+  `"c_compat.h"` (for `STATIC_ASSERT` - never raw `_Static_assert`).
 - Does **not** include `metrics.h` or any `scene/` header (respects the
   Makefile no-scene-include guard). Local `typedef float UiRgba[4];`
   rather than scene-namespaced `SceneRgba`.
@@ -182,29 +182,29 @@ already accepts; consistency beats shaving it.
 Neutral = identical across all theme rows. Accent-derived = varies per row.
 
 Neutral chrome (theme-stable):
-- `UI_TOK_SURFACE` `#1d1d1d` — menubar / strip bg
-- `UI_TOK_RAISED` `#222` — dropdown / overlay panel bg
-- `UI_TOK_SUNKEN` `#141414`/`#181818` — search field / statusbar bg
-- `UI_TOK_BORDER` `#3a3a3a` — panel borders
-- `UI_TOK_DIVIDER` `#333` — separators / rules
-- `UI_TOK_MENU_LABEL_HOVER_BG` `#2a2a2a` — **stays neutral gray**
-- `UI_TOK_MENU_LABEL_ACTIVE_BG` `#262626` — pressed/"hot" label
+- `UI_TOK_SURFACE` `#1d1d1d` - menubar / strip bg
+- `UI_TOK_RAISED` `#222` - dropdown / overlay panel bg
+- `UI_TOK_SUNKEN` `#141414`/`#181818` - search field / statusbar bg
+- `UI_TOK_BORDER` `#3a3a3a` - panel borders
+- `UI_TOK_DIVIDER` `#333` - separators / rules
+- `UI_TOK_MENU_LABEL_HOVER_BG` `#2a2a2a` - **stays neutral gray**
+- `UI_TOK_MENU_LABEL_ACTIVE_BG` `#262626` - pressed/"hot" label
 - `UI_TOK_TEXT_PRIMARY` `#d8d8d8`
-- `UI_TOK_TEXT_ON_HILITE` `#ffffff` — text over hover/selection
-- `UI_TOK_TEXT_SECTION` `#7a8494` — dropdown section header
-- `UI_TOK_TEXT_MUTED` `#888888` — shortcuts, hints, counts
+- `UI_TOK_TEXT_ON_HILITE` `#ffffff` - text over hover/selection
+- `UI_TOK_TEXT_SECTION` `#7a8494` - dropdown section header
+- `UI_TOK_TEXT_MUTED` `#888888` - shortcuts, hints, counts
 - `UI_TOK_TEXT_PLACEHOLDER` `#7a7a7a`
-- `UI_TOK_CARET` `{0.95,0.80,0.24}` — text/search caret
+- `UI_TOK_CARET` `{0.95,0.80,0.24}` - text/search caret
 - `UI_TOK_STATUS_OK` `#70c070` (semantic, theme-stable)
 - `UI_TOK_STATUS_WARN` `#e0a040`
 - `UI_TOK_STATUS_ERR` `#c9442e`-family
 
 Accent-derived (per-row):
-- `UI_TOK_ACCENT` — green `#6fb36f` `{0.435,0.702,0.435}` (== current
+- `UI_TOK_ACCENT` - green `#6fb36f` `{0.435,0.702,0.435}` (== current
   `UI_ACCENT_GREEN_*`, so migration is a visual no-op)
-- `UI_TOK_DROPDOWN_ITEM_HOVER_BG` — **the Issue-1 fix**: green
+- `UI_TOK_DROPDOWN_ITEM_HOVER_BG` - **the Issue-1 fix**: green
   `#2e6e4a` `{0.180,0.431,0.290}`
-- `UI_TOK_ACCENT_GLOW_BG` — HUD/control accent band, green `#304c38`
+- `UI_TOK_ACCENT_GLOW_BG` - HUD/control accent band, green `#304c38`
 
 The `MENU_LABEL_HOVER_BG` (neutral, stays gray) vs
 `DROPDOWN_ITEM_HOVER_BG` (accent, blue→green) split is the load-bearing
@@ -233,7 +233,7 @@ static int g_ui_theme = UI_THEME_GREEN;   /* the single swap point */
 ```
 
 Explicit per-row RGBAs (not a computed accent→tint helper): the prototype
-hard-codes them, and arithmetic would hide the rendered color — against
+hard-codes them, and arithmetic would hide the rendered color - against
 this codebase's minimal-abstraction value. Designated initializers (C99,
 matches `grid.c:272` `g_grid_theme_specs[]`). `STATIC_ASSERT` that the
 enum count matches `UI_TOK_COUNT`; a runtime test catches zeroed slots.
@@ -255,7 +255,7 @@ static inline UiTheme ui_theme_active(void)    { return g_ui_theme; }
 `… 0.98f*alpha` patterns. Token is a compile-time constant → inlines to a
 fixed `.rodata` read; satisfies the performance ask.
 `ui_theme_select/active` are the seam a later `GlrConfigKey` theme cycle
-(grid-theme precedent) would drive — not built now.
+(grid-theme precedent) would drive - not built now.
 
 Before/after (`menu_bar.c`):
 - `:1087` `glColor4f(0.180f,0.290f,0.431f, alpha);` (delete `:1086` TODO)
@@ -265,23 +265,23 @@ Before/after (`menu_bar.c`):
 - `:1025` `glColor4f(0.133f,0.133f,0.133f, 0.98f*alpha)` →
   `ui_clr_a(UI_TOK_RAISED, 0.98f * alpha)`
 
-## Phase A — infra + Issue 1 (small, revertible)
+## Phase A - infra + Issue 1 (small, revertible)
 
 1. Create `src/ui/theme.h` (enum, table with **green row fully
    populated**; other rows may be stubbed-then-filled in Phase B's last
    step), query API, `STATIC_ASSERT`.
 2. Makefile: add `src/ui/theme.h` to `HDRS` (after `src/ui/text_search.h`,
-   before `src/ui/variable_panel.h` — alpha order). No `SRCS` edit
+   before `src/ui/variable_panel.h` - alpha order). No `SRCS` edit
    (header-only).
 3. `menu_bar.c`: `#include "theme.h"`; convert `:734`/`:1087` +
    text twins `:737`/`:1090`; delete the `:1086` TODO comment. Apply on
    top of the **uncommitted working tree** (git shows `M
-   src/ui/menu_bar.c`) — do not discard unrelated local edits.
+   src/ui/menu_bar.c`) - do not discard unrelated local edits.
 4. Add `tests/test_ui_theme.c` + Makefile wiring (see Verification).
 
 Phase A alone resolves both reported issues as a tiny diff.
 
-## Phase B — migrate chrome files to tokens
+## Phase B - migrate chrome files to tokens
 
 Per-file, smallest-blast-radius order; one file per commit:
 `replay_hud.c` → `tabbed_overlay.c` → `autocomplete_panel.c` →
@@ -289,7 +289,7 @@ Per-file, smallest-blast-radius order; one file per commit:
 `text_panel.c` (chrome inline literals only).
 
 Call-site → token mapping (apply the classification rule; representative
-sites — full per-line inventory already exists from exploration):
+sites - full per-line inventory already exists from exploration):
 
 | Literal / role | Token | Files (examples) |
 |---|---|---|
@@ -316,12 +316,12 @@ End of Phase B: fill the WARM/CYAN/AMBER/VIOLET/MONO rows; migrate the 9
 `UI_ACCENT_GREEN_*` macros from `src/ui/metrics.h`** (no dangling
 back-compat). Keep `metrics.h` otherwise unchanged.
 
-Named-constant bucket (rule #2 — do *not* tokenize): menubar pure-black
+Named-constant bucket (rule #2 - do *not* tokenize): menubar pure-black
 bottom rule `#000` (menu_bar:994), picker chrome grays, panels
-rename-bar affordance blues — give each a local `#define UI_RGBA_*` or
+rename-bar affordance blues - give each a local `#define UI_RGBA_*` or
 `static const` at use site.
 
-## Phase C — explicit exclusions (no work; documented)
+## Phase C - explicit exclusions (no work; documented)
 
 `color_picker.c` HSV/preview (computed data), `repl_code_panel.c`
 `k_category_colors[]`/`k_syntax_shade` (deliberate syntax palette),
@@ -332,25 +332,25 @@ line comment at each pointing to `theme.h`'s rationale block.
 ## Files modified (15 commits)
 
 **Core infrastructure:**
-- `src/ui/theme.h` — **new**, header-only, 170 lines
-- `config.h` — added UI_THEME_DEFAULT (0–5 knob, #ifndef-guarded, build-overridable)
-- `tests/test_ui_theme.c` — **new**, header-only, 444 assertions
-- `Makefile` — added theme.h to HDRS, test wiring; help note for UI_THEME_DEFAULT
-- `ARCHITECTURE.md` — added "### UI Color Theming" subsection (UI Layer)
+- `src/ui/theme.h` - **new**, header-only, 170 lines
+- `config.h` - added UI_THEME_DEFAULT (0–5 knob, #ifndef-guarded, build-overridable)
+- `tests/test_ui_theme.c` - **new**, header-only, 444 assertions
+- `Makefile` - added theme.h to HDRS, test wiring; help note for UI_THEME_DEFAULT
+- `ARCHITECTURE.md` - added "### UI Color Theming" subsection (UI Layer)
 
 **Phase B chrome migration (9 files):**
-- `src/ui/menu_bar.c` — Phase A partial + remainder (40+ literals → tokens/consts)
-- `src/ui/replay_hud.c` — 8 literals → tokens
-- `src/ui/tabbed_overlay.c` — 18 literals → tokens
-- `src/ui/autocomplete_panel.c` — 6 literals → tokens
-- `src/ui/scene_tabs.c` — 11 literals → tokens/named consts
-- `src/ui/panels.c` — 7 literals → named consts (rename modal, status banner)
-- `src/ui/text_panel.c` — 8 chrome literals → tokens/named consts (k_clr_* left as-is)
-- `src/ui/metrics.h` — deleted 3 UI_ACCENT_GREEN_* macros (9 users → ui_clr(UI_TOK_ACCENT))
+- `src/ui/menu_bar.c` - Phase A partial + remainder (40+ literals → tokens/consts)
+- `src/ui/replay_hud.c` - 8 literals → tokens
+- `src/ui/tabbed_overlay.c` - 18 literals → tokens
+- `src/ui/autocomplete_panel.c` - 6 literals → tokens
+- `src/ui/scene_tabs.c` - 11 literals → tokens/named consts
+- `src/ui/panels.c` - 7 literals → named consts (rename modal, status banner)
+- `src/ui/text_panel.c` - 8 chrome literals → tokens/named consts (k_clr_* left as-is)
+- `src/ui/metrics.h` - deleted 3 UI_ACCENT_GREEN_* macros (9 users → ui_clr(UI_TOK_ACCENT))
 
 **Phase D user-requested extension (2 files):**
-- `src/ui/variable_panel.c` — 12 chrome literals → tokens/named consts (k_var_* data palette left as-is)
-- `src/ui/profile_panel.c` — 11 chrome literals → tokens/named consts; FPS gauge (set_time_color) left as-is
+- `src/ui/variable_panel.c` - 12 chrome literals → tokens/named consts (k_var_* data palette left as-is)
+- `src/ui/profile_panel.c` - 11 chrome literals → tokens/named consts; FPS gauge (set_time_color) left as-is
 
 **No changes to:**
 - `src/ui/color_picker.c` (HSV/preview data, theme.h bucket 3)
@@ -359,7 +359,7 @@ line comment at each pointing to `theme.h`'s rationale block.
 
 ## Verification
 
-`tests/test_ui_theme.c` — header-only, links no project objects, exactly
+`tests/test_ui_theme.c` - header-only, links no project objects, exactly
 the `test_repl_code_panel_layout` precedent:
 - `STATIC_ASSERT` enum count == `UI_TOK_COUNT` (in `theme.h`).
 - Runtime: no theme row has a zeroed token (catches designated-init
@@ -381,7 +381,7 @@ Gates: `make test_ui_theme`, `make test`, `make check-c99`,
 `check-color-picker-ui-isolation` guards).
 
 Manual visual check: build, run, open a Scene/Config dropdown, hover an
-item — band is **green `#2e6e4a`**, not blue; top-bar menu **label**
+item - band is **green `#2e6e4a`**, not blue; top-bar menu **label**
 hover is still neutral gray `#2a2a2a`; Replay icon / active item still
 `#6fb36f`. Flip `g_ui_theme = UI_THEME_WARM`, rebuild, confirm only
 accent/hover/glow change and neutral chrome is unchanged.

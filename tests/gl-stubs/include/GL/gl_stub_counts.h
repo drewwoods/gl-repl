@@ -6,14 +6,14 @@
  *
  * The stub headers (tests/gl-stubs/include/GL/gl.h etc.) reference gl_stub_tick() and
  * the GL_STUB_* enum unconditionally, so the enum and tick function
- * must always be visible — otherwise any build that falls back to the
+ * must always be visible - otherwise any build that falls back to the
  * local stubs without defining GL_STUBS fails to
  * compile. Real storage only exists in stub builds; in every other
  * build gl_stub_tick() is a trivial no-op that the optimizer elides.
  *
  * Callers (the benchmark harness) snapshot and reset the array around
  * the region of interest to see which GL paths are actually exercised
- * — the stubs compile to no-ops so no wall-clock measurement tells you
+ * - the stubs compile to no-ops so no wall-clock measurement tells you
  * that on its own.
  */
 
@@ -173,7 +173,7 @@ const char *gl_stub_count_name(int idx);
 void         gl_stub_counts_reset(void);
 
 /* Dump all non-zero counters (one per line) to `out`. `divisor` scales
- * each counter — pass the number of outer operations to see per-op
+ * each counter - pass the number of outer operations to see per-op
  * averages, or 1 for raw totals. */
 void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
 
@@ -189,15 +189,15 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
  * the previous file first.
  *
  * Format contract for the line:
- *   <symbol> <arg>...                — space-separated, %g for floats,
+ *   <symbol> <arg>...                - space-separated, %g for floats,
  *                                      integer codes for enums and
  *                                      bytes (so newlines inside text
  *                                      labels can't corrupt the trace).
- *   pointer-array args are omitted    — fp parity tests compare scalar
+ *   pointer-array args are omitted    - fp parity tests compare scalar
  *                                      args only; see
  *                                      docs/plans/done/gl-stub-extensions.md
  *                                      for the array-content sketch.
- *   glutBitmapStringByte <byte>       — one supplemental line per string byte,
+ *   glutBitmapStringByte <byte>       - one supplemental line per string byte,
  *                                      used to verify display-only text
  *                                      transforms without recording a fake
  *                                      glutBitmapCharacter call. */

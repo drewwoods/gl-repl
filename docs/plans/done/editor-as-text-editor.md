@@ -1,23 +1,23 @@
 # Plan: Editor as a Generic Text Editor
 
-## Status — DONE (2026-05-23 audit)
+## Status - DONE (2026-05-23 audit)
 
 All seven phases landed; the named V1–V5 violations are closed. Spot
 checks against current code:
 
-- **Phase 1 — Comment-prefix config seam.** `editor_set_line_comment_prefix`
+- **Phase 1 - Comment-prefix config seam.** `editor_set_line_comment_prefix`
   and `editor_line_comment_prefix` live in `src/editor/state.{h,c}` (state.h:458–459,
   state.c:773–777). Controller registers `"// "` at
   `src/app/glr_ctrl.c:2317`.
-- **Phase 2 — `repl_compile_toggle_comment`.** Declared
+- **Phase 2 - `repl_compile_toggle_comment`.** Declared
   `src/repl/compile.h:397`, implemented `src/repl/compile.c:1290`.
-- **Phase 3 — Handler rewrite.** `handle_comment_toggle_key_route` at
+- **Phase 3 - Handler rewrite.** `handle_comment_toggle_key_route` at
   `src/editor/input.c:1127–1172` matches the plan body almost line for
   line: prefix lookup → `repl_compile_toggle_comment` →
   `editor_commit_apply_external_change`. No `CMD_*` reads, no inline
   `GLCmd` construction, no `g_predef_vars[]` writes, no
   `repl_eval_*`/`repl_command_store_*` in the toggle path.
-- **Phase 4 — Verification (comment-toggle scope).** Confirmed:
+- **Phase 4 - Verification (comment-toggle scope).** Confirmed:
   `grep -nE "CMD_VAR_ASSIGN|CMD_VAR_DECLARE|CMD_COMMENT|CMD_FOR_BEGIN|
   CMD_FOR_END" src/editor/input.c` → 0 hits. **Caveat:** the two
   broader greps (`repl_eval_*`/`repl_command_store_*` in
@@ -28,15 +28,15 @@ checks against current code:
   cleanup is a separate scope (would require routing the editor's own
   commit pipeline through the apply seam too) and lives outside this
   plan.
-- **Phase 5 — Replay-annotation consumer audit.** Clean:
+- **Phase 5 - Replay-annotation consumer audit.** Clean:
   `grep -rn replay_annotations src/editor src/ui` → 0 hits. The
   `editor_code_panel_document.c` referenced in the plan was already
   reshaped into `src/ui/repl_code_panel.c`, which does not include
   `repl_replay_annotations.h`.
-- **Phase 6 — Inline rename audit.** Marked LANDED in-doc 2026-05-08;
+- **Phase 6 - Inline rename audit.** Marked LANDED in-doc 2026-05-08;
   re-verified `src/editor/inline_rename.c` only touches the
   `repl_user_scene_*` API.
-- **Phase 7 — Search line-count source.** Done: `src/editor/search.c`
+- **Phase 7 - Search line-count source.** Done: `src/editor/search.c`
   uses `editor_buffer_view()`; the only `repl_state_document_count()`
   appearances are doc-comments at lines 9–10.
 
@@ -57,8 +57,8 @@ interpret the language being edited.
 Before any committed text change lands in the REPL command store, the
 editor calls a validation callback (today: `EditorServices.compile`) and
 the REPL parser/compile decides what the line means. The editor surfaces
-the resulting `ReplCompiledChange` outcome — success message, diagnostic,
-or capacity rejection — but does not construct, inspect, or pre-validate
+the resulting `ReplCompiledChange` outcome - success message, diagnostic,
+or capacity rejection - but does not construct, inspect, or pre-validate
 the parse result.
 
 This is the "longer code" path: prefer round-tripping through the
@@ -95,48 +95,48 @@ Allowed editor reads/writes:
 After landing #1 (autocomplete rename) and #2 (delete-range compile),
 the following editor files still do REPL work:
 
-### V1 — Comment-toggle handler bypasses every guardrail
+### V1 - Comment-toggle handler bypasses every guardrail
 
 `editor_input.c::handle_comment_toggle_key_route` (lines 1006–1156)
 is the worst remaining offender. The single function:
 
 - Reads `cur->type == CMD_COMMENT` (line 1012) and `cur->type != CMD_FOR_BEGIN
-  && cur->type != CMD_FOR_END` (line 1129) — direct grammar reads.
-- Builds a `GLCmd` with `commented.type = CMD_COMMENT` (line 1139) — direct
+  && cur->type != CMD_FOR_END` (line 1129) - direct grammar reads.
+- Builds a `GLCmd` with `commented.type = CMD_COMMENT` (line 1139) - direct
   GLCmd construction.
 - On uncomment fallback, reaches into `repl_eval_find_predef_var_idx`,
   `repl_eval_validate_expression_idents`, `repl_eval_input_has_predef_vars`,
-  `repl_eval_expr` (lines 1068–1100) — inline grammar evaluation.
+  `repl_eval_expr` (lines 1068–1100) - inline grammar evaluation.
 - Sets `new_cmd.type = CMD_VAR_ASSIGN` (line 1096) and writes
-  `g_predef_vars[var_idx].value = val` (line 1106) — direct cmd construction
+  `g_predef_vars[var_idx].value = val` (line 1106) - direct cmd construction
   + direct predef-table write.
-- Calls `repl_command_store_replace_one` directly (lines 1118, 1144) —
+- Calls `repl_command_store_replace_one` directly (lines 1118, 1144) -
   bypasses the compile/apply seam entirely.
-- Hardcodes `// ` (lines 1017–1020 strip; line 1138 prepend) — should be
+- Hardcodes `// ` (lines 1017–1020 strip; line 1138 prepend) - should be
   config.
 
-### V2 — Clipboard (separate plan)
+### V2 - Clipboard (separate plan)
 
 `editor_clipboard.c` and `editor_state.h`. Already covered in
 `done/repl-agnostic-clipboard.md`.
 
-### V3 — Replay annotations consumer
+### V3 - Replay annotations consumer
 
 `editor_code_panel_document.c` includes `repl_replay_annotations.h`. The
 editor-owns-text-completion plan landed virtual-line snapshots; verify
 this consumer reads through `EditorVirtualLineList` rather than calling
 the annotation API directly.
 
-### V4 — Inline scene rename
+### V4 - Inline scene rename
 
 `editor_inline_rename.c` includes `repl_core.h`. Likely fine (rename is
 a user-scene API call, not a parser call), but warrants a quick read
 to confirm.
 
-### V5 — Search reads document_count
+### V5 - Search reads document_count
 
 `editor_search.c` reads `repl_state_document_count()` for line counts.
-Cosmetic — should read `editor_buffer_view().line_count`. No behavior
+Cosmetic - should read `editor_buffer_view().line_count`. No behavior
 change.
 
 ### Out-of-scope (deferred)
@@ -144,12 +144,12 @@ change.
 Cursor migration (`edit_line_idx` canonical on EditorState), broader
 `repl_state_document_count()` reads in `editor_input.c`, and the
 two-ring undo split are bigger structural moves. They don't block the
-contract — the contract is "editor doesn't interpret REPL grammar",
+contract - the contract is "editor doesn't interpret REPL grammar",
 and that's met once V1–V5 are closed.
 
 ## Phases
 
-### Phase 1 — Comment-prefix config seam (~2 hr)
+### Phase 1 - Comment-prefix config seam (~2 hr)
 
 Add a configurable comment prefix:
 
@@ -164,12 +164,12 @@ a no-op until the controller registers a prefix. The controller
 (`imrepl_ctrl.c`, sibling of `repl_autocomplete_register_provider()`)
 calls `editor_set_line_comment_prefix("// ")` at startup explicitly.
 
-No behavior change yet — Phase 2 consumes the config.
+No behavior change yet - Phase 2 consumes the config.
 
-### Phase 2 — Add `repl_compile_toggle_comment` (~1 day)
+### Phase 2 - Add `repl_compile_toggle_comment` (~1 day)
 
 The REPL fully owns toggle semantics. Editor expresses intent (line
-index + configured prefix); the compile entry decides what to do —
+index + configured prefix); the compile entry decides what to do -
 single-line toggle, comment-strip-and-reparse, or block-batch toggle
 for structural heads.
 
@@ -211,7 +211,7 @@ Pure: never mutates state, never calls set_status. Returns
 REPL_COMPILE_OK on success, REPL_COMPILE_ERROR with `err` filled on
 parse failure during uncomment.
 
-### Phase 3 — Rewrite `handle_comment_toggle_key_route` (~2 hr)
+### Phase 3 - Rewrite `handle_comment_toggle_key_route` (~2 hr)
 
 Replace the body (lines 1006–1156) with ~25 lines:
 
@@ -257,7 +257,7 @@ Delete:
 - The `g_predef_vars[var_idx].value = val` write.
 - The `repl_eval_*` direct calls.
 
-### Phase 4 — Verification
+### Phase 4 - Verification
 
 ```bash
 make test                       # 28 / 3382 stay green
@@ -271,24 +271,24 @@ grep -n "g_predef_vars\|repl_eval_\|repl_parser_" editor_input.c
 # Expected: 0 hits in dispatch paths
 
 grep -n "repl_command_store_" editor_input.c
-# Expected: only via editor_commit_apply_* — no direct mutator calls
+# Expected: only via editor_commit_apply_* - no direct mutator calls
 ```
 
 Manual smoke:
-- Comment then uncomment `glColor3f(1, 0, 0);` — round-trips, status
+- Comment then uncomment `glColor3f(1, 0, 0);` - round-trips, status
   shows compile-supplied commit_message.
-- Comment then uncomment `x = 5;` — round-trips through var-assign
+- Comment then uncomment `x = 5;` - round-trips through var-assign
   compile path. No special fallback.
-- Comment then uncomment `float x;` — round-trips through float-decl
+- Comment then uncomment `float x;` - round-trips through float-decl
   compile.
-- Toggle on `for (i, 0, 10) {` — comments the entire block. Toggle
-  again on the now-comment line — uncomments the entire block.
-- Toggle on FOR_END / FUNC_END / IF_END — same block-batch behavior.
+- Toggle on `for (i, 0, 10) {` - comments the entire block. Toggle
+  again on the now-comment line - uncomments the entire block.
+- Toggle on FOR_END / FUNC_END / IF_END - same block-batch behavior.
 - Pre-Phase-1 (controller hasn't called
   `editor_set_line_comment_prefix`): Ctrl-/ is a no-op, no status
   change.
 
-### Phase 5 — Replay-annotation consumer audit (~1 hr)
+### Phase 5 - Replay-annotation consumer audit (~1 hr)
 
 Read `editor_code_panel_document.c`. If it calls
 `repl_replay_annotations_*` directly, route those reads through
@@ -296,7 +296,7 @@ Read `editor_code_panel_document.c`. If it calls
 If it already does, drop the `#include "repl_replay_annotations.h"`
 if unused.
 
-### Phase 6 — Inline rename audit (~1 hr)  [LANDED 2026-05-08]
+### Phase 6 - Inline rename audit (~1 hr)  [LANDED 2026-05-08]
 
 Read `editor_inline_rename.c`. If it touches anything beyond
 user-scene rename APIs (text + status + scene name change), document
@@ -309,10 +309,10 @@ REPL calls are coarse scene-management ops on the user-scene API
 parser/eval/compile/store-mutator touches). Status messages are
 editor-framed for the input session (`"Renamed to: %s"`,
 `"Scene name cannot be empty"`). Scene rename mutates metadata not
-the command store, so the compile/apply seam doesn't apply here —
+the command store, so the compile/apply seam doesn't apply here -
 the direct user-scene API call is the right shape.
 
-### Phase 7 — Search line-count source (~30 min)
+### Phase 7 - Search line-count source (~30 min)
 
 Replace `repl_state_document_count()` reads in `editor_search.c` with
 `editor_buffer_view().line_count`. Cosmetic; behavior-preserving.
@@ -330,7 +330,7 @@ whole block in one stroke) and falls out naturally from giving the
 REPL full ownership of toggle semantics. If preserving "refuse
 structural" is preferred, `repl_compile_toggle_comment` returns
 REPL_COMPILE_ERROR with `"Cannot toggle on structural line"` for
-block heads/ends instead of doing the batch — same shape, less code
+block heads/ends instead of doing the batch - same shape, less code
 in the body, no editor-side change.
 
 ## Open Questions
@@ -370,7 +370,7 @@ One new question:
 | `editor_state.c` | 1 | Storage and accessors. |
 | `imrepl_ctrl.c` | 1 | Register `"// "` at startup, sibling of `repl_autocomplete_register_provider()`. |
 | `repl_compile.h` | 2 | Declare `repl_compile_toggle_comment`. |
-| `repl_compile.c` | 2 | Body — handles plain / comment / block cases internally; uses existing `repl_source_scope_find_block_end` for block extent and `repl_compile_dispatch` for re-parsing the stripped text. |
+| `repl_compile.c` | 2 | Body - handles plain / comment / block cases internally; uses existing `repl_source_scope_find_block_end` for block extent and `repl_compile_dispatch` for re-parsing the stripped text. |
 | `editor_input.c` | 3 | Rewrite `handle_comment_toggle_key_route` (~25 lines); delete inline GLCmd construction, inline eval-table touches, direct cmd-store mutator calls. |
 | `editor_code_panel_document.c` | 5 | Audit + migrate any direct annotation reads. |
 | `editor_inline_rename.c` | 6 | Audit. |

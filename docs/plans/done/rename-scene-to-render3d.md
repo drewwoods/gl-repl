@@ -1,6 +1,6 @@
 # Rename `src/scene` → `src/render3d`
 
-**Status:** ready to execute. Pure rename, **no behavior change** — the final
+**Status:** ready to execute. Pure rename, **no behavior change** - the final
 diff must not alter any runtime output, file format, or UI string. The compiler
 + test suite are the consistency net: if a rename is incomplete or inconsistent,
 the build breaks.
@@ -45,7 +45,7 @@ code panel), so the `3d` qualifier scopes it correctly without the bare word
 no collisions (the old `render_*` statics in `glr_ctrl.c`/demos are a *different*
 prefix and are left alone).
 
-### Four names that are NOT mechanical (apply by hand — see §5, Step 2b)
+### Four names that are NOT mechanical (apply by hand - see §5, Step 2b)
 
 A blind prefix swap stutters on these. Use the target on the right:
 
@@ -58,7 +58,7 @@ A blind prefix swap stutters on these. Use the target on the right:
 
 ---
 
-## 2. CRITICAL INVARIANT — "scene" is two concepts; only ONE moves
+## 2. CRITICAL INVARIANT - "scene" is two concepts; only ONE moves
 
 The single way this rename goes wrong is by sweeping **user-scene** tokens.
 **Never run a blanket `s/scene/render3d/` over the tree.**
@@ -84,7 +84,7 @@ The single way this rename goes wrong is by sweeping **user-scene** tokens.
 **The safety mechanism:** the symbol rename in §5 *derives the MOVE set
 automatically from the contents of the moved directory* (`src/render3d/` after
 `git mv`). User-scene tokens are not in that directory, so they are excluded by
-construction — you do not hand-maintain a denylist. Then Step 0 / Step 3 verify
+construction - you do not hand-maintain a denylist. Then Step 0 / Step 3 verify
 the STAY tokens' counts are unchanged.
 
 ---
@@ -99,12 +99,12 @@ the STAY tokens' counts are unchanged.
 - Docs (current-design only): `CLAUDE.md`, `MODULES.md`, `ARCHITECTURE.md`,
   `ADVANCED_USAGE.md`, `src/scene/README.md` (→ `src/render3d/README.md`),
   `src/app/README.md`, `src/support/README.md`, `src/subsystems/README.md`.
-- **Do NOT edit** `plans/done/**` or `plans/in-review/accum-motion-blur.md` —
+- **Do NOT edit** `plans/done/**` or `plans/in-review/accum-motion-blur.md` -
   those are history.
 
 ---
 
-## 4. Phase 0 — Branch + baseline + record STAY counts
+## 4. Phase 0 - Branch + baseline + record STAY counts
 
 ```bash
 cd <repo>
@@ -126,9 +126,9 @@ cat /tmp/stay-before.txt
 
 ---
 
-## 5. Phase 1 — Move files + fix include paths (NO symbol renames yet)
+## 5. Phase 1 - Move files + fix include paths (NO symbol renames yet)
 
-This phase must compile with **zero symbol renames** — it only moves files and
+This phase must compile with **zero symbol renames** - it only moves files and
 repoints `"scene/…"` includes.
 
 ```bash
@@ -156,14 +156,14 @@ grep -rn '"scene/' src tools tests   # EXPECT: zero hits
 ```
 **Gate:** `make gl-repl` + `make scene_demo` succeed; no `"scene/` includes
 remain. If a build error mentions a missing header, a bare include needs the
-`render3d/` prefix or a path var in the Makefile was missed — fix and re-run.
+`render3d/` prefix or a path var in the Makefile was missed - fix and re-run.
 **Commit** ("Phase 1: move src/scene -> src/render3d, repoint includes").
 
 ---
 
-## 6. Phase 2 — Rename the renderer's symbols
+## 6. Phase 2 - Rename the renderer's symbols
 
-### Step 2a — Generate the rename map from the moved directory
+### Step 2a - Generate the rename map from the moved directory
 
 This derives the MOVE set from `src/render3d/`'s own tokens, so user-scene
 tokens cannot be included.
@@ -192,7 +192,7 @@ wc -l /tmp/render3d.sed     # sanity: expect ~140-160 substitution lines
 head /tmp/render3d.sed
 ```
 
-### Step 2c — Apply the map to all code (NOT docs/Makefile/scripts)
+### Step 2c - Apply the map to all code (NOT docs/Makefile/scripts)
 
 ```bash
 git grep -lE '\b(scene_[a-z]|Scene[A-Z]|SCENE_)' -- 'src/**' 'tools/**' 'tests/**' \
@@ -200,7 +200,7 @@ git grep -lE '\b(scene_[a-z]|Scene[A-Z]|SCENE_)' -- 'src/**' 'tools/**' 'tests/*
   | xargs gsed -i -f /tmp/render3d.sed
 ```
 
-### Step 2d — Verify
+### Step 2d - Verify
 
 ```bash
 # (i) No renderer-prefixed token remains inside the module:
@@ -216,9 +216,9 @@ make gl-repl
 make test
 ```
 **Gate:** (i) zero, (iii) **no diff** (STAY untouched), (iv) green. If (iii)
-shows a diff, a user-scene token was wrongly swept — `git checkout` the affected
+shows a diff, a user-scene token was wrongly swept - `git checkout` the affected
 file and investigate before continuing. If `make test` fails to *compile*, a
-rename was inconsistent across a header/caller — fix the reported symbol.
+rename was inconsistent across a header/caller - fix the reported symbol.
 **Commit** ("Phase 2: rename scene_/Scene/SCENE_ -> render3d_/Render3d/RENDER3D_").
 
 > Note: generic field names `scene_x/y/w/h` and `scene_clr*` become
@@ -228,7 +228,7 @@ rename was inconsistent across a header/caller — fix the reported symbol.
 
 ---
 
-## 7. Phase 3 — Build system, guards, scripts, demo + test target names
+## 7. Phase 3 - Build system, guards, scripts, demo + test target names
 
 ### 7a. Demo: rename dir, source file, and Makefile targets/vars
 
@@ -242,7 +242,7 @@ gsed -i 's/tools\/scene_demo/tools\/render3d_demo/g' Makefile
 gsed -i 's/\bSCENE_SRCS\b/RENDER3D_SRCS/g; s/\bSCENE_HDRS\b/RENDER3D_HDRS/g; s/\bSCENE_OBJS\b/RENDER3D_OBJS/g' Makefile
 ```
 The demo's own file-private statics (`render_hud`, `render_cube`, …) are bare
-`render_`, not `scene_` — leave them as-is.
+`render_`, not `scene_` - leave them as-is.
 
 ### 7b. Tests: rename the four renderer tests (NOT the user-scene ones)
 
@@ -276,12 +276,12 @@ done
 ```
 **Do NOT rename** `check-repl-scenes-cfg-clear-paired` (user-scene guard).
 
-### 7d. `scripts/check-module-prefixes.sh` — update mapping + invert the deny
+### 7d. `scripts/check-module-prefixes.sh` - update mapping + invert the deny
 
 This guard documents the module→prefix map and denies stale prefixes. Update the
 comment `src/scene -> scene_/Scene` to `src/render3d -> render3d_/Render3d`, and
 make it deny the **old** prefix reappearing in `src/render3d` (catches a future
-partial revert). Edit by hand — confirm the deny pattern now flags
+partial revert). Edit by hand - confirm the deny pattern now flags
 `scene_`/`Scene`/`SCENE_` under `src/render3d`.
 
 **Verify Phase 3:**
@@ -295,30 +295,30 @@ works. **Commit** ("Phase 3: build/guard/script/demo/test target renames").
 
 ---
 
-## 8. Phase 4 — Documentation (current-design docs only)
+## 8. Phase 4 - Documentation (current-design docs only)
 
 Update prose + the symbol references. **Do not** edit `plans/done/**` or
 `plans/in-review/accum-motion-blur.md`. (`src/scene/README.md` already moved to
-`src/render3d/README.md` with the directory in Phase 1 — just edit its contents.)
+`src/render3d/README.md` with the directory in Phase 1 - just edit its contents.)
 
-Edit by hand (these mix prose "scene" with symbol references — be selective):
+Edit by hand (these mix prose "scene" with symbol references - be selective):
 
-- **`src/render3d/README.md`** — retitle to the `render3d` module; keep the
+- **`src/render3d/README.md`** - retitle to the `render3d` module; keep the
   "what a scene renderer is" framing but anchor it on the module name
   `render3d`; update every `src/scene` path, `scene_render_3d_scene` →
   `render3d_draw_scene`, `SceneRenderConfig` → `Render3dRenderConfig`,
   `scene_demo` → `render3d_demo`.
-- **`CLAUDE.md`** — the File-Layout table rows for every `src/scene/*` file
+- **`CLAUDE.md`** - the File-Layout table rows for every `src/scene/*` file
   (paths + descriptions), the Conventions bullet (`scene_*` for 3D rendering →
   `render3d_*`), the Rendering-Pipeline and Accumulation-Motion-Blur prose
   (`scene_render_3d_scene`, `SceneRenderConfig`, `src/scene/render.c`), and any
   `scene_demo` / `make scene_demo` mention.
-- **`MODULES.md`** — the layer-4 "scene renderer" map and the `scene_*` prefix
+- **`MODULES.md`** - the layer-4 "scene renderer" map and the `scene_*` prefix
   line.
-- **`ARCHITECTURE.md`** — frame-pipeline narrative references
+- **`ARCHITECTURE.md`** - frame-pipeline narrative references
   (`scene_render_3d_scene`, `SceneRenderConfig`, `src/scene`).
 - **`ADVANCED_USAGE.md`**, **`src/app/README.md`**, **`src/support/README.md`**,
-  **`src/subsystems/README.md`** — their `src/scene` path references.
+  **`src/subsystems/README.md`** - their `src/scene` path references.
 
 **Verify:**
 ```bash
@@ -331,7 +331,7 @@ grep -rnE 'src/scene\b|scene_render_3d_scene|SceneRenderConfig' \
 
 ---
 
-## 9. Phase 5 — Full verification matrix
+## 9. Phase 5 - Full verification matrix
 
 ```bash
 make test                       # debug = ASan + UBSan
@@ -376,35 +376,35 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
 
 ---
 
-## Appendix A — Decision history (why `render3d`, not the alternatives)
+## Appendix A - Decision history (why `render3d`, not the alternatives)
 
 Diagnostic: *does the name describe what the module owns (the framing
 apparatus), or what it excludes (the geometry/contents)?* And: does it
 over-claim a cross-cutting verb?
 
-- **`scene` (status quo)** — names the excluded contents; collides with the
+- **`scene` (status quo)** - names the excluded contents; collides with the
   user-scene concept. Rejected (the reason for this whole change).
-- **`renderer`** — accurate about the pipeline, but the bare agent-noun
+- **`renderer`** - accurate about the pipeline, but the bare agent-noun
   over-claims *all* rendering when UI/HUD/editor rendering lives elsewhere.
   Rejected for over-claiming; `render3d` keeps the accuracy while scoping to 3D.
-- **`stage` / `studio`** — collision-free and fits the grid/backdrop
+- **`stage` / `studio`** - collision-free and fits the grid/backdrop
   "decorations," but metaphorical where a code module wants literal, and
   undersells the projection/AA/post pipeline. Runner-up.
-- **`world`** — worse than status quo; "world" is the contents/world-space, the
+- **`world`** - worse than status quo; "world" is the contents/world-space, the
   exact thing the module doesn't own. Rejected.
-- **`viewport3d`** — "viewport" is already owned by `UiState`
+- **`viewport3d`** - "viewport" is already owned by `UiState`
   (`UiViewportState`, `ui_state_viewport*`) and connotes the pixel rectangle /
   layout region, not the renderer. Rejected for that overlap.
-- **Renaming the user-scene side instead** — fewer files but touches the on-disk
+- **Renaming the user-scene side instead** - fewer files but touches the on-disk
   `@scene-name` save format + UI labels (not behavior-neutral; needs
   back-compat), renames the *more* legitimate owner of "scene," and leaves the
   renderer mis-named. Rejected.
-- **Also cleaning the crowded `render_*` namespace** — out of scope; those are
+- **Also cleaning the crowded `render_*` namespace** - out of scope; those are
   file-private statics, which the codebase convention permits to be neutrally
   named. `render3d_` does not collide with the bare `render_` statics, so no
   cleanup is needed.
 
-## Appendix B — STAY list (must remain unchanged)
+## Appendix B - STAY list (must remain unchanged)
 
 `SceneSnapshot`, `SceneSnapshotCameraMode`, all `scene_snapshot_*`, all
 `scene_tabs*`, `scene_name`, `scene_name_hint`, `scene_slot`, `scene_idx`,
@@ -417,7 +417,7 @@ tests `test_ui_scene_tabs`, `test_scene_file_menu`; guard
 
 ---
 
-## Review (2026-06-24) — landed
+## Review (2026-06-24) - landed
 
 Reviewed against the §10 Definition of Done. **Verdict: correct and complete on
 the code side; merged after a small batch of cosmetic-label cleanups.**
@@ -426,7 +426,7 @@ the code side; merged after a small batch of cosmetic-label cleanups.**
 
 - **Directory move with history.** `src/scene/` gone, `src/render3d/` present;
   `git log --follow src/render3d/render.c` shows the full pre-rename history
-  (154 commits) — the `git mv` preserved provenance.
+  (154 commits) - the `git mv` preserved provenance.
 - **Symbol rename complete.** Zero `scene_*`/`Scene*`/`SCENE_*` renderer tokens
   remain in `src/render3d`; zero `"scene/"` includes anywhere in `src`/`tools`/
   `tests`; zero renderer symbols (`scene_render_3d_scene`, `SceneRenderConfig`,
@@ -449,13 +449,13 @@ the code side; merged after a small batch of cosmetic-label cleanups.**
 
 **Flaw found in the plan's own verification (not the branch):** the §4/§6/§9
 STAY-token gate uses `git grep … -- 'src/**' 'tests/**'`, and that `src/**`
-pathspec matches **nothing** in this repo's git — so `stay-before.txt` /
+pathspec matches **nothing** in this repo's git - so `stay-before.txt` /
 `stay-after.txt` were both empty and the "no diff" gate passed *vacuously*. The
 branch is fine (confirmed by the real comparison above), but anyone re-running
 this plan's gate should replace `'src/**'` with `src` (a plain dir pathspec) or
 `:(glob)src/**`.
 
-**Cosmetic stragglers cleaned up before merge** (all behavior-neutral —
+**Cosmetic stragglers cleaned up before merge** (all behavior-neutral -
 comment/echo text only, the guards were already functionally correct):
 
 - Renamed-guard output labels: `scripts/check-render3d-no-upper-layers.sh`

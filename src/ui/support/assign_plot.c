@@ -23,7 +23,7 @@
  * reach an exported @cfg header).
  *
  * The control row is laid out once, by ap_ctrl_layout(), which both the
- * renderer and the hit-test consume — four chips whose widths change with
+ * renderer and the hit-test consume - four chips whose widths change with
  * their own state (`1 Hz` vs `frame`, `1x` vs `2x`) is more
  * mirrored arithmetic than two code paths can be trusted to keep in step.
  */
@@ -64,8 +64,8 @@
 #define AP_RESET_LABEL  "[reset]"
 #define AP_LIN_LABEL    "lin"
 #define AP_LOG_LABEL    "log"
-/* The zoom is a two-state setting, so it names the state it is in — "1x" or
- * "2x" — rather than the move available from here. A verb there would be the
+/* The zoom is a two-state setting, so it names the state it is in - "1x" or
+ * "2x" - rather than the move available from here. A verb there would be the
  * one chip in the row whose label meant something different from its
  * neighbours'. */
 #define AP_ZOOM_1X_LABEL "1x"
@@ -79,10 +79,10 @@
 #define AP_Y_TARGET_DIVS 4
 
 /* Plot line colors: fixed data-viz identity like the FPS series, not theme
- * tokens — a trace has to stay legible and stay the same hue in every scheme.
+ * tokens - a trace has to stay legible and stay the same hue in every scheme.
  * Series 0 keeps the cyan the single-series plot has always used; the rest are
  * spaced around it and chosen to stay distinguishable in the common forms of
- * color blindness (no red/green pair carries meaning on its own — the legend
+ * color blindness (no red/green pair carries meaning on its own - the legend
  * names every series in text as well). */
 static const float k_ap_series[MAX_ASSIGN_PLOT_SERIES][3] = {
     { 0.45f, 0.85f, 1.00f },  /* cyan   */
@@ -128,7 +128,7 @@ static int ap_plot_well_h(int expanded) {
 }
 
 /* The legend exists only to tell series apart, so one series does not get one
- * — its name is already the panel header. */
+ * - its name is already the panel header. */
 static int ap_legend_h(int series_count) {
     return series_count > 1 ? AP_LEGEND_H : 0;
 }
@@ -197,7 +197,7 @@ static void ap_ctrl_layout(const UiAssignPlotPanelView *view, int panel_w,
     out->rate.label = out->rate_buf;
 
     /* Every one of these three owns a setting, so each shows the value it is
-     * on — the chip grammar in ui/core/gl_2d.h. Only [reset] is a verb, and
+     * on - the chip grammar in ui/core/gl_2d.h. Only [reset] is a verb, and
      * it is the only one of the four that has no mode. */
     out->yscale.label = view->plot.y_log ? AP_LOG_LABEL : AP_LIN_LABEL;
     out->expand.label = view->plot.expanded ? AP_ZOOM_2X_LABEL
@@ -248,8 +248,8 @@ static const char *ap_fit_label(const char *src, int max_px,
  *
  * `max_chars` is what the cell actually has left after its key, and precision
  * is dropped until the number fits. An exponent eats characters a plain
- * decimal does not — the mean of a symmetric sine lands on something like
- * 1.027e-11 — and at 4 digits that runs straight into the key beside it.
+ * decimal does not - the mean of a symmetric sine lands on something like
+ * 1.027e-11 - and at 4 digits that runs straight into the key beside it.
  * Significant digits are the right thing to spend: 1e-11 still says "this is
  * zero, to rounding", which is the whole content of that number.
  *
@@ -299,7 +299,7 @@ typedef enum {
 
 /* The Y axis actually drawn. `lo`/`hi`/`step` live in *axis space*: value units
  * when linear, log10(value) when LOG, and signed decades away from
- * `zero_floor` when SYMLOG — every consumer goes through ap_value_y() /
+ * `zero_floor` when SYMLOG - every consumer goes through ap_value_y() /
  * ap_tick_value(), so nothing else has to know which. */
 typedef struct {
     int    kind;             /* ApYKind */
@@ -307,7 +307,7 @@ typedef struct {
     double zero_floor;       /* SYMLOG: |v| at or below this reads as zero */
 } ApYAxis;
 
-/* Min/max across every series' plotted columns — the Y axis is shared, so the
+/* Min/max across every series' plotted columns - the Y axis is shared, so the
  * extent has to be too. Columns a series has no value for are skipped rather
  * than read as zero. Returns 0 when there is nothing anywhere. */
 static int ap_col_extent(const AssignPlotView *plot,
@@ -386,19 +386,19 @@ static int ap_y_axis_linear(double lo, double hi, ApYAxis *out) {
  *
  * So: magnitudes below a floor read as zero, and above it the axis is
  * log10(|v| / floor) carrying the value's sign. Two sinusoids an order of
- * magnitude apart then sit one decade apart at their peaks — which is the
- * whole point of asking for log on signed data — and both still cross a real
+ * magnitude apart then sit one decade apart at their peaks - which is the
+ * whole point of asking for log on signed data - and both still cross a real
  * center line.
  *
  * The floor is derived rather than fixed. A fixed constant is right for
  * unit-scale data and wrong for a scene whose values live at 1e-6, where it
  * would swallow the trace whole; scaling it to the largest magnitude present
- * keeps the same *shape* of plot at any scale — three decades below the peak.
+ * keeps the same *shape* of plot at any scale - three decades below the peak.
  *
  * The absolute term is a ceiling on the floor, not a floor on it: it only
  * binds above unit scale, where it says "keep resolving down to 0.01 anyway".
- * That is deliberate. Values here are usually O(1)–O(100) — angles, positions,
- * color channels — and for a trace peaking at 100 the hundredths are still
+ * That is deliberate. Values here are usually O(1)–O(100) - angles, positions,
+ * color channels - and for a trace peaking at 100 the hundredths are still
  * worth a gridline, so it opens a fourth decade rather than stopping at 0.1.
  * Far above that the axis does get tall in decades, which is compressed but
  * never wrong; nothing in this REPL's vocabulary lives there. */
@@ -418,7 +418,7 @@ static int ap_y_axis_symlog(double lo, double hi, ApYAxis *out) {
     double max_abs = fabs(lo) > fabs(hi) ? fabs(lo) : fabs(hi);
     double zf, p_lo, p_hi, span, step;
 
-    if (!(max_abs > 0.0)) return 0;   /* nothing but zeros — caller falls back */
+    if (!(max_abs > 0.0)) return 0;   /* nothing but zeros - caller falls back */
 
     zf = max_abs * AP_SYMLOG_REL_FLOOR;
     if (zf > AP_SYMLOG_MAX_FLOOR) zf = AP_SYMLOG_MAX_FLOOR;
@@ -437,7 +437,7 @@ static int ap_y_axis_symlog(double lo, double hi, ApYAxis *out) {
     out->zero_floor = zf;
     out->step       = step;
     /* Snapped to multiples of the step, which puts a gridline exactly on the
-     * center whenever the data spans it — the sign change is the thing being
+     * center whenever the data spans it - the sign change is the thing being
      * looked for, and on this axis it is also where the floor band sits. */
     out->lo = floor(p_lo / step) * step;
     out->hi = ceil(p_hi / step) * step;
@@ -447,7 +447,7 @@ static int ap_y_axis_symlog(double lo, double hi, ApYAxis *out) {
 
 /* Log axis over a strictly-positive range: whole decades, so every gridline
  * label is a power of ten. A range inside one decade still gets that decade's
- * full span rather than a fractional window — the point of asking for log is
+ * full span rather than a fractional window - the point of asking for log is
  * to see magnitude, and a 2..3 trace stretched over its own tiny log slice
  * would read exactly like the linear plot it replaced. */
 static int ap_y_axis_log(double lo, double hi, ApYAxis *out) {
@@ -471,8 +471,8 @@ static int ap_y_axis_log(double lo, double hi, ApYAxis *out) {
 
 /* Resolve the axis for this frame's columns. `want_log` is the chip; the data
  * picks which log axis that means. Strictly-positive data keeps the plain
- * log10 axis — it has a real bottom end and no need of a floor, so nothing
- * that worked before changes — and any range containing non-positive values,
+ * log10 axis - it has a real bottom end and no need of a floor, so nothing
+ * that worked before changes - and any range containing non-positive values,
  * including an entirely negative one, gets the symmetric axis. */
 static int ap_y_axis(const AssignPlotView *plot, int want_log, ApYAxis *out) {
     double lo, hi;
@@ -502,7 +502,7 @@ static double ap_axis_pos(const ApYAxis *ax, double v) {
     }
 }
 
-/* Value a gridline at axis-space `p` stands for — what the gutter labels. On
+/* Value a gridline at axis-space `p` stands for - what the gutter labels. On
  * the symmetric axis the center is the floor band, which is exactly the
  * "indistinguishable from zero" reading it is labeled with. */
 static double ap_tick_value(const ApYAxis *ax, double p) {
@@ -539,7 +539,7 @@ static float ap_value_y(const ApYAxis *ax, double v, int plot_y, int plot_h) {
 
 /* Envelope band: one quad per column spanning lo..hi. Columns whose lo == hi
  * (every column of a non-decimated trace) contribute nothing visible, which is
- * exactly right — the line strip below carries them. */
+ * exactly right - the line strip below carries them. */
 static void ap_draw_envelope(const AssignPlotColumn *cols, int count,
                              int plot_x, int plot_y, int plot_w, int plot_h,
                              const ApYAxis *ax, const float rgb[3]) {
@@ -628,7 +628,7 @@ static void ap_draw_trace(const AssignPlotColumn *cols, int count,
  * row and a 16-iteration row put the same PC at different fractions, and a
  * single rule would be wrong for every series but one.
  *
- * Drawn in the series color, under half alpha — it is an annotation on the
+ * Drawn in the series color, under half alpha - it is an annotation on the
  * trace, not data, and it must not be mistaken for one at a glance. Drawn after
  * the traces so it stays visible where it crosses one. */
 static void ap_draw_replay_markers(const UiAssignPlotPanelView *view,
@@ -704,7 +704,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     tx = panel_x + AP_PAD;
     ty = panel_y + panel_h - AP_HEADER_H + 2;
 
-    /* Header: the primary series' label — with more than one series the
+    /* Header: the primary series' label - with more than one series the
      * legend below names them all, so the header says how many rather than
      * pretending the first one is the whole plot. */
     close_w = ap_control_w(AP_CLOSE_LABEL);
@@ -735,7 +735,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     /* Replay captures every frame so the trace stays the one its PC marker is
-     * drawn over, which overrides this chip — so the chip says so, in the same
+     * drawn over, which overrides this chip - so the chip says so, in the same
      * placeholder color the log chip uses for a setting that is understood but
      * not in force. ONCE is exempt from the override and so from the graying:
      * a frozen one-shot is still frozen. */
@@ -776,7 +776,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     if (have_data) {
         /* Gridlines on whole steps; the zero line, when the axis crosses it,
          * gets a brighter rule because sign changes are usually the thing
-         * being looked for. The symmetric log axis has one too — its center is
+         * being looked for. The symmetric log axis has one too - its center is
          * where the sign flips. A plain log axis is strictly positive and
          * never has one, so the test is suppressed there. */
         for (double p = ax.lo; p <= ax.hi + ax.step * 0.5; p += ax.step) {
@@ -836,7 +836,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
                          empty, FONT_SMALL);
     } else {
         /* Value labels right-aligned in the gutter, vertically centered on
-         * their gridline — but clamped into the plot's own band. Without the
+         * their gridline - but clamped into the plot's own band. Without the
          * clamp the bottom label drops into the x-axis caption below and the
          * top one is clipped by the control row above; both extremes are
          * always drawn, since they are the two numbers worth reading. */
@@ -869,7 +869,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
         int  row_y = plot_y - AP_XAXIS_H + 2;
 
         /* Both numbers belong to the focused series, matching the stats block
-         * below — n and the execution count are per-row facts, and a sum
+         * below - n and the execution count are per-row facts, and a sum
          * across series would describe nothing that exists. */
         snprintf(count_buf, sizeof(count_buf), "n=%llu",
                  (unsigned long long)view->plot.series[focus].stats.count);
@@ -896,7 +896,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
     }
 
     /* Legend: one swatch + name per series, only when there is more than one.
-     * The focused entry — the one the stats below describe — draws its name in
+     * The focused entry - the one the stats below describe - draws its name in
      * primary text; the others are muted. */
     if (series_count > 1) {
         int row_y = ap_legend_band_y(panel_y) + 2;
@@ -1007,7 +1007,7 @@ int ui_assign_plot_panel_hit_test(const UiAssignPlotPanelView *view,
         return UI_ASSIGN_PLOT_HIT_NONE;
     }
 
-    /* Legend band: a non-negative result is the series index. Read-only —
+    /* Legend band: a non-negative result is the series index. Read-only -
      * the caller consumes it as inert chrome, and the renderer uses it to
      * decide whose statistics to show. */
     if (series_count > 1) {

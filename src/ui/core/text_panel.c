@@ -6,7 +6,7 @@
 #include "config.h"
 #include "support/cpuprof.h"   /* phase probes; sections are opaque ints, the
                                 * catalog comes from the force-included
-                                * prof_sections.h — no app dependency */
+                                * prof_sections.h - no app dependency */
 #include "ui/core/gl_2d.h"
 #include "ui/core/text_layout.h"
 #include "ui/core/text_search.h"
@@ -91,7 +91,7 @@ static int text_panel_row_text_len(const UiTextPanelSnapshot *snap,
  * walks rows; read back by ui_text_panel_hit_test and
  * ui_text_panel_input_row_y so they stop re-walking the same row text
  * the renderer already walked. Keyed on the snapshot pointer plus the
- * geometry fields wrap depends on (row_count, cp_w, wrap_at_comma) —
+ * geometry fields wrap depends on (row_count, cp_w, wrap_at_comma) -
  * if any of those change the cache is invalidated and consumers fall
  * back to a fresh compute.
  *
@@ -378,8 +378,8 @@ static void text_panel_draw_left_aux(const UiTextPanelSnapshot *snap,
 
     aux_x = snap->cp_x + snap->text_x - 6 * FONT_W;
 
-    /* Blend is off by default in the panel pass — the row-text path turns it
-     * on per span and back off again — so a translucent label has to bracket
+    /* Blend is off by default in the panel pass - the row-text path turns it
+     * on per span and back off again - so a translucent label has to bracket
      * its own draw or the alpha is simply discarded. */
     blend_on = row->left_aux_alpha > 0.0f && row->left_aux_alpha < 1.0f;
     if (blend_on) {
@@ -574,7 +574,7 @@ int ui_text_panel_match_paren(const char *s, int len, int cursor,
         return 0;
 
     /* Resolve the bracket pair from the char in front of the caret.
-     * '(' / ')' and '{' / '}' are matched independently — depth counts
+     * '(' / ')' and '{' / '}' are matched independently - depth counts
      * only the active pair's own brackets, so the other kind nested
      * between them is ignored. */
     if (s[cursor] == '(' || s[cursor] == ')') {
@@ -765,8 +765,8 @@ static void text_panel_draw_bracket_cells(const UiTextPanelSnapshot *snap,
 
 /* Faint background band behind the in-scope characters [lo, hi] (inclusive)
  * of the caret's enclosing-paren span, clamped to the wrap row. Marks the
- * active scope without recoloring any glyph, so syntax colors — and the
- * near-grey comment shade — stay intact (an earlier version dimmed the
+ * active scope without recoloring any glyph, so syntax colors - and the
+ * near-grey comment shade - stay intact (an earlier version dimmed the
  * out-of-scope text and read as a comment). Drawn before the text segment. */
 static void text_panel_draw_paren_scope_band(const UiTextPanelSnapshot *snap,
                                              int wrap_x, int wrap_start,
@@ -1050,7 +1050,7 @@ static int text_panel_total_visual_rows(const UiTextPanelSnapshot *snap) {
 /* Solve the scrollbar for the snapshot's current scroll. Returns 0 when the
  * panel shows no scrollbar. The thumb is placed along `travel` (not the raw
  * track height) so a thumb clamped up to the minimum height still bottoms
- * out exactly at the track's bottom edge — that is what makes the placement
+ * out exactly at the track's bottom edge - that is what makes the placement
  * exactly invertible for drag mapping. */
 static int text_panel_scrollbar_solve(const UiTextPanelSnapshot *snap,
                                       TextPanelScrollbar *out) {
@@ -1165,7 +1165,7 @@ static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap) {
         return;
 
     glEnable(GL_BLEND);
-    /* Faint track behind the thumb — the strip is draggable along its whole
+    /* Faint track behind the thumb - the strip is draggable along its whole
      * length, so it reads as a control rather than a floating tick. */
     ui_clr_a(UI_TOK_TEXT_MUTED, 0.12f);
     glRectf((float)sb.track_x, (float)sb.track_y,

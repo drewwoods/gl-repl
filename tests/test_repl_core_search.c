@@ -47,7 +47,7 @@ static void declare_test_vars(void) {
     repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
-/* Mark [anchor, cursor) of the live input as an input-buffer selection —
+/* Mark [anchor, cursor) of the live input as an input-buffer selection -
  * the state Shift+arrows / drag-select leave behind. */
 static void select_input_range(int anchor, int cursor) {
     EditorInputState *inp = editor_state_input_mut();

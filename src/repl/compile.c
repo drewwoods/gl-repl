@@ -21,7 +21,7 @@
  * shift, editor-buffer write) are performed by src/repl/apply.c and
  * orchestrated by the editor commit path.
  *
- * Reading guide — entry points and what they emit:
+ * Reading guide - entry points and what they emit:
  *   repl_compile_float_decl         INSERT_ONE / REPLACE_ONE  +
  *                                   DECLARE / UNDECLARE / SET_VALUE
  *   repl_compile_var_assign         INSERT_ONE / REPLACE_ONE  +
@@ -71,7 +71,7 @@ ReplCompileResult repl_compile_dispatch(const char *text,
                                         char *err, int err_size) {
     if (!out || !ctx) return REPL_COMPILE_ERROR;
 
-    /* Canonical order — mirrors editor_try_commit_any. Each entry
+    /* Canonical order - mirrors editor_try_commit_any. Each entry
      * is a per-kind compile validator that returns NO_CHANGE when
      * the input doesn't match its grammar, OK + a populated
      * ReplCompiledChange when it does, or ERROR on syntax failure.
@@ -263,7 +263,7 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
 }
 
 /* Source index of the innermost open CMD_FUNC_DEF at `pos`, or -1 at
- * document top level. Resolves *through* a nested for/if — a declaration
+ * document top level. Resolves *through* a nested for/if - a declaration
  * typed one level down still belongs to the owning function, which is what
  * makes hoist-from-any-depth work. */
 static int compile_enclosing_func_at(const ReplCompileContext *ctx, int pos) {
@@ -311,7 +311,7 @@ static void compile_collect_bindings(const ReplCompileContext *ctx, int pos,
                                          out->kinds);
 }
 
-/* Innermost binding of `name`, or -1. The *first* match decides — a
+/* Innermost binding of `name`, or -1. The *first* match decides - a
  * matching PARAM or LOOP is never skipped in search of an outer LOCAL,
  * which is how eval_primary and flatten resolve reads. */
 static int compile_bindings_find(const CompileScopeBindings *b,
@@ -375,7 +375,7 @@ static int compile_open_loop_depth_at(const ReplCompileContext *ctx, int pos) {
  * `func_idx`: its parameters, plus its locals, plus the deepest for-loop
  * nesting in the body. flatten_for_loop prepends an iterator to a fresh
  * array per level and silently drops the last outer binding at the cap,
- * so loop depth is a real multiplier and this — not `params + locals` —
+ * so loop depth is a real multiplier and this - not `params + locals` -
  * is the quantity that must fit MAX_EXPR_VARS. */
 static int compile_func_scope_peak(const ReplCompileContext *ctx,
                                    int func_idx) {
@@ -401,14 +401,14 @@ static int compile_func_scope_peak(const ReplCompileContext *ctx,
 }
 
 /* Would binding `name` over [body_start, body_end) capture an existing
- * scalar assignment — turning a row that currently writes a global or an
+ * scalar assignment - turning a row that currently writes a global or an
  * outer local into a write to a new parameter or loop iterator, which are
  * not writable?
  *
  * Shadowing itself stays legal; this is a target-legality check, not a
  * return to the blanket name-collision ban. Nested same-name binders are
- * respected exactly as normal resolution does — a `for(name, ...)` inside
- * the body already owns the assignments it encloses — and a nested
+ * respected exactly as normal resolution does - a `for(name, ...)` inside
+ * the body already owns the assignments it encloses - and a nested
  * function body is a different lexical scope, so it is skipped whole. */
 static int compile_binder_captures_assignment(const ReplCompileContext *ctx,
                                               int body_start, int body_end,
@@ -463,7 +463,7 @@ static int compile_binder_captures_assignment(const ReplCompileContext *ctx,
     return 0;
 }
 
-/* Text of a for-header after the iterator's name token — i.e. the bound
+/* Text of a for-header after the iterator's name token - i.e. the bound
  * expressions. "" when the header is malformed. */
 static const char *compile_for_header_bounds(const char *line) {
     const char *p = line ? strchr(line, '(') : NULL;
@@ -546,7 +546,7 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
 /* Mirror image of compile_line_uses_global_ident: does this line read the
  * *local* `name` of the enclosing function?
  *
- * The global helper cannot be reused here — it deliberately answers 0 the
+ * The global helper cannot be reused here - it deliberately answers 0 the
  * moment the name is bound in an enclosing scope, which since locals joined
  * collect_visible_vars_in() is every reference to a local inside its own
  * body. So the question is inverted: resolve innermost-first and count the
@@ -559,7 +559,7 @@ static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
  *
  *   - A function header is all declarations; it reads nothing.
  *   - A for-header's *bounds* are evaluated in the enclosing scope, before
- *     the iterator exists — `for(x, 0, x + 1)` reads the outer `x`, which
+ *     the iterator exists - `for(x, 0, x + 1)` reads the outer `x`, which
  *     compile and flatten both honor. Treating the iterator as bound
  *     across the whole header would call that outer local unreferenced and
  *     let it be deleted, and the bound would then silently resolve to a
@@ -610,7 +610,7 @@ static int compile_local_name_is_still_referenced(const ReplCompileContext *ctx,
     return 0;
 }
 
-/* Storage-aware "is this declared name still read?" predicate — the one
+/* Storage-aware "is this declared name still read?" predicate - the one
  * place that decides which of the two reference walks applies.
  *
  * The declaration row's own storage picks the walk, and it has to: the
@@ -851,7 +851,7 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
     return 1;
 }
 
-/* Parsed shape of `float a, b = expr, c;` — names + optional init
+/* Parsed shape of `float a, b = expr, c;` - names + optional init
  * values (already evaluated at compile time so apply doesn't need
  * the source string). decl_comment carries any trailing `// ...`
  * verbatim so format_decl_text can re-emit it. */
@@ -898,7 +898,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         /* A trailing `// comment` ends the name list just like `;` or
-         * end-of-string — the comment-capture below reads it. This lets
+         * end-of-string - the comment-capture below reads it. This lets
          * an interactive decl carry a comment without a typed semicolon
          * (`float n // @tune`), since the `;` key commits before the user
          * can type one; mirrors repl_compile_var_assign's `//` handling. */
@@ -906,7 +906,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
         if (parsed->count > 0) {
             /* Subsequent name must be preceded by ','. A non-comma
              * here means the line was float-shaped through `float `
-             * but breaks the comma-separated list — fall through to
+             * but breaks the comma-separated list - fall through to
              * the next handler instead of erroring. */
             if (*p != ',') {
                 *recognized = 0;
@@ -934,7 +934,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
         /* Optional `= expr`. Stop at unparenthesized comma so the
          * outer name loop picks up the next decl, and at a top-level
          * `//` so `float n = 1 // @tune` keeps the comment out of the
-         * initializer. `==` is left for the eval validator to reject —
+         * initializer. `==` is left for the eval validator to reject -
          * a literal `=` followed by `=` is not a decl initializer. */
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == '=' && p[1] != '=') {
@@ -1063,7 +1063,7 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
  *
  * `bind` must be collected over the whole enclosing body (so a local
  * declared *after* the row being edited still counts), with `old_decl`
- * naming the row being replaced — its own names are not collisions with
+ * naming the row being replaced - its own names are not collisions with
  * itself. `scope_peak` is the post-edit peak from compile_func_scope_peak
  * minus this row's contribution. */
 static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
@@ -1121,7 +1121,7 @@ static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
  * static that retains its value across frames (the exporter emits it as
  * `static float ...`), while a local is a plain C automatic living for
  * one call. Surfacing the keyword in the code panel makes that lifetime
- * difference — and which storage the commit actually chose — obvious.
+ * difference - and which storage the commit actually chose - obvious.
  * `indent` is the row's gutter: depth 0 for a global, the enclosing
  * function body's depth for a local.
  *
@@ -1129,13 +1129,13 @@ static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
  * reject the line rather than commit a partial row: a dropped name stays
  * registered in the predef table while vanishing from the source text, which
  * is the desync the p83 regression in tests/test_repl_core_io.c guards. A
- * clipped trailing comment is not a failure — it costs no state — so it does
+ * clipped trailing comment is not a failure - it costs no state - so it does
  * not feed the flag.
  *
  * The row can be *wider than the line the author typed*: `static ` is added,
  * `", "` replaces `","`, and each `= %g` re-render can outgrow its source
  * literal (`1e30` -> `1e+30`). Appends therefore go through
- * repl_append_clamped and never `off += snprintf` — see src/repl/util.h for
+ * repl_append_clamped and never `off += snprintf` - see src/repl/util.h for
  * why the raw idiom writes out of bounds. */
 static int format_decl_text(const FloatDeclParse *parsed,
                             const char *indent,
@@ -1223,7 +1223,7 @@ static void build_decl_predef_ops(const FloatDeclParse *parsed,
     out->predef_op_count = op_count;
 }
 
-/* Compose "declared a, b, c" — or "declared local a, b in blade" — for
+/* Compose "declared a, b, c" - or "declared local a, b in blade" - for
  * the status banner. Storage depends on cursor position for the plain
  * `float` case, which is otherwise invisible state; naming it here gives
  * the author a second confirmation alongside the canonical text. */
@@ -1266,7 +1266,7 @@ static void compile_func_display_name(const ReplCompileContext *ctx,
 }
 
 /* The local arm of repl_compile_float_decl: a declaration inside a
- * function body. It emits no predef ops at all — the prologue row *is*
+ * function body. It emits no predef ops at all - the prologue row *is*
  * the binding, which is why deleting it is guarded like a live variable
  * and why the row carries REPL_VAR_IDX_LOCAL rather than a slot.
  *
@@ -1325,8 +1325,8 @@ static ReplCompileResult compile_float_decl_local(const ReplCompileContext *ctx,
     }
 
     /* This body's declaration prologue, mirroring the global rule (which
-     * skips only CMD_VAR_DECLARE rows). Hoisting here — from whatever
-     * for/if the author typed in — is what keeps every reference strictly
+     * skips only CMD_VAR_DECLARE rows). Hoisting here - from whatever
+     * for/if the author typed in - is what keeps every reference strictly
      * after its declaration, so flatten's binding stays a prefix scan. */
     decl_pos = func_idx + 1;
     while (decl_pos < body_end && decl_pos < ctx->document_count &&
@@ -1369,7 +1369,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     repl_compiled_change_init(out);
 
     /* Storage is decided *before* parsing, because the two paths validate
-     * initializers differently — the global path evaluates them against
+     * initializers differently - the global path evaluates them against
      * the predef table, which would reject `float x = param;` with an
      * unknown-identifier error before the local diagnostic could run.
      * Two steps, in order:
@@ -1421,7 +1421,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     /* Global path. A local row being retyped as `static float` is a
      * *storage conversion*, not an ordinary overwrite: it credits no old
      * predef slot (there was none), emits no UNDECLARE, and every name
-     * needs a fresh slot — so a full table rejects it before any source
+     * needs a fresh slot - so a full table rejects it before any source
      * mutation. old_global is NULL in that case precisely to get that
      * accounting. */
     const GLCmd *old_global = old_is_local ? NULL : old_decl;
@@ -1443,7 +1443,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     } else if (old_is_local) {
         /* No exemptions: an *unchanged* name is still being removed from
          * local storage, and every compiled assignment to it carries
-         * REPL_VAR_IDX_LOCAL. Refusing the edit is the resolution — same
+         * REPL_VAR_IDX_LOCAL. Refusing the edit is the resolution - same
          * shape as the rule next door, and no reclassify-every-assignment
          * transaction to get wrong. */
         if (!repl_compile_decl_replacement_allowed(ctx, insert_idx, NULL, 0,
@@ -1475,8 +1475,8 @@ ReplCompileResult repl_compile_float_decl(const char *input,
         out->count = 1;
         out->adjust_edit_line = 0;
     } else if (old_is_local) {
-        /* The row has to move — local storage lives at the function-body
-         * top, global storage at the document top — so this is a
+        /* The row has to move - local storage lives at the function-body
+         * top, global storage at the document top - so this is a
          * delete-here-and-reinsert, not a replace-in-place. `pos` is in
          * post-delete coordinates (compile.h convention). */
         out->kind         = REPL_COMPILED_INSERT_ONE;
@@ -1494,7 +1494,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     out->cmds[0] = cmd;
 
     char decl_text[MAX_LINE_LEN];
-    /* Before build_decl_predef_ops, so a rejected line registers nothing —
+    /* Before build_decl_predef_ops, so a rejected line registers nothing -
      * same atomicity as the "too many names" path above. */
     if (!format_decl_text(&parsed, "  ", decl_text, (int)sizeof(decl_text)))
         return compile_set_err(err, err_size,
@@ -1589,7 +1589,7 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
     /* Replace the one decl line in place: delete it, then insert the N
      * single-name decls at the same index. `pos` is in post-delete
      * coordinates (compile.h convention); deleting one line at line_idx
-     * leaves line_idx as the insert point. No predef ops — the
+     * leaves line_idx as the insert point. No predef ops - the
      * variables stay declared with their current values. */
     out->kind             = REPL_COMPILED_INSERT_MANY;
     out->pos              = line_idx;
@@ -1635,7 +1635,7 @@ static int compile_rebase_var_assign_slot_after_undeclares(
  * _count / edit_line, and visible-var collection now runs through
  * collect_visible_vars_in over that same context view (no live
  * g_repl_state read). Callers still build a fresh context per statement
- * — repl_compile_context_from_live snapshots the live document — so a
+ * - repl_compile_context_from_live snapshots the live document - so a
  * multi-statement commit observes each prior change via its next
  * context. Reached from both the editor commit path and the file-load
  * path via load_try_block. */
@@ -1749,7 +1749,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     } else {
         /* Lexical target resolution. The innermost binding decides, and a
          * matching PARAM/LOOP is never skipped in search of an outer
-         * LOCAL — a shadowed outer binding is simply not reachable from
+         * LOCAL - a shadowed outer binding is simply not reachable from
          * here, exactly as in C. Only when nothing scoped matches does
          * the target fall through to a predef slot. */
         int bind_slot = compile_bindings_find(&bind, name);
@@ -1886,7 +1886,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     /* Rebase exists to fix up predef slot indices after undeclares, so it
      * runs only when *both* sides are global. A local-target assignment
-     * carries REPL_VAR_IDX_LOCAL (-1), which the helper reads as failure —
+     * carries REPL_VAR_IDX_LOCAL (-1), which the helper reads as failure -
      * ungated, it would reject the legitimate "overwrite an unused local
      * decl with an assignment to another local" edit. */
     out->predef_op_count = op_count;
@@ -2305,7 +2305,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
             /* Dispatch didn't recognize. Go through the normal commit
              * pipeline so visible-variable references in the stripped
              * text are preserved (otherwise `// glVertex3f(t, 0, 0)`
-             * round-trips back as `glVertex3f(0.0000, 0, 0)` — the
+             * round-trips back as `glVertex3f(0.0000, 0, 0)` - the
              * parser's canonical text emits args from cmd->args[]
              * regardless of has_vars). */
             ExprVar vis[MAX_EXPR_VARS];
@@ -2354,7 +2354,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
         const char *orig = source_text_line(ctx->text, line_idx);
 
         /* If the line is a CMD_VAR_DECLARE, commenting it out must
-         * also remove the variable from the predef table — otherwise
+         * also remove the variable from the predef table - otherwise
          * the live runtime keeps a name the source no longer
          * declares (and a save/reload would disagree). The shared
          * helper validates references and emits UNDECLARE ops with
@@ -3037,7 +3037,7 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
     /* Reverse binder guards, for a header rewrite over an existing body.
      * Validating only where the local is declared would leave a later
      * header edit free to create a same-scope redefinition, to overflow
-     * the frame, or to capture a write — so the parameter list is checked
+     * the frame, or to capture a write - so the parameter list is checked
      * against the body that is already there. This lives in the kernel and
      * not the wrapper because the editor calls the kernel directly
      * (src/editor/commit.c), so a check on the wrapper alone is bypassed
@@ -3055,7 +3055,7 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
             int bad = 0;
 
             /* A local hoists to the body top, the same scope as the
-             * parameter list — C calls that a redefinition, not
+             * parameter list - C calls that a redefinition, not
              * shadowing. Only LOCAL matches count: the PARAM entries in
              * `bind` are the old parameters this edit is replacing. */
             for (int b = 0; b < bind.count && !bad; b++) {
@@ -3068,7 +3068,7 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
             }
             /* Shadowing does not make a parameter writable, so an
              * assignment the new parameter would capture has to block the
-             * edit — otherwise the row silently becomes a write to a
+             * edit - otherwise the row silently becomes a write to a
              * constant binding. */
             if (!bad &&
                 compile_binder_captures_assignment(ctx,
@@ -3181,7 +3181,7 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
     /* Reverse binder guards, the loop-header twin of the func-def
      * kernel's. Capacity first: flatten_for_loop prepends this iterator to
      * a *fresh* scope array and copies the outer bindings under
-     * `lnv < MAX_EXPR_VARS`, silently dropping the last one at the cap —
+     * `lnv < MAX_EXPR_VARS`, silently dropping the last one at the cap -
      * with locals in that array, a live local would vanish mid-body and
      * read as 0. Reject at compile time instead. */
     {

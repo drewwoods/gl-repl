@@ -1,8 +1,8 @@
-# `src/repl/` — Code-Smell Audit
+# `src/repl/` - Code-Smell Audit
 
 > Audit produced 2026-05-23. Findings come from five parallel reviews of
 > `src/repl/` plus targeted spot-verification of the most actionable
-> claims. File:line references are exact at the time of writing — check
+> claims. File:line references are exact at the time of writing - check
 > `git log` on the cited files before acting if this doc has aged.
 >
 > Scope: every file under `src/repl/` except `examples.c` (mostly
@@ -27,50 +27,50 @@ Status by finding:
 - **🔵 Structural:** #36 already done before the audit ran (the
   declared mutator had moved to `state_owners.h`); #37, #38 done in
   the original passes; **#41 + #42 + #43 + #45 + #46 done in the
-  closeout** (Tier A/B — see below); **#39, #40 done in the Tier C
+  closeout** (Tier A/B - see below); **#39, #40 done in the Tier C
   pass** (see below); **#44 done in the closeout** (Tier B).
 
 ### Tier system
 
 Used during the 2026-05-24 backlog review to triage what was left:
 
-- **Tier A — small, real fix, near-zero risk.** 5–30 line changes
+- **Tier A - small, real fix, near-zero risk.** 5–30 line changes
   with no architectural exposure. Always worth doing once they're
   identified; no reason to defer.
-- **Tier B — moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50–200 line changes,
   one or two files of churn, a real test impact. Worth doing when
   next in the area, or as a focused pass.
-- **Tier C — defer (high cost, low payoff).** Real wins but touch
+- **Tier C - defer (high cost, low payoff).** Real wins but touch
   a wide surface; the audit's own "Out of scope" cluster lives here.
   Revisit if the surrounding code is being reworked anyway.
-- **Tier D — keep deferred.** Findings the audit landed wrong, or
+- **Tier D - keep deferred.** Findings the audit landed wrong, or
   where the original intent (a kept-on-purpose trampoline, a
   test-pinned bug) makes "fixing" them worse than living with them.
 
 ### Findings by tier
 
-- **Tier A (done — commit `f5d0c50`):**
-  - **#42** — Add `GLCmd.var_idx`, stop overloading `num_args` for
+- **Tier A (done - commit `f5d0c50`):**
+  - **#42** - Add `GLCmd.var_idx`, stop overloading `num_args` for
     `CMD_VAR_ASSIGN`. Closes a documented foot-gun.
-  - **#43** — Add `display_name` to `ReplCommandTypeSpec`; replace
+  - **#43** - Add `display_name` to `ReplCommandTypeSpec`; replace
     the 14-case `cmd_display_name_for_begin_error` switch.
-  - **#45** — Rename `repl_state_mark_normals_dirty` →
+  - **#45** - Rename `repl_state_mark_normals_dirty` →
     `_mark_source_dirty` (and the `repl_mark_*` wrapper). The
     function invalidates more than normals; the new name says so.
-  - **#46** — Move `repl_copy_predef_values` / `_restore_predef_values`
+  - **#46** - Move `repl_copy_predef_values` / `_restore_predef_values`
     from `executor.c` to `eval.c` (executor never touched them).
-- **Tier B (done — commits `cbe73d2` and `17a574b`):**
-  - **#41** — Build `func_def_idx[REPL_FUNC_SLOT_COUNT]` once per
+- **Tier B (done - commits `cbe73d2` and `17a574b`):**
+  - **#41** - Build `func_def_idx[REPL_FUNC_SLOT_COUNT]` once per
     flatten so CMD_CALL handlers index directly instead of scanning
     `source_cmds[]` per call. (`cbe73d2`)
-  - **#44** — Embed `ReplExportConfig cfg` in `UserScene`; fold
+  - **#44** - Embed `ReplExportConfig cfg` in `UserScene`; fold
     `g_pre_example_cfg`/`g_pre_example_valid` into one wrapped struct.
     Kills the parallel-array invariant. (`17a574b`)
-- **Tier C (done — branch `repl-audit-test-gaps`, 2026-05-25):**
-  - **#40** — `flatten_range` extraction (378 → 160 lines). Extracted
+- **Tier C (done - branch `repl-audit-test-gaps`, 2026-05-25):**
+  - **#40** - `flatten_range` extraction (378 → 160 lines). Extracted
     `flatten_reparse_line`, `flatten_for_loop`, `flatten_call`,
     `flatten_if_block`.
-  - **#39** — `parse_command` extraction (903 → 456 lines). Extracted
+  - **#39** - `parse_command` extraction (903 → 456 lines). Extracted
     `parse_label`, `parse_materialfv`, `parse_materialf`,
     `parse_point_parameter_fv`, `parse_func_call`.
   - Size ratchet added (`check-tier-c-function-size`) to prevent
@@ -79,13 +79,13 @@ Used during the 2026-05-24 backlog review to triage what was left:
   `src-ui-code-smell-audit.md` is #37, kept as a deliberate
   namespace-boundary marker).
 - **Already done before the audit ran:**
-  - **#36** — `repl_state_document_reset` is in `state_owners.h:36`,
+  - **#36** - `repl_state_document_reset` is in `state_owners.h:36`,
     not `state_views.h`.
 
 The 🔵 cluster's outstanding work was always small enough to fit in
 a one-afternoon pass; the audit just hadn't gotten around to it. The
 "out of scope" Tier C entries remain real wins for the day someone
-opens the relevant files for unrelated work — both `parse_command`
+opens the relevant files for unrelated work - both `parse_command`
 and `flatten_range` would shed ~200-400 lines under a per-handler
 extraction.
 
@@ -93,21 +93,21 @@ extraction.
 
 Findings are grouped by severity, not by file:
 
-- **🔴 Actual bugs (verified)** — correctness or data-loss issues with a
+- **🔴 Actual bugs (verified)** - correctness or data-loss issues with a
   concrete failure mode. These should be picked up first.
-- **🟡 Drift hazards** — parallel structures (two parsers, two tables,
+- **🟡 Drift hazards** - parallel structures (two parsers, two tables,
   two walkers) that aren't enforced by anything. Working today; a
   one-side edit will silently diverge.
-- **🟢 Dead code / dead fields** — code with no callers, enum values
+- **🟢 Dead code / dead fields** - code with no callers, enum values
   with no producers, parameters silenced with `(void)`. Pure surface
   reduction.
-- **🔵 Structural / boundary concerns** — long functions, misplaced
+- **🔵 Structural / boundary concerns** - long functions, misplaced
   helpers, the `_mut()`-for-reads pattern. Bigger refactors; higher
   cost.
 
 Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Where the same root cause shows up in
-multiple files, it's one finding with multiple references — don't fan
+multiple files, it's one finding with multiple references - don't fan
 the fix out across separate PRs.
 
 ## 🔴 Actual bugs (verified)
@@ -122,7 +122,7 @@ and falls to `default: return 0`. The guard at L1095 is `nargs < 1`
 (accepts 1), so execution flows into the switch and the EVAL overlay is
 silently dropped.
 
-**Why it matters:** Real correctness bug — `glutSolidCube(t * 0.5)`
+**Why it matters:** Real correctness bug - `glutSolidCube(t * 0.5)`
 during replay loses the evaluated overlay. No test caught it because
 the suite covers only multi-arg shapes.
 
@@ -136,10 +136,10 @@ L612-658 (vs. `save_scene_to_slot` at L195-240,
 `src/repl/export.c:3628-3673`
 
 **Smell:** Save/load capture and restore `func_aliases` (L212-218,
-L300-304). The live-state shuttle variants — used by
+L300-304). The live-state shuttle variants - used by
 `repl_save_workspace`, `repl_load_workspace`,
 `repl_promote_example_if_needed`, `repl_load_scene_as_new_slot`, and
-LRU eviction — do not. Workspace import has the same additive-state
+LRU eviction - do not. Workspace import has the same additive-state
 shape: `load_scene_file_into_slot()` loads each file into the live alias
 table, while `repl_export_load_from_file()` only adds aliases from
 `// @func` directives and never clears aliases absent from the file.
@@ -175,7 +175,7 @@ an opaque struct-member error, not a missing-symbol error.
 
 **Where:** `src/repl/parser.c:842`
 
-**Smell:** `cmd->has_vars = (num_vars > 0);` — i.e. "does any var exist
+**Smell:** `cmd->has_vars = (num_vars > 0);` - i.e. "does any var exist
 in the world?", not "does this command reference one?". Every other
 table-driven branch (lines 160, 218, 479, 627, 771, 940, 1031) uses
 `input_has_any_visible_vars(args, vars, num_vars)`.
@@ -198,7 +198,7 @@ was an undeclared ident.
 **Why it matters:** `glDepthMask(undef_var)` reports the wrong cause.
 
 **Fix:** In the const-value branch, treat undeclared-ident failure the
-same as expr-form — surface `verr`.
+same as expr-form - surface `verr`.
 
 ### 6. `repl_export_save_output` ignores fclose / ferror (done)
 
@@ -218,9 +218,9 @@ status with its own success message.
 success/failure and make all callers preserve failure status instead of
 posting a later success.
 
-### 7. `%g` everywhere — lossy float round-trip (done)
+### 7. `%g` everywhere - lossy float round-trip (done)
 
-**Where:** `src/repl/export.c` — 25+ sites use bare `%g` for float
+**Where:** `src/repl/export.c` - 25+ sites use bare `%g` for float
 persistence. Sample: L295, L1076, L1081, L1086, L1114, L1184-L1193,
 L1812, L1854, L1860, L1868, L2006, L2344, L2610, L2622, L2625, L2810,
 L2851, L2888.
@@ -228,7 +228,7 @@ L2851, L2888.
 **Smell:** `%g` defaults to 6 significant digits. `0.1234567f` becomes
 `0.123457` on save.
 
-**Why it matters:** Files don't round-trip — they lose precision every
+**Why it matters:** Files don't round-trip - they lose precision every
 save/load cycle. The comment at L1029 acknowledges `%g` is for
 trailing-zero strip, but it's applied to *all* persistence, not just
 rendered C.
@@ -302,7 +302,7 @@ silently disappear (the `loaded` counter only tracks successes). The
 semantic the user expects ("load this workspace") doesn't match what
 the function does.
 
-**Fix:** Decide on the semantic — clear slots first, or report "skipped
+**Fix:** Decide on the semantic - clear slots first, or report "skipped
 N files: slots full".
 
 ## 🟡 Drift hazards (parallel structures, no enforcement)
@@ -332,7 +332,7 @@ catch test. The menu side already proves the abstraction works
 **Smell:** Two ~110-line near-identical forward simulations
 (CMD_VAR_ASSIGN / CMD_SCRATCH_ASSIGN / CMD_IF_BEGIN skip / CMD_GOTO
 follow with `REPL_GOTO_LOOP_LIMIT`). The doc-comments at L580-585 and
-L706-707 explicitly say "mirror the other function" — the duplication
+L706-707 explicitly say "mirror the other function" - the duplication
 is acknowledged.
 
 **Fix:** Extract one `replay_simulate(target_pc,
@@ -411,7 +411,7 @@ char **out_start)` at the top of `eval.c`.
 **Where:** `src/repl/parser.c:942-948, 1006-1011, 1062-1067`
 
 **Smell:** The `gluEnd`, funcN-call, and goto branches all open-code
-indent as `(bb ? 4 : 2) + fdepth * 2` — mirroring `repl_source_scope_cmd_indent`,
+indent as `(bb ? 4 : 2) + fdepth * 2` - mirroring `repl_source_scope_cmd_indent`,
 but the funcN/goto inline forms *exclude* tess depth. A funcN call
 inside `gluBegin(...) { ... }` gets wrongly indented.
 
@@ -432,7 +432,7 @@ walks the same ladder again.
 
 ### 21. Slug strings hard-coded in `export.c` despite "opaque bag" contract (done)
 
-**Where:** `src/repl/export.c` — `"point_attenuation"` (L631/633/657),
+**Where:** `src/repl/export.c` - `"point_attenuation"` (L631/633/657),
 `"msaa"` (L970), `"line_smooth"` (L973), `"vertex_outlines"`
 (L1973/L3200), `"vertex_points"` (L1974/L3203)
 
@@ -516,7 +516,7 @@ anywhere.
 **Where:** `src/repl/state.c:399-404`
 
 **Smell:** Declared in `state_owners.h`; no production callers. And
-when someone *does* wire it up they'll hit a stale-flat-program bug —
+when someone *does* wire it up they'll hit a stale-flat-program bug -
 the function resets predef vars and rebinds eval storage but doesn't
 call `repl_state_mark_flat_dirty()` / `_mark_normals_dirty()`. Compare
 with `repl_state_reset_program` which marks both.
@@ -556,7 +556,7 @@ the static to `_apply_non_stack_transform_cmd`.
 **Smell:** The comment claims the stash is needed because
 "UNDECLARE-first matches the order `repl_apply_predef_ops` expects."
 Verified: `repl_apply_predef_ops` (`apply.c:140-165`) makes two
-independent passes — one filtering UNDECLARE, one filtering
+independent passes - one filtering UNDECLARE, one filtering
 DECLARE/SET_VALUE. Cross-kind ordering doesn't matter.
 
 **Fix:** Delete the `pending_set` juggling; just append UNDECLAREs
@@ -615,7 +615,7 @@ table-driven path.
 ### 37. `_mut()` accessors used for reads (done)
 
 **Where:** Hot spots:
-- `src/repl/replay_annotations.c` (~39 sites — pure annotation module
+- `src/repl/replay_annotations.c` (~39 sites - pure annotation module
   that never mutates)
 - `src/repl/core.c:153, 154, 501, 503, 725, 740`
 - `src/repl/flatten.c:167-175, 639, 669-711`
@@ -631,7 +631,7 @@ ratchet to prevent regression.
 
 ### 38. ~10 generic REPL helpers live in `export.c` (done)
 
-**Where:** `src/repl/export.c` — non-`static`, declared in
+**Where:** `src/repl/export.c` - non-`static`, declared in
 `core_internal.h`:
 `trim_in_place` (L1221), `repl_extract_paren_payload` (L1230),
 `extract_for_args_text` (L1245), `parse_identifier_list` (L1276),
@@ -654,14 +654,14 @@ heaviest file in the directory. Moving them out drops `export.c` by
 **Fix:** Move to a new `src/repl/text_helpers.c` (or merge into
 `parser.c`).
 
-### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping (done — Tier C)
+### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping (done - Tier C)
 
 **Where:** `src/repl/parser.c:250-1121`
 
 **Smell:** Dispatches comments, table-driven enum commands, glEnd,
 table-driven std commands, label, glMaterialfv, glPointParameterfv,
 glPush/Pop/LoadIdentity, funcN calls, glu* tess ops, goto/label, and
-"reserved-ident-as-command" fallback — all in one function. Each new
+"reserved-ident-as-command" fallback - all in one function. Each new
 command grows another `if (strcmp(func, ...) == 0)` arm. The
 "format → if clamped, re-format" shape for `CMD_CLEAR_COLOR` (L513-532)
 is uniquely embedded in this one function. Findings #5, #20, #43 are
@@ -671,7 +671,7 @@ sub-bugs of this.
 with a uniform `(line, args, cmd, text_out, text_sz, ctx) → int`
 signature.
 
-### 40. `flatten_range` is a 380-line god-function (done — Tier C)
+### 40. `flatten_range` is a 380-line god-function (done - Tier C)
 
 **Where:** `src/repl/flatten.c:198-576`
 
@@ -684,7 +684,7 @@ Three near-identical re-parse branches at L517-572 differ only in
 `flatten_if`) and a `flatten_reparse_line()` for the tail; let the
 loop be a dispatch table.
 
-### 41. Linear `CMD_FUNC_DEF` lookup per `CMD_CALL` (done — Tier B, commit `cbe73d2`)
+### 41. Linear `CMD_FUNC_DEF` lookup per `CMD_CALL` (done - Tier B, commit `cbe73d2`)
 
 **Where:** `src/repl/flatten.c:294-352`
 
@@ -695,7 +695,7 @@ unrolled iterations × M source cmds, that's K*N*M scans per frame.
 **Fix:** Build a `func_def_idx[REPL_FUNC_SLOT_COUNT]` lookup once per
 flatten.
 
-### 42. `GLCmd.num_args` is overloaded for `CMD_VAR_ASSIGN` (done — Tier A, commit `f5d0c50`)
+### 42. `GLCmd.num_args` is overloaded for `CMD_VAR_ASSIGN` (done - Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/flatten.c:422`, `src/repl/executor.c:695`;
 `src/repl/command.h:93` documents it as an exception.
@@ -706,7 +706,7 @@ arg-count assertions to the executor will silently corrupt VAR_ASSIGN.
 
 **Fix:** Add a dedicated `GLCmd.var_idx` field (or tagged union).
 
-### 43. `cmd_display_name_for_begin_error` is a manual switch parallel to the spec tables (done — Tier A, commit `f5d0c50`)
+### 43. `cmd_display_name_for_begin_error` is a manual switch parallel to the spec tables (done - Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/parser.c:1127-1147`
 
@@ -720,7 +720,7 @@ identifier.
 **Fix:** Add a `display_name` field to `ReplCommandTypeSpec` or
 reverse-lookup the spec tables by type.
 
-### 44. Per-slot cfg storage parallel to user-scene array (done — Tier B, commit `17a574b`)
+### 44. Per-slot cfg storage parallel to user-scene array (done - Tier B, commit `17a574b`)
 
 **Where:** `src/repl/scenes.c:81-92`
 
@@ -734,12 +734,12 @@ convention-only (today, one call site: L815-816). Same for
 roll `g_pre_example_valid` into a discriminator field on
 `ReplExportConfig`.
 
-### 45. Hidden cache-coupling: depth invalidation rides on `mark_normals_dirty` (done — Tier A, commit `f5d0c50`)
+### 45. Hidden cache-coupling: depth invalidation rides on `mark_normals_dirty` (done - Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/state.c:367-371`
 
 **Smell:** `repl_source_scope_depth_cache_invalidate` only fires when
-callers explicitly invoke it — *or* when `repl_state_mark_normals_dirty()`
+callers explicitly invoke it - *or* when `repl_state_mark_normals_dirty()`
 happens to call it inside the same function. `apply.c` mutates the
 command store, which calls `command_store_invalidate_after_mutation` →
 `mark_normals_dirty` → depth-cache invalidate. Three layers of unnamed
@@ -753,7 +753,7 @@ answers.
 wire `command_store_invalidate_after_mutation` directly so the
 dependency is explicit.
 
-### 46. `repl_copy_predef_values` / `_restore_predef_values` live in `executor.c` but never called by it (done — Tier A, commit `f5d0c50`)
+### 46. `repl_copy_predef_values` / `_restore_predef_values` live in `executor.c` but never called by it (done - Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/executor.c:177-197`
 
@@ -768,18 +768,18 @@ dependency is explicit.
 
 ### One-afternoon pass
 
-- [x] **#1** — `format_evaluated_cmd` missing case 1 (single-arg shape
+- [x] **#1** - `format_evaluated_cmd` missing case 1 (single-arg shape
   replay bug). Surgical add of one case arm.
-- [x] **#2** — `func_aliases` stash/import hole. Mirror what
+- [x] **#2** - `func_aliases` stash/import hole. Mirror what
   `save_scene_to_slot` already does for live stash/install/restore,
   and add the per-file import clear/restore so unaliased scenes do not
   inherit previous aliases.
-- [x] **#3** — Delete the `g_search_*` / `g_ac_*` landmine macros.
-- [x] **#4** — `glPointParameterfv` `has_vars`. One line.
-- [x] **#5** — Const-value branch error surfacing. Two-line swap.
-- [x] **#29** + **#30** + **#31** — Delete dead variables / unused
+- [x] **#3** - Delete the `g_search_*` / `g_ac_*` landmine macros.
+- [x] **#4** - `glPointParameterfv` `has_vars`. One line.
+- [x] **#5** - Const-value branch error surfacing. Two-line swap.
+- [x] **#29** + **#30** + **#31** - Delete dead variables / unused
   parameters / unreachable cases.
-- [x] **#24** — Delete `REPL_COMPILED_LOAD_ALL` (one enum value + six
+- [x] **#24** - Delete `REPL_COMPILED_LOAD_ALL` (one enum value + six
   switch arms across four files; check no tests guard the empty
   "load-all" branch first).
 
@@ -787,18 +787,18 @@ That's ~7 small commits, all with focused scope.
 
 ### One-week pass
 
-- [x] **#37** — `_mut()` for reads in `replay_annotations.c` (~39 sites in
+- [x] **#37** - `_mut()` for reads in `replay_annotations.c` (~39 sites in
   one TU, easy to do in one commit).
-- [x] **#38** — Move the ~10 generic helpers out of `export.c`. Biggest
+- [x] **#38** - Move the ~10 generic helpers out of `export.c`. Biggest
   single file-size reduction in the directory.
-- [x] **#33** — Delete `repl_dump_code_panel_visual_text` and its 7 dead
+- [x] **#33** - Delete `repl_dump_code_panel_visual_text` and its 7 dead
   `ReplExportLayout` fields; remove the `glr_ctrl.c` population code.
-- [x] **#21** + **#22** — Add `bridge->is_known(slug)` and clean up the
+- [x] **#21** + **#22** - Add `bridge->is_known(slug)` and clean up the
   hardcoded slugs in `export.c`.
-- [x] **#14** — Single source of truth for the `@cfg` slug allow-list
+- [x] **#14** - Single source of truth for the `@cfg` slug allow-list
   (push into the bridge).
-- [x] **#12** — Hoist `CatalogTagOps` for examples/tutorials tag duplication.
-- [x] **#13** — Extract `replay_simulate` from the twin walkers.
+- [x] **#12** - Hoist `CatalogTagOps` for examples/tutorials tag duplication.
+- [x] **#13** - Extract `replay_simulate` from the twin walkers.
 
 ### Out of scope
 
@@ -808,11 +808,11 @@ That's ~7 small commits, all with focused scope.
 - The two-level command model (source → flat) or any of `command.h`'s
   control-flow predicates. Load-bearing.
 - The `STEP_APPEND` / `STEP_SET` / `STEP_REQUIRE` positional macros
-  in `tutorials.c:10-36` — worth switching to designated initializers
+  in `tutorials.c:10-36` - worth switching to designated initializers
   in principle, but every existing call site already initializes by
   position, so the field-reorder hazard is theoretical.
 - ~~`parse_command` extraction (#39) and `flatten_range` extraction (#40)~~
-  — **Done** (2026-05-25, branch `repl-audit-test-gaps`). Both functions
+  - **Done** (2026-05-25, branch `repl-audit-test-gaps`). Both functions
   decomposed with per-command static handlers; a size ratchet
   (`check-tier-c-function-size`) prevents future growth.
 
@@ -830,7 +830,7 @@ a slice of `src/repl/`:
 Each agent was asked for ~15-20 highest-signal findings only, not a
 comprehensive sweep. The most actionable claims (real-bug findings
 above) were verified against the source before being escalated to
-🔴 status — see the `Bash` calls in the audit transcript for the
+🔴 status - see the `Bash` calls in the audit transcript for the
 verification commands. The 🟡 / 🟢 / 🔵 findings are reported as
 the agents framed them; spot-check before acting on the more
 mechanical ones.

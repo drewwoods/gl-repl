@@ -39,7 +39,7 @@ static void test_repl_command_store_live(void) {
     ASSERT_TRUE("live store has cmds pointer", store.cmds != NULL);
     ASSERT_TRUE("live store has count pointer", store.count != NULL);
     ASSERT_INT("live store has capacity", store.capacity, MAX_EDITOR_COMMANDS);
-    /* No edit_line pointer post Phase 1 — cursor is caller-owned. */
+    /* No edit_line pointer post Phase 1 - cursor is caller-owned. */
 }
 
 static void test_repl_command_store_count(void) {
@@ -434,7 +434,7 @@ static void test_repl_command_store_delete_cursor_math(void) {
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    /* Seed 5 commands: [0, 1, 2, 3, 4]. Delete [1..3) — count 2 —
+    /* Seed 5 commands: [0, 1, 2, 3, 4]. Delete [1..3) - count 2 -
      * leaves [0, 3, 4]. Cursors land per the three-case math. */
     repl_command_store_insert_one(&store, 0, &cmd, NULL);
     repl_command_store_insert_one(&store, 1, &cmd, NULL);
@@ -442,7 +442,7 @@ static void test_repl_command_store_delete_cursor_math(void) {
     repl_command_store_insert_one(&store, 3, &cmd, NULL);
     repl_command_store_insert_one(&store, 4, &cmd, NULL);
 
-    /* Cursor before the deleted range — unchanged. */
+    /* Cursor before the deleted range - unchanged. */
     int cur_before = 0;
     ReplStoreMutOpts before_opts = { .flags = 0, .cursor_inout = &cur_before };
     ASSERT_INT("delete with cursor before range",
@@ -455,7 +455,7 @@ static void test_repl_command_store_delete_cursor_math(void) {
     repl_command_store_insert_one(&store, 2, &cmd, NULL);
     ASSERT_INT("count back to 5", repl_command_store_count(&store), 5);
 
-    /* Cursor inside the deleted range — snaps to range start. */
+    /* Cursor inside the deleted range - snaps to range start. */
     int cur_inside = 2;
     ReplStoreMutOpts inside_opts = { .flags = 0, .cursor_inout = &cur_inside };
     ASSERT_INT("delete with cursor inside range",
@@ -467,7 +467,7 @@ static void test_repl_command_store_delete_cursor_math(void) {
     repl_command_store_insert_one(&store, 2, &cmd, NULL);
     ASSERT_INT("count back to 5 (again)", repl_command_store_count(&store), 5);
 
-    /* Cursor past the deleted range — shifts left by count. */
+    /* Cursor past the deleted range - shifts left by count. */
     int cur_past = 4;
     ReplStoreMutOpts past_opts = { .flags = 0, .cursor_inout = &cur_past };
     ASSERT_INT("delete with cursor past range",

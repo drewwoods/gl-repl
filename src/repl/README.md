@@ -1,10 +1,10 @@
-# `src/repl` — the language pipeline (Draft)
+# `src/repl` - the language pipeline (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. This README is the module-local
 > orientation: what a REPL pipeline *is*, how the standalone demo exercises
-> it, and what it does inside this app. For the deep dive — the data model,
+> it, and what it does inside this app. For the deep dive - the data model,
 > the edit/frame flows, each pipeline stage, and the state-ownership
-> boundaries — read [`ARCHITECTURE.md`](ARCHITECTURE.md).
+> boundaries - read [`ARCHITECTURE.md`](ARCHITECTURE.md).
 >
 > Whole-tree context lives one level up: the ownership map is in
 > [`../../docs/MODULES.md`](../../docs/MODULES.md) and the per-frame *app* narrative is
@@ -22,8 +22,8 @@ source text ──parse──▶ command/AST ──compile/validate──▶ IR 
 ```
 
 `src/repl` is exactly that pipeline for a small domain-specific language.
-The "language" is a friendly subset of **immediate-mode OpenGL** —
-`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… — plus light control flow
+The "language" is a friendly subset of **immediate-mode OpenGL** -
+`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… - plus light control flow
 (`for`, `if`, `func0..func9`), scalar variables, and fixed scratch arrays.
 The "effects" are live GL calls that draw geometry.
 
@@ -46,19 +46,19 @@ animation and variable edits take effect live.
 
 ## The demo: `repl_demo`
 
-[`tools/repl_demo/`](../../tools/repl_demo/) drives the pipeline —
-parse → command store → flatten → execute — from **hard-coded static text**,
+[`tools/repl_demo/`](../../tools/repl_demo/) drives the pipeline -
+parse → command store → flatten → execute - from **hard-coded static text**,
 with no editor, controller, or UI in the link set. It is the load-bearing
 proof that the language pipeline stands on its own.
 
 ```bash
-make repl-demo USE_GL_STUBS=1   # headless build (no GL dev libs needed) — start here
+make repl-demo USE_GL_STUBS=1   # headless build (no GL dev libs needed) - start here
 ./repl_demo                     # print parse + flatten summaries for samples 1-3
 ./repl_demo --execute           # also run repl_execute_program() against GL stubs
 ./repl_demo --trace             # narrated end-to-end walkthrough of every stage
 ```
 
-It opens **no window and creates no GL context** — that is the whole point:
+It opens **no window and creates no GL context** - that is the whole point:
 its link set contains no `src/ui/` at all, which is what makes it the tighter
 isolation proof. Its windowed counterpart is
 [`tools/repl_live_demo/`](../../tools/repl_live_demo/README.md), which wires the same
@@ -68,7 +68,7 @@ the executor call is skipped with a warning, since there is no context.)
 
 **Start with `--trace`.** It loads one representative program through the
 *real* non-editor compile→apply path (`repl_load_apply_line`) and narrates
-every stage the backend runs — text → compile → apply → source program →
+every stage the backend runs - text → compile → apply → source program →
 flatten (with provenance + local-var snapshots) → per-frame re-evaluation.
 It's the executable companion to [`ARCHITECTURE.md` §11](ARCHITECTURE.md),
 which walks the same output prose-side.
@@ -87,12 +87,12 @@ with their owning modules in the full app and tests.
 
 The three print-summary samples each isolate one pipeline behavior:
 
-1. **Plain commands** — a `glBegin/glColor/glVertex/glEnd` triangle parsed
+1. **Plain commands** - a `glBegin/glColor/glVertex/glEnd` triangle parsed
    straight through `repl_parser_parse_command_ctx` + the command store.
-2. **Hand-built for-loop** — a `CMD_FOR_BEGIN`/body/`CMD_FOR_END` triplet
+2. **Hand-built for-loop** - a `CMD_FOR_BEGIN`/body/`CMD_FOR_END` triplet
    constructed directly so `repl_flatten_program` is shown unrolling 4
    vertices (no editor commit path involved).
-3. **Variable-driven re-evaluation** — declares `r`, parses
+3. **Variable-driven re-evaluation** - declares `r`, parses
    `glVertex3f(r*sin(t), r*cos(t), 0)` with the expression *preserved*, then
    bumps `t` and re-flattens to watch `has_vars` expressions recompute
    against the live variable table.
@@ -100,7 +100,7 @@ The three print-summary samples each isolate one pipeline behavior:
 What the demo deliberately *does not* link tells you where the boundary is:
 the `float x;` / `x = expr;` / typed-as-text `for(...) {` flows live in
 [`src/editor/commit.c`](../editor/commit.c) (editor business), so the demo hand-constructs commands
-instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty — the pipeline has zero
+instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty - the pipeline has zero
 backfill dependencies once host effects flow through the one
 [`ReplHostEffects`](host_effects.h#L38) bridge.
 
@@ -125,7 +125,7 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
   separately in [`scenes.c`](scenes.c) (as [`SceneSnapshot`](scene_snapshot.h#L17)s); [`ReplRuntimeState`](state.h#L18) only tracks the
   active example index and bound workspace dir.
 
-[`GLCmd`](command.h#L122) is a pure parse result (type, args, flags, provenance) — it carries
+[`GLCmd`](command.h#L122) is a pure parse result (type, args, flags, provenance) - it carries
 **no source text**; the per-line text lives in the editor's buffer. That
 split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
@@ -142,9 +142,9 @@ text is authored outside C in
 [`command_descriptions.txt`](command_descriptions.txt) and validated/generated
 at build time, like the example catalog.
 
-> For how all of this fits together — the two flows, the compile→apply
+> For how all of this fits together - the two flows, the compile→apply
 > seam, the flatten budgets, the state slices, and the host-effects
-> bridge — see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+> bridge - see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## File map
 
@@ -161,7 +161,7 @@ at build time, like the example catalog.
 | [`apply.c`](apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
 | [`command_store.c`](command_store.c) / `.h` | Low-level [`GLCmd`](command.h#L122) array mechanics (insert/replace/delete/load) |
 | [`load.c`](load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
-| [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Ordered lexical scope collection — loop iterators, function parameters and function-scoped locals, each tagged with its [`ReplVisibleVarKind`](visible_vars.h#L20); parse/extract/canonical-text helpers |
+| [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Ordered lexical scope collection - loop iterators, function parameters and function-scoped locals, each tagged with its [`ReplVisibleVarKind`](visible_vars.h#L20); parse/extract/canonical-text helpers |
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
@@ -183,7 +183,7 @@ at build time, like the example catalog.
 | **Persistence (save/load)** | |
 | [`export.c`](export.c), [`import.c`](import.c) | Writer half (file emit, header refresh) and reader half (import state machine) |
 | [`export_setup.c`](export_setup.c), [`export_prologue.c`](export_prologue.c), [`export_display.c`](export_display.c), [`export_cmd_writer.c`](export_cmd_writer.c) | C boilerplate, globals/predef prologue, `display()` body, per-command C emission |
-| [`export_glr.c`](export_glr.c) | `.glr` scene writer — the authoring format (non-default `@cfg` + `// camera` + document text), symmetric with [`example_loader.c`](example_loader.c) |
+| [`export_glr.c`](export_glr.c) | `.glr` scene writer - the authoring format (non-default `@cfg` + `// camera` + document text), symmetric with [`example_loader.c`](example_loader.c) |
 | [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h), [`export_format_shared.h`](export_format_shared.h) | Export/import API and shared state-text dimensions |
 | **Scenes & workspaces** | |
 | [`scenes.c`](scenes.c) / `.h`, [`scene_snapshot.c`](scene_snapshot.c) / `.h` | Explicit eight-slot user-scene catalog (promotion, stable filenames, transactional persistence); copyable scene payload |

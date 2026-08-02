@@ -66,19 +66,19 @@ These keys drive the tour instead of stopping it:
 | `Esc` | Exit the tour, keeping whatever it has done so far. |
 
 Backstep works by restoring one whole-app baseline captured when the tour
-started, then fast-replaying the events up to the target boundary — there is no
+started, then fast-replaying the events up to the target boundary - there is no
 per-event snapshot. Reversible authored actions reconstruct faithfully: discrete
 edits, config toggles, menu navigation, and scene changes land in the same
 state. Camera and slider **drags** reconstruct their end *position* (the glide's
-smoothstep samples are dispatched synchronously), but not their dynamics — the
+smoothstep samples are dispatched synchronously), but not their dynamics - the
 fast prefix replay skips the per-frame camera tick, so any leftover orbit
 momentum and its subsequent settling can differ from the live run. Scene-camera
 presets are deterministic during Back: their normally eased camera target is
 applied immediately while the prefix reconstructs, so the pre-tour baseline
 angle does not flash or ease through the target again. Decorative overlays are
 rebuilt to match the landing moment: a caption (`echo`) whose on-screen window
-still covers the boundary reappears where it would be in live playback — so
-rewinding into a caption you were reading brings it back — while captions that
+still covers the boundary reappears where it would be in live playback - so
+rewinding into a caption you were reading brings it back - while captions that
 have already timed out stay gone. **Irreversible
 side effects cannot be undone by backstep:** filesystem writes, process exit,
 and audio-position changes. Keep rewindable tours free of those actions.
@@ -146,7 +146,7 @@ top-left), or one of these symbolic tokens:
 | `scene:<x>,<y>` | A fraction of the live scene viewport, measured from its top-left. For example, `scene:0.5,0.5` is its center. |
 | `shell:<label>` | An Emscripten browser-shell control outside the canvas. Currently `shell:new` targets the top **New** button. |
 | `helptab:<label>` | A tab of the F1 help overlay: `overview`, `commands`, `keys`, `about`. Only resolves while the overlay is open. |
-| `code:<label>` or `code:<n>` | A code-panel row — the first *visible* row whose canonical text the label prefixes (`code:glcolor3f`), or a line by the number in the panel's gutter (`code:3`, 1-based like the `GLR_*` capture hooks). Only resolves for a row currently scrolled into view. |
+| `code:<label>` or `code:<n>` | A code-panel row - the first *visible* row whose canonical text the label prefixes (`code:glcolor3f`), or a line by the number in the panel's gutter (`code:3`, 1-based like the `GLR_*` capture hooks). Only resolves for a row currently scrolled into view. |
 
 Labels use a case-insensitive normalized prefix match. In target labels, `_`
 matches a space, so `sub:3d:torus_knot` can match **Torus knot (animated)**.
@@ -230,15 +230,15 @@ drags behave like real ones.
 ### Modified key chords
 
 `chord <mods> <key>` presses a single key with modifiers held, so a tour can
-trigger shortcuts that key off Shift — which `key`/`skey` cannot reach, because
+trigger shortcuts that key off Shift - which `key`/`skey` cannot reach, because
 a plain key byte carries no Shift bit.
 
-- `<mods>` is a `+`-joined subset of `ctrl`, `shift`, and `alt` — order-free and
+- `<mods>` is a `+`-joined subset of `ctrl`, `shift`, and `alt` - order-free and
   case-insensitive (`ctrl+shift`, `shift`, `alt+ctrl`).
 - `<key>` is either a special-key name from the `skey` list above, or a single
   printable character. For a printable character, `ctrl` folds it to its control
   byte exactly as `\cX` does, so `chord ctrl+shift c` sends the same byte as
-  Ctrl+C plus a held Shift — i.e. Ctrl+Shift+C.
+  Ctrl+C plus a held Shift - i.e. Ctrl+Shift+C.
 
 ```text
 chord ctrl+shift c    # Ctrl+Shift+C  (reset camera)
@@ -248,7 +248,7 @@ chord shift left      # Shift+Left     (extend selection)
 
 A line is rejected at load (failing a recording, stopping a tour) when: the
 `<key>` is a single printable char but no `ctrl` is present (a shift-only glyph
-has no shortcut meaning — type it with `key`); a modifier name is unknown,
+has no shortcut meaning - type it with `key`); a modifier name is unknown,
 empty, or repeated (`ctrl++shift`, `ctrl+ctrl`); or extra tokens follow the key
 (only a trailing `#` comment is allowed).
 

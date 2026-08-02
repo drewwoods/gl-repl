@@ -83,13 +83,13 @@ typedef enum {
  * + disabled rim layout. HEADLIGHT places light 0 in eye space (at the
  * camera, set with an identity modelview) so the scene self-illuminates
  * as the camera moves. SOLAR puts light 0 at the world origin so user
- * geometry orbits a single central source — useful for solar-system /
+ * geometry orbits a single central source - useful for solar-system /
  * planet renders. STUDIO is the three-point portrait rig (warm-white key,
  * cool-blue rim, warm-orange fill) plus a green directional accent,
  * mirroring the tools/render3d_demo lighting. NEON is a vibrant saturated
  * triad (magenta key, cyan rim, lime fill) plus a dim warm back light,
  * for showing off colored materials. As with every theme, all four
- * slots ship `.enabled = 0` — a theme only defines each light's
+ * slots ship `.enabled = 0` - a theme only defines each light's
  * position/colors; the program's glEnable(GL_LIGHTn) commands (or an
  * example's @cfg) decide which slots actually light up. */
 #define LIGHT_THEME_LIST(X) \
@@ -142,7 +142,7 @@ typedef enum {
  * deliberately faint (minor lines ~0.03..0.12); this scales them so a
  * grid can be dialed up (or down) for contrast against the backdrop. The
  * actual multiplier values live in the controller (glr_ctrl.c), resolved
- * into Render3dRenderConfig.grid_brightness — NORMAL == 1.0 (no change). */
+ * into Render3dRenderConfig.grid_brightness - NORMAL == 1.0 (no change). */
 #define GRID_BRIGHTNESS_LIST(X) \
     X(DIM,    "Dim")            \
     X(NORMAL, "Normal")         \

@@ -44,7 +44,7 @@ typedef struct Render3dGuideLabelSink {
 typedef struct Render3dGuideSnapshot {
     int show_guides;
     int replaying;
-    /* Flat-program index of the draw the active replay step emitted, or -1 —
+    /* Flat-program index of the draw the active replay step emitted, or -1 -
      * a glVertex / gluVertex *or* a glutSolid*. When replaying with guides on,
      * the live transform guide anchors on the transform shaping this draw. Set
      * from replay_focus_anchor_flat_idx(). */
@@ -53,7 +53,7 @@ typedef struct Render3dGuideSnapshot {
     int user_lighting_enabled;
     float anim_time;
 
-    /* `input` is the live editor input buffer text — always a valid C
+    /* `input` is the live editor input buffer text - always a valid C
      * string, possibly empty (input_len == 0), never NULL. Consumers
      * may strncmp / strncpy / strchr against it without a NULL guard.
      * `edit_line_committed_text` MAY be NULL when the cursor is on a
@@ -109,7 +109,7 @@ typedef struct Render3dGuideSnapshot {
      * line, the controller looks forward in the *flat* program for the
      * next vertex command and writes its evaluated position here. The
      * normal-guide renderer prefers this over its own forward search
-     * through source_cmds — source args are frozen at parse time, so a
+     * through source_cmds - source args are frozen at parse time, so a
      * dynamic wave (where the surrounding x/y/z vars are reassigned
      * each frame inside a loop) would otherwise anchor the normal
      * arrow at the parse-time vertex position instead of the live one.

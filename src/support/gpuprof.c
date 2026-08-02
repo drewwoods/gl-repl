@@ -3,8 +3,8 @@
  *
  * Mechanism (see gpuprof.h for the contract):
  *
- * GL_TIME_ELAPSED_EXT queries cannot nest — only one may be active at a
- * time — but prof sections do nest (PROF_RENDER3D wraps _FILL, _HELPERS,
+ * GL_TIME_ELAPSED_EXT queries cannot nest - only one may be active at a
+ * time - but prof sections do nest (PROF_RENDER3D wraps _FILL, _HELPERS,
  * ...). So begin/end never map 1:1 onto queries; instead each transition
  * is a boundary, slicing the frame into non-overlapping *segments*. Every
  * segment records the set of sections open while it ran; at harvest a
@@ -26,7 +26,7 @@
  * Results are asynchronous: a frame's segments live in one slot of a small
  * ring until the GL reports the slot's *last* query available (queries
  * complete in submission order, so one GL_QUERY_RESULT_AVAILABLE poll per
- * frame covers the whole slot). Only then are the 64-bit results read —
+ * frame covers the whole slot). Only then are the 64-bit results read -
  * by which point they are no longer in flight, so the read never stalls.
  * If the ring fills (GPU several frames behind) new frames go unsampled
  * rather than blocking; an EMA display doesn't miss them.
@@ -52,7 +52,7 @@
 
 /* Segments (= query objects) per frame slot. Worst case observed shape is
  * the accumulation loop: ~13 GPU-bracketed scene sections x 2 transitions
- * x 16 passes plus the 2D UI sections — roughly 450. Overflow marks the
+ * x 16 passes plus the 2D UI sections - roughly 450. Overflow marks the
  * slot invalid (frame dropped from the GPU column), never UB.
  * Overridable so tests can exercise the overflow path with a tiny cap. */
 #ifndef GPU_PROF_MAX_SEGMENTS
@@ -113,7 +113,7 @@ static void gpu_reset_stats(void) {
 }
 
 /* Open a new elapsed-mode segment under the current section set (ends
- * none — callers have already ended any running query). */
+ * none - callers have already ended any running query). */
 static void gpu_start_segment(GpuProfFrameSlot *slot) {
     if (slot->seg_count >= GPU_PROF_MAX_SEGMENTS) {
         slot->overflowed = 1;

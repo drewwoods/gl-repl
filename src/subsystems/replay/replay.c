@@ -69,7 +69,7 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
 
 /* Cursor-block-match logic: does a flat cmd belong to the user's currently
  * focused source line / block / function call? Lifted out of scene/overlays.c
- * — these checks read REPL flatten metadata (call_src_cmd_idx, src_cmd_idx,
+ * - these checks read REPL flatten metadata (call_src_cmd_idx, src_cmd_idx,
  * func_scope_mask, current-block bounds), so they're squarely REPL state. */
 static int replay_walk_flat_cmd_matches_cursor(int flat_idx,
                                                int edit_line_idx,

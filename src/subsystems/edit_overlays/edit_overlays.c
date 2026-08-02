@@ -252,7 +252,7 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
  * The user program runs inside a glPushAttrib(GL_ALL_ATTRIB_BITS) bracket, so
  * by the time these passes retrace its geometry the clip planes, the cull
  * state and the stencil test it set are gone. An overlay would then trace the
- * whole uncut, unculled, unmasked silhouette — outlining a sphere over what
+ * whole uncut, unculled, unmasked silhouette - outlining a sphere over what
  * the frame actually shows as a dome, or drawing every far-side edge of a
  * culled solid. So every pass re-issues the program's own clip / cull /
  * stencil-test commands as it walks:
@@ -260,7 +260,7 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
  *   - glClipPlane bakes its equation into eye space using the modelview
  *     current at the call, and these passes track the same modelview the
  *     executor had, so issuing it at the same point in the walk reproduces the
- *     executor's planes exactly — an equation riding an animated variable
+ *     executor's planes exactly - an equation riding an animated variable
  *     included.
  *   - Culling needs no such care: GL_CULL_FACE / glCullFace / glFrontFace are
  *     plain state, and GL culls polygons in glPolygonMode(GL_LINE) and
@@ -271,7 +271,7 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
  *     back face still sits on a face you can see).
  *   - The stencil TEST replays (GL_STENCIL_TEST + glStencilFunc): an outline
  *     around geometry a mask threw away is a lie about what is on screen.
- *     The stencil WRITE state does not — see overlay_gl_walk_begin. This is
+ *     The stencil WRITE state does not - see overlay_gl_walk_begin. This is
  *     the one place where "reproduce the program's state" splits in two, and
  *     it splits along test-vs-write, not along command boundaries.
  *
@@ -279,11 +279,11 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
  * brackets render3d_pass_helpers (backdrop / grid / axes / orbit target /
  * light gizmos) with the stencil test suspended, because masking chrome the
  * user never authored is never what was meant. That split works because the
- * two render3d passes align exactly with the two policies — helpers are all
+ * two render3d passes align exactly with the two policies - helpers are all
  * chrome, overlays are all geometry reporting.
  *
  * Vertex points and plain outlines honor all of it unconditionally: they exist
- * to report the geometry you can see. The cursor highlight is the one opt-out —
+ * to report the geometry you can see. The cursor highlight is the one opt-out -
  * under POLY_HIGHLIGHT_ON it draws the shape as authored, via
  * overlay_gl_suspend/_resume around that single draw, so you can still see the
  * whole solid a plane cuts into, the far side of a culled shell, or the part a
@@ -313,14 +313,14 @@ typedef struct OverlayGlState {
 
 /* One saved attribute frame: the push mask, the mirror snapshot, and the live
  * eye-space clip-plane equations at push time (captured from GL, since the
- * mirror never knows them — glClipPlane bakes the walk's modelview in). */
+ * mirror never knows them - glClipPlane bakes the walk's modelview in). */
 typedef struct OverlayAttribFrame {
     unsigned       mask;
     OverlayGlState snap;
     GLdouble       clip_eq[OUTLINE_CLIP_PLANE_COUNT][4];
 } OverlayAttribFrame;
 
-/* The mirror plus its attribute-stack scoping — one per walker, stepped by
+/* The mirror plus its attribute-stack scoping - one per walker, stepped by
  * overlay_gl_track_cmd so every walk interprets glPushAttrib/glPopAttrib the
  * same way. */
 typedef struct OverlayGlTracker {
@@ -342,7 +342,7 @@ static void overlay_gl_tracker_init(OverlayGlTracker *trk) {
  * mirror claims, rather than assuming the frame left one.
  *
  * The stencil write state is set once here and never touched again for
- * the rest of the walk — see overlay_gl_apply_cmd, which deliberately
+ * the rest of the walk - see overlay_gl_apply_cmd, which deliberately
  * refuses to replay glStencilOp / glStencilMask. An overlay pass redraws
  * the user's geometry, so with the program's own op/mask live it would
  * *write* to the stencil buffer as a side effect: corrupting the mask a
@@ -367,7 +367,7 @@ static int outline_clip_cap_index(GLenum cap) {
 
 /* --- color-mask-aware overlays ---
  *
- * glColorMask(GL_FALSE, ...) marks geometry the frame never shows — the
+ * glColorMask(GL_FALSE, ...) marks geometry the frame never shows - the
  * classic depth-only seed pass. Outlining or dotting it would advertise a
  * shape that isn't on screen, so the plain outline and vertex-point passes
  * track the program's mask as they walk and skip whatever is drawn while no
@@ -477,7 +477,7 @@ static void overlay_gl_restore_frame(const OverlayAttribFrame *fr,
     }
     if (mask & repl_attrib_bits_for_type(CMD_CLIP_PLANE, 0)) {
         /* Put back the eye-space equations captured at push time. glClipPlane
-         * transforms by the current modelview, so restore under identity —
+         * transforms by the current modelview, so restore under identity -
          * exactly the frame glGetClipPlane reported them in. */
         glPushMatrix();
         glLoadIdentity();
@@ -507,7 +507,7 @@ static void overlay_gl_restore_frame(const OverlayAttribFrame *fr,
         st->stencil_enabled = target->stencil_enabled;
     }
     /* glStencilFunc belongs to GL_STENCIL_BUFFER_BIT, which the REPL does
-     * not accept in glPushAttrib yet — repl_attrib_bits_for_type returns 0
+     * not accept in glPushAttrib yet - repl_attrib_bits_for_type returns 0
      * for CMD_STENCIL_FUNC, so this branch is unreachable today and turns
      * itself on with the rest of the stencil attrib group. Routing it
      * through attrib_bits rather than hardcoding a bit is what makes that
@@ -529,7 +529,7 @@ static void overlay_gl_restore_frame(const OverlayAttribFrame *fr,
  * the mirrored clip/cull/front-face/color-mask state (so a scoped
  * glDisable(GL_CULL_FACE) reverts at the pop, like the real scene render);
  * everything else defers to overlay_gl_apply_cmd. Returns 1 when the command
- * was consumed (state bookkeeping — nothing for the caller to draw). Every
+ * was consumed (state bookkeeping - nothing for the caller to draw). Every
  * walker steps this so no pass can miss the push/pop scoping. */
 static int overlay_gl_track_cmd(const GLCmd *cmd, OverlayGlTracker *trk) {
     switch (cmd->type) {
@@ -570,7 +570,7 @@ static void overlay_gl_reset(OverlayGlState *st) {
      * The stencil test is dropped for the same reason the clip planes are:
      * the label and guide passes that run afterward report positions, not
      * geometry, and must not be masked away. glStencilFunc is left as the
-     * walk set it — with the test off it selects nothing. */
+     * walk set it - with the test off it selects nothing. */
     if (st->stencil_enabled)
         glDisable(GL_STENCIL_TEST);
     st->clip_enabled_mask = 0;
@@ -691,7 +691,7 @@ static int last_matching_block_head(const OverlayWalkCtx *ctx,
     return found;
 }
 
-/* Same, gated on the highlight actually being on — the outline passes have
+/* Same, gated on the highlight actually being on - the outline passes have
  * nothing to resolve when it is off. The normal-vector pass wants the
  * ungated form above: it honors the scope whether or not the highlight does. */
 static int last_selected_block_head(const OverlayWalkCtx *ctx,
@@ -700,7 +700,7 @@ static int last_selected_block_head(const OverlayWalkCtx *ctx,
     return last_matching_block_head(ctx, head_type, is_tess);
 }
 
-/* Same, for the glutSolid* pass — those match per command, not per block. */
+/* Same, for the glutSolid* pass - those match per command, not per block. */
 static int last_selected_glut_shape(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int found = -1;
@@ -732,7 +732,7 @@ static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
  * outline pass entirely via block_is_current), this fires while
  * block_is_current is forced back to 0, so the caller's plain-outline
  * branch still redraws the WHOLE block afterward at the edge width/color
- * — including the primitive just highlighted here. In the default outline
+ * - including the primitive just highlighted here. In the default outline
  * style that redraw is thinner (EDGE_WIDTH) than this highlight
  * (ACTIVE_WIDTH) and stays visible around it, but Bold scales EDGE_WIDTH
  * by the same factor ACTIVE_WIDTH would need to stay ahead of it
@@ -743,7 +743,7 @@ static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
  * One wrinkle once culling is live (CLIPPED_CULLED): GL implicitly reverses
  * the winding of every odd-numbered GL_TRIANGLE_STRIP triangle, and the
  * resolver hands us `first` == that triangle's index. Re-issued on its own the
- * run becomes strip triangle 0, losing the flip — so an odd triangle would be
+ * run becomes strip triangle 0, losing the flip - so an odd triangle would be
  * culled exactly when the real face is visible. Swapping glFrontFace for the
  * draw restores the parity. Quad strips (first is always even, and a 4-vertex
  * run rebuilds the same quad) and fans (center + pair, in order) need none. */
@@ -1234,14 +1234,14 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
  * each other into an unreadable jumble (classic when a primitive is viewed
  * edge-on). Instead we now project every label to screen space during the
  * walk, collect them, then lay them out in a 2D pass in collection (walk)
- * order — a camera-independent priority, so co-visible labels never swap as the
- * camera moves — nudging any label whose box overlaps an already-placed one
+ * order - a camera-independent priority, so co-visible labels never swap as the
+ * camera moves - nudging any label whose box overlaps an already-placed one
  * vertically (with a thin leader line back to the vertex) until it clears.
  *
  * The nudge search is BOUNDED: a label that can't find a free slot within a
  * few rows of its anchor is dropped rather than stacked arbitrarily far. That
  * keeps a dense block (e.g. a 50-vertex parametric-torus quad strip) from
- * piling every label into a tall column of long leader streaks — the
+ * piling every label into a tall column of long leader streaks - the
  * earlier-in-walk labels are the ones that survive.
  *
  * The solve is also TEMPORALLY STICKY. A memoryless per-frame solve made
@@ -1482,7 +1482,7 @@ static int project_guide_label_obstacles(
     return count;
 }
 
-/* Does a candidate label box — inflated by `margin` px on every side —
+/* Does a candidate label box - inflated by `margin` px on every side -
  * overlap any already-placed box? All boxes share VERTEX_LABEL_LINE_H.
  * margin > 0 demands headroom (a label entering or homing); margin < 0 is
  * lenient (an incumbent keeping its held row). */
@@ -1542,7 +1542,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
      * is last, so every new copy simply discards what the previous one
      * collected. All-instances, Whole-scene and At-vertex modes keep all
      * copies; declutter pass still drops whatever doesn't fit. Single-polygon
-     * narrows last-instance further to the primitive under the cursor — but
+     * narrows last-instance further to the primitive under the cursor - but
      * only for glBegin blocks (primitive_mode != 0); tess (GLU) polygons keep
      * whole-block labels by design. */
     if (state->vertex_idx_in_block == 0) {
@@ -1576,7 +1576,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
                     produced an invalid raster position and drawn nothing here */
 
     /* Drop the vertex if the scene rendered nearer geometry at this pixel
-     * (i.e. the vertex is occluded) — labels never show through solid
+     * (i.e. the vertex is occluded) - labels never show through solid
      * geometry, in any scope. depthbuf is NULL only when the readback failed;
      * the off-screen guard above keeps the index in range. */
     if (ctx->depthbuf) {
@@ -1586,13 +1586,13 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     }
 
     /* Numbering exists to disambiguate, so it keys on whether ambiguity is
-     * possible — which is a question about both scope and placement.
+     * possible - which is a question about both scope and placement.
      *
      * A decluttered label floats away from its vertex on a leader line, so
      * once a scope keeps more than one unrolled copy a repeated v0..vN per
      * copy is genuinely unreadable: number those globally. An at-vertex label
      * sits ON the vertex it names, so there is nothing to disambiguate and
-     * the in-block ordinal is the more useful reading (and stays small —
+     * the in-block ordinal is the more useful reading (and stays small -
      * global numbering over a torus puts four-digit numbers on every vertex).
      * Single-copy scopes are unambiguous either way. */
     label_num = (ctx->placement != OVERLAY_LABEL_PLACEMENT_AT_VERTEX &&
@@ -1670,7 +1670,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
         obstacle_n = project_guide_label_obstacles(
             ctx, obstacle_x, obstacle_y, obstacle_w,
             GUIDE_LABEL_OBSTACLE_MAX);
-        /* Place in collection (walk) order — a camera-independent priority — so two
+        /* Place in collection (walk) order - a camera-independent priority - so two
          * labels competing for the same screen region never swap which one claims
          * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
          * instead made near-equal depths flip every frame (a z-fighting-like
@@ -1718,7 +1718,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
                     }
                 }
             }
-            /* Phase B: keep the held row, judged leniently — evicting a
+            /* Phase B: keep the held row, judged leniently - evicting a
              * visible label needs a real collision, not a boundary graze. */
             if (was_drawn && !found &&
                 !vertex_label_cand_clashes(
@@ -1815,7 +1815,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
         y = l->draw_y;
         /* The anchor is on-screen (off-screen vertices were culled at collect),
          * but a declutter nudge can push draw_y past the top/bottom edge, where
-         * glRasterPos would invalidate and drop the whole string — keep Y in. */
+         * glRasterPos would invalidate and drop the whole string - keep Y in. */
         if (y < 0.0f)                  y = 0.0f;
         if (y > (float)ctx->vh - 1.0f) y = (float)ctx->vh - 1.0f;
         glRasterPos2f(l->anchor_x, y);
@@ -1852,7 +1852,7 @@ typedef struct NormalVectorRenderCtx {
 } NormalVectorRenderCtx;
 
 /* Track which block the walk is inside, and whether that block belongs to the
- * cursor — the walk only computes block selection when it is narrowing itself,
+ * cursor - the walk only computes block selection when it is narrowing itself,
  * and this pass deliberately is not. */
 static void on_normal_vector_cmd(const ReplayVertexWalkState *state,
                                  void *user) {
@@ -2085,7 +2085,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
 
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
         mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) {
-        /* The modelview here is the camera/view matrix — the walker has not yet
+        /* The modelview here is the camera/view matrix - the walker has not yet
          * applied any model transform (it pushes/translates per cmd below). Cache
          * its inverse once so each label can strip the camera back out. */
         float cam_view[16];
@@ -2384,7 +2384,7 @@ static void on_end_render_cursor_guides(const ReplayVertexWalkState *state,
         ctx->geometry_guide_done = 1;
     }
     /* A tail-anchored transform plan (brand-new line) is flushed by the
-     * post-walk step in edit_overlays_render_cursor_guides, not here — that
+     * post-walk step in edit_overlays_render_cursor_guides, not here - that
      * one path also covers the empty-program case where the walk never runs. */
 }
 
@@ -2416,7 +2416,7 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
     /* The flat-program walk drives the geometry (vertex/normal) guides, which
      * render in the walk's accumulated modelview, and consumes the transform
      * plan for the committed / replay / mid-document cases. It's skipped for an
-     * empty program (nothing to walk) — but the transform guide must still
+     * empty program (nothing to walk) - but the transform guide must still
      * render below, so the early-out only bypasses the walk, not the flush.
      *
      * During replay, render3d_transform_guides_prepare() builds a plan anchored
@@ -2433,8 +2433,8 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
     }
 
     /* Transform guides are position-independent: render3d_transform_guides_render_if_due()
-     * recomputes its own anchor frame, so a plan the walk never reached — an
-     * empty flat program, or a brand-new line anchored at the flat tail —
+     * recomputes its own anchor frame, so a plan the walk never reached - an
+     * empty flat program, or a brand-new line anchored at the flat tail -
      * flushes here. This is the transform analog of the vertex guide's
      * on_end / in_block append-row path (it's why a first-time transform
      * draws live, before commit, just like a first-time glVertex). */
@@ -2445,7 +2445,7 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
     }
 
     /* A clip-plane line the walk never anchored (brand-new / uncommitted
-     * row, or an empty program) still previews live while typing —
+     * row, or an empty program) still previews live while typing -
      * rendered in the world frame, since there's no flat instance whose
      * transform context could be replayed yet. Committed lines take the
      * walk path above and render in their true modelview. */
@@ -2498,8 +2498,8 @@ void edit_overlays_post_overlays(void *user_data) {
 }
 
 /* Bitmap-text label passes. Runs once per frame via the scene's
- * post_resolve_overlays_fn — after the accumulation resolve, not inside
- * the per-pass loop — so AA jitter / blur sub-passes can't stamp the
+ * post_resolve_overlays_fn - after the accumulation resolve, not inside
+ * the per-pass loop - so AA jitter / blur sub-passes can't stamp the
  * pixel-snapped glyphs at N slightly different positions and ghost the
  * text (the geometry overlays above stay in-pass and accumulate). */
 void edit_overlays_post_resolve_overlays(void *user_data) {

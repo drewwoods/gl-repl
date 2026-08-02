@@ -1,23 +1,23 @@
-# `src/app/` — Code-Smell Audit
+# `src/app/` - Code-Smell Audit
 
 > Audit produced 2026-05-24. Findings come from four parallel reviews of
 > `src/app/` (`glr_ctrl.c`; `glr_actions.c`; `glr_audio.c`; the camera +
 > completion + config + state + debug + defaults + source-document
 > bucket) plus targeted spot-verification of the most actionable claims.
-> File:line references are exact at the time of writing — check `git
+> File:line references are exact at the time of writing - check `git
 > log` on the cited files before acting if this doc has aged.
 >
 > **Revision 2 (2026-05-24):** Reviewer corrections applied. Fixed:
 > #1's proposed "snapshot under lock, unlock, call miniaudio" fix would
 > race with the worker's off-lock slot teardown
 > (`worker_uninit_all`/`worker_load` both release the lock before
-> `ma_sound_uninit`) — use-after-uninit risk; finding now rejects that
+> `ma_sound_uninit`) - use-after-uninit risk; finding now rejects that
 > unsafe shape and calls out the slot-lifetime constraint explicitly.
 > #20's "make `glr_audio_set_cfg_mode` apply pause/loop semantics" fix
 > contradicts the header contract at `glr_audio.h:112` (the cfg_mode
 > integer is explicitly opaque, owned by the action/config layer); fix
 > now routes through an action-layer apply helper instead. #42
-> withdrawn as a false positive — the `< 0.0` clamp only fires for
+> withdrawn as a false positive - the `< 0.0` clamp only fires for
 > negative env values; `GLR_AUDIO_HITCH_MS=0` correctly caches as 0.0
 > on first read. #39's heading corrected: the display frame builds the
 > snapshot *twice*, not three times (the body always said "doubled").
@@ -60,7 +60,7 @@
 > plus a new `edit_overlays/` peer subsystem), not `src/scene/`. The
 > original draft proposed `src/scene/replay_overlays.c` etc., which
 > would have contradicted the existing `scene/overlays.h:24-29` rule
-> that `src/scene/` stays app/REPL-agnostic — these passes re-execute
+> that `src/scene/` stays app/REPL-agnostic - these passes re-execute
 > REPL geometry and depend on editor cursor state, which is exactly
 > what `src/subsystems/` exists to host.
 >
@@ -68,31 +68,31 @@
 > where they document a contract, but not audited.
 >
 > The single most important contract for this directory:
-> **`src/app/` is the composition root / mediator — `glr_ctrl_*` routes
+> **`src/app/` is the composition root / mediator - `glr_ctrl_*` routes
 > raw input to owning subsystems and assembles per-frame snapshots; it
 > does not implement editor behavior, parse the language, or draw
 > widgets.** A `check-glr-ctrl-not-editor-mirror` guard enforces the
 > name-shape side of that contract, but the guard only watches symbol
 > names. The dominant theme in the findings below is *that contract is
-> leaky in places the guard cannot see* — chiefly ~600 lines of GL
+> leaky in places the guard cannot see* - chiefly ~600 lines of GL
 > rendering living in `glr_ctrl.c` and `_mut()` accessors used for
-> read-only work — plus a pile of audio-thread bugs that just haven't
+> read-only work - plus a pile of audio-thread bugs that just haven't
 > bitten yet.
 
 ## How to read this
 
 Severity grouping mirrors the previous audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or
+- **🔴 Actual bugs / hazards (verified)** - correctness or
   memory-safety issues with a concrete failure mode that exists in
   current production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — layer-crossing reaches, naming
+- **🟡 Drift / boundary hazards** - layer-crossing reaches, naming
   drift, parallel structures, hidden side effects, ambiguous-intent
   code that works today but is one edit away from misbehaving.
-- **🟢 Dead code / dead fields** — code with no callers, unreachable
+- **🟢 Dead code / dead fields** - code with no callers, unreachable
   branches, redundant initializers, unused parameters. Pure surface
   reduction.
-- **🔵 Structural concerns** — long functions, near-duplicate pairs,
+- **🔵 Structural concerns** - long functions, near-duplicate pairs,
   magic numbers, comment archaeology. Bigger refactors; higher cost.
 
 Each finding cites file + line, names the smell, says why it matters,
@@ -120,7 +120,7 @@ started** means no branch change was found for that finding.
 | 11 | Done | Camera import now parses yaw (`numeric ry` or `g_angle`) in one state and advances directly to target-translate (legacy state-3 path removed). |
 | 12 | Done | `cam_consume_example_block_now` now consumes the real 4-line block directly (synthetic `g_angle` injection removed). |
 | 13 | Done | New Scene now calls `editor_reset_for_new_scene()` instead of `editor_clear_all_cmds()`. |
-| 14 | Done (Partial — see deferred follow-ups) | Extracted ~771 lines of GL rendering out of `glr_ctrl.c` into `src/subsystems/replay/replay_render.{c,h}` (fade batches, tess preview) and `src/subsystems/edit_overlays/edit_overlays.{c,h}` (outlines, vertex points/numbers, normals, cursor-guide walk). File destinations match the audit's revised `Fix` text. **Deferred follow-up**: the `post_fill_fn` / `post_overlays_fn` callback machinery in `SceneRenderConfig` was retained — the callbacks were relocated, not eliminated, so the scene→subsystems arrow still inverts via `scene/render.c:601-602`. See "Deferred follow-ups" block below. |
+| 14 | Done (Partial - see deferred follow-ups) | Extracted ~771 lines of GL rendering out of `glr_ctrl.c` into `src/subsystems/replay/replay_render.{c,h}` (fade batches, tess preview) and `src/subsystems/edit_overlays/edit_overlays.{c,h}` (outlines, vertex points/numbers, normals, cursor-guide walk). File destinations match the audit's revised `Fix` text. **Deferred follow-up**: the `post_fill_fn` / `post_overlays_fn` callback machinery in `SceneRenderConfig` was retained - the callbacks were relocated, not eliminated, so the scene→subsystems arrow still inverts via `scene/render.c:601-602`. See "Deferred follow-ups" block below. |
 | 15 | Done | `_mut()`-for-read usage was replaced with const getters in the controller, completion, and config paths. |
 | 16 | Done | MSAA label mutation is now encapsulated inside `glr_actions_set_msaa_label()`. |
 | 17 | Done | Redundant scene/example reach-through was removed. |
@@ -131,7 +131,7 @@ started** means no branch change was found for that finding.
 | 22 | Done | Added symbolic default macros in `glr_defaults.h` and bound them in state resets. |
 | 23 | Done | `glr_config.c` now includes the real accessor headers. |
 | 24 | Done | The cited getter/setter locking gaps are closed; re-check under real GCC with the full branch. |
-| 25 | Partial | A cancel flag landed earlier, and `set_playlist` now explicitly clears `g_music_loaded = 0` so the worker's stale post-init publish can't mislead later observers. The cleaner alternative (cancel-in-flight semantics with the worker checking a flag before publishing) was not pursued — the residual race window between `worker_post(AWR_UNINIT, …)` and `worker_load`'s post-init publish at `:419-426` may still exist. Re-review under load if it bites; otherwise leaving Partial. |
+| 25 | Partial | A cancel flag landed earlier, and `set_playlist` now explicitly clears `g_music_loaded = 0` so the worker's stale post-init publish can't mislead later observers. The cleaner alternative (cancel-in-flight semantics with the worker checking a flag before publishing) was not pursued - the residual race window between `worker_post(AWR_UNINIT, …)` and `worker_load`'s post-init publish at `:419-426` may still exist. Re-review under load if it bites; otherwise leaving Partial. |
 | 26 | Done | Lowercased `audio_cfg_names` and removed specialized cycle formatters, relying on generic fallback. |
 | 27 | Done | The controller-owned gesture-once flag was removed; remaining gesture synchronization is tracked under #3. |
 | 28 | Done | The targeted stale phase/plan comment sweep landed for `src/app`. |
@@ -156,10 +156,10 @@ started** means no branch change was found for that finding.
 | 47 | Done | Redundant `g_camera_target` initializer was removed. |
 | 48 | Done | Redundant stack zero-initializers were removed. |
 | 49 | Done | Covered by #17's delete. |
-| 50 | Not started (deferred) | `glr_cfg_cycle_row()` is still a per-key chain. **Tier B intentionally deferred** — see "Deferred follow-ups" block below; the on-change-hook refactor is the most valuable remaining Tier B item but did not land in this branch despite the Tier B commit message. |
+| 50 | Not started (deferred) | `glr_cfg_cycle_row()` is still a per-key chain. **Tier B intentionally deferred** - see "Deferred follow-ups" block below; the on-change-hook refactor is the most valuable remaining Tier B item but did not land in this branch despite the Tier B commit message. |
 | 51 | Done | Split into `render_outlines_glbegin_pass()` and `render_outlines_tess_pass()` as part of the #14 extraction; lives in `src/subsystems/edit_overlays/edit_overlays.c` now. |
-| 52 | Done | All four near-duplicate pairs parameterized: `cam_format_block_impl(use_g_angle)`, `glr_ctrl_step_projection_toward` collapsed via `sign`, `cycle_example_or_user_scene_dir(direction)` with thin wrappers, and the two replay-key routers merged into `glr_ctrl_router_handle_replay_key` (safe — `replay_handle_key` self-checks `state->active`). |
-| 53 | Done (Partial) | Zoom-wheel velocity unified at `0.3f` across `glr_ctrl.c:2390` and `:3290` (the probable real bug). The wider magic-number sweep (outline `glLineWidth` constants, auto-rotate increment, ASCII control-char range) was not done — Tier B leftover. |
+| 52 | Done | All four near-duplicate pairs parameterized: `cam_format_block_impl(use_g_angle)`, `glr_ctrl_step_projection_toward` collapsed via `sign`, `cycle_example_or_user_scene_dir(direction)` with thin wrappers, and the two replay-key routers merged into `glr_ctrl_router_handle_replay_key` (safe - `replay_handle_key` self-checks `state->active`). |
+| 53 | Done (Partial) | Zoom-wheel velocity unified at `0.3f` across `glr_ctrl.c:2390` and `:3290` (the probable real bug). The wider magic-number sweep (outline `glLineWidth` constants, auto-rotate increment, ASCII control-char range) was not done - Tier B leftover. |
 | 54 | Done | Hoisted a local `GlrPresentationState p = glr_state_presentation();` in the CODE_PANEL_LAYOUT branch of `glr_cfg_cycle_row`. |
 | 55 | Done | Direct includes were added for the cited app dependencies. |
 | 56 | Done | Audio lock helpers were renamed to `audio_lock()` / `audio_unlock()`. |
@@ -181,7 +181,7 @@ audits use (see `plans/done/src-editor-code-smell-audit.md` for the
 full definitions). The recommendation is to land Tier A now, queue
 Tier B, and spin out #14 as its own plan.
 
-### Tier A — afternoon-pass mechanical (~7 commits, half-day)
+### Tier A - afternoon-pass mechanical (~7 commits, half-day)
 
 Land these to clear the way for this doc's graduation from
 `plans/in-review/` to `plans/done/`. None are bigger than ~10 LOC
@@ -190,7 +190,7 @@ each; **#53** is the only one likely to fix a real bug today.
 | # | What | Cost | Notes |
 |---|---|---|---|
 | **#36** | Docstring on `glr_camera_controls_reset` saying mode is preserved (vs. `glr_camera_reset_default` forcing 3D) | ~5 lines | Closes the named-resets asymmetry that misleads callers. |
-| **#53** (zoom-velocity half) | Unify the wheel-zoom velocity at `glr_ctrl.c:2998` (`0.3f`) and `:3956` (`0.1f`) — same gesture, two values | 1 line | **Probable real bug.** Pick the value the project considers canonical and use in both. The wider magic-number sweep (`glLineWidth`, auto-rotate increment, ASCII control range at `:536-537`) can stay Tier B; the zoom mismatch should not. |
+| **#53** (zoom-velocity half) | Unify the wheel-zoom velocity at `glr_ctrl.c:2998` (`0.3f`) and `:3956` (`0.1f`) - same gesture, two values | 1 line | **Probable real bug.** Pick the value the project considers canonical and use in both. The wider magic-number sweep (`glLineWidth`, auto-rotate increment, ASCII control range at `:536-537`) can stay Tier B; the zoom mismatch should not. |
 | **#54** | Hoist a local `GlrPresentationState p = glr_state_presentation();` in the CODE_PANEL_LAYOUT branch of `glr_cfg_cycle_row` | 2 lines | Bundles well with **#50** if both land; standalone otherwise. |
 | **#57** | Standardize `<ctype.h>` cast style across `glr_completion.c:74, 128, 131, 293` | ~4 lines | Pure consistency. |
 | **#59** | Emit a one-shot status when autocomplete ghost is dropped on overflow at `glr_completion.c:428-431` | ~5 lines | Closes silent-failure UX gap (popup vanishes without typed text growing). |
@@ -198,24 +198,24 @@ each; **#53** is the only one likely to fix a real bug today.
 | **#62** | Add `/* worker-thread-only, no lock */` comment on `g_slot_inited[]` in `glr_audio.c:343-354` | 1 line | Documents the invariant that makes the unlocked access safe today; closes the audit's open question without changing behavior. |
 
 After the Tier A pass, every "Not started" item with a one-paragraph
-fix is closed. The remaining open work is genuine Tier B / Tier C —
+fix is closed. The remaining open work is genuine Tier B / Tier C -
 exactly the shape that justifies graduating this doc.
 
-### Tier B — focused-pass slot (queue, don't bundle)
+### Tier B - focused-pass slot (queue, don't bundle)
 
 | # | What | Cost | Notes |
 |---|---|---|---|
 | **#25** (Partial) | Re-review the in-flight `worker_load` → `set_playlist` race window at `glr_audio.c:618-647` now that #2 + #3 cleanup landed | ~30-60 LOC if a race remains | **Time-sensitive**: the audit explicitly flagged "should be re-reviewed after #2/#3 cleanup", and those prerequisites are now ✅. If the cancel flag closed the window, just mark #25 Done; if it didn't, it's a real concurrency hazard. |
-| **#50** | Refactor `glr_cfg_cycle_row` (91 lines, per-key chain) to an `on_change(int new_value, const GlrConfigItem *)` hook field on `GlrConfigItem` | ~150 LOC | **Highest-value Tier B.** The per-key chain is where #19's "replay-stop side effect" was hidden — moving to a declarative hook structurally prevents that class of bug. Each key declares its own side effect; action rows become the natural early-return discriminator. |
-| **#51** | Split `glr_ctrl_render_outlines` (132-line god-function) into `render_outlines_glbegin_pass` + `render_outlines_tess_pass` | ~50-100 LOC | **Bundle with #14** — they're the same surgery (GL rendering extraction out of the controller). If #14 lands first, #51 falls out of it. |
-| **#52** | Parameterize four near-duplicate function pairs: `cycle_example_or_user_scene` ± direction, `cam_format_save_block`/`_display_block`, `glr_ctrl_step_projection_toward` up/down branches, the two replay-key routers | ~80 LOC removed | Mostly mechanical. **Be careful with the cycle pair** — needs paired test coverage so the prev path doesn't regress. The other three are safer. |
+| **#50** | Refactor `glr_cfg_cycle_row` (91 lines, per-key chain) to an `on_change(int new_value, const GlrConfigItem *)` hook field on `GlrConfigItem` | ~150 LOC | **Highest-value Tier B.** The per-key chain is where #19's "replay-stop side effect" was hidden - moving to a declarative hook structurally prevents that class of bug. Each key declares its own side effect; action rows become the natural early-return discriminator. |
+| **#51** | Split `glr_ctrl_render_outlines` (132-line god-function) into `render_outlines_glbegin_pass` + `render_outlines_tess_pass` | ~50-100 LOC | **Bundle with #14** - they're the same surgery (GL rendering extraction out of the controller). If #14 lands first, #51 falls out of it. |
+| **#52** | Parameterize four near-duplicate function pairs: `cycle_example_or_user_scene` ± direction, `cam_format_save_block`/`_display_block`, `glr_ctrl_step_projection_toward` up/down branches, the two replay-key routers | ~80 LOC removed | Mostly mechanical. **Be careful with the cycle pair** - needs paired test coverage so the prev path doesn't regress. The other three are safer. |
 | **#63** | Cache the help-overlay content. Either cache `UiOverlayContent *` once, or read from `snap->help_content` (snapshot machinery exists post-#39) | ~20 LOC | Closes per-Tab/per-click rebuild of the help table. Bundles well with the broader snapshot work if #39 grows a follow-up. |
 
-### Tier C — spin out as its own plan
+### Tier C - spin out as its own plan
 
 | # | What | Why Tier C |
 |---|---|---|
-| **#14** | Extract ~600 lines of GL rendering from `glr_ctrl.c` into **`src/subsystems/replay/replay_render.c`** (replay-driven 3D passes — fade batches, tess preview) and **`src/subsystems/edit_overlays/edit_overlays.c`** (new peer subsystem — outlines, vertex points/numbers, normals, cursor-guide walk) | **High-value architectural cleanup** (the controller's own README says it doesn't draw widgets, but ~30% of the file is `glBegin`/`glEnd`; the `post_fill_fn` callback that inverts the dependency arrow goes away). **Destination is `src/subsystems/`, not `src/scene/`** — `scene/overlays.h:24-29` already documents why these passes were kept out of `src/scene/` (they re-execute REPL geometry and depend on editor cursor state; scene is app/REPL-agnostic by design). It's a multi-commit week-long extraction that benefits from its own design doc in `plans/in-review/`, not a single bullet in this audit. **Recommendation**: open `plans/in-review/glr-ctrl-rendering-extraction.md` and pull #51 into it; see finding #14's revised "Fix" text for the destination-by-overlay breakdown. |
+| **#14** | Extract ~600 lines of GL rendering from `glr_ctrl.c` into **`src/subsystems/replay/replay_render.c`** (replay-driven 3D passes - fade batches, tess preview) and **`src/subsystems/edit_overlays/edit_overlays.c`** (new peer subsystem - outlines, vertex points/numbers, normals, cursor-guide walk) | **High-value architectural cleanup** (the controller's own README says it doesn't draw widgets, but ~30% of the file is `glBegin`/`glEnd`; the `post_fill_fn` callback that inverts the dependency arrow goes away). **Destination is `src/subsystems/`, not `src/scene/`** - `scene/overlays.h:24-29` already documents why these passes were kept out of `src/scene/` (they re-execute REPL geometry and depend on editor cursor state; scene is app/REPL-agnostic by design). It's a multi-commit week-long extraction that benefits from its own design doc in `plans/in-review/`, not a single bullet in this audit. **Recommendation**: open `plans/in-review/glr-ctrl-rendering-extraction.md` and pull #51 into it; see finding #14's revised "Fix" text for the destination-by-overlay breakdown. |
 | **#65** | Promote design-history comment paragraphs in `glr_ctrl.c` (~30% comments by line) to `MODULES.md` / `ARCHITECTURE.md`; leave one-line "what" + "why" in source | Discretionary editorial. Real but low-urgency; no behavior change. |
 
 ### Graduation checklist
@@ -226,24 +226,24 @@ This audit can move from `plans/in-review/` to `plans/done/` once:
 2. **#25** is either closed (race was already fixed by #2 + #3) or
    re-classified to a follow-up bug ticket if a window remains.
 3. **#14** is spun out to its own `plans/in-review/` plan (or
-   explicitly deferred with a "Tier C — deferred" marker in the
+   explicitly deferred with a "Tier C - deferred" marker in the
    status table above).
 4. The remaining Tier B items (#50, #52, #63) are either
    closed or carried forward into a "Tier B outstanding" block
    the way the closed `src-editor-code-smell-audit.md` did.
 
 After graduation, anything still open from this audit lives as
-Tier-C-classified backlog inside the closeout block — same shape as
+Tier-C-classified backlog inside the closeout block - same shape as
 the editor audit's "Implementation status" section.
 
 ## Deferred follow-ups (post-graduation)
 
 Two items were intentionally not landed in the four commits that
 graduated this audit. They are *not* leftover Tier C / Tier D
-work — they are scoped-out followups that need their own commits
+work - they are scoped-out followups that need their own commits
 and (for the second) probably their own audit revision.
 
-### 1. `#50` — `glr_cfg_cycle_row` `on_change`-hook refactor
+### 1. `#50` - `glr_cfg_cycle_row` `on_change`-hook refactor
 
 The Tier B commit (`d062f43 app: resolve Tier B code-smell audit
 findings`) **did not implement #50** despite its message
@@ -253,7 +253,7 @@ suggesting Tier B was fully resolved. The per-key chain in
 `GLR_CONFIG_AUTO_NORMALS` / `_POINT_ATTENUATION` is still buried
 at L463-466.
 
-**Why this matters:** the refactor's value was structural — moving
+**Why this matters:** the refactor's value was structural - moving
 each key's side effects into a declarative `on_change(int new_value,
 const GlrConfigItem *)` hook **structurally prevents** the
 "hidden side effect" class of bug that #19 closed reactively.
@@ -264,7 +264,7 @@ the next Tier B pass on this layer) to actually land the
 `on_change` hook. ~150 LOC. The status-table row above is marked
 "Not started (deferred)" rather than "Done" to make this visible.
 
-### 2. `#14` — `post_fill_fn` / `post_overlays_fn` callback collapse
+### 2. `#14` - `post_fill_fn` / `post_overlays_fn` callback collapse
 
 The `#14` extraction commit relocated the GL rendering into
 `src/subsystems/replay/replay_render.{c,h}` and
@@ -282,7 +282,7 @@ Specifically:
   (`edit_overlays_post_overlays`, `replay_render_post_fill`), but
   not eliminated.
 
-The dependency arrow still inverts — now from `src/scene/` →
+The dependency arrow still inverts - now from `src/scene/` →
 `src/subsystems/` instead of `src/scene/` → `src/app/`. The
 *direction* shifted; the *inversion* remains. This is meaningfully
 less bad (subsystems are peer-state modules; app is the
@@ -298,7 +298,7 @@ controller, where the layering arrow is correct) invoke
 `replay_render_post_fill(&g_replay_fade_plan)` and
 `edit_overlays_post_overlays(&g_overlay_pack)` directly. The
 ordering between the existing scene helpers (grid / axes /
-backdrop) and the overlay passes needs to be preserved — review
+backdrop) and the overlay passes needs to be preserved - review
 `scene_render_3d_scene` to identify what currently happens after
 the `post_fill_fn` call and either move those steps or split the
 scene function into a `pre_overlay` + `post_overlay` pair.
@@ -312,7 +312,7 @@ future src/scene/ audit revision.
 
 After the graduation commit, a fix-up pass landed:
 
-- **P1 — Overlay pack uninitialized reads.**
+- **P1 - Overlay pack uninitialized reads.**
   `glr_ctrl_build_overlay_pack(&g_overlay_pack, config)` was
   called before `config->multisample_enabled`,
   `line_smooth_enabled`, `user_lighting_enabled`, and
@@ -322,14 +322,14 @@ After the graduation commit, a fix-up pass landed:
   config fields are set) and left an explanatory comment at the
   install-hook site so a future caller can't reintroduce the
   early build.
-- **Layering — `ReplayFadePlan` location.** Moved the typedef from
+- **Layering - `ReplayFadePlan` location.** Moved the typedef from
   `src/app/glr_ctrl.h:12` into
   `src/subsystems/replay/replay_state.h` (alongside
   `ReplayFadeBatch` and `ReplayRuntimeState`), restoring the
   one-direction `app/` → `subsystems/` include arrow that every
   other subsystem header respects. `replay_render.h` now includes
   `subsystems/replay/replay_state.h` instead of `app/glr_ctrl.h`.
-- **Layering — `edit_overlays.h` `app/glr_config.h` include.**
+- **Layering - `edit_overlays.h` `app/glr_config.h` include.**
   Dropped the `app/glr_config.h` include from
   `edit_overlays.h` (the public surface); replaced
   `GlrVertexLabelMode mode` with plain `int mode` in the public
@@ -337,7 +337,7 @@ After the graduation commit, a fix-up pass landed:
   documented private include of `app/glr_config.h` for the
   `GLR_VERTEX_LABEL_*` enum-value comparisons. Header surface no
   longer leaks the cfg-layer dependency.
-- **P3 — Trailing whitespace.** Stripped from
+- **P3 - Trailing whitespace.** Stripped from
   `src/app/glr_ctrl.c:279`.
 - **#62 placement.** Moved the `g_slot_inited[]` ownership comment
   from inside `worker_uninit_all` (L381, post-unlock) to the
@@ -366,7 +366,7 @@ unlock();
 ```
 Plus `cursor_seconds_locked` calls `ma_sound_get_cursor_in_pcm_frames`
 under the lock. The file's doc-comments assert these miniaudio entry
-points are "non-blocking" — but miniaudio's public contract does not
+points are "non-blocking" - but miniaudio's public contract does not
 formally guarantee that, and the audio device callback (a thread the
 REPL doesn't own) may take internal locks.
 
@@ -377,7 +377,7 @@ holds `g_mtx` and waits for the same internal → deadlock. Same family
 as #2 / #3.
 
 **Fix:** The naive "snapshot `g_active` + slot pointer under the lock,
-unlock, then call miniaudio" is **not safe on its own** — it races
+unlock, then call miniaudio" is **not safe on its own** - it races
 with the worker's off-lock slot teardown
 (`worker_uninit_all` at `:343-354` and `worker_load` at `:428+` both
 release the lock *before* calling `ma_sound_uninit` on a slot). A
@@ -409,7 +409,7 @@ static void unlock(void) { if (g_worker_running) pthread_mutex_unlock(&g_mtx); }
 thread exists" with "no synchronization needed". On the worker-create
 failure path (#5), the engine is still inited and miniaudio's internal
 threads are still alive, but every public API now runs without
-synchronization — silently. The `g_worker_running` read itself is
+synchronization - silently. The `g_worker_running` read itself is
 unsynchronized.
 
 **Fix:** Initialize `g_mtx` unconditionally (use
@@ -426,7 +426,7 @@ negligible. This single change also tightens #3 and #24.
 unlocked in the deferred-gesture branch)
 
 **Smell:** Inconsistent with `set_paused`/`set_loop_mode`/`set_cfg_mode`
-peers (which take the lock — see #1). `g_muted` is touched bare;
+peers (which take the lock - see #1). `g_muted` is touched bare;
 `g_pending_start` / `g_playlist_pos` / `g_req_seek` are touched bare on
 some paths.
 
@@ -434,7 +434,7 @@ some paths.
 writes; the project's `-std=c99` portability goal is partly about
 "old machines / old GCC" where `int` writes aren't always atomic.
 Worse, `g_req_seek` aliases the worker-mailbox seek slot with the
-deferred-gesture seek — same variable, two ownership disciplines.
+deferred-gesture seek - same variable, two ownership disciplines.
 
 **Fix:** Take `g_mtx` in every flag-style getter/setter. Use a dedicated
 `g_pending_seek` for the deferred-gesture path so the worker mailbox
@@ -469,10 +469,10 @@ clue.
 
 **Why it matters:** Real shutdown-hang potential under racy teardown
 (test fixtures, signal-handler quit paths, etc.). The current production
-sequence happens to be safe — shutdown is called last — but the
+sequence happens to be safe - shutdown is called last - but the
 invariant is unenforced.
 
-**Fix:** In `worker_post`, treat `AWR_QUIT` as terminal — refuse to
+**Fix:** In `worker_post`, treat `AWR_QUIT` as terminal - refuse to
 overwrite it. Or use a separate `int g_quit_requested` flag the worker
 checks at each iteration.
 
@@ -495,7 +495,7 @@ stays live with no worker and no working primitives. `set_muted` /
 signal that audio is broken.
 
 **Fix:** On mutex / cond / thread setup failure, `ma_engine_uninit` and
-set `g_inited = 0` — i.e. fully back out.
+set `g_inited = 0` - i.e. fully back out.
 
 ### 7. `worker_save_state` corrupts the temp filename for paths with a directory component
 
@@ -508,9 +508,9 @@ if (snprintf(tmp, sizeof(tmp), ".%s.tmp", state_file) >= (int)sizeof(tmp))
     return;
 ```
 The `.` is prepended to the *whole* path. `state_file = "subdir/state.ini"`
-becomes `.subdir/state.ini.tmp` — a file named `state.ini.tmp` inside a
+becomes `.subdir/state.ini.tmp` - a file named `state.ini.tmp` inside a
 hidden directory `.subdir` that doesn't exist. `rename` then fails
-silently (return is not checked beyond zero — see #4) or crosses
+silently (return is not checked beyond zero - see #4) or crosses
 directories.
 
 **Why it matters:** Saves silently break for any non-flat path. Today
@@ -529,7 +529,7 @@ buffer half-mutated. Callers (`autonormal.c`, `export.c`) treat the
 return as atomic.
 
 **Why it matters:** Concrete corruption window. Callers attempt rollback
-by issuing a follow-up `source_document_apply_change(&rollback)` — that
+by issuing a follow-up `source_document_apply_change(&rollback)` - that
 pattern only works if intermediate failures leave a recoverable
 snapshot, which they don't here.
 
@@ -573,9 +573,9 @@ void glr_camera_restore(const GlrCameraState *snap) {
 and a snapshot restore lands a new pose (e.g., scene switch, undo), the
 next `glr_camera_tick()` applies the stale velocity to the new pose.
 
-**Why it matters:** Visible glitch — camera lurches after restore. The
+**Why it matters:** Visible glitch - camera lurches after restore. The
 header at lines 67-72 acknowledges "Pointer cache, target easing, and
-momentum velocities are NOT part of the snapshot — those are transient
+momentum velocities are NOT part of the snapshot - those are transient
 session state". `cancel_target_ease()` is called but `reset_velocities()`
 is not. The "transient session state" comment makes the intent clear;
 the implementation only does half of it.
@@ -590,7 +590,7 @@ restore, matching `glr_camera_controls_reset()` semantics.
 **Smell:**
 ```c
 if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
-    /* Animation hook line `glRotatef(g_angle, 0,1,0)` — no
+    /* Animation hook line `glRotatef(g_angle, 0,1,0)` - no
      * scalars, just advance. Tolerate its absence by falling
      * through to state 4 (older saved files omit it). */
     const char *q = strchr(p, '(');
@@ -600,7 +600,7 @@ if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
 }
 ```
 The "fall through to try the target translate on the same line" comment
-is wrong — the next state-4 branch matches `glTranslatef`, not the
+is wrong - the next state-4 branch matches `glTranslatef`, not the
 current `glRotatef` line. The state machine advances **without
 consuming** the line; the line is then re-fed as user code while the
 machine is misaligned.
@@ -673,7 +673,7 @@ resets `repl_scenes_reset_for_transient` doesn't cover
 
 ### 14. ~600 lines of GL rendering live in the "thin controller"
 
-**Where:** `src/app/glr_ctrl.c:243-924` — `tess_preview_*` (243-248),
+**Where:** `src/app/glr_ctrl.c:243-924` - `tess_preview_*` (243-248),
 `glr_ctrl_render_replay_fade_batches` (292),
 `glr_ctrl_render_replay_tess_preview` (350),
 `glr_ctrl_render_vertex_numbers` (416),
@@ -692,12 +692,12 @@ passes, not scene primitives. src/app/glr_ctrl.c re-executes the
 user's geometry in GL_LINE or GL_POINT mode."*
 
 **Why it matters:** The `check-glr-ctrl-not-editor-mirror` guard
-catches name-shape violations only — it can't see ~600 lines of GL
+catches name-shape violations only - it can't see ~600 lines of GL
 state-machine pushing. The `post_fill_fn` / `post_overlays_fn` callback
 abstraction makes `src/scene/` call back into the controller, inverting
 the intended dependency arrow.
 
-**Fix (revised — destination must be `src/subsystems/`, not
+**Fix (revised - destination must be `src/subsystems/`, not
 `src/scene/`):** `src/scene/` is app/REPL-agnostic by design, and
 `scene/overlays.h:24-29` already documents why these passes were
 left in the controller: they re-execute REPL geometry and depend on
@@ -707,22 +707,22 @@ mirror the existing peer-subsystem pattern (`replay/`, `tutorial/`,
 `color_picker/`, `variable_panel/`):
 
 - **`src/subsystems/replay/replay_render.c`** (new peer of
-  `replay.c` + `replay_state.c`) — owns the replay-driven 3D
+  `replay.c` + `replay_state.c`) - owns the replay-driven 3D
   passes: `tess_preview_*`, `glr_ctrl_render_replay_fade_batches`,
   `glr_ctrl_render_replay_tess_preview`. The struct it reads from
   (`ReplayFadePlan`) and the state it consumes already live in
   `src/subsystems/replay/`; the renderer is the natural counterpart.
 - **`src/subsystems/edit_overlays/edit_overlays.c`** (new peer
-  subsystem) — owns the editor-cursor-aware 3D passes:
+  subsystem) - owns the editor-cursor-aware 3D passes:
   `glr_ctrl_render_outlines` (re-executes user geometry in GL_LINE),
   `glr_ctrl_render_vertex_points` (GL_POINT mode),
   `glr_ctrl_render_vertex_numbers`, `glr_ctrl_render_normal_vectors`,
   and the flat-program walk that drives `glr_ctrl_render_cursor_guides`.
   These all depend on the executor + flat program + editor
-  cursor/edit_line — exactly the "peer with cross-layer state"
+  cursor/edit_line - exactly the "peer with cross-layer state"
   shape that `src/subsystems/` exists for.
 - **`src/scene/guides/`** keeps its existing pure-data renderers
-  (`geometry_guides.c`, `transform_guides.c` — both already take
+  (`geometry_guides.c`, `transform_guides.c` - both already take
   `SceneGuideSnapshot`). The cursor-guide *walk* that builds the
   snapshot moves to `src/subsystems/edit_overlays/`; the renderer
   it feeds stays in `src/scene/guides/`.
@@ -738,7 +738,7 @@ the overlay passes afterward. `glr_ctrl.c` shrinks by ~600 lines;
 
 **Why this isn't `src/ui/app/`:** the existing
 `src/ui/app/replay_hud.c` is the 2D HUD (status text, progress
-bar — reads `UiRenderSnapshot`). The 3D overlay rendering needs
+bar - reads `UiRenderSnapshot`). The 3D overlay rendering needs
 the live GL state machine (`glPushAttrib`, `glPolygonMode`,
 re-execution of the flat program through the executor), which is
 heavier than UI snapshot consumption and shouldn't share a TU
@@ -776,7 +776,7 @@ back it.
 
 **Why it matters:** Breaks the `g_cfg_items[]` ownership invariant.
 Both branches duplicate the same scan. The `static char` mutable
-global is pointed-to by the table — a publisher pattern that nothing
+global is pointed-to by the table - a publisher pattern that nothing
 else in the table follows.
 
 **Fix:** Add `glr_actions_set_msaa_label(int samples)` to
@@ -794,7 +794,7 @@ already does `g_example_idx = -1` internally (`scenes.c:353`).
 
 **Why it matters:** Reach-through that breaks the typed-facade
 convention this codebase deliberately maintains (`state_owners.h` vs
-`state_views.h`). The line is also redundant — fix is delete-only.
+`state_views.h`). The line is also redundant - fix is delete-only.
 
 **Fix:** Delete lines 599-601 entirely; `repl_scenes_enter_transient_scene()`
 covers it. If a separate semantic is wanted, add a named API in
@@ -829,7 +829,7 @@ Toggling anything (MSAA, grid, vertex labels, syntax highlighting…)
 silently aborts an in-progress replay. Not documented in help text or
 surfaced on any cfg-item descriptor.
 
-**Why it matters:** Broken UX — no way to cycle backdrop during a
+**Why it matters:** Broken UX - no way to cycle backdrop during a
 replay without losing the spot. Surprising behavior with no signal.
 
 **Fix:** Narrow this to the specific keys that genuinely invalidate
@@ -848,13 +848,13 @@ the stored value back and *separately* calls `apply_audio_cfg_mode(mode)`
 to actually apply the semantics.
 
 **Why it matters:** Any other caller of
-`glr_config_set(GLR_CONFIG_AUDIO_MODE, …)` — e.g. the
-`glr_export_cfg_apply` bridge during workspace `@cfg audio = N` load —
+`glr_config_set(GLR_CONFIG_AUDIO_MODE, …)` - e.g. the
+`glr_export_cfg_apply` bridge during workspace `@cfg audio = N` load -
 silently fails to take effect. `fill_all` (full workspace cfg snapshots)
 includes audio; `cfg_key_in_scene_subset` excludes it. Latent bug.
 
 **Fix:** Do **not** push the apply logic into `glr_audio_set_cfg_mode`
-— the header at `glr_audio.h:112-117` explicitly documents
+- the header at `glr_audio.h:112-117` explicitly documents
 `cfg_mode` as "Opaque audio-config integer owned by the action/config
 layer," and `glr_audio.c` deliberately doesn't know the `AUDIO_CFG_*`
 enum. Instead, expose `apply_audio_cfg_mode` (currently file-static in
@@ -875,7 +875,7 @@ case GLR_CONFIG_XFORM_GUIDE_MODE:   return &glr_state_presentation_mut()->xform_
 The config-key family `XFORM_*` rebinds to a field with the *different*
 `vertex` prefix. The menu label is "Xform guides".
 
-**Why it matters:** Reading the switch case is misleading — key, field,
+**Why it matters:** Reading the switch case is misleading - key, field,
 and label disagree on the name.
 
 **Fix:** Rename either the key (`GLR_CONFIG_VERTEX_GUIDES`) or the
@@ -907,7 +907,7 @@ mirroring `GLR_CAMERA_INITIAL` so BSS-zero startup matches docs.
 
 **Smell:** The comment cites a `check-controller-boundaries` constraint
 to justify the forward declarations. That constraint forbids `ui/`
-includes from REPL modules — but `glr_config.c` is an `app/` module
+includes from REPL modules - but `glr_config.c` is an `app/` module
 and is explicitly allowed to include UI headers. The four accessors
 (`glr_camera_mut`, `ui_state_profile_panel_mut`,
 `variable_panel_view_mut`, `replay_state_mut`) already have proper
@@ -948,7 +948,7 @@ post-init publish at `:419-426` writes `g_playlist_pos = idx` where
 **Why it matters:** `get_current_track` and `worker_save_state` both
 have a `pos < count` guard, so the symptom is "save skipped, status
 shows nothing." Cleaner: `g_music_loaded = 1` with `g_playlist_pos`
-already out of range — invariant violation that's only OK because
+already out of range - invariant violation that's only OK because
 all observers re-check.
 
 **Fix:** Add cancel-in-flight semantics (a `cancel` flag the worker
@@ -1004,13 +1004,13 @@ or been renamed.
 loaded. Litters source comments with archaeology that should be in
 commit history.
 
-**Fix:** Mechanical sweep — delete phase-step references, keep "why
+**Fix:** Mechanical sweep - delete phase-step references, keep "why
 this is here" notes. Provenance lives in commit messages and
 `plans/done/`.
 
 ### 29. Two top-level naming prefixes for one module: `glr_ctrl_*` and `glr_ctrl_*`
 
-**Where:** `src/app/glr_ctrl.c` (mixed throughout) — `glr_ctrl_*` examples
+**Where:** `src/app/glr_ctrl.c` (mixed throughout) - `glr_ctrl_*` examples
 at `:1889-2191`: `glr_ctrl_reset_all`, `glr_ctrl_reset_example_chrome`,
 `glr_ctrl_install_app_services`, `glr_ctrl_camera_distance`,
 `glr_ctrl_export_reshape_projection`, `glr_ctrl_editor_input_reset`,
@@ -1026,7 +1026,7 @@ distinction is undocumented; `glr_ctrl_reset_all` is exposed in
 the rule.
 
 **Fix:** Either rename all `glr_ctrl_*` → `glr_ctrl_*` (the natural
-home — the file is `glr_ctrl.c`), or document `glr_ctrl_*` as a
+home - the file is `glr_ctrl.c`), or document `glr_ctrl_*` as a
 sub-prefix in CLAUDE.md and group them physically.
 
 ### 30. `OverlayWalkCtx` and `ReplayVertexWalkContext` overlap, but are separate structs
@@ -1073,7 +1073,7 @@ to remember to update at every write site (build, read, reset).
 void glr_debug_dump_editor(FILE *out, SourceTextView text);
 void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text);
 ```
-Both functions do the same thing — pull line text out by index — but
+Both functions do the same thing - pull line text out by index - but
 one takes `SourceTextView` and the other `EditorBufferView`, forcing
 callers to remember which is which.
 
@@ -1091,7 +1091,7 @@ is more neutral) and use it for both. Or have both take the underlying
 ```c
 /* Orbit/pan momentum decay per frame. Deliberately independent of
  * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) even
- * though both currently default to 0.88f — they are different knobs. */
+ * though both currently default to 0.88f - they are different knobs. */
 #define CAM_DECAY 0.88f
 ```
 But `config.h:130` actually defines `GLR_CAMERA_TARGET_DECAY 0.93f`,
@@ -1225,7 +1225,7 @@ is computed from layout that needs the snapshot.
 
 **Why it matters:** Per-frame cost doubled for 25+ fields that didn't
 change between the two builds. The pattern also repeats off the
-display path — `glr_ctrl_mouse` (`:3832`) builds the snapshot on each
+display path - `glr_ctrl_mouse` (`:3832`) builds the snapshot on each
 left-button press; the selection-drag motion path
 (`glr_ctrl.c:3603-3664`) rebuilds it once or twice per mouse-move
 (see #40).
@@ -1241,7 +1241,7 @@ factor follow-scroll to read live editor state directly.
 **Smell:** On every `motion` callback during a drag, the controller
 rebuilds the entire `UiRenderSnapshot` (variable-panel vars copy,
 projection lines printf, scene-tabs build, swatch reparse, …) and may
-do it twice — the inner `ui_snap` even shadows the outer. `gl_y` is
+do it twice - the inner `ui_snap` even shadows the outer. `gl_y` is
 computed but only used to clamp the top edge; no analogous bottom-edge
 clamp despite the comment promising one.
 
@@ -1273,7 +1273,7 @@ int direction)` in either `src/editor/` (treated as an editor service)
 or a new `src/subsystems/numeric_swatch/` peer subsystem matching the
 color-picker pattern. The router becomes 5 lines.
 
-### 42. ~~Hitch-threshold env cache defeats `GLR_AUDIO_HITCH_MS=0`~~ (withdrawn — false positive)
+### 42. ~~Hitch-threshold env cache defeats `GLR_AUDIO_HITCH_MS=0`~~ (withdrawn - false positive)
 
 **Where:** `src/app/glr_audio.c:179-187`
 
@@ -1294,7 +1294,7 @@ re-reviewer doesn't re-flag the same pattern.
 
 ## 🟢 Dead code / dead fields
 
-### 43. `OverlayWalkCtx` / `ReplayVertexWalkContext` parallel statics — fold into one struct (#30)
+### 43. `OverlayWalkCtx` / `ReplayVertexWalkContext` parallel statics - fold into one struct (#30)
 
 Covered above; both fills duplicate 5 lines of init.
 
@@ -1306,7 +1306,7 @@ Covered above; both fills duplicate 5 lines of init.
 ignores the value: `if (variable_panel_handle_drag_motion(x, &value_change))
 glr_ctrl_apply_variable_panel_value_change(&value_change);`.
 
-**Why it matters:** Misleading API — reader assumes the `int` means
+**Why it matters:** Misleading API - reader assumes the `int` means
 consumed/not-consumed.
 
 **Fix:** Make it `void`.
@@ -1317,7 +1317,7 @@ consumed/not-consumed.
 
 **Smell:**
 ```c
-int arg_index = 0;     /* never goes negative — only `arg_index++` */
+int arg_index = 0;     /* never goes negative - only `arg_index++` */
 ...
 if (arg_index < 0 || arg_index > param_count) return;
 int next_param = arg_has_text ? arg_index + 1 : arg_index;
@@ -1357,7 +1357,7 @@ Gated by `g_camera_target_active = 0` (line 74) and overwritten on
 every `glr_camera_ease_to` call (line 246). Initial value is never
 observed.
 
-**Fix:** Drop the initializer (leave BSS-zeroed) — removes the
+**Fix:** Drop the initializer (leave BSS-zeroed) - removes the
 misleading suggestion that the initial value matters.
 
 ### 48. Stack zero-init arrays are partly redundant, but the predef claim needs care
@@ -1404,7 +1404,7 @@ then fallback formatters.
 
 **Why it matters:** Exactly the kind of switch the table-driven
 `g_cfg_items[]` idiom exists to avoid (CLAUDE.md: *"Adding a config
-item: append to `g_cfg_items[]` — count is auto-computed via sizeof"*).
+item: append to `g_cfg_items[]` - count is auto-computed via sizeof"*).
 Hides the replay-stop side effect (#19) inside the same chain.
 
 **Fix:** Add an `on_change(int new_value, const GlrConfigItem *)` hook
@@ -1435,10 +1435,10 @@ switch becomes a dispatch table.
 ### 52. Near-duplicate function pairs
 
 **Where:**
-- `cycle_example_or_user_scene` / `_prev` (`src/app/glr_ctrl.c:2750-2839`) — 89 lines walking the same sequence in opposite directions
-- `cam_format_save_block` / `cam_format_display_block` (`src/app/glr_camera_export.c:34-60`) — 12 lines duplicated for one line-2 difference (`g_angle` vs literal)
-- `glr_ctrl_step_projection_toward` (`src/app/glr_ctrl.c:1169-1195`) — symmetric up/down branches
-- `glr_ctrl_router_handle_active_replay_key` / `_replay_toggle_key` (`:2538-2544`) — both forward to the same `replay_handle_key`; the "active" filter is already inside the callee
+- `cycle_example_or_user_scene` / `_prev` (`src/app/glr_ctrl.c:2750-2839`) - 89 lines walking the same sequence in opposite directions
+- `cam_format_save_block` / `cam_format_display_block` (`src/app/glr_camera_export.c:34-60`) - 12 lines duplicated for one line-2 difference (`g_angle` vs literal)
+- `glr_ctrl_step_projection_toward` (`src/app/glr_ctrl.c:1169-1195`) - symmetric up/down branches
+- `glr_ctrl_router_handle_active_replay_key` / `_replay_toggle_key` (`:2538-2544`) - both forward to the same `replay_handle_key`; the "active" filter is already inside the callee
 
 **Why it matters:** Any change to one half has to be mirrored.
 
@@ -1449,16 +1449,16 @@ formatter taking a line-2 string; one projection-step using
 ### 53. Magic numbers where named constants exist nearby
 
 **Where:**
-- `src/app/glr_ctrl.c:2998` vs `:3956` — scroll-wheel zoom velocity
+- `src/app/glr_ctrl.c:2998` vs `:3956` - scroll-wheel zoom velocity
   `0.3f` vs `0.1f` for the same gesture
-- `:580, 612, 615, 703` — outline `glLineWidth(1.5f/3.0f/1.2f)` and
+- `:580, 612, 615, 703` - outline `glLineWidth(1.5f/3.0f/1.2f)` and
   `glPointSize(2.0f/7.0f)`; only `GLR_NORMAL_ARROW_SCALE` is named
-- `src/app/glr_camera.c:421` — auto-rotate `c->ry += 0.3f;` (every
+- `src/app/glr_camera.c:421` - auto-rotate `c->ry += 0.3f;` (every
   other camera tunable is a `CAM_*` define)
-- `src/app/glr_actions.c:536-537` — `key_code <= 0 || key_code >= 32`
+- `src/app/glr_actions.c:536-537` - `key_code <= 0 || key_code >= 32`
   (the ASCII control-character range, no name)
 
-**Why it matters:** Same input shape, different numeric outcome — and
+**Why it matters:** Same input shape, different numeric outcome - and
 no comment explaining the asymmetry.
 
 **Fix:** Hoist constants to a single header (or `config.h`). The
@@ -1507,7 +1507,7 @@ two pthread calls and drop the helpers.
 
 ### 57. `'isspace(ch)'` style mixed across `glr_completion.c`
 
-**Where:** `src/app/glr_completion.c:74` (`if (!isspace(ch))` — `ch`
+**Where:** `src/app/glr_completion.c:74` (`if (!isspace(ch))` - `ch`
 already `unsigned char`); `:128, 131, 293` (use the explicit cast)
 
 **Smell:** Two styles for the same `<ctype.h>` UB guard.
@@ -1546,7 +1546,7 @@ if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
 ```
 If the ghost doesn't fit, input is left unchanged and the popup is
 cleared. User sees the popup vanish without their typed text growing
-— no feedback.
+- no feedback.
 
 **Fix:** Emit a one-shot status when the ghost is dropped, or factor
 the bound into a comment.
@@ -1596,9 +1596,9 @@ Negligible at keystroke rate but inconsistent with the snapshot's
 `help_content` field at `:1591`.
 
 **Fix:** Cache the `UiOverlayContent *` once. Or read from
-`snap->help_content` (requires a snapshot — see #39's broader fix).
+`snap->help_content` (requires a snapshot - see #39's broader fix).
 
-### 64. ~~`static const ReplayTessPreviewCallbacks` uses `g_` prefix instead of `k_`~~ (withdrawn — local convention allows it)
+### 64. ~~`static const ReplayTessPreviewCallbacks` uses `g_` prefix instead of `k_`~~ (withdrawn - local convention allows it)
 
 **Where:** `src/app/glr_ctrl.c:250`, `:1934` (`g_export_projection_bridge_impl`),
 `:2025` (`g_glr_host_effects`)
@@ -1629,52 +1629,52 @@ reproduced inline; many describe historical migrations. Hard to skim.
 
 ### One-afternoon pass
 
-1. **#13 — Done.** Drop `editor_clear_all_cmds()` from NEW_SCENE. The
+1. **#13 - Done.** Drop `editor_clear_all_cmds()` from NEW_SCENE. The
    New Scene action now calls `editor_reset_for_new_scene()`, so it no
    longer posts the misleading clear-all status or runs the clear-all
    tutorial guard.
-2. **#17 — Done.** Delete the `scenes->active_example_idx = -1`
+2. **#17 - Done.** Delete the `scenes->active_example_idx = -1`
    reach-through.
-3. **#45 + #46 + #47 + #48 + #49 — Done.** Mechanical dead-code
+3. **#45 + #46 + #47 + #48 + #49 - Done.** Mechanical dead-code
    removal in completion / camera / display path, with #48 limited to
    the verified redundant initializer(s).
-4. **#28 — Done.** Stale plan/phase comment sweep for the targeted
+4. **#28 - Done.** Stale plan/phase comment sweep for the targeted
    `src/app` comments.
-5. **#33 — Done.** Fix the wrong decay-value comment in
+5. **#33 - Done.** Fix the wrong decay-value comment in
    `glr_camera.c:25` and `config.h:123`.
-6. **#23 — Done.** Drop the forward-decl block in `glr_config.c`
+6. **#23 - Done.** Drop the forward-decl block in `glr_config.c`
    (include the real headers).
-7. **#44 — Done.** `glr_ctrl_apply_variable_panel_value_change` →
+7. **#44 - Done.** `glr_ctrl_apply_variable_panel_value_change` →
    `void`.
-8. **#55 — Done.** Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/
+8. **#55 - Done.** Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/
    `<stdlib.h>` includes where currently transitive.
 
 This pass is complete in the current worktree.
 
-### One-week pass — the audio bug cluster
+### One-week pass - the audio bug cluster
 
 This is the highest-leverage block: most of the **🔴** bucket is here
 and the fixes are well-contained.
 
-Order matters — do the cheap structural fixes first; for #1 take the
+Order matters - do the cheap structural fixes first; for #1 take the
 low-churn documented-lock path first, and only introduce worker-routed
 control requests if the documented risk turns into an observed stall or
 deadlock.
 
-1. **#2 + #24 + #3 — Done locally.** The branch now uses dynamic mutex
+1. **#2 + #24 + #3 - Done locally.** The branch now uses dynamic mutex
    initialization and the cited bare shared-state paths lock. Re-run the
    full branch on `gracemont` before closing the portability gate.
-2. **#5 — Done.** Sticky `AWR_QUIT` in `worker_post`.
-3. **#4 — Done.** `fflush`/`fclose` error handling in
+2. **#5 - Done.** Sticky `AWR_QUIT` in `worker_post`.
+3. **#4 - Done.** `fflush`/`fclose` error handling in
    `worker_save_state`.
-4. **#6 — Done.** Back out engine on mutex/cond/thread setup failure in
+4. **#6 - Done.** Back out engine on mutex/cond/thread setup failure in
    `init`; reverify after #2's mutex cleanup.
-5. **#7 — Done.** Fix `tmp` filename prefix for paths with a directory.
-6. **#27 — Done.** Move audio-gesture idempotence into `glr_audio.c`;
+5. **#7 - Done.** Fix `tmp` filename prefix for paths with a directory.
+6. **#27 - Done.** Move audio-gesture idempotence into `glr_audio.c`;
    remaining gesture synchronization is tracked under #3.
-7. **#25 — Partial.** A cancel flag landed, but re-review the
+7. **#25 - Partial.** A cancel flag landed, but re-review the
    set-playlist/load-in-flight ordering before closing this item.
-8. **#1 — Partial.** Active-slot miniaudio calls stay under the module
+8. **#1 - Partial.** Active-slot miniaudio calls stay under the module
    mutex, but the code still needs the explicit slot-lifetime /
    accepted-risk note. The recursive mutex is now a dynamically
    initialized implementation detail; it is not the correctness
@@ -1684,62 +1684,62 @@ Do not treat the audio bug cluster as fully closed until #1's in-code
 note lands, #25 has had a final race review, and the full branch passes
 on real GCC.
 
-### One-week pass — closing the controller's rendering layer
+### One-week pass - closing the controller's rendering layer
 
 The structural smell that swallows most of `glr_ctrl.c`'s size:
 
-- **#14** — Extract `src/scene/replay_overlays.c`,
+- **#14** - Extract `src/scene/replay_overlays.c`,
   `src/scene/edit_overlays.c`, `src/scene/cursor_guides.c`. Promote
   `OverlayWalkCtx` / `SceneGuideSnapshot` to shared scene types.
   Have `scene_render_3d_scene` call them directly instead of
   through `post_fill_fn` callbacks. `glr_ctrl.c` shrinks by ~600
   lines.
-- **#51** — Split `glr_ctrl_render_outlines` into two passes (GL_BEGIN
+- **#51** - Split `glr_ctrl_render_outlines` into two passes (GL_BEGIN
   / TESS) as the function moves to `src/scene/edit_overlays.c`.
-- **#30** + **#31** — Fold `OverlayWalkCtx` / `ReplayVertexWalkContext`
+- **#30** + **#31** - Fold `OverlayWalkCtx` / `ReplayVertexWalkContext`
   into one struct; fold `g_replay_fade_plan_*` parallel statics into
   one struct.
-- **#15** — `_mut()`-for-reads sweep across `glr_ctrl.c`,
+- **#15** - `_mut()`-for-reads sweep across `glr_ctrl.c`,
   `glr_completion.c`, `glr_config.c`.
 
 Then **the camera-export seam**:
 
-- **#11** + **#12** — Done. Import now parses either yaw form in one
+- **#11** + **#12** - Done. Import now parses either yaw form in one
   state and advances directly to target-translate; the synthetic
   example `g_angle` line is gone.
-- **#34** — Either add `glr_camera_export.h` or roll the bridge back
+- **#34** - Either add `glr_camera_export.h` or roll the bridge back
   into `glr_camera.c`.
 
 Then **the cycle/menu-action layer**:
 
-- **#50** — Add `on_change` hook to `GlrConfigItem`; migrate the
+- **#50** - Add `on_change` hook to `GlrConfigItem`; migrate the
   per-key chain out of `glr_cfg_cycle_row`.
-- **#19** — Narrow the replay-stop side effect to keys that actually
+- **#19** - Narrow the replay-stop side effect to keys that actually
   invalidate replay state (or add an `invalidates_replay : 1` bit).
-- **#20** — Expose `glr_actions_apply_audio_cfg_mode(int)` (currently
+- **#20** - Expose `glr_actions_apply_audio_cfg_mode(int)` (currently
   file-static `apply_audio_cfg_mode`) and have the cfg-set path call
   it. Do **not** push the apply logic into `glr_audio_set_cfg_mode`
-  — the header documents that integer as opaque.
-- **#26** — Delete `labels[]` audio shadow array; use
+  - the header documents that integer as opaque.
+- **#26** - Delete `labels[]` audio shadow array; use
   `state_names` formatter.
-- **#52** — Collapse the four near-duplicate function pairs.
+- **#52** - Collapse the four near-duplicate function pairs.
 
 Then **the small-name-shape cleanups**:
 
-- **#16** + **#22** — Add `glr_actions_set_msaa_label()`;
+- **#16** + **#22** - Add `glr_actions_set_msaa_label()`;
   add the missing `CFG_DEFAULT_*` macros and a `GLR_STATE_INITIAL`.
-- **#21** — Pick one name across `XFORM_GUIDES` key / `show_vertex_guides`
+- **#21** - Pick one name across `XFORM_GUIDES` key / `show_vertex_guides`
   field / "Xform guides" label.
-- **#29** — Rename `glr_ctrl_*` → `glr_ctrl_*` (or document the
+- **#29** - Rename `glr_ctrl_*` → `glr_ctrl_*` (or document the
   sub-prefix in CLAUDE.md and group them).
-- **#32** — Pick one view type for the two `glr_debug_dump_*`
+- **#32** - Pick one view type for the two `glr_debug_dump_*`
   signatures.
-- **#35** — Symbolic constants for the tutorial-menu offsets.
+- **#35** - Symbolic constants for the tutorial-menu offsets.
 
 ### Out of scope
 
 - The `glr_ctrl_router_*` helper family is the cleanest thing in the
-  module — small, single-purpose, testable in isolation. Don't refactor
+  module - small, single-purpose, testable in isolation. Don't refactor
   the router shape itself; the smells are at the edges (#41, #40),
   not in the routing pattern.
 - `glr_defaults.h` is the right kind of header: pure macro definitions
@@ -1753,11 +1753,11 @@ Then **the small-name-shape cleanups**:
 
 This audit was produced by four parallel review agents:
 
-- `glr_ctrl.c` (163KB, 4069 lines — by far the biggest file in the
+- `glr_ctrl.c` (163KB, 4069 lines - by far the biggest file in the
   directory) + `glr_ctrl.h` + the module `README.md`
-- `glr_actions.c` (30KB, 691 lines) + `glr_actions.h` — the table /
+- `glr_actions.c` (30KB, 691 lines) + `glr_actions.h` - the table /
   menu / cycle layer
-- `glr_audio.c` (29KB, 833 lines) + `glr_audio.h` — threading and
+- `glr_audio.c` (29KB, 833 lines) + `glr_audio.h` - threading and
   miniaudio plumbing
 - The remainder bucket: camera (`glr_camera.c` + `_export.c` +
   header), completion, config, debug, defaults, source-document,
@@ -1767,6 +1767,6 @@ Each agent was asked for ~15-25 highest-signal findings, not a
 comprehensive sweep. The most actionable claims (real-bug findings
 above) were verified against the source. The 🟡 / 🟢 / 🔵 findings
 are reported as the agents framed them; spot-check before acting on
-the more mechanical ones — and re-grep the `_mut()` references in
+the more mechanical ones - and re-grep the `_mut()` references in
 #15 in particular, since that pattern shows up enough that the
 neighboring sites may have shifted.

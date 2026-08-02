@@ -6,7 +6,7 @@
  * This is a boot-band concern: it consumes the parsed GlrCliOptions (glr_cli)
  * before any frame runs and never returns to the main loop. It reuses the
  * controller-band diagnostic formatters in glr_debug (a downward call), which
- * is why the dispatch lives here rather than in glr_debug itself — that keeps
+ * is why the dispatch lives here rather than in glr_debug itself - that keeps
  * the reusable dump primitives free of any boot (glr_cli) dependency.
  */
 #ifndef GLR_BOOT_DUMPS_H

@@ -2,7 +2,7 @@
  * test_ui_gl_state.c - real-GL regression: 2D-overlay state isolation.
  *
  * Creates an actual GL context via GLUT (so glPushAttrib/glPopAttrib and
- * glGetFloatv/glIsEnabled behave for real — the no-op stub harness can't
+ * glGetFloatv/glIsEnabled behave for real - the no-op stub harness can't
  * model the GL state machine) and verifies that the shared
  * gl2d_begin()/gl2d_end() bracket every overlay uses fully restores the
  * GL state it touches: current color, GL_DEPTH_TEST, GL_LIGHTING.
@@ -166,7 +166,7 @@ static void test_fresh_context_defaults(void) {
     /* GL's initial stencil masks are all ones over the buffer's full width;
      * the report narrows them to 0xFF because the REPL's stencil surface is
      * 8-bit (repl/stencil_limits.h). Assert the property the narrowing rests
-     * on — every low bit set — not GL's raw width. */
+     * on - every low bit set - not GL's raw width. */
     glGetIntegerv(GL_STENCIL_VALUE_MASK, &iv);
     ASSERT_TRUE("default stencil value mask covers the REPL's 8 bits",
                 ((unsigned)iv & 0xFFu) == 0xFFu);
@@ -287,7 +287,7 @@ static void test_gl2d_restores_state(void) {
 /* Driver oracle for the GL_CURRENT_RASTER_COLOR model in
  * gl_state_inspector.c: glRasterPos latches the current color once (a later
  * glColor no longer moves the cell), and under GL_LIGHTING the driver stores
- * the *lit* color instead of the color the program set — which is why the fold
+ * the *lit* color instead of the color the program set - which is why the fold
  * evaluates the lighting equation for that cell. Whether it evaluates it the way
  * a driver does is the differential in test_gl_state_inspector_gl.c; this only
  * pins the latch semantics the model rests on. Identity transforms keep (0,0,0)

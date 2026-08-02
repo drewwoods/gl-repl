@@ -16,7 +16,7 @@ The REPL's subsystems (`src/subsystems/*`) and support/UI helpers
 (`src/support/*`, `src/ui/support/*`, `src/ui/subsystems/*`,
 `src/ui/core/*`) are *meant* to be reusable, feature-scoped modules that
 don't drag in the controller/REPL/editor layers. We want three small
-standalone GLUT demos to **prove that claim** — each should link only
+standalone GLUT demos to **prove that claim** - each should link only
 `{src/subsystems, src/support, src/ui/support, src/ui/subsystems,
 src/ui/core}` and **not** `src/ui/app`, `src/app`, `src/repl`, or
 `src/editor`. The demos double as a forcing function: wherever a demo
@@ -25,14 +25,14 @@ sever.
 
 This mirrors the three demos that already exist as isolation proofs:
 `scene_demo` (scene/ has no REPL dep), `repl_demo` (REPL pipeline has no
-editor/UI dep — reached **zero stub bodies**), and `editor_demo` (editor
+editor/UI dep - reached **zero stub bodies**), and `editor_demo` (editor
 data-model has no REPL-controller dep).
 
 **Exploration found a clear isolation gradient:**
 
 | Subsystem | Data/logic layer | UI/render layer |
 |---|---|---|
-| **memprof** | `src/support/memprof.c` — **already pure** (stdio/time only) | `src/ui/support/memprof.c` takes `UiRenderSnapshot*` (a god-object pulling in editor/repl/app) but reads only 6 scalars; also calls `ui_layout_*` (ui/app) |
+| **memprof** | `src/support/memprof.c` - **already pure** (stdio/time only) | `src/ui/support/memprof.c` takes `UiRenderSnapshot*` (a god-object pulling in editor/repl/app) but reads only 6 scalars; also calls `ui_layout_*` (ui/app) |
 | **variable_panel** | `variable_panel_state.c` pure; `variable_panel_drag.c` reaches `repl/eval.h` for value read at drag-begin | renderer takes `UiRenderSnapshot*`, calls `ui_state_viewport()`/`ui_layout_*` (ui/app); hit-kind `UI_HIT_VARIABLE_SLIDER` lives in `ui/app/hit.h` |
 | **color_picker** | `color_picker_state.c` reads the REPL document, synthesizes+parses a `glColor` line, and writes back via `editor_commit_apply_external_change` | renderer is nearly pure; only the **test-only** `ui_color_picker_render_swatch` uses `UiTransformer` (`ui/app/editor.h`) |
 
@@ -47,12 +47,12 @@ The project already has the decoupling primitive the user called a "sync
 system": **controller-installed function-pointer bridges + narrow
 per-frame view structs**. Precedents to copy verbatim:
 
-- `ReplHostEffects` (`src/repl/core.h`) — host effects via installed
+- `ReplHostEffects` (`src/repl/core.h`) - host effects via installed
   callbacks; unset hook = silent no-op.
 - `ReplExportCameraBridge` / `ProjectionBridge` / `ConfigBridge`
-  (`src/repl/export.h`) — `repl_export_install_*()`.
+  (`src/repl/export.h`) - `repl_export_install_*()`.
 - `SceneExecuteProgramFn` + `SceneRenderConfig` (`src/scene/render_types.h`)
-  — controller projects state into a narrow read-only config the renderer
+  - controller projects state into a narrow read-only config the renderer
   consumes.
 - `EditorCompletionProvider` (`src/editor/completion.h`).
 
@@ -62,7 +62,7 @@ reads (the 2D analog of `SceneRenderConfig`, replacing `UiRenderSnapshot`);
 installs real bridges (in `src/app/glr_ctrl.c` / `glr_actions.c`); the demo
 leaves them unset or installs an in-memory stub. "Zero stubs" means **zero
 stub function bodies** (like `tools/repl_demo/stubs.c`, which is 47 lines of
-comments) — unset bridges are silent no-ops.
+comments) - unset bridges are silent no-ops.
 
 ## Shared groundwork (do once, before phase 1)
 
@@ -70,7 +70,7 @@ comments) — unset bridges are silent no-ops.
    `int kind` field is the *designed-in* extension seam (`ui/core/hit.h:52`
    documents "int kind to allow enum extension"); do **not** fold the ~14
    app-level feature kinds into core (that would make core a registry of
-   every feature — the opposite of what the demos prove). Instead each
+   every feature - the opposite of what the demos prove). Instead each
    subsystem UI header owns only the kind it emits, as a fixed offset off
    `UI_HIT_CORE_COUNT` in a reserved high range that cannot collide with
    `ui/app/hit.h`'s contiguous app range (`UI_HIT_CORE_COUNT+0..+12`):
@@ -84,13 +84,13 @@ comments) — unset bridges are silent no-ops.
    so mixing ranges is fine; the controller/panels already include the
    subsystem headers for routing). `ui/core/hit.h` is left untouched.
 2. **Hard constraint on every new view struct:** all pointer fields must be
-   `const` — `scripts/check-views-flat.sh` scans every `ui_*.h`
+   `const` - `scripts/check-views-flat.sh` scans every `ui_*.h`
    `typedef struct` named `Ui*View`/`*State`/`*Output` and fails on a
    non-`const` pointer. New view type names must end in `View` to satisfy
    `scripts/check-ui-renderer-signatures.sh`. New view headers must **not**
    include `repl/state*.h` (`scripts/check-no-facade-include-in-views.sh`).
 
-## Phase 1 — memprof demo (proof of pattern)
+## Phase 1 - memprof demo (proof of pattern)
 
 **Decouple shipped source:**
 - In `src/ui/support/memprof.h`: drop `#include "ui/app/snapshot.h"`; define
@@ -107,13 +107,13 @@ comments) — unset bridges are silent no-ops.
   the `PROFILE_PANEL_W` side-by-side shift + scene clamp. Lift this into
   `src/app/glr_ctrl.c` (caller at `glr_ctrl.c:1363`) so it bakes a resolved
   `(panel_x, panel_y)` into the view. **Migrate cpuprof's anchor the same
-  way in this phase** — otherwise narrowing `ui_variable_panel_rect_for_count`
+  way in this phase** - otherwise narrowing `ui_variable_panel_rect_for_count`
   in phase 2 forces an unplanned cpuprof edit (ordering hazard).
 
 **Demo `tools/memprof_demo/memprof_demo.c`:** GLUT window, a slowly
 spinning `glutSolidTeapot` as filler, memory panel overlay. Keys: `a`
 malloc+touch a ~4 MB block (append to a list), `f` free the newest, `c`
-clear, `q` quit — RSS graph visibly climbs/drops. Each frame:
+clear, `q` quit - RSS graph visibly climbs/drops. Each frame:
 `memprof_frame_tick()`, fill `UiMemoryPanelView` (full-window anchor,
 `mode = MEMORY_PANEL_ON`), `ui_memory_panel_render(&view)`.
 
@@ -122,7 +122,7 @@ src/ui/support/memprof.c src/ui/core/theme.c
 tests/gl-stubs/gl_stub_counts.c` + target/phony/`ROOT_BIN_LINKS`/clean,
 modeled on the `scene_demo` block (Makefile ~782).
 
-## Phase 2 — variable_panel demo
+## Phase 2 - variable_panel demo
 
 **Decouple shipped source:**
 - **Value-source bridge** in `variable_panel_state.h`:
@@ -165,11 +165,11 @@ src/subsystems/variable_panel/variable_panel_drag.c
 src/ui/subsystems/variable_panel.c src/ui/core/theme.c
 tests/gl-stubs/gl_stub_counts.c`.
 
-## Phase 3 — color_picker demo (hardest)
+## Phase 3 - color_picker demo (hardest)
 
 **Decouple shipped source:**
 - **Document bridge** in `color_picker_state.h`. The peer doesn't actually
-  branch on command *type* — it branches on two derived properties (does the
+  branch on command *type* - it branches on two derived properties (does the
   command have an alpha channel? and value-max clamping). So no parallel
   `CmdType`-shaped enum is needed: `read_color` returns those two derived
   properties plus the rgba; `write_color` does the string synthesis + parse
@@ -209,7 +209,7 @@ tests/gl-stubs/gl_stub_counts.c`.
   point the test at the new home. **The load-bearing change is the header:**
   `src/ui/subsystems/color_picker.h` includes `ui/app/editor.h` (line 15,
   for the `UiTransformer` in `render_swatch`'s signature) and `ui/app/hit.h`
-  (line 16) — both must be removed when `render_swatch` leaves; replace the
+  (line 16) - both must be removed when `render_swatch` leaves; replace the
   latter with the subsystem-owned `UI_HIT_COLOR_SWATCH` + `ui/core/hit.h`.
   The remaining `color_picker.c` (`ui_color_picker_render` + `_hit_test`)
   then needs only `ColorPickerView` + `ui/core`.
@@ -229,22 +229,22 @@ tests/gl-stubs/gl_stub_counts.c`.
 ## Guards (new + edits)
 
 **New (one per demo, wired into `check-state-ownership` + `test-full`):**
-`check-<name>-demo-isolation.sh` — assert the demo's `*_DEMO_DEP_SRCS`
+`check-<name>-demo-isolation.sh` - assert the demo's `*_DEMO_DEP_SRCS`
 contains only allowed dirs (no `src/app`, `src/repl`, `src/editor`,
 `src/ui/app`) and, for built binaries, a `nm` negative test (no `repl_`/
 `editor_`/`glr_` symbols), mirroring `scene_demo`'s documented
 `nm | grep` check and `check-repl-demo-no-editor.sh`.
 
 **Existing guards to verify/adjust (per Plan-agent audit):**
-`check-views-flat.sh` (new views — all pointer fields `const`),
+`check-views-flat.sh` (new views - all pointer fields `const`),
 `check-ui-renderer-signatures.sh` (view type names end in `View`),
 `check-no-facade-include-in-views.sh` (no `repl/state*.h` in new view
 headers), `check-color-picker-ui-isolation.sh` (its `render_swatch` branch
-becomes dead — clean up), `check-duplicate-api-decls.sh` (each installer
+becomes dead - clean up), `check-duplicate-api-decls.sh` (each installer
 declared in exactly one header; the subsystem-owned hit-kind `enum`s are not
 function decls, so they're not tracked). Deleting two enumerators from
 `ui/app/hit.h` shifts the auto-increment values of the app-only kinds below
-them — verify no code persists hit `kind` values (none does; they're routed
+them - verify no code persists hit `kind` values (none does; they're routed
 live). `check-c99.sh` auto-globs `tools/**/*.c`, so the new demo drivers are
 picked up with no Makefile edit.
 
@@ -253,7 +253,7 @@ picked up with no Makefile edit.
 1. Phase 1 must migrate **both** memprof and cpuprof anchors to the
    controller, or phase 2's `ui_variable_panel_rect_for_count` signature
    change breaks cpuprof.
-2. Phase 2: ~8 tests call `ui_variable_panel_rect_for_count(NULL, ...)` —
+2. Phase 2: ~8 tests call `ui_variable_panel_rect_for_count(NULL, ...)` -
    keep a NULL-view fallback or update them.
 3. Phase 3: `color_picker_start`/handlers signature change touches ~13 test
    sites + `glr_ctrl.c:2792` in lockstep.
@@ -275,14 +275,14 @@ picked up with no Makefile edit.
 ## Verification
 
 Per phase (debug ASan/UBSan is the test default):
-- `make <name>_demo && ./<name>_demo` — interact (memprof: `a`/`f` move the
+- `make <name>_demo && ./<name>_demo` - interact (memprof: `a`/`f` move the
   RSS graph; variable_panel: drag sliders reshape the torus; color_picker:
   click a shape, drag sliders, it recolors).
-- `make <name>_demo USE_GL_STUBS=1` — headless link-check of the isolated
+- `make <name>_demo USE_GL_STUBS=1` - headless link-check of the isolated
   link set.
 - `make check-c99` and the new `make check-<name>-demo-isolation`.
 - Regression: `make test_memprof` (phase 1), `make test_ui`
-  (phases 2/3 — view signature + swatch move), full `make test`.
+  (phases 2/3 - view signature + swatch move), full `make test`.
 - Final: `make test-full` (builds all demos under stubs + runs the gate),
   and the gracemont real-gcc cross-check
   (`make check-c99 && make test-stubs`).

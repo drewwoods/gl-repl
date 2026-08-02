@@ -3,7 +3,7 @@
  *
  * Case folding is ASCII-only by design (the editor buffer is ASCII per
  * CLAUDE.md), so the locale-aware tolower() pulls a hazard with no
- * upside — under a Turkish locale, e.g., the 'I'/'i' mapping is wrong.
+ * upside - under a Turkish locale, e.g., the 'I'/'i' mapping is wrong.
  * ascii_tolower() keeps the folding deterministic across locales.
  *
  * The `_opts` variants add whole-word (identifier-boundary) matching; the
@@ -26,7 +26,7 @@ int ui_text_is_ident_char(int c) {
 
 /* Identifier-boundary test for a match of `query_len` chars at `pos`.
  * Only the ends where the query itself carries an identifier character
- * are constrained — a query like "(GL" has no left-hand word to bound. */
+ * are constrained - a query like "(GL" has no left-hand word to bound. */
 static int word_boundary_ok(const char *text, int text_len,
                             const char *query, int query_len, int pos) {
     int end = pos + query_len;

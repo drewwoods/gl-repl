@@ -221,7 +221,7 @@ static int find_dropdown_item_point(int menu_id, int target_item,
 /* The File menu's workspace header names the binding the workspace rows below
  * it act on. Three things are pinned: the unbound wording (the state that is
  * otherwise invisible), that a bound manifest's name reaches the label, and
- * that the row stays inert — it is a header, not a command. */
+ * that the row stays inert - it is a header, not a command. */
 static void test_workspace_header_row(void) {
     char temp_dir[] = "/tmp/test_workspace_header.XXXXXX";
     char *dir;
@@ -378,7 +378,7 @@ static void test_dropdown_and_config_press(void) {
     /* MENU_TUTORIALS top-level row 0 was a tutorial item before Phase B
      * (the flat dropdown); after Phase B it is the first tag row (tutorial
      * activation moved to per-tag flyouts via route_submenu_item_hit).
-     * Hit-test still returns 0 either way — row index is row index — but
+     * Hit-test still returns 0 either way - row index is row index - but
      * activation is now inert (mirrors the Scene tag-row guard below). */
     ASSERT_TRUE("found first tutorial tag row point",
                 find_dropdown_item_point(GLR_MENU_TUTORIALS, 0,
@@ -598,7 +598,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
 
 /* The Scene menu's "Next" / "Previous" cycle rows carry the F12 /
  * Shift+F12 shortcuts (moved off the "### EXAMPLES" header), hit-test as
- * plain menu items, and — being leaf actions — have no flyout. */
+ * plain menu items, and - being leaf actions - have no flyout. */
 static void test_scene_menu_cycle_rows(void) {
     int tag_count;
     int next_row, prev_row;
@@ -666,7 +666,7 @@ static void test_scene_submenu_with_stubs(void) {
     unsigned long long hover_raster_calls;
 
     /* Tall fixture: the per-row render assertion below needs the whole tag
-     * flyout onscreen — 600px clamps it once the catalog grows past ~32
+     * flyout onscreen - 600px clamps it once the catalog grows past ~32
      * entries plus group subheading rows. */
     reset_menu_bar_fixture(1000, 1000);
     make_test_ui_snapshot(&snap);
@@ -752,7 +752,7 @@ static void test_scene_submenu_with_stubs(void) {
 }
 
 /* Step 9: positive Config-flyout coverage mirroring
- * test_scene_submenu_with_stubs — open Config, hover section 0, assert
+ * test_scene_submenu_with_stubs - open Config, hover section 0, assert
  * the flyout rect/hit/render, and that the "All" flyout keeps its
  * "### "/"---" chrome inert (Finding #4). */
 static void test_config_submenu_with_stubs(void) {
@@ -806,7 +806,7 @@ static void test_config_submenu_with_stubs(void) {
                 hover_raster > base_raster);
 
     /* "All" flyout (last parent row) spans the whole table; a point on
-     * its first row — a "### " HEADER — must be inert chrome, NOT a
+     * its first row - a "### " HEADER - must be inert chrome, NOT a
      * submenu hit. */
     {
         int all_row = glr_config_section_count();  /* synthetic All */
@@ -927,7 +927,7 @@ static void test_tutorial_submenu_with_stubs(void) {
  * render path, double-mutating hover state with whatever the snapshot's
  * pointer.{mouse_x,mouse_y} happened to be. Probe by seeding hover at A,
  * rendering with snap.pointer at a different point B, then re-seeding at
- * A — the return value (changed?) is the observable signal. */
+ * A - the return value (changed?) is the observable signal. */
 static void test_render_does_not_mutate_hover(void) {
     UiRenderSnapshot snap;
     int item_a_mx = -1, item_a_my = -1;
@@ -1206,8 +1206,8 @@ static void test_dropdown_inert_chrome_hit(void) {
  * glr_ctrl_router.c → ui_panels_hit_test → ui_menu_bar_hit_test →
  * submenu_hit_test) and cycles ONLY on a UI_HIT_SUBMENU_ITEM hit with
  * cmd_idx == GLR_MENU_CONFIG. submenu_hit_test resolves actionable ITEM
- * rows only — chrome ("### "/"---" in the "All" flyout) is skipped via
- * submenu_row_kind, and section/All parent rows own no submenu row — so
+ * rows only - chrome ("### "/"---" in the "All" flyout) is skipped via
+ * submenu_row_kind, and section/All parent rows own no submenu row - so
  * a right-press over the section list (or a closed menu) never
  * mis-cycles a g_cfg_items[] index. This test drives the same filter
  * against the hit-test. */
@@ -1274,8 +1274,8 @@ static void test_config_submenu_right_press(void) {
  * keyed on (menu_id, parent_row, win_w, win_h). The cache hit path
  * bypasses the menu_dropdown_rect call that would otherwise enforce
  * ui_menu_bar_panel_visible(). If the panel becomes invisible while
- * the cache is warm, the next submenu_rect call must return 0 — not
- * the stale cached rect — because callers (hit-test, render) gate on
+ * the cache is warm, the next submenu_rect call must return 0 - not
+ * the stale cached rect - because callers (hit-test, render) gate on
  * the return code, not the rect contents. */
 static void test_submenu_cache_invalidates_when_panel_hidden(void) {
     int sx, sy, sw, sh;
@@ -1312,7 +1312,7 @@ static void test_submenu_cache_invalidates_when_panel_hidden(void) {
  * wheel pages through the hidden rows. submenu_row_point() addresses rows
  * by VISIBLE position (0 = topmost on-screen row), so a fixed screen point
  * maps to a higher absolute ordinal as the flyout scrolls. Pure
- * geometry/hit-test — runs in both stub and non-stub builds. */
+ * geometry/hit-test - runs in both stub and non-stub builds. */
 static void test_config_all_flyout_scroll(void) {
     int sx, sy, sw, sh;
     int parent_mx = -1, parent_my = -1;
@@ -1433,7 +1433,7 @@ static void test_config_short_flyout_consumes_but_no_scroll(void) {
 
 /* Symbolic pointer-script targets (menu:/item:/subenter:/sub:/pin:/scene:)
  * must resolve to points the real hit-test classifies as the named element
- * — and must keep doing so at a different window size, since resolution
+ * - and must keep doing so at a different window size, since resolution
  * against the live layout is the whole point. */
 static void test_symbolic_targets_resolve_to_hits(void) {
     static const int sizes[][2] = { { 1200, 800 }, { 1600, 1000 } };
@@ -1524,8 +1524,8 @@ static void test_symbolic_targets_resolve_to_hits(void) {
     }
 }
 
-/* helptab: and code: resolve against transient surfaces — the modal help
- * overlay and the code panel's visible rows — so both must fail closed when
+/* helptab: and code: resolve against transient surfaces - the modal help
+ * overlay and the code panel's visible rows - so both must fail closed when
  * the surface is absent and land on the real hit-test when it is up. */
 static void test_help_and_code_targets_resolve_to_hits(void) {
     int mx = -1, my = -1;

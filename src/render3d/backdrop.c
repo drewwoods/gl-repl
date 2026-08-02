@@ -433,7 +433,7 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         draw_building_windows(&win_geom, anim_time);
     }
 
-    /* Restore the NV fog distance mode explicitly — GL_FOG_DISTANCE_MODE_NV
+    /* Restore the NV fog distance mode explicitly - GL_FOG_DISTANCE_MODE_NV
      * isn't in the Khronos GL_FOG_BIT spec so the outer glPopAttrib may
      * not put it back. Conservative even on drivers that DO save it. */
     if (nv_fog_distance_supported)
@@ -453,12 +453,12 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
  *   quadratic default (1/distance footprint scaling) for normal scene
  *   point rendering; without this override stars would attenuate
  *   noticeably across the STAR_SKY_RADIUS dome. Gated on the runtime
- *   capability + loaded proc the controller mirrored into the config —
+ *   capability + loaded proc the controller mirrored into the config -
  *   unsupported contexts can't have run the init-bootstrap call either,
  *   so the GL default (identity) is already in effect and no reset is
  *   needed.
  * - Strips the camera translation from the modelview (under a
- *   glPushMatrix) so the sky follows rotation only — no zoom pop.
+ *   glPushMatrix) so the sky follows rotation only - no zoom pop.
  *
  * Pair every call with backdrop_end_sky_point_state(). */
 static void backdrop_begin_sky_point_state(
@@ -996,15 +996,15 @@ static void draw_nebula(
 }
 
 /* Piecewise-linear vertical gradient for the polar-day dome: a cold
- * whiteout. The horizon stop is exactly RENDER3D_GLACIAL_TINT — the same
- * colour the Frozen Lake grid fades to — so the grid dissolves into
+ * whiteout. The horizon stop is exactly RENDER3D_GLACIAL_TINT - the same
+ * colour the Frozen Lake grid fades to - so the grid dissolves into
  * the sky with no seam at the grid extent. Above it the sky cools
  * through powder blue to a steel-blue zenith. Below the eye-level
  * horizon the table clamps to the constant glacial tint and the dome
  * extends well downward (POLAR_PHI_MIN): the dome is camera-centred,
  * so a rim pinned at the horizon leaves a void over the beyond-grid
  * region that grows with camera altitude, and any partial floor leaves
- * a visible bottom edge at steep look-down angles — the haze must
+ * a visible bottom edge at steep look-down angles - the haze must
  * close the full lower hemisphere to be edge-free from every camera.
  * The backdrop draws before the grid, so the grid (and its FAR
  * white-out, which is this same tint) renders over it seamlessly. */
@@ -1105,7 +1105,7 @@ static void draw_snowfall(
             float cx = cosf(ang) * rad;
             float cz = sinf(ang) * rad;
 
-            /* Near flakes (later bands) fall a touch faster — cheap
+            /* Near flakes (later bands) fall a touch faster - cheap
              * parallax against the slow far-band drift. */
             float speed = (0.7f + city_rng(base + 3u) * 0.7f) *
                           (1.0f + 0.25f * (float)bi);
@@ -1140,7 +1140,7 @@ static void draw_snowfall(
 
 /* Sunset environment lights, one row per slot: world-space position
  * (w=0 => directional), then diffuse / ambient / specular. Slots live
- * on GL_LIGHT4..6 — above the REPL's user-facing GL_LIGHT0..3 range —
+ * on GL_LIGHT4..6 - above the REPL's user-facing GL_LIGHT0..3 range -
  * so lit geometry picks up the scene's colors without consuming any
  * user slot (fixed-function GL guarantees 8 lights). Intensities stay
  * moderate so an enabled user light still reads as the key. */
@@ -1174,7 +1174,7 @@ static const BackdropEnvLight k_sunset_lights[] = {
 };
 
 /* Nebula environment lights: cold cosmic palette matched to the gas
- * families above — magenta key from high along the band, teal rim
+ * families above - magenta key from high along the band, teal rim
  * from the opposite low quarter, and a deep-indigo bounce from below
  * standing in for the Star Chart floor's glow. Same GL_LIGHT4..6
  * contract as the sunset rig. */
@@ -1204,7 +1204,7 @@ static const BackdropEnvLight k_nebula_lights[] = {
  * directionless (no sun disc), so the key is zenith-down and neutral-
  * cool rather than warm-directional.  Same GL_LIGHT4..6 contract. */
 static const BackdropEnvLight k_polar_day_lights[] = {
-    /* Cool white zenith key, straight overhead — the open arctic sky. */
+    /* Cool white zenith key, straight overhead - the open arctic sky. */
     { GL_LIGHT4,
       .pos      = { 1.0f,  0.2f,  0.0f, 0.0f },
       .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
@@ -1216,7 +1216,7 @@ static const BackdropEnvLight k_polar_day_lights[] = {
       .diffuse  = { 0.30f, 0.44f, 0.62f, 1.0f },
       .ambient  = { 0.02f, 0.03f, 0.05f, 1.0f },
       .specular = { 0.22f, 0.34f, 0.48f, 1.0f } },
-    /* Pale glacial bounce from below — the ice-sheet reflection. */
+    /* Pale glacial bounce from below - the ice-sheet reflection. */
     { GL_LIGHT6,
       .pos      = { -1.0f, -0.2f,  0.10f, 0.0f },
       .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
@@ -1296,7 +1296,7 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         break;
     case RENDER3D_BACKDROP_NEBULA:
         /* Gas first, then the shared starfield shines through on top
-         * (no depth writes in either pass — draw order is the layering). */
+         * (no depth writes in either pass - draw order is the layering). */
         draw_nebula(frame_ctx->config.anim_time,
                     frame_ctx->config.point_parameter_supported,
                     frame_ctx->config.point_parameter_proc);

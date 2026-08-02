@@ -23,7 +23,7 @@ The goal is a clean **push model**:
   scene renderer no longer depends on that wrapper.
 - The `repl_execute_program()` call becomes an **optional function callback**
   inside `SceneRenderConfig`. When `NULL`, the scene renders without user
-  geometry — grid, backdrop, axes, lights, and non-user overlays still work;
+  geometry - grid, backdrop, axes, lights, and non-user overlays still work;
   only user GL commands are suppressed.
 - `scene_*.c` files depend only on **common code**: `sample.h`,
   `gl_includes.h`, `gl_2d.h`, and `repl_flatten.h` for `FlatProgramView` /
@@ -81,7 +81,7 @@ only needs `scene_render_3d_scene_with_config()`.
 ## Execute Callback Design
 
 The callback typedef lives in `scene_render_types.h`. It uses only
-`FlatProgramView` from `repl_flatten.h` — no `repl_executor.h` types:
+`FlatProgramView` from `repl_flatten.h` - no `repl_executor.h` types:
 
 ```c
 typedef struct SceneExecuteRequest {
@@ -194,7 +194,7 @@ unsigned int cursor_func_scope_mask;
 int          cursor_call_src_cmd_idx; /* -1 = cursor not on a CMD_CALL */
 ```
 
-`FrameRenderContext` is **unchanged** — the new fields live in the embedded
+`FrameRenderContext` is **unchanged** - the new fields live in the embedded
 `SceneRenderConfig` and are reached via `frame_ctx->config.*`.
 
 Note: `REPLAY_FADE_BATCH_MAX` is also transitional. If replay constants move out
@@ -237,7 +237,7 @@ state sampling.
 ## New File: scene_transform_utils.h
 
 Inline helpers that eliminate `repl_executor.h` from `scene_transform_guides.c`
-and `scene_overlays.c`. No `.c` companion — the bodies are small enough to inline.
+and `scene_overlays.c`. No `.c` companion - the bodies are small enough to inline.
 
 ```c
 /*
@@ -345,14 +345,14 @@ one fade batch into the next.
 | File | Removed | Added |
 |------|---------|-------|
 | `scene_render.c` | `repl_core_internal.h`, `repl_executor.h`, `repl_replay.h`, `repl_state.h`, `ui_panels.h` | `scene_transform_utils.h` |
-| `scene_grid.c` | `repl_state.h` | — |
-| `scene_axes.c` | `repl_state.h` | — |
-| `scene_backdrop.c` | `repl_state.h` | — |
-| `scene_lights.c` | `repl_state.h` | — |
+| `scene_grid.c` | `repl_state.h` | - |
+| `scene_axes.c` | `repl_state.h` | - |
+| `scene_backdrop.c` | `repl_state.h` | - |
+| `scene_lights.c` | `repl_state.h` | - |
 | `scene_overlays.c` | `repl_executor.h`, `repl_core.h`, `repl_state.h` | `scene_transform_utils.h`, `scene_render_types.h` |
 | `scene_transform_guides.c` | `repl_executor.h`, `repl_state.h` | `scene_transform_utils.h` |
-| `scene_render_types.h` | — | `repl_flatten.h` |
-| `repl_core.c` / `repl_scene_adapter.c` | — | `scene_render_types.h` |
+| `scene_render_types.h` | - | `repl_flatten.h` |
+| `repl_core.c` / `repl_scene_adapter.c` | - | `scene_render_types.h` |
 
 New files: `scene_transform_utils.h` and optionally `scene_cursor_match.h` /
 `.c` for the pure cursor-match helper.
@@ -367,7 +367,7 @@ New files: `scene_transform_utils.h` and optionally `scene_cursor_match.h` /
 # Old (check-layer-coupling):
 grep -nE '#include\s+"ui_' scene_*.c scene_*.h | grep -vE 'scene_render\.c:.*ui_panels\.h'
 
-# New — no exception needed:
+# New - no exception needed:
 grep -nE '#include\s+"ui_' scene_*.c scene_*.h
 ```
 
@@ -441,7 +441,7 @@ should include focused tests.
   `repl_lights_reset_all_enabled()`.
 - **`repl_state_render_derived()` write-back**: `scene_prepare_focus_vertex()`
   currently writes the focus vertex back to global derived state. After the
-  config-driven entry point lands, this write-back is no longer needed — the
+  config-driven entry point lands, this write-back is no longer needed - the
   result stays local to `FrameRenderContext.focus`. The global
   `ReplRenderDerivedState` write is eliminated.
 - **Matrix isolation around fade batches**: keep per-batch matrix isolation even

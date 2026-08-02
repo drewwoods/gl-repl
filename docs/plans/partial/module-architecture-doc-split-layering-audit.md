@@ -8,36 +8,36 @@ Date: 2026-06-05 (moved to partial 2026-06-08)
 > `SceneLight` → `Render3dLight`, the `check-scene-no-upper-layers` guard →
 > `check-render3d-no-upper-layers`, etc.; see
 > `plans/done/rename-scene-to-render3d.md`). The `src/scene` paths and `Scene*`
-> type names below are preserved as the original audit text — read them as the
+> type names below are preserved as the original audit text - read them as the
 > pre-rename `src/render3d` equivalents.
 
 ## Status summary (partial)
 
 Moved to `plans/partial/` because a meaningful slice of the audit's cleanup
-landed in `main` and stands on its own, while the headline deliverable — the
-actual `ARCHITECTURE.md` → per-module `src/*/ARCHITECTURE.md` split — is
+landed in `main` and stands on its own, while the headline deliverable - the
+actual `ARCHITECTURE.md` → per-module `src/*/ARCHITECTURE.md` split - is
 deliberately deferred until the heavier coupling edges are decided.
 
 **Landed (in `main`):**
 
-- Finding 3 — `replay_annotations.{c,h}` moved out of `src/repl` into
+- Finding 3 - `replay_annotations.{c,h}` moved out of `src/repl` into
   `src/subsystems/replay/`; the REPL→replay presentation edge is gone (one-way).
-- Finding 5 — `edit_overlays` no longer reads `src/app`/`src/editor` live state;
+- Finding 5 - `edit_overlays` no longer reads `src/app`/`src/editor` live state;
   the controller maps config into the subsystem-local enum and passes
   cursor / `FlatProgramView` through `OverlayWalkCtx`.
-- Finding 4 (light half) — the REPL/scene `SceneLight` vocabulary edge is split:
+- Finding 4 (light half) - the REPL/scene `SceneLight` vocabulary edge is split:
   REPL owns an enable bitmask, the dimensional light table is app-owned, export
   reads it through a bridge; `state_views.h` no longer includes
   `scene/render_types.h`.
 
 **Deferred (residual scope):**
 
-- The doc split itself — collapsing root `ARCHITECTURE.md` + `MODULES.md` into a
-  high-level map and adding one canonical per-module deep doc — is **not done**.
+- The doc split itself - collapsing root `ARCHITECTURE.md` + `MODULES.md` into a
+  high-level map and adding one canonical per-module deep doc - is **not done**.
 - Finding 1 (app/UI menu/config view-model cycle) and Finding 2 (editor/UI
   two-way includes): not started; these are the medium-high edges the split
   should either refactor or explicitly document as current contracts.
-- Finding 4 (guides half) — REPL-aware guide snapshot/walk + `transform_utils.h`
+- Finding 4 (guides half) - REPL-aware guide snapshot/walk + `transform_utils.h`
   still live in `src/scene`.
 - Finding 6 (`ui/app` ↔ `ui/subsystems` internal cycle) and the "doc-exists"
   structural guard idea: open.
@@ -278,7 +278,7 @@ Landed cleanup:
 The dependency is now one-way: replay depends on the REPL program model; REPL
 no longer depends on replay runtime state.
 
-### 4. REPL/scene type-vocabulary cycle — light half removed
+### 4. REPL/scene type-vocabulary cycle - light half removed
 
 Evidence (original):
 
@@ -302,7 +302,7 @@ render contracts and REPL-aware guide overlays. Still, it complicates a strict
 
 Difficulty: medium, but lower urgency than app/UI and editor/UI.
 
-#### Landed cleanup (light split — Option C)
+#### Landed cleanup (light split - Option C)
 
 Date: 2026-06-05
 
@@ -339,7 +339,7 @@ Verified `make test-stubs` (52/52 binaries, 9430/9430), `check-state-ownership`,
 
 #### Remaining (guides vocabulary)
 
-Still open, lower urgency — the guide overlays keep REPL-aware code in scene:
+Still open, lower urgency - the guide overlays keep REPL-aware code in scene:
 
 - Consider moving REPL-aware guide snapshot/walk helpers out of `src/scene`
   into `src/subsystems/edit_overlays` or another feature-bridge module. Scene

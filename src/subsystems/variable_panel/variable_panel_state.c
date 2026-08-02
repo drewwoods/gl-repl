@@ -69,7 +69,7 @@ void variable_panel_toggle_collapsed(void) {
 /* Drag transaction handlers. The pure-pass-through query / handler
  * wrappers (variable_panel_drag_active / _active_var / _coarse /
  * variable_panel_handle_drag_begin / _motion / _reset) live in
- * variable_panel_drag.c — they sit alongside the value-mapping
+ * variable_panel_drag.c - they sit alongside the value-mapping
  * logic (normal + coarse linear) so the implementation file is self-contained.
  *
  * The two undo-snapshot fields are kept here because they're a pure

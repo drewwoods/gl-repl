@@ -3,7 +3,7 @@
  * core of the depth-buffer visualization (buffer_viz_depth_map).
  *
  * Drives the mapping directly with hand-built float buffers and a fixed
- * Render3dProjectionDesc — no GL context. Pins the linearization math,
+ * Render3dProjectionDesc - no GL context. Pins the linearization math,
  * the near=bright / background=black conventions, the SCENE
  * normalization (EMA smoothing, snap-on-jump, overshoot clamping, the
  * zero-span mid-gray fallback, the empty-scene LINEAR fallback), and
@@ -37,7 +37,7 @@ static Render3dProjectionDesc make_desc(Render3dProjectionMode mode) {
     return d;
 }
 
-/* Window z for a perspective eye distance L — the forward companion of
+/* Window z for a perspective eye distance L - the forward companion of
  * the map's inverse: z = f*(L - n) / (L*(f - n)). */
 static float persp_z(float eye_dist) {
     return (FAR_Z * (eye_dist - NEAR_Z)) / (eye_dist * (FAR_Z - NEAR_Z));
@@ -99,7 +99,7 @@ static void test_scene_zero_span(void) {
     buffer_viz_depth_map(depth, 4, BUFFER_VIZ_DEPTH_SCENE, &proj,
                          &range, lum);
 
-    /* Constant-depth scene: span == 0 must not divide — every in-range
+    /* Constant-depth scene: span == 0 must not divide - every in-range
      * pixel maps to mid-gray (d01 = 0.5 -> 1 - 0.9*0.5 = 0.55). */
     AB("zero-span: constant depth maps to mid-gray", lum[0], 140);
     AI("zero-span: all in-range pixels agree", lum[1], lum[0]);
@@ -110,7 +110,7 @@ static void test_scene_zero_span(void) {
 static void test_scene_ema_overshoot_clamps(void) {
     Render3dProjectionDesc proj = make_desc(PROJ_PERSPECTIVE);
     /* Pre-seeded smoothed range [4, 8]. The raw capture below spans
-     * [2, 9] (ratio < 2x either way, so EMA smoothing — no snap), which
+     * [2, 9] (ratio < 2x either way, so EMA smoothing - no snap), which
      * leaves this frame's extremes OUTSIDE the lagging smoothed range. */
     BufferVizRange range = { 4.0f, 8.0f, 1 };
     float depth[2];

@@ -121,11 +121,11 @@ static float val_to_slider_t(float val, float scale) {
 /* Collapse chip: right-aligned "[-]"/"[+]" in the title bar, mirroring the
  * gl-state popup's details chip and the tour HUD's collapse affordance. */
 #define VAR_COLLAPSE_CHIP_CHARS 3
-/* Title text sits this far below the panel's padded top edge — it is the
+/* Title text sits this far below the panel's padded top edge - it is the
  * *baseline* offset, since gl2d_draw_string rasters from the baseline. */
 #define VAR_TITLE_BASELINE_PAD 4
 /* Baseline-relative glyph box of FONT_SMALL (8x13): descent below, the rest
- * above. The chip hit cell is derived from this, not from VAR_TITLE_H — the
+ * above. The chip hit cell is derived from this, not from VAR_TITLE_H - the
  * nominal title row extends well below the drawn glyphs, and sizing the cell
  * to the row put the clickable area under the visible "[-]". */
 #define VAR_FONT_SMALL_DESCENT 2
@@ -184,7 +184,7 @@ static void var_panel_collapse_chip_rect(const UiVariablePanelView *view,
     *y0 = baseline - VAR_FONT_SMALL_DESCENT - VAR_COLLAPSE_CHIP_SLOP;
     *y1 = baseline + (FONT_SMALL_H - VAR_FONT_SMALL_DESCENT) +
           VAR_COLLAPSE_CHIP_SLOP;
-    /* Never let the cell reach past the panel border — clicks outside the
+    /* Never let the cell reach past the panel border - clicks outside the
      * panel belong to whatever overlay is there, not to the chip. */
     if (*y1 > py + ph) *y1 = py + ph;
 }
@@ -248,9 +248,9 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
                 "Variables (declared)", FONT_SMALL);
 
     /* Collapse/expand chip: "[-]" collapses to just this title bar, "[+]"
-     * restores the slider rows. Mouse-only — there is no keymap slot for it.
+     * restores the slider rows. Mouse-only - there is no keymap slot for it.
      *
-     * An action chip by the grammar in ui/core/gl_2d.h — bracketed, muted, no
+     * An action chip by the grammar in ui/core/gl_2d.h - bracketed, muted, no
      * well. It names the move, not the state, which is the documented
      * exemption for single-glyph disclosure controls: +/- cannot be misread
      * as a value, and the panel's own collapsed shape already shows which way

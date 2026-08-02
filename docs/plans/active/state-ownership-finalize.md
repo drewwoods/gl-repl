@@ -1,21 +1,21 @@
 # State Ownership: Finalize Headers, Helpers, and Capture Docs
 
-## Status — ACTIVE (2026-07-16)
+## Status - ACTIVE (2026-07-16)
 
 The "Provenance" stages 0–5 have all landed (that's the section
 below). The remaining work is tracked below:
 
-- **A — `state_views.h` / `state_owners.h` split and header cleanup.**
+- **A - `state_views.h` / `state_owners.h` split and header cleanup.**
   - **Status:** **LANDED**
   - Decoupled `src/repl/state_owners.h` from `src/repl/state.h`.
   - Updated `src/repl/state.h` to only include `src/repl/state_views.h` (the read-side surface) and declare the `ReplRuntimeState` and capture/restore APIs.
   - Callers mutating state now explicitly include `src/repl/state_owners.h`.
   - Updated all tests and source files to match this new structure. There are
     no staged changes for this item; the split is in `main`.
-- **B — Domain-helper audit.**
+- **B - Domain-helper audit.**
   - **Status:** **NOT STARTED**
   - No changes yet. Pass-through wrappers still exist in `src/app/glr_actions.c`, `src/app/glr_state.c`, and the `repl_state_*_set_*` family.
-- **C — Capture/restore boundary docs.**
+- **C - Capture/restore boundary docs.**
   - **Status:** **NOT STARTED**
   - No "Capture/restore boundaries" subsection in `ARCHITECTURE.md` yet.
 
@@ -37,29 +37,29 @@ on or before commit `edc682e`.
 
 ### What landed (Stages 0–5)
 
-- **Stage 0/1** — `check-state-ownership` ratchets wired into
+- **Stage 0/1** - `check-state-ownership` ratchets wired into
   `make test`. `ReplRuntimeState` is the real aggregate;
   `repl_state_capture` / `repl_state_restore` round-trip in
   `test_repl_state.c`.
-- **Stages 2/3** — Every UI-visible slice has a by-value getter
+- **Stages 2/3** - Every UI-visible slice has a by-value getter
   declared in `src/repl/state_views.h`. UI files contain zero
   `_mut()` calls; mutations route through `glr_actions`,
   `repl_command_store`, `variable_panel_drag`, and the replay
   helpers. `check-ui-no-repl-state-mut` enforces it.
-- **Stage 4** — Cursor pixel write went through the
+- **Stage 4** - Cursor pixel write went through the
   `UiCodePanelOutput` pattern with controller actualization, exactly
   as the plan's target shape. `src/ui/panels.c` writes
   `out->cursor_px` / `out->cursor_py`; the interim
   `repl_action_set_cursor_pixel` helper and the
   `cursor-px-encapsulated.txt` allowlist are gone.
-- **Stage 5** — Medium slices return by-value or read-only views.
+- **Stage 5** - Medium slices return by-value or read-only views.
   `src/ui/panels.c` no longer calls `repl_state_presentation()`,
-  `repl_state_replay()`, or `repl_state_render()` directly — those
+  `repl_state_replay()`, or `repl_state_render()` directly - those
   arrive through `UiRenderSnapshot`.
 
 ### What was abandoned
 
-- **Stage 6 — rebuild `repl_undo.c` on `repl_state_capture()`.**
+- **Stage 6 - rebuild `repl_undo.c` on `repl_state_capture()`.**
   Premise overtaken. Undo lives at `src/editor/undo.c` and
   *deliberately* does not snapshot input bytes or clipboard state.
   See [`done/editor-input-selection.md`](../done/editor-input-selection.md)
@@ -80,7 +80,7 @@ on or before commit `edc682e`.
 
 ## Remaining work
 
-### A — Decide the long-term shape of `state_views.h` / `state_owners.h`
+### A - Decide the long-term shape of `state_views.h` / `state_owners.h`
 
 **Decision:** Keep the split and leave filenames as-is, but refine the decoupling.
 
@@ -92,7 +92,7 @@ Rather than collapsing the headers or renaming them, the split was preserved and
 
 Staged changes implement this change across the codebase, updating all references and tests.
 
-### B — Domain-helper audit
+### B - Domain-helper audit
 
 (Stage 9 leftover, narrowed.)
 
@@ -108,7 +108,7 @@ wrappers blur the surface without adding safety.
 
 Suitable for a single focused commit. Likely small.
 
-### C — Document the three capture/restore boundaries
+### C - Document the three capture/restore boundaries
 
 The codebase has three independent capture/restore pairs, and the
 boundary between them is load-bearing:
@@ -125,7 +125,7 @@ spuriously promoting an example to a custom scene (see Phase A item
 6 of `done/editor-input-selection.md`). Future migrations
 must not silently fold one boundary into another.
 
-Add a short section to `ARCHITECTURE.md` documenting this — currently
+Add a short section to `ARCHITECTURE.md` documenting this - currently
 the rules live in code comments and one item of a now-archived
 feature plan.
 

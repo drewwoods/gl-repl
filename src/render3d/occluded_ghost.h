@@ -7,7 +7,7 @@
  * stipple so the overlay still reads when it sits inside user geometry.
  * The overlays only look consistent if every helper uses the same dashed
  * stipple pattern (and the ghost passes the same alpha fraction). These
- * constants are that convention; they are values, not a mechanism — each
+ * constants are that convention; they are values, not a mechanism - each
  * helper still owns how it applies them (transform_guides routes the
  * alpha through its private g_guide_alpha_mul; render.c multiplies it
  * inline; the plain dashed-line consumers set their own line factor).

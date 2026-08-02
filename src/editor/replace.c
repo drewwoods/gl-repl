@@ -3,7 +3,7 @@
  *
  * One code path serves both entry points: build the substituted document,
  * hand it to the REPL rebuild, restore the editor's view state. They
- * differ only in which occurrences the substitution accepts — all of
+ * differ only in which occurrences the substitution accepts - all of
  * them, or the single one the find bar is parked on.
  *
  * Row model. The rewritten document always comes from the committed
@@ -35,7 +35,7 @@
  * `only_occurrence` selects between the two modes: -1 replaces every
  * match, 0..n replaces just that occurrence within the line (used by
  * Replace-current). Returns the number of substitutions, or -1 when the
- * result would not fit in `dst_sz` — a line that grows past MAX_LINE_LEN
+ * result would not fit in `dst_sz` - a line that grows past MAX_LINE_LEN
  * fails the whole operation rather than being silently truncated into
  * something that still parses. */
 static int substitute_line(const char *src, const char *query,

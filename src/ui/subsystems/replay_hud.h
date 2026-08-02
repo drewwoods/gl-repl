@@ -34,7 +34,7 @@
 
 /* Render the replay HUD once per frame. Reads replay state (mode / pc /
  * total / play state / speed / expand-args) from snap->replay and the
- * scene rect from ui_layout_scene_rect — matching the
+ * scene rect from ui_layout_scene_rect - matching the
  * (const UiRenderSnapshot *) signature shared by the other panel
  * renderers. No-op when snap->replay.active is 0. */
 struct UiRenderSnapshot;

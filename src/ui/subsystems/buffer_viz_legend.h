@@ -12,13 +12,13 @@
  *       -> ui_buffer_viz_legend_render(view)       (here: pixels)
  *
  * The panel exists because the stencil overlay alone cannot answer "which
- * value is that colour, and how much of the frame does it cover" — the
+ * value is that colour, and how much of the frame does it cover" - the
  * palette repeats every 16 values, so a swatch is ambiguous and the
  * printed number is not. Rows carry the colour the overlay actually
  * painted (RAMP included), so the panel and the viewport always agree.
  *
- * Row selection — top-N by pixel count, the zero row and the total always
- * retained — is the controller's job: a valid capture can hold all 256
+ * Row selection - top-N by pixel count, the zero row and the total always
+ * retained - is the controller's job: a valid capture can hold all 256
  * values and this panel has no scrolling, so an unbounded legend would
  * run off the viewport.
  */

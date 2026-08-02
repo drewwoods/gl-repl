@@ -20,7 +20,7 @@ static void editor_state_apply_sentinels(EditorState *s) {
     s->cursor_blink.blink_tick        = 0;
 }
 
-/* Lazily-initialised defaults — avoids embedding a 3.2 MB const copy
+/* Lazily-initialised defaults - avoids embedding a 3.2 MB const copy
  * of EditorState in the object file.  Also patches the live state on
  * first call so callers that run before an explicit reset() still see
  * correct sentinels (anchor_pos = -1, etc.). */
@@ -30,7 +30,7 @@ static const EditorState *editor_state_get_defaults(void) {
     if (!inited) {
         /* defaults is BSS-zeroed; add the non-zero sentinels. */
         editor_state_apply_sentinels(&defaults);
-        /* Patch live state once — it's also BSS-zeroed at this point. */
+        /* Patch live state once - it's also BSS-zeroed at this point. */
         editor_state_apply_sentinels(&g_editor_state);
         inited = 1;
     }
@@ -38,7 +38,7 @@ static const EditorState *editor_state_get_defaults(void) {
 }
 
 /* Bounded copy: writes src into dst (capacity sz, NUL-terminated). If
- * src is too long, dst is cleared to "" — same surrender behavior as
+ * src is too long, dst is cleared to "" - same surrender behavior as
  * the legacy repl_copy_string_fits helper this slice depended on
  * before the migration. Inlined locally so editor_state.c does not
  * depend on a repl header just for a string helper. */
@@ -244,7 +244,7 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
     case REPL_COMPILED_INSERT_ONE:
         return editor_buffer_insert_line(change->pos, change->text[0]);
     case REPL_COMPILED_INSERT_MANY: {
-        /* Build a const char *[] view of the change's text array — the
+        /* Build a const char *[] view of the change's text array - the
          * editor_buffer_* mutators take a list of pointers. We clamp to
          * MAX_COMMIT_CMDS when copying to avoid out-of-bounds reads. */
         const char *line_ptrs[MAX_COMMIT_CMDS] = {NULL};
@@ -280,7 +280,7 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
 /* The edit-line cursor lives on g_editor_state.document.edit_line_idx;
  * the editor accessors read and write the field directly. REPL
  * pipeline code receives the value as an explicit function parameter
- * or via the repl_dispatch_edit_line_get/_set sink — never by
+ * or via the repl_dispatch_edit_line_get/_set sink - never by
  * linking to editor_state_edit_line directly (β invariant;
  * storage moved here in Phase 4 of docs/plans/done/edit-line-ownership.md). */
 int editor_state_edit_line(void) {
@@ -398,7 +398,7 @@ static void cursor_pos_set_internal(int cursor_pos, int keep_anchor) {
         g_editor_state.input.anchor_pos = -1;
         return;
     }
-    /* keep_anchor: empty selections still collapse — if the anchor
+    /* keep_anchor: empty selections still collapse - if the anchor
      * just collided with the cursor, drop it. */
     if (g_editor_state.input.anchor_pos == cursor_pos)
         g_editor_state.input.anchor_pos = -1;
@@ -421,7 +421,7 @@ void editor_cursor_pos_extend_selection(int new_pos) {
 
     /* Pin the pre-move cursor as the anchor *before* the move so a
      * previously inactive selection becomes [old, new). If the anchor
-     * is already set, leave it alone — the existing range just extends
+     * is already set, leave it alone - the existing range just extends
      * or contracts. Using anchor_pos_set here would collapse the
      * anchor on (anchor == cursor) before we get the chance to move,
      * which is exactly the footgun this helper avoids. */
@@ -433,7 +433,7 @@ void editor_cursor_pos_extend_selection(int new_pos) {
     /* The input-buffer character selection and the whole-line range
      * selection are mutually exclusive views of "what is selected".
      * Whenever a character selection is active, drop any line-range so
-     * the two highlight bands never paint at once — e.g. shift+click a
+     * the two highlight bands never paint at once - e.g. shift+click a
      * multi-line range, then hold shift and press Left/Right, which
      * starts a char selection on the current row. This is the single
      * chokepoint every char-selection path flows through (shift+arrows,
@@ -575,7 +575,7 @@ void editor_state_clipboard_count_set(int line_count) {
     if (line_count > MAX_EDITOR_COMMANDS)
         line_count = MAX_EDITOR_COMMANDS;
     /* _count_set(0) is a full clipboard reset, not a "drop the lines
-     * but keep stale input_text" partial — otherwise a previous
+     * but keep stale input_text" partial - otherwise a previous
      * INPUT_TEXT payload would survive as EMPTY-kind with non-zero
      * input_text_len, breaking the kind/payload invariant. */
     if (line_count == 0) {

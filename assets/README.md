@@ -7,7 +7,7 @@ Runtime data for the REPL sample. The audio backend ([`src/app/glr_audio.c`](../
 
 [`gl_repl.c`](../gl_repl.c) scans this folder at startup for files matching `*.mp3`,
 sorts them by filename, and plays them as a playlist. Drop one file,
-drop ten — the REPL just picks them up in alphabetical order.
+drop ten - the REPL just picks them up in alphabetical order.
 
 ```
 assets/
@@ -27,7 +27,7 @@ entry cycles the loop mode:
 | `All`  | Plays the playlist, wraps back to the first track at the end (default) |
 
 If `assets/` contains no `.mp3` files, the sample falls back to the
-legacy single-file default `assets/song.mp3` — so older setups with
+legacy single-file default `assets/song.mp3` - so older setups with
 one dropped-in track keep working unchanged. The same fallback is
 overridable via `-DREPL_AUDIO_DEFAULT_MUSIC='"assets/yourfile.mp3"'`
 in `CFLAGS`.
@@ -37,7 +37,7 @@ startup scanner is deliberately restricted to `*.mp3`. If you need
 other formats, either rename them or call `repl_audio_set_playlist()`
 yourself from `main()`.
 
-If the files are missing or fail to load, the REPL still runs — you'll
+If the files are missing or fail to load, the REPL still runs - you'll
 see a single `repl_audio:` warning on stderr per failure and no sound.
 There are no hard audio dependencies.
 
@@ -51,5 +51,5 @@ mount point matches the native relative path so no code changes.
 ## Deliberately gitignored
 
 This folder is included in the repository so the directory structure
-is versioned, but actual audio files are **not** committed — see the
+is versioned, but actual audio files are **not** committed - see the
 local `.gitignore`.

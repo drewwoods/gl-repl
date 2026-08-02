@@ -4,12 +4,12 @@
  *
  * Two halves, matching the two places the legend can go wrong:
  *
- *   - glr_ctrl_buffer_viz_legend_select_rows() — the controller decides
+ *   - glr_ctrl_buffer_viz_legend_select_rows() - the controller decides
  *     which of up to 255 non-zero values earn a row. A capture can hold
  *     them all and the panel has no scrolling, so the top-N cap, the
  *     "+N more" remainder, and the always-retained zero/total rows are
  *     load-bearing, not cosmetic.
- *   - ui_buffer_viz_legend_size() — the renderer's pure solve. Drives it
+ *   - ui_buffer_viz_legend_size() - the renderer's pure solve. Drives it
  *     with no GL context; the panel must stay inside the scene rect and
  *     refuse to draw when it cannot.
  */
@@ -70,7 +70,7 @@ static void test_select_rows_reports_counts(void) {
     AI("select: then value 5", view.rows[2].value, 5);
 }
 
-/* Descending by count, and a tie resolves to the lower value — otherwise
+/* Descending by count, and a tie resolves to the lower value - otherwise
  * two equally-covered values would swap rows frame to frame. */
 static void test_select_rows_orders_by_count_then_value(void) {
     const Bin bins[] = { { 9, 40 }, { 4, 40 }, { 7, 90 }, { 200, 40 } };
@@ -246,7 +246,7 @@ static void test_size_widens_for_large_counts(void) {
     UiBufferVizLegendView big = drawable_view(2);
     int small_w = 0, big_w = 0;
 
-    /* A short title, so the count column — not the header — is what the
+    /* A short title, so the count column - not the header - is what the
      * solved width has to accommodate. */
     small.title = "Stencil";
     big.title = "Stencil";
@@ -258,7 +258,7 @@ static void test_size_widens_for_large_counts(void) {
 }
 
 /* The "+N more" row is built into a fixed left-column buffer, and that buffer
- * used to be too small to hold the string for a large remainder — so the count
+ * used to be too small to hold the string for a large remainder - so the count
  * was silently clipped and the solved width described the clipped text rather
  * than what the panel draws. Two remainders that differ only past the old
  * 12-byte cap have to produce two different widths. */
@@ -270,8 +270,8 @@ static void test_size_tracks_a_large_truncation_count(void) {
     /* Short title so the left column, not the header, drives the width. */
     narrow.title = "S";
     wide.title = "S";
-    narrow.hidden_rows = 2000000;    /* "+2000000 more"  — 13 chars */
-    wide.hidden_rows = 20000000;     /* "+20000000 more" — 14 chars */
+    narrow.hidden_rows = 2000000;    /* "+2000000 more"  - 13 chars */
+    wide.hidden_rows = 20000000;     /* "+20000000 more" - 14 chars */
     narrow.hidden_px = 4000u;
     wide.hidden_px = 4000u;
 
@@ -296,7 +296,7 @@ static void test_size_refuses_a_scene_too_small(void) {
 /* --- controller view ------------------------------------------------- */
 
 /* Stencil view defaults to Off, so the panel is absent until the user
- * turns the viz on — the legend never draws next to an absent overlay. */
+ * turns the viz on - the legend never draws next to an absent overlay. */
 static void test_view_absent_while_viz_is_off(void) {
     UiBufferVizLegendView view;
 

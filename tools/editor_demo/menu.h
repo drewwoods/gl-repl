@@ -2,7 +2,7 @@
  * tools/editor_demo/menu.h - Minimal demo-local menu bar.
  *
  * A standalone File menu for the generic text editor demo. Not
- * reused from src/ui/app/menu_bar.c — that one is heavily coupled to
+ * reused from src/ui/app/menu_bar.c - that one is heavily coupled to
  * REPL (config items, scenes, tutorials, examples) and would drag
  * those deps into the demo's link set. The demo menu is ~80 lines
  * of plain rendering + hit-test; no point sharing.

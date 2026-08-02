@@ -5,11 +5,11 @@ nothing until they're relevant.
 
 ## Are they auto-discovered?
 
-**Yes — with one caveat worth understanding.**
+**Yes - with one caveat worth understanding.**
 
 Every `SKILL.md` under `.claude/skills/*/` is discovered automatically at
 session start. No registration, no settings entry. What gets loaded into the
-model's context up front is only each skill's `name` and `description` — a line
+model's context up front is only each skill's `name` and `description` - a line
 or two apiece. The body is read on demand, when the agent decides the skill
 applies, or when you invoke it by name.
 
@@ -17,7 +17,7 @@ The caveat: *discovery is automatic, invocation is a judgment call.* The agent
 matches your request against those one-line descriptions. If the description
 doesn't contain the words you'd naturally use, the skill silently doesn't fire
 and you get default behavior. That's why the descriptions here are stuffed with
-concrete trigger phrases and file names rather than tidy summaries — a
+concrete trigger phrases and file names rather than tidy summaries - a
 description is a matching surface, not documentation.
 
 You can always force it: `/gl-repl-capture`, or just "use the capture skill".
@@ -31,7 +31,7 @@ You can always force it: `/gl-repl-capture`, or just "use the capture skill".
 | `gl-repl-config-toggle` | "add a setting/toggle/config key", editing `glr_actions.c` | `g_cfg_items[]` row + section, `CFG_DEFAULT_*`, keymap binding, and the 32-golden regeneration a new `GlrConfigKey` forces |
 | `gl-repl-capture` | "screenshot", "record a GIF", "regenerate docs images", "run it headless" | CLI flags, `GLR_*` env hooks, OSMesa build, freeglut frame capture, record scripts, shot staging, startup diagnostics |
 
-## Skill vs CLAUDE.md — where does a new fact go?
+## Skill vs CLAUDE.md - where does a new fact go?
 
 The test is **where the trigger lives**:
 
@@ -57,7 +57,7 @@ better as always-on one-liners.
 ## Maintenance
 
 `CLAUDE.md` was cut from 43 KB to ~28 KB when these were extracted. It's loaded
-in full on every single turn, so it's the expensive file — when you find
+in full on every single turn, so it's the expensive file - when you find
 yourself adding a paragraph to it, check whether the fact is task-triggered
 first.
 

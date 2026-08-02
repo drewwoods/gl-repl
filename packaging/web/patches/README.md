@@ -259,7 +259,7 @@ per frame, so replacing them with `gl4es_scratch()` would be speculative. The
 memory tradeoff is documented rather than hidden: each generated line endpoint
 stores 64 bytes when all five non-texture attributes are present, plus 16 bytes
 for every texture-coordinate set. A near-60,000-vertex triangle list can
-therefore create several MiB—and with many texture units, tens of MiB—of CPU
+therefore create several MiB-and with many texture units, tens of MiB-of CPU
 data, with a compiled list retaining a similarly sized VBO. That is acceptable
 for the measured workloads but is the limit to investigate if a pathological
 scene appears.

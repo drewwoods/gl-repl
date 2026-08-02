@@ -390,7 +390,7 @@ static void test_menu_actions(void) {
     ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, tag_count + GLR_SCENE_OFF_SCENES), 1);
     ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
 
-    /* Config menu: top-level rows are section parents — activating
+    /* Config menu: top-level rows are section parents - activating
      * one is an inert no-op that keeps the dropdown open (returns 0). */
     ASSERT_INT("Config parent-row activate is inert (returns 0)",
                glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0);
@@ -491,7 +491,7 @@ static void test_split_decl_menu_action(void) {
 /* Regression: the in-app Open Workspace action must land on a loaded
  * scene (active slot >= 0) AND rescue the pre-load document to the
  * recovery file. Before the fix, repl_load_workspace left the active
- * slot at -1 with the (now tabless) pre-load document still live — the
+ * slot at -1 with the (now tabless) pre-load document still live - the
  * user saw their current scene vanish from the tab strip yet stay
  * selected/showing in the editor. The CLI bootstrap already activated
  * the first slot; the menu caller forgot to. */
@@ -518,7 +518,7 @@ static void test_load_workspace_activates_scene(void) {
     ASSERT_TRUE("loadws saved a scene", repl_save_workspace("ws", NULL) >= 1);
 
     /* Fresh session with a distinctive unsaved pre-load document and no
-     * active scene — exactly the reported repro (fresh start, then Load
+     * active scene - exactly the reported repro (fresh start, then Load
      * Workspace from inside the REPL). */
     glr_ctrl_reset_all();
     repl_set_workspace_dir(NULL);
@@ -550,8 +550,8 @@ static void test_load_workspace_activates_scene(void) {
     }
 }
 
-/* Step 5 (Finding #1): every Config top-level row — each "### "
- * section parent and the synthetic "All" row — must be inert on
+/* Step 5 (Finding #1): every Config top-level row - each "### "
+ * section parent and the synthetic "All" row - must be inert on
  * click: glr_action_menu_item_activate returns 0 (menu stays open)
  * and NObody's config state changes (it must never be mis-read as a
  * g_cfg_items[] index and cycled). */
@@ -797,7 +797,7 @@ static void test_tutorial_start_applies_cfg(void) {
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
         /* Exit keeps the lesson's view (the learner is still in the
          * tutorial's scene); the cfg baseline captured at tutorial_start
-         * is restored by the next teardown flush — see the bag-restore
+         * is restored by the next teardown flush - see the bag-restore
          * lifecycle added in the REQUIRE/SET commit (8fefa82). The
          * baseline here was the post-reset 3D default, so the flush
          * reverts the tutorial's 2D back to 3D. */
@@ -838,7 +838,7 @@ static void test_tutorial_start_applies_cfg(void) {
     }
 }
 
-/* Phase B: top-level MENU_TUTORIALS rows behave like Scene tag rows —
+/* Phase B: top-level MENU_TUTORIALS rows behave like Scene tag rows -
  * clicking a tag row is inert (returns 0, keeps menu open), and Restart /
  * Exit work via their positions (tag_count + GLR_TUTORIAL_OFF_*). Activation
  * of an actual tutorial flows through route_submenu_item_hit (not this
@@ -898,7 +898,7 @@ static void test_tutorial_menu_dispatch(void) {
 
 /* Tours menu: every catalog entry has a name, activating a row starts the
  * controlled pointer-script tour (validating each built-in script parses as an
- * untimed, completion-driven script — glr_pointer_script_start_tour rejects
+ * untimed, completion-driven script - glr_pointer_script_start_tour rejects
  * malformed and timestamped lines) and closes the menu, and out-of-range rows
  * are consumed. */
 static void test_tours_menu_dispatch(void) {
@@ -1260,7 +1260,7 @@ static void test_scene_menu_cycle_actions(void) {
 
     /* Open the Scene dropdown, as a real click would. The cycle runs
      * glr_ctrl_reset_transients() (which closes the menu) internally, so
-     * this guards that the dropdown survives — the reported regression. */
+     * this guards that the dropdown survives - the reported regression. */
     ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
     ASSERT_INT("Scene menu open before cycle",
                ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
@@ -1454,7 +1454,7 @@ static void test_cfg_cycle_stops_replay(void) {
 /* On a context that can't read the depth buffer back (WebGL; a failed
  * init-GL probe), the interactive Depth view cycle must refuse with a
  * status message instead of silently cycling a row whose render-config
- * copy is forced Off every frame. Only glr_cfg_cycle_row is gated —
+ * copy is forced Off every frame. Only glr_cfg_cycle_row is gated -
  * @cfg header loads still write the stored value so files round-trip. */
 static void test_depth_viz_cycle_refuses_without_readback(void) {
     glr_ctrl_reset_all();
@@ -1593,7 +1593,7 @@ static void test_status_set_drops_empty_message(void) {
  *   TIME_RESET           → repl_reset_time_to_zero
  *   CODE_PANEL_LAYOUT_HIDDEN → ui_menu_bar_close + color_picker_stop +
  *                              editor_completion_clear (the hidden-only
- *                              branch — the other layouts test pure
+ *                              branch - the other layouts test pure
  *                              status & state in test_cfg_cycling).
  *
  * Each case asserts an OBSERVABLE side effect (camera target active,
@@ -1628,7 +1628,7 @@ static void test_cfg_cycle_focus_origin_eases_to_origin(void) {
     ASSERT_STR("focus_origin status", g_last_status, "Camera: focus origin");
 
     /* Tick to convergence and verify the ease destination was the origin
-     * (tx/ty/tz, not rx/ry — focus_origin recenters the orbit target). */
+     * (tx/ty/tz, not rx/ry - focus_origin recenters the orbit target). */
     for (int i = 0; i < 500 && glr_camera_target_active(); i++)
         glr_camera_tick();
     GlrCameraState cam = glr_camera();
@@ -1668,7 +1668,7 @@ static void test_time_reset_action(void) {
 
     /* Seed a non-zero t predef-var value so we can observe the reset.
      * (repl_reset_time_to_zero zeros the t predef var, not the
-     * controller-side anim_time accumulator — the predef value is
+     * controller-side anim_time accumulator - the predef value is
      * what the executor and the scene observe each frame.) */
     int t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef var exists", t_idx >= 0);
@@ -1680,7 +1680,7 @@ static void test_time_reset_action(void) {
 
     ASSERT_TRUE("time reset zeros t",
                 fabsf(g_predef_vars[t_idx].value) < 1e-6f);
-    /* time_playing is not changed by the reset path — it just zeroes
+    /* time_playing is not changed by the reset path - it just zeroes
      * the clock. Pin the invariant so a refactor that flips play state
      * trips the assert. */
     ASSERT_INT("time reset leaves play state unchanged",
@@ -1931,13 +1931,13 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                SYNTAX_HIGHLIGHT_ON_SHADOW);
 
     /* Unknown name on a known slug must fail (don't fall back to
-     * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
+     * strtol - "GRID_THEME_XYZ" must NOT silently land as 0). */
     out = -42;
     ASSERT_TRUE("unknown symbol fails resolve",
                 !repl_cfg_resolve_text("grid", "GRID_THEME_XYZ", &out));
     ASSERT_INT("  out untouched on failure", out, -42);
 
-    /* Apply via repl_cfg_set_text — proves the bridge wires the
+    /* Apply via repl_cfg_set_text - proves the bridge wires the
      * resolved int into glr_export_cfg_apply, not just the lookup. */
     repl_cfg_set_text("grid", "GRID_THEME_TRON");
     ASSERT_INT("set_text grid -> presentation.grid_theme",
@@ -1957,7 +1957,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                glr_state_presentation().syntax_highlight,
                SYNTAX_HIGHLIGHT_OFF);
 
-    /* Legacy integer-form @cfg lines must still load — the apply
+    /* Legacy integer-form @cfg lines must still load - the apply
      * path tries resolve_text first, then falls back to strtol.
      * Drives the same bag/apply edge repl_cfg_set_text uses, just
      * with an integer-string value instead of a symbolic name. */
@@ -2087,8 +2087,8 @@ static void test_f9_cycles_light_theme(void) {
 }
 
 /* Shift+F<n> steps the F-key-bound config rows BACKWARD (plain F<n> steps
- * forward). Exercised on two multi-state cycles — light theme (F9) and grid
- * theme (F3) — where the direction is observable; 2-state toggles flip
+ * forward). Exercised on two multi-state cycles - light theme (F9) and grid
+ * theme (F3) - where the direction is observable; 2-state toggles flip
  * either way. Modifiers are driven through the editor test seam. */
 static void test_shift_fkey_steps_backward(void) {
     glr_ctrl_reset_all();
@@ -2208,7 +2208,7 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
  * in keymap.h), and an F-key vs a Ctrl byte of equal numeric value are
  * distinct via is_special. Guards against an accidental double-map when a
  * keymap.h binding is reused across two rows. Data-driven over
- * g_cfg_items[] (the enumerable, collision-prone tier — it owns the
+ * g_cfg_items[] (the enumerable, collision-prone tier - it owns the
  * shared Ctrl-letters); key_code-0 rows are section chrome or
  * shortcut-less and are skipped. */
 static void test_no_duplicate_config_bindings(void) {
@@ -2270,7 +2270,7 @@ static void test_keymap_event_is_strict(void) {
                keymap_event_is(KEY_CTRL_C, KEY_CTRL_C, GLUT_ACTIVE_SHIFT), 1);
 
     /* (The macOS Cmd/SUPER normalization is only meaningful on the real
-     * freeglut Cocoa build — GLUT_ACTIVE_SUPER is 0 under the GL stubs — so
+     * freeglut Cocoa build - GLUT_ACTIVE_SUPER is 0 under the GL stubs - so
      * it isn't asserted here; see keymap_event_is in src/editor/input.c.)
      * A binding that explicitly requires Ctrl (audio arrows) needs it. */
     g_test_mods = GLUT_ACTIVE_CTRL;

@@ -30,7 +30,7 @@
  * copies the current state into it (inheriting the example's name with
  * de-duplication), and marks that slot as active. Subsequent mutations accumulate
  * into the user scene; the example remains unchanged. Switching away from the
- * user scene via F12 does not restore the example state — user edits are
+ * user scene via F12 does not restore the example state - user edits are
  * independent once promoted.
  *
  * Query API: repl_example_count() returns the total number of examples;
@@ -73,7 +73,7 @@ int repl_example_count(void);
 
 /* Curated metadata tags used by the Scene menu. Examples keep their flat
  * identity; tags are only a secondary discovery index. Tag index 0 is the
- * synthetic "All" group — every example is a member (folded into the mask
+ * synthetic "All" group - every example is a member (folded into the mask
  * by repl_example_tag_mask), so the Scene menu's first example group lists
  * every example once, matching the flat order the F12 cycle walks.
  *
@@ -100,7 +100,7 @@ int repl_example_index_for_tag(int tag_idx, int ordinal);
 int repl_example_visible_tag_count(void);
 int repl_example_visible_tag_at(int dense_idx);
 
-/* Subheading API — mirrors repl_tutorial_subheading. Returns the example's
+/* Subheading API - mirrors repl_tutorial_subheading. Returns the example's
  * free-form section label or NULL (no subheading / out-of-range idx). The
  * Scene menu uses this to group entries within a tag flyout: consecutive
  * examples sharing a non-NULL subheading render under one `### subheading`

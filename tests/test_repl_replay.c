@@ -308,8 +308,8 @@ static void test_misc_helpers(void) {
 }
 
 /* Regression (ab1011e7): once glClear became a real source command at the
- * top of every scene, replay's fade pass re-executed it — the pre-skip
- * prefix runs state commands — so each fade batch wiped the frame the fill
+ * top of every scene, replay's fade pass re-executed it - the pre-skip
+ * prefix runs state commands - so each fade batch wiped the frame the fill
  * pass had just rendered and the whole scene flashed in from black on
  * every step. The executor now skips CMD_CLEAR under fade context, and the
  * replay clamps never cut a frame-defining pass below the leading clear
@@ -390,7 +390,7 @@ static void test_replay_fade_skips_program_clear(void) {
 
 /* Regression: replay annotation simulation must apply the precomputed
  * args[0] for CMD_VAR_ASSIGN, mirroring the live executor (which
- * deliberately does not re-evaluate — see executor.c:CMD_VAR_ASSIGN).
+ * deliberately does not re-evaluate - see executor.c:CMD_VAR_ASSIGN).
  *
  * The original bug: `tDelta = (t - tLast) * 10;` substituted as 0 in the
  * downstream `p = tDelta * i * scale;` annotation while the variable
@@ -398,7 +398,7 @@ static void test_replay_fade_skips_program_clear(void) {
  * the live executor keeps applying the args[0] frozen at the prior
  * flatten (when tLast still held its previous-frame value); meanwhile
  * flatten itself ran `tLast = t` afterward, so the baseline replay_start
- * captured had t == tLast — and the simulation re-evaluated the RHS
+ * captured had t == tLast - and the simulation re-evaluated the RHS
  * against that baseline, producing 0 instead of the cached 0.16. */
 static void test_replay_var_assign_uses_flatten_args(void) {
     glr_ctrl_reset_all();
@@ -419,7 +419,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
     /* Clear dirty so replay_start does NOT re-flatten with the mutated
-     * t below — we want args[0]=5 frozen at this flatten. */
+     * t below - we want args[0]=5 frozen at this flatten. */
     repl_state_flat_program_clear_dirty();
 
     /* Sanity-check the args[0] flatten captured. */
@@ -438,7 +438,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
         ASSERT_TRUE("flat program contains u assignment", found);
     }
 
-    /* Mutate t after flatten — replay never re-flattens, so the live
+    /* Mutate t after flatten - replay never re-flattens, so the live
      * executor keeps using args[0]=5 frozen above. A re-evaluation
      * against this baseline would give (10-0.5)*10=95. */
     g_predef_vars_mut[t_idx].value = 10.0f;
@@ -543,7 +543,7 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
 }
 
 /* Verbose is the *only* mode that turns one source row into several.
- * Expanded shows the same evaluated call, but appended inline — for every
+ * Expanded shows the same evaluated call, but appended inline - for every
  * command with an evaluated form, not just the vertex emitters that first
  * got the treatment. Regression: glutSolid* and the transforms kept
  * emitting virtual rows in Expanded, and the color/normal families emitted
@@ -647,7 +647,7 @@ static void test_replay_tess_vertex_expand_modes(void) {
     repl_state_flat_program_clear_dirty();
 
     replay_start();
-    /* Step only as far as the focus line under test — running to the end
+    /* Step only as far as the focus line under test - running to the end
      * parks src_line_idx past the polygon. */
     while (g_replay_pc < g_replay_total_flat && safety-- > 0) {
         replay_advance(repl_state_flat_program_view());
@@ -730,7 +730,7 @@ static void test_replay_expanded_color_and_normal_values_inline(void) {
  * table can be reshaped (workspace switch, scene load, undo across
  * @declare). Pre-fix the baseline carried only floats indexed by slot,
  * so a reshape between replay_start and the fade-render restore landed
- * each saved value into the slot that USED to hold its variable —
+ * each saved value into the slot that USED to hold its variable -
  * which now holds a different variable. */
 static void test_replay_baseline_restore_survives_predef_reshape(void) {
     char err[64];
@@ -761,7 +761,7 @@ static void test_replay_baseline_restore_survives_predef_reshape(void) {
     ASSERT_TRUE("replay active", g_replay_active);
 
     /* Reshape the live predef table mid-replay: drop Y. Pre-fix this
-     * cascades the slots — Z now sits in Y's old slot. A values-only
+     * cascades the slots - Z now sits in Y's old slot. A values-only
      * restore would later assign Y's saved value (20) into Z, and
      * drop Z's saved value entirely. */
     repl_eval_undeclare_predef_var("Y");
@@ -782,7 +782,7 @@ static void test_replay_baseline_restore_survives_predef_reshape(void) {
     ASSERT_TRUE("post-restore: Z gets Z's saved value (30), NOT Y's (20)",
                 fabsf(g_predef_vars[z_idx2].value - 30.0f) < 1e-5f);
 
-    /* Live table shape is unchanged — by-name restore never resurrects
+    /* Live table shape is unchanged - by-name restore never resurrects
      * the dropped Y, never adds/removes slots. */
     ASSERT_TRUE("post-restore: Y stays gone",
                 repl_eval_find_predef_var_idx("Y") < 0);
@@ -1339,7 +1339,7 @@ static int find_doc_cmd_of_type(CmdType type) {
 }
 
 /* A function-definition header should show the current invocation's
- * parameter values — " // a = 6, b = 5" — but only while the replay
+ * parameter values - " // a = 6, b = 5" - but only while the replay
  * position is executing inside that function's body. The call site is not
  * annotated. */
 static void test_replay_funcdef_shows_params(void) {

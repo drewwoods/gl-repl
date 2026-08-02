@@ -3,7 +3,7 @@
  *
  * A guided tour's transport controls (Back / Done-restart, see
  * src/app/glr_pointer_script.h) rewind to the exact state the tour began in by
- * restoring one baseline and fast-replaying a prefix of events on top of it —
+ * restoring one baseline and fast-replaying a prefix of events on top of it -
  * NOT by snapshotting every event. This module owns that single baseline: it
  * composes the focused per-owner captures (repl checkpoint, editor session,
  * undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/

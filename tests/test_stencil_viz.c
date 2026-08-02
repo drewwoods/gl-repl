@@ -3,7 +3,7 @@
  * core of the stencil-buffer visualization (buffer_viz_stencil_scan and
  * buffer_viz_stencil_map).
  *
- * Drives both directly with hand-built byte buffers — no GL context.
+ * Drives both directly with hand-built byte buffers - no GL context.
  * Pins the properties the visualization's usefulness rests on: zero is
  * transparent (the whole compositing model), the palette is
  * view-independent and deterministic, the histogram counts what a legend
@@ -43,7 +43,7 @@ static void test_scan_counts_and_extent(void) {
     TEST_ASSERT_FLOAT(&g_h, "scan: hi is the largest", hi, 7.0f, 1e-6f);
 }
 
-/* Zero must not enter the extent — it is the clear value and dominates
+/* Zero must not enter the extent - it is the clear value and dominates
  * every real scene, so including it would pin lo at 0 and flatten RAMP
  * into a fixed 0..max mapping. */
 static void test_scan_extent_excludes_zero(void) {

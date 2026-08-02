@@ -16,7 +16,7 @@
  * stderr. Silencing keeps the suite output readable without weakening the
  * assertions.
  *
- * Links CORE_TEST_OBJS — the resolvers read the compiled-in example and tour
+ * Links CORE_TEST_OBJS - the resolvers read the compiled-in example and tour
  * catalogs (glr_scene_example_*, glr_tours_*). Nothing here opens a window or
  * calls GL.
  */
@@ -121,7 +121,7 @@ static void test_boolean_flags(void) {
     ASSERT_INT("--accum proceeds", parse_v(&o, &code, av1b), 1);
     ASSERT_INT("--accum forces accum on", o.use_accum, GLR_CLI_ACCUM_ON);
 
-    /* Last flag wins in either order — plain left-to-right assignment. */
+    /* Last flag wins in either order - plain left-to-right assignment. */
     char *av1c[] = { "gl-repl", "--accum", "--no-accum", NULL };
     ASSERT_INT("--accum then --no-accum proceeds", parse_v(&o, &code, av1c), 1);
     ASSERT_INT("last accum flag wins (off)", o.use_accum, GLR_CLI_ACCUM_OFF);

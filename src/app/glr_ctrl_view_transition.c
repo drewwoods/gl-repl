@@ -3,7 +3,7 @@
  *
  * Carved out of glr_ctrl.c: the projection blend + camera-to-2D/3D easing that
  * runs when the View mode toggles. Pure app-layer state (camera + presentation
- * only — no scene/ui/repl/editor), so it links cleanly and keeps glr_ctrl.c
+ * only - no scene/ui/repl/editor), so it links cleanly and keeps glr_ctrl.c
  * smaller. The controller drives it via glr_ctrl_tick_view_transition and reads
  * the blend through glr_ctrl_view_projection_mix (see glr_ctrl_internal.h).
  */
@@ -16,7 +16,7 @@
 static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
 /* Independent projection-toggle blend (GLR_CONFIG_PROJECTION), eased on the
  * same schedule as g_projection_mix but driven purely by the Projection
- * config — no camera flatten, no control-mode change. The controller combines
+ * config - no camera flatten, no control-mode change. The controller combines
  * this with the view-mode blend via min() (ortho wins). Kept separate so the
  * view-mode 2D/3D state machine below stays exactly as it was. */
 static float g_projection_toggle_mix = 1.0f; /* 0 = ortho, 1 = perspective */
@@ -66,7 +66,7 @@ static void glr_ctrl_start_camera_to_2d(void) {
     g_saved_3d_camera = cam;
     g_saved_3d_camera_valid = 1;
     glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
-    /* Use a faster decay for this leg only — the orbit flattening
+    /* Use a faster decay for this leg only - the orbit flattening
      * shouldn't drag the projection blend that follows it. The override
      * is reset by the next glr_camera_ease_to call (drag, scene load,
      * etc.), so non-view-mode eases keep the global default. */
@@ -115,15 +115,15 @@ static void glr_ctrl_handle_view_mode_target_change(void) {
 }
 
 void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz) {
-    /* The saved-3D snapshot is still the authority — pending consumption by
-     * start_camera_to_3d — for as long as the controls are in 2D mode:
+    /* The saved-3D snapshot is still the authority - pending consumption by
+     * start_camera_to_3d - for as long as the controls are in 2D mode:
      * either dwelling in 2D, or mid 2D->3D with the projection still
      * blending (the same condition glr_ctrl_sync_camera_control_mode uses).
      * Loading a *second* example mid-blend must refresh it here; otherwise
      * start_camera_to_3d restores the FIRST example's stale orbit angle when
      * the blend finishes. Once start_camera_to_3d has fired (CAMERA_TO_3D)
      * or we've settled in 3D (IDLE) the live camera is authoritative and a
-     * stale report must not smear the snapshot — see
+     * stale report must not smear the snapshot - see
      * test_view_record_external_3d_pose_noop_in_perspective. */
     if (!glr_ctrl_view_controls_are_2d())
         return;
@@ -204,7 +204,7 @@ void glr_ctrl_tick_view_transition(float dt) {
     }
 
     /* Independent of the phase machine above: ease the projection-toggle
-     * blend toward the current Projection config. No camera work — the
+     * blend toward the current Projection config. No camera work - the
      * camera stays free, so this renders ortho from the live orbit angle. */
     glr_ctrl_step_mix_toward(&g_projection_toggle_mix,
                              (glr_state_presentation().projection_mode == PROJ_ORTHO) ? 0.0f : 1.0f,

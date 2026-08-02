@@ -44,14 +44,14 @@ static inline UiTextPanelColor ui_text_panel_input_text_color(void) {
 
 typedef enum {
     /* Workspace header, render-state, camera, header_pre/post, footer
-     * scaffolding — chrome the adapter never edits. */
+     * scaffolding - chrome the adapter never edits. */
     UI_TEXT_PANEL_ROW_STATIC = 0,
 
     /* A committed source row (one per document command in the REPL
      * adapter). */
     UI_TEXT_PANEL_ROW_TEXT,
 
-    /* The active edit row — the renderer draws cursor, selection, and
+    /* The active edit row - the renderer draws cursor, selection, and
      * autocomplete ghost/hint here. row->text is ignored; the live input
      * comes from UiTextPanelSnapshot.input. */
     UI_TEXT_PANEL_ROW_INPUT,
@@ -133,7 +133,7 @@ typedef struct {
 /* Logical row descriptor. The adapter fills one UiTextPanelRow per source
  * line / static chrome line / virtual annotation / input row and passes the
  * full array to UiTextPanelSnapshot. The generic renderer iterates the array
- * and performs wrap iteration itself — it does not assume one logical row
+ * and performs wrap iteration itself - it does not assume one logical row
  * maps to one visual row.
  *
  * Field semantics:
@@ -149,7 +149,7 @@ typedef struct {
  *   left_aux_alpha   - Alpha multiplier for left_aux_label, against the
  *                      label's theme colour. Rows are zero-initialised and
  *                      the common case is a fully opaque label, so 0 (and
- *                      any negative) means 1.0 — an adapter opts into
+ *                      any negative) means 1.0 - an adapter opts into
  *                      translucency by setting a positive fraction.
  *   right_action     - Right-edge decoration. active==0 means no
  *                      decoration on this row. Any semantic routing for
@@ -220,7 +220,7 @@ typedef struct {
  * ---------------------------------------------------------------------- */
 
 /* Input buffer state for the active edit row. ghost and hint are
- * pre-resolved NUL-terminated strings from the autocomplete subsystem —
+ * pre-resolved NUL-terminated strings from the autocomplete subsystem -
  * the text panel treats them as opaque display strings and does not
  * interpret their grammar. Pass empty strings ("") when not needed
  * (e.g. standalone demo with no grammar to suggest from). */
@@ -253,7 +253,7 @@ typedef struct {
  * Snapshot (immutable per-frame input to the renderer)
  * ---------------------------------------------------------------------- */
 
-/* Chrome visibility flags — OR-combination of UI_TEXT_PANEL_CHROME_* bits. */
+/* Chrome visibility flags - OR-combination of UI_TEXT_PANEL_CHROME_* bits. */
 #define UI_TEXT_PANEL_CHROME_STATUSBAR  (1 << 0)  /* draw statusbar slot */
 #define UI_TEXT_PANEL_CHROME_SCROLLBAR  (1 << 1)  /* draw scrollbar */
 #define UI_TEXT_PANEL_CHROME_LINE_NUMS  (1 << 2)  /* draw line-number gutter */
@@ -294,14 +294,14 @@ typedef struct {
      * two or more consecutive '-' using the full-width horizontal-bar glyph
      * (0x12). A lone '-' stays a hyphen, and non-comment lines (including
      * code with a trailing // comment) are left alone. This is a pure 1:1
-     * glyph swap at draw time — the underlying row / input text is unchanged,
+     * glyph swap at draw time - the underlying row / input text is unchanged,
      * so every column, cursor index, wrap point, and hit-test position is
      * identical to the plain hyphen text and saved files keep the '-'
      * characters. */
     int comment_rule_ligature;
 
     /* Active-input-row paren aids (1 = on). paren_match tints the
-     * caret's matching bracket — '(' / ')' or '{' / '}'; paren_scope
+     * caret's matching bracket - '(' / ')' or '{' / '}'; paren_scope
      * draws a faint background band behind the text inside the caret's
      * enclosing '(' / ')' pair (glyph colors untouched). Independent
      * toggles. */
@@ -319,7 +319,7 @@ typedef struct {
      * Replaces the former global statusbar metrics dependency. */
     int statusbar_h;
 
-    /* Logical row array — one entry per source / chrome / virtual / input
+    /* Logical row array - one entry per source / chrome / virtual / input
      * line. The renderer iterates all rows and wraps each one internally. */
     const UiTextPanelRow *rows;
     int                   row_count;
@@ -328,7 +328,7 @@ typedef struct {
     int scroll;
 
     /* Non-zero while the user is dragging the scrollbar thumb. Presentation
-     * only — the thumb draws emphasized; the scroll value itself still
+     * only - the thumb draws emphasized; the scroll value itself still
      * arrives through `scroll`. The adapter mirrors its own drag flag here. */
     int scrollbar_drag;
 
@@ -381,7 +381,7 @@ typedef struct {
  * ---------------------------------------------------------------------- */
 
 /* Compute how many visual rows fit in a panel of height panel_h pixels for
- * the supplied statusbar height. Pure geometry — does not read
+ * the supplied statusbar height. Pure geometry - does not read
  * any global state. */
 int  ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
                                              int top_chrome_h);
@@ -420,12 +420,12 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my);
 
-/* Non-zero when (mx, gl_y) — window x, OpenGL bottom-left y — falls in the
+/* Non-zero when (mx, gl_y) - window x, OpenGL bottom-left y - falls in the
  * resize divider's grab band: within UI_PANEL_DIVIDER_GRAB_PX of whichever
  * panel edge borders the scene (right edge when the panel is narrower than
  * the viewport, else top edge when it sits at the window bottom, else its
  * bottom edge). Exposed so an adapter that layers its own chrome over that
- * edge — a statusbar strip along the panel's scene-facing side, say — can
+ * edge - a statusbar strip along the panel's scene-facing side, say - can
  * classify the divider *before* the chrome and keep the grab band whole.
  * Pure. */
 int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
@@ -435,8 +435,8 @@ int ui_text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
  * fills the non-NULL out params when the panel currently shows a scrollbar
  * (UI_TEXT_PANEL_CHROME_SCROLLBAR set and the wrapped content taller than the
  * viewport); returns 0 without touching them otherwise. *out_track is the full
- * strip the thumb travels in — the click band, so a click on the track pages
- * the thumb there — and *out_thumb the movable part at the current scroll.
+ * strip the thumb travels in - the click band, so a click on the track pages
+ * the thumb there - and *out_thumb the movable part at the current scroll.
  * Pure; the same solve backs the draw, the hit-test and the drag mapping so
  * they cannot drift. */
 int ui_text_panel_scrollbar_geometry(const UiTextPanelSnapshot *snap,
@@ -444,7 +444,7 @@ int ui_text_panel_scrollbar_geometry(const UiTextPanelSnapshot *snap,
                                      UiTextPanelRect *out_thumb);
 
 /* Scroll row index that would place the scrollbar thumb's top edge at
- * thumb_top_y (OpenGL bottom-left y) — the inverse of the thumb placement in
+ * thumb_top_y (OpenGL bottom-left y) - the inverse of the thumb placement in
  * ui_text_panel_scrollbar_geometry, clamped to [0, total_rows - visible_rows].
  * Returns -1 when the panel shows no scrollbar. Pure; the controller feeds it
  * the dragged pointer position plus the grab offset recorded at press. */
@@ -462,20 +462,20 @@ int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
  * then returns 1. The two bracket kinds are matched independently (depth
  * counts only the active pair's own brackets). Returns 0 when s[cursor]
  * is not a bracket or the pair is unbalanced (no partner within
- * [0, len)). Pure — no GL, no global state. The renderer uses it to tint
+ * [0, len)). Pure - no GL, no global state. The renderer uses it to tint
  * the matching pair on the active row. */
 int  ui_text_panel_match_paren(const char *s, int len, int cursor,
                                int *self, int *match);
 
 /* Multi-row curly-brace matching. Given the caret's bracket at
- * (self_row, self_char) — where the row's text holds a '{' or '}' at
- * self_char — scans the editable rows (UI_TEXT_PANEL_ROW_TEXT /
+ * (self_row, self_char) - where the row's text holds a '{' or '}' at
+ * self_char - scans the editable rows (UI_TEXT_PANEL_ROW_TEXT /
  * _ROW_INPUT, skipping chrome / virtual rows) in document order: forward
  * for '{', backward for '}', counting brace depth. On the balancing
  * bracket writes its row index to *match_row and char index to
  * *match_char and returns 1. Returns 0 when the caret is not on a curly
- * brace ('(' / ')' are single-row — use ui_text_panel_match_paren) or the
- * brace is unbalanced across the document. Pure — reads only the snapshot
+ * brace ('(' / ')' are single-row - use ui_text_panel_match_paren) or the
+ * brace is unbalanced across the document. Pure - reads only the snapshot
  * rows + input text, no GL or global state. Lets the renderer tint the
  * partner brace of an if / for block on its own line. */
 int  ui_text_panel_match_bracket_multiline(const UiTextPanelSnapshot *snap,
@@ -487,7 +487,7 @@ int  ui_text_panel_match_bracket_multiline(const UiTextPanelSnapshot *snap,
  * On success writes the open/close indices to *open / *close (the pair's
  * own parens are part of the enclosed span) and returns 1. Returns 0 when
  * the caret is not inside any pair, or the enclosing '(' has no close.
- * Pure — no GL, no global state. The renderer draws a faint background
+ * Pure - no GL, no global state. The renderer draws a faint background
  * band behind [open, close] so the active paren scope stands out. */
 int  ui_text_panel_enclosing_parens(const char *s, int len, int cursor,
                                      int *open, int *close);

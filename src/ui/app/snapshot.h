@@ -48,7 +48,7 @@ enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 /* Resolved reshape() projection block, frozen into the snapshot once per
  * frame by the controller so the code panel's row-count and render
  * passes (which run on opposite sides of render3d_draw_scene) always
- * agree. Dimensions hardcoded for UI-layer purity — equivalence with
+ * agree. Dimensions hardcoded for UI-layer purity - equivalence with
  * REPL_EXPORT_PROJ_LINES / _LINE_MAX is STATIC_ASSERTed in glr_ctrl.c. */
 enum { UI_RESHAPE_PROJ_LINES = 4 };    /* == REPL_EXPORT_PROJ_LINES */
 enum { UI_RESHAPE_PROJ_LINE_MAX = 96 };/* == REPL_EXPORT_PROJ_LINE_MAX */
@@ -60,7 +60,7 @@ enum { UI_INIT_SECTION_MAX = 32 };
 enum { UI_GL_VECTOR_HELPER_MAX = 49 };
 
 /* Workspace binding the tab strip's leading chip names. `name` is "" when no
- * managed workspace is bound — the chip renders that absence rather than
+ * managed workspace is bound - the chip renders that absence rather than
  * hiding, so "these are loose scenes" is a visible state. Dimension repeated
  * locally for UI-layer purity, like UI_SCENE_TAB_NAME_MAX above; glr_ctrl.c
  * STATIC_ASSERTs the equivalence. */
@@ -113,7 +113,7 @@ typedef struct UiRenderSnapshot {
     EditorCursorBlinkState      cursor_blink;
     ColorPickerView             color_picker;
 
-    /* Inline numeric swatch (stateless — rebuilt every frame) */
+    /* Inline numeric swatch (stateless - rebuilt every frame) */
     struct {
         int   visible;
         int   arg_start;
@@ -173,7 +173,7 @@ typedef struct UiRenderSnapshot {
     /* User scenes */
     int                         user_scene_active_idx;
 
-    /* Scene tab strip — derived each frame, no persistent model */
+    /* Scene tab strip - derived each frame, no persistent model */
     UiSceneTabList              scene_tabs;
     UiWorkspaceBinding          workspace;
 

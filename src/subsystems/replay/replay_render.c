@@ -29,7 +29,7 @@ static const ReplayTessPreviewCallbacks g_tess_preview_cb = {
  * NAME (not by slot index), so a workspace switch / scene load / undo
  * across an @declare between replay_start and this frame can't land
  * saved values into the wrong vars. The "by-name" variant deliberately
- * leaves the live table's shape untouched — this function runs inside
+ * leaves the live table's shape untouched - this function runs inside
  * the controller's per-frame values-only save/restore at
  * glr_ctrl_display_frame, which can't repopulate slots a reshape
  * would have dropped. */
@@ -77,7 +77,7 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
         prof_begin(PROF_RENDER3D_FADE_BATCH_EXEC);
         /* VERTEX-mode fade batches replay partial tess sequences,
          * so each batch must skip the executor's trailing
-         * gluTessEndContour / gluTessEndPolygon cleanup — finalizing
+         * gluTessEndContour / gluTessEndPolygon cleanup - finalizing
          * a half-applied tess would emit incomplete geometry. The
          * POLYGON-mode path doesn't slice mid-tess, so it lets the
          * default finalize run. */

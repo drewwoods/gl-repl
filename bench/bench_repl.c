@@ -103,15 +103,15 @@
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl/examples.h"
 #include "repl/executor.h"
-#include "repl/load.h"           /* repl_load_apply_line — uncapped doc build */
+#include "repl/load.h"           /* repl_load_apply_line - uncapped doc build */
 #include "repl/normalize.h"      /* repl_parse_and_normalize_strict */
 #include "repl/parser.h"
 #include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
-#include "repl/state_views.h"     /* repl_state_normals_dirty — source-dirty probe */
+#include "repl/state_views.h"     /* repl_state_normals_dirty - source-dirty probe */
 #include "repl/state_owners.h"    /* repl_state_normals_dirty_clear,
                                      repl_state_flat_program_{dirty,clear_dirty} */
 #include "subsystems/variable_panel/variable_panel_state.h"
-#include "repl/time.h"           /* repl_set_time — Whale topology sweep */
+#include "repl/time.h"           /* repl_set_time - Whale topology sweep */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "support/cpuprof.h"     /* PROF_FLATTEN_* phase readback */
@@ -226,7 +226,7 @@ static int g_case_missing = 0;
  * is added.
  *
  * Absence is a hard error natively (that is the whole point of g_case_missing
- * — a renamed built-in must fail `make bench`, not quietly drop a row), but a
+ * - a renamed built-in must fail `make bench`, not quietly drop a row), but a
  * skip under Emscripten. The web build compiles examples/catalog-emscripten.ini,
  * a deliberate subset: Orrery and Whale are simply not in it, so several named
  * cases cannot resolve there no matter how healthy the catalog is. `make bench`
@@ -369,7 +369,7 @@ static BenchResult bench_feed_examples(int iters) {
 /* A verbatim, frozen copy of the "Animated wave surface" built-in example (a
  * nested-for surface that unrolls to a large flat program). Hardcoded here so
  * the flatten benchmark's workload is fixed regardless of changes to the
- * built-in example list — adding, reordering, or editing examples in
+ * built-in example list - adding, reordering, or editing examples in
  * src/repl/examples.c can't move this number. The // camera / // @cfg metadata
  * lines are kept so repl_load_example_lines_for_test strips them exactly as the
  * real example loader does, preserving an identical post-load command set. */
@@ -523,8 +523,8 @@ static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
 /* Cold-cache variant of bench_flatten_one: each timed flatten starts from an
  * invalidated expression cache, so the sample includes rebuilding every
  * line's compiled programs (the cost an edit pays on its next frame). The
- * warm rows above never see this — their cache builds once before the timer
- * — so an edit-time regression cannot hide inside a steady-state number. */
+ * warm rows above never see this - their cache builds once before the timer
+ * - so an edit-time regression cannot hide inside a steady-state number. */
 static BenchResult bench_flatten_one_cold(const char *bench_name,
                                           int example_idx, int iters,
                                           int inner, int *flat_cmds_out) {
@@ -590,7 +590,7 @@ typedef struct {
 } CorpusCase;
 
 /* Rank by the minimum per-flatten time, not the mean. Benchmark noise is
- * one-sided — a scheduling stall can only ever add time — so the minimum is
+ * one-sided - a scheduling stall can only ever add time - so the minimum is
  * the least-contaminated estimate of a scene's true cost, while the mean lets
  * a single descheduled iteration crown the wrong scene. In the phase-0 baseline
  * that is not hypothetical: Orrery's corpus mean reads 30.27 ms against a
@@ -666,8 +666,8 @@ static void bench_flatten_corpus(int iters) {
 /* Splits one full flatten into the three eval-heavy leaf phases the
  * PROF_FLATTEN_* probes already accumulate, plus the derived structural
  * remainder (loop/if/call iteration + append). Reads prof_section_last_us
- * after each flatten — repl_flatten_program commits the accumulators once per
- * call — so no new timers are added inside the evaluator primitives. */
+ * after each flatten - repl_flatten_program commits the accumulators once per
+ * call - so no new timers are added inside the evaluator primitives. */
 static void bench_flatten_phases_case(const char *label, int example_idx,
                                       int iters) {
     enum { INNER = 16 };
@@ -822,7 +822,7 @@ static void bench_flatten_refresh(int iters) {
 /* The `t` cases above measure the animation clock. This one measures the
  * other live-edit motion: dragging one global's slider. It is the trip-wire
  * for the structural-dependency rule in
- * docs/plans/done/scoped-local-variables.md — a global that feeds a
+ * docs/plans/done/scoped-local-variables.md - a global that feeds a
  * function-scoped local reports its deps structurally, so scrubbing it takes a
  * full flatten where an all-global scene would have rebaked in place. The
  * printed route is the part to watch; the timing says what that costs. */
@@ -918,8 +918,8 @@ static void bench_refresh_slider(int iters) {
          * assertion satisfied because every pinned expectation would be FULL.
          *
          * Wave's `amp` scales already-emitted vertex/normal/colour arguments
-         * through global scratch only — no local, no loop bound, no condition
-         * — so it is genuinely value-only.
+         * through global scratch only - no local, no loop bound, no condition
+         * - so it is genuinely value-only.
          *
          * The two orrery rows are both structural, for different reasons worth
          * keeping visible: EARTH_RATE feeds planetKepler()'s local `th`
@@ -1010,7 +1010,7 @@ static void bench_flatten_whale(int iters) {
     if (distinct < 2) {
         fprintf(stderr,
                 "ERROR: flatten_whale expected >= 2 distinct flat counts "
-                "across the time grid, got %d — the dynamic-topology canary "
+                "across the time grid, got %d - the dynamic-topology canary "
                 "no longer varies with t\n", distinct);
         g_case_missing = 1;
     }
@@ -1028,7 +1028,7 @@ static void bench_flatten_whale(int iters) {
  * would undercount: after Phase 3a a value-only slider change lands in
  * args_dirty_mask, not the full flag, so the `value` row's motion would drain
  * nothing and refresh zero times. repl_state_normals_dirty() is likewise not
- * the counter — it gates autonormal recomputation, a different cache. Without
+ * the counter - it gates autonormal recomputation, a different cache. Without
  * this drain a motion loop only routes the change and returns, timing
  * pointer-event dispatch (~10 us/motion) and never the flatten/rebake it
  * defers, which is the cost Phase 3 exists to change. */
@@ -1047,9 +1047,9 @@ static int drain_pending_flatten(void) {
  * full event -> dirty -> frame-rebuild round trip, as the app performs it.
  *
  * Two cases, by what the dragged variable feeds:
- *   value      — `amp` only scales already-emitted vertices, so a later rebake
+ *   value      - `amp` only scales already-emitted vertices, so a later rebake
  *                phase can keep the flat topology and rebake values in place;
- *   structural — `bound` is a loop bound, so a change must re-flatten fully.
+ *   structural - `bound` is a loop bound, so a change must re-flatten fully.
  * Today both re-flatten fully; the split is here so the rebake phase has a
  * before/after pair, and the timed region now contains the flatten that phase
  * makes cheaper for the `value` case.
@@ -1088,7 +1088,7 @@ static void bench_slider_drag_case(const char *label,
 
         /* Fresh document per iteration: the release edit rewrites the
          * declaration, so a reused document would drift its start value.
-         * glr_ctrl_reset_all (not fresh_repl) — the scene declares its own
+         * glr_ctrl_reset_all (not fresh_repl) - the scene declares its own
          * variable, and declare_test_idents would claim the name first and
          * make the `float ...` line a redeclaration error, leaving no
          * declaration row for the release edit to rewrite. */
@@ -1155,7 +1155,7 @@ static void bench_slider_drag_case(const char *label,
     /* Every motion moves the value, so every motion must have left a rebuild
      * for the frame to consume. If this drops to zero the timed region has
      * stopped containing a flatten and the row is measuring event routing
-     * again — the exact defect this benchmark was rewritten to avoid. */
+     * again - the exact defect this benchmark was rewritten to avoid. */
     {
         long long expect = (long long)MOTIONS * motion.iters;
         if (motion_rebuilds != expect) {
@@ -1212,7 +1212,7 @@ static void bench_slider_drag(int iters) {
  * directly: the readout runs once per frame at snapshot build, the
  * flatten it annotates runs once per frame too. One op = one full
  * sweep of the document (every line classified + counted), i.e. a
- * deliberate worst case — the live app issues a single line per frame. */
+ * deliberate worst case - the live app issues a single line per frame. */
 static BenchResult bench_flat_cost_query(int iters) {
     BenchResult r = { .name = "flat_cost_query", .unit = "sweeps",
                       .min_sec = 1e18 };
@@ -1248,7 +1248,7 @@ static BenchResult bench_flat_cost_query(int iters) {
     return r;
 }
 
-/* ---- bench: spike — flatten the largest example, repeatedly ----------- */
+/* ---- bench: spike - flatten the largest example, repeatedly ----------- */
 
 /* Editor-owns-text spike pass/fail bar. The spike modifies flatten_range()
  * to re-parse every command from the editor buffer on each call (today the
@@ -1466,7 +1466,7 @@ static BenchResult bench_replay_long(int iters) {
 /* glr_ctrl_push_highlights() calls replay_focus_flat_idx() once per rendered
  * frame while a replay is active. Commit 34df87f added that call. The function
  * derives the active step's begin via replay_prev_limit(pc), which re-walks the
- * flat stream from index 0 up to pc *every call* — and in REPLAY_MODE_VERTEX
+ * flat stream from index 0 up to pc *every call* - and in REPLAY_MODE_VERTEX
  * each step within that walk does its own O(pc) backward scan
  * (replay_find_open_begin_before / _tess_polygon_before), so the whole thing is
  * O(N^2) in the flat-program length, paid per frame and worst at the tail of a
@@ -1481,7 +1481,7 @@ static BenchResult bench_replay_focus(int iters) {
     repl_mark_source_dirty();
     replay_start();
 
-    /* Advance to the end so pc sits at the tail — the worst case the
+    /* Advance to the end so pc sits at the tail - the worst case the
      * per-frame highlight push pays. State becomes REPLAY_DONE but stays
      * active until replay_stop(), and replay_focus_flat_idx() keys off
      * state->active + state->pc, so the focus call still does full work. */
@@ -1626,7 +1626,7 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
 
 /* The fade-render workload moved out of the scene module (it's now the
  * REPL controller's post_fill_fn). This bench drives the same per-batch
- * cost — repl_execute_program with a skip-prefix and per-batch alpha —
+ * cost - repl_execute_program with a skip-prefix and per-batch alpha -
  * directly, without going through the scene API. The numbers are
  * comparable to the pre-move benchmark since the heavy lifting was
  * always repl_execute_program. */
@@ -1641,7 +1641,7 @@ static void bench_render_one_fade_batch(int new_pc, int skip_pc, float alpha,
     });
 }
 
-/* Refresh the fade plan from the live replay state — bench reinstalls
+/* Refresh the fade plan from the live replay state - bench reinstalls
  * fade batches every iteration, so the plan it walks must be rebuilt
  * each time. */
 static int bench_refresh_fade_plan(FlatProgramView program, ReplayFadePlan *plan, int *base_limit_out) {
@@ -1796,7 +1796,7 @@ static int load_deep_scope_doc(int blocks) {
 
 /* Sweep every source-scope depth/scope query over every position of a deep
  * document, with NO mutation in the loop, so the prefix-depth cache stays warm.
- * This isolates the **amortized O(1) query** cost — the property the Finding-4
+ * This isolates the **amortized O(1) query** cost - the property the Finding-4
  * source-scope view refactor must preserve. A regression that recomputes the
  * prefix arrays per call (instead of indexing a built cache) shows up here as a
  * large per-sweep blow-up. One op = one full document sweep across five
@@ -1840,7 +1840,7 @@ static BenchResult bench_source_scope_query(int iters) {
 /* Isolates the O(N) prefix-depth REBUILD. Each op invalidates the cache (as a
  * document mutation does) then issues one query, forcing a full
  * depth_cache_rebuild() over the document. Guards the "build on (re)bind" cost
- * the Finding-4 view refactor must keep flat — a view bound once per frame and
+ * the Finding-4 view refactor must keep flat - a view bound once per frame and
  * queried many times should rebuild no more often than today's global. One op =
  * one invalidate + rebuild. */
 static BenchResult bench_source_scope_churn(int iters) {
@@ -1881,8 +1881,8 @@ static BenchResult bench_source_scope_churn(int iters) {
  * view refactor moved repl_parse_and_normalize{,_strict} off the warm
  * live-document cache (amortized O(1)) onto binding a fresh
  * ReplSourceScopeView against the live document per call (O(N) build over the
- * whole document). source_scope_query can't see this — it queries the live
- * wrapper directly — so this drives the normalize entry against a large
+ * whole document). source_scope_query can't see this - it queries the live
+ * wrapper directly - so this drives the normalize entry against a large
  * document to expose any per-call O(N) cost in the commit/parse path.
  *
  * Uses only the stable normalize/loader API (no ReplSourceScopeView types),
@@ -1965,8 +1965,8 @@ static BenchResult bench_reformat_large_doc(int iters) {
  *   cpuprof_bin_for_us    the log10 bin lookup alone. This is the bin half of
  *                         a record, and so also the shape of the whole record
  *                         before the running statistics were added.
- *   cpuprof_record        the whole record path — bin lookup, bin increment,
- *                         min/max/sum and the Welford mean/m2 update — with no
+ *   cpuprof_record        the whole record path - bin lookup, bin increment,
+ *                         min/max/sum and the Welford mean/m2 update - with no
  *                         clock read, EMA or staleness, rotating across all
  *                         PROF_SECTION_COUNT histograms the way a frame does.
  *                         Minus the row above, this is what the statistics
@@ -1981,7 +1981,7 @@ static BenchResult bench_reformat_large_doc(int iters) {
  *   cpuprof_frame_tick    prof_frame_tick(): the PROF_SECTION_COUNT staleness
  *                         sweep, the frame-time histogram record, and the
  *                         three FPS windows. Once per frame, not per section.
- *   cpuprof_stats_read    prof_section_stats() readback — the legend-hover
+ *   cpuprof_stats_read    prof_section_stats() readback - the legend-hover
  *                         path, at most once per frame per hovered series.
  *
  * The first two rows call src/support/histogram.c directly rather than going
@@ -1995,7 +1995,7 @@ static BenchResult bench_reformat_large_doc(int iters) {
  * legend, and this binary has no UI objects linked. */
 
 /* Elapsed times in us, spanning what the real sections cover: sub-microsecond
- * helpers through a 100 ms whole-frame stall. Spread on purpose — the bin
+ * helpers through a 100 ms whole-frame stall. Spread on purpose - the bin
  * lookup is a log10 and the stats update carries two comparisons, so a table
  * of one repeated value would measure a perfectly predicted branch pattern
  * that no real section produces. */
@@ -2007,7 +2007,7 @@ static const int k_prof_sample_n =
     (int)(sizeof(k_prof_sample_us) / sizeof(k_prof_sample_us[0]));
 
 /* Samples per timed iteration. Large enough that one iteration is milliseconds
- * rather than a handful of clock ticks — a single sample is tens of
+ * rather than a handful of clock ticks - a single sample is tens of
  * nanoseconds, well under the resolution of the benchmark's own clock. */
 enum { PROF_BENCH_INNER = 20000 };
 
@@ -2041,7 +2041,7 @@ static BenchResult bench_cpuprof_bin_for_us(int iters) {
  * histogram_record() itself, and a private accumulator keeps them from
  * perturbing (or being perturbed by) whatever the profiler has been sampling.
  * One per section, because how many distinct histograms are in flight is the
- * single biggest term in this function's cost — see below. */
+ * single biggest term in this function's cost - see below. */
 static Histogram g_bench_hist[PROF_SECTION_COUNT];
 
 /* Two rows for one function, because histogram_record() costs two very
@@ -2052,7 +2052,7 @@ static Histogram g_bench_hist[PROF_SECTION_COUNT];
  * fsub -> fdiv -> fadd, and stored, and the next sample into that histogram
  * cannot start until it lands. Back-to-back on one histogram that chain is
  * ~26 cycles and it stalls; measured on an M2, it is long enough to hide the
- * entire bin path (log10, scale, bin store) underneath it — deleting the bin
+ * entire bin path (log10, scale, bin store) underneath it - deleting the bin
  * division outright changes the row by nothing at all.
  *
  * The app never sees that. A frame walks PROF_SECTION_COUNT *different*
@@ -2118,7 +2118,7 @@ static BenchResult bench_cpuprof_sample_live(int iters) {
         r.iters++;
     }
     /* An empty body samples near 0 us, which the bin lookup short-circuits on
-     * (`!(us > MIN_US)` returns bin 0 without the log10) — so this row is the
+     * (`!(us > MIN_US)` returns bin 0 without the log10) - so this row is the
      * clock read plus the *cheapest* bin path, and undercounts a real section
      * by the log10 that cpuprof_bin_for_us prices separately. Report what the
      * samples actually looked like so that reading is checkable. */
@@ -2210,7 +2210,7 @@ static void bench_cpuprof_sample(int iters) {
     report(bench_cpuprof_stats_read(iters));
 
     /* The two numbers these rows exist to produce, in ns because a per-op
-     * column in us reads as a wall of zeroes at this scale. Human mode only —
+     * column in us reads as a wall of zeroes at this scale. Human mode only -
      * CSV keeps its fixed columns, and every term below is derivable from
      * them. */
     if (!g_csv) {

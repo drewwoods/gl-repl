@@ -493,7 +493,7 @@ static void test_color_picker(void) {
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key swatch == red g", view.swatches[0][1], 0.0f);
 
     /* Drag the hue bar to change the current color; the key (swatch 0) must
-     * NOT move — the tetrad stays anchored. */
+     * NOT move - the tetrad stays anchored. */
     {
         int hue_mx = view.rects.hue_x + 5;
         int hue_my = ui_state_viewport().window_h - (view.rects.hue_y + 70);
@@ -532,7 +532,7 @@ static void test_color_picker(void) {
     color_picker_stop();
     color_picker_state_reset();
 
-    /* Test swatch rendering — render reads from a transformer entry, not
+    /* Test swatch rendering - render reads from a transformer entry, not
      * from the document, so build a minimal one for the test. */
     gl_stub_counts_reset();
     {
@@ -562,7 +562,7 @@ static void test_color_picker_active_line_no_revert(void) {
 
     glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
-    repl_load_example(0); /* Lit cube — has glColor3f(1, 1, 1); */
+    repl_load_example(0); /* Lit cube - has glColor3f(1, 1, 1); */
 
     int ci = -1;
     for (int i = 0; i < repl_state_document_count(); i++)
@@ -772,7 +772,7 @@ static void test_ui_panels_hit_test(void) {
         ASSERT_TRUE(lbl, h.kind == UI_HIT_SCENE);
 
         /* Code text: first my (top-down) at the text column that the
-         * panel classifies as CODE_TEXT — found by scan so no row-y
+         * panel classifies as CODE_TEXT - found by scan so no row-y
          * math leaks layout/scroll/chrome assumptions in. */
         {
             int mx = cp_x + text_x + 2 * FONT_W;
@@ -970,7 +970,7 @@ static void test_ui_variable_panel_hit_test(void) {
     ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
 
     /* The collapse chip's hit cell must cover the glyphs that are actually
-     * drawn — the top text row of the panel, right-aligned — and not the
+     * drawn - the top text row of the panel, right-aligned - and not the
      * empty lower part of the nominal title band. Sizing the cell to
      * VAR_TITLE_H once put the clickable area below the visible "[-]". */
     int chip_mx = px + pw - 10;               /* inside the 3-char chip column */
@@ -1155,7 +1155,7 @@ static void test_tour_hud_compact_expand_hit_routing(void) {
  * every pixel. The regression this pins: the code panel's statusbar strip
  * runs along the same edge as the divider in the default TOP layout (and
  * across it in LEFT), so classifying the strip first left the band's
- * panel-interior half hitting the statusbar — the resize cursor appeared
+ * panel-interior half hitting the statusbar - the resize cursor appeared
  * over ~3px that started no drag, and the effective grab area collapsed to
  * the outermost pixel or two.
  *
@@ -1196,7 +1196,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     ui_state_code_panel_mut()->panel_frac = 0.5f;
     /* The editor's hover predicate reads the layout through the
      * controller's provider hook, installed by glr_ctrl_init in
-     * production — which this harness skips. Without it every layout
+     * production - which this harness skips. Without it every layout
      * below would read as LEFT. Uninstalled again at the end so the
      * rest of the suite keeps the harness default. */
     editor_input_set_code_panel_layout_provider(
@@ -1366,7 +1366,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
 
 /* J2.1: in insert mode, clicking on the insertion virtual rows
  * (the extra "ghost" row above the edit-line where the user is
- * typing the next command) surfaces UI_HIT_CODE_INSERT_LINE — the
+ * typing the next command) surfaces UI_HIT_CODE_INSERT_LINE - the
  * controller's route_code_insert_line_hit skips editor_navigate_to_line
  * for these clicks, matching the legacy on_insert_line=1 path. */
 static void test_ui_panels_hit_test_insert_line(void) {
@@ -1444,7 +1444,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
     /* Both code-focus modes, pinned explicitly: the trailing blank row
      * must resolve to UI_HIT_CODE_TEXT @ document_count regardless of
      * CFG_DEFAULT_CODE_FOCUS. b472592 flipped that default and broke
-     * this — the row's y was hand-computed and the scroll clamps
+     * this - the row's y was hand-computed and the scroll clamps
      * differently once focus collapses the header chrome. */
     for (int cf = 0; cf <= 1; cf++) {
         const char *mode = cf ? " [focus]" : " [full]";
@@ -1531,7 +1531,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
  * This used to measure a glRasterPos2f delta between renders with the
  * vertex-index column off and on. That column is now unconditional (the
  * `show_vertex_indices` flag it toggled was unreachable outside tests), so
- * the label is read off the built row instead — which pins the label text
+ * the label is read off the built row instead - which pins the label text
  * rather than merely that one more string was drawn. */
 static void test_vertex2f_gutter_labels(void) {
     UiRenderSnapshot snap;
@@ -1547,7 +1547,7 @@ static void test_vertex2f_gutter_labels(void) {
         ui_state_code_panel_mut()->panel_frac = 0.4f;
 
         /* Commit a real program so both the document array and editor buffer
-         * are populated — the wrap iterator needs non-empty display text to
+         * are populated - the wrap iterator needs non-empty display text to
          * produce rows, which is required for the gutter to draw. */
         editor_feed_line("glBegin(GL_TRIANGLES);");
         editor_feed_line(use_2f ? "glVertex2f(1, 2);" : "glVertex3f(1, 2, 0);");
@@ -1621,7 +1621,7 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
  *
  * The dim is asserted as a relationship against the hand-typed row rather
  * than against REPL_CODE_PANEL_AUTO_{ROW,LABEL}_ALPHA, so retuning either
- * constant does not break the test — only collapsing the distinction does. */
+ * constant does not break the test - only collapsing the distinction does. */
 static void test_auto_normal_rows_are_labelled_and_dimmed(void) {
     UiRenderSnapshot snap;
     char label[8];
@@ -1912,7 +1912,7 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
     /* Force the comment row to wrap by shrinking the code panel until
      * the instruction text spans multiple wrap segments. The fade path
      * must still emit per-char raster ops across every visible segment
-     * — line_len is computed from the full display_text so the per-
+     * - line_len is computed from the full display_text so the per-
      * char delay spans the wrapped line, but every visible char on
      * every wrap row should still get a raster + alpha call. */
     unsigned long long fading_raster_calls;
@@ -1970,7 +1970,7 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
  * doesn't refresh after the document mutates) would silently miss-route
  * clicks. Sweep clicks across the panel after render(A), record which
  * source lines are hit-testable, then add a new line + re-render + re-sweep
- * — the new line must be hit-testable (proves the cache refreshed). */
+ * - the new line must be hit-testable (proves the cache refreshed). */
 static int hit_lines_bitmap(const UiRenderSnapshot *snap, int mx) {
     int found_mask = 0;
     for (int my = 0; my < ui_state_viewport().window_h; my++) {
@@ -1993,7 +1993,7 @@ static void test_render_then_hit_test_row_consistency(void) {
     ui_state_code_panel_mut()->panel_frac = 0.45f;
     editor_scroll_follow_cursor_set(0);
     /* Force the row builder cache empty so render(A) is the first call
-     * that populates it — without this, prior tests may leave
+     * that populates it - without this, prior tests may leave
      * g_builder_cache.snap pointing at a stale stack address that
      * happens to mismatch &snap, causing every hit-test below to take
      * the rebuild path instead of exercising the cache. */
@@ -2036,7 +2036,7 @@ static void test_render_then_hit_test_row_consistency(void) {
     editor_feed_line("glColor3f(0.9, 0.1, 0.1);");
 
     /* Reuse the same `snap` variable so the cache compares the same
-     * pointer — render must overwrite the cache with B's larger row
+     * pointer - render must overwrite the cache with B's larger row
      * set or hit-test will miss the later rows. */
     make_test_ui_snapshot(&snap);
     ui_repl_code_panel_render_with_chrome(&snap, NULL);

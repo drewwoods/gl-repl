@@ -69,7 +69,7 @@ int editor_clipboard_cut_current_with_result(void);
  * Optional bridge to the window system's clipboard, installed by the app
  * (src/app/glr_clipboard.c) so this module keeps making no platform calls
  * of its own. With no bridge installed the internal buffer is the whole
- * story — that is what the tests, the editor demo, and the web build (whose
+ * story - that is what the tests, the editor demo, and the web build (whose
  * OS clipboard arrives through the DOM instead, see glr_web_io.c) run with.
  *
  * The internal clipboard stays the thing that is pasted: the bridge only

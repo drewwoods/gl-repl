@@ -9,7 +9,7 @@
  *
  * The Enter path clears the undo ring (wholesale state replacement,
  * same invariant as Load Workspace / F12 cycle) and runs the existing
- * file-import path via repl_load_scene_as_new_slot — i.e., the same
+ * file-import path via repl_load_scene_as_new_slot - i.e., the same
  * pipeline `./gl-repl <file>` uses at startup.
  */
 #include "inline_file_prompt.h"
@@ -57,7 +57,7 @@ int editor_inline_file_prompt_begin(const char *default_name) {
     /* At most one inline modal is up at a time. If the user had a
      * scene-rename in progress and somehow triggered Load Scene (via
      * a future shortcut, etc.), cancel rename rather than have both
-     * modals quietly active — the controller's keyboard route checks
+     * modals quietly active - the controller's keyboard route checks
      * rename first, so the file prompt would otherwise be invisible
      * to keystrokes while still drawing in the snapshot. */
     editor_inline_rename_cancel();
@@ -83,7 +83,7 @@ void editor_inline_file_prompt_cancel(void) {
 /* Filename input filter. Reject control chars (printable-ASCII gate),
  * quotes (shell paste guard), and the small set of shell metacharacters
  * a typed path should not contain. `.` and `/` are explicitly allowed
- * — unlike rename, where they would corrupt scene-name slugs, here
+ * - unlike rename, where they would corrupt scene-name slugs, here
  * they are required to address subdirectories like `workspace/x.c`. */
 static int prompt_char_ok(unsigned char c) {
     if (!key_is_printable_ascii(c)) return 0;
@@ -118,7 +118,7 @@ static void format_load_err(ReplSceneLoadStatus reason,
         break;
     case REPL_SCENE_LOAD_ERR_IS_DIR:
         snprintf(out, (size_t)out_sz,
-                 "Path is a directory — use Load Workspace: %s", path);
+                 "Path is a directory - use Load Workspace: %s", path);
         break;
     case REPL_SCENE_LOAD_ERR_PARSE:
         snprintf(out, (size_t)out_sz,
@@ -126,7 +126,7 @@ static void format_load_err(ReplSceneLoadStatus reason,
         break;
     case REPL_SCENE_LOAD_ERR_NO_SLOT:
         snprintf(out, (size_t)out_sz,
-                 "All scene slots full — delete a scene first");
+                 "All scene slots full - delete a scene first");
         break;
     default:
         snprintf(out, (size_t)out_sz, "Failed to load: %s", path);
@@ -141,7 +141,7 @@ static void format_load_err(ReplSceneLoadStatus reason,
 static void prompt_commit_path(void) {
     /* Note: do NOT call editor_undo_note_wholesale_replacement before
      * the load. The REPL function preserves the live document on any
-     * failure, but the undo ring is the user's edit history — clearing
+     * failure, but the undo ring is the user's edit history - clearing
      * it preemptively would discard that history even when the load
      * fails. Clear it only after a confirmed successful slot allocation,
      * mirroring how Load Workspace / F12 sequence the clear right next
@@ -158,14 +158,14 @@ static void prompt_commit_path(void) {
     editor_undo_note_wholesale_replacement();
     /* Loaded scene's edit_line points to its end; refresh the input
      * buffer from the new line so any stale typed text the user had
-     * is dropped — matches glr_scene_load_user_slot in glr_actions.c
+     * is dropped - matches glr_scene_load_user_slot in glr_actions.c
      * which is the sibling 'switch active slot' path. */
     editor_load_line_to_input(editor_state_edit_line());
 
     /* Sized to fit the full path (FILE_PROMPT_BUF_MAX) plus the format
      * chrome. The literal below mirrors the format string verbatim with
      * INT_MIN substituted for %d, so sizeof() yields the worst-case
-     * chrome width at compile time — edit the format, edit the literal. */
+     * chrome width at compile time - edit the format, edit the literal. */
     char msg[FILE_PROMPT_BUF_MAX + sizeof("Loaded scene from:  (slot -2147483648)")];
     snprintf(msg, sizeof(msg),
              "Loaded scene from: %s (slot %d)",

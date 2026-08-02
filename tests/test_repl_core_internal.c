@@ -313,7 +313,7 @@ int main() {
          * predef table when it executes the if-body's CMD_VAR_ASSIGN,
          * and it stores the post-if tmp2 value into the downstream
          * CMD_VERTEX3F's args[0]. We deliberately don't call
-         * repl_execute_program here — the source contains glBegin/
+         * repl_execute_program here - the source contains glBegin/
          * glVertex3f/glEnd, and the live test runs without a GL
          * context (this binary links real libGL, not the stubs). */
         repl_flatten_commands(editor_state_edit_line());
@@ -478,7 +478,7 @@ int main() {
         ReplFlattenOptions opts;
         ReplFlattenResult result;
 
-        /* (a) unreached if(0) body — source sees an enable; flat doesn't. */
+        /* (a) unreached if(0) body - source sees an enable; flat doesn't. */
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("if(0) {");
         editor_feed_line("  glEnable(GL_LIGHTING);");
@@ -497,7 +497,7 @@ int main() {
         ASSERT_INT("if(0) lighting is OFF (flat walk)",
                    result.user_lighting_enabled, 0);
 
-        /* (b) unreferenced funcN body — source sees the enable; flat
+        /* (b) unreferenced funcN body - source sees the enable; flat
          * skips because the function is never called. */
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("func0() {");
@@ -513,7 +513,7 @@ int main() {
                    result.user_lighting_enabled, 0);
 
         /* (c) glDisable(GL_LIGHTING) inside an unreached for-loop body
-         * — source walk would see the disable and report OFF; flat walk
+         * - source walk would see the disable and report OFF; flat walk
          * does not enter the empty range and reports ON. */
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glEnable(GL_LIGHTING);");
@@ -529,7 +529,7 @@ int main() {
         ASSERT_INT("dead-disable lighting is ON (flat walk)",
                    result.user_lighting_enabled, 1);
 
-        /* (d) enable behind a control-flow gate that DOES execute — for-loop
+        /* (d) enable behind a control-flow gate that DOES execute - for-loop
          * runs once and visits glEnable. Confirms the flat walk picks up
          * legitimate enables reached via expansion. */
         glr_ctrl_reset_all(); declare_test_vars();
@@ -763,7 +763,7 @@ int main() {
         glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
         glr_state_presentation_mut()->wrap_at_comma = 0;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
-        /* focus_vertex storage was deleted in step 7a — no live
+        /* focus_vertex storage was deleted in step 7a - no live
          * readers; per-frame compute lives in glr_ctrl. */
 
         glr_state_presentation_reset_defaults();
@@ -795,7 +795,7 @@ int main() {
         ASSERT_INT("presentation reset backdrop",
                    glr_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         /* Step 7a removed the camera reset from
-         * glr_state_presentation_reset_defaults — the camera resets
+         * glr_state_presentation_reset_defaults - the camera resets
          * itself via glr_camera_reset_default in glr_ctrl_reset_all. */
         ASSERT_INT("presentation reset highlight", glr_state_presentation().highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", glr_state_presentation().ortho_mode, 0);
@@ -803,7 +803,7 @@ int main() {
                    glr_state_presentation().wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
         ASSERT_INT("presentation reset layout",
                    glr_state_presentation().code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
-        /* focus_vertex storage deleted in step 7a — no asserts. */
+        /* focus_vertex storage deleted in step 7a - no asserts. */
     }
 
     /* 14. render state facade */
@@ -1003,7 +1003,7 @@ int main() {
      * two CMD_FUNC_DEFs for the same slot (compile.c:1775 / commit.c:654),
      * so this corruption can only arise from a malformed loaded file or
      * a future code change that bypasses validation. Even then, the
-     * flatten contract is that the FIRST def wins — matching the
+     * flatten contract is that the FIRST def wins - matching the
      * pre-cbe73d2 linear-scan, which `break`-ed out of its scan on the
      * first match. Any other choice would silently switch the body bound
      * to a slot when a malformed file is loaded.
@@ -1047,7 +1047,7 @@ int main() {
         dup_def.valid    = 1;
         dup_body.type    = CMD_COLOR3F;
         dup_body.valid   = 1;
-        dup_body.num_args = 3;         /* r, g, b — flatten resolves args from text */
+        dup_body.num_args = 3;         /* r, g, b - flatten resolves args from text */
         dup_body.has_vars = 1;         /* references "s" param */
         dup_end.type     = CMD_FUNC_END;
         dup_end.valid    = 1;
@@ -1249,7 +1249,7 @@ int main() {
 
         /* The cursor-block source-extent cache (shared with the other
          * scopes' block highlighting) treats the CMD_END line itself as
-         * outside the block — edit_line_idx < end_line, not <=. So the
+         * outside the block - edit_line_idx < end_line, not <=. So the
          * cursor sitting exactly on glEnd() resolves no block at all,
          * same as the pre-existing LAST_INSTANCE/ALL_INSTANCES behavior. */
         p = repl_flatten_cursor_polygon(14);
@@ -1450,7 +1450,7 @@ int main() {
 
     /* #4 regression: repl_config_bag_set must detect snprintf truncation
      * and refuse the write. Pre-fix, an over-long key truncated silently
-     * and the function returned 1 — subsequent gets against the
+     * and the function returned 1 - subsequent gets against the
      * untruncated slug would miss the stored value. */
     {
         ReplConfigBag bag;
@@ -1492,7 +1492,7 @@ int main() {
                    repl_config_bag_get(&bag, "wireframe"), "1");
 
         /* set_int path: with REPL_CFG_VALUE_MAX >= 12 every 32-bit int
-         * fits, but pin the contract — overlong key still fails. */
+         * fits, but pin the contract - overlong key still fails. */
         ASSERT_INT("set_int ok: short key",
                    repl_config_bag_set_int(&bag, "grid", 42), 1);
         ASSERT_INT("set_int fail: oversized key returns 0",

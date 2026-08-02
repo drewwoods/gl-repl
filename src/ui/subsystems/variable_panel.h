@@ -9,7 +9,7 @@
  *
  * The renderer consumes a narrow `UiVariablePanelView` (the 2D analog of
  * Render3dRenderConfig), NOT the whole-frame `UiRenderSnapshot`. That keeps this
- * subsystem linkable from {subsystems, support, ui/core} alone — no ui/app.
+ * subsystem linkable from {subsystems, support, ui/core} alone - no ui/app.
  * The controller projects the snapshot down via
  * `ui_app_variable_panel_view()` (src/ui/app/variable_panel_view.c).
  */
@@ -33,7 +33,7 @@ enum { UI_VARIABLE_PANEL_MAX_ROWS = MAX_PREDEF_VARS };
 enum { UI_VARIABLE_NAME_MAX = 16 };
 
 /* One UI-facing variable row. `name` is copied; `value` points at the live
- * source value for the frame (const — the renderer never writes through it). */
+ * source value for the frame (const - the renderer never writes through it). */
 typedef struct {
     char         name[UI_VARIABLE_NAME_MAX];
     const float *value;
@@ -51,7 +51,7 @@ typedef struct {
 /* Narrow per-frame view. All pointer fields are const (check-views-flat).
  * panel_x/panel_y is the resolved bottom-left position (GL window coords):
  * the app side bakes it via the overlay layout engine
- * (src/ui/app/overlay_layout.c), standalone drivers set it directly — the
+ * (src/ui/app/overlay_layout.c), standalone drivers set it directly - the
  * renderer holds no placement policy of its own. */
 typedef struct {
     int   visible;

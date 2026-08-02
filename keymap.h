@@ -16,7 +16,7 @@
  *             key already implies (Ctrl is implicit in a KEY_CTRL_* byte);
  *             0 = none.
  *
- * Call sites never spell out modifiers — they pass the whole pair to the
+ * Call sites never spell out modifiers - they pass the whole pair to the
  * matcher, which folds in the live modifier state in one place:
  *
  *     if (keymap_event_is(key, GLR_CODE_FOCUS)) { ... }
@@ -25,7 +25,7 @@
  * keymap_event_is(event_key, binding_key, binding_mods) is an EXACT match:
  *   - returns 0 unless event_key == binding_key;
  *   - the held modifiers must equal binding_mods, AFTER normalizing away
- *     the modifier the key already implies — a KEY_CTRL_* byte carries
+ *     the modifier the key already implies - a KEY_CTRL_* byte carries
  *     Ctrl (and on macOS the Cmd/SUPER alias). So binding_mods == 0 means
  *     strictly "no extra modifiers": a Shift binding and its plain twin on
  *     the same key never alias, and the dispatch ORDER of two bindings on
@@ -37,8 +37,8 @@
  * instead, NOT this matcher.
  * It reads the live modifiers through the editor's modifier accessor, so
  * it is implemented in src/editor/input.c (next to that accessor) and
- * declared here so every dispatcher — including subsystems that don't
- * include editor headers — can call it.
+ * declared here so every dispatcher - including subsystems that don't
+ * include editor headers - can call it.
  *
  * Because a binding is a comma pair it cannot be a `case` label; the one
  * switch on a binding (replay's Ctrl+K) lifts it to an `if`. The cfg
@@ -48,7 +48,7 @@
  * Dependency contract (mirrors config.h's FONT_* = GLUT_BITMAP_* macros):
  * the KEY_CTRL_* / KEY_ESC codes (keys.h) and the GLUT_KEY_* /
  * GLUT_ACTIVE_* codes (GLUT) appear only inside macro BODIES, so nothing
- * resolves until a dispatch site uses a binding — and every such site
+ * resolves until a dispatch site uses a binding - and every such site
  * already has keys.h and the GLUT headers in scope. keymap.h itself
  * includes NOTHING and is safe to pull in everywhere: config.h includes
  * it, so it reaches every TU; TUs that never reference a binding pay
@@ -56,7 +56,7 @@
  * are not forced to take it on. Reassigning a binding ACROSS callback
  * classes (an F-key to a Ctrl-letter or vice versa) still needs the
  * consuming site to move between the normal and special callbacks / flip
- * g_cfg_items[].is_special — the pair alone doesn't carry that.
+ * g_cfg_items[].is_special - the pair alone doesn't carry that.
  *
  * Modifier pairs: several keys host a plain-Ctrl action and a Ctrl+Shift
  * action on the same byte (the matcher disambiguates by mods). They are
@@ -65,13 +65,13 @@
  * Lives at the repo root beside config.h / prof_sections.h (the
  * force-included project-config headers); the keys.h-style zero-dependency
  * portability headers live in include/. The GLR_ prefix denotes the
- * gl-repl application's bindings, not app-layer ownership — any layer may
+ * gl-repl application's bindings, not app-layer ownership - any layer may
  * reference these.
  */
 #ifndef KEYMAP_H
 #define KEYMAP_H
 
-/* No includes on purpose — see the dependency contract above. */
+/* No includes on purpose - see the dependency contract above. */
 
 /* ---- Special-key (function-key) bindings ----------------------------- *
  * Delivered to the GLUT special callback. The F2..F9 config cycles read
@@ -153,7 +153,7 @@
 
 /* Not registered here on purpose: the accum-AA sample fine-adjust is a
  * multi-key +/- gesture ('='/'+' up, '-'/Ctrl+- down), not a single named
- * binding — it stays inline in glr_ctrl_router_handle_accum_samples_key.
+ * binding - it stays inline in glr_ctrl_router_handle_accum_samples_key.
  * The Accum AA cycle itself is GLR_ACCUM_AA (F2) above. */
 
 /* Match the dispatched event against a binding pair. See the contract in
@@ -186,7 +186,7 @@ const char *keymap_binding_to_string(char *out, int out_size,
  * bare key/mods constant rather than a match: a `case` label (which can't
  * take a comma pair), a synthetic dispatch that feeds a key byte to a
  * handler, or a struct-initializer field (g_cfg_items[]). Generic over any
- * GLR_<ACTION> pair — not per-binding macros.
+ * GLR_<ACTION> pair - not per-binding macros.
  *
  * The two-level form is load-bearing: a function-like macro fixes its
  * argument count from the commas present BEFORE its arguments expand, so

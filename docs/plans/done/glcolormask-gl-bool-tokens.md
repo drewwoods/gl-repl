@@ -1,6 +1,6 @@
 # glColorMask: preserve GL_TRUE/GL_FALSE via generalized enum args
 
-Status: **DONE — fork C implemented in full (all 11 steps) on branch
+Status: **DONE - fork C implemented in full (all 11 steps) on branch
 `enum-path-generalization`**. The design below is retained as the
 historical record; the implementation outcome is summarized next.
 
@@ -13,32 +13,32 @@ exactly as designed, including the bool-slot policy and `glColorMask`.
 
 Commits (in order):
 
-- `abeadd8` step 1 — `ReplEnumSlotKind` + positional `ReplEnumArgSpec`.
-- `50e5b09` step 2 — populate positional `args[]` metadata.
-- `df1a6a8` steps 3+5+6 — generalized N-arg parser + uniform `args[]`
+- `abeadd8` step 1 - `ReplEnumSlotKind` + positional `ReplEnumArgSpec`.
+- `50e5b09` step 2 - populate positional `args[]` metadata.
+- `df1a6a8` steps 3+5+6 - generalized N-arg parser + uniform `args[]`
   storage + every reader migrated. **Fused into one commit** because
   the storage contract is atomic (pitfall 8: no transition window); the
   2-arg `args[0]` slot means different things old vs. new, so
   parser/executor/readers cannot be split into independently-green
   commits. Per-commit grouping otherwise follows the steps.
-- `15d65ae` step 4 — slot-indexed autocomplete; legacy
+- `15d65ae` step 4 - slot-indexed autocomplete; legacy
   `enums1/enums2/usage1/usage2` removed.
-- `006350d` step 7 — **option 1 chosen**: `CMD_MATERIALF` /
+- `006350d` step 7 - **option 1 chosen**: `CMD_MATERIALF` /
   `CMD_POINT_PARAMETER_FV` migrated to `args[]` and `GLCmd.mode`
   **deleted outright**. The compiler-enforced invariant immediately
   flushed out a real straggler the step-3 atomic migration missed
-  (`CMD_BLEND_FUNC` in `apply_state_cmd` still read `cmd->mode`) — it
+  (`CMD_BLEND_FUNC` in `apply_state_cmd` still read `cmd->mode`) - it
   had passed only because stub `glBlendFunc` is a no-op and no test
   asserted the call. This is exactly the payoff the plan argued for, so
   no `check-state-ownership` guard is needed (step 9 is a no-op).
-- `be5de0c` step 8 — bool-slot policy (`glDepthMask` →
+- `be5de0c` step 8 - bool-slot policy (`glDepthMask` →
   `ENUM_OR_CONST_VALUE`) + `CMD_COLOR_MASK`; full test suite incl. the
   `glLightModeli` slot-2 strict-compat pins and the contract test.
-- `cc0f7de` — end-to-end GL-trace regression net (parser→executor) for
+- `cc0f7de` - end-to-end GL-trace regression net (parser→executor) for
   the P1 arg-shift class; closes the count-only test gap.
-- `d8849e0` steps 9–10 — docs (CLAUDE.md); step 9 documented as a no-op
+- `d8849e0` steps 9–10 - docs (CLAUDE.md); step 9 documented as a no-op
   (invariant is compiler-enforced by the field deletion).
-- `0a915f4` — post-review fixes: **P2** the `ENUM_OR_CONST_VALUE`
+- `0a915f4` - post-review fixes: **P2** the `ENUM_OR_CONST_VALUE`
   numeric fallback used the non-consuming evaluator (`glDepthMask(1+)`
   → `GL_TRUE`); replaced with strict `strtod`-literal parsing. **P3**
   stale "reserved/unused" comments refreshed.
@@ -58,14 +58,14 @@ to the tokens.
 
 ## Original design (historical record)
 
-Chosen path: **C — generalize enum parsing to N args**. This is larger
+Chosen path: **C - generalize enum parsing to N args**. This is larger
 than the std-path workaround, but it is the right hygiene move: boolean
 GL tokens should not be parsed through one command path for
 `glDepthMask` and a different expression/text-repair path for
 `glColorMask`.
 
-The previous design fork — how a slot declares "expression fallback"
-(`glLightModeli` arg2) — is resolved in "Slot-kind representation":
+The previous design fork - how a slot declares "expression fallback"
+(`glLightModeli` arg2) - is resolved in "Slot-kind representation":
 an explicit three-value `ReplEnumSlotKind` (`ENUM_ONLY` /
 `ENUM_OR_CONST_VALUE` / `ENUM_OR_EXPR`), not a `NULL` sentinel and
 not a two-kind collapse. `ENUM_ONLY` is kept distinct specifically so
@@ -84,7 +84,7 @@ models:
 
 - **Enum path** (`k_enum_command_specs[]`, `src/repl/parser.c:215`):
   literal token → table lookup, echoes the token name back into the
-  canonical source text. *Not generalized* — hand-written
+  canonical source text. *Not generalized* - hand-written
   `num_args==1` (→ `cmd->mode`) and `num_args==2` (→ `mode` +
   `args[0]`) branches with **divergent storage conventions** the
   executor reads per-command. Struct carries only `enums1`/`enums2`.
@@ -95,7 +95,7 @@ Neither fits cleanly: the std path flattens to `1/0`; the enum path
 has no N-arg shape and would need a third bespoke branch + a third
 storage convention for one command.
 
-## Current state — rolled back; nothing implemented
+## Current state - rolled back; nothing implemented
 
 The prototype touched `command.h` (`CMD_COLOR_MASK`),
 `command_spec.c` (spec row, func-completion, type-spec),
@@ -112,13 +112,13 @@ regardless of whether glColorMask is ever built.
 
 A useful sub-finding from the prototype, reusable if this resumes:
 `GL_TRUE`/`GL_FALSE` can be added as evaluator constants in `eval.c`
-(4 sites, mirroring `PI`/`TAU`; **no** C round-trip map entry — the
+(4 sites, mirroring `PI`/`TAU`; **no** C round-trip map entry - the
 tokens are byte-identical valid literals in both the REPL and exported
 C). That alone makes the std path accept the symbolic tokens; only the
 *display-as-`1/0`* problem then remains, which is what the fork below
 is about.
 
-## Scope fork — where glColorMask lives
+## Scope fork - where glColorMask lives
 
 ### A. Std path + post-parse text special-case
 
@@ -129,7 +129,7 @@ only text emission.
   parsing, the new `GL_TRUE`/`GL_FALSE` constants, validation, arg
   storage); accepts `GL_TRUE`/`GL_FALSE` **and** `1/0`/expressions and
   normalizes display to symbolic. The one wart
-  (`if (def->type == …)` in a generic loop) is **not novel** — it is
+  (`if (def->type == …)` in a generic loop) is **not novel** - it is
   the established `glClearColor` idiom.
 - Con: a second type-special-case accreting on the std loop; carries a
   numeric `fmt` that is written then overwritten (same as
@@ -146,7 +146,7 @@ Bespoke 4-token branch in the enum path.
   fields (`enums3/4`) used by one command; enum path rejects `1/0`
   and expressions. More code than A, in the wrong-to-grow place.
 
-### C. Generalize the enum path to N args (uniform `args[]`) — *chosen*
+### C. Generalize the enum path to N args (uniform `args[]`) - *chosen*
 
 The clean home: one N-arg enum branch, uniform storage, and no
 `glColorMask`-specific source-text repair. `glDepthMask(flag)` and
@@ -158,7 +158,7 @@ tokens.
   model. Keeps `GL_TRUE`/`GL_FALSE` handling coherent across depth and
   color masks. Future multi-enum or multi-bool commands become table
   rows, not parser forks.
-- Con: largest blast radius — changes the storage contract and
+- Con: largest blast radius - changes the storage contract and
   executor reads for **every** existing enum command (glEnable,
   glDisable, glShadeModel, glFrontFace, glDepthMask, glColorMaterial,
   glBlendFunc, glLightModeli, glBegin) for the benefit of one new
@@ -177,11 +177,11 @@ Hard constraint: enum tables store **real GL constant values**, not
 project-local aliases or dense ordinal IDs. The REPL source should stay
 copy/paste-shaped like GL code: `GL_TRUE` means the platform's
 `GL_TRUE`, `GL_DEPTH_TEST` means the platform's `GL_DEPTH_TEST`. Where
-a numeric fallback exists at all (only `ENUM_OR_CONST_VALUE` slots — see
+a numeric fallback exists at all (only `ENUM_OR_CONST_VALUE` slots - see
 slot kinds below), it succeeds only by matching one of those real
 values in the expected enum table.
 
-Storage contract (atomic — all or nothing):
+Storage contract (atomic - all or nothing):
 
 - Store every parsed enum argument in `cmd->args[arg_idx]` as a float
   value, even for one-arg commands.
@@ -190,7 +190,7 @@ Storage contract (atomic — all or nothing):
   carrier for table-driven `ReplEnumCommandSpec` commands in the same
   change: every `GLCmd.mode` reader for those commands moves to
   `args[]` in one commit. Do not ship a window where some readers use
-  `mode` and others use `args[]` — a half-migrated reader diverges
+  `mode` and others use `args[]` - a half-migrated reader diverges
   silently (pitfall 8). The golden snapshot below makes a big-bang
   refactor safe to verify, so the dual-write window buys nothing and
   only adds a drift surface.
@@ -233,14 +233,14 @@ Spec shape:
   behavior-neutral while boolean mask slots can opt into numeric
   `1` / `0` support:
 
-  - `REPL_ENUM_SLOT_ENUM_ONLY` — exact token match only; numeric and
+  - `REPL_ENUM_SLOT_ENUM_ONLY` - exact token match only; numeric and
     expression input are rejected. Strict non-bool enum slots get this
     kind (glBegin, glEnable/Disable, glShadeModel, glFrontFace,
     glColorMaterial ×2, glBlendFunc ×2, glLightModeli slot 0). This is
-    exactly today's behavior — the current parser only `strcmp`s
-    against the table — so those commands do not silently start
+    exactly today's behavior - the current parser only `strcmp`s
+    against the table - so those commands do not silently start
     accepting numbers.
-  - `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` — token first, else a
+  - `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` - token first, else a
     constant-only expression reverse-mapped to a table value; runtime
     vars rejected. **Boolean mask slots use this**: existing
     `glDepthMask` and new `glColorMask`. This intentionally changes
@@ -248,7 +248,7 @@ Spec shape:
     `GL_TRUE` / `GL_FALSE`, and lets `glColorMask(1, 0, 1, 0)`
     canonicalize to `GL_TRUE`/`GL_FALSE`. The numeric broadening is
     explicit and scoped to bool-mask slots, not global.
-  - `REPL_ENUM_SLOT_ENUM_OR_EXPR` — token first, else a full
+  - `REPL_ENUM_SLOT_ENUM_OR_EXPR` - token first, else a full
     expression (vars permitted). **Only `glLightModeli` slot 1 uses
     this**, reproducing its current bool-token-or-int/expr param.
 
@@ -276,7 +276,7 @@ Spec shape:
     evaluate the raw arg once through the normal expression evaluator
     (vars in scope permitted), store the folded float in
     `cmd->args[slot]`, and **emit the original typed source token for
-    that slot verbatim** — do not canonicalize it to a value or token
+    that slot verbatim** - do not canonicalize it to a value or token
     name.
   - The current low-level parser branch for `CMD_LIGHT_MODEL_I` already
     preserves the typed fallback text (`trimmed2`) but does not set
@@ -285,7 +285,7 @@ Spec shape:
     is an intentional tightening of the parser contract so callers do
     not have to infer it later.
   By contrast, `REPL_ENUM_SLOT_ENUM_ONLY` slots accept only an exact
-  token (no numeric, no expression — today's behavior, preserved), and
+  token (no numeric, no expression - today's behavior, preserved), and
   `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` slots accept a token or a
   constant value but reject runtime vars; both canonicalize the emitted
   text to the table's token name.
@@ -307,14 +307,14 @@ Parser shape:
     enum-token lookup against `args[slot].enums` only. No numeric, no
     expression. Fail with the slot's usage if no token matches. This
     is byte-for-byte today's behavior for every strict enum slot
-    assigned this kind — the behavior-neutral baseline the golden
+    assigned this kind - the behavior-neutral baseline the golden
     snapshot pins.
   - **Enum-or-const-value slot** (`REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE`)
-    — `resolve_enum_arg(raw, args[slot].enums, vars, num_vars,
+    - `resolve_enum_arg(raw, args[slot].enums, vars, num_vars,
     out_value, out_name, err)`:
     1. Try exact enum-token lookup first.
     2. If that fails, evaluate the raw arg as a **constant-only**
-       expression (reject visible vars — these slots never animate).
+       expression (reject visible vars - these slots never animate).
     3. Reverse-map the folded value to a token by exact value match in
        `args[slot].enums`; fail with the slot's usage if no match.
     4. Return the numeric value **and** the canonical token name; the
@@ -339,7 +339,7 @@ Parser shape:
   `{ k_light_model_params, ..., REPL_ENUM_SLOT_ENUM_ONLY }`, slot 1 =
   `{ k_bool_vals, ..., REPL_ENUM_SLOT_ENUM_OR_EXPR }`. This reproduces
   today's "pname is a token, param is a bool token *or* an
-  int/expression" behavior with **no** bespoke command branch — it falls
+  int/expression" behavior with **no** bespoke command branch - it falls
   out of the generalized resolver. Two distinct test obligations:
   - **Strict compat (pin *before* the refactor):** `GL_TRUE`, `1`, `0`,
     and a non-table integer in slot 2 must parse, store, and emit
@@ -347,7 +347,7 @@ Parser shape:
   - **The one intentional change:** a *var* expression in slot 2 now
     sets `has_vars` (see "Slot-kind … intentional tightening"), where
     today it does not. This case must assert the **new** behavior
-    (re-evaluation), and therefore cannot be a pre-refactor pin —
+    (re-evaluation), and therefore cannot be a pre-refactor pin -
     snapshot today's value for documentation, then assert the change.
 
 Completion shape:
@@ -390,7 +390,7 @@ Expression and numeric compatibility:
   value exactly matches a value in that slot's table; unknown magic
   numbers are rejected.
 - `ENUM_ONLY` slots do **not** get numeric fallback. `glEnable(3553)`
-  stays rejected exactly as today — the refactor does not silently
+  stays rejected exactly as today - the refactor does not silently
   broaden strict enum commands to accept raw enum numbers. This is the
   whole point of keeping `ENUM_ONLY` distinct.
 - Do **not** accept runtime-variable expressions for `glColorMask` in
@@ -438,13 +438,13 @@ Migration safety:
   1. **Delete `GLCmd.mode` entirely.** If the custom enum+float
      consumers (`CMD_MATERIALF`, `CMD_POINT_PARAMETER_FV`) are migrated
      to `args[]` in this refactor, the field has no users and the
-     *compiler* enforces the invariant — no guard needed. This is the
+     *compiler* enforces the invariant - no guard needed. This is the
      cleanest end state and the one to aim for.
   2. **If `mode` is retained** for those two documented custom
      commands only: the guard greps `$(REPL_SRCS)` for `\.mode`/
      `->mode` and fails on any hit outside an allowlist of the
      documented `MATERIALF`/`POINT_PARAMETER_FV` parser/executor
-     sites — mirroring how `check-gl-boundaries` allowlists
+     sites - mirroring how `check-gl-boundaries` allowlists
      `executor.c`. Note `mode` is a generic field name; scope the
      grep to GLCmd-bearing files and pair it with the contract test
      so the structural guard and the behavioral test together pin it.
@@ -452,7 +452,7 @@ Migration safety:
 ## Pitfalls (path C blast radius)
 
 These are the reasons C was the *hesitated* choice. Each is a silent
-regression — compiles and parses fine, fails only at render/round-trip.
+regression - compiles and parses fine, fails only at render/round-trip.
 
 1. **The `mode`-reader audit is grep-hostile.** `->mode` / `.mode`
    matches ~13 files, but most are unrelated `mode` fields (replay
@@ -466,7 +466,7 @@ regression — compiles and parses fine, fails only at render/round-trip.
 2. **`glBegin` primitive-mode is a state machine, not a value.** The
    executor keys vertex emission, begin/end bracketing, and overlay
    passes off the active begin mode. This is the hottest reader and the
-   one least covered by parse tests — move it last and verify by
+   one least covered by parse tests - move it last and verify by
    rendering, not by asserting `args[0]`.
 3. **`glFrontFace` winding feeds autonormal.** `autonormal.c` computes
    generated `glNormal3f` direction from `CMD_FRONT_FACE` winding. Miss
@@ -475,7 +475,7 @@ regression — compiles and parses fine, fails only at render/round-trip.
 4. **`glLightModeli` arg2 is the semantic-regression hotspot.** Today
    slot 2 accepts a bool token **or an arbitrary int/expression**. A
    naive "token, else reverse-map into the enum table" resolver
-   *narrows* this — `glLightModeli(pname, 2)` (or any value not in
+   *narrows* this - `glLightModeli(pname, 2)` (or any value not in
    `k_bool_vals`) would start failing where it parsed before, and
    `glLightModeli(pname, 1)` would canonicalize to `GL_TRUE`
    unexpectedly. Slot 2 must be modeled explicitly as "enum token with
@@ -504,7 +504,7 @@ regression — compiles and parses fine, fails only at render/round-trip.
    (below), not by eyeballing.
 8. **Partial migration is its own hazard.** If `mode` and `args[]`
    were both live, a half-migrated reader would diverge silently.
-   Decision: **no transition window** — the migration is atomic (see
+   Decision: **no transition window** - the migration is atomic (see
    "Storage contract"). This pitfall is therefore designed out rather
    than mitigated; the only defense needed is the type-aware audit
    (pitfall 1) being exhaustive in the single migrating commit.
@@ -592,7 +592,7 @@ normal 4-argument bool-token enum command using the same slot kind.
      non-table integer) pinned byte-identical *before* the refactor and
      still passing after; slot 2 emits the typed source token verbatim
      (not canonicalized). The var-expression case is the one
-     intentional change — assert the new `has_vars`/re-eval behavior,
+     intentional change - assert the new `has_vars`/re-eval behavior,
      not "as today" (see Spec shape).
    - End-of-input autocomplete works for all enum slots, including
      `glColorMask` slot 4.
@@ -606,12 +606,12 @@ normal 4-argument bool-token enum command using the same slot kind.
      vars in bool-mask slots are rejected.
    - `ENUM_ONLY` behavior-neutral guard: `glEnable(3553)` (and a
      numeric arg to another strict enum command) stays **rejected**
-     exactly as today — pins that the refactor did not broaden
+     exactly as today - pins that the refactor did not broaden
      non-bool enum commands to accept enum numbers.
 9. Standing guard: add a `check-*` target to the
    `make check-state-ownership` aggregator enforcing the
    no-`GLCmd.mode`-for-enum-spec invariant (delete the field outright
-   if the custom consumers are migrated; else the allowlisted grep —
+   if the custom consumers are migrated; else the allowlisted grep -
    see "Migration safety").
 10. Docs: CLAUDE.md supported-commands list. Note that enum commands
    use one uniform `args[]` storage convention.

@@ -4,7 +4,7 @@
  *
  * Each case builds a small scene through the live commit pipeline, runs a
  * full flatten, and asserts the structural/value dependency masks and
- * rebake_ok the flatten reported — plus the dirty routing those masks drive
+ * rebake_ok the flatten reported - plus the dirty routing those masks drive
  * through repl_state_notify_predef_value_changed. Exact-equality asserts
  * are used wherever the expected mask is fully known, so overbroad masks
  * (which would silently cost performance) fail as loudly as missing bits
@@ -46,7 +46,7 @@ static ReplExprDepMask predef_bit(const char *name) {
     return idx >= 0 ? (ReplExprDepMask)1u << idx : 0;
 }
 
-/* glVertex3f(t, ...): t is a value-only root — a rebake suffices, so a t
+/* glVertex3f(t, ...): t is a value-only root - a rebake suffices, so a t
  * change routes to args_dirty_mask, and a full flatten clears it again. */
 static void test_value_only_t(void) {
     printf("--- value-only t ---\n");
@@ -77,7 +77,7 @@ static void test_value_only_t(void) {
                (int)repl_state_flat_program_args_dirty_mask(), 0);
 }
 
-/* for(i, 0, t + 2): the loop bound decides topology, so t is structural —
+/* for(i, 0, t + 2): the loop bound decides topology, so t is structural -
  * and the iterator local carries {t} into the body's value deps. */
 static void test_structural_t_via_loop_bound(void) {
     printf("--- structural t via loop bound ---\n");
@@ -147,7 +147,7 @@ static void test_structural_via_call_arg(void) {
 }
 
 /* n = t * 2; glVertex3f(n, ...): reads of n after the assignment resolve
- * to the RHS's roots {t}, so n's own bit drops out of the masks entirely —
+ * to the RHS's roots {t}, so n's own bit drops out of the masks entirely -
  * a slider change to n is a routing no-op (the reflatten would re-bake
  * n = t * 2 over it anyway). */
 static void test_transitive_assignment(void) {

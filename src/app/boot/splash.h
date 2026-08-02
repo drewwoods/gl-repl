@@ -5,7 +5,7 @@
  * Startup splash banner: the open-cube logo lockup (mark + name + tagline)
  * in a band along the bottom of the window, fading out after a few seconds.
  * Frame-counted (not wall-clock) so headless/record runs are deterministic.
- * Not a full-screen overlay — the scene and UI render normally underneath.
+ * Not a full-screen overlay - the scene and UI render normally underneath.
  */
 
 /* Nonzero while the banner still has frames to draw. */

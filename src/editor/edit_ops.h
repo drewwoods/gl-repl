@@ -56,7 +56,7 @@ int edit_op_buffer_delete_right_of_cursor(void);
 /* If a character-range selection is active in the input buffer,
  * delete the selected bytes, move the cursor to the (collapsed)
  * range start, and clear the anchor. Returns 1 if a selection was
- * consumed, 0 if none was active. The buffer-only deletion path —
+ * consumed, 0 if none was active. The buffer-only deletion path -
  * does not touch document state or autocomplete. */
 int edit_op_consume_input_selection(void);
 

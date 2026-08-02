@@ -58,7 +58,7 @@ typedef struct {
 } StatusStripFrame;
 
 /* Compute the strip geometry, set up gl2d + blend. Returns 0 (no
- * draw) on a degenerate scene rect — callers should bail without
+ * draw) on a degenerate scene rect - callers should bail without
  * a matching close, matching `gl2d_begin` lifetime. */
 static int status_strip_begin(const UiRenderSnapshot *snap,
                               StatusStripFrame *f) {
@@ -543,7 +543,7 @@ static void status_banner_render(const UiRenderSnapshot *snap,
     lead_a = bg_a * anim.ext;                    /* faint moving leading edge */
     ta     = anim.ext;                           /* whole-bar fade-in */
 
-    /* Background: horizontal alpha gradient — faint at the leading edge,
+    /* Background: horizontal alpha gradient - faint at the leading edge,
      * solid where it meets the bell. */
     glBegin(GL_QUADS);
     glColor4f(bg_rgb[0], bg_rgb[1], bg_rgb[2], lead_a);

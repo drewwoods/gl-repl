@@ -154,7 +154,7 @@ void color_picker_state_reset(void);
  * slider values, the anchor, the value limit, the RGBA/has-alpha flag, the
  * active drag target, the undo-captured flag, and the palette tab + harmony key
  * state. The installed host bridge pointer and the derived Full-grid palette
- * cache are deliberately excluded — the host is process-global and the cache
+ * cache are deliberately excluded - the host is process-global and the cache
  * rebuilds on demand. `drag` carries the file-local CpDragTarget value as an
  * int so the enum stays peer-private. Used by the tour baseline so Back /
  * Done-restart put an open picker (mid-drag included) back as the tour began. */
@@ -199,7 +199,7 @@ ColorPickerView color_picker_view(void);
  * Press semantics:
  *   - inside a slider rect: { consumed=1, closed=0, changed=1 } (drag begins; changed=1 iff the writeback succeeded)
  *   - inside the picker bounds but outside slider rects: { consumed=1, closed=0, changed=0 } (consumed-no-op to prevent dismiss on padding clicks)
- *   - outside the picker: { consumed=0, closed=1, changed=0 } — picker
+ *   - outside the picker: { consumed=0, closed=1, changed=0 } - picker
  *     dismisses itself; controller should redraw and let the click flow to
  *     menu/scene handlers.
  *   - picker not open: { consumed=0, closed=0, changed=0 }.

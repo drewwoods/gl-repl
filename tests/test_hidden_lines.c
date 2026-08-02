@@ -128,7 +128,7 @@ static void test_unmatched_push_unwound_at_end(void) {
 }
 
 /* The program's glClear is the frame's clear for the scene rect, and this walk
- * replaces the main fill in hidden-line mode — so exactly one of the three
+ * replaces the main fill in hidden-line mode - so exactly one of the three
  * passes must run it. The depth-fill pass (first) owns it; re-running it in
  * the hidden- or visible-line pass would wipe the depth seed and the lines
  * already drawn. */
@@ -147,7 +147,7 @@ static void test_only_depth_fill_pass_clears(void) {
 }
 
 /* The depth-fill pass masks colour writes to seed depth only, and glClear
- * obeys glColorMask — so the clear has to be bracketed by a mask lift that
+ * obeys glColorMask - so the clear has to be bracketed by a mask lift that
  * hands the pass's own colour state back afterwards. */
 static void test_depth_fill_clear_lifts_color_mask(void) {
     printf("--- hidden-lines: depth-fill clear lifts the colour mask ---\n");

@@ -8,8 +8,8 @@
  *
  * This is not a control-flow VM: flatten still owns loops, calls, branches,
  * assignments, output materialization, and resource budgets. A program here
- * is one expression — a GL-command argument, a loop-header bound, an
- * if-condition, a call argument, or an assignment RHS/index — compiled once
+ * is one expression - a GL-command argument, a loop-header bound, an
+ * if-condition, a call argument, or an assignment RHS/index - compiled once
  * and evaluated many times.
  *
  * Parity contract: evaluation performs the same float operations in the same
@@ -17,7 +17,7 @@
  * pointers, same guarded divide/modulo, same epsilon compares), so compiled
  * and text results are bit-identical (NaN compares as the NaN parity case).
  * Anything the compiler cannot express fails compilation, and the caller
- * keeps using the text evaluator for that expression — behavior differences
+ * keeps using the text evaluator for that expression - behavior differences
  * are only ever "fall back", never "diverge".
  *
  * The cache is ephemeral REPL-owned state: never captured into undo
@@ -83,7 +83,7 @@ typedef enum {
 } ReplExprLineState;
 
 /* Evaluation environment. `locals` are the active flatten bindings (loop
- * counters / function params), resolved by name, checked before predefs —
+ * counters / function params), resolved by name, checked before predefs -
  * same shadowing order as the text evaluator. `local_deps` optionally
  * carries one dependency mask per local binding (NULL: locals contribute no
  * bits). `predef_vars` is the predefined-variable table the values are read
@@ -107,7 +107,7 @@ ReplExprCache *repl_expr_cache_live(void);
 ReplExprCache *repl_expr_cache_create(void);
 void           repl_expr_cache_destroy(ReplExprCache *cache);
 /* Drop every compiled program and line entry (arena capacity is retained so
- * a rebuild does not re-grow from zero). The single invalidation entry —
+ * a rebuild does not re-grow from zero). The single invalidation entry -
  * called from repl_state_mark_source_dirty and state restore. */
 void           repl_expr_cache_invalidate(ReplExprCache *cache);
 
@@ -116,7 +116,7 @@ void           repl_expr_cache_invalidate(ReplExprCache *cache);
 /* Compile-time bindings. Predef slots are resolved at compile time
  * (declare/undeclare invalidates the cache, so resolved slots cannot go
  * stale). `locals` are the flatten bindings visible where the expression
- * lives; they are used only for a shadow check — the text evaluator resolves
+ * lives; they are used only for a shadow check - the text evaluator resolves
  * locals before builtin function calls, so an expression whose call target
  * name is shadowed by a local binding fails compilation instead of
  * mis-compiling to the builtin. Local *values* are never baked in; identifier
@@ -186,7 +186,7 @@ int  repl_expr_cache_line_role_count(const ReplExprCache *cache, int line_idx,
 /*
  * The destination name of `x = expr` is a pure function of the row's text,
  * and flatten re-derives it on every visit of every assignment (a persisted
- * var_idx must not be able to defeat a later legal shadow — see
+ * var_idx must not be able to defeat a later legal shadow - see
  * flatten_resolve_assign_target). Memoising it here buys that back for free:
  * the memo inherits this cache's single invalidation seam, and
  * repl_state_mark_source_dirty's contract is that every source mutation goes
@@ -194,12 +194,12 @@ int  repl_expr_cache_line_role_count(const ReplExprCache *cache, int line_idx,
  *
  * Deliberately independent of the line's program state. The LHS is well
  * defined on an EMPTY line (first visit), on a FAILED one, and on a line
- * whose RHS never compiled — none of which the program index can represent.
+ * whose RHS never compiled - none of which the program index can represent.
  * The memo also stores "this row has no scalar assignment target" so a
  * non-assignment row is parsed at most once.
  *
  * Get returns 1 (memoised, name copied to `out`), 0 (memoised as "no LHS",
- * `out` emptied), or -1 (not memoised — the caller must derive and set it).
+ * `out` emptied), or -1 (not memoised - the caller must derive and set it).
  * Set with lhs == NULL or "" records the "no LHS" verdict. Storage failure
  * is silent: the line stays unmemoised and the caller keeps deriving it. */
 int  repl_expr_cache_line_lhs_get(const ReplExprCache *cache, int line_idx,

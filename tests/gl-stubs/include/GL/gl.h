@@ -140,7 +140,7 @@ typedef double GLclampd;
 #define GL_PROJECTION_MATRIX 0x0BA7
 #define GL_TEXTURE_MATRIX 0x0BA8
 #define GL_VIEWPORT 0x0BA2
-/* glGetString names — only GL_VERSION is consumed (runtime
+/* glGetString names - only GL_VERSION is consumed (runtime
  * point-parameter detection in glr_ctrl_init_gl); the rest round out
  * the enum so a real glGetString switch would still compile. */
 #define GL_VENDOR 0x1F00
@@ -294,7 +294,7 @@ static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDep
 static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil %d\n", (int)s); gl_stub_tick(GL_STUB_glClearStencil); }
 /* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so
  * occlusion-style depth reads behave as if every vertex is visible. The fill
- * MUST branch on `type` — a GL_UNSIGNED_BYTE read (stencil) hands us a
+ * MUST branch on `type` - a GL_UNSIGNED_BYTE read (stencil) hands us a
  * one-byte-per-pixel buffer, and writing floats into it overruns by 4x. */
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                                 GLenum format, GLenum type, void *pixels) {
@@ -415,7 +415,7 @@ static inline void glPassThrough(GLfloat token) { GL_STUB_TRACE_LINE("glPassThro
 static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glPointParameterfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glPointParameterfv); (void)params; }
 /* Timer-query entry points (GL 1.5 occlusion-query API + GL_EXT_timer_query's
  * 64-bit getter), consumed only through the runtime-loaded GPU-profiler path
- * (src/support/gpuprof.c via glutGetProcAddress) — never called directly by
+ * (src/support/gpuprof.c via glutGetProcAddress) - never called directly by
  * app code, so they don't tick gl_stub counters. glGenQueries hands out ids
  * (callers key results on them); the getters write 0 so a stub "GPU result"
  * is never available and gpuprof simply reports no data. */

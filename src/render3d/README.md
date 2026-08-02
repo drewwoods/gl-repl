@@ -1,4 +1,4 @@
-# `src/render3d` — the 3D renderer (Draft)
+# `src/render3d` - the 3D renderer (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -12,9 +12,9 @@ A **3D renderer** is the part of a graphics program that owns the
 *frame*: it sets the viewport, clears the buffers, builds the projection,
 positions the camera, configures lighting, draws the world, and adds the
 "studio" decorations (a reference grid, axes, a backdrop). It does **not**
-decide *what* geometry exists — that is handed in.
+decide *what* geometry exists - that is handed in.
 
-`src/render3d` is a renderer for **fixed-function OpenGL** — the classic GL 1.x
+`src/render3d` is a renderer for **fixed-function OpenGL** - the classic GL 1.x
 style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
 the caller fills a [`Render3dRenderConfig`](render_types.h#L140) (camera pose, lighting, grid/axes
@@ -27,7 +27,7 @@ glr_camera_load_modelview(&pose);                /* caller owns the modelview ca
 render3d_draw_scene(&renderer_state, &cfg);    /* viewport → projection → cfg.execute_fn() → grid/axes/backdrop/overlays */
 ```
 
-The render3d module owns no camera type — the caller picks one. The REPL
+The render3d module owns no camera type - the caller picks one. The REPL
 controller uses [`GlrCameraPose`](../app/glr_camera.h#L143) + `glr_camera_load_modelview` from
 [`src/app/glr_camera.h`](../app/glr_camera.h); the standalone `render3d_demo` inlines the six
 matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
@@ -42,8 +42,8 @@ backdrop are all renderer concerns; the geometry is not.
 ## The demo: `render3d_demo`
 
 [`tools/render3d_demo/render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c) drives
-this module with a **non-REPL** geometry callback — a single
-`glutSolidTeapot` — wrapped in a small interactive shell.
+this module with a **non-REPL** geometry callback - a single
+`glutSolidTeapot` - wrapped in a small interactive shell.
 
 ```bash
 make render3d-demo     # opens a window: "render3d teapot demo"
@@ -59,7 +59,7 @@ The demo is the **layer-independence proof** for `src/render3d`: it builds with
 a deliberately slim object list and a geometry callback that knows nothing
 about the REPL. If render3d code ever grew a hard dependency on the editor,
 controller, or UI, this binary would stop linking. It also documents the
-contract by example — `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L140)
+contract by example - `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L140)
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
 never terminates).
 
@@ -67,7 +67,7 @@ never terminates).
 
 ```bash
 make render3d-hot      # builds render3d_hot_demo + the reloadable library
-./render3d_hot_demo    # then edit any src/render3d/*.c and save — it reloads live
+./render3d_hot_demo    # then edit any src/render3d/*.c and save - it reloads live
 ```
 
 Same teapot harness, but the `src/render3d` subtree is compiled into a shared
@@ -78,11 +78,11 @@ render3d-hot-lib`) and re-`dlopen()`s a fresh copy, so `grid.c` / `backdrop.c`
 HUD shows a `Hot  reloads=N  last build=ok/FAILED` line; a build error keeps the
 last good module loaded.
 
-**State survives the reload** because every piece of demo state — camera pose,
-2D/3D + projection blend, grid/axes themes, lighting, backdrop — lives in the
+**State survives the reload** because every piece of demo state - camera pose,
+2D/3D + projection blend, grid/axes themes, lighting, backdrop - lives in the
 host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
 bodies are. [`Render3dState`](render.h#L97) crosses the boundary but is host-owned, and its
-layout is fixed by [`render.h`](render.h) at host-compile time — so editing `.c` bodies is
+layout is fixed by [`render.h`](render.h) at host-compile time - so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
 
@@ -92,7 +92,7 @@ dynamic_lookup` + the host `-force_load`ing freeglut so every symbol is present
 and exported; Linux binds against the already-loaded shared `libglut`/`libGL`).
 A second freeglut copy in the library would have an uninitialised `fgState` and
 `glutSolidSphere()` would abort "called before glutInit". Each reload
-`dlopen()`s a uniquely-named on-disk copy of the rebuilt library — macOS dyld
+`dlopen()`s a uniquely-named on-disk copy of the rebuilt library - macOS dyld
 caches images by path and keeps them mapped past `dlclose`, so reusing the
 canonical path would hand back stale code. The plain static `render3d_demo`
 target is untouched (it stays the link-proof `make test-full` and
@@ -114,7 +114,7 @@ under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
 `src/subsystems/edit_overlays/` (driven by the controller each frame)
 resolves their data into a [`Render3dGuideSnapshot`](guides/guides_shared.h#L44) and passes it in. The camera transform is the
-controller's job — [`render.c`](render.c) only brackets sub-renderer push/pop and
+controller's job - [`render.c`](render.c) only brackets sub-renderer push/pop and
 applies a render3d-local frustum shift for jitter.
 
 ## File map
@@ -122,7 +122,7 @@ applies a render3d-local frustum shift for jitter.
 | File | Responsibility |
 |---|---|
 | [`render.c`](render.c) / `.h` | Frame orchestration: viewport, clear, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
-| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L140), frame-context types — the renderer contract |
+| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L140), frame-context types - the renderer contract |
 | [`grid.c`](grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](axes.c) / `.h` | Axis rendering and axis themes |
 | [`render3d_transition.c`](render3d_transition.c) / `.h` | Pure grid/axes show↔hide fade state machine (no GL) |
@@ -137,4 +137,4 @@ applies a render3d-local frustum shift for jitter.
 
 **Boundary:** render3d code renders. It does **not** parse, edit, save, or
 dispatch UI actions, and `render3d_*` / `ui_*` do not include each other's
-headers — shared types live in [`render_types.h`](render_types.h) / [`src/ui/app/snapshot.h`](../ui/app/snapshot.h).
+headers - shared types live in [`render_types.h`](render_types.h) / [`src/ui/app/snapshot.h`](../ui/app/snapshot.h).

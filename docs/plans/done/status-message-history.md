@@ -1,12 +1,12 @@
 # Status-message history (recent messages viewer)
 
-Status: **done** — implemented 2026-06-08. Built the persistent bottom
+Status: **done** - implemented 2026-06-08. Built the persistent bottom
 "messages" button (trigger, fork 1) + click-to-toggle inline stacked
 history list (surface, fork 2) + 16-entry session ring, newest-at-bottom,
 age-dimmed, consecutive-dup collapse (fork 3). The button appears once the
 session has recorded at least one message (the ring is session-retained, so
 it then stays). The transient-message **slide animation (fork 4)** was kept
-on the plain-fade fallback the plan sanctioned — discoverability is already
+on the plain-fade fallback the plan sanctioned - discoverability is already
 solved by the persistent button, and the slide is the fiddly part; it can be
 layered on later without touching the data/hit-test work.
 
@@ -36,7 +36,7 @@ All architectural claims verified against the live codebase. The plan
 is feasible, low-risk, and well-described. Key corrections applied
 below (stale paths, missing error-kind detail). UX recommendation
 (persistent button + slide animation + inline list) adopted as the
-direction — forks 1–4 resolved.
+direction - forks 1–4 resolved.
 
 ## 2026-05-23 audit
 
@@ -56,18 +56,18 @@ wired via the sink table to `ui_state_status_set()` /
 `ui_state_status_set_error()` (`src/app/glr_ctrl.c:1720–1722`,
 `.status = ui_state_status_set`, `.status_error =
 ui_state_status_set_error`; impl `src/ui/app/state.c:58–75`). Both
-delegate to the private `ui_state_status_set_kind(msg, kind)` helper —
+delegate to the private `ui_state_status_set_kind(msg, kind)` helper -
 **every** message funnels through that one function. A ring pushed
 there captures all of them (both INFO and ERROR), no call-site sweep.
 
 Note: two callers of `ui_state_status_mut()` exist (TTL decrement in
-`glr_ctrl.c:2321` and save/restore in `editor/input.c:1025`) — neither
+`glr_ctrl.c:2321` and save/restore in `editor/input.c:1025`) - neither
 writes `.text` from scratch, so the ring push belongs only in
 `ui_state_status_set_kind`.
 
 A reusable scrollable text overlay already exists
 (`ui_tabbed_overlay_render(UiOverlayState/UiOverlayContent)` in
-`src/ui/core/tabbed_overlay.{c,h}`, the F1 help shell — explicitly
+`src/ui/core/tabbed_overlay.{c,h}`, the F1 help shell - explicitly
 feature-agnostic per its header comment).
 
 ## Effort (≈ 1–2 days, low architectural risk)
@@ -79,7 +79,7 @@ feature-agnostic per its header comment).
 - By-value `UiStatusHistory` slice on `UiRenderSnapshot`, filled in
   `glr_ctrl_build_ui_snapshot` (same pattern as `scene_tabs`; ~4 KB/frame).
 - Trigger = pure read of `snap->pointer` vs the status-bar rect (the
-  scene-tab hover pattern) or a keybinding — no new input plumbing,
+  scene-tab hover pattern) or a keybinding - no new input plumbing,
   respects `check-ui-*` purity guards.
 - Viewer: reuse `ui_tabbed_overlay_render` (single tab, lines = history)
   → mostly plumbing; or a bespoke inline list above the bar (nicer for a
@@ -97,21 +97,21 @@ snapshot-view pattern, pointer-hover pattern, existing overlay renderer).
   clickable). Pro: steady, no flicker, simple. Con: slightly less
   discoverable.
 - **Persistent "messages" button** fixed at the bottom of the screen;
-  click it to toggle the history. Pro: always-visible affordance —
+  click it to toggle the history. Pro: always-visible affordance -
   discoverability solved outright; clear, obvious purpose; steady (no
   hover flicker). Con: adds a permanent screen element + a real
-  hit-region; small bespoke render. — *recommended (see fork 4).*
+  hit-region; small bespoke render. - *recommended (see fork 4).*
 
 ### 2. Surface
 - **Inline stacked list** just above the bar (newest at bottom, fades
   by age, capped visible rows). Pro: matches the "recent peek" intent;
-  non-modal. Con: more bespoke layout code. — *recommended.*
+  non-modal. Con: more bespoke layout code. - *recommended.*
 - **Reuse `tabbed_overlay`** (modal, scrollable). Pro: ~zero new render
   code, full scrollback. Con: heavier UX for a transient peek; blocks
   the scene.
 
 ### 3. Retention / display
-- Ring size (propose **16**, session-only — no persistence).
+- Ring size (propose **16**, session-only - no persistence).
 - Show age / relative time per entry? (propose: yes, dim older).
 - De-dup consecutive identical messages? (propose: collapse with a
   count, e.g. "(x3)").
@@ -123,17 +123,17 @@ snapshot-view pattern, pointer-hover pattern, existing overlay renderer).
 - **Slide from / into the messages button.** A new transient message
   slides out of the bottom "messages" button into the banner position;
   on expiry it slides back into the button. Pro: visually *teaches*
-  what the button is and where messages go — discoverability and
+  what the button is and where messages go - discoverability and
   purpose become self-evident; pairs naturally with the persistent
   button (fork 1). Con: replaces the fade path in
   `ui_panels_render_scene_status` with a slide transform anchored at
   the button rect (offset driven by remaining `ttl` / `anim_time`);
-  modest extra render/animation code. — *recommended.*
+  modest extra render/animation code. - *recommended.*
 
   Mechanics sketch: button rect is the slide anchor. On set, message
   origin = button; animates to the banner slot over ~N frames; holds;
   on `ttl` low, animates back to the button and disappears "into" it.
-  Reuses the existing `ttl` clock — no new timer. The button stays lit
+  Reuses the existing `ttl` clock - no new timer. The button stays lit
   while messages exist / briefly pulses on new message.
 
 ## Recommendation
@@ -158,7 +158,7 @@ fallback if the slide proves fiddly.
   Entry must preserve `UiStatusKind` (INFO vs ERROR) so the viewer
   can color-code (amber vs red, matching `ui_panels_render_scene_status`).
 - `src/ui/app/state.{c,h}`: push in `ui_state_status_set_kind` (the
-  single private chokepoint — not in the public `_set`/`_set_error`
+  single private chokepoint - not in the public `_set`/`_set_error`
   wrappers); reset in `ui_state_reset`. Accessor
   `ui_state_status_history()`. Consecutive-dup detection: if new text
   matches head entry, increment count instead of pushing.
@@ -180,7 +180,7 @@ fallback if the slide proves fiddly.
   - the inline stacked history list, anchored at / growing up from the
     button, shown while the toggle is open.
   - **Caveat**: `rename_active` and `file_prompt_active` modal strips
-    take priority over status rendering — the button and history list
+    take priority over status rendering - the button and history list
     must respect this suppression (same guard at panels.c that already
     gates the status banner).
 
@@ -195,12 +195,12 @@ fallback if the slide proves fiddly.
   assert order, overflow eviction, consecutive-dup collapse with
   count); kind preservation (push INFO then ERROR, assert both kinds
   round-trip). Button hit-region geometry as a pure fn; slide math
-  (position given ttl) as a pure fn — all headless-unit-testable.
+  (position given ttl) as a pure fn - all headless-unit-testable.
 
 ### Docs & verification
 
 - Update `AGENTS.md` File Layout / `MODULES.md` if a new module lands.
-- Must pass all UI boundary guards — in particular:
+- Must pass all UI boundary guards - in particular:
   `check-ui-no-repl-state-mut`, `check-ui-renderer-takes-view`,
   `check-ui-no-repl-state-read`, `check-ui-panels-no-mutators`,
   `check-ui-returns-hits-only`.

@@ -3,7 +3,7 @@
  *
  * Implements undo/redo using circular snapshot buffers: one ring for undo
  * history (32 slots) and one for redo history (32 slots). Each snapshot
- * captures the editor's *document* state at a point in time — not the
+ * captures the editor's *document* state at a point in time - not the
  * full session.
  *
  * Snapshot contents (see EditorUndoSnapshot): source command array +
@@ -25,10 +25,10 @@
  *
  * Transient auto-promotion hook: editor_undo_push_snapshot() is the entrypoint
  * where repl_promote_transient_if_needed() fires. If the user is editing a
- * built-in example — or the document a completed/stopped tutorial left behind
- * — a fresh user scene slot is allocated, the current state is copied into it,
+ * built-in example - or the document a completed/stopped tutorial left behind
+ * - a fresh user scene slot is allocated, the current state is copied into it,
  * the slot is named (derived from the example / tutorial name, with
- * de-duplication), and control flow returns — the user continues editing
+ * de-duplication), and control flow returns - the user continues editing
  * without interruption. Subsequent mutations accumulate into the user scene.
  * An ACTIVE tutorial is deliberately not promotable: its own step commits
  * come through here, and promoting would end the lesson at step 0.
@@ -54,7 +54,7 @@
  *
  * `generation` is stamped at push time from the live counter.
  * Pop/redo refuse to restore a snapshot whose generation differs from
- * the current live generation — that means a wholesale document
+ * the current live generation - that means a wholesale document
  * replacement (scene switch, workspace load) intervened, and the
  * snapshot belongs to a different world. */
 typedef struct {
@@ -84,7 +84,7 @@ typedef struct {
     unsigned int generation;
 } EditorUndoRingState;
 
-/* Opaque, heap-backed snapshot of the LIVE undo/redo history — the actual
+/* Opaque, heap-backed snapshot of the LIVE undo/redo history - the actual
  * ring entries, not just the head/count pointers that EditorUndoRingState
  * carries. Used by the tour baseline (src/app/glr_tour_snapshot.c) so Back /
  * Done-restart can reinstate the exact undo history the user had when the
@@ -141,7 +141,7 @@ void editor_undo_note_wholesale_replacement(void);
  * cross-generation safety net. */
 unsigned int editor_undo_generation(void);
 
-/* Raw ring clear — implementation detail.  Production code should
+/* Raw ring clear - implementation detail.  Production code should
  * call editor_undo_note_wholesale_replacement() which also bumps the
  * generation counter.  Retained for test scaffolding that needs to
  * reset ring state without changing generations. */

@@ -1,6 +1,6 @@
 # Smooth Autonormals Plan
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status - NOT STARTED (2026-05-23 audit)
 
 `src/repl/autonormal.c` still runs pre-flatten on source commands and
 skips block heads (the existing behavior the conversation notes

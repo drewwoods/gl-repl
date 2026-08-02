@@ -114,7 +114,7 @@ int repl_func_alias_name_is_valid(const char *name) {
         if (!repl_eval_is_ident_continue((unsigned char)*p)) return 0;
     }
     if (len >= REPL_FUNC_NAME_MAX) return 0;
-    /* Reject the bare slot names — those are the underlying form. */
+    /* Reject the bare slot names - those are the underlying form. */
     if (len == 5 && strncmp(name, "func", 4) == 0 &&
         name[4] >= '0' && name[4] <= '9')
         return 0;
@@ -254,7 +254,7 @@ void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst) {
  * longer exist in the live table are silently dropped; live names
  * not present in the snapshot keep their current values.
  *
- * Used by the fade-batch render path (#3 bug fix) — that path wants
+ * Used by the fade-batch render path (#3 bug fix) - that path wants
  * to revert values to the replay-start baseline before each batch,
  * but it sits inside a frame-level values-only save/restore that
  * doesn't carry a count. Reshaping the live table inside the frame
@@ -285,7 +285,7 @@ void repl_eval_restore_predef_values_by_snapshot(const ReplPredefSnapshot *src) 
 
 /* Values-only snapshot of the live predef table, used by the controller's
  * per-frame baseline-save and by the replay peer's start/stop bracketing.
- * Names + count are NOT preserved here — callers that need the full table
+ * Names + count are NOT preserved here - callers that need the full table
  * use repl_eval_copy_predef_vars / _restore_predef_vars above. */
 void repl_copy_predef_values(float *dst, int max_vals) {
     int n;
@@ -370,7 +370,7 @@ static float builtin_round(const float *args) { return roundf(args[0]); }
 static float builtin_fmod(const float *args)  { return fmodf(args[0], args[1]); }
 static float builtin_rem(const float *args)   { return remainderf(args[0], args[1]); }
 /* Shaping helpers. These have no libm twin, so the exporter emits matching
- * repl_*f helpers (write_shape_helpers in export_prologue.c) — keep the two
+ * repl_*f helpers (write_shape_helpers in export_prologue.c) - keep the two
  * bodies identical or a scene diverges between the REPL and its export. */
 static float builtin_clamp(const float *args) {
     /* Bounds crossed (hi < lo) is a user typo, not a mode: lo wins, which is
@@ -396,7 +396,7 @@ static float builtin_smoothstep(const float *args) {
     return u * u * (3.0f - 2.0f * u);
 }
 static float builtin_sign(const float *args)  {
-    /* Exactly 0 (and NaN) return 0 — not copysignf's signed zero. */
+    /* Exactly 0 (and NaN) return 0 - not copysignf's signed zero. */
     if (args[0] > 0.0f) return 1.0f;
     if (args[0] < 0.0f) return -1.0f;
     return 0.0f;
@@ -824,7 +824,7 @@ static int expr_range_has_runtime_values(
  * in-range, recursively-validated index when the index is itself
  * compile-time evaluable), a visible loop/param var, or a predef var.
  * Also rejects unbalanced parens up front, since eval_expr itself is
- * forgiving about a missing ')'. Pure check — evaluates nothing into
+ * forgiving about a missing ')'. Pure check - evaluates nothing into
  * state; on failure writes a user-facing message into `err`. */
 static int validate_expression_idents_range(
         const ReplExprIdentValidationConfig *cfg) {
@@ -1049,7 +1049,7 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
     int nlen = (int)strlen(name);
     const char *s = src;
     while (*s) {
-        /* Stop at inline `//` — the rest of the line is a comment,
+        /* Stop at inline `//` - the rest of the line is a comment,
          * not real code. Mirrors the expression validator at
          * validate_expression_idents_range. */
         if (s[0] == '/' && s[1] == '/')
@@ -1137,7 +1137,7 @@ static float expr_rand_signed(float seed, float iter) {
     return expr_rand01(seed, iter) * 2.0f - 1.0f;
 }
 
-/* The `primary` production of the recursive-descent grammar — the leaf
+/* The `primary` production of the recursive-descent grammar - the leaf
  * dispatcher under repl_eval_expr's operator-precedence chain. In match
  * order: unary -/+/!, parenthesised subexpression, numeric literal,
  * then identifier resolution (named constant → scratch-array subscript
@@ -1396,7 +1396,7 @@ const char *repl_scan_to_matching_paren(const char *p) {
     while (*p) {
         p = repl_scan_next_arg_delim(p);
         if (*p == ')' || *p == '\0') break;
-        /* *p == ',' — internal top-level comma; skip and continue
+        /* *p == ',' - internal top-level comma; skip and continue
          * scanning. The matching close lies past further commas. */
         p++;
     }
@@ -1466,7 +1466,7 @@ void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) 
     if (cur >= dst_sz - 1)
         return;  /* dst already full */
 
-    /* A single separator space ONLY when dst already has content — a
+    /* A single separator space ONLY when dst already has content - a
      * comment-only line (empty dst, e.g. repl_eval_expr_to_c translating
      * a `// ...` line whose code part is empty) must not gain a leading
      * space. Then the comment span, all bounds-checked. */
@@ -1482,7 +1482,7 @@ void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) 
 /* ========================================================================= */
 
 /* Strict float-literal check ([+-]digits[.digits][e[+-]digits], whole
- * span) — gates the inline numeric swatch so it only attaches to a
+ * span) - gates the inline numeric swatch so it only attaches to a
  * literal argument, never an expression. */
 static int is_pure_numeric_literal(const char *s, int len) {
     int i = 0;
@@ -1717,7 +1717,7 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
 /* Translate one REPL expression to compilable C for export. Three
  * sequential rewrite passes over the code (a trailing `// ...` comment
  * is split off first and re-attached untouched at the end):
- *   1. identifier mapping — REPL constants/builtins to their C names
+ *   1. identifier mapping - REPL constants/builtins to their C names
  *      (PI -> M_PI, sin -> sinf, ...), other identifiers verbatim
  *   2. `LHS % RHS` -> `fmodf(LHS, RHS)` (REPL `%` is float-modulo;
  *      C's operator is integer-only), with paren/call-aware operand
@@ -1899,7 +1899,7 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
  * TAU by substring pass first (it isn't a single identifier), then an
  * identifier-aware pass maps C names back (M_PI -> PI, sinf -> sin),
  * then scratch-array subscripts return to A/B/C[] form. fmodf is left
- * as-is — the REPL grammar accepts it as the fmod builtin. */
+ * as-is - the REPL grammar accepts it as the fmod builtin. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     if (!in || !out || out_sz <= 0)
         return;
@@ -2035,7 +2035,7 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
 
     /* Start and end expressions share the same ExprCtx; we only need to
      * re-seat ctx.p at each argument boundary since eval_expr advances it.
-     * Each bound's capture span is [seat point, post-eval position] — the
+     * Each bound's capture span is [seat point, post-eval position] - the
      * exact text the evaluator consumed. */
     ExprCtx ctx = {
         .p = p,
@@ -2088,7 +2088,7 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
  * comparison forms onto the REPL's half-open ascending loop model:
  * inclusive bounds (<=, >=) nudge END by one step, and a `>` condition
  * forces a negative step so the loop terminates. Bounds are evaluated
- * to floats here (no var context — imported headers are literal). */
+ * to floats here (no var context - imported headers are literal). */
 int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
                        float *start, float *end, float *step) {
     const char *p = input;

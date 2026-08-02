@@ -1,4 +1,4 @@
-# `repl_live_demo` — external-editor, file-watching REPL demo
+# `repl_live_demo` - external-editor, file-watching REPL demo
 
 ## Context
 
@@ -14,7 +14,7 @@ parts* under a realistic workflow:
   errors to the terminal.
 - The demo **watches the active scene file's mtime** and re-imports it on
   change, warning on errors (the swap/temp-file idea is dropped per
-  clarification — plain mtime polling on the canonical `.c`).
+  clarification - plain mtime polling on the canonical `.c`).
 - The demo links **only the REPL pipeline + the variable panel subsystem** (no
   editor, no `glr_ctrl`, no `src/ui/app`, no `src/render3d`), proving those
   pieces compose without the app shell. Predefined variables surface in the
@@ -27,7 +27,7 @@ backend.
 
 ## Decisions (confirmed with user)
 
-- **Render stack:** minimal — REPL executor + a manual orbit camera. A
+- **Render stack:** minimal - REPL executor + a manual orbit camera. A
   *demo-local* `ReplExportCameraBridge` applies the imported `// camera` block.
   No grid/axes/lights/backdrop, no `src/render3d`.
 - **File watching:** poll the active scene file's `mtime`; on change re-import
@@ -40,7 +40,7 @@ Reload is **not** transactional, and the demo does not pretend otherwise. The
 import sequence resets live state *first*
 (`repl_state_reset_program()` + `source_document_clear()`), and
 `repl_export_load_from_file` records per-line parse failures as *warnings* and
-still returns success as long as the file opened — it only returns 0 on
+still returns success as long as the file opened - it only returns 0 on
 `fopen` failure (`src/repl/import.c`). So a malformed save can replace a good
 scene with a **partial or empty** one; there is no rollback to the previous
 frame.
@@ -58,13 +58,13 @@ is never silent.
 ## Reused APIs / patterns (do not reinvent)
 
 - Import: `repl_export_load_from_file(path, &ReplImportResult)`
-  (`src/repl/export.h`) — streams lines through `repl_load_apply_line`, no
+  (`src/repl/export.h`) - streams lines through `repl_load_apply_line`, no
   editor. **Does not reset state**, so the caller must
   `repl_state_reset_program()` + `source_document_clear()` +
   `repl_dispatch_edit_line_set(0)` before each import (see `src/repl/import.c`
   `repl_export_load_from_file`).
 - Host effects: `ReplHostEffects` / `repl_install_host_effects`
-  (`src/repl/host_effects.h`) — back `edit_line_get/_set` with a file-static int
+  (`src/repl/host_effects.h`) - back `edit_line_get/_set` with a file-static int
   (as `repl_demo` does) and route `status`/`status_error` to stderr to surface
   per-line import diagnostics.
 - Camera bridge: `ReplExportCameraBridge` / `repl_export_install_camera_bridge`
@@ -73,7 +73,7 @@ is never silent.
   `glRotatef`/`static float g_angle =` lines via `sscanf` into demo cam vars),
   leave the save/example callbacks `NULL`.
 - Frame loop: flatten + execute exactly like `repl_demo`'s `--render` /
-  `tick_and_execute` — `repl_state_mark_flat_dirty` →
+  `tick_and_execute` - `repl_state_mark_flat_dirty` →
   `repl_flatten_commands(repl_dispatch_edit_line_get())` →
   `repl_execute_program(&ReplExecutionOptions{ flat_cmd_count, program,
   text=source_document_view() })`.
@@ -97,7 +97,7 @@ is never silent.
 
 ## Files to create
 
-- `tools/repl_live_demo/repl_live_demo.c` — the whole demo controller:
+- `tools/repl_live_demo/repl_live_demo.c` - the whole demo controller:
   - arg/INI parse → list of scene file paths + options (window size, poll ms,
     panel on/off);
   - install host effects (edit-line int + stderr status), camera bridge,
@@ -110,9 +110,9 @@ is never silent.
   - `display`: flatten + execute under manual camera, draw variable panel + a
     small bitmap HUD (scene name/file/`t`);
   - input: mouse orbit/pan/wheel zoom; slider drag (left=linear/right=log);
-    keys — `[`/`]` cycle scene, `r` force reload, `v` toggle panel, space
+    keys - `[`/`]` cycle scene, `r` force reload, `v` toggle panel, space
     pause/resume `t`, `q`/Esc quit.
-- `tools/repl_live_demo/repl_live_demo.ini` — sample config (flat `key=value`,
+- `tools/repl_live_demo/repl_live_demo.ini` - sample config (flat `key=value`,
   repeatable `scene=`):
   ```
   poll_ms=250
@@ -124,11 +124,11 @@ is never silent.
   ```
   CLI: `./repl_live_demo [config.ini]` (default `repl_live_demo.ini`); also
   `./repl_live_demo file1.c file2.c …` to bypass the INI.
-- `tools/repl_live_demo/scenes/{triangle,ring,torus}.c` — example scenes in the
+- `tools/repl_live_demo/scenes/{triangle,ring,torus}.c` - example scenes in the
   **export `.c` format** (`repl_export_load_from_file` is the reader). At least
   one carries a `// camera` block to exercise the camera bridge. Generate/verify
   by importing them in the demo during implementation; adjust until clean.
-- `tools/repl_live_demo/README.md` — workflow (open a `scene=` file in vim, save,
+- `tools/repl_live_demo/README.md` - workflow (open a `scene=` file in vim, save,
   watch it reload; drag sliders; cycle scenes), INI format, link-set note.
 
 ## Files to modify
@@ -140,18 +140,18 @@ is never silent.
     `src/ui/subsystems/variable_panel.c`, `src/ui/core/theme.c`.
     (`REPL_DEMO_DEP_SRCS` already supplies the pipeline +
     `tools/repl_demo/source_document.c` + `gl_stub_counts` + `cpuprof`.)
-  - `REPL_LIVE_DEMO_BIN`, objs, link rule, phony `repl_live_demo:` + symlink —
+  - `REPL_LIVE_DEMO_BIN`, objs, link rule, phony `repl_live_demo:` + symlink -
     mirror the `REPL_DEMO_BIN` block; add to `ROOT_BIN_LINKS`, `demos:`, and the
     `clean` binary list.
   - Wire `check-repl-live-demo-no-editor` into the guard aggregate next to
     `check-repl-demo-no-editor`.
-- `scripts/check-repl-demo-no-editor.sh` — generalize: accept the Makefile
+- `scripts/check-repl-demo-no-editor.sh` - generalize: accept the Makefile
   dep-srcs var name as `$2` (default `REPL_DEMO_DEP_SRCS`) so the same script
   guards `repl_live_demo` via `check-repl-demo-no-editor.sh repl_live_demo
   REPL_LIVE_DEMO_DEP_SRCS`. The forbidden patterns (`src/editor/`,
-  `glr_source_document.c`, editor nm symbols) are satisfied — the variable-panel
+  `glr_source_document.c`, editor nm symbols) are satisfied - the variable-panel
   TUs live under `src/subsystems` / `src/ui`, not `src/editor`.
-- `docs/MODULES.md` — add a `repl_live_demo` bullet under "Standalone Demo
+- `docs/MODULES.md` - add a `repl_live_demo` bullet under "Standalone Demo
   Binaries"; note it is the *composition* proof (REPL pipeline + variable panel,
   no editor/app/render3d).
 
@@ -163,7 +163,7 @@ is never silent.
   project-local headers, angle for system/vendored.
 - No trailing whitespace (pre-push + `check-trailing-whitespace`).
 - The demo links **no** `src/editor/*`, `src/app/*`, `src/render3d/*`, or
-  `src/ui/app/*` — only the REPL pipeline + the four variable-panel TUs +
+  `src/ui/app/*` - only the REPL pipeline + the four variable-panel TUs +
   `src/ui/core/theme.c` + the reused `source_document.c`.
 
 ## Verification
@@ -179,7 +179,7 @@ is never silent.
 3. **Live reload:** with the demo running, `vim tools/repl_live_demo/scenes/ring.c`,
    change a vertex, `:w` → the window updates within `poll_ms`. Then introduce a
    parse error and `:w`: confirm a clear stderr warning naming the file (and line
-   when available). **Reload is non-transactional** — the bad save may blank or
+   when available). **Reload is non-transactional** - the bad save may blank or
    partially replace the scene (see "Reload semantics" above); the test is that
    the *diagnostic* makes the cause obvious, not that the prior frame survives.
 4. **C99 ratchet:** `make check-c99` (the demo driver joins the project source
@@ -190,7 +190,7 @@ is never silent.
 ## Open implementation detail (resolve while coding, not blocking)
 
 - Exact `sscanf` patterns for the camera block + whether `import.c` NULL-checks
-  the unused bridge callbacks (`fill_*`, `apply_*`) — confirm and guard the demo
+  the unused bridge callbacks (`fill_*`, `apply_*`) - confirm and guard the demo
   bridge accordingly. If `// camera` parsing proves fiddly, the manual orbit
   camera still gives a usable default; camera-from-file is the enhancement the
   bridge seam is there to prove.

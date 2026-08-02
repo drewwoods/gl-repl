@@ -39,7 +39,7 @@ static void test_match_shapes(void) {
 }
 
 /* Block-shaped expected text (for/if headers, close braces) matches
- * through the same whitespace-stripped compare as ordinary commands —
+ * through the same whitespace-stripped compare as ordinary commands -
  * the matcher needs no block awareness. */
 static void test_match_block_shapes(void) {
     TutorialMatchResult result;

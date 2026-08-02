@@ -1,6 +1,6 @@
 # Accumulation buffer on the web build: detection + FBO emulation
 
-Status: done — **Part 1 and Part 2 both implemented** (accum-bits
+Status: done - **Part 1 and Part 2 both implemented** (accum-bits
 detection + the gl4es FBO emulation, shipped as local patch #7
 `packaging/web/patches/gl4es-accum-fbo.patch`; the companion web
 keyboard-shim fix delivers Ctrl+= / Ctrl+- so the passes step works
@@ -14,29 +14,29 @@ startup path.
 `glAccum` is an explicit no-op stub in gl4es
 (`third_party/web/gl4es/src/gl/wrap/glstub.c`, `STUB(glAccum)`), and the
 Emscripten canvas has no accumulation buffer to begin with. The app has **no
-runtime detection** — `use_accum` is only the `--noaccum` CLI flag
+runtime detection** - `use_accum` is only the `--noaccum` CLI flag
 (`gl_repl.c`), and the accum loop in `render3d_draw_scene`
 (`src/render3d/render.c`, the `do_accum` block around lines 839–897) trusts
 it. Consequences on web today:
 
 - **Accum AA** (the default effect, 2 passes): every frame renders the whole
   3D scene **twice**; both `glAccum(GL_ACCUM, 0.5)` calls and the final
-  `glAccum(GL_RETURN, 1.0)` do nothing, so the user sees the last pass only —
+  `glAccum(GL_RETURN, 1.0)` do nothing, so the user sees the last pass only -
   2x GPU/CPU cost for zero visual benefit.
 - **Blur / Blur Cam** (up to 16 passes, each with a per-pass reflatten):
   up to 16x cost, again with no effect.
 
 Two-part plan: a cheap detection fix that stops the waste immediately, then a
-gl4es patch that implements the accum buffer with an FBO — which flips the
+gl4es patch that implements the accum buffer with an FBO - which flips the
 same detection back on and makes Blur/Blur Cam actually work in the browser.
 
-## Part 1 — runtime accum detection (all backends) — IMPLEMENTED
+## Part 1 - runtime accum detection (all backends) - IMPLEMENTED
 
 **Change (as landed).** Query the context's real accumulation depth once at
 GL init and force `use_accum` off when it is zero:
 
-1. `glr_ctrl_init_gl()` (`src/app/glr_ctrl.c`) — next to the existing
-   `glGetIntegerv(GL_SAMPLES, &samples)` precedent — queries
+1. `glr_ctrl_init_gl()` (`src/app/glr_ctrl.c`) - next to the existing
+   `glGetIntegerv(GL_SAMPLES, &samples)` precedent - queries
    `GL_ACCUM_RED_BITS` into a variable **initialized to 0**, then one
    `(void)glGetError()` to clear the `GL_INVALID_ENUM` a GLES context
    raises, and records the result in the new `GlrRenderState.accum_bits`
@@ -44,7 +44,7 @@ GL init and force `use_accum` off when it is zero:
    dump-only paths that skip `glr_ctrl_init_gl` keep their old behavior).
 2. `glr_ctrl_set_accum(enabled)` (`src/app/glr_ctrl.c`) masks with it:
    a probed `accum_bits == 0` forces `use_accum` off. This placement
-   matters — `main()` calls `glr_ctrl_set_accum(use_accum)`
+   matters - `main()` calls `glr_ctrl_set_accum(use_accum)`
    (`gl_repl.c:727`) *after* `glr_ctrl_init_gl()` (`gl_repl.c:663`), so a
    force-off inside init alone would be overwritten.
 3. When accum was requested but is unavailable, one stderr line
@@ -59,23 +59,23 @@ GL init and force `use_accum` off when it is zero:
 
 | Backend | `GL_ACCUM_RED_BITS` result | Effect |
 |---|---|---|
-| macOS Cocoa / Linux GLX (native) | real bits (window requested `GLUT_ACCUM`, `gl_repl.c:658`) | accum stays on — no behavior change |
-| OSMesa (headless captures) | **16** — the vendored freeglut backend maps `GLUT_ACCUM` to 16 accum bits (`third_party/freeglut/src/osmesa/fg_window_osmesa.c:40`) | accum stays on — `scripts/docs-assets.sh`'s `GLR_ACCUM_PASSES=16` accumulation AA is unaffected (verified in source; re-render one full-UI doc asset as the regression check) |
-| Emscripten / gl4es | gl4es's getter has no `GL_ACCUM_*_BITS` case, so the pname falls through to the WebGL driver → `GL_INVALID_ENUM`, out-param untouched → stays 0 | accum forced off — the waste stops. Hence init-to-0 + the `glGetError()` clear |
+| macOS Cocoa / Linux GLX (native) | real bits (window requested `GLUT_ACCUM`, `gl_repl.c:658`) | accum stays on - no behavior change |
+| OSMesa (headless captures) | **16** - the vendored freeglut backend maps `GLUT_ACCUM` to 16 accum bits (`third_party/freeglut/src/osmesa/fg_window_osmesa.c:40`) | accum stays on - `scripts/docs-assets.sh`'s `GLR_ACCUM_PASSES=16` accumulation AA is unaffected (verified in source; re-render one full-UI doc asset as the regression check) |
+| Emscripten / gl4es | gl4es's getter has no `GL_ACCUM_*_BITS` case, so the pname falls through to the WebGL driver → `GL_INVALID_ENUM`, out-param untouched → stays 0 | accum forced off - the waste stops. Hence init-to-0 + the `glGetError()` clear |
 | GL stubs (`USE_GL_STUBS=1`) | no-op getter → 0 | accum off; stub builds don't render, harmless |
 
 **Non-goals for Part 1:** no menu/config surface changes. The Accum effect
 config row still cycles; with `use_accum == 0` the `do_accum` branch simply
 never runs (existing `config->use_accum` gating). Optionally the status line
-could note "accum unavailable" when cycling the effect on web — nice-to-have,
+could note "accum unavailable" when cycling the effect on web - nice-to-have,
 not required.
 
-## Part 2 — gl4es patch: accum buffer via FBO — IMPLEMENTED
+## Part 2 - gl4es patch: accum buffer via FBO - IMPLEMENTED
 
 **As landed** (deltas from the sketch below):
 
 - New `src/gl/accum.c` (+`accum.h`) in gl4es; ops draw through a private
-  `uScale` shader (one program serves ACCUM/LOAD/RETURN — additive blend
+  `uScale` shader (one program serves ACCUM/LOAD/RETURN - additive blend
   on for ACCUM, off for LOAD/RETURN) rather than `gl4es_blitTexture`
   itself, but follow its exact state-hygiene pattern (raw GLES draws
   under `glPushAttrib(GL_ENABLE_BIT|GL_COLOR_BUFFER_BIT)`, tracked
@@ -85,8 +85,8 @@ not required.
   for: Emscripten runs `GetHardwareExtensions` with `notest` (no
   `gles_getProcAddress` hook is installed), so `hardext.floatfbo` /
   `halffloattex` stay 0 there. The landed probe tries formats outright
-  — RGBA16F/`GL_HALF_FLOAT`, then unsized `GL_HALF_FLOAT_OES`, then
-  RGBA8 — judged by a one-time 4x4 FBO-completeness test.
+  - RGBA16F/`GL_HALF_FLOAT`, then unsized `GL_HALF_FLOAT_OES`, then
+  RGBA8 - judged by a one-time 4x4 FBO-completeness test.
 - Drawable-size resolution for the FBO-0 case (gl4es tracks no canvas
   size on Emscripten): the `getMainFBSize` hook if installed, else the
   Emscripten drawing-buffer query, else `mainfbo_*` / viewport extent.
@@ -98,13 +98,13 @@ not required.
   components to be a subset of the read buffer's, and the WebGL canvas
   has no alpha channel (GLUT never requests one → `alpha:false` →
   effectively RGB8), so an RGBA destination fails with
-  `GL_INVALID_OPERATION` and the copy silently drops — the first cut
+  `GL_INVALID_OPERATION` and the copy silently drops - the first cut
   shipped that way and RETURN painted the whole scene rect black
   (found by interactive testing; the 2D overlays drawn after RETURN
   survived, which is what localized the failure to the accum content).
   RGB works against both RGB8 and RGBA8 read sources.
 
-Verified (2026-07-16, headful Chrome with `GLR_ACCUM_PASSES=2` forced —
+Verified (2026-07-16, headful Chrome with `GLR_ACCUM_PASSES=2` forced -
 two gotchas made the first verification pass vacuous: headless Chrome
 barely pumps rAF frames so `glAccum` never ran at all, and the passes
 default is 1 so even headful sessions never enter the accum loop
@@ -122,7 +122,7 @@ stack byte-identical to the working tree.
 
 ### What actually needs emulating
 
-The app's usage (the only accum client) is narrow — `src/render3d/render.c`:
+The app's usage (the only accum client) is narrow - `src/render3d/render.c`:
 
 ```
 glClear(... | GL_ACCUM_BUFFER_BIT)      // once per frame, full window
@@ -139,30 +139,30 @@ translation is the textbook accumulate-in-a-texture pattern:
 | `glAccum(GL_ACCUM, w)` | `glCopyTexSubImage2D` the current read framebuffer into a scratch texture, then draw it into the accum FBO as a fullscreen quad with additive blending scaled by `w` (`glBlendColor` + `GL_CONSTANT_ALPHA`, or a tiny private shader) |
 | `glAccum(GL_RETURN, s)` | draw the accum texture to the current draw framebuffer, replace mode, modulated by `s` |
 | `glAccum(GL_LOAD, w)` | same as ACCUM without blending (trivial; include for completeness) |
-| `GL_ADD` / `GL_MULT` | leave TODO — nothing in gl-repl (or most fixed-function code) uses them |
+| `GL_ADD` / `GL_MULT` | leave TODO - nothing in gl-repl (or most fixed-function code) uses them |
 
 Scissor semantics come for free: real `glAccum` honors the scissor box, and
-the emulation's copies/quad draws inherit the live scissor state — so the
+the emulation's copies/quad draws inherit the live scissor state - so the
 app's `use_accum_aa_scissors` option maps 1:1.
 
 ### Why gl4es is a good host
 
 The risky machinery already exists in-tree:
 
-- **`gl4es_blitTexture`** (`src/gl/blit.c`) — the internal "draw a texture
+- **`gl4es_blitTexture`** (`src/gl/blit.c`) - the internal "draw a texture
   into the current framebuffer with a private shader while preserving user
   fpe/program state" helper the bitmap-font emulation uses mid-frame. That is
   exactly the state-hygiene problem the accum ops have, already solved and
   battle-tested.
 - **FBO wrappers** (`src/gl/framebuffers.c`) for the internal accum target.
 - `glCopyTexSubImage2D` from the (possibly MSAA) canvas backbuffer performs
-  an implicit resolve in WebGL2 — the same mechanism the app's Post FX filter
+  an implicit resolve in WebGL2 - the same mechanism the app's Post FX filter
   already uses successfully on web.
 
 New code is essentially an `accum.c`: glstate fields (accum texture + FBO +
 scratch texture + dims), lazy creation sized to the drawable, recreate on
 canvas resize, the ops, the clear hook, and replacing the `STUB(glAccum)`
-export. Estimated **300–400 lines** — larger than the attrib-stack patches,
+export. Estimated **300–400 lines** - larger than the attrib-stack patches,
 smaller than color-material. Ships as local patch #7
 (`packaging/web/patches/gl4es-accum-fbo.patch`), registered last in
 `scripts/web-deps.sh` `GL4ES_PATCHES` and listed in
@@ -171,7 +171,7 @@ smaller than color-material. Ships as local patch #7
 ### Format, capability probe, and the detection tie-in
 
 - **Accum target format: RGBA16F.** Rendering/blending into half-float needs
-  WebGL2's `EXT_color_buffer_float` — effectively universal on modern desktop
+  WebGL2's `EXT_color_buffer_float` - effectively universal on modern desktop
   browsers. gl4es's `hardext` probes float *texturing* only
   (`floattex`/`halffloattex` in `src/glx/hardext.h`), so add a renderability
   probe (extension check, or a one-time FBO-completeness test).
@@ -181,7 +181,7 @@ smaller than color-material. Ships as local patch #7
 - **Report `GL_ACCUM_RED/GREEN/BLUE/ALPHA_BITS`** (16 or 8) from gl4es's
   getter when the emulation is live. This is the tie-in that makes Part 1
   self-healing: the app's detection sees nonzero bits and re-enables accum on
-  web automatically — no app-side changes in Part 2.
+  web automatically - no app-side changes in Part 2.
 - Precision: 16F (10-bit mantissa) is comfortable for ≤16 passes of
   1/N-weighted adds; a real accum buffer was typically 16-bit integer.
 
@@ -197,7 +197,7 @@ canvas likely has MSAA on by default. That makes accum **AA** partly
 redundant on web (and each copy pays an MSAA resolve). The emulation's real
 payoff is **Blur / Blur Cam**, which have no MSAA substitute. If AA-2-pass
 proves visually redundant on web, consider defaulting the effect to Off there
-while leaving Blur available — a follow-up, not part of this plan.
+while leaving Blur available - a follow-up, not part of this plan.
 
 ### Risks
 
@@ -207,7 +207,7 @@ while leaving Blur available — a follow-up, not part of this plan.
 - **Resize lifecycle**: the accum/scratch textures must track drawable size;
   recreate on mismatch at op time (accum contents are per-frame scratch for
   this app, so a resize glitch frame is harmless).
-- **Existing-checkout migration**: same note as the attrib-stack amendments —
+- **Existing-checkout migration**: same note as the attrib-stack amendments -
   a stale `third_party/web/gl4es` needs `git checkout -- src` (or deletion)
   if patch stacking ever reports "already applied" spuriously.
 
@@ -217,7 +217,7 @@ while leaving Blur available — a follow-up, not part of this plan.
   quads, GL 1.1 only): no gl4es change, but 8-bit precision (banding worse at
   high pass counts, and the i/(i+1) running-average compounds rounding), and
   it pollutes the portable fixed-function app code with a web-shaped path.
-  Rejected — the project's pattern is to fix GL-stack gaps in gl4es patches
+  Rejected - the project's pattern is to fix GL-stack gaps in gl4es patches
   and keep the app authored against real GL semantics.
 - **Do nothing / default accum off on web**: stops the waste (Part 1 achieves
   this generically) but leaves Blur/Blur Cam permanently dead in the browser.
@@ -225,7 +225,7 @@ while leaving Blur available — a follow-up, not part of this plan.
 ## Verification
 
 Part 1 (done at implementation time):
-- Native: `FREEGLUT_CAPTURE_FRAMES=2 ./gl-repl --no-audio` — no accum
+- Native: `FREEGLUT_CAPTURE_FRAMES=2 ./gl-repl --no-audio` - no accum
   notice on stderr (real context reports accum bits), frames render.
 - `make test`, `make test-stubs`, `make check-state-ownership`,
   `make check-c99`, `make gl-repl USE_GL_STUBS=1` all green. (The `make

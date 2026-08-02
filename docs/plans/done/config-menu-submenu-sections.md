@@ -1,27 +1,27 @@
 # Config menu → flyout submenu sections (+ "All")
 
-Status: **done** — Option A delivered: one generalized flyout-submenu
+Status: **done** - Option A delivered: one generalized flyout-submenu
 engine serves the Scene example menu and the Config section / All menu.
 The tall All-flyout scrolling limitation is documented as an out-of-scope
 follow-up.
 
 ## Progress log
 
-- [x] Step 1 — Section model in `glr_config` (incl. `row_kind`)
-- [x] Step 2 — Generalize submenu plumbing (Scene-wired; Config stubbed)
-- [x] Step 3 — `UiHit` contract rename
-- [x] Step 4 — Config menu shape (+ flyout state/shortcut render, pulled from Step 8)
-- [x] Step 5 — Parent-row click guard (option b; activate-layer)
-- [x] Step 6 — Controller routing
-- [x] Step 7 — Right-click backward-cycle in flyouts
-- [x] Step 8 — Render verification (gates green; All-flyout scroll noted)
-- [x] Step 9 — Tests + docs (full gate green; CLAUDE.md + MODULES.md updated)
+- [x] Step 1 - Section model in `glr_config` (incl. `row_kind`)
+- [x] Step 2 - Generalize submenu plumbing (Scene-wired; Config stubbed)
+- [x] Step 3 - `UiHit` contract rename
+- [x] Step 4 - Config menu shape (+ flyout state/shortcut render, pulled from Step 8)
+- [x] Step 5 - Parent-row click guard (option b; activate-layer)
+- [x] Step 6 - Controller routing
+- [x] Step 7 - Right-click backward-cycle in flyouts
+- [x] Step 8 - Render verification (gates green; All-flyout scroll noted)
+- [x] Step 9 - Tests + docs (full gate green; CLAUDE.md + MODULES.md updated)
 
 ## Goal
 
 Replace the single flat Config dropdown with a short list of **section
 rows** (RENDERING, TIME & REPLAY, OVERLAYS & SCENE, GEOMETRY,
-INTERFACE, AUDIO) that each open a **flyout submenu** of their items —
+INTERFACE, AUDIO) that each open a **flyout submenu** of their items -
 the same interaction the Scene menu already uses for example tags. Add
 an **All** section row whose flyout is today's full flat list (so the
 current behavior remains reachable verbatim).
@@ -32,25 +32,25 @@ current behavior remains reachable verbatim).
   (`src/app/glr_actions.c:94`) already carries `### RENDERING`,
   `### TIME & REPLAY`, `### OVERLAYS & SCENE`, `### GEOMETRY`,
   `### INTERFACE`, `### AUDIO` as `section_header` rows with `---`
-  separators. No data restructure is required — a runtime walk that
+  separators. No data restructure is required - a runtime walk that
   treats `### X` rows as boundaries yields `(label, start, count)`.
-- **"All" is the current flat list** — same content/order/look as
+- **"All" is the current flat list** - same content/order/look as
   today, just relocated into a flyout. Not quite *free*: because it
   spans the `### `/`---` chrome rows, the generic submenu layer needs a
-  `row_kind` so chrome stays inert (Finding #4 — see Step 2).
+  `row_kind` so chrome stays inert (Finding #4 - see Step 2).
 - **Submenu-item activation is index-based and unchanged.**
   `glr_action_menu_item_activate(menu_id, item_idx)`
   (`src/app/glr_actions.c:455`, Config branch at `:551`) already
   dispatches a Config row purely by its **absolute `g_cfg_items[]`
   index** via `glr_config_item_at(item_idx)`. A submenu row only has to
-  carry that absolute index — exactly like the Scene submenu carries
-  the global example index — so the *leaf-item* activation path needs
-  *zero* changes. **The parent (section) row path does need a guard —
+  carry that absolute index - exactly like the Scene submenu carries
+  the global example index - so the *leaf-item* activation path needs
+  *zero* changes. **The parent (section) row path does need a guard -
   see the "Parent-row click guard" risk below.**
 - **There is an exact precedent for the parent-row guard.** The
   `MENU_SCENE` branch of `glr_action_menu_item_activate`
   (`src/app/glr_actions.c:~520`) already does
-  `if (item_idx >= 1 && item_idx <= tag_count) return 0;` — a tag
+  `if (item_idx >= 1 && item_idx <= tag_count) return 0;` - a tag
   *parent* row click is a deliberate no-op (the flyout opens on
   **hover**, not click). Config must mirror this for section rows.
 - **The flyout pattern is proven** in `src/ui/menu_bar.c`:
@@ -75,7 +75,7 @@ scene/example concepts:
 
 So there are two viable directions.
 
-### Option A — Generalize the submenu engine (recommended)
+### Option A - Generalize the submenu engine (recommended)
 
 Make one menu-agnostic submenu mechanism driven by `(menu_id,
 parent_row)` plus a tiny row-provider indirection:
@@ -84,7 +84,7 @@ parent_row)` plus a tiny row-provider indirection:
 - `submenu_label(menu, parent_row, ordinal)`
 - `submenu_abs_index(menu, parent_row, ordinal)`
 - **`submenu_row_kind(menu, parent_row, ordinal)` →
-  `{HEADER, SEPARATOR, ITEM}`** — required because the **All** section
+  `{HEADER, SEPARATOR, ITEM}`** - required because the **All** section
   spans the *full* `g_cfg_items[]` range, which contains `### …`
   header and `---` separator rows. Without a row-kind the generic
   hit-test would route a click on chrome as a real config hit. The
@@ -105,30 +105,30 @@ today's flat-list look verbatim).
 Pros:
 - One submenu code path (rect/hit/hover-open/render) instead of two.
   Consistent with the codebase's ownership discipline (CLAUDE.md
-  prefixes; `arch-simplicity` ethos) — avoids a parallel copy.
+  prefixes; `arch-simplicity` ethos) - avoids a parallel copy.
 - `MENU_CONFIG`'s `menu_item_count/label` collapse to the section list;
   per-item detail moves entirely behind the submenu provider.
 - Future menus (Tutorials?) get submenus for free.
 
 Cons:
 - Diffuse change: touches the hover-open state machine (a single
-  `g_open_*tag` pair can't represent two menus' open submenus — replace
+  `g_open_*tag` pair can't represent two menus' open submenus - replace
   with `{menu_id, parent_row, open_time}`), the hit-test precedence in
   `ui_menu_bar_hit_test` (`:480`), the render path, and the `UiHit`
   contract (rename `UI_HIT_EXAMPLE_SUBMENU_ITEM` →
   `UI_HIT_SUBMENU_ITEM`, carry `menu_id` so the controller routes to
   scene-load *or* `glr_action_menu_item_activate`).
-- Touches Scene-menu behavior — regression-test both menus.
+- Touches Scene-menu behavior - regression-test both menus.
 - Config-specific gaps the Scene menu never had (all addressed in the
   Steps, not deferred): **(1)** Config parent rows must not route as
-  flat-index activation — guarded via the `MENU_SCENE` precedent
+  flat-index activation - guarded via the `MENU_SCENE` precedent
   (Step 5); **(3)** right-click backward-cycle must move from the flat
   dropdown to the open flyout (Step 7); **(4)** the All flyout spans
   `### `/`---` chrome, so the generic provider needs a `row_kind` and
   the renderer/hit-test must keep chrome inert (Step 2 provider, Step 8
   render).
 
-### Option B — Duplicate the submenu code for Config
+### Option B - Duplicate the submenu code for Config
 
 Copy `scene_example_submenu_*` into `config_section_submenu_*` with its
 own `g_config_open_section` / open-time globals and a
@@ -139,7 +139,7 @@ Pros:
 
 Cons (decisive):
 - Two near-identical submenu engines to keep in sync (rect math,
-  hover-open timing, fade, hit precedence) — classic pattern-soup in a
+  hover-open timing, fade, hit precedence) - classic pattern-soup in a
   tree that is otherwise careful about single-owner mechanics.
 - The hover-open globals still need disambiguation once both menus can
   have an open submenu, so half of A's "diffuse" cost is paid anyway.
@@ -150,8 +150,8 @@ Cons (decisive):
 submenu engine, Config detail hidden behind a provider), and B pays much
 of A's state-machine cost without the consolidation benefit. Note the
 review correction: the "All" section and the parent-row activation path
-are *not* trivial — All drags in row-kind/chrome handling and section
-rows need the no-op-on-click guard — but those costs are identical in A
+are *not* trivial - All drags in row-kind/chrome handling and section
+rows need the no-op-on-click guard - but those costs are identical in A
 and B, so they don't change the A-vs-B verdict; they're folded into the
 Steps.
 
@@ -161,7 +161,7 @@ Order matters; each step builds + passes tests before the next.
 
 1. **Section model (no UI yet).** ✅ **Done** (commit `Step 1`).
    Added to `src/app/glr_config.{c,h}` a pure helper enumerating **only
-   the real sections present in the data** (no synthetic All — that is
+   the real sections present in the data** (no synthetic All - that is
    a menu-layer concern, see Step 4): `glr_config_section_count()`
    (count of `### ` headers), `glr_config_section_label(s)` ("### "
    marker stripped), `glr_config_section_range(s, *start, *count)`
@@ -170,10 +170,10 @@ Order matters; each step builds + passes tests before the next.
    *never* counted here.
    **Deviation from sketch:** `glr_config_row_kind(idx) →
    {ITEM,HEADER,SEPARATOR}` (originally slated for Step 2) landed here
-   too — it is pure config-domain row classification, so it belongs
+   too - it is pure config-domain row classification, so it belongs
    beside the section model, not in the menu layer. Step 2's provider
    now just *consumes* it.
-   Tests: `test_glr_actions.c::test_config_sections` — section
+   Tests: `test_glr_actions.c::test_config_sections` - section
    count/labels, range contiguity & item-only invariant, and that
    header+separator+item kinds partition the whole table
    (`build/release-gl-stubs/test_glr_actions` → 157/157).
@@ -182,9 +182,9 @@ Order matters; each step builds + passes tests before the next.
    `g_scene_submenu_open_time` with generic
    `g_submenu_menu_id`/`g_submenu_parent_row`/`g_submenu_open_time`
    (+ `submenu_reset()`). Rewrote the scene-specific functions into a
-   menu-agnostic engine — `submenu_rect`, `submenu_hit_test`,
+   menu-agnostic engine - `submenu_rect`, `submenu_hit_test`,
    `submenu_hover_ordinal`, `update_submenu_hover_at`,
-   `render_active_submenu` — driven by a small file-static provider
+   `render_active_submenu` - driven by a small file-static provider
    keyed by `(menu_id, parent_row)`: `submenu_row_count/_label/
    _abs_index/_kind/_is_active` + `menu_row_has_submenu`. `MENU_SCENE`
    resolves the parent row back to its tag and reuses
@@ -194,7 +194,7 @@ Order matters; each step builds + passes tests before the next.
    `tag → parent_row → submenu_rect`).
    **Deviations from sketch (kept the step behaviour-neutral):**
    - The Config side of the provider is *stubbed* (`submenu_row_count`
-     returns 0 for non-Scene) — the `glr_config_section_*` wiring lands
+     returns 0 for non-Scene) - the `glr_config_section_*` wiring lands
      in Step 4 with the menu-shape change, so this commit cannot regress
      Config.
    - The `UiHit` contract is **not** renamed yet (that is Step 3). A
@@ -218,7 +218,7 @@ Order matters; each step builds + passes tests before the next.
 4. **Config menu shape.** ✅ **Done** (commit `Step 4`).
    `menu_item_count(MENU_CONFIG)` → `glr_config_section_count() + 1`;
    the **menu layer owns the +1 synthetic All row** via
-   `config_all_parent_row()` (Step 1's accessor never counts it — no
+   `config_all_parent_row()` (Step 1's accessor never counts it - no
    double-count). `menu_item_label` returns section labels + "All";
    every Config top-level row is a parent that hover-opens the generic
    submenu. Provider Config branch wired
@@ -249,7 +249,7 @@ Order matters; each step builds + passes tests before the next.
      `UI_HIT_MENU_ITEM`, consumed, scene-unchanged invariant intact).
    - **Step 4 ↔ 5 coupling found:** plan-Step-5 option (a) ("hit-test
      never emits `UI_HIT_MENU_ITEM` for parent rows") is **not viable**
-     — `ui_menu_bar_dropdown_item_hit` is shared with the hover path,
+     - `ui_menu_bar_dropdown_item_hit` is shared with the hover path,
      and returning −1 there would stop Config sections from
      hover-opening. So Step 5 collapses to **option (b) only**: the
      `glr_action_menu_item_activate(MENU_CONFIG, …)` guard. At Step 4
@@ -262,7 +262,7 @@ Order matters; each step builds + passes tests before the next.
    `Step 5`). Option (a) ruled out in Step 4 (hover shares
    `ui_menu_bar_dropdown_item_hit`); implemented **option (b)**: the
    `GLR_MENU_CONFIG` branch of `glr_action_menu_item_activate` is now
-   an explicit parent-row no-op — it never treats `item_idx` as a
+   an explicit parent-row no-op - it never treats `item_idx` as a
    `g_cfg_items[]` index, returns 0 (dropdown stays open), mirroring
    the `MENU_SCENE` tag-row guard. Leaf config items will be activated
    by the controller calling `glr_cfg_cycle_row()` on the absolute
@@ -281,7 +281,7 @@ Order matters; each step builds + passes tests before the next.
    default/`MENU_SCENE` → `glr_scene_load_example(item_idx)` then
    `ui_menu_bar_close()`. **Plan correction:** the sketch said route
    Config through `glr_action_menu_item_activate(GLR_MENU_CONFIG, …)`,
-   but Step 5 made that branch the inert parent-row guard — so the
+   but Step 5 made that branch the inert parent-row guard - so the
    leaf path deliberately calls `glr_cfg_cycle_row` directly instead
    (the activate path would now no-op). `UI_HIT_SUBMENU_ITEM` is
    already in the dropdown-dismiss keep-open allowlist (Step 3), so a
@@ -291,10 +291,10 @@ Order matters; each step builds + passes tests before the next.
    tests; full suite stays 6059/6059.
 7. **Right-click backward-cycle in flyouts (Finding #3).** ✅ **Done**
    (commit `Step 7`). `ui_menu_bar_handle_config_right_press` now
-   calls the generic `submenu_hit_test(mx,my)` — which only resolves
+   calls the generic `submenu_hit_test(mx,my)` - which only resolves
    actionable `ITEM` rows (chrome skipped via `submenu_row_kind`;
    parent/All rows own no submenu) and carries the absolute
-   `g_cfg_items[]` index in `item_idx` — then `glr_cfg_cycle_row(idx,
+   `g_cfg_items[]` index in `item_idx` - then `glr_cfg_cycle_row(idx,
    -1)`. A right-press over the section list / chrome / closed menu is
    a clean no-op. Added a public generic test accessor
    `ui_menu_bar_submenu_rect_for_test(menu_id, parent_row, …)` (the
@@ -302,7 +302,7 @@ Order matters; each step builds + passes tests before the next.
    `test_ui_menu_bar.c::test_config_submenu_right_press`: flyout item
    cycles backward; section parent row & closed menu are no-ops. Full
    suite 6069/6069.
-8. **Render (verification — core work pulled into Steps 2 & 4).**
+8. **Render (verification - core work pulled into Steps 2 & 4).**
    ✅ **Done** (commit `Step 8`, plan-only). `render_active_submenu`
    (unified fade, Step 2) + HEADER/SEPARATOR inert chrome (Finding #4)
    + Config flyout shortcut/state columns (Step 4) were code-reviewed
@@ -316,8 +316,8 @@ Order matters; each step builds + passes tests before the next.
    GL-purity/ownership regression), `make test USE_GL_STUBS=1`
    6069/6069.
    **Known limitation (documented, out of scope):** the **All** flyout
-   spans the whole table (~40+ rows). The submenu engine — like the
-   pre-existing Scene tag submenu — does not scroll, so on a short
+   spans the whole table (~40+ rows). The submenu engine - like the
+   pre-existing Scene tag submenu - does not scroll, so on a short
    window the All flyout clamps to `y=0` and its earliest rows render
    above the viewport. Named sections (the primary feature) are short
    and unaffected; All is a secondary escape hatch. A scrolling
@@ -348,8 +348,8 @@ step. Option A (generalize) delivered: one `(menu_id, parent_row)`
 flyout engine now serves both the Scene example menu and the new
 Config section/All menu, with the four review findings closed
 (parent-row guard, single All ownership, right-press in flyout,
-row-kind chrome). Net deviations from the original sketch — all
-documented inline above — were forced by the "every step builds +
+row-kind chrome). Net deviations from the original sketch - all
+documented inline above - were forced by the "every step builds +
 passes" constraint: render columns pulled Step 8→4, the Step 4↔5
 coupling collapsed Step 5 to option (b), Step 6 routes Config leaves
 directly via `glr_cfg_cycle_row` (not the now-inert activate branch),
@@ -399,7 +399,7 @@ overlay-precedence hole:
 5. **In-flyout chrome fell through.** `submenu_hit_test` returns
    `UI_HIT_NONE` for the All flyout's `### `/`---` chrome rows, but the
    inert-consume fallback in `ui_menu_bar_hit_test` only tested the
-   *parent* dropdown rect — the flyout is a separate rect beside it.
+   *parent* dropdown rect - the flyout is a separate rect beside it.
    Clicking a visible header/separator therefore returned `UI_HIT_NONE`
    → the controller dismissed the menu and routed the click to the
    tabs/code/scene drawn beneath. Fix: after `submenu_hit_test` misses,
@@ -411,15 +411,15 @@ overlay-precedence hole:
 
 ## Open sub-questions for review
 
-- **All placement:** ✅ resolved — **last** row (after all sections),
+- **All placement:** ✅ resolved - **last** row (after all sections),
   via `config_all_parent_row() == glr_config_section_count()`.
-- **Keyboard shortcuts:** ✅ resolved — the submenu ITEM rows render
+- **Keyboard shortcuts:** ✅ resolved - the submenu ITEM rows render
   the shortcut hint + state label (Step 4); F-key/Ctrl dispatch is
   unchanged (still `glr_actions`, not menu geometry).
-- **Scene-menu regression scope:** ✅ held — the Scene example submenu
+- **Scene-menu regression scope:** ✅ held - the Scene example submenu
   rides the same generalized engine and all Scene submenu tests stayed
   green every step (6069/6069 at Step 7).
-- **Scrolling submenu (NEW, follow-up — out of scope):** the **All**
+- **Scrolling submenu (NEW, follow-up - out of scope):** the **All**
   flyout exceeds a short window's height and the engine doesn't
   scroll (a limitation inherited from the pre-existing Scene tag
   submenu). Worth a dedicated follow-up plan (clamp + scroll, or cap

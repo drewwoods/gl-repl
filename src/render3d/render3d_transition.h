@@ -5,7 +5,7 @@
  * It is a pure CLOCK plus a phase/event policy: it owns the requested theme,
  * calls render3d_xn_set()/render3d_xn_show() when that request changes, and advances
  * the machine with render3d_xn_tick(dt). It does NOT know how long a fade takes
- * or what opacity a given moment maps to — that belongs to the overlay.
+ * or what opacity a given moment maps to - that belongs to the overlay.
  *
  * Each overlay supplies a Render3dXnReveal (bound once at render3d_xn_init): a pair
  * of pure functions that own the durations, the per-theme speed, and the
@@ -21,12 +21,12 @@
  * themes and reversing back to the current theme flips direction continuously.
  *
  * API verb cheat-sheet:
- *   render3d_xn_init  — snap to theme fully shown, no animation; bind the reveal.
- *   render3d_xn_set   — request a theme change; reads `current` to decide whether
+ *   render3d_xn_init  - snap to theme fully shown, no animation; bind the reveal.
+ *   render3d_xn_set   - request a theme change; reads `current` to decide whether
  *                    to FADE_OUT, reverse to FADE_IN, or no-op.
- *   render3d_xn_show  — fade in from invisible, skipping a dead FADE_OUT.
- *   render3d_xn_tick  — advance `elapsed` by dt; sole driver of phase changes.
- *   render3d_xn_opacity — current 0..1 opacity for the renderer (via the reveal).
+ *   render3d_xn_show  - fade in from invisible, skipping a dead FADE_OUT.
+ *   render3d_xn_tick  - advance `elapsed` by dt; sole driver of phase changes.
+ *   render3d_xn_opacity - current 0..1 opacity for the renderer (via the reveal).
  */
 #ifndef RENDER3D_TRANSITION_H
 #define RENDER3D_TRANSITION_H

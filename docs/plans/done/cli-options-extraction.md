@@ -1,6 +1,6 @@
 # Where should CLI/arg handling live? (decision pending)
 
-Status: **in-review** — competing options, no decision yet. This folder is
+Status: **in-review** - competing options, no decision yet. This folder is
 for plans whose *direction* is still contested; do not implement until a
 direction is chosen and the file is moved to `not-started/` (or dropped).
 
@@ -23,7 +23,7 @@ so the File>Load-Scene message and other UI text can name the binary.
 
 Question raised: should we push `argc/argv` straight into `glr_ctrl`
 (or a new `glr_init(argc, argv)`) to move "the glr logic" out of
-`sample.c` — which would also subsume `glr_ctrl_set_program_name`?
+`sample.c` - which would also subsume `glr_ctrl_set_program_name`?
 
 ## Options
 
@@ -39,7 +39,7 @@ Cons (decisive):
   `check-gl-boundaries` guard requires GLUT/GL calls to stay in
   `sample.c`/`executor.c`. GLUT setup *cannot* move into `glr_ctrl`
   without tripping the guard, so argv handling ends up split across two
-  places anyway — more seams, not fewer.
+  places anyway - more seams, not fewer.
 - **Layering inversion.** CLAUDE.md: `sample.c` is the thin shell that
   forwards to `glr_ctrl_*`; `glr_ctrl` is the per-frame controller
   (display/reshape/input). CLI parsing + usage text is a startup/shell
@@ -50,9 +50,9 @@ Cons (decisive):
   these; absorbing CLI into `glr_ctrl` forces every entrypoint to reason
   about it.
 - Removes a ~12-line, well-scoped helper at the cost of a large
-  structural change — net complexity up.
+  structural change - net complexity up.
 
-### B. Extract a CLI/options module (`glr_cli.{c,h}`) — recommended if we act
+### B. Extract a CLI/options module (`glr_cli.{c,h}`) - recommended if we act
 
 `int glr_cli_parse(int argc, char **argv, GlrOptions *out)` returns a
 parsed struct (`input_file`, `no_audio`, `use_accum`, window size, dump
@@ -71,7 +71,7 @@ Pros:
 - Incremental, low blast radius.
 
 Cons:
-- A new module + `GlrOptions` struct (small) — only worth it if
+- A new module + `GlrOptions` struct (small) - only worth it if
   `sample.c` size / CLI testability is a real goal, not just to delete
   one helper.
 

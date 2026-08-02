@@ -8,7 +8,7 @@
  * of named sections (the `ProfSection` enum + `PROF_SECTION_COUNT`) is supplied
  * by the host via prof_sections.h, which the Makefile force-includes into every
  * TU (`-include prof_sections.h`, beside `-include config.h`). When no catalog
- * is provided — e.g. these files lifted into another project unchanged — the
+ * is provided - e.g. these files lifted into another project unchanged - the
  * fallback below makes ProfSection an opaque int and the timer degenerates to a
  * single section, so cpuprof.{c,h} still compile and link standalone.
  *
@@ -139,20 +139,20 @@ static inline int prof_section_set_equal(const ProfSectionSet *a,
 }
 
 /* Per-section display metadata, supplied by the app (not the generic timer).
- *  label    — bare section name for the HUD (no indentation baked in).
- *  depth    — nesting level (0 = top-level); the single source of truth for
+ *  label    - bare section name for the HUD (no indentation baked in).
+ *  depth    - nesting level (0 = top-level); the single source of truth for
  *             nesting. The panel derives the visual indentation from it and
  *             treats depth>0 as a "detail" sub-section hidden outside DETAILS
- *             mode — so restyling the indent never re-classifies a row.
- *  is_total — nonzero for a total row (drawn with a divider above it and the
+ *             mode - so restyling the indent never re-classifies a row.
+ *  is_total - nonzero for a total row (drawn with a divider above it and the
  *             full-budget warn/crit thresholds).
- *  is_slack — nonzero for a row where a *bigger* number is the healthy one:
+ *  is_slack - nonzero for a row where a *bigger* number is the healthy one:
  *             it measures time the frame is handed rather than time it spends
- *             (gl-repl's Present row — the vsync wait). The panel inverts the
+ *             (gl-repl's Present row - the vsync wait). The panel inverts the
  *             warn/crit coloring for these, so a long wait reads green and a
  *             vanishing one red. Such a row is outside the frame total by
  *             construction; the flag only decides how it is colored.
- *  is_frame_total — nonzero only for the whole-frame total. It keeps the
+ *  is_frame_total - nonzero only for the whole-frame total. It keeps the
  *             refresh-boundary tolerance specific to that row: another total
  *             uses the ordinary hard full-budget threshold.
  *
@@ -181,7 +181,7 @@ void prof_end(ProfSection s);
  * clock is read) and prof_end / prof_accum_end (after the elapsed time is
  * taken) so hook cost stays out of the section's own CPU measurement.
  * This is the seam the app uses to bracket the same sections with GPU
- * timer queries (src/support/gpuprof.c) without touching any call site —
+ * timer queries (src/support/gpuprof.c) without touching any call site -
  * the hook implementation decides which sections it cares about. NULLs
  * uninstall. No-op-cheap when uninstalled; not used by the generic timer
  * itself. */
@@ -194,7 +194,7 @@ void prof_install_section_hooks(ProfSectionHookFn begin_hook,
  * clock read and no hooks (there is no span to bracket a GPU query around).
  *
  * For a section that is a *difference* between two measured spans and would be
- * wrong to bracket directly — gl-repl's Present, which is the frame total minus
+ * wrong to bracket directly - gl-repl's Present, which is the frame total minus
  * the frame's work. Bracketing the swap itself would leave everything between
  * the two spans unattributed; subtracting sweeps it into the row that is meant
  * to absorb it. Prefer prof_begin/prof_end wherever there is a real span. */
@@ -227,8 +227,8 @@ int    prof_section_is_stale(ProfSection s);
 
 /* --- Fixed timing histograms ---
  *
- * One Histogram per section plus one for frame time. The distribution itself —
- * log-spaced bins, running statistics, and the reasoning behind both — belongs
+ * One Histogram per section plus one for frame time. The distribution itself -
+ * log-spaced bins, running statistics, and the reasoning behind both - belongs
  * to src/support/histogram.h; what lives here is only *when* a sample is fed.
  *
  * Section histograms are fed when a section publishes a sample:
@@ -247,10 +247,10 @@ int prof_frame_time_histogram(HistogramBin *out, int max_bins);
 int prof_section_stats(ProfSection s, HistogramStats *out);
 int prof_frame_time_stats(HistogramStats *out);
 
-/* Zero every section histogram and the frame-time histogram — bins and
- * running statistics alike — so the next samples start a fresh distribution.
+/* Zero every section histogram and the frame-time histogram - bins and
+ * running statistics alike - so the next samples start a fresh distribution.
  * Call when the measured workload is
- * replaced wholesale (loading a different example / scene) — the old shape
+ * replaced wholesale (loading a different example / scene) - the old shape
  * describes different geometry, and its startup outliers would otherwise sit
  * in the bins forever. Leaves the EMAs, staleness and FPS history alone:
  * those are self-correcting over a few frames, the histograms are cumulative

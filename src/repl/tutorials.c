@@ -20,7 +20,7 @@
       .var_target = 0.0f }
 
 /* Comment-less append COMMAND step: commits `e` with no locked
- * instruction row above it — the autocomplete ghost and status hint
+ * instruction row above it - the autocomplete ghost and status hint
  * still teach the command. Use for runs of related commands where a
  * narration comment per line would just be noise. */
 #define STEP_CMD(step_label, e) \
@@ -32,7 +32,7 @@
 
 /* Comment-only step: reveal the instruction comment, wait for an ack
  * key (Enter/Tab/Space), advance. SET's showcase flow without the cfg
- * write — narration between commands with no GL call to type. */
+ * write - narration between commands with no GL call to type. */
 #define STEP_NOTE(c) \
     { .label = NULL, .comment = (c), .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -49,7 +49,7 @@
 
 /* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
  * effect, show a "press Enter to continue" prompt, advance on ack key.
- * `expected` is NULL — there is no command to type. */
+ * `expected` is NULL - there is no command to type. */
 #define STEP_SET(step_label, c, slug, val) \
     { .label = (step_label), .comment = (c), .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -70,7 +70,7 @@
       .cfg_value = 0, .cfg_value_name = (val_name), .var_name = NULL, \
       .var_target = 0.0f }
 
-/* Staging step: apply cfg_slug=val and advance immediately — no
+/* Staging step: apply cfg_slug=val and advance immediately - no
  * instruction row, no ack key, no pause. Comment-less on purpose (the
  * validator rejects a comment here), so a run of them stacks without an
  * Enter apiece:
@@ -82,7 +82,7 @@
  * `cfg_slug` doubles as the discriminator that keeps these out of the
  * step-array sentinel (repl_tutorial_step_is_sentinel). Reach for
  * TutorialEntry.cfg instead when the settings can be applied at
- * tutorial start — this is for staging that must happen mid-lesson. */
+ * tutorial start - this is for staging that must happen mid-lesson. */
 #define STEP_SET_QUIET(slug, val) \
     { .label = NULL, .comment = NULL, .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -90,7 +90,7 @@
       .cfg_value = (val), .cfg_value_name = NULL, .var_name = NULL, \
       .var_target = 0.0f }
 
-/* Symbolic-value variant of STEP_SET_QUIET — see STEP_SET_SYM. */
+/* Symbolic-value variant of STEP_SET_QUIET - see STEP_SET_SYM. */
 #define STEP_SET_QUIET_SYM(slug, val_name) \
     { .label = NULL, .comment = NULL, .expected = NULL, \
       .placement = TUTORIAL_STEP_APPEND, .target_label = NULL, \
@@ -138,7 +138,7 @@
 
 /* Sentinel: comment, expected AND cfg_slug all NULL
  * (repl_tutorial_step_is_sentinel). Every real step carries at least one of
- * the three — SET/REQUIRE/NOTE have NULL `expected` but a comment;
+ * the three - SET/REQUIRE/NOTE have NULL `expected` but a comment;
  * comment-less COMMAND steps have NULL `comment` but an expected; SET_QUIET
  * has neither but always a cfg_slug. */
 #define STEP_SENTINEL \
@@ -159,7 +159,7 @@
  *     ~4 units tall, about 60% of the frame height.
  *   - A solid presented on its own is ~2 units across, matching
  *     glutSolidSphere(1, ...). The other GLUT solids do NOT agree at their
- *     nominal size-1 arguments — measured extents are cube(1) 1 unit,
+ *     nominal size-1 arguments - measured extents are cube(1) 1 unit,
  *     torus(1, 2) 6 units, teapot(1) 3.2 units, cone(1, 2) 2 units but
  *     growing along +Z from its base rather than centered. Match them
  *     explicitly: cube(2), torus(0.3, 0.7), teapot(0.7), and stand the cone
@@ -177,7 +177,7 @@
  * (CFG_DEFAULT_TUTORIAL_VERTEX_*), which is the right default while a learner
  * is placing individual vertices: on a triangle or a cube the overlays name
  * exactly what was typed. On a high-tessellation GLUT solid they do the
- * opposite — a 48x32 sphere is ~1600 vertices and a size-1 teapot ~1600, so
+ * opposite - a 48x32 sphere is ~1600 vertices and a size-1 teapot ~1600, so
  * every surface turns into speckle with its silhouette buried. Any entry whose
  * geometry is a dense solid (sphere/torus/teapot at these resolutions) shares
  * this block; entries that stay on cubes and flat figures keep the overlays. */
@@ -219,7 +219,7 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
 
 /* The square is 2 units, not the flat-figure +/-2 motif: it is the one flat
  * tutorial whose figure gets translated, and at 4 units wide a 2-unit shift
- * barely separated it from the origin — it just read as an oversized quad
+ * barely separated it from the origin - it just read as an oversized quad
  * hanging off to the right. Half the size makes the displacement legible. */
 static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
@@ -297,11 +297,11 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
     NULL,
 };
 
-/* "Feature Tour" — exercises the non-COMMAND step kinds and the
+/* "Feature Tour" - exercises the non-COMMAND step kinds and the
  * relaxed step shapes:
  *   1) A NOTE step opens the tour (comment-only; ack key advances).
  *   2) Five COMMAND steps draw a triangle in 3D. The two lower-corner
- *      vertex steps are comment-less (STEP_CMD) — the autocomplete
+ *      vertex steps are comment-less (STEP_CMD) - the autocomplete
  *      ghost and status hint carry the instruction, demonstrating
  *      that a narration comment per command is not required.
  *   3) One REQUIRE step asks the user to enable vertex outlines (using
@@ -349,13 +349,13 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
     NULL,
 };
 
-/* "Variable Slider" — teaches the REQUIRE_VAR step kind by driving a
+/* "Variable Slider" - teaches the REQUIRE_VAR step kind by driving a
  * variable that controls a drawn shape. The user declares `n` (the
  * triangle's size), draws a triangle whose vertices use `n`, then grows
  * `n` to 10 with the variable-panel slider and watches the triangle
  * scale. Both a typed commit and a slider drag flow through
  * repl_apply_predef_ops, which the editor commit path notifies after.
- * No `@cfg` block — presentation defaults are fine.
+ * No `@cfg` block - presentation defaults are fine.
  *
  * Step 0 is a DECLARATION step: `n` does not exist when the tutorial
  * starts, so the runner detects the undeclared var (see
@@ -395,7 +395,7 @@ static const TutorialStep g_tutorial_variable_slider_steps[] = {
     /* 2.5, not 10: the triangle's apex is at y = n, and the shared tutorial
      * camera only shows about +/-3.3 units of height, so a target of 10 ended
      * the lesson on a white slab filling the whole scene rect. Reachable by
-     * drag either way — the slider scrubs a flat 0.1 units per pixel from the
+     * drag either way - the slider scrubs a flat 0.1 units per pixel from the
      * declared value, so 2.5 is 15 px of travel. */
     STEP_REQUIRE_VAR(NULL,
         "// Now drag the n slider in the variable panel to bring n to 2.5.",
@@ -403,7 +403,7 @@ static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_SENTINEL,
 };
 
-/* "Lighting Basics" — the first lit-surface tutorial. Six COMMAND steps
+/* "Lighting Basics" - the first lit-surface tutorial. Six COMMAND steps
  * stand up the minimal lighting pipeline (depth test, lighting, one
  * light, color-material) and then draw a GLUT sphere so the shading
  * gradient across a curved surface is obvious. No entry `@cfg` is needed:
@@ -433,7 +433,7 @@ static const TutorialStep g_tutorial_lighting_basics_steps[] = {
     STEP_SENTINEL,
 };
 
-/* "First Animation" — introduces the built-in `t` clock without asking the
+/* "First Animation" - introduces the built-in `t` clock without asking the
  * learner to declare or edit it. The entry cfg pauses Auto time before the
  * first step, so the cube is visibly frozen until the REQUIRE step asks the
  * learner to press Ctrl+T. The closing NOTE leaves the motion on-screen
@@ -463,7 +463,7 @@ static const char *const g_tutorial_first_animation_cfg[] = {
     NULL,
 };
 
-/* "Color Interpolation" — the first tutorial that BUILDS ON prior work
+/* "Color Interpolation" - the first tutorial that BUILDS ON prior work
  * via a preloaded `setup` scaffold instead of making the user re-type
  * it (see docs/plans/active/tutorial-setup-scaffold.md). The scaffold
  * is the flat triangle from "First Triangle" drawn in one solid color,
@@ -513,7 +513,7 @@ static const char *const g_tutorial_points_lines_cfg[] = {
 static const TutorialStep g_tutorial_points_lines_steps[] = {
     /* 12, not 8: the GL_LINE_STRIP built in the second half of this tutorial
      * runs through the SAME three vertices as the point batch, and a 3-unit
-     * line width swallowed 8-pixel points almost entirely — the first half's
+     * line width swallowed 8-pixel points almost entirely - the first half's
      * result vanished as the second half was typed. At 12 the dots still read
      * at each joint of the finished strip. */
     STEP_APPEND(NULL,
@@ -570,7 +570,7 @@ static const char *const g_tutorial_glut_solids_setup[] = {
 };
 
 /* Every argument here is chosen so the five solids come out the same 2 units
- * across on a 3-unit pitch — see the measured extents in the staging comment
+ * across on a 3-unit pitch - see the measured extents in the staging comment
  * at the top of this file. The nominal "size 1" call for each shape does NOT
  * agree: cube(1) is half the sphere's width and torus(1, 2) is three times it.
  * The cone is the one shape the learner has to reorient, because it grows
@@ -723,7 +723,7 @@ static const TutorialStep g_tutorial_depth_mask_steps[] = {
 
 static const char *const g_tutorial_fog_cfg[] = {
     "// @cfg backdrop = RENDER3D_BACKDROP_STARS",
-    /* Eight dense toruses — see g_tutorial_dense_solid_cfg. */
+    /* Eight dense toruses - see g_tutorial_dense_solid_cfg. */
     "// @cfg vertex_points = 0",
     "// @cfg vertex_outlines = 0",
     NULL,
@@ -734,7 +734,7 @@ static const char *const g_tutorial_fog_cfg[] = {
  * the NEAREST ring ~8% visible, so the whole tunnel came out uniformly fogged
  * and the closing NOTE described a gradient nobody could see. From 11 units at
  * density 0.05 the near ring stays ~74% visible and the deepest ~9%. The yaw
- * stays oblique on purpose — this is the one tutorial whose geometry recedes
+ * stays oblique on purpose - this is the one tutorial whose geometry recedes
  * along Z, and looking straight down the tunnel stacks the rings concentrically
  * instead of showing them as a receding row. */
 static const char *const g_tutorial_fog_setup[] = {
@@ -776,7 +776,7 @@ static const TutorialStep g_tutorial_fog_steps[] = {
 
 /* d MUST stay 0 here: the sphere below has radius 1, so the plane y + 1 = 0
  * this tutorial used to define is exactly tangent to its south pole and clips
- * nothing at all — the lesson rendered as an untouched sphere. y = 0 cuts
+ * nothing at all - the lesson rendered as an untouched sphere. y = 0 cuts
  * through the center, which is what the step text promises. */
 static const TutorialStep g_tutorial_clip_planes_steps[] = {
     STEP_APPEND(NULL,
@@ -829,7 +829,7 @@ static const char *const g_tutorial_shade_model_setup[] = {
     NULL,
 };
 
-/* A flat quad cannot show the difference between GL_FLAT and GL_SMOOTH — the
+/* A flat quad cannot show the difference between GL_FLAT and GL_SMOOTH - the
  * two agree exactly on a single-normal polygon, which is why the old combined
  * tutorial demonstrated nothing. The comparison needs curvature the shading
  * can either hide or expose, so this draws a COARSE sphere (16x12: few enough
@@ -1004,7 +1004,7 @@ static const TutorialStep g_tutorial_bitmap_text_steps[] = {
 
 /* No camera-only scaffold here, unlike the other comparison tutorials: a
  * func-open step and a `setup` array are mutually exclusive (the validator
- * rejects the pair — func relocation would desync locked rows). So the three
+ * rejects the pair - func relocation would desync locked rows). So the three
  * spokes keep the shared yawed pose and render at slightly unequal sizes; the
  * ring radius stays at 2 so the spread stays small enough for that to read as
  * perspective rather than as three different spheres. */
@@ -1061,7 +1061,7 @@ static const TutorialStep g_tutorial_conditionals_steps[] = {
 
 /* Camera-only scaffold (see g_tutorial_culling_setup): the three spheres are a
  * plot of A[0..2], so their sizes have to read as equal and their 3-unit pitch
- * as even — exactly what the shared pose's yaw destroys. */
+ * as even - exactly what the shared pose's yaw destroys. */
 static const char *const g_tutorial_scratch_arrays_setup[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -10.00f);",
@@ -1127,7 +1127,7 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
               "g_tutorial_tag_labels[] out of sync with REPL_TUTORIAL_TAG_COUNT");
 
 /* Subheading labels here are catalog-author choices, not a fixed
- * vocabulary — the menu just emits `### subheading` chrome rows when
+ * vocabulary - the menu just emits `### subheading` chrome rows when
  * the subheading changes. The current catalog uses Beginner,
  * Intermediate, and Advanced; future catalogs can use any labels that
  * group sensibly within each tag flyout.
@@ -1163,7 +1163,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         /* Placed before "Depth Test Triangle" (Intermediate) so the ALL
          * flyout walks Beginner-only entries first, then transitions
-         * once to Intermediate at the tail — the subheading contiguity
+         * once to Intermediate at the tail - the subheading contiguity
          * test (test_catalog_subheading_metadata) requires a single
          * Beginner→Intermediate transition across the whole catalog. */
         .name       = "Variable Slider",
@@ -1215,7 +1215,7 @@ static const TutorialEntry g_tutorials[] = {
         /* Appended after Depth Test Triangle so both Intermediate entries
          * stay contiguous (Beginner run, then Intermediate run) in the ALL
          * flyout, and the two DEPTH_LIGHTING entries (Depth Test Triangle,
-         * Lighting Basics) form a single Intermediate run in that flyout —
+         * Lighting Basics) form a single Intermediate run in that flyout -
          * test_catalog_subheading_metadata enforces both. */
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
@@ -1224,7 +1224,7 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Intermediate",
     },
     {
-        /* Builds on First Triangle via a preloaded setup scaffold —
+        /* Builds on First Triangle via a preloaded setup scaffold -
          * the learner colors the corners without re-drawing the
          * triangle. It closes the original Intermediate trio while the
          * global catalog continues with Phase C's Intermediate entries. */
@@ -1616,16 +1616,16 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  *
  *   - empty / whitespace-only text;
  *   - embedded newlines (`\n`, `\r`);
- *   - statement separators (`;`) — would commit two source rows;
+ *   - statement separators (`;`) - would commit two source rows;
  *   - block punctuation (`{`/`}`) outside the block shapes the
- *     classifier recognises (see repl_tutorial_expected_shape) —
+ *     classifier recognises (see repl_tutorial_expected_shape) -
  *     the runner's bookkeeping only understands the open / branch /
  *     close commit deltas;
- *   - ORDINARY text with a `for(` / `if(` header prefix — the block
+ *   - ORDINARY text with a `for(` / `if(` header prefix - the block
  *     kernels claim those regardless of a trailing `{`, so the
  *     commit would still insert header + auto `}` (two rows) while
  *     the runner expected one;
- *   - any `float ` declaration (single- or multi-name) — the
+ *   - any `float ` declaration (single- or multi-name) - the
  *     CMD_VAR_DECLARE placement rule relocates the new decl to the
  *     top of non-decl code regardless of edit_line, so
  *     pending.commit_line would not match the actual landing row
@@ -1741,7 +1741,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
     /* Walk steps, validating each as we go. Forward references are
      * rejected naturally because target_label can only match a label
      * we have already seen. Sentinel is comment AND expected both NULL
-     * — SET/REQUIRE/NOTE steps legitimately leave `expected` NULL, and
+     * - SET/REQUIRE/NOTE steps legitimately leave `expected` NULL, and
      * comment-less COMMAND steps legitimately leave `comment` NULL.
      *
      * Block-shape COMMAND steps are tracked with a depth counter (and
@@ -1758,7 +1758,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
      * ORDINARY command, or a for/if block). Func defs relocate to the
      * top of non-decl code on commit; while only comments / decls /
      * completed funcs precede, that relocation is an identity and the
-     * runner's pending.commit_line stays truthful — afterwards it is
+     * runner's pending.commit_line stays truthful - afterwards it is
      * not, so later func-opens are rejected. */
     int saw_topline_nonfunc = 0;
     unsigned char open_is_if[TUTORIAL_MAX_STEPS];
@@ -1803,7 +1803,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
          * of this slug?) is a runtime check at tutorial_start because
          * it depends on the controller-installed config bridge. */
         if (step->kind == TUTORIAL_STEP_KIND_COMMAND) {
-            /* `comment` is optional for COMMAND — NULL/empty commits the
+            /* `comment` is optional for COMMAND - NULL/empty commits the
              * expected command with no locked instruction row. */
             if (!step->expected) {
                 if (err_size > 0)
@@ -1967,7 +1967,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             }
             /* A SET_QUIET never renders an instruction row, so a comment
              * on one is dead text the author expected to see. Reject it
-             * rather than swallow it — the fix is a SET step. */
+             * rather than swallow it - the fix is a SET step. */
             if (step->comment) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
@@ -2018,7 +2018,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             return 0;
         }
 
-        /* Unique non-empty labels — and no shadowing of a `:name` goto
+        /* Unique non-empty labels - and no shadowing of a `:name` goto
          * label the setup scaffold defines, so a target_label always
          * resolves unambiguously to one anchor. */
         if (!label_is_empty(step->label)) {
@@ -2071,7 +2071,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                 }
             }
             /* A target can also anchor on a `:name` goto label the
-             * setup scaffold defines — that's how steps splice new
+             * setup scaffold defines - that's how steps splice new
              * commands INTO preloaded code (resolved at step entry by
              * walking the live document's CMD_GOTO_LABEL rows). */
             if (!found && setup_defines_goto_label(entry, step->target_label))
@@ -2095,7 +2095,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
         step_count++;
     }
 
-    /* Every block that opens must close before the tutorial ends —
+    /* Every block that opens must close before the tutorial ends -
      * otherwise teardown leaves the learner inside a half-typed block
      * and the trailing auto-`}` never gets its matching step. */
     if (depth != 0) {
@@ -2108,7 +2108,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
     }
 
     /* Every preloaded prelude row is locked: the injected scene-clear
-     * rows (TUTORIAL_SCENE_PRELUDE_ROWS — the comment + glClear the runner
+     * rows (TUTORIAL_SCENE_PRELUDE_ROWS - the comment + glClear the runner
      * loads ahead of every tutorial) plus every setup line, plus up to one
      * baseline lock per step. A commented block-open needs TWO additional
      * locks for its committed header + auto-`}` (the baseline step lock is
@@ -2116,7 +2116,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
      * but budgeting two for every open is a safe upper bound. A branch
      * similarly needs one extra lock for its committed separator row.
      * Counting every setup line (metadata headers included) also
-     * overcounts — safely. Check even without setup so the relationship
+     * overcounts - safely. Check even without setup so the relationship
      * remains sound if either capacity constant changes. */
     {
         int setup_count = 0;

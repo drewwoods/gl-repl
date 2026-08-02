@@ -1,7 +1,7 @@
 # Built-In Examples
 
-> For a rendered gallery of these scenes — screenshots, animations, and the
-> source behind them — see the [Showcase](../docs/SHOWCASE.md).
+> For a rendered gallery of these scenes - screenshots, animations, and the
+> source behind them - see the [Showcase](../docs/SHOWCASE.md).
 
 Built-in examples are listed, in flat load order, by `examples/catalog.ini`.
 Their source files live under `examples/scenes/` and use one of two formats:
@@ -60,7 +60,7 @@ runtime.
 
 ## Authoring notes
 
-No predefined `goto` examples are shipped: `goto` support is partial — top-level
+No predefined `goto` examples are shipped: `goto` support is partial - top-level
 only (flatten rejects labels/gotos inside functions), not replay-safe (replay
 intentionally does not model dynamic goto traces), and not suitable for
 variable-driven geometry loops. Keep `goto` coverage in tests and docs rather
@@ -71,10 +71,10 @@ work out of `for` bodies so a dense example stays well clear of the cap.
 
 ## Example Color Language
 
-The built-in example scenes share one coherent palette — currently
+The built-in example scenes share one coherent palette - currently
 "Neon", electric accents around the brand mark's original magenta on the
 same deep ink (the earlier "Dusk" / "Dusk Magenta" sets are kept in
-[`accent_palette.h`](../accent_palette.h) for an easy flip back) — so the set reads as a
+[`accent_palette.h`](../accent_palette.h) for an easy flip back) - so the set reads as a
 designed family instead of a grab-bag of unrelated primaries. The rollout
 began with the Scene menu "2D" tag and now also covers the line/surface 3D
 scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and
@@ -83,12 +83,12 @@ transform stress. Extend it to the rest of the catalog as examples are touched.
 Beyond the examples, the palette also anchors the default **XZ Ruler grid
 theme** (`grid_ruler_line_color` + the axis/tick colors in
 [`src/render3d/grid.c`](../src/render3d/grid.c): CORAL X axis, AZURE Z axis, near-neutral field lines)
-and every staged snippet object in `scripts/docs-assets.sh` — so the docs
+and every staged snippet object in `scripts/docs-assets.sh` - so the docs
 screenshots, the showcase, and a fresh session all read as one family. Keep
 those on the palette too when touching them.
 
 Every covered scene clears to the same deep cool ink and draws geometry from
-this curated accent set — bright, electric, but still one family:
+this curated accent set - bright, electric, but still one family:
 
 | Role | RGB | Use |
 |---|---|---|
@@ -104,13 +104,13 @@ this curated accent set — bright, electric, but still one family:
 The machine-readable source of truth for this palette is
 [`accent_palette.h`](../accent_palette.h) at the repo root: named anchor
 sets, the active-palette select, and the semantic role map
-(`PAL_ROLE_*`) that C consumers — the XZ Ruler axes in
+(`PAL_ROLE_*`) that C consumers - the XZ Ruler axes in
 [`src/render3d/grid.c`](../src/render3d/grid.c), the color picker's
-palette swatch row — bind to instead of literals. Scene files cannot
+palette swatch row - bind to instead of literals. Scene files cannot
 `#include`, so they keep literal anchor triples; `make check-palette`
 (also part of `make check-state-ownership`) cross-checks the table above
 and every covered scene against the header. Scenes not yet migrated are
-listed in `scripts/baselines/palette-coverage.txt` — a remove-only
+listed in `scripts/baselines/palette-coverage.txt` - a remove-only
 ratchet; never add new scenes to it. `make palette-list` prints the
 anchors as floats + hex for SVG and doc work. To retune a role (say,
 move the warm key from CORAL to MAGENTA) edit its one `PAL_ROLE_*` line; to
@@ -118,7 +118,7 @@ swap the whole palette, add a new anchor list, repoint
 `PALETTE_ACTIVE_*`, and let `make check-palette` enumerate the scenes
 that need re-authoring.
 
-Procedural color sweeps lerp between two anchors — `color = A + (B - A) * s`
+Procedural color sweeps lerp between two anchors - `color = A + (B - A) * s`
 with `s` in `[0, 1]`. The signature ramp is CORAL → AZURE (warm to cool); a few
 scenes use VIOLET → AZURE or an AMBER accent for variety while staying in the
 family. Flat-colored discrete sets (triangle trios, transform groups, tess
@@ -127,7 +127,7 @@ stops) pick distinct palette members rather than ad-hoc primaries.
 **Neon design language.** The current anchors are deliberately electric:
 saturated hues at full value against the deep ink, so lit surfaces and
 line work read like a vector display rather than a softened print
-palette. Author with the anchors at full strength — depth cues should
+palette. Author with the anchors at full strength - depth cues should
 come from lighting and the black-interpolating ramps, not from
 pre-dimmed colors. MAGENTA is the family's fixed point (it *is* the
 brand mark's floor material, restored from the original logo); AMBER is

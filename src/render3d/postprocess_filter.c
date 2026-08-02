@@ -6,7 +6,7 @@
  * passes with a small ±x screen offset.
  *
  * Iteration 2: vignette. A blended elliptical radial gradient drawn
- * over the rect — transparent at the centre, darkening toward the
+ * over the rect - transparent at the centre, darkening toward the
  * corners. No capture needed (it only darkens), so it skips the
  * texture machinery entirely.
  *
@@ -15,7 +15,7 @@
  * so the whole image bulges toward the viewer like a CRT tube; dark
  * scanlines are then bent onto that same surface and multiplicatively
  * blended (GL_DST_COLOR, GL_ZERO) to darken existing pixels without
- * adding light. The barrel grid — not the texture work — is the trick,
+ * adding light. The barrel grid - not the texture work - is the trick,
  * so the surface stays a reusable primitive (see postprocess_surface.h):
  * it also offers a RIPPLE type (an animated underwater wobble) that no
  * filter wires up yet.
@@ -103,8 +103,8 @@ static int next_pow2(int v) {
  * snapshots the matrix-mode (not covered by glPushAttrib); end accepts
  * it back as a parameter, so the pair isn't coupled by a file-static
  * and an unbalanced second caller can't desync. Exported (declared in
- * postprocess_filter.h) so sibling scene-post passes — the depth-viz
- * quad — reuse the same bracket instead of duplicating it. */
+ * postprocess_filter.h) so sibling scene-post passes - the depth-viz
+ * quad - reuse the same bracket instead of duplicating it. */
 void render3d_post_2d_begin(int sx, int sy, int sw, int sh,
                             GLint *saved_matrix_mode_out) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -152,7 +152,7 @@ void render3d_post_2d_end(GLint saved_matrix_mode) {
 }
 
 /* Screen-aligned textured quad, vertex-shifted by dx pixels in X
- * (texcoords unchanged — an exact pixel offset independent of the POT
+ * (texcoords unchanged - an exact pixel offset independent of the POT
  * texture size). */
 static void postprocess_filter_draw_quad(int sw, int sh,
                                          float umax, float vmax,
@@ -172,7 +172,7 @@ static void postprocess_filter_draw_quad(int sw, int sh,
  * begin_2d bracket: glPushAttrib's GL_TEXTURE_BIT group (pulled in by
  * GL_ALL_ATTRIB_BITS) snapshots GL_TEXTURE_BINDING_2D at push time, so
  * glPopAttrib restores the caller's binding only if the push precedes our
- * bind here — OpenGL 2.1 spec §6.1.16 / the glPushAttrib reference page,
+ * bind here - OpenGL 2.1 spec §6.1.16 / the glPushAttrib reference page,
  * https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/glPushAttrib.xml
  * Allocation/copy are matrix/viewport-independent, so running them inside
  * the bracket is safe. Returns the used sub-rectangle of the POT texture
@@ -225,7 +225,7 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
     float umax = 0.0f, vmax = 0.0f;
     if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
         render3d_post_2d_end(saved_matrix_mode);
-        return; /* texture would exceed the GL limit — skip this frame */
+        return; /* texture would exceed the GL limit - skip this frame */
     }
 
     /* Base image: full RGB, unshifted. */
@@ -245,12 +245,12 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
     render3d_post_2d_end(saved_matrix_mode);
 }
 
-/* Vignette: a blended elliptical annulus over the rect — transparent at
+/* Vignette: a blended elliptical annulus over the rect - transparent at
  * the inner ellipse, darkening to `edge_alpha` black at the outer one.
  * The outer ellipse is aspect-matched (radii scaled by sqrt(2)) so it
  * passes exactly through the four corners; every rect pixel is therefore
  * inside-or-on it. The inner ellipse leaves the centre untouched. No
- * frame capture needed — this only darkens what is already on screen. */
+ * frame capture needed - this only darkens what is already on screen. */
 static void postprocess_filter_render_vignette(int sx, int sy,
                                                int sw, int sh) {
     GLint saved_matrix_mode = 0;
@@ -296,7 +296,7 @@ static void postprocess_filter_render_vignette(int sx, int sy,
  * bent onto the same surface and multiplicatively blended via
  * GL_DST_COLOR × GL_ZERO (darkens existing pixels, never adds light). The
  * dim-gray line color (0.75) dims the bright scanline rows ~25% while the
- * gaps stay untouched — the classic phosphor mask, now curving with the
+ * gaps stay untouched - the classic phosphor mask, now curving with the
  * tube. The convex barrel pulls the corners inward, so the rectangular
  * corners fall outside the warped image; a black backing fill supplies
  * the rounded-tube vignette there. */
@@ -313,14 +313,14 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
     float umax = 0.0f, vmax = 0.0f;
     if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
         render3d_post_2d_end(saved_matrix_mode);
-        return; /* texture would exceed the GL limit — skip this frame */
+        return; /* texture would exceed the GL limit - skip this frame */
     }
 
     Render3dPostSurface surf = render3d_post_surface_barrel(sw, sh,
                                                             SCANLINE_BULGE);
 
     /* Black backing: the convex barrel pulls the corners inward, so the
-     * rectangular corners fall outside the warped image — fill the rect
+     * rectangular corners fall outside the warped image - fill the rect
      * with CRT black (the rounded-tube vignette) rather than let the
      * un-warped scene show through there. Drawn opaque (begin_2d left
      * blending off) before the warped image. */
@@ -355,7 +355,7 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
 /* Film grain: tile a small luminance noise texture over the rect at one
  * texel per pixel (GL_NEAREST + GL_REPEAT keep it crisp and seamless)
  * and alpha-blend it so each pixel moves GRAIN_STRENGTH of the way
- * toward its texel's random gray — brightening shadows and darkening
+ * toward its texel's random gray - brightening shadows and darkening
  * highlights like real grain, unlike a darken-only overlay. The texcoord
  * origin jumps to a random texel offset every call, so the pattern
  * decorrelates frame to frame. No frame capture needed. */

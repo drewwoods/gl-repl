@@ -62,8 +62,8 @@ extern char **environ;
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
 #include "render3d/themes.h"
-#include "render3d/view_mode.h"         /* RENDER3D_VIEW_LIST — derives the view_mode cfg symbols */
-#include "render3d/projection_mode.h"   /* RENDER3D_PROJ_LIST — derives the projection cfg symbols */
+#include "render3d/view_mode.h"         /* RENDER3D_VIEW_LIST - derives the view_mode cfg symbols */
+#include "render3d/projection_mode.h"   /* RENDER3D_PROJ_LIST - derives the projection cfg symbols */
 #include "render3d/lights.h"           /* render3d_lights_apply_theme, render3d_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "ui/app/repl_code_panel.h"
@@ -264,7 +264,7 @@ static const char *auto_normal_names[REPL_AUTONORMAL_COUNT] = {
 #undef AUTO_NORMAL_NAME_ENTRY
 };
 
-/* Hidden session toggles — intentionally NOT rows in this table (no
+/* Hidden session toggles - intentionally NOT rows in this table (no
  * menu entry, no keyboard-shortcut field here, no @cfg persistence).
  * They are session-only state flipped by a dedicated router handler,
  * mirroring the F1 help overlay. Listed here because g_cfg_items[] is
@@ -355,7 +355,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "View mode", .key = GLR_CONFIG_ORTHO_MODE,
       .state_count = ARRAY_LEN(view_mode_names), .state_names = view_mode_names,
       .key_code = KM_KEY(GLR_VIEW_MODE), .modifiers = KM_MODS(GLR_VIEW_MODE) },
-    /* Projection matrix (perspective/ortho) with a free camera — distinct
+    /* Projection matrix (perspective/ortho) with a free camera - distinct
      * from "View mode", which flattens & locks the camera to a top-down 2D
      * view. Keybound to Ctrl+Shift+E. */
     { .label = "Projection", .key = GLR_CONFIG_PROJECTION,
@@ -483,7 +483,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     }
 }
 
-/* Default value of every cfg_key_in_scene_subset() key — the baseline
+/* Default value of every cfg_key_in_scene_subset() key - the baseline
  * glr_ctrl_reset_example_chrome() lands on before a scene's own leading
  * `@cfg` is applied. Values come from the CFG_DEFAULT_* macros in
  * glr_defaults.h (the single source of truth), never from literals, so a
@@ -613,7 +613,7 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
  * light_theme / view_mode / overlay_scope / vertex_labels / vertex_outline_style).
- * Other enum-shaped slugs — replay, code_panel_layout, etc. — stay integer-only
+ * Other enum-shaped slugs - replay, code_panel_layout, etc. - stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
  * support for one of those slugs.
@@ -649,7 +649,7 @@ static const char *cfg_grid_brightness_symbols[GRID_BRIGHTNESS_COUNT] = {
     GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_SYMBOL_ENTRY)
 #undef GRID_BRIGHTNESS_SYMBOL_ENTRY
 };
-/* RENDER3D_VIEW_LIST is single-arg — X(name) — unlike the (name, str) theme
+/* RENDER3D_VIEW_LIST is single-arg - X(name) - unlike the (name, str) theme
  * lists above, so its symbol-entry macro takes one parameter. */
 static const char *cfg_view_mode_symbols[RENDER3D_VIEW_COUNT] = {
 #define SCENE_VIEW_SYMBOL_ENTRY(name) [RENDER3D_VIEW_##name] = "RENDER3D_VIEW_" #name,
@@ -817,7 +817,7 @@ static int glr_export_cfg_resolve_text(const char *slug,
  * whitespace). The fallback path below uses this to decide whether
  * strtol's "0 on no conversion" is meaningful: an identifier-shaped
  * string like "GRID_THEME_RADRA" (a typo'd enum name) is NOT a
- * legacy integer-form value — strtol would silently land it at 0,
+ * legacy integer-form value - strtol would silently land it at 0,
  * collapsing every misspelled symbol onto the first enum entry. */
 static int glr_export_cfg_value_is_integer_literal(const char *s) {
     if (!s || !*s) return 0;
@@ -923,7 +923,7 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
         const char *value = cfg->items[idx].value;
         int val;
         if (!glr_export_cfg_resolve_value(slug, value, &val)) {
-            /* Unresolved symbolic value — drop the row rather than
+            /* Unresolved symbolic value - drop the row rather than
              * silently land it at 0 (GRID_THEME_OFF / AXES_THEME_OFF
              * etc.). The pre-bridge parse_cfg path did the
              * equivalent via strtol; tightening it here is what
@@ -950,7 +950,7 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
         } else if (glr_export_cfg_slug_is_hidden_audio(slug)) {
             glr_config_set(GLR_CONFIG_AUDIO_MODE, val);
         }
-        /* Unknown slugs silently ignored — same behaviour as the pre-bridge
+        /* Unknown slugs silently ignored - same behaviour as the pre-bridge
          * parse_cfg path: drop unrecognised cfg keys. */
     }
 }
@@ -1048,7 +1048,7 @@ const char *glr_scene_example_name(int idx) {
 /* Shared scene-load sequences. The Scene menu and the scene tab strip
  * both switch scenes; keep the load sequence (and its load-bearing
  * subtleties) in one place rather than duplicating the statements.
- * Neither helper self-no-ops on "already active" — the Scene menu
+ * Neither helper self-no-ops on "already active" - the Scene menu
  * always reloads, so callers that want a no-op (the tab router) check
  * before calling. */
 void glr_scene_load_example(int example_idx) {
@@ -1168,8 +1168,8 @@ void glr_cfg_cycle_row(int row, int delta) {
              * stranded them: the pass only ever added, so there was no
              * non-manual way back, and because it mutates the document from
              * the display frame there was no undo entry to fall back on
-             * either. Undo cannot serve here while the mode is on — the next
-             * frame just re-inserts — so Off is the only possible way out.
+             * either. Undo cannot serve here while the mode is on - the next
+             * frame just re-inserts - so Off is the only possible way out.
              *
              * The snapshot is what makes the removal safe rather than merely
              * symmetric: Ctrl+Z restores the rows, and with the mode now off
@@ -1278,7 +1278,7 @@ void glr_action_reset_time_to_zero(void) {
  * control code with or without Shift, so keymap_event_is reads the live
  * modifier state. A config row is an exact binding: extra modifiers never
  * fall through to a nearby plain row. The descriptor table is the single
- * source of truth — no separate router. */
+ * source of truth - no separate router. */
 static int cfg_match_row(unsigned char key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
@@ -1359,7 +1359,7 @@ int glr_action_open_workspace_path(const char *dir) {
     }
 
     /* Nothing to rescue when the visible document is an unpromoted
-     * example — skipping the write is success, not a failed save. */
+     * example - skipping the write is success, not a failed save. */
     if (glr_ctrl_recovery_has_user_work() && !glr_ctrl_save_recovery_file()) {
         repl_set_status_error("Workspace switch cancelled: recovery save failed");
         return 0;
@@ -1488,7 +1488,7 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
     switch (kind) {
     case GLR_MODAL_WORKSPACE_NEW: {
         /* An unbound collection has no managed home yet, so opening the fresh
-         * (empty) workspace would clear it from view — glr_action_open_-
+         * (empty) workspace would clear it from view - glr_action_open_-
          * workspace_path() keeps the bytes in the recovery workspace, but
          * nothing surfaces them. Adopt those scenes into the new workspace
          * instead. Creating a workspace *from* a managed one still starts
@@ -1588,7 +1588,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         case GLR_FILE_ITEM_SAVE_GLR:
             /* Same target directory and base name as Save Scene / Export
-             * .ply, just the authoring format — a .glr you can drop into
+             * .ply, just the authoring format - a .glr you can drop into
              * examples/scenes/ instead of a standalone C program. */
             if (!bind_app_workspace_for_scene_save_if_needed())
                 return 1;
@@ -1720,7 +1720,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     case GLR_MENU_TUTORIALS: {
         /* Top-level Tutorials rows after the Phase-B hierarchical menu:
          *   [0..t-1]   tag rows (inert hover-only, like Scene tag rows
-         *              — the actual tutorial flyout-item activation
+         *              - the actual tutorial flyout-item activation
          *              flows through route_submenu_item_hit which
          *              dispatches directly to tutorial_start, NOT
          *              through this function).
@@ -1758,7 +1758,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     }
 
     case GLR_MENU_TOURS:
-        /* Tour rows start the guided tour and close the menu — the script
+        /* Tour rows start the guided tour and close the menu - the script
          * needs the dropdown out of the way before its first glide. Out of
          * range falls through to the same consumed-return as File/Scene. */
         if (item_idx >= 0 && item_idx < glr_tours_count())
@@ -1773,7 +1773,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
          * it must never be cycled. Leaf config-item activation arrives
          * via UI_HIT_SUBMENU_ITEM and is dispatched straight to
          * glr_cfg_cycle_row() on the absolute g_cfg_items[] index
-         * (route_submenu_item_hit) — it never reaches this branch.
+         * (route_submenu_item_hit) - it never reaches this branch.
          * Return 0 so the dropdown stays open, matching the old
          * per-toggle feel. */
         (void)item_idx;

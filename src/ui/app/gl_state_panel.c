@@ -3,8 +3,8 @@
  *
  * Pure renderer + hit-test: consumes the controller-built
  * UiGlStatePanelView and draws the right-click state report as a table
- * (state name, current value, and — behind the header's expand chip,
- * collapsed by default so the popup stays narrow — the OpenGL 2.1
+ * (state name, current value, and - behind the header's expand chip,
+ * collapsed by default so the popup stays narrow - the OpenGL 2.1
  * default and latest change source columns) anchored near the click.
  * When the report is taller than the window the row window scrolls
  * (wheel, routed by the controller) with a flyout-style right-edge
@@ -25,7 +25,7 @@
 #define GLSP_PAD_X          10
 #define GLSP_PAD_Y           6
 #define GLSP_COL_GAP_CHARS   2
-/* Wide enough for the longest name the report emits — the qualified raster
+/* Wide enough for the longest name the report emits - the qualified raster
  * rows, "GL_CURRENT_RASTER_POSITION (object input)" at 41 cells. The column is
  * still content-sized, so only a report carrying one of those pays for it. */
 #define GLSP_NAME_CHARS_MAX 41
@@ -247,7 +247,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
      * (right-aligned), so it only floors that column's width instead of
      * adding a blank third column under itself. */
     /* Authorship fold: the report is partitioned user-rows-first, so the
-     * shown set is always the prefix rows[0, row_count) — no filtering, which
+     * shown set is always the prefix rows[0, row_count) - no filtering, which
      * keeps scroll indices and hit-testing identical to the unfolded case. */
     out->setup = view->setup_expanded ? 1 : 0;
     out->setup_count = report->count - report->user_row_count;
@@ -446,7 +446,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     }
 
     /* Setup fold chip: right-aligned on the title row, one level above the
-     * details chip both visually and semantically — it picks which rows the
+     * details chip both visually and semantically - it picks which rows the
      * table holds, where the details chip picks which columns. It survives
      * row_count == 0, since that is exactly when the user needs it to get the
      * folded rows back. */
@@ -583,7 +583,7 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
             }
 
             /* Two tiers, because "differs from the GL 2.1 default" is a
-             * near-constant for a generated-setup row — it is in the report
+             * near-constant for a generated-setup row - it is in the report
              * precisely because the harness wrote it, so highlighting the
              * whole group says nothing and drowns out the rows that matter.
              * The saturated accents are reserved for state this program
@@ -626,7 +626,7 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
 
     /* Overflow scrollbar hint: thin track + proportional thumb on the
      * popup's right inner edge, shown only when rows are hidden. Purely
-     * a visual cue — the wheel does the scrolling (same convention as
+     * a visual cue - the wheel does the scrolling (same convention as
      * the menu flyouts), so there is no hit region. */
     if (lo.max_scroll > 0) {
         float bx1       = (float)(lo.px + lo.popup_w - 2);

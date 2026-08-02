@@ -61,10 +61,10 @@ void render3d_post_surface_point(const Render3dPostSurface *s,
         /* Pull each vertex inward toward the centre, more at the edges
          * (r^2 term), so magnification falls off with radius: the centre
          * stays ~1:1, the edges compress, and the corners pull in the
-         * most — a convex bulge toward the viewer (barrel). The
+         * most - a convex bulge toward the viewer (barrel). The
          * rectangular corners fall outside the image, so the caller draws
          * a black fill behind the mesh for the CRT vignette. (The inverse,
-         * scale = 1 + k*r^2, would be pincushion — a concave dish.) */
+         * scale = 1 + k*r^2, would be pincushion - a concave dish.) */
         float scale = 1.0f - s->strength * (nx * nx + ny * ny);
         *out_x = cx + nx * scale * cx;
         *out_y = cy + ny * scale * cy;
@@ -72,7 +72,7 @@ void render3d_post_surface_point(const Render3dPostSurface *s,
     }
     case RENDER3D_POST_SURFACE_RIPPLE: {
         /* Flat base plus a horizontal sine that travels vertically and
-         * animates with time — the underwater wobble. */
+         * animates with time - the underwater wobble. */
         float ny = 2.0f * v - 1.0f;
         *out_x = u * (float)s->sw
                  + s->strength * sinf(ny * POST_SURFACE_RIPPLE_FREQ
@@ -118,7 +118,7 @@ void render3d_post_surface_draw_scanlines(const Render3dPostSurface *s,
     if (s->sh <= 0) return;
     /* Lines are placed at device-uniform v, then warped through the same
      * surface. On a barrel that means the pitch spreads at the (magnified)
-     * centre and compresses toward the (curved) edges — the physically
+     * centre and compresses toward the (curved) edges - the physically
      * correct look for uniform scanlines on a curved tube. */
     for (int y = 0; y < s->sh; y += spacing_px) {
         float v = ((float)y + 0.5f) / (float)s->sh; /* pixel-row centre */

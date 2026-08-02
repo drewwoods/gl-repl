@@ -360,12 +360,12 @@ static void test_cpuprof_histogram_reset(void) {
 }
 
 /* The running statistics kept beside each histogram. Fed a known sample set,
- * every figure must come out exactly — these are what the legend hover reports,
+ * every figure must come out exactly - these are what the legend hover reports,
  * and an approximate mean is worse than none. */
 static void test_cpuprof_histogram_stats(void) {
     HistogramStats st;
     /* Deliberately spread over three decades so no two samples share a bin:
-     * sum 11110, mean 2222, squared deviations summing to 44323680 — sample
+     * sum 11110, mean 2222, squared deviations summing to 44323680 - sample
      * variance 11080920 us^2 over the n-1 divisor, stddev ~3328.8 us. */
     static const double dur_us[] = { 10.0, 100.0, 1000.0, 2000.0, 8000.0 };
     double now = 1000.0;
@@ -399,7 +399,7 @@ static void test_cpuprof_histogram_stats(void) {
     ASSERT_TRUE("stddev is the root of the variance",
                 st.stddev_us > 3328.7 && st.stddev_us < 3328.9);
 
-    /* One sample has no spread to estimate — the n-1 divisor is undefined
+    /* One sample has no spread to estimate - the n-1 divisor is undefined
      * there, and reporting a 0 beats reporting a division by zero. */
     prof_test_reset();
     prof_test_set_now_us(0.0);
@@ -498,7 +498,7 @@ static void test_cpuprof_histogram_stats_alternate_feeds(void) {
 }
 
 /* The statistics are cumulative in the same way the bins are, so they clear on
- * the same reset — a stale min from a previous example describes geometry that
+ * the same reset - a stale min from a previous example describes geometry that
  * is no longer on screen. */
 static void test_cpuprof_histogram_stats_reset(void) {
     HistogramStats st;
@@ -527,7 +527,7 @@ static void test_cpuprof_histogram_stats_reset(void) {
     ASSERT_INT_EQ("reset clears the frame stats", (int)st.count, 0);
 
     /* The next sample starts a fresh distribution rather than extending the
-     * old one — a 50 ms max must not survive as the new min. */
+     * old one - a 50 ms max must not survive as the new min. */
     prof_test_set_now_us(100000.0);
     prof_begin(PROF_FLATTEN);
     prof_test_set_now_us(120000.0);
@@ -591,7 +591,7 @@ static void test_cpuprof_log_bin_layout(void) {
 }
 
 /* The axis spans the occupied bins. An outlier extends it, but only by the
- * bounded number of bins that separates it on a log scale — the whole reason
+ * bounded number of bins that separates it on a log scale - the whole reason
  * the panel needs no percentile trim. */
 static void test_histogram_axis_range(void) {
     int lo = -1, hi = -1;
@@ -619,7 +619,7 @@ static void test_histogram_axis_range(void) {
     int hi_before = hi;
 
     /* Add one 200 ms stall: the axis must grow to include it, and by far less
-     * than the 100x ratio in time — that is the log scale doing its job. */
+     * than the 100x ratio in time - that is the log scale doing its job. */
     prof_test_set_now_us(9000000.0);
     prof_begin(PROF_FRAME_TOTAL);
     prof_test_set_now_us(9000000.0 + 200000.0);
@@ -684,7 +684,7 @@ static void test_histogram_silhouette_collapses_flat_runs(void) {
         .window_w = 800, .window_h = 600,
         .visible = 1, .panel_x = 10, .panel_y = 10
     };
-    /* Sections spread across four decades — the sparse, humped shape the
+    /* Sections spread across four decades - the sparse, humped shape the
      * collapse exists for. */
     static const double dur_us[] = { 0.4, 6.0, 128.0, 560.0, 2090.0 };
     static const ProfSection secs[] = {
@@ -732,7 +732,7 @@ static void test_histogram_panel_metrics(void) {
     ASSERT_TRUE("histogram height is positive", ui_histogram_panel_height() > 0);
 
     /* Height is a function of the catalog, not of which sections happen to
-     * have samples — otherwise the panel would resize under the overlay
+     * have samples - otherwise the panel would resize under the overlay
      * stack as sections start and stop running. */
     int before = ui_histogram_panel_height();
     prof_test_reset();
@@ -751,7 +751,7 @@ static void test_histogram_reset_hit_test(void) {
     };
     int panel_w = ui_histogram_panel_width();
     int panel_h = ui_histogram_panel_height();
-    /* Title-row right edge — where the "[reset]" control renders. */
+    /* Title-row right edge - where the "[reset]" control renders. */
     int control_mx = view.panel_x + panel_w - 4;
     int header_my  = view.window_h - (view.panel_y + panel_h - 6);
 
@@ -895,7 +895,7 @@ static void test_histogram_legend_solo(void) {
     ASSERT_TRUE("solo hides the other plotted series",
                 prof_section_set_contains(&mask, (ProfSection)second));
 
-    /* Sections with no legend cell (nested or unlabeled) stay out of the mask —
+    /* Sections with no legend cell (nested or unlabeled) stay out of the mask -
      * they are not plotted in the first place, so hiding them means nothing. */
     for (s = 0; s < PROF_SECTION_COUNT; s++) {
         ProfSectionInfo info = prof_section_info((ProfSection)s);
@@ -1115,7 +1115,7 @@ static void test_histogram_render_with_samples(void) {
     unsigned long long empty_verts  = gl_stub_counts[GL_STUB_glVertex2f];
     unsigned long long empty_blends = gl_stub_counts[GL_STUB_glBlendFunc];
 
-    /* Two top-level sections with distinct distributions — the case the
+    /* Two top-level sections with distinct distributions - the case the
      * overlaid plot exists for. */
     for (int i = 0; i < 30; i++) {
         prof_test_set_now_us((double)i * 100000.0);
@@ -1275,7 +1275,7 @@ static void test_histogram_legend_hover_without_bars(void) {
 
 /* The box is clamped into the window. The legend sits at the panel's bottom
  * edge, so a panel parked at the window's bottom-right corner is the case that
- * would otherwise push the box off-screen — where it is drawn but unreadable. */
+ * would otherwise push the box off-screen - where it is drawn but unreadable. */
 static void test_histogram_legend_hover_clamps_to_window(void) {
     UiHistogramPanelView view;
     int legend_rows = 0, series = 0;

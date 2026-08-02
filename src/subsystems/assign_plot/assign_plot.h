@@ -11,7 +11,7 @@
  *
  * Flatten already does the work. Each execution instance of an assignment
  * becomes its own flat command with the evaluated RHS baked into args[0]
- * (args[2] for a scratch assign) — the executor only applies it, it never
+ * (args[2] for a scratch assign) - the executor only applies it, it never
  * re-evaluates (see the comment on CMD_VAR_ASSIGN in src/repl/executor.c).
  * So a capture is a read-only scan of the flat program the frame was going to
  * build anyway: no instrumentation in the hot path, no new bookkeeping, and
@@ -27,13 +27,13 @@
  *
  * A row inside a loop executes many times per frame, so the natural X axis is
  * the execution index within the captured frame (ASSIGN_PLOT_X_EXEC). A
- * top-level row executes exactly once, which would plot a single point — there
+ * top-level row executes exactly once, which would plot a single point - there
  * the X axis becomes successive captures (ASSIGN_PLOT_X_FRAME) and the buffer
  * is a scrolling time series. The mode is re-derived on every capture from the
  * execution count; a flip clears the buffer and the statistics, because the two
  * axes describe different things and averaging across the change would be a
  * lie. A capture that finds zero executions leaves the mode alone and appends
- * nothing — and at the ONCE rate does not count as the shot, so a row that is
+ * nothing - and at the ONCE rate does not count as the shot, so a row that is
  * still being skipped does not freeze the plot empty.
  *
  * --- Several series on one plot ---
@@ -42,8 +42,8 @@
  * adds a row to the open plot; plain right-click retargets it to that row
  * alone). Two things are shared and cannot be per-series:
  *
- *   The X axis. It is derived from the *primary* series — the one the plot was
- *   opened on — and a row is refused at add time when its execution count
+ *   The X axis. It is derived from the *primary* series - the one the plot was
+ *   opened on - and a row is refused at add time when its execution count
  *   disagrees, because a once-per-frame row and a 64-per-frame row have
  *   nothing to put on a common X. The check runs against the flat program at
  *   the moment of the click; a row that has never executed cannot be judged
@@ -56,7 +56,7 @@
  *
  * The Y axis is shared too, and deliberately so: the reason to put two rows on
  * one plot is to compare them. Series of wildly different magnitudes will
- * flatten each other — the per-series statistics under the legend are what
+ * flatten each other - the per-series statistics under the legend are what
  * carry the real numbers in that case.
  *
  * --- Decimation vs. statistics ---
@@ -81,11 +81,11 @@
  * still means something. */
 #define MAX_ASSIGN_PLOT_SERIES 4
 
-/* Capture rate. Cycled by the panel's own chip — mouse-only, deliberately no
+/* Capture rate. Cycled by the panel's own chip - mouse-only, deliberately no
  * keymap slot and no config key: this is a per-plot property, not a global
  * setting, and it should not appear in exported @cfg headers. */
 typedef enum {
-    /* One capture, then frozen — but only a frame in which *every* series
+    /* One capture, then frozen - but only a frame in which *every* series
      * ran. A one-shot is meant to be read across, so it is not spent on a
      * frame where some row is still being skipped; that attempt is discarded
      * and the next frame tried. */
@@ -104,8 +104,8 @@ typedef enum {
  * panel's size query and its renderer read them out of the one view they
  * already take, and so all three mouse-only chips live in one place.
  *
- * Like the rate they survive open/close — retargeting a row should not undo
- * the zoom the user just asked for — and unlike the rate neither resets the
+ * Like the rate they survive open/close - retargeting a row should not undo
+ * the zoom the user just asked for - and unlike the rate neither resets the
  * buffer: they change how captured values are drawn, not which values were
  * captured or what window the statistics describe. */
 
@@ -119,13 +119,13 @@ typedef enum {
  * column per capture so that column N means capture N for all of them, which
  * means a series that did not execute that frame has to hold its place rather
  * than shift its history left against the others. The renderer breaks its line
- * there — a gap in a time series is information, not an absence of it. */
+ * there - a gap in a time series is information, not an absence of it. */
 typedef struct {
     float lo, hi;
     int   valid;
 } AssignPlotColumn;
 
-/* One plotted row. Columns are in display order, oldest first — the ring is
+/* One plotted row. Columns are in display order, oldest first - the ring is
  * normalized here so no caller has to know about it. */
 typedef struct {
     int source_line_idx;
@@ -165,7 +165,7 @@ void assign_plot_close(void);
 /* Open `source_line_idx`, or close if that row is the only one plotted. */
 void assign_plot_toggle(int source_line_idx);
 
-/* Outcome of assign_plot_toggle_series(), which the caller reports — a refusal
+/* Outcome of assign_plot_toggle_series(), which the caller reports - a refusal
  * that said nothing would look like a dead gesture. */
 typedef enum {
     ASSIGN_PLOT_SERIES_ADDED = 0,
@@ -233,7 +233,7 @@ void assign_plot_set_live_capture(int on);
  *
  * X_FRAME mode produces nothing: there a column is a whole capture, so a
  * position *within* a frame has no column to point at. Neither does
- * ASSIGN_PLOT_RATE_ONCE, whose frozen columns are some earlier frame's — a
+ * ASSIGN_PLOT_RATE_ONCE, whose frozen columns are some earlier frame's - a
  * marker there would put this frame's position on another frame's values,
  * which is exactly what the live-capture override exists to prevent.
  *
@@ -248,7 +248,7 @@ int assign_plot_exec_progress(int exec_limit,
  * dependency and makes the gate exactly reproducible under test.
  *
  * Closes the plot if the targeted row is gone or is no longer an assignment.
- * No-op — and no flat-program scan — when nothing is targeted. */
+ * No-op - and no flat-program scan - when nothing is targeted. */
 void assign_plot_capture(double now_us);
 
 AssignPlotView assign_plot_view(void);

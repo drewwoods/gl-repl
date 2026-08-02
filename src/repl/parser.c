@@ -307,7 +307,7 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
         }
         /* Boolean-mask slot: accept only a well-formed numeric literal,
          * then reverse-map. repl_eval_parse_exprs / repl_eval_expr do
-         * NOT require full input consumption (eval.c) — they evaluate
+         * NOT require full input consumption (eval.c) - they evaluate
          * "1+" as 1 (trailing '+' with an empty 0 operand) and "1abc"
          * as 1, which would silently canonicalize garbage to GL_TRUE.
          * strtod with an end-of-token check rejects "1+", "1abc",
@@ -341,7 +341,7 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
     }
 
     case REPL_ENUM_SLOT_ENUM_BITFIELD: {
-        /* `A | B | ...` — every term must be a token from this slot's
+        /* `A | B | ...` - every term must be a token from this slot's
          * table (the exact-match above already handled the single-token
          * case, so a `|` is normally present by the time we get here), or
          * the slot's optional all-bits alias. Numeric and expression input
@@ -435,7 +435,7 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
         }
         /* Expression-resolved slot (the token table didn't match): the
          * compiled path re-evaluates exactly this slot. Token-matched
-         * slots are never captured — their baked enum value is the
+         * slots are never captured - their baked enum value is the
          * command's constant argument. */
         parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG, slot_idx, raw);
         *out_val = fv;
@@ -459,7 +459,7 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
  * (strtof(text) == v) via repl_format_source_float: for a !has_vars
  * command the canonical text is the only source-of-record of a folded
  * constant expression, and the flatten force-reparse path re-evaluates
- * that text expecting the committed bits — a lossy "%g" here (6
+ * that text expecting the committed bits - a lossy "%g" here (6
  * significant digits) made e.g. `glColor3f(0.92*0.55, ...)` commit
  * arg bits its own canonical text no longer reproduced. */
 static const char *fmt_source_float(char buf[REPL_SOURCE_FLOAT_TEXT_MAX],
@@ -662,7 +662,7 @@ static int try_parse_table_driven_enum_command(const char *func,
  * ctx->err_buf). `indent` is the pre-computed source-scope indent
  * string for source_line_idx. */
 
-/* gluColor(r, g, b[, a]) — per-vertex tessellator color. Alpha defaults to
+/* gluColor(r, g, b[, a]) - per-vertex tessellator color. Alpha defaults to
  * 1.0 when omitted; num_args is always canonicalized to 4. */
 static int parse_glu_color(const char *args, GLCmd *cmd,
                            char *text_out, int text_sz,
@@ -829,7 +829,7 @@ static int split_two_args(const char *args,
  * success with face_str / pname_str / val_arg filled and *out_face set
  * to the resolved enum. Returns 0 after emitting `usage_msg` (on split
  * failure) or the canonical face-token error (on unknown face). The
- * caller validates pname its own way — parse_materialfv looks it up in
+ * caller validates pname its own way - parse_materialfv looks it up in
  * the material-params table; parse_materialf string-compares to
  * "GL_SHININESS". */
 static int parse_face_pname(const char *args,
@@ -925,7 +925,7 @@ static int parse_compound_literal_arg(const char *arg,
     return 1;
 }
 
-/* glMaterialfv(face, pname, ...) — the one command whose value argument
+/* glMaterialfv(face, pname, ...) - the one command whose value argument
  * is an aggregate. Accepts the canonical compound-literal form
  * `(GLfloat[]){r, g, b, a}` (1 element for GL_SHININESS, 4 for the RGBA
  * pnames) or the flat shorthand `face, pname, r, g, b, a`, which is
@@ -1134,7 +1134,7 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     return 1;
 }
 
-/* glClipPlane(plane, ...) — same aggregate-value shape as glMaterialfv.
+/* glClipPlane(plane, ...) - same aggregate-value shape as glMaterialfv.
  * Accepts the canonical compound-literal form `(GLdouble[]){a, b, c, d}`
  * or the flat shorthand `plane, a, b, c, d`, which is rewritten to the
  * compound-literal form in the canonical text. The equation is stored
@@ -1217,7 +1217,7 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     return 1;
 }
 
-/* True when `args` is nothing but an identifier — the shape that selects
+/* True when `args` is nothing but an identifier - the shape that selects
  * glMultMatrixf's scratch-array form. Anything else (a brace literal, a
  * number, a subscript, a comma list) falls through to the value form,
  * which produces the better diagnostic for it. */
@@ -1237,7 +1237,7 @@ static int mult_matrixf_lone_ident(const char *args,
     return *p == '\0';
 }
 
-/* glMultMatrixf — post-multiply the current matrix by a column-major 4x4,
+/* glMultMatrixf - post-multiply the current matrix by a column-major 4x4,
  * in either of two argument forms:
  *
  *   glMultMatrixf(A)                        a scratch array (A, B, or C),
@@ -1247,7 +1247,7 @@ static int mult_matrixf_lone_ident(const char *args,
  *   glMultMatrixf((GLfloat[]){m0, ..., m15}) the 16 values inline
  *
  * plus the flat shorthand `glMultMatrixf(m0, ..., m15)`, rewritten to the
- * compound-literal form in the canonical text — the glMaterialfv /
+ * compound-literal form in the canonical text - the glMaterialfv /
  * glClipPlane / glFogfv precedent.
  *
  * The forms differ in where the values come from, not in what reaches the
@@ -1256,7 +1256,7 @@ static int mult_matrixf_lone_ident(const char *args,
  * behind it change, and flatten snapshots those cells when it emits the
  * flat command. The value form has no indirection to preserve, so the
  * parse fills the payload and the captured expression slots re-evaluate
- * it — that is what lets a literal matrix animate. */
+ * it - that is what lets a literal matrix animate. */
 static int parse_mult_matrixf(const char *args, GLCmd *cmd,
                               char *text_out, int text_sz,
                               const char *indent,
@@ -1280,7 +1280,7 @@ static int parse_mult_matrixf(const char *args, GLCmd *cmd,
         }
         cmd->args[0] = (float)array_idx;
         cmd->num_args = 1;
-        /* No expression slots to re-evaluate — the line is a name. The
+        /* No expression slots to re-evaluate - the line is a name. The
          * cells behind that name still change every frame, but they are
          * picked up by the flatten-time snapshot, which runs on every path
          * into the flat array including this command's has_vars=0 fast
@@ -1323,7 +1323,7 @@ static int parse_mult_matrixf(const char *args, GLCmd *cmd,
             return 0;
         }
         /* The cells are the whole command, so they capture from ordinal 0.
-         * args[] stays empty — the values do not fit in it — which is also
+         * args[] stays empty - the values do not fit in it - which is also
          * how the two forms are told apart downstream
          * (repl_cmd_mult_matrix_from_array). */
         parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
@@ -1357,7 +1357,7 @@ static int parse_mult_matrixf(const char *args, GLCmd *cmd,
     }
 }
 
-/* glFogf(pname, value) — enum pname + one scalar expression, the
+/* glFogf(pname, value) - enum pname + one scalar expression, the
  * glMaterialf shape without the face arg. GL_FOG_MODE lives on glFogi
  * (it takes an enum, not a float) and GL_FOG_COLOR on glFogfv. */
 static int parse_fogf(const char *args, GLCmd *cmd,
@@ -1418,7 +1418,7 @@ static int parse_fogf(const char *args, GLCmd *cmd,
     return 1;
 }
 
-/* glFogfv(GL_FOG_COLOR, ...) — same aggregate-value shape as
+/* glFogfv(GL_FOG_COLOR, ...) - same aggregate-value shape as
  * glPointParameterfv. Accepts the canonical `(GLfloat[]){r, g, b, a}`
  * compound literal or the flat shorthand `GL_FOG_COLOR, r, g, b, a`,
  * rewritten to the compound-literal form in the canonical text. */
@@ -1531,7 +1531,7 @@ static int parse_stencil_value_literal(const char *text, int *out_value,
 /* The 0..255 *quantity* slot shared by glStencilFunc's ref and
  * glClearStencil's value: a full expression (so it can animate), evaluated
  * here for the constant case and clamped by the same helper the flatten
- * post-evaluation fixup uses. A literal out of range is rejected — the user
+ * post-evaluation fixup uses. A literal out of range is rejected - the user
  * is right there to be told; an animated one is clamped per frame instead,
  * because a per-frame parse error is not a usable failure mode.
  *
@@ -1600,8 +1600,8 @@ static int parse_clear_stencil(const char *args, GLCmd *cmd,
     cmd->has_vars = has_vars;
     if (text_out && text_sz > 0) {
         char value_text[REPL_SOURCE_FLOAT_TEXT_MAX];
-        /* The canonical form can outgrow its source line — the interactive
-         * `;` path hands us a line with no trailing semicolon — so refuse an
+        /* The canonical form can outgrow its source line - the interactive
+         * `;` path hands us a line with no trailing semicolon - so refuse an
          * over-long line rather than store a truncated row. */
         if (!repl_format_fits(text_out, (size_t)text_sz,
                               "%sglClearStencil(%s);", indent,
@@ -1683,7 +1683,7 @@ static int parse_stencil_mask(const char *args, GLCmd *cmd,
                               const ReplParseContext *ctx) {
     int mask;
     if (!parse_stencil_value_literal(args, &mask,
-                                     "Usage: glStencilMask(mask) — mask is decimal or 0xNN in 0..255", ctx))
+                                     "Usage: glStencilMask(mask) - mask is decimal or 0xNN in 0..255", ctx))
         return 0;
     cmd->type = CMD_STENCIL_MASK;
     cmd->valid = 1;
@@ -1703,7 +1703,7 @@ static int parse_stencil_mask(const char *args, GLCmd *cmd,
  * label("fmt", a, b, c, d) is custom because one arg is a string
  * literal the std-table parsers don't tokenize and the
  * substitution-arg count is variable (forbidden inside the format
- * string: '//', '(', ')', ',', and any backslash — these keep the
+ * string: '//', '(', ')', ',', and any backslash - these keep the
  * string-unaware parser scaffolding honest; see
  * repl_label_split_args()). The others carry an aggregate value arg
  * (a compound literal) or, for glMaterialf, share glMaterialfv's
@@ -1844,7 +1844,7 @@ static void write_text(char *out, int sz, const char *fmt, ...) {
  * matched (cmd + text populated), 0 otherwise. glPushMatrix opens an indent
  * scope like glBegin, so its body lands one level deeper (handled by the
  * precomputed source-scope `indent`); glPopMatrix aligns with its matching
- * glPushMatrix — one matrix level shallower — mirroring how glEnd lines up
+ * glPushMatrix - one matrix level shallower - mirroring how glEnd lines up
  * with glBegin. glPopAttrib takes the plain `indent` (glPushAttrib opens no
  * indent scope). */
 static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
@@ -1900,7 +1900,7 @@ static void strip_trailing_comment(char *p) {
 
 /* The REPL line parser: match one trimmed source line to a CmdType,
  * evaluate its argument expressions, and emit the canonical line text.
- * Deliberately one flat dispatcher — each command match is independent,
+ * Deliberately one flat dispatcher - each command match is independent,
  * so the high branch count is breadth, not depth. The order is:
  *
  *   1. trim + strip trailing ';'; empty line / `// comment` short-circuit
@@ -1911,7 +1911,7 @@ static void strip_trailing_comment(char *p) {
  *   5. hand-written matchers for the irregular forms: glEnd, label(),
  *      glMaterialfv/f, glPointParameterfv, matrix stack, gluBegin/End/
  *      Color, goto / :label
- *   6. `unknown_command:` fallback — recognize a bare math expression
+ *   6. `unknown_command:` fallback - recognize a bare math expression
  *      and suggest assigning it, else emit the per-context error
  *
  * On success the matched arm sets cmd->type/args/valid and writes the
@@ -1929,13 +1929,13 @@ static int check_trailing_garbage(const char *after, const ReplParseContext *ctx
 }
 
 /* Bare-keyword statements: the REPL forms that are a word (and maybe a
- * label) rather than a `name(args)` call — `break`, `continue`,
+ * label) rather than a `name(args)` call - `break`, `continue`,
  * `goto name`, and `:name` / `name:` label definitions. Split out of
  * parse_command so this keyword set can grow without the dispatcher
  * doing.
  *
  * Returns 1 when the line parsed, 0 when it was one of these forms but
- * invalid (diagnostic already emitted), and -1 when it is none of them —
+ * invalid (diagnostic already emitted), and -1 when it is none of them -
  * the caller then continues into its unknown-command reporting. `p` is
  * the trimmed line with any trailing `;` already stripped; `len` is its
  * length. */
@@ -2031,7 +2031,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                          const ReplParseContext *ctx) {
     /* All production / test callers pass a non-NULL context (the
      * legacy no-ctx wrappers were retired earlier). The
-     * `repl_state_edit_line()` fallback that lived here — it was
+     * `repl_state_edit_line()` fallback that lived here - it was
      * confirmed dead code, and keeping it would force the parser to
      * reach into REPL-state for cursor info that has no business
      * being parser-internal. */
@@ -2043,7 +2043,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* Null-safe text helpers: write to text_out when provided */
 /* Every call passes at least one variadic arg after fmt, so plain
- * __VA_ARGS__ suffices — no GNU `, ##__VA_ARGS__` comma-elision (which
+ * __VA_ARGS__ suffices - no GNU `, ##__VA_ARGS__` comma-elision (which
  * -std=c99 -pedantic-errors rejects). */
 #define WRITE_TEXT(fmt, ...) write_text(text_out, text_sz, fmt, __VA_ARGS__)
     strncpy(buf, line, sizeof(buf) - 1);
@@ -2087,7 +2087,7 @@ static int parse_command(const char *line, GLCmd *cmd,
      * close paren and corrupt arg extraction. The caller re-attaches the
      * comment to the canonical text (repl_append_trailing_comment on the
      * original line), so dropping it here only affects parsing. The scan is
-     * string-aware — a `//` inside a "..." literal is left in place, so
+     * string-aware - a `//` inside a "..." literal is left in place, so
      * label("a // b") still reaches its dedicated "// forbidden" check. */
     {
         strip_trailing_comment(p);
@@ -2222,7 +2222,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
     /* Custom-branch commands (label / glMaterialfv / glMaterialf /
-     * glPointParameterfv / glClipPlane) — see the dispatcher for why
+     * glPointParameterfv / glClipPlane) - see the dispatcher for why
      * each escapes the tables. */
     {
         int custom_rv = try_parse_custom_arg_command(func, args, cmd,
@@ -2293,19 +2293,19 @@ static int parse_command(const char *line, GLCmd *cmd,
 
 unknown_command:
     /* Recognise "I typed a math expression as a top-level command"
-     * before the generic "unknown cmd" — otherwise `rand();` or
+     * before the generic "unknown cmd" - otherwise `rand();` or
      * `sin(t);` get the same diagnostic as a misspelled GL call,
      * which is actively misleading. */
     if (func[0] && repl_eval_is_reserved_ident(func)) {
         if (open_p) {
             parser_emit_error(ctx,
-                "'%s(...)' is an expression, not a command — assign it "
+                "'%s(...)' is an expression, not a command - assign it "
                 "(e.g. 'x = %s(...);') or use it inside another expression",
                 func, func);
         } else {
             parser_emit_error(ctx,
                 "'%s' is a reserved name (constant or scratch array), "
-                "not a command — use it inside an expression",
+                "not a command - use it inside an expression",
                 func);
         }
         return 0;
@@ -2342,8 +2342,8 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
      * text. parse_command rebuilds out->text from the parsed args (with
      * the trailing `;` for needs-semicolon commands) and drops the
      * comment; re-attaching it here means every consumer of the canonical
-     * text — typed commit, reformat, the inline swatch, Enter/insert
-     * commits, and verbatim C export — preserves the inline comment from
+     * text - typed commit, reformat, the inline swatch, Enter/insert
+     * commits, and verbatim C export - preserves the inline comment from
      * one place. Idempotent: a no-op when out->text already ends in a
      * comment (e.g. CMD_COMMENT lines, whose whole text is the comment). */
     if (!skip_text)
@@ -2373,7 +2373,7 @@ int repl_label_split_args(const char *args,
     }
     const char *quote_open = p;
 
-    /* Closing quote — string contents allow no escapes by design,
+    /* Closing quote - string contents allow no escapes by design,
      * so the next bare '"' ends the literal. */
     const char *quote_close = NULL;
     for (const char *q = quote_open + 1; *q; q++) {

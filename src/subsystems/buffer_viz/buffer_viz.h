@@ -5,8 +5,8 @@
  * render3d fires three hooks (Render3dRenderConfig.buffer_read_fn /
  * buffer_pass_overlay_fn / buffer_resolve_overlay_fn) and knows nothing
  * about what for. Each is a SINGLE slot, so this file is the one
- * subscriber and fans out to the per-buffer modules — depth_viz.c,
- * stencil_viz.c — according to the modes in the frame config the host
+ * subscriber and fans out to the per-buffer modules - depth_viz.c,
+ * stencil_viz.c - according to the modes in the frame config the host
  * hands over as `user_data`.
  *
  * The two visualizations deliberately composite at different points:
@@ -19,7 +19,7 @@
  *
  * Policy stays with the host: it owns the readback-capability probes and
  * the config rows, and passes the already-masked modes per frame. This
- * module never asks whether a mode is allowed — only what it is.
+ * module never asks whether a mode is allowed - only what it is.
  */
 #ifndef BUFFER_VIZ_H
 #define BUFFER_VIZ_H
@@ -37,7 +37,7 @@ typedef struct BufferVizRange {
 
 /* Fold one frame's raw [lo, hi] into the smoothed range. Snaps outright
  * when the raw span jumps past BUFFER_VIZ_SNAP_RATIO of the smoothed one
- * in either direction — an example switch must not lag through the EMA —
+ * in either direction - an example switch must not lag through the EMA -
  * and eases otherwise. Pure; the caller owns `range`. */
 void buffer_viz_range_update(BufferVizRange *range, float raw_lo, float raw_hi);
 

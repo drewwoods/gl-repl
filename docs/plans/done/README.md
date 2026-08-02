@@ -46,13 +46,13 @@ historical context and are not in the table below.
 | `modules-editor-view-update.md` | 2026-04-30 | Replacement language + Mermaid diagram for `MODULES.md` post-corrected-contract. Applied. |
 | `file-structure-cleanup.md` | 2026-04-30 | Formalized module layout rules: paired modules at root, header-only helpers in `include/`, tests under `tests/`. |
 | `editor-owns-text-spike.md` | 2026-05-01 | Spike investigation: tested moving canonical text ownership from `GLCmd.source` to a parallel editor buffer. |
-| `editor-owns-text-spike-results.md` | 2026-05-01 | Spike results: re-parsing all commands from editor buffer on flatten runs under 4.2 ms — acceptable. |
+| `editor-owns-text-spike-results.md` | 2026-05-01 | Spike results: re-parsing all commands from editor buffer on flatten runs under 4.2 ms - acceptable. |
 | `editor-owns-text.md` | 2026-05-01 | Design for migrating canonical command text to editor buffer and deleting `GLCmd.source`. |
 | `editor-text-model-controller.md` | 2026-05-03 → -05 | M/V/C+compiler+router contract: passive `UiHit`, `imrepl_ctrl` routes, editor / peers / scene each own behavior, `repl_compile`/`repl_apply` pure. |
 | `editor-owns-text-completion.md` | 2026-05-03 → -05 | Three-layer ownership split (Editor / REPL / UI). Phases A–J: input-dispatch boundary, code-panel hit, color-picker writeback, cursor-pixel output, forwarder ratchets, macOS Cmd, metadata highlight. |
 | `editor-owns-text-completion-revised.md` | 2026-05-05 | Sibling correcting the controller boundary (no `UiAction` dispatch enum). |
 | `editor-ownership-gap-cleanup.md` | 2026-05-05 | Audit / ratchet branch that delivered the J-phase work. Hard guards: 32. |
-| `add-fixed-array-support.md` | 2026-05-06 | Fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]` end-to-end — REPL state, parser/eval/flatten/executor, export round-trip, autocomplete + help. |
+| `add-fixed-array-support.md` | 2026-05-06 | Fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]` end-to-end - REPL state, parser/eval/flatten/executor, export round-trip, autocomplete + help. |
 | `editor-as-text-editor.md` | 2026-05-08 | Generic text-editor split: REPL mode becomes one configuration of a configurable editor with its own UI chrome. |
 | `predef-var-compaction-on-apply.md` | 2026-05-08 | Moved predef-var compaction from editor input dispatcher into the compile/apply transaction layer. |
 | `repl-agnostic-clipboard.md` | Phase A 2026-05-08; Phase B incidentally landed | Block-aware copy + decl-guard queries moved behind REPL-side predicates. Phase B (`GLCmd[]` storage dropped) satisfied incidentally. |
@@ -80,19 +80,19 @@ historical context and are not in the table below.
 | `code-quality-refactor-followups.md` | 2026-05-19 | Residual code-quality findings from refactor audits requiring behavior-preserving structural changes. |
 | `edit-line-ownership.md` | 2026-05-20 | Migrated active edit-line cursor ownership from `ReplState` to `EditorState` to align with layering invariants. |
 | `src-shuffle-final.md` | 2026-05-23 | 8-phase source tree restructure: `prof`/`transform_utils` relocation, `subsystems/` split, `ui/core`+`ui/app` split, `sample→gl-repl` rename. |
-| `src-editor-code-smell-audit.md` | 2026-05-23 | `src/editor/` audit: layering violations, modal-capture issues, state management — all Tier A/B fixes landed. |
-| `src-repl-code-smell-audit.md` | 2026-05-23 | `src/repl/` first-pass audit: correctness bugs, naming drift, structural issues — all Tier A/B fixes landed. |
-| `src-ui-code-smell-audit.md` | 2026-05-23 | `src/ui/` audit: snapshot-purity violations, core/app boundary leaks — all bugs and most drift hazards closed. |
+| `src-editor-code-smell-audit.md` | 2026-05-23 | `src/editor/` audit: layering violations, modal-capture issues, state management - all Tier A/B fixes landed. |
+| `src-repl-code-smell-audit.md` | 2026-05-23 | `src/repl/` first-pass audit: correctness bugs, naming drift, structural issues - all Tier A/B fixes landed. |
+| `src-ui-code-smell-audit.md` | 2026-05-23 | `src/ui/` audit: snapshot-purity violations, core/app boundary leaks - all bugs and most drift hazards closed. |
 | `tutorials-check-and-set-repl-state.md` | 2026-05-23 | Tutorial `REQUIRE` and `SET` step kinds: config-state checkpoint steps and showcase (auto-advance on ack) steps. |
 | `inline-numeric-swatch-stepper.md` | 2026-05-23 | Stateless up/down stepper widget for numeric literals in code panel, committing edits through the normal pipeline. |
-| `src-app-code-smell-audit.md` | 2026-05-24 | `src/app/` audit: audio-module races, stale camera imports, status-reporting issues — Tier A/B findings catalogued. |
+| `src-app-code-smell-audit.md` | 2026-05-24 | `src/app/` audit: audio-module races, stale camera imports, status-reporting issues - Tier A/B findings catalogued. |
 | `src-scene-code-smell-audit.md` | 2026-05-24 | `src/scene/` audit: 54 of 65 findings closed, including camera movement, transform parity, and lighting state fixes. |
 | `src-subsystems-code-smell-audit.md` | 2026-05-24 | `src/subsystems/` audit: cross-peer inconsistency in state ownership, lifecycle verbs, and input routing. |
 | `memory-profile-panel.md` | 2026-05-26 | Process-memory overlay: cross-platform RSS reader, 1024-sample ring, time-anchored graph, Off/On/Details config row, Ctrl+Shift+W hotkey. |
 | `src-app-code-smell-audit-2.md` | 2026-05-26 | `src/app/` follow-up: 22 Tier A fixes verified across 45 binaries and 6815 tests. |
 | `src-editor-code-smell-audit-2.md` | 2026-05-26 | `src/editor/` follow-up: residual modal-capture, status-publishing, and undo-ring-generation issues addressed. |
 | `src-repl-audit-2-tier-a-implementation.md` | 2026-05-26 | Implementation record for 22 Tier A findings from the `src/repl/` second-pass audit. |
-| `src-repl-code-smell-audit-2.md` | 2026-05-26 | `src/repl/` follow-up: 83 findings total, 80 closed — help-layering inversion, export file I/O hardening. |
+| `src-repl-code-smell-audit-2.md` | 2026-05-26 | `src/repl/` follow-up: 83 findings total, 80 closed - help-layering inversion, export file I/O hardening. |
 | `src-subsystems-code-smell-audit-2.md` | 2026-05-26 | `src/subsystems/` follow-up: color-picker state, replay fade batches, tutorial-editor decoupling. |
 | `demos-for-color-picker-variable-panel-memprof.md` | 2026-05-29 | Three standalone UI subsystem demos (color picker, variable panel, memory profiler) prove zero coupling to editor/REPL/app via in-place bridge. |
 | `repl-trailing-comments-roundtrip.md` | 2026-05-29 | Full round-trip preservation of trailing `// comments` on commands through commits, reformats, and export/import. |
@@ -101,7 +101,7 @@ historical context and are not in the table below.
 | `vendor-freeglut.md` | 2026-06-02 | Vendor freeglut as in-tree static library (`third_party/freeglut/`), Cocoa backend, `scripts/vendor-freeglut.sh` re-pin, `THIRD_PARTY_LICENSES.md` acknowledgement. |
 | `remove-remaining-repl-mut-reads.md` | 2026-06-08 | Finalized REPL state-access pattern: targeted setters and `_writable()` accessors in `state_owners.h`; zeroed the `_mut()` read ratchet across all non-owner modules. |
 | `accum-motion-blur.md` | 2026-06-09 → 2026-07-03 | Accumulation effect/pass split with AA, time blur, and camera blur; per-sample REPL-state isolation, configuration, UI/docs, and coverage. |
-| `color-picker-palettes.md` | Color picker — Basic / Full / Harmony palettes |
+| `color-picker-palettes.md` | Color picker - Basic / Full / Harmony palettes |
 | `rename-scene-to-render3d.md` | 2026-06-24 | Renamed the 3D scene-renderer module `src/scene/` → `src/render3d/` (`scene_*`/`Scene*`/`SCENE_*` → `render3d_*`/`Render3d*`/`RENDER3D_*`, `render3d_draw_scene`, `Render3dState`, `render3d_demo`, renamed guards/tests, `PROF_RENDER3D_*`) to end the collision with the user-scene concept. Behavior-neutral; user-scene tokens untouched. Includes review. |
 | `audio-menu.md` | 2026-07-06 | Add a top-level Audio menu grouping discovered tracks by source, highlighting the playing track, displaying track duration, and integrating Play/Pause, Next/Previous controls, and loop modes. |
 | `tutorial-setup-scaffold.md` | 2026-07-08 | Locked `TutorialEntry.setup` scaffolds with example-header support, setup-label anchors, catalog validation, and Color Interpolation as the composition example. |
@@ -112,7 +112,7 @@ historical context and are not in the table below.
 | `rethinking-flattening-behaviour.md` | 2026-07-25 | Superseded by the dependency-aware evaluation design in `flatten-performance-without-vm.md`. |
 | `bounded-global-arrays.md` | 2026-07-25 | Superseded by fixed scratch arrays `A`/`B`/`C` and per-seed/iter deterministic `rand()`. |
 | `tutorial-replay-system.md` | 2026-07-25 | Superseded by the walkthrough-style tutorial runner and Tutorials menu. |
-| `stencil-buffer-support.md` | 2026-07-27 | Stencil support in three landed phases: `src/subsystems/buffer_viz/` extracted behind three neutral render3d hooks (depth-viz relocated), `glStencilFunc`/`glStencilOp`/`glStencilMask` + `GL_STENCIL_TEST` + `GL_STENCIL_BUFFER_BIT`, sparse stencil visualization with legend panel and capability gate, host-pass stencil policy, then attrib group + GL-state inspector + `glClearStencil`. Phase 3 (`*Separate`) deliberately not pursued — see the plan's status header. |
+| `stencil-buffer-support.md` | 2026-07-27 | Stencil support in three landed phases: `src/subsystems/buffer_viz/` extracted behind three neutral render3d hooks (depth-viz relocated), `glStencilFunc`/`glStencilOp`/`glStencilMask` + `GL_STENCIL_TEST` + `GL_STENCIL_BUFFER_BIT`, sparse stencil visualization with legend panel and capability gate, host-pass stencil policy, then attrib group + GL-state inspector + `glClearStencil`. Phase 3 (`*Separate`) deliberately not pursued - see the plan's status header. |
 | `scoped-local-variables.md` | 2026-07-27 | Function-scoped locals (`float x;` inside a funcN body): lexical call frames, scope-aware edit guards, C-automatic export/import round-trip, three converted examples, and the pay-for-use assignment-target resolution. Follow-up split out as `not-started/local-aware-rebake.md`. |
 | `tutorial-scene-promotion.md` | 2026-07-27 | Post-tutorial documents promote like examples: `tutorial_origin_idx` marker set at lesson end, `repl_promote_example_if_needed` → `repl_promote_transient_if_needed` with capture-before-teardown ordering and per-scene cfg reapply, retryable slots-full rejection. |
 | `assignment-value-plot.md` | 2026-07-28 | Right-click a `var = expr;` / `A[i] = expr;` row for a floating plot of that row's values: flat-program scan with no executor hook, neutral `src/support/runstats.c` (histogram delegates to it), `src/subsystems/assign_plot/` capture engine, 250px panel in the overlay column, mouse-only rate chip so nothing lands in the `@cfg` surface. |

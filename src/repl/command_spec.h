@@ -5,7 +5,7 @@
  * Describes parsing, formatting, and completion requirements for each command
  * type in a declarative way (name, argument count, format string, usage hints).
  *
- * Structure: two command spec arrays — enum-based specs (GL_BLEND, GL_LIGHTING,
+ * Structure: two command spec arrays - enum-based specs (GL_BLEND, GL_LIGHTING,
  * etc. with enumeration tables) and standard specs (vertex/normal/color/transform
  * commands with simple float arguments). Control structures (for, func, if, close
  * block) are represented as ReplCommandTypeSpec entries: metadata about whether
@@ -54,7 +54,7 @@ typedef struct {
  *    glFrontFace, glColorMaterial x2, glBlendFunc x2, glLightModeli
  *    slot 0).
  *  - ENUM_OR_CONST_VALUE: token first, else a well-formed numeric
- *    literal (strict — no trailing junk, no runtime vars) reverse-
+ *    literal (strict - no trailing junk, no runtime vars) reverse-
  *    mapped to a value in this slot's table. The bool-slot policy:
  *    used by glDepthMask and all four glColorMask channels, so
  *    glDepthMask(1) / glColorMask(1, 0, 1, 0) canonicalize to
@@ -84,7 +84,7 @@ typedef enum {
 /* One positional enum-argument spec: the source-of-truth enum token
  * table (also drives autocomplete), the per-slot diagnostic shown when
  * resolution fails, the slot kind, and an optional all-bits alias for
- * bitfield slots. `enums` is non-null for all four kinds — the parser
+ * bitfield slots. `enums` is non-null for all four kinds - the parser
  * branches on `kind`, never on whether `enums` is null. */
 typedef struct {
     const ReplEnumEntry *enums;
@@ -99,7 +99,7 @@ typedef struct {
  * the completion table once per group, emitting a section header and
  * one row per entry. NONE means "don't render in the command help"
  * (used by language-level entries like `func0 {`, `x = `, math
- * builtins, and the constants `PI` / `TAU` — those live in the
+ * builtins, and the constants `PI` / `TAU` - those live in the
  * hand-written language sections of the overlay). */
 typedef enum {
     REPL_HELP_GROUP_NONE = 0,
@@ -136,19 +136,19 @@ typedef struct {
 /* Syntax-highlighting category for code-panel rendering. Each CmdType maps
  * to exactly one category; the renderer (ui_panels.c) translates the
  * category into an RGB color via a category→color palette. Living in the
- * spec means a new CmdType picks up the right highlight automatically — the
+ * spec means a new CmdType picks up the right highlight automatically - the
  * UI doesn't need to grow another switch case.
  *
  * Categories are the *visual* taxonomy (one color per category). For
- * *control-flow* predicates — "is this a transform?" / "does this emit a
- * vertex?" / "is this a block head?" — see the inline helpers in
+ * *control-flow* predicates - "is this a transform?" / "does this emit a
+ * vertex?" / "is this a block head?" - see the inline helpers in
  * src/repl/command.h (repl_cmd_is_transform, repl_cmd_emits_vertex,
  * repl_cmd_is_block_head, repl_cmd_is_block_end). The two axes are
  * intentionally separate: e.g. CMD_FOR_BEGIN / CMD_FUNC_DEF /
  * CMD_IF_BEGIN live in three distinct visual categories
  * (CMD_CAT_LOOP / CMD_CAT_FUNCTION / CMD_CAT_CONDITIONAL) but share a
  * single control-flow predicate (repl_cmd_is_block_head). Don't fold
- * the predicates through the spec table — that'd invert the header
+ * the predicates through the spec table - that'd invert the header
  * layering (command.h is foundational, command_spec.h depends on it). */
 typedef enum {
     CMD_CAT_DEFAULT = 0,    /* fallback gray; only hit for out-of-range types */

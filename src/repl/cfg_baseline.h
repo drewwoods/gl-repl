@@ -18,11 +18,11 @@
  * enforced at the REPL layer (the bridge is the only TU that needs
  * to know the symbolic names). */
 #define REPL_CFG_VALUE_MAX   40
-/* Capacity of a config bag — must stay >= the number of emitted @cfg
+/* Capacity of a config bag - must stay >= the number of emitted @cfg
  * toggles (every non-header, non-action g_cfg_items[] row). When a new
  * config toggle pushes the real count past this, glr_export_cfg_fill_all
  * silently drops the overflow and the last @cfg lines stop round-tripping
- * (caught by test_workspace_header_budget_worst_case). Bump this — and
+ * (caught by test_workspace_header_budget_worst_case). Bump this - and
  * MAX_WORKSPACE_HEADER_LINES in export_state.h, which is sized from it. */
 #define REPL_CFG_MAX_ITEMS   48
 
@@ -51,7 +51,7 @@ typedef struct {
     void (*fill_all)(ReplConfigBag *cfg);
     /* Fill bag with the per-scene-snapshot subset for repl_scenes. */
     void (*fill_scene_subset)(ReplConfigBag *cfg);
-    /* Fill bag with the *default* value of every `fill_scene_subset` slug —
+    /* Fill bag with the *default* value of every `fill_scene_subset` slug -
      * the baseline an example load resets to before applying the scene's
      * own leading `@cfg`. Same keys, same order as fill_scene_subset, so a
      * writer can diff the two bags positionally or by slug. Used by the
@@ -73,7 +73,7 @@ typedef struct {
      * with *out_value set; 0 when the slug doesn't take symbolic
      * values or the name isn't a known constant. The bridge owns the
      * scene-enum vocabulary so REPL-layer code can stay
-     * scene-agnostic — see the @cfg parser and the tutorial runner's
+     * scene-agnostic - see the @cfg parser and the tutorial runner's
      * SET/REQUIRE handlers. */
     int  (*resolve_text)(const char *slug, const char *value_name,
                          int *out_value);
@@ -93,7 +93,7 @@ int  repl_cfg_known(const char *slug);
 /* Apply a slug with a symbolic value name (e.g. "GRID_THEME_RADAR").
  * The bridge resolves the name to int and applies it the same way
  * repl_cfg_set_int would. Falls back to strtol when the bridge has no
- * resolve_text or the name isn't a known constant — that path lets
+ * resolve_text or the name isn't a known constant - that path lets
  * legacy integer-form saved files keep loading. */
 void repl_cfg_set_text(const char *slug, const char *value_name);
 

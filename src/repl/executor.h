@@ -57,10 +57,10 @@ typedef struct {
  * footprint on the model. The single source of truth for both point-size
  * paths, so they can't drift:
  *   - The software fallback (no glPointParameterfv) scales glPointSize by
- *     REF_DIST/cam_dist directly — see repl_exec_point_size in executor.c.
+ *     REF_DIST/cam_dist directly - see repl_exec_point_size in executor.c.
  *   - The hardware default seeds GL_POINT_DISTANCE_ATTENUATION with a
  *     pure-quadratic coefficient 1/REF_DIST^2, which makes GL's
- *     size/sqrt(c*d^2) reduce to the same size*REF_DIST/d — see the init
+ *     size/sqrt(c*d^2) reduce to the same size*REF_DIST/d - see the init
  *     bootstrap in src/repl/export.c. */
 #define REPL_POINT_SIZE_REF_DIST 4.0f
 
@@ -99,7 +99,7 @@ typedef struct {
     int             has_fade_context;
     int             suppress_tess_finalize;
     /* When set (the .ply export pass), the executor: (1) mirrors each vertex's
-     * current normal — transformed to world space — into the texture
+     * current normal - transformed to world space - into the texture
      * coordinate channel, bracketing user glBegin/glEnd primitives with
      * glPassThrough(MESH_PLY_PASS_NORMALS / _NO_NORMALS) so the feedback parser
      * knows which texcoords are authored normals (vs solids / tess, which fall
@@ -110,8 +110,8 @@ typedef struct {
     int             encode_feedback_normals;
     /* Optional filter over the program's GL state/color-emitting commands.
      * Returns nonzero to emit the command's GL normally, zero to suppress
-     * the GL emission (the REPL bookkeeping a state command carries — the
-     * GL_LIGHTn enable mask and clear color — still runs, so render state
+     * the GL emission (the REPL bookkeeping a state command carries - the
+     * GL_LIGHTn enable mask and clear color - still runs, so render state
      * stays coherent). NULL emits everything (the default live-frame path).
      *
      * This lets a single render pass own the material/lighting/cull state
@@ -229,9 +229,9 @@ void repl_executor_draw_glut_solid(const GLCmd *cmd);
  * repl_apply_state_bookkeeping() before emitting GL. */
 int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
-/* Apply only the REPL render-state bookkeeping a state command carries —
+/* Apply only the REPL render-state bookkeeping a state command carries -
  * the GL_LIGHTn enable mask (for the light-indicator overlay) and the
- * clear color (for export / next-frame clear) — without emitting any GL.
+ * clear color (for export / next-frame clear) - without emitting any GL.
  * This is the single source of truth for "which commands carry REPL
  * render bookkeeping": repl_apply_state_cmd() calls it alongside the GL
  * emission, and specialized passes that own GL state themselves and skip

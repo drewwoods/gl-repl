@@ -34,7 +34,7 @@ void write_predef_var_globals(FILE *f) {
  * of each frame and restore it before every pass after the first, so
  * each pass sees the same starting state but the LAST pass's mutations
  * persist into the next frame. Mirrors the live REPL's per-frame
- * save/restore around the executor. `t` is not saved — every pass
+ * save/restore around the executor. `t` is not saved - every pass
  * sees the same per-frame `t` value set in display(). */
 void write_save_restore_helpers(FILE *f) {
     if (!export_has_persistent_predef_vars())
@@ -78,7 +78,7 @@ void write_rand_helper(FILE *f) {
 
 /* Shaping builtins with no libm twin. Bodies must stay identical to
  * builtin_clamp / builtin_lerp / builtin_smoothstep / builtin_sign in
- * src/repl/eval.c — the exported binary and the live REPL are supposed to
+ * src/repl/eval.c - the exported binary and the live REPL are supposed to
  * render the same frame, and these are pure math with no GL state to hide a
  * divergence. */
 void write_shape_helpers(FILE *f, const ExportNeeds *needs) {
@@ -280,7 +280,7 @@ void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs) {
  * the REPL's CMD_LABEL executor case in src/repl/executor.c) so the live
  * REPL and exported binary render identical text. Using vsnprintf with
  * the raw format would print `1.000000` for `%f` while the REPL prints
- * `1` — that divergence breaks visual round-trips.
+ * `1` - that divergence breaks visual round-trips.
  *
  * Float args promote to double through the variadic call, so user
  * expressions don't need explicit casts at the call site.

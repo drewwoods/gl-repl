@@ -1,4 +1,4 @@
-# `src/repl/` — Code-Smell Audit (Follow-up)
+# `src/repl/` - Code-Smell Audit (Follow-up)
 
 > Audit produced 2026-05-26 as a refresh of the 2026-05-23 audit
 > (`plans/done/src-repl-code-smell-audit.md`). Findings come from five
@@ -8,14 +8,14 @@
 > material, a regression of a previously-closed item, or an item the
 > prior audit closed only partially.
 >
-> File:line references are exact at the time of writing — check
+> File:line references are exact at the time of writing - check
 > `git log` on the cited files before acting if this doc has aged.
 >
 > Scope: every file under `src/repl/` except `examples.c` (mostly
 > verbatim data, but cross-reference smells in adjacent files are
 > included).
 >
-> **Context — what landed since 2026-05-23:** 35 findings closed in
+> **Context - what landed since 2026-05-23:** 35 findings closed in
 > the original closeout (#1–#35); Tier A 2026-05-24 closed #36, #42,
 > #43, #45, #46; Tier B 2026-05-24 closed #41 and #44; the
 > follow-up [P2]/[P3] pass swept the `var_idx`/parallel-cfg leftovers.
@@ -30,7 +30,7 @@
 
 83 findings total (82 from the original audit + 1 review-discovered).
 80 closed (✅), 3 still open. All open findings verified against
-current HEAD. Tier letters cover the whole open backlog — no unclassified rows
+current HEAD. Tier letters cover the whole open backlog - no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
 added #83 closed it in the same commit. The 2026-05-27 #41 close ran the
@@ -63,7 +63,7 @@ full slug-to-int route (bridge + X-macro symbol tables in
 | 22 | 🟡 | B | ✅ Done | Executor includes `subsystems/replay/*` (layering) |
 | 23 | 🟡 | B | ✅ Done | Executor writes status messages to live REPL state |
 | 24 | 🔵 | B | ✅ Done | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
-| 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
+| 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro - third "write text" pattern |
 | 26 | 🟡 | A | ✅ Done | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
 | 27 | 🟡 | A | ✅ Done | Stray `func0(var0)` autocomplete row |
 | 28 | 🔵 | B | ✅ Done | `replay_apply_state_cmd` parallel to executor dispatch |
@@ -78,7 +78,7 @@ full slug-to-int route (bridge + X-macro symbol tables in
 | 37 | 🔵 | C | ✅ Done | `GLCmd.text[64]` + `var_names[8][16]` per command |
 | 38 | 🟢 | A | ✅ Done | `examples.h` / `example_loader.c` parallel API names |
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
-| 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
+| 40 | 🔵 | - | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | ✅ Done | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | B | ✅ Done | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | A | ✅ Done | `tag_bit` byte-identical inlines |
@@ -90,7 +90,7 @@ full slug-to-int route (bridge + X-macro symbol tables in
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
 | 50 | 🟡 | B | ✅ Done | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
 | 51 | 🔵 | B | ✅ Done | Five file-level statics in executor.c |
-| 52 | 🟡 | — | ✅ Done | `command_spec.c` terminator positional zeros |
+| 52 | 🟡 | - | ✅ Done | `command_spec.c` terminator positional zeros |
 | 53 | 🟢 | A | ✅ Done | Six of seven `repl_format_*` functions dead |
 | 54 | 🟢 | A | ✅ Done | `compile_scope_indent` one-line forwarder |
 | 55 | 🟢 | A | ✅ Done | `make_auto_normal` dead `insert_pos` param |
@@ -130,15 +130,15 @@ full slug-to-int route (bridge + X-macro symbol tables in
 
 Severity grouping mirrors the previous audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or data-loss
+- **🔴 Actual bugs / hazards (verified)** - correctness or data-loss
   issues with a concrete failure mode that exists in current
   production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — parallel structures, layering
+- **🟡 Drift / boundary hazards** - parallel structures, layering
   inversions, ambiguous-intent code that works today but is one edit
   away from misbehaving.
-- **🟢 Dead code / dead fields** — code with no callers, unused
+- **🟢 Dead code / dead fields** - code with no callers, unused
   parameters, redundant wrappers. Pure surface reduction.
-- **🔵 Structural concerns** — long functions, magic numbers, comment
+- **🔵 Structural concerns** - long functions, magic numbers, comment
   archaeology. Bigger refactors; higher cost.
 
 Each finding cites file:line, names the smell, says why it matters,
@@ -151,7 +151,7 @@ recurring in multiple TUs) carry a **🔀 cross-file** tag.
 
 **Where:** `src/repl/help_text.c:11`
 
-**Smell:** `#include "app/glr_config.h"` — `glr_config_items()` /
+**Smell:** `#include "app/glr_config.h"` - `glr_config_items()` /
 `GlrConfigItem` / `GLR_CONFIG_NONE` reach into the descriptor table
 that `glr_actions.c` owns. A grep across `src/repl/*.{c,h}` shows
 this is the **only** `app/` include in the layer.
@@ -172,18 +172,18 @@ already reads `g_cfg_items`. Add a guard to lock the boundary.
 hook in `src/repl/help_text.h`; the controller installs a static
 `glr_ctrl_help_fkey_label(fn)` lookup that walks `g_cfg_items[]`
 inside `glr_ctrl_install_app_services`. `src/repl/help_text.c` no
-longer includes `app/glr_config.h` — when no provider is installed
+longer includes `app/glr_config.h` - when no provider is installed
 (the standalone `scene_demo`) the F-Key Toggles section renders
 empty rather than dragging in the controller's vocabulary. The
 existing `scripts/check-repl-no-app.sh` ratchet was already in
 place; its baseline drops from 1 to 0, so any new `#include "app/..."`
 from src/repl/ is now a hard error.
 
-### 2. 🟡 `parse_cfg` double-applies every `// @cfg` line — design hazard, not currently triggerable
+### 2. 🟡 `parse_cfg` double-applies every `// @cfg` line - design hazard, not currently triggerable
 
 (*Severity note: downgraded from 🔴 to 🟡 after closer reading.
 The double-fire is a real contract violation but the only
-observable side effect today — `tutorial_notify_state_changed` —
+observable side effect today - `tutorial_notify_state_changed` -
 is a no-op when no tutorial is active and a near-no-op even when
 one is, so no current user-visible failure mode has been
 identified. The "actual bug" classification was over-strong;
@@ -210,18 +210,18 @@ import_cfg_accumulator_apply_and_reset();   // applies the bag AGAIN
 during parse and once at drain. The bridge implementation in
 `glr_config.c` ends every `glr_config_set` with
 `tutorial_notify_state_changed`. Comment at `export.c:412` justifies
-this as "same set of pairs" — but `apply` is not contractually
+this as "same set of pairs" - but `apply` is not contractually
 idempotent, only happens to be in practice today because:
 
 - Tutorial-notify (`glr_config.c:163-169`) early-returns when no
   tutorial is active and when the current step is not REQUIRE.
 - A REQUIRE step that matches and advances on the per-line apply
-  will be on a different step by the drain — so the drain's
+  will be on a different step by the drain - so the drain's
   re-fire still hits the early-return.
 
 The pathological case (tutorial REQUIRE step N matches on per-line
 apply; advance to step N+1, also a REQUIRE on the *same* slug
-matching the *same* value — would auto-advance through the
+matching the *same* value - would auto-advance through the
 showcase) is constructible but not in any shipped tutorial.
 
 **Fix:** Pick one path. Either drop the per-line apply (let the
@@ -242,7 +242,7 @@ slug. `tests/test_repl_editor.c` was updated to call
 `parse_workspace_header_line` sites that previously relied on the
 per-line apply.
 
-### 3. ✅ `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
+### 3. ✅ `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability - currently no enforcement, and at least one caller can violate the assumption
 
 **Where:** `src/repl/eval.c:233-253` (the just-moved functions from
 the closed #46); contract comment at `src/repl/eval.h:229-232`.
@@ -260,11 +260,11 @@ slots now holding *different* variables (reorder / shrink-then-grow).
 
 **Why it matters:** The autonormal scratch pair (`flatten.c`) is
 short-lived enough that the table cannot change between save and
-restore in normal operation — there the values-only contract is
+restore in normal operation - there the values-only contract is
 fine. Everything else is a *long-lived* path that can span a table
 mutation:
 
-- `replay.c`'s start-of-replay baseline (three sites) — survives
+- `replay.c`'s start-of-replay baseline (three sites) - survives
   multiple frames; the user can switch workspace mid-replay,
   which rebinds the predef table.
 - `ReplayFadePlan.baseline_predef_vals` (`glr_ctrl.h:17`,
@@ -286,7 +286,7 @@ source/predef-table mutation routed through user input) while a
 replay is active rebinds the table; the fade-plan restore then
 writes saved floats into slots now holding different vars.
 
-**Fix (pick one — they are not stacking options):**
+**Fix (pick one - they are not stacking options):**
 
 1. **Cascade the full-snapshot pair through every long-lived
    caller.** That means: switch `replay.c`'s three sites to
@@ -297,7 +297,7 @@ writes saved floats into slots now holding different vars.
    and the matching `ReplayFadePlan` storage (`glr_ctrl.h:17`) to
    carry names + count too; update `glr_ctrl.c:226` and `:264`
    accordingly. The short-lived autonormal pair stays values-only;
-   the frame pair (`:1844, :1953`) is a judgement call — see (3)
+   the frame pair (`:1844, :1953`) is a judgement call - see (3)
    below for the smaller-scope alternative.
 2. **Stop replay before any source / predef-table mutation.**
    Tighter contract: replay must terminate before a workspace
@@ -310,10 +310,10 @@ writes saved floats into slots now holding different vars.
 3. **Keep all values-only callers on the values-only pair and add
    an `assert(g_num_predef_vars == saved_count &&
    names[i]==saved_names[i])` guard in `repl_restore_predef_values`**
-   — but that requires capturing names too, which is effectively
+   - but that requires capturing names too, which is effectively
    option (1) without the API rename.
 4. **Document the prerequisite in the contract comment and leave
-   the runtime bug latent** — only acceptable if every long-lived
+   the runtime bug latent** - only acceptable if every long-lived
    caller is audited and proven not to span a table mutation.
    Brittle long-term; deferred-cost fix.
 
@@ -337,7 +337,7 @@ of `glr_ctrl_display_frame`. Going through
 `repl_eval_restore_predef_vars` (full replacement, including
 `g_num_predef_vars`) would have changed the live table's COUNT
 mid-frame, leaving the frame-end values-only restore unable to
-repopulate any slots the fade restore had dropped — that would have
+repopulate any slots the fade restore had dropped - that would have
 turned a values-only bug into a full-table loss.
 
 The fix:
@@ -360,7 +360,7 @@ The fix:
    `repl_eval_restore_predef_values_by_name(src_vals, src_names,
    src_count)` that pairs saved values with the LIVE predef slots by
    name match. It deliberately leaves the live table's
-   count/names/slot order untouched — only updates values where the
+   count/names/slot order untouched - only updates values where the
    snapshot's name still exists in the live table. Saved names that
    no longer exist are silently dropped; live names not in the
    snapshot keep their current values. Both
@@ -375,7 +375,7 @@ The fix:
    still pairs CURRENT predef-table names with the saved value array.
    It also has the slot-mismatch bug under reshape, but its consumer
    (per-frame annotation rendering) is short-lived and its
-   correctness story is fuzzier than the fade restore's — a separate
+   correctness story is fuzzier than the fade restore's - a separate
    follow-up. The values-only `replay_copy_baseline_predef_values`
    API was kept specifically for this caller.
 
@@ -386,7 +386,7 @@ Regression test
 into Y's old slot), clobbers live values, calls
 `replay_restore_baseline_predef_values`, and asserts X == 10 AND
 Z == 30. Pre-fix the values-only restore put Y's saved value (20)
-into Z's slot — verified by temporarily restoring the old body and
+into Z's slot - verified by temporarily restoring the old body and
 watching the `Z gets Z's saved value (30), NOT Y's (20)` assertion
 fail.
 
@@ -425,7 +425,7 @@ local "%d" buffer the same way, with a
 runtime check is for defense, never a hot path). Regression tests
 in `tests/test_repl_core_internal.c` exercise oversized key,
 oversized new value, oversized replace value, oversized set_int
-key, plus the `KEY_MAX - 1 / KEY_MAX` boundary cases — pre-fix 9
+key, plus the `KEY_MAX - 1 / KEY_MAX` boundary cases - pre-fix 9
 assertions fail, post-fix all 221 pass.
 
 ### 5. ✅ `UserScene` stack allocations carry ~1 MB+ each; multiple concurrent stashes exceed small-thread stacks
@@ -433,7 +433,7 @@ assertions fail, post-fix all 221 pass.
 **Where:** `src/repl/scenes.c:601, 731, 798, 848, 857, 949`;
 `UserScene` definition at `src/repl/scenes.c:65-83`.
 
-**Smell:** `UserScene` carries two large fixed arrays —
+**Smell:** `UserScene` carries two large fixed arrays -
 `GLCmd cmds[MAX_COMMANDS]` (4096 entries) and
 `char lines[MAX_COMMANDS][MAX_LINE_LEN]` (4096 × 256 = 1 MB on its
 own), plus predef/scratch/func-alias arrays. `sizeof(UserScene)` is
@@ -454,7 +454,7 @@ scene paths.
 attributed the bloat to Tier B #44's `ReplConfigBag` embed. That
 was wrong: with `REPL_CFG_KEY_MAX=24`, `REPL_CFG_VALUE_MAX=16`, and
 `REPL_CFG_MAX_ITEMS=32` (see `cfg_baseline.h:12`),
-`sizeof(ReplConfigBag)` is ≈ 1.3 KB — well under 0.2% of the struct.
+`sizeof(ReplConfigBag)` is ≈ 1.3 KB - well under 0.2% of the struct.
 The cfg embed is incidental to the stack hazard; `cmds[]` + `lines[]`
 already dwarfed everything else. Treat this finding as a pre-existing
 `UserScene` stack-copy hazard, not as fallout from the cfg work.
@@ -465,7 +465,7 @@ g_scratch_stash` (these functions are not reentrant; the static
 scratch matches the original #1/#2 fix pattern). Either is Tier B
 sized.
 
-**Status (2026-05-26):** ✅ Closed via heap allocation (option 1 —
+**Status (2026-05-26):** ✅ Closed via heap allocation (option 1 -
 static scratch was rejected because `repl_load_scene_as_new_slot`
 holds two scratches simultaneously while `try_evict_lru` allocates
 a third, so a single shared static would clobber). Added
@@ -503,22 +503,22 @@ restore. The header docstring's "scene bookkeeping" is misleading.
 
 **Fix:** Either move the four scene-catalog file-statics into
 `ReplRuntimeState.scenes` (the BSS would move from scenes.c into
-the runtime struct — invasive but principled), or update the
+the runtime struct - invasive but principled), or update the
 docstring to say "scene bookkeeping = active-example-idx +
 workspace-dir only; the user-scene catalog is NOT in this snapshot."
 
 **Status (2026-05-27):** ✅ Closed via docstring update (the
 non-invasive option). `repl_state_capture/_restore` has no live
-production caller today — only `tests/test_repl_state.c` exercises
+production caller today - only `tests/test_repl_state.c` exercises
 the pair. Moving the user-scene catalog statics into
 `ReplRuntimeState.scenes` would be a real invasive refactor (BSS
 ownership, init order, all of scenes.c's helpers re-pointed) and
 isn't worth doing while no caller depends on the missing data.
 The `src/repl/state.h` block comment on `ReplRuntimeState` now
-spells out the gap explicitly — what the `scenes` slice does
+spells out the gap explicitly - what the `scenes` slice does
 cover (`active_example_idx` + workspace dir) and what it omits
 (`g_user_scenes[]`, `g_active_user_scene`, `g_user_scene_tick`,
-`g_pre_example`) — and points future readers back here if they
+`g_pre_example`) - and points future readers back here if they
 wire capture/restore into undo or session-save.
 
 ### 7. ✅ `source_scope.c` reads through `_mut()` accessors (regression of audit #37)
@@ -544,7 +544,7 @@ intended ratchet would have caught it.
 ratchet to `check-state-ownership` against `_mut()` outside owner
 modules (state.c, apply.c, command_store.c, controller).
 
-**Status (2026-05-26):** ✅ Closed together with #14 — see the
+**Status (2026-05-26):** ✅ Closed together with #14 - see the
 combined fix block under #14.
 
 ### 8. ✅ `import_feed_one_line` ignores `load_err` populated by `repl_load_apply_line`
@@ -568,7 +568,7 @@ the `import_try_function_header` warning emit now check whether
 `load_err[0]` is populated; if so, the Warning line ends with
 `(<load_err>)`. While auditing the path I also found that the
 plain-command tail of `repl_load_apply_line` (`load.c:219`) didn't
-populate `err` on capacity failure — the structured-change path
+populate `err` on capacity failure - the structured-change path
 above did, but plain commands fell through silently. Added the
 same `"command store at capacity (max %d)"` message to that branch
 so both compile shapes surface the same diagnostic. Regression test
@@ -586,7 +586,7 @@ edit.
 loop (no `ferror` check inside or after)
 
 **Smell:** `fclose` failure is silent (no status/log). The `fgets`
-loop never checks `ferror(f)` — returning NULL is treated as EOF
+loop never checks `ferror(f)` - returning NULL is treated as EOF
 even on real I/O error. The prior audit's #6 fix landed the
 save-side check; the load-side never got the symmetric treatment.
 
@@ -598,7 +598,7 @@ repl_set_status_error("Error: cannot read X");`.
 `ferror`/`fclose` pair after the import loop, with a matching
 `"Error: cannot read %s"` status message. Regression test in
 `tests/test_repl_core_io.c` points the loader at `/tmp` (a directory
-— `fopen` succeeds, the first `fgets` returns NULL with
+- `fopen` succeeds, the first `fgets` returns NULL with
 `ferror=1`) and asserts the function returns failure; pre-fix this
 returned success.
 
@@ -688,7 +688,7 @@ camera block silently swallows subsequent geometry lines.
 ordinary parsing or fail the load with a status error.
 
 **Status (2026-05-26):** ✅ Closed. Gated the 5-line skip on the
-`try_apply_example_camera_header` return value — on validation
+`try_apply_example_camera_header` return value - on validation
 failure the lines are left for ordinary parsing instead of silently
 eaten. Updated the existing `invalid_camera_example` test in
 `tests/test_repl_core_examples.c` to assert the new "all lines
@@ -707,7 +707,7 @@ transforms + 2 geometry lines under the 5-line skip).
 (no-progress loop break). The two values disagree on what failure
 looks like.
 
-**Why it matters — doc drift, not an actual bug:** A sweep of
+**Why it matters - doc drift, not an actual bug:** A sweep of
 callers (`parser.c:216, 460, 605, 693, 756, 1046, 1154`,
 `compile.c:1625`, `editor/commit.c:383`, `app/glr_ctrl.c:185`,
 `tests/test_eval.c:44, 591`) shows none rely on `-1` as a sentinel.
@@ -716,13 +716,13 @@ arity": e.g. `parser.c:1046-1051` does
 `cmd->num_args = repl_eval_parse_exprs(...); if (cmd->num_args <
 def->num_args) <incomplete-arg-error> else <usage-error>;`. A `-1`
 return would land in the `<incomplete-arg-error>` branch, which is
-already an error path — the diagnostic stays consistent. The
+already an error path - the diagnostic stays consistent. The
 "treats malformed lists as zero args, success" phrasing in the
 original draft of this finding was overstated; no current caller
 exhibits that behavior.
 
 **Fix:** Drop the `-1` clause from the docstring so behavior and
-contract agree. This is doc drift, not a runtime bug — Tier A as
+contract agree. This is doc drift, not a runtime bug - Tier A as
 written (single-comment edit) and safe. If a future caller wants a
 hard error signal it can switch to a parse entry that provides
 one, but no such caller exists today.
@@ -734,7 +734,7 @@ still passes (`build/release/test_eval --run-tests`: 482/482).
 
 ## 🟡 Drift / boundary hazards
 
-### 14. ✅ 🔀 `_mut()` accessors used for read-only work — multi-file regression
+### 14. ✅ 🔀 `_mut()` accessors used for read-only work - multi-file regression
 
 **Where:**
 - `src/repl/source_scope.c:41, 42, 161, 175` (covered as #7 above)
@@ -744,7 +744,7 @@ still passes (`build/release/test_eval --run-tests`: 482/482).
 - `src/repl/export.c` (sites total ~22; classify per below before
   acting)
 - `src/repl/replay_annotations.c:7` (`#include "repl/state_owners.h"`
-  but the file uses zero `_mut` APIs — leftover include from the
+  but the file uses zero `_mut` APIs - leftover include from the
   closed #37 sweep)
 - `src/repl/compile.c:567` (predef-vars read via `_mut()`-backed
   macro alias inside an `ExprCtx` init)
@@ -758,7 +758,7 @@ that resolve to `_mut()` accessors.
 **Why it matters:** Defeats the constness contract the typed-facade
 encodes. Any future "enforce read-only paths" refactor can't.
 
-**Classify before sweeping — not every `_mut()` call site is read-only
+**Classify before sweeping - not every `_mut()` call site is read-only
 drift.** Three categories overlap in this finding; only the first is
 fair game for the const-replacement sweep:
 
@@ -778,18 +778,18 @@ fair game for the const-replacement sweep:
    `memcpy` out of (e.g., `scenes.c:202` does
    `memcpy(s->cmds, repl_state_document_cmds_mut(), …)`). The
    const accessor `repl_state_document_cmds()` already exists at
-   `state_owners.h:17` / `state.c:201` — these callers just need
+   `state_owners.h:17` / `state.c:201` - these callers just need
    to switch to it. Do **not** treat as raw drift.
 
 **Fix:** Per-file sweep, but split into three commits matching the
 categories above so reviewers can audit each separately:
 
-1. *Const-replacement sweep* — pure read drift only (replace
+1. *Const-replacement sweep* - pure read drift only (replace
    `_mut()` calls with the existing const accessors where the
    caller only reads).
 2. *Reroute snapshot-owners and add the one missing const helper.*
    The document-array snapshot-owners (`scenes.c:202`, etc.)
-   already have `repl_state_document_cmds()` available — just
+   already have `repl_state_document_cmds()` available - just
    switch them over. The one missing helper is the predef-var
    const variant: today `g_predef_vars` is a macro routing to a
    `_mut()`-backed accessor, so reads can't expressively distinguish
@@ -797,7 +797,7 @@ categories above so reviewers can audit each separately:
    and reroute the read-side `g_predef_vars` callers through it,
    keeping the `_mut()` form on the write helpers internal to
    eval.c.
-3. *Audit the genuine writers* — confirm each surviving `_mut()`
+3. *Audit the genuine writers* - confirm each surviving `_mut()`
    reference is a real write; document why (file ownership) so the
    ratchet has an allowlist.
 
@@ -818,14 +818,14 @@ the ratchet to lock the result:
   `const GLCmd *`).
 - `scenes.c`: 2 snapshot-owner sites at the `stash_live_state` and
   `save_scene_to_slot` `memcpy(s->cmds, repl_state_document_cmds(),
-  ...)` (category 3 — switched to the existing const accessor).
+  ...)` (category 3 - switched to the existing const accessor).
 
 The remaining 10 `_mut(` call sites in non-owner `src/repl/*.c` are
 all category 2 (legitimate writers / file-local owner helpers) and
 are documented inline in the baseline file.
 
 The "predef-var const variant" suggested for the second commit was
-NOT done in this pass — `replay_annotations.c` still uses
+NOT done in this pass - `replay_annotations.c` still uses
 `g_predef_vars[i].name` for the SAVED-snapshot mapping, which is
 the latent simulator bug already documented under #3's status
 follow-up. Routing it through `repl_eval_predef_view()` is a
@@ -853,17 +853,17 @@ matched-existing-end). Comment at compile.c:1492 says "Step 5c
 (deferred) can refactor the editor wrappers to call these pure
 versions." Concrete drift caught while reading: `editor_compile_for_loop`
 uses `%.9g` for for-loop bounds; `repl_compile_for_loop` uses
-`repl_format_source_float` — same shape, different formatter.
+`repl_format_source_float` - same shape, different formatter.
 
-**Fix:** Step 5c — make `editor_compile_*` call `repl_compile_*`
+**Fix:** Step 5c - make `editor_compile_*` call `repl_compile_*`
 for parse/validate, layer editor effects on top. Or extract a
 shared `parse_for_loop_header()` and have both wrappers call it.
 
 **Status (2026-05-27):** ✅ Closed via per-kind kernel extraction
 landed across four focused commits (one per block kind). Each
 kernel lives in `src/repl/compile.c` and owns the shared
-parse + validate + format work. Both wrappers — the lean-loader
-`repl_compile_<kind>` and the editor's `editor_compile_<kind>` —
+parse + validate + format work. Both wrappers - the lean-loader
+`repl_compile_<kind>` and the editor's `editor_compile_<kind>` -
 call the kernel and add their kind-specific concerns on top.
 
 - **for_loop** (`repl_compile_for_loop_kernel`, `ReplForLoopKernel`):
@@ -875,7 +875,7 @@ call the kernel and add their kind-specific concerns on top.
   parses the condition, validates idents, builds CMD_IF_BEGIN +
   ib_text with the cached cond_val on args[0] and has_vars set.
 - **close_brace** (`repl_compile_close_brace_kernel`,
-  `ReplCloseBraceKernel`): no expression parse — just the open-block
+  `ReplCloseBraceKernel`): no expression parse - just the open-block
   scope lookup, end_type derivation, and the matched-existing-end vs
   insert-new-end-marker decision. Returns end_type so the editor
   wrapper can drive its func-decl-resume one-shot and pick a label
@@ -906,7 +906,7 @@ Net effect on file sizes (post-extraction):
   duplicated parse; commit.c is ~210 lines lighter overall.
 
 Validated end-to-end against the existing 47/47-binary, 7550/7550-
-test suite — no regressions.
+test suite - no regressions.
 
 ### 16. `repl_compile_dispatch` covers float-decl + var-assign only; other entry points are out-of-band
 
@@ -919,7 +919,7 @@ a new entry needs hand-wiring at every caller (load.c does it,
 `editor_try_commit_*` does it separately).
 
 **Fix:** Extend dispatch to call all six in canonical order
-(load-bearing — float_decl before var_assign, close_brace before
+(load-bearing - float_decl before var_assign, close_brace before
 for/func/if), or rename to `_dispatch_var_or_assign` so the limited
 scope is in the name.
 
@@ -934,7 +934,7 @@ load-bearing constraint (float_decl before var_assign, close_brace
 before the openers), documented inline.
 
 `src/repl/load.c::repl_load_apply_line` collapses to a single
-`repl_compile_dispatch` call — the per-kind chain it used to walk
+`repl_compile_dispatch` call - the per-kind chain it used to walk
 manually plus its `load_try_block` helper are both gone.
 
 ### 17. Three extracted parser handlers re-implement the same trim/split skeleton
@@ -943,7 +943,7 @@ manually plus its `load_try_block` helper are both gone.
 `:637-711` (`parse_materialf`), `:713-777` (`parse_point_parameter_fv`)
 
 **Smell:** Tier C extracted these out of `parse_command`
-independently — each carries its own copy of "find comma, strncpy,
+independently - each carries its own copy of "find comma, strncpy,
 trim leading/trailing spaces" (L532-547 vs L652-667), face-token
 lookup (L552-562 vs L671-676), and the validate-then-parse sequence
 (L598-609 vs L686-697 vs L750-761). Newly-exposed by the Tier C
@@ -986,7 +986,7 @@ were covered by the focused core-commit validation that still passes.
 ### 19. Five "extract slug + walk again" duplicates that the closed #14 missed
 
 **Where:**
-- `src/repl/example_loader.c:176-212` (`example_cfg_extract_slug` —
+- `src/repl/example_loader.c:176-212` (`example_cfg_extract_slug` -
   fresh parser parallel to `cfg_baseline.c:76-101`)
 - `src/repl/export.c:400-411` (`parse_cfg` extracts then re-walks
   the same characters to find `=`)
@@ -1086,7 +1086,7 @@ reads `replay_mode()` itself and sets the flag to 1 when in
 VERTEX-mode slices" semantic. Both
 `#include "subsystems/replay/replay.h"` and
 `#include "subsystems/replay/replay_state.h"` are gone from
-`src/repl/executor.c` — the executor no longer reaches across to
+`src/repl/executor.c` - the executor no longer reaches across to
 its peer subsystem. (I used the inverted-sense
 `suppress_tess_finalize` rather than the audit's `finalize_tess`
 so the zero-init default keeps the live behavior; the meaning is
@@ -1096,7 +1096,7 @@ equivalent.)
 
 **Where:** `src/repl/executor.c:615`
 
-**Smell:** `repl_set_status_error("goto: loop limit reached");` —
+**Smell:** `repl_set_status_error("goto: loop limit reached");` -
 same purity concern as #22. The executor's contract is "emit GL
 calls"; status-bar UI side effects belong to the caller (or via a
 result struct like `ReplFlattenResult.status[]`).
@@ -1105,7 +1105,7 @@ result struct like `ReplFlattenResult.status[]`).
 `ReplExecutionResult`; controller posts it after the call.
 
 **Status (2026-05-27):** ✅ Closed (via `ReplExecutionOptions`
-extension rather than a separate result struct — see the note
+extension rather than a separate result struct - see the note
 below). Added `char *status_out;` + `int status_out_sz;` to
 `ReplExecutionOptions`. The executor writes the goto-loop-limit
 diagnostic into the caller's buffer via `snprintf` (no-op when
@@ -1130,7 +1130,7 @@ the right move is still the dedicated struct.
 **Smell:** Both call `repl_extract_paren_payload` →
 `repl_eval_c_expr_to_repl` → build `ExprCtx` → `repl_eval_expr`.
 CMD_VAR_ASSIGN's comment at L671 says "flatten owns the eval; we
-just apply args[0]" — but CMD_IF_BEGIN re-evaluates because of goto
+just apply args[0]" - but CMD_IF_BEGIN re-evaluates because of goto
 dynamism. Undocumented; duplicated logic is unguarded.
 
 **Fix:** Either (a) document why CMD_IF's `has_vars` re-eval is
@@ -1240,7 +1240,7 @@ CMD_FOR_*, CMD_FUNC_*, CMD_CALL) stay distinct from `default` so
 they continue to skip apply_state_cmd. A comment above `default`
 names every CmdType the fall-through is meant to catch.
 
-### 29. `g_pre_example.valid` is still a parallel scalar — Tier B #44 left it half-done
+### 29. `g_pre_example.valid` is still a parallel scalar - Tier B #44 left it half-done
 
 **Where:** `src/repl/scenes.c:89-95`.
 
@@ -1259,7 +1259,7 @@ the reset site accordingly. Tier B sized (touches `cfg_baseline.h`
 **Do not** use `count == 0` as the sentinel. The comment block at
 `scenes.c:89-91` explicitly calls out that the code needs to
 distinguish "valid empty capture" (a pre-example state with no
-overrides — restorable as a no-op) from "no capture yet" (don't
+overrides - restorable as a no-op) from "no capture yet" (don't
 restore at all). A `count == 0` collapse would merge those two
 cases and silently re-enter restore on every example load.
 
@@ -1267,7 +1267,7 @@ cases and silently re-enter restore on every example load.
 `src/repl/cfg_baseline.h:25` now carries a `valid` field;
 `repl_config_bag_clear` resets it to 0 alongside `count`. The
 sibling `g_pre_example.valid` scalar in `src/repl/scenes.c` is
-gone — `g_pre_example` is just a `ReplConfigBag`. The
+gone - `g_pre_example` is just a `ReplConfigBag`. The
 capture/restore path (`capture_pre_example_cfg`,
 `restore_pre_example_cfg_if_valid` at L145-160) sets/clears the
 flag explicitly; "captured empty" and "never captured" stay
@@ -1310,7 +1310,7 @@ test_repl_export_all_commands.c).
 in `src/repl/text_helpers.c`
 
 **Smell:** The closed #38 moved helpers to `text_helpers.c` but
-declarations stayed in `core_internal.h` — the very junk drawer the
+declarations stayed in `core_internal.h` - the very junk drawer the
 new home was meant to relieve. `text_helpers.c` is the only
 `src/repl/*.c` (besides examples.c, which is data) without a
 matching header.
@@ -1328,15 +1328,15 @@ the new header directly or pick it up transitively through
 
 **Where:**
 - `src/repl/text_helpers.c:121, 142, 218, 282` and `core_internal.h:77,
-  85, 90` — `char names[][16]`, `ni >= 15` (REPL_PREDEF_NAME_MAX is 16)
+  85, 90` - `char names[][16]`, `ni >= 15` (REPL_PREDEF_NAME_MAX is 16)
 - `src/repl/replay_annotations.c:642, 649`,
   `src/repl/executor.c:610, 621`, `src/repl/core.c:675, 682`,
-  `src/repl/parser.c:1209` — six `char label[64]` declarations for
+  `src/repl/parser.c:1209` - six `char label[64]` declarations for
   goto/label names
 - `src/repl/parser.c:1182, 1209, 523, 643, 719` and
-  `src/repl/source_scope.c:172, 177` — multiple unrelated `[64]`
+  `src/repl/source_scope.c:172, 177` - multiple unrelated `[64]`
   buffers (label names, block-nesting depth, per-slot enum capacity)
-- `src/repl/parser.c:985` — bare `char end_ind[32]` while the rest
+- `src/repl/parser.c:985` - bare `char end_ind[32]` while the rest
   of the file uses `REPL_INDENT_TEXT_MAX`
 
 **Smell:** Hardcoded sizes scattered through the layer; mechanically
@@ -1364,7 +1364,7 @@ constant instead of the literal.
 **Where:** `src/repl/export.c:193-196, 332-338`
 
 **Smell:** Constant unrelated to `MAX_PREDEF_VARS`. Overflow path
-is silent — no warnings++, no status error. User could lose `@var`
+is silent - no warnings++, no status error. User could lose `@var`
 values from a workspace file.
 
 **Fix:** `#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS`, or
@@ -1376,7 +1376,7 @@ limits cannot drift. The overflow path stays silent for now;
 nothing currently emits more `@var` lines than the predef table
 can hold.
 
-### 34. `repl_workspace_dir` / `repl_state_workspace_dir` — two names for the same getter
+### 34. `repl_workspace_dir` / `repl_state_workspace_dir` - two names for the same getter
 
 **Where:** `src/repl/state.c:478-484` and `src/repl/scenes.c:1016-1023`
 
@@ -1387,11 +1387,11 @@ requires checking both.
 **Fix:** Pick one (the `repl_state_workspace_*` shims add no value;
 delete and rewrite the 4 callers).
 
-### 35. `core.c` header comment is stale — "diagnostic dumps pending move" but none exist
+### 35. `core.c` header comment is stale - "diagnostic dumps pending move" but none exist
 
 **Where:** `src/repl/core.c:1-20`
 
-**Smell:** The "Diagnostic dumps — pending move" bullet promises
+**Smell:** The "Diagnostic dumps - pending move" bullet promises
 work that already happened (grep finds zero `dump_*` in core.c).
 Other "pending" items have been pending so long the comment misleads.
 
@@ -1404,15 +1404,15 @@ redistribution" framing.
 **Where:** `src/repl/command_store.h:56-80, 120-124`
 
 **Smell:**
-- `repl_command_store_source_to_line` — 25-line inline definition,
+- `repl_command_store_source_to_line` - 25-line inline definition,
   zero callers
-- `repl_command_store_first_non_decl` — introduces a `CMD_VAR_DECLARE`-
+- `repl_command_store_first_non_decl` - introduces a `CMD_VAR_DECLARE`-
   specific policy hook into a header documented as "array mechanics"
 
 **Fix:** Delete the inline helper. Move `first_non_decl` into
 `command_store_policy.h` or fold into the export.c caller as static.
 
-### 37. `GLCmd.text[64]` + `var_names[8][16]` carried by every command for CmdType-specific use — CLOSED
+### 37. `GLCmd.text[64]` + `var_names[8][16]` carried by every command for CmdType-specific use - CLOSED
 
 **Where (original):** `src/repl/command.h:101-103`
 
@@ -1482,16 +1482,16 @@ in `cfg_baseline.c` does exactly this.
 
 **Status (2026-05-27):** ✅ Closed. #34 removed the redundant
 `repl_state_workspace_*` shim surface (both getter and setter halves)
-and switched the remaining callers — including the lone
-`tests/test_repl_state.c` setter site — to `repl_workspace_dir()` /
+and switched the remaining callers - including the lone
+`tests/test_repl_state.c` setter site - to `repl_workspace_dir()` /
 `repl_set_workspace_dir()`. #35 trimmed the stale `src/repl/core.c`
 header comment. #36 deleted the dead `repl_command_store_source_to_line`
 inline helper, removed the public `repl_command_store_first_non_decl`
 hook, and localized the only policy use in `export.c`. #38 renamed the
 built-in example query trio to singular `repl_example_*`, deleted the
 `example_loader.c` trampolines, and updated callers/docs. #39 replaced
-the remaining bridge ternaries — including `export_count_enabled_passes`'s
-`if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) { … }` block —
+the remaining bridge ternaries - including `export_count_enabled_passes`'s
+`if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) { … }` block -
 with `repl_cfg_get_int(...)`.
 
 **Follow-up (2026-05-27, reviewer):** the first revision of this status
@@ -1526,7 +1526,7 @@ same evaluator-owned predef-var copy contract as the rest of the layer.
 Validated with `build/release/test_repl_core_extra` and
 `build/release/test_repl_core_io --run-tests`.
 
-### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum — CLOSED
+### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum - CLOSED
 
 **Where:** `src/repl/tutorials.c:178-183`, `src/repl/examples.c:548,
 834, 874-878`
@@ -1540,11 +1540,11 @@ wrong themes without a build failure.
 **Resolution (full slug-to-int route, two commits):**
 
 The cleaner alternative noted at the bottom of the original
-write-up — push slug-to-int into the bridge — was taken instead of
+write-up - push slug-to-int into the bridge - was taken instead of
 the test-only enum pin. The REPL layer stays scene-agnostic;
 vocabulary lives in `src/app/glr_actions.c`.
 
-Phase 1 (commit 75a3e5f) — bridge plumbing:
+Phase 1 (commit 75a3e5f) - bridge plumbing:
 
 - `REPL_CFG_VALUE_MAX` bumped 16 → 32 (fits
   "SCENE_BACKDROP_CITY_AND_STARS").
@@ -1558,7 +1558,7 @@ Phase 1 (commit 75a3e5f) — bridge plumbing:
 - `src/scene/themes.h` refactored to X-macro lists
   (`GRID_THEME_LIST(X)` / `AXES_THEME_LIST(X)` / `SCENE_BACKDROP_LIST(X)`)
   that drive **both** the enum definition and the cfg-symbol string
-  tables in `src/app/glr_actions.c` from a single name list — adding
+  tables in `src/app/glr_actions.c` from a single name list - adding
   a theme/backdrop extends both at compile time. Mirrors the existing
   `GL_STUB_COUNTER_LIST(X)` pattern.
 - App-layer resolver `glr_export_cfg_resolve_text` wired into the
@@ -1568,7 +1568,7 @@ Phase 1 (commit 75a3e5f) — bridge plumbing:
   (calls `repl_cfg_set_text`) and REQUIRE (calls
   `repl_cfg_resolve_text`).
 
-Phase 2 (commit f4ff371) — flip catalogs:
+Phase 2 (commit f4ff371) - flip catalogs:
 
 - `src/repl/examples.c` 5 sites (glow particles, snowfall, stress
   test) + docstring.
@@ -1578,16 +1578,16 @@ Phase 2 (commit f4ff371) — flip catalogs:
 Tests (string equality, end-to-end, three layers):
 
 - `test_feature_tour_grid_steps_use_symbolic_names`
-  (`tests/test_tutorial_runner.c`) — catalog SET steps assert
+  (`tests/test_tutorial_runner.c`) - catalog SET steps assert
   `cfg_value_name` string-equals `"GRID_THEME_RADAR"` /
   `"GRID_THEME_FOCUS"`. Replaces the integer-equality placeholder.
 - `test_example_cfg_uses_symbolic_names`
-  (`tests/test_repl_core_examples.c`) — scans every example's
+  (`tests/test_repl_core_examples.c`) - scans every example's
   leading `@cfg` block; any `grid`/`axes`/`backdrop` value that
   starts with a digit fails CI. Catches a regression in either
   direction.
 - `test_cfg_bridge_resolves_symbolic_names`
-  (`tests/test_glr_actions.c`) — locks `resolve_text` +
+  (`tests/test_glr_actions.c`) - locks `resolve_text` +
   `repl_cfg_set_text` for one canonical name per scene enum;
   unknown-symbol-fails (no silent zero); legacy `"4"` still
   resolves to `GRID_THEME_EMBER` via the strtol fallback.
@@ -1712,13 +1712,13 @@ component count for format string.
 
 **Status (2026-05-27):** ✅ Closed via a small two-helper
 extraction. Added `parse_tess_brace_block(p, key_fmt, n, exprs)`
-(symbolic path — fills `exprs[n][MAX_LINE_LEN]` from the
+(symbolic path - fills `exprs[n][MAX_LINE_LEN]` from the
 `<key>[i] = <expr>;` assignments) and `eval_tess_brace_floats(start,
-n, out)` (numeric fallback — walks N `= <expr>` fragments and evals
+n, out)` (numeric fallback - walks N `= <expr>` fragments and evals
 to floats). Each of the three blocks in `import_make_repl_tess_line`
 (`_tn`, `_tc`, `_v->pos`) collapsed from ~25 lines to ~12. The
 output format strings remain explicit at the call sites because
-`gluNormal` / `gluColor` / `gluVertex` differ — and `gluColor` has
+`gluNormal` / `gluColor` / `gluVertex` differ - and `gluColor` has
 the alpha-1 elision quirk that doesn't generalize. `import_make_repl_tess_line`
 went from 134 lines to ~70.
 
@@ -1760,7 +1760,7 @@ too; `_can_apply_compiled_change` becomes the no-mutation peek.
 re-runs `repl_apply_can_apply_compiled_change` at the top before any
 mutation, so a malformed change (over-MAX_COMMIT_CMDS insert, OOB
 pos, compound pre-delete + REPLACE_ONE, OOB pre-delete range) can no
-longer half-apply — the pre-insert delete cannot fire and then leave
+longer half-apply - the pre-insert delete cannot fire and then leave
 the cmd-store in an unexpected shape. The header docstring's
 "callers should preflight" caveat was rewritten to describe the
 new internal-preflight contract while still recommending callers
@@ -1833,7 +1833,7 @@ changing behavior. Validated with `make check-c99` and the full
 
 ## 🟢 Dead code / dead fields
 
-### 53. Six of seven `repl_format_*` functions have zero production callers — `format.c` is mostly dead
+### 53. Six of seven `repl_format_*` functions have zero production callers - `format.c` is mostly dead
 
 **Where:** `src/repl/format.c:9-82`
 
@@ -1868,7 +1868,7 @@ the full `make test-stubs` gate.
 
 **Smell:** `static void compile_scope_indent(...) { repl_source_scope_cmd_indent(...); }`.
 One caller (`compile.c:977`). Comment references
-`fill_scope_indent` in editor_commit.c — function no longer exists.
+`fill_scope_indent` in editor_commit.c - function no longer exists.
 
 **Fix:** Inline the one call site; delete the wrapper.
 
@@ -1885,7 +1885,7 @@ shape as closed #30 (`flatten_src_text`'s `src_cmd` dead param).
 
 **Where:** `src/repl/flatten.c:58-70`
 
-**Smell:** `(void)cmd;` — same shape as #55 and the closed #30.
+**Smell:** `(void)cmd;` - same shape as #55 and the closed #30.
 
 **Fix:** Delete the parameter.
 
@@ -1912,7 +1912,7 @@ re-zero is dead.
 
 **Where:** `src/repl/flatten.c:237-245`
 
-**Smell:** Per-iteration dead branch — `MAX_EXPR_VARS == 32` and
+**Smell:** Per-iteration dead branch - `MAX_EXPR_VARS == 32` and
 `lnv == 0` at that point.
 
 **Fix:** Hoist the iterator binding out of the if.
@@ -1952,7 +1952,7 @@ non-NULL `.enabled` field. The null-check never fires.
 
 **Where:** `src/repl/export.c:1289-1298`
 
-**Smell:** `off += fprintf(...)` accumulated then `(void)off;` —
+**Smell:** `off += fprintf(...)` accumulated then `(void)off;` -
 never bounds-checked, never used.
 
 **Fix:** Delete the `int off =` and `+= ` operators; call `fprintf`
@@ -1973,7 +1973,7 @@ callback at all.
 **Where:** `src/repl/replay_annotations.c:203, 209`
 
 **Smell:** L209 reassigns `len` to the same expression already
-evaluated on L203 — dead store.
+evaluated on L203 - dead store.
 
 **Fix:** Delete L209.
 
@@ -2002,7 +2002,7 @@ migration; noise now. Some reference deleted modules (e.g. `eval.h`
 mentions `editor_undo.h`, `replay.c / glr_ctrl.c`, `FlatScope`
 which doesn't exist).
 
-**Fix:** Mechanical sweep — drop phase coordinates; keep policy
+**Fix:** Mechanical sweep - drop phase coordinates; keep policy
 statements where useful.
 
 **Status (2026-05-27):** ✅ Closed. Tier A follow-up landed the full
@@ -2049,7 +2049,7 @@ Post-extraction the heaviest functions are import-side translators:
 natural and the file is begging for it.
 
 **Fix:** Split into `src/repl/export.c` (writer side) +
-`src/repl/import.c` (new — `repl_export_load_from_file`,
+`src/repl/import.c` (new - `repl_export_load_from_file`,
 `ImportState`, all `import_*` functions, deferred-var apply,
 snippet directive table). Both halves ~1500/1700 lines, similar to
 post-Tier-C parser.c.
@@ -2090,12 +2090,12 @@ glr_ctrl.c` (replay is now `src/subsystems/replay/replay.c`), and
 `FlatScope` reference.
 
 **Status (2026-05-27):** ✅ Closed. The first heading in `src/repl/eval.h`
-now reads `MAX_PREDEF_VARS — global user-declared variables` (the body
+now reads `MAX_PREDEF_VARS - global user-declared variables` (the body
 description it owns). The three module paths and the FlatScope reference
 were already corrected in the Tier A follow-up; this label flip closes
 the residual mismatch flagged by the audit.
 
-### 71. `g_predef_vars` macros always route reads through `_mut()` — CLOSED
+### 71. `g_predef_vars` macros always route reads through `_mut()` - CLOSED
 
 **Where:** `src/repl/eval.h:172-173` (original)
 
@@ -2120,7 +2120,7 @@ int           *repl_eval_predef_count_mut(void);
 #define g_num_predef_vars_mut (*repl_eval_predef_count_mut())
 ```
 
-`g_predef_vars` is now `const ExprVar *` — `g_predef_vars[i].value = X`
+`g_predef_vars` is now `const ExprVar *` - `g_predef_vars[i].value = X`
 fails to compile, so writers must spell their intent with the
 `_mut` macro pair. Every existing writer was converted (eval.c,
 state.c, executor.c, flatten.c, apply.c, import.c, the
@@ -2170,7 +2170,7 @@ Comment justifies it; static analyzer / reader won't expect it.
 
 **Status (2026-05-27):** ✅ Closed. Renamed
 `repl_state_get_defaults` → `repl_state_defaults` and stripped its
-hidden side effect — it now just fills a file-static buffer on
+hidden side effect - it now just fills a file-static buffer on
 first call and returns a const pointer. The patched-live-state
 half moved to a new `repl_state_ensure_sentinels()` helper (also
 file-static, idempotent). `repl_state_reset_program` calls
@@ -2186,7 +2186,7 @@ function that does what its name says.
 **Status (2026-05-27):** ✅ Closed by #36's resolution. The
 `repl_command_store_first_non_decl` declaration was removed from
 `command_store.h` and the policy moved to a file-local helper inside
-the only consumer — `import_first_non_decl` in `src/repl/import.c`
+the only consumer - `import_first_non_decl` in `src/repl/import.c`
 (it lives there because the only caller is `parse_snippet_declare`
 during snippet import, after the #69 split). The `command_store.h`
 layer is back to "array mechanics" only.
@@ -2197,7 +2197,7 @@ layer is back to "array mechanics" only.
 
 **Smell:** `host_cursor_park`, `completion_clear`, `completion_update`,
 `host_input_get` have only tutorial.c callers in production. The
-"host effects" framing suggests broad applicability — they're
+"host effects" framing suggests broad applicability - they're
 really a private tutorial-to-controller path.
 
 **Fix:** Rename to reflect tutorial-only usage, or move into a
@@ -2234,7 +2234,7 @@ needed) or commit to the sparse-cfg change as a real plan.
 
 **Status (2026-05-27):** ✅ Closed via delete. The
 `restore_pre_example_cfg_if_valid()` call in
-`src/repl/scenes.c::load_scene_from_slot` is gone — the bridge's
+`src/repl/scenes.c::load_scene_from_slot` is gone - the bridge's
 `apply(scene_cfg(idx))` immediately below it already overwrites every
 slug. The replacement comment names the precise future condition
 (scene_cfg going sparse / inherited-aware) that would require putting
@@ -2267,7 +2267,7 @@ of the line text changes one place and both sites stay in sync.
 **Smell:** `eval_fmt_for_type` only ever returns `nargs ∈ {0,1,2,3,4}`.
 Cases 5/6 are dead but read `cmd->args[4..5]` (in-bounds of the
 8-slot array, but unreachable). Looks defensive but is misleading
-— hides the same dispatch shape that produced the original #1
+- hides the same dispatch shape that produced the original #1
 single-arg drop.
 
 **Fix:** Replace the whole switch with a loop or single `vsnprintf`
@@ -2278,7 +2278,7 @@ over `cmd->args[0..nargs-1]`. `assert(nargs >= 1 && nargs <= 4)`.
 format_evaluated_cmd` are gone; the `default:` returns 0, and a
 comment on the switch records `eval_fmt_for_type` only ever
 returns `nargs ∈ {0..4}`. The vsnprintf-loop alternative was
-not taken — the explicit 1-4 case shape is still the clearest
+not taken - the explicit 1-4 case shape is still the clearest
 read.
 
 ### 80. `s_replay_text_view` is hidden file-level state with set-then-read semantics
@@ -2334,7 +2334,7 @@ the pointer. Keep the per-field getters as inline shims.
 `tutorial_step_at` to public `repl_tutorial_step_get` and declared
 it in `src/repl/tutorials.h`. The eight per-field accessors moved
 out of `tutorials.c` and became `static inline` shims in the
-header — each invokes `repl_tutorial_step_get` once and reads a
+header - each invokes `repl_tutorial_step_get` once and reads a
 single field off the returned pointer.
 
 The menu paint path (or any caller pulling multiple fields from the
@@ -2342,7 +2342,7 @@ same step) can now bind the pointer once and walk fields directly,
 turning the previous O(N²) per-tutorial paint (8 accessors × O(N)
 walk each) into O(N). Callers that only need one field per step
 can keep using the per-field shims and still pay the same cost as
-before — no API break.
+before - no API break.
 
 ### 83. ✅ `@declare` import treats failed `repl_eval_declare_predef_var` as success
 
@@ -2364,14 +2364,14 @@ name lands in the reconstructed `CMD_VAR_DECLARE` even though the
 predef-var slot was never allocated, leaving the source document and
 the predef table out of sync.
 
-The eval.h header doc at L264-265 reinforced the bug — it said
+The eval.h header doc at L264-265 reinforced the bug - it said
 "returns index, or -1 on duplicate/error", which is the contract of
 the `_with_value` sibling, not this function.
 
 **Why it matters:** The `tests/test_repl_core_internal.c` suite
 caps at well under `MAX_PREDEF_VARS`, so no test surfaces the table-
 full path. In production a workspace with too many `@var` headers
-(or one that triggers the `_with_value` validators — reserved-name
+(or one that triggers the `_with_value` validators - reserved-name
 collision, invalid first char, name too long) imports as if it
 worked. The `CMD_VAR_DECLARE` carries a name the runtime predef
 table doesn't have; downstream evaluation of that name falls through
@@ -2388,34 +2388,34 @@ checks to `!` at `src/repl/import.c:418` and
 `tools/repl_demo/repl_demo.c:273`, and rewrote the `repl_eval_declare_predef_var`
 doc comment in `src/repl/eval.h` to spell out the 1/0 return shape
 (distinct from the `_with_value` sibling that returns idx-or-(-1)).
-The two functions intentionally keep different return shapes —
+The two functions intentionally keep different return shapes -
 callers that need the slot index go through `_with_value`; callers
 that only need success/failure use the thin wrapper.
 
 ## Sequencing
 
-### One-afternoon pass — focused on bugs + dead code
+### One-afternoon pass - focused on bugs + dead code
 
-1. **#3** — predef-values count bug. One-line save/restore signature
+1. **#3** - predef-values count bug. One-line save/restore signature
    change.
-2. **#11** — source_scope buf_sz≤0 guard. Two lines.
-3. **#9** — load-side fclose/ferror check. Mirror save-side.
-4. **#13** — `repl_eval_parse_exprs` doc fix or behavior fix.
-5. **#53** — delete six dead `repl_format_*` functions. ~80 lines
+2. **#11** - source_scope buf_sz≤0 guard. Two lines.
+3. **#9** - load-side fclose/ferror check. Mirror save-side.
+4. **#13** - `repl_eval_parse_exprs` doc fix or behavior fix.
+5. **#53** - delete six dead `repl_format_*` functions. ~80 lines
    of format.c, ~120 lines of format.h.
 6. **#54** + **#55** + **#56** + **#57** + **#58** + **#59** +
-   **#60** + **#61** + **#62** + **#63** — mechanical dead-code
+   **#60** + **#61** + **#62** + **#63** - mechanical dead-code
    removal across multiple files.
-7. **#64** + **#65** + **#66** — replay_annotations + state.c
+7. **#64** + **#65** + **#66** - replay_annotations + state.c
    dead-code/dead-macros cleanup.
-8. **#67** — phase-N.M comment sweep across the layer.
+8. **#67** - phase-N.M comment sweep across the layer.
 
 **Status (2026-05-27):** #13, #18, #34, #35, #36, #38, #39, #40,
 #46, #52, #53, and #54-#67 are now closed. The one-afternoon Tier A
 pass is fully landed; no Tier A items remain from this slice.
 
 (*#10 `flatten_source_lighting_enabled` is a real correctness
-fix but touches the flatten contract enough to be Tier B —
+fix but touches the flatten contract enough to be Tier B -
 deferred from the afternoon pass to keep tier classifications
 consistent. See the "Tier-classified outstanding work" section
 below.*)
@@ -2423,28 +2423,28 @@ below.*)
 That's ~9 commits; net ~400-500 LOC reduction; closes three
 bug-level findings.
 
-### One-week pass — the cluster work
+### One-week pass - the cluster work
 
 Most of the original cluster has landed. The 2026-05-27 Tier B pass
 closed #14, #7, #17, #20, #21, #25, #29, #31, #32, and #5. What
 remains:
 
-1. **#15** — extract shared parse cores for the four block kinds
+1. **#15** - extract shared parse cores for the four block kinds
    so editor_compile_* and repl_compile_* share validation. Closes
    the largest remaining drift surface (#15 line count: ~430 +
    ~860).
-2. **#16** — extend `repl_compile_dispatch` to cover all six entry
+2. **#16** - extend `repl_compile_dispatch` to cover all six entry
    points, or rename it.
-3. **#37** — tagged union for GLCmd's CmdType-specific fields.
+3. **#37** - tagged union for GLCmd's CmdType-specific fields.
    Invasive; the natural follow-up to #5.
 
-### One-week pass — finish the file-size reductions
+### One-week pass - finish the file-size reductions
 
 #69 landed on 2026-05-27 (`export.c` → `export.c` + `import.c`,
 1920 + 1454 lines). What remains:
 
-1. **#68** — split `repl_execute_program` into per-CmdType handlers.
-2. **#47** — extract `parse_tess_brace_block` for the 134-line
+1. **#68** - split `repl_execute_program` into per-CmdType handlers.
+2. **#47** - extract `parse_tess_brace_block` for the 134-line
    import function.
 
 ### Tier-classified outstanding work
@@ -2453,10 +2453,10 @@ Following the Tier A/B/C/D system the prior audit landed. The
 2026-05-27 classification pass tiered every previously-unclassified
 finding so the backlog can be scheduled without re-reading each body.
 
-- **Tier A (small, near-zero risk):** none currently open — the
+- **Tier A (small, near-zero risk):** none currently open - the
   2026-05-27 close pass landed #26, #27, #43, #70, #72, #76, #77,
   #78, #79, and #81.
-- **Tier B (moderate, focused pass):** none currently open — the
+- **Tier B (moderate, focused pass):** none currently open - the
   2026-05-27 follow-up landings closed the cluster (#22, #23, #24,
   #28, #30, #42, #47, #73, #82) as five focused commits.
 - **Tier C (high cost, broad surface):** #37 (tagged-union for
@@ -2468,18 +2468,18 @@ finding so the backlog can be scheduled without re-reading each body.
   to all six entries).
 - **Tier D (kept on purpose):** #75 (the tutorial-only dispatch
   trampolines could stay if renamed and grouped; consult tutorial
-  owner before "fixing"), #80 (`s_replay_text_view` — documented
+  owner before "fixing"), #80 (`s_replay_text_view` - documented
   trade-off).
 
 ### Out of scope
 
-- The two-level command model (source → flat) — load-bearing.
-- `examples.c`'s 1496 lines of mostly-data — touch only when
+- The two-level command model (source → flat) - load-bearing.
+- `examples.c`'s 1496 lines of mostly-data - touch only when
   bumping example content.
 - `command.h`'s control-flow predicates (`repl_cmd_is_transform`,
-  etc.) — well-named, well-used.
+  etc.) - well-named, well-used.
 - The closed audit's #39 (`parse_command` extraction) and #40
-  (`flatten_range` extraction) — Tier C in the original audit;
+  (`flatten_range` extraction) - Tier C in the original audit;
   both have been worked down (parse_command 903→456,
   flatten_range 378→160), no further extraction urgent.
 
@@ -2507,10 +2507,10 @@ Verified prior-audit closures held: #1 (single-arg drop), #38
 
 The dominant theme this pass is **half-finished cleanups**: the
 prior audit's individual fixes mostly landed, but the broader
-ratchet/policy that would have prevented re-occurrence didn't —
+ratchet/policy that would have prevented re-occurrence didn't -
 hence #14 (`_mut()` regression in 5 files), #29 (#44's discriminator
 half), #31 (text_helpers' missing header), #67 (phase comments
 that survived #11). The non-trivial new findings are #1 (layering
 breach), #2 (cfg double-apply correctness), #3 (predef-values count
-bug), and #5 (UserScene stack pressure — direct consequence of the
+bug), and #5 (UserScene stack pressure - direct consequence of the
 otherwise-clean Tier B #44).

@@ -50,7 +50,7 @@
 
 /* Search and navigation */
 #define KEY_CTRL_F    6    /* open search overlay (Ctrl+F; Shift: toggle
-                              code focus — hidden session toggle, see
+                              code focus - hidden session toggle, see
                               the g_cfg_items[] note in glr_actions.c) */
 #define KEY_CTRL_K    11   /* jump replay PC to cursor line (Ctrl+K) */
 

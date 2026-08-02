@@ -393,7 +393,7 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
 
     ASSERT_TRUE("scene execute fn wired", g_last_scene_config.execute_fn != NULL);
     ASSERT_TRUE("scene execute user data null", g_last_scene_config.execute_user_data == NULL);
-    /* viewport_w/h removed from Render3dRenderConfig — scene helpers use
+    /* viewport_w/h removed from Render3dRenderConfig - scene helpers use
      * render3d_w/render3d_h (the active GL viewport) instead. The HUD asserts
      * below read the window viewport from the snapshot directly. */
     ASSERT_FLOAT("camera distance forwarded", g_last_scene_config.cam_dist, 7.5f);
@@ -413,7 +413,7 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("replay baseline scratch copied",
                  g_replay_fade_plan.baseline_scratch_arrays[0][0], 4.0f);
     /* The fixture has replay_mode == VERTEX, which gates the tess-preview
-     * wireframe overlay — so post_fill_fn is wired even though no fade
+     * wireframe overlay - so post_fill_fn is wired even though no fade
      * batches are active. */
     ASSERT_TRUE("post_fill_fn wired when a replay overlay is active",
                 g_last_scene_config.post_fill_fn != NULL);
@@ -440,7 +440,7 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
 
     /* Scene/viewport rect: replay_ui_hud_render now derives the scene
      * rect via ui_layout_scene_rect() and reads the viewport from
-     * snap->viewport — neither field travels on the snapshot we capture
+     * snap->viewport - neither field travels on the snapshot we capture
      * in the stub. The rect+viewport contracts are exercised by the
      * scene_config asserts above; here we focus on what the snapshot
      * carries. */
@@ -496,7 +496,7 @@ static void test_reshape_clamps_height(void) {
  * The "all major sections non-stale" half is deterministic. The
  * "sum approximately equals total" half uses a generous lower bound
  * (50% of PROF_FRAME_WORK) to avoid flake from OS scheduling noise
- * — any future regression that drops a major section entirely will
+ * - any future regression that drops a major section entirely will
  * blow the lower bound. A tighter upper bound is not asserted
  * because per-section start/end overhead can stack to a real but
  * harmless gap.
@@ -527,7 +527,7 @@ static void test_display_frame_profile_coverage(void) {
     /* Drive one frame after marking both dirty so PROF_AUTONORMAL
      * and PROF_FLATTEN both run. The fixture also leaves replay
      * active so PROF_REPLAY_HUD lands. The glr_frame_* trio is the host's
-     * frame bracket — without it neither span ever opens. Coverage is measured
+     * frame bracket - without it neither span ever opens. Coverage is measured
      * against PROF_FRAME_WORK: every section below runs inside it, while
      * PROF_FRAME_TOTAL additionally carries a present this test never
      * performs. */
@@ -674,14 +674,14 @@ static void test_display_frame_profile_coverage(void) {
  * minus the present), and Present as their difference.
  *
  * Each piece is a regression that happened. The stages gl_repl.c runs on
- * either side of glr_ctrl_display_frame() — scripted input, the post-composite
- * splash / tour overlays — are real per-frame cost: a guided tour's caption
+ * either side of glr_ctrl_display_frame() - scripted input, the post-composite
+ * splash / tour overlays - are real per-frame cost: a guided tour's caption
  * overlay alone measured ~10 ms/frame while the frame reported ~1.5 ms,
  * because the bracket lived inside the controller and the overlay draws after
  * it returns. The present is the vsync wait: counted as work it pinned the
  * number at the refresh interval, so a 5 ms frame and a 15 ms one both read
  * ~16 ms in permanent red. And deriving Present rather than bracketing the
- * swap is what keeps the two spans exhaustive — anything the callback does
+ * swap is what keeps the two spans exhaustive - anything the callback does
  * after glr_frame_work_end() lands in Present instead of nowhere.
  *
  * Driven on the profiler's test clock so the arithmetic is exact and no GL is
@@ -753,7 +753,7 @@ static void test_frame_spans_host_stages(void) {
     ASSERT_TRUE("frame without work_end attributes the full frame to present",
                 prof_section_last_us(PROF_PRESENT) == 5000.0);
 
-    /* An unpaired end must not close a span that was never opened —
+    /* An unpaired end must not close a span that was never opened -
      * glr_ctrl_display_frame() is called bare by tests and tools. */
     prof_test_set_now_us(99000.0);
     glr_frame_work_end();
@@ -771,7 +771,7 @@ static void test_frame_spans_host_stages(void) {
 /* The three summary rows the panel draws under its divider: the frame total
  * first, then the two parts it decomposes into. Row order is catalog order, so
  * the run PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_PRESENT is what puts them
- * under the rule and in that order — and the flags are what make the total read
+ * under the rule and in that order - and the flags are what make the total read
  * "over budget when long" and Present the reverse. */
 static void test_summary_row_metadata(void) {
     int section_idx;
@@ -1119,8 +1119,8 @@ static int vp_click_y_for_row(int click_x, int var_idx) {
 /* The drag transaction split (docs/plans/in-review/
  * flatten-performance-without-vm.md, phase 1B): motion applies the live value
  * only. repl_state_mark_source_dirty() is the single seam every source-derived
- * cache invalidates from — autonormals, the flat program, the source-scope
- * depth cache — so a drag that never trips it during motion is a drag that
+ * cache invalidates from - autonormals, the flat program, the source-scope
+ * depth cache - so a drag that never trips it during motion is a drag that
  * cannot rebuild those caches per pointer event. Mouse-up trips it exactly
  * once. */
 static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
@@ -1272,7 +1272,7 @@ static void test_variable_panel_drag_release_without_declaration_is_a_noop(void)
  * in UiRenderSnapshot from the controller's snapshot-build phase, not be
  * re-fetched from peer file-statics inside ui_variable_panel_render. Pin
  * that glr_ctrl_build_ui_snapshot copies both fields (active_var, coarse)
- * — a revert to live peer reads would silently still pass every existing
+ * - a revert to live peer reads would silently still pass every existing
  * variable_drag test but would re-introduce the snapshot-purity violation. */
 static void test_variable_drag_snapshot_wiring(void) {
     printf("--- imrepl_ctrl variable_drag snapshot wiring ---\n");
@@ -1562,7 +1562,7 @@ static int shift_mods_provider(void) {
 }
 
 /* Shift+right-click adds a row to the open plot instead of retargeting, and
- * the status line reports the count — plus, for a frozen one-shot, the fact
+ * the status line reports the count - plus, for a frozen one-shot, the fact
  * that the snapshot the user deliberately froze has been re-armed. */
 static void test_shift_right_click_adds_plot_series(void) {
     UiHit hit;
@@ -1924,9 +1924,9 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
 }
 
 /* The resize cursor must promise exactly what a press delivers. A panel
- * painted in front of the divider owns the pixel — the OpenGL-state popup is
+ * painted in front of the divider owns the pixel - the OpenGL-state popup is
  * classified ahead of the canonical hit-test in mouse_dispatch, so a press
- * there never reaches the divider — and the hover treatment, which the editor
+ * there never reaches the divider - and the hover treatment, which the editor
  * derives from divider geometry alone, has to yield to it. */
 static void test_divider_hover_yields_to_front_panel(void) {
     UiHit hit;
@@ -2218,7 +2218,7 @@ static void test_gl_state_popup_modelview_uses_four_lines(void) {
 }
 
 /* Rightmost x (GLUT coords) answering the popup's surface hit-test; -1
- * when nothing hits. Coarse scan is fine — we only compare widths. */
+ * when nothing hits. Coarse scan is fine - we only compare widths. */
 static int gl_state_popup_rightmost_hit_x(const UiGlStatePanelView *view) {
     int mx, my, right = -1;
     for (my = 0; my < view->window_h; my += 6) {
@@ -2601,7 +2601,7 @@ static void test_gl_state_popup_setup_fold(void) {
 }
 
 /* The popup's source column quotes a line number, and the only thing that
- * number is good for is finding the line in the code panel — so it has to be
+ * number is good for is finding the line in the code panel - so it has to be
  * the panel's own gutter label, not the document index. The two diverge the
  * moment code focus is off, because the gutter counts the derived-C chrome
  * rows the focus view hides. Before this was resolved through the panel's
@@ -2848,7 +2848,7 @@ static void test_overlay_transition_machine_wiring(void) {
     const int settle = (int)((GRID_FADE_OUT_SECS + GRID_FADE_IN_SECS)
                              / 0.016f) + 6;
 
-    /* 1. First frame is a SNAP — rule 8 seeding (in glr_ctrl_reset_all)
+    /* 1. First frame is a SNAP - rule 8 seeding (in glr_ctrl_reset_all)
      *    means the non-off default grid does NOT animate in at startup. */
     glr_ctrl_display_frame();
     ASSERT_INT("snap grid theme = default",
@@ -2909,7 +2909,7 @@ static void test_overlay_transition_machine_wiring(void) {
                 g_last_scene_config.grid_opacity < 1.0f);
 
     /* 5. glr_ctrl_reset_all() re-seeds both machines to the post-reset
-     *    presentation at full opacity, STEADY — no post-reset animation. */
+     *    presentation at full opacity, STEADY - no post-reset animation. */
     glr_ctrl_reset_all();
     glr_ctrl_display_frame();
     ASSERT_INT("reset snaps grid to default",
@@ -3090,7 +3090,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
      * tick where projection reaches 1.0 also calls start_camera_to_3d
      * AND runs glr_camera_tick once (the tick chain is view_transition
      * then camera_tick), so the camera is already 1 tick into its ease
-     * the moment projection settles — that's the sample to measure
+     * the moment projection settles - that's the sample to measure
      * against the default decay. */
     glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     int converged_at = -1;
@@ -3128,7 +3128,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
  * from the live orbit angle. This test pins the two load-bearing properties:
  * (1) toggling it to Ortho eases projection_mix to 0 while the camera stays
  * put at the fixture's (rx=11, ry=22) with control mode 3D and no ease in
- * flight, and (2) the combine is min() — 3D view + Ortho toggle still yields
+ * flight, and (2) the combine is min() - 3D view + Ortho toggle still yields
  * projection_mix 0. */
 static void test_projection_toggle_free_camera(void) {
     GlrCameraState cam;
@@ -3168,7 +3168,7 @@ static void test_projection_toggle_free_camera(void) {
     for (int i = 0; i < projection_settle_ticks; i++)
         glr_ctrl_tick();
     glr_ctrl_display_frame();
-    /* min(view_mix=1, toggle_mix=0) == 0 — the combine picks the ortho
+    /* min(view_mix=1, toggle_mix=0) == 0 - the combine picks the ortho
      * contributor even though View mode is still 3D perspective. */
     ASSERT_FLOAT("projection settles on ortho (min picks the toggle)",
                  g_last_scene_config.projection_mix, 0.0f);
@@ -3206,7 +3206,7 @@ static void test_projection_toggle_free_camera(void) {
 
 /* The controller's saved-3D snapshot drives the 2D->3D restoration.
  * Without an external refresh, switching examples while dwelling in 2D
- * leaves the snapshot pointing at the pose captured on 2D entry — so
+ * leaves the snapshot pointing at the pose captured on 2D entry - so
  * pressing 3D restores the *previous* example's angle, not the one
  * currently loaded. The bridge call into
  * glr_ctrl_view_record_external_3d_pose lets the example loader keep
@@ -3260,7 +3260,7 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
  * `// camera` ease (e.g. dist=2.5) one frame before the view-mode
  * transition fires. The 3D->2D camera flatten must carry that ease
  * *destination* into 2D, not the still-live previous-example pose
- * (dist=7.5 here) — otherwise the ortho zoom locks onto the old camera
+ * (dist=7.5 here) - otherwise the ortho zoom locks onto the old camera
  * distance. Regression for the 3D-example -> 2D-example dist bug. */
 static void test_view_mode_2d_honors_pending_camera_ease(void) {
     GlrCameraState cam;
@@ -3287,7 +3287,7 @@ static void test_view_mode_2d_honors_pending_camera_ease(void) {
 
 /* Drive the projection blend to a discrete endpoint (0 = ortho, 1 =
  * perspective). Unlike tick_until_view_settled, this keeps ticking until
- * the projection MIX reaches the target — tick_until_view_settled returns
+ * the projection MIX reaches the target - tick_until_view_settled returns
  * the instant the camera flatten finishes, while the 2D projection blend
  * hasn't started, so it leaves mix == 1.0 (still perspective). */
 static void tick_until_projection_mix(float want, int max_iters) {
@@ -3358,7 +3358,7 @@ static void test_view_mode_restore_honors_pending_camera_reset(void) {
 
 /* A file loaded from disk carries its authored `// camera` block just like a
  * built-in example does, so "Reset camera" (Ctrl+Shift+C) must return to that
- * pose — not to the global built-in defaults. Import streams the block through
+ * pose - not to the global built-in defaults. Import streams the block through
  * the camera bridge line by line; the end-of-import hook is what turns the
  * result into the scene default. */
 static void test_import_camera_block_becomes_scene_default(void) {
@@ -3425,7 +3425,7 @@ static void test_import_without_camera_block_keeps_global_default(void) {
 /* Cycling 2D-example -> 3D-example-A -> 3D-example-B fast: example A
  * starts a 2D->3D projection blend; example B loads mid-blend. The
  * saved-3D snapshot (consumed by start_camera_to_3d when the blend ends)
- * must refresh to B's pose, not stay stuck on A's — and the carried
+ * must refresh to B's pose, not stay stuck on A's - and the carried
  * pan/zoom must track B's full target, not the ~98%-eased live pose. */
 static void test_view_mode_3d_restore_tracks_example_loaded_midblend(void) {
     GlrCameraState cam;
@@ -3499,7 +3499,7 @@ static void test_view_record_external_3d_pose_noop_in_perspective(void) {
     tick_until_view_settled(400);
     cam_before = glr_camera();
 
-    /* Fire the bridge while in 3D — the saved snapshot must be ignored. */
+    /* Fire the bridge while in 3D - the saved snapshot must be ignored. */
     glr_ctrl_view_record_external_3d_pose(99.0f, 99.0f, 99.0f);
 
     glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
@@ -3610,7 +3610,7 @@ static void remove_recovery_workspace(const char *dir) {
 }
 
 /* Quitting while an example is on screen must still rescue the user's
- * in-memory scene slots — they die with the process and the single-file
+ * in-memory scene slots - they die with the process and the single-file
  * recovery copy can only hold the (uninteresting) visible document. They
  * go to a recovery WORKSPACE instead, never to the bound workspace dir. */
 static void test_recovery_workspace_rescues_scene_slots(void) {
@@ -3660,8 +3660,8 @@ static void test_recovery_workspace_rescues_scene_slots(void) {
  * We don't memcmp() the whole struct because it contains pointers
  * (document_cmds, snapshots of subsystem state) that may legitimately
  * vary across builds in some refactors. Instead spot-check the fields
- * a renderer would actually consume — viewport, code-panel, replay,
- * camera-derived selection, autocomplete — so the test pins the
+ * a renderer would actually consume - viewport, code-panel, replay,
+ * camera-derived selection, autocomplete - so the test pins the
  * observable contract rather than internal layout. */
 static void test_build_ui_snapshot_is_idempotent(void) {
     UiRenderSnapshot snap_a;
@@ -3725,7 +3725,7 @@ static void test_build_ui_snapshot_is_idempotent(void) {
  *
  * Most fields are already pinned by
  * test_display_frame_builds_config_and_restores_live_state; this test
- * adds the invariants that travel ACROSS frames — repeated frames must
+ * adds the invariants that travel ACROSS frames - repeated frames must
  * not introduce hysteresis, and the post-overlays hook's user_data
  * must point at the config that hosts the guides (so the future
  * scene-side overlay code can rely on that handle). */
@@ -3745,7 +3745,7 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
     frame2 = g_last_scene_config;
 
     /* Stable inputs across frames. Note: anim_time advances inside
-     * render3d_render (via the replay tick), so don't pin that here —
+     * render3d_render (via the replay tick), so don't pin that here -
      * the rest of the config is steady-state. */
     ASSERT_INT("render3d_w stable across frames",
                frame2.render3d_w, frame1.render3d_w);
@@ -3774,7 +3774,7 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
 
     /* The post_overlays_fn hook is wired with config-as-user_data so
      * the hook reads guides off Render3dRenderConfig. Pin that pointer
-     * identity — a refactor that switches user_data to NULL or to a
+     * identity - a refactor that switches user_data to NULL or to a
      * different pointer would break the guide overlay. */
     ASSERT_TRUE("post_overlays_fn wired in frame 1",
                 frame1.post_overlays_fn != NULL);
@@ -3784,7 +3784,7 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
      * render3d_draw_scene (not the cached frame1/frame2 copies).
      * Catch it by reading g_last_scene_config.post_overlays_user_data
      * after the second frame and asserting it equals &g_last_scene_config
-     * is intentionally NOT done — the controller hands the scene module
+     * is intentionally NOT done - the controller hands the scene module
      * its OWN local Render3dRenderConfig. We pin the looser invariant: the
      * hook always carries a non-NULL user_data alongside the fn. */
     ASSERT_TRUE("post_overlays_user_data non-NULL",
@@ -3883,8 +3883,8 @@ static void test_display_frame_follows_replay_line_after_tick(void) {
 }
 
 /* Cursor on a glPushAttrib line colours exactly the parsed mask's GL_*_BIT
- * tokens, confined to the (...) argument range — a bit token mentioned in a
- * trailing comment is never coloured — and the saved-setter line and matching
+ * tokens, confined to the (...) argument range - a bit token mentioned in a
+ * trailing comment is never coloured - and the saved-setter line and matching
  * pop bracket get their highlights. */
 static void test_push_attrib_bit_token_highlights(void) {
     printf("--- imrepl_ctrl glPushAttrib bit-token highlights ---\n");
@@ -4040,7 +4040,7 @@ static void test_replay_call_site_highlights_are_pushed(void) {
 
 /* Req 5: during replay the affecting-transform highlight tracks the
  * replay-focused vertex (via the req-4 exact-flat resolver), not the edit
- * cursor — and each expansion shows only its own in-scope transforms. */
+ * cursor - and each expansion shows only its own in-scope transforms. */
 static void test_replay_focus_vertex_affecting_transforms(void) {
     printf("--- imrepl_ctrl replay focus-vertex affecting transforms ---\n");
 
@@ -4088,8 +4088,8 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 
     /* Off replay the edit-cursor set now follows overlay_scope. Last-instance
-     * resolves the LAST flat expansion of the cursor line — here the second
-     * func0() call — so it shows that expansion's transform set: all three. */
+     * resolves the LAST flat expansion of the cursor line - here the second
+     * func0() call - so it shows that expansion's transform set: all three. */
     replay_stop();
     glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
     glr_ctrl_push_highlights();
@@ -4111,7 +4111,7 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 }
 
-/* Last-instance scope resolves the cursor line's LAST flat expansion — the
+/* Last-instance scope resolves the cursor line's LAST flat expansion - the
  * copy whose loop/call state the variable panel still holds. Scoping the
  * first call in a glPushMatrix/glPopMatrix pair makes the two expansions
  * disagree, so this pins which one the highlight set comes from. */
@@ -4271,7 +4271,7 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
     const char *after_up = editor_buffer_view_line(buf, 0);
     ASSERT_TRUE("swatch step-up modified the source line",
                 strcmp(after_up, before) != 0);
-    /* The new arg is greater than 1.5 — pin the direction without
+    /* The new arg is greater than 1.5 - pin the direction without
      * pinning the exact step size (which lives in repl_eval). The
      * arg span shifts after re-emission, so re-derive it from the
      * post-commit input buffer rather than guessing offsets. */
@@ -4300,7 +4300,7 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
                     d_down.value < 1.5f);
     }
 
-    /* Each swatch step is a discrete undo unit — three steps total
+    /* Each swatch step is a discrete undo unit - three steps total
      * (one up, two down) so three Ctrl+Z restores the original. */
     editor_undo_pop_snapshot();
     editor_undo_pop_snapshot();
@@ -4427,7 +4427,7 @@ static void test_numeric_swatch_no_op_outside_numeric_arg(void) {
     char before[MAX_LINE_LEN];
 
     seed_swatch_fixture("// hello world");
-    /* Cursor mid-comment — no numeric arg available. */
+    /* Cursor mid-comment - no numeric arg available. */
     editor_cursor_pos_set(6);
     buf = editor_buffer_view();
     snprintf(before, sizeof(before), "%s", editor_buffer_view_line(buf, 0));
@@ -4435,8 +4435,8 @@ static void test_numeric_swatch_no_op_outside_numeric_arg(void) {
     hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
     hit_up.item_idx = 1;
     int rc = route_numeric_swatch_hit(&hit_up, 1.0f);
-    /* Consumed (returns 1) — the swatch hit is the router's
-     * responsibility — but no change to the line. */
+    /* Consumed (returns 1) - the swatch hit is the router's
+     * responsibility - but no change to the line. */
     ASSERT_INT("swatch on comment still consumed", rc, 1);
     buf = editor_buffer_view();
     ASSERT_STR("swatch on comment leaves line unchanged",
@@ -4450,7 +4450,7 @@ static void test_numeric_swatch_no_op_in_insert_mode(void) {
 
     seed_swatch_fixture("glVertex3f(1.0, 0, 0);");
     editor_cursor_pos_set(12);
-    /* Flip to insert mode — swatch should refuse. */
+    /* Flip to insert mode - swatch should refuse. */
     editor_insert_mode_set(1);
 
     buf = editor_buffer_view();
@@ -4588,7 +4588,7 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
  * predef vars or scratch arrays; MAIN_FILL and the visible wireframe
  * pass still do (would-be-regression for accidentally suppressing the
  * real render path, including wireframe mode). Clear-color and
- * light-enable side effects are intentionally excluded here — the
+ * light-enable side effects are intentionally excluded here - the
  * parser clamps glClearColor channels to 0.15 max, which complicates
  * a clean test signal, but the snapshot/restore path covers them the
  * same way it covers the predef/scratch state. */
@@ -4611,7 +4611,7 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     int scratch_a_idx = repl_eval_scratch_array_index("A");
     ASSERT_TRUE("A scratch array index", scratch_a_idx >= 0);
 
-    /* Force a known starting state *before* re-flattening — the
+    /* Force a known starting state *before* re-flattening - the
      * executor applies precomputed `args[0]` directly (the comment in
      * executor.c on CMD_VAR_ASSIGN explains why: re-evaluating at exec
      * time would double-apply self-referential assigns). So the
@@ -4774,8 +4774,8 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
 /* Regression: loading an example resets the light_theme *name* to the
  * default, and that reset must ALSO re-apply the theme to the app-state
  * lights[] (positions / colors / eye-space). Before the fix
- * glr_ctrl_reset_example_chrome reset the cfg field directly — bypassing
- * the render3d_lights_apply_theme hook in glr_config_set — so the lights[]
+ * glr_ctrl_reset_example_chrome reset the cfg field directly - bypassing
+ * the render3d_lights_apply_theme hook in glr_config_set - so the lights[]
  * array (and the light indicators that read it) stayed on the *previous*
  * theme: the name said default but the geometry stayed e.g. SOLAR.
  *
@@ -4808,7 +4808,7 @@ static void test_example_reset_reapplies_light_theme(void) {
 }
 
 /* The light-split contract: Render3dRenderConfig.lights[] is assembled per frame
- * from two owners — the app-owned theme-seeded dimensional data
+ * from two owners - the app-owned theme-seeded dimensional data
  * (GlrRenderState.lights: position / color / id / eye-space) merged with the
  * REPL-owned enable bitmask (ReplRenderState.light_enabled_mask). This drives
  * a frame (scene render is stubbed, so the executor never re-derives the mask)
@@ -5022,7 +5022,7 @@ static void test_mouse_routing_and_hit_testing(void) {
 }
 
 /* glMaterialfv's RGBA value lives in a compound literal at args[2..5],
- * behind two baked enum tokens — so both the read (swatch color) and the
+ * behind two baked enum tokens - so both the read (swatch color) and the
  * write (source rewrite) take their own path through the picker host. */
 static void test_color_picker_materialfv(void) {
     printf("--- imrepl_ctrl color picker on glMaterialfv ---\n");
@@ -5203,7 +5203,7 @@ static void test_special_key_shortcuts(void) {
 
 /* Drive one untimed pointer-script line and fire its single event. The
  * scripted `chord` verb is the only production path that synthesizes a Shift
- * modifier, so these tests install NO modifier provider — the scripted override
+ * modifier, so these tests install NO modifier provider - the scripted override
  * pushed by glr_ctrl_scripted_*_with_modifiers is the sole modifier source,
  * exactly as in a real capture/tour run. */
 static void run_pointer_script_line(const char *line) {

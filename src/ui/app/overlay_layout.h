@@ -5,21 +5,21 @@
  * scene viewport: the variable slider panel and the CPU-profile and memory
  * panels. Panels stack bottom-up in one right-edge column above the status
  * bar and an optional reserved bottom band (the replay HUD), spilling into
- * a fresh column to the left when the stack runs out of vertical room — so
+ * a fresh column to the left when the stack runs out of vertical room - so
  * panels never overlap each other or the HUD by construction.
  *
  * Two layers:
  *   - ui_overlay_layout_solve() is pure: inputs in, target positions out.
  *   - A small eased-position state, advanced once per frame by the
  *     controller via ui_overlay_layout_tick(), makes every panel glide
- *     toward its target — the generalization of the old variable-panel-only
+ *     toward its target - the generalization of the old variable-panel-only
  *     replay_lift_px easing. ui_overlay_layout_panel_pos() returns the
  *     eased position and falls back to the pure target while the state has
  *     never been ticked (headless/test paths that query geometry without
  *     rendering frames).
  *
  * Anchor-bound popups (autocomplete, color picker, menu dropdowns, status
- * history) are deliberately NOT routed through this engine — they stay
+ * history) are deliberately NOT routed through this engine - they stay
  * glued to their anchors.
  */
 #ifndef UI_APP_OVERLAY_LAYOUT_H
@@ -78,7 +78,7 @@ typedef struct {
  * UiMemoryPanelMode values (passed as int to avoid their UI headers);
  * `profile_collapsed_sections` is the DETAILS-tree presentation set.
  * Panel sizes are resolved via the panels' own size
- * queries. `band_h` is the replay-HUD reservation — the controller
+ * queries. `band_h` is the replay-HUD reservation - the controller
  * computes it per tick; other callers forward
  * ui_overlay_layout_last_band_h(). */
 UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args);

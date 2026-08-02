@@ -69,7 +69,7 @@ typedef struct {
  * several cells (glPushMatrix touches the stack depth but not the matrix), it
  * sits at the position of the primary cell it writes.
  *
- * gl_state_restore_attrib_groups() is the deliberate exception — it is ordered
+ * gl_state_restore_attrib_groups() is the deliberate exception - it is ordered
  * by attribute group instead; see its comment. */
 typedef struct {
     ReplGlTrackedCap caps[REPL_GL_STATE_MAX_CAPS];
@@ -168,7 +168,7 @@ typedef struct {
 
     /* Stencil test + write state. func/ref/mask move together (one command
      * writes all three), the op slots move together, and the write mask and
-     * clear value are independent — matching the attrib_bits cells. */
+     * clear value are independent - matching the attrib_bits cells. */
     GLenum stencil_func;
     int stencil_ref;
     unsigned int stencil_value_mask;
@@ -200,7 +200,7 @@ typedef struct {
      * both cells ride raster_pos_touched/_source: one command writes them
      * together, and nothing else in the REPL command set moves either (a later
      * glColor* changes GL_CURRENT_COLOR only). The latched value is the current
-     * color, or the lit color when GL_LIGHTING is on — see
+     * color, or the lit color when GL_LIGHTING is on - see
      * gl_state_lit_color(). */
     float raster_pos[4];
     float raster_color[4];
@@ -560,7 +560,7 @@ static int gl_state_cap_enabled_const(const ReplGlTrackedState *s, GLenum cap) {
  *
  * The generated display setup writes ambient/diffuse/specular/position for all
  * REPL_LIGHT_SLOT_COUNT slots every frame, so without this gate a report is
- * dominated by up to five rows per light for lights that are switched off —
+ * dominated by up to five rows per light for lights that are switched off -
  * measured at 20 of 37 rows for a three-line program, all reading (0, 0, 0, 0).
  * A disabled light's parameters cannot affect the frame, so they are noise.
  *
@@ -646,7 +646,7 @@ static void gl_state_apply_color_material(
  *
  * Evaluated for exactly one reported cell: GL_CURRENT_RASTER_COLOR, which
  * glRasterPos latches from the *lit* color when GL_LIGHTING is on. Vertex
- * colors need no equivalent — they are not state, so the report never quotes
+ * colors need no equivalent - they are not state, so the report never quotes
  * one.
  *
  * What the REPL and the generated setup can reach bounds what has to be
@@ -656,13 +656,13 @@ static void gl_state_apply_color_material(
  * where two-sided lighting does not apply (it distinguishes the faces of
  * polygons), so the front material is the one that lights it. Should a
  * spotlight or attenuation setter ever join the command set, this is where it
- * lands — the two factors are the multiplicand of the per-light sum below.
+ * lands - the two factors are the multiplicand of the per-light sum below.
  *
  * The rest is the equation as specified: emission plus scene ambient, then per
  * enabled light an ambient, a diffuse and a Blinn specular term, honouring the
  * local-viewer half vector, GL_NORMALIZE, and glColorMaterial-tracked materials
  * (already folded into materials[] at glColor time). Verified against a real
- * driver in tests/test_gl_state_inspector_gl.c — the only reason this is worth
+ * driver in tests/test_gl_state_inspector_gl.c - the only reason this is worth
  * having rather than guessing. */
 static float gl_state_vec3_dot(const float a[3], const float b[3]) {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -835,7 +835,7 @@ static int gl_state_mask_covers(unsigned mask, CmdType type) {
  *
  * Ordering: this is the one function in the module that does NOT follow
  * ReplGlTrackedState field order. It is grouped by attribute bit, in
- * k_attrib_bits[] order (command_spec.c) — the question a reader brings here is
+ * k_attrib_bits[] order (command_spec.c) - the question a reader brings here is
  * "what does GL_LINE_BIT restore?", so a bit's cells must sit together. Keep
  * new cells in their group and keep the groups in table order.
  *
@@ -1313,7 +1313,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         memcpy(s->raster_pos, cmd->args, 3 * sizeof(float));
         s->raster_pos[3] = 1.0f;
         /* GL 2.1 2.13: the raster position is processed like a vertex, so the
-         * data associated with it — here GL_CURRENT_RASTER_COLOR — is latched
+         * data associated with it - here GL_CURRENT_RASTER_COLOR - is latched
          * now and no longer follows GL_CURRENT_COLOR. Lighting applies exactly
          * as it would to a vertex, which is why the fold evaluates it
          * (gl_state_lit_color) instead of quoting the current color and hoping:
@@ -1327,7 +1327,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
             /* Clamped like the lit path: the raster color is a vertex's
              * associated color, and RGBA vertex colors are clamped to [0,1]
              * before use (GL 2.1 2.7; the compatibility CLAMP_VERTEX_COLOR
-             * defaults to TRUE). Measured on three drivers — Apple M2 and
+             * defaults to TRUE). Measured on three drivers - Apple M2 and
              * NVIDIA 595.84 store the clamped value, Mesa 25.2.8 keeps the raw
              * one; the panel follows the majority and the spec. GL_CURRENT_COLOR
              * stays unclamped, which is right: nothing has used it yet. */
@@ -1377,7 +1377,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
         }
         break;
 
-    /* Deliberately no `default:` — -Werror=switch then makes a new CmdType a
+    /* Deliberately no `default:` - -Werror=switch then makes a new CmdType a
      * compile error here rather than a silently unmodelled state change (which
      * is exactly how CMD_MULT_MATRIXF went missing from the matrix fold). Every
      * type below is an explicit "does not move any tracked cell"; a new command
@@ -1489,7 +1489,7 @@ static void gl_state_apply_generated_write(
         break;
     case GL_POSITION:
         /* OpenGL stores the position after multiplying it by the current
-         * modelview, so show the actual eye-coordinate state—not merely the
+         * modelview, so show the actual eye-coordinate state-not merely the
          * object-space argument printed in display(). */
         gl_state_mat_vec_mul(s->matrix_stack[s->matrix_top], write->value,
                              light->position);
@@ -1958,7 +1958,7 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         /* Gated on the raster *position* latch, not on the current color:
          * glRasterPos3f is the only command that writes this cell, so before
          * the first one the initial (1,1,1,1) says nothing, and after one the
-         * row is what `label(...)` actually draws with — the lit color when
+         * row is what `label(...)` actually draws with - the lit color when
          * lighting is on, which is the number a program's own glColor3f will
          * not tell you. */
         gl_state_report_vec(out, "GL_CURRENT_RASTER_COLOR",
@@ -2000,7 +2000,7 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
 /* Stable-partition the emitted rows so user-authored ones lead, and record the
  * boundary. Insertion-sort-style rotation rather than a comparison sort: the
  * row array is small (<= REPL_GL_STATE_REPORT_MAX_ROWS) and stability is the
- * point — within each group rows must keep gl_state_append_report()'s
+ * point - within each group rows must keep gl_state_append_report()'s
  * emission order, which is the module's canonical cell order. */
 static void gl_state_partition_report_by_author(ReplGlStateReport *out) {
     int i, boundary = 0;

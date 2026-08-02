@@ -4,7 +4,7 @@
  * Why this exists
  * ---------------
  * gl_state_inspector.c answers "what OpenGL state does this program hold at
- * this line?" without issuing a single GL call — it re-implements the parts of
+ * this line?" without issuing a single GL call - it re-implements the parts of
  * the GL state machine the REPL can reach (including 4x4 matrix composition and
  * glPushAttrib group semantics). Everything else that tests it compares the
  * fold against *itself*: the pure sweep in test_repl_state.c drives apply and
@@ -12,7 +12,7 @@
  * initial values hand-copied into the test. Neither can catch the fold
  * modelling GL wrongly.
  *
- * This test closes that: one GLCmd program drives two sides —
+ * This test closes that: one GLCmd program drives two sides -
  *
  *   driver side: the real executor (repl_execute_program), the same walk the
  *                live frame uses, against a real GL context;
@@ -26,9 +26,9 @@
  *
  * Rows deliberately NOT compared, because the report says in its own name that
  * it is not quoting a GL value:
- *   - "GL_CURRENT_RASTER_POSITION (object input)" — GL stores window
+ *   - "GL_CURRENT_RASTER_POSITION (object input)" - GL stores window
  *     coordinates; the fold reports the untransformed input.
- *   - "GL_LIGHTn_POSITION (world)" — derived by inverting the modelview.
+ *   - "GL_LIGHTn_POSITION (world)" - derived by inverting the modelview.
  * Their exact-value twins (the "(eye)" light position) are compared.
  *
  * GL_CURRENT_RASTER_COLOR *is* compared, including under GL_LIGHTING: the fold
@@ -41,7 +41,7 @@
  * that transform rather than for equality. See diff_clip_plane_row.
  *
  * In GL_TEST_BINS / `make gl-tests` (needs a real context; a display, or
- * FREEGLUT_OSMESA=1 headless) — NOT in `make test` / `make test-stubs`.
+ * FREEGLUT_OSMESA=1 headless) - NOT in `make test` / `make test-stubs`.
  */
 #include "gl_includes.h"
 #include "repl/gl_state_inspector.h"
@@ -106,7 +106,7 @@ static int feq(float a, float b, float epsilon) {
  *      leaving exactly the ambient sum (0.060, 0.064, 0.068). It does not depend
  *      on the face, nor on whether a glColor was ever issued (setting the
  *      material with glMaterialfv while the cap is on zeroes it just the same),
- *      and ordinary *vertex* lighting under identical state is correct — a
+ *      and ordinary *vertex* lighting under identical state is correct - a
  *      GL_3D_COLOR feedback vertex comes back at the value the equation calls
  *      for. So the fault is confined to the raster-position path, and
  *      glDisable(GL_COLOR_MATERIAL) immediately before glRasterPos is a
@@ -121,7 +121,7 @@ static int diff_driver_is_apple_legacy(void) {
     return vendor && strstr(vendor, "Apple") != NULL;
 }
 
-/* Mesa deviates on the same cell in two *different* places — measured on Mesa
+/* Mesa deviates on the same cell in two *different* places - measured on Mesa
  * 25.2.8 / Intel ADL-N against Apple's legacy GL, which agrees with this fold
  * and with the GL 2.1 text on both. Each was pinned by solving for the model
  * that reproduces the driver's numbers exactly, not by inspection:
@@ -137,7 +137,7 @@ static int diff_driver_is_apple_legacy(void) {
  *      (0.699445, 0.559124, 0.428803).
  *
  *   3. It stores the unlit latch *unclamped*. Apple and NVIDIA 595.84 both
- *      clamp to [0, 1], and the spec agrees — the raster color is a vertex's
+ *      clamp to [0, 1], and the spec agrees - the raster color is a vertex's
  *      associated color, and RGBA vertex colors are clamped before use (GL 2.1
  *      2.7; compatibility CLAMP_VERTEX_COLOR defaults to TRUE). This was left
  *      open while only two drivers had been measured and they disagreed; the
@@ -156,7 +156,7 @@ static int diff_driver_is_mesa(void) {
 
 /* Skips print, so a driver-specific gap can never pass for coverage. */
 static void diff_skip(const char *what, const char *why) {
-    printf("    (skipped: %s — %s)\n", what, why);
+    printf("    (skipped: %s - %s)\n", what, why);
 }
 
 /* --- generated-setup light values ---------------------------------------- */
@@ -245,8 +245,8 @@ static void diff_exec(const GLCmd *cmds, int count) {
 static GLCmd g_case_cmds[DIFF_MAX_CMDS];
 
 /* The executor walk for the case under comparison, left open on purpose.
- * repl_exec_cursor_end() balances whatever the prefix left open — an unmatched
- * glPushMatrix or glPushAttrib — because a frame must never leak stack depth.
+ * repl_exec_cursor_end() balances whatever the prefix left open - an unmatched
+ * glPushMatrix or glPushAttrib - because a frame must never leak stack depth.
  * That balancing is the opposite of what a checkpoint *inside* a push is
  * asking about, so the walk is stepped to the checkpoint, the rows are
  * compared while it is still open, and the next case (or main) closes it. */
@@ -312,7 +312,7 @@ static void diff_apply_generated_phase(int display_phase) {
 /* Return GL to the state the previous case started from: popping the generated
  * display bracket restores every attribute group the case touched inside it,
  * and the matrix stack is unwound by hand (matrices are not attribute state).
- * State the init() phase wrote survives, exactly as it does in the app — and
+ * State the init() phase wrote survives, exactly as it does in the app - and
  * every case re-applies those same writes anyway. */
 static void diff_reset_gl(void) {
     GLint attrib_depth = 0;
@@ -613,8 +613,8 @@ static void diff_matrix_row(void) {
  * glClipPlane transforms the equation into eye coordinates at call time: as a
  * row vector, p' = p M^-1 with M the modelview current at the call (GL 2.1
  * §2.12), and glGetClipPlane reads that stored eye-space plane back. The fold
- * keeps the object-space input it was handed — the row says "(object)" for
- * exactly this reason — because the modelview it would need is the one at the
+ * keeps the object-space input it was handed - the row says "(object)" for
+ * exactly this reason - because the modelview it would need is the one at the
  * call, which is the fold's own composed matrix rather than anything GL will
  * tell it.
  *
@@ -624,7 +624,7 @@ static void diff_matrix_row(void) {
  *
  *     (a, b, c, d - (a*tx + b*ty + c*tz))
  *
- * — a closed form, so the test needs no general 4x4 inverse of its own to
+ * - a closed form, so the test needs no general 4x4 inverse of its own to
  * check against (which would just be a second copy of the code under test).
  * An identity modelview reduces it to equality, which is the plain case. */
 static void diff_clip_plane_row(int plane, float tx, float ty, float tz) {
@@ -663,7 +663,7 @@ static void diff_clip_plane_row(int plane, float tx, float ty, float tz) {
 /* GL leaves the current raster color and position *undefined* when the raster
  * position is clipped away (GL 2.1 2.13); both drivers tested leave the cell at
  * its (1,1,1,1) default instead of latching anything. The fold cannot know
- * that — it tracks the modelview but never the projection — so it reports the
+ * that - it tracks the modelview but never the projection - so it reports the
  * value a valid position would have latched. Every lighting case therefore keeps
  * its point inside the clip volume, and this asserts it, so a case that later
  * drifts outside fails on the reason instead of on a baffling color mismatch. */
@@ -679,7 +679,7 @@ static void diff_require_valid_raster_pos(const char *case_name) {
 
 /* Material rows, read back with glGetMaterialfv. Both drivers agree here, so
  * these need no gating: what the fold has to get right is that the material
- * tracks the current color from the moment GL_COLOR_MATERIAL is enabled — not
+ * tracks the current color from the moment GL_COLOR_MATERIAL is enabled - not
  * only on the glColor calls that follow it. */
 static void diff_material_row(const char *name, GLenum face, GLenum pname,
                               int count) {
@@ -738,7 +738,7 @@ static void diff_light_row(const char *name, GLenum light, GLenum pname,
 
 /* 1. The generated prologue alone. Nothing user-authored, so every row here is
  * the fold's account of the setup the app runs before the program's first
- * line — the baseline every other case builds on. */
+ * line - the baseline every other case builds on. */
 static void test_diff_generated_prologue(void) {
     diff_case("inspector vs driver: generated prologue", NULL, 0, 0);
 
@@ -857,7 +857,7 @@ static void test_diff_transform_fold(void) {
  * of its own: the matrix row simply kept whatever the previous transform left,
  * and every cell derived from the modelview (the light world positions, the
  * raster position) followed it off. Column-major, deliberately asymmetric and
- * non-orthogonal — a shear plus a translation — so a transposed load or a
+ * non-orthogonal - a shear plus a translation - so a transposed load or a
  * pre-multiply instead of a post-multiply changes the product rather than
  * cancelling out against the surrounding rotate. */
 static const float k_diff_shear_matrix[16] = {
@@ -921,7 +921,7 @@ static void test_diff_attrib_group_scoping(void) {
 /* 5. The raster-color latch (see gl_state_inspector.c's CMD_RASTER_POS3F
  * case): glRasterPos copies the current color once and a later glColor no
  * longer moves the cell. Lighting stays off, which is exactly when the fold
- * claims an exact value — the lit case is reported under a different row name
+ * claims an exact value - the lit case is reported under a different row name
  * and excluded from this comparison by design. */
 static void test_diff_raster_color_latch(void) {
     GLCmd cmds[4];
@@ -948,7 +948,7 @@ static void test_diff_raster_color_latch(void) {
  * term and no expected value depends on the generated setup's light-model
  * ambient constant. Raster positions stay well inside the clip volume (the
  * projection is identity here) because a clipped position makes GL's stored
- * color undefined — asserted per case, see diff_require_valid_raster_pos. */
+ * color undefined - asserted per case, see diff_require_valid_raster_pos. */
 static void test_diff_lit_raster_color(void) {
     GLCmd cmds[12];
     int n;
@@ -975,7 +975,7 @@ static void test_diff_lit_raster_color(void) {
     }
 
     /* (b) Diffuse from a positional light (slot 0, w = 1), with a normal that
-     * has to be carried into eye space by a rotated + translated modelview —
+     * has to be carried into eye space by a rotated + translated modelview -
      * the inverse-transpose path. */
     if (diff_driver_is_mesa()) {
         diff_skip("diffuse under a transformed modelview",
@@ -1072,7 +1072,7 @@ static void test_diff_lit_raster_color(void) {
      * follows the program's color *through* the lighting equation instead of
      * being copied from it. Apple's legacy GL gets this wrong (it stores
      * (0,0,0,1) as if the material were zeroed), so there the case is skipped
-     * loudly rather than asserted — see diff_driver_is_apple_legacy. */
+     * loudly rather than asserted - see diff_driver_is_apple_legacy. */
     if (diff_driver_is_apple_legacy()) {
         diff_skip("color-material raster latch",
                   "Apple stores (0,0,0,1) here; Mesa agrees with the fold");
@@ -1113,7 +1113,7 @@ static void test_diff_lit_raster_color(void) {
 /* 7. Materials, including the one ordering that bites: GL_COLOR_MATERIAL makes
  * the tracked components follow the current color from the moment it is
  * ENABLED, not just on later glColor calls. Both drivers report the tracked
- * value here even though the glColor came first, so this is portable — and it is
+ * value here even though the glColor came first, so this is portable - and it is
  * the case that would catch the fold deferring the tracking to the next glColor.
  * (The lit raster color under the same state is Apple's broken path; the
  * material cells themselves are fine there.) */
@@ -1203,7 +1203,7 @@ static void test_diff_clip_planes(void) {
     diff_clip_plane_row(1, 0.5f, -1.5f, 2.0f);
     diff_clip_plane_row(2, 0.5f, -1.5f, 2.0f);
     /* The fold's row is the object-space input, so it must NOT have moved with
-     * the modelview — the property the closed-form check above rests on. */
+     * the modelview - the property the closed-form check above rests on. */
     {
         const ReplGlStateReportRow *row =
             diff_row("GL_CLIP_PLANE1_EQUATION (object)");

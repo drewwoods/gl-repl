@@ -88,7 +88,7 @@ static int g_menu_item_hover = -1;
 
 /* Generic flyout-submenu open state. A submenu is identified by the
  * top-level menu it belongs to and the parent dropdown row that owns
- * it — menu-agnostic, so Scene (example tags) and Config (sections)
+ * it - menu-agnostic, so Scene (example tags) and Config (sections)
  * share one engine. -1 / -1 = no submenu open. */
 static int   g_submenu_menu_id    = -1;
 static int   g_submenu_parent_row = -1;
@@ -160,7 +160,7 @@ int ui_menu_bar_scene_parent_row_for_tag(int tag_idx) {
 }
 
 /* Tutorials menu mirror of the scene helpers above. Tag rows occupy
- * [0..t-1] (no leading "### TUTORIALS" header — single-section menu).
+ * [0..t-1] (no leading "### TUTORIALS" header - single-section menu).
  * The trailing "---" / Restart / Exit rows when a tutorial is active
  * are owned by menu_item_label, not these helpers. */
 static int tutorial_tag_idx_for_parent_row(int row) {
@@ -193,7 +193,7 @@ static int audio_group_differs(const char *a, const char *b) {
 /* Number of consecutive distinct source groups in the playlist. This is
  * the count of Audio-menu parent rows; the control rows (Play/Next/Prev/
  * Loop) sit at offsets past it. INVARIANT: glr_actions.c's
- * audio_menu_group_count() must compute the identical value — it turns a
+ * audio_menu_group_count() must compute the identical value - it turns a
  * clicked top-level item_idx back into a control-row offset by subtracting
  * this count, so if the two ever disagree the control clicks misfire. Both
  * read the same glr_audio_track_* accessors on the main thread, so they
@@ -261,8 +261,8 @@ static int subheadings_equal(const char *a, const char *b) {
  * entries must be contiguous per tag (enforced by
  * test_example_subheading_metadata and test_catalog_subheading_metadata).
  *
- * Backing the walker is a tiny ops table — four catalog query function
- * pointers — so the algorithm has one home and every menu stays in
+ * Backing the walker is a tiny ops table - four catalog query function
+ * pointers - so the algorithm has one home and every menu stays in
  * lockstep when the rule changes. */
 typedef struct {
     int         (*count_for_tag)(int tag);
@@ -391,7 +391,7 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * (route_submenu_item_hit dispatches MENU_TUTORIALS submenu
          * items to tutorial_start directly), so the top-level rows
          * here are tag rows (inert hover-only) plus the trailing
-         * Restart/Exit actions — mirroring Scene's tag-row pattern. */
+         * Restart/Exit actions - mirroring Scene's tag-row pattern. */
         return tag_count + (active ? GLR_TUTORIAL_FIXED_COUNT_ACTIVE : GLR_TUTORIAL_FIXED_COUNT_INACTIVE);
     }
     case MENU_TOURS:
@@ -399,7 +399,7 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
     case MENU_CONFIG:
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
-         * The +1 is owned here in the menu layer — the pure
+         * The +1 is owned here in the menu layer - the pure
          * glr_config_section_count() never counts All (implemented per
          * plan Finding #2). */
         return glr_config_section_count() + 1;
@@ -425,7 +425,7 @@ static const char *audio_loop_mode_label(void) {
     return "All";
 }
 
-/* Row label for dropdown row `i` of `menu_id` — the single label table
+/* Row label for dropdown row `i` of `menu_id` - the single label table
  * every render/measure path reads. Static menus (File) are literal
  * per-index returns; Scene / Tutorials / Config compute the label from
  * their catalog row layout (tag rows, `### ` headers, `---` separators,
@@ -446,7 +446,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_WORKSPACE_HDR) {
             /* Names the binding the rows below it act on: which workspace
              * "Save Workspace" writes to, or that there is none to write to.
-             * Inert by construction — menu_chrome_kind() classifies the
+             * Inert by construction - menu_chrome_kind() classifies the
              * "### " prefix as a header, which both the hit-test and the
              * pointer-target lookup skip. */
             static char ws_header[WORKSPACE_HDR_LABEL_MAX];
@@ -602,7 +602,7 @@ static const char *menu_item_shortcut(int menu_id, int i) {
                                             KM_MODS(GLR_AUDIO_PREV), 1);
         return NULL;
     }
-    /* Config: top-level rows are section parents — no shortcut at this
+    /* Config: top-level rows are section parents - no shortcut at this
      * level; the per-item shortcut renders inside the flyout (Step 8). */
     (void)i;
     return NULL;
@@ -826,7 +826,7 @@ static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
 
 /* Map a GL-space y coordinate (`ry`, i.e. window_h - my) inside a
  * dropdown/submenu rect (`top`, `h`) to its 0-based row ordinal.
- * The formula counts down from the top of the inner row band — the
+ * The formula counts down from the top of the inner row band - the
  * caller is responsible for bounds-checking the result against the
  * actual row count. Shared by `ui_menu_bar_dropdown_item_hit`,
  * `submenu_hit_test`, and `submenu_hover_ordinal` so the three
@@ -835,7 +835,7 @@ static int dropdown_row_for_gl_y(int top, int h, int gl_y) {
     return (top + h - DROPDOWN_PAD_Y - gl_y) / LINE_H;
 }
 
-/* Number of rows that fit in a flyout of GL-space height `sh` — the
+/* Number of rows that fit in a flyout of GL-space height `sh` - the
  * inverse of the `height = rows * LINE_H + 2 * DROPDOWN_PAD_Y` formula
  * submenu_rect uses. At least 1. */
 static int submenu_visible_rows(int sh) {
@@ -1100,7 +1100,7 @@ static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
 /* Extra right-column px a flyout reserves for per-row chrome: Config
  * uses shortcut + state label; Audio uses elapsed / duration. */
 /* Widest keyboard-shortcut label (px) across a Config flyout's rows.
- * Constant per flyout — both the shortcut and the state-value column
+ * Constant per flyout - both the shortcut and the state-value column
  * are aligned to fixed x's derived from it, so they don't jitter
  * row-to-row (matching the original flat dropdown). */
 static int config_submenu_max_sc_px(int parent_row) {
@@ -1264,7 +1264,7 @@ const char *ui_menu_bar_menu_item_label_for_test(int menu_id, int item_idx) {
     return menu_item_label(menu_id, item_idx);
 }
 
-/* Classify a raw dropdown label as header / separator / item — the
+/* Classify a raw dropdown label as header / separator / item - the
  * one place the "### "-prefix and "---" conventions are decoded, so
  * the render paths and the hit-test agree (no more 3 hand-copied
  * predicates). */
@@ -1551,7 +1551,7 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
     }
 
     /* Pin button (Search / Replay). Pins are rendered after the menu
-     * labels and overlap the label region in narrow code panels — the
+     * labels and overlap the label region in narrow code panels - the
      * visible pin must beat the underlying label, so check pins
      * before the top-level menu hit. Matches the legacy press-handler
      * order (pin_hit before menu_hit). */
@@ -1627,7 +1627,7 @@ UiMenuBarOpenState ui_menu_bar_open_state_capture(void) {
 }
 
 void ui_menu_bar_open_state_restore(UiMenuBarOpenState state) {
-    /* Nothing was open, or the menu is no longer showable — leave closed. */
+    /* Nothing was open, or the menu is no longer showable - leave closed. */
     if (state.menu_id < 0 || state.menu_id >= NUM_MENUS ||
         !menu_visible(state.menu_id)) {
         ui_menu_bar_close();
@@ -1790,7 +1790,7 @@ static float ui_fade_alpha(float anim_time, float open_time) {
     return dt / UI_FADE_DURATION;
 }
 
-/* Render-time "this row reflects the active selection" highlight —
+/* Render-time "this row reflects the active selection" highlight -
  * tints the row LABEL with the accent colour. Only Scene uses it (the
  * active example). Config deliberately does NOT: its label stays the
  * normal primary colour like the original flat dropdown; its on/off
@@ -1850,7 +1850,7 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
 
 /* Open the submenu owned by the hovered parent row; keep an already-open
  * one alive while the pointer is inside its flyout rect; otherwise close
- * it. Menu-agnostic — driven entirely by menu_row_has_submenu(). */
+ * it. Menu-agnostic - driven entirely by menu_row_has_submenu(). */
 static void update_submenu_hover_at(int mx, int my, float now) {
     int sx, sy, sw, sh;
 
@@ -1862,7 +1862,7 @@ static void update_submenu_hover_at(int mx, int my, float now) {
     if (menu_row_has_submenu(g_open_menu, g_menu_item_hover)) {
         if (g_submenu_menu_id != g_open_menu ||
             g_submenu_parent_row != g_menu_item_hover) {
-            /* Switching to a different flyout — restart it at the top. */
+            /* Switching to a different flyout - restart it at the top. */
             g_submenu_open_time = now;
             g_submenu_scroll    = 0;
         }
@@ -2064,7 +2064,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
 
     /* Overflow scrollbar hint: a thin track + proportional thumb on the
      * flyout's right inner edge, shown only when rows are hidden. Purely
-     * a visual cue — the wheel does the scrolling, so there is no hit
+     * a visual cue - the wheel does the scrolling, so there is no hit
      * region. Sits in the right padding (config columns end at sx+sw-14),
      * so it never overlaps row text. */
     if (count > visible_rows) {
@@ -2133,7 +2133,7 @@ static int search_nav_geometry(EditorSearchState srch,
  * clamped to the code panel's left margin.
  *
  * One geometry function feeds both the renderer and the hit test so the
- * two cannot drift — the same rule the match stepper follows.
+ * two cannot drift - the same rule the match stepper follows.
  * ------------------------------------------------------------------ */
 #define REPLACE_ROW_MIN_W     330
 #define REPLACE_ROW_MIN_TEXT  12    /* chars of replacement kept visible */
@@ -2141,7 +2141,7 @@ static int search_nav_geometry(EditorSearchState srch,
 #define REPLACE_BTN_GAP       8
 /* Menu-bar rows are LINE_H (18px). Inset 2 leaves a 14px button, which
  * clears FONT_TINY's 10px box top and bottom; the old inset of 4 left
- * 10px of button for a 13px FONT_SMALL label — the text physically could
+ * 10px of button for a 13px FONT_SMALL label - the text physically could
  * not fit inside its own border. */
 #define REPLACE_BTN_INSET_Y   2
 /* Below this much room for the query the find row drops its "replace"
@@ -2225,11 +2225,11 @@ static int replace_row_geometry(EditorSearchState srch, ReplaceRowGeom *g) {
 /* Marks the focused text field by sinking it into the row: a darker fill
  * drawn *behind* the text.
  *
- * An underline was the obvious cue and the wrong one — a menu-bar row is
+ * An underline was the obvious cue and the wrong one - a menu-bar row is
  * 22px against a 13px font, which leaves no clear band under the
  * descenders of a 'y' or 'p'. The fill needs no vertical room of its own.
  * `right_limit` is the neighboring widget's left edge; the fill stops
- * short of it so the two never touch. The fill carries the cue alone —
+ * short of it so the two never touch. The fill carries the cue alone -
  * an outline on top of it read as a wire cage around the text, and the
  * blinking caret already says where typing lands. */
 static void draw_field_focus_box(int x0, int right_limit,
@@ -2247,7 +2247,7 @@ static void draw_field_focus_box(int x0, int right_limit,
 }
 
 /* Small filled button with a label. `on` paints the "engaged" fill used
- * by the word chip when whole-word matching is active — that fill is the
+ * by the word chip when whole-word matching is active - that fill is the
  * whole cue, deliberately with no extra focus ring stacked outside the
  * button's border. */
 static void draw_replace_button(int x, int y, int w, int h,
@@ -2425,7 +2425,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
      * controller via ui_menu_bar_note_search_opened() on both open
      * paths (Ctrl+F in glr_ctrl_keyboard, menu pin in
      * route_pin_button_hit). This renderer no longer detects the
-     * rising edge itself — render stays pure. */
+     * rising edge itself - render stays pure. */
 
     if (!srch.active)
         return;
@@ -2468,7 +2468,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     glVertex2f((float)box_x + 0.5f,              (float)(box_y + box_h) - 0.5f);
     glEnd();
 
-    /* Focused field box (behind the text) — only meaningful once there
+    /* Focused field box (behind the text) - only meaningful once there
      * are two fields to choose between. */
     if (srch.replace_open && srch.focus == EDITOR_SEARCH_FOCUS_FIND)
         draw_field_focus_box(query_x, count_x, box_y, box_h, alpha);
@@ -2491,7 +2491,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
         ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    /* The caret only marks the find field while it holds focus — with the
+    /* The caret only marks the find field while it holds focus - with the
      * replace row open there are two text fields and exactly one caret. */
     if (snap->cursor_blink.cursor_visible &&
         srch.focus == EDITOR_SEARCH_FOCUS_FIND) {
@@ -2578,7 +2578,7 @@ UiHit ui_menu_bar_search_hit_test(const UiRenderSnapshot *snap,
 
         find_row_geometry(snap->search, &fg, count_buf, sizeof(count_buf));
         /* The "replace" affordance opens the row and lands the caret in
-         * it — the mouse twin of Tab. */
+         * it - the mouse twin of Tab. */
         if (fg.chip_w > 0 &&
             point_in_rect(mx, gl_y, fg.chip_x, fg.chip_y, fg.chip_w, fg.chip_h)) {
             h.kind = UI_HIT_SEARCH_FOCUS;

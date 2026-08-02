@@ -22,7 +22,7 @@ void glr_debug_dump_current_flat_histogram(FILE *out);
 void glr_debug_dump_runtime_state_layout(FILE *out);
 
 /* The CLI dump-and-exit dispatch (glr_boot_run_dumps) lives in the boot band
- * — src/app/boot/glr_boot_dumps.{c,h} — because it consumes GlrCliOptions
+ * - src/app/boot/glr_boot_dumps.{c,h} - because it consumes GlrCliOptions
  * (glr_cli) and orchestrates a GL-free bootstrap before any frame. It calls
  * the dump primitives above; keeping it out of this TU keeps these formatters
  * free of any boot dependency, so the controller can reuse them at runtime. */

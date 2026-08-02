@@ -8,8 +8,8 @@
  * operation as the text evaluator (same guarded divide/modulo, same epsilon
  * compares, the same builtin function pointers via repl_eval_builtin_at),
  * compiled evaluation is bit-identical with text evaluation. Anything the
- * grammar walk cannot express — an unbalanced construct, an unknown call
- * target, an over-long identifier — fails compilation and the caller stays
+ * grammar walk cannot express - an unbalanced construct, an unknown call
+ * target, an over-long identifier - fails compilation and the caller stays
  * on the text path for that expression, so mismatches can only manifest as
  * "no speedup", never as a different value.
  *
@@ -81,7 +81,7 @@ typedef struct {
 #define EXPR_LINE_BUILDING 3
 
 /* Assignment-LHS memo states (ExprLineEntry.lhs_state). Zero must mean
- * "unknown" — invalidation resets the line table with memset. */
+ * "unknown" - invalidation resets the line table with memset. */
 #define EXPR_LHS_UNKNOWN 0
 #define EXPR_LHS_NONE    1
 #define EXPR_LHS_NAME    2
@@ -251,7 +251,7 @@ static int compile_env_local_index(const ExprCompiler *c, const char *name) {
                                             c->env->num_locals, name);
 }
 
-/* The `primary` production. Mirrors eval_primary in src/repl/eval.c —
+/* The `primary` production. Mirrors eval_primary in src/repl/eval.c -
  * same match order (unary, paren, number, identifier: constant -> scratch
  * -> variable -> builtin call). Constructs the text evaluator resolves to
  * an error-and-0.0f at *parse structure* level (missing ']', unknown call
@@ -317,7 +317,7 @@ static void compile_primary(ExprCompiler *c) {
         if (!name_end) {
             /* Unrecognized character: the text evaluator returns 0 for the
              * primary without consuming it, which only arises from input
-             * the commit validators reject. Not worth mirroring — fail. */
+             * the commit validators reject. Not worth mirroring - fail. */
             compiler_fail(c);
             return;
         }
@@ -419,7 +419,7 @@ static void compile_primary(ExprCompiler *c) {
 
         /* Variable read: locals by name at evaluation time (they shadow
          * predefs), then the compile-time-resolved predef slot, then 0.0f
-         * for a name that resolves to nothing — the text evaluator's
+         * for a name that resolves to nothing - the text evaluator's
          * unknown-identifier value. */
         {
             int sym = cache_intern_symbol(c->cache, name);
@@ -641,7 +641,7 @@ int repl_expr_cache_compile_list(ReplExprCache *cache, const char *src,
         return count;
     }
 
-    /* Mirrors repl_eval_parse_exprs (src/repl/eval.c): lenient — skips
+    /* Mirrors repl_eval_parse_exprs (src/repl/eval.c): lenient - skips
      * leading whitespace/commas, stops at ')' / end / no progress. */
     while (*p && count < max) {
         const char *before;
@@ -721,7 +721,7 @@ ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
         case EXPR_OP_SCRATCH: {
             float v = 0.0f;
             /* Out-of-range reads yield 0, matching eval_primary's
-             * error-and-0.0f. Dependency stays the index's — see the
+             * error-and-0.0f. Dependency stays the index's - see the
              * value-position rationale in expr_program.h / the plan. */
             (void)repl_eval_scratch_get(ins->a, (int)stack[sp - 1], &v);
             stack[sp - 1] = v;

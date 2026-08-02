@@ -24,7 +24,7 @@
  * process-wide view and invalidate it whenever the source command array changes
  * (via repl_source_scope_depth_cache_invalidate).
  *
- * Indentation formatting: Two variants — standard indentation for regular blocks
+ * Indentation formatting: Two variants - standard indentation for regular blocks
  * and tess-aware indentation for gluTessCallback setup. Both accept a destination
  * buffer; repl_source_scope_cmd_indent_chars() returns the character count without
  * writing. Used by the formatter and code-panel renderer for visual indentation.

@@ -19,11 +19,11 @@ Add a sibling panel that:
   Windows-future branch (`_WIN32` stub for now).
 
 Toggle is in the Config menu (mirroring CPU profile) **and** bound to
-Ctrl+Shift+M. Three modes: **Off / On / Details** — Off and On are the same
+Ctrl+Shift+M. Three modes: **Off / On / Details** - Off and On are the same
 as CPU profile; in v1 Details adds nothing extra over On (room reserved for a
 future per-allocator breakdown without enum migration).
 
-## Module 1 — `src/support/memprof.{c,h}`
+## Module 1 - `src/support/memprof.{c,h}`
 
 Mirrors `src/support/prof.{c,h}` in shape and conventions (file-scope statics
 with `g_` prefix, no GL/UI deps, platform-conditional reader).
@@ -45,7 +45,7 @@ typedef struct {
 } MemSample;
 
 /* Capture baseline using the module's monotonic clock as t0.
- * Safe to call multiple times — only first call takes. */
+ * Safe to call multiple times - only first call takes. */
 void   memprof_init(void);
 
 /* Per-frame entry point. Refreshes the cached "current" reading and
@@ -80,7 +80,7 @@ void   memprof_set_reader(MemprofReaderFn reader);
 
 /* --- Live state accessors. --- */
 
-/* Cached current reading (always fresh — refreshed in every frame_tick). */
+/* Cached current reading (always fresh - refreshed in every frame_tick). */
 MemSample memprof_current(void);
 MemSample memprof_baseline(void);
 
@@ -142,7 +142,7 @@ void memprof_init_at(double t0_seconds) {
     g_memprof_last_push_s = 0.0;   /* First history push happens at t=5s
                                     * (one full interval after init), not
                                     * at t=0. This is the committed
-                                    * sampling semantics — text rows are
+                                    * sampling semantics - text rows are
                                     * live immediately, graph fills in. */
     /* Capture baseline now (text rows): */
     MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
@@ -164,14 +164,14 @@ void memprof_reset(void) {
 }
 ```
 
-Reader (cross-platform, ifdef chain — mirrors `prof.c` style):
+Reader (cross-platform, ifdef chain - mirrors `prof.c` style):
 ```c
 /* Must appear BEFORE any system header. Mirrors src/support/prof.c so
  * Linux gets clock_gettime() / CLOCK_MONOTONIC prototypes under -std=c99
  * (which otherwise hides POSIX 2008 names). */
 #define _POSIX_C_SOURCE 200809L
 
-/* Unconditional standard headers — used regardless of platform.
+/* Unconditional standard headers - used regardless of platform.
  *   stdio.h: snprintf in memprof_format_bytes (every build) and
  *            fopen/fscanf inside the __linux__ reader branch.
  *   string.h: memset (zeroing samples on reset / failure). */
@@ -236,19 +236,19 @@ absolute seconds. `memprof_frame_tick()` calls `memprof_frame_tick_at(memprof_no
    `g_memprof_current` into the ring (wrap on capacity), record `t_rel` into
    `g_memprof_ring_t[]`, advance `head`, set `g_memprof_last_push_s = t_rel`.
 
-Failure mode: when the reader returns 0, `g_memprof_current` is zeroed — the
+Failure mode: when the reader returns 0, `g_memprof_current` is zeroed - the
 panel detects this and renders `"--"` (mirrors the CPU panel's stale-row
 convention with `k_prof_dim`).
 
 Most-recent-timestamp helper for the renderer (so the X axis can right-align
-the newest sample to "now" — see Graph section):
+the newest sample to "now" - see Graph section):
 ```c
 double memprof_history_latest_t(void); /* returns t_rel of the newest
                                           sample, or 0 if count == 0 */
 ```
 Add this to `memprof.h` next to `memprof_history_get`.
 
-## Module 2 — `src/ui/app/memory_panel.{c,h}`
+## Module 2 - `src/ui/app/memory_panel.{c,h}`
 
 Mirrors `src/ui/app/profile_panel.c` shape, but with a graph area below the
 text block.
@@ -379,7 +379,7 @@ Draw:
    `ui_clr(UI_TOK_ACCENT)`, using the mapping shown above.
 5. **X-axis labels** at left/mid/right: `-85m`, `-42m`, `now` (derived from
    `total_span`). Use a tiny `fmt_time_offset` helper. These labels are
-   geometry-fixed — they describe the panel's time scale, not the history's
+   geometry-fixed - they describe the panel's time scale, not the history's
    extent.
 
 ### Positioning
@@ -399,7 +399,7 @@ co-located with the public panel API.
 
 The memory panel must mirror `profile_panel_rect_for_height`'s **full
 branching on `snap->variable_panel.visible`** (`profile_panel.c:51-73`),
-not just one branch — otherwise the two panels desync when the user hides
+not just one branch - otherwise the two panels desync when the user hides
 the variable panel and the side-by-side offset lands them somewhere weird.
 
 ```c
@@ -440,14 +440,14 @@ static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
 Required local helpers (not in any shared header today):
 - **`clamp_int(v, lo, hi)`** is file-static in `src/ui/app/profile_panel.c:35`.
   Duplicate it as a 5-line file-static helper at the top of `memory_panel.c`
-  rather than extracting to a shared header — it's trivial, and extracting
+  rather than extracting to a shared header - it's trivial, and extracting
   would touch profile_panel.c unnecessarily. (If a third caller emerges later,
   hoist it then.)
-- **`STATUSBAR_H`** comes from `src/ui/app/layout.h` — include that header at
+- **`STATUSBAR_H`** comes from `src/ui/app/layout.h` - include that header at
   the top of `memory_panel.c` (profile_panel.c also includes it; mirror the
   same `#include "ui/app/layout.h"` line).
 
-## Module 3 — UI state plumbing
+## Module 3 - UI state plumbing
 
 ### `src/ui/app/state_types.h`
 
@@ -473,7 +473,7 @@ Add `UiMemoryPanelState memory_panel;` to `UiRenderSnapshot`.
 Add `snap->memory_panel = ui_state_memory_panel();` right after the
 `snap->profile_panel = ...` line.
 
-## Module 4 — Config + actions wiring
+## Module 4 - Config + actions wiring
 
 ### `src/app/glr_config.h`
 
@@ -492,7 +492,7 @@ static const char *memory_panel_mode_names[] = { "Off", "On", "Details" };
 ```
 
 Append to `g_cfg_items[]` immediately after the CPU profile row (which sits
-under the `### INTERFACE` section header at `glr_actions.c:175` — Memory
+under the `### INTERFACE` section header at `glr_actions.c:175` - Memory
 profile must share that section so it appears in the same Config flyout):
 ```c
 /* In ### INTERFACE section, right after the CPU profile row: */
@@ -502,9 +502,9 @@ profile must share that section so it appears in the same Config flyout):
 
 Note `key_code = 0`: Ctrl+Shift+M cannot use the simple `key_code` field
 (since plain Ctrl+M is ASCII 13 = Enter). The hotkey is wired via a router
-branch instead — see next section.
+branch instead - see next section.
 
-## Module 5 — Controller wiring (`src/app/glr_ctrl.c`)
+## Module 5 - Controller wiring (`src/app/glr_ctrl.c`)
 
 ### Includes
 Add at top:
@@ -513,18 +513,18 @@ Add at top:
 #include "ui/app/memory_panel.h"
 ```
 
-### Init — end of `glr_ctrl_init_gl()`
+### Init - end of `glr_ctrl_init_gl()`
 Add `memprof_init();` *after* `glr_app_reset_all()`, so the baseline reflects
 "REPL ready and idle" rather than the bare process at `main()` entry. This is
 the more useful baseline for leak attribution.
 
-### Per-frame tick — in `glr_ctrl_display_frame()`
+### Per-frame tick - in `glr_ctrl_display_frame()`
 Right after `prof_frame_tick();`, add:
 ```c
 memprof_frame_tick();
 ```
 
-### Render — in `glr_ctrl_display_frame()`
+### Render - in `glr_ctrl_display_frame()`
 After the existing `PROF_PROFILE_PANEL` block (~line 1947), add a parallel
 profiled block:
 ```c
@@ -533,12 +533,12 @@ ui_memory_panel_render(&ui_snap);
 prof_end(PROF_MEMORY_PANEL);
 ```
 
-### Ctrl+Shift+M hotkey — new router helper in `src/app/glr_ctrl.c`
+### Ctrl+Shift+M hotkey - new router helper in `src/app/glr_ctrl.c`
 
 Add a named router helper alongside the existing chain (`glr_ctrl.c:2604`
-onward — see `glr_ctrl_router_handle_save_key`, `_handle_code_focus_key`, etc).
+onward - see `glr_ctrl_router_handle_save_key`, `_handle_code_focus_key`, etc).
 The existing routers go through `editor_input_active_modifiers()`, **not**
-`glutGetModifiers()` — match that pattern, and check each modifier bit
+`glutGetModifiers()` - match that pattern, and check each modifier bit
 individually (`mods & (A | B)` is true if *either* bit is set, which would
 steal Shift+Enter from the editor):
 
@@ -555,11 +555,11 @@ int glr_ctrl_router_handle_memory_panel_key(unsigned char key) {
 ```
 
 There is **no** `glr_cfg_cycle_by_key()` helper; the existing APIs are:
-- `glr_config_cycle(ReplConfigKey key, int dir)` — cycle by config key
+- `glr_config_cycle(ReplConfigKey key, int dir)` - cycle by config key
   (this is the right tool here).
-- `glr_cfg_cycle_row(int row_idx, int dir)` — cycle by `g_cfg_items[]`
+- `glr_cfg_cycle_row(int row_idx, int dir)` - cycle by `g_cfg_items[]`
   index (useful when a row index is already known, e.g. menu clicks).
-- `glr_ctrl_router_handle_code_focus_key` does *not* go through config — it
+- `glr_ctrl_router_handle_code_focus_key` does *not* go through config - it
   toggles a state flag directly, which is why its shape differs from this
   router.
 
@@ -582,15 +582,15 @@ insert the new call **right after `glr_ctrl_router_handle_code_focus_key`**
 the unmodified Enter behavior is preserved.
 
 Verification: with the keyboard running, press Shift+Enter inside the input
-buffer — must still insert a newline (not cycle the memory panel). Press
-plain Enter — must still commit. Press Ctrl+Shift+M — must cycle the panel.
+buffer - must still insert a newline (not cycle the memory panel). Press
+plain Enter - must still commit. Press Ctrl+Shift+M - must cycle the panel.
 
 ### `PROF_MEMORY_PANEL` enum entry
 In `src/support/prof.h`, add `PROF_MEMORY_PANEL` right after `PROF_PROFILE_PANEL`.
 In `src/ui/app/profile_panel.c::section_label`, add the case
 `case PROF_MEMORY_PANEL: return "Memory Panel";`.
 
-## Module 6 — Tests
+## Module 6 - Tests
 
 ### `tests/test_memprof.c` (new)
 
@@ -610,7 +610,7 @@ with `memprof_reset()` followed by either a fake-reader install + `memprof_init_
    `memprof_frame_tick_at(10.0)` → assert count == 2.
 3. **Ring wraps.** `memprof_reset();` install a reader that returns whatever
    the test wrote into a global `g_test_rss`. `memprof_init_at(0.0)` (init
-   reader call captures baseline — irrelevant here, ring is empty). Then
+   reader call captures baseline - irrelevant here, ring is empty). Then
    **tick only at push boundaries** (one tick per push interval, no sub-interval
    noise) for `N = MEMPROF_HISTORY_CAP + 5` iterations:
    ```c
@@ -630,7 +630,7 @@ with `memprof_reset()` followed by either a fake-reader install + `memprof_init_
 4. **Right-anchored timestamps.** Assert
    `memprof_history_latest_t() ≈ last_pushed_t_rel` (within an epsilon),
    so the renderer can right-align the newest sample to "now" deterministically.
-5. **`memprof_format_bytes` ranges** (pure formatter, no platform/GL deps —
+5. **`memprof_format_bytes` ranges** (pure formatter, no platform/GL deps -
    safe to test here since it lives in `memprof.c`):
    - 0 → "--"
    - 1500 → "1 KB"
@@ -696,7 +696,7 @@ In `CORE_TEST_SRCS`, add **both** new translation units:
   src/ui/app/memory_panel.c \
 ```
 `memory_panel.c` is required here because `tests/test_glr_ctrl.c` includes
-`src/app/glr_ctrl.c`, which now calls `ui_memory_panel_render()` — the same
+`src/app/glr_ctrl.c`, which now calls `ui_memory_panel_render()` - the same
 reason `src/ui/app/profile_panel.c` is already in `CORE_TEST_SRCS` (Makefile
 line ~473). Without it the controller test will fail to link.
 
@@ -713,32 +713,32 @@ Files to **create**:
 - `tests/test_memprof.c`
 
 Files to **modify**:
-- `Makefile` — `SRCS`, `CORE_TEST_SRCS`, `TEST_BINS`, new per-test recipe
-- `src/support/prof.h` — add `PROF_MEMORY_PANEL` enum value
-- `src/ui/app/profile_panel.h` — move `PROF_PANEL_W` here as `PROFILE_PANEL_W`
+- `Makefile` - `SRCS`, `CORE_TEST_SRCS`, `TEST_BINS`, new per-test recipe
+- `src/support/prof.h` - add `PROF_MEMORY_PANEL` enum value
+- `src/ui/app/profile_panel.h` - move `PROF_PANEL_W` here as `PROFILE_PANEL_W`
   so `memory_panel.c` can reference it for side-by-side layout
-- `src/ui/app/profile_panel.c` — `section_label` case for `PROF_MEMORY_PANEL`;
+- `src/ui/app/profile_panel.c` - `section_label` case for `PROF_MEMORY_PANEL`;
   switch local `PROF_PANEL_W` references to the header-defined `PROFILE_PANEL_W`
-- `src/ui/app/state_types.h` — `UiMemoryPanelState` typedef
-- `src/ui/app/state.h` / `state.c` — field, accessors, default
-- `src/ui/app/snapshot.h` — snapshot field
-- `src/app/glr_config.h` — `GLR_CONFIG_MEMORY_PROFILE`
-- `src/app/glr_config.c` — config dispatch case
-- `src/app/glr_actions.c` — `memory_panel_mode_names[]` array, `g_cfg_items[]` entry
-- `src/app/glr_ctrl.c` — includes, `memprof_init()` call, `memprof_frame_tick()`
+- `src/ui/app/state_types.h` - `UiMemoryPanelState` typedef
+- `src/ui/app/state.h` / `state.c` - field, accessors, default
+- `src/ui/app/snapshot.h` - snapshot field
+- `src/app/glr_config.h` - `GLR_CONFIG_MEMORY_PROFILE`
+- `src/app/glr_config.c` - config dispatch case
+- `src/app/glr_actions.c` - `memory_panel_mode_names[]` array, `g_cfg_items[]` entry
+- `src/app/glr_ctrl.c` - includes, `memprof_init()` call, `memprof_frame_tick()`
   call, render block, Ctrl+Shift+M hotkey branch in `glr_ctrl_keyboard`
-- `tests/test_glr_ctrl.c` — `ui_memory_panel_render` stub `#define`/`#undef`
+- `tests/test_glr_ctrl.c` - `ui_memory_panel_render` stub `#define`/`#undef`
   pair + empty stub body; add `PROF_MEMORY_PANEL` to the profile-coverage
   `major[]` array and to the `sum_us` sum
 
 ## Verification
 
-1. `make check-include-style` — confirms quoted `"support/memprof.h"` and
+1. `make check-include-style` - confirms quoted `"support/memprof.h"` and
    `"ui/app/memory_panel.h"` includes.
-2. `make check-c99` — the build guard. New module must compile non-pedantic
+2. `make check-c99` - the build guard. New module must compile non-pedantic
    under `gcc -std=c99 -fsyntax-only` with the project's `-I` set.
-3. `make test_memprof` (new) — unit tests pass.
-4. `make test` — full suite still green.
+3. `make test_memprof` (new) - unit tests pass.
+4. `make test` - full suite still green.
 5. **Real-gcc verification (Linux)**:
    ```
    ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
@@ -750,7 +750,7 @@ Files to **modify**:
    - `make gl-repl && ./gl-repl`
    - Open Config → toggle "Memory profile" to On. Confirm panel appears
      immediately with **live text rows** (current RSS/VSZ, baseline RSS/VSZ,
-     Δ) and an **empty plot area** (no history pushed yet — first sample
+     Δ) and an **empty plot area** (no history pushed yet - first sample
      lands at the 5 s mark; that gap is intentional, see Module 1).
    - Wait ~30 s. Confirm 5–6 samples plotted, newest pinned to the right
      edge, X-axis labels reading `-85m … -42m … now`. Confirm Y-axis tick
@@ -758,7 +758,7 @@ Files to **modify**:
    - Press Ctrl+W to toggle CPU profile. Confirm both panels render side by
      side without overlap.
    - Press Ctrl+Shift+M three times. Confirm cycle: On → Details → Off → On.
-   - Press Enter (in input row) — confirm new-line insert still works (Ctrl+M
+   - Press Enter (in input row) - confirm new-line insert still works (Ctrl+M
      hotkey must not have hijacked plain Enter).
    - Load a large workspace via `./gl-repl workspace/`. Confirm RSS line
      steps up to a new plateau; Δ row updates.

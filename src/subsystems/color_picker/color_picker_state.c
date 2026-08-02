@@ -39,7 +39,7 @@ typedef enum {
 static CpPaletteTab g_cp_tab = CP_TAB_BASIC;
 
 /* Harmony key: a persistent base color (HSV) the tetrad derives from. Unlike
- * the active command's color, it survives close/reopen — so a coordinated set
+ * the active command's color, it survives close/reopen - so a coordinated set
  * can be applied across several color commands. Seeded from the current color
  * the first time the Harmony tab is entered (or via the Set-key button), and
  * NOT moved when a derived swatch is applied. Cleared by state_reset. */
@@ -63,7 +63,7 @@ static const float CP_BASIC[10][3] = {
 /* Scene palette: the curated accent set the built-in example scenes share
  * (examples/README.md "Example Color Language"). One clickable row, so a user
  * editing a scene can stay on the family instead of ad-hoc primaries.
- * Generated from the accent_palette.h anchor list — cannot drift from the
+ * Generated from the accent_palette.h anchor list - cannot drift from the
  * grid / README / checker view of the palette. */
 #define CP_SCENE_PAL_ROW(name, r, g, b) { r, g, b },
 static const float CP_SCENE_PAL[PAL_SCENE_ANCHOR_COUNT][3] = {
@@ -188,7 +188,7 @@ void color_picker_install_host(const ColorPickerHostBridge *host) {
     g_host = host;
 }
 
-/* Window height via the host (0 if unset) — used for screen-y flips. */
+/* Window height via the host (0 if unset) - used for screen-y flips. */
 static int cp_viewport_h(void) {
     int w = 0, h = 0;
     if (g_host && g_host->viewport) g_host->viewport(&w, &h);
@@ -219,7 +219,7 @@ static void cp_rgb_to_hsv(float r, float g, float b,
                           float *h, float *s, float *v);
 static int  color_picker_write_cmd(void);
 
-/* Width spanned by the SV square + hue bar (+ alpha bar) — the palette and
+/* Width spanned by the SV square + hue bar (+ alpha bar) - the palette and
  * preview strip stretch across this. */
 static int cp_total_w(void) {
     return CP_SV_SZ + CP_GAP + CP_HUE_W
@@ -483,7 +483,7 @@ void color_picker_start(int cmd_idx, int my) {
 
     /* New session (first open, or switching to a different line):
      * arm the next writeback to capture undo. Editing the same line
-     * after a close-then-reopen is treated as a new session — matches
+     * after a close-then-reopen is treated as a new session - matches
      * the legacy behaviour where every open-on-different-line pushed
      * undo, except the snapshot now records the moment of the first
      * actual mutation rather than the moment of open. */

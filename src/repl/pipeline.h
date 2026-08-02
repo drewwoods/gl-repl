@@ -32,7 +32,7 @@ ReplFlatRefreshKind repl_refresh_flat_program_for_deps(
 void repl_flat_refresh_profile_frame_begin(void);
 void repl_flat_refresh_profile_frame_end(void);
 /* Auto-normal shading modes. The value is owned by glr_state's config
- * (GLR_CONFIG_AUTO_NORMALS) and passed in by the caller — see the comment
+ * (GLR_CONFIG_AUTO_NORMALS) and passed in by the caller - see the comment
  * on repl_recompute_autonormals. FACE gives every vertex of a primitive
  * its face's normal; SMOOTH averages the faces meeting at each vertex,
  * welding coincident positions within one glBegin block. */
@@ -53,7 +53,7 @@ void repl_recompute_autonormals(int autonormal_mode,
 
 /* Delete every generated normal row (immediate-mode and tessellator),
  * returning the number removed. Call on the transition to
- * REPL_AUTONORMAL_OFF — not on every OFF-mode recompute; see the comment
+ * REPL_AUTONORMAL_OFF - not on every OFF-mode recompute; see the comment
  * on the definition. Rows the user typed are left alone. */
 int repl_strip_auto_normals(int *edit_line_inout);
 void repl_refresh_camera_lines(void);

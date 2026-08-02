@@ -19,7 +19,7 @@ void glr_ctrl_set_time(float value);
 
 /* Park the cursor on source line `line` (0-based, clamped to the
  * document), load that line into the input buffer, and request that the
- * next code-panel layout scroll it into view — the same state arrowing
+ * next code-panel layout scroll it into view - the same state arrowing
  * to the line produces. Startup hook for GLR_EDIT_LINE: cursor-bound
  * overlays (transform guides, vertex labels) can't otherwise be posed
  * on a headless render with no keyboard input. */
@@ -28,7 +28,7 @@ void glr_ctrl_set_edit_line(int line);
 /* Set the accumulation sample count (one of 1/2/4/8/12/16; anything
  * else warns and is ignored). Startup hook for GLR_ACCUM_PASSES:
  * headless captures raise the AA passes for smoother 3D edges without
- * supersampling — the 2D UI renders outside the accumulation loop, so
+ * supersampling - the 2D UI renders outside the accumulation loop, so
  * text keeps its full size. */
 void glr_ctrl_set_accum_passes(int count);
 
@@ -38,7 +38,7 @@ void glr_ctrl_set_accum_passes(int count);
  * swatch click, so a headless capture can't otherwise pose it. */
 /* Capture affordance (GLR_CODE_SCROLL): park the code panel's first visible
  * row and stop follow-scroll from pulling it back. Panel rows, not document
- * lines — with code focus off the generated C fills rows no cursor can reach. */
+ * lines - with code focus off the generated C fills rows no cursor can reach. */
 void glr_ctrl_set_code_panel_scroll(int top_row);
 
 void glr_ctrl_open_color_picker(int line);
@@ -59,7 +59,7 @@ int glr_ctrl_open_assign_plot(int line);
  * GL-family row. Returns 1 once the card is up on that row, 0 if the row is
  * off-screen (retry next frame) or carries no description. `anchor_dx` slides
  * the opened card horizontally from where the click left it (screen px, right
- * positive) — a capture-curation knob, since the click position that selects
+ * positive) - a capture-curation knob, since the click position that selects
  * the row also decides what the card lands on top of. */
 int glr_ctrl_open_command_description(int line, int anchor_dx);
 
@@ -72,7 +72,7 @@ int glr_ctrl_add_assign_plot_series(int line);
  * in declaration order; if two entries target the same GlrConfigKey for
  * this mask the later one wins and a warning is logged to stderr.
  * Returns the collision count (0 when the policy is conflict-free, >0
- * when at least one key was overwritten — the policy is misconfigured
+ * when at least one key was overwritten - the policy is misconfigured
  * and the warning surfaces it). The controller's example-reset hook
  * passes the shipped k_example_tag_defaults policy; tests pass synthetic
  * tables to exercise the collision path without modifying shipped data. */
@@ -90,14 +90,14 @@ void glr_ctrl_reset_all(void);
  * addition to the editor commit transients. Called from
  * glr_ctrl_reset_all() and from controller paths that switch examples /
  * scenes so the editor returns to a clean idle posture. Hoisted out
- * of src/editor/input.c per audit #8 — the body reaches into
+ * of src/editor/input.c per audit #8 - the body reaches into
  * camera / UI / picker / controller state, not editor-text state. */
 void glr_ctrl_reset_transients(void);
 
 /* Re-sync controller-derived chrome and refresh the export/render/camera text
  * caches after a tour baseline restore (glr_tour_snapshot_restore). Steps 11-12
  * of the plan's restore order. Deliberately does NOT call
- * glr_ctrl_reset_transients() — that would erase the just-restored camera
+ * glr_ctrl_reset_transients() - that would erase the just-restored camera
  * defaults, open menus, and peer state. */
 void glr_ctrl_after_tour_restore(void);
 
@@ -111,7 +111,7 @@ int glr_ctrl_code_panel_layout_provider(void);
  * request via the restore_hidden_code_panel effect flag the
  * controller actualizes after editor_handle_*. Returns 1 if the
  * layout was hidden (and is now restored), 0 if it was already
- * visible. Hoisted out of src/editor/input.c per audit #8 — the
+ * visible. Hoisted out of src/editor/input.c per audit #8 - the
  * body writes glr_state and runs glr_ctrl_sync_ui_chrome. */
 int glr_ctrl_restore_hidden_code_panel(void);
 
@@ -127,7 +127,7 @@ void glr_ctrl_sync_ui_chrome(void);
  * chrome). Shared by the Ctrl+Shift+F shortcut and the status-bar
  * keycap click so both paths sync chrome, request follow-scroll, and
  * post the same status line. Session-only state, like the F1 help
- * overlay — no Config row, no @cfg. */
+ * overlay - no Config row, no @cfg. */
 void glr_ctrl_toggle_code_focus(void);
 
 /* Toggle the F1 help overlay. Shared by the F1 key and the status-bar
@@ -170,7 +170,7 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
     int *out_follow_doc_line,
     int *out_visible_lines);
 /* Arm or disarm the accumulation-buffer feature gate (GlrRenderState.use_accum;
- * the effect selector is separate — see CFG_DEFAULT_ACCUM_EFFECT). Takes the
+ * the effect selector is separate - see CFG_DEFAULT_ACCUM_EFFECT). Takes the
  * GLR_CLI_ACCUM_* tri-state: 1 forces on, 0 forces off, and a negative value
  * (AUTO, the default) leaves the decision to the GL-init renderer probe, which
  * disables accum on renderers that emulate it on the CPU (Mesa). A context
@@ -179,7 +179,7 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
 void glr_ctrl_set_accum(int mode);
 
 /* NULL when the GL context can read the depth buffer back (Depth view
- * works); otherwise a short status-bar reason why it can't — WebGL-specific
+ * works); otherwise a short status-bar reason why it can't - WebGL-specific
  * wording on the web build. Probed once in glr_ctrl_init_gl; tests flip the
  * flag through the _for_test seam (they never run the probe). */
 const char *glr_ctrl_depth_readback_unsupported_reason(void);
@@ -214,10 +214,10 @@ int glr_ctrl_save_quit_recovery(void);
 /* Write the live scene to the recovery file (config.h QUIT_RECOVERY_FILE).
  * Used by the quit safeguard and by Open Workspace before it replaces the
  * current in-memory scene. Returns 1 on success, 0 on failure. Writes
- * unconditionally — gate it on glr_ctrl_recovery_has_user_work(). */
+ * unconditionally - gate it on glr_ctrl_recovery_has_user_work(). */
 int glr_ctrl_save_recovery_file(void);
 
-/* The frame boundary. The application owns it — these three bracket the host's
+/* The frame boundary. The application owns it - these three bracket the host's
  * display callback, which is what a frame *is*; the controller is only one of
  * the stages inside. Hence the plain glr_ prefix: they are not controller
  * entry points like the glr_ctrl_* calls below, and glr_ctrl_display_frame()
@@ -231,12 +231,12 @@ int glr_ctrl_save_recovery_file(void);
  *
  * They own the profiler's frame boundary: the staleness/FPS tick, the
  * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
- * and both frame spans — PROF_FRAME_TOTAL across the whole callback and
+ * and both frame spans - PROF_FRAME_TOTAL across the whole callback and
  * PROF_FRAME_WORK across everything up to the present, with PROF_PRESENT
  * derived from the difference (see prof_sections.h). The brackets belong out
  * here rather than inside glr_ctrl_display_frame() because the callback runs
  * host-band work on both sides of it (scripted input, splash + tour overlays)
- * — work that a bracket around the controller alone silently omits, which is
+ * - work that a bracket around the controller alone silently omits, which is
  * exactly how a guided tour's ~10 ms caption overlay stayed invisible in the
  * profile panel while the frame reported ~1.5 ms.
  *
@@ -257,7 +257,7 @@ void glr_ctrl_render_script_overlay(int win_w, int win_h);
 /* Ambient guided-tour presence layer (title card + breathing border + exit
  * collapse). Must be called EVERY frame, tour or not: it advances the presence
  * clock, and the exit collapse it draws runs after the tour has already
- * stopped. Belongs last in the host's overlay stage — after the compositor
+ * stopped. Belongs last in the host's overlay stage - after the compositor
  * post-process, so a user's own whole-frame Post FX cannot paint over the
  * chrome that says which mode the app is in. */
 void glr_ctrl_render_tour_presence(int win_w, int win_h);
@@ -340,7 +340,7 @@ void glr_ctrl_help_scroll_by(int delta);                            /* clamped h
 
 /* Pointer-script symbolic targets that need controller-side state
  * (`helptab:<label>`, `code:<label-or-index>`). Both fill GLUT mouse
- * coordinates and return 0 when the target is not currently on screen — the
+ * coordinates and return 0 when the target is not currently on screen - the
  * help overlay is closed, the label matches no tab, or no matching code row
  * is on screen. A text `code:` spec takes the first visible row whose
  * canonical text it prefixes; a numeric one addresses a source line by the
@@ -392,7 +392,7 @@ void glr_ctrl_router_reset_code_panel_drag(void);
  * a prior code-panel press, if (target_line, target_char) still hits
  * the active edit row, grow the input-buffer selection toward
  * target_char and return 1. Returns 0 when the motion should fall
- * through to the line-range path — drag wandered off the press row,
+ * through to the line-range path - drag wandered off the press row,
  * the press wasn't on a code-text row, or no drag is armed. The
  * production drag handler calls this after ui_panels_hit_test; tests
  * call it directly so they don't need to compute pixel coordinates

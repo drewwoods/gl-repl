@@ -1,6 +1,6 @@
 ---
 name: gl-repl-scene-authoring
-description: Write or edit gl-repl scenes and built-in examples — the full REPL command/expression language reference, per-command parser policies, @cfg + camera headers, the presentation-reset rule, size budgets, and the full set of files (catalog, goldens, docs, showcase media) an example must be edited together with. Use when asked to write a scene, add or modify a built-in example, author a .c scene file, or when touching examples.c / example_loader.c.
+description: Write or edit gl-repl scenes and built-in examples - the full REPL command/expression language reference, per-command parser policies, @cfg + camera headers, the presentation-reset rule, size budgets, and the full set of files (catalog, goldens, docs, showcase media) an example must be edited together with. Use when asked to write a scene, add or modify a built-in example, author a .c scene file, or when touching examples.c / example_loader.c.
 ---
 
 # Scene & example authoring
@@ -19,14 +19,14 @@ glMultMatrixf((GLfloat[]){m0, ..., m15})  (column-major 4x4; cells are
                                 ordinary expressions. Flat shorthand
                                 glMultMatrixf(m0, ..., m15) accepted)
 glMultMatrixf(A)               (same, read from scratch array A/B/C; bare
-                                name only — no expression, no subscript)
+                                name only - no expression, no subscript)
 glPushAttrib(mask), glPopAttrib()  (attribute-stack save/restore; GL_*_BIT tokens)
 glEnable(CAP), glDisable(CAP)  (depth/lighting/blend/cull/fog/lights 0-3,
                                 GL_CLIP_PLANE0..5, line/point smooth, ...)
 glFogi/glFogf/glFogfv          (fog mode/scalar/color)
 glClipPlane(plane, (GLdouble[]){a,b,c,d})
 glShadeModel(MODE), glPointSize(s), glLineWidth(w)
-glLineStipple(factor, pattern) (pattern is plain int — no hex literals)
+glLineStipple(factor, pattern) (pattern is plain int - no hex literals)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, c, l, q)
 glBlendFunc(sfactor, dfactor)
 glColorMaterial(face, mode)
@@ -41,10 +41,10 @@ label("fmt", a, b, c, d)       (bitmap text at raster pos; REPL primitive)
 for(var, start, end[, step]) { body }
 func0..func9(params) { body }  (parens required; NAME(params) aliases a slot)
 if(expr) { body }
-:name / name:  and  goto name  (goto labels — colon syntax, not label())
+:name / name:  and  goto name  (goto labels - colon syntax, not label())
 // comment
 float name[, name2, ...];      (declaration; inside a func body this is a
-                                function-scoped local — see ## Math)
+                                function-scoped local - see ## Math)
 static float name[, ...];      (always a global, from any cursor position)
 var = expr;   A[i] = expr;     (scratch arrays A/B/C, index 0..15)
 ```
@@ -55,7 +55,7 @@ Semantics in depth: `docs/USER_GUIDE.md`.
 
 Functions: `sin cos tan asin acos atan atan2(y,x) sqrt abs pow log ln min max
 clamp(x,lo,hi) lerp(a,b,s) smoothstep(e0,e1,x) sign floor ceil fmod rem
-rand(seed[,iter]) rand2(seed[,iter])` — `log` is base-10, `ln` natural;
+rand(seed[,iter]) rand2(seed[,iter])` - `log` is base-10, `ln` natural;
 `asin`/`acos` clamp to [-1,1] before the call, `atan2` returns [-PI, PI] (the
 aim-at / polar-angle primitive); `lerp` is unclamped (s outside [0,1]
 extrapolates), `smoothstep` clamps and eases, `sign` gives 0 at exactly 0;
@@ -63,7 +63,7 @@ extrapolates), `smoothstep` clamps and eases, `sign` gives 0 at exactly 0;
 Constants: `PI`, `TAU`, `e`.
 
 Prefer `clamp`/`lerp`/`smoothstep` over hand-rolled `min(max(...))` chains and
-cubic polynomials — shorter lines, and they stay inside the per-example body
+cubic polynomials - shorter lines, and they stay inside the per-example body
 budget.
 
 Only `t` is predefined; everything else needs `float name;`. `t` starts at 0 and
@@ -71,9 +71,9 @@ advances 1/60 s per simulation tick while playing.
 
 **Storage is keyword-first, cursor-second.** `static float x;` is a global
 wherever it is typed. Plain `float x;` is a global at top level and a
-**function-scoped local** inside a function body — fresh per call (so recursion
+**function-scoped local** inside a function body - fresh per call (so recursion
 is safe), zero on entry, no initializer allowed (`float x = 1;` in a body is
-rejected — assign on the next line), no predef slot, no variable-panel row, and
+rejected - assign on the next line), no predef slot, no variable-panel row, and
 therefore no `@tune`/`@config`. Declare temporaries this way by default; keep a
 global only for a value the *caller* reads back or a knob you want to scrub.
 Locals hoist to the top of their function body (from any nesting depth) exactly
@@ -93,7 +93,7 @@ must stay 0..15. No local arrays.
 `params + locals + deepest loop nesting <= MAX_EXPR_VARS` (32) *per function*,
 rejected with "function scope full".
 
-**Reserved names** — `A`, `B`, `C`, `t`, `PI`, `TAU`, `float`, `var` all reject
+**Reserved names** - `A`, `B`, `C`, `t`, `PI`, `TAU`, `float`, `var` all reject
 a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
 
 ## Per-command policies that bite
@@ -108,7 +108,7 @@ a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
   to the compound-literal form. `glDepthMask`/`glColorMask` accept 0/1,
   canonicalized to `GL_TRUE`/`GL_FALSE`.
 - **`glPushAttrib`/`glPopAttrib`.** Mask is `|`-joined `GL_*_BIT` tokens (same
-  bitfield policy as glClear); 10 supported bits — GL_CURRENT / POINT / LINE /
+  bitfield policy as glClear); 10 supported bits - GL_CURRENT / POINT / LINE /
   POLYGON / LIGHTING / FOG / DEPTH_BUFFER / TRANSFORM / ENABLE /
   COLOR_BUFFER_BIT. GL_FOG_BIT scopes the glFog* parameters; the GL_FOG enable
   flag rides both GL_FOG_BIT and GL_ENABLE_BIT, matching real GL.
@@ -117,7 +117,7 @@ a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
   REPL meaning grows when another supported group is added. The alias token
   itself has no per-bit colour; its covered setter lines still receive per-bit
   markers. The executor keeps a real GL stack only `REPL_ATTRIB_STACK_CAP` (8)
-  deep — virtual push depth is unbounded, an orphan `glPopAttrib` is a silent
+  deep - virtual push depth is unbounded, an orphan `glPopAttrib` is a silent
   no-op, and unmatched pushes unwind at frame end, so only balanced pairs reach
   GL. Unbalanced pairs get the red gutter warning. Opens no indentation scope
   (unlike `glPushMatrix`).
@@ -139,7 +139,7 @@ ortho projection at the free camera, `view_mode` = locked 2D/3D toggle).
 **Every example load resets the non-camera presentation settings (including
 `view_mode`) to `CFG_DEFAULT_*` before applying the example's `@cfg`.**
 `CFG_DEFAULT_*` lives in `src/app/glr_defaults.h` and is the single source of
-truth — reuse the macros, never duplicate literals.
+truth - reuse the macros, never duplicate literals.
 
 Camera is deliberately excluded from that reset: it is inherited unless a
 `// camera` header is present. `restore_user_scene()` restores commands and
@@ -148,27 +148,27 @@ predef vars only.
 ## Files that move together
 
 Built-in examples are file-backed: a scene under `examples/scenes/` plus a
-catalog row. `build/generated/repl_examples_data.inc` is generated from them —
+catalog row. `build/generated/repl_examples_data.inc` is generated from them -
 never edit it. Adding or renaming one means touching all of:
 
-- `examples/scenes/<slug>.glr` (or `.c`) — the scene itself
-- `examples/catalog.ini` — section id, `file`, `name`, `tags`, `group`
-- `examples/catalog-emscripten.ini` — the **separate, trimmed** web catalog
+- `examples/scenes/<slug>.glr` (or `.c`) - the scene itself
+- `examples/catalog.ini` - section id, `file`, `name`, `tags`, `group`
+- `examples/catalog-emscripten.ini` - the **separate, trimmed** web catalog
   (`WEB=1` swaps `EXAMPLES_CATALOG` to it in the Makefile). Nothing
   cross-checks the two, so a scene added only to `catalog.ini` silently never
   ships in `make web`. Omit a scene here on purpose only if it is too heavy or
-  unsupported in the browser — and say so.
-- `tests/testdata/repl_examples_ui/NN.golden.txt` — the 0-based index golden
-- `docs/USER_GUIDE.md` — the numbered example list *and* the count claim
-- `README.md` — two count claims
-- `docs/SHOWCASE.md` — a gallery tile: link to the scene file **plus** a local
+  unsupported in the browser - and say so.
+- `tests/testdata/repl_examples_ui/NN.golden.txt` - the 0-based index golden
+- `docs/USER_GUIDE.md` - the numbered example list *and* the count claim
+- `README.md` - two count claims
+- `docs/SHOWCASE.md` - a gallery tile: link to the scene file **plus** a local
   PNG/GIF that exists. `make check-user-guide-examples` fails without both.
-- `scripts/docs-assets.sh` — the recipe that *produces* that media: an
+- `scripts/docs-assets.sh` - the recipe that *produces* that media: an
   `sc-<slug>` entry in `GIF_ASSETS` (or `PNG_ASSETS`) and the matching
   `if want sc-<slug>; then ...` block, keyed by `--example "<name>"`, never by
   index. Then run `scripts/docs-assets.sh sc-<slug>` to write the file. This
   drives the **native** build (`make gl-repl`) and briefly opens a real
-  window — that is the intended path; OSMesa is not needed and renders the
+  window - that is the intended path; OSMesa is not needed and renders the
   grid/themes worse.
 
 Details in `examples/README.md`. Checks and regeneration:
@@ -180,11 +180,11 @@ make rebuild-golden                # regen ALL goldens (correct, ordinary path)
 make test_repl_core_examples       # focused suite (load, export, reimport)
 ```
 
-**Use `make rebuild-golden`** — it enters the stubbed build before resolving
+**Use `make rebuild-golden`** - it enters the stubbed build before resolving
 `BINDIR`, so the binary that regenerates is the binary that validates. Hand-
 rolling `<bindir>/test_repl_core_examples --dump-index N > ...NN.golden.txt`
 regenerates one fixture but silently picks the wrong build config (a stale or
-release binary regenerating fixtures a debug binary then checks) — the classic
+release binary regenerating fixtures a debug binary then checks) - the classic
 "test passes, `git diff` shows nothing" trap.
 
 Live iteration without regenerating: `./gl-repl --examples-dir examples
@@ -192,11 +192,11 @@ Live iteration without regenerating: `./gl-repl --examples-dir examples
 
 **Authoring in the app**: pose/tune a scene interactively, then
 **File → Save Scene as .glr** writes `<workspace>/<scene-slug>.glr` in exactly
-this format — only the `@cfg` rows that differ from `CFG_DEFAULT_*`, the
+this format - only the `@cfg` rows that differ from `CFG_DEFAULT_*`, the
 `// camera` block, and the document. Copy it into `examples/scenes/`, add the
 catalog row, done. (Writer: `src/repl/export_glr.c`, symmetric with
 `example_loader.c`.) It does *not* carry `@cfg` slugs outside the per-scene
-presentation subset — those never applied on load anyway.
+presentation subset - those never applied on load anyway.
 
 **Index-keyed goldens shift when you insert mid-catalog.** Appending is cheap;
 inserting is not.
@@ -212,7 +212,7 @@ inserting is not.
 | `MAX_PREDEF_VARS` | 32 | global decls, 1 reserved for `t` |
 | `MAX_EXPR_VARS` | 32 | per-function `params + locals + deepest loop nesting` |
 
-Hoist loop-invariant assignments out of `for` bodies — they multiply against the
+Hoist loop-invariant assignments out of `for` bodies - they multiply against the
 flat cap, not the source cap.
 
 **Measure the flat cap before naming anything inside a loop.** Introducing a
@@ -232,19 +232,19 @@ half. Check first; the failure mode is a scene that silently stops loading.
 The two variable caps are independent, which is the lever when a scene runs out
 of declarations: move a function's temporaries to plain `float` locals and they
 stop costing predef slots entirely (the *Orrery* scene went 29 globals → 16 this
-way). A function with many parameters is where the *other* cap bites first —
+way). A function with many parameters is where the *other* cap bites first -
 `planetKepler()` there sat at 16 params + 15 locals = 31 of 32 until the sphere
 draw moved to its own `drawBody()` func; splitting a func's *positioning* args
 from its *appearance* args is the usual way to buy that scope back.
 
 **Max 8 names per `float` declaration** ("too many names per declaration
-(max 8); split across lines") — split a wide local list over several lines.
+(max 8); split across lines") - split a wide local list over several lines.
 
 ## Authoring gotchas
 
 - **Comment run before a `func()` header: 16 lines max.** Import buffers a
   function's preceding comments in a fixed `IMPORT_MAX_PENDING_COMMENTS` (16)
-  slot array and **silently drops the overflow** — the export/import roundtrip
+  slot array and **silently drops the overflow** - the export/import roundtrip
   test then fails with a one-line diff. Count the run *after* hoisting: export
   moves `static float` decls to the document top, so paragraphs those decls
   used to separate become one contiguous run. Break a long run up by moving
@@ -252,22 +252,22 @@ from its *appearance* args is the usual way to buy that scope back.
 - **Hoisting a subexpression into a local can move the last ULP.** Caching a
   call (`cx = cos(...)`) is exact, but reassociating is not: `0.30*i/rings`
   parses as `(0.30*i)/rings` and does not always equal `0.30*u` for
-  `u = i/rings`. Expect ~1e-7 relative drift on affected colors/positions —
+  `u = i/rings`. Expect ~1e-7 relative drift on affected colors/positions -
   below 8-bit framebuffer resolution, but it means the flat dumps are not
   byte-identical. Diff `--dump-flat` at several `--time` values to see the
   real blast radius rather than assuming either way.
-- **Const-fold vs flatten differential** — an expression that constant-folds at
+- **Const-fold vs flatten differential** - an expression that constant-folds at
   parse time and one that flattens per-frame can disagree; verify the animated
   path, not just the `t = 0` frame.
 - **Palette**: use accent anchors or expressions, not raw literals invented per
   scene (`accent_palette.h`, `make check-palette`). Only *pure-literal* color
   triples are checked, and `scripts/baselines/palette-coverage.txt` is
-  remove-only — a **new** scene must be authored on-palette, so budget for
+  remove-only - a **new** scene must be authored on-palette, so budget for
   retinting a scene drafted off-palette. The house idiom for off-anchor tints
   is an anchor scaled by a factor (`0.92*ink`) or a lerp between two anchors,
   not a fresh literal.
 - **Formatting**: `make check-formatted` (via `scripts/format_scenes.py
-  --write`) owns scene indentation — run it before wiring a scene into the
+  --write`) owns scene indentation - run it before wiring a scene into the
   catalog.
 - **Eased example cameras** need ~240-frame captures to settle.
 
@@ -279,5 +279,5 @@ Headless, no window required:
 make gl-repl FREEGLUT_OSMESA=1
 ```
 
-Then use the capture hooks — see the `gl-repl-capture` skill. Vertex outlines
+Then use the capture hooks - see the `gl-repl-capture` skill. Vertex outlines
 default ON and pollute reference shots; theme fades need ~12 s to settle.

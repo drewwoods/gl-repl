@@ -42,7 +42,7 @@ void render3d_grid_render(const Render3dFrameRenderContext *frame_ctx);
  * the FOG transition style these fall back to the plain alpha FADE.
  * The FAR extent is intentionally NOT here: its distance fog is the
  * same LINEAR/clear-color model as the recede, so it composes without
- * a pop. Pure — safe to call from tests. */
+ * a pop. Pure - safe to call from tests. */
 int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme);
 
 /* True for the generic table-driven line themes that dissolve their
@@ -51,7 +51,7 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme);
  * That is the standard line themes plus XZ Ruler and Star Chart; the
  * custom environment themes and Radar own their own atmosphere/fog and
  * are excluded.
- * Pure — safe to call from tests. */
+ * Pure - safe to call from tests. */
 int render3d_grid_theme_uses_edge_fade(Render3dGridTheme grid_theme);
 
 #endif /* RENDER3D_GRID_H */

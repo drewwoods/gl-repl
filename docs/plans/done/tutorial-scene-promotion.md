@@ -1,12 +1,12 @@
 # Tutorial Scene Promotion: Treat Post-Tutorial Documents Like Examples
 
-## Status — LANDED (2026-07-27)
+## Status - LANDED (2026-07-27)
 
 Shipped as designed. `ReplSceneRuntimeState.tutorial_origin_idx` is the
 post-tutorial marker, set only by `tutorial_end_keep_view()` and cleared by
 `tutorial_teardown()` plus every scene-state transition in `src/repl/scenes.c`.
 `repl_promote_example_if_needed()` was renamed to
-`repl_promote_transient_if_needed()` outright (no compatibility wrapper — all
+`repl_promote_transient_if_needed()` outright (no compatibility wrapper - all
 in-tree callers were updated) and now recognises example and tutorial origins,
 with the capture-before-teardown ordering and the `apply_scene_cfg_from_slot()`
 per-scene reapply the design calls for. Slot reservation was extracted to
@@ -22,7 +22,7 @@ Deviations from the plan, both in the verification section:
   invalid index) and additionally pins that a rejected start does not discard
   an *existing* post-tutorial origin.
 - **Global-slug test (item 6).** No shipped tutorial SETs a slug outside
-  `cfg_key_in_scene_subset()` — Feature Tour's `grid` / `vertex_outlines`, and
+  `cfg_key_in_scene_subset()` - Feature Tour's `grid` / `vertex_outlines`, and
   even `view_mode`, are all per-scene. The test synthesizes the case by adding
   `msaa` to the live tutorial's restore baseline before mutating it, which is
   the exact shape a future tutorial with a global SET step would produce.

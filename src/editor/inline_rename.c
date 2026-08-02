@@ -20,7 +20,7 @@
 #include "config.h"               /* REPL_DIAG_TEXT_MAX */
 
 /* `g_rename_active` is the active predicate (matches the
- * inline_file_prompt.c shape — separate flag rather than overloading
+ * inline_file_prompt.c shape - separate flag rather than overloading
  * `g_rename_slot` with a -1 sentinel). When inactive, `g_rename_slot`
  * is reset to -1 but only `g_rename_active` is the source of truth
  * for the predicate readers. */

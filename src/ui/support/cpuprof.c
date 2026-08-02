@@ -7,7 +7,7 @@
  *  - the section listing, three time columns per section, all EMAs: CPU (wall
  *    time from support/cpuprof), GPU (timer-query elapsed time from
  *    support/gpuprof; "--" for sections that are CPU-only or when GPU timing
- *    is unavailable), and Max (the worse of the two — the binding cost for
+ *    is unavailable), and Max (the worse of the two - the binding cost for
  *    the section);
  *  - the FPS plot, three overlaid time windows off the prof_fps_* history;
  *  - the section histograms, every top-level section's fixed timing histogram
@@ -81,7 +81,7 @@ typedef struct {
  * PROF_COL_VAL_W is the column *pitch*, not a text width. */
 #define PROF_COL_VAL_FIELD_W  (PROF_COL_VAL_W - FONT_SMALL_W)
 
-/* Width of a formatted value's suffix, " us" / " ms" — the space included. */
+/* Width of a formatted value's suffix, " us" / " ms" - the space included. */
 #define PROF_VAL_UNIT_CELLS   3
 
 /* Visual indentation per nesting level. Labels arrive un-indented; the panel
@@ -97,7 +97,7 @@ typedef struct {
 /* Fit a section label into `max_px`, appending "..." when it has to cut.
  *
  * The CPU value is drawn at a fixed column x, so nothing stops an over-long
- * label from running underneath it — the row just renders two strings on top
+ * label from running underneath it - the row just renders two strings on top
  * of each other. Clipping here makes that structurally impossible for any
  * label any binary supplies (gl-repl's come from src/app/glr_prof.c, each
  * demo's from its own driver), rather than relying on every caller to keep
@@ -131,7 +131,7 @@ static const char *fit_label(const char *src, int max_px,
  * a "400 us" row and a "14.53 ms" row stagger their units by two cells and the
  * eye has to re-find the unit on every line. FONT_SMALL is fixed-width, so the
  * offset is a character count. A string too wide for the field falls back to
- * left-aligned rather than bleeding into the column to its left — the same
+ * left-aligned rather than bleeding into the column to its left - the same
  * failure mode an over-wide value has always had, just not a silent one.
  *
  * `placeholder` marks the stale "--", which is a missing *number*, not a
@@ -156,7 +156,7 @@ static void fmt_us(char *buf, int buf_sz, double us) {
 /* Same, over the full range a histogram statistic can span. The panel's other
  * readouts are per-frame times that stop at a few ms, but the hover tooltip
  * also reports a running total, which passes a second within a minute of
- * profiling — and a sub-millisecond mean or standard deviation, where fmt_us()'s
+ * profiling - and a sub-millisecond mean or standard deviation, where fmt_us()'s
  * whole microseconds would round the interesting digit away. */
 static void fmt_us_wide(char *buf, int buf_sz, double us) {
     if (us < 1000.0)
@@ -170,7 +170,7 @@ static void fmt_us_wide(char *buf, int buf_sz, double us) {
 /* Same, for a value that is exactly a power of ten (the histogram's decade
  * ticks). The mantissa fmt_us() prints is all zeroes there, and those four
  * characters are what pushed "1.00 ms" into the axis' high bound and got the
- * whole label dropped — "1 ms" fits where it did not. */
+ * whole label dropped - "1 ms" fits where it did not. */
 static void fmt_us_decade(char *buf, int buf_sz, double us) {
     if (us < 1000.0)
         snprintf(buf, (size_t)buf_sz, "%.0f us", us);
@@ -231,7 +231,7 @@ static void draw_disclosure_bitmap(float x, float y, int collapsed) {
  * period to ~33 ms and is nowhere near the tolerance. Other totals keep the
  * hard 1/60s red step.
  *
- * A slack row (is_slack — gl-repl's Present, the vsync wait) isn't a budget
+ * A slack row (is_slack - gl-repl's Present, the vsync wait) isn't a budget
  * the frame can blow: it's the leftover time the frame was handed back, so
  * it never signals an alarm. It always reads as informational (a distinct
  * color, not the green/yellow/red budget scale) regardless of magnitude. */
@@ -290,7 +290,7 @@ static void set_time_color(const ProfSectionInfo *info, double us) {
 }
 
 /* A row's visibility is the app's call, expressed through prof_section_info():
- *  - a section with no label (NULL/empty) is not a row at all — it's a catalog
+ *  - a section with no label (NULL/empty) is not a row at all - it's a catalog
  *    slot this binary doesn't use (a demo instrumenting a subset returns this
  *    for the rest), so it's omitted in every mode;
  *  - a nested row has depth > 0 and can be hidden with its parent branch.
@@ -559,7 +559,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
                              FONT_SMALL);
         }
 
-        /* CPU / GPU / Max values — all smoothed averages. */
+        /* CPU / GPU / Max values - all smoothed averages. */
         double cpu_us = prof_section_avg_us(s);
         double gpu_us = gpu_prof_section_avg_us(s);
         char val_buf[24];
@@ -585,7 +585,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         /* NOTE: Max takes the worse of the two independently-smoothed EMAs
          * (and the GPU EMA runs 1-3 frames behind the CPU one, since query
          * results are harvested asynchronously), not the average of paired
-         * per-frame worst cases — pairing each CPU sample with its GPU twin
+         * per-frame worst cases - pairing each CPU sample with its GPU twin
          * would mean holding samples back until the query resolves, for a
          * distinction that only shows when CPU and GPU spikes anti-correlate
          * frame-to-frame. Not strictly correct, close enough for a HUD. */
@@ -677,7 +677,7 @@ int ui_profile_panel_hit_test(const UiProfilePanelView *view, int mx, int my) {
 #define FPS_BOTTOM_PAD    10
 
 /* Series identity colors: fixed data-viz semantics (which time window a
- * line is), not theme tokens — they must stay distinct in every scheme. */
+ * line is), not theme tokens - they must stay distinct in every scheme. */
 static const float k_fps_col_10s[3] = { 0.55f, 0.95f, 0.55f };  /* green */
 static const float k_fps_col_1m[3]  = { 0.95f, 0.85f, 0.35f };  /* amber */
 static const float k_fps_col_10m[3] = { 0.45f, 0.75f, 1.00f };  /* blue  */
@@ -868,19 +868,19 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
  * bins are log-spaced (see support/cpuprof.h), so the axis is linear in bin
  * index and therefore logarithmic in time. A 100 ms stall then sits a bounded
  * number of bins to the right of a 3 ms frame instead of 30x further along a
- * linear scale — it costs the axis a slice of width rather than flattening
+ * linear scale - it costs the axis a slice of width rather than flattening
  * every real distribution into the leftmost pixel. That is what lets the panel
  * show the whole distribution, tail included, instead of trimming it away. */
 #define HIST_MIN_AXIS_BINS  64
 
 /* Floor for the log-y ceiling. Early in a run the tallest bin holds one or
- * two samples, and scaling to that draws every occupied bin at full height —
+ * two samples, and scaling to that draws every occupied bin at full height -
  * a presence band rather than a histogram. Pinning the ceiling at 10 lets the
  * bars grow up out of the baseline as samples accumulate, and is inert once
  * any bin passes 10. */
 #define HIST_MIN_PEAK  10UL
 
-/* Tick lengths (pixels, hanging below the plot floor into the x-axis gutter —
+/* Tick lengths (pixels, hanging below the plot floor into the x-axis gutter -
  * inside the plot they would be buried under the baseline clutter of a dozen
  * overlaid series). Decade boundaries already carry a full-height gridline;
  * the longer mark anchors the row the minor ticks sit in. */
@@ -974,7 +974,7 @@ static int hist_legend_series(HistLegendSeries *out, int max_series) {
     return count;
 }
 
-/* A series' position in catalog order among the visible set — the index its
+/* A series' position in catalog order among the visible set - the index its
  * identity color is generated from. The two bar passes walk the whole catalog;
  * the mean-sorted legend and hover tooltip resolve the catalog ordinal from
  * the section so changing position never changes a series' color. */
@@ -988,7 +988,7 @@ static int hist_series_ordinal(ProfSection s) {
 }
 
 /* The set actually drawn: in the catalog and not toggled off. The x axis, the
- * y ceiling and the bar passes all agree on this — a hidden series must not
+ * y ceiling and the bar passes all agree on this - a hidden series must not
  * stretch the axis, or hiding the sub-microsecond sections would leave the
  * plot pinned at 1 us with the surviving millisecond hump squeezed into the
  * right-hand sliver. */
@@ -997,7 +997,7 @@ static int hist_series_plotted(ProfSection s, const ProfSectionSet *hidden) {
            !prof_section_set_contains(hidden, s);
 }
 
-/* Series identity colors — the same fixed data-viz exclusion as the FPS
+/* Series identity colors - the same fixed data-viz exclusion as the FPS
  * plot's three window colors, but generated rather than hand-picked: hue
  * rotates by the golden ratio per series, which keeps any number of catalog
  * sections mutually distinguishable without a palette that has to grow every
@@ -1071,7 +1071,7 @@ int ui_histogram_panel_hit_test(const UiHistogramPanelView *view,
         gl_y < view->panel_y || gl_y >= view->panel_y + panel_h)
         return UI_HISTOGRAM_PANEL_HIT_NONE;
 
-    /* The right side of the title row owns the reset control — same band the
+    /* The right side of the title row owns the reset control - same band the
      * profile panel gives its collapse/expand-all control. */
     control_w = FONT_SMALL_W * (int)strlen(HIST_RESET_LABEL) + 2;
     if (mx >= view->panel_x + HIST_PANEL_W - control_w &&
@@ -1174,7 +1174,7 @@ int ui_histogram_axis_range(ProfSectionSet hidden_series,
 
 /* Snap a coordinate to the centre of a pixel. The 2D projection is 1:1 with
  * pixels, so a 1px line asked for at a whole coordinate straddles two columns
- * and GL picks one by the diamond-exit rule — neighbouring ticks then land on
+ * and GL picks one by the diamond-exit rule - neighbouring ticks then land on
  * opposite sides and the row looks unevenly spaced. On a pixel centre there is
  * nothing to decide: the line covers exactly that column. */
 static float ui_pixel_center(float v) {
@@ -1182,7 +1182,7 @@ static float ui_pixel_center(float v) {
 }
 
 /* Where a time lands on the x axis. The axis is linear in bin index and the
- * bins are log-spaced, so this is the one place that mapping lives — gridlines,
+ * bins are log-spaced, so this is the one place that mapping lives - gridlines,
  * ticks and labels all go through it. Returns 0 when the time falls outside the
  * drawn range (the caller draws nothing). */
 static int hist_time_to_x(double us, int lo_bin, int hi_bin,
@@ -1216,7 +1216,7 @@ static void hist_series_columns(ProfSection s, int lo_bin, int hi_bin,
 
 /* Legend: descending histogram mean, filling columns left to right. A series
  * with no samples follows the sampled set and is dimmed. Drawn on every path
- * through the panel, including the empty ones — it is the only way back once
+ * through the panel, including the empty ones - it is the only way back once
  * every series has been toggled off. */
 static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
                              const unsigned long *series_samples) {
@@ -1273,7 +1273,7 @@ static void hist_draw_legend(const UiHistogramPanelView *view, int legend_rows,
  * alongside the bins, for the legend entry the pointer is resting on.
  *
  * The graph answers "what shape is this section's distribution"; these are the
- * numbers behind it, which no amount of squinting at a log-log plot recovers —
+ * numbers behind it, which no amount of squinting at a log-log plot recovers -
  * and the section listing next door has only a single smoothed EMA. min/max in
  * particular are the raw extremes, not bin edges, so they stay exact in the
  * open-ended first and last bins where the plot itself cannot be.
@@ -1397,7 +1397,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
     HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int lo_bin = 0, hi_bin = 0;
-    /* The axis spans the plotted series only — hiding a series narrows it. */
+    /* The axis spans the plotted series only - hiding a series narrows it. */
     int have_data = ui_histogram_axis_range(view->hidden_series,
                                             &lo_bin, &hi_bin);
     int any_shown = 0;
@@ -1405,12 +1405,12 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
      * this function, including the two empty ones. */
     int hover_section = hist_hover_section(view);
 
-    /* Tallest single bin of any one series — the log-y ceiling. Per series,
+    /* Tallest single bin of any one series - the log-y ceiling. Per series,
      * not the summed height across series: each series is drawn against this
      * scale independently, so a pooled ceiling would shrink every bar by
      * however many sections happen to share its bin. The same sweep records
      * each series' sample count, which the legend needs to dim sections that
-     * never ran — so it runs whether or not there is anything to plot. */
+     * never ran - so it runs whether or not there is anything to plot. */
     unsigned long peak = 0;
     unsigned long series_samples[PROF_SECTION_COUNT];
     memset(series_samples, 0, sizeof(series_samples));
@@ -1478,7 +1478,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         ui_clr(UI_TOK_TEXT_PLACEHOLDER);
         /* Two different empties: nothing sampled yet, versus every series
          * toggled off. The second is a state the user typed themselves and can
-         * only leave through the legend, so it says so — and the legend below
+         * only leave through the legend, so it says so - and the legend below
          * still draws, or the panel would be a dead box with no way back. */
         const char *empty = any_shown ? "(collecting)"
                                       : "(no series shown - click a legend entry)";
@@ -1597,7 +1597,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     /* Axis ticks: a long mark per decade plus minor marks at 2..9 within each
      * decade. The decade gridlines alone leave a whole decade of width
      * unmarked between them, and that is exactly the millisecond stretch the
-     * frame sections live in — the minor ticks are what let a hump be read as
+     * frame sections live in - the minor ticks are what let a hump be read as
      * "about 3 ms" instead of "somewhere past 1 ms". They are log-spaced like
      * the axis, so each decade's marks crowd toward its right edge. */
     for (int pass = 0; pass < 2; pass++) {
@@ -1637,7 +1637,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     }
 
     /* Tick row: one label per decade boundary, centered on its tick. Nothing
-     * else shares this row — every label here means "the tick above me is this
+     * else shares this row - every label here means "the tick above me is this
      * time", which is what makes the row readable at a glance. */
     {
         int  label_y = plot_y - HIST_XAXIS_H + 2 + HIST_XAXIS_LABEL_H;
@@ -1662,7 +1662,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
     /* Range row: the drawn span's real endpoints, flush to the plot edges on
      * their own row and dimmer than the tick labels. These are the fastest and
-     * slowest sample actually recorded, not decade boundaries — the only two
+     * slowest sample actually recorded, not decade boundaries - the only two
      * labels in the panel whose text sits beside its position rather than
      * centered over it, so they get a row where nothing invites that reading,
      * with a rule running out to a cap at each plot edge to say which edge each

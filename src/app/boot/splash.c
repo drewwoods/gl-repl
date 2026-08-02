@@ -1,8 +1,8 @@
 /*
- * splash.c — startup splash banner.
+ * splash.c - startup splash banner.
  *
  * A lower-third band along the bottom of the window: the open-cube mark
- * (lit-cube.glr's 4-faced cube, both X faces open — the logo) slowly
+ * (lit-cube.glr's 4-faced cube, both X faces open - the logo) slowly
  * turning beside the app name and tagline.  Not a full-screen overlay:
  * the scene and UI render normally underneath from frame one; the band
  * fades out after a few seconds.  Frame-counted, not wall-clock, so
@@ -11,7 +11,7 @@
  * Drawn by display_func() (gl_repl.c) after glr_ctrl_display_frame() and
  * before glutSwapBuffers(), so it sits on top of the composited frame.
  *
- * The cube is projected in software (rotY -> rotX, drop Z — the same
+ * The cube is projected in software (rotY -> rotX, drop Z - the same
  * projection as scripts/gen_rotating_cube.py and the baked SMIL logo) and
  * drawn as 2D fills inside a gl2d_begin/end scope.  Faces are two-sided:
  * quiet near-white exterior, azure wall + magenta floor interior showing
@@ -44,7 +44,7 @@ void splash_skip(void)   { g_splash_done = 1; }
 
 /* ---- projection ------------------------------------------------------- */
 
-/* Avoid M_PI — not guaranteed by C99. */
+/* Avoid M_PI - not guaranteed by C99. */
 #define SPLASH_PI_F     3.14159265f
 #define SPLASH_PITCH_F  0.6155f              /* atan(1/sqrt(2)) = 35.264deg */
 #define SPLASH_REST_YAW (SPLASH_PI_F / 4.0f) /* the logo's resting angle    */
@@ -83,8 +83,8 @@ static const int k_faces[4][4] = {
 };
 
 /* Face base colors come from the shared brand-mark anchors
- * (accent_palette.h) — the same vocabulary the SVG twins are checked
- * against — so retuning the mark there re-themes this splash too. The
+ * (accent_palette.h) - the same vocabulary the SVG twins are checked
+ * against - so retuning the mark there re-themes this splash too. The
  * two faces the vector mark never shows lit (the exterior underside,
  * the dim interior ceiling) are splash-only shading nuances and stay
  * local named constants. */

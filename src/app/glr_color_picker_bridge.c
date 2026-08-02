@@ -157,7 +157,7 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
 
     /* The editor input buffer is a live shadow of the active edit line.
      * The REPLACE_ONE above updated the command store + editor buffer
-     * text, but not the input buffer — so when the picker edits the line
+     * text, but not the input buffer - so when the picker edits the line
      * the cursor is parked on, the code panel keeps showing the stale
      * pre-edit text, and a later navigation re-commits that stale input
      * over the picker's change (commit_before_navigation), silently

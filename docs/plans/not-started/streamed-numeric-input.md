@@ -1,6 +1,6 @@
 # Streamed Numeric Input
 
-## Status — NOT STARTED (2026-07-25)
+## Status - NOT STARTED (2026-07-25)
 
 Design drafted; no implementation commits have landed. This plan belongs in
 `not-started/` until the first implementation change is made, then moves to
@@ -700,7 +700,7 @@ letting UI code read live transport globals.
 
 ## Implementation Phases
 
-### Phase 1 — Pure framing parser and tape model
+### Phase 1 - Pure framing parser and tape model
 
 Add the transport-independent foundations and tests before touching stdin:
 
@@ -717,7 +717,7 @@ Add the transport-independent foundations and tests before touching stdin:
 Exit criterion: arbitrary byte chunking produces the same group sequence, and
 tape cursors are independently rewindable and never mutate published values.
 
-### Phase 2 — Language and expression-cache integration
+### Phase 2 - Language and expression-cache integration
 
 1. Reserve and validate bare `input` in `eval.c` identifier handling.
 2. Reject it in declaration initializers with the focused diagnostic.
@@ -732,7 +732,7 @@ tape cursors are independently rewindable and never mutate published values.
 Exit criterion: text and compiled evaluators consume the same tape values in
 the same order, while commit/validation/dependency operations consume none.
 
-### Phase 3 — Flatten, rebake, and atomic publication
+### Phase 3 - Flatten, rebake, and atomic publication
 
 1. Thread an explicit tape cursor through `ReplFlattenOptions`, parser context,
    direct-evaluation fast paths, conditions, loop headers, call arguments,
@@ -751,7 +751,7 @@ the same order, while commit/validation/dependency operations consume none.
 Exit criterion: the sample programs in this plan bake expected values, and an
 underflow at the last loop iteration cannot partially alter live geometry.
 
-### Phase 4 — Native stdin transport and CLI
+### Phase 4 - Native stdin transport and CLI
 
 1. Add `GlrCliOptions.stream_input` and help text.
 2. Add `src/app/glr_stream_input.{c,h}`.
@@ -765,7 +765,7 @@ underflow at the last loop iteration cannot partially alter live geometry.
 Exit criterion: a slow producer never freezes the UI, partial writes remain
 invisible, and a fast producer is backpressured without losing group order.
 
-### Phase 5 — Accumulation and replay integration
+### Phase 5 - Accumulation and replay integration
 
 1. Prove AA and camera blur never invoke the tape after base flatten.
 2. Rewind the active tape per animation-time blur sub-sample.
@@ -778,7 +778,7 @@ invisible, and a fast producer is backpressured without losing group order.
 Exit criterion: captures from AA/replay are deterministic and no render pass
 consumes a later queued group.
 
-### Phase 6 — Save/import, documentation, and guards
+### Phase 6 - Save/import, documentation, and guards
 
 1. Add the zero-valued `repl_stream_input()` export helper and needs flag.
 2. Translate helper calls back to `input` on import.

@@ -14,13 +14,13 @@
  *      glr_pointer_script.c with no accessor, so the only way to observe it
  *      without touching production is to look at what the overlay pass draws.
  *   2. HUD containment. The HUD panel must never be forced wider than the scene
- *      (else it spills into a side code panel) — a geometric property of the
+ *      (else it spills into a side code panel) - a geometric property of the
  *      panel rectangle.
  *
  * Rather than read pixels, this uses GL_FEEDBACK (the same mechanism the PLY
  * exporter uses in glr_mesh_export.c): in feedback mode primitives are not
  * rasterized; their post-transform vertices are written to a buffer as tokens.
- * With GL_2D each vertex is (x, y) in window pixels — exact and deterministic,
+ * With GL_2D each vertex is (x, y) in window pixels - exact and deterministic,
  * no anti-aliasing fuzz. The production render entry points
  * (glr_pointer_script_render_overlay / tour_ui_hud_render) are called AS-IS
  * inside a feedback bracket; they don't know they're being captured, so no
@@ -29,7 +29,7 @@
  * the ring line-loops and the HUD panel rect, not on text.
  *
  * In GL_TEST_BINS / `make gl-tests` (needs a real context; a display, or
- * FREEGLUT_OSMESA=1 headless) — NOT in `make test` / `make test-stubs`.
+ * FREEGLUT_OSMESA=1 headless) - NOT in `make test` / `make test-stubs`.
  */
 #include "gl_includes.h"
 #include "app/glr_pointer_script.h"
@@ -249,7 +249,7 @@ static void test_step_past_ring_clears_overlay(void) {
 #define ECHO_R  60.0f
 
 /* Rewinding to a boundary still inside an earlier caption's on-screen window
- * restores that caption — the still-live-caption behavior. The echo fires at
+ * restores that caption - the still-live-caption behavior. The echo fires at
  * event 0 with a 5s window; landing two events later (well within it) must
  * bring the caption back, even though it is not the final replayed event. */
 static void test_backstep_restores_live_caption(void) {
@@ -270,7 +270,7 @@ static void test_backstep_restores_live_caption(void) {
                 count_near(verts, ECHO_CX, ECHO_CY, ECHO_R) > 0);
 }
 
-/* A caption whose window has elapsed by the landing boundary is NOT restored —
+/* A caption whose window has elapsed by the landing boundary is NOT restored -
  * rewind reproduces what live playback would show, not a stale caption. The
  * echo's 0.05s (3-frame) window is long gone four events later. */
 static void test_backstep_expired_caption_not_shown(void) {
@@ -328,7 +328,7 @@ static void test_caption_newline_renders_two_lines(void) {
 
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
  * top-left inset and its captured width matches tour_hud_panel_width(scene_w)
- * exactly — tying the real GL output to the pure width function whose clamp is
+ * exactly - tying the real GL output to the pure width function whose clamp is
  * guarded arithmetically in test_glr_tour_transport. (Feedback clips at the
  * window edge, so it cannot observe off-window overflow directly; the width
  * cross-check is what actually pins the panel size.) */

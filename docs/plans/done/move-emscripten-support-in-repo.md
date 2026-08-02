@@ -22,7 +22,7 @@ build system.
 
 **Decisions (confirmed with Drew):**
 - gl4es + GLU: **fetch-and-build script** into gitignored dirs, pinned SHAs
-- freeglut wasm: **stack the emscripten patch onto `~/src/freeglut-fork` and re-vendor** — one vendored tree serves Cocoa / OSMesa / wasm
+- freeglut wasm: **stack the emscripten patch onto `~/src/freeglut-fork` and re-vendor** - one vendored tree serves Cocoa / OSMesa / wasm
 - Project-owned web files live in **`packaging/web/`**
 - Entry point: **Makefile-native `WEB=1` block + thin wrapper script** (mirrors the `FREEGLUT_OSMESA=1` pattern)
 
@@ -41,7 +41,7 @@ build system.
   change**. (Push the branch to the fork's remote for a portable pin, per
   the note in VENDORED.txt.)
 - The patch is additive (CMake gates on the EMSCRIPTEN toolchain), so the
-  Cocoa and OSMesa backends are untouched — verify with `make gl-repl` and
+  Cocoa and OSMesa backends are untouched - verify with `make gl-repl` and
   `make gl-repl FREEGLUT_OSMESA=1` after re-vendoring.
 - Update the pinned SHA note in `docs/THIRD_PARTY_LICENSES.md`.
 - The `0001-...patch` file then retires (lives in fork history); do not
@@ -57,7 +57,7 @@ in gl-repl preserves the why behind each shim/flag:
   `emscripten/shell.html` working-tree change (git status shows ` M`) so
   the replay captures the latest state.
 - `git format-patch --root -o <scratchpad>/web-history -- emscripten/shell.html
-  emscripten/build.sh emscripten/gl4es_bootstrap.c` in OpenGL-Vibe — one
+  emscripten/build.sh emscripten/gl4es_bootstrap.c` in OpenGL-Vibe - one
   chronological series, diffs limited to those paths (commits that also
   touched other files contribute only their relevant hunks).
 - Rewrite paths inside the patch files with `gsed` (the `diff --git`,
@@ -65,31 +65,31 @@ in gl-repl preserves the why behind each shim/flag:
   - `emscripten/shell.html` → `packaging/web/shell.html`
   - `emscripten/gl4es_bootstrap.c` → `packaging/web/gl4es_bootstrap.c`
   - `emscripten/build.sh` → `scripts/build-web.sh` (its final resting
-    name — step 5's rewrite then lands as a normal commit on top)
+    name - step 5's rewrite then lands as a normal commit on top)
 - `git am` the series in gl-repl (on a branch first, per the worktree
-  memory — integrate via `push HEAD:main`). Authorship, dates, and
+  memory - integrate via `push HEAD:main`). Authorship, dates, and
   messages carry over. If any patch fails to apply cleanly (context
   drift from commits outside the path filter), fall back to
   `git am -3`; content is guaranteed identical at series end.
 - Skip-list: commits in the series that only touched the *other*
-  OpenGL-Vibe samples' handling inside build.sh still apply — they're
+  OpenGL-Vibe samples' handling inside build.sh still apply - they're
   legitimate history of the file; no pruning.
 
 Resulting files (adjusting only path comments in follow-up commits):
 - `packaging/web/shell.html`
-- `packaging/web/gl4es_bootstrap.c` — compiled at **link time** (listed in
+- `packaging/web/gl4es_bootstrap.c` - compiled at **link time** (listed in
   `GL_LDFLAGS`, as today), so it never joins `$(SRCS)`; the C99 ratchet
   (`check-c99`) is untouched even though this TU needs gnu99/EM_ASM.
-- `packaging/web/README.md` (new) — deps, build flow, browser-input/shim
+- `packaging/web/README.md` (new) - deps, build flow, browser-input/shim
   notes (distill the memory-file knowledge: JS GLUT windowing vs freeglut
   solids, wheel/backspace/Ctrl fixes, Display-P3 tagging).
 
-### 3. `scripts/web-deps.sh` — fetch & build gl4es + GLU
+### 3. `scripts/web-deps.sh` - fetch & build gl4es + GLU
 
 Modeled on `scripts/vendor-freeglut.sh`'s pin discipline but building into
 **gitignored** `third_party/web/`:
 
-- Requires `emcc` on PATH (caller sources emsdk; see step 5) — hard error
+- Requires `emcc` on PATH (caller sources emsdk; see step 5) - hard error
   with install instructions otherwise (reuse build.sh's help text).
 - `third_party/web/gl4es`: clone `https://github.com/ptitSeb/gl4es`,
   checkout pinned SHA (record the SHA of the current working
@@ -107,7 +107,7 @@ Modeled on `scripts/vendor-freeglut.sh`'s pin discipline but building into
 - Add `third_party/web/` to `.gitignore`.
 - Acknowledge gl4es + GLU licenses in `docs/THIRD_PARTY_LICENSES.md`.
 
-### 4. Makefile — `WEB=1` platform block + `web` targets
+### 4. Makefile - `WEB=1` platform block + `web` targets
 
 Follow the `FREEGLUT_OSMESA` / `USE_GL_STUBS` precedents:
 
@@ -125,7 +125,7 @@ Follow the `FREEGLUT_OSMESA` / `USE_GL_STUBS` precedents:
   - `GL_HEADER_CFLAGS`: `-include $(GL4ES_DIR)/include/GL/gl.h
     -I$(GL4ES_DIR)/include -I$(GLU_DIR)/include -I$(FREEGLUT_SRC)/include
     -DUSE_MGL_NAMESPACE -DCFG_DEFAULT_VERTEX_OUTLINES=0
-    -DCFG_DEFAULT_VERTEX_POINTS=0 -std=gnu99` — the trailing `-std=gnu99`
+    -DCFG_DEFAULT_VERTEX_POINTS=0 -std=gnu99` - the trailing `-std=gnu99`
     lands after `COMMON_CFLAGS`' `-std=c99` on the compile line (miniaudio's
     EM_ASM needs gnu mode); keep build.sh's comment explaining this.
   - `GL_LDFLAGS` / `GLUT_GL_LDFLAGS`: `packaging/web/gl4es_bootstrap.c
@@ -134,9 +134,9 @@ Follow the `FREEGLUT_OSMESA` / `USE_GL_STUBS` precedents:
     -sUSE_WEBGL2=1 -sFULL_ES2=1 -sINITIAL_MEMORY=805306368
     -sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864
     -sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene
-    -sEXPORTED_RUNTIME_METHODS=ccall,FS $(WEB_PRELOAD)` — cross-reference
+    -sEXPORTED_RUNTIME_METHODS=ccall,FS $(WEB_PRELOAD)` - cross-reference
     `src/app/glr_web_io.c` next to the exports list.
-  - `WEB_PRELOAD`: `$(wildcard ...)`-based — `assets/favorite` dir →
+  - `WEB_PRELOAD`: `$(wildcard ...)`-based - `assets/favorite` dir →
     `--preload-file assets/favorite@/assets`, else `assets/sample.mp3` →
     single-file preload, else empty (the `make app` small-download policy;
     keeps file_packager from following the multi-hundred-MB playlist
@@ -155,19 +155,19 @@ Follow the `FREEGLUT_OSMESA` / `USE_GL_STUBS` precedents:
   either relinks (emcc emits `index.{html,js,wasm,data}` next to
   `SAMPLE_BIN`).
 - **Targets**:
-  - `web:` — fail fast with a clear hint if `emcc` is missing
+  - `web:` - fail fast with a clear hint if `emcc` is missing
     ("run scripts/build-web.sh or source emsdk_env.sh"), run
     `scripts/web-deps.sh`, then build `$(SAMPLE_BIN)` with `WEB=1`.
     Implement as a delegating recipe (`$(MAKE) WEB=1 $(SAMPLE_BIN)`-style,
     like `make glut` does with `FREEGLUT_VENDOR=0`) so plain `make web`
     works without remembering the flag.
-  - `web-serve:` — `python3 -m http.server` rooted at the web BINDIR,
+  - `web-serve:` - `python3 -m http.server` rooted at the web BINDIR,
     printing the URL.
 - `WEB=1` must not disturb any native path: every change is inside
   `ifeq ($(WEB),1)` guards or new variables that default to today's
   values. Tests/demos are not wired for WEB=1 (unsupported, as today).
 
-### 5. `scripts/build-web.sh` — rewrite the replayed build.sh into a thin wrapper
+### 5. `scripts/build-web.sh` - rewrite the replayed build.sh into a thin wrapper
 
 The history replay (step 2) lands the full build.sh at
 `scripts/build-web.sh`; now rewrite it in place (a normal commit on top of
@@ -181,12 +181,12 @@ emsdk in the shell):
 
 ### 6. Docs + cleanup
 
-- CLAUDE.md: new "Web build (Emscripten)" section under Build — one
+- CLAUDE.md: new "Web build (Emscripten)" section under Build - one
   paragraph + the two commands (`scripts/build-web.sh`, `make web` /
   `make web-serve`), and note `packaging/web/` ownership.
 - `docs/MODULES.md` / README build sections: brief mention.
 - Out-of-repo: leave `OpenGL-Vibe/emscripten/build.sh` alone for the
-  legacy one-file samples, but its `^gl-repl:` branch becomes obsolete —
+  legacy one-file samples, but its `^gl-repl:` branch becomes obsolete -
   note this in the commit message. (Optionally follow up there separately.)
 - Update the `emscripten-gl4es-build` memory file to point at the new
   in-repo flow after implementation.
@@ -203,7 +203,7 @@ emsdk in the shell):
 2. **Web build**: `scripts/build-web.sh` from a shell without emsdk →
    produces `build/release-web/index.html` (+ .js/.wasm/.data);
    `make web` works in an emsdk-activated shell.
-3. **Browser smoke**: `make web-serve`, load the page — scene renders,
+3. **Browser smoke**: `make web-serve`, load the page - scene renders,
    wheel zoom in the 3D scene, backspace + Ctrl shortcuts in the editor,
    File menu hidden, examples come from `catalog-emscripten.ini`, audio
    starts. (Headless: the CDP `shot.js` pattern from the 2026-07-07

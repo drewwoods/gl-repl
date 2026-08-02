@@ -136,7 +136,7 @@ flowchart TD
     frame --> s1["tick profiling"]
     s1 --> s2["rebuild autonormals if dirty"]
     s2 --> s3["rebuild flat program if dirty<br/><i>PROF_FLATTEN</i>"]
-    s3 --> s4["push editor snapshots — transformers /<br/>highlights / virtual lines<br/>(replay_annotations_prepare)<br/><i>PROF_SNAPSHOT*</i>"]
+    s3 --> s4["push editor snapshots - transformers /<br/>highlights / virtual lines<br/>(replay_annotations_prepare)<br/><i>PROF_SNAPSHOT*</i>"]
     s4 --> s5["save live predefined variable values"]
     s5 --> s6["prepare replay frame if replay is active"]
     s6 --> s7["update export / camera strings"]
@@ -166,14 +166,14 @@ callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
 frame itself: real per-frame work runs on *both sides* of
-`glr_ctrl_display_frame()` — a controller-owned scripted-input stage before
+`glr_ctrl_display_frame()` - a controller-owned scripted-input stage before
 it, then the post-composite splash and controller-owned scripted overlay after
 it. A bracket around the main controller render alone
 understated the frame by however much those stages cost: a guided tour's
 caption overlay measured ~10 ms/frame (plus ~4 ms of `glFinish` draining its
 GPU work) while the frame reported a comfortable ~1.5 ms and no row named the
 culprit. Any new per-frame host stage needs its own section for the same
-reason — a stage inside the bracket with no row of its own is only visible as
+reason - a stage inside the bracket with no row of its own is only visible as
 unattributed work.
 
 Where that section's bracket goes follows the band split: a stage whose work
@@ -194,12 +194,12 @@ exhaustive: anything else the callback does after `glr_frame_work_end()` lands
 in Present instead of nowhere.
 
 The split exists because with vsync on the present is dominated by the wait for
-the next scan-out — time the frame is handed, not time it spends. Counted as
+the next scan-out - time the frame is handed, not time it spends. Counted as
 work it pinned the number at the refresh interval and left the over-budget
 coloring permanently red no matter what the frame actually cost. So Frame Work
 is the row to watch for cost, and Present is colored on an inverted scale
 (`is_slack` in [`ProfSectionInfo`](../src/support/cpuprof.h): long is green,
-vanishing is red) because a shrinking present is the real warning — it is the
+vanishing is red) because a shrinking present is the real warning - it is the
 frame's remaining headroom. The corollary is that `glFinish` absorbs GPU work
 the driver deferred, so a GPU-bound frame shows as slack draining out of
 Present rather than as CPU cost in any row above it; the GPU column (carried by
@@ -241,9 +241,9 @@ data.
 
 > [!NOTE]
 > This section is the app-level summary. For the full treatment of the
-> `src/repl` interpreter — the [`GLCmd`](../src/repl/command.h#L122) record and provenance, the
+> `src/repl` interpreter - the [`GLCmd`](../src/repl/command.h#L122) record and provenance, the
 > compile→apply edit flow, the flatten→execute frame flow, the [`ReplRuntimeState`](../src/repl/state.h#L18)
-> ownership slices, and the host-effects bridge — see the module-local deep
+> ownership slices, and the host-effects bridge - see the module-local deep
 > dive [`src/repl/ARCHITECTURE.md`](../src/repl/ARCHITECTURE.md) (with a worked
 > `repl_demo --trace` walkthrough), oriented by [`src/repl/README.md`](../src/repl/README.md).
 
@@ -308,7 +308,7 @@ samples sets a different transient `t` and calls
 sample through the existing flat topology when `t` changes values only; scenes
 whose loops, selected branches, or call snapshots depend on `t` still take the
 full-flatten fallback. A saving that looks modest in a one-refresh benchmark is
-therefore paid back once per sample—up to sixteen times in one displayed
+therefore paid back once per sample-up to sixteen times in one displayed
 frame. In practice this is what makes **Accum Blur** feasible for most
 stable-topology examples, especially in the Emscripten build where repeated
 full flattening is substantially more expensive. Evaluate this optimization
@@ -320,7 +320,7 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
 `EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L199)**
-([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model — *not* in
+([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model - *not* in
 [`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L122) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
 code passes both to text-aware command-store APIs
@@ -346,8 +346,8 @@ not a runtime callback table:
 
 | Host | Backing implementation |
 |---|---|
-| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) — forwards to [`EditorState`](../src/editor/state.h#L199) |
-| Standalone `repl_demo` | [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) — tiny editor-free line store |
+| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) - forwards to [`EditorState`](../src/editor/state.h#L199) |
+| Standalone `repl_demo` | [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) - tiny editor-free line store |
 | Tests | whichever adapter the scenario links |
 
 `check-repl-no-direct-editor`, `check-repl-no-direct-buffer-read`,
@@ -580,17 +580,17 @@ sky behind the grid.
 
 Pieces, all in [`src/render3d/grid.c`](../src/render3d/grid.c):
 
-* `render3d_grid_theme_uses_edge_fade(theme)` — the membership predicate
+* `render3d_grid_theme_uses_edge_fade(theme)` - the membership predicate
   (declared in [`grid.h`](../src/render3d/grid.h), pure, test-visible). True for the table-driven
   line themes (minus FOG, and including XZ Ruler since it joined the spec
   table) plus the custom-path Star Chart.
-* `grid_edge_fade_build()` — once per frame, caches `fade_end` / `band`
+* `grid_edge_fade_build()` - once per frame, caches `fade_end` / `band`
   and the offset-0 breakpoint ramp (used by the origin axes, which run
   through the origin so radius == |along|). `fade_end = extent` steady,
   and `extent * opacity` so the front sweeps inward during a hide
-  transition (the same machinery is the grid's in/out animation — there
+  transition (the same machinery is the grid's in/out animation - there
   is no separate transition fog for these themes).
-* `draw_grid_line_pair()` / `grid_radial_mul()` — for each grid line at
+* `draw_grid_line_pair()` / `grid_radial_mul()` - for each grid line at
   perpendicular offset `v`, subdivides at the radii where
   `sqrt(v² + a²)` crosses `fade_start`/`fade_end` and scales per-vertex
   alpha by the radial ramp. `GRID_EDGE_FADE_BAND` is the ramp width.
@@ -631,7 +631,7 @@ alpha dissolve), same theme/camera/backdrop:
 ![Grid dissolving cleanly into the backdrop with the radial fade](images/grid-fade-radial-after.png)
 
 **Per-theme fade ownership** (which mechanism each grid theme dissolves
-with — keep this current when adding a theme):
+with - keep this current when adding a theme):
 
 | Theme(s) | Dissolve mechanism |
 |---|---|
@@ -639,10 +639,10 @@ with — keep this current when adding a theme):
 | Star Chart | World-radial alpha (custom path, but lines route through `draw_grid_line_pair`; in the edge-fade predicate) |
 | Focus | Own alpha fade by distance from the focus point (bounded magnifier) |
 | Adaptive Planes | Own alpha fade by camera orientation (vertical planes) |
-| Ocean, Frozen Lake | Intentional **environment fog/tint** to their *own* color (underwater teal / glacial), full-frame — not the clear color |
+| Ocean, Frozen Lake | Intentional **environment fog/tint** to their *own* color (underwater teal / glacial), full-frame - not the clear color |
 | Fog | Fog by design (EXP2 to clear color) |
 | Radar | Opts into NV distance fog for its rings (covered by `test_nv_fog_distance_radial_optin`) |
-| Tilled Field | Opaque depth-written terrain — no translucent-line stacking |
+| Tilled Field | Opaque depth-written terrain - no translucent-line stacking |
 | Sketchbook, Neon Graph | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D themes, not on the radial path |
 | Graph Planes | Own alpha fade (`grid_color` xn_alpha) + per-plane camera-orientation weight; 3D adaptive labelled planes |
 
@@ -650,14 +650,14 @@ Open follow-up: Radar, Fog, Tilled Field, Focus, and Adaptive Planes are
 *not* on the world-radial path. Ocean/Frozen are deliberate (they own
 their atmosphere and fade to their own color). The others can still fog
 to the clear color when a backdrop is on; converting Radar (fade its
-rings by radius — a natural radial fit) and gating the residual
+rings by radius - a natural radial fit) and gating the residual
 clear-color fog on `backdrop == OFF` would close the gap.
 
 #### 2D grid themes (Sketchbook + Neon Graph)
 
 `Sketchbook` and `Neon Graph` are purpose-built for the **2D ortho view**.
-Unlike every other theme — which draws its graticule in the XZ ground
-plane — these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
+Unlike every other theme - which draws its graticule in the XZ ground
+plane - these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
 z=0 user geometry), so they read as a flat, front-facing grid when the
 camera looks down −Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
@@ -681,15 +681,15 @@ arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c)
   brighter violet majors, an additive bloom pass, glowing nodes at the
   major intersections, and a pulsing coral origin cross. No text.
 
-A third theme, **Graph Planes**, is the **3D** counterpart — an
+A third theme, **Graph Planes**, is the **3D** counterpart - an
 adaptive-planes coordinate graph. It draws three bounded grid planes (XY
 azure, ZY amber, XZ floor grey) spanning the grid `extent`; each plane's
 brightness tracks how head-on the camera is to it (face weights
 `xy_w`/`zy_w`/`xz_w` from `cam_rx`/`cam_ry`, which sum to 1), so a plane
 edge-on to the camera fades to near nothing and the facing one is the
 bright readable graph. Only the plane the camera is **nearly orthogonal
-to** (face weight past a threshold) is labelled — so one X/Y, X/Z or Z/Y
-plane at a time — with both in-plane axes' real coordinate values, fading
+to** (face weight past a threshold) is labelled - so one X/Y, X/Z or Z/Y
+plane at a time - with both in-plane axes' real coordinate values, fading
 in as the view squares up. Labels are billboarded to the camera
 (`grid_stroke_text_billboard`, an explicit screen-right/up world basis)
 and anchored at the **visible** view edges so both axes stay on screen:
@@ -709,19 +709,19 @@ were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include
 [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c) draws the "Vertex
 outlines" (F7, `show_vertex_outlines`) and cursor "highlight current
 polygon" (`highlight_current_poly`) overlays. `edit_overlays_render_outlines`
-sets the shared overlay GL state once — lighting off, depth test on with
+sets the shared overlay GL state once - lighting off, depth test on with
 `glDepthMask(GL_FALSE)`, `glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)`, and
 `glEnable(GL_POLYGON_OFFSET_LINE)` with the negative
 `REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS}` (pulls the wireframe in
-front of the filled surface so edges read cleanly without z-fighting) —
+front of the filled surface so edges read cleanly without z-fighting) -
 then runs **three** walk passes over the flat program, each tracking the
 modelview with `apply_tracked_transform` / `unwind_transform_stack`:
 
-1. `render_outlines_glbegin_pass` — re-issues `glBegin`/`glVertex` blocks
+1. `render_outlines_glbegin_pass` - re-issues `glBegin`/`glVertex` blocks
    as line geometry from the REPL-tracked vertices.
-2. `render_outlines_tess_pass` — the same for tessellated polygons
+2. `render_outlines_tess_pass` - the same for tessellated polygons
    (`gluTess*` contours), drawn as `GL_LINE_LOOP`.
-3. `render_outlines_glut_pass` — for `glutSolid*` shapes.
+3. `render_outlines_glut_pass` - for `glutSolid*` shapes.
 
 These passes consume `OverlayWalkCtx.program`, populated once per frame from
 `repl_state_flat_program_view()` by the controller's overlay snapshot pack.
@@ -730,7 +730,7 @@ program walks repeat per sample, but the source interpreter, expression
 evaluator, and flattener are not re-entered.
 
 The third pass exists because **GLUT solid shapes emit no REPL-tracked
-vertices** — the geometry is generated inside GLU/freeglut, so the first
+vertices** - the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
@@ -738,7 +738,7 @@ goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L223) (s
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L284) in [`src/repl/command.h`](../src/repl/command.h)
-— the single source that also feeds `repl_cmd_starts_geometry_emit` and
+- the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L44) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)
 pins the set). Cursor-on-the-line picks `RENDER3D_CLR_OUTLINE_ACTIVE` at a
@@ -769,8 +769,8 @@ functions or loops.
 [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L190) walks the current [`FlatProgramView`](../src/repl/flatten.h#L58) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's chosen
-flat command — its first expansion, or its last when the snapshot's
-`prefer_last_instance` is set by the last-instance overlay scopes —
+flat command - its first expansion, or its last when the snapshot's
+`prefer_last_instance` is set by the last-instance overlay scopes -
 [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L200) replaces `vertex_args` or
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
@@ -782,13 +782,13 @@ parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L438) so nested e
 
 Transform guides ([`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c),
 `glTranslatef`/`glScalef`/`glRotatef`) render **live as you type**, before the
-line is committed — the same render-while-typing affordance the vertex guides
+line is committed - the same render-while-typing affordance the vertex guides
 have. The split mirrors the vertex path: the controller pre-evaluates the
 partial input into `Render3dGuideSnapshot.xform_args[4]` / `xform_filled[4]`
 (`parse_arg_slots()` in [`glr_ctrl.c`](../src/app/glr_ctrl.c), no eval in the render3d module), and the
 render3d module re-derives the transform *kind* from the input prefix
 (`transform_input_kind()`, a strncmp like `input_is_vertex_kind`) and fills the
-untyped slots with the transform identity — **0 for translate/rotate, 1 for
+untyped slots with the transform identity - **0 for translate/rotate, 1 for
 scale** (`transform_live_cmd()`).
 
 [`render3d_transform_guides_render_if_due()`](../src/render3d/guides/transform_guides.h#L23) uses those live args only when the
@@ -800,7 +800,7 @@ transform" and "compose a new one".
 
 **Anchoring, and the first-composition gotcha.** A live transform line usually
 has no flat expansion yet (it isn't committed), so [`render3d_transform_guides_prepare()`](../src/render3d/guides/transform_guides.h#L17)
-anchors at the *insertion point* — the first flat command at/after the cursor's
+anchors at the *insertion point* - the first flat command at/after the cursor's
 source line, or the **flat tail** for an appended line. Crucially,
 [`render3d_transform_guides_render_if_due()`](../src/render3d/guides/transform_guides.h#L23) is **position-independent**: it
 recomputes its own anchor frame (`compute_before_cursor_matrix` /
@@ -815,7 +815,7 @@ transform guide **after** the walk (and even when there is *no* walk):
   walk's accumulated modelview) and consumes the transform plan for the
   committed / replay / mid-document cases.
 * An **empty flat program** (e.g. a transform is the very first thing typed in a
-  scene) skips the walk — but the post-walk flush still renders the guide. This
+  scene) skips the walk - but the post-walk flush still renders the guide. This
   is why the `cmd_count <= 0` early-out must bypass only the walk, not the
   post-walk flush.
 * A **tail-anchored** plan (`cursor_flat_idx == cmd_count`) never matches a
@@ -852,7 +852,7 @@ signature for audited renderers.
 [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L85) carries:
 
 * by-value value-type slices (code_panel, replay, search, autocomplete,
-  status, …) — small structs cheap to copy. Scene-presentation policy
+  status, …) - small structs cheap to copy. Scene-presentation policy
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
@@ -861,7 +861,7 @@ signature for audited renderers.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
   [`ReplImportExportView`](../src/repl/state_views.h#L162), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
-  — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
+  - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers
@@ -873,14 +873,14 @@ signature for audited renderers.
 
 Slices that would have been heavy to copy are deliberately excluded:
 [`EditorClipboardState`](../src/editor/state.h#L106) (~1.88 MB with the lines sidecar) is not on the
-snapshot — the per-row selection band reads `selection_lo/_hi` instead.
+snapshot - the per-row selection band reads `selection_lo/_hi` instead.
 
 **Two selection models, one clipboard.** `selection_lo/_hi` above is
 the *line-range* selection used by gutter drag and the multi-line
 clipboard (`anchor_idx`/`end_idx` on [`EditorSelectionState`](../src/editor/state.h#L80)). The
 *input-buffer* selection is a separate character-range model on
 `EditorInputState.anchor_pos`, scoped to the active edit row only
-— shift+arrow, double-click word, drag-on-edit-row, and partial-line
+- shift+arrow, double-click word, drag-on-edit-row, and partial-line
 copy/cut/paste all drive that anchor. The two share one tagged
 clipboard object ([`EditorClipboardState`](../src/editor/state.h#L106) carries an [`EditorClipboardKind`](../src/editor/state.h#L100)
 discriminator plus both a line array and an `input_text` slot) so
@@ -892,7 +892,7 @@ tests cover the edge cases.
 Mutations route through `repl_actions`, `repl_command_store`,
 `variable_panel_drag`, or another REPL-owned mutation path. UI input
 hit-tests (`*_hit_test`, `*_rect`) compute neutral [`UiHit`](../src/ui/core/hit.h#L60) values and
-return — `glr_ctrl_router_handle_code_panel_hit` dispatches by
+return - `glr_ctrl_router_handle_code_panel_hit` dispatches by
 `UiHit.kind` to the owning subsystem. Render-side
 discoveries (e.g. the editor cursor pixel computed during the generic
 text-panel pass) flow back through per-frame `Ui*Output` structs that
@@ -918,7 +918,7 @@ The scrollbar is one geometry solve in [`src/ui/core/text_panel.c`](../src/ui/co
 drag mapping, so the drawn thumb and the grabbable thumb cannot drift apart.
 The strip is inset from the panel's right edge because the resize divider's
 grab band is classified *first*: a flush thumb would be unclickable in the LEFT
-layout. Ownership splits the usual way — the hit-test returns
+layout. Ownership splits the usual way - the hit-test returns
 `UI_HIT_CODE_SCROLLBAR` carrying the press's grab offset (a press on the empty
 track reports half the thumb height, which centers the thumb and continues as a
 drag), the router owns the drag flag and feeds motion back through
@@ -978,7 +978,7 @@ the values that row actually produced, with min / max / mean / stddev under it.
 baked into `args[0]` (`args[2]` for a `CMD_SCRATCH_ASSIGN`); the executor only
 applies that number and deliberately never re-evaluates, so a self-referential
 `x = x + 1` is not double-applied. That makes capture a read-only scan of the
-flat program the frame was going to build anyway —
+flat program the frame was going to build anyway -
 [`assign_plot_capture()`](../src/subsystems/assign_plot/assign_plot.h) in
 [`src/subsystems/assign_plot/assign_plot.c`](../src/subsystems/assign_plot/assign_plot.c)
 filters `src_cmd_idx == target` and reads the baked value. Nothing is added to
@@ -992,7 +992,7 @@ do over a frame", not "what has run so far".
 
 **Replay markers.** Where the replay PC *is* shows as a vertical rule per
 series instead, from
-[`assign_plot_exec_progress()`](../src/subsystems/assign_plot/assign_plot.h) —
+[`assign_plot_exec_progress()`](../src/subsystems/assign_plot/assign_plot.h) -
 the same scan counting executions before the clamp. One rule per series, not
 one shared: in `X_EXEC` mode each series spans the full width as its own
 execution percentage, so a 64-iteration row and a 16-iteration row put one PC
@@ -1015,7 +1015,7 @@ from having to.
 
 **Two X axes.** A row inside a loop runs many times per frame, so X is the
 execution index within the captured frame (`ASSIGN_PLOT_X_EXEC`). A top-level
-row runs exactly once, which would plot a single point — there X becomes
+row runs exactly once, which would plot a single point - there X becomes
 successive captures (`ASSIGN_PLOT_X_FRAME`) and the buffer is a scrolling time
 series. The mode is re-derived from the execution count on every capture; a
 flip clears the buffer *and* the statistics, since the two axes describe
@@ -1032,14 +1032,14 @@ come from [`src/support/runstats.c`](../src/support/runstats.c), which is
 `histogram.c`'s statistics half extracted: assignment values are signed and
 unitless, and no positive log-spaced bin range could hold them.
 
-**Several series.** Up to `MAX_ASSIGN_PLOT_SERIES` (4) rows plot together —
+**Several series.** Up to `MAX_ASSIGN_PLOT_SERIES` (4) rows plot together -
 Shift+right-click adds or removes one, plain right-click retargets to a single
 row. `series[0]` is the primary and it alone fixes the X axis, so a row whose
 execution count disagrees with the mode is **refused when it is added**
 (`ASSIGN_PLOT_SERIES_INCOMPATIBLE`), judged against the flat program as it
 stands at click time; a row that has never executed cannot be judged and is
 admitted. In `X_FRAME` mode the shared axis has to stay meaningful column by
-column, so every series appends exactly one column per capture — a series that
+column, so every series appends exactly one column per capture - a series that
 did not run contributes `valid = 0` (a drawn gap, uncounted by the statistics)
 and one added mid-history is back-filled with gaps rather than starting short
 and being stretched across captures it never saw. In `X_EXEC` mode series may
@@ -1047,20 +1047,20 @@ legitimately differ in execution count (two loops of different lengths), so
 each is spread across the full width and X reads as normalized progress.
 A frozen `once` capture is the exception: adding a row clears and re-arms the
 one-shot so every series in that snapshot comes from the same frame. The same
-rule bounds when the shot is spent at all — `assign_plot_capture()` only sets
+rule bounds when the shot is spent at all - `assign_plot_capture()` only sets
 `g_captured` for a frame in which *every* series ran, discarding the partial
 attempt otherwise. A one-shot exists to be read across, and a frame that froze
 with one row still skipped could not be, with no later frame able to repair it.
 The cost is that a plot whose rows never coincide keeps scanning at the FRAME
 rate; the panel says `(collecting)` while that is true.
 
-Y is shared and deliberately so — comparison is the point — which does mean
+Y is shared and deliberately so - comparison is the point - which does mean
 series of very different magnitudes flatten each other; the per-series
 statistics are what carry the real numbers there.
 
 **Ownership split.** The peer subsystem owns only the target lines, the rate,
 the presentation chips, and per series the buffer and statistics. The panel
-*titles* are not stored — the controller re-derives each from its live source
+*titles* are not stored - the controller re-derives each from its live source
 row's left-hand side every frame (`glr_ctrl_assign_plot_title`), so editing a
 row retitles its series instead of stranding a stale label, and the subsystem
 stays free of any `src/editor` dependency. The drift check is correspondingly
@@ -1070,21 +1070,21 @@ closes only when the last one goes.
 
 **Controls are mouse-only, by design.** Capture rate (once / 1 Hz / every
 frame), the Y scale and the zoom are properties of one plot, not global
-settings, so none has a [`keymap.h`](../keymap.h) binding or a `GlrConfigKey` —
+settings, so none has a [`keymap.h`](../keymap.h) binding or a `GlrConfigKey` -
 and therefore none reaches an exported `@cfg` header. Left-press on the rate
 chip cycles forward, right-press backward, mirroring the Config flyout idiom;
 the two-state chips do the same thing on either button. Right-clicking the
 plotted row again closes the panel, mirroring the GL-state inspector toggle.
 
 Chip geometry is resolved once by `ap_ctrl_layout()` and consumed by both the
-renderer and the hit-test — four chips whose widths change with their own state
+renderer and the hit-test - four chips whose widths change with their own state
 (`1 Hz` vs `frame`, `1x` vs `2x`) is more mirrored arithmetic
 than two code paths keep in step. The legend hit region works the same way, and
 is hover-only: it selects whose statistics the stats block reports (resolved
 from `pointer_x/_y` exactly as the histogram panel's tooltip is), so the lit
 entry and the described one cannot disagree. Clicks there are consumed as inert
-chrome. Panel size depends on `expanded` *and* `series_count` — the legend row
-exists only past one series — so `ui_assign_plot_panel_size()` takes both and
+chrome. Panel size depends on `expanded` *and* `series_count` - the legend row
+exists only past one series - so `ui_assign_plot_panel_size()` takes both and
 `UiOverlayLayoutInputs` carries both to the overlay solver, which must reserve
 the real footprint or the zoomed panel overlaps its neighbours.
 
@@ -1093,19 +1093,19 @@ Strictly-positive values take a plain log10 axis. Anything crossing or touching
 zero takes a **symmetric** one (`AP_Y_SYMLOG`): magnitudes at or below a floor
 map to the center, and above it the position is `log10(|v| / floor)` carrying
 the sign. Assignment values are routinely sinusoidal, and without this the
-chip was simply unavailable for the most common shape in the language — while
+chip was simply unavailable for the most common shape in the language - while
 plotting raw `log10(|v|)` would spend most of the well on the 1e-11 dive a
 sampled sine makes through its zero crossings.
 
 The floor is `max_abs * AP_SYMLOG_REL_FLOOR`, capped at `AP_SYMLOG_MAX_FLOOR`.
-Deriving it from the peak makes the plot scale-invariant — the same shape comes
+Deriving it from the peak makes the plot scale-invariant - the same shape comes
 out at 1e0 or 1e-6, where a fixed constant would swallow the trace whole. The
 absolute term is a *ceiling* on the floor and so only binds above unit scale,
 where it keeps hundredths resolvable. `ui_assign_plot_y_log_available()` is
 correspondingly weak now: the only refusal left is a trace pinned at exactly
 zero, which has no decade in either direction. When it cannot be honored the
 axis stays linear, the chip draws in the placeholder color, and the router says
-so — a refusal that looked like a dead control would be worse than no control.
+so - a refusal that looked like a dead control would be worse than no control.
 
 Routing enters at `route_right_code_panel_hit()`
 ([`src/app/glr_ctrl_router.c`](../src/app/glr_ctrl_router.c)) **before** the
@@ -1119,7 +1119,7 @@ cover both: `PROF_ASSIGN_PLOT` is `prof_accum_reset` at the capture site,
 `prof_accum_end` after each phase, and `prof_accum_commit` after the draw, with
 `PROF_ASSIGN_PLOT_CAPTURE` / `_PANEL` as ordinary nested leaves. Both the reset
 and the commit are gated on the panel being open, and **that pair has to stay in
-sync** — committing an accumulator that was not reset this frame would report
+sync** - committing an accumulator that was not reset this frame would report
 the previous plot's time forever. A closed plot leaves all three rows stale
 (`--`), which is the honest reading of a feature that is not running.
 
@@ -1143,9 +1143,9 @@ the token is a compile-time constant so the lookup folds to a fixed
 
 Color falls into three buckets:
 
-1. **Theme token** — accent + shared neutral chrome (surfaces, borders,
+1. **Theme token** - accent + shared neutral chrome (surfaces, borders,
    dividers, text tiers, hover/selection): `ui_clr(UI_TOK_*)`.
-2. **Named constant** — fixed, non-theme one-offs that must keep their
+2. **Named constant** - fixed, non-theme one-offs that must keep their
    hue in every scheme: the ephemeral example-tab amber, the
    variable-row data palette, dim/stale text tiers, the `#000` menubar
    rule. A local `static const` documented at the use site. (The status
@@ -1154,7 +1154,7 @@ Color falls into three buckets:
    the dot/text/edge-stripe via `UI_TOK_ACCENT` /
    `UI_TOK_STATUS_ERR[_TEXT]`, and the modal strip on the
    accent-derived tokens so it re-tints per scheme.)
-3. **Left as-is** — computed/domain palettes that must not follow the
+3. **Left as-is** - computed/domain palettes that must not follow the
    accent: [`src/ui/subsystems/color_picker.c`](../src/ui/subsystems/color_picker.c) HSV math,
    [`src/ui/app/repl_code_panel.c`](../src/ui/app/repl_code_panel.c) syntax-highlight palette, the
    [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c) FPS gauge (red must keep meaning
@@ -1162,7 +1162,7 @@ Color falls into three buckets:
    sub-palette. Each carries a one-line pointer back to [`src/ui/core/theme.h`](../src/ui/core/theme.h).
 
 **Selecting the scheme.** `UI_THEME_DEFAULT` in [`config.h`](../config.h) is the
-single compile-time knob: a bare integer (`0` green … `5` mono — kept
+single compile-time knob: a bare integer (`0` green … `5` mono - kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`;
@@ -1183,12 +1183,12 @@ rollout started with the Scene menu "2D" tag (assignment sketch, function
 demos, recursive tree, spirograph, ripple ring, bezier) and
 now also covers the line/surface 3D scenes (animated ring, animated wave
 surface, GLU tessellator + cutout, transform stress) and the
-kitchen-sink showcase, "Dusk lighthouse atoll" (the stress test —
+kitchen-sink showcase, "Dusk lighthouse atoll" (the stress test -
 redesigned from a feature hodgepodge into one coherent dusk seascape that
 still exercises nested loops, recursion with `if`/`else if`/`else`, GLU
 tess + cutout, GLUT solids, a parametric surface, additive points,
 translucency, and bitmap text); the intent is the whole catalog over
-time. The active palette (currently "Neon" — electric accents around the
+time. The active palette (currently "Neon" - electric accents around the
 brand mark's magenta; the earlier "Dusk" sets remain in
 [`accent_palette.h`](../accent_palette.h) for an easy flip back) and its design
 guidelines are documented in detail in
@@ -1208,7 +1208,7 @@ with `build/release/test_repl_core_examples --dump-index N`.
 Capture caveat: review these scenes with the **native** backend
 (`make gl-repl`, `FREEGLUT_CAPTURE_FRAMES=N ./gl-repl --example N`). The
 OSMesa software rasterizer mis-renders the default Adaptive-Planes grid
-as an opaque warm quad, which is an swrast artifact — not a scene color —
+as an opaque warm quad, which is an swrast artifact - not a scene color -
 and would mislead a palette review. See *Headless Rendering &
 Screenshots (OSMesa)* above.
 
@@ -1234,7 +1234,7 @@ Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
 env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L131)
-enum — only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a Done linger
+enum - only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a Done linger
 that auto-closes after the final caption expires; env capture is never canceled
 and never auto-stops.
 
@@ -1258,8 +1258,8 @@ Runtime shape:
   are tracked separately. Firing an event does not count it complete; its
   [`PsWait`](../src/app/glr_pointer_script.c#L181) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
-  **normal playback** a `ring` is an authored beat — `PS_WAIT_RING` holds until
-  its duration elapses, so a trailing ring delays Done — while `echo` and the
+  **normal playback** a `ring` is an authored beat - `PS_WAIT_RING` holds until
+  its duration elapses, so a trailing ring delays Done - while `echo` and the
   click `ripple` are non-blocking decoration that never delay it. Only
   **immediate step / seek** bypasses the ring wait (a ring forced by Right or
   fast seek counts complete at once); this does not change normal playback.
@@ -1273,7 +1273,7 @@ Runtime shape:
   turn). The baseline is derived-state-free: the flat program, renderer
   resources, and controller frame caches are rebuilt, not stored. Discrete
   edits/toggles/scene actions reconstruct exactly; a drag's end *position* is
-  reproduced (its glide samples dispatch synchronously) but not its dynamics —
+  reproduced (its glide samples dispatch synchronously) but not its dynamics -
   seek suppresses animation-time, REPL-replay, view-transition, and camera ticks,
   so orbit momentum + time-driven settling are not simulated. Camera easing
   requested by the reconstructed prefix (most visibly an example's `// camera`
@@ -1286,7 +1286,7 @@ Runtime shape:
   `ps_tour_restore_landing_overlays()`: it re-walks `[0, target)` accumulating
   each event's intrinsic playback cost (`ps_event_playback_cost`) into a virtual
   landing frame, anchors `g_frame` there, and re-creates whatever live playback
-  would still be showing — chiefly a caption (`echo`) whose multi-second window
+  would still be showing - chiefly a caption (`echo`) whose multi-second window
   spans later events, plus a still-live click ripple, and a ring shown fresh
   when the boundary lands directly on it. Single-slot semantics match live
   playback (only the most-recent still-live echo/ripple shows), so rewinding
@@ -1301,7 +1301,7 @@ Runtime shape:
   toggles the transport-owned `hud_expanded` bit. That bit is intentionally
   outside `GlrTourSnapshot`, so Back reconstruction cannot rewind presentation
   choice. Every new tour resets it to compact. The compact strip carries
-  `Esc exit` as well as the name — the HUD defaults collapsed, so the collapsed
+  `Esc exit` as well as the name - the HUD defaults collapsed, so the collapsed
   form is what a tour actually runs under, and it is the only place a keyboard
   way out is stated for most of a tour's life.
 * **Ambient presence.** A 26px strip is easy to miss in both directions: at the
@@ -1314,8 +1314,8 @@ Runtime shape:
   (pure render):
   * an **entry title card** naming the tour plus `Esc exits / Space pauses`,
     eased in and back out inside ~1.4 s so it is gone before the first caption;
-  * a **breathing amber border** — four gradient bands inset from the window
-    edges over a ~3 s cycle — for as long as the tour runs. It keeps breathing
+  * a **breathing amber border** - four gradient bands inset from the window
+    edges over a ~3 s cycle - for as long as the tour runs. It keeps breathing
     while the tour is paused, because a paused tour is still a mode you are
     inside;
   * an **exit collapse**: the band thins to nothing over ~0.4 s once the tour
@@ -1438,7 +1438,7 @@ src/editor/input.c  glutGetModifiers via editor_get_modifiers (gated behind
                 editor_input_enable_glut_modifier_reads so tests stay safe)
 src/repl/executor.c GLUT solid shapes (glutSolidCube/Sphere/Torus/Teapot/Cone)
                 and glutBitmapCharacter for label() text. (Its GLU
-                tessellator setup — gluNewTess/gluTessCallback — is GLU,
+                tessellator setup - gluNewTess/gluTessCallback - is GLU,
                 not GLUT.) The glutSolid* call site is centralized in
                 `repl_executor_draw_glut_solid()`; the edit-overlays
                 outline pass re-draws shapes through that helper rather
@@ -1506,7 +1506,7 @@ boundary and routes host interactions through explicit, neutral seams.
 [`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) is the negative boundary proof. Its
 default samples run parse → command store → flatten → execute without the app
 controller, editor, UI renderers, or app-owned visual state. It is headless in
-every build — no window, no GL context — which is what keeps `src/ui/` out of
+every build - no window, no GL context - which is what keeps `src/ui/` out of
 its link set entirely and makes it a strictly tighter proof than
 `repl_live_demo` (which links `ui/core/theme.c` + the variable-panel renderer).
 Windowed REPL-pipeline demonstration is `repl_live_demo`'s job.
@@ -1570,7 +1570,7 @@ published or adopted.
 That asymmetry is the design. The internal
 [`EditorClipboardState`](../src/editor/state.h#L106) stays the thing that is
 pasted, so a copy/paste that never left the app keeps its payload kind
-(LINES vs. INPUT_TEXT) and its block-aware line range — round-tripping every
+(LINES vs. INPUT_TEXT) and its block-aware line range - round-tripping every
 paste through plain OS text would flatten both. Foreign text has no kind, so
 it is classified on adoption: multi-line becomes source lines, a single line
 becomes input text when an input selection or insert mode can receive it.
@@ -1579,7 +1579,7 @@ Backend selection is compile-time, in [`glr_clipboard.c`](../src/app/glr_clipboa
 `glutSetClipboardString`/`glutGetClipboardString` under `GLUT_HAS_CLIPBOARD`
 (implemented on the vendored fork's Cocoa backend; the others return an empty
 clipboard until theirs lands), `pbcopy`/`pbpaste` on the `make glut`
-Apple-framework build, and none on web — where the clipboard arrives as DOM
+Apple-framework build, and none on web - where the clipboard arrives as DOM
 events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is installed at all.
 
 #### 5. Global State Reset & Dispatch Separation
@@ -1601,8 +1601,8 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail—[`ReplRenderState`](../src/repl/state_views.h#L121), containing per-light state and clear
-color—remains a REPL slice.
+tail-[`ReplRenderState`](../src/repl/state_views.h#L121), containing per-light state and clear
+color-remains a REPL slice.
 
 ## Core Subsystem Features & Integrations
 
@@ -1620,8 +1620,8 @@ executor, or GL-free export code.
 #### Runtime GL Capability Detection
 
 GL feature availability that varies by *runtime context* (not by build) is
-detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L15) — the first point at which the GL
-context is current — and pushed into the GL-free REPL/render3d layers through
+detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L15) - the first point at which the GL
+context is current - and pushed into the GL-free REPL/render3d layers through
 setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L140), never re-queried per frame.
 
 The first case is **`glPointParameterfv`** (distance-attenuated point
@@ -1642,14 +1642,14 @@ into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
 own direct call is gated identically.
 
 **`GLR_NO_POINT_PARAMETER`** (environment variable, any non-empty value)
-forces the unsupported path on capable hardware — the only override; there
+forces the unsupported path on capable hardware - the only override; there
 is no build flag (it replaced the old compile-time `NO_POINT_PARAMETER`
 macro). When point attenuation ends up off, [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L15) logs one
 line to stderr that distinguishes the two causes:
 
-* env override — `"glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=..."`
+* env override - `"glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=..."`
   (and notes whether the hardware would otherwise support it);
-* genuine lack — `"glPointParameterfv unsupported by this GL context
+* genuine lack - `"glPointParameterfv unsupported by this GL context
   (GL_VERSION ...)"` (and points at the env var for forced testing).
 
 > [!WARNING]
@@ -1658,7 +1658,7 @@ line to stderr that distinguishes the two causes:
 > entry has to be skipped entirely rather than invoking the missing entry
 > point.
 
-The second case is the **GPU profiler's timer queries** — the profile
+The second case is the **GPU profiler's timer queries** - the profile
 panel's GPU column, measured by [`src/support/gpuprof.c`](../src/support/gpuprof.c). Detection:
 
 ```
@@ -1675,28 +1675,28 @@ stays GL-header-free. Two measurement modes, picked at init by what
 loaded:
 
 * **timestamp mode** (preferred; `glQueryCounter(GL_TIMESTAMP)`, ARB /
-  GL 3.3 only — typical on Linux/Mesa contexts): one marker per section
+  GL 3.3 only - typical on Linux/Mesa contexts): one marker per section
   transition; interval deltas tile the GPU timeline exactly, so
   per-section times are additive and the frame total is a true window.
-  `glQueryCounter` is only loaded when `has_timestamp` is advertised —
+  `glQueryCounter` is only loaded when `has_timestamp` is advertised -
   GLX's GetProcAddress can return a callable stub for *any* name, so
   load-and-see is not a safe capability test.
-* **elapsed mode** (fallback; `GL_TIME_ELAPSED_EXT` brackets — the only
+* **elapsed mode** (fallback; `GL_TIME_ELAPSED_EXT` brackets - the only
   option on Apple's GL 2.1, which exposes `EXT_timer_query` but not
   `ARB_timer_query`): bracket windows overlap on pipelined and
   tile-deferred GPUs, so per-section sums can exceed the wall-clock
   frame time; read the column as a relative-hotspot signal there (the
   full caveat lives in [`src/support/gpuprof.h`](../src/support/gpuprof.h)).
 
-Either way results are harvested asynchronously — a 4-deep ring of
+Either way results are harvested asynchronously - a 4-deep ring of
 per-frame query slots polled with `GL_QUERY_RESULT_AVAILABLE`, read 1–3
-frames later — never a `glFinish`. How much gets queried per frame
+frames later - never a `glFinish`. How much gets queried per frame
 follows the profile panel: hidden → no queries at all, ON → top-level
 sections, DETAILS → the full GPU subset (`glr_prof_set_gpu_capture_mode`,
 policy table in [`src/app/glr_prof.c`](../src/app/glr_prof.c)).
 
 **`GLR_NO_GPU_PROF`** (environment variable, any non-empty value)
-disables GPU timing entirely — the panel's GPU column reads `--`, and
+disables GPU timing entirely - the panel's GPU column reads `--`, and
 the Max column falls back to plain CPU. When GPU timing ends up off,
 [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L15) logs one stderr line distinguishing the env
 override, a context that advertises timer queries but yields no loadable
@@ -1728,7 +1728,7 @@ mechanisms:
    [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
 
-**Rule — where a per-frame dynamic value is resolved.** Apply this test
+**Rule - where a per-frame dynamic value is resolved.** Apply this test
 to *any* value that is (a) recomputed per frame from live REPL/render3d
 state and (b) read by more than one consumer in the frame loop:
 
@@ -1743,10 +1743,10 @@ panel's row-count/follow-scroll pass and its render pass sit on
 [`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L266) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
-that frame — here a 2D/3D switch would let row-count see one
+that frame - here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
-frame" is *not* sufficient — the inputs themselves change mid-frame at
+frame" is *not* sufficient - the inputs themselves change mid-frame at
 the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L85)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
@@ -1755,7 +1755,7 @@ the case where the value is computed rather than copied.
 > **Do not generalize the `"static float g_angle = 0.0f;"` precedent.**
 > That special-case resolves at the consumer site, which is safe *only*
 > because its single consumer is the file writer (one pass, off the frame
-> loop). It is the wrong model for any value the code panel reads — copy
+> loop). It is the wrong model for any value the code panel reads - copy
 > the snapshot shape below, not the `g_angle` shape.
 
 **Dynamic-footer sentinel mechanism.** `g_footer_pre_init[]` is iterated
@@ -1770,7 +1770,7 @@ Per the rule above:
   [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L139) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
-  shape — UI reads the snapshot only (the symmetric counterpart of
+  shape - UI reads the snapshot only (the symmetric counterpart of
   [`Render3dRenderConfig`](../src/render3d/render_types.h#L140)). The block is the *previous* frame's render3d
   projection (snapshot is built before render3d render); a one-frame text
   lag during a transition is invisible and, crucially, internally
@@ -1779,7 +1779,7 @@ Per the rule above:
   `REPL_EXPORT_PROJ_*` source-of-truth in [`glr_ctrl.c`](../src/app/glr_ctrl.c) (same pattern as
   the scene-tab dims).
 * **File save (discrete action):** `repl_export_save_output()` calls
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) directly — a single pass on
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187) directly - a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
   a controller-owned [`ReplExportLayout`](../src/repl/export.h#L258)-style export context is the
@@ -1787,7 +1787,7 @@ Per the rule above:
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L143) is the *nearest-steady* projection: the
 continuous blend is snapped to the dominant side (`mix < 0.5` ⇒ ortho).
-It is deliberately not the live blended 16-float matrix — `reshape()`
+It is deliberately not the live blended 16-float matrix - `reshape()`
 emits one discrete mode, not an interpolation; a faithful mid-transition
 matrix export would need a different, explicitly-named contract.
 
@@ -1798,11 +1798,11 @@ snapshot for the panel, special-case in the consumers.
 **Build-enforced**, not convention-only (both in the
 `check-state-ownership` gate):
 
-* `check-ui-no-export-resolver` — no `src/ui/` file may call
+* `check-ui-no-export-resolver` - no `src/ui/` file may call
   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L187); the panel reads the
   snapshot-frozen block. This is the structural backstop for the rule
   above: the mistake fails the build, not just review.
-* `check-repl-export-via-bridge` — [`src/repl/export.c`](../src/repl/export.c) may not include
+* `check-repl-export-via-bridge` - [`src/repl/export.c`](../src/repl/export.c) may not include
   `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
   ([`ReplExportProjectionBridge`](../src/repl/export.h#L149), [`ReplExportCameraBridge`](../src/repl/export.h#L84),
@@ -1811,7 +1811,7 @@ snapshot for the panel, special-case in the consumers.
 
 #### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
 
-An orthographic projection has no inherent scale — unlike perspective,
+An orthographic projection has no inherent scale - unlike perspective,
 moving the camera toward the 3D stage changes nothing on screen. So the 2D
 view must *pick* an eye distance whose on-screen size it reproduces, and
 zoom must rescale that pick rather than dolly a camera the projection
@@ -1819,29 +1819,29 @@ ignores. All of this lives in [`src/render3d/render.c`](../src/render3d/render.c
 only `cam_dist` and `projection_mix` (the 2D↔3D blend) through
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L140).
 
-**The probe runs once per *entry* into 2D — never on zoom.**
+**The probe runs once per *entry* into 2D - never on zoom.**
 `render3d_update_ortho_ref()` calls `render3d_probe_eye_dist()` (a
 `GL_FEEDBACK` pass that replays the user geometry through a wide ortho
-box and returns the *depth-center* — the midpoint of the drawn
+box and returns the *depth-center* - the midpoint of the drawn
 geometry's eye-distance span) on exactly one frame: the rising edge
 where ortho starts contributing (`ortho_now && !ortho_active`, i.e. the
 instant a 3D→2D switch begins, or startup directly in 2D). That single
 sample is frozen into `Render3dState.ortho_ref_dist`, together with
 the camera distance at that moment (`ortho_ref_cam_dist`). For the entire
-2D dwell after that — including every zoom frame — neither branch of the
+2D dwell after that - including every zoom frame - neither branch of the
 edge test fires, so there is no feedback pass at all. One feedback pass
 per round-trip into 2D, full stop. (This is the default
 `GLR_ORTHO_REF_FROZEN` mode; see [`config.h`](../config.h).)
 
 **Zoom rescales the frozen reference by arithmetic, not a re-probe.**
 `render3d_effective_ortho_ref()` returns
-`ortho_ref_dist + (cam_dist - ortho_ref_cam_dist)` — the frozen
+`ortho_ref_dist + (cam_dist - ortho_ref_cam_dist)` - the frozen
 depth-center plus the live camera-distance delta accrued since the
 freeze. The mouse wheel already drives `cam_dist`
 (`glr_camera_add_zoom_velocity` → `glr_camera_tick`), so this alone makes
 the ortho box grow/shrink with the wheel; no other wiring is needed. Both
-projection sites — `render3d_compute_active_projection()` (the cached
-[`Render3dProjectionDesc`](../src/render3d/render.h#L60)) and `render3d_apply_projection()` (each AA sample) —
+projection sites - `render3d_compute_active_projection()` (the cached
+[`Render3dProjectionDesc`](../src/render3d/render.h#L60)) and `render3d_apply_projection()` (each AA sample) -
 read this one helper so they can't diverge, and it clamps to a positive
 floor so a deep zoom-in can't collapse or invert the box. Regression:
 `test_scene_ortho_zoom_rescales` in [`tests/test_render3d_render.c`](../tests/test_render3d_render.c).
@@ -1849,7 +1849,7 @@ floor so a deep zoom-in can't collapse or invert the box. Regression:
 **Why a delta and not a re-probe.** Moving the camera by Δ is a rigid
 translation: it shifts *every* vertex's eye-distance by exactly Δ, so
 `frozen_ref + Δ` reconstructs precisely what a fresh probe at the new
-distance would measure — but without the cost (the ~96K-float feedback
+distance would measure - but without the cost (the ~96K-float feedback
 buffer walk happens once at the switch, not on every wheel tick) and,
 crucially, without *breathing*. A live re-probe would also track
 animation: `t`-driven geometry moving in and out of the depth span would
@@ -1857,7 +1857,7 @@ wobble the ortho scale every frame even when the user isn't touching
 anything. Freezing the intrinsic depth-center and adding only the camera
 delta gives zoom-tracking without animation-induced wobble. (The
 non-default `GLR_ORTHO_REF_PERFRAME` knob re-probes every ortho frame and
-accepts the breathing in exchange for tracking live 3D stage motion — even
+accepts the breathing in exchange for tracking live 3D stage motion - even
 that is per-frame, not keyed to zoom.)
 
 **Wheel feel.** Two independent [`config.h`](../config.h) knobs, shared by 2D *and* 3D
@@ -1866,14 +1866,14 @@ velocity impulse) sets magnitude, and `CAM_DECAY_ZOOM` sets smoothness.
 One notch travels
 `GLR_WHEEL_ZOOM_STEP / (1 - CAM_DECAY_ZOOM)` distance units, eased over
 ~`1 / (1 - CAM_DECAY_ZOOM)` frames, with `(1 - CAM_DECAY_ZOOM)` of the
-motion on the first frame — lower decay is snappier but more "stepped",
+motion on the first frame - lower decay is snappier but more "stepped",
 higher is smoother but coasts longer. Rapid notches stack onto the
 velocity, so fast scrolls still travel quickly.
 
 #### Filtering The REPL Program (rendering a modified view)
 
 Several render passes need to draw the user's geometry but **not exactly as
-the program wrote it** — they want to own a slice of GL state (a uniform
+the program wrote it** - they want to own a slice of GL state (a uniform
 line color, a two-sided debug material) that the program's own `glColor` /
 `glMaterialfv` / `glEnable` calls would otherwise clobber, or they want to
 skip whole primitives. The program is the single source of geometry, so
@@ -1881,16 +1881,16 @@ these passes re-drive the *same* flat command stream with a subset of its
 state commands suppressed. There are two complementary mechanisms, chosen by
 how much of the walk the pass needs to restructure.
 
-**1. `state_filter` predicate — suppress a slice of state, keep the real
+**1. `state_filter` predicate - suppress a slice of state, keep the real
 walk.** [`ReplExecutionOptions`](../src/repl/executor.h) carries an optional
 `state_filter(CmdType, const GLCmd *, void *ud)` callback. The executor runs
-its normal full path — real `gluTess*`, authored normals, animation
-re-eval — but at each state/color-emitting command it asks the filter:
+its normal full path - real `gluTess*`, authored normals, animation
+re-eval - but at each state/color-emitting command it asks the filter:
 return nonzero to emit the GL normally, zero to **suppress the GL emission**.
 A suppressed command still runs [`repl_apply_state_bookkeeping()`](../src/repl/executor.h)
 so the REPL render bookkeeping a state command carries (the `GL_LIGHTn`
 enable mask read by the light-indicator overlay, the `glClearColor`) stays
-coherent. `NULL` emits everything — the default live-frame path. This is the
+coherent. `NULL` emits everything - the default live-frame path. This is the
 light-touch option: the pass installs its own GL state once, then lets the
 geometry/transforms/normals execute untouched while the filter strips only
 the commands that would fight it.
@@ -1901,7 +1901,7 @@ two-sided-lighting pass (front material green, back material red, cull off)
 so flipped/inside-out polygons read red against green; GL selects front-vs-
 back material purely from window-space winding. `winding_state_filter` in
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) is the predicate the controller
-hands the executor for the `RENDER3D_EXEC_WINDING` purpose — it suppresses
+hands the executor for the `RENDER3D_EXEC_WINDING` purpose - it suppresses
 `glMaterialfv`/`glMaterialf`/`glColorMaterial`/`glLightModeli` and the
 `glEnable`/`glDisable` of lighting / cull-face / color-material / `GL_LIGHT0..3`.
 Everything else (geometry, transforms, `glNormal3f`) passes through; `glColor`
@@ -1913,19 +1913,19 @@ suppression of the program's `glEnable(GL_LIGHTING)` / `glEnable(GL_CULL_FACE)`
 inline in the executor so feedback captures raw material color over all
 faces. New passes should prefer the general `state_filter`.
 
-**2. Whitelist re-walk — restructure the walk entirely.** When a pass needs
-*more* than a state slice — multiple passes, a stripped-down tessellator,
-or skipping whole primitives — it drives the **exposed execution cursor**
+**2. Whitelist re-walk - restructure the walk entirely.** When a pass needs
+*more* than a state slice - multiple passes, a stripped-down tessellator,
+or skipping whole primitives - it drives the **exposed execution cursor**
 ([`repl_exec_cursor_begin`](../src/repl/executor.h)/`_peek`/`_step`/`_advance`/
 `_end`) itself instead of calling `repl_execute_program`. The hidden-line
 wireframe renderer ([`src/subsystems/hidden_lines/hidden_lines.c`](../src/subsystems/hidden_lines/hidden_lines.c))
 is the example. Its per-command loop:
 
 - runs `repl_exec_cursor_step` (real execution) only for command types in
-  the `hidden_lines_cursor_owns_cmd` whitelist — transforms, `glBegin`/`End`,
+  the `hidden_lines_cursor_owns_cmd` whitelist - transforms, `glBegin`/`End`,
   vertices, the `glutSolid*` shapes, gotos, `if`, and var/scratch assigns;
 - for every other command (all the color/material/enable state) calls
-  `repl_apply_state_bookkeeping` and `_advance` — i.e. suppresses **all**
+  `repl_apply_state_bookkeeping` and `_advance` - i.e. suppresses **all**
   state, since the pass sets up its own uniform-line GL state externally;
 - replaces `gluTess*` with its own position-only tessellator (the wireframe
   wants outline edges, not lit/colored fills);
@@ -1942,7 +1942,7 @@ more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
 snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L118)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L75) is *not* the one
-side-effecting fill — so `t = t + 1` style assignment animation advances
+side-effecting fill - so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
 line pass, and `RENDER3D_EXEC_WINDING` are the side-effecting fills (they
 replace the main fill, single pass), so they advance normally; the hidden /
@@ -1953,15 +1953,15 @@ depth-fill wireframe passes and probes are bracketed.
 The `.ply` exporter (F11 / File → Export .ply / `--export-ply <file>`)
 captures the **live flat program** once through
 `glRenderMode(GL_FEEDBACK)` and writes an ASCII PLY mesh. Everything the
-scene draws — user `glVertex` polygons, GLU-tessellated polygons, and the
+scene draws - user `glVertex` polygons, GLU-tessellated polygons, and the
 GLUT solids (teapot/sphere/cube/cone/torus, which emit no REPL-tracked
-vertices) — is captured through this **one** path, so the export can't
+vertices) - is captured through this **one** path, so the export can't
 drift from what renders.
 
-**Two-module split — GL capture vs. pure writer.** The GL-coupled half is
+**Two-module split - GL capture vs. pure writer.** The GL-coupled half is
 [`src/app/glr_mesh_export.c`](../src/app/glr_mesh_export.c) (`glr_export_mesh_ply`); the parsing/writing
 half is [`src/support/mesh_ply.c`](../src/support/mesh_ply.c), which calls **no** GL function and
-includes **no** GL header — it only reads a plain float buffer, so it is
+includes **no** GL header - it only reads a plain float buffer, so it is
 fully unit-testable with synthetic buffers and no GL context
 ([`tests/test_mesh_ply.c`](../tests/test_mesh_ply.c)). The pure writer redefines the OpenGL feedback
 token values (`MESH_PLY_TOK_*`) locally; [`glr_mesh_export.c`](../src/app/glr_mesh_export.c)
@@ -1974,7 +1974,7 @@ the projection backwards to world space: identity modelview (no camera),
 a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
 hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
 and `glDepthRange(0, 1)`. The writer inverts exactly this
-([`MeshPlyCapture`](../src/support/mesh_ply.h#L63) carries `ortho_r` / viewport / depth-range) — note
+([`MeshPlyCapture`](../src/support/mesh_ply.h#L63) carries `ortho_r` / viewport / depth-range) - note
 `glOrtho` maps world `z → -z/R`, so the depth inversion negates. State is
 saved/restored (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks
 pushed explicitly, since `glPushAttrib` doesn't cover them), and feedback
@@ -1982,11 +1982,11 @@ produces no fragments, so the visible frame is undisturbed.
 
 **Raw color, all faces.** Feedback honors lighting / polygon-mode / cull,
 so the pass forces `GL_FILL`, disables `GL_CULL_FACE`, and disables
-`GL_LIGHTING` — *and* the executor suppresses the program's own
+`GL_LIGHTING` - *and* the executor suppresses the program's own
 `glEnable(GL_LIGHTING / GL_CULL_FACE)` in export mode
 (`ReplExecutionOptions.encode_feedback_normals`). Without that suppression
 a scene that re-enables lighting would feed back per-vertex *lit* colors
-(not the authored `glColor` material) and cull back faces — the bug that
+(not the authored `glColor` material) and cull back faces - the bug that
 motivated the encode flag. Vertex color is written linear (pass-through)
 by default; `--export-ply-srgb` (`MeshPlyOptions.srgb_decode`) applies the
 sRGB→linear EOTF to RGB (alpha untouched) for color-managed viewers.
@@ -1995,12 +1995,12 @@ sRGB→linear EOTF to RGB (alpha untouched) for color-managed viewers.
 mode returns only position + color, so a synthesized geometric normal is
 all that's recoverable. To carry the *authored* per-vertex normal, the
 export pass uses `GL_3D_COLOR_TEXTURE` (11 floats/vertex) and the executor
-mirrors each vertex's world-space normal — inverse-transpose of the
-begin-time modelview 3×3 — into the texcoord `(s,t,r)` under an identity
+mirrors each vertex's world-space normal - inverse-transpose of the
+begin-time modelview 3×3 - into the texcoord `(s,t,r)` under an identity
 texture matrix (so it round-trips un-projected). Whether a given run of
 texcoords *is* a normal is signalled **out of band** by bracketing user
 `glBegin`/`glEnd` with `glPassThrough(MESH_PLY_PASS_NORMALS /
-_NO_NORMALS)` — a passthrough value can't collide with real vertex data
+_NO_NORMALS)` - a passthrough value can't collide with real vertex data
 the way an in-band tag could. Solids / tess (no authored normal) stay in
 the default NO_NORMALS mode and the writer synthesizes + smooths a
 geometric normal instead. (`glPassThrough` and `glGetFloatv` are illegal
@@ -2012,18 +2012,18 @@ rejected mid-primitive.)
 transient `corners[]` (3 per triangle, n-gons fan-triangulated) +
 per-triangle face normals, plus separate line-endpoint and point-vertex
 lists (see below), which are then appended behind the triangle corners.
-Pass 2 builds the output vertex set over that one unified array — welded
+Pass 2 builds the output vertex set over that one unified array - welded
 by `(quantized pos, 8-bit color)` when `weld && smooth_normals`, else 1:1
-flat — resolves per-vertex normals (authored wins, else
+flat - resolves per-vertex normals (authored wins, else
 face-normal-averaged), then writes `vertex`/`face`(/`edge`) elements.
 
 **Points and line edges.** Point and line geometry export too
 ([`src/support/mesh_ply.c`](../src/support/mesh_ply.c)): `glBegin(GL_POINTS)` arrives as `GL_POINT`
 feedback tokens and becomes **loose vertices** (the PLY point-cloud
-convention — vertices referenced by no face);
+convention - vertices referenced by no face);
 `glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)` arrives as `GL_LINE` /
 `GL_LINE_RESET` tokens, one record per segment, and becomes a PLY
-**`edge` element** (`property int vertex1/vertex2` — the
+**`edge` element** (`property int vertex1/vertex2` - the
 CloudCompare/Blender convention). The edge element is declared only when
 the capture contains lines, so triangle-only output is unchanged for
 viewers that predate the convention. Point/line vertices ride the same
@@ -2052,7 +2052,7 @@ synthetic buffers; the executor's encode contract is covered in stub mode
 via `gl_stub_counts` (`test_export_normal_encoding` in
 [`tests/test_repl_executor.c`](../tests/test_repl_executor.c) asserts lighting/cull suppression +
 texcoord/passthrough emission). Verifying real feedback *values* needs a
-real GL context — Xvfb (Linux) or the **OSMesa backend** below, which renders
+real GL context - Xvfb (Linux) or the **OSMesa backend** below, which renders
 this exact path with no display (`--export-ply` headless matches a native
 capture to ~1e-4).
 
@@ -2065,7 +2065,7 @@ section retains the ownership decisions and implementation constraints.
 #### Headless Rendering & Screenshots (OSMesa)
 
 `make ... FREEGLUT_OSMESA=1` builds against a freeglut **OSMesa** backend that
-renders into a CPU buffer with no window system at all (no Cocoa/GLX/X11) — a
+renders into a CPU buffer with no window system at all (no Cocoa/GLX/X11) - a
 software (llvmpipe/swrast) **compatibility** context, so fixed-function GL, the
 GLUT solids, GLU tessellation, and `glRenderMode(GL_FEEDBACK)` all work. This is
 the load-bearing path for headless CI: the real-GL tests (`make gl-tests`) and
@@ -2074,7 +2074,7 @@ native render.
 
 **It is a build-mode swap, not a source change.** `gl_includes.h`'s non-Apple
 branch already includes the Mesa headers (`<GL/gl.h>`/`<GL/glu.h>`/
-`<GL/freeglut.h>` — on macOS the Cocoa build *already* compiles against
+`<GL/freeglut.h>` - on macOS the Cocoa build *already* compiles against
 Homebrew's `/opt/homebrew/include/GL` headers and only links Apple's GL
 framework). So OSMesa mode just (a) builds the vendored freeglut with
 `-DFREEGLUT_OSMESA=ON` instead of `-DFREEGLUT_COCOA=ON`, and (b) links Mesa
@@ -2086,11 +2086,11 @@ framework). So OSMesa mode just (a) builds the vendored freeglut with
 vendored-archive prereq gate); the user-facing build and capture commands live
 in [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
 
-The backend lives in the **vendored** freeglut only — but the in-tree
+The backend lives in the **vendored** freeglut only - but the in-tree
 vendored tree **already carries it**: the `capture-windowed-backends` branch
 it is pinned to is stacked on `osmesa-backend`, so one tree holds both the
 native (Cocoa/X11) and OSMesa backends. `make … FREEGLUT_OSMESA=1` builds the
-OSMesa backend directly with **no re-vendor** — it coexists with the native
+OSMesa backend directly with **no re-vendor** - it coexists with the native
 build under suffixed dirs. Re-vendoring
 (`FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`; the source is
 recorded in `third_party/freeglut/VENDORED.txt`) is only for re-pinning a
@@ -2142,13 +2142,13 @@ capture commands remain operational concerns of
 Two always-on stderr diagnostics localise startup stalls and
 audio-thread hitches (notably on slow Linux disks). Both follow the
 project's one-line-stderr convention (same as the point-parameter log
-above); neither is gated off by default — the point is to see them
+above); neither is gated off by default - the point is to see them
 when a stall happens.
 
 * **Init trace** ([`gl_repl.c`](../gl_repl.c)). `main()` calls `init_trace(<phase>)` at
   each startup phase; it prints `[init +N.NNNs] <phase>` with
   wall-clock seconds (`gettimeofday`, not the per-platform timebase in
-  [`src/support/cpuprof.c`](../src/support/cpuprof.c) — ms granularity is enough and this stays portable/C99)
+  [`src/support/cpuprof.c`](../src/support/cpuprof.c) - ms granularity is enough and this stays portable/C99)
   elapsed since the first call. Two granularity levels share one
   stream:
 
@@ -2186,7 +2186,7 @@ when a stall happens.
   logs `[init +N.NNNs] repl_audio: worker hitch: <op>[+save] took N ms (threshold
   M ms)`. Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables;
   read once and cached in a static). `AWR_QUIT` is intentionally
-  outside the timed span — a slow final save/uninit at shutdown is not
+  outside the timed span - a slow final save/uninit at shutdown is not
   a runtime hitch. These stalls delay track change / resume only; the
   miniaudio device-callback thread is owned by miniaudio, not the
   REPL, so this detector does not (and cannot) observe playback
@@ -2201,7 +2201,7 @@ every source keeps its own filename order:
 
 1. **Primary assets dir.** `./assets` relative to the working directory
    by default. Overridden by `--assets <dir>` (highest precedence) or the
-   `GLR_ASSETS_DIR` env var — `--assets` beats env beats default,
+   `GLR_ASSETS_DIR` env var - `--assets` beats env beats default,
    resolved in `main()` and passed into `glr_audio_bootstrap()`. This is
    the only source the override touches.
 2. **Bundled-beside-the-executable.** `<exe>/../Resources/assets`, with
@@ -2211,16 +2211,16 @@ every source keeps its own filename order:
    so a Finder-launched bundle (cwd `/`, where source 1 finds nothing)
    still has music. The bundle subfolder name is fixed; the
    override does not change it.
-3. **Per-user music folder.** `user_music_dir()` —
+3. **Per-user music folder.** `user_music_dir()` -
    `~/Library/Application Support/gl-repl/Music` (macOS) or the XDG data
    home (`$XDG_DATA_HOME/gl-repl/music`, else `~/.local/share/...`)
-   elsewhere — created on first run by `ensure_dir()` (a `mkdir -p`) and
+   elsewhere - created on first run by `ensure_dir()` (a `mkdir -p`) and
    announced once on stderr (`repl_audio: add more music in <dir>`) so
    users have a place to drop their own tracks.
 
 If all three yield zero `.mp3`s, it falls back to the single-file
 `AUDIO_DEFAULT_MUSIC` (`assets/song.mp3`); `--no-audio` skips audio
-entirely. The whole model lives in [`gl_repl.c`](../gl_repl.c)'s file-private statics —
+entirely. The whole model lives in [`gl_repl.c`](../gl_repl.c)'s file-private statics -
 no module touches it. The platform branches in `executable_dir` /
 `user_music_dir` are `#ifdef`-guarded and stay C99/portable. The Windows
 branches are still absent; keep any future platform work localized to those
@@ -2256,7 +2256,7 @@ When a module starts owning mutable REPL state, follow this template:
    policy belongs on [`glr_state`](../src/app/glr_state.h#L2)
    ([`src/app/glr_state.c`](../src/app/glr_state.c)), editor document/session
    state on [`EditorState`](../src/editor/state.h#L199), and intentional
-   sidecars (undo rings, user-scene slots) stay separate — call those out
+   sidecars (undo rings, user-scene slots) stay separate - call those out
    explicitly rather than folding them into [`ReplRuntimeState`](../src/repl/state.h#L18). REPL-pipeline
    TUs must not reach `glr_state`
    (`check-repl-state-no-glr-state`,
@@ -2280,7 +2280,7 @@ This is the canonical checklist for adding a new GL/GLU/GLUT command, REPL
 primitive (e.g. `label`), or math/expression function (e.g. `rand2`) to the
 REPL. **Every numbered step is required** unless the note marks it optional.
 Skipping any step leaves a half-wired feature: a command that parses but has no
-F1 help, no autocomplete, no replay annotation, or — worst — diverges between
+F1 help, no autocomplete, no replay annotation, or - worst - diverges between
 the live REPL and exported `output.c`. The GLUT solid shapes
 (`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`) are
 the canonical worked example for a GL command; `label` (REPL primitive) and
@@ -2290,23 +2290,23 @@ shapes.
 > [!TIP]
 > **What kind of thing am I adding?** The path branches at step 0.
 >
-> - **Bound GL/GLU/GLUT command** (most common — `glutSolidCube`,
+> - **Bound GL/GLU/GLUT command** (most common - `glutSolidCube`,
 >   `glRasterPos3f`, `glColor3f`, etc.) → steps 1–8 in order.
 > - **REPL primitive** that compiles down to a custom helper at export time
 >   (`label` is the only example today) → steps 1–4, 5 (with extra emphasis on
 >   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
 >   helper because the line is not a real GL symbol.
-> - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) — these are
+> - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) - these are
 >   evaluated inline by [`src/repl/eval.c`](../src/repl/eval.c), never become a [`CmdType`](../src/repl/command.h#L44), and skip
 >   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
 > - **Structured / control-flow syntax** (a new block construct, branch
->   separator, or context-sensitive statement the generic parser can't own —
+>   separator, or context-sensitive statement the generic parser can't own -
 >   `for`, `if`, `} else if(...) {`) → the shared wiring here still applies
 >   (steps 1–2, and 8 to verify), but the parse/validate, dispatch-order,
 >   source-scope, and flatten-lowering work lives in the compile + flatten path,
 >   not in a single `command_spec` row. Read
->   [Adding New REPL Commands](#structured--control-flow-command-pipeline) first — it is the
+>   [Adding New REPL Commands](#structured--control-flow-command-pipeline) first - it is the
 >   companion that owns that path and the source-vs-flat model.
 
 #### 0a. Update user-facing command references
@@ -2331,9 +2331,9 @@ go through [`src/repl/executor.c`](../src/repl/executor.c). They live entirely i
 3. Add an entry to the REPL→C identifier map (`{ "rand2", "repl_rand2f", 1 }`)
    and the inverse C→REPL map. The exporter uses these to translate
    call-site syntax in both directions.
-4. Step 2a still applies — add a `k_func_completions[]` entry with
+4. Step 2a still applies - add a `k_func_completions[]` entry with
    `REPL_HELP_GROUP_MATH` so it shows up in F1 help and autocomplete.
-5. Step 7 still applies — emit a standalone helper function from
+5. Step 7 still applies - emit a standalone helper function from
    [`src/repl/export.c`](../src/repl/export.c) (gated on a `needs_*` flag detected via
    `export_text_uses_token("rand2(", …)`) so the exported file compiles
    without dragging the whole REPL runtime.
@@ -2341,7 +2341,7 @@ go through [`src/repl/executor.c`](../src/repl/executor.c). They live entirely i
 After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3, 4, 5,
 and 6 do not apply to math functions.
 
-#### 1. [`src/repl/command.h`](../src/repl/command.h) — declare the type
+#### 1. [`src/repl/command.h`](../src/repl/command.h) - declare the type
 
 Add a new [`CmdType`](../src/repl/command.h#L44) enum entry in the `CMD_*` block, adjacent to related
 commands. The enum drives switch dispatch everywhere. ([`CmdType`](../src/repl/command.h#L44) lives in
@@ -2352,7 +2352,7 @@ commands. The enum drives switch dispatch everywhere. ([`CmdType`](../src/repl/c
 CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 ```
 
-#### 2. [`src/repl/command_spec.c`](../src/repl/command_spec.c) — three additions
+#### 2. [`src/repl/command_spec.c`](../src/repl/command_spec.c) - three additions
 
 > [!IMPORTANT]
 > **Required, not optional.** All three sub-tables feed different consumers.
@@ -2360,8 +2360,8 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 > 2b the parser has nothing to match against; without 2c the code-panel
 > highlight color and indentation are wrong.
 
-**a. `k_func_completions[]`** — autocomplete prefix/hint entry **and** the
-F1 help row. **This is the single source of truth for both surfaces** —
+**a. `k_func_completions[]`** - autocomplete prefix/hint entry **and** the
+F1 help row. **This is the single source of truth for both surfaces** -
 [`src/app/glr_completion.c`](../src/app/glr_completion.c) and [`src/repl/help_text.c`](../src/repl/help_text.c) both read this table. If the
 new command isn't here, F1 will silently omit it and Tab won't complete
 it, even if everything else works.
@@ -2370,7 +2370,7 @@ The prefix string (including the opening `(`) must match exactly what the
 user types. The hint string is displayed inline; param names drive
 Tab-cycle hints. The trailing two fields drive the help overlay:
 `help_desc` is the right-column description (empty string `""` to render
-the signature row alone, `NULL` to skip the entry from help entirely —
+the signature row alone, `NULL` to skip the entry from help entirely -
 used for language-level entries like `func0() {` or `x =`), and
 `help_group` (`REPL_HELP_GROUP_TOP` / `LIGHTING` / `GLUT_SHAPES` /
 `GLU_TESS` / `MATH` / `NONE`) selects the section header. Multi-line help
@@ -2385,7 +2385,7 @@ indented continuation row.
     REPL_HELP_GROUP_MATH },
 ```
 
-**b. `k_std_command_specs[]`** — parse spec used by [`src/repl/parser.c`](../src/repl/parser.c) and the
+**b. `k_std_command_specs[]`** - parse spec used by [`src/repl/parser.c`](../src/repl/parser.c) and the
 autocomplete lookup. `num_args` must match the `%g` count in `fmt`. For
 commands with `glEnable`/`glBlendFunc`-style enum arguments, append to
 `k_enum_command_specs[]` instead and wire `enums1` / `enums2` to the
@@ -2395,20 +2395,20 @@ appropriate [`ReplEnumEntry`](../src/repl/command_spec.h#L35) tables.
 { "glutSolidCube", CMD_GLUT_CUBE, 1, "glutSolidCube(%g);", "Usage: glutSolidCube(size)", 0 },
 ```
 
-**c. `g_command_type_specs[]`** — formatting/indentation metadata plus the
+**c. `g_command_type_specs[]`** - formatting/indentation metadata plus the
 syntax category that drives code-panel highlight color. The
 `CMD_TYPE_SPEC(type, needs_semicolon, needs_block_indent, category)`
 macro is keyed on the enum, so order is validated at compile time. Pick
 the matching `CMD_CAT_*` from [`src/repl/command_spec.h`](../src/repl/command_spec.h) (e.g.
 `CMD_CAT_GLUT_SHAPE` for solid shapes, `CMD_CAT_VERTEX` for vertices,
 `CMD_CAT_STATE` for `glEnable`-shaped state). Nearly all geometry
-commands use `(1, 1, ...)` — needs semicolon, needs block indent.
+commands use `(1, 1, ...)` - needs semicolon, needs block indent.
 
 ```c
 CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1, CMD_CAT_GLUT_SHAPE),
 ```
 
-#### 3. [`src/repl/executor.c`](../src/repl/executor.c) — execute the command
+#### 3. [`src/repl/executor.c`](../src/repl/executor.c) - execute the command
 
 Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
 function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
@@ -2425,7 +2425,7 @@ case CMD_GLUT_CUBE:
     break;
 ```
 
-#### 4. [`src/subsystems/replay/replay_annotations.c`](../src/subsystems/replay/replay_annotations.c) — replay display format
+#### 4. [`src/subsystems/replay/replay_annotations.c`](../src/subsystems/replay/replay_annotations.c) - replay display format
 
 Add a `case` that sets `*nargs_out` and returns a `printf`-style format string
 for the replay annotation overlay.
@@ -2434,11 +2434,11 @@ for the replay annotation overlay.
 case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 ```
 
-#### 5. F1 help text — already wired (if step 2a is done)
+#### 5. F1 help text - already wired (if step 2a is done)
 
 Help is generated from `k_func_completions[]` (step 2a). The `help_desc`
 + `help_group` fields you set there feed the F1 overlay's Commands tab
-automatically — [`src/repl/help_text.c`](../src/repl/help_text.c) walks the spec table, groups by
+automatically - [`src/repl/help_text.c`](../src/repl/help_text.c) walks the spec table, groups by
 section, and emits one row per command. **Step 5 is a no-op only if step
 2a is filled in correctly.** If F1 doesn't show the new command, you
 forgot 2a; if it shows the signature with no description, your
@@ -2458,15 +2458,15 @@ remain manual since they document REPL syntax, not commands.
 
 If the GL/GLU/GLUT function is new to the stub build:
 
-**[`tests/gl-stubs/include/GL/gl_stub_counts.h`](../tests/gl-stubs/include/GL/gl_stub_counts.h)** — append to `GL_STUB_COUNTER_LIST`:
+**[`tests/gl-stubs/include/GL/gl_stub_counts.h`](../tests/gl-stubs/include/GL/gl_stub_counts.h)** - append to `GL_STUB_COUNTER_LIST`:
 
 ```c
 X(glutSolidTeapot)  \
 X(glutSolidCone)
 ```
 
-In [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h)—or
-[`tests/gl-stubs/include/GL/glu.h`](../tests/gl-stubs/include/GL/glu.h)—add a no-op inline stub:
+In [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h)-or
+[`tests/gl-stubs/include/GL/glu.h`](../tests/gl-stubs/include/GL/glu.h)-add a no-op inline stub:
 
 ```c
 static inline void glutSolidTeapot(double size) {
@@ -2477,29 +2477,29 @@ static inline void glutSolidTeapot(double size) {
 Keep stubs minimal: model the signature, call `gl_stub_tick`, suppress
 unused-parameter warnings with `(void)`, no real rendering.
 
-#### 7. Save/load round-trip — verify byte-for-byte and behavior parity
+#### 7. Save/load round-trip - verify byte-for-byte and behavior parity
 
 Most commands round-trip automatically: [`src/repl/export.c`](../src/repl/export.c) writes the
 source-document line text (`source_text_line(view, cmd_idx)` via the
-neutral port — flat commands do not own source text, and [`export.c`](../src/repl/export.c) does
+neutral port - flat commands do not own source text, and [`export.c`](../src/repl/export.c) does
 not reach into [`EditorState`](../src/editor/state.h#L199) directly)
 verbatim into the exported `display()` body, and `repl_export_load_from_file`
 feeds those lines back through the commit pipeline. You only need to
-touch [`src/repl/export.c`](../src/repl/export.c) for commands with non-source-text encoding —
+touch [`src/repl/export.c`](../src/repl/export.c) for commands with non-source-text encoding -
 declarations (`@declare`), tess blocks, REPL primitives that need a
 standalone helper, etc.
 
 **Command flags that are not in the text need their own marker.** A
 generated normal carries `GLCmd.is_auto`, which no amount of round-tripping
-the line text can reconstruct — so export appends `/* @auto */` to the line
+the line text can reconstruct - so export appends `/* @auto */` to the line
 and `import_feed_one_line()` strips it and re-stamps the flag. Unlike
 `@declare` the marker rides the command's own line, keeping one exported
 line per source row; the tess arm appends it to the lowered `{ _tn[...] }`
 form, and the import block-comment normalizer hands both back as `// @auto`
 before the tess translator (which rebuilds its output from scratch) can drop
 it. Without the marker a reloaded scene's normals read as hand-written, and
-the autonormal pass then refuses to update them — a hand-written normal owns
-its block — so they silently freeze at their exported values.
+the autonormal pass then refuses to update them - a hand-written normal owns
+its block - so they silently freeze at their exported values.
 
 **Behavior parity is required, not just syntactic round-trip.** When the
 exporter emits a helper function (`write_label_helper`, `write_rand_helper`,
@@ -2509,7 +2509,7 @@ nearest visible bit. Divergence examples to guard against:
 - `label("%f", x)` rendering `1.000000` in exported output but `1` in the
   REPL because the REPL's CMD_LABEL case substitutes `%f` with `%g`
   formatting while the exported helper uses real `vsnprintf("%f", …)`.
-  Fix: either match formatting in the helper, or change REPL semantics —
+  Fix: either match formatting in the helper, or change REPL semantics -
   but they must agree.
 - A REPL primitive whose live executor relies on the per-frame state
   reset in [`src/render3d/render.c`](../src/render3d/render.c) (e.g. `glDisable(GL_LIGHTING)` baseline,
@@ -2521,7 +2521,7 @@ nearest visible bit. Divergence examples to guard against:
 
 Add a focused round-trip case to [`tests/test_repl_export_all_commands.c`](../tests/test_repl_export_all_commands.c)
 to keep coverage tight. The mega test compiles the exported `output.c`
-standalone against vanilla freeglut — if your helper has wrong
+standalone against vanilla freeglut - if your helper has wrong
 assumptions about includes, missing symbols, or printf-format mismatches,
 this test catches it. Adding the test is part of the step, not optional.
 
@@ -2557,7 +2557,7 @@ make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 
 The architectural companion to [Adding A New Command](#adding-a-new-command).
 That section is the mechanical step-by-step checklist for the three common
-command *shapes* — a bound GL/GLU/GLUT statement, a REPL primitive, or a math
+command *shapes* - a bound GL/GLU/GLUT statement, a REPL primitive, or a math
 function. This section is the pipeline mental model behind it, and the path for
 the fourth shape the checklist defers: **structured, control-flow, or
 context-sensitive** syntax (`for`, `if`, `} else if(...) {`, `funcN`) whose
@@ -2582,13 +2582,13 @@ checklist above (its steps 1–2), a structured command touches:
    illegal between `glBegin` / `glEnd`, and use the enum-arg specs for
    table-driven GL commands.
 2. **Decide who owns the syntax.** A plain `name(args);` statement belongs to
-   the generic parser + command specs — i.e. the checklist path. Structured or
+   the generic parser + command specs - i.e. the checklist path. Structured or
    context-sensitive forms belong in [`compile.c`](../src/repl/compile.c) as a pure `repl_compile_*`
    validator, usually with a shared `repl_compile_*_kernel` that the loader and
    the editor wrapper both reuse.
 3. **Check compile dispatch order.** Any syntax that starts like an existing
    grammar must run before the broader grammar; `} else if(...) {` is the
-   canonical example — it must run before the generic `}` close-brace.
+   canonical example - it must run before the generic `}` close-brace.
 4. **Update source-scope** if the command affects structure, visible variables,
    indentation, block extent, copy/cut, or comment-toggle. Not every
    structural-looking line is a block head or end: `CMD_ELSE_IF` / `CMD_ELSE`
@@ -2604,10 +2604,10 @@ checklist above (its steps 1–2), a structured command touches:
    [`repl_load_apply_line()`](../src/repl/load.h#L78), and reformat must preserve canonical text plus
    indentation. (A GL command that needs a standalone export helper is the
    checklist's step 7 instead.)
-7. **Sweep the flat-program walkers** — replay, hidden-line, overlays, UI. Most
+7. **Sweep the flat-program walkers** - replay, hidden-line, overlays, UI. Most
    source-only markers should be defensive skip-list entries only, because
    flatten should have stripped them before execution.
-8. **Test at the lowest layer that owns the behavior** — parser/spec tests for
+8. **Test at the lowest layer that owns the behavior** - parser/spec tests for
    plain syntax, compile/load tests for structured source shapes, flatten tests
    for executable semantics, format/import tests for round-trip, and editor
    tests only when cursor/insert-mode behavior is part of the feature.
@@ -2623,15 +2623,15 @@ guard rails apply. Current kinds are:
 
 | Kind          | Carrier fields              | Advance signal                            |
 |---------------|-----------------------------|-------------------------------------------|
-| `COMMAND`     | `expected` (`comment` optional) | User commits a line matching `expected`. A NULL/empty `comment` emits no locked instruction row — the command commits at the insertion row itself, taught by the autocomplete ghost + status hint; after the commit the committed row is recorded as the step's label anchor and locked (`tutorial_note_expected_commit_applied`). |
-| `NOTE`        | `comment` only              | Ack key (Enter / Tab / Space) — SET's showcase flow without the cfg write; the document stays frozen while it waits. |
+| `COMMAND`     | `expected` (`comment` optional) | User commits a line matching `expected`. A NULL/empty `comment` emits no locked instruction row - the command commits at the insertion row itself, taught by the autocomplete ghost + status hint; after the commit the committed row is recorded as the step's label anchor and locked (`tutorial_note_expected_commit_applied`). |
+| `NOTE`        | `comment` only              | Ack key (Enter / Tab / Space) - SET's showcase flow without the cfg write; the document stays frozen while it waits. |
 | `SET`         | `cfg_slug`, `cfg_value` (`_name`) | Ack key (Enter / Tab / Space) after auto-apply. |
 | `REQUIRE`     | `cfg_slug`, `cfg_value` (`_name`) | Live cfg slug matches target (notify from `glr_config_set`). |
 | `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify at the tail of the predef-writeback commit, after editor post-effects). |
 
 The step-array sentinel is the record with BOTH `comment` and
 `expected` NULL (`repl_tutorial_step_is_sentinel` in [`src/repl/tutorials.h`](../src/repl/tutorials.h));
-every real step carries at least one of the two — COMMAND requires
+every real step carries at least one of the two - COMMAND requires
 `expected`, every other kind requires a non-empty `comment`.
 
 Orthogonal to step kinds, a tutorial may declare a `setup` scaffold
@@ -2661,7 +2661,7 @@ The distance exists because tutorial geometry is authored in **whole
 units** (see [`src/repl/tutorials.c`](../src/repl/tutorials.c)): shapes sit on +/-1 or +/-2, solid
 sizes and radii are 1, and lineups step 4 apart. Decimal coordinates like
 `glVertex3f(0.8, -0.6, 0)` made lesson shapes so small that the
-cursor-bound overlays — vertex labels especially — were larger than the
+cursor-bound overlays - vertex labels especially - were larger than the
 primitive being taught. Whole units read better in the code panel *and*
 give the overlays something to annotate, but +/-2 does not fit the
 built-in dist of 5.0 (which frames only +/-2.07 vertically), hence the
@@ -2674,8 +2674,8 @@ values; the camera is not restored (the pre-tutorial scene's own snapshot
 carries it back when the user returns to that scene).
 
 **Deferred baseline restore.** Ending a tutorial does *not* write the
-baseline back. `tutorial_end_keep_view()` — used by both the completion
-path and [`tutorial_stop()`](../src/subsystems/tutorial/tutorial.h#L68) (menu Exit) — clears `active` via
+baseline back. `tutorial_end_keep_view()` - used by both the completion
+path and [`tutorial_stop()`](../src/subsystems/tutorial/tutorial.h#L68) (menu Exit) - clears `active` via
 `tutorial_state_reset_except_baseline()` and leaves the bag in place as a
 *pending* restore. Snapping the presentation back the instant the last
 step lands reads as the tutorial undoing itself, and discards the very
@@ -2683,27 +2683,27 @@ settings a SET/REQUIRE lesson just taught; the learner is still sitting in
 the tutorial's transient scene, so its view stays too. The pending
 baseline is flushed by the next [`tutorial_teardown()`](../src/subsystems/tutorial/tutorial.h#L75), which now also runs
 with no active tutorial (guarded on `baseline_valid`). That is every point
-where the document is replaced wholesale — scene / example / workspace
-load, `glr_ctrl_reset_all`, and the next `tutorial_start` — so live cfg is
+where the document is replaced wholesale - scene / example / workspace
+load, `glr_ctrl_reset_all`, and the next `tutorial_start` - so live cfg is
 always restored *before* anything stashes it as a pre-workspace or
 per-scene snapshot. The internal-failure paths in `tutorial_enter_step`
 still call [`tutorial_teardown()`](../src/subsystems/tutorial/tutorial.h#L75) directly: a lesson that broke mid-step
 has no view worth keeping.
 
 **Post-tutorial scene promotion.** The retained document has no scene
-identity — neither an active user scene nor an active example — so without
+identity - neither an active user scene nor an active example - so without
 help the undo hook's promotion pass would decline it and the next scene
 switch would silently discard whatever the learner typed after the lesson.
 `tutorial_end_keep_view()` therefore also stamps a **tutorial origin** onto
 scene runtime state (`ReplSceneRuntimeState.tutorial_origin_idx`, the twin
 of `active_example_idx`), and `repl_promote_transient_if_needed()`
 recognises it as a second promotable origin alongside a loaded example.
-Both end paths — natural completion and `tutorial_stop()` — produce a
+Both end paths - natural completion and `tutorial_stop()` - produce a
 promotable document.
 
 The marker is set at the *end*, never at `tutorial_start`: tutorial step
 commits run through `editor_undo_push_snapshot()`, so an origin present
-during the lesson would promote — and tear the lesson down — on step 0. An
+during the lesson would promote - and tear the lesson down - on step 0. An
 active tutorial always reads -1. Every wholesale replacement clears it
 (`tutorial_teardown` unconditionally, plus each scene-state transition in
 [`src/repl/scenes.c`](../src/repl/scenes.c) defensively), so an unedited
@@ -2712,7 +2712,7 @@ back.
 
 Promotion order is load-bearing when the origin is a tutorial:
 
-1. reserve a free slot — there is no implicit eviction, so a slots-full
+1. reserve a free slot - there is no implicit eviction, so a slots-full
    rejection leaves the
    origin *and* the pending baseline intact and the next edit retries,
    capturing everything typed in the meantime;
@@ -2731,7 +2731,7 @@ baseline captured on a retained post-tutorial document restores the origin
 and the pending cfg baseline (carried on `TutorialRuntimeState`) together.
 
 Use this section as a checklist when adding a new kind. The
-`REQUIRE_VAR` rollout is the most recent worked example — its commits
+`REQUIRE_VAR` rollout is the most recent worked example - its commits
 land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
@@ -2740,7 +2740,7 @@ land in roughly the order below.
 - Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L129). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
-  to the new defaults — adding fields mid-struct silently shifts other
+  to the new defaults - adding fields mid-struct silently shifts other
   fields' values.
 - Add a `STEP_<KIND>(label, comment, ...)` macro for catalog authors.
   Keep the same layout as the sibling macros and zero-init unused
@@ -2784,7 +2784,7 @@ land in roughly the order below.
   kind and dispatch to the matching predicate; advance via
   `tutorial_advance_step(...)` on match. The function takes no args,
   so the call sites that fire it (see below) don't need to know what
-  changed — only that *something* did.
+  changed - only that *something* did.
 - If the new kind allows typed commits to mutate the document (like
   REQUIRE_VAR), update `tutorial_guard_source_change` to whitelist it
   alongside `TUTORIAL_STEP_KIND_COMMAND`; otherwise the
@@ -2793,50 +2793,50 @@ land in roughly the order below.
   the commit-side advance must stay a no-op for it: the notify hook is
   the authoritative advance. The mechanism is `tutorial_advance_if_commit_ok`
   (in [`src/editor/input.c`](../src/editor/input.c)), which advances ONLY when
-  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L158) returns 1 — i.e. a pending
+  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L158) returns 1 - i.e. a pending
   COMMAND expected-command attempt was in flight. A free-form REQUIRE_VAR
   commit sets no pending record, so it returns 0 and the commit path does
   not advance. This is load-bearing: the REQUIRE_VAR notify fires *inside*
   the commit and may advance onto a COMMAND step; a second commit-side
   advance would then skip that COMMAND step entirely (instruction comment
   shown, command never typed). Checking the current step kind instead of
-  the return value is NOT sufficient — by the time the commit returns the
+  the return value is NOT sufficient - by the time the commit returns the
   step is already the next (COMMAND) one. (`tutorial_advance_after_successful_commit`
   also keeps an internal REQUIRE_VAR bypass for direct callers / safety.)
 - If the kind needs a *runtime-derived* entry variant, decide it in
   `tutorial_enter_step` before emitting the instruction comment.
   REQUIRE_VAR does this: a step whose `var_name` does not exist yet is
   a DECLARATION step. The satisfying `float name = ...;` is a decl,
-  which the compiler relocates to the document top (above any comment —
+  which the compiler relocates to the document top (above any comment -
   see `compile_insert_pos` / `decl_pos`), so a separate locked instruction
   comment line above it would be stranded and desync locked-line tracking.
   The runner therefore skips `tutorial_emit_instruction_comment` for
   declaration steps; the instruction instead rides the autocomplete ghost
   as `float name = target; <catalog comment>` (synthesized in
   `tutorial_shadow_suffix`), so the catalog comment commits as a TRAILING
-  comment on the decl line and travels with it to the top — no separate
+  comment on the decl line and travels with it to the top - no separate
   comment to track. The cursor parks on the trailing row
   (`instruction_line`, since nothing was inserted) rather than
   `instruction_line + 1`. The tutorial does NOT pre-declare its
-  variables — the user declares them, which is the point of the step.
+  variables - the user declares them, which is the point of the step.
 
 #### 3. Notify call sites
 
 The notify hook is `tutorial_notify_state_changed(void)`. New kinds
-share the function — they only add new *call sites* where the watched
+share the function - they only add new *call sites* where the watched
 state can change. Today's sites:
 
-- **`src/app/glr_config.c::glr_config_set`** — fires after every cfg write;
+- **`src/app/glr_config.c::glr_config_set`** - fires after every cfg write;
   REQUIRE consumes it to advance when the watched slug reaches its target.
   SET writes also flow through this setter on entry, but SET advancement is
   ack-key driven rather than notify-driven.
-- **`src/editor/commit.c::notify_tutorial_if_predef_changed`** — fires
+- **`src/editor/commit.c::notify_tutorial_if_predef_changed`** - fires
   once if any predef op is applied by the commit. Covers REQUIRE_VAR for
   typed `name = expr;` assignments, `float n = 5;` declarations-with-
   initializer, and variable-panel slider writebacks (the slider flows
   through `editor_commit_apply_external_change`; typed commits flow
   through `editor_commit_apply_plan`). Both entry points call it at
-  their TAIL — after `apply_post_effects` and the status publish — NOT
+  their TAIL - after `apply_post_effects` and the status publish - NOT
   from inside `apply_compiled_change_full`. The notify can advance the
   step, which inserts the next instruction comment and re-parks the
   cursor; firing it mid-apply let the in-flight commit's own
@@ -2856,7 +2856,7 @@ same operation performs, so the advance sees a settled document.
   default (matched commit must land on `tutorial_expected_commit_line`).
   Add a short-circuit `return 1` for the new kind early in the
   function (after the empty-input and noncommand-reject checks) when
-  the kind allows free-form commits — without this, typed commits get
+  the kind allows free-form commits - without this, typed commits get
   blocked with "Move cursor to the tutorial insertion line".
 - `tutorial_reject_noncommand_commit_with_hint` (in
   [`tutorial_runner.c`](../src/subsystems/tutorial/tutorial_runner.c)) decides whether a typed commit attempt is
@@ -2871,10 +2871,10 @@ same operation performs, so the advance sees a settled document.
   still benefits from passive guidance, synthesize an expected string
   at the top of the function and let the existing strict-prefix logic
   produce the suffix. REQUIRE_VAR synthesizes `float name = target;
-  <catalog comment>` while the variable is still undeclared — the
+  <catalog comment>` while the variable is still undeclared - the
   declaration the user must type, carrying the step's catalog comment as
   a trailing comment so it lands as a code comment on the relocated decl
-  line — and the bare `name = target` once the variable exists. The same
+  line - and the bare `name = target` once the variable exists. The same
   declared-ness test gates whether the runner emits a separate
   instruction comment (it does not, for the declaration form).
 - `src/app/glr_completion.c::update_autocomplete` only computes the
@@ -2887,7 +2887,7 @@ same operation performs, so the advance sees a settled document.
 
 Ship at least one tutorial that exercises the new kind so the menu
 flyout, instruction-comment fade, and notify wiring are all exercised
-in production — purely synthetic test fixtures miss the menu, the
+in production - purely synthetic test fixtures miss the menu, the
 status hint, and the autocomplete provider. Adding a tutorial means:
 
 - Pick a tag (`TUTORIAL_TAG_*`) and a subheading consistent with the
@@ -2904,7 +2904,7 @@ status hint, and the autocomplete provider. Adding a tutorial means:
   yet (the "Variable Slider" tutorial's step 0): the runner detects the
   undeclared var and treats it as a declaration step (no separate locked
   comment; the instruction rides the ghost as a trailing comment on the
-  decl line — see §2), and the typed decl-with-initializer satisfies the
+  decl line - see §2), and the typed decl-with-initializer satisfies the
   target via its DECLARE predef op. Word the step's catalog comment to
   read as a trailing description of the variable (it commits as
   `float n = 5; <that comment>`), not as a standalone "type ..." line.
@@ -2916,11 +2916,11 @@ Add at least:
 - Validator acceptance + per-rule rejection (missing carrier, wrong
   shape, reserved-name collisions). Use designated-initializer
   `TutorialStep[]` fixtures and call `repl_tutorial_validate_entry`
-  directly — no need to enter the runner.
+  directly - no need to enter the runner.
 - Auto-advance on already-satisfied entry (or, if the kind cannot
   be pre-satisfied through the test fixture, an indirect proof that
   the runner *pauses* on the next step rather than advancing through
-  it — see `test_require_var_pauses_on_next_step_after_match`).
+  it - see `test_require_var_pauses_on_next_step_after_match`).
 - Each satisfaction path the kind supports (typed commit, slider drag,
   F-key, …). For each, drive the live entry point (`editor_handle_key`,
   `glr_ctrl_router_*`, `glr_config_set`) rather than the runner internals
@@ -2988,7 +2988,7 @@ work can either close the gap or document the intentional behaviour.
 - **Func alias slot exhaustion.** `editor_try_commit_func_def` (in
   [`src/editor/commit.c`](../src/editor/commit.c)) calls [`repl_func_alias_first_free_slot()`](../src/repl/eval.h#L220); when all
   10 slots are taken it returns the diagnostic
-  `"no free function slots (max %d)"`. No test fires this path — adding the
+  `"no free function slots (max %d)"`. No test fires this path - adding the
   10 distinct user-named func defs and asserting the 11th is rejected with
   this status would close the gap.
 - **Func alias name collision.** `repl_func_alias_set` rejects assigning the
@@ -3024,11 +3024,11 @@ work can either close the gap or document the intentional behaviour.
   is idempotent, but the SET_VALUE for the assigned name is silently
   dropped on this path. The TODO calls for a focused test before fixing.
 
-### Covered — keep tests around
+### Covered - keep tests around
 
 - Float-decl overwrite cascade ([`tests/test_repl_editor.c`](../tests/test_repl_editor.c)'s
   `overwrite shared` / `expand decl` cases).
-- Predef-table full (`MAX_PREDEF_VARS`) — same file.
+- Predef-table full (`MAX_PREDEF_VARS`) - same file.
 - Hard-cap rejection when all eight user-scene slots are occupied, both
   unbound and managed (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
 - Func alias roundtrip and `if`/`for`/`goto` not hijacked
@@ -3047,7 +3047,7 @@ does not match the current checkout.
 Use the compat shim. Two modes:
 
 ```sh
-# Worktree mode — recommended. Run from a current checkout (where the
+# Worktree mode - recommended. Run from a current checkout (where the
 # script and compat/ exist), pass the old SHA via --at, and the
 # script handles the checkout for you in a private git worktree under
 # .compat-scratch/worktrees/<sha>/. Your main checkout is untouched.
@@ -3055,7 +3055,7 @@ Use the compat shim. Two modes:
 ./scripts/build-historical.sh --at <old-sha> test USE_GL_STUBS=1
 ./scripts/build-historical.sh --at <old-sha> --clean sample   # wipe worktree first
 
-# In-place mode — only useful if you have already checked out the old SHA
+# In-place mode - only useful if you have already checked out the old SHA
 # yourself, or are streaming the script from main (since the script is
 # not tracked at older SHAs):
 git checkout <old-sha>
@@ -3064,14 +3064,14 @@ git show main:scripts/build-historical.sh | sh -s -- sample
 
 The script reads compat headers internally with
 `git show main:compat/legacy-include/...`, so `compat/` doesn't need to
-exist on disk in the old checkout — only in `main`'s tree. Run
+exist on disk in the old checkout - only in `main`'s tree. Run
 `./scripts/build-historical.sh --help` for the full inline reference.
 
 How it works:
 
 1. Reads two compat headers from a configurable ref (`COMPAT_REF`,
    default `main`):
-   - [`compat/legacy-include/gl_includes.h`](../compat/legacy-include/gl_includes.h) — the **fat** compat header.
+   - [`compat/legacy-include/gl_includes.h`](../compat/legacy-include/gl_includes.h) - the **fat** compat header.
      Older export templates relied on `gl_includes.h` transitively
      pulling in `<stdlib.h>`, `<stdio.h>`, `<string.h>`, `<math.h>` via
      OpenGL-Vibe's bundled utilities, so this one re-includes them

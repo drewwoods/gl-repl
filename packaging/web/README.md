@@ -5,8 +5,8 @@ Files owned by this directory, plus their build-system entry points:
 | File | Role |
 |------|------|
 | [`gl4es_bootstrap.c`](gl4es_bootstrap.c) | Compiled at **link time** (listed in `GL_LDFLAGS`, not `$(SRCS)`), so it never joins the `-std=c99` ratchet. Provides `glutExtensionSupported` (Emscripten's built-in JS GLUT lacks it; gl-repl's runtime GL capability detection calls it) and gl4es init/config. |
-| `shell.html` | The themed Emscripten shell (`--shell-file`) — dark + amber, monospace, loading overlay, collapsible console drawer, canvas resize handling, browser scene open/download/fullscreen controls. |
-| [`patches/*.patch`](patches/) | Local fixes to gl4es/GLU not yet upstream (or in a public fork). Applied by `scripts/web-deps.sh` after cloning, before building — see each patch's header comment and the running [`patches/README.md`](patches/README.md) investigation log. |
+| `shell.html` | The themed Emscripten shell (`--shell-file`) - dark + amber, monospace, loading overlay, collapsible console drawer, canvas resize handling, browser scene open/download/fullscreen controls. |
+| [`patches/*.patch`](patches/) | Local fixes to gl4es/GLU not yet upstream (or in a public fork). Applied by `scripts/web-deps.sh` after cloning, before building - see each patch's header comment and the running [`patches/README.md`](patches/README.md) investigation log. |
 
 Both [`gl4es_bootstrap.c`](gl4es_bootstrap.c) and `shell.html` carry their full history from the
 original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*`).
@@ -41,7 +41,7 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   plain ASCII punctuation with CTRL in the modifiers so the accum-passes
   step works (delivering them also `preventDefault()`s the browser's
   Ctrl+=/- page zoom where that binding exists).
-- **OS clipboard**: plain Ctrl/Cmd+C/X/V bypass JS GLUT entirely — gl4es_bootstrap.c's
+- **OS clipboard**: plain Ctrl/Cmd+C/X/V bypass JS GLUT entirely - gl4es_bootstrap.c's
   `GLUT.getASCIIKey` override returns `null` for them so neither `keyboardFunc`
   (gl-repl's own Ctrl+C/X/V path) nor `preventDefault()` fire, leaving the
   browser free to synthesize its native `copy`/`cut`/`paste` events, which
@@ -65,7 +65,7 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   management doesn't wash out saturated scene colors.
 - **Scene import/export**: the shell's Open/Download/New controls call into
   [`src/app/glr_web_io.c`](../../src/app/glr_web_io.c)'s `EMSCRIPTEN_KEEPALIVE` exports
-  (`glr_web_new_scene`, `glr_web_load_scene_text`, `glr_web_export_scene`) —
+  (`glr_web_new_scene`, `glr_web_load_scene_text`, `glr_web_export_scene`) -
   see `-sEXPORTED_FUNCTIONS` in the Makefile's `WEB=1` block.
 - **Guided tours**: the in-canvas Tours menu uses
   [`tours/catalog-emscripten.ini`](../../tours/catalog-emscripten.ini). Its
@@ -73,7 +73,7 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   resolves that symbolic target against the real DOM New button and queues
   its existing click handler instead of relying on the hidden native File menu.
 - **URL sharing**: the *share* button encodes the whole scene into
-  `location.hash` so a copy-pasted link reproduces it — no server involved,
+  `location.hash` so a copy-pasted link reproduces it - no server involved,
   works on static hosting. Payload format is
   `#s1=<base64url(deflate-raw(scene text))>` where the text is exactly what
   the download button saves (so `@cfg` presentation settings, the camera
@@ -107,8 +107,8 @@ so it is purely a fetch-and-compile cost. Pass
 
 `make bench-web` compiles `bench/bench_repl.c` to wasm and runs it headless
 under node. It exists because wasm cost is not a fixed multiple of native
-cost — measured per-op ratios ran from ~1.2x to ~2.2x across sub-benchmarks,
-which is enough to reorder what looks expensive — so `make bench` alone can
+cost - measured per-op ratios ran from ~1.2x to ~2.2x across sub-benchmarks,
+which is enough to reorder what looks expensive - so `make bench` alone can
 point at the wrong hot spot for this target.
 
 It measures the C pipeline only. node has no GPU and no WebGL context, so
@@ -128,14 +128,14 @@ runner and the same per-test arguments as `make test-stubs`.
 The `WEB=1 USE_GL_STUBS=1` combination is the whole trick. `make test` is
 already a stubs build, so the wasm twin needs no GL stack at all: no gl4es, no
 `scripts/web-deps.sh`, no `third_party/web/` checkout, no browser, and none of
-`packaging/web/gl4es_bootstrap.c` — whose constructor calls
+`packaging/web/gl4es_bootstrap.c` - whose constructor calls
 `document.querySelector` and throws before `main()` outside a browser. Only
 `emcc` and `node` are required. From clean it takes about 35 s.
 
 Link differences from `BENCH_WEB_LDFLAGS` live in `WEB_TEST_LDFLAGS`:
 
-- `-sNODERAWFS=1`. Tests `fopen()` real paths — `build/*_trace.txt` stub
-  traces, `tests/testdata/` fixtures, `/tmp` workspaces — and MEMFS has none
+- `-sNODERAWFS=1`. Tests `fopen()` real paths - `build/*_trace.txt` stub
+  traces, `tests/testdata/` fixtures, `/tmp` workspaces - and MEMFS has none
   of them. Without it, `fopen()` fails silently and roughly 150 assertions
   fail as "expected 6, got 0" rather than as an error. It also makes the
   `system()` calls in `test_export_trace_parity` work.
@@ -151,7 +151,7 @@ It covers what the native suite structurally cannot reach: the
 and stricter alignment.
 
 It does **not** cover gl4es -> WebGL2. This lane links the GL stubs, so no GL
-call goes anywhere — the same blind spot as `bench-web`, and the reason the
+call goes anywhere - the same blind spot as `bench-web`, and the reason the
 recent gl4es polygon-line and vertex-label regressions would not have been
 caught here. That still needs a browser lane.
 
@@ -159,30 +159,30 @@ caught here. That still needs a browser lane.
 
 73 of the 76 binaries run under node. Where a test asserted behavior the web
 build deliberately does not have, the fix is a `__EMSCRIPTEN__` arm around the
-affected assertions rather than dropping the binary — `test_ui`,
+affected assertions rather than dropping the binary - `test_ui`,
 `test_ui_scene_tabs`, `test_glr_ctrl` (the File menu `menu_visible()` hides)
 and `test_repl_core_extra` (a `dup2`'d stdin pipe, which does not reach wasm's
 stdio) each carry one.
 
 Better still, assert the web form where one exists. `test_render3d_guides`
 counts two `glutSolidSphere` calls under `__EMSCRIPTEN__` where native counts
-two `glVertex3f` — the marker is drawn either way, and that is the only
+two `glVertex3f` - the marker is drawn either way, and that is the only
 coverage the web geometry-guide path has. Reach for a skip only when the web
 build genuinely does nothing.
 
 Three binaries remain in `WEB_TEST_EXCLUDE`; see the Makefile for the
 per-binary reason. None is a wasm defect:
 
-- `test_audio` — the whole binary is the native miniaudio device backend, down
+- `test_audio` - the whole binary is the native miniaudio device backend, down
   to the hitch-threshold accessor that returns `0.0` on web. Guarding it out
   assertion-by-assertion leaves an empty binary.
-- `test_edit_overlays` — 12 assertions across 6 sites match the vertex
+- `test_edit_overlays` - 12 assertions across 6 sites match the vertex
   marker's *world coordinates* in the stub trace (`"glVertex3f 1 0 0"`), and
   the Emscripten octahedron emits unit-corner coords under a
   `glTranslatef`/`glScalef`. Needs a marker-form-aware trace helper, not a
   guard. **This is the last uncovered `__EMSCRIPTEN__` render path and is
   worth doing.**
-- `test_ui_menu_bar` — 25 assertions across ~8 sites drive the hidden File
+- `test_ui_menu_bar` - 25 assertions across ~8 sites drive the hidden File
   menu; guarding each would gut the binary's File-menu coverage for no web
   gain. A browser lane should cover the shell's replacement chrome instead.
 
@@ -193,6 +193,6 @@ Re-check the list whenever an `__EMSCRIPTEN__` branch is added or removed.
 The 40MB+ `.wasm`/`.data` payload makes `--screenshot`-style headless capture
 unreliable (it stalls waiting for the full download). Drive the page instead
 with a small Chrome DevTools Protocol script over a native WebSocket that
-waits for `#overlay.hidden` before capturing — see the `shot.js` pattern from
+waits for `#overlay.hidden` before capturing - see the `shot.js` pattern from
 the 2026-07-07 session (not checked in; a throwaway script, not a build
 artifact).

@@ -134,7 +134,7 @@ static void test_geometry_hit(void) {
 
     /* The band now leads with the workspace chip, so the left margin is the
      * chip and tab 0 sits to its right. Scan rightward from the chip's end
-     * for tab 0 rather than recomputing the private chip metrics — the
+     * for tab 0 rather than recomputing the private chip metrics - the
      * contract under test is the breadcrumb ORDER, not the exact gap. */
     {
         int chip_x = 0, chip_w = 0;
@@ -180,7 +180,7 @@ static void test_band_h_lockstep(void) {
         int with = ui_text_panel_visible_lines_for_height(H, 22,
                                                           TAB_STRIP_H);
         if (base <= 1)
-            continue;  /* clamp floor (see plan §3) — delta not meaningful */
+            continue;  /* clamp floor (see plan §3) - delta not meaningful */
         ASSERT_INT_EQ("TAB_STRIP_H drops visible rows by exactly one",
                       with, base - 1);
     }
@@ -354,7 +354,7 @@ static void test_dropdown_over_band_consumes(void) {
      * "RENDERING" section *parent* row, not a literal "### " header.
      * A click on it is classified as UI_HIT_MENU_ITEM and consumed by
      * the menu layer (Config's activate keeps the dropdown open), so it
-     * still does NOT fall through to a scene tab underneath — the
+     * still does NOT fall through to a scene tab underneath - the
      * overlay-precedence invariant this regression guards. The
      * general "section rows are inert" guarantee + dedicated coverage
      * lands in Step 5. */
@@ -404,7 +404,7 @@ static void test_rename_prompt_owns_its_state(void) {
     snprintf(prompt_before, sizeof(prompt_before), "%s", snap.rename_text);
 
     /* A competing status message (e.g. an audio track change) mid-rename
-     * must NOT clobber the rename prompt — the reported bug. */
+     * must NOT clobber the rename prompt - the reported bug. */
     repl_set_status("Now playing: some track");
     glr_ctrl_build_ui_snapshot(&snap);
     ASSERT_TRUE("rename still active after competing status",

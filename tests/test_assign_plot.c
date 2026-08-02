@@ -7,7 +7,7 @@
  * statistics see every value even when the plot does not.
  *
  * The clock is a plain parameter to assign_plot_capture(), so every timing
- * case here is exact — there is no fake-clock hook to install.
+ * case here is exact - there is no fake-clock hook to install.
  */
 #include <math.h>
 #include <stdio.h>
@@ -594,7 +594,7 @@ static void test_second_series_captures_independently(void) {
     ASSERT_INT("primary kept its row", v.series[0].source_line_idx, row_x);
     ASSERT_INT("secondary took the other", v.series[1].source_line_idx, row_y);
     ASSERT_INT("both ran eight times", v.series[1].exec_count, 8);
-    /* Each series carries its own values and its own statistics — a shared
+    /* Each series carries its own values and its own statistics - a shared
      * buffer would show one row's numbers under both names. */
     ASSERT_FLOAT("x starts at 0", v.series[0].cols[0].lo, 0.0);
     ASSERT_FLOAT("y starts at 100", v.series[1].cols[0].lo, 100.0);
@@ -797,7 +797,7 @@ static void test_toggle_series_removes_and_closes(void) {
     ASSERT_INT("with no series left", assign_plot_series_count(), 0);
 
     /* From closed, the add gesture opens on that row rather than doing
-     * nothing — otherwise the modifier would be a dead key on a closed panel. */
+     * nothing - otherwise the modifier would be a dead key on a closed panel. */
     ASSERT_INT("adding from closed opens",
                assign_plot_toggle_series(row_x), ASSIGN_PLOT_SERIES_ADDED);
     ASSERT_INT("open on one series", assign_plot_series_count(), 1);
@@ -875,7 +875,7 @@ static void test_incompatible_x_mode_is_refused(void) {
 }
 
 /* In capture mode every series appends one column per capture, so column N
- * means capture N for all of them — a series that did not run holds its place
+ * means capture N for all of them - a series that did not run holds its place
  * with an invalid column instead of sliding its history left. */
 static void test_frame_mode_keeps_series_aligned(void) {
     static const char *const k_scene[] = {
@@ -929,7 +929,7 @@ static void test_frame_mode_keeps_series_aligned(void) {
                v.series[1].cols[1].valid, 0);
     ASSERT_INT("and values where it ran", v.series[1].cols[2].valid, 1);
     ASSERT_FLOAT("which are its own", v.series[1].cols[2].lo, 10.0);
-    /* A gap contributes nothing to the statistics — it is a missing sample,
+    /* A gap contributes nothing to the statistics - it is a missing sample,
      * not a zero. */
     ASSERT_INT("the gap is not counted as a sample",
                (int)v.series[1].stats.count, 2);
@@ -1007,7 +1007,7 @@ static void test_dead_row_drops_only_its_series(void) {
  * Replay coupling: the PC marker and the live-capture override.
  * ------------------------------------------------------------------ */
 
-/* Flat index just past the `nth` (1-based) execution of `row` — what a replay
+/* Flat index just past the `nth` (1-based) execution of `row` - what a replay
  * clamp would be when exactly that many of the row's assignments have run. */
 static int flat_limit_after_exec(int row, int nth) {
     const GLCmd *flat = repl_state_flat_program_cmds();
@@ -1213,7 +1213,7 @@ static void test_live_capture_overrides_the_1hz_gate(void) {
     ASSERT_FLOAT("live capture takes this frame's values",
                  S0(assign_plot_view()).cols[7].hi, 107.0);
 
-    /* And the override lifts cleanly — the gate is the clock again. */
+    /* And the override lifts cleanly - the gate is the clock again. */
     assign_plot_set_live_capture(0);
     repl_state_time_set(200.0f);
     reflatten();

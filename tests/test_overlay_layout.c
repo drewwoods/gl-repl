@@ -28,7 +28,7 @@ enum {
 };
 
 /* A 700x600 scene at x=300 (code panel on the left) over a 22px status
- * bar — the shape the app actually produces. */
+ * bar - the shape the app actually produces. */
 static UiOverlayLayoutIn base_inputs(void) {
     UiOverlayLayoutIn in;
     in.render3d_x = 300; in.render3d_y = 0;
@@ -332,7 +332,7 @@ int main(void) {
 
     /* --- Top-docked code panel: the scene rect is the short band below it
      *     (render3d_y = 0, render3d_h = window_h - code_panel_h). The stack must
-     *     stay inside that band — spilling sideways rather than climbing
+     *     stay inside that band - spilling sideways rather than climbing
      *     into the code panel above. --- */
     {
         UiOverlayLayoutIn in = base_inputs();

@@ -24,7 +24,7 @@
  * script sets. The controller entry points stay 0-based document indices, and
  * this is the one place that converts. Returns -1 for a line that is not a
  * positive number, which every caller treats as "ignore this hook" rather than
- * silently acting on row 0 — an off-by-one that pointed at real geometry was
+ * silently acting on row 0 - an off-by-one that pointed at real geometry was
  * exactly the failure this numbering is meant to stop. */
 static int capture_env_line(const char *s, const char *var) {
     int line;
@@ -102,7 +102,7 @@ static void maybe_capture_view_toggle(void) {
  * <line> opens the floating color picker on that source line (1-based like the
  * code panel; no-op unless the line is a picker-editable color command). The
  * picker only opens via a swatch click, which a capture run has no mouse to
- * deliver. Applied on the first display callback — not at bootstrap —
+ * deliver. Applied on the first display callback - not at bootstrap -
  * because the popup placement clamps against the live viewport, which
  * reshape has not populated until the main loop starts. */
 static void maybe_capture_open_color_picker(void) {
@@ -143,7 +143,7 @@ static void maybe_capture_open_gl_state(void) {
  * row, which must be an assignment, opening its value plot; any further rows
  * are added as extra series (the Shift+right-click gesture), so a multi-series
  * plot is reachable headlessly. Same retry-until-on-screen shape as the state
- * popup above — only the first row needs to be on screen, since the rest do
+ * popup above - only the first row needs to be on screen, since the rest do
  * not go through the code panel's hit model.
  *
  * GLR_ASSIGN_PLOT_EXPANDED=1, GLR_ASSIGN_PLOT_LOG=1 and
@@ -170,7 +170,7 @@ static void maybe_capture_open_assign_plot(void) {
         return;
     }
     if (!glr_ctrl_open_assign_plot(line))
-        return;   /* row not on screen yet — retry next frame */
+        return;   /* row not on screen yet - retry next frame */
 
     for (p = strchr(s, ','); p; p = strchr(p + 1, ',')) {
         int series = capture_env_line(p + 1, "GLR_OPEN_ASSIGN_PLOT");
@@ -203,12 +203,12 @@ static void maybe_capture_open_assign_plot(void) {
 /* Capture affordance, sibling of GLR_OPEN_ASSIGN_PLOT: GLR_OPEN_COMMAND_HELP=
  * <line>[,<dx>] right-clicks a committed GL-family row to raise its authored
  * help card. Ordered after the assign-plot hook in the frame hook because the
- * routing closes the card when a right-click lands on an assignment row —
+ * routing closes the card when a right-click lands on an assignment row -
  * posing both means opening the plot first.
  *
  * The optional dx slides the card along x from where the click left it (screen
  * px, right positive; the renderer clamps it into the window). The row picks
- * the card and fixes its y, so x is the only axis a capture can curate — which
+ * the card and fixes its y, so x is the only axis a capture can curate - which
  * it needs, because the click has to land on the row being explained, not on
  * clear space. */
 static void maybe_capture_open_command_help(void) {
@@ -228,13 +228,13 @@ static void maybe_capture_open_command_help(void) {
     dx = comma ? atoi(comma + 1) : 0;
     line = capture_env_line(s, "GLR_OPEN_COMMAND_HELP");
     if (line < 0 || glr_ctrl_open_command_description(line, dx))
-        done = 1;   /* else the row is not on screen yet — retry next frame */
+        done = 1;   /* else the row is not on screen yet - retry next frame */
 }
 
 /* Capture affordance, sibling of GLR_EDIT_LINE: GLR_CODE_SCROLL=<row> parks
  * the code panel's first visible row. Cursor parking cannot reach the
  * generated C that code focus normally hides (init(), the display() prologue)
- * — those rows belong to no document line — so a capture that wants to
+ * - those rows belong to no document line - so a capture that wants to
  * photograph them scrolls instead. Applied per frame until it lands, since the
  * row count depends on a laid-out panel. */
 static void maybe_capture_code_scroll(void) {
@@ -296,7 +296,7 @@ void glr_capture_env_apply(const char *time_arg) {
     }
     /* Scripted pointer/keyboard input: GLR_POINTER_SCRIPT=<file> drives
      * menu navigation & co. on the rendered-frame clock (video capture
-     * hook — see src/app/glr_pointer_script.h for the grammar). Loaded
+     * hook - see src/app/glr_pointer_script.h for the grammar). Loaded
      * before the tick-per-frame resolve below because an active script
      * implies the mode. GLR_NO_SPLASH skips the startup banner (any
      * capture that shouldn't open on the splash band). */
@@ -334,7 +334,7 @@ void glr_capture_env_apply(const char *time_arg) {
     /* Typed-input override: GLR_TYPE_KEYS=<text> feeds each character
      * through the keyboard dispatch exactly as typing would (guides,
      * autocomplete ghost, and all). Headless-capture hook for
-     * mid-typing states — e.g. a partially-entered glVertex3f( whose
+     * mid-typing states - e.g. a partially-entered glVertex3f( whose
      * 2-DOF plane / 1-DOF line guide can't be posed from a committed
      * line. Applied after GLR_EDIT_LINE so it can extend a loaded line
      * or (on a fresh row) start a new one. */
@@ -351,7 +351,7 @@ void glr_capture_env_apply(const char *time_arg) {
     /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/8/12/16)
      * raises the accumulation sample count. Capture hook: the 2D UI
      * renders outside the accumulation loop, so this antialiases the
-     * 3D scene while text keeps its full size — unlike 2x supersampling,
+     * 3D scene while text keeps its full size - unlike 2x supersampling,
      * which halves the apparent UI text. Applied after the file/example
      * load so it wins over any @cfg accum_passes header. */
     {
@@ -360,7 +360,7 @@ void glr_capture_env_apply(const char *time_arg) {
             glr_ctrl_set_accum_passes(atoi(p_src));
     }
     /* Code focus: GLR_CODE_FOCUS=0 shows the generated C the focused view
-     * hides (init(), the display() prologue) — where the light rig's positions
+     * hides (init(), the display() prologue) - where the light rig's positions
      * and colors are actually written, and the only place to read them, since
      * no REPL command sets them. Toggle-only in the app and bound to a
      * Shift-modified key GLR_TYPE_KEYS cannot deliver, so a capture needs
@@ -377,7 +377,7 @@ void glr_capture_env_apply(const char *time_arg) {
     /* Accumulation effect: GLR_ACCUM_EFFECT=<state name> picks the Config
      * row's state by its own label (off/aa/blur/blur cam, case- and
      * space-insensitive), so the env var spells what the menu spells. Unlike
-     * the pass count this is not scene metadata — no @cfg slug reaches it —
+     * the pass count this is not scene metadata - no @cfg slug reaches it -
      * and its keyboard binding carries a Shift the synthetic-key path cannot
      * deliver, so a capture has no other route to Blur. */
     {

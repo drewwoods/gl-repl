@@ -1,6 +1,6 @@
 ## GL Stub Extensions: Printf Trace for Per-Call Argument Diffs
 
-## Status — DONE (2026-05-23 audit)
+## Status - DONE (2026-05-23 audit)
 
 The trace facility shipped. Spot checks:
 
@@ -9,7 +9,7 @@ The trace facility shipped. Spot checks:
 - Storage definition `FILE *gl_stub_trace_fp = NULL;` lives at
   `tests/gl-stubs/gl_stub_counts.c:24`; the env-var open helper is at
   lines 48–54 of the same file.
-- `tests/test_export_trace_parity.c` consumes the new trace pathway —
+- `tests/test_export_trace_parity.c` consumes the new trace pathway -
   `--keep-traces` flag at line 234, `/tmp/test_trace_*.repl.tr`
   filename template at line 325, and the child compile cmd at line
   246 wires in the trace stub source.
@@ -21,8 +21,8 @@ deferred and shouldn't block done-ness.
 ### Summary
 The stub layer at `tests/gl-stubs/include/GL/*` currently records only a
 per-symbol call count (`gl_stub_counts[GL_STUB_*]`). That's enough for
-shape comparisons — "did the REPL emit the same number of `glVertex3f`
-calls as the exported C?" — but it's blind to argument values. The one
+shape comparisons - "did the REPL emit the same number of `glVertex3f`
+calls as the exported C?" - but it's blind to argument values. The one
 real divergence the count-only `test_export_trace_parity` surfaces on
 `--full` today (Bezier off-by-one `glVertex2f`) would be much easier to
 root-cause if both legs could dump a full per-call trace that `diff(1)`
@@ -32,7 +32,7 @@ can chew through.
 Add a `GL_STUB_TRACE_LINE(...)` macro that each stub function calls
 just before `gl_stub_tick()`. The macro expands to either an fprintf
 or nothing, gated by a compile-time `#define`. No in-memory storage,
-no ring sizing decisions, no per-symbol tables — just lines of text
+no ring sizing decisions, no per-symbol tables - just lines of text
 flushed to a configurable file. Diagnosis becomes a `diff` invocation.
 
 ### Macro Design
@@ -87,7 +87,7 @@ glVertex3f 0 1 0
 glEnd
 ```
 
-Newline-terminated and free of synchronization markers — `diff -u`
+Newline-terminated and free of synchronization markers - `diff -u`
 sees aligned line ranges, the unified-diff hunk points at the
 offending range, and you're done.
 
@@ -116,7 +116,7 @@ Add a `--trace` flag (or just always-on under `-DGL_STUB_TRACE`):
    was passed; otherwise unlink.
 
 The count check stays as the primary gate. The trace is a diagnosis
-aid — only consulted on failure or when explicitly requested.
+aid - only consulted on failure or when explicitly requested.
 
 ### Cost
 - Compile-time: ~one extra macro invocation per stub function. The
@@ -139,7 +139,7 @@ aid — only consulted on failure or when explicitly requested.
   diff-aligned. If a future feature (parallel rendering, async
   callbacks) breaks that, the trace would need a sequence prefix
   per line and a more careful comparator.
-- **String args.** `glutBitmapCharacter` takes a single byte —
+- **String args.** `glutBitmapCharacter` takes a single byte -
   emit it as an integer code rather than as a char so a 0x00 or
   newline byte doesn't corrupt the trace. `label()`-emitted text
   shows up as a sequence of `glutBitmapCharacter N` lines, which is

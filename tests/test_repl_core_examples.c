@@ -1306,7 +1306,7 @@ static void test_example_tag_metadata(void) {
  *     stripping logic would render an empty string as zero-width chrome).
  *   - The getter returns NULL for out-of-range indices.
  *   - Per tag, every non-NULL subheading appears in a single contiguous
- *     run of examples (matches the menu walker's emit rule — one header
+ *     run of examples (matches the menu walker's emit rule - one header
  *     per group; interleaving would render duplicate headers).
  *   - At least one shipped example has a non-NULL subheading so the
  *     menu walker's HEADER path is exercised in production. */
@@ -1332,7 +1332,7 @@ static void test_example_subheading_metadata(void) {
     }
     ASSERT_TRUE("catalog ships at least one subheading", has_any_subheading);
 
-    /* Per tag: contiguity check — count distinct non-NULL subheadings
+    /* Per tag: contiguity check - count distinct non-NULL subheadings
      * (set semantics) vs the number of subheading-change transitions
      * the menu walker would emit. Equality means each distinct
      * subheading appears in a single contiguous run; a mismatch means
@@ -1404,7 +1404,7 @@ static void test_example_subheading_metadata(void) {
  *   2. A multi-tag example that includes 2D also lands at
  *      GRID_THEME_PLANES when it doesn't override grid.
  *   3. An example outside the 2D tag (3D-only) lands at the global
- *      grid default (CFG_DEFAULT_GRID_THEME) — no tag default applies.
+ *      grid default (CFG_DEFAULT_GRID_THEME) - no tag default applies.
  *   4. An example tagged 2D but with its own `@cfg grid = N` keeps N
  *      (example `@cfg` wins over the tag default).
  *
@@ -1448,7 +1448,7 @@ static void test_example_cfg_uses_symbolic_names(void) {
 /* Switching examples replaces the measured workload, so the cumulative timing
  * histograms must not carry the previous example's distribution (or its
  * startup outliers) into the new one. repl_load_example is the chokepoint
- * every path funnels through — menu, F12 cycle, --example, bootstrap. */
+ * every path funnels through - menu, F12 cycle, --example, bootstrap. */
 static void test_example_load_resets_histograms(void) {
     HistogramBin bins[HISTOGRAM_BIN_COUNT];
     int total;
@@ -1570,7 +1570,7 @@ static void test_example_tag_default_cfg(void) {
  *   - Entries whose tag bit is not in the mask are skipped.
  *
  * The test calls glr_ctrl_apply_tag_defaults directly with a synthetic
- * table — no example loaded, no @cfg in play — so the only thing
+ * table - no example loaded, no @cfg in play - so the only thing
  * mutating state here is the helper itself. glr_ctrl_reset_all
  * normalizes presentation to global defaults before each subcase. */
 static void test_example_tag_default_dispatch(void) {
@@ -1619,7 +1619,7 @@ static void test_example_tag_default_dispatch(void) {
     }
 
     /* (C) Two entries colliding on the same key but for DIFFERENT tags
-     * — both tag bits set in the mask → still a collision (the mask
+     * - both tag bits set in the mask → still a collision (the mask
      * picks both up). Same-key second-write wins. */
     {
         static const GlrExampleTagDefault table[] = {
@@ -1917,7 +1917,7 @@ int main(int argc, char **argv) {
         /* view_mode is example-settable via @cfg: the slug maps to
          * GLR_CONFIG_ORTHO_MODE through the cfg bridge, and like other
          * scene-presentation toggles it is reset to its default per
-         * example load before any leading @cfg is applied — so a 3D
+         * example load before any leading @cfg is applied - so a 3D
          * example never silently renders in 2D just because the prior
          * example set ortho. */
         static const char *const view_mode_2d_example[] = {
@@ -2284,7 +2284,7 @@ int main(int argc, char **argv) {
     }
 
     {
-        /* Regression for #12 — a truncated camera header (`// camera`
+        /* Regression for #12 - a truncated camera header (`// camera`
          * + 2 transforms then geometry) used to eat the marker, both
          * transforms, AND the first 2 geometry lines (5-line skip
          * regardless of validation). Post-fix every line survives;

@@ -1,4 +1,4 @@
-# `repl_live_demo` — live, file-watching REPL demo
+# `repl_live_demo` - live, file-watching REPL demo
 
 A standalone driver that bootstraps the **REPL pipeline + the variable-panel
 peer** from a one-file controller and drives them under a real
@@ -7,14 +7,14 @@ external-editor workflow:
 - You edit **scene `.c` files** in your own editor (vim, or anything).
 - The demo **watches the active scene's mtime** and re-imports it on save,
   drawing the geometry live.
-- The scene's **predefined variables** appear in the floating slider panel —
+- The scene's **predefined variables** appear in the floating slider panel -
   drag a row and the geometry reshapes in real time.
 - Each scene's saved **`// camera` block** sets the initial view.
 
 It is the *composition* counterpart to [`repl_demo`](../repl_demo/): where
 `repl_demo` proves the REPL language pipeline links with **no** editor /
 controller / UI, this demo proves the pipeline and the variable-panel subsystem
-compose without the app shell — no `src/editor`, `src/app`, `src/render3d`, or
+compose without the app shell - no `src/editor`, `src/app`, `src/render3d`, or
 `src/ui/app` in the link set (`check-repl-live-demo-no-editor` enforces the
 editor exclusion).
 
@@ -49,7 +49,7 @@ make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
 
 ## The live-edit loop
 
-1. `./repl_live_demo` (from the repo root — the bundled INI resolves its scene
+1. `./repl_live_demo` (from the repo root - the bundled INI resolves its scene
    paths relative to itself, so this just works).
 2. In another terminal: `vim tools/repl_live_demo/scenes/ring.c`, tweak a vertex
    or a `float` value, `:w`.
@@ -57,9 +57,9 @@ make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
 
 **Reload is not transactional.** The importer resets live state before loading
 and treats per-line parse failures as *warnings* while still succeeding if the
-file merely opened — so a malformed save can leave a partial or empty scene with
+file merely opened - so a malformed save can leave a partial or empty scene with
 no rollback. That is by design: the file is the source of truth and you
-fix/undo in your editor. The demo's job is diagnostic clarity — every reload
+fix/undo in your editor. The demo's job is diagnostic clarity - every reload
 prints a banner and the importer's per-line warnings + load summary go to the
 terminal, so a partial load is never silent.
 
@@ -80,12 +80,12 @@ scene=scenes/torus.c
 
 ## Scene file format
 
-Scenes are in the app's **save/export `.c` format** — exactly what
+Scenes are in the app's **save/export `.c` format** - exactly what
 `./gl-repl scene.c` reads and what File → Save (`Ctrl+S`) writes.
 
-**Full standalone exports load directly.** A complete `output.c` — with its
+**Full standalone exports load directly.** A complete `output.c` - with its
 `#include` / `display()` / `main()` scaffold, global variable declarations,
-function definitions, and `// camera` block — imports the same as a minimal
+function definitions, and `// camera` block - imports the same as a minimal
 file: the demo uses the same `repl_export_load_from_file` reader as
 `./gl-repl output.c`, so a saved scene round-trips byte-for-byte through the
 geometry. Just point the demo at one (`./repl_live_demo output.c`) or add a
@@ -96,7 +96,7 @@ The bundled [`scenes/`](scenes/) files are deliberately **minimal** so they are
 pleasant to hand-edit in vim: the geometry lives between `// Snippet start` and
 `// Snippet end`, a leading `// camera` block sets the view, and
 `float name = value;` lines declare the predefined variables that drive the
-sliders. The animation clock `t` is shown as a slider too — dragging it scrubs
+sliders. The animation clock `t` is shown as a slider too - dragging it scrubs
 the clock (playback then continues from the scrubbed value); space pauses it.
 
 ## Rendering notes & limitations
@@ -106,11 +106,11 @@ functions). It does *not* run an export's `init()` / `display()` scaffold, which
 in the real app is the job of the `render3d` layer the demo deliberately omits.
 To keep lit scenes looking right anyway, the demo installs a small per-frame GL
 baseline that approximates `render3d`'s defaults: `GL_COLOR_MATERIAL` (so
-`glColor3f` tints lit surfaces — otherwise it is ignored under `GL_LIGHTING` and
+`glColor3f` tints lit surfaces - otherwise it is ignored under `GL_LIGHTING` and
 geometry renders as the default white-ish material), `GL_NORMALIZE`, a neutral
 key + fill light, and a small global ambient. The scene still enables
 `GL_LIGHTING` and its own lights. The *exact* light colors/positions from a
 scene's `init()` are not reproduced, so a heavily lit export may look close but
 not pixel-identical to `gl-repl`. The animation clock `t` is advanced in place
 in the REPL variable table (like the app), so a scene's own `t = 0` reset takes
-effect — the panel `t`, the HUD `t`, and the geometry all stay in sync.
+effect - the panel `t`, the HUD `t`, and the geometry all stay in sync.

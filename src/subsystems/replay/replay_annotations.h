@@ -11,7 +11,7 @@
  * return-value shape.
  *
  * Public surface:
- *   - replay_annotations_prepare() — fills the output. Idempotent
+ *   - replay_annotations_prepare() - fills the output. Idempotent
  *     within a frame; safe to call from the controller, layout, and
  *     tests. The full app uses glr_publish_replay_annotations() (in
  *     app/glr_ctrl_replay_annotations.h) to copy the rows into

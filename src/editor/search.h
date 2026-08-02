@@ -49,7 +49,7 @@ void editor_search_rescan(void);
  * when there is no hit. Replace-current addresses the match this way
  * rather than by character offset: search rows read the unindented input
  * buffer for the edit line, while the document row carries its leading
- * indentation, so offsets do not survive the crossing — the occurrence
+ * indentation, so offsets do not survive the crossing - the occurrence
  * ordinal does. */
 int  editor_search_current_hit_occurrence(void);
 int  editor_search_find_next_in_text(const char *text, const char *query,

@@ -38,7 +38,7 @@ typedef enum {
     UI_TOK_RAISED,                 /* dropdown / overlay panel   #222222 */
     UI_TOK_SUNKEN,                 /* sunken field bg            #141414 */
     UI_TOK_SCRIM,                  /* translucent plate under text drawn
-                                    * over ARBITRARY content — the tour
+                                    * over ARBITRARY content - the tour
                                     * caption's backing, the pointer arrow's
                                     * outline. Distinct from SUNKEN, which is
                                     * a form-field background sitting on known

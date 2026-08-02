@@ -17,15 +17,15 @@ Keep the current root-level source layout for now, but formalize a simple rule s
 7. Verify with focused tests first, then the full suite. Cover one pure utility test, one GL-free REPL test, one include-as-unit test, and one stubbed GL path if the include split touches header resolution.
 
 **Relevant files**
-- `include/gl_2d.h` — current example of header-only utility placement
-- `cmd_format.h` / `prof.h` — source-backed utility headers that should stay paired with their `.c` files
-- `Makefile` — test binary list, object wiring, and include-as-unit special cases
-- `MODULES.md` — existing file-layout overview that should be updated with the new rule
-- `CLAUDE.md` — agent-facing repo brief that already describes the current layout
-- `tests/test_eval.c` — representative self-contained test
-- `tests/test_format.c` — representative pure utility test that should adopt the shared harness
-- `tests/test_repl_editor.c` — representative large REPL test with repeated macros and setup helpers
-- `tests/test_imrepl_ctrl.c` — representative include-as-unit test that needs explicit build handling
+- `include/gl_2d.h` - current example of header-only utility placement
+- `cmd_format.h` / `prof.h` - source-backed utility headers that should stay paired with their `.c` files
+- `Makefile` - test binary list, object wiring, and include-as-unit special cases
+- `MODULES.md` - existing file-layout overview that should be updated with the new rule
+- `CLAUDE.md` - agent-facing repo brief that already describes the current layout
+- `tests/test_eval.c` - representative self-contained test
+- `tests/test_format.c` - representative pure utility test that should adopt the shared harness
+- `tests/test_repl_editor.c` - representative large REPL test with repeated macros and setup helpers
+- `tests/test_imrepl_ctrl.c` - representative include-as-unit test that needs explicit build handling
 
 **Verification**
 1. Run representative tests after the move: `make test_eval`, `make test_format`, `make test_repl_core_parse`, `make test_repl_editor`, and `make test_imrepl_ctrl`.

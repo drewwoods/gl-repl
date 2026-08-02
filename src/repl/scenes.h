@@ -59,7 +59,7 @@ typedef struct {
  * slot's per-scene cfg subset is re-applied to the live view.
  * Returns the promoted slot index, or -1 if promotion was a no-op or
  * rejected. A rejection (all slots full) leaves
- * the origin — and any pending tutorial baseline — intact, so the next edit
+ * the origin - and any pending tutorial baseline - intact, so the next edit
  * retries and still captures everything typed in between. */
 int  repl_promote_transient_if_needed(void);
 
@@ -188,7 +188,7 @@ void repl_scenes_reset(void);
  * baseline (src/app/glr_tour_snapshot.c) so Back / Done-restart reinstate the
  * exact scene catalog the tour started from.
  *
- * Capture deliberately does NOT call repl_scenes_save_active_scene_if_any() —
+ * Capture deliberately does NOT call repl_scenes_save_active_scene_if_any() -
  * that would mutate the catalog (flush the live document into its slot) while
  * taking the baseline. It records the catalog exactly as it stands. Returns
  * NULL on allocation failure; destroy frees it. */

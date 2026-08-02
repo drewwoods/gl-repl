@@ -1,16 +1,16 @@
 /*
- * tools/memprof_demo/memprof_demo.c — standalone driver for the memory
+ * tools/memprof_demo/memprof_demo.c - standalone driver for the memory
  * profiling subsystem.
  *
  * Isolation proof: links ONLY src/support/memprof.c (the pure memory
  * sampler) + src/ui/support/memprof.c (the overlay panel) + src/ui/core
- * (theme). No src/ui/app, no src/app, no src/repl, no src/editor — see
+ * (theme). No src/ui/app, no src/app, no src/repl, no src/editor - see
  * MEMPROF_DEMO_DEP_SRCS in the Makefile and check-memprof-demo-isolation.sh.
  *
  * What it shows: a spinning teapot as filler scene plus the live memory
  * panel overlay (current / baseline / delta / limit + a time-anchored graph).
  * Press 'a' to allocate a ~4 MB block, 'f' to free the newest, 'c' to free
- * all — and watch the memory signal and graph respond.
+ * all - and watch the memory signal and graph respond.
  *
  * The panel renderer is snapshot-free: it consumes a UiMemoryPanelView
  * whose panel_x/panel_y this demo bakes directly (top-right corner),
@@ -19,7 +19,7 @@
  * Timebase: the panel drives off memprof's own monotonic clock via
  * memprof_frame_tick(), so the graph's X axis (-85m .. now, spanning
  * MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S seconds) reflects real
- * wall-clock time — a sample lands every MEMPROF_PUSH_INTERVAL_S (~5s).
+ * wall-clock time - a sample lands every MEMPROF_PUSH_INTERVAL_S (~5s).
  * The current/baseline/delta text rows refresh every frame, so an
  * alloc/free shows in the numbers immediately and on the graph at the
  * next sample tick.
@@ -49,7 +49,7 @@ static void alloc_block(void) {
     if (g_block_count >= MAX_BLOCKS) return;
     unsigned char *p = (unsigned char *)malloc(BLOCK_BYTES);
     if (!p) return;
-    /* Touch every page so the RSS (resident) figure actually grows —
+    /* Touch every page so the RSS (resident) figure actually grows -
      * malloc alone may not fault the pages in. */
     memset(p, 0xAB, BLOCK_BYTES);
     g_blocks[g_block_count++] = p;
@@ -89,8 +89,8 @@ static void demo_stage_alloc_tick(void) {
 
 /* Keep the staged blocks in the resident working set. A page written once and
  * never touched again is a candidate for eviction (on macOS the memory
- * compressor takes it within a few seconds), which walks RSS — the number the
- * panel plots — back to the baseline and erases the step this hook exists to
+ * compressor takes it within a few seconds), which walks RSS - the number the
+ * panel plots - back to the baseline and erases the step this hook exists to
  * stage. One byte per page per frame is ~12k writes for the default 12
  * blocks. Runs only for hook-staged blocks: interactive 'a' presses keep
  * their untouched-allocation behaviour. */
@@ -132,7 +132,7 @@ static void display_func(void) {
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
 
-    /* Memory panel overlay — anchored top-right (gl2d is y-up). */
+    /* Memory panel overlay - anchored top-right (gl2d is y-up). */
     UiMemoryPanelView view;
     view.window_w = g_window_w;
     view.window_h = g_window_h;

@@ -16,7 +16,7 @@
 #include "subsystems/variable_panel/variable_panel_state.h"
 
 /* Drag-scaling tunable (the prose spec in the file header above is the
- * authority — keep it in sync). The coarse (right-click) scrub multiplies
+ * authority - keep it in sync). The coarse (right-click) scrub multiplies
  * this by GLR_ADJUST_COARSE_SCALE from config.h. */
 #define VAR_DRAG_LINEAR_UNITS_PER_PX  0.10f   /* 1 px = 0.1 units */
 

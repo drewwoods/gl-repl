@@ -3,7 +3,7 @@
 ## Context
 
 The gl-repl tutorial system today teaches **OpenGL** only: every step is
-`{comment, expected}` — the runner reveals an instruction comment and the user
+`{comment, expected}` - the runner reveals an instruction comment and the user
 must type the `expected` GL command to advance. The user wants tutorials to also
 teach **gl-repl features** (view mode, vertex outlines, grid themes, …) in two ways:
 
@@ -19,7 +19,7 @@ teach **gl-repl features** (view mode, vertex outlines, grid themes, …) in two
 Existing "type a GL command" steps keep working unchanged (now called **COMMAND**).
 
 ### Decisions confirmed with the user
-- **Config restore on exit:** the tutorial is non-destructive — snapshot the config
+- **Config restore on exit:** the tutorial is non-destructive - snapshot the config
   slugs the tutorial touches at start, restore them on exit/completion.
 - **Advance keys for SET steps:** Enter, Tab, or Space.
 - **REQUIRE already-satisfied:** auto-advance (never appear stuck).
@@ -33,7 +33,7 @@ Existing "type a GL command" steps keep working unchanged (now called **COMMAND*
 - Runtime state: `src/widgets/tutorial_state.{h,c}` (`tutorial_state_view/_mut/_reset`).
 - **Config seam (layering):** config lives in the app layer (`glr_config_*`,
   `g_cfg_items[]`), but repl/widgets reach it only through the **installed config
-  bridge** — `repl_export_config_bridge()` (`src/repl/export.h:118`) exposing
+  bridge** - `repl_export_config_bridge()` (`src/repl/export.h:118`) exposing
   `get_int(slug,fallback)` and `apply(ReplExportConfig*)`. Slugs (`grid`,
   `vertex_outlines`, `view_mode`, …) are the decoupled handle, exactly like `@cfg`.
 - **Single user-driven config choke point:** F-keys, Ctrl-keys, and menu clicks all
@@ -70,7 +70,7 @@ void repl_cfg_set_int(const char *slug, int value);      /* one-item bag -> brid
 ```
 `set_int` mirrors `parse_cfg` (`export.c:466`): build a one-entry `ReplExportConfig`
 and call `bridge->apply`. Both no-op when no bridge is installed. **They call only
-`repl_export_config_bridge()` + bag API + bridge function pointers — no `scene_*`/`glr_*`
+`repl_export_config_bridge()` + bag API + bridge function pointers - no `scene_*`/`glr_*`
 calls, no scene/app includes** (satisfies `check-repl-export-via-bridge`).
 
 ### Runner control flow (widgets/tutorial.c)
@@ -78,7 +78,7 @@ calls, no scene/app includes** (satisfies `check-repl-export-via-bridge`).
   record stays shared, and the COMMAND-only tail (`expected_commit_line = line+1`,
   cursor placement, insert mode) moves into the kind branch. (Labels keep anchoring on
   the instruction-comment row for all kinds.)
-- **New `static void tutorial_enter_step(int step)`** — resolve instruction line, emit
+- **New `static void tutorial_enter_step(int step)`** - resolve instruction line, emit
   comment, then branch on kind:
   - COMMAND: existing typing setup + `tutorial_set_step_status` + `editor_completion_update`.
   - SET: `repl_cfg_set_int(slug, value)`; `expected_commit_line = -1`; status
@@ -96,13 +96,13 @@ calls, no scene/app includes** (satisfies `check-repl-export-via-bridge`).
   first (see below).
 - **Public additions** (declare in `src/widgets/tutorial.h`):
   - `TutorialStepKind tutorial_current_step_kind(void);` (COMMAND when inactive).
-  - `void tutorial_notify_state_changed(void);` — REQUIRE: advance if the watched slug
+  - `void tutorial_notify_state_changed(void);` - REQUIRE: advance if the watched slug
     now equals its target (slug-scoped; ignores unrelated config changes).
-  - `int tutorial_handle_ack_key(unsigned char key);` — SET step + key ∈ {`\r`,`\n`,`\t`,` `}
+  - `int tutorial_handle_ack_key(unsigned char key);` - SET step + key ∈ {`\r`,`\n`,`\t`,` `}
     ⇒ advance, return 1; else 0.
-  - `int tutorial_block_noncommand_commit(void);` — SET/REQUIRE ⇒ set a kind-appropriate
+  - `int tutorial_block_noncommand_commit(void);` - SET/REQUIRE ⇒ set a kind-appropriate
     status *inside tutorial.c* and return 1; COMMAND/inactive ⇒ 0. (Keeps the editor
-    precheck from adding any new `repl_*` symbol — see ownership note.)
+    precheck from adding any new `repl_*` symbol - see ownership note.)
 
 ### Config snapshot / restore (non-destructive)
 `fill_scene_subset` does **not** cover `view_mode`/`variable_panel`, so snapshot the
@@ -112,8 +112,8 @@ calls, no scene/app includes** (satisfies `check-repl-export-via-bridge`).
 - `tutorial_start` (after transient entry): walk steps 0..N-1; for each SET/REQUIRE
   step, record each distinct `cfg_slug` with `repl_cfg_get_int(slug, fallback)`.
 - On `tutorial_exit` and on the completion branch: write each saved `(slug, orig)`
-  back via `repl_cfg_set_int`, then clear. (Other teardown paths — example/scene/
-  workspace load, `glr_app_reset_all` — call `tutorial_state_reset()` directly and
+  back via `repl_cfg_set_int`, then clear. (Other teardown paths - example/scene/
+  workspace load, `glr_app_reset_all` - call `tutorial_state_reset()` directly and
   re-apply their own config, so they need no restore.)
 
 ### Wiring (app layer → widget, correct direction)
@@ -127,7 +127,7 @@ calls, no scene/app includes** (satisfies `check-repl-export-via-bridge`).
   during a REQUIRE step won't interfere; scope the ack consume strictly to SET steps.)
 - `src/editor/input.c`: in `tutorial_precheck_current_input` (~`:1233`), short-circuit
   at the top with `if (tutorial_active() && tutorial_block_noncommand_commit()) {
-  editor_completion_clear(); return 0; }` — replaces the misleading "Move cursor to the
+  editor_completion_clear(); return 0; }` - replaces the misleading "Move cursor to the
   tutorial insertion line" message for SET/REQUIRE steps. **Adds only a `tutorial_*`
   call (no new `repl_*` symbol).**
 
@@ -137,7 +137,7 @@ Make `repl_tutorial_validate_entry` kind-aware: sentinel break on `!comment`; th
 - SET/REQUIRE: require `comment`, non-empty `cfg_slug`, and `expected == NULL` (reject
   non-NULL with a clear diagnostic); skip `expected_is_single_command`.
 - Keep label-uniqueness + placement (APPEND/LABEL) rules for all kinds.
-Slug *validity* can't be checked at the repl layer (no bridge) — unknown slugs no-op at
+Slug *validity* can't be checked at the repl layer (no bridge) - unknown slugs no-op at
 runtime; note this in a comment.
 
 ### Demo tutorial (tutorials.c)
@@ -145,7 +145,7 @@ Add one short entry (e.g. "Feature Tour"): draw a triangle (COMMAND ×5) →
 `STEP_REQUIRE(NULL, "// Press F7 to turn on vertex outlines.", "vertex_outlines", 1)` →
 `STEP_SET(NULL, "// The radar grid looks like this.", "grid", 10 /* Radar */)` →
 `STEP_SET(NULL, "// The focus grid looks like this.", "grid", 6 /* Focus */)`.
-Use **integer** grid values with a naming comment — `tutorials.c` is repl-layer and
+Use **integer** grid values with a naming comment - `tutorials.c` is repl-layer and
 must not include `scene/themes.h`; the catalog already treats cfg values as opaque ints.
 
 ## Files to modify
@@ -155,7 +155,7 @@ must not include `scene/themes.h`; the catalog already treats cfg values as opaq
 | `src/repl/tutorials.c` | macros (`STEP_SET`/`STEP_REQUIRE`, update existing+sentinel); re-key termination on `comment`; kind-aware validator; accessors; demo tutorial |
 | `src/repl/export.c` | implement `repl_cfg_get_int`/`repl_cfg_set_int` (bridge-only) |
 | `src/repl/state_owners.h` | declare the two `repl_cfg_*` wrappers |
-| `src/widgets/tutorial_state.h` | (if needed) nothing required — snapshot lives file-static in tutorial.c |
+| `src/widgets/tutorial_state.h` | (if needed) nothing required - snapshot lives file-static in tutorial.c |
 | `src/widgets/tutorial.h` | declare `tutorial_current_step_kind`, `_notify_state_changed`, `_handle_ack_key`, `_block_noncommand_commit`; doc |
 | `src/widgets/tutorial.c` | split emit; `tutorial_enter_step`; `tutorial_advance_to_next_step` (iterative); kind branches; cfg baseline capture/restore; commit-block hint |
 | `src/editor/input.c` | precheck short-circuit via `tutorial_block_noncommand_commit` (no new `repl_*`) |
@@ -165,21 +165,21 @@ must not include `scene/themes.h`; the catalog already treats cfg values as opaq
 
 ## Ownership-check compliance (verified against the scripts)
 The user asked specifically that no ownership checks break. Verified:
-- **`check-repl-export-via-bridge`** — the new `export.c` wrappers call only
+- **`check-repl-export-via-bridge`** - the new `export.c` wrappers call only
   `repl_export_config_bridge()` + bag API + bridge function pointers; no `scene_*(`/
   `glr_*(`, no scene/app includes. ✓
 - **`check-editor-repl-surface`** (ratchets `input.c` at **21** unique `repl_*`
-  symbols) — the precheck change routes through a `tutorial_*` widget call that sets
+  symbols) - the precheck change routes through a `tutorial_*` widget call that sets
   status internally; `input.c` gains **zero** new `repl_*` symbols. ✓
-- **`check-state-boundaries` / `check-views-no-owners`** — only restrict
+- **`check-state-boundaries` / `check-views-no-owners`** - only restrict
   `SCENE_SRCS`/`UI_SRCS` (+`glr_ctrl.c`); `widgets/tutorial.c` already includes
   `state_owners.h`. Adding declarations there touches no scene/UI includer. ✓
-- **`check-views-flat`** — scans only `state_views.h`/`ui_*.h`/specific scene headers;
+- **`check-views-flat`** - scans only `state_views.h`/`ui_*.h`/specific scene headers;
   `TutorialStep` isn't scanned and const-pointer fields are allowed regardless. ✓
-- **`check-module-prefixes`** (denylist) — `repl_cfg_*`, `repl_tutorial_step_*`,
+- **`check-module-prefixes`** (denylist) - `repl_cfg_*`, `repl_tutorial_step_*`,
   `tutorial_*`, `glr_ctrl_router_*` aren't denied; demo uses integer grid values (no
   `scene/themes.h` in repl). ✓
-- **`check-domain-encapsulation`** — only scans `repl_state_<domain>_mut(`; none added. ✓
+- **`check-domain-encapsulation`** - only scans `repl_state_<domain>_mut(`; none added. ✓
 - Untouched guard surfaces: parser/compile/apply set-status, GL boundaries, feed_line/
   load_line_to_input in pipeline, source-document owners. ✓
 
@@ -196,7 +196,7 @@ Add to `tests/test_tutorial_runner.c` (harness installs the bridge via
 - REQUIRE advances when the watched slug reaches target via `glr_cfg_cycle_row(row,1)`;
   toggling a **different** config does **not** advance; already-satisfied auto-advances.
 - Commit is rejected during SET/REQUIRE (`set_input_text(...)` + `editor_handle_key(';',…)`
-  ⇒ step unchanged, no new doc line, SET hint shown — not "Move cursor…").
+  ⇒ step unchanged, no new doc line, SET hint shown - not "Move cursor…").
 - Config **restore on exit**: set a slug as baseline, run a SET step that changes it,
   `tutorial_exit()` ⇒ slug back to baseline.
 - Label-targeted COMMAND step still anchors correctly when a SET step sits between it
@@ -211,7 +211,7 @@ test-stubs`) per CLAUDE.md.
 - REQUIRE matches an **exact** value at notify time (not a transition); overshooting a
   multi-value cycle and returning still lands the match. Documented behavior.
 - `editor_feed_line`-based full-walk loops in existing tests must not be pointed at the
-  demo tutorial (they'd stall at a SET/REQUIRE step) — drive those via the ack/notify
+  demo tutorial (they'd stall at a SET/REQUIRE step) - drive those via the ack/notify
   entries instead.
 - Restore reverts **both** SET- and REQUIRE-applied slugs to the pre-tutorial value
   (simplest consistent "restore on exit" semantics).

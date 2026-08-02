@@ -73,8 +73,8 @@ stale texture name.
 
    Use power-of-two dimensions (`next_pow2(sw) x next_pow2(sh)`). This is
    **required**, not just conservative: NPOT textures are an OpenGL 2.0
-   feature (`ARB_texture_non_power_of_two`); OpenGL 1.1 — the
-   fixed-function baseline this codebase targets (no shaders, no FBOs) —
+   feature (`ARB_texture_non_power_of_two`); OpenGL 1.1 - the
+   fixed-function baseline this codebase targets (no shaders, no FBOs) -
    only supports power-of-two `GL_TEXTURE_2D` dimensions. Do **not** add a
    runtime NPOT check: the POT-texture-plus-`umax/vmax`-subregion path
    below renders correctly on both GL 1.1 and GL 2.0+, so branching on
@@ -102,12 +102,12 @@ stale texture name.
 
    Coordinate origin: `glCopyTexSubImage2D` reads the framebuffer in
    GL window coordinates (**bottom-left origin**). `sx, sy, sw, sh` are
-   the exact rect `config->scene_x/y/w/h` — the same rect the scene was
-   rendered into via `glViewport(sx, sy, sw, sh)` — so the copy region
+   the exact rect `config->scene_x/y/w/h` - the same rect the scene was
+   rendered into via `glViewport(sx, sy, sw, sh)` - so the copy region
    and the redraw viewport are consistent by construction (no Y flip is
    needed; do not introduce one). If a future change makes `scene_y`
    top-left-origin, this copy and the redraw below must both flip
-   together — assert/keep them defined in the same convention.
+   together - assert/keep them defined in the same convention.
 
    The visible texture region is:
 
@@ -144,7 +144,7 @@ stale texture name.
    one channel at a time over the base image.
 
    The offset is applied to the quad's **vertex X positions**, in the
-   `gluOrtho2D(0, sw, 0, sh)` pixel space — i.e. translate the screen
+   `gluOrtho2D(0, sw, 0, sh)` pixel space - i.e. translate the screen
    quad by ±dx pixels. **Texcoords are unchanged** (still `0..umax` /
    `0..vmax`); do not offset in texture space. (Vertex-space shift keeps
    the offset an exact pixel amount regardless of the POT texture size;
@@ -284,7 +284,7 @@ Keep `USE_GL_STUBS=1` and `make test-stubs` building.
 
 `tests/gl-stubs/include/GL/gl.h` already has `glBindTexture`,
 `glTexCoord2f`, `glTexEnvi`, `glGetIntegerv` (used for the
-`GL_MAX_TEXTURE_SIZE` guard — do **not** re-add it), `GL_TEXTURE_2D`,
+`GL_MAX_TEXTURE_SIZE` guard - do **not** re-add it), `GL_TEXTURE_2D`,
 `GL_LINEAR`, `GL_REPLACE`, `GL_TEXTURE_ENV`, and `GL_TEXTURE_ENV_MODE`.
 
 Add, following the file's existing inline no-op + `gl_stub_tick` style:

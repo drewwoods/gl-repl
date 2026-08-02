@@ -1,6 +1,6 @@
 # First-class `else` / `else if` REPL commands
 
-Status: **done** — shipped on `feature/first-class-else-if` (commit
+Status: **done** - shipped on `feature/first-class-else-if` (commit
 `a3a1194d`) and reviewed. The command model, structured compile/editor path,
 source-scope indent/extent behavior, flatten arm selection, reformat/import
 coverage, defensive replay skip-list handling, and architecture notes all
@@ -37,7 +37,7 @@ nested `if` syntax.
   input is recognized before the generic close-brace compiler can claim it.
 - Flatten resolves the conditional **at flatten time**: `flatten_if_block()`
   (`src/repl/flatten.c`) evaluates `CMD_IF_BEGIN`'s condition, emits the body
-  only when true, and skips the `CMD_IF_BEGIN`/`CMD_IF_END` markers — they never
+  only when true, and skips the `CMD_IF_BEGIN`/`CMD_IF_END` markers - they never
   reach the flat program. The flat array is rebuilt every frame, so an animated
   condition re-selects each frame.
 - The `case CMD_IF_BEGIN` / `CMD_IF_END` handlers in `src/repl/executor.c` and
@@ -103,7 +103,7 @@ first-class `else if`; the model should preserve that shape.
 | Structured compile / editor commit | `src/repl/compile.c`, `src/repl/compile.h`, `src/editor/commit.c`, `src/editor/commit.h` | `} else {` / `} else if(...) {` currently get stolen by close-brace handling; compile path must recognize and validate branch transitions before generic close-brace. |
 | Source-scope / structural editing | `src/repl/source_scope.c`, `src/repl/source_scope.h`, `src/editor/input.c`, `src/editor/clipboard.c`, `src/repl/compile.c` | Block extent, nearest-open-block, sticky editing, block copy/cut, and block toggle-comment logic need branch-chain-aware matching. |
 | Flatten (the core of the feature) | `src/repl/flatten.c` | `flatten_if_block()` currently chooses "emit body" vs "skip body"; it becomes the **sole** arm selector: evaluate `IF_BEGIN`, then each same-depth `CMD_ELSE_IF` in source order, and emit the first true arm's range (or the optional `CMD_ELSE` arm), continuing to strip all separators as it strips IF markers today. |
-| Execute / replay (re-scoped — mostly do *not* extend) | `src/repl/executor.c`, `src/subsystems/replay/replay_annotations.c`, `src/subsystems/replay/replay_playback.c` | Because flatten strips IF markers, the runtime/replay IF handlers are dead on the flat path and need **no** separator-aware skip logic. Treat as cleanup: optionally delete the dead `case CMD_IF_BEGIN/END` blocks, and add `CMD_ELSE`/`CMD_ELSE_IF` to `replay_cmd_is_focus_candidate`'s skip-list for parity. |
+| Execute / replay (re-scoped - mostly do *not* extend) | `src/repl/executor.c`, `src/subsystems/replay/replay_annotations.c`, `src/subsystems/replay/replay_playback.c` | Because flatten strips IF markers, the runtime/replay IF handlers are dead on the flat path and need **no** separator-aware skip logic. Treat as cleanup: optionally delete the dead `case CMD_IF_BEGIN/END` blocks, and add `CMD_ELSE`/`CMD_ELSE_IF` to `replay_cmd_is_focus_candidate`'s skip-list for parity. |
 | Formatting / canonical text | `src/repl/reformat.c`, `src/repl/normalize.c`, `src/repl/text_helpers.c` as needed | Reformatter and normalization paths must preserve canonical `} else if(expr) {` and `} else {` output. |
 | Import / load / export | `src/repl/load.c`, `src/repl/import.c`, `src/repl/export*.c` | Export can emit canonical separator lines, but import/load need explicit branch-separator support to round-trip the structure back into REPL commands. |
 | Tests | `tests/test_repl_compile.c`, `tests/test_repl_editor.c`, `tests/test_repl_core_commit.c`, `tests/test_repl_executor.c`, `tests/test_repl_core_io.c`, replay/annotation tests as needed | Conditional parsing, editing, flattening, execution, replay annotation, and round-trip behavior all need coverage. |
@@ -159,19 +159,19 @@ first-class `else if`; the model should preserve that shape.
    `CMD_ELSE` / `CMD_ELSE_IF` need a `g_command_type_specs[]` entry with
    `CMD_CAT_CONDITIONAL` so they pick up the `if` highlight color. They will
    have a syntax *category* but intentionally no block-head/end *predicate*
-   twin — confirm the predicate↔category drift test in
+   twin - confirm the predicate↔category drift test in
    `tests/test_replay_walk.c` allows that asymmetry (per `command.h`'s note on
    intentionally-narrower subsets) or add an explicit carve-out.
 
 8. **`goto`/label semantics are unchanged, not improved.**
    A label inside a *not-taken* arm is absent from the flat stream (its arm was
-   not emitted) — identical to today's single `if`, so not a regression, but
+   not emitted) - identical to today's single `if`, so not a regression, but
    state it. `flatten.c` already rejects goto/labels inside `funcN`; nothing
    new is needed there.
 
 ## Alternative considered: a `switch` / `case` construct
 
-Not easier — and less general. A `switch(expr) { case k: … default: … }` is the
+Not easier - and less general. A `switch(expr) { case k: … default: … }` is the
 *same separator shape* as this plan (`SWITCH_BEGIN` + repeatable `CASE` +
 optional `DEFAULT` + `SWITCH_END`), so it inherits the entire
 source-scope / indent / reformat / round-trip / block-editing cost above with
@@ -179,7 +179,7 @@ nothing saved, then adds problems `else if` doesn't have:
 
 - **Fall-through is the fork in the road.** C `switch` falls through until
   `break`. Real fall-through means a first-class `CMD_BREAK` and a flatten model
-  that emits from the matched case *through* later cases until a break —
+  that emits from the matched case *through* later cases until a break -
   strictly harder than one-arm selection. Dropping fall-through (each `case`
   auto-breaks) makes `switch` merely an equality-dispatch spelling of an
   `else if` chain.
@@ -194,7 +194,7 @@ nothing saved, then adds problems `else if` doesn't have:
 
 Recommendation: ship `else` / `else if` first. If integer-mode dispatch
 ergonomics are wanted later, a *no-fall-through* `switch` can be layered cheaply
-on the separator infrastructure — and because no-fall-through `switch` ≡ an
+on the separator infrastructure - and because no-fall-through `switch` ≡ an
 `else if` chain, desugaring `switch` → `else if` at parse time is defensible
 (it flattens rather than nests, unlike desugaring `else if` → nested `if`,
 which this plan rejects). The fall-through decision is the gate: if you want C
@@ -204,16 +204,16 @@ fall-through, scope `CMD_BREAK` explicitly.
 
 | Scope | Estimate |
 |---|---|
-| Parse + flatten prototype for `else` only (no execute changes — flatten selects the arm) | A few hours |
+| Parse + flatten prototype for `else` only (no execute changes - flatten selects the arm) | A few hours |
 | Parse + flatten prototype for first-class `else` + `else if` | **0.5–1 day** |
 | Clean implementation with editor structural behavior (compile ordering, separator indent, block extent / copy / comment) and tests | **About 2 focused days** |
 | Full polish including import/export round-trip, reformatting, dead-code cleanup in executor/replay, and edge cases | **2–3 days** |
 
-Overall rating: **moderate** — lower than a first read suggests. First-class
+Overall rating: **moderate** - lower than a first read suggests. First-class
 `else if` turns a two-arm conditional into a branch chain that the
 **source/structural** tools (compile, source-scope, reformat, import/export,
 editor block ops) must understand, but the **runtime** path needs essentially
-no new logic — flatten already owns arm selection. The risk concentrates in
+no new logic - flatten already owns arm selection. The risk concentrates in
 flatten + structural editing, not in the executor/replay walkers.
 
 ## Recommended implementation order
@@ -242,8 +242,8 @@ flatten + structural editing, not in the executor/replay walkers.
 7. Add reformat / completion support (incl. separator-line indent and the
    `command_spec` / drift-test wiring from implications 6–7).
 8. Add export/import round-trip coverage.
-9. Lock tests *as each stage lands* — at minimum a flatten arm-selection test
-   and a compile-recognition test before the structural-editor work — rather
+9. Lock tests *as each stage lands* - at minimum a flatten arm-selection test
+   and a compile-recognition test before the structural-editor work - rather
    than deferring the whole matrix to the end, given the breadth of structural
    code touched and the index-keyed golden fixtures.
 
@@ -272,30 +272,30 @@ empirical `--dump-flat` check.
 
 ### What matched the plan
 
-- **Model** (`command.h`) — `CMD_ELSE_IF` / `CMD_ELSE` appended (stable enum
+- **Model** (`command.h`) - `CMD_ELSE_IF` / `CMD_ELSE` appended (stable enum
   order), new `repl_cmd_is_if_branch_separator` predicate, deliberately kept
   out of the block head/end sets.
-- **Flatten** (`flatten.c`) — `flatten_if_block` became a first-true-arm chain
+- **Flatten** (`flatten.c`) - `flatten_if_block` became a first-true-arm chain
   selector (`flatten_if_arm_boundary` walks same-depth separators, skipping
   nested blocks via block-head/end depth tracking); markers stay stripped.
-- **Executor** (`executor.c`) — the dead `CMD_IF_BEGIN`/`IF_END` walker was
+- **Executor** (`executor.c`) - the dead `CMD_IF_BEGIN`/`IF_END` walker was
   **deleted** (not extended) and folded into the "resolved during flatten" case
   group, matching the re-scoped Execute/replay guidance. `replay_playback.c`
   got the defensive focus-list parity entries.
-- **Compile** (`compile.c`) — `if_branch` dispatched before close-brace;
+- **Compile** (`compile.c`) - `if_branch` dispatched before close-brace;
   validation is *stronger* than the plan sketched: it rejects duplicate `else`,
   `else` not last, and `else if` after `else`.
-- **Source-scope** — separator-line outer-indent fix (implication 6,
+- **Source-scope** - separator-line outer-indent fix (implication 6,
   `cmd_indent` / `cmd_indent_chars`) and chain-head `block_extent` for
   copy/cut/comment both present.
-- **Editor / reformat / load** — `editor_compile_if_branch` wired first in the
+- **Editor / reformat / load** - `editor_compile_if_branch` wired first in the
   block-struct chain (handles insert + overwrite), reformat emits canonical
   separator text, the loader dispatches `if_branch`.
 
 ### Empirical confirmation
 
 `./gl-repl --example cond --dump-flat` reports `num_flat_cmds=18` with **zero**
-`CMD_IF_BEGIN`/`IF_END` markers — confirming branch selection is entirely a
+`CMD_IF_BEGIN`/`IF_END` markers - confirming branch selection is entirely a
 flatten-time concern and the deleted executor/replay IF handling was dead on
 the live path, exactly as the plan's review correction stated.
 

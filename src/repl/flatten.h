@@ -14,7 +14,7 @@
  * Local variables (loop counters, function params) are snapshotted into
  * FlatCmdLocalVars for each flat command. Argument re-evaluation itself
  * happens at flatten time (the per-frame re-flatten is what animates
- * time-dependent t and slider-modified variables — the executor consumes
+ * time-dependent t and slider-modified variables - the executor consumes
  * baked args only); the stored snapshots serve consumers that reconstruct a
  * flat command's scope after the fact, e.g. replay's value-tracing
  * annotations.
@@ -32,8 +32,8 @@
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
  * Not read by the executor (which consumes baked args); consumers that need
- * a flat command's scope after the fact — replay's value-tracing
- * annotations — read it to reconstruct per-instance bindings. */
+ * a flat command's scope after the fact - replay's value-tracing
+ * annotations - read it to reconstruct per-instance bindings. */
 typedef struct {
     int   source_cmd_idx;
     float iter_value;
@@ -120,7 +120,7 @@ typedef struct {
     /* Per-predef-root dependency masks for the produced flat program
      * (flatten plan phase 3): structural roots can change flat-stream
      * topology or frozen local snapshots (loop bounds, if/else-if
-     * conditions, call args — plus everything conservatively widened to
+     * conditions, call args - plus everything conservatively widened to
      * all-bits: scratch reads in structural positions, uncached/failed
      * expressions); value roots feed baked args or assignments. Runs
      * without an expression cache report all-bits in both (fully
@@ -152,11 +152,11 @@ int repl_flat_clears_stencil(const GLCmd *flat_cmds, int flat_count);
  * re-expanding it: baked argument slots and assignment results are
  * recomputed from each command's compiled programs under its frozen local
  * snapshot, and assignments (scalar + scratch) are re-applied in stream
- * order so later reads see them — the same threading a full flatten
+ * order so later reads see them - the same threading a full flatten
  * performs. Topology, provenance, flags, local snapshots, and lighting
  * classification are never touched; that is what makes it valid only for
  * value-routed changes (args_dirty_mask): any structural root change must
- * take repl_flatten_program instead. Compiled-only by design — a needed
+ * take repl_flatten_program instead. Compiled-only by design - a needed
  * program that is missing (line not READY) fails the walk, it never falls
  * back to text parsing. */
 typedef struct {

@@ -9,8 +9,8 @@
  *   - scalar assignments evaluate their already-canonical REPL RHS directly.
  *
  * This suite tests that claim over the whole built-in corpus. Each example is
- * flattened twice from an identical baseline — once normally, once with
- * ReplFlattenOptions.force_reparse (the old always-reparse behavior) — and the
+ * flattened twice from an identical baseline - once normally, once with
+ * ReplFlattenOptions.force_reparse (the old always-reparse behavior) - and the
  * two runs must agree on:
  *
  *   - the flatten result (ok / flat count / lighting / status text),
@@ -222,7 +222,7 @@ static void compare_runs(const char *name, float t, const char *tag,
 /* Flatten the live document three ways at `t` from an identical baseline
  * and compare against the forced-reparse reference:
  *   - cold: fast paths + an empty expression cache (this run builds it);
- *   - warm: the same cache, now READY — the compiled path proper.
+ *   - warm: the same cache, now READY - the compiled path proper.
  * The cache carries over between the cold and warm runs only; the example
  * load's source-dirty invalidation cleared it beforehand. */
 static void compare_document_at_time(const char *name, float t) {
@@ -267,7 +267,7 @@ static void test_corpus_differential(void) {
 }
 
 /* The fast path must still emit the enclosing loop/function bindings on a
- * literal command — replay's value-tracing annotations read them. */
+ * literal command - replay's value-tracing annotations read them. */
 static void test_literal_cmd_keeps_local_snapshot(void) {
     glr_ctrl_reset_all();
     editor_feed_line("for(i, 0, 3) {");
@@ -313,7 +313,7 @@ static void load_auto_normal_doc(void) {
 }
 
 /* The three vertices of a single triangle all take its one face normal, and
- * the pass emits one row per run of vertices sharing a normal — so the
+ * the pass emits one row per run of vertices sharing a normal - so the
  * document synthesizes exactly one auto-normal, not one per vertex. What
  * these tests pin is that is_auto survives the flatten, not how many rows
  * carry it; the count only has to match what the pass actually produced. */
@@ -332,7 +332,7 @@ static void test_literal_cmd_keeps_is_auto(void) {
 /* The two paths must agree on the synthesized normal too. The forced path runs
  * repl_parser_parse_command_ctx, which memsets the whole ReplParsedLine and
  * never writes is_auto (except to clear it for CMD_EMPTY / CMD_COMMENT) or
- * var_idx at all — so without an explicit post-parse restore in
+ * var_idx at all - so without an explicit post-parse restore in
  * flatten_reparse_line, the reparsed normal loses is_auto and the seam is not
  * semantically equivalent. test_corpus_differential cannot catch this: no
  * built-in example carries an auto-normal, so the field never differs there. */
@@ -353,7 +353,7 @@ static float mult_matrix_cell(const FlattenRun *run, int cell) {
  * time, in stream order, and baked onto the flat command. Two things have
  * to hold: the bake sees the writes from the A[k] = ... lines above it (not
  * a stale or zeroed array), and it happens on every path into the flat
- * array — the command carries has_vars=0, so the fast path copies the
+ * array - the command carries has_vars=0, so the fast path copies the
  * source command wholesale and would otherwise ship the parser's identity
  * placeholder while the forced-reparse path shipped the real matrix. */
 static void test_mult_matrixf_snapshot(void) {
@@ -400,7 +400,7 @@ static void test_mult_matrixf_snapshot(void) {
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "animated cell re-bakes at t=4",
                               mult_matrix_cell(&g_fast, 0), 8.0f);
 
-    /* Both flatten paths must ship the same matrix — see the has_vars=0
+    /* Both flatten paths must ship the same matrix - see the has_vars=0
      * fast-path note above. */
     flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "forced reparse bakes the same cell",
@@ -409,7 +409,7 @@ static void test_mult_matrixf_snapshot(void) {
 
 /* The compound-literal form has no scratch array to snapshot: its cells are
  * expression slots on the line, sitting at REPL_EXPR_ROLE_CMD_ARG ordinals
- * 0..15 — past the args[] window the generic refresh walks. Miss them and a
+ * 0..15 - past the args[] window the generic refresh walks. Miss them and a
  * matrix built from `t` freezes at its commit-time value on the second
  * flatten, when the warm compiled path takes over from the text reparse. */
 static void test_mult_matrixf_literal_reeval(void) {
@@ -475,7 +475,7 @@ static void test_auto_normal_differential(void) {
 }
 
 /* var_idx is commit-time state (compile.c) that the parser never writes, so a
- * reparse would zero it — retargeting the assignment at predef slot 0 (`t`).
+ * reparse would zero it - retargeting the assignment at predef slot 0 (`t`).
  * flatten_reparse_line does NOT restore it, and does not need to: flatten_range
  * routes CMD_VAR_ASSIGN to flatten_var_assign before the reparse path can see
  * it. That routing is the invariant this test pins. If a future change lets a
@@ -602,7 +602,7 @@ static void test_capture_construct_coverage(void) {
 
     /* The scene above committed line by line, so the live cache may hold
      * partial builds from intermediate states; a source-dirty already
-     * invalidated it on every commit — the last one leaves it EMPTY. */
+     * invalidated it on every commit - the last one leaves it EMPTY. */
     for (size_t s = 0; s < sizeof(k_times) / sizeof(k_times[0]); s++)
         compare_document_at_time("construct coverage", k_times[s]);
 

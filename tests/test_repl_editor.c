@@ -434,7 +434,7 @@ int main() {
 
     /* commit_current_input ordering invariant #2 (within var_statements):
      * `editor_try_commit_var_statements_then_insert` is the overwrite-
-     * Enter variant — it runs float_decl before assign_variable and
+     * Enter variant - it runs float_decl before assign_variable and
      * additionally flips into insert mode + clears input on success
      * (post-effects the canonical `_any` chain does not provide). */
     {
@@ -479,8 +479,8 @@ int main() {
      * block_structs attempt unconditionally ahead of the var-statement
      * chain and the GL parser, matching the ;-key path
      * (editor_try_commit_any). These cases drive the real Enter route
-     * (editor_handle_key('\r', ...)) from a glVertex line — a
-     * non-block-head, non-last cursor — and assert each block head
+     * (editor_handle_key('\r', ...)) from a glVertex line - a
+     * non-block-head, non-last cursor - and assert each block head
      * commits instead of erroring out. */
     {
         struct { const char *input; CmdType want; const char *label; } cases[] = {
@@ -700,7 +700,7 @@ int main() {
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
             /* Config items are no longer activated through
-             * glr_action_menu_item_activate(GLR_MENU_CONFIG, …) — that
+             * glr_action_menu_item_activate(GLR_MENU_CONFIG, …) - that
              * path is now a parent-row no-op (plan Step 5). The Config
              * flyout route invokes glr_cfg_cycle_row() on the absolute
              * g_cfg_items[] index; exercise that primitive directly. */
@@ -1002,17 +1002,17 @@ int main() {
     /* 3b. Undo ring is cleared by glr_ctrl_reset_all / scene switch /
      * example load. Cross-scene undo would otherwise restore a previous
      * scene's pre-mutation state into the current scene's live commands
-     * — silently corrupting the active scene.
+     * - silently corrupting the active scene.
      *
      * Reproducer for the bug (without the clear):
      *   1. Populate scene A with 2 cmds; push an undo snapshot (saves
      *      A's current state).
-     *   2. Reset (simulates scene switch / example load — the live REPL
+     *   2. Reset (simulates scene switch / example load - the live REPL
      *      state goes empty but the undo ring is preserved by the
      *      buggy code).
      *   3. Populate scene B with 1 cmd; verify it stuck.
      *   4. Press Ctrl+Z. The pop pulls scene A's snapshot off the ring
-     *      and restores 2 cmds into the live state — but the user
+     *      and restores 2 cmds into the live state - but the user
      *      thinks they're on scene B. Live state of "B" now shows
      *      what A had at push time.
      *
@@ -1522,7 +1522,7 @@ int main() {
     }
 
     /* 8i. Copy refuses to capture a range that contains a float
-     * declaration. (Paste-time decl guard is gone in Phase B —
+     * declaration. (Paste-time decl guard is gone in Phase B -
      * copy-time guard prevents decls from entering the clipboard
      * in the first place; pasting a decl that somehow ended up in
      * the clipboard now goes through the standard commit chain
@@ -1691,7 +1691,7 @@ int main() {
 
     /* 12c. Enter at column 0 of a committed line inserts a real,
      * persistent blank line ABOVE and keeps the cursor on the original
-     * content (it follows the text down one row) — "newline before the
+     * content (it follows the text down one row) - "newline before the
      * cursor". No transient insert row that vanishes on a same-index
      * click. */
     {
@@ -2579,7 +2579,7 @@ int main() {
      * computed a huge size_t and wrote out of bounds (ASan:
      * stack-buffer-overflow at compile.c format_decl_text). Test 39 covers the
      * name *count* cap and test_repl_locals.c's long-decl case covers width
-     * just under the buffer — neither combines the two maxima, which is why
+     * just under the buffer - neither combines the two maxima, which is why
      * the whole ASan suite stayed green.
      *
      * Widths are derived, not hardcoded, so the test tracks the limits. */
@@ -2587,7 +2587,7 @@ int main() {
         char input[MAX_LINE_LEN];
         int off;
         /* Twelve chars is the widest `%g` rendering of a float ("-1.23457e-38"
-         * and friends), and it is its own shortest source spelling — so the
+         * and friends), and it is its own shortest source spelling - so the
          * input stays under MAX_LINE_LEN while the formatted row blows past. */
         const char *wide_val = "-1.23457e-38";
 
@@ -2662,7 +2662,7 @@ int main() {
         glr_ctrl_reset_all();
         /* Fill all user-declarable slots (MAX_PREDEF_VARS - 1; slot 0 is
          * reserved for t which is re-declared on every reset). Feed in
-         * batches of 8 — the per-line name limit. */
+         * batches of 8 - the per-line name limit. */
         int user_slots = MAX_PREDEF_VARS - 1;
         int filled_cmds = 0;
         char last_var[16] = "";
@@ -3332,7 +3332,7 @@ int main() {
         /* Editor owns the text buffer (Phase 4 of
          * docs/plans/done/edit-line-ownership.md). A clear-all has to drop
          * the editor's source text in lockstep with the command store
-         * — otherwise the user sees the old lines in the code panel
+         * - otherwise the user sees the old lines in the code panel
          * while every commit acts on an empty cmd-store. */
         ASSERT_INT("clear_all: source_document has baseline",
                    source_document_view().line_count, 6);
@@ -3654,7 +3654,7 @@ int main() {
 
     /* Ctrl++ / Ctrl+- step the Config "Accum passes" cycle (clamped, no
      * wrap), gated on use_accum and the effect being active. The passes
-     * cycle never turns the effect off — it only changes the sample count.
+     * cycle never turns the effect off - it only changes the sample count.
      * Ladder steps and indices are derived from GLR_ACCUM_PASS_LADDER so
      * editing the ladder can't silently invalidate this test. */
     {
@@ -3894,7 +3894,7 @@ int main() {
     }
 
     /* Extra coverage: Help overlay scrolling. Use a small viewport so
-     * the active tab overflows — scroll is now clamped to the real
+     * the active tab overflows - scroll is now clamped to the real
      * content bounds, so a tab that fully fits would (correctly) pin
      * at 0 and never increment. */
     {
@@ -4130,7 +4130,7 @@ int main() {
         {
             /* Ctrl+S is now File > Save Scene. With an active *example*
              * (no named user scene, no workspace bound) it falls back
-             * to the default ./output.c save — keep that deterministic
+             * to the default ./output.c save - keep that deterministic
              * so the assertion below is stable. */
             repl_load_example(0);
             /* Keep the default output path inside a throwaway directory so

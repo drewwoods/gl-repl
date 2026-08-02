@@ -130,7 +130,7 @@ static UiTextPanelColor repl_code_panel_rgba(float r, float g, float b, float a)
 
 /* Line-range selection band (shift+up/down or shift+click selecting
  * whole rows). Deliberately the muted blue from the editor sub-palette
- * — distinct from text_panel.c's brighter k_clr_selection_band, which
+ * - distinct from text_panel.c's brighter k_clr_selection_band, which
  * marks the in-input character-range selection. The two highlights
  * coexist in the same panel; keeping them visually distinct makes
  * it clear which selection mode is active. */
@@ -268,7 +268,7 @@ static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
     for (int i = 0; g_footer_pre_init[i]; i++) {
         if (strcmp(g_footer_pre_init[i],
                    REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-            /* Read the frame-frozen block from the snapshot — never
+            /* Read the frame-frozen block from the snapshot - never
              * re-resolve live here, or this pass and the render pass
              * (opposite sides of render3d_draw_scene) could disagree
              * on row count across a 2D/3D transition. */
@@ -411,7 +411,7 @@ static int repl_code_panel_cursor_doc_line_from_layout(
     /* The three former branches (insert mode / in-range edit line /
      * out-of-range fallback) all summed the same prefix and then added
      * the identical cursor-row term. The prefix length is the same in
-     * every case: min(edit_line, document_count) — insert mode clamps
+     * every case: min(edit_line, document_count) - insert mode clamps
      * to both bounds; non-insert uses edit_line when it is
      * < document_count, otherwise document_count, which is that same
      * min. So the dispatch was redundant. */
@@ -621,7 +621,7 @@ static int repl_code_panel_line_is_affecting_transform(const UiRenderSnapshot *s
 }
 
 /* OR of the bit-index masks (aux) over every HIGHLIGHT_ATTRIB_STATE entry on a
- * line — the set of attribute-bit colours the glPushAttrib gutter marker bands
+ * line - the set of attribute-bit colours the glPushAttrib gutter marker bands
  * for this saved/reverted setter line. 0 when the line carries no attrib
  * highlight. Multi-entry per line (a cell covered by several bits, or several
  * cells on one line), like the unbalanced scanner above. */
@@ -638,7 +638,7 @@ static unsigned repl_code_panel_line_attrib_bits(const UiRenderSnapshot *snap,
 }
 
 /* The 6-char aux column (vertex indices, the auto-normal tag) is always
- * reserved, and UI_TEXT_PANEL_CHROME_AUX_COL is always set to match — the
+ * reserved, and UI_TEXT_PANEL_CHROME_AUX_COL is always set to match - the
  * renderer draws the column at text_x - 6 * FONT_W, so reserving and
  * painting it must never disagree or the labels land on the line-number
  * gutter. It was previously conditional on a `show_vertex_indices` flag
@@ -797,8 +797,8 @@ static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
  * never a vertex row, so the two never contend for it. */
 #define REPL_CODE_PANEL_AUTO_ROW_ALPHA 0.8f
 
-/* The label is pure chrome — it names the mechanism once the reader has
- * learned the dim, and then repeats down the block — so it is tuned
+/* The label is pure chrome - it names the mechanism once the reader has
+ * learned the dim, and then repeats down the block - so it is tuned
  * independently of, and further back than, the row text it annotates. */
 #define REPL_CODE_PANEL_AUTO_LABEL_ALPHA 0.30f
 
@@ -901,7 +901,7 @@ typedef enum {
 /* Decorate one code-panel row with its background band (replay PC /
  * line selection) and at most one left-edge marker. Every marker
  * source is tested independently against the snapshot, and ties
- * resolve through the MarkerPriority ladder above — a sequence of
+ * resolve through the MarkerPriority ladder above - a sequence of
  * "claim if higher priority" checks rather than nested exclusions, so
  * adding a marker kind is one enum entry plus one block here. */
 static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder,
@@ -936,7 +936,7 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         color = repl_code_panel_rgba(0.20f, 0.90f, 0.30f, 0.85f);
     }
 
-    /* Replay call-site markers (cyan family) — the funcN(...) line(s) whose
+    /* Replay call-site markers (cyan family) - the funcN(...) line(s) whose
      * expansion is currently executing. Distinct from the green PC marker so a
      * reused/recursive function shows which invocation is live. Immediate
      * caller (brighter) outranks the root caller of a nested chain (dimmer). */
@@ -957,7 +957,7 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     if (repl_code_panel_line_is_affecting_transform(builder->snap, line_idx)) {
         if (MARKER_PRIORITY_AFFECTING_TRANSFORM > priority) {
             priority = MARKER_PRIORITY_AFFECTING_TRANSFORM;
-            /* Vivid amber — deliberately redder/more saturated than the pale
+            /* Vivid amber - deliberately redder/more saturated than the pale
              * feeding-color yellow (0.95,0.85,0.30) and clear of the blue
              * feeding-normal marker, so the transform set reads distinctly. */
             color = repl_code_panel_rgba(1.0f, 0.50f, 0.10f, 0.92f);
@@ -993,7 +993,7 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     if (repl_code_panel_line_is_unbalanced(builder->snap, line_idx)) {
         if (MARKER_PRIORITY_UNBALANCED > priority) {
             priority = MARKER_PRIORITY_UNBALANCED;
-            /* Warning red — distinct from the violet match / orange
+            /* Warning red - distinct from the violet match / orange
              * affecting-transform / blue-yellow feeding markers. */
             color = repl_code_panel_rgba(0.95f, 0.35f, 0.30f, 0.95f);
         }
@@ -1127,7 +1127,7 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
  * Per-kind argument syntax coloring
  * ---------------------------------------------------------------------- */
 
-/* Argument shades are derived from the command's class color *only* — no
+/* Argument shades are derived from the command's class color *only* - no
  * independent per-kind hue (that produced cross-hue clashes / a rainbow).
  * The keyword keeps the full class color; the other kinds are separate
  * {brightness, saturation} tiers of that same hue, so the class stays
@@ -1327,7 +1327,7 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
             len = i - start;
 
             /* Function-call name (ident immediately followed by '(',
-             * skipping spaces) keeps the class color — covers the command
+             * skipping spaces) keeps the class color - covers the command
              * keyword, math fns, funcN, and user aliases. */
             j = i;
             while (text[j] == ' ' || text[j] == '\t')
@@ -1358,7 +1358,7 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
                                              REPL_SYNTAX_CONSTANT };
             } else if (repl_eval_is_reserved_ident(name) ||
                        repl_syntax_is_c_keyword(name)) {
-                /* REPL/C keyword, type, or math fn used bare — structural */
+                /* REPL/C keyword, type, or math fn used bare - structural */
             } else {
                 /* loop var, funcN param, or otherwise-unknown ident */
                 out[n++] = (UiSyntaxSpan){ start, len,
@@ -1544,7 +1544,7 @@ static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
 /* Color a command line's trailing `// ...` comment with the comment
  * category color (matching standalone comment lines) instead of letting
  * it inherit the command's syntax color. Appended after any syntax spans
- * — which stop at the '//' — so the segments stay ordered and disjoint;
+ * - which stop at the '//' - so the segments stay ordered and disjoint;
  * the renderer fills gaps with row->color. Works in both syntax-highlight
  * modes: ON (code spans precede it) and OFF (no spans, so the code prefix
  * renders as the gap in row->color). Fades are handled separately and
@@ -2358,7 +2358,7 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
     /* Cursor budget readout ("fn cmds 2480", "scope cmds 230"): how
      * much of the flat budget the cursor's scope spends. Kept LAST in
-     * the left cluster — it appears/disappears and changes width as
+     * the left cluster - it appears/disappears and changes width as
      * the cursor moves, so anything placed after it would jitter. The
      * controller leaves the label empty when there's nothing worth
      * showing (plain lines costing <= 1, comments, empty buffer). */
@@ -2877,7 +2877,7 @@ static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
 static void repl_code_panel_draw_focus_icon(int kx, int ky, int kw, int kh) {
     /* 13x12 1bpp "focus frame" reticle: four L-shaped corner brackets
      * framing an empty centre, the camera/crop "reframe" glyph. It reads
-     * as focusing on a region — apt for the code-focus toggle that hides
+     * as focusing on a region - apt for the code-focus toggle that hides
      * the surrounding boilerplate chrome. Frame spans cols 1-11, rows
      * 1-10 (1px pad all round); each arm is 3px. Rows bottom-to-top; bit
      * 0x80 of byte 0 = leftmost pixel (col 0).
@@ -3283,8 +3283,8 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
     gl_y = builder.text_snap.vp_h - my;
 
     /* Statusbar strip vs. resize divider. In the TOP layout (the default)
-     * the divider runs along the panel's bottom edge — exactly where the
-     * strip sits — and in LEFT the full-width strip crosses the divider
+     * the divider runs along the panel's bottom edge - exactly where the
+     * strip sits - and in LEFT the full-width strip crosses the divider
      * column, so the two overlap and the order between them decides who
      * gets the grab band's panel-interior half. Three tiers:
      *
@@ -3294,7 +3294,7 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
      *     otherwise shave off their bottom row.
      *  2. The divider, ahead of the inert strip. Classified after it, the
      *     band's inner half belonged to the statusbar and the drag only
-     *     started on the scene-side pixels — while the hover cursor, derived
+     *     started on the scene-side pixels - while the hover cursor, derived
      *     straight from divider geometry, promised the whole band.
      *  3. The rest of the strip, which consumes its clicks as chrome.
      *
@@ -3459,8 +3459,8 @@ void ui_repl_code_panel_invalidate_row_cache_for_test(void) {
  * This exists because the gutter label is NOT the document index: it counts
  * every emitted row, so with code focus off the derived-C chrome rows push
  * every user line's label up by the size of that boilerplate. Anything
- * quoting a line number to the user — the OpenGL-state popup's source column
- * — has to name the row the way the gutter names it, or the two disagree on
+ * quoting a line number to the user - the OpenGL-state popup's source column
+ * - has to name the row the way the gutter names it, or the two disagree on
  * screen (measured at 100 apart on a three-line scene).
  *
  * Reading the label back off the built rows, rather than recomputing the

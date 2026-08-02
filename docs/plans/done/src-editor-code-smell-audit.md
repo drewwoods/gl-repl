@@ -1,10 +1,10 @@
-# `src/editor/` — Code-Smell Audit
+# `src/editor/` - Code-Smell Audit
 
 > Audit produced 2026-05-23. Findings come from four parallel reviews
 > of `src/editor/` (input + edit_ops; commit + services + reformat;
 > state + clipboard + undo; search + inline overlays + completion +
 > help_session) plus targeted spot-verification of the most actionable
-> claims. File:line references are exact at the time of writing —
+> claims. File:line references are exact at the time of writing -
 > check `git log` on the cited files before acting if this doc has
 > aged.
 >
@@ -28,19 +28,19 @@
 > commit_message, normals_dirty, and the `_var_statements_then_insert`
 > insert-mode flip); reframed as two viable shapes (shared ordering
 > table vs. adapter). #11 also missed `collect_visible_vars` at
-> `core.c:721`, which has its own live-state reads — full extraction
+> `core.c:721`, which has its own live-state reads - full extraction
 > spans three modules. #15 conflicted with #27 (delete the only
-> production user of `EditorCommitResult`) — picked direction (delete
+> production user of `EditorCommitResult`) - picked direction (delete
 > the type; reframe #15 around status-side-effect testability). #3
 > covered only `editor_compile_close_brace` while the same ignored-err
 > issue exists in `repl_compile_close_brace` (`compile.c:1485`) and
-> propagates through `load_try_block` — fix now requires both. #29's
+> propagates through `load_try_block` - fix now requires both. #29's
 > test-call count was revised upward from the first draft (later
 > corrected to 19 actual calls in Revision 4); afternoon sequencing
 > now names the real churn so "build-safe" stays true.
 >
 > **Revision 4 (2026-05-23):** Third reviewer pass. Fixed: #4's
-> "success check" was ambiguous — `repl_load_workspace()` returns the
+> "success check" was ambiguous - `repl_load_workspace()` returns the
 > file count, 0 for empty, -1 on I/O error; the audit now specifies
 > the recommended `>= 0` predicate and flags the empty-workspace
 > behavior as a product decision. #11's interim doc-fix only covered
@@ -48,10 +48,10 @@
 > (`compile.c:858`) also calls live `collect_visible_vars` and was
 > added to the doc-fix scope. #13's "static const ReplCompileFn
 > k_var_statement_chain[]" was wrong (a `static` table isn't shareable
-> across TUs) — reframed as a shared kind enum with per-TU dispatch
+> across TUs) - reframed as a shared kind enum with per-TU dispatch
 > tables. #16's "three apply-block sites" stops being true after
-> #27 lands in the afternoon — finding now carries the conditional
-> framing. #29's call-site count corrected (19, not 21 — the extra 2
+> #27 lands in the afternoon - finding now carries the conditional
+> framing. #29's call-site count corrected (19, not 21 - the extra 2
 > were doc-comments). #27's call-site list corrected (L621 was a
 > doc-comment, not a call; the 5 actual calls are L630/L639/L662/L679/
 > L724). Afternoon sequencing items 2, 3, and 8 updated to match.
@@ -104,8 +104,8 @@
 > passes: #13 (var-statement ordering: shared kind list vs. adapter),
 > #15 (error reporting testability), #18 (`parse_for_commit`
 > policy-flagged helper extraction), #28 (EditorServices
-> dismantle — steps 1-2 landed, steps 3-4 remain),
-> #41 (optional line-paste factoring — main fixes done).
+> dismantle - steps 1-2 landed, steps 3-4 remain),
+> #41 (optional line-paste factoring - main fixes done).
 > #20 resolved as correct layering (adapter comments added);
 > #23 done (generation-counter safety + structural guard).
 > All completed items are tested via the 7113-test suite and guarded
@@ -123,21 +123,21 @@ classified their remaining findings by **Tier A/B/C/D** (see those
 docs for definitions, reproduced below). Applying the same system
 to this audit shows almost nothing left to bite off:
 
-- **Tier A — small, real fix, near-zero risk.** None outstanding;
+- **Tier A - small, real fix, near-zero risk.** None outstanding;
   the original afternoon pass already absorbed every Tier-A-sized
   item that could land safely. (Several Tier C items below are
   *individually* small but were deferred for cross-audit or product
-  reasons — see notes per finding.)
-- **Tier B — moderate effort, clear value.** None outstanding;
+  reasons - see notes per finding.)
+- **Tier B - moderate effort, clear value.** None outstanding;
   the original week pass closed the layering inversions and
   dispatch-chain drift.
-- **Tier C — defer (high cost or cross-cutting).** The 2 ⏳-marked
+- **Tier C - defer (high cost or cross-cutting).** The 2 ⏳-marked
   items (#13, #18) plus #28 and 17 unmarked findings that were
   triaged-skipped during the original closeout but aren't worth a
   dedicated pass on their own. Most are real wins; they wait for
   the surrounding code to be reworked. See individual headings.
-- **Tier D — keep deferred / stale.** #12 is stale after later
-  cursor-blink ownership work and needs no fix. #25 — the
+- **Tier D - keep deferred / stale.** #12 is stale after later
+  cursor-blink ownership work and needs no fix. #25 - the
   `editor_search_find_{next,prev}_in_text` pass-through wrappers,
   same call as `src-ui` #37 (also Tier D), is kept to preserve the
   `editor_*` ↔ `ui_text_*` prefix boundary. Deleting it would force
@@ -147,15 +147,15 @@ to this audit shows almost nothing left to bite off:
 
 Used during the 2026-05-24 backlog review to triage what was left:
 
-- **Tier A — small, real fix, near-zero risk.** 5–30 line changes
+- **Tier A - small, real fix, near-zero risk.** 5–30 line changes
   with no architectural exposure. Always worth doing once identified.
-- **Tier B — moderate effort, clear value.** 50–200 line changes,
+- **Tier B - moderate effort, clear value.** 50–200 line changes,
   one or two files of churn, a real test impact. Worth doing as a
   focused pass when next in the area.
-- **Tier C — defer (high cost, low payoff).** Real wins but touch a
+- **Tier C - defer (high cost, low payoff).** Real wins but touch a
   wide surface, or need cross-audit/product coordination; revisit
   when the surrounding code is being reworked anyway.
-- **Tier D — keep deferred.** Findings the audit landed wrong, or
+- **Tier D - keep deferred.** Findings the audit landed wrong, or
   where the original intent (a kept-on-purpose trampoline, a
   test-pinned bug) makes "fixing" them worse than living with them.
 
@@ -167,7 +167,7 @@ extraction that depends on a decision the original closeout deferred."
 None are bugs. They sit in Tier C waiting for either (a) the relevant
 area being touched for other reasons, or (b) the cross-audit work that
 resolves their upstream dependency (e.g., #45 waits on `src-repl`
-#18, which is done — so #45 is unblocked but still cheap enough to
+#18, which is done - so #45 is unblocked but still cheap enough to
 skip until someone opens `input.c` again). Revision 6 reclassifies
 #12 as stale/Tier D and leaves #25 as intentionally kept.
 
@@ -178,17 +178,17 @@ Headings below carry either ✅ / ⏳ (from the original closeout) or
 
 Severity grouping mirrors the previous two audits:
 
-- **🔴 Actual bugs / hazards (verified)** — correctness or
+- **🔴 Actual bugs / hazards (verified)** - correctness or
   memory-safety issues with a concrete failure mode that exists in
   current production code. Pick these up first.
-- **🟡 Drift / boundary hazards** — parallel structures, layering
+- **🟡 Drift / boundary hazards** - parallel structures, layering
   inversions, dispatch reorderings, contract mismatches, naming
   hazards, and ambiguous-intent code that works today but is one
   edit away from misbehaving. Working today; one-side edit will
   silently diverge.
-- **🟢 Dead code / dead fields** — code with no callers, unused
+- **🟢 Dead code / dead fields** - code with no callers, unused
   parameters, redundant wrappers. Pure surface reduction.
-- **🔵 Structural concerns** — long functions, misnamed entry
+- **🔵 Structural concerns** - long functions, misnamed entry
   points, magic numbers, hand-rolled patterns. Bigger refactors;
   higher cost.
 
@@ -203,14 +203,14 @@ matters, and suggests a one-line fix.
 
 **Smell:** `CommitAttemptState before;` is a stack local. The
 file-scope rationale block at L550-553 explicitly documents the
-struct as huge — its `EditorUndoSnapshot.cmds[MAX_COMMANDS]` plus
+struct as huge - its `EditorUndoSnapshot.cmds[MAX_COMMANDS]` plus
 `editor_lines[MAX_COMMANDS][MAX_LINE_LEN]` (~1 MB each) total ~2 MB.
 The other two call sites (L663, L862) correctly use the file-scope
 `g_commit_attempt_before` / `g_navigation_commit_before` statics for
 exactly this reason.
 
 **Why it matters:** Every `;` keystroke pushes 2 MB onto the call
-stack — ASan-trap-bait, and a guaranteed overflow on threads with
+stack - ASan-trap-bait, and a guaranteed overflow on threads with
 default 512 KB stacks (some embedded / sandboxed environments).
 
 **Fix:** Reuse `g_commit_attempt_before` (or add a third
@@ -225,7 +225,7 @@ default 512 KB stacks (some embedded / sandboxed environments).
 1 MB stack allocation, sized for the worst case regardless of the
 actual `count` of pasted lines.
 
-**Why it matters:** Same risk as #1 — the entire snapshot fits on
+**Why it matters:** Same risk as #1 - the entire snapshot fits on
 the stack of a typical desktop thread but fails on smaller-stack
 deployments; ASan flags it.
 
@@ -233,7 +233,7 @@ deployments; ASan flags it.
 (`char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN)`)
 with a null check and early return; or promote to a file-scope
 static mirroring the #1 pattern (avoids the `free()` obligation).
-The implementation chose heap — see `clipboard.c:380-384`.
+The implementation chose heap - see `clipboard.c:380-384`.
 
 ### 3. ✅ Close-brace compile functions accept `err` / `err_size` then ignore them
 
@@ -250,14 +250,14 @@ in both modules use them. Close-brace *can* fail (stray `}` with
 no open block returns NO_CHANGE silently).
 
 **Why it matters:** Callers who want "why didn't close-brace
-match?" can't — the diagnostic is unreachable from interactive
+match?" can't - the diagnostic is unreachable from interactive
 commit *and* from file load. Future debugging of brace-mismatch
 issues will require re-plumbing both err buffers.
 
 **Fix:** Fix both functions together. Either drop the `(void)`
 casts and fill `err` for the stray-`}` case in both, or remove
 `err`/`err_size` from both signatures and split each typedef. Do
-**not** fix only the editor side — that leaves
+**not** fix only the editor side - that leaves
 `repl_compile_close_brace` in the same shape and
 `load_try_block`'s diagnostic still discarded.
 
@@ -267,10 +267,10 @@ casts and fill `err` for the stray-`}` case in both, or remove
 `src/editor/inline_file_prompt.c:138-144` (cautionary comment)
 
 **Smell:** `editor_undo_clear()` runs *before*
-`repl_load_workspace(dir)` is called — so failed workspace loads
+`repl_load_workspace(dir)` is called - so failed workspace loads
 also blow away undo. The inline file prompt's authors explicitly
 warned against this in a comment and modeled their own ordering on
-"Load Workspace's adjacent-to-success-branch policy" — but that
+"Load Workspace's adjacent-to-success-branch policy" - but that
 policy never actually existed; Load Workspace clears unconditionally
 upfront.
 
@@ -287,10 +287,10 @@ after loading no scenes). A truthy C check (`if (n)`) would still
 clear undo on -1; a `> 0` check would skip empty-workspace cases
 that do replace workspace/user-scene state before returning 0.
 The intended predicate depends on whether "workspace exists but
-contained no scenes" should reset undo (arguably yes — workspace
-state changed) or preserve it (arguably no — no scene was actually
+contained no scenes" should reset undo (arguably yes - workspace
+state changed) or preserve it (arguably no - no scene was actually
 loaded). Audit's recommendation for the menu path, which supplies
-a non-empty directory, is `if (n >= 0) editor_undo_clear();` —
+a non-empty directory, is `if (n >= 0) editor_undo_clear();` -
 i.e. clear on success **and** on empty, only preserve on I/O
 error. But this is a product decision, not a mechanical fix;
 document the intended empty-workspace behavior in the
@@ -301,7 +301,7 @@ document the intended empty-workspace behavior in the
 **Where:** `src/editor/state.c:27-38, 60-64`
 
 **Smell:** `editor_state_get_defaults()` already self-guards with an
-`inited` flag (L27-38) — it patches `g_editor_state` with the
+`inited` flag (L27-38) - it patches `g_editor_state` with the
 non-zero sentinels (`anchor_pos = -1`, etc.) the *first time* it's
 called. The first call is inside `_reset` / `_search_clear` /
 `_autocomplete_clear`. `editor_state_capture()` (L60-64) skips
@@ -326,13 +326,13 @@ and remove the lazy-init pattern entirely.
 **Where:** `src/editor/clipboard.c:33-35`, `clipboard.h:30`
 
 **Smell:** The name says "clipboard clear selection", but the body
-is exactly one line: `editor_state_selection_clear()` — it clears
+is exactly one line: `editor_state_selection_clear()` - it clears
 the line-range *selection* anchors only. The clipboard payload is
 untouched. A sibling function `editor_state_clipboard_clear()`
 *does* clear the payload, so the file has two near-identical names
 with opposite behaviors.
 
-**Why it matters:** Nothing breaks today — every caller of
+**Why it matters:** Nothing breaks today - every caller of
 `editor_clipboard_clear_selection` actually wants the selection
 cleared and does not expect the payload cleared. But it's a
 classic naming-vs-behavior footgun: the next contributor who reads
@@ -348,13 +348,13 @@ similar without `clipboard_` prefix); update the 10 call sites.
 **Where:** `src/editor/input.c:949-951, 964-965, 1175`
 
 **Smell:** Every site mentioning one mentions the other with `||`.
-`edit_op_buffer_delete_left_of_cursor` ignores the distinction —
+`edit_op_buffer_delete_left_of_cursor` ignores the distinction -
 Delete behaves as Backspace. No comment in the source acknowledges
 the conflation. Could be intentional (the missing
 `delete_right_of_cursor` primitive is a deferred feature) or a
 silent bug.
 
-**Why it matters:** Intent is unknown — the audit cannot
+**Why it matters:** Intent is unknown - the audit cannot
 classify this as a verified bug without a product decision. But
 the code reads as if a future contributor will assume Delete is
 broken and "fix" it (changing behavior), or assume the conflation
@@ -381,7 +381,7 @@ editor sees them. Yet `input.c` calls
 `glr_completion_accept_autocomplete()` (L1225, L1307).
 
 **Why it matters:** The file comment at L29-34 acknowledges
-`editor_reset_transients` as a single "boundary exception" — but
+`editor_reset_transients` as a single "boundary exception" - but
 the inversion is now much wider than the docstring admits. Future
 contributors look at the includes and assume the layering is
 informal.
@@ -399,7 +399,7 @@ two autocomplete call sites don't need `glr_completion.h`.
 `glr_completion_accept_autocomplete()` directly)
 
 **Smell:** The provider seam exposes `update`,
-`update_selected_preview`, `clear` — but no `accept`. So the Tab
+`update_selected_preview`, `clear` - but no `accept`. So the Tab
 and Enter routes bypass the seam and call into the REPL-flavored
 provider directly, breaking the abstraction the rest of the
 registry maintains.
@@ -423,7 +423,7 @@ L1315) runs `editor_try_commit_block_structs()` *first*, then
 calls `editor_try_commit_var_statements_then_insert()` (overwrite)
 or `editor_try_commit_var_statements()` (insert) deeper. The
 overwrite path uses the `_then_insert` variant specifically for its
-post-effects — flipping into insert mode and clearing the input
+post-effects - flipping into insert mode and clearing the input
 buffer after a successful var commit (`commit.c:1350`,
 `input.c:779`).
 
@@ -433,14 +433,14 @@ buffer after a successful var commit (`commit.c:1350`,
 the two Enter sites use a block-first variant.
 
 **Why it matters:** The README and CLAUDE.md flag ordering as
-load-bearing — but the load-bearing claim only really applies to
+load-bearing - but the load-bearing claim only really applies to
 the var-statement pair (`float_decl` before `assign`). The
 block-vs-var top-level reordering under Enter is genuinely
 intentional (so a `}` on Enter closes the block instead of being
 misread as a free-floating var statement). What's missing is the
 *written* invariant that explains the variant.
 
-**Fix:** *Not* "replace with `editor_try_commit_any`" — that loses
+**Fix:** *Not* "replace with `editor_try_commit_any`" - that loses
 the `_var_statements_then_insert` post-effects (insert-mode flip,
 input clear) the overwrite path depends on. Instead: (a) document
 the block-first variant inline at `commit_current_input` with a
@@ -463,7 +463,7 @@ keeping the post-effects intact.
 snapshot) but then call `repl_source_scope_nearest_open_block_at(pos)`,
 `repl_source_scope_cmd_indent(pos, ...)`,
 `repl_source_scope_block_depth_at(...)`,
-`repl_source_scope_find_block_end(...)` — which read live REPL
+`repl_source_scope_find_block_end(...)` - which read live REPL
 state, not the context snapshot.
 
 **Why it matters:** The "REPL-half is pure" claim
@@ -471,7 +471,7 @@ state, not the context snapshot.
 synthetic context but skip live-state setup will silently misbehave
 (the live REPL document is empty / out-of-sync with the context).
 
-**Fix (under-scoped — read first):** A proper fix is a real
+**Fix (under-scoped - read first):** A proper fix is a real
 extraction, not a small refactor. The live-state coupling is
 broader than just `source_scope_*`:
 
@@ -508,12 +508,12 @@ secretly reads live state**:
 
 Doc-comment at each: "context-pure for document data,
 live-state-coupled for scope queries and visible-var
-collection — callers must apply the change to the live
+collection - callers must apply the change to the live
 document before the next scope-dependent or visible-vars
 call." That's a one-pass doc-comment change today, with the
 full extraction queued as its own week of work.
 
-### 12. [Tier D — stale after later refactor] Cursor blink ownership mismatch is no longer present
+### 12. [Tier D - stale after later refactor] Cursor blink ownership mismatch is no longer present
 
 **Where:** `src/editor/README.md:88` and `src/editor/state.h`
 (`EditorCursorBlinkState` inside `EditorState`)
@@ -530,7 +530,7 @@ old fix that strikes "cursor blink" from the README.
 still open, resolve it from the UI side against the current source;
 this editor finding is stale.
 
-### 13. ⏳ [Tier C — deferred] Two parallel encodings of `float_decl → var_assign` order
+### 13. ⏳ [Tier C - deferred] Two parallel encodings of `float_decl → var_assign` order
 
 **Where:** `src/repl/compile.c:60-87` (in `repl_compile_dispatch`)
 vs. `src/editor/commit.c:1335-1339` (in
@@ -546,7 +546,7 @@ each of which calls `repl_compile_float_decl` /
 requires touching two unrelated functions; the load-bearing
 ordering comment in CLAUDE.md only covers one.
 
-**Fix (carefully scoped — read first):** Do **not** "route through
+**Fix (carefully scoped - read first):** Do **not** "route through
 `repl_compile_dispatch`" naively. `repl_compile_dispatch`
 (`compile.c:60`) only returns a bare `ReplCompiledChange`. The
 two editor handlers do considerably more than compile:
@@ -581,7 +581,7 @@ transaction is already being reworked:
    itself is not enough reason to take this shape.
 
 Either way, the audit's first-draft "route through dispatch and
-remove the direct calls" recipe is **wrong** — it silently drops
+remove the direct calls" recipe is **wrong** - it silently drops
 every `EditorCommitPlan` effect listed above and breaks overwrite
 Enter's insert-mode flip.
 
@@ -601,7 +601,7 @@ this one.
 
 **Fix:** Rename to `editor_try_commit_assign_variable`.
 
-### 15. [Tier C — deferred] Error reporting drifts across handlers
+### 15. [Tier C - deferred] Error reporting drifts across handlers
 
 **Where:** `src/editor/commit.c` try-commit handlers that call
 `repl_set_status_error(...)` / `repl_set_status(...)` directly.
@@ -633,14 +633,14 @@ test helpers that install the existing host-effects status callbacks.
 `editor_commit_apply_plan` each contain the same 4-step apply
 sequence (`apply_predef_ops` → `apply_scratch_ops` →
 `editor_buffer_apply_compiled_change` → `apply_repl_change`).
-But each reaches the underlying primitives differently — one via
+But each reaches the underlying primitives differently - one via
 passed-in `services`, one via a fresh `svc =
 editor_services_default()`, one via direct `repl_apply_*`.
 
 **Why it matters:** A fix to the apply sequence needs coordinated
 changes across the call sites.
 
-**Fix (conditional — depends on #27):** This is "three call sites"
+**Fix (conditional - depends on #27):** This is "three call sites"
 *only* if `editor_commit_current_input` is still alive. The
 afternoon sequence deletes it via #27, dropping the count to two
 (`editor_commit_apply_external_change` and
@@ -649,11 +649,11 @@ afternoon sequence deletes it via #27, dropping the count to two
 1. **If #27 lands first (recommended):** rewrite this finding as
    "dedupe the two remaining apply paths
    (`editor_commit_apply_external_change` and
-   `editor_commit_apply_plan`) — both still reach
+   `editor_commit_apply_plan`) - both still reach
    `repl_apply_*` differently after services dismantle."
 2. **If #27 is dropped:** keep the three-site extraction
    (`apply_compiled_three_halves`), but read #15's keep-#15 branch
-   first — `EditorCommitResult` survives and the three sites stay
+   first - `EditorCommitResult` survives and the three sites stay
    asymmetric on diagnostic shape too.
 
 Either way the fix is "extract one canonical four-step apply
@@ -669,21 +669,21 @@ below, the same module uses the proper seam
 
 **Why it matters:** If `g_predef_vars` storage layout moves, undo
 silently breaks. The seam pattern is already established next to it
-— this is the one outlier.
+- this is the one outlier.
 
 **Fix:** Add `repl_eval_predef_copy(EditorUndoSnapshot *)` /
 `_restore` seam (mirror the scratch-array helpers); route undo
 through it.
 
-### 18. ⏳ [Tier C — deferred] Five near-identical "collect-visible-vars → parse → place" sequences
+### 18. ⏳ [Tier C - deferred] Five near-identical "collect-visible-vars → parse → place" sequences
 
 **Where:** `src/editor/input.c:437-486, 694-751, 1351-1394,
 1496-1538`; also `commit_current_input`'s overwrite branch at
 L763-803
 
-**Smell:** Same shape — `collect_visible_vars(insert_idx, ...)` →
+**Smell:** Same shape - `collect_visible_vars(insert_idx, ...)` →
 `parse_command_ctx`-or-`repl_parse_and_normalize_strict` two-branch
-→ `editor_place_parsed_command` → status — replicated 4-5×. Two
+→ `editor_place_parsed_command` → status - replicated 4-5×. Two
 different parse APIs are used across them.
 
 **Why it matters:** Any tweak to the parse policy needs to be
@@ -693,7 +693,7 @@ sets `strict_refs` and preserves variable expressions through
 `parse_and_normalize_impl`; the strict path is what rejects
 undefined top-level function calls (see `core_internal.h:50`).
 The plain `parse_command_ctx` path doesn't. The audit cannot
-recommend "pick one parse entry point" — that would silently drop
+recommend "pick one parse entry point" - that would silently drop
 strict-mode rejections from the affected dispatch sites.
 
 **Fix:** Extract `parse_for_commit(insert_idx, GLCmd *out, char
@@ -719,7 +719,7 @@ shared helper.
 **Fix:** Extract a single helper (probably in `src/repl/`, given
 `parser.c` also has canonical-form duties).
 
-### 20. [Tier C — ✅ done] Tutorial commit-gating helpers live in `input.c` as file-locals
+### 20. [Tier C - ✅ done] Tutorial commit-gating helpers live in `input.c` as file-locals
 
 **Where:** `src/editor/input.c:1233-1299`, call sites at L875,
 L1277, L1294-1297, L1312-1322, L1335-1346, L1396-1397
@@ -728,7 +728,7 @@ L1277, L1294-1297, L1312-1322, L1335-1346, L1396-1397
 `tutorial_advance_if_commit_ok` are file-local helpers reading
 tutorial state. The README's sanctioned
 `glr_ctrl_router_handle_tutorial_ack_key` path correctly hoists
-ack-key routing — but commit-time tutorial gating still relies on
+ack-key routing - but commit-time tutorial gating still relies on
 input.c locals.
 
 **Resolution:** Assessed as correct layering. These are editor
@@ -743,7 +743,7 @@ the dependency (tutorial → editor) or require heavy parameter
 plumbing for minimal gain. Documented with adapter-intent comments
 at both the forward declarations and the definitions.
 
-### 21. [Tier C — ✅ done] Tagged-union `EditorClipboardKind` is never consulted via switch
+### 21. [Tier C - ✅ done] Tagged-union `EditorClipboardKind` is never consulted via switch
 
 **Where:** `src/editor/state.c:534-595`, `clipboard.c:212,
 245-413`
@@ -754,12 +754,12 @@ at both the forward declarations and the definitions.
 
 **Why it matters:** Adding a third kind (e.g., a `BLOCK` kind for
 rectangular selections) requires touching every getter/predicate
-and is invisible to the compiler — no `-Wswitch` safety net.
+and is invisible to the compiler - no `-Wswitch` safety net.
 
 **Fix:** Switch read sites to `switch (kind)` for exhaustiveness,
 or drop the enum and use the two-flag invariant explicitly.
 
-### 22. [Tier C — ✅ done] `EditorInputView.input` aliases live storage with no documented liveness
+### 22. [Tier C - ✅ done] `EditorInputView.input` aliases live storage with no documented liveness
 
 **Where:** `src/editor/state.h:64-74`, `state.c:300-313`
 
@@ -779,7 +779,7 @@ while the scalar fields are by-value snapshots. A fully by-value view
 is also valid, but it copies two `MAX_INPUT_LEN` buffers per call and
 should be justified by an actual caller need.
 
-### 23. [Tier C — ✅ done] `editor_undo_clear` is contract-required but compile-unenforced
+### 23. [Tier C - ✅ done] `editor_undo_clear` is contract-required but compile-unenforced
 
 **Where:** `src/editor/undo.h:97-102`, call sites at
 `src/app/glr_actions.c:360, 365, 569, 585`,
@@ -788,7 +788,7 @@ should be justified by an actual caller need.
 
 **Smell:** Header documentation says it "must be called on
 wholesale replacement"; nothing checks it. Failure mode is silent
-— Ctrl+Z restores foreign-scene state into the new scene.
+- Ctrl+Z restores foreign-scene state into the new scene.
 
 **Resolution:** Added `editor_undo_note_wholesale_replacement()` which
 clears both undo/redo rings AND bumps a generation counter.
@@ -804,7 +804,7 @@ scaffolding. Structural guard `check-no-raw-undo-clear` (in
 (3c/3d/3e) cover: cross-generation pop/redo blocked, same-generation
 undo/redo works, multiple wholesale replacements isolate each world.
 
-### 24. [Tier C — ✅ done] Three sites hardcode `name[16]` instead of a shared constant
+### 24. [Tier C - ✅ done] Three sites hardcode `name[16]` instead of a shared constant
 
 **Where:** `src/editor/undo.h:58`, `src/editor/state.h:147`,
 `src/repl/eval.h:133`
@@ -814,11 +814,11 @@ the same finding as `src-repl` audit #28 and `src-ui` not-applicable.
 
 **Fix:** `#define REPL_PREDEF_NAME_MAX 16` in `eval.h` (the upstream
 source); reference the predef-variable name buffers from there. Do
-not blindly replace every local `char name[16]` in the tree — several
+not blindly replace every local `char name[16]` in the tree - several
 are parser scratch buffers or command-shaped names and should only
 move if they are semantically tied to the predef table.
 
-### 25. [Tier D — kept on purpose] Wrapped editor search functions are pass-throughs to `ui_text_*`
+### 25. [Tier D - kept on purpose] Wrapped editor search functions are pass-throughs to `ui_text_*`
 
 **Where:** `src/editor/search.c:57-65`
 
@@ -832,7 +832,7 @@ directly.
 `ui_text_*` directly, or inline them as `static` inside
 `search.c`. (Same as the `src/ui/` audit's #37.)
 
-### 26. [Tier C — ✅ done] `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
+### 26. [Tier C - ✅ done] `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
 
 **Where:** `src/editor/commit.c:872`
 
@@ -856,7 +856,7 @@ in the same change.
 
 **Where:** `src/editor/commit.c:65-130` (definition);
 `commit.h:55` (declaration). Verified: only
-`tests/test_repl_compile.c` calls it — **5 call sites at L630,
+`tests/test_repl_compile.c` calls it - **5 call sites at L630,
 L639, L662, L679, L724** (the doc-comment block at L621 referenced
 the function name without calling it). They exercise the
 compile-failure, NO_CHANGE, and success paths.
@@ -868,7 +868,7 @@ bypass it and go through `editor_try_commit_*` + the open-coded
 indirection (#28) exists primarily for this function.
 
 **Fix:** Delete the function (and the `services` indirection it
-requires) and update the 5 test call sites — they're a small
+requires) and update the 5 test call sites - they're a small
 cluster in one file and each test currently asserts something
 about the wrapper's return shape rather than the underlying
 behavior, so the tests should be rewritten to exercise the live
@@ -876,7 +876,7 @@ dispatch sites instead. Or, alternatively, route the four
 production dispatch sites through it (the harder direction, since
 those sites have post-effects the wrapper currently doesn't model).
 
-### 28. ⏳ [Tier C — deferred] `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
+### 28. ⏳ [Tier C - deferred] `EditorServices` is a one-implementation abstraction (with production callers - not pure cleanup)
 
 **Where:** `src/editor/services.h:28-74`, `services.c:65-76`.
 Remaining production callers verified at `src/editor/commit.c`
@@ -886,12 +886,12 @@ Remaining production callers verified at `src/editor/commit.c`
 **Smell:** `editor_services_default()` is the only `EditorServices`
 factory in the tree. The header at L6-9 admits: "gives the
 controller a single place to substitute test doubles or alternate
-implementations" — no such substitution exists in `src/` or
+implementations" - no such substitution exists in `src/` or
 `tests/`.
 
 **Why it matters:** Adds context churn (svc construction,
 `void *user` plumbing) for no substitution benefit. **But unlike
-#27, this is not a self-contained delete** — the four production
+#27, this is not a self-contained delete** - the four production
 call sites use the services struct's function pointers; ripping
 the struct out means migrating each of them to the direct
 underlying calls (`repl_compile_dispatch`,
@@ -902,9 +902,9 @@ underlying calls (`repl_compile_dispatch`,
    `editor_commit_apply_plan` now share `apply_compiled_three_halves`,
    which calls the `repl_apply_*` primitives directly.
 2. Migrate `commit.c:872` (in `editor_compile_for_loop`) per
-   finding #26 — replace `svc.parse_command_ctx(body, ...)` with
+   finding #26 - replace `svc.parse_command_ctx(body, ...)` with
    `repl_parser_parse_command_ctx(body, ...)` directly.
-3. Migrate `input.c:439, 634` together — these are the
+3. Migrate `input.c:439, 634` together - these are the
    parse-and-place sites that finding #18 also touches; do them
    in the same change as the strict/permissive helper extraction.
 4. Only then delete `EditorServices` + `editor_services_default`
@@ -916,7 +916,7 @@ removing service calls need a matching update to
 `scripts/check-editor-repl-surface.sh` and
 `scripts/baselines/editor-repl-surface.txt` so the ratchet reflects
 the intended new surface instead of failing unexpectedly. The audit's
-original framing as "delete in an afternoon" was incorrect — it's a
+original framing as "delete in an afternoon" was incorrect - it's a
 week-pass refactor that touches #26, #18, and the remaining production
 sites. Current source no longer has the #27 / #29 APIs, so they are no
 longer prerequisites.
@@ -925,7 +925,7 @@ longer prerequisites.
 
 **Where:** `src/editor/commit.c:1117-1119`, declared at
 `commit.h:79`. Verified: only `tests/test_repl_compile.c` calls
-it — **19 call sites** (plus 2 doc-comment references; the
+it - **19 call sites** (plus 2 doc-comment references; the
 21-match `grep` count includes both). Production code uses
 `editor_commit_apply_external_change(change, 0)` directly.
 
@@ -937,7 +937,7 @@ than to the underlying API.
 **Fix:** Delete the wrapper; rewrite the 19 test sites to call
 `editor_commit_apply_external_change(change, 0)` directly. The
 rewrite is mechanical search-and-replace, but the LOC churn is
-non-trivial — name it in the sequencing so "build-safe" stays
+non-trivial - name it in the sequencing so "build-safe" stays
 true.
 
 ### 30. ✅ `EditorInputState.input_capacity` and `pending_newline_capacity` are write-only
@@ -963,7 +963,7 @@ variable-panel peer. Yet the typedef still sits in
 **Fix:** Move the typedef to
 `src/subsystems/variable_panel/variable_panel_state.h`.
 
-### 32. [Tier C — ✅ done] Two pointless one-liner route wrappers in input.c
+### 32. [Tier C - ✅ done] Two pointless one-liner route wrappers in input.c
 
 **Where:** `src/editor/input.c:992-994, 1594-1596`
 
@@ -981,7 +981,7 @@ symmetrically.
 **Smell:** Signature is `static void special_begin_key(int key)`
 with `(void)key;` as first statement. Either use `key` (clear
 line-range selection like `keyboard_begin_key` does) or drop the
-parameter — currently a documentation lie.
+parameter - currently a documentation lie.
 
 **Fix:** `static void special_begin_key(void)`.
 
@@ -997,7 +997,7 @@ in behavior; both go through the same test seam.
 **Fix:** Pick `editor_input_active_modifiers` (matches file's prefix
 convention); delete the wrapper.
 
-### 35. [Tier C — ✅ done] `editor_state_search()` returns a 1 KB struct by value per call
+### 35. [Tier C - ✅ done] `editor_state_search()` returns a 1 KB struct by value per call
 
 **Where:** `src/editor/state.c:597-599`; callers at
 `src/app/glr_ctrl.c:1505, 2485, 3621-3623` and
@@ -1076,7 +1076,7 @@ is applied. **Then** add a new finding-of-its-own (or fold into
 #23): every call site that doesn't push a snapshot before
 `editor_commit_apply_plan` is a latent undo-skip bug.
 
-### 40. [Tier C — ✅ done] `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
+### 40. [Tier C - ✅ done] `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
 
 **Where:** `src/editor/commit.c:1182, 1229, 1283`
 
@@ -1094,7 +1094,7 @@ surface there points future cleanup in the wrong direction.
 
 ## 🔵 Structural concerns
 
-### 41. [Tier C — deferred, optional] `editor_clipboard_paste_current` decision logic is opaque
+### 41. [Tier C - deferred, optional] `editor_clipboard_paste_current` decision logic is opaque
 
 **Where:** `src/editor/clipboard.c:245-413`
 
@@ -1111,7 +1111,7 @@ paste path into `paste_lines(state)` and `finalize_after_paste(...)`;
 do not treat input-text extraction or stack-snapshot removal as still
 pending.
 
-### 42. [Tier C — ✅ done] `mouse_func` signature has 3 silenced unused parameters
+### 42. [Tier C - ✅ done] `mouse_func` signature has 3 silenced unused parameters
 
 **Where:** `src/editor/input.c:1823-1832`
 
@@ -1123,7 +1123,7 @@ signature is required by GLUT shape; legitimate, but un-commented.
 **Fix:** Add `/* GLUT callback shape; only state == GLUT_UP is
 editor-relevant. */`; lay the casts out one per line.
 
-### 43. [Tier C — ✅ done] Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
+### 43. [Tier C - ✅ done] Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
 
 **Where:** `src/editor/input.c:305-336`
 (`editor_load_line_to_input`)
@@ -1151,7 +1151,7 @@ existed publicly the whole time. `state.c` itself uses the helper
 **Fix:** Replace the four open-coded clears in `input.c` with
 calls to `editor_pending_newline_clear()`.
 
-### 45. [Tier C — ✅ done] `is_word_char` re-implements the project's identifier predicate
+### 45. [Tier C - ✅ done] `is_word_char` re-implements the project's identifier predicate
 
 **Where:** `src/editor/input.c:1407-1410`
 
@@ -1177,12 +1177,12 @@ strlen + cursor_pos_set` sequence directly on
 **Fix:** Replace the open-coded sequence with a single
 `editor_input_set_text(text)` call.
 
-### 47. [Tier C — ✅ done] Tutorial-locked guard messages drift in wording
+### 47. [Tier C - ✅ done] Tutorial-locked guard messages drift in wording
 
 **Where:** `src/editor/input.c:186, 292`, `clipboard.c:29`
 
-**Smell:** Three guards say roughly the same thing — two with
-"comment", one with "instruction". Trivial but real — they'll
+**Smell:** Three guards say roughly the same thing - two with
+"comment", one with "instruction". Trivial but real - they'll
 show up next to each other in status text.
 
 **Fix:** Pick one phrasing; ideally a small tutorial-subsystem helper
@@ -1190,7 +1190,7 @@ that publishes the status text. Avoid adding a new generic
 `repl_set_status_tutorial_locked()` special case unless other modules
 need that exact status policy.
 
-### 48. [Tier C — ✅ done (doc)] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
+### 48. [Tier C - ✅ done (doc)] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
 
 **Where:** `src/editor/state.h:191-194`
 
@@ -1209,7 +1209,7 @@ struct (e.g., `EditorOverlaySnapshot`) the controller refills
 directly; or document that `editor_state_capture()` deliberately
 covers them.
 
-### 49. [Tier C — ✅ done (doc)] `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
+### 49. [Tier C - ✅ done (doc)] `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
 
 **Where:** `src/editor/state.c:545-563`
 (`editor_state_clipboard_count_set`)
@@ -1227,7 +1227,7 @@ can be undefined if a future caller forgets to populate.
 **Fix:** Make this private; or take
 `(const char *const *lines, int count)` and write both inside.
 
-### 50. [Tier C — ✅ done] Reformat saves five fields; the doc claim is broader
+### 50. [Tier C - ✅ done] Reformat saves five fields; the doc claim is broader
 
 **Where:** `src/editor/reformat.c:19-40`, `reformat.h:1-14`
 
@@ -1246,7 +1246,7 @@ don't save them"; or expand the save set.
 **Where:** `src/editor/commit.h:267-270`
 
 **Smell:** Comment says "editor_commit_func_decl_resume_set is
-declared at line 190" — actual declaration is at L176.
+declared at line 190" - actual declaration is at L176.
 
 **Fix:** Drop the line-number reference, or delete the comment
 (the symbol is declared once at L176 with its own docblock; no
@@ -1261,47 +1261,47 @@ that would break the build / invert the boundary, have been moved
 or rewritten. Read every item before treating this as an
 implementation checklist.
 
-### One-afternoon pass — truly self-contained, build-safe
+### One-afternoon pass - truly self-contained, build-safe
 
-1. **#1** + **#2** — Move the 2 MB and 1 MB stack allocations to
+1. **#1** + **#2** - Move the 2 MB and 1 MB stack allocations to
    file-scope statics or heap. Each is a 2-line change at a single
    site.
-2. **#3** — Either fill `err` for the stray-`}` case in **both**
+2. **#3** - Either fill `err` for the stray-`}` case in **both**
    `editor_compile_close_brace` (`commit.c:285`) **and**
    `repl_compile_close_brace` (`compile.c:1485`), or drop the
    unused parameters in both (and split the typedef). The REPL
    variant is reached via `load_try_block` (`load.c:94`), so
    editor-only fix preserves the file-load diagnostic gap.
-3. **#4** — Add `editor_undo_clear()` after the
+3. **#4** - Add `editor_undo_clear()` after the
    `repl_load_workspace(dir)` call, gated on the return value.
    Recommended: `if (n >= 0) editor_undo_clear();` (clear on
    success and on empty workspace; preserve only on I/O error).
-   But this is a product call on empty-workspace semantics —
+   But this is a product call on empty-workspace semantics -
    read finding #4 for the predicate options.
-4. **#5** — Make `editor_state_capture()` call
+4. **#5** - Make `editor_state_capture()` call
    `editor_state_get_defaults()` (idempotent after first call) so
    captured state always has the correct sentinels.
-5. **#6** — Rename `editor_clipboard_clear_selection` to
+5. **#6** - Rename `editor_clipboard_clear_selection` to
    `editor_selection_clear_line_range` (or similar without
    `clipboard_` prefix); update the 10 call sites. Mechanical.
-6. **#14** — Rename `editor_try_assign_variable` →
+6. **#14** - Rename `editor_try_assign_variable` →
    `editor_try_commit_assign_variable`. 11 references across src/
    and tests/.
-7. **#44** + **#46** — Replace the four open-coded
+7. **#44** + **#46** - Replace the four open-coded
    `pending_newline` clears with the existing
    `editor_pending_newline_clear()` (state.h:339); replace the
    tutorial-Tab open-coded buffer write with the existing
    `editor_input_set_text()` (state.h:299). The audit's first
    draft proposed adding new helpers; the helpers already exist
    publicly.
-8. **#27** + **#29** — Delete two test-only API shapes:
+8. **#27** + **#29** - Delete two test-only API shapes:
    - `editor_commit_current_input`: **5 calls** in
      `tests/test_repl_compile.c` at **L630, L639, L662, L679,
      L724** (the doc-comment at L621 references the function
      name but does not call it). Rewrite each test to exercise
      the live dispatch sites.
    - `editor_commit_apply_compiled_change`: **19 calls** in the
-     same test file — rewrite each to call
+     same test file - rewrite each to call
      `editor_commit_apply_external_change(change, 0)` directly.
      Mechanical search-and-replace but ~19 LOC churn.
 
@@ -1313,39 +1313,39 @@ implementation checklist.
 
    **Test-cost note:** the 5 `editor_commit_current_input` calls
    in `test_repl_compile.c` aren't just shape-testing the
-   wrapper — they cover the compile→undo→preflight→apply
+   wrapper - they cover the compile→undo→preflight→apply
    transaction boundary that the wrapper sequences. Rewriting
    them to use `editor_commit_apply_external_change(change, 0)`
    directly loses that coverage; the rewrite needs to exercise
    the live dispatch sites (`editor_try_commit_*` chain) to
    preserve it. This is a meaningful redesign of what those
    tests cover, not a mechanical substitution.
-9. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** —
+9. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** -
    Dead-field and naming cleanup. All mechanical.
-10. **#38** + **#39** (docstring half only) + **#51** —
+10. **#38** + **#39** (docstring half only) + **#51** -
     Documentation fixes: replace "legacy" comments, strike
     "Capture undo pre-state" from `editor_commit_apply_plan`'s
     header (#39's full fix continues in the week pass), drop the
     stale line-number reference in `commit.h:267-270`.
 
-### One-week pass — multi-site refactors
+### One-week pass - multi-site refactors
 
 The dominant work is **closing the layering inversion**,
 **resolving dispatch-chain drift**, and **dismantling the
 `EditorServices` indirection without breaking the build**.
 
-- **#7** — *Product decision first.* Decide whether Delete should
+- **#7** - *Product decision first.* Decide whether Delete should
   delete-right. If yes, add `edit_op_buffer_delete_right_of_cursor`
   and dispatch on key. If no, document the conflation at each of
   the three dispatch sites. Either way, the audit cannot proceed
   without a product call.
-- **#8** + **#9** — Hoist `editor_reset_transients` and
+- **#8** + **#9** - Hoist `editor_reset_transients` and
   `editor_input_restore_hidden_code_panel` into
   `src/app/glr_ctrl.c`; add `accept` to
   `EditorCompletionProvider`. Together they remove the four
   `app/` includes from `editor/input.c`.
-- **#10** — Do **not** "replace with `editor_try_commit_any`" as
-  the first-draft fix said — that would lose the
+- **#10** - Do **not** "replace with `editor_try_commit_any`" as
+  the first-draft fix said - that would lose the
   `_var_statements_then_insert` post-effects the overwrite Enter
   path depends on. Instead, add an inline comment at
   `commit_current_input` (`input.c:633`) naming both ordering
@@ -1355,7 +1355,7 @@ The dominant work is **closing the layering inversion**,
   their ordering. Optionally extract
   `editor_try_commit_block_structs_then_var_statements_insert()`
   as a single canonical helper that both Enter sites call.
-- **#11** — *Larger than first stated.* The live-state coupling
+- **#11** - *Larger than first stated.* The live-state coupling
   spans three modules, not one: `source_scope.h` exposes only
   live-state queries today; `collect_visible_vars`
   (`src/repl/core.c:721`) reads the live document directly and
@@ -1368,22 +1368,22 @@ The dominant work is **closing the layering inversion**,
   (b) queue the full extraction (`source_scope_*_view`,
   `collect_visible_vars_view`, and the compile.c migration)
   as its own week.
-- **#13** — *Do not naively route through `repl_compile_dispatch`*
-  — `repl_compile_dispatch` only returns `ReplCompiledChange`,
+- **#13** - *Do not naively route through `repl_compile_dispatch`*
+  - `repl_compile_dispatch` only returns `ReplCompiledChange`,
   while the editor wrappers build `EditorCommitPlan` effects
   (clear_input, cursor_target, load_line_after_apply,
   commit_message, normals dirty) plus the
   `_var_statements_then_insert` insert-mode flip. Preferred shape:
   (a) define one shared ordered var-statement kind list
   (`VAR_STMT_FLOAT_DECL`, `VAR_STMT_ASSIGN`) and let each TU map
-  those kinds to its own local handler table — pure compilers in
+  those kinds to its own local handler table - pure compilers in
   `compile.c`, editor wrappers in `commit.c`. Alternative:
   (b) introduce
   `editor_compile_var_statement(...)` adapter that calls
-  dispatch then layers per-kind post-effects — bigger, and only
+  dispatch then layers per-kind post-effects - bigger, and only
   safe if it can identify the matched kind and preserve all editor
   post-effects. Do not take (b) merely because #28 is in flight.
-- **#16** — *Site count depends on #27.* If #27 lands in the
+- **#16** - *Site count depends on #27.* If #27 lands in the
   afternoon (audit recommendation), `editor_commit_current_input`
   is already gone and this becomes a two-site dedupe between
   `editor_commit_apply_external_change` and
@@ -1391,9 +1391,9 @@ The dominant work is **closing the layering inversion**,
   three-site extraction. Either way: extract one canonical
   four-step apply helper. Read the finding for the conditional
   framing.
-- **#17** — Add `repl_eval_predef_copy` seam; route undo through
+- **#17** - Add `repl_eval_predef_copy` seam; route undo through
   it.
-- **#18** — *Preserve strict/permissive semantics.* Extract a
+- **#18** - *Preserve strict/permissive semantics.* Extract a
   `parse_for_commit(..., int strict_refs, int preserve_var_exprs)`
   helper that takes the policy as flags. Audit the 4-5 call sites
   first to enumerate which combination each currently uses; the
@@ -1402,10 +1402,10 @@ The dominant work is **closing the layering inversion**,
   remaining `EditorServices.parse_command_ctx` call sites should
   disappear; update `check-editor-repl-surface` and its baseline if
   the direct `repl_*` surface changes.
-- **#19** — Extract the canonical strip helper (probably in
+- **#19** - Extract the canonical strip helper (probably in
   `src/repl/`).
-- **#23** — ✅ Done. See finding above.
-- **#28** — *Multi-step `EditorServices` dismantling.* Order:
+- **#23** - ✅ Done. See finding above.
+- **#28** - *Multi-step `EditorServices` dismantling.* Order:
   (1) already landed: `apply_compiled_three_halves` is the shared
   direct `repl_apply_*` sequence;
   (2) migrate `commit.c:872` (#26: replace `svc.parse_command_ctx`
@@ -1417,7 +1417,7 @@ The dominant work is **closing the layering inversion**,
   replace service calls affect `scripts/check-editor-repl-surface.sh`
   / `scripts/baselines/editor-repl-surface.txt`. #27 + #29 have
   already landed in current source and no longer block this work.
-- **#39** (full fix) — Once the docstring is corrected
+- **#39** (full fix) - Once the docstring is corrected
   (afternoon), audit every call site of
   `editor_commit_apply_plan` that doesn't push an undo snapshot
   beforehand. Each is a latent undo-skip bug.
@@ -1427,31 +1427,31 @@ The dominant work is **closing the layering inversion**,
   dispatch sites (`input.c`) that push undo first. The undo
   contract is documented at `commit.c:1118-1124`.
   `editor_feed_line` intentionally skips per-line undo (bulk
-  loader — callers bracket the load). No latent undo-skip bugs
+  loader - callers bracket the load). No latent undo-skip bugs
   found.
 
 ### Out of scope
 
-- The 32-deep undo ring depth — it's a long-standing constant; not
+- The 32-deep undo ring depth - it's a long-standing constant; not
   flagged.
-- The `editor_demo` link surface — it's working as designed
+- The `editor_demo` link surface - it's working as designed
   (`state.c` + `edit_ops.c` only). All the findings about input/
   commit/clipboard apply to the REPL editor; the demo proves the
   cleavage works.
-- `help_session.c` (51 lines) — the abstraction is thin but real
+- `help_session.c` (51 lines) - the abstraction is thin but real
   (read-only editor session over a content provider); don't merge
   it into something larger.
-- The `EditorClipboardKind` tagged-union — keep the kind for the
+- The `EditorClipboardKind` tagged-union - keep the kind for the
   future `BLOCK` use case, but enforce it via `switch` (#21).
 
 ## Method note
 
 This audit was produced by four parallel review agents:
 
-- `input.c` (73KB, 1904 lines — the heaviest file in `src/editor/`)
+- `input.c` (73KB, 1904 lines - the heaviest file in `src/editor/`)
   + `edit_ops.c`
 - `commit.c` (53KB, 1376 lines) + `services.c` + `reformat.c`
-- `state.{c,h}` (state.h is 461 lines — unusually large for a
+- `state.{c,h}` (state.h is 461 lines - unusually large for a
   header) + `clipboard.c` + `undo.c`
 - `search.c` + the two inline overlays (`inline_rename.c`,
   `inline_file_prompt.c`) + `help_session.c` + `completion.c`
@@ -1472,5 +1472,5 @@ Cross-references to the other two audits in this directory:
   `EditorState` and the README matches. Re-check the UI finding
   against current source before applying any old cross-audit recipe.
 - `src-ui-code-smell-audit.md` finding #37 (search wrapper
-  pass-throughs) is the same as editor finding #25 — fix once at
+  pass-throughs) is the same as editor finding #25 - fix once at
   the editor side.

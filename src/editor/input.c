@@ -1,5 +1,5 @@
 /*
- * editor_input.c — Editor input dispatch.
+ * editor_input.c - Editor input dispatch.
  *
  * Owns text-document dispatch only: cursor / selection / scroll /
  * search / autocomplete / clipboard / undo / commit chain / code-panel
@@ -184,7 +184,7 @@ void editor_input_enable_glut_modifier_reads(void) {
 }
 
 unsigned char editor_input_normalize_super_to_ctrl(unsigned char key) {
-    /* Alpha check first so non-letter keys never read modifiers — that
+    /* Alpha check first so non-letter keys never read modifiers - that
      * read goes through glutGetModifiers() in production, which aborts
      * pre-init. The controller calls this at the top of its keyboard
      * route, before the cfg-shortcut chain that compares against
@@ -219,13 +219,13 @@ int editor_input_active_modifiers(void) {
 }
 
 /* Binding matcher for keymap.h (declared there; homed here so it reads the
- * canonical modifier accessor above — and so every test's modifier provider
+ * canonical modifier accessor above - and so every test's modifier provider
  * flows through unchanged).
  *
  * Exact modifier match, so binding_mods == 0 means strictly "no extra
  * modifiers": a Shift binding and its plain twin on the same key never
  * alias (Shift is the exact discriminator). Held modifiers are first
- * normalized to drop the modifier the key already IMPLIES — a KEY_CTRL_*
+ * normalized to drop the modifier the key already IMPLIES - a KEY_CTRL_*
  * control byte carries Ctrl, and on macOS the Cmd/SUPER alias that the
  * accessor mirrors into Ctrl. SUPER is always dropped; Ctrl is dropped
  * unless the binding explicitly requires it (the Ctrl+Arrow audio
@@ -254,7 +254,7 @@ void editor_request_close_help(void) {
     g_pending_input_effects.close_help_overlay = 1;
 }
 
-/* Editor-side tutorial adapters.  These are NOT misplaced tutorial policy —
+/* Editor-side tutorial adapters.  These are NOT misplaced tutorial policy -
  * the real matching/step/locked-line rules live in tutorial.c.  These statics
  * bridge editor facts (input text, cursor position, insert mode) into the
  * tutorial policy API and translate the result back into editor side effects
@@ -341,7 +341,7 @@ static void editor_reset_document_to_empty(void) {
     /* Editor owns the source-text buffer, not just a UI mirror of
      * the REPL command-store. A wholesale "clear all cmds" has to
      * drop the buffer too, otherwise the cleared command-array and
-     * the surviving editor text drift out of lockstep — the user
+     * the surviving editor text drift out of lockstep - the user
      * sees the old lines in the code panel while every commit acts
      * on an empty cmd-store (implemented in Phase 4 of
      * docs/plans/done/edit-line-ownership.md). */
@@ -391,7 +391,7 @@ void editor_load_line_to_input(int idx) {
         if (repl_line_is_label(idx)) {
             if (*s == ':') {
                 /* Label written as ":name"; strip trailing whitespace
-                 * only — keep the ':' and the body verbatim. */
+                 * only - keep the ':' and the body verbatim. */
                 int len = (int)strlen(s);
                 while (len > 0 && isspace((unsigned char)s[len - 1]))
                     len--;
@@ -470,7 +470,7 @@ static void navigate_to_line_raw_resolved(int target) {
             /* Mid-document commit rows (block bodies, label splices)
              * only accept pure inserts, and the row that currently
              * sits there is tutorial-locked (the shifted `}` / the
-             * anchored command) — loading it would both error and
+             * anchored command) - loading it would both error and
              * strand the user out of insert mode (e.g. after Esc).
              * Re-park exactly as step entry did: insert mode on, a
              * fresh empty input row. */
@@ -562,9 +562,9 @@ static void warn_if_scope_truncated(int vis_total) {
 }
 
 /* Parse g_input into `cmd` as if it were being committed at source-line
- * `insert_idx`. Used by two Enter-key paths — overwrite-Enter (replace
+ * `insert_idx`. Used by two Enter-key paths - overwrite-Enter (replace
  * the line under the cursor) and append-at-end Enter (append a new line
- * past document end) — hence the neutral name. Handles the three-way
+ * past document end) - hence the neutral name. Handles the three-way
  * fan-out shared by both paths:
  *   - loop/function locals visible at that line -> parse_with_vars +
  *     reindent
@@ -652,9 +652,9 @@ typedef enum {
     EDITOR_PLACE_REJECTED     /* replacing a still-referenced declaration row */
 } EditorPlaceResult;
 
-/* Is replacing the source row at `pos` allowed? This is a raw replace —
+/* Is replacing the source row at `pos` allowed? This is a raw replace -
  * it goes straight to the command store, with none of the compile path's
- * feasibility checks in front of it — so the one guard that must not be
+ * feasibility checks in front of it - so the one guard that must not be
  * skipped is asked for explicitly. For a global the row is survivable
  * collateral (the predef slot outlives it), but a function-scoped local's
  * binding *is* its prologue row: drop it and every assignment to that name
@@ -670,7 +670,7 @@ static int editor_replace_row_allowed(int pos, char *err, int err_size) {
  * advance edit_line to its post-place resting position. Callers handle
  * their own status messages and side effects (status text, input clear,
  * editor_load_line_to_input, pending_newline) based on the returned
- * result — each caller's user-visible behavior is intentionally distinct. */
+ * result - each caller's user-visible behavior is intentionally distinct. */
 static EditorPlaceResult editor_place_parsed_command(int insert_idx,
                                                      const GLCmd *cmd,
                                                      const char *cmd_text) {
@@ -711,8 +711,8 @@ typedef struct {
     int newline_len;
 } CommitAttemptState;
 
-/* File-scope (not locals) only to keep these >1 MB structs — each
- * embeds a full EditorUndoSnapshot — off the stack. They are
+/* File-scope (not locals) only to keep these >1 MB structs - each
+ * embeds a full EditorUndoSnapshot - off the stack. They are
  * captured and consumed within a single call, never retained
  * across calls. */
 static CommitAttemptState g_commit_attempt_before;
@@ -753,7 +753,7 @@ static int input_matches_committed_line(int line) {
 
 /* The editor_try_commit_* chain returns 1 for BOTH a successful commit
  * and a handled error, so "did anything actually change?" can't be read
- * off the return value — it must be detected structurally by diffing
+ * off the return value - it must be detected structurally by diffing
  * the document/cursor/input against the pre-attempt snapshot. */
 static int commit_progressed_since(const CommitAttemptState *s) {
     EditorInputView inp = editor_state_input();
@@ -788,11 +788,11 @@ static int current_input_needs_navigation_commit(void) {
  * line-advance/insert-mode behavior for unchanged lines; navigation treats
  * unchanged input as a no-op and only uses this helper for modified text.
  *
- * ORDERING INVARIANTS (audit #10 — both are load-bearing, in opposite
+ * ORDERING INVARIANTS (audit #10 - both are load-bearing, in opposite
  * directions; do not "normalize" to a single shape):
  *
  *  1. WITHIN var_statements: float_decl MUST run before assign_variable.
- *     `editor_try_commit_var_statements()` enforces this order — the
+ *     `editor_try_commit_var_statements()` enforces this order - the
  *     reverse would misread `float x` as an assignment to an
  *     identifier named "float". See `editor_try_commit_var_statements`
  *     in src/editor/commit.c and CLAUDE.md "Commit Dispatch Sites".
@@ -804,14 +804,14 @@ static int current_input_needs_navigation_commit(void) {
  *     block, not be misread as a stray-`}` to var-statement fallthrough.
  *     The overwrite-Enter branch additionally uses
  *     `_var_statements_then_insert()` to flip into insert-mode + clear
- *     the input after a successful var-statement commit — a post-effect
+ *     the input after a successful var-statement commit - a post-effect
  *     `editor_try_commit_any` does not perform.
  *
  * test_repl_editor.c pins both invariants (search for
  * "commit_current_input ordering"). */
 /* `needs_commit_hint`: pass 1 when the caller has already verified
  * via `current_input_needs_navigation_commit()` that a commit is
- * needed (skips the redundant re-evaluation here — see
+ * needed (skips the redundant re-evaluation here - see
  * `commit_before_navigation`). Pass -1 to make this helper compute
  * the predicate itself; pass 0 to assert no precheck happened (then
  * `enter_mode` is the only thing that can skip the early-exit). */
@@ -894,7 +894,7 @@ static CommitResult commit_current_input(int enter_mode,
      * append row with insert mode OFF. The ;-key route reaches these via
      * editor_try_commit_any; the Enter / navigation route would otherwise
      * fall through to the GL-command parser below, which rejects
-     * `float n = 1;` — a tutorial REQUIRE_VAR declaration step parks the
+     * `float n = 1;` - a tutorial REQUIRE_VAR declaration step parks the
      * cursor exactly here, so Enter (not just ';') must commit the decl.
      * block_structs already ran above, preserving the Enter "block_structs
      * first" ordering invariant (#2); the insert-mode branch below keeps
@@ -1165,7 +1165,7 @@ void editor_navigate_to_line(int target) {
      * even when the target equals the current index: an empty insert row
      * left behind by Enter must persist as a real blank line no matter
      * which row the next click/arrow lands on (otherwise clicking the
-     * line directly below — which hit-tests to the same index — would
+     * line directly below - which hit-tests to the same index - would
      * silently discard it, unlike the arrow keys). */
     if (target != editor_state_edit_line() || editor_insert_mode()) {
         int inserted_at = editor_state_edit_line();
@@ -1249,7 +1249,7 @@ static void restore_hidden_code_panel_for_key(unsigned char key) {
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
         /* Escape drops transient state. The input-selection anchor is
-         * one such state — clear it alongside whatever specific branch
+         * one such state - clear it alongside whatever specific branch
          * fires below, so Esc is the universal "dismiss" key for both
          * visible selection bands and the other overlays. */
         editor_input_anchor_clear();
@@ -1293,7 +1293,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
         else
             editor_undo_pop_snapshot();
         /* keyboard_begin_key already armed scroll-follow; suppress it so
-         * undo/redo doesn't yank the view to the restored cursor — the
+         * undo/redo doesn't yank the view to the restored cursor - the
          * user may be looking at a different region (e.g. color picker). */
         editor_scroll_follow_cursor_set(0);
         return 1;
@@ -1436,7 +1436,7 @@ static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
         /* Input-buffer selection wins over the line-range selection.
          * Editing the input row is the more local concern and matches
-         * standard editor behavior. Works in insert mode too — the
+         * standard editor behavior. Works in insert mode too - the
          * line-range guard below only matters when no input selection
          * is active. Both Backspace and Delete consume the selection
          * the same way; the asymmetry below only applies to the
@@ -1515,7 +1515,7 @@ static int tutorial_precheck_current_input(void) {
     if (!tutorial_active())
         return 1;
 
-    /* SET/REQUIRE steps don't accept typed commits — block here with a
+    /* SET/REQUIRE steps don't accept typed commits - block here with a
      * kind-appropriate hint and let the SET-step ack key (Enter / Tab /
      * Space, handled in glr_ctrl_keyboard's router) drive advancement
      * instead. Routing the hint through a tutorial_* widget call keeps
@@ -1535,7 +1535,7 @@ static int tutorial_precheck_current_input(void) {
     if (editor_state_input().input[0] == '\0')
         return 0;
 
-    /* REQUIRE_VAR steps don't pin a single expected commit line — the
+    /* REQUIRE_VAR steps don't pin a single expected commit line - the
      * user is free to type any `name = expr;` (or unrelated source)
      * anywhere they like; the step advances when the watched predef
      * variable reaches its target value (notify hook in
@@ -1588,7 +1588,7 @@ static void tutorial_advance_if_commit_ok(CommitResult result) {
          * predef-writeback notify hook inside the commit instead; if that
          * notify already advanced onto a COMMAND step, a second advance
          * here would skip it (instruction comment shown, command never
-         * typed — the `float n = ...;` → glBegin skip). */
+         * typed - the `float n = ...;` → glBegin skip). */
         if (tutorial_note_expected_commit_applied())
             tutorial_advance_after_successful_commit();
     } else {
@@ -1737,7 +1737,7 @@ static int handle_printable_input_key_route(unsigned char key) {
 /* Editor's keyboard dispatch. Non-editor concerns (config menu,
  * replay forwarding, cfg shortcut, replay toggle, accum samples,
  * save / debug / quit) are routed by src/app/glr_ctrl.c directly to their
- * owning subsystem before this runs — they don't appear here. */
+ * owning subsystem before this runs - they don't appear here. */
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
@@ -2031,7 +2031,7 @@ static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
 
-    /* A bare modifier press is not edit input — don't let it reset the
+    /* A bare modifier press is not edit input - don't let it reset the
      * scroll-follow (snapping the view to the cursor) or otherwise act. */
     if (special_key_is_bare_modifier(key))
         return;
@@ -2085,7 +2085,7 @@ int editor_input_point_on_code_panel_divider(int x, int y) {
     int gl_y = ui_state_viewport().window_h - y;
     int layout = editor_input_code_panel_layout();
     /* Same band the click classification uses (ui_text_panel_point_on_divider
-     * via the code-panel adapter) — the cursor must promise exactly the
+     * via the code-panel adapter) - the cursor must promise exactly the
      * pixels that start a drag. */
     int pad = UI_PANEL_DIVIDER_GRAB_PX;
 
@@ -2193,7 +2193,7 @@ static void motion_func(int x, int y) {
 
 /* Each entry point runs its editor route, then drains and returns the
  * pending effects (its own plus anything the caller accumulated before
- * delegating — deliberately NOT reset at entry, so caller-side effects
+ * delegating - deliberately NOT reset at entry, so caller-side effects
  * are returned rather than silently wiped). The controller merges the
  * snapshot back into the accumulator via editor_merge_input_effects and
  * flushes once per GLUT event; test fixtures read the snapshot

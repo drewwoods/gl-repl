@@ -5,11 +5,11 @@
  * (src/ui/support/cpuprof.c) are section-name agnostic: they key on the
  * opaque ProfSection int and ask the app for each section's display via
  * prof_section_info(). This file is that app-side table for the gl-repl
- * binary — each row is
+ * binary - each row is
  * { label, depth, is_total, is_slack, is_frame_total }:
  *   - label    is the bare section name (NO indentation baked in);
  *   - depth    is the nesting level (0 = top-level, 1/2/3 = children),
- *              the single source of truth — the panel derives the visual
+ *              the single source of truth - the panel derives the visual
  *              indentation from it, so restyling the indent never changes
  *              the nesting classification;
  *   - is_total marks a total row;
@@ -52,7 +52,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
     [PROF_RENDER3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
     /* Buffer-viz cost is dominated by the synchronous glReadPixels stall
-     * plus the CPU convert — CPU-side numbers by nature, so these rows are
+     * plus the CPU convert - CPU-side numbers by nature, so these rows are
      * deliberately NOT in k_gpu_sections below. Stencil reads once per
      * accumulation pass (it composites per pass), depth once per frame, so
      * the two rows are not comparable at accum > 1. */
@@ -129,7 +129,7 @@ ProfSectionInfo prof_section_info(ProfSection s) {
  * so the cpuprof hooks below wrap them in GL_TIME_ELAPSED queries. Left
  * out (0): the pure-CPU sections (snapshot/flatten/reformat/autonormal/
  * frame-restore, code-panel layout precompute) and the per-fade-batch
- * sub-sections — one segment per batch per accumulation pass would swamp
+ * sub-sections - one segment per batch per accumulation pass would swamp
  * gpuprof's per-frame query budget while PROF_RENDER3D_FADE already
  * covers the whole pass. */
 static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
@@ -150,7 +150,7 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D_OVERLAY_NORMALS]          = 1,
     [PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS]   = 1,
     [PROF_RENDER3D_POST_PROCESS]             = 1,
-    /* build rows / layout are pure-CPU phases (no GL emitted) — excluded. */
+    /* build rows / layout are pure-CPU phases (no GL emitted) - excluded. */
     [PROF_CODE_PANEL]                        = 1,
     [PROF_CODE_PANEL_TEXT]                   = 1,
     [PROF_CODE_PANEL_TEXT_CHROME]            = 1,
@@ -168,8 +168,8 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * is rendering the profiler's own measurements. */
     [PROF_MEMORY_PANEL]                      = 1,
     /* Only the assignment plot's panel leaf draws. Its parent spans the
-     * flat-program scan as well — pure CPU, and accumulated across two
-     * separate points in the frame — so a query there would bracket work
+     * flat-program scan as well - pure CPU, and accumulated across two
+     * separate points in the frame - so a query there would bracket work
      * that issues no GL at all. */
     [PROF_ASSIGN_PLOT_PANEL]                 = 1,
     [PROF_COMPOSITOR]                        = 1,

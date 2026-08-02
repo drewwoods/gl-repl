@@ -1,5 +1,5 @@
 /*
- * tools/capacity_matrix.c — print state-scaling matrix for tunable
+ * tools/capacity_matrix.c - print state-scaling matrix for tunable
  * MAX_* / depth constants in the gl-repl tree.
  *
  * Run via `make capacity-matrix`. The output table shows, for each
@@ -10,10 +10,10 @@
  *
  * The per-unit math is hand-curated. Each row sums every long-lived
  * (.bss / .data / static) array dimension that scales with the
- * constant — transient stack arrays don't count. When you add a new
+ * constant - transient stack arrays don't count. When you add a new
  * MAX_* or change a struct that uses one, append (or update) a row.
  *
- * The numbers are deliberately conservative — file-private structs
+ * The numbers are deliberately conservative - file-private structs
  * (UserScene in src/repl/scenes.c) are computed approximately because
  * their definitions aren't visible from a tool TU. Notes call out
  * those cases.
@@ -57,7 +57,7 @@ static const CapRow rows[] = {
       "undo+redo rings (×64) + document + editor_buffer + user scenes (×8)" },
 
     /* Flat-program capacity (split from the source cap 2026-07-10).
-     * One live array pair — no undo/scene fan-out. */
+     * One live array pair - no undo/scene fan-out. */
     { "MAX_FLAT_COMMANDS", MAX_FLAT_COMMANDS,
       sizeof(GLCmd) + sizeof(FlatCmdLocalVars)
         + sizeof(unsigned) + sizeof(int) + sizeof(float)
@@ -108,7 +108,7 @@ static const CapRow rows[] = {
     /* Compile-time temp arrays. Per-call only. */
     { "MAX_COMMIT_CMDS", MAX_COMMIT_CMDS,
       sizeof(GLCmd) + MAX_LINE_LEN, /* per ReplCompiledChange instance, but those are stack-only */
-      "ReplCompiledChange.cmds[]/.text[][] — per-call stack only, no durable state" },
+      "ReplCompiledChange.cmds[]/.text[][] - per-call stack only, no durable state" },
 
     /* Number of GL_LIGHT slots tracked by the renderer. */
     { "MAX_LIGHTS", MAX_LIGHTS,
@@ -128,12 +128,12 @@ static const CapRow rows[] = {
     /* Function-hint metadata table. */
     { "MAX_FUNC_HINT_PARAMS", MAX_FUNC_HINT_PARAMS,
       sizeof(char *),
-      "ReplFuncCompletion.params[] — pointers into static const strings" },
+      "ReplFuncCompletion.params[] - pointers into static const strings" },
 
     /* Autocomplete match list size. */
     { "MAX_AC_MATCHES", MAX_AC_MATCHES,
       sizeof(char *),
-      "EditorAutocompleteState.matches[] — pointers into static const strings" },
+      "EditorAutocompleteState.matches[] - pointers into static const strings" },
 
     /* Workspace header line cap. Each line is a full source-line-length string. */
     { "MAX_WORKSPACE_HEADER_LINES", MAX_WORKSPACE_HEADER_LINES,
@@ -153,7 +153,7 @@ static void format_bytes(size_t b, char *buf, size_t bufsz) {
 
 int main(void) {
     printf("\n");
-    printf("Capacity matrix — gl-repl state scaling\n");
+    printf("Capacity matrix - gl-repl state scaling\n");
     printf("=======================================\n\n");
 
     printf("Major struct sizes (sizeof at the current configuration):\n");
@@ -200,7 +200,7 @@ int main(void) {
         printf("Sum across rows (rough total durable state): %s\n", buf);
     }
     printf("Note: rows overlap (e.g. MAX_EDITOR_COMMANDS and MAX_LINE_LEN both\n");
-    printf("count editor_buffer + undo rings) — the sum overstates the\n");
+    printf("count editor_buffer + undo rings) - the sum overstates the\n");
     printf("true footprint. For an authoritative figure, sum sizeof of\n");
     printf("g_repl_state + g_undo_buf + g_redo_buf + g_user_scenes.\n\n");
 

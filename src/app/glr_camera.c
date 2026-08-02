@@ -6,7 +6,7 @@
  * ui_state_camera* accessors and `repl_camera_controls.c` did the
  * drag math reaching back into UiState; both halves merged here.
  *
- * Pointer tracking is internal — drag deltas come from the file-static
+ * Pointer tracking is internal - drag deltas come from the file-static
  * cache. `ui/state.h` (the global `UiPointerState` for snapshot
  * consumers) is updated by callers in glr_ctrl, not by this module,
  * so glr_camera stays free of UI dependencies.
@@ -50,7 +50,7 @@
 #define CAM_GLOW_FLOOR 0.005f
 #define CAM_GLOW_VEL_THRESHOLD 0.01f
 
-/* Default values for GlrCameraState — the previous home was
+/* Default values for GlrCameraState - the previous home was
  * UI_STATE_INITIAL.camera in src/ui/app/state.c. */
 #define GLR_CAMERA_INITIAL                          \
     {                                               \

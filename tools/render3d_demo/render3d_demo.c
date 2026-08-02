@@ -1,5 +1,5 @@
 /*
- * tools/render3d_demo/render3d_demo.c — independent binary that drives the scene
+ * tools/render3d_demo/render3d_demo.c - independent binary that drives the scene
  * module with a non-REPL geometry callback (a single glutSolidTeapot).
  *
  * Demonstrates that scene/ has no hard dependency on the REPL editor or
@@ -56,7 +56,7 @@ static void (*g_hot_get_active_projection)(const Render3dState *,
                                            Render3dProjectionDesc *);
 
 /* Route the render3d_* call sites through the pointers. Defined AFTER
- * render3d/render.h is included, so the header's prototypes are untouched —
+ * render3d/render.h is included, so the header's prototypes are untouched -
  * these function-like macros only rewrite the call expressions in this file. */
 #define render3d_init_gl()                   g_hot_init_gl()
 #define render3d_state_init(s)               g_hot_state_init(s)
@@ -169,7 +169,7 @@ static int hot_load(void) {
 
 /* Polled from idle: if a render3d source changed, ARM a rebuild for the next
  * frame. Throttled so the directory walk stays cheap. Deliberately does not
- * build here — the build runs post-swap in display_func so the banner frame
+ * build here - the build runs post-swap in display_func so the banner frame
  * reaches the screen first. */
 static void hot_poll_sources(void) {
     if (g_hot_state != HOT_IDLE) return;
@@ -191,13 +191,13 @@ static void hot_poll_sources(void) {
 
 /* The blocking rebuild + reload. MUST be called after display_func has already
  * rendered and swapped a frame showing the "rebuilding" banner, so it is on
- * screen while this (frozen) compile runs. The window pauses for the compile —
+ * screen while this (frozen) compile runs. The window pauses for the compile -
  * fine for a dev tool. */
 static void hot_run_build(void) {
-    fprintf(stderr, "[hot] change detected — rebuilding src/render3d ...\n");
+    fprintf(stderr, "[hot] change detected - rebuilding src/render3d ...\n");
     int rc = system(RENDER3D_HOT_BUILD_CMD);
     if (rc != 0) {
-        fprintf(stderr, "[hot] build failed (status %d) — keeping module #%d\n",
+        fprintf(stderr, "[hot] build failed (status %d) - keeping module #%d\n",
                 rc, g_hot_reload_count);
         g_hot_last_ok = 0;
         return;
@@ -232,7 +232,7 @@ static float g_cam_ty   = 0.0f;
 static float g_cam_tz   = 0.0f;
 static int   g_auto_rotate = 1;
 
-/* Per-renderer scene state — the demo owns one instance, init'd in
+/* Per-renderer scene state - the demo owns one instance, init'd in
  * main() after the GL context is current. Mirrors what glr_ctrl owns
  * in src/app/glr_ctrl.c (the single-renderer assumption is now per
  * binary). */
@@ -291,7 +291,7 @@ static void my_scene_execute(const Render3dExecuteContext *ctx, void *user_data)
         ctx && (ctx->purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
                 ctx->purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES);
 
-    /* The scene owns its clear — render3d_draw_scene no longer clears the
+    /* The scene owns its clear - render3d_draw_scene no longer clears the
      * scene rect for anyone. In gl-repl the equivalent glClear is a visible
      * line in the user's program; here it is this call. It sits inside
      * execute_fn (not before draw_scene) so it lands under the same
@@ -360,7 +360,7 @@ static void build_config(Render3dRenderConfig *cfg) {
      * GL-context capability-query path (it is a link-proof harness,
      * not a feature surface), and never calling the entry point
      * unless a caller has explicitly confirmed support is the safe
-     * default — same as post_filter_mode defaulting off here. */
+     * default - same as post_filter_mode defaulting off here. */
     memset(cfg, 0, sizeof(*cfg));
 
     cfg->execute_fn = my_scene_execute;
@@ -616,7 +616,7 @@ static void render_hot_banner(void) {
 /* --- GLUT callbacks ---------------------------------------------------- */
 
 /* Populate GL_MODELVIEW with the orbit-camera transform. The scene
- * module documents this as the caller's responsibility — see the
+ * module documents this as the caller's responsibility - see the
  * comment block in src/scene/render.h above render3d_draw_scene.
  * Inlined here (instead of importing src/app/glr_camera.h's
  * glr_camera_load_modelview) because render3d_demo's whole purpose is
@@ -802,12 +802,12 @@ int main(int argc, char **argv) {
      * arm the watcher against the current source state so we only rebuild on
      * an actual edit. */
     if (!hot_load()) {
-        fprintf(stderr, "[hot] initial load of %s failed — run `make render3d-hot` first\n",
+        fprintf(stderr, "[hot] initial load of %s failed - run `make render3d-hot` first\n",
                 RENDER3D_HOT_LIB_PATH);
         return 1;
     }
     g_hot_src_mtime = hot_newest_mtime(RENDER3D_HOT_SRC_DIR);
-    fprintf(stderr, "[hot] watching %s — edit any .c/.h and save to reload live\n",
+    fprintf(stderr, "[hot] watching %s - edit any .c/.h and save to reload live\n",
             RENDER3D_HOT_SRC_DIR);
 #endif
 

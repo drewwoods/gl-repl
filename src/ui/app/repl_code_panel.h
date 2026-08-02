@@ -21,7 +21,7 @@ struct UiCodePanelOutput;
  * Per-kind argument syntax coloring
  *
  * The code panel colors a command row by its class (CmdSyntaxCategory).
- * On top of that, argument *tokens* — literals, constants, and variables —
+ * On top of that, argument *tokens* - literals, constants, and variables -
  * are drawn as dimmer/desaturated tiers of that same class hue (derived
  * from the class color only, never an independent hue), so the class stays
  * recognizable and a line never clashes with itself. Keyword / function-call
@@ -138,8 +138,8 @@ int  ui_repl_code_panel_input_row_has_color_swatch(
  * fails to refresh the cache after a snapshot change becomes observable. */
 /* Resolve the code panel's left-margin gutter label for each of `count`
  * document line indices (parallel arrays; -1 where no row represents the
- * line). The label is not the document index — with code focus off the
- * derived-C chrome rows shift it — so any UI quoting a line number to the
+ * line). The label is not the document index - with code focus off the
+ * derived-C chrome rows shift it - so any UI quoting a line number to the
  * user must resolve it here rather than printing source_line_idx + 1.
  * Batched: a cache miss rebuilds the whole row list. */
 void ui_repl_code_panel_gutter_labels_for_lines(const UiRenderSnapshot *snap,

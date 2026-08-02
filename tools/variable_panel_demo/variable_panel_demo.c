@@ -1,10 +1,10 @@
 /*
- * tools/variable_panel_demo/variable_panel_demo.c — standalone driver for the
+ * tools/variable_panel_demo/variable_panel_demo.c - standalone driver for the
  * variable-panel subsystem.
  *
  * Isolation proof: links ONLY the src/subsystems/variable_panel peer (state +
  * drag math) + src/ui/subsystems/variable_panel.c (the renderer) + ui/core
- * theme. No src/ui/app, no src/app, no src/repl, no src/editor — see
+ * theme. No src/ui/app, no src/app, no src/repl, no src/editor - see
  * VARIABLE_PANEL_DEMO_DEP_SRCS in the Makefile and
  * check-variable-panel-demo-isolation.
  *

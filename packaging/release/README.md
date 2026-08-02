@@ -1,6 +1,6 @@
 # Release notes
 
-One `<tag>.md` per release — the user-facing body of the GitHub release. Name
+One `<tag>.md` per release - the user-facing body of the GitHub release. Name
 the file after the tag and `make release` picks it up with no further wiring:
 the upload step defaults to `(auto)`, which resolves `packaging/release/<tag>.md`
 and falls back to gh's one-line placeholder when there is no such file.
@@ -21,8 +21,8 @@ gh release edit v0.1 --repo drewwoods/gl-repl \
 ```
 
 `README.md` is skipped by the menu listing, so this file never shows up as a
-choice. Notes live here rather than in `docs/` because they ship *outward* — to
-someone who has a zip and no checkout — so they describe first-launch and
+choice. Notes live here rather than in `docs/` because they ship *outward* - to
+someone who has a zip and no checkout - so they describe first-launch and
 runtime-dependency steps, not how the tree is built.
 
 Keep the macOS Gatekeeper section in any new release notes. The app is ad-hoc

@@ -2,8 +2,8 @@
  * src/ui/subsystems/buffer_viz_legend.c -- Stencil-buffer legend panel.
  *
  * Pure renderer over UiBufferVizLegendView (see the header for the
- * subsystem -> controller -> UI pull). Solves one small table — swatch,
- * value, pixel count — and parks it in the scene rect's top-left corner,
+ * subsystem -> controller -> UI pull). Solves one small table - swatch,
+ * value, pixel count - and parks it in the scene rect's top-left corner,
  * the one corner no other scene chrome claims (the status bar and replay
  * HUD sit along the bottom, the floating panel stack down the right
  * edge). Everything is fixed-width FONT_SMALL text, so column widths are
@@ -28,7 +28,7 @@
 #define BVL_RULE_H       5   /* vertical room a divider rule occupies */
 
 /* Wide enough for the longest left-column string, "+<int> more" (16 chars at
- * INT_MAX), so the count can't be silently clipped — which is also what
+ * INT_MAX), so the count can't be silently clipped - which is also what
  * -Wformat-truncation was pointing at. */
 #define BVL_LEFT_MAX    20
 #define BVL_RIGHT_MAX   16
@@ -75,7 +75,7 @@ static void bvl_push_line(BvlLayout *out, BvlLineKind kind,
 
 /* Solve the table and its placement. Returns 0 when the panel would not
  * draw (invisible view, degenerate window/scene rect, or a scene too
- * small to hold the solved panel). Pure — no GL, no state reads. */
+ * small to hold the solved panel). Pure - no GL, no state reads. */
 static int bvl_solve(const UiBufferVizLegendView *view, BvlLayout *out) {
     char label[BVL_LEFT_MAX];
     int left_chars = 0, right_chars = 0, title_chars;
@@ -165,7 +165,7 @@ static void bvl_draw_swatch(const BvlLine *line, int x, int y) {
     if (line->kind != BVL_LINE_ZERO)
         return;
     /* Zero is transparent in every viz mode, so it gets the outline of a
-     * swatch rather than a fill — the panel says "background", not "a
+     * swatch rather than a fill - the panel says "background", not "a
      * colour you should be looking for on screen". */
     ui_clr(UI_TOK_TEXT_MUTED);
     glBegin(GL_LINE_LOOP);

@@ -3,8 +3,8 @@
  *
  * Pure renderer + hit-test over a controller-built view: draws the
  * right-click OpenGL-state report as a floating table (state name, current
- * value, and — expanded via the clickable header chip, collapsed by
- * default — the OpenGL 2.1 default and latest change source columns)
+ * value, and - expanded via the clickable header chip, collapsed by
+ * default - the OpenGL 2.1 default and latest change source columns)
  * anchored near the click position, wheel-scrollable when the report is
  * taller than the window (flyout-style right-edge scrollbar hint). The fold
  * itself lives in src/repl/gl_state_inspector.c; open/close/scroll/expand
@@ -25,10 +25,10 @@
  * details_expanded widens the table with the default/source columns
  * (collapsed the popup shows only state + current, keeping it narrow).
  * setup_expanded folds in the generated init()/display() rows (collapsed
- * the popup shows only what the program itself wrote — see the report's
+ * the popup shows only what the program itself wrote - see the report's
  * user_row_count partition; the generated group is typically the large
  * majority, so this is what keeps the popup readable).
- * `report` stays valid for the frame — it points at controller-owned
+ * `report` stays valid for the frame - it points at controller-owned
  * storage rebuilt each frame from the flat program. */
 typedef struct {
     int visible;
@@ -50,11 +50,11 @@ typedef struct {
  * current value in the warning accent; explicit writes of the default value
  * draw in the OK accent so touched-ness stays visible either way. Generated
  * setup rows keep that distinction in the muted palette rather than the
- * accents — nearly all of them differ from the GL default, so accenting the
+ * accents - nearly all of them differ from the GL default, so accenting the
  * group would carry no signal. */
 void ui_gl_state_panel_render(const UiGlStatePanelView *view);
 
-/* Pure hit-test: 1 when (mx, my) — GLUT screen coords, y-down — lands
+/* Pure hit-test: 1 when (mx, my) - GLUT screen coords, y-down - lands
  * inside the open popup's frame; 0 otherwise (including when the popup
  * is closed). The router uses this for click-away dismiss and to scope
  * wheel scrolling to the popup. */
@@ -62,7 +62,7 @@ int ui_gl_state_panel_hit_test(const UiGlStatePanelView *view,
                                int mx, int my);
 
 /* Pure hit-test for the header's expand/collapse chip ("[+] ..." /
- * "[-] ..."): 1 when (mx, my) — GLUT screen coords, y-down — lands on
+ * "[-] ..."): 1 when (mx, my) - GLUT screen coords, y-down - lands on
  * the chip's header-row cell. The router flips
  * ui_state_gl_state_inspector_toggle_details() on a left press there
  * (the press is already swallowed by the popup's surface hit-test). */
@@ -70,7 +70,7 @@ int ui_gl_state_panel_hit_test_details_toggle(const UiGlStatePanelView *view,
                                               int mx, int my);
 
 /* Pure hit-test for the title row's setup-fold chip ("[+] N from setup" /
- * "[-] N from setup"): 1 when (mx, my) — GLUT screen coords, y-down — lands
+ * "[-] N from setup"): 1 when (mx, my) - GLUT screen coords, y-down - lands
  * on the chip cell. The router flips
  * ui_state_gl_state_inspector_toggle_setup() on a left press there. Returns 0
  * when the report has no generated rows to fold. */

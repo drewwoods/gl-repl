@@ -193,7 +193,7 @@ const char *glr_paths_default_audio_state_file(void) {
         return path;
 
     /* Unlike the recovery file, nothing else creates the state dir before
-     * the audio worker's first save — do it here, once, at bootstrap. */
+     * the audio worker's first save - do it here, once, at bootstrap. */
     snprintf(dir, sizeof(dir), "%s", path);
     char *slash = strrchr(dir, '/');
     if (!slash)

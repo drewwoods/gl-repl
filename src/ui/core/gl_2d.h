@@ -1,6 +1,6 @@
 #ifndef GL_2D_H
 #define GL_2D_H
-#include <string.h>          /* strlen — chip label measurement */
+#include <string.h>          /* strlen - chip label measurement */
 
 #include "gl_includes.h"
 #include "ui/core/theme.h"
@@ -13,8 +13,8 @@
  * into GL's current color and bleed into the next frame's scene
  * geometry (uncolored user geometry otherwise inherited the status
  * banner's orange / profile panel's green). Overlays stay fully
- * transient: the scene/display color — or the GL default, or whatever
- * init() set — is left exactly as it was. */
+ * transient: the scene/display color - or the GL default, or whatever
+ * init() set - is left exactly as it was. */
 static inline void gl2d_begin(int w, int h) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -37,7 +37,7 @@ static inline void gl2d_begin(int w, int h) {
      * not what leaks out, but what leaks in. 2D overlays are pixel work, and
      * a 1px panel border or axis tick must not change width or pick up
      * antialiasing because the scene left glLineWidth(5) or GL_LINE_SMOOTH
-     * behind — the user's program can set both, and so can the Line smooth
+     * behind - the user's program can set both, and so can the Line smooth
      * config. Every overlay therefore starts from the same crisp 1px
      * baseline, and any width an overlay sets for itself is popped by
      * gl2d_end(). */
@@ -71,7 +71,7 @@ static inline void gl2d_draw_string(float x, float y, const char *s,
 /* Pixel width of `s` in a GLUT bitmap font, summed per glyph.
  *
  * Fixed-width fonts (FONT_SMALL / FONT_MONO) can be measured as
- * strlen * FONT_*_W, but FONT_TINY is Helvetica 10 — proportional — so
+ * strlen * FONT_*_W, but FONT_TINY is Helvetica 10 - proportional - so
  * chrome that centers or right-aligns tiny text has to ask GLUT. */
 static inline int gl2d_text_width(void *font, const char *s) {
     int w = 0;
@@ -105,17 +105,17 @@ static inline void gl2d_panel_frame(float x, float y, float w, float h,
  * The panels carry two kinds of clickable text, and they are not the same
  * thing even though both used to be bracketed words:
  *
- *   A *state* chip owns a setting and shows that setting's current value —
+ *   A *state* chip owns a setting and shows that setting's current value -
  *   "1 Hz", "log", "2x". Clicking it changes the value (cycling, or toggling
  *   for a two-state one).
  *
- *   An *action* chip fires a one-shot — "[reset]", "[x]". It owns no state,
+ *   An *action* chip fires a one-shot - "[reset]", "[x]". It owns no state,
  *   so there is nothing for it to display but the verb.
  *
  * The rule for authors is therefore: **anything with persistent state shows
  * the state; a verb means clicking does that thing, now.** A chip labelled
- * with a verb must not have a mode. (Single-glyph disclosure controls —
- * "[+]" / "[-]" — are the one exemption: they are a universal idiom, they
+ * with a verb must not have a mode. (Single-glyph disclosure controls -
+ * "[+]" / "[-]" - are the one exemption: they are a universal idiom, they
  * cannot be misread as a value, and the panel's own collapsed shape already
  * shows the state.)
  *
@@ -136,7 +136,7 @@ static inline void gl2d_panel_frame(float x, float y, float w, float h,
 #define GL2D_CHIP_H     (FONT_SMALL_H + 2)
 
 /* Width of a state chip's well, for layout and hit-testing. `label` is the
- * bare value — no brackets. Fixed-width font, so this is a character count. */
+ * bare value - no brackets. Fixed-width font, so this is a character count. */
 static inline int gl2d_chip_state_w(const char *label) {
     return (label ? (int)strlen(label) : 0) * FONT_SMALL_W + 2 * GL2D_CHIP_PAD_X;
 }

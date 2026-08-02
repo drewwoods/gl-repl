@@ -1,6 +1,6 @@
 # Float-Returning REPL Functions
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status - NOT STARTED (2026-05-23 audit)
 
 No `CMD_RETURN` in the command model; user functions remain
 `static void`-shaped at export. Stays in `not-started/`.

@@ -1,12 +1,12 @@
 /*
  * depth_viz.c - see depth_viz.h.
  *
- * Split into a pure conversion core (buffer_viz_depth_map — no GL,
+ * Split into a pure conversion core (buffer_viz_depth_map - no GL,
  * unit-tested with synthetic buffers) and a thin GL shell: capture
  * (glReadPixels GL_DEPTH_COMPONENT into a persistent float buffer,
  * grown on resize) and render (byte conversion + POT GL_LUMINANCE
  * texture sub-upload + screen-space quad, reusing postprocess_filter's
- * 2D bracket). GL_NEAREST filtering — the quad is a 1:1 pixel overlay.
+ * 2D bracket). GL_NEAREST filtering - the quad is a 1:1 pixel overlay.
  */
 #include "subsystems/buffer_viz/depth_viz.h"
 
@@ -139,7 +139,7 @@ void buffer_viz_depth_map(const float *depth, int count,
             }
         }
         if (!found) {
-            /* Empty capture: nothing to normalize against — fall back
+            /* Empty capture: nothing to normalize against - fall back
              * to the LINEAR map (every pixel is background -> black
              * anyway) and leave the EMA range untouched. */
             range_normalize = 0;
@@ -303,7 +303,7 @@ void buffer_viz_depth_render(BufferVizDepthMode mode,
     if (!depth_viz_upload_texture(sw, sh)) {
         render3d_post_2d_end(saved_matrix_mode);
         prof_accum_end(PROF_BUFFER_VIZ_DEPTH);
-        return; /* texture would exceed the GL limit — skip this frame */
+        return; /* texture would exceed the GL limit - skip this frame */
     }
 
     umax = (float)sw / (float)g_tex_w;

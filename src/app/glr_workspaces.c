@@ -26,7 +26,7 @@ static int g_count;
 
 /* glr_workspaces_active_name() memo. g_name_valid is a separate flag rather
  * than a "g_name_dir is empty" test because "" (unbound) is itself a
- * cacheable key — and the flag is what glr_workspaces_refresh() clears, so a
+ * cacheable key - and the flag is what glr_workspaces_refresh() clears, so a
  * newly written manifest at an already-bound directory is picked up. */
 static char g_name_dir[GLR_PATH_MAX];
 static char g_name[WORKSPACE_IO_NAME_MAX];
@@ -127,7 +127,7 @@ const char *glr_workspaces_active_name(void) {
         }
     }
     /* A bound directory that resolved to no name is a directory with no
-     * manifest *yet* — the state between binding a workspace path and writing
+     * manifest *yet* - the state between binding a workspace path and writing
      * its manifest. Leave that one uncached so the name appears as soon as the
      * manifest lands, even without an intervening glr_workspaces_refresh().
      * Costs one stat per call, and only while in that transient state; the

@@ -8,7 +8,7 @@
 
 /* Keep this a non-empty translation unit even when GL_STUBS is
  * undefined: ISO C (enforced by the -std=c99 -pedantic-errors ratchet)
- * rejects an empty TU. Behavior-neutral — just a typedef. */
+ * rejects an empty TU. Behavior-neutral - just a typedef. */
 typedef int gl_stub_counts_tu_nonempty_t;
 
 #ifdef GL_STUBS
@@ -51,7 +51,7 @@ void gl_stub_trace_open(const char *path) {
     gl_stub_trace_close();
     if (!path || !*path) return;
     /* Force C locale for %g so the decimal separator stays '.' on hosts
-     * configured otherwise — text traces are diffed byte-for-byte. */
+     * configured otherwise - text traces are diffed byte-for-byte. */
     setlocale(LC_NUMERIC, "C");
     gl_stub_trace_fp = fopen(path, "w");
 }

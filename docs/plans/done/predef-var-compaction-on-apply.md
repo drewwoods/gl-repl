@@ -30,7 +30,7 @@ where the editor's input dispatcher reaches directly into REPL command grammar:
 This duplicates work already supported by the compile/apply seam:
 `repl_apply.c:109-125`'s `repl_apply_predef_ops()` performs the same UNDECLARE
 + cascade, and `REPL_COMPILED_DELETE_RANGE` already exists. There is no
-compile entry that fills in the predef ops for a delete range — so editor
+compile entry that fills in the predef ops for a delete range - so editor
 code took the shortcut.
 
 ## Target shape
@@ -60,7 +60,7 @@ construction work and stay as-is.)
 
 ## Phases
 
-### Phase 1 — Capacity bump (~5 min)
+### Phase 1 - Capacity bump (~5 min)
 
 `MAX_PREDEF_OPS_PER_COMMIT` is currently `MAX_NAMES_PER_DECL * 2 + 1` = 17.
 A worst-case delete-range can UNDECLARE up to `MAX_PREDEF_VARS` = 24 names
@@ -68,7 +68,7 @@ A worst-case delete-range can UNDECLARE up to `MAX_PREDEF_VARS` = 24 names
 in `repl_compile.h:117`. No behavior change for existing callers; only the new
 compile entry uses the extra room.
 
-### Phase 2 — Add `repl_compile_delete_range` (~1 day)
+### Phase 2 - Add `repl_compile_delete_range` (~1 day)
 
 **Signature** (declared in `repl_compile.h`, body in `repl_compile.c`):
 
@@ -95,16 +95,16 @@ ReplCompileResult repl_compile_delete_range(int start, int count,
    `"Too many declarations in range"`.
 4. Set `out->kind = REPL_COMPILED_DELETE_RANGE`, `out->pos = start`,
    `out->count = count`. Format `out->commit_message` as
-   `"%s %d line%s"` is **not** done here — the message is caller-provided
+   `"%s %d line%s"` is **not** done here - the message is caller-provided
    today via the `what` parameter to `delete_cmd_range`. Either thread `what`
    through context, or have the caller overwrite `commit_message` after
    compile. Recommended: **caller overwrites** `commit_message` post-compile,
    since the verb ("Cut" / "Removed") is editor-side framing.
 5. Pure: never call `set_status`, never mutate REPL or editor state.
 
-**No new tests yet — wait for Phase 3.**
+**No new tests yet - wait for Phase 3.**
 
-### Phase 3 — Migrate `remove_cmd_range_unchecked` (~1 day)
+### Phase 3 - Migrate `remove_cmd_range_unchecked` (~1 day)
 
 Replace the body of `remove_cmd_range_unchecked()` with:
 
@@ -145,16 +145,16 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
 
 Delete `delete_cmd_range_allowed()` in the same commit (logic is in compile).
 Update the caller `delete_cmd_range()` (`editor_input.c:235-244`) to drop the
-`if (!delete_cmd_range_allowed(...))` early-return — compile now owns that
+`if (!delete_cmd_range_allowed(...))` early-return - compile now owns that
 check.
 
-### Phase 4 — Verification
+### Phase 4 - Verification
 
 ```bash
 make test                      # 28 binaries / 3382 tests must stay green
 make check-state-ownership     # all guards green
 grep -nE "CMD_VAR_DECLARE|CMD_VAR_ASSIGN" editor_input.c | wc -l
-# Expected: 2 hits remaining (lines ~1102, ~1136 — comment-toggle, unrelated)
+# Expected: 2 hits remaining (lines ~1102, ~1136 - comment-toggle, unrelated)
 # Down from: 5 hits today
 ```
 
@@ -162,16 +162,16 @@ Manual smoke test (build with `make sample USE_GL_STUBS=1` is enough; the test
 suite already covers the path):
 
 - Type `float x;` then `x = 5;` then `;` to commit nothing. Cut the
-  declaration line — should reject with "still referenced".
+  declaration line - should reject with "still referenced".
 - Type `float x;`, `x = 5;`, then move cursor to the assignment, cut. Should
   succeed. Then cut the declaration. Should succeed (no references remain).
 - Type `float x;`, `float y;`, `y = 1;`. Select both decl lines and cut.
-  Should reject (because `y = 1` references `y`) — same as today.
+  Should reject (because `y = 1` references `y`) - same as today.
 
 ## Risks
 
 1. **Capacity overflow.** Phase 1 covers the predef cap. The cmd cap
-   (`MAX_COMMIT_CMDS = 16`) is unaffected — `DELETE_RANGE` doesn't use
+   (`MAX_COMMIT_CMDS = 16`) is unaffected - `DELETE_RANGE` doesn't use
    `cmds[]` storage.
 
 2. **`apply_predef_ops` cascade order vs. cmd-store mutation order.**
@@ -184,13 +184,13 @@ suite already covers the path):
    `num_args--` loop scans deleted rows too, but those rows are about to be
    removed anyway so it's harmless. The non-harmless case would be if a
    surviving CMD_VAR_ASSIGN's `num_args` was being held by a deleted decl
-   that's still in the array at the time of cascade — but undeclare clears
+   that's still in the array at the time of cascade - but undeclare clears
    the slot in `g_predef_vars`, so no surviving cmd can reuse the freed slot
    index in this single-transaction window. Safe.
 
 3. **Diagnostic message wording.** `delete_cmd_range_allowed` says
    `"Cannot remove '%s': still referenced"`; the migrated path keeps the
-   same wording (Phase 2 step 2). Test expectations may match this string —
+   same wording (Phase 2 step 2). Test expectations may match this string -
    spot-check `tests/test_repl_editor.c` and similar before landing.
 
 ## Critical Files
@@ -201,4 +201,4 @@ suite already covers the path):
 | `repl_compile.c` | Add `repl_compile_delete_range` body. |
 | `editor_input.c` | Replace `remove_cmd_range_unchecked` body; delete `delete_cmd_range_allowed`; update `delete_cmd_range` to drop the prevalidation call. |
 
-No test file changes expected — the migrated path is behavior-preserving.
+No test file changes expected - the migrated path is behavior-preserving.

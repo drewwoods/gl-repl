@@ -10,7 +10,7 @@
  * requires identifier boundaries: a match is rejected when the query's first
  * character is an identifier character preceded by one in the text, or its
  * last is followed by one. Queries that begin/end with punctuation are
- * unaffected at that end, matching the usual \b semantics — so whole-word
+ * unaffected at that end, matching the usual \b semantics - so whole-word
  * "r" skips the r inside glColor3f but whole-word "(GL" still matches.
  */
 #ifndef UI_TEXT_SEARCH_H

@@ -10,14 +10,14 @@
  * coordinates, fan-triangulates polygons, optionally welds shared vertices
  * and smooths normals, then writes an ASCII PLY document. Point and line
  * primitives are exported too: each point becomes a loose vertex (the PLY
- * point-cloud convention — a vertex referenced by no face), and each line
+ * point-cloud convention - a vertex referenced by no face), and each line
  * segment becomes an `element edge` record (`property int vertex1/vertex2`,
  * the CloudCompare/Blender convention; the edge element is only emitted when
  * the capture contains lines, so triangle-only output is unchanged). Callers
  * may also request triangle proxies for points and lines because mesh-only
  * viewers such as Xcode ignore loose vertices and edge elements.
  *
- * This module calls NO GL functions and includes NO GL header — it only
+ * This module calls NO GL functions and includes NO GL header - it only
  * reads a plain float buffer, so it is fully unit-testable with synthetic
  * buffers and no GL context. The GL-coupled capture that fills the buffer
  * lives in src/app/glr_mesh_export.c. See

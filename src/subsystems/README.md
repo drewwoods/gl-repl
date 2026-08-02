@@ -1,4 +1,4 @@
-# `src/subsystems/` — the peer subsystems (Draft)
+# `src/subsystems/` - the peer subsystems (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -25,35 +25,35 @@ Each subsystem lives in its own subdirectory under `src/subsystems/`,
 keeping the per-feature files (state + controller) co-located. The
 subsystems here:
 
-- **`replay/`** — a step-by-step execution visualizer (a tiny transport:
+- **`replay/`** - a step-by-step execution visualizer (a tiny transport:
   play / pause / step, a program counter, speed, and a fade-batch ring
   so old geometry fades as new geometry appears). Its fade-batch GL
   rendering lives in [`replay_render.c`](replay/replay_render.c), extracted out of `src/render3d/`.
-- **`variable_panel/`** — floating sliders that scrub the REPL's scalar
+- **`variable_panel/`** - floating sliders that scrub the REPL's scalar
   variables, with a log/linear drag transaction that writes the new value
   back into the source line.
-- **`color_picker/`** — a floating HSV/alpha picker that rewrites the
+- **`color_picker/`** - a floating HSV/alpha picker that rewrites the
   `glColor*` call under the cursor.
-- **`tutorial/`** — a guided runner that feeds instruction comments, locks
+- **`tutorial/`** - a guided runner that feeds instruction comments, locks
   rows, gates commits, and tracks step progress.
-- **`edit_overlays/`** — cursor edit-guide + vertex/normal overlay
+- **`edit_overlays/`** - cursor edit-guide + vertex/normal overlay
   orchestration: owns the cursor-guide snapshot and the flat-program walk
   that drives the 3D overlay primitives (plus the GL_LINE / GL_POINT
   outline passes), extracted out of [`src/app/glr_ctrl.c`](../app/glr_ctrl.c).
-- **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
+- **`hidden_lines/`** - hidden-line wireframe execution: drives the REPL
   execution cursor through the render3d renderer's hidden/depth/visible wireframe
   passes while skipping pass-local state commands.
-- **`buffer_viz/`** — framebuffer *inspection*: read a GL buffer back and
+- **`buffer_viz/`** - framebuffer *inspection*: read a GL buffer back and
   composite a false-colour view of it (today `depth_viz.c`). The odd one
-  out in one respect — its input is not user input but the pixels
-  render3d just wrote — so it plugs in through render3d's neutral buffer
+  out in one respect - its input is not user input but the pixels
+  render3d just wrote - so it plugs in through render3d's neutral buffer
   hooks ([`Render3dRenderConfig`](../render3d/render_types.h)
   `buffer_read_fn` / `buffer_pass_overlay_fn` /
   `buffer_resolve_overlay_fn`) rather than through routed input. render3d
   fires those hooks knowing nothing about what subscribes; the controller
   supplies the per-frame modes as the hooks' `user_data`. Each viz splits
   into a **GL-free conversion core** (unit-tested against synthetic
-  buffers — that is where the interesting math lives) and a thin GL
+  buffers - that is where the interesting math lives) and a thin GL
   shell around `glReadPixels` + a textured quad.
 
 Subsystem file shapes vary: a single co-located file (like
@@ -78,11 +78,11 @@ by feature-UI in `src/ui/subsystems/` ([`replay_hud.c`](../ui/subsystems/replay_
 Two peers do have a standalone driver, and those are the ones whose host
 seam is a **narrow installable interface** rather than the snapshot:
 
-- **`make variable-panel-demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) —
+- **`make variable-panel-demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) -
   drives the peer over an in-memory `VariablePanelValueSource` and a
   hand-built `UiVariablePanelView`, so neither the REPL eval table nor
   [`UiRenderSnapshot`](../ui/app/snapshot.h#L85) is in the link set.
-- **`make color-picker-demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) —
+- **`make color-picker-demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) -
   drives the peer over a [`ColorPickerHostBridge`](color_picker/color_picker_state.h#L116)
   backed by a plain color array, standing in for the REPL document + commit
   pipeline the app wires up.
@@ -95,7 +95,7 @@ its demo stops linking. Index of every demo: [`tools/README.md`](../../tools/REA
 
 ## In the REPL app
 
-Inside the full app these are **layer 2b** of the ownership map — peers
+Inside the full app these are **layer 2b** of the ownership map - peers
 carved out of the editor/UI so neither becomes a grab bag. The flow for each
 is identical:
 
@@ -107,7 +107,7 @@ is identical:
    `variable_panel_handle_*`).
 3. The subsystem mutates its own state; if a change must reach the
    program (a slider value, a picked color), it goes through the editor
-   *commit* transaction — the one sanctioned path into REPL runtime state.
+   *commit* transaction - the one sanctioned path into REPL runtime state.
 4. UI renders the subsystem from the frame snapshot.
 
 A peer may *produce* overlays the editor renders (replay annotations are
@@ -135,7 +135,7 @@ virtual lines), but it never *becomes* editor-owned.
 (Programmatic scene-setup or comment injection by subsystems like `tutorial` may
 bypass the commit transaction and load directly via `repl_load_apply_line` without
 generating undo history.)
-(The tutorial *catalog* — the lesson content — lives in
+(The tutorial *catalog* - the lesson content - lives in
 [`src/repl/tutorials.c`](../repl/tutorials.c), separate from the runner here.)
 
 ## Lifecycle Vocabulary Conventions

@@ -1,4 +1,4 @@
-# Plan: Editor-Owned Text Completion — Revised
+# Plan: Editor-Owned Text Completion - Revised
 
 > **Status: landed.** This revised sibling's direction shipped via
 > Phases A–I of

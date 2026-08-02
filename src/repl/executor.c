@@ -79,13 +79,13 @@ static int            g_tess_vert_count = 0;
 
 /* User-facing point-size emission. When the runtime lacks
  * glPointParameterfv, approximate its distance attenuation in software by
- * scaling every glPointSize call by REF_DIST/cam_dist — a constant
+ * scaling every glPointSize call by REF_DIST/cam_dist - a constant
  * footprint on the model, matching the hardware path's pure-quadratic
  * default (see REPL_POINT_SIZE_REF_DIST). Reads cam_dist from the
  * controller-installed source; with no source installed (the demo, or
  * any embedder without an app-shell camera) cam_dist defaults to 0
  * and `sz` passes through unchanged. When supported, emit `sz`
- * directly — CMD_POINT_PARAMETER_FV handles the real attenuation. */
+ * directly - CMD_POINT_PARAMETER_FV handles the real attenuation. */
 static void repl_exec_point_size(GLfloat sz) {
     if (!g_point_parameter_supported) {
         float cam_dist = g_camera_distance_source ? g_camera_distance_source() : 0.0f;
@@ -206,7 +206,7 @@ static void repl_executor_apply_non_stack_transform_cmd(const GLCmd *cmd) {
         glLoadIdentity();
         break;
     case CMD_MULT_MATRIXF:
-        /* Snapshotted by flatten at this point in the stream — see the
+        /* Snapshotted by flatten at this point in the stream - see the
          * payload.matrix comment in command.h. */
         glMultMatrixf(cmd->payload.matrix.m);
         break;
@@ -372,7 +372,7 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_CLIP_PLANE: {
         /* args[0]=plane, args[1..4]=equation. GL transforms the equation
          * by the modelview current at this call, so user transforms
-         * preceding the command position the plane — native semantics. */
+         * preceding the command position the plane - native semantics. */
         GLdouble eq[4] = {
             (GLdouble)cmd->args[1], (GLdouble)cmd->args[2],
             (GLdouble)cmd->args[3], (GLdouble)cmd->args[4]
@@ -435,7 +435,7 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
     case CMD_CLEAR_DEPTH:
-        /* GL clamps the GLclampd to [0,1] itself, so no REPL-side clamp —
+        /* GL clamps the GLclampd to [0,1] itself, so no REPL-side clamp -
          * an out-of-range literal behaves exactly as the exported C does.
          * Unlike the clear color there is no render-state mirror: the host
          * never needs the program's depth-clear value, and every host-side
@@ -451,7 +451,7 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         return 1;
     case CMD_CLEAR:
         /* args[0] is the resolved GL_*_BUFFER_BIT mask. This IS the
-         * frame's clear for the scene rect — nothing clears it on the
+         * frame's clear for the scene rect - nothing clears it on the
          * program's behalf, so a scene without a glClear line smears
          * (colour) and, with no depth clear, fails the depth test
          * outright. The host scissors this walk to the scene rect, so a
@@ -578,7 +578,7 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     cursor.tess_current_color[3] = cursor.alpha_scale;
 
     /* The light-indicator overlay reads light_enabled_mask for its on/off
-     * visual. GL's real default — and render3d_lights_setup() — is
+     * visual. GL's real default - and render3d_lights_setup() - is
      * all-lights-disabled; only the program's glEnable(GL_LIGHTn) turns
      * one on. Reset the bookkeeping at the start of every walk so the
      * indicator tracks what the program actually does, instead of the
@@ -680,7 +680,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             glPassThrough((GLfloat)MESH_PLY_PASS_NORMALS);
             /* The modelview is constant within a begin/end block (the
              * parser rejects transforms inside), and glGet is illegal
-             * between glBegin/glEnd — so snapshot it here, once, and reuse
+             * between glBegin/glEnd - so snapshot it here, once, and reuse
              * it for every vertex's normal transform in the block. */
             glGetFloatv(GL_MODELVIEW_MATRIX, cursor->begin_mv);
         }
@@ -762,7 +762,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         glRasterPos3f(cmd->args[0], cmd->args[1], cmd->args[2]);
         break;
     case CMD_LABEL: {
-        /* `label("fmt", a, b, c, d)` — printf-style text emission
+        /* `label("fmt", a, b, c, d)` - printf-style text emission
          * at the current raster position. Position is set by a preceding
          * glRasterPos3f; this command does not touch it, so the call composes
          * cleanly with whatever modelview/raster state the user has set up.
@@ -923,7 +923,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
      * exhaustive over CmdType. Without enumeration, a `default:`
      * would silently swallow any newly-added CmdType (the prior
      * shape routed the default through repl_apply_state_cmd, whose
-     * own default returns 0 — the "you forgot to handle this"
+     * own default returns 0 - the "you forgot to handle this"
      * signal was lost in both layers). With no default and -Wall
      * (which enables -Wswitch), adding a new CmdType emits a
      * compile-time warning here. Adding a new entry to
@@ -991,7 +991,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_FOG_FV:
         /* Fade-batch replays composite translucent geometry over the
          * frame the fill pass already rendered, and their pre-skip
-         * prefix executes state commands — so without this gate every
+         * prefix executes state commands - so without this gate every
          * batch would replay the program's leading glClear and wipe
          * that frame (the whole scene then flashes in from black on
          * each replay step). A clear is per-frame setup, not state a
@@ -1010,7 +1010,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         }
         /* Export pass captures raw glColor + all faces. The capture
          * disabled GL_LIGHTING and GL_CULL_FACE, but the program's own
-         * glEnable would turn them back on — feedback would then return
+         * glEnable would turn them back on - feedback would then return
          * per-vertex lit colors (not the material color) and drop culled
          * back faces. Suppress those two enables during export (lights /
          * material then no-op on color; both sides are captured). */

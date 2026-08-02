@@ -129,7 +129,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
 }
 
 /* A float decl can carry a trailing `// comment` even when the input
- * has no semicolon — the interactive case, since the `;` key commits
+ * has no semicolon - the interactive case, since the `;` key commits
  * before a comment can be typed. Mirrors the var-assign `//` handling.
  * The comment is the vehicle for the `@tune` knob tag, so this is what
  * lets an interactively-declared variable be tagged tunable. */
@@ -455,7 +455,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
     ASSERT_INT("seed float X = 5 apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
 
-    /* Declare Y (no initializer, no users — eligible for overwrite). */
+    /* Declare Y (no initializer, no users - eligible for overwrite). */
     set_input("float Y;");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
     ASSERT_INT("seed float Y compile OK",
@@ -809,7 +809,7 @@ static void test_capacity_failure_is_atomic(void) {
     change.kind = REPL_COMPILED_INSERT_MANY;
     change.pos = 0;
     change.count = MAX_COMMIT_CMDS + 1;  /* exceeds change buffer */
-    /* leave cmds/text uninitialized — preflight should reject before reading */
+    /* leave cmds/text uninitialized - preflight should reject before reading */
     change.predef_ops[0].kind = REPL_PREDEF_OP_DECLARE;
     strncpy(change.predef_ops[0].name, "phantom",
             sizeof(change.predef_ops[0].name) - 1);
@@ -1045,7 +1045,7 @@ static void test_set_predef_value_live_only_without_source(void) {
     }
 }
 
-/* The live half: predef op, never a source rewrite — even when a declaration
+/* The live half: predef op, never a source rewrite - even when a declaration
  * row exists. This is what every variable-panel motion event compiles. */
 static void test_compile_set_predef_value_live_leaves_declaration(void) {
     glr_ctrl_reset_all();
@@ -1222,7 +1222,7 @@ static void test_orchestration_compile_failure_returns_diagnostic(void) {
 }
 
 /* Live dispatch NO_CHANGE path: input that no editor_try_commit_*
- * handler accepts — the chain falls through with no mutation. */
+ * handler accepts - the chain falls through with no mutation. */
 static void test_orchestration_no_change_falls_through(void) {
     glr_ctrl_reset_all();
     editor_input_set_text("glVertex3f(0,0,0)");
@@ -1369,7 +1369,7 @@ static void test_func_def_blank_line_relocation(void) {
 /* Regression: a blank line separating two var-decl groups must not
  * stop the func-decl insert walk inside the prologue. Pre-fix, the
  * walk skipped the leading decls, stepped over the blank, then hit the
- * second decl group and broke — inserting the new func BETWEEN the
+ * second decl group and broke - inserting the new func BETWEEN the
  * float groups instead of after all decls. */
 static void test_func_def_after_blank_separated_decls(void) {
     glr_ctrl_reset_all();
@@ -1381,7 +1381,7 @@ static void test_func_def_after_blank_separated_decls(void) {
      *   [3] float c;
      *   [4] float d;
      * The blank is inserted mid-document (Enter at column 0 above
-     * `float c`) so it genuinely separates two decl groups — feeding a
+     * `float c`) so it genuinely separates two decl groups - feeding a
      * blank directly would auto-relocate the later decls above it. */
     editor_feed_line("float a;");
     editor_feed_line("float b;");
@@ -1542,7 +1542,7 @@ static int commit_decl_at(const char *text, int edit_line,
     return editor_commit_apply_external_change(&change, 0, 0);
 }
 
-/* func0(r) { glVertex3f(r, 0, 0); } — rows 0..2, cursor left on row 1. */
+/* func0(r) { glVertex3f(r, 0, 0); } - rows 0..2, cursor left on row 1. */
 static void seed_one_func(void) {
     glr_ctrl_reset_all();
     repl_func_alias_clear_all();
@@ -1613,7 +1613,7 @@ static void test_static_keyword_selects_global_from_inside_func(void) {
 }
 
 /* Locals take no initializer in V1. Both spellings must produce the
- * initializer diagnostic — `= param` used to die on unknown-identifier
+ * initializer diagnostic - `= param` used to die on unknown-identifier
  * validation before any local diagnostic could run. */
 static void test_local_decl_rejects_initializer(void) {
     char err[REPL_STATUS_TEXT_MAX];
@@ -1661,7 +1661,7 @@ static void test_local_decl_rejects_same_scope_redefinition(void) {
                 strstr(err, "already declared in this function") != NULL);
 }
 
-/* Outer scopes may be shadowed — that is ordinary C, and eval_primary
+/* Outer scopes may be shadowed - that is ordinary C, and eval_primary
  * already resolves innermost-first. */
 static void test_local_decl_allows_shadowing_outer_scopes(void) {
     char err[REPL_STATUS_TEXT_MAX];
@@ -1739,7 +1739,7 @@ static void test_var_assign_resolves_scoped_targets(void) {
                change.predef_op_count, 0);
 
     /* A loop iterator is not writable, even with an outer local of the
-     * same name — the innermost binding decides. */
+     * same name - the innermost binding decides. */
     glr_ctrl_reset_all();
     repl_func_alias_clear_all();
     editor_feed_line("func0(r) {");
@@ -1842,7 +1842,7 @@ static void test_split_decl_on_local_keeps_storage(void) {
     ASSERT_STR("split re-emits the local form", change.text[1], "    float v;");
 }
 
-/* Deleting a local decl releases no predef slot — undeclaring by name
+/* Deleting a local decl releases no predef slot - undeclaring by name
  * would have taken a same-named global with it. */
 static void test_delete_local_decl_spares_same_named_global(void) {
     char err[REPL_STATUS_TEXT_MAX];
@@ -1895,7 +1895,7 @@ static void test_local_delete_guard_is_scope_aware(void) {
                 strstr(err, "still referenced") != NULL);
 
     /* Sole textual `x` lives under `for(x, ...)`, which shadows the
-     * local — so the local is unreferenced and deletes cleanly. */
+     * local - so the local is unreferenced and deletes cleanly. */
     glr_ctrl_reset_all();
     repl_func_alias_clear_all();
     editor_feed_line("func0(r) {");
@@ -1990,7 +1990,7 @@ static ReplCompileResult compile_for_header_at(const char *header, int row,
 }
 
 /* A parameter and a local of the same body share one scope, so a header
- * edit colliding with an existing local is a redefinition — the mirror of
+ * edit colliding with an existing local is a redefinition - the mirror of
  * the rule Phase 1 enforces when the local is declared. */
 static void test_param_rename_onto_local_is_rejected(void) {
     char err[REPL_STATUS_TEXT_MAX];
@@ -2069,7 +2069,7 @@ static void test_loop_rename_capturing_an_assignment_is_rejected(void) {
 static void test_shadowing_without_capture_is_accepted(void) {
     char err[REPL_STATUS_TEXT_MAX];
 
-    /* A parameter may shadow a global — pre-existing behavior. */
+    /* A parameter may shadow a global - pre-existing behavior. */
     glr_ctrl_reset_all();
     repl_func_alias_clear_all();
     editor_feed_line("static float i;");
@@ -2131,7 +2131,7 @@ static void seed_saturated_func(void) {
 }
 
 /* Capacity is a whole-function property, so every binder edit is measured
- * against the same expression — not just the one that declares a local. */
+ * against the same expression - not just the one that declares a local. */
 static void test_capacity_blocks_later_binder_edits(void) {
     char err[REPL_STATUS_TEXT_MAX];
     int loop_row = -1;
@@ -2165,7 +2165,7 @@ static void test_capacity_blocks_later_binder_edits(void) {
                 strstr(err, "function scope full") != NULL);
 }
 
-/* func0(a) { float u; u = a; glVertex3f(u, 0, 0); } — rows 0 head,
+/* func0(a) { float u; u = a; glVertex3f(u, 0, 0); } - rows 0 head,
  * 1 decl, 2 assign, 3 vertex, 4 close. `u` is read, so row 1 cannot be
  * replaced. */
 static void seed_func_with_used_local(void) {
@@ -2206,7 +2206,7 @@ static void test_raw_replace_routes_respect_the_guard(void) {
 }
 
 /* The var-assign cascade: refuse when a dropped name is read, allow when
- * it is not. The success half is the one that would regress silently —
+ * it is not. The success half is the one that would regress silently -
  * the slot rebase reads REPL_VAR_IDX_LOCAL as failure, so running it
  * ungated rejects a perfectly legal edit. */
 static void test_overwrite_local_decl_with_assignment(void) {
@@ -2216,7 +2216,7 @@ static void test_overwrite_local_decl_with_assignment(void) {
 
     /* Refused: row 2 declares `used`, which rows 3 and 4 read. The
      * assignment's own target `lead` is declared on row 1, so it resolves
-     * — the rejection is the overwrite guard's, not a lookup failure. */
+     * - the rejection is the overwrite guard's, not a lookup failure. */
     glr_ctrl_reset_all();
     repl_func_alias_clear_all();
     editor_feed_line("func0(a) {");
@@ -2617,8 +2617,8 @@ int main(void) {
 
     /* [P2 editor] regression: editor_compile_func_def must not publish
      * aliases on duplicate-funcN failure. The old dup-check returned
-     * ERROR after registering the alias, so a NEW alias for slot N —
-     * where slot N already had a CMD_FUNC_DEF — leaked the alias. */
+     * ERROR after registering the alias, so a NEW alias for slot N -
+     * where slot N already had a CMD_FUNC_DEF - leaked the alias. */
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();
@@ -2696,7 +2696,7 @@ int main(void) {
         ASSERT_TRUE("[Phase 0] original row 1 pushed down to row 2",
                     line2 && strstr(line2, "glColor3f(0") != NULL);
 
-        /* And a plain GL command mid-document at index 0 — the
+        /* And a plain GL command mid-document at index 0 - the
          * widened contract allows insertion at the very top. */
         el = 0;
         editor_insert_mode_set(0);
@@ -2840,7 +2840,7 @@ int main(void) {
     /* #49 regression: repl_apply_compiled_change runs the preflight
      * internally so a malformed change cannot half-apply. Pre-fix the
      * pre-insert delete would fire, then INSERT_MANY would either
-     * silently clamp the pos or fail — leaving the cmd-store mutated
+     * silently clamp the pos or fail - leaving the cmd-store mutated
      * but not in the requested shape. These tests bypass the wrapper
      * (editor_commit_apply_external_change) and call the bare
      * repl_apply_compiled_change so they pin the apply-level contract,
@@ -2856,7 +2856,7 @@ int main(void) {
 
         ReplCompiledChange change;
 
-        /* (a) INSERT_MANY with count > MAX_COMMIT_CMDS — apply must
+        /* (a) INSERT_MANY with count > MAX_COMMIT_CMDS - apply must
          * reject before mutating the cmd-store. */
         repl_compiled_change_init(&change);
         change.kind = REPL_COMPILED_INSERT_MANY;
@@ -2867,7 +2867,7 @@ int main(void) {
         ASSERT_INT("[#49] over-MAX_COMMIT_CMDS no mutation",
                    repl_state_document_count(), pre_count);
 
-        /* (b) REPLACE_ONE with out-of-bounds pos — apply rejects
+        /* (b) REPLACE_ONE with out-of-bounds pos - apply rejects
          * cleanly rather than relying on the store's range check. */
         repl_compiled_change_init(&change);
         change.kind = REPL_COMPILED_REPLACE_ONE;
@@ -2900,7 +2900,7 @@ int main(void) {
         ASSERT_INT("[#49] pre-delete + replace no mutation",
                    repl_state_document_count(), pre_count);
 
-        /* (d) Pre-delete with out-of-bounds range — apply rejects
+        /* (d) Pre-delete with out-of-bounds range - apply rejects
          * before performing the partial delete. */
         repl_compiled_change_init(&change);
         change.kind = REPL_COMPILED_INSERT_ONE;
@@ -2939,14 +2939,14 @@ int main(void) {
         int rejected_keyword = 0;
         char err[256];
 
-        /* Case A: Bare predefined function like func0() { — not a custom alias, should return REPL_COMPILE_OK */
+        /* Case A: Bare predefined function like func0() { - not a custom alias, should return REPL_COMPILE_OK */
         repl_compiled_change_init(&change);
         rejected_keyword = 0;
         ReplCompileResult res = repl_compile_func_def_resolve_alias(&ctx, "func0() {", &change, &rejected_keyword, err, sizeof(err));
         ASSERT_INT("resolve_alias func0: returns OK", res, REPL_COMPILE_OK);
         ASSERT_INT("resolve_alias func0: rejected_keyword is false", rejected_keyword, 0);
 
-        /* Case B: Reserved control keyword like if() { — rejected_keyword should be set to 1, out->kind set to NO_CHANGE, returns OK */
+        /* Case B: Reserved control keyword like if() { - rejected_keyword should be set to 1, out->kind set to NO_CHANGE, returns OK */
         repl_compiled_change_init(&change);
         rejected_keyword = 0;
         res = repl_compile_func_def_resolve_alias(&ctx, "if() {", &change, &rejected_keyword, err, sizeof(err));
@@ -2954,7 +2954,7 @@ int main(void) {
         ASSERT_INT("resolve_alias if: rejected_keyword is true", rejected_keyword, 1);
         ASSERT_INT("resolve_alias if: change kind is NO_CHANGE", change.kind, REPL_COMPILED_NO_CHANGE);
 
-        /* Case C: Valid custom function like myfunc() { — should compile and pick a slot successfully */
+        /* Case C: Valid custom function like myfunc() { - should compile and pick a slot successfully */
         repl_compiled_change_init(&change);
         rejected_keyword = 0;
         res = repl_compile_func_def_resolve_alias(&ctx, "myfunc() {", &change, &rejected_keyword, err, sizeof(err));

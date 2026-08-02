@@ -2,7 +2,7 @@
  * glr_ctrl_internal.h - cross-file-internal surface shared between glr_ctrl.c
  * and its carved-out siblings (glr_ctrl_view_transition.c, ...).
  *
- * NOT a public API — these declarations let the controller's frame loop /
+ * NOT a public API - these declarations let the controller's frame loop /
  * scene-config / reset paths reach state machines that now live in sibling
  * translation units. The public controller surface stays in glr_ctrl.h.
  */
@@ -12,7 +12,7 @@
 #include "editor/input.h"   /* EditorInputDispatchEffects (by-value seam param) */
 #include "app/glr_camera.h" /* GlrCameraState for the view-transition snapshot */
 
-struct UiRenderSnapshot;    /* opaque here — only a pointer crosses the seam */
+struct UiRenderSnapshot;    /* opaque here - only a pointer crosses the seam */
 
 /* View-mode transition tuning.
  *
@@ -50,7 +50,7 @@ float glr_ctrl_view_projection_mix(void);
 /* Smoothed projection-toggle blend in [0,1] (0 = ortho, 1 = perspective),
  * driven by GLR_CONFIG_PROJECTION independently of the 2D/3D view mode (free
  * camera, no flatten). The scene-config builder combines it with
- * glr_ctrl_view_projection_mix() via min() — the scene is orthographic if
+ * glr_ctrl_view_projection_mix() via min() - the scene is orthographic if
  * EITHER blend is below 1. */
 float glr_ctrl_projection_toggle_mix(void);
 

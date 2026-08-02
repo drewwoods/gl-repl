@@ -1,5 +1,5 @@
 /*
- * tests/export_trace_driver.c — test-only entry point that #includes a
+ * tests/export_trace_driver.c - test-only entry point that #includes a
  * freshly-exported REPL program and runs only its user-geometry body.
  *
  * Why #include and not link? The exporter emits the user-geometry as
@@ -8,7 +8,7 @@
  * into this TU so the driver can call them directly, skipping the
  * camera transform, outline-pass, vertex-point-pass, and lighting
  * setup that display() would otherwise emit between init() and the
- * user code — none of which the REPL executor replays.
+ * user code - none of which the REPL executor replays.
  *
  * Compile invocation supplies:
  *   -Dmain=app_main                      so the exported file's GLUT
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 
     /* draw_scene is static-in-translation-unit by the exporter;
      * the #include above makes it visible. We deliberately skip the
-     * companion reset_repl_vars() — it's only emitted when the program
+     * companion reset_repl_vars() - it's only emitted when the program
      * actually uses a predefined REPL var, so calling it would be a
      * compile error for predef-free programs. File-scope `static float
      * t = 0.0f;` etc. emitted by the exporter already gives the same

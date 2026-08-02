@@ -1,6 +1,6 @@
-## Local-Aware Rebake — carry function-scoped locals through a value-only walk
+## Local-Aware Rebake - carry function-scoped locals through a value-only walk
 
-## Status — NOT STARTED
+## Status - NOT STARTED
 
 Split out of [`docs/plans/done/scoped-local-variables.md`](../done/scoped-local-variables.md),
 where it is "fix 3". That plan shipped function-scoped locals end to end and
@@ -18,7 +18,7 @@ that motivate this work, and they are not repeated here in full.
 
 Today `flatten_var_assign` reports **every** dependency feeding a local
 assignment as **structural**, so any predefined variable that can reach a local
-— transitively counts — forces a full reflatten instead of a value-only rebake.
+- transitively counts - forces a full reflatten instead of a value-only rebake.
 
 That is not a statement about the program's shape. It is a statement about what
 rebake can carry. `rebake_one_cmd` evaluates each flat command against a
@@ -61,8 +61,8 @@ the converted grass case, whose locals are read both before and inside
 `for(s, 0, 6)`.
 
 The identity has to be the local's ordinal in its function's declaration
-prologue — the order `flatten_bind_func_locals` appends them in, which is
-stable across loop depth — with a per-command sidecar recording, for each
+prologue - the order `flatten_bind_func_locals` appends them in, which is
+stable across loop depth - with a per-command sidecar recording, for each
 snapshot slot, which function-local ordinal (if any) it holds.
 
 #### The assignment target needs its own recorded ordinal
@@ -73,7 +73,7 @@ records the resolved target ordinal per flat command, or rebake recovers the
 LHS by name. Recording the ordinal is the better trade: the full flatten that
 produced the row computes it anyway.
 
-(The parent plan's fix 2 — the per-row LHS memo on `ReplExprCache` — has
+(The parent plan's fix 2 - the per-row LHS memo on `ReplExprCache` - has
 already landed, so the by-name route is available as a fallback rather than a
 prerequisite. It also survives this change rather than being absorbed by it:
 the full flatten still resolves every assignment target on every visit to
@@ -82,14 +82,14 @@ the full flatten still resolves every assignment target on every visit to
 #### The sidecar must become mutable, and rebake must write it
 
 Today `FlatCmdLocalVars` is exposed `const`, and `flatten.h`'s rebake contract
-states outright that "local snapshots … are never touched" — which is what
+states outright that "local snapshots … are never touched" - which is what
 makes the current skip safe. Local-aware rebake has to break that promise
 deliberately: `replay_annotations.c` reads those values directly to render
 per-instance bindings, so a rebake that fixed only `args[]` would render
 correctly while the replay HUD and code panel still showed locals from the
 previous full flatten.
 
-Each command's stored snapshot must end up holding its *effective* locals —
+Each command's stored snapshot must end up holding its *effective* locals -
 post-write for a local assignment, matching what a full flatten leaves there.
 
 #### Frame entry, and the off-by-one in the depth array
@@ -101,7 +101,7 @@ blade(i); }` with nothing else in the body does not. `root_call_src_cmd_idx`
 does not separate them either.
 
 Hence a `frame_seq` bumped on call entry and stamped on every command emitted
-in that frame — which means **flatten needs a per-depth active-sequence table
+in that frame - which means **flatten needs a per-depth active-sequence table
 too**, not one scalar: `flatten_range` emits the caller's remaining commands
 after a nested call returns, and those must carry the caller's seq, not the
 callee's. Rebake keeps `carried_seq[depth]` beside the carried frames and
@@ -115,12 +115,12 @@ incrementing, so a command emitted at the limit carries
 `call_depth == MAX_FLATTEN_CALL_DEPTH`; a literal `[MAX_FLATTEN_CALL_DEPTH]`
 array indexed by that value overruns.
 
-#### `rand`/`rand2` in a local's RHS needs no new rule — but say so explicitly
+#### `rand`/`rand2` in a local's RHS needs no new rule - but say so explicitly
 
 Value-routing those assignments means rebake re-evaluates them, and grass is
 literally the `rand + t` scene (`cx = x0 + 0.08*rand2(seed, 11)*u + …`). It is
 safe: `expr_rand01` is a pure hash of `(seed, iter)` with no stream state, so
-re-evaluation is idempotent. Nor is there an existing rule to match — nothing
+re-evaluation is idempotent. Nor is there an existing rule to match - nothing
 is pinned or forced structural for `rand` today, and a *global* assignment with
 `rand` in its RHS already rebakes, which is exactly what pre-conversion grass
 did on every `t` change. Locals inherit that unchanged.
@@ -136,7 +136,7 @@ plan, "Three defects found by the conversion"), because the row's frozen
 snapshot is post-write and re-evaluating a self-referential RHS against it
 applies the write twice. That skip is lossless only while every such dep is
 structural. Value-routing them makes the skip wrong, so this change must
-replace it — re-evaluate the assignment against the *carried* frame, and write
+replace it - re-evaluate the assignment against the *carried* frame, and write
 the result into both the carried frame and the row's snapshot.
 
 The pre-write value the parent plan records in
@@ -162,12 +162,12 @@ production grass scene:
   updated in stream order before the row that reads it; and
 - **two successive value-only rebakes** followed by a full-flatten differential,
   comparing commands, local values and all sidecar metadata after each walk.
-  The *second* rebake is the load-bearing one — a single pass hides latent
+  The *second* rebake is the load-bearing one - a single pass hides latent
   metadata damage that only shows when the next walk consumes it.
 
 `tests/test_repl_flatten_rebake.c` already compares `FlatCmdLocalVars` via
 `flat_locals_equal`, so the value differential that would catch stale replay
-snapshots exists. Extend that helper to compare every new sidecar field too —
+snapshots exists. Extend that helper to compare every new sidecar field too -
 slot-to-local ordinals, local-assignment target ordinal, and `frame_seq`.
 
 ### Verification
@@ -190,7 +190,7 @@ the improvement.
 ### Related plans
 
 - [`docs/plans/done/scoped-local-variables.md`](../done/scoped-local-variables.md)
-  — parent; shipped locals, measured this regression, and landed the two
+  - parent; shipped locals, measured this regression, and landed the two
   pay-for-use fixes that precede this one.
 - [`docs/plans/done/flatten-performance-without-vm.md`](../done/flatten-performance-without-vm.md)
-  — the dependency-mask / compiled-expression design this walk is built on.
+  - the dependency-mask / compiled-expression design this walk is built on.

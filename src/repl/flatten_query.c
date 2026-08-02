@@ -159,7 +159,7 @@ static int flat_cost_count_call_site(int line_idx) {
     return count;
 }
 
-/* Does flat command `fc` trace back to a source line in [lo, hi] —
+/* Does flat command `fc` trace back to a source line in [lo, hi] -
  * directly, or via the call site / root call site of an inlined body? */
 static int flat_scope_member(const GLCmd *fc, int lo, int hi) {
     return (fc->src_cmd_idx >= lo && fc->src_cmd_idx <= hi) ||
@@ -176,7 +176,7 @@ static int flat_scope_member(const GLCmd *fc, int lo, int hi) {
  * control leaves the scope. So the FIRST maximal in-scope run is exactly
  * one invocation's cost. This is what makes nested scopes distinct: an
  * inner loop reports one enclosing-iteration's worth (e.g. sea()'s inner
- * strip loop), while the outer loop — invoked once — still reports its
+ * strip loop), while the outer loop - invoked once - still reports its
  * whole run. A top-level or singly-invoked block's first run equals its
  * frame total, so those readouts are unchanged. */
 static int flat_cost_count_first_run(int lo, int hi) {

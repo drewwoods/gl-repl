@@ -38,7 +38,7 @@ void render3d_draw_focused_normal_glyph(float vx, float vy, float vz,
                                      const char *detail_text);
 
 /* Draw `str` at world position (x, y, z) using `font` (e.g. FONT_MONO
- * or FONT_SMALL — both `void *` GLUT bitmap pointers). Combines the
+ * or FONT_SMALL - both `void *` GLUT bitmap pointers). Combines the
  * glRasterPos3f + per-character glutBitmapCharacter loop the scene
  * module repeats in light indicators, overlay labels, and the orbit
  * gizmo coord readout. Color is the caller's responsibility (set

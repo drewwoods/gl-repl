@@ -362,7 +362,7 @@ static int count_auto_normals(void) {
 
 /* is_auto has to survive export/import or a reloaded scene's generated
  * normals read as hand-written, and the autonormal pass then refuses to
- * update them (a hand-written normal owns its block) — the normals freeze
+ * update them (a hand-written normal owns its block) - the normals freeze
  * at whatever values were exported. The marker rides the command's own
  * line, so this also pins that it never leaks into the REPL row text. */
 static void test_auto_normal_marker_roundtrip(void) {
@@ -479,7 +479,7 @@ static void test_auto_normal_marker_roundtrip(void) {
 }
 
 /* break / continue are the two commands that produce no flat command at
- * all — flatten consumes them while unrolling — so the mega-roundtrip's
+ * all - flatten consumes them while unrolling - so the mega-roundtrip's
  * command inventory cannot cover them. They still have to survive export
  * (where they are plain C keywords inside the generated `for`) and import
  * (where the loader's parser must accept them at their loop depth). */

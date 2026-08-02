@@ -8,7 +8,7 @@
  * capturing stderr to a temp file, since the trace format is the contract
  * the startup-stall diagnostics are read with.
  *
- * Standalone: links only src/app/glr_init_trace.o — no GL, no controller.
+ * Standalone: links only src/app/glr_init_trace.o - no GL, no controller.
  */
 #include "app/boot/glr_init_trace.h"
 

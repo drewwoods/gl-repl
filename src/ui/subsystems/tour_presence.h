@@ -3,14 +3,14 @@
  *
  * Feature-owned UI under the `tour_ui_*` prefix, the peripheral counterpart of
  * tour_hud.c: where the HUD is a panel you read, this is a frame you notice.
- * Pure over a GlrTourPresenceView — it holds no state and reads no live tour
+ * Pure over a GlrTourPresenceView - it holds no state and reads no live tour
  * data, so all of its animation comes from src/app/glr_tour_presence.c.
  *
  * Drawn LAST, in the host band after the compositor post-process, for two
  * reasons: a user's own whole-frame Post FX must not paint over the one piece
  * of chrome that says which mode the app is in, and nothing else may sit on
  * top of it either. It deliberately does NOT route through the Post FX effect
- * enum — that is a user setting the Config menu owns (and that a tour may well
+ * enum - that is a user setting the Config menu owns (and that a tour may well
  * be demonstrating), and it is the wrong channel for app state. The two
  * capture-based effects would also read back the frame every frame and smear
  * the code panel, which during a tour is exactly the text being read.

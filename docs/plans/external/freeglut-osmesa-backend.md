@@ -1,9 +1,9 @@
 # Add an OSMesa (off-screen, window-system-less) backend to freeglut
 
-> **External plan — IMPLEMENTED.** This work is done **in a freeglut fork**,
+> **External plan - IMPLEMENTED.** This work is done **in a freeglut fork**,
 > not in gl-repl. It lives here only as the spec that motivated it (gl-repl
-> wants a headless GL context so `--export-ply`'s `GL_FEEDBACK` capture —
-> including the GLUT solids — can be validated in CI without a display).
+> wants a headless GL context so `--export-ply`'s `GL_FEEDBACK` capture -
+> including the GLUT solids - can be validated in CI without a display).
 >
 > **Where the work lives:** the freeglut fork at
 > <https://github.com/drewwoods/freeglut>, branch **`osmesa-backend`**. That
@@ -16,9 +16,9 @@
 > open.
 >
 > Reference checkout used to write this plan: `~/src/freeglut-fork`
-> (freeglut **3.8.0**; macOS Cocoa build) — now published as the fork above.
+> (freeglut **3.8.0**; macOS Cocoa build) - now published as the fork above.
 > File paths below are relative to the freeglut source root. Line numbers are
-> approximate — match by symbol.
+> approximate - match by symbol.
 
 ## Why
 
@@ -49,7 +49,7 @@ run truly headless and cross-platform.
   buffer of `w*h*4` bytes. All subsequent GL renders into `buf`.
 - Pixel origin defaults to `OSMESA_Y_UP = 1` (OpenGL bottom-up). Relevant only
   if anyone reads pixels back; the gl-repl feedback path never reads pixels.
-- It is **not** layered on X11/EGL and must not be combined with one — it
+- It is **not** layered on X11/EGL and must not be combined with one - it
   *replaces* the window-system context path.
 
 ## freeglut architecture this plugs into (verified in the fork)
@@ -63,7 +63,7 @@ provider**:
 - Context providers: the X11 backend pairs with **GLX** (`src/x11/fg_*_x11_glx.c`)
   or **EGL** (`src/egl/fg_*_egl.c`), selected by the `FREEGLUT_GLES` CMake
   option. `src/egl/` is a reusable context layer (create/destroy context,
-  make-current, swap, config select, proc address) — **the closest template for
+  make-current, swap, config select, proc address) - **the closest template for
   OSMesa.**
 
 The window's context lives on `SFG_Window.Window` (`SFG_Context`,
@@ -73,7 +73,7 @@ The window's context lives on `SFG_Window.Window` (`SFG_Context`,
 struct tagSFG_Context {
     SFG_WindowContextType Context;   /* the GL context handle (per-platform typedef) */
     ...
-    SFG_PlatformContext pContext;    /* per-provider data: a union — .egl.Surface, X11 FBConfig, Win DC */
+    SFG_PlatformContext pContext;    /* per-provider data: a union - .egl.Surface, X11 FBConfig, Win DC */
 };
 ```
 
@@ -94,7 +94,7 @@ entry points to study:
 (`src/fg_teapot.c`, `src/fg_geometry.c`) only need a current context plus the
 GL entry points. With OSMesa current, `glGetString` succeeds, `fgInitGL2()`
 runs, and (because gl-repl never calls `glutSetVertexAttrib*`) the
-`fghDrawGeometrySolid11` client-vertex-array path executes — identical to the
+`fghDrawGeometrySolid11` client-vertex-array path executes - identical to the
 Cocoa build. No solid-specific work is needed.
 
 ## Design decision: one new `osmesa` platform (not a separate null window backend)
@@ -151,7 +151,7 @@ typedef struct {
 | `GLUT_RGBA`/`GLUT_RGB` | `OSMESA_RGBA` format |
 | `GLUT_DEPTH` | `depthBits = 24` (else 0) |
 | `GLUT_STENCIL` | `stencilBits = 8` (else 0) |
-| `GLUT_ACCUM` | `accumBits = 16` — **but** llvmpipe usually lacks accum; treat as best-effort and document (gl-repl should pass `--noaccum`) |
+| `GLUT_ACCUM` | `accumBits = 16` - **but** llvmpipe usually lacks accum; treat as best-effort and document (gl-repl should pass `--noaccum`) |
 | `GLUT_DOUBLE` | single buffer; swap is a no-op |
 | `GLUT_MULTISAMPLE` | ignored (no MSAA in swrast); document |
 | `GLUT_INDEX` | unsupported; force RGBA |
@@ -188,14 +188,14 @@ typedef struct {
 
 | Path | Change |
 |---|---|
-| `src/osmesa/fg_internal_osmesa.h` | **new** — `SFG_PlatformDisplay`/`SFG_PlatformContext` osmesa arms, `SFG_WindowContextType = OSMesaContext` |
-| `src/osmesa/fg_init_osmesa.c` | **new** — `fgPlatformInitialize/InitWork/CloseDisplay`, time base |
-| `src/osmesa/fg_window_osmesa.c` | **new** — context create/destroy, open/close window, `fgPlatformSetWindow` (make-current), buffer alloc, initial reshape/visibility |
-| `src/osmesa/fg_display_osmesa.c` | **new** — `fgPlatformGlutSwapBuffers` (no-op), swap-ctl no-ops, `fgPlatformExtSupported` |
-| `src/osmesa/fg_state_osmesa.c` | **new** — `fgPlatformGlutGet`, `fgPlatformGlutGetModeValues`, config getters |
-| `src/osmesa/fg_main_osmesa.c` | **new** — null event loop: `ProcessSingleEvent`, `MainLoopPreliminaryWork`, `SleepForEvents`, `SystemTime` |
-| `src/osmesa/fg_structure_osmesa.c` | **new** — per-window struct alloc/free (mirror `src/egl/fg_structure_egl.c`) |
-| `src/osmesa/fg_cursor_osmesa.c` / `fg_ext_osmesa.c` / `fg_gamemode_osmesa.c` / `fg_input_devices_osmesa.c` / `fg_joystick_osmesa.c` / `fg_spaceball_osmesa.c` | **new** — stubs (model after the leanest existing backend, e.g. `src/blackberry/` + `src/android/`) |
+| `src/osmesa/fg_internal_osmesa.h` | **new** - `SFG_PlatformDisplay`/`SFG_PlatformContext` osmesa arms, `SFG_WindowContextType = OSMesaContext` |
+| `src/osmesa/fg_init_osmesa.c` | **new** - `fgPlatformInitialize/InitWork/CloseDisplay`, time base |
+| `src/osmesa/fg_window_osmesa.c` | **new** - context create/destroy, open/close window, `fgPlatformSetWindow` (make-current), buffer alloc, initial reshape/visibility |
+| `src/osmesa/fg_display_osmesa.c` | **new** - `fgPlatformGlutSwapBuffers` (no-op), swap-ctl no-ops, `fgPlatformExtSupported` |
+| `src/osmesa/fg_state_osmesa.c` | **new** - `fgPlatformGlutGet`, `fgPlatformGlutGetModeValues`, config getters |
+| `src/osmesa/fg_main_osmesa.c` | **new** - null event loop: `ProcessSingleEvent`, `MainLoopPreliminaryWork`, `SleepForEvents`, `SystemTime` |
+| `src/osmesa/fg_structure_osmesa.c` | **new** - per-window struct alloc/free (mirror `src/egl/fg_structure_egl.c`) |
+| `src/osmesa/fg_cursor_osmesa.c` / `fg_ext_osmesa.c` / `fg_gamemode_osmesa.c` / `fg_input_devices_osmesa.c` / `fg_joystick_osmesa.c` / `fg_spaceball_osmesa.c` | **new** - stubs (model after the leanest existing backend, e.g. `src/blackberry/` + `src/android/`) |
 | `src/fg_internal.h` | add the `osmesa` union arm to `SFG_PlatformDisplay`/`SFG_PlatformContext`; `#elif TARGET_HOST_OSMESA` typedef for `SFG_WindowContextType` |
 | `CMakeLists.txt` | add `OPTION(FREEGLUT_OSMESA ...)`; a new branch in the `IF(WIN32)/ELSEIF(ANDROID...)/ELSEIF(OGC)/ELSE` chain (~L161+) that lists the `src/osmesa/*` sources when `FREEGLUT_OSMESA`; `find_package`/`pkg_check_modules(OSMesa osmesa)`; link `OSMesa::OSMesa`/`-lOSMesa`; `add_definitions(-DTARGET_HOST_OSMESA)` |
 | `README.osmesa` (or `README.md`) | document the new build option + deps |
@@ -224,12 +224,12 @@ typedef struct {
    session and confirm it still runs (the whole point).
 4. **Cross-platform:** build + run the self-test on Linux **and** macOS.
 
-## Downstream integration (gl-repl — separate, later, not part of this plan)
+## Downstream integration (gl-repl - separate, later, not part of this plan)
 
 Once the fork ships `libglut_osmesa`, gl-repl adds a `USE_OSMESA=1` Make variant
 that links it + `-lOSMesa` instead of the Cocoa/X11 freeglut, then a CI target:
 `./gl-repl <teapot scene> --export-ply out.ply` (already implemented) and assert
-the triangle count. This is the headless validation the whole effort unlocks —
+the triangle count. This is the headless validation the whole effort unlocks -
 but it is **gl-repl** work, tracked separately; this plan stops at freeglut.
 
 ## Risks / caveats
@@ -239,7 +239,7 @@ but it is **gl-repl** work, tracked separately; this plan stops at freeglut.
   feedback-export consumer does not need either.
 - **Callbacks without events:** the null backend must *synthesize* the initial
   reshape/visibility and honor `glutPostRedisplay`, or `display` never fires.
-  This is the subtlest part — study `src/fg_main.c`'s work-list + how
+  This is the subtlest part - study `src/fg_main.c`'s work-list + how
   `src/android/fg_main_android.c` (also event-poor) drives redisplay.
 - **`SFG_WindowContextType` typedef churn:** adding a `TARGET_HOST_OSMESA` arm
   touches shared `src/fg_internal.h`; keep it strictly additive so other
@@ -248,7 +248,7 @@ but it is **gl-repl** work, tracked separately; this plan stops at freeglut.
   routing OSMesa (gallium/llvmpipe vs classic swrast) honors it. It does on
   standard distro Mesa; pin the tested Mesa version in CI.
 - **Menus / overlays:** freeglut menus are sub-windows; leave unsupported under
-  OSMesa (assert/no-op) — out of scope for headless rendering.
+  OSMesa (assert/no-op) - out of scope for headless rendering.
 - **Upstreaming:** target a freeglut fork; if upstreaming, follow freeglut's
   backend conventions and add the `FREEGLUT_OSMESA` option to its CI matrix.
 

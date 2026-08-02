@@ -8,7 +8,7 @@
  *      occurrence even when no transform guide is active. Earlier a
  *      fast-path in glr_ctrl_render_cursor_guides skipped the walk in
  *      that case, so the geometry guide ran with the caller's
- *      (un-transformed) modelview — guide marker landed at world
+ *      (un-transformed) modelview - guide marker landed at world
  *      origin instead of at the vertex.
  *
  *   2. The flat command's `args[]` carry the *evaluated* coordinates
@@ -23,7 +23,7 @@
  *      O(flat_count) walk every frame.
  *
  * The walker calls glPushMatrix / glTranslatef directly, so this test
- * needs the no-op GL stubs — it lives under the USE_GL_STUBS=1 gate in
+ * needs the no-op GL stubs - it lives under the USE_GL_STUBS=1 gate in
  * the Makefile.
  */
 #include "app/glr_ctrl.h"
@@ -161,8 +161,8 @@ static int find_source_line(const char *prefix) {
  *   call A: args = (0.5, 0.25, 0)
  *   call B: args = (0.75, -0.4, 0)
  *
- * If those came back as (0, 0, 0) — which is what the input-text
- * parser produces for funcN locals — the cursor guide would render
+ * If those came back as (0, 0, 0) - which is what the input-text
+ * parser produces for funcN locals - the cursor guide would render
  * at the local origin and we'd be back in the bug.
  */
 static void test_walker_resolves_funcn_args_at_cursor(void) {
@@ -398,7 +398,7 @@ static void test_cursor_guide_snapshot_override(void) {
     ASSERT_NEAR("TESS_VERTEX: z", snap3.vertex_args[2], -0.5f);
 
     /* NORMAL3F: override normal_args (not vertex_args) since cursor is
-     * on a glNormal3f line. Same root cause as the vertex bug — text
+     * on a glNormal3f line. Same root cause as the vertex bug - text
      * parser collapses funcN-local refs to 0; we recover from flat
      * cmd's evaluated args. */
     GLCmd nrm = {0};
@@ -507,7 +507,7 @@ static void test_cursor_guide_snapshot_override(void) {
  *
  * Note: this tests parse_arg_slots (static in glr_ctrl.c, reached
  * via the include-as-unit pattern at the top of this file). With no
- * predefined-variable values, the args evaluate to 0 — that's the
+ * predefined-variable values, the args evaluate to 0 - that's the
  * normal outcome for funcN-local references; n_filled=3 is what we
  * actually care about so the n==3 branch fires and the cursor-guide
  * snapshot override (test #4) provides correct positions.
@@ -608,12 +608,12 @@ static void test_display_name_for_not_in_begin(void) {
 /* --- 7. transform-dispatch drift guard --------------------------------
  *
  * Two parallel switches dispatch transform CmdTypes:
- *   - apply_tracked_transform (repl/transform_utils.h) — used by the
+ *   - apply_tracked_transform (repl/transform_utils.h) - used by the
  *     replay walkers, edit-overlay walks, and transform-guide pre-passes
- *   - repl_executor_apply_tracked_transform_cmd (repl/executor.c) — used
+ *   - repl_executor_apply_tracked_transform_cmd (repl/executor.c) - used
  *     by the live executor and replay paths
  *
- * Both must cover the same set of CmdTypes as repl_cmd_is_transform —
+ * Both must cover the same set of CmdTypes as repl_cmd_is_transform -
  * any drift between the three is a silent guide-position bug. Detection:
  * GL stub counters tick exactly one of the six transform entrypoints
  * (glPushMatrix/glPopMatrix/glLoadIdentity/glTranslatef/glScalef/
@@ -693,7 +693,7 @@ static void test_transform_dispatch_drift_guard(void) {
 /* --- 8. geometry-emit predicate coverage --------------------------
  *
  * repl_cmd_starts_geometry_emit names the commands that anchor a draw
- * using the current modelview — glBegin opens a vertex stream, the
+ * using the current modelview - glBegin opens a vertex stream, the
  * glut solid primitives close a shape, and CMD_TESS_BEGIN_POLYGON opens
  * a tessellated draw. transform-guide planning uses this predicate as
  * its "stop walking forward" signal in the after-cursor anchor search.
@@ -763,7 +763,7 @@ static void test_is_glut_solid_predicate(void) {
         ASSERT_INT(label, repl_cmd_is_glut_solid(t), is_expected);
 
         /* Every glut solid must also be a geometry-emit anchor and a
-         * color consumer — the two predicates that OR it in. */
+         * color consumer - the two predicates that OR it in. */
         if (is_expected) {
             ASSERT_INT("glut solid anchors a draw",
                        repl_cmd_starts_geometry_emit(t), 1);

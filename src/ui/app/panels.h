@@ -25,7 +25,7 @@
  * that the controller actualizes after the render call. Today this
  * carries the editor cursor's window-pixel position, which the
  * floating autocomplete popup needs to anchor itself under the cursor.
- * The cursor pixel is not durable state — it's recomputed every frame
+ * The cursor pixel is not durable state - it's recomputed every frame
  * from the same wrap/segment math the renderer is already running, so
  * surfacing it as a per-frame output (rather than a state field
  * mutated mid-render) keeps `ui_*` pure.
@@ -60,7 +60,7 @@ int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
                                           int *x, int *y, int *w, int *h);
 
 /* Pure hit-test: classify the pointer at (mx, my) as a `UiHit`.
- * glr_ctrl_router_handle_code_panel_hit is the canonical consumer — it
+ * glr_ctrl_router_handle_code_panel_hit is the canonical consumer - it
  * dispatches by UiHit.kind to the owning subsystem. `variable_count` is
  * supplied by the controller so UI hit-testing does not read the live
  * REPL variable table. */

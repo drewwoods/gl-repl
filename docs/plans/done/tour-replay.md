@@ -289,7 +289,7 @@ else
 
 Process at most 32 events per rendered frame. With `PS_MAX_EVENTS == 256`, a full seek requires at most eight rendered frames.
 
-Suppress all decorative overlays during the prefix sweep (no strobing as the seek blasts through 32 events/frame), then **reconstruct** the landing overlays once settled: `ps_tour_restore_landing_overlays()` re-walks `[0, target)` summing each event's intrinsic playback cost into a virtual landing frame, anchors `g_frame` there, and re-creates whatever live playback would still be showing — the most-recent still-live caption (`echo`) and click ripple, plus a ring shown fresh when the boundary lands directly on one. This is what makes rewinding into a caption's on-screen window bring the caption back, rather than only showing the final replayed event's overlay.
+Suppress all decorative overlays during the prefix sweep (no strobing as the seek blasts through 32 events/frame), then **reconstruct** the landing overlays once settled: `ps_tour_restore_landing_overlays()` re-walks `[0, target)` summing each event's intrinsic playback cost into a virtual landing frame, anchors `g_frame` there, and re-creates whatever live playback would still be showing - the most-recent still-live caption (`echo`) and click ripple, plus a ring shown fresh when the boundary lands directly on one. This is what makes rewinding into a caption's on-screen window bring the caption back, rather than only showing the final replayed event's overlay.
 
 `glr_ctrl_tick()` may still be scheduled by the host during a rendered seek
 frame. It must consult
@@ -447,25 +447,25 @@ Requirements:
 
 ## Implementation Sequence
 
-1. **Landed — `8721a4b9`:** add focused owner snapshot APIs.
-2. **Landed — `e30df777`:** compose `GlrTourSnapshot`, add restore
+1. **Landed - `8721a4b9`:** add focused owner snapshot APIs.
+2. **Landed - `e30df777`:** compose `GlrTourSnapshot`, add restore
    synchronization, and pass the composite round-trip gate.
-3. **Landed — `37aa1d30`:** add `source_line`, catalog filename metadata, and
+3. **Landed - `37aa1d30`:** add `source_line`, catalog filename metadata, and
    catalog timed-tour rejection.
-4. **Landed — `fdf8e8b9`:** extract `ps_advance_one_virtual_frame()` while
+4. **Landed - `fdf8e8b9`:** extract `ps_advance_one_virtual_frame()` while
    keeping environment-script behavior unchanged.
-5. **Landed — `17206ba4`:** introduce the controlled-tour run kind, playback
+5. **Landed - `17206ba4`:** introduce the controlled-tour run kind, playback
    state, event accounting, speed, pause, immediate Right, and Done; remove
    `start_lines()` and migrate its relevant tests.
-6. **Landed — `17206ba4`:** add the two-way completion fork: environment
+6. **Landed - `17206ba4`:** add the two-way completion fork: environment
    capture never auto-stops; controlled tours enter Done.
-7. **Landed — `17206ba4`:** integrate baseline-pending capture and Done
+7. **Landed - `17206ba4`:** integrate baseline-pending capture and Done
    restart.
-8. **Landed — `17206ba4`:** add resumable Back/Seeking using the snapshot
+8. **Landed - `17206ba4`:** add resumable Back/Seeking using the snapshot
    layer.
-9. **Landed — `70a3e951`:** route host transport keys before cancellation.
-10. **Landed — `e7516251`:** add the HUD and UI snapshot field.
-11. **Landed — `16201e2a`:** add the focused transport test, finish
+9. **Landed - `70a3e951`:** route host transport keys before cancellation.
+10. **Landed - `e7516251`:** add the HUD and UI snapshot field.
+11. **Landed - `16201e2a`:** add the focused transport test, finish
     documentation/help text, and run all verification commands.
 
 Each stage should leave the environment-script behavior intact.

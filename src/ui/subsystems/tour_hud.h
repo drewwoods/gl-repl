@@ -4,7 +4,7 @@
  * Feature-owned UI under the `tour_ui_*` prefix, the transport counterpart of
  * replay_ui_hud.c. It legitimately knows controlled-tour concepts (playback
  * state, speed, step/total, source line) and reads ONLY from the per-frame
- * UiRenderSnapshot's `tour` slice (GlrTourPlaybackView) — never live
+ * UiRenderSnapshot's `tour` slice (GlrTourPlaybackView) - never live
  * pointer-script state. It renders and classifies hits; the controller owns
  * the resulting expand/collapse mutation.
  *

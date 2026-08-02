@@ -2,16 +2,16 @@
 
 ## Progress
 
-- [x] Step 1 — segment cap 4 → 16 (`src/ui/text_panel.h`), committed
-- [x] Step 2 — classifier + color model + wiring + public API
+- [x] Step 1 - segment cap 4 → 16 (`src/ui/text_panel.h`), committed
+- [x] Step 2 - classifier + color model + wiring + public API
       (`src/ui/repl_code_panel.{c,h}`), `make sample` green,
       `check-ui-text-panel-pure` OK, committed
-- [x] Step 3 — `test_repl_code_panel_syntax` + Makefile target;
+- [x] Step 3 - `test_repl_code_panel_syntax` + Makefile target;
       caught & fixed `t` (reserved but is the predefined var) being
       classified as structural, committed
-- [x] Step 4 — optional contrast regression test (3.0 WCAG vs the
+- [x] Step 4 - optional contrast regression test (3.0 WCAG vs the
       `(0.06,0.06,0.10)` panel background), committed
-- [x] Step 5 — verified: `make test` 4373/4373, `make test-stubs`
+- [x] Step 5 - verified: `make test` 4373/4373, `make test-stubs`
       4814/4814, `make sample` + `make sample USE_GL_STUBS=1` both link
 
 **Status: complete.** All five commits on branch `feat/per-kind-arg-hue`.
@@ -39,11 +39,11 @@ renderer at `src/ui/text_panel.c` `text_panel_draw_colored_text`). It is
 already used for tutorial fade (`repl_code_panel_apply_fade_segments`,
 `:619-664`) and virtual-line aux text (`:796-808`). Gaps between segments
 fall back to `row->color`, and the renderer **clamps** an over-long segment
-list (`seg_count > UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` → clamp) — so overflow
+list (`seg_count > UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` → clamp) - so overflow
 degrades gracefully to the class color, never crashes.
 
 No change is needed to the generic renderer or the `text_panel.h` contract
-(which must stay REPL-free — `make check-ui-text-panel-pure`). All new logic
+(which must stay REPL-free - `make check-ui-text-panel-pure`). All new logic
 lives in the REPL adapter `src/ui/repl_code_panel.c`, expressed purely as
 generic color segments.
 
@@ -54,11 +54,11 @@ generic color segments.
 Add a self-contained scanner over the row's display text that emits
 `(char_start, char_count, kind)` tuples. Kinds:
 
-- `TOKEN_LITERAL` — numeric literal (`isdigit`/leading `.`), and any
+- `TOKEN_LITERAL` - numeric literal (`isdigit`/leading `.`), and any
   double-quoted run (the whole `"..."` as one span; do **not** descend into
   `label("...")` format-string interior).
-- `TOKEN_CONSTANT` — identifier that is `PI`, `TAU`, or starts with `GL_`.
-- `TOKEN_VARIABLE` — identifier that is a known variable: predef/declared
+- `TOKEN_CONSTANT` - identifier that is `PI`, `TAU`, or starts with `GL_`.
+- `TOKEN_VARIABLE` - identifier that is a known variable: predef/declared
   (`repl_eval_find_predef_var_idx`, `src/repl/eval.h:207`), scratch array
   `A`/`B`/`C` (`repl_eval_scratch_array_index`, `:194`), or any other
   identifier **not** immediately followed by `(` and **not**
@@ -74,7 +74,7 @@ Skip tokenization entirely when the command's category is
 `CMD_CAT_COMMENT` (whole comment line keeps comment color).
 
 Reuse `repl_scan_next_arg_delim` (`src/repl/eval.h:243`) is **not** needed
-here — this is a flat left-to-right lexer over display text, not an arg
+here - this is a flat left-to-right lexer over display text, not an arg
 splitter. Identifier/number scanning mirrors the logic already in
 `eval.c::eval_primary` but only needs positions, not values.
 
@@ -110,7 +110,7 @@ Memory note: `g_repl_code_panel_rows` is
 `MAX_COMMANDS(4096)+MAX_VIRTUAL_LINES(512)+256+2 ≈ 4866` rows; each
 `UiTextPanelColorSegment` ≈ 28 bytes. 4→16 segments adds ≈ `4866 * 12 * 28
 ≈ 1.6 MB` static. Acceptable for a desktop GL app. (If this is later judged
-too heavy, the scalable alternative — out of scope here — is converting the
+too heavy, the scalable alternative - out of scope here - is converting the
 inline array to an index/count into a shared per-frame segment pool; not
 recommended now since it churns the generic contract.) 16 covers virtually
 all real lines (`MAX_LINE_LEN = 256`); longer/denser lines degrade to class
@@ -125,20 +125,20 @@ color past 16 with no visual breakage.
   (no segments), `label("a=%f", x)` (string is one LITERAL, `x` VARIABLE),
   `PI`/`TAU` as CONSTANT, scratch `A[0] = 1` (`A` VARIABLE, `1` LITERAL).
   Add a Makefile target mirroring the existing `test_repl_core_*` pattern.
-- **Optional (mark optional in code review):** contrast test — for every
+- **Optional (mark optional in code review):** contrast test - for every
   (kind × `CmdSyntaxCategory`) pair, compute the class-nudged final color and
   assert relative luminance contrast vs the code-panel background exceeds a
   threshold (e.g. ≥ 3.0). Source the panel background from the actual
   code-panel fill color used in `src/ui/text_panel.c`/panel chrome (confirm
-  exact RGB during implementation; statusbar uses `0.094` — verify the text
+  exact RGB during implementation; statusbar uses `0.094` - verify the text
   area background). This guards future palette/NUDGE tweaks from producing
   invisible text.
 
 ## Critical files
 
-- `src/ui/repl_code_panel.c` — classifier, color model, wiring (primary).
-- `src/ui/text_panel.h` — bump `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` 4 → 16.
-- `src/repl/eval.h` — reuse `repl_eval_find_predef_var_idx`,
+- `src/ui/repl_code_panel.c` - classifier, color model, wiring (primary).
+- `src/ui/text_panel.h` - bump `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` 4 → 16.
+- `src/repl/eval.h` - reuse `repl_eval_find_predef_var_idx`,
   `repl_eval_scratch_array_index`, `repl_eval_is_reserved_ident` (already
   public; no change).
 - `tests/test_repl_code_panel_syntax.c` (new) + `Makefile` target.
@@ -146,7 +146,7 @@ color past 16 with no visual breakage.
 
 ## Effort
 
-**Moderate, low architectural risk** — roughly half a day to ~1.5 days:
+**Moderate, low architectural risk** - roughly half a day to ~1.5 days:
 
 - Classifier: ~120-180 lines (the bulk).
 - Color model + palette + nudge: ~30 lines.
@@ -161,15 +161,15 @@ is resolved above with a graceful-degradation fallback.
 
 ## Verification
 
-1. `make sample` then `./sample` — load an example with loops, variables,
+1. `make sample` then `./sample` - load an example with loops, variables,
    constants, and `label(...)`. Confirm: command keyword keeps its class
    hue; literals/constants/variables show distinct but class-tinted shades;
    comments unchanged; tutorial fade still works (start a tutorial).
-2. `./sample workspace/` with a multi-scene workspace — sanity-check dense
+2. `./sample workspace/` with a multi-scene workspace - sanity-check dense
    `glVertex3f(...)` lines and `for(...)` headers.
 3. `make test` (all suites) + the new
    `make test_repl_code_panel_syntax`.
-4. `make check-ui-text-panel-pure` — confirm the generic panel stayed
+4. `make check-ui-text-panel-pure` - confirm the generic panel stayed
    REPL-free (all new logic is in the adapter).
-5. `make test-stubs && make sample USE_GL_STUBS=1 && make sample` — both
+5. `make test-stubs && make sample USE_GL_STUBS=1 && make sample` - both
    build paths green.

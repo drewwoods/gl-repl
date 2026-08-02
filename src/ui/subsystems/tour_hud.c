@@ -4,9 +4,9 @@
  * Feature-owned UI under the `tour_ui_*` prefix. Reads ONLY snap->tour (a
  * GlrTourPlaybackView) plus the scene rect; never live pointer-script state.
  * Shares the replay HUD's line structure (metadata / progress / hints) but is
- * styled apart from it — warm amber identity color, a solid top ribbon instead
+ * styled apart from it - warm amber identity color, a solid top ribbon instead
  * of a thin outline, and a segmented per-event step bar instead of the
- * continuous groove — and sits at the TOP of the scene viewport so both HUDs
+ * continuous groove - and sits at the TOP of the scene viewport so both HUDs
  * can show at once without reading as the same control.
  */
 #include "ui/subsystems/tour_hud.h"
@@ -138,7 +138,7 @@ static void tour_hud_build_line2(char *dst, size_t dstsz, int max_chars) {
 
 /* Available panel width for a scene `scene_w` px wide: the scene minus
  * horizontal margins, and NEVER more (no forced minimum width that could push
- * the panel past a narrow scene into a side code panel or off-window — feedback
+ * the panel past a narrow scene into a side code panel or off-window - feedback
  * can't see the off-window part, so this is guarded arithmetically instead).
  * Returns 0 when the scene is too narrow to show a readable HUD (render is
  * skipped). tour_ui_hud_rect's expanded width and cap; the single source of
@@ -167,7 +167,7 @@ static void draw_hud_panel(int x, int y, int w, int h) {
 }
 
 /* Segmented per-event step bar: a filled amber block per completed event with
- * panel-colored separator ticks — tours advance in discrete steps, unlike the
+ * panel-colored separator ticks - tours advance in discrete steps, unlike the
  * replay HUD's continuous command groove. Falls back to a plain fill when
  * segments would be too narrow to read. */
 static void draw_step_bar(int x, int y, int w, float progress, int total) {

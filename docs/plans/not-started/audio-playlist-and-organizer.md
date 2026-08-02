@@ -1,6 +1,6 @@
 # Audio Menu: Playlist Browser, Play/Remove, and Tag Organization
 
-## Status — PARTLY OVERTAKEN (2026-07-29 audit)
+## Status - PARTLY OVERTAKEN (2026-07-29 audit)
 
 `done/audio-menu.md` (landed 2026-07-06) shipped the browser half of this plan
 independently, so the Context section below is stale where it says there is no
@@ -12,13 +12,13 @@ flyouts, the playing track highlighted with live `m:ss / m:ss`, and
 
 What is still unbuilt, and all this plan is now for:
 
-- **Right-click removal** — no `glr_audio_remove_track()`; §1's removal
+- **Right-click removal** - no `glr_audio_remove_track()`; §1's removal
   semantics (index shifting, removing the current track, `g_load_cancelled`
   during `g_loading`) are untouched and remain the substantive design content.
-- **Tag organization** — grouping is by *source* (`Assets` / `Bundled` /
+- **Tag organization** - grouping is by *source* (`Assets` / `Bundled` /
   `My Music` / `Default`), not user tags. No `tags.txt` parsing anywhere in the
   tree, no `All` / `Untagged` synthetic groups.
-- `glr_audio_track_path()` — not added; the menu reads display names instead.
+- `glr_audio_track_path()` - not added; the menu reads display names instead.
 
 Re-scope against the shipped menu before implementing; do not re-derive the
 accessors that already exist.
@@ -46,7 +46,7 @@ Decisions confirmed with the user: tag-grouped flyouts; session-only removal
 track advances to the next.
 
 The Audio menu rides the **existing tag-grouped flyout engine** already shared
-by the Scene (examples) and Tutorials menus — the `CatalogFlyoutOps` vtable in
+by the Scene (examples) and Tutorials menus - the `CatalogFlyoutOps` vtable in
 `src/ui/app/menu_bar.c`. No new menu/flyout rendering machinery is needed; we
 supply a third ops table and three small dispatch branches.
 
@@ -57,8 +57,8 @@ supply a third ops table and three small dispatch branches.
 The playlist already lives in `glr_audio.c` as
 `g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH]`, `g_playlist_count`,
 `g_playlist_pos`. Add a thin public surface over it (all guarded by the existing
-`audio_lock()` mutex — dynamically initialized as `PTHREAD_MUTEX_RECURSIVE` in
-`glr_audio_init()` — mirroring `glr_audio_next_track`):
+`audio_lock()` mutex - dynamically initialized as `PTHREAD_MUTEX_RECURSIVE` in
+`glr_audio_init()` - mirroring `glr_audio_next_track`):
 
 ```c
 int         glr_audio_track_count(void);            /* g_playlist_count */
@@ -68,7 +68,7 @@ int         glr_audio_play_track(int idx);          /* request_start(idx, GLR_AU
 int         glr_audio_remove_track(int idx);        /* rebuild playlist minus idx */
 ```
 
-- `glr_audio_current_index()` — `g_playlist_pos` is `0` at static init (not
+- `glr_audio_current_index()` - `g_playlist_pos` is `0` at static init (not
   `-1`), and the current-track display should follow the same loaded-state
   contract as `glr_audio_get_current_track()`: return `-1` when
   `!g_music_loaded` or `g_playlist_pos` is out of range, otherwise return
@@ -109,7 +109,7 @@ int         glr_audio_remove_track(int idx);        /* rebuild playlist minus id
     `tick` end-of-track advance, and any similar future path) must also gate on
     `g_music_loaded` so they do not restart or advance the removed stopped slot.
   - Playlist becomes empty: clear pending start/load state as needed and post
-    `AWR_UNINIT` (the only "drop current sound" request — there is no `AWR_STOP`;
+    `AWR_UNINIT` (the only "drop current sound" request - there is no `AWR_STOP`;
     the full enum is `AWR_NONE / AWR_START / AWR_ADVANCE / AWR_UNINIT /
     AWR_QUIT`).
 
@@ -117,7 +117,7 @@ int         glr_audio_remove_track(int idx);        /* rebuild playlist minus id
   removed element (`g_req == AWR_START`, `g_pending_start`) so a stale submenu
   index cannot start a different track after the array compacts. Returns 0/-1.
 
-These are pure additions — no behavior change for existing callers.
+These are pure additions - no behavior change for existing callers.
 
 ### 2. New tag catalog module (`src/app/glr_audio_tags.{c,h}`)
 
@@ -125,7 +125,7 @@ A small **app-layer** module (no GL, no threads) that owns the parsed tag map
 and presents the playlist as a tag-grouped catalog. It reads track paths from
 `glr_audio_*` (above), so it stays in sync with removals automatically.
 
-- `void glr_audio_tags_init(void);` — self-resolves the tag file path (see §6)
+- `void glr_audio_tags_init(void);` - self-resolves the tag file path (see §6)
   and parses `tags.txt` once at startup. Each line: `stem: [tagA, tagB, ...]`.
   Store `stem → tag list`. Tolerant parser (skip blank/`#` lines, trim
   whitespace, ignore malformed).
@@ -139,10 +139,10 @@ and presents the playlist as a tag-grouped catalog. It reads track paths from
   user's `The_Save_Point` style (no extension). The stem extractor handles both
   `/` and `\` path separators for Windows-port readiness.
 - Derive the **visible tag set**: the union of all tags seen in the file (stable
-  order — first-seen or alphabetical), **filtered to only tags that match at
+  order - first-seen or alphabetical), **filtered to only tags that match at
   least one track in the current playlist** (so stale/irrelevant tags from
   `tags.txt` don't produce empty flyouts), then append synthetic **Untagged**
-  (only when ≥1 track is tagged AND ≥1 track has no tags — if all tracks are
+  (only when ≥1 track is tagged AND ≥1 track has no tags - if all tracks are
   untagged, skip it) and **All** (always last, every track). Even with no
   `tags.txt`, "All" alone gives a flat playlist flyout.
 - **Duplicate stems.** If a stem appears on multiple lines in `tags.txt`, merge
@@ -178,7 +178,7 @@ mutations and avoids a generation-counter protocol between the two modules.
   GLR_MENU_COUNT`; audio becomes the fifth member.
 - `menu_bar.c`:
   - Add alias `MENU_AUDIO = GLR_MENU_AUDIO` (next to `MENU_CONFIG`) and append
-    `"Audio"` to `g_menu_labels[]` (after `"Config"` — rightmost position).
+    `"Audio"` to `g_menu_labels[]` (after `"Config"` - rightmost position).
     `NUM_MENUS` is `= GLR_MENU_COUNT` (an enum alias, `menu_bar.c:30`), so adding
     `GLR_MENU_AUDIO` to `GlrMenuId` bumps the count and `NUM_MENUS` tracks it
     automatically. But `g_menu_labels[NUM_MENUS]` is a fixed-size initializer:
@@ -187,7 +187,7 @@ mutations and avoids a generation-counter protocol between the two modules.
     widths from the labels.
   - `menu_item_count`: `MENU_AUDIO → 0` when the playlist is empty, otherwise
     `glr_audio_tags_visible_tag_count()` (top-level rows are tag rows,
-    hover-only flyout parents — mirrors the Scene/Tutorials tag-row pattern).
+    hover-only flyout parents - mirrors the Scene/Tutorials tag-row pattern).
     The `snap` path can use `snap->audio.track_count`; the existing `NULL`
     layout/hit fallback can use `glr_audio_track_count()`.
   - `menu_item_label`: `MENU_AUDIO → glr_audio_tags_tag_label(i)`.
@@ -199,7 +199,7 @@ mutations and avoids a generation-counter protocol between the two modules.
         .count_for_tag = glr_audio_tags_count_for_tag,
         .index_for_tag = glr_audio_tags_index_for_tag,
         .name_of       = glr_audio_tags_track_name,
-        .subheading_of = audio_no_subheading,   /* returns NULL — flat groups */
+        .subheading_of = audio_no_subheading,   /* returns NULL - flat groups */
     };
     ```
     plus a `kAudioProvider` (`FlyoutProvider`) whose
@@ -212,7 +212,7 @@ mutations and avoids a generation-counter protocol between the two modules.
     the new branch calls `submenu_row_abs_index(menu_id, parent_row, ordinal)` to
     get the absolute playlist index, then returns
     `abs_idx >= 0 && abs_idx == snap->audio.current_idx` (the accent-color
-    highlight — same pattern as the Scene/Tutorials branches). This is the
+    highlight - same pattern as the Scene/Tutorials branches). This is the
     "► currently playing" indicator.
 
 Flyout scrolling for long playlists already works generically
@@ -249,7 +249,7 @@ that extra structure.
 
 - **Top-level tag rows are inert** on click (hover-open only): add a
   `GLR_MENU_AUDIO` branch to `glr_action_menu_item_activate` that returns 0 for
-  any `item_idx` (mirrors the `MENU_SCENE` / `MENU_TUTORIALS` tag-row guard —
+  any `item_idx` (mirrors the `MENU_SCENE` / `MENU_TUTORIALS` tag-row guard -
   both already return 0).
 - **Left-click a song** (`route_submenu_item_hit` in `glr_ctrl_router.c`):
   ```c
@@ -263,7 +263,7 @@ that extra structure.
   `route_right_press` in `src/app/glr_ctrl_router.c`: one canonical
   `ui_panels_hit_test`, then a switch on the hit kind. Its
   `UI_HIT_SUBMENU_ITEM` case already receives the owning menu id in
-  `hit.cmd_idx` (today only `GLR_MENU_CONFIG` acts on it — backward
+  `hit.cmd_idx` (today only `GLR_MENU_CONFIG` acts on it - backward
   cycle), so audio needs no new plumbing: add a
   `hit.cmd_idx == GLR_MENU_AUDIO` branch that removes the track at
   `hit.item_idx` and keeps the dropdown open.
@@ -291,11 +291,11 @@ After the playlist is built and `glr_audio_set_playlist(...)` is called (the
 public signature is `int glr_audio_set_playlist(const char *const *paths, int
 count)`), call `glr_audio_tags_init()`. The tag module self-resolves the file
 path: `glr_paths_user_music_dir(char *buf, size_t buflen)` (public API in
-`src/app/glr_paths.h` — the old `user_music_dir()` static was refactored out)
+`src/app/glr_paths.h` - the old `user_music_dir()` static was refactored out)
 **fills a caller buffer and returns success** (it is not a string-returning
 accessor), so `glr_audio_tags_init` writes the dir into a local buffer, appends
-`/tags.txt`, and parses that — no path is threaded through `main()`. (Tags load
-once at startup; editing `tags.txt` takes effect on next launch — a reload hook
+`/tags.txt`, and parses that - no path is threaded through `main()`. (Tags load
+once at startup; editing `tags.txt` takes effect on next launch - a reload hook
 can be a later follow-up.)
 
 ## Critical files

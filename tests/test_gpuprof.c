@@ -3,7 +3,7 @@
  *
  * Include-as-unit: pulls in support/gpuprof.c with a tiny segment cap and
  * ring so the overflow and ring-exhaustion paths are reachable, and drives
- * it with scripted fake GL query functions — no GL anywhere. The fakes
+ * it with scripted fake GL query functions - no GL anywhere. The fakes
  * model the contract gpuprof relies on: gen hands out ids, results are
  * keyed by id, availability is global (queries complete in order).
  */
@@ -157,7 +157,7 @@ static void test_nested_sections_credit_inclusive_time(void) {
     ASSERT_INT_EQ("init enables", gpu_prof_enabled(), 1);
 
     gpu_prof_frame_begin();
-    /* A wraps B: three segments — {A}, {A,B}, {A} — on slot 0's ids 1,2,3. */
+    /* A wraps B: three segments - {A}, {A,B}, {A} - on slot 0's ids 1,2,3. */
     gpu_prof_begin(SEC_A);
     gpu_prof_begin(SEC_B);
     gpu_prof_end(SEC_B);

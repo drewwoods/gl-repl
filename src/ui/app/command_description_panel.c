@@ -115,12 +115,12 @@ static int cdp_solve(const UiCommandDescriptionPanelView *view,
         return 0;
 
     /* The card is clamped to the window, not to the code panel it describes a
-     * row of — same box as the state inspector next door. It used to stop at
+     * row of - same box as the state inspector next door. It used to stop at
      * the panel's bottom edge, which meant a card anchored on one of the last
      * rows was pushed *up* over the code the reader had just right-clicked in;
      * hanging down over the scene hides nothing they were reading. Nothing
-     * routes through the card either — it has no hit-test surface and the next
-     * key or click dismisses it — so overlapping the viewport cannot swallow a
+     * routes through the card either - it has no hit-test surface and the next
+     * key or click dismisses it - so overlapping the viewport cannot swallow a
      * camera drag. The menu bar stays the ceiling. */
     left = CDP_EDGE_MARGIN;
     right = view->window_w - CDP_EDGE_MARGIN;

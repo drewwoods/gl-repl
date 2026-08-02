@@ -11,13 +11,13 @@
  *
  * The types are:
  *   - FLAT   : an identity quad-grid (the flat<->warp morph's zero point).
- *   - BARREL : a convex CRT bulge — the centre stays ~1:1, the edges
+ *   - BARREL : a convex CRT bulge - the centre stays ~1:1, the edges
  *              compress, and the corners pull inward, so the image bulges
  *              toward the viewer and the rectangular corners fall outside
  *              it (draw a black fill behind the mesh for the vignette).
  *              Paired with the scanlines filter.
  *   - RIPPLE : an animated sine wobble (an "underwater" warp). Fully
- *              implemented and tested, but reserved for a future filter —
+ *              implemented and tested, but reserved for a future filter -
  *              nothing wires it up yet.
  *
  * The surface is deliberately independent of any one effect's texture
@@ -27,7 +27,7 @@
  * code.
  *
  * Pure fixed-function GL (glBegin/glTexCoord2f/glVertex2f). No shaders,
- * no FBOs, and it owns no textures or matrices — the caller sets those up.
+ * no FBOs, and it owns no textures or matrices - the caller sets those up.
  */
 #ifndef RENDER3D_POSTPROCESS_SURFACE_H
 #define RENDER3D_POSTPROCESS_SURFACE_H
@@ -40,7 +40,7 @@ typedef enum Render3dPostSurfaceKind {
 
 /* One warped surface. Positions are in the same bottom-left pixel space
  * the filter's 2D ortho uses ([0,sw] x [0,sh]). Build one with a
- * constructor below rather than filling it by hand — `strength` and `t`
+ * constructor below rather than filling it by hand - `strength` and `t`
  * mean different things per kind. */
 typedef struct Render3dPostSurface {
     Render3dPostSurfaceKind kind;
@@ -56,7 +56,7 @@ typedef struct Render3dPostSurface {
 Render3dPostSurface render3d_post_surface_flat(int sw, int sh);
 
 /* Convex CRT bulge: `bulge` is the barrel strength (0 = flat, ~0.1 = a
- * gentle tube). The corners pull inward, so they fall outside the image —
+ * gentle tube). The corners pull inward, so they fall outside the image -
  * the caller should fill the rect with black behind the mesh for the
  * rounded-tube vignette. Keep bulge below ~0.5 (beyond it a corner's
  * scale 1 - 2*bulge goes negative and the geometry inverts). */

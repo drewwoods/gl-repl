@@ -4,7 +4,7 @@
  * Per the Phase 8 cleavage in docs/plans/done/editor-demo.md, this demo
  * does NOT reuse the REPL editor's controller (src/editor/input.c,
  * commit.c, clipboard.c, undo.c, reformat.c, search.c, completion.c,
- * and the inline overlays — all REPL-flavored). It runs entirely on:
+ * and the inline overlays - all REPL-flavored). It runs entirely on:
  *
  *   - src/editor/state.c     : text buffer + cursor + selection data model.
  *   - src/editor/edit_ops.c  : generic text-editing primitives shared with
@@ -12,7 +12,7 @@
  *   - src/ui/core/text_panel.c    : generic wrapped text renderer.
  *   - src/ui/core/text_layout.c   : wrap math.
  *   - src/ui/core/text_search.c   : case-insensitive text find (linked for the
- *                              text_panel's search-row machinery — find is
+ *                              text_panel's search-row machinery - find is
  *                              not bound to a key in v1).
  *   - src/support/cpuprof.c  : profiling.
  *   - tools/editor_demo/input.c : the demo's own generic key dispatcher.
@@ -23,14 +23,14 @@
  * above. There is no fake REPL service layer, no per-symbol REPL /
  * glr / ui / tutorial stub block, and (since Phase 4 of
  * docs/plans/done/edit-line-ownership.md flipped storage and Phase 5
- * deleted the shim file) no repl_shim.c either — the editor now
+ * deleted the shim file) no repl_shim.c either - the editor now
  * owns its edit-line cursor on EditorState.document.edit_line_idx.
  *
  * v1 behavior: type characters into the input row, backspace to delete,
  * arrow keys / Home / End to move within the row, click the File menu
  * for Load / Save (unimplemented handlers) / Quit. Cross-line nav, undo,
  * find, word jumps, selection clipboard, and File menu handlers are
- * deferred to follow-up phases — see docs/plans/done/editor-demo.md "What's
+ * deferred to follow-up phases - see docs/plans/done/editor-demo.md "What's
  * still open".
  *
  * Run:
@@ -158,7 +158,7 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
      * search_row_idx >= 0; the row matching (hit_row, hit_char)
      * gets the brighter "current hit" accent. The find-bar itself
      * is drawn separately as a top overlay (text_panel doesn't
-     * render the bar — only the highlights). */
+     * render the bar - only the highlights). */
     snap->search.active    = demo_search_active();
     snap->search.query     = demo_search_query();
     snap->search.query_len = demo_search_query_len();
@@ -172,7 +172,7 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
 
 /* Tiny find-bar overlay drawn just below the menu bar when search
  * is active. text_panel handles the in-line match highlights, but
- * not the bar showing the live query — that's a demo concern. */
+ * not the bar showing the live query - that's a demo concern. */
 static void demo_render_find_bar(void) {
     if (!demo_search_active()) return;
 
@@ -183,7 +183,7 @@ static void demo_render_find_bar(void) {
     glColor3f(0.16f, 0.16f, 0.20f);
     glRectf(0, bar_y_bot, (float)g_demo_vp_w, bar_y_top);
 
-    /* "Find: <query>" — Esc to cancel, Enter to accept hint on
+    /* "Find: <query>" - Esc to cancel, Enter to accept hint on
      * the right. Hit-count "no match" indicator when query is
      * non-empty but no match found. */
     char buf[DEMO_SEARCH_QUERY_MAX + 32];
@@ -261,7 +261,7 @@ static void demo_handle_code_panel_click(int mx, int glut_y) {
 /* Single-line drag-selection bookkeeping. The active line is read
  * from editor_state_edit_line at the moment of the initial mouse
  * down (after demo_handle_code_panel_click navigates to it), so
- * the drag stays clamped to the line the user clicked on — cross-
+ * the drag stays clamped to the line the user clicked on - cross-
  * line drag would need either snap-to-start-line or a buffer-line-
  * range selection mode, both deferred. */
 static int g_demo_drag_active = 0;
@@ -282,7 +282,7 @@ static void demo_handle_code_panel_drag(int mx, int glut_y) {
     /* The active edit line is rendered as a single INPUT row.
      * Dragging within that row gives a clean char hit on the
      * INPUT_LINE kind. Dragging above / below the row clamps to
-     * the row's bounds — the visible selection stays on the line
+     * the row's bounds - the visible selection stays on the line
      * where the drag started. */
     if (hit.kind == UI_HIT_CODE_INSERT_LINE && hit.char_idx >= 0) {
         target = hit.char_idx;
@@ -341,7 +341,7 @@ static void demo_reshape_func(int w, int h) {
 }
 
 static void demo_keyboard_func(unsigned char key, int x, int y) {
-    /* The demo's own generic dispatcher — does not route through
+    /* The demo's own generic dispatcher - does not route through
      * src/editor/input.c (the REPL editor's dispatcher). v1 covers
      * printable chars, backspace, and ESC; see
      * tools/editor_demo/input.c for the full key map. */
@@ -357,7 +357,7 @@ static void demo_special_func(int key, int x, int y) {
 /* Capture hook: GLR_DEMO_TEXT=<path> types the file into the document at
  * startup, so a headless frame grab shows a populated editor instead of an
  * empty row. It feeds bytes through the demo's OWN dispatcher rather than
- * writing EditorState directly — the staged document is therefore the result
+ * writing EditorState directly - the staged document is therefore the result
  * of the same key path a user drives, which is the property the demo exists
  * to show. */
 static void demo_stage_text(void) {
@@ -396,7 +396,7 @@ static int run_demo(int argc, char **argv) {
     glutKeyboardFunc(demo_keyboard_func);
     glutSpecialFunc(demo_special_func);
     glutMouseFunc(demo_mouse_func);
-    /* glutMotionFunc fires only while a button is held — exactly
+    /* glutMotionFunc fires only while a button is held - exactly
      * the "drag" event. demo_motion_func gates on g_demo_drag_active
      * (set by mouse-down on the code panel, cleared on mouse-up)
      * so non-code-panel drags (a click that landed on the menu

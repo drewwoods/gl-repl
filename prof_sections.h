@@ -2,7 +2,7 @@
  * prof_sections.h - CPU-profile section catalog (the app's ProfSection enum).
  *
  * The per-frame timing sections are instrumented (prof_begin/prof_end) from
- * across the tree — src/scene, src/subsystems, src/repl, src/app — none of
+ * across the tree - src/scene, src/subsystems, src/repl, src/app - none of
  * which include each other. So the section IDs live in this one tiny header,
  * force-included into every translation unit by the Makefile's OBJ_CFLAGS
  * (`-include prof_sections.h`, right beside `-include config.h`). That keeps
@@ -11,14 +11,14 @@
  * falls back to an opaque
  * `typedef int ProfSection` when this catalog is absent (see its #ifndef
  * PROF_SECTIONS_PROVIDED guard), so those four files compile and link with no
- * dependency on this file at all — the build just injects a richer catalog.
+ * dependency on this file at all - the build just injects a richer catalog.
  *
  * Defining PROF_SECTIONS_PROVIDED is the signal cpuprof.h checks to suppress
  * its fallback. Because this header is force-included *before* any TU's own
  * `#include "support/cpuprof.h"`, the guard is always set first.
  *
  * The per-section *display* (label / nesting depth / is-total flag) is NOT
- * here — it is supplied per binary via prof_section_info() (src/app/glr_prof.c
+ * here - it is supplied per binary via prof_section_info() (src/app/glr_prof.c
  * for gl-repl; the driver itself for the standalone demos). A different app
  * reusing cpuprof ships its own prof_sections.h with its own section list.
  */
@@ -101,21 +101,21 @@ typedef enum {
     PROF_PROFILE_PANEL_HISTOGRAM, /* ui_histogram_panel_render() */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
     /* Assignment-value plot. Its two phases sit at opposite ends of the frame
-     * — the flat-program scan right after the flatten refresh, the panel draw
-     * with the other overlays — so the parent is accumulated across both via
+     * - the flat-program scan right after the flatten refresh, the panel draw
+     * with the other overlays - so the parent is accumulated across both via
      * prof_accum_* rather than bracketed by a single begin/end. All three rows
      * stay stale while no assignment row is plotted, which is the honest
      * reading: the feature costs nothing when it is closed. */
     PROF_ASSIGN_PLOT,           /* capture + panel, accumulated */
     PROF_ASSIGN_PLOT_CAPTURE,   /* assign_plot_capture() flat-program scan */
     PROF_ASSIGN_PLOT_PANEL,     /* ui_assign_plot_panel_render() */
-    PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() — whole-frame
+    PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() - whole-frame
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     /* Host-band stages. The GLUT display callback in gl_repl.c does real
-     * per-frame work on both sides of glr_ctrl_display_frame() — scripted
-     * input before it, the splash/tour overlays after it — and
+     * per-frame work on both sides of glr_ctrl_display_frame() - scripted
+     * input before it, the splash/tour overlays after it - and
      * PROF_FRAME_WORK covers all of it, so those stages need rows of their
      * own or they show up only as unattributed work. A guided tour's cursor +
      * caption overlay is the reason this exists: it can cost more than the
@@ -126,18 +126,18 @@ typedef enum {
      * plus a controller-band one), so no single callee can own the bracket. */
     PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
     PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
-    PROF_HOST_SPLASH,      /* splash_render() — startup banner only. Bracketed
+    PROF_HOST_SPLASH,      /* splash_render() - startup banner only. Bracketed
                             * from the host too, so splash.c stays free of the
                             * profiler: test_splash links it against nothing but
                             * the theme table and the GL-stub counters. */
     /* glr_pointer_script_render_overlay(), which owns this bracket itself: the
-     * guided-tour narration layer — caption, cursor, click ripple, highlight
+     * guided-tour narration layer - caption, cursor, click ripple, highlight
      * ring. Named for the tour rather than the cursor because the caption's
      * bitmap text is what costs anything here; the cursor and its decorations
      * are a few dozen vertices. (The same overlay renders for env-driven
      * capture runs, which have no HUD and nobody watching a profile panel.) */
     PROF_TOUR_OVERLAY,
-    /* glr_ctrl_render_tour_presence(): the ambient "you are in a tour" layer —
+    /* glr_ctrl_render_tour_presence(): the ambient "you are in a tour" layer -
      * four gradient edge bands plus, during the first ~1.4 s, a title card.
      * Separate from the overlay above because it has a different lifetime (it
      * outlives the tour by the length of its exit collapse) and a different
@@ -157,8 +157,8 @@ typedef enum {
      * every last microsecond of the frame into the row built to absorb it.
      * (prof_section_record_us is how a derived row lands its sample.)
      *
-     * With vsync on the present is mostly the wait for the next scan-out — idle
-     * time the frame is *given*, not time it spends — so Frame Work is the row
+     * With vsync on the present is mostly the wait for the next scan-out - idle
+     * time the frame is *given*, not time it spends - so Frame Work is the row
      * to watch for cost and the panel colors Present inversely (long = green,
      * see the is_slack flag). The caveat that follows: glFinish absorbs GPU work
      * the driver deferred, so a GPU-bound frame shows up as Present's slack

@@ -332,7 +332,7 @@ static void test_compile_rejection(void) {
         "abcdefghijklmnopqrstuvwxyz_abcdefghijklmnop", NULL, 0); /* >=32 chars */
 
     /* A local binding shadowing a builtin name must not compile to the
-     * builtin call — the text evaluator resolves the local first (yielding
+     * builtin call - the text evaluator resolves the local first (yielding
      * the local's value and leaving "(1)" unconsumed). The compiler emits
      * the same variable read, so parity holds. */
     strcpy(locals[0].name, "sin");

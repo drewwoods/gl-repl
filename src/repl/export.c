@@ -1,7 +1,7 @@
 #include "repl/export_internal.h"
 #include "repl/text_helpers.h"
 
-/* Light bridge — the controller installs an adapter that copies the live
+/* Light bridge - the controller installs an adapter that copies the live
  * app-owned theme-seeded light data (positions/colors/eye-space) into the
  * neutral ReplExportLightInfo. This TU stays clean of scene/app includes
  * (check-repl-export-via-bridge / controller-boundary guards). NULL on the
@@ -16,7 +16,7 @@ const ReplExportLightBridge *repl_export_light_bridge(void) {
     return g_export_light_bridge;
 }
 
-/* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
+/* Camera bridge - same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
  * references glr_camera_*. The default bridge is installed by
  * glr_ctrl_install_app_services. */
@@ -30,7 +30,7 @@ const ReplExportCameraBridge *repl_export_camera_bridge(void) {
     return g_export_camera_bridge;
 }
 
-/* Reshape-projection bridge — same install shape as the camera bridge.
+/* Reshape-projection bridge - same install shape as the camera bridge.
  * NULL on the demo / in tests, where the perspective default is emitted.
  * Read internally via the g_export_projection_bridge static. */
 static const ReplExportProjectionBridge *g_export_projection_bridge = NULL;
@@ -41,10 +41,10 @@ void repl_export_install_projection_bridge(const ReplExportProjectionBridge *bri
 
 /* Resolves to live scene state via the bridge. Callable directly only
  * from single-pass, off-frame-loop consumers (the file writer). The code
- * panel must NOT call this — the controller resolves it once per frame
+ * panel must NOT call this - the controller resolves it once per frame
  * into UiRenderSnapshot.reshape_proj_lines so the panel's row-count and
  * render passes (which straddle render3d_draw_scene) agree. See
- * docs/ARCHITECTURE.md, "Rule — where a per-frame dynamic value is resolved". */
+ * docs/ARCHITECTURE.md, "Rule - where a per-frame dynamic value is resolved". */
 int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]) {
     static char buf[REPL_EXPORT_PROJ_LINES][REPL_EXPORT_PROJ_LINE_MAX];
     int count = 0;

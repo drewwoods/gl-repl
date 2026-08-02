@@ -73,7 +73,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
     /* Tag the WebGL drawing buffer Display-P3 so the web build's colors are as
      * vibrant as the native build on wide-gamut displays. JS GLUT creates the
      * context lazily inside glutCreateWindow (after this ctor runs), and tagging
-     * it mid-creation (wrapping getContext) proved unreliable — GLUT's initial
+     * it mid-creation (wrapping getContext) proved unreliable - GLUT's initial
      * reshape resizes the drawing buffer right after. So defer until the live
      * context is current (Module.ctx, set by GL.makeContextCurrent) and tag it
      * then, matching the timing that worked when called from the app. No-op on
@@ -195,7 +195,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
          * collides with the clean canvas 'wheel' bridge below: the synthetic
          * button press leaves a pointer button "stuck" and resets the camera zoom
          * velocity the bridge just added, so 3D-scene zoom never happens (the
-         * code-panel scroll path, which ignores button state, still works — hence
+         * code-panel scroll path, which ignores button state, still works - hence
          * wheel appears to work there but not in the scene).
          *
          * Neutralize GLUT's handler at the source by stubbing it out. GLUT reads
@@ -214,7 +214,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
              * dead. Re-route at the source: drop backspace from the special-key
              * map so onKeydown falls through to the ASCII path, and emit 8 there
              * (keeping modifiers, unlike stock getASCIIKey which returns null
-             * under ctrl/alt/meta — gl-repl reads modifiers separately). Forward
+             * under ctrl/alt/meta - gl-repl reads modifiers separately). Forward
              * delete (keyCode 46 -> 111 GLUT_KEY_DELETE) is left alone; gl-repl
              * already handles it. */
             var glrOrigSpecialKey = GLUT.getSpecialKey;

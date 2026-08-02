@@ -40,7 +40,7 @@ typedef struct {
  * a user source line (source.source_line_idx >= 0) comes first, followed by
  * the rows the generated init()/display() setup owns. `user_row_count` is the
  * boundary, so rows[0, user_row_count) is "what this program did" and
- * rows[user_row_count, count) is "what the harness set up around it" — the
+ * rows[user_row_count, count) is "what the harness set up around it" - the
  * split the popup collapses on, because the generated group routinely
  * outnumbers the authored one by an order of magnitude.
  *

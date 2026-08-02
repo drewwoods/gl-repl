@@ -52,11 +52,11 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * non-NULL and `change->adjust_edit_line` is set, INSERT_ONE /
  * INSERT_MANY pass it through to the store so the standard insert
  * math shifts the caller's int. DELETE_RANGE passes it
- * unconditionally (gating is a caller choice — pass NULL when no
+ * unconditionally (gating is a caller choice - pass NULL when no
  * cursor math is desired). Pre-insert deletes (the optional
  * `delete_count > 0` path that runs before INSERT_*) pass NULL to
  * preserve the historical behavior where the pre-delete did not
- * shift the cursor. REPLACE_ONE has no cursor parameter — replace
+ * shift the cursor. REPLACE_ONE has no cursor parameter - replace
  * never shifts.
  *
  * Apply itself never reads or writes editor state. The cursor
@@ -68,7 +68,7 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * then failed out-of-bounds). Callers driving the full transaction
  * shape (predef-ops + editor-buffer + cmd-store) should still
  * preflight first so the predef-ops and editor-buffer steps can be
- * skipped when the apply would reject — `_can_apply_compiled_change`
+ * skipped when the apply would reject - `_can_apply_compiled_change`
  * is the no-mutation peek for that ordering. The preflight + apply
  * pair is wrapped by `editor_commit_apply_external_change()`. */
 int  repl_apply_compiled_change(const ReplCompiledChange *change,

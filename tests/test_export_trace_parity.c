@@ -1,5 +1,5 @@
 /*
- * tests/test_export_trace_parity.c — cross-checks that running a REPL
+ * tests/test_export_trace_parity.c - cross-checks that running a REPL
  * program through repl_execute_program() and running the same program
  * through repl_export_save_output() + cc + execution produces the same
  * sequence of stub GL calls.
@@ -19,7 +19,7 @@
  *   5. subtracts the fixed display()-boilerplate counts that the REPL
  *      executor never emits (g_display_header glClear / glLoadIdentity /
  *      glPushAttrib and g_footer_pre_init glPopAttrib);
- *   6. compares — known fungible pairs like glColor3f vs glColor4f get
+ *   6. compares - known fungible pairs like glColor3f vs glColor4f get
  *      summed before comparing because the executor folds 3f into 4f at
  *      execute time.
  *
@@ -50,7 +50,7 @@
 #include <unistd.h>
 
 /* This test runs its own four-bucket tally (PASS/FAIL/XFAIL/XPASS) and
- * doesn't use support/test_harness.h — the asserts-passed/total model
+ * doesn't use support/test_harness.h - the asserts-passed/total model
  * doesn't fit XFAIL/XPASS cleanly, and the exit code is what
  * scripts/run-tests.sh actually checks. */
 
@@ -76,7 +76,7 @@ typedef enum {
 } ParityResult;
 
 /* Curated programs. Each exercises a shape the executor / exporter
- * could plausibly disagree on. Keep them small — every entry triggers
+ * could plausibly disagree on. Keep them small - every entry triggers
  * one cc invocation. */
 static const char *prog_triangle[] = {
     "glBegin(GL_TRIANGLES);",
@@ -157,7 +157,7 @@ static const char *prog_stencil_mask[] = {
     /* The two-pass masking shape, and the only place the exported C of a
      * stencil scene is compiled at all: it proves the export writer emits
      * every stencil call (and that the prologue still compiles with them
-     * present). Note this compares call *counts*, not argument values —
+     * present). Note this compares call *counts*, not argument values -
      * the ref-truncation parity is pinned by value in
      * test_repl_flatten_rebake.c and test_repl_export_all_commands.c. */
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);",
@@ -182,7 +182,7 @@ static const char *prog_func_locals[] = {
      * `float u = 0.0f;` declaration is actually handed to cc, so it is
      * what proves the export writer emits compilable C for them. The
      * read-before-write on the first vertex is deliberate: it is the case
-     * the zero initializer exists for — bare `float u;` would be
+     * the zero initializer exists for - bare `float u;` would be
      * undefined there, while the REPL binds it to 0. */
     "glBegin(GL_TRIANGLES);",
     "func0(k) {",
@@ -214,7 +214,7 @@ static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]))
  * mode). Keyed by repl_example_name(). A mismatch on an annotated
  * example is reported as XFAIL (quiet, doesn't fail the test). A *match*
  * on an annotated example is reported as XPASS, which DOES fail the
- * test — the annotation has gone stale and needs to be removed. Keeping
+ * test - the annotation has gone stale and needs to be removed. Keeping
  * this table small and high-quality is the whole point. */
 static const struct {
     const char *name;
@@ -341,11 +341,11 @@ static int compare_counts(const char *case_name,
  *
  * Infrastructure failures (compile error, child error, unreadable child
  * output) always return PARITY_FAIL regardless of the case's XFAIL
- * annotation — those are bugs in the test, not in the program, and
+ * annotation - those are bugs in the test, not in the program, and
  * silencing them would defeat the point of the test. */
 static ParityResult run_one_case(const TraceProgram *prog) {
     pid_t pid = getpid();
-    /* Example names can contain spaces, parens, slashes — anything goes
+    /* Example names can contain spaces, parens, slashes - anything goes
     * via repl_example_name(). Build a safe path stem by mapping every
      * non-alnum/dot/dash to '_'. Keeps the temp paths immune to shell
      * quoting surprises across the system() compile + run invocations. */
@@ -384,7 +384,7 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     repl_flatten_commands(editor_state_edit_line());
 
     /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
-     * gluDeleteTess setup — these are REPL-internal, not user-emitted GL,
+     * gluDeleteTess setup - these are REPL-internal, not user-emitted GL,
      * so reset counters AFTER init and snapshot BEFORE destroy to keep
      * the trace user-code-only. The trace file opens between reset and
      * execute for the same reason. */
@@ -471,10 +471,10 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     }
 
     /* Output dispatch by bucket:
-     *   PASS  — silent (only the run-counter prints later).
-     *   XFAIL — one info line so the divergence stays visible, no diff.
-     *   FAIL  — counter-mismatch lines + a unified diff hunk.
-     *   XPASS — explicit "annotation stale" callout; no diff (the
+     *   PASS  - silent (only the run-counter prints later).
+     *   XFAIL - one info line so the divergence stays visible, no diff.
+     *   FAIL  - counter-mismatch lines + a unified diff hunk.
+     *   XPASS - explicit "annotation stale" callout; no diff (the
      *           traces matched). */
     switch (result) {
     case PARITY_PASS:
@@ -567,10 +567,10 @@ static void print_help(const char *argv0) {
 "\n"
 "Cases listed in g_example_xfail (in the test source) are treated as\n"
 "expected-to-fail. Buckets:\n"
-"  PASS  — match, no annotation.\n"
-"  FAIL  — mismatch, no annotation; fails the test, dumps diff.\n"
-"  XFAIL — mismatch, has annotation; quiet info line, doesn't fail.\n"
-"  XPASS — match, has annotation; the annotation is stale, remove it.\n"
+"  PASS  - match, no annotation.\n"
+"  FAIL  - mismatch, no annotation; fails the test, dumps diff.\n"
+"  XFAIL - mismatch, has annotation; quiet info line, doesn't fail.\n"
+"  XPASS - match, has annotation; the annotation is stale, remove it.\n"
 "          Fails the test (loud) so the list doesn't accumulate cruft.\n"
 "\n"
 "Options:\n"

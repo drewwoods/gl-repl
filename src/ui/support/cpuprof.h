@@ -4,11 +4,11 @@
  * Renders a compact overlay showing per-frame time breakdown across major
  * sections (flattening, rendering, UI, etc.). Each row shows three smoothed
  * exponential averages: CPU wall time, GPU elapsed time (for the
- * GPU-bracketed subset, when timer queries are available — "--" otherwise),
+ * GPU-bracketed subset, when timer queries are available - "--" otherwise),
  * and Max, the worse of the two. Used for real-time performance monitoring
  * and bottleneck detection. GPU windows overlap on pipelined/tile-deferred
  * GPUs, so the GPU column is a relative-hotspot signal, not an additive
- * budget — see the NOTE in support/gpuprof.h.
+ * budget - see the NOTE in support/gpuprof.h.
  *
  * Profiling infrastructure: The CPU measurement is in
  * src/support/cpuprof.c / src/support/cpuprof.h, which uses platform timers
@@ -77,7 +77,7 @@ enum {
 
 /* Narrow per-frame view (the 2D analog of Render3dRenderConfig). The controller
  * resolves the panel's stacked anchor and bakes it into panel_x/panel_y, so
- * the renderer needs nothing from UiRenderSnapshot or ui/app — it links from
+ * the renderer needs nothing from UiRenderSnapshot or ui/app - it links from
  * {support, ui/core} alone (see cpuprof_demo). */
 typedef struct {
     int                window_w, window_h;
@@ -130,7 +130,7 @@ int  ui_fps_panel_height(void);
  * histograms from support/cpuprof.c as one graph: every top-level (depth 0)
  * section overlaid, additively blended, so their distributions can be compared
  * directly instead of through the section listing's single EMA number. Nested
- * detail sections are never plotted — forty overlaid series would be noise —
+ * detail sections are never plotted - forty overlaid series would be noise -
  * so it is shown only by the final HISTOGRAM mode.
  *
  * Both axes are logarithmic. Time (x) because the bins themselves are
@@ -144,12 +144,12 @@ int  ui_fps_panel_height(void);
  * decade ("1 us" .. "1 s"), plus minor ticks at 2..9 within each decade
  * hanging below the axis line. Without the minor ticks a decade of width
  * carries no reference at all, which is worst exactly where the frame
- * sections live — everything between 1 ms and 10 ms.
+ * sections live - everything between 1 ms and 10 ms.
  *
  * Under that sits a second, dimmer row carrying the drawn span's measured
  * endpoints, flush to the plot edges with a cap at each. Those two are the
  * only labels in the panel that are not centered over the thing they name, so
- * they get a row of their own rather than reading as mispositioned ticks —
+ * they get a row of their own rather than reading as mispositioned ticks -
  * and off the tick row they can no longer crowd out a decade label.
  *
  * hidden_series is a session-only set (one entry per ProfSection, same shape as
@@ -158,16 +158,16 @@ int  ui_fps_panel_height(void);
  * goes into the set at once). A hidden series is dropped from the plot,
  * from the y-scale (so hiding a dominant distribution lets the rest grow) and
  * from the x-axis span (so hiding the fast sections zooms the axis onto what
- * is left), but keeps its mean-sorted legend entry — rendered as a hollow
- * swatch — so toggling visibility does not change the ordering or hit-test.
+ * is left), but keeps its mean-sorted legend entry - rendered as a hollow
+ * swatch - so toggling visibility does not change the ordering or hit-test.
  * Sampled entries sort by descending histogram mean; unsampled entries follow
  * in catalog order. With every series hidden the plot draws empty and says so;
  * the legend still renders, since it is the only way back.
  *
  * pointer_x/pointer_y are the last known pointer position in GLUT window
  * coordinates (y down). Resting the pointer on a legend entry pops that
- * series' running statistics — count, min/mean/max, total and standard
- * deviation — over the plot: the shape of a distribution is what the graph is
+ * series' running statistics - count, min/mean/max, total and standard
+ * deviation - over the plot: the shape of a distribution is what the graph is
  * for, but reading a number off a log-log plot with a dozen series on it is
  * not, and the section listing beside it only carries one smoothed EMA. The
  * hovered series is resolved by ui_histogram_panel_hit_test(), so the region
@@ -217,7 +217,7 @@ ProfSectionSet ui_histogram_panel_toggle_series(
     ProfSectionSet hidden_series, int section_idx);
 
 /* Pure session-state transition: "plot only this one". Hides every plottable
- * series except section_idx, whatever the incoming mask said — the controller
+ * series except section_idx, whatever the incoming mask said - the controller
  * applies it to UiProfilePanelState.hidden_histogram_series for a right press
  * on the same legend rectangle the left button toggles. Isolating one
  * distribution out of a dozen overlaid ones otherwise costs eleven clicks.
@@ -234,7 +234,7 @@ ProfSectionSet ui_histogram_panel_solo_series(
  * Writes the inclusive bin range the plot draws: the occupied bins across
  * every plotted series, widened to a minimum span so a one-bin distribution is
  * still drawable. Returns 0 (leaving the outputs untouched) when no plotted
- * series has any samples — including when hidden_series masks them all off.
+ * series has any samples - including when hidden_series masks them all off.
  *
  * Series hidden by hidden_series are excluded from the span, so the axis
  * follows what is actually drawn: hide the sub-microsecond sections and a

@@ -27,7 +27,7 @@ Decisions (confirmed with user):
 - Migrate scene holdouts **and** `glr_ctrl.c` scene-space draws.
 - Leave `axes.c`/`grid.c` per-theme spec tables as independent
   theme-switchable data (the scene equivalent of `theme.h`'s bucket-3
-  carve-out) — palette covers only non-theme one-offs.
+  carve-out) - palette covers only non-theme one-offs.
 - Single sweep (header + test + all migrations in one change).
 
 ## Approach
@@ -35,7 +35,7 @@ Decisions (confirmed with user):
 New header-only palette `src/scene/palette.h`, mirroring `src/ui/theme.h`
 structure exactly but scene-scoped:
 
-- Reuse the existing `SceneRgba` type — `#include "render_types.h"`
+- Reuse the existing `SceneRgba` type - `#include "render_types.h"`
   (already transitively reached by every scene TU and by `glr_ctrl.c`
   via `scene/render.h`).
 - One `static const SceneRgba g_scene_palette[SCENE_CLR_COUNT]` table
@@ -84,26 +84,26 @@ a visual no-op; exact token list finalized during implementation.)
 ## Files
 
 **New:**
-- `src/scene/palette.h` — the palette (header-only).
-- `tests/test_scene_palette.c` — mirrors `tests/test_ui_theme.c`
+- `src/scene/palette.h` - the palette (header-only).
+- `tests/test_scene_palette.c` - mirrors `tests/test_ui_theme.c`
   (header-only target, links no project objects: every-slot-initialized
   check via `a > 0`, count guard already enforced by `STATIC_ASSERT`).
 
 **Modified (migrate literals → `scene_clr*`):**
-- `src/scene/lights.c` — fixed indicator colors only; leave `d[]`-derived.
-- `src/scene/render.c` — orbit-target 3-ring glow.
-- `src/scene/guides/geometry_guides.c` — axis/vertex/normal guide colors.
-- `src/scene/guides/transform_guides.c` — the gray reference ticks only;
+- `src/scene/lights.c` - fixed indicator colors only; leave `d[]`-derived.
+- `src/scene/render.c` - orbit-target 3-ring glow.
+- `src/scene/guides/geometry_guides.c` - axis/vertex/normal guide colors.
+- `src/scene/guides/transform_guides.c` - the gray reference ticks only;
   `xform_axis_color()` computed colors stay. **This branch is based on
   `cd1c14f` (ghost-pass), so every color call here is already the
   `tg_color4f()` wrapper that applies the per-pass `g_guide_alpha_mul`.
   The gray ticks migrate via `scene_rgba(SCENE_CLR_GUIDE_REF*)` fed
-  through `tg_color4f(c.r, c.g, c.b, c.a * ...)` — NOT `scene_clr()`,
+  through `tg_color4f(c.r, c.g, c.b, c.a * ...)` - NOT `scene_clr()`,
   which would bypass the wrapper and break the ghost/solid two-pass.
   `scene_clr`/`scene_clr_a` remain the right call everywhere else.**
-- `src/app/glr_ctrl.c` — all 11 scene-space color sites; add
+- `src/app/glr_ctrl.c` - all 11 scene-space color sites; add
   `#include "scene/palette.h"` (app→scene, allowed by layering rules).
-- `Makefile` — wire `test_scene_palette` exactly like `test_ui_theme`
+- `Makefile` - wire `test_scene_palette` exactly like `test_ui_theme`
   (add to the `TEST_BINS` list ~L527 and the header-only `filter-out`
   in `CORE_TEST_BINS` ~L579).
 
@@ -125,16 +125,16 @@ the `test_ui_theme.c` test skeleton + harness (`tests/support/`).
   `transform-guides-ghost-pass` (`cd1c14f`), so the ghost-pass
   `tg_color4f` wrapper is assumed landed. No rebase/sequencing needed;
   the `transform_guides.c` migration integrates with the wrapper
-  directly (see the file note above — `scene_rgba()` through
+  directly (see the file note above - `scene_rgba()` through
   `tg_color4f`, not `scene_clr()`).
 
 ## Verification
 
-End-to-end (single sweep is a visual no-op — same RGBA, named):
-1. `make sample && make scene_demo && make sample USE_GL_STUBS=1` — all
+End-to-end (single sweep is a visual no-op - same RGBA, named):
+1. `make sample && make scene_demo && make sample USE_GL_STUBS=1` - all
    build (proves layering: scene palette doesn't drag in REPL).
-2. `make test` (incl. new `test_scene_palette`) — green.
-3. `make check-c99` and `make check-state-ownership` — pass (header-only
+2. `make test` (incl. new `test_scene_palette`) - green.
+3. `make check-c99` and `make check-state-ownership` - pass (header-only
    C99 guard + ownership/boundary guards).
 4. `./sample`, load an example with lights + guides + outlines:
    - F-key overlays (vertex labels yellow, normal arrows, outline cyan/
@@ -143,7 +143,7 @@ End-to-end (single sweep is a visual no-op — same RGBA, named):
    - Light indicators (F-key) unchanged for on/off lights.
    - Ctrl+G replay → fade-batch tint + replay vertex points unchanged.
    - Cursor on a `glVertex3f` / transform line → edit guides unchanged.
-5. `git diff --stat` — only the 6 files above; no `axes.c`/`grid.c`/
+5. `git diff --stat` - only the 6 files above; no `axes.c`/`grid.c`/
    `backdrop.c` changes.
 
 ## Risk / rollback

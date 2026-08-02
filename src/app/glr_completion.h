@@ -12,8 +12,8 @@
  *    so the editor knows about the REPL grammar.
  *  - `glr_completion_accept_autocomplete()` is called by the editor input dispatch
  *    when the user accepts the current ghost (Tab / Enter on the
- *    popup). The acceptance behavior — append ghost text to the input
- *    buffer, advance the cursor, clear the popup — knows enough about
+ *    popup). The acceptance behavior - append ghost text to the input
+ *    buffer, advance the cursor, clear the popup - knows enough about
  *    REPL grammar (mode-specific suffixes, function parameter hints)
  *    that it lives here rather than inside the generic editor
  *    dispatch.

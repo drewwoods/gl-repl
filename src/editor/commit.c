@@ -21,7 +21,7 @@
  * halves run, so predef-vars, editor buffer, and cmd-store stay in
  * sync. Without the preflight a capacity failure would leave
  * predef-vars declared and (potentially) editor text written but
- * no cmd-store entry — exactly the partial-commit state this
+ * no cmd-store entry - exactly the partial-commit state this
  * transaction shape exists to prevent.
  *
  * Undo capture is owned by the dispatch sites in src/editor/input.c
@@ -67,7 +67,7 @@
  * both of which sit above the definitions; the forward decls
  * keep `make check-c99` green (under -std=c99, implicit
  * declarations are a hard error). `_peek` stays public for the
- * test harness — see commit.h. */
+ * test harness - see commit.h. */
 static void editor_commit_func_decl_resume_set(int delta);
 static int  editor_commit_func_decl_resume_take(void);
 
@@ -89,7 +89,7 @@ static ReplCompileResult editor_compile_error(char *err, int err_size,
 
 /* Apply the predef-ops + scratch-ops + editor-buffer + cmd-store
  * steps of a compiled change. Preflight + undo capture are the
- * caller's job — this is the shared mutation sequence; each caller
+ * caller's job - this is the shared mutation sequence; each caller
  * decides its own preflight-failure policy and undo policy. The
  * edit-line is read into a local, threaded through apply, and
  * written back on success (matches the apply API's cursor-inout
@@ -116,12 +116,12 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
 
 /* Fire the tutorial REQUIRE_VAR notify for any predef-var writeback
  * (typed `name = expr;`, `float n = 5;` decl-with-initializer, or a
- * variable-panel slider drag) — but only AFTER the commit's editor
+ * variable-panel slider drag) - but only AFTER the commit's editor
  * post-effects (cursor park, input clear) have settled.
  *
  * The notify may advance the tutorial, which inserts the next step's
  * instruction comment and re-parks the cursor. Firing it from inside
- * apply_compiled_change_full — before apply_post_effects ran — let the
+ * apply_compiled_change_full - before apply_post_effects ran - let the
  * in-flight commit's own cursor_target clobber that re-park, stranding
  * the cursor on the freshly-inserted locked comment row (read-only +
  * the empty input overlay hid the comment). Both predef-writeback entry
@@ -516,7 +516,7 @@ static int compile_function_decl_insert_pos_after_delete(
          * glClear counts as prologue too: it is the scene-open boilerplate
          * every example (and every tutorial, which injects it as a locked
          * prelude row) authors first, so a newly-typed func def should
-         * hoist to just BELOW it rather than above it — keeping glClear at
+         * hoist to just BELOW it rather than above it - keeping glClear at
          * the document top the way exported scenes read. */
         if (cmds[pos].type == CMD_VAR_DECLARE ||
             cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY ||
@@ -554,7 +554,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     editor_compile_clear_err(err, err_size);
 
     /* Compute the edit position + overwrite-mode flag BEFORE calling
-     * the kernel — the kernel needs `allow_overwrite_at_pos` to know
+     * the kernel - the kernel needs `allow_overwrite_at_pos` to know
      * whether the duplicate-funcN guard should exempt the cursor row
      * (editor in-place rewrites of `drawCube` -> `drawSphere`). */
     int edit_pos = ctx->insert_mode ? ctx->edit_line :
@@ -632,7 +632,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     /* A func decl always lives at depth 0, so its indent is the
      * depth-0 indent regardless of the (post-delete) insert position
-     * the kernel computed — query the source-scope helper at pos 0
+     * the kernel computed - query the source-scope helper at pos 0
      * and re-format the header against that indent. The kernel's
      * fd / fd_text are built against `kernel.pos` (the current edit
      * cursor), which can be nested for the relocation case. */
@@ -693,7 +693,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     out->effects.func_decl_resume_publish       = 1;
     out->effects.func_decl_resume_publish_value = resume_delta;
 
-    /* Cursor lands on the first body line of the new func — that's
+    /* Cursor lands on the first body line of the new func - that's
      * insert_pos + comment_count + 1 in post-delete coordinates. */
     out->effects.cursor_target      = insert_pos + comment_count + 1;
     out->effects.insert_mode_target = 1;
@@ -883,7 +883,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
  * commit and the REPL act as a pure parser/validator. These
  * `editor_try_commit_*` dispatchers decide which compile entry to
  * call, apply the resulting plan, and own the editor post-effect /
- * status fan-out — that is editor-side orchestration, not REPL
+ * status fan-out - that is editor-side orchestration, not REPL
  * grammar. Parse failures return data rather than calling set_status
  * from inside the REPL path; callers surface the diagnostic.
  * ===========================================================================
@@ -910,7 +910,7 @@ static void editor_commit_func_decl_resume_set(int delta) {
     g_func_decl_resume_delta = delta;
 }
 
-/* Side effect: consumes (zeroes) g_func_decl_resume_delta — it is a
+/* Side effect: consumes (zeroes) g_func_decl_resume_delta - it is a
  * one-shot, applied to at most one exit-target resolution. */
 int editor_commit_resolve_insert_exit_target(int target) {
     if (!editor_insert_mode() ||
@@ -942,7 +942,7 @@ void editor_commit_reset_transients(void) {
  * undoable. Current dispatch sites in src/editor/input.c that push:
  *  - ; key (handle_semicolon_commit_key_route, unconditional)
  *  - Enter / navigation (commit_current_input, gated on input_len > 0
- *    or insert_mode — empty input never triggers a mutating handler)
+ *    or insert_mode - empty input never triggers a mutating handler)
  *  - editor_feed_line callers bracket the whole load with one push
  *    (currently only editor_clipboard_paste_current uses this path)
  * Audit #39 walked these and confirmed no missing-undo bugs. */
@@ -967,7 +967,7 @@ int editor_try_commit_float_decl(void) {
         plan.effects.cursor_target = ctx.edit_line + 1;
         plan.effects.load_line_after_apply = 1;
     } else if (plan.change.kind == REPL_COMPILED_INSERT_ONE) {
-        /* INSERT_ONE has adjust_edit_line=1 — the REPL apply auto-bumps
+        /* INSERT_ONE has adjust_edit_line=1 - the REPL apply auto-bumps
          * edit_line when pos <= edit_line. The live post-effect
          * conditionally reloaded the input from the new edit_line when
          * not in insert mode and the cursor still pointed at a real
@@ -1145,7 +1145,7 @@ int editor_split_decl_at_cursor(void) {
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
 
-    /* Compile is pure, so it's safe to run before the undo push — the
+    /* Compile is pure, so it's safe to run before the undo push - the
      * snapshot is only taken once we know a split will actually apply. */
     ReplCompileResult r = repl_compile_split_decl(&ctx, line, &plan.change,
                                                   err, sizeof(err));

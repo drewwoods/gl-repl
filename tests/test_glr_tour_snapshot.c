@@ -255,7 +255,7 @@ static void test_post_tutorial_origin_round_trip(void) {
     ASSERT_TRUE("capture non-NULL", snap != NULL);
     if (!snap) return;
 
-    /* Mutate away — a wholesale replacement discards both halves. */
+    /* Mutate away - a wholesale replacement discards both halves. */
     repl_load_example(0);
     ASSERT_INT("origin cleared before restore",
                repl_state_scenes().tutorial_origin_idx, -1);

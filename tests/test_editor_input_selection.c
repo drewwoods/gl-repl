@@ -79,7 +79,7 @@ int main(void) {
         ASSERT_INT("selection lo", editor_input_selection_lo(), 0);
         ASSERT_INT("selection hi", editor_input_selection_hi(), 4);
 
-        /* Setting anchor equal to cursor collapses immediately —
+        /* Setting anchor equal to cursor collapses immediately -
          * empty selections are not representable. */
         editor_input_anchor_set(4);
         ASSERT_INT("anchor==cursor collapses to -1",
@@ -87,7 +87,7 @@ int main(void) {
         ASSERT_TRUE("collapse → selection inactive",
                     !editor_input_selection_active());
 
-        /* Anchor with cursor on the right end of the range — derivation
+        /* Anchor with cursor on the right end of the range - derivation
          * still picks min/max correctly. */
         editor_cursor_pos_set(2);
         editor_input_anchor_set(7);
@@ -265,7 +265,7 @@ int main(void) {
                    editor_state_clipboard_mut()->kind,
                    EDITOR_CLIPBOARD_EMPTY);
 
-        /* Restore — full struct copy brings everything back. */
+        /* Restore - full struct copy brings everything back. */
         editor_state_restore(&snap);
         ASSERT_INT("restored anchor", editor_input_anchor(), 8);
         ASSERT_INT("restored cursor", editor_cursor_pos(), 2);
@@ -399,7 +399,7 @@ int main(void) {
         editor_state_reset();
         load_input("glVertex3f(0, 0, 0)");
         /* Place a selection inside the line. ; should commit the full
-         * text (parser strips trailing whitespace + ;) — the selection
+         * text (parser strips trailing whitespace + ;) - the selection
          * is dismissed but the underlying bytes survive. */
         editor_cursor_pos_set(11);
         editor_input_anchor_set(18);
@@ -438,7 +438,7 @@ int main(void) {
         editor_handle_key(KEY_ESC, 0, 0);
         ASSERT_INT("esc clears anchor", editor_input_anchor(), -1);
         /* The current Esc branch with no other transient state clears
-         * the whole input. That's an existing behavior — the new
+         * the whole input. That's an existing behavior - the new
          * property is just that the anchor went away too. */
     }
 
@@ -480,7 +480,7 @@ int main(void) {
         ASSERT_INT("Ctrl+X clears anchor", editor_input_anchor(), -1);
         ASSERT_INT("Ctrl+X cursor at lo", editor_cursor_pos(), 11);
 
-        /* Same path in insert mode — line-range cut is disabled there,
+        /* Same path in insert mode - line-range cut is disabled there,
          * but partial-line cut must still work. */
         glr_ctrl_reset_all();
         load_input("foo bar baz");
@@ -509,7 +509,7 @@ int main(void) {
                    editor_input_text(), "glVertex3f(sin(t))");
         ASSERT_INT("Ctrl+V cursor advances to end of paste",
                    editor_cursor_pos(), 17);
-        /* Paste leaves the clipboard intact — user can paste again. */
+        /* Paste leaves the clipboard intact - user can paste again. */
         ASSERT_TRUE("Ctrl+V leaves clipboard populated",
                     editor_clipboard_has_input_text());
     }
@@ -580,7 +580,7 @@ int main(void) {
         const char *t = "glVertex3f(1, 2, 3)";
         int len = (int)strlen(t);
 
-        /* Inside the identifier — walks both directions over [A-Za-z0-9_]. */
+        /* Inside the identifier - walks both directions over [A-Za-z0-9_]. */
         editor_input_word_bounds_at(t, len, 4, &s, &e);
         ASSERT_INT("word start at 'glVertex3f'[0]", s, 0);
         ASSERT_INT("word end at 'glVertex3f'[10]", e, 10);
@@ -672,7 +672,7 @@ int main(void) {
                    editor_input_selection_hi(), 10);
 
         /* A third press more than DOUBLE_CLICK_MS later is a single
-         * click again — clears the selection and re-places cursor. */
+         * click again - clears the selection and re-places cursor. */
         g_test_clock_ms = 1200 + 500;
         glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
         ASSERT_INT("late press: single-click clears selection",
@@ -735,7 +735,7 @@ int main(void) {
                    editor_cursor_pos(), 18);
 
         /* Drag wandering off the active edit row is not handled by
-         * this path — falls through to line-range (existing behavior,
+         * this path - falls through to line-range (existing behavior,
          * not exercised here). */
         handled = glr_ctrl_router_apply_input_row_drag(1, 0);
         ASSERT_INT("drag off active edit row not handled here",
@@ -749,7 +749,7 @@ int main(void) {
         /* A press in the code text arms a character drag; dragging off
          * that row promotes the gesture to whole-line range selection
          * rather than dead-ending. The input buffer is one row wide, so
-         * a character span can't cross rows — promoting keeps the plain
+         * a character span can't cross rows - promoting keeps the plain
          * editor gesture (press in text, drag down) producing the
          * multi-line selection the user is reaching for, instead of
          * requiring a separate press in the gutter. */
@@ -1040,7 +1040,7 @@ int main(void) {
         int doc_before = editor_buffer_count();
         editor_input_clear();
         editor_handle_key(KEY_CTRL_V, 0, 0);
-        /* LINES paste runs editor_feed_line — a new source command appears. */
+        /* LINES paste runs editor_feed_line - a new source command appears. */
         ASSERT_TRUE("LINES paste extended the document",
                     editor_buffer_count() > doc_before);
     }

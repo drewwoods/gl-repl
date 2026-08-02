@@ -26,7 +26,7 @@
 #include <unistd.h>
 
 #define g_example_idx            (repl_state_active_example_idx())
-/* Post-tutorial promotion marker — the tutorial twin of g_example_idx.
+/* Post-tutorial promotion marker - the tutorial twin of g_example_idx.
  * >= 0 only while the live transient document is the retained result of a
  * COMPLETED or STOPPED tutorial; an active tutorial keeps it at -1 so its own
  * step commits can't promote. See ReplSceneRuntimeState.tutorial_origin_idx. */
@@ -70,7 +70,7 @@
  *
  * The per-scene snapshot is embedded on UserScene (the `snapshot`
  * field) so cfg, camera, variables, source text, and aliases travel
- * with the rest of the slot via struct copy — no parallel arrays, no
+ * with the rest of the slot via struct copy - no parallel arrays, no
  * lifecycle invariant to maintain. The cfg
  * bag's contents are opaque to this TU; only the controller-installed
  * bridge interprets the slugs. The "pre-example" cfg (captured before
@@ -190,7 +190,7 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
      * which aliases s->name. snprintf with overlapping src/dst is UB
      * (glibc with `%s` produces an empty buffer), so only copy when the
      * pointers differ. The aliased path leaves the existing name in
-     * place — the caller's intent in that case is "save commands; keep
+     * place - the caller's intent in that case is "save commands; keep
      * the name". */
     if (name && *name) {
         if (name != s->name)
@@ -250,14 +250,14 @@ void repl_scenes_enter_transient_scene(void) {
     repl_state_scenes_set_active_example_idx(-1);
     /* Unconditional: entering a transient buffer supersedes any retained
      * post-tutorial document. The tutorial-start path runs through here and
-     * does NOT re-establish the marker — only the runner's end-of-lesson path
-     * does — so a tutorial stays unpromotable for as long as it is active. */
+     * does NOT re-establish the marker - only the runner's end-of-lesson path
+     * does - so a tutorial stays unpromotable for as long as it is active. */
     repl_state_scenes_set_tutorial_origin_idx(-1);
 }
 
 void repl_scenes_reset_for_transient(void) {
     repl_state_document_reset();
-    /* repl_state_document_reset doesn't touch the edit-line cursor —
+    /* repl_state_document_reset doesn't touch the edit-line cursor -
      * storage now lives outside ReplState (see the helper's contract
      * in state.c). The transient-scene boundary is a wholesale
      * reset, so the cursor goes back to 0 alongside the document
@@ -291,7 +291,7 @@ static void install_scene_into_live(int slot) {
     (void)scene_snapshot_apply_live(&s->snapshot, SCENE_SNAPSHOT_CAMERA_SNAP);
 }
 
-/* Heap-allocate a transient SceneSnapshot scratch (~1.2 MB —
+/* Heap-allocate a transient SceneSnapshot scratch (~1.2 MB -
  * cmds[4096] + lines[4096][256] dominate). Stack allocation is a
  * real overflow hazard because workspace/load flows can keep multiple
  * snapshots can be live together during transactional loads; putting them on
@@ -454,7 +454,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     }
 
     /* Callers routinely pass repl_workspace_dir(), so `dir` aliases
-     * g_workspace_dir — which this function rewrites below and restores on the
+     * g_workspace_dir - which this function rewrites below and restores on the
      * failure path. snprintf with overlapping source and destination is
      * undefined; glibc terminates the destination before copying, so the alias
      * empties `dir` mid-save and every later path join fails. Work from an
@@ -465,7 +465,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
 
     if (!workspace_io_ensure_dir(dir)) {
         char msg[REPL_STATUS_TEXT_MAX];
-        /* Clip the path, not the sentence — same rule as the success
+        /* Clip the path, not the sentence - same rule as the success
          * status, and it silences -Wformat-truncation. */
         snprintf(msg, sizeof(msg),
                  "Workspace save: cannot create %.200s", dir);
@@ -623,7 +623,7 @@ fail:
 /* Single source of truth for active-scene export file naming, shared by Save
  * Scene (.c) and the .ply export so the two can't drift. Builds
  * "<workspace_dir>/<slug>.<ext>" when `workspace_dir` is set, else
- * "<slug>.<ext>", for the active named user scene — or "output.<ext>" when
+ * "<slug>.<ext>", for the active named user scene - or "output.<ext>" when
  * there is no active named scene. `ext` has no leading dot. The mkdir / error
  * policy is the caller's (Save Scene aborts on a failed mkdir; the export
  * falls back to the cwd); the caller passes the resulting dir-vs-cwd choice. */
@@ -1114,7 +1114,7 @@ static int reserve_slot_for_promotion(void) {
  * restored the user's pre-tutorial values wholesale: the promoted slot owns
  * the tutorial-mutated per-scene settings, so the live view must follow the
  * new scene, while any slug the tutorial touched from OUTSIDE the bridge's
- * scene subset (a global / tutorial-only setting) stays restored — it isn't
+ * scene subset (a global / tutorial-only setting) stays restored - it isn't
  * in the bag, so this pass cannot re-assert it.
  *
  * Deliberately NOT a full scene_snapshot_apply_live: promotion runs inside an
@@ -1327,7 +1327,7 @@ void repl_scenes_reset(void) {
 }
 
 /* Whole-catalog snapshot. The slot array dominates (~10 MB: 8 * SceneSnapshot),
- * so this is heap-allocated. Copies every slot verbatim (occupied or not — a
+ * so this is heap-allocated. Copies every slot verbatim (occupied or not - a
  * whole-array copy is drop-proof if UserScene grows a field) plus the active
  * index, the monotonic activity tick, and the pre-example cfg bag. */
 struct ReplScenesSnapshot {
@@ -1342,7 +1342,7 @@ ReplScenesSnapshot *repl_scenes_snapshot_capture(void) {
         (ReplScenesSnapshot *)malloc(sizeof(ReplScenesSnapshot));
     if (!s)
         return NULL;
-    /* Deliberately NOT repl_scenes_save_active_scene_if_any() — recording the
+    /* Deliberately NOT repl_scenes_save_active_scene_if_any() - recording the
      * catalog as-is, not flushing the live document into its slot. */
     memcpy(s->slots, g_user_scenes, sizeof(g_user_scenes));
     s->active_user_scene = g_active_user_scene;

@@ -1,32 +1,32 @@
 # `src/` restructure: subsystems split, ui core/app split, prof + transform_utils relocations, sample → gl-repl rename
 
-## Completion — 2026-05-23
+## Completion - 2026-05-23
 
 Done. Landed as 8 commits on `main` (a8b360e → e988e7d):
 
-- 57bdfff — Phase A: `prof.{c,h}` → `src/support/`
-- 2371aa8 — Phase B: `transform_utils.h` → `src/scene/guides/`
-- 95a971a — Phase C: `src/widgets/` → `src/subsystems/<feature>/`
-- 010b35a — Phase D: `src/ui/` split into `core/` and `app/`
-- 978ca79 — Phase F: `sample` → `gl-repl` (binary + source files)
-- c023ce9 — Phase E: doc refresh (CLAUDE.md / MODULES.md / ARCHITECTURE.md / AGENTS.md / per-subdir READMEs)
-- b75be61 — Phase G (added late, user-requested): project-local includes consistency — `<X.h>` → `"X.h"` for `c_compat.h` / `gl_includes.h` / `keys.h` / `gl_2d.h`, plus a new `scripts/check-include-style.sh` wired into `check-state-ownership`.
-- e988e7d — fix: stub `tutorial_teardown` in `tools/repl_demo/stubs.c` so `make test-full` links (pre-existing on `main`; the tutorial work introduced a call from REPL pipeline TUs that the demo can't satisfy without dragging in editor/). Baseline bumped 0 → 1 with a note pointing at the proper `ReplTutorialTeardownBridge` follow-up.
+- 57bdfff - Phase A: `prof.{c,h}` → `src/support/`
+- 2371aa8 - Phase B: `transform_utils.h` → `src/scene/guides/`
+- 95a971a - Phase C: `src/widgets/` → `src/subsystems/<feature>/`
+- 010b35a - Phase D: `src/ui/` split into `core/` and `app/`
+- 978ca79 - Phase F: `sample` → `gl-repl` (binary + source files)
+- c023ce9 - Phase E: doc refresh (CLAUDE.md / MODULES.md / ARCHITECTURE.md / AGENTS.md / per-subdir READMEs)
+- b75be61 - Phase G (added late, user-requested): project-local includes consistency - `<X.h>` → `"X.h"` for `c_compat.h` / `gl_includes.h` / `keys.h` / `gl_2d.h`, plus a new `scripts/check-include-style.sh` wired into `check-state-ownership`.
+- e988e7d - fix: stub `tutorial_teardown` in `tools/repl_demo/stubs.c` so `make test-full` links (pre-existing on `main`; the tutorial work introduced a call from REPL pipeline TUs that the demo can't satisfy without dragging in editor/). Baseline bumped 0 → 1 with a note pointing at the proper `ReplTutorialTeardownBridge` follow-up.
 
 Gates all green on macOS:
-- `make check-c99 && make check-state-ownership` — clean
-- `make test-stubs` — 6510/45 (no regression)
-- `make test-full` — 6510/45 + all 4 demos build (gl-repl, bench_repl, scene_demo, editor_demo)
+- `make check-c99 && make check-state-ownership` - clean
+- `make test-stubs` - 6510/45 (no regression)
+- `make test-full` - 6510/45 + all 4 demos build (gl-repl, bench_repl, scene_demo, editor_demo)
 
 Cross-checked on `gracemont` (Ubuntu 24.04, gcc 13.x) per CLAUDE.md:
-- `make check-c99` — OK
-- `make check-state-ownership` — OK (incl. new `check-include-style`)
-- `make test-stubs` — 6510/45
-- `make gl-repl USE_GL_STUBS=1` — links
+- `make check-c99` - OK
+- `make check-state-ownership` - OK (incl. new `check-include-style`)
+- `make test-stubs` - 6510/45
+- `make gl-repl USE_GL_STUBS=1` - links
 
 ### Open follow-up
 
-- `ReplTutorialTeardownBridge` — analogous to the existing `ReplExportConfigBridge` / `ReplExportCameraBridge`. The full app installs a real `tutorial_teardown` callback; the demo installs nothing → silent no-op → the one-line stub at `tools/repl_demo/stubs.c` can go away and the ratchet baseline drops back to 0. Not blocking; scoped as a future PR.
+- `ReplTutorialTeardownBridge` - analogous to the existing `ReplExportConfigBridge` / `ReplExportCameraBridge`. The full app installs a real `tutorial_teardown` callback; the demo installs nothing → silent no-op → the one-line stub at `tools/repl_demo/stubs.c` can go away and the ratchet baseline drops back to 0. Not blocking; scoped as a future PR.
 
 ## Context
 
@@ -36,12 +36,12 @@ implicit two-tier UI (generic primitives vs. feature-UI). The filesystem
 doesn't reflect either: `src/widgets/` is flat, `src/ui/` is flat, `prof.{c,h}`
 sits at the repo root with no owner directory, and `transform_utils.h` is a
 root-level neutral helper. The main binary is still called `sample` even
-though the project name is `gl-repl` — MODULES.md's "Open Refactor Edges"
+though the project name is `gl-repl` - MODULES.md's "Open Refactor Edges"
 already tracks the rename as R8 ("sample → glr rename, mechanical, last").
 This restructure aligns the filesystem and the binary name with the
 already-stated conceptual structure so future readers can see the layout
 from `ls src/`, not just from prose. **Every phase sweeps source comments
-alongside includes** — a stale `/* see src/widgets/foo.c */` in a
+alongside includes** - a stale `/* see src/widgets/foo.c */` in a
 neighbouring file is just as confusing as a stale doc paragraph.
 
 End-state filesystem (the user's spec, verbatim):
@@ -66,22 +66,22 @@ src/
 ```
 
 ## What stays the same
-- **Symbol prefixes** — `ui_*`, `replay_*`, `tutorial_*`, `color_picker_*`,
+- **Symbol prefixes** - `ui_*`, `replay_*`, `tutorial_*`, `color_picker_*`,
   `variable_panel_*`, `prof_*` are unchanged. `check-module-prefixes` is a
   denylist, not a sweep, so existing symbols keep passing.
-- **Include resolution** — `-Isrc`, `-I.`, `-Iinclude` stay. All updated
+- **Include resolution** - `-Isrc`, `-I.`, `-Iinclude` stay. All updated
   `#include` lines use `src/`-relative paths (e.g. `"subsystems/tutorial/tutorial.h"`,
   `"ui/core/layout.h"`, `"ui/app/snapshot.h"`, `"support/prof.h"`,
   `"scene/guides/transform_utils.h"`).
-- **Build flags, sanitizer config, C99 standard** — untouched.
-- **Source-line filenames inside per-feature subdirs** — the user's spec
+- **Build flags, sanitizer config, C99 standard** - untouched.
+- **Source-line filenames inside per-feature subdirs** - the user's spec
   keeps the existing filenames (`tutorial_state.c`, not `state.c`) so the
   rename is purely a directory move.
 
 ## Blast radius (from the include audit)
 - ~75 includes touching `widgets/`, ~152 touching `ui/`, ~7 touching `prof.h`,
   2 touching `transform_utils.h`, ~6 touching `sample.{c,h}` (mostly
-  Makefile + the symlink line) — ~240 mechanical `#include`/Makefile-row
+  Makefile + the symlink line) - ~240 mechanical `#include`/Makefile-row
   edits across ~90 source files.
 - Makefile: ~90 row edits across `SRCS`, `HDRS`, the `UI_SRCS` filter,
   `STATE_NEUTRAL_SRCS`, `SCENE_DEMO_DEP_SRCS`, `REPL_DEMO_DEP_SRCS`, the
@@ -105,11 +105,11 @@ src/
 Each phase runs `make check-c99 && make check-state-ownership && make test`
 to gate before moving on; the cross-check on `gracemont` runs once at the end.
 
-### Phase A — `prof` → `src/support/`
+### Phase A - `prof` → `src/support/`
 - Move: `prof.c` → `src/support/prof.c`; `prof.h` → `src/support/prof.h`.
 - Update 7 includes: `prof.c` (self), `src/app/glr_ctrl.c`, `src/repl/core.c`,
   `src/scene/render.c`, `src/ui/profile_panel.c`, `tests/test_repl_editor.c`,
-  `tests/test_ui.c` — all switch to `#include "support/prof.h"`.
+  `tests/test_ui.c` - all switch to `#include "support/prof.h"`.
 - Makefile: 7 row edits (`SRCS`, `HDRS`, `STATE_NEUTRAL_SRCS`,
   `SCENE_DEMO_DEP_SRCS`, `REPL_DEMO_DEP_SRCS`, the bench harness rows).
 - `scripts/check-c99.sh:46` carries a literal `prof.c` in `SAMPLE_FILES`;
@@ -122,19 +122,19 @@ to gate before moving on; the cross-check on `gracemont` runs once at the end.
   neutral shared utilities; describes `prof.{c,h}` as the only inhabitant
   for now).
 
-### Phase B — `transform_utils.h` → `src/scene/guides/`
+### Phase B - `transform_utils.h` → `src/scene/guides/`
 - Move: `transform_utils.h` → `src/scene/guides/transform_utils.h`.
 - Update 2 includes: `src/app/glr_ctrl.c`, `src/scene/guides/transform_guides.c`
   (the second can drop to `#include "transform_utils.h"` because it now sits
-  beside the file, but `"scene/guides/transform_utils.h"` is fine too — pick
+  beside the file, but `"scene/guides/transform_utils.h"` is fine too - pick
   the latter for grep consistency).
 - Makefile: 1 row in `HDRS`.
 - **Comment sweep**: `grep -rn 'transform_utils' src/ tests/ tools/ MODULES.md
-  ARCHITECTURE.md CLAUDE.md AGENTS.md` — update any prose path references
+  ARCHITECTURE.md CLAUDE.md AGENTS.md` - update any prose path references
   (the header is named in the "Sanctioned naming exceptions" block of
   MODULES.md and is mentioned in CLAUDE.md's File Layout).
 
-### Phase C — `src/widgets/` → `src/subsystems/<feature>/`
+### Phase C - `src/widgets/` → `src/subsystems/<feature>/`
 Per-feature subdirs and file moves:
 - `src/subsystems/color_picker/{color_picker_state.c,h}` (2 files)
 - `src/subsystems/replay/{replay.c,h, replay_state.c,h}` (4 files)
@@ -147,7 +147,7 @@ Include updates (~75 lines across ~26 source files):
   (`color_picker_*` → `color_picker/`, `replay*` → `replay/`,
   `tutorial*` → `tutorial/`, `variable_panel*` → `variable_panel/`).
 - Intra-subsystem includes (e.g. `tutorial.c` includes `tutorial_state.h`)
-  resolve through `-Isrc` exactly the same way — full path
+  resolve through `-Isrc` exactly the same way - full path
   `"subsystems/tutorial/tutorial_state.h"` everywhere for grep
   consistency. (Adding `-Isrc/subsystems` per-feature would let internal
   files use bare names, but introduces collision risk; defer.)
@@ -157,14 +157,14 @@ Makefile (~24 row edits):
 - 8 widget `SRCS` rows → 8 `src/subsystems/<feature>/...` rows.
 - Header rows similarly.
 - `REPL_DEMO_DEP_SRCS` lists 3 widget files (replay.c, replay_state.c,
-  tutorial_state.c) — update those paths.
+  tutorial_state.c) - update those paths.
 
 Scripts:
 - `check-module-prefixes.sh` has `src/widgets/replay` and
-  `src/widgets/variable_panel_state.h` in **comments only** — refresh for
+  `src/widgets/variable_panel_state.h` in **comments only** - refresh for
   readability (not load-bearing).
 - `check-unused-apis.sh` and `check-duplicate-api-decls.sh` do
-  `find src/repl src/editor src/widgets` for header discovery — change
+  `find src/repl src/editor src/widgets` for header discovery - change
   `src/widgets` → `src/subsystems`.
 
 **Comment sweep**: after the include rewrite, run
@@ -176,8 +176,8 @@ Move `src/widgets/README.md` → `src/subsystems/README.md`; rewrite the
 opening to introduce the new subdir layout (one paragraph per feature
 subdir, pointing at MODULES.md for the layered view).
 
-### Phase D — `src/ui/` split into `core/` and `app/`
-Per the user's spec — `ui/core/` is the REPL/editor-unaware primitives,
+### Phase D - `src/ui/` split into `core/` and `app/`
+Per the user's spec - `ui/core/` is the REPL/editor-unaware primitives,
 `ui/app/` is feature-UI that knows about REPL state, scene snapshots, or
 peer subsystems.
 
@@ -213,40 +213,40 @@ Makefile (~56 row edits):
   edit beyond row updates.
 
 Scripts (~10 files):
-- `check-color-picker-ui-isolation.sh` — update `src/ui/color_picker.{c,h}`
+- `check-color-picker-ui-isolation.sh` - update `src/ui/color_picker.{c,h}`
   → `src/ui/app/color_picker.{c,h}`.
-- `check-editor-ownership-budget.sh` — `src/ui/state.h` → `src/ui/app/state.h`.
-- `check-output-actualization.sh` — `src/ui/*.h` glob → `src/ui/app/*.h`
+- `check-editor-ownership-budget.sh` - `src/ui/state.h` → `src/ui/app/state.h`.
+- `check-output-actualization.sh` - `src/ui/*.h` glob → `src/ui/app/*.h`
   (state/snapshot/output types live in app).
-- `check-ui-no-export-resolver.sh` — `src/ui/*.{c,h}` glob → union of
+- `check-ui-no-export-resolver.sh` - `src/ui/*.{c,h}` glob → union of
   `src/ui/core/*.{c,h}` and `src/ui/app/*.{c,h}`.
-- `check-ui-panels-no-mutators.sh` — `src/ui/panels.c` → `src/ui/app/panels.c`.
-- `check-ui-renderer-signatures.sh` — `src/ui/*.{h,c}` rg patterns → both
+- `check-ui-panels-no-mutators.sh` - `src/ui/panels.c` → `src/ui/app/panels.c`.
+- `check-ui-renderer-signatures.sh` - `src/ui/*.{h,c}` rg patterns → both
   subdirs.
-- `check-ui-returns-hits-only.sh` — `src/ui/*.c` glob + the
+- `check-ui-returns-hits-only.sh` - `src/ui/*.c` glob + the
   `src/ui/state.c` exclusion → `src/ui/app/...`.
-- `check-ui-text-panel-pure.sh` — `src/ui/text_panel.{c,h}` →
+- `check-ui-text-panel-pure.sh` - `src/ui/text_panel.{c,h}` →
   `src/ui/core/text_panel.{c,h}`.
-- `check-variable-panel-forwarders.sh` — `src/ui/state.c` → `src/ui/app/state.c`.
-- Baseline files mentioning `src/ui/...` in comments (5 files) — refresh
+- `check-variable-panel-forwarders.sh` - `src/ui/state.c` → `src/ui/app/state.c`.
+- Baseline files mentioning `src/ui/...` in comments (5 files) - refresh
   the comments only; numeric baselines are path-agnostic.
 
 **Comment sweep**: `grep -rn 'src/ui/\|"ui/' src/ tests/ tools/ bench/`
 after the include rewrite. Update prose references that name old paths;
 tools/repl_demo and tools/editor_demo comments mention `src/ui/...` paths
 in their "what's not pulled in" notes. The check-state-ownership script
-descriptions also mention `src/ui/*.c` — refresh inline.
+descriptions also mention `src/ui/*.c` - refresh inline.
 
 Rewrite `src/ui/README.md` to introduce the two-tier layout (core =
 REPL-agnostic primitives; app = feature-UI knowing REPL/editor/peer
 concepts), with a one-line directory landmark for each.
 
-### Phase E — Documentation refresh (`.md` files + cross-doc consistency)
+### Phase E - Documentation refresh (`.md` files + cross-doc consistency)
 Four files, mechanical path updates plus narrative tweaks:
 - `CLAUDE.md` File Layout (~25 rows): every `src/widgets/...`,
   `src/ui/...`, root `prof.{c,h}`, root `transform_utils.h` row updates
   to the new path. The convention paragraph on prefixes / directory
-  ownership stays — it already names the prefixes, just point at the new
+  ownership stays - it already names the prefixes, just point at the new
   homes. Also update narrative paragraphs mentioning `src/widgets/` or
   `src/ui/` (e.g. the "Editor input dispatcher" row, the "Cursor Edit
   Guides" section, the "Replay System" / "Tutorials" subsections).
@@ -254,8 +254,8 @@ Four files, mechanical path updates plus narrative tweaks:
   - Layer view diagram (`### Layer view`): rename "Peer subsystems" node
     layer label to match `src/subsystems/`; split the "5. 2D UI" node
     text to acknowledge the `core` + `app` two-tier (drop the conflated
-    "(snapshots in, UiHit out — never mutates)" annotation only as far
-    as needed — keep its substance; restructure prose).
+    "(snapshots in, UiHit out - never mutates)" annotation only as far
+    as needed - keep its substance; restructure prose).
   - File-level view (`### File-level view`): update `widgets/` →
     `subsystems/` boxes and the `tutorial_sys`/`replay`/etc. labels.
   - Per-module rows (`tutorial_state`, `replay`, `variable_panel`,
@@ -277,7 +277,7 @@ Four files, mechanical path updates plus narrative tweaks:
 and confirm zero stale matches. (Anything left is a paragraph the
 mechanical sweep missed.)
 
-### Phase F — `sample` → `gl-repl` rename
+### Phase F - `sample` → `gl-repl` rename
 The binary, target, source file, and symlink all become `gl-repl`. C
 filenames use underscores by project convention, so the source pair is
 `gl_repl.{c,h}`; the binary/target name uses a hyphen (`gl-repl`)
@@ -303,9 +303,9 @@ Makefile:
   the variable name as-is unless it crosses a line; just update the
   filename literal.
 
-Comment sweep — broader than the other phases because `sample` is a
+Comment sweep - broader than the other phases because `sample` is a
 common English word and shows up in many sentences:
-- `grep -rnw 'sample\b' src/ tests/ tools/ bench/ *.md` — manual review
+- `grep -rnw 'sample\b' src/ tests/ tools/ bench/ *.md` - manual review
   required to distinguish "the `sample` binary" (rename to `gl-repl`)
   from "a sample value" / "code sample" prose (leave alone). The
   Makefile help text, several C-source file-banner comments, and the
@@ -314,7 +314,7 @@ common English word and shows up in many sentences:
 - `sample.h` and `sample.c` literal mentions → `gl_repl.h` / `gl_repl.c`.
 - `./sample` invocation hints in CLAUDE.md `## Run` section → `./gl-repl`.
 - `make sample` invocation hints in CLAUDE.md `## Build` → `make gl-repl`.
-- The symlink target — Makefile's `ln -sfn build/release/sample sample`
+- The symlink target - Makefile's `ln -sfn build/release/sample sample`
   → `ln -sfn build/release/gl-repl gl-repl`.
 
 Documentation:
@@ -322,33 +322,33 @@ Documentation:
   USE_GL_STUBS=1` rows), `## Run` section (every `./sample ...`
   invocation), File Layout row for the renamed source files, any
   prose paragraph naming the binary.
-- `MODULES.md`: "Open Refactor Edges" — strike R8.
+- `MODULES.md`: "Open Refactor Edges" - strike R8.
 - `ARCHITECTURE.md`: any binary-name references.
 - `AGENTS.md`: the binary row.
-- All six `src/*/README.md` files — quick grep for `sample` and update.
+- All six `src/*/README.md` files - quick grep for `sample` and update.
 
 Other touches:
-- `tools/repl_demo/`, `tools/scene_demo/`, `tools/editor_demo/` — these
+- `tools/repl_demo/`, `tools/scene_demo/`, `tools/editor_demo/` - these
   standalone-demo binaries are NOT renamed (they're proofs that the
   REPL / scene / editor pipelines link without the full app). Only the
   `sample` binary becomes `gl-repl`.
-- `output.c` (the file the running app saves to) — name unchanged
+- `output.c` (the file the running app saves to) - name unchanged
   (it's a user-data artifact, not a binary name).
-- `quit-recovery.c`, `my-scene.c` at the repo root — unchanged.
+- `quit-recovery.c`, `my-scene.c` at the repo root - unchanged.
 
 History preservation: each move uses `git mv` so blame chains stay
 intact across the rename.
 
-## Mechanics — how to run each phase locally
+## Mechanics - how to run each phase locally
 For each phase:
 1. `git mv` the files (preserves history) into their new homes.
 2. Update includes via a scripted sed sweep (one pattern per phase). For
    the ui split, the sed needs to know which target each filename maps to
-   — a small Python helper that reads the user's per-file split and emits
+   - a small Python helper that reads the user's per-file split and emits
    the right substitution is the cleanest approach (vs. 25 manual seds).
 3. Update the Makefile rows.
 4. Update the affected `scripts/check-*.sh`.
-5. `make check-c99 && make check-state-ownership && make test` — gate
+5. `make check-c99 && make check-state-ownership && make test` - gate
    before committing.
 6. Commit with a `refactor(layout): …` message.
 
@@ -358,17 +358,17 @@ later layout shuffles).
 
 ## Verification
 Run after EACH phase:
-- `make check-c99` — must stay OK (catches stray bare-name includes that
+- `make check-c99` - must stay OK (catches stray bare-name includes that
   used to resolve from `-I.` and no longer do).
-- `make check-state-ownership` — exercises every boundary guard. The
+- `make check-state-ownership` - exercises every boundary guard. The
   `check-ui-*` family is the highest-risk surface after Phase D; if any
   script glob is wrong it fires here.
-- `make test` — must stay at the pre-restructure count (5713/39 binaries
+- `make test` - must stay at the pre-restructure count (5713/39 binaries
   as of the last green run); no test logic changes, so the count is the
   exact regression signal.
-- `make sample` (or `make gl-repl` after Phase F) — links the full app;
+- `make sample` (or `make gl-repl` after Phase F) - links the full app;
   smoke-runs the interactive binary.
-- **Stale-reference grep** — at the end of each phase, the phase-specific
+- **Stale-reference grep** - at the end of each phase, the phase-specific
   `grep -rn <old-path>` returns zero matches across `src/ tests/ tools/
   bench/ *.md`.
 - After Phase F (final phase only): `ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && git pull --ff-only origin main && make check-c99 && make test-stubs'`
@@ -381,12 +381,12 @@ Run after EACH phase:
   is a removed-name denylist, so it cares only about old stale names,
   not the directory.
 - **No per-feature READMEs** inside `src/subsystems/<feature>/` or inside
-  `src/ui/{core,app}/` — the user's spec lists READMEs only at the
+  `src/ui/{core,app}/` - the user's spec lists READMEs only at the
   `subsystems/` and `ui/` top level. `src/support/README.md` is added
   as the convention-matching landing page; `src/scene/guides/` already
   has its parent README.
-- **No `-Isrc/subsystems` or `-Isrc/ui` per-tier `-I` flags** — full paths
+- **No `-Isrc/subsystems` or `-Isrc/ui` per-tier `-I` flags** - full paths
   in includes for unambiguous greppability.
-- **Camera stays in `src/app/`** — the user's spec doesn't move it, and
+- **Camera stays in `src/app/`** - the user's spec doesn't move it, and
   the Layer-view → filesystem alignment for camera is a separate open
   question (tracked in MODULES.md "Open Refactor Edges"). Out of scope here.

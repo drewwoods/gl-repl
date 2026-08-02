@@ -124,7 +124,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
                                     int strict_refs,
                                     const ReplSourceScopeView *source_scope,
                                     ReplFuncAliasView func_aliases) {
-    /* repl_parse_and_normalize is called from many sites — commit
+    /* repl_parse_and_normalize is called from many sites - commit
      * paths, reformatter, tests. The parser never calls set_status
      * itself (it writes diagnostics into ctx->err_buf; enforced by
      * the check-no-set-status-in-repl-parser build guard). This
@@ -161,7 +161,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
         out_cmd->has_vars = 1;
     } else {
         if (text_out && text_sz > 0) {
-            /* pl.text already carries any trailing `// ...` comment —
+            /* pl.text already carries any trailing `// ...` comment -
              * repl_parser_parse_command_ctx re-attaches it to the
              * canonical text, so copying pl.text preserves it. */
             int n = (int)strlen(pl.text);

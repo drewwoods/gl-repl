@@ -27,14 +27,14 @@ static const char *g_export_ply_path = NULL;
 static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
-    /* Open the frame — first statement in the callback, because the callback
+    /* Open the frame - first statement in the callback, because the callback
      * *is* the frame: this file owns the boundary, not the controller, which is
      * only one of the stages below. Everything from here to glr_frame_ended()
      * at the bottom is Frame Time. */
     glr_frame_begin();
 
     /* Every per-frame stage below is inside the frame's work span, so a stage
-     * with no ProfSection of its own is visible only as unattributed work —
+     * with no ProfSection of its own is visible only as unattributed work -
      * which is how a tour's ~10 ms caption overlay once hid. Add a section when
      * you add a stage: inside the callee if it can own its own bracket, here
      * when the stage spans the boot/controller seam that only this file
@@ -51,7 +51,7 @@ static void display_func(void) {
     glr_ctrl_run_scripted_input_frame();
     prof_end(PROF_SCRIPTED_INPUT);
     /* Trace the first two frames separately (gated on the init-trace
-     * detailed flag — see --detailed-prof / GLR_DETAILED_PROF). The first frame
+     * detailed flag - see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
      * macOS first-drawable wait, GL stack lazy init / SW-fallback
      * chatter) that frame 2 reveals as gone. A side-by-side frame-1
@@ -73,7 +73,7 @@ static void display_func(void) {
 
     /* --export-ply: the scene has rendered one full frame, so it is loaded,
      * flattened, and the GL context is live. Capture geometry to the requested
-     * file (post-context — feedback needs a context, unlike the pre-context
+     * file (post-context - feedback needs a context, unlike the pre-context
      * --dump-* paths) and exit. Done BEFORE glutSwapBuffers() so the feedback
      * pass never re-enters the GL pipeline after a buffer swap (which can race
      * the display on some drivers); the swap is cosmetic here since we exit. */
@@ -93,7 +93,7 @@ static void display_func(void) {
      * owned by this callback rather than the controller (splash is boot-band,
      * and the tour overlay must land after the compositor to stay topmost).
      * The aggregate row is bracketed here because it is the only place that can
-     * span both — a boot-band pass and a controller-band one. Its children are
+     * span both - a boot-band pass and a controller-band one. Its children are
      * self-timed where they can be (see the controller's scripted overlay
      * stage);
      * splash_render() is bracketed from here to keep the profiler out of
@@ -108,12 +108,12 @@ static void display_func(void) {
     }
 
     /* Tour narration overlay (caption, cursor arrow, click ripple,
-     * highlight ring) so a tour — or a recorded video — shows what is being
+     * highlight ring) so a tour - or a recorded video - shows what is being
      * said and where the synthetic mouse is. Self-timed as PROF_TOUR_OVERLAY. */
     glr_ctrl_render_script_overlay(glutGet(GLUT_WINDOW_WIDTH),
                                    glutGet(GLUT_WINDOW_HEIGHT));
 
-    /* Ambient tour presence (title card, breathing border, exit collapse) —
+    /* Ambient tour presence (title card, breathing border, exit collapse) -
      * dead last, so nothing paints over the one piece of chrome that says the
      * app is in a mode, and so it survives a user's whole-frame Post FX.
      * Called unconditionally: it owns the clock its exit animation runs on,
@@ -124,9 +124,9 @@ static void display_func(void) {
 
     /* Close the frame's *work* span: everything the callback does to produce
      * this frame is now behind us, and the present that follows is mostly the
-     * wait for vsync — slack the frame is handed, not work it does. The frame
+     * wait for vsync - slack the frame is handed, not work it does. The frame
      * itself stays open across it, and Present is the difference (nothing in
-     * between can go unattributed that way — see prof_sections.h). */
+     * between can go unattributed that way - see prof_sections.h). */
     glr_frame_work_end();
 
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
     glr_init_trace_detail("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL |
                         GLUT_MULTISAMPLE |
-                        /* AUTO still asks for the accum visual — whether the
+                        /* AUTO still asks for the accum visual - whether the
                          * feature is armed is decided post-init from the
                          * renderer string (glr_ctrl_set_accum), which needs a
                          * live context and so cannot run this early. Only an
@@ -284,17 +284,17 @@ int main(int argc, char **argv) {
     /* Headless-capture env hooks applied at bootstrap (after the file/example
      * load, before the main loop): initial-time override, pointer script,
      * splash skip, tick-per-frame resolve, edit-line / type-keys pose, accum
-     * passes. Ordering inside is load-bearing — see glr_capture_env.c. */
+     * passes. Ordering inside is load-bearing - see glr_capture_env.c. */
     glr_capture_env_apply(opts.time_arg);
     /* --tour <name|idx>: start a built-in guided tour on launch. Deferred to
-     * here so it runs after every capture/env resolve above — in particular
+     * here so it runs after every capture/env resolve above - in particular
      * the GLR_TICK_PER_FRAME resolve, which keys off glr_pointer_script_active()
      * and must not see the tour's controlled script (a launched tour plays on
      * the real 60 Hz clock with live transport, like one started from the
      * Tours menu). Index was validated up front; the events fire against the
      * live layout once the main loop is drawing. Any real key/click cancels. */
     if (opts.tour_index >= 0) {
-        splash_skip();       /* start clean — no splash band over the tour */
+        splash_skip();       /* start clean - no splash band over the tour */
         glr_ctrl_start_tour(opts.tour_index);
     }
     glr_init_trace("REPL bootstrap done");

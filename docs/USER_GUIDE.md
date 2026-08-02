@@ -9,12 +9,12 @@ step-by-step, and export as a standalone C program.
 ![gl-repl rendering the Whale example](images/hero.png)
 
 **The code is the interface.** By design, you shape the scene by editing
-commands — there is no click-to-select, drag-a-vertex, or gizmo-in-the-scene
+commands - there is no click-to-select, drag-a-vertex, or gizmo-in-the-scene
 editing. Mouse input inside the 3D viewport moves the *camera* and nothing
 else (orbit, pan, zoom), so you can never nudge your geometry by accident
 while looking around, and the code panel always says exactly what the scene
-is. Everything else you can point at — menus, the code panel, the variable
-panel sliders, the status bar — lives in the 2D chrome around the viewport,
+is. Everything else you can point at - menus, the code panel, the variable
+panel sliders, the status bar - lives in the 2D chrome around the viewport,
 and the edits it makes show up as text in your program.
 
 This guide follows the shape of a session: you [start the app](#getting-started),
@@ -25,8 +25,8 @@ get your bearings from the [built-in examples](#built-in-examples) and guided
 [visual feedback](#seeing-what-youre-doing) and
 [diagnostic views](#diagnostic-views) to understand and debug what you built,
 and finally [keep and ship](#scenes--workspaces) the
-result. Reference material — the full [CLI](#command-line-options) and
-[keyboard](#keyboard--mouse-reference) listings — sits at the end. For headless
+result. Reference material - the full [CLI](#command-line-options) and
+[keyboard](#keyboard--mouse-reference) listings - sits at the end. For headless
 rendering, recording, and every environment variable, see
 [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); for project internals,
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
@@ -75,33 +75,33 @@ printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 
 Top to bottom:
 
-- **Menu bar** — *File*, *Scene*, *Tutorials*, *Tours*, *Config*, *Audio*
+- **Menu bar** - *File*, *Scene*, *Tutorials*, *Tours*, *Config*, *Audio*
   dropdowns, a *search...* slot (same as Ctrl+F), and the *Replay* button at
   the far right.
-- **Scene tabs** — one tab per open scene (here *Spinning Torus* and *Ring
+- **Scene tabs** - one tab per open scene (here *Spinning Torus* and *Ring
   Sketch*), behind the name of the managed workspace they came from (*Tour*).
   Click to switch.
-- **Code panel** — the live, editable list of GL commands. By default it sits
+- **Code panel** - the live, editable list of GL commands. By default it sits
   above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
   **Ctrl+B** or the *Code panel* config item. When a document is taller than
   the panel, a scrollbar appears along its right edge: the mouse wheel scrolls
-  as usual, and dragging the thumb — or clicking anywhere on the track, which
-  jumps the thumb there and keeps dragging — moves through a long document in
+  as usual, and dragging the thumb - or clicking anywhere on the track, which
+  jumps the thumb there and keeps dragging - moves through a long document in
   one gesture.
-- **Status bar** — command count, current line, the accumulation indicator
-  (`AA 1x` / `Blur 16x` — the shot above is under motion blur, which is why the
+- **Status bar** - command count, current line, the accumulation indicator
+  (`AA 1x` / `Blur 16x` - the shot above is under motion blur, which is why the
   torus smears), and clickable controls for undo/redo, copy/cut,
   resetting the scene to its five display defaults, *focus* ([code
   focus](#keeping-the-buffer-tidy)), and *F1 help*.
-- **3D viewport** — your geometry, rendered every frame. Drag to orbit,
+- **3D viewport** - your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
-- **Variable panel** — bottom-right overlay listing `t` and every program-wide
+- **Variable panel** - bottom-right overlay listing `t` and every program-wide
   variable with a draggable slider (see [The Variable
   Panel](#the-variable-panel)). Function locals do not appear there.
-- **Floating panels** — what right-clicking a row opens. Above: the
+- **Floating panels** - what right-clicking a row opens. Above: the
   [assignment value plot](#plotting-an-assignments-values) tracking both angle
   rows that drive the torus, and the help card for `glutSolidSphere`.
-- **Message line** — the bottom row shows the most recent status message.
+- **Message line** - the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
   history.
 
@@ -136,7 +136,7 @@ The triangle appears as soon as the vertices commit. Now:
 - Press **Ctrl+T** and change a vertex to `glVertex3f(sin(t), 1, 0)` to
   animate it.
 - Press **F12** to flip through the built-in examples for ideas.
-- Press **F1** for the built-in help overlay — its *Commands* tab lists every
+- Press **F1** for the built-in help overlay - its *Commands* tab lists every
   supported command, and its *Keys* tab is the full keyboard reference. Esc
   or a click outside dismisses it.
 
@@ -174,12 +174,12 @@ set.
 
 Examples may carry their own presentation presets (grid theme, backdrop,
 camera, 2D mode...). Loading an example resets the scene-presentation
-settings to defaults first, then applies the example's presets — so examples
+settings to defaults first, then applies the example's presets - so examples
 always look as authored, and your camera carries over unless the example
 sets its own.
 
 Editing an example automatically promotes it to a user scene (see
-[Scenes & Workspaces](#scenes--workspaces)) — you never modify the built-ins
+[Scenes & Workspaces](#scenes--workspaces)) - you never modify the built-ins
 themselves.
 
 ---
@@ -187,7 +187,7 @@ themselves.
 ## Tutorials
 
 The **Tutorials** menu offers guided, step-by-step lessons rendered directly
-in the code panel — instruction comments appear with a typewriter reveal, and
+in the code panel - instruction comments appear with a typewriter reveal, and
 each step either asks you to type a command (autocomplete ghost text shows
 the expected call), acknowledge a short note, change a setting, or drag a
 variable slider to a target.
@@ -196,7 +196,7 @@ variable slider to a target.
   group entries under difficulty subheadings.
 - While a tutorial is active, the menu gains **Restart Tutorial** and
   **Exit Tutorial** entries.
-- Instruction lines are locked — the tutorial guards them against edits
+- Instruction lines are locked - the tutorial guards them against edits
   until you finish or exit.
 - **Beginner:** *First Triangle*, *Color & Transform*, *Feature Tour*,
   *Variable Slider*, *First Animation*, *Points & Lines*, *GLUT Solids Tour*,
@@ -212,18 +212,18 @@ variable slider to a target.
 ## Guided Tours
 
 Where a tutorial asks *you* to type, the **Tours** menu drives the app for
-you: pick an entry and a synthetic pointer takes over — gliding through
+you: pick an entry and a synthetic pointer takes over - gliding through
 menus, hovering flyouts, clicking, and typing, with an on-screen cursor,
 click ripples, spotlight rings, and captions narrating each step. Press any
 key or click anywhere to stop a tour and take back control (a finished tour
 hands control back by itself).
 
-- *Menus & Examples* — browses the Scene example flyouts, loads a showcase
+- *Menus & Examples* - browses the Scene example flyouts, loads a showcase
   scene, peeks at Tutorials, toggles a Config overlay, and runs a replay.
-- *Editing Basics* — creates a fresh scene and types a spinning triangle
+- *Editing Basics* - creates a fresh scene and types a spinning triangle
   plus a torus, line by line, showing commits and the autocomplete ghost.
-- *Camera & Views* — orbit drags, wheel zoom, and the focus-origin ease.
-- *Getting Help* — opens the F1 overlay and clicks through its Overview /
+- *Camera & Views* - orbit drags, wheel zoom, and the focus-origin ease.
+- *Getting Help* - opens the F1 overlay and clicks through its Overview /
   Commands / Keys / About tabs, then right-clicks a command in the code panel
   to pop that command's own help card.
 
@@ -260,7 +260,7 @@ Autocomplete appears as you type:
 ![Typing glEnable(GL_LI: the popup lists the matching constants, ghost text completes inline](images/autocomplete.png)
 
 Your own functions complete too. Once a slot is defined, both spellings are
-offered — the bare `func3(` and any name you gave it (`drawCube(`) — and the
+offered - the bare `func3(` and any name you gave it (`drawCube(`) - and the
 parameter hint after the open paren names that definition's parameters.
 
 ### Editing what's there
@@ -268,7 +268,7 @@ parameter hint after the open paren names that definition's parameters.
 Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
 (**Ctrl+Z / Ctrl+Y**) work like a normal editor. Copy and cut also put the text
 on the **system clipboard**, so it pastes into any other app, and Ctrl+V takes
-text copied from anywhere else — multi-line text arrives as source lines, a
+text copied from anywhere else - multi-line text arrives as source lines, a
 single line lands in the input row when you are editing one. Right-click a GL command for
 a short description, or an assignment for [a plot of its
 values](#plotting-an-assignments-values). **Ctrl+D** deletes the current line or selection;
@@ -290,15 +290,15 @@ you are parked on. Clicking any of the three widgets focuses (and, for the
 chip, toggles) it.
 
 The **word** chip switches matching from plain substring to whole identifiers,
-and it applies to the search as well as the replace — the match count and the
+and it applies to the search as well as the replace - the match count and the
 highlights always show exactly what a replace would rewrite. Turn it on before
 renaming something short: without it, replacing `r` also hits the `r` inside
 `glColor3f`.
 
 Replace All is the tool for **renaming a variable or a function**. A rename
-cannot be done one line at a time — the REPL rejects a declaration whose name
+cannot be done one line at a time - the REPL rejects a declaration whose name
 is still referenced below it, and rejects a use of a name that is not declared
-yet — so the whole document is rewritten and validated in a single
+yet - so the whole document is rewritten and validated in a single
 transaction. If the result does not parse, nothing changes: the document, its
 variables, and its scratch arrays are restored, and the status line names the
 offending line. A successful replace is one **Ctrl+Z** away from being undone,
@@ -376,7 +376,7 @@ symmetric log axis when negative values or a zero crossing are present.
 Log spacing separates traces of different magnitudes while keeping their
 signs. Near-zero values collapse onto the center line; an all-zero trace has no
 logarithmic range, so the chip is disabled. **Min**, **max**, **mean**, and
-**sd** use every captured value for the selected series — hover its legend entry,
+**sd** use every captured value for the selected series - hover its legend entry,
 or move away to select the first. Visual decimation affects only the curve, not
 these statistics.
 
@@ -398,11 +398,11 @@ in which they all execute; changing the rows or rate starts a new collection.
 **During [replay](#replay)** a vertical rule marks how far the
 replay has run through each plotted row's executions this frame. So that the
 rule sits over the values the replay is actually stepping through, the plot
-captures every frame while replay is active regardless of the rate — the rate
+captures every frame while replay is active regardless of the rate - the rate
 chip greys out to show it is not in force. **once** is the exception: it stays
 frozen, and a frozen snapshot gets no rule, since the replay is not walking the
 frame it holds. A top-level row plotted against successive captures gets no
-rule either — there is no position within a frame to mark.
+rule either - there is no position within a frame to mark.
 
 **Comparing several rows.** **Shift**+right-click adds an assignment to the open
 plot instead of replacing what is there, up to four at once; Shift+right-click a
@@ -412,7 +412,7 @@ plotted row again to remove it.
 
 The legend identifies each color. X comes from the first row, so another row
 must have the same executions per frame or it is refused; a row that skips a
-later capture leaves a gap. Y spans every series — use `log` for widely different
+later capture leaves a gap. Y spans every series - use `log` for widely different
 magnitudes and `2x` for more drawing room.
 
 Plain right-click retargets the plot to one row. Editing a plotted row keeps
@@ -429,7 +429,7 @@ current, still-uncommitted empty input row.
 
 The popup opens on the state **your program** wrote before that row. The
 generated `init()` and `display()` setup writes far more state than a typical
-scene does — often by a factor of ten — so those rows start folded behind the
+scene does - often by a factor of ten - so those rows start folded behind the
 **[+] N from setup** chip on the title row. Click it to fold them in; they draw
 in a muted tone so the two groups stay distinguishable. Explicit writes that
 happen to match the initial OpenGL default are kept either way, so touched-ness
@@ -437,23 +437,23 @@ stays visible.
 
 The current value is always visible; click the **[+] default/source** chip in
 the column header to add the initial default and the source of the latest
-write — `init()`, generated `display()`, or a user `display()` line. The line
+write - `init()`, generated `display()`, or a user `display()` line. The line
 number it quotes is the one in the code panel's left margin, so it stays
 right whether or not code focus is hiding the derived C boilerplate (those
 hidden rows are counted in the margin numbering).
 
-A light's parameter rows appear only while that light can affect the frame —
+A light's parameter rows appear only while that light can affect the frame -
 that is, while it is enabled, or if your program set one of its parameters
 itself. Four disabled lights would otherwise contribute twenty rows of
 unreachable state.
 
 `glRasterPos3f` contributes two rows: the position, and the
-`GL_CURRENT_RASTER_COLOR` it latches from the current color at that line — the
+`GL_CURRENT_RASTER_COLOR` it latches from the current color at that line - the
 color `label(...)` then draws with, which a later `glColor3f` no longer moves.
 Neither row appears before the first `glRasterPos3f`, since nothing else writes
 those cells. With lighting on, OpenGL lights the raster position like a vertex
 and stores that result, so the inspector evaluates the lighting equation for
-this row — with `glEnable(GL_LIGHTING)` the value it shows is the lit color your
+this row - with `glEnable(GL_LIGHTING)` the value it shows is the lit color your
 text will actually be drawn in, which is generally *not* the `glColor3f` above
 it. (Two caveats it cannot show: a raster position clipped outside the view
 leaves the value undefined in OpenGL, and a few drivers compute this cell
@@ -470,7 +470,7 @@ report; click elsewhere or send input to the editor to dismiss it.
 | Ctrl+\ | Reformat all lines (re-indent blocks) |
 | Ctrl+/ | Toggle `//` comment on the current line |
 | Ctrl+Shift+Q | Split a multi-name `float` declaration into one decl per line (also File → Split Declaration) |
-| Ctrl+Shift+F | Toggle code focus — the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
+| Ctrl+Shift+F | Toggle code focus - the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
 | PgUp / PgDn | Scroll the active panel or overlay |
 
@@ -484,8 +484,8 @@ enclosing parens).
 
 ## The REPL Language
 
-The language is immediate-mode OpenGL with just enough structure around it —
-variables, loops, functions, conditionals — to build real scenes. Every
+The language is immediate-mode OpenGL with just enough structure around it -
+variables, loops, functions, conditionals - to build real scenes. Every
 numeric argument everywhere is a full math expression.
 
 ### Supported GL commands
@@ -494,20 +494,20 @@ numeric argument everywhere is a full math expression.
 - [`glVertex3f(x,y,z)`](https://docs.gl/gl2/glVertex), [`glVertex2f(x,y)`](https://docs.gl/gl2/glVertex)
 - [`glNormal3f(x,y,z)`](https://docs.gl/gl2/glNormal)
 - [`glColor3f(r,g,b)`](https://docs.gl/gl2/glColor), [`glColor4f(r,g,b,a)`](https://docs.gl/gl2/glColor)
-- [`glClearColor(r,g,b,a)`](https://docs.gl/gl2/glClearColor) — background clear color; channels
+- [`glClearColor(r,g,b,a)`](https://docs.gl/gl2/glClearColor) - background clear color; channels
   clamp to >= 0.15 (prevents a fully black background from hiding geometry)
 - [`glTranslatef(x,y,z)`](https://docs.gl/gl2/glTranslate), [`glScalef(sx,sy,sz)`](https://docs.gl/gl2/glScale),
   [`glRotatef(deg,x,y,z)`](https://docs.gl/gl2/glRotate)
 - [`glPushMatrix()`](https://docs.gl/gl2/glPushMatrix), [`glPopMatrix()`](https://docs.gl/gl2/glPushMatrix),
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
-- [`glMultMatrixf((GLfloat[]){m0, ..., m15})`](https://docs.gl/gl2/glMultMatrix) —
+- [`glMultMatrixf((GLfloat[]){m0, ..., m15})`](https://docs.gl/gl2/glMultMatrix) -
   post-multiply by a column-major 4x4, given inline or as a scratch array name
   (`glMultMatrixf(A)`); see [Arbitrary matrices](#arbitrary-matrices)
-- [`glPolygonMode(face,mode)`](https://docs.gl/gl2/glPolygonMode) — `GL_FILL`,
+- [`glPolygonMode(face,mode)`](https://docs.gl/gl2/glPolygonMode) - `GL_FILL`,
   `GL_LINE`, or `GL_POINT` rasterization, per face
-- [`glPolygonOffset(factor,units)`](https://docs.gl/gl2/glPolygonOffset) — depth
+- [`glPolygonOffset(factor,units)`](https://docs.gl/gl2/glPolygonOffset) - depth
   nudge for coplanar passes; needs `glEnable(GL_POLYGON_OFFSET_FILL)`
-- [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) —
+- [`glPushAttrib(mask)`](https://docs.gl/gl2/glPushAttrib), [`glPopAttrib()`](https://docs.gl/gl2/glPushAttrib) -
   save/restore a group of GL state (see Scoping state below). `mask` is one or
   more of `GL_CURRENT_BIT`, `GL_POINT_BIT`, `GL_LINE_BIT`, `GL_POLYGON_BIT`,
   `GL_LIGHTING_BIT`, `GL_FOG_BIT`, `GL_DEPTH_BUFFER_BIT`,
@@ -524,7 +524,7 @@ numeric argument everywhere is a full math expression.
     `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
-- [`glLineStipple(factor, pattern)`](https://docs.gl/gl2/glLineStipple) — repeat
+- [`glLineStipple(factor, pattern)`](https://docs.gl/gl2/glLineStipple) - repeat
   a 16-bit line pattern while `GL_LINE_STIPPLE` is enabled
 - [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
 - [`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA | GL_ONE)`](https://docs.gl/gl2/glBlendFunc)
@@ -538,33 +538,33 @@ numeric argument everywhere is a full math expression.
 - [`glDepthFunc(func)`](https://docs.gl/gl2/glDepthFunc), [`glDepthMask(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glDepthMask)
 - [`glStencilFunc(func, ref, mask)`](https://docs.gl/gl2/glStencilFunc),
   [`glStencilOp(stencil-fail, depth-fail, depth-pass)`](https://docs.gl/gl2/glStencilOp),
-  [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) — stencil-mask
+  [`glStencilMask(mask)`](https://docs.gl/gl2/glStencilMask) - stencil-mask
   setup, scoped by `GL_STENCIL_BUFFER_BIT` on the attribute stack
-- [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) — each channel GL_TRUE/GL_FALSE or 0/1
-- [`glClear(mask)`](https://docs.gl/gl2/glClear) — clear again part-way down a scene (see Clearing
+- [`glColorMask(r, g, b, a)`](https://docs.gl/gl2/glColorMask) - each channel GL_TRUE/GL_FALSE or 0/1
+- [`glClear(mask)`](https://docs.gl/gl2/glClear) - clear again part-way down a scene (see Clearing
   mid-scene). `mask` combines `GL_COLOR_BUFFER_BIT`, `GL_DEPTH_BUFFER_BIT`, and
   `GL_STENCIL_BUFFER_BIT` with `|`
-- [`glClearDepth(depth)`](https://docs.gl/gl2/glClearDepth) — the depth value a
+- [`glClearDepth(depth)`](https://docs.gl/gl2/glClearDepth) - the depth value a
   `GL_DEPTH_BUFFER_BIT` clear writes. GL clamps it to 0..1 and defaults to 1
   (the far plane); a lower value makes the cleared buffer reject geometry
   further away than that depth. Scoped by `GL_DEPTH_BUFFER_BIT` on the
   attribute stack, alongside `glDepthFunc` / `glDepthMask`
-- [`glClearStencil(value)`](https://docs.gl/gl2/glClearStencil) — the value a
+- [`glClearStencil(value)`](https://docs.gl/gl2/glClearStencil) - the value a
   `GL_STENCIL_BUFFER_BIT` clear writes, 0..255 (GL starts at 0). Takes an
   expression, truncated toward zero; scoped by `GL_STENCIL_BUFFER_BIT`
-- [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
-- [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
+- [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) - scalar boundary-edge flag; 0/1 accepted
+- [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) - user clip
   plane (see Clip planes)
 - [`glFogi(GL_FOG_MODE, GL_LINEAR|GL_EXP|GL_EXP2)`](https://docs.gl/gl2/glFog),
   [`glFogf(pname, value)`](https://docs.gl/gl2/glFog) with pname `GL_FOG_DENSITY`,
   `GL_FOG_START`, or `GL_FOG_END`, and
-  [`glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glFog) —
+  [`glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glFog) -
   distance fog; enable with `glEnable(GL_FOG)` (see built-in example *Fog ring
   tunnel*)
-- [`glRasterPos3f(x, y, z)`](https://docs.gl/gl2/glRasterPos) — position for bitmap text (see label below)
+- [`glRasterPos3f(x, y, z)`](https://docs.gl/gl2/glRasterPos) - position for bitmap text (see label below)
 
 [`glMaterialfv`](https://docs.gl/gl2/glMaterial) also accepts the flat shorthand
-`glMaterialfv(face, pname, r, g, b, a)` — the parser rewrites it to the
+`glMaterialfv(face, pname, r, g, b, a)` - the parser rewrites it to the
 compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) and
 [`glFogfv`](https://docs.gl/gl2/glFog) accept the same flat shorthand
 (`glClipPlane(plane, a, b, c, d)`, `glFogfv(GL_FOG_COLOR, r, g, b, a)`).
@@ -601,21 +601,21 @@ Add a second `gluBegin(GLU_CONTOUR)` block inside the same polygon to punch a
 hole through it. The built-in examples *GLU concave arrow*, *GLU concave arrow
 cutout*, and *GLU concave arrow extrusion* build up all three cases.
 
-- `gluBegin(GLU_POLYGON)` — start a tessellated polygon (REPL syntax over
+- `gluBegin(GLU_POLYGON)` - start a tessellated polygon (REPL syntax over
   [`gluTessBeginPolygon`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessBeginPolygon.xml))
-- `gluBegin(GLU_CONTOUR)` — start a contour within the polygon (REPL syntax
+- `gluBegin(GLU_CONTOUR)` - start a contour within the polygon (REPL syntax
   over [`gluTessBeginContour`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessBeginContour.xml))
-- `gluEnd()` — end the current contour or polygon, tracked by nesting depth
+- `gluEnd()` - end the current contour or polygon, tracked by nesting depth
   (REPL syntax over [`gluTessEndContour`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessEndContour.xml) /
   [`gluTessEndPolygon`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessEndPolygon.xml))
-- `gluNormal(nx, ny, nz)` — set the per-vertex normal (REPL syntax over
+- `gluNormal(nx, ny, nz)` - set the per-vertex normal (REPL syntax over
   [`gluTessNormal`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessNormal.xml))
-- `gluColor(r, g, b[, a])` — set the per-vertex color; alpha defaults to 1.0
+- `gluColor(r, g, b[, a])` - set the per-vertex color; alpha defaults to 1.0
   when omitted (REPL-only convenience, no direct GLU equivalent)
-- `gluVertex(x, y, z)` — add a vertex to the current contour (REPL syntax
+- `gluVertex(x, y, z)` - add a vertex to the current contour (REPL syntax
   over [`gluTessVertex`](https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluTessVertex.xml))
 
-### Bitmap text — `label()`
+### Bitmap text - `label()`
 
 ![The Orrery example uses labels that track 3D orbits](images/labels-orrery.png)
 
@@ -628,7 +628,7 @@ label("Earth phase = %f", t);
   position. Up to 4 substitution args; `%f` substitutes a value, `%%` is a
   literal percent. The string literal between the quotes is limited to 64
   characters and may not contain `//`, `(`, `)`, `,`, or backslashes.
-- This is a REPL convenience, not a real GL call — exported C files include
+- This is a REPL convenience, not a real GL call - exported C files include
   a self-contained `label()` helper so they still compile standalone.
 
 ### Clip planes
@@ -638,26 +638,26 @@ glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
 glEnable(GL_CLIP_PLANE0);
 ```
 
-`glClipPlane` sets the plane equation `a*x + b*y + c*z + d >= 0` — GL keeps
+`glClipPlane` sets the plane equation `a*x + b*y + c*z + d >= 0` - GL keeps
 the half-space the inequality selects and clips everything on the other
 side. Six planes are available (`GL_CLIP_PLANE0..5`); each does nothing
 until its cap is enabled. The equation is interpreted in the coordinate
 frame active at the call, so transforms before the line position the plane
 just like they position geometry.
 
-Coefficients are full expressions, so a plane can animate — a `d` driven by
+Coefficients are full expressions, so a plane can animate - a `d` driven by
 `t` sweeps a live cross-section through the scene:
 
 ![An animated clip plane sweeping a torus](images/clip-plane-sweep.gif)
 
 A plane equation is hard to picture from four numbers, so the cursor draws
-it for you — see [the clip-plane guide](#the-clip-plane-guide). Exporting
+it for you - see [the clip-plane guide](#the-clip-plane-guide). Exporting
 keeps clip planes standalone-compilable: the C file routes the equation
 through a small `repl_gldouble4` helper (compound literals are C99; the
 export targets C89) and reload converts it back.
 
 The *Clip planes carve solids (glClipPlane)* example walks the three core
-moves — one plane (a sphere becomes a dome), two planes meeting at an angle
+moves - one plane (a sphere becomes a dome), two planes meeting at an angle
 (a 120° wedge), and an animated `d` (a cutaway sweeping through a torus).
 
 ### Clearing mid-scene
@@ -674,7 +674,7 @@ middle of a scene when a later pass needs a fresh buffer.
 
 The useful one is `GL_DEPTH_BUFFER_BIT`. It throws away the depth of
 everything drawn so far, so geometry below the line draws over what came
-before it no matter how far away it is — the classic way to sit a HUD, a
+before it no matter how far away it is - the classic way to sit a HUD, a
 gizmo, or an inset object on top of a scene without moving it:
 
 ```c
@@ -687,7 +687,7 @@ glutSolidCube(0.3);             // ...so the cube is never hidden by the teapot
 `GL_COLOR_BUFFER_BIT` repaints the scene with the current
 [`glClearColor`](https://docs.gl/gl2/glClearColor), erasing geometry drawn
 above the line. It is confined to the 3D viewport, so it cannot touch the
-code panel or the menu bar — the rest of the window keeps the background the
+code panel or the menu bar - the rest of the window keeps the background the
 frame started with.
 
 `mask` is one bit, or any combination OR'd with `|`. Unlike every other numeric
@@ -710,7 +710,7 @@ has set a different value (0..255).
 stored value while `GL_STENCIL_TEST` is enabled. Both `ref` and `mask` are
 restricted to 0 through 255 and accept decimal or `0xNN`, but they differ in
 kind: `ref` is a full expression, so it can animate, while `mask` must be a
-literal — a mask names bits, not a quantity to sweep. Fractional references
+literal - a mask names bits, not a quantity to sweep. Fractional references
 truncate toward zero before GL receives them, and an animated `ref` that
 leaves the range is clamped to it rather than rejected.
 
@@ -718,7 +718,7 @@ leaves the range is clamped to it rather than rejected.
 full pass; `glStencilMask` limits which stencil bits can be written. Use
 `glStencilMask(0)` to protect a completed mask while later geometry tests it.
 
-All of it — comparison, ops, write mask and clear value — is scoped by
+All of it - comparison, ops, write mask and clear value - is scoped by
 `GL_STENCIL_BUFFER_BIT` on the attribute stack, so a masked pass can be
 wrapped in `glPushAttrib(GL_STENCIL_BUFFER_BIT)` / `glPopAttrib()` and leave
 nothing behind. The `GL_STENCIL_TEST` enable flag rides that bit *and*
@@ -726,18 +726,18 @@ nothing behind. The `GL_STENCIL_TEST` enable flag rides that bit *and*
 
 The grid, axes, backdrop and light indicators are drawn with the stencil test
 suspended, so a mask never clips the host's own chrome. Vertex outlines and
-points *do* follow it — they report what your geometry did, and an outline
-around masked-away geometry would be a lie — but they never write stencil, so
+points *do* follow it - they report what your geometry did, and an outline
+around masked-away geometry would be a lie - but they never write stencil, so
 turning them on cannot disturb a mask a later pass depends on.
 
 A mask is invisible in the rendered frame, so there is a viewer for it:
 [Stencil view](#stencil-view), under [Diagnostic Views](#diagnostic-views).
 
-### Wireframe & decals — glPolygonMode, glPolygonOffset
+### Wireframe & decals - glPolygonMode, glPolygonOffset
 
 `glPolygonMode(face, mode)` picks how polygons rasterize: `GL_FILL` (the
 default), `GL_LINE` for edges only, or `GL_POINT` for their corners. It is a
-wireframe of the geometry you already submitted — no second set of line
+wireframe of the geometry you already submitted - no second set of line
 primitives to build, and `face` (`GL_FRONT`, `GL_BACK`, `GL_FRONT_AND_BACK`)
 can give the two sides different treatments:
 
@@ -749,7 +749,7 @@ glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 `glPolygonOffset(factor, units)` exists for the pass you draw *on top of*
 another. Two coplanar surfaces have mathematically equal depth, so the depth
-test can't order them and the result speckles — the artefact known as
+test can't order them and the result speckles - the artefact known as
 z-fighting. The offset shifts polygon depths a hair before the test, and
 negative values pull toward the viewer:
 
@@ -764,7 +764,7 @@ glDisable(GL_POLYGON_OFFSET_FILL);
 `factor` scales with the polygon's depth slope (how steeply it recedes) and
 `units` is a fixed multiple of the smallest resolvable depth difference;
 `(-1, -1)` is the conventional starting pair for both. **The offset only
-applies while the matching capability is enabled** — `GL_POLYGON_OFFSET_FILL`
+applies while the matching capability is enabled** - `GL_POLYGON_OFFSET_FILL`
 for filled polygons, `GL_POLYGON_OFFSET_LINE` and `GL_POLYGON_OFFSET_POINT`
 for the other two `glPolygonMode` modes. Setting an offset without enabling
 one of those does nothing at all, which is the usual reason a decal still
@@ -799,7 +799,7 @@ three `glStencilOp` slots, the write mask and the clear value),
 `GL_TRANSFORM_BIT` (clip planes), `GL_ENABLE_BIT`
 (every `glEnable`/`glDisable` toggle), and `GL_COLOR_BUFFER_BIT` (blend, clear
 colour, colour mask). The `GL_FOG` and `GL_STENCIL_TEST` enable flags are saved
-by both their group bit and `GL_ENABLE_BIT`, matching real GL. Join several with `|` — like `glClear`'s
+by both their group bit and `GL_ENABLE_BIT`, matching real GL. Join several with `|` - like `glClear`'s
 mask it is a fixed set of tokens (no expressions), canonicalised to a stable
 order. `GL_ALL_ATTRIB_BITS` is a compact alias for the union of every group the
 REPL can currently change; its scope therefore grows if a later release adds
@@ -841,7 +841,7 @@ down:
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter) pair,
 and `rand2` is the same hash mapped to `[-1, 1]`. There is no per-frame random
 state anywhere: the same pair always returns the same number, which is what
-makes `rand` the stateless substitute for stored random values — see [Working
+makes `rand` the stateless substitute for stored random values - see [Working
 without state](#working-without-state).
 
 ### Variables
@@ -886,7 +886,7 @@ arrays persist and round-trip through save/load.
 
 `glTranslatef`, `glRotatef`, and `glScalef` cover almost everything, and they
 read far better than sixteen numbers. `glMultMatrixf` is for what they cannot
-express between them — a shear, a mirror, a planar shadow projection. It
+express between them - a shear, a mirror, a planar shadow projection. It
 post-multiplies the current matrix by a 4x4 you supply, written inline:
 
 ```c
@@ -899,14 +899,14 @@ itself to the compound-literal form, the same as `glMaterialfv`, `glFogfv`, and
 
 The layout is OpenGL's **column-major** order, the same one `glGetFloatv`
 returns: the first four values are the first column, the next four the second,
-and — the one worth memorizing — cells 12, 13, 14 hold the translation. The
+and - the one worth memorizing - cells 12, 13, 14 hold the translation. The
 example above shears x by 0.4 of y.
 
 Cells are ordinary expressions, re-evaluated every frame like any other
 argument, so a matrix built from `t` animates. The transform guides, replay,
 and overlays all follow it, because they see the same matrix the frame did.
 
-The classic use is the planar shadow projection — the matrix that squashes
+The classic use is the planar shadow projection - the matrix that squashes
 geometry onto a plane as seen from a light, so drawing the shape a second time
 through it draws its shadow (the *Planar shadows (glMultMatrixf)* example is
 this, animated):
@@ -926,7 +926,7 @@ glPopMatrix();
 #### From a scratch array
 
 Sixteen cells is also exactly a 4x4, so `glMultMatrixf` accepts a bare scratch
-array name instead — `A`, `B`, or `C`:
+array name instead - `A`, `B`, or `C`:
 
 ```c
 A[0] = 1;                 // the identity matrix: 1s down the diagonal
@@ -936,11 +936,11 @@ A[15] = 1;
 glMultMatrixf(A);         // post-multiply the current matrix by A
 ```
 
-This form is worth it when the matrix is built up over several lines — in a
-loop, or by a `funcN` — or reused by more than one call. The name is not an
+This form is worth it when the matrix is built up over several lines - in a
+loop, or by a `funcN` - or reused by more than one call. The name is not an
 expression and not a subscript: the array *is* the matrix, filled by ordinary
 `A[k] = ...` lines above the call, in the same block. Cells you never assign
-are zero, so write every one your matrix needs non-zero — an unassigned
+are zero, so write every one your matrix needs non-zero - an unassigned
 `A[15]` leaves the matrix singular and your geometry gone.
 
 The array is read when the frame is built, at that point in the program, so
@@ -961,7 +961,7 @@ limited first by the flat-command budget and the number of loop-iterator
 variables in scope. Loop bounds can be expressions (and can animate with
 `t`).
 
-#### Leaving a loop early — `break` and `continue`
+#### Leaving a loop early - `break` and `continue`
 
 ```c
 for(i, 0, 64) {
@@ -988,7 +988,7 @@ func1(radius, sides) {            // func0..func9, up to 10 params
         glVertex3f(radius*cos(i*TAU/sides), radius*sin(i*TAU/sides), 0);
     }
 }
-drawCube() {                      // or any name — aliases to a free funcN slot
+drawCube() {                      // or any name - aliases to a free funcN slot
     glutSolidCube(1);
 }
 
@@ -997,7 +997,7 @@ drawCube();
 ```
 
 Ten function slots are available. Recursion works when paired with an
-`if(...)` guard — see the *Recursive triangle tree* example.
+`if(...)` guard - see the *Recursive triangle tree* example.
 
 #### Function-scoped locals
 
@@ -1017,7 +1017,7 @@ blade(x0, z0, height) {
 ```
 
 - **`static` chooses storage, and it beats where the cursor is.**
-  `static float x;` is program-wide wherever you type it — including from
+  `static float x;` is program-wide wherever you type it - including from
   inside a function body, which is how you declare one without leaving the
   function first. Plain `float x;` is a local inside a function and
   program-wide at the top level, so existing scenes behave exactly as before.
@@ -1026,13 +1026,13 @@ blade(x0, z0, height) {
   line.
 - Locals hoist to the top of the *function body* the same way top-level
   declarations hoist to the top of the *program*, so you can type one at the
-  moment you realize you need it — including inside a `for` or an `if` nested in
+  moment you realize you need it - including inside a `for` or an `if` nested in
   the body. It lives for the whole call either way: it is not scoped to the
   block you typed it in, and it is not reset per iteration.
 - Recursion is safe. Two frames of the same function never share a local, which
   is what a program-wide scratch variable could never manage.
 - **Names follow C's scope rules.** A local may not collide with a parameter of
-  the same function, or with another local of the same body — those share one
+  the same function, or with another local of the same body - those share one
   scope, and C calls that a redefinition rather than shadowing. Shadowing an
   *outer* name is fine and resolves innermost-first: a local may shadow a
   program-wide variable, and a loop iterator may shadow a local for the length
@@ -1042,7 +1042,7 @@ blade(x0, z0, height) {
 - A function's parameters, its locals and its deepest loop nesting share one
   32-binding frame: `params + locals + deepest loop nesting <= 32`.
 
-A local is not a return value — the caller cannot read it. When the caller does
+A local is not a return value - the caller cannot read it. When the caller does
 need a result, keep that one variable program-wide and let the function write
 it. The *Orrery* example does exactly that: `px/py/pz` stay program-wide so the
 caller can hang a label off the body it just drew, while the fifteen Kepler
@@ -1064,7 +1064,7 @@ if(t > 2) {
 ```
 
 Continuation lines are matched as a unit, so both braces must sit on the same
-line as the keyword — `} else if(t > 1) {` and `} else {`, with whitespace
+line as the keyword - `} else if(t > 1) {` and `} else {`, with whitespace
 between the pieces optional. Splitting the brace onto its own line does not
 parse.
 
@@ -1092,10 +1092,10 @@ Type `// text` directly to add a comment line, or press `Ctrl+/` to toggle a
 comment on an existing one. A trailing comment on a `float` declaration can
 also carry a tag that changes how the variable is treated:
 
-- `// @tune` makes it a knob in the exported program — see [Tunable
+- `// @tune` makes it a knob in the exported program - see [Tunable
   Variables](#tunable-variables--tune).
 - `// @config` marks it as a parameter the program assigns on purpose, which
-  keeps its variable-panel row bright instead of dimmed — see [Config
+  keeps its variable-panel row bright instead of dimmed - see [Config
   Variables](ADVANCED_USAGE.md#config-variables--config).
 
 ---
@@ -1104,7 +1104,7 @@ also carry a tag that changes how the variable is treated:
 
 ![The Animated ring example](images/animated-ring.gif)
 
-`t` is the one predefined variable — it exists in every session without a
+`t` is the one predefined variable - it exists in every session without a
 declaration, starts at `0`, and while playing advances a fixed 1/60 s per
 rendered frame. Use it in any expression:
 
@@ -1115,8 +1115,8 @@ glVertex3f(sin(t), cos(t), 0);
 
 This is the whole animation model: there is no keyframe data and no
 accumulated state. The scene re-evaluates every frame, so anything written
-in terms of `t` animates — loop bounds, colors, transforms, vertex
-positions — and a frame is a *pure function of `t`*. The same `t` always
+in terms of `t` animates - loop bounds, colors, transforms, vertex
+positions - and a frame is a *pure function of `t`*. The same `t` always
 produces the same picture, which is what makes the scrubbing below (and
 headless capture) exactly reproducible.
 
@@ -1124,23 +1124,23 @@ headless capture) exactly reproducible.
   toggle).
 - **Ctrl+Shift+T** resets time `t` to zero.
 - `--time <secs>` (or the `GLR_TIME` env var) sets the starting `t` when
-  launching — handy for headless captures of a later moment.
+  launching - handy for headless captures of a later moment.
 
 ### Working without state
 
 A frame being a pure function of `t` cuts both ways: there is nowhere to
 *accumulate* anything between frames. You cannot write `pos = pos + vel`
-once per frame and expect `pos` to remember where it was — next frame the
+once per frame and expect `pos` to remember where it was - next frame the
 scene re-evaluates from source, not from last frame's values. Scenes that
 would normally keep state use one of three patterns instead. They read a
 little differently from typical game-loop code, but they are not harder
-to write — and they are *easier to debug*, because any moment can be
+to write - and they are *easier to debug*, because any moment can be
 reproduced exactly by setting `t`, without replaying history to get there.
 
 **Deterministic randomness instead of stored random state.** Where a
 game loop would roll a particle's attributes once and store them, here
 each particle recomputes them every frame from `rand(seed, iter)` /
-`rand2` — the same (seed, iter) pair always returns the same value, so a
+`rand2` - the same (seed, iter) pair always returns the same value, so a
 particle's "random" drift, size, or tint is a stable per-particle
 constant keyed on its index. The *Snowfall particles* example
 derives every flake's drift, fall speed, and depth from `rand(p, slot)`
@@ -1164,21 +1164,21 @@ get drift-with-drag. Looping lifetimes fall out of `fmod`:
 with no bookkeeping.
 
 **Replay the algorithm from the start.** Some scenes really are
-history-dependent — a sort's array order depends on every swap before it.
+history-dependent - a sort's array order depends on every swap before it.
 The stateless version recomputes that history each frame: start from the
 initial state and re-run the algorithm's steps up to the count implied by
 `t`. The *Bubble sort (scratch arrays)* example re-seeds `A[0..15]` with
 a deterministic shuffle and re-runs its compare-and-swap loops every
 frame, gating each compare on `p*15 + j < steps` where `steps` derives
-from `t` — the bars freeze mid-sort at exactly the right compare, and
+from `t` - the bars freeze mid-sort at exactly the right compare, and
 dragging the time slider scrubs the sort forwards *and backwards*.
 
 The payoff of all three is the same: reproducibility. A glitch spotted at
-`t ≈ 7.3` is inspected by pausing and dragging `t` to 7.3 — no waiting,
+`t ≈ 7.3` is inspected by pausing and dragging `t` to 7.3 - no waiting,
 no lucky re-run, no divergent state. It is also what makes
 [replay](#replay), timeline scrubbing, and `--time`-anchored headless
-captures possible at all. The cost is recomputation — the replay pattern
-in particular redoes work proportional to what `t` implies, every frame —
+captures possible at all. The cost is recomputation - the replay pattern
+in particular redoes work proportional to what `t` implies, every frame -
 see [Performance & Scope](#performance--scope) for where that ceiling
 sits and how export lifts it.
 
@@ -1199,11 +1199,11 @@ have no panel row.
 
 Row brightness distinguishes knobs from storage:
 
-- **Bright** — read-only parameter/config variables; best for sliders.
-- **Dim** — variables written by committed `name = expr;` lines. You can
+- **Bright** - read-only parameter/config variables; best for sliders.
+- **Dim** - variables written by committed `name = expr;` lines. You can
   drag them, but a later assignment may overwrite the value.
 - A [`// @config`](ADVANCED_USAGE.md#config-variables--config) tag on the
-  declaration keeps a row bright even though the program assigns it — for
+  declaration keeps a row bright even though the program assigns it - for
   bounds-keeping writes like `n = min(20, max(n, 3));` that clamp a knob
   rather than compute state.
 - The [`// @tune`](#tunable-variables--tune) accent is separate from
@@ -1213,7 +1213,7 @@ Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.
 
 Because `t` is just a variable, it gets a row in the variable panel like any
-other — and dragging that row is a timeline scrubber. Pause with **Ctrl+T**,
+other - and dragging that row is a timeline scrubber. Pause with **Ctrl+T**,
 then drag the `t` row to move the whole animation back and forth; release
 and press **Ctrl+T** again to resume playing from wherever you left it. The
 usual drag speeds apply: plain drag scrubs linearly, **right-click drag** is
@@ -1223,7 +1223,7 @@ the fast scrub, **Shift+drag** the slow one.
 
 ## Camera & Views
 
-Mouse input in the viewport is *camera-only* — there is nothing to click on
+Mouse input in the viewport is *camera-only* - there is nothing to click on
 in the scene, and no drag can change your geometry. To move a vertex, edit
 its `glVertex3f` line (or the variable feeding it); see
 [Adjusting values without retyping](#adjusting-values-without-retyping).
@@ -1234,7 +1234,7 @@ its `glVertex3f` line (or the variable feeding it); see
 | Right-drag | Pan in the XZ plane |
 | Shift+Right-drag | Pan vertically (Y) |
 | Scroll wheel | Zoom, with momentum |
-| Ctrl+O | Focus origin — ease the orbit target back to (0,0,0) |
+| Ctrl+O | Focus origin - ease the orbit target back to (0,0,0) |
 | Ctrl+Shift+C | Reset the camera to its default pose (eased) |
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode: 3D perspective / 2D ortho |
@@ -1242,7 +1242,7 @@ its `glVertex3f` line (or the variable feeding it); see
 
 **2D mode.** *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config
 menu) switches between the 3D perspective camera and a flat 2D orthographic
-projection — useful for plots, sketches, and UI-like drawings. Examples that
+projection - useful for plots, sketches, and UI-like drawings. Examples that
 declare `@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
 
 ![Toggling View mode between 3D perspective and 2D ortho on the wave surface](images/view-mode-2d.gif)
@@ -1259,7 +1259,7 @@ orthographically. Examples can declare `@cfg projection = PROJ_ORTHO`.
 
 Immediate-mode GL is invisible state: the current color, the current matrix,
 the winding of the polygon you just typed. A family of guides and overlays
-exists to make that state visible while you edit — they follow your cursor and
+exists to make that state visible while you edit - they follow your cursor and
 annotate the geometry the line under it produces. The [diagnostic
 views](#diagnostic-views) that follow work the other way round: they re-render
 the whole scene to answer one question.
@@ -1268,7 +1268,7 @@ the whole scene to answer one question.
 
 While a `glVertex3f(` line is still being typed, the scene shows where the
 vertex *could* still land given what you have entered so far. Each coordinate
-you type removes a degree of freedom, and the guide collapses to match — a
+you type removes a degree of freedom, and the guide collapses to match - a
 surface, then a line, then a point:
 
 ![The guide narrowing as coordinates are typed: sheet at x = 1.2, then a line along z, then a point, then a fresh sheet for the next vertex](images/vertex-guides.png)
@@ -1286,7 +1286,7 @@ Reading in order, and the typed line above each panel is what produced it:
   findable against geometry. The same marker appears when the cursor sits on a
   committed vertex line.
 - **The next vertex** starts the ladder over. In the last panel the first
-  vertex has been committed — it is the one labelled `v0` — and a second is
+  vertex has been committed - it is the one labelled `v0` - and a second is
   under way, pinned on `y` this time, so the sheet is horizontal and green
   where the first was vertical and red.
 
@@ -1294,7 +1294,7 @@ The guide is colored by the axis you pinned (X red, Y green, Z blue), which is
 why the sheet changes color between the first and last panels.
 
 `glVertex2f` pins `z = 0` implicitly, so its first coordinate already narrows
-the guide to a line. Guides follow the cursor's transform context — inside a
+the guide to a line. Guides follow the cursor's transform context - inside a
 `glPushMatrix`/`glTranslatef` frame the sheet and line render in that frame,
 matching where the vertex will actually land.
 
@@ -1306,7 +1306,7 @@ viewport, and moving the cursor moves the highlight.
 
 ![Cursor on each of two tri() calls in turn; the highlight and vertex labels move to the triangle that call draws](images/cursor-highlight.png)
 
-Both halves are the same scene and the same program — only the cursor has
+Both halves are the same scene and the same program - only the cursor has
 moved. The *Transform stress* example calls one `tri()` function from two
 different transform stacks, so line 54 draws the magenta triangle up top and
 line 60 draws the yellow one spinning at the origin. Park the cursor on either
@@ -1325,34 +1325,34 @@ The overlay toggles annotate geometry scene-wide:
 ![The cursor on the glNormal3f row, and the quad below it carrying vertex labels, points, outlines, normals and the polygon highlight](images/vertex-overlays.png)
 
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
-  Index+World Fine — numbers each vertex of the primitive at the cursor,
+  Index+World Fine - numbers each vertex of the primitive at the cursor,
   optionally with its coordinates. "At the cursor" is literal: the cursor has
-  to be resting on a committed `glVertex3f` line. Park it anywhere else — a
-  blank row, a `glBegin`, a vertex you are still typing — and there is no
+  to be resting on a committed `glVertex3f` line. Park it anywhere else - a
+  blank row, a `glBegin`, a vertex you are still typing - and there is no
   primitive to number, so nothing is labelled. **Whole scene** is the scope
   that lifts that restriction.
-- **Overlay scope** (F8): Cursor block — last instance / all instances /
-  single polygon — plus **Whole scene**. Controls how broadly the cursor-bound
+- **Overlay scope** (F8): Cursor block - last instance / all instances /
+  single polygon - plus **Whole scene**. Controls how broadly the cursor-bound
   overlays are shown around repeated function/loop instances: the vertex
   labels, the polygon highlight, the **normal vectors** and the cursor guide
   all obey it. *Last instance* picks the final unrolled copy, so they all sit
   on the copy whose loop-body variable values the **variable panel** is
-  showing — and on the last polygon a replay draws. *Whole scene* is the one
+  showing - and on the last polygon a replay draws. *Whole scene* is the one
   scope not anchored to the cursor: it takes **every** vertex the program
   emits, not just the block you are editing. The highlight stays on the
   cursor's block there.
 
   Vertex labels are culled against the depth buffer when the GL context
-  supports reading it — a vertex hidden behind solid geometry gets no label,
+  supports reading it - a vertex hidden behind solid geometry gets no label,
   in every scope. WebGL cannot read the default framebuffer's depth, so the web
   build shows every in-scope label instead. The polygon highlight is exempt and
   still draws through, so the cursor's shape stays findable.
-- **Vertex label placement**: Decluttered / At vertex — *where* each label
+- **Vertex label placement**: Decluttered / At vertex - *where* each label
   sits, independent of which vertices get one. Decluttered floats labels onto
   clear rows with leader lines; At vertex pins each to its own vertex, exact
   position and overlaps included.
 - **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow,
-  within the **Overlay scope** above — so on a dense surface you can narrow
+  within the **Overlay scope** above - so on a dense surface you can narrow
   the arrows to the block you are editing instead of reading a pincushion.
   *Whole scene* is the scope that arrows everything.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
@@ -1360,28 +1360,28 @@ The overlay toggles annotate geometry scene-wide:
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
   Cycles Off / On / **Clipped & culled**. Both draw the highlight; they differ
   over your `glClipPlane` and `glEnable(GL_CULL_FACE)` calls. On draws the
-  cursor's shape **as authored** — the whole sphere a plane cuts into a dome,
-  both sides of a culled shell — so you can see the geometry you wrote. Clipped
+  cursor's shape **as authored** - the whole sphere a plane cuts into a dome,
+  both sides of a culled shell - so you can see the geometry you wrote. Clipped
   & culled draws only what the frame draws, like every other overlay.
 
 Vertex outlines and vertex points always report the geometry the frame
 actually shows:
 
-- **Clip planes** — an outline stops where the shape does, and no point is
+- **Clip planes** - an outline stops where the shape does, and no point is
   drawn on a clipped-away face.
-- **Culling** — back-face outlines vanish under `glEnable(GL_CULL_FACE)`,
+- **Culling** - back-face outlines vanish under `glEnable(GL_CULL_FACE)`,
   following your own `glCullFace` / `glFrontFace` rule. Authored vertex points
   are the exception: GL never culls point primitives, and a vertex shared by a
   front and a back face still sits on a face you can see, so the dots stay.
   Points on `glutSolid*` meshes do cull, since those draw as polygons.
-- **Color mask** — geometry drawn under a `glColorMask` with no live color
+- **Color mask** - geometry drawn under a `glColorMask` with no live color
   channel gets no outline and no dots: a depth-only seed pass puts nothing on
   screen to outline.
 
 The cursor highlight is the deliberate exception to all of it. It draws through
 a color mask (finding the line you're editing matters even when its geometry is
 an invisible depth seed), and under Polygon highlight = On it ignores clipping
-and culling too — so you can get a cut, culled outline with a whole-shape
+and culling too - so you can get a cut, culled outline with a whole-shape
 highlight over it.
 
 ### Vertex label placement & numbering
@@ -1410,7 +1410,7 @@ between the two scenes.
 - **At vertex** (right) numbers by **index within the primitive**: `v0`..`v3`,
   once per copy. The label is drawn on the vertex it names, so there is
   nothing to disambiguate, and the in-block ordinal is the more useful reading
-  — it tells you which corner of the quad you are on, and stays short. Global
+  - it tells you which corner of the quad you are on, and stays short. Global
   numbering on a dense surface would put four-digit numbers on every vertex.
 
 *Last instance* and *Single polygon* keep only one copy, so both rules produce
@@ -1418,7 +1418,7 @@ the same numbers there.
 
 **Single polygon** scope narrows labels and the polygon highlight down to
 just the one primitive your cursor is building, instead of the whole
-`glBegin`/`glEnd` block — handy for a multi-face batch like a cube drawn as
+`glBegin`/`glEnd` block - handy for a multi-face batch like a cube drawn as
 one `glBegin(GL_QUADS)` with several faces packed into it. The cursor's
 position between vertex lines picks the primitive: any line up through a
 primitive's last vertex belongs to it, and the next line starts the next
@@ -1427,15 +1427,15 @@ one.
 ![Single polygon scope: cursor on the second quad's second vertex highlights and labels only that quad](images/single-polygon-scope.png)
 
 Here the cursor sits on the second quad's `glVertex3f(1.6, -0.8, 0)` line;
-only that quad outlines and labels (`v4`..`v7`) — the first quad is left
+only that quad outlines and labels (`v4`..`v7`) - the first quad is left
 alone even though both share the same `glBegin`/`glEnd` pair.
 
 ### Transform guides
 
 With **Transform guides** on (Ctrl+Shift+X), placing the cursor on a committed
 `glTranslatef` / `glRotatef` / `glScalef` line draws an overlay showing what
-that line does. Every guide is drawn in the same "axes pulse" language — a dim
-base shape with a bright dot traveling along it — colored from the command's
+that line does. Every guide is drawn in the same "axes pulse" language - a dim
+base shape with a bright dot traveling along it - colored from the command's
 own vector, so a pure-axis transform reads as a pure axis color (X=red,
 Y=green, Z=blue) and diagonals blend:
 
@@ -1443,21 +1443,21 @@ Y=green, Z=blue) and diagonals blend:
 
 Each kind draws its own shape, labeled with its own readout:
 
-- **Translate** — an arrow along the argument vector, tip where the geometry
+- **Translate** - an arrow along the argument vector, tip where the geometry
   lands, labeled with the endpoint position.
-- **Rotate** — a dial in the plane of the rotation, swept by the pulse in the
+- **Rotate** - a dial in the plane of the rotation, swept by the pulse in the
   direction of the turn and labeled with the angle.
-- **Scale** — a 3-axis gizmo: a gray unit reference with a tick at `1.0` on
-  each axis, and a pulsing arrow only on the axes whose factor is not 1 —
+- **Scale** - a 3-axis gizmo: a gray unit reference with a tick at `1.0` on
+  each axis, and a pulsing arrow only on the axes whose factor is not 1 -
   outward for `> 1`, inward for `< 1` (the green Y arrow in the last tile).
 
 Guides only appear when the line parsed cleanly and your current input
-matches the committed source — partial or mid-edit lines are skipped.
+matches the committed source - partial or mid-edit lines are skipped.
 
 #### Guide mode
 
-**Transform guides** is a three-state setting — Ctrl+Shift+X (or the Config
-menu row) cycles Off → World → Frame — and the two on-states differ in *where*
+**Transform guides** is a three-state setting - Ctrl+Shift+X (or the Config
+menu row) cycles Off → World → Frame - and the two on-states differ in *where*
 the guide is anchored. It is worth knowing which one you are reading: OpenGL
 applies transforms in reverse source order when computing a vertex
 (`M_1 · M_2 · ... · M_n · v`), so the literal reading of a transform line is
@@ -1468,18 +1468,18 @@ often not where you see it act.
 Both captures above run the same program with the cursor on the same
 `glTranslatef(-3.6, 1, 0)`; only the mode differs.
 
-- **World** *(top)* — the strict reverse-order reading, drawn in world axes
+- **World** *(top)* - the strict reverse-order reading, drawn in world axes
   starting from the point the commands *after* the cursor have already placed
-  (accumulation stops at the first draw call — `glBegin`, a `glutSolid*`
+  (accumulation stops at the first draw call - `glBegin`, a `glutSolid*`
   shape, a tess polygon). Here nothing follows the cursor but the cube, so the
   arrow leaves the world origin and ends in empty space. When post-cursor
   transforms *do* carry that point off the origin, rotate sweeps the point
   itself instead of drawing a dial, and scale draws a single before → after
   arrow instead of the gizmo.
-- **Frame** *(default, bottom)* — anchored where the modelview *before* the
+- **Frame** *(default, bottom)* - anchored where the modelview *before* the
   cursor has carried the origin: the first cube. The same vector now runs from
   the first cube to the second, lining up with the geometry as rendered. Only
-  the anchor comes from the pre-cursor matrix — the guide still draws with
+  the anchor comes from the pre-cursor matrix - the guide still draws with
   world-axis orientation.
 
 The *Transform stress* example (F12 to cycle to it) is built to exercise
@@ -1500,7 +1500,7 @@ the call, so it sits exactly where the plane cuts.
 
 ### Auto-normals
 
-Unlike everything above, **Auto-normals** does not draw anything — it writes
+Unlike everything above, **Auto-normals** does not draw anything - it writes
 `glNormal3f` lines into your program. It is an experimental helper with one
 narrow job: you have pasted in a slab of static geometry, polygon soup with no
 normals, and want lighting to do something reasonable without hand-writing a
@@ -1511,8 +1511,8 @@ meeting at a vertex).
 Read the limitation before reaching for it: **the pass only touches a
 `glBegin` block whose vertex coordinates are all literal numbers.** If any
 vertex in the block is expression-driven, the whole block is skipped. That
-rules out most real scenes — geometry inside a `for` loop uses the loop
-iterator, and anything animated uses `t` or a variable — so on the scenes you
+rules out most real scenes - geometry inside a `for` loop uses the loop
+iterator, and anything animated uses `t` or a variable - so on the scenes you
 would most like it to help with, auto-normals will quietly do nothing. Write
 those normals yourself, or compute them alongside the vertices.
 
@@ -1528,7 +1528,7 @@ trailing `/* @auto */` comment so a reloaded scene keeps updating them.
 
 ## Diagnostic Views
 
-Each of these re-renders the whole scene to answer one question — which way is
+Each of these re-renders the whole scene to answer one question - which way is
 this face pointing, what does the depth buffer hold, what did my stencil pass
 write. They are independent of the cursor, and they stack with the overlays
 above.
@@ -1553,14 +1553,14 @@ glance.
 
 Wireframe draws polygon edges over the scene. Hidden-line goes further: it
 draws all edges first in a muted color, seeds the depth buffer with filled
-polygons, then redraws visible edges bright — so the silhouette reads
+polygons, then redraws visible edges bright - so the silhouette reads
 clearly while occluded structure stays faint. Tip: vertex outlines/points
 are on by default and draw over the wires; turn them off for a clean
 wireframe look.
 
 ### Depth view
 
-**Ctrl+Shift+D** cycles the Depth view: **Off / Linear / Scene / Split** — a
+**Ctrl+Shift+D** cycles the Depth view: **Off / Linear / Scene / Split** - a
 grayscale rendering of the depth buffer, for seeing what depth testing
 actually sees. Near surfaces are bright, far ones dark, and empty
 background is black:
@@ -1569,35 +1569,35 @@ background is black:
 
 - **Linear** spreads the gray ramp across the whole near/far range of the
   projection. Faithful, but since most scenes occupy a small slice of that
-  range, everything tends to read bright and flat — use it when you care
+  range, everything tends to read bright and flat - use it when you care
   about absolute depth (e.g. how close geometry sits to the near plane).
 - **Scene** stretches the ramp over *your geometry's* actual depth extent
   instead, so the nearest surface is white and the farthest keeps a dim
-  floor above the background — full contrast for spotting depth ordering
+  floor above the background - full contrast for spotting depth ordering
   and z-fighting candidates. The range follows the scene smoothly as it
   animates.
 - **Split** keeps the normal render and overlays the scene-normalized
-  depth image on the right half, pixel-aligned — the same column of pixels
+  depth image on the right half, pixel-aligned - the same column of pixels
   in both halves is the same fragment, so you can read color and depth
   side by side.
 
 The depth snapshot is taken right after your geometry draws, before the
-grid, backdrop, and axes render — so the helpers never appear in the depth
+grid, backdrop, and axes render - so the helpers never appear in the depth
 image (notice the grid on Split's normal half only). It works during
 replay, pairs with wireframe/hidden-line (they seed real depths), and the
 depth image is taken from the final accumulation pass, so AA and motion
 blur keep working in Split's normal half. On the web build the row is
-inert — WebGL cannot read the depth buffer back.
+inert - WebGL cannot read the depth buffer back.
 
 ### Stencil view
 
-**Stencil view** (Ctrl+Shift+S) cycles **Off / Palette / Ramp / Split** — a
+**Stencil view** (Ctrl+Shift+S) cycles **Off / Palette / Ramp / Split** - a
 false-color overlay of the stencil buffer, with a legend in the scene's top-left
 corner. It is the companion to [Stencil masks](#stencil-masks): a mask changes
 what draws without ever showing itself, so this is the only way to see what
 your mask pass actually wrote.
 
-Zero is fully transparent, which makes the overlay sparse — the ordinary
+Zero is fully transparent, which makes the overlay sparse - the ordinary
 render shows through everywhere the buffer is 0, and only stenciled pixels
 take a color. **Palette** gives each value a fixed swatch, **Ramp** normalizes
 the non-zero values to a smoothed min/max, and **Split** restricts the overlay
@@ -1611,8 +1611,8 @@ Four things are worth knowing before you trust what you see:
   invisible. That is a property of the buffer, not of the viewer.
 - The palette **repeats every 16 values** (1 and 17 share a swatch), which is
   why every legend row prints its numeric value. The legend lists the biggest
-  rows by pixel count — up to eight, plus a `+N more` row when there are more
-  — and always keeps the background and total rows.
+  rows by pixel count - up to eight, plus a `+N more` row when there are more
+  - and always keeps the background and total rows.
 - Nothing clears the scene rect for you, so a program that omits
   `GL_STENCIL_BUFFER_BIT` from its `glClear` accumulates stencil across
   frames. With the view on, the status line points that out once per program
@@ -1623,14 +1623,14 @@ Four things are worth knowing before you trust what you see:
 With Depth view on at the same time, depth wins wherever it paints: it
 replaces the whole rect after the stencil overlay composites, so the stencil
 overlay survives only in the live half of depth's Split. That falls out of the
-compositing order and is left that way deliberately — a menu row that silently
+compositing order and is left that way deliberately - a menu row that silently
 switched another one off would be the worse surprise.
 
 The overlay needs a stencil readback, which the web build cannot do; there the
 row refuses with *Stencil view unavailable: WebGL context can't read the
 stencil buffer (works in the native build)*, and a native context that granted
 no stencil planes refuses the same way. The commands themselves work
-everywhere — only the visualization is native/OSMesa-only. A scene whose
+everywhere - only the visualization is native/OSMesa-only. A scene whose
 `@cfg` header carries `stencil_view` loads its stored value regardless, so
 files round-trip unchanged between machines.
 
@@ -1640,29 +1640,29 @@ files round-trip unchanged between machines.
 
 Nearly every toggle in this guide has a home here, whether or not it also has
 a key. Open the **Config** dropdown (or press **Ctrl+Shift+K**). Items are
-grouped into sections — hovering one opens a flyout of its items, and the
+grouped into sections - hovering one opens a flyout of its items, and the
 trailing **All** row shows the entire table at once (the mouse wheel scrolls flyouts
 taller than the window):
 
-- **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Point attenuation,
+- **RENDERING** - MSAA, Line smooth, Accum effect, Accum passes, Point attenuation,
   Post FX Scope, Post FX Effect
-- **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
-- **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
+- **TIME & REPLAY** - Auto time, Replay, Replay mode, Replay expand
+- **SCENE** - Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
   Light indicators
-- **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
-  (returns to the scene's authored `// camera` pose — from a built-in example
-  or a loaded file — and to the built-in defaults only when the scene has no
+- **CAMERA** - View mode, Projection, Camera rotate, Focus origin, Reset camera
+  (returns to the scene's authored `// camera` pose - from a built-in example
+  or a loaded file - and to the built-in defaults only when the scene has no
   camera header)
-- **GEOMETRY** — Wireframe, Winding, Depth view, Stencil view, Auto-normals
-- **OVERLAYS** — Overlay scope, Vertex labels, Vertex points, Vertex outlines,
+- **GEOMETRY** - Wireframe, Winding, Depth view, Stencil view, Auto-normals
+- **OVERLAYS** - Overlay scope, Vertex labels, Vertex points, Vertex outlines,
   Vertex outline style, Normal vectors, Polygon highlight, Transform guides
-- **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
+- **INTERFACE** - Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
 
 **Left-click** a flyout item to cycle it forward, **right-click** to cycle
 backward. Multi-state items show their current state name. Items this guide
-names without a shortcut — Line smooth, Point attenuation, Post FX Effect,
-Auto-normals, Vertex label placement — are menu-only; they have no key.
+names without a shortcut - Line smooth, Point attenuation, Post FX Effect,
+Auto-normals, Vertex label placement - are menu-only; they have no key.
 
 Function keys drive the most common cycles directly (**Shift+F*n*** steps
 backward):
@@ -1684,7 +1684,7 @@ backward):
 ## Scene Appearance
 
 The stage your geometry stands on, and the quality settings that render it.
-None of this is part of your program — it is not exported, and switching any
+None of this is part of your program - it is not exported, and switching any
 of it changes nothing about the commands in the code panel.
 
 ### Grid & axes
@@ -1700,12 +1700,12 @@ Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
 brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
 changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
 
-![Grid brightness against a bright cube — Dim, Normal (top), Bright, Bold (bottom)](images/grid-brightness.png)
+![Grid brightness against a bright cube - Dim, Normal (top), Bright, Bold (bottom)](images/grid-brightness.png)
 
 Grid brightness is at its most useful where the grid crosses **bright
 geometry**, as above: a near-white cube sunk below the grid plane, so the
 whole graticule draws over its faces. Dim all but drops the lines there,
-while Bright and Bold keep them readable — those two levels give every line a
+while Bright and Bold keep them readable - those two levels give every line a
 dark contrast casing, because past a point raising the line's opacity alone
 stops helping: a blended line converges toward its own color, and a pale gray
 line on a pale surface has nowhere left to go.
@@ -1733,12 +1733,12 @@ see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
 
 **Light themes** (**F9**) are preset light rigs: Default (three colored
 keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
-origin — for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
+origin - for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
 Neon (saturated magenta/cyan/lime triad).
 
 > [!NOTE]
 > A theme only positions and colors
-> the four light slots — your program still chooses which ones are on via
+> the four light slots - your program still chooses which ones are on via
 > `glEnable(GL_LIGHT0..3)`.
 
 **Themes are the in-app control for light positions and colors.** The REPL
@@ -1750,7 +1750,7 @@ See [Scope & Current Limitations](#scope--current-limitations).
 (labelled `L0..L3`, with *off* noted for disabled lights), so you can see
 where the rig sits. Park the cursor on a light's own
 `glEnable`/`glDisable(GL_LIGHTn)` line and that light's indicator is wrapped
-in a soft halo of its own color — on or off, so it also finds the light you
+in a soft halo of its own color - on or off, so it also finds the light you
 are about to switch on. It tracks the line you are typing, not just committed
 ones.
 
@@ -1767,34 +1767,34 @@ lines, where they can be inspected or edited as ordinary C.
 
 ### Rendering quality
 
-- **MSAA** (Ctrl+U) — hardware multisampling on/off.
-- **Line smooth** — GL line antialiasing.
-- **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+−) — the
+- **MSAA** (Ctrl+U) - hardware multisampling on/off.
+- **Line smooth** - GL line antialiasing.
+- **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+−) - the
   accumulation buffer drives antialiasing and motion blur:
-  - **AA** *(default, 1 pass)* — jitters the camera frustum per pass.
-  - **Blur** — re-renders the scene per pass across the frame's
-    animation-time window, so spinning geometry smears realistically —
+  - **AA** *(default, 1 pass)* - jitters the camera frustum per pass.
+  - **Blur** - re-renders the scene per pass across the frame's
+    animation-time window, so spinning geometry smears realistically -
     even while the camera moves (the camera itself stays crisp). Scenes
     that don't use `t` fall back to AA jitter.
-  - **Blur Cam** — blurs camera motion only; falls back to AA when still.
+  - **Blur Cam** - blurs camera motion only; falls back to AA when still.
   - Passes: 1/2/4/8/12/16. The status bar shows the active mode
-    (`AA 1x`, `Blur 16x`). Blur is expensive — every pass is a full scene
+    (`AA 1x`, `Blur 16x`). Blur is expensive - every pass is a full scene
     render. `--no-accum` disables the accumulation buffer entirely;
     `--accum` forces it on where it would otherwise auto-disable (Mesa
     emulates the accumulation buffer on the CPU).
 
   ![Motion blur on a spinning cube (Blur 16x)](images/motion-blur.png)
 
-- **Point attenuation** — distance-attenuated point sprites
+- **Point attenuation** - distance-attenuated point sprites
   (`glPointParameterfv`); used by the glow/particle examples. On hardware
   without the entry point the REPL falls back to a distance-based
   `glPointSize` approximation.
 
   ![The point-size and attenuation setup rows above the sprite cloud they draw](images/glow-sprites.png)
 
-- **Post FX Scope** (F10 forward / Shift+F10 backward) — where the selected
+- **Post FX Scope** (F10 forward / Shift+F10 backward) - where the selected
   effect applies: Off / 3D View / Frame.
-- **Post FX Effect** — the selected operation: Chromatic aberration, Vignette,
+- **Post FX Effect** - the selected operation: Chromatic aberration, Vignette,
   Scanlines, or Film grain.
 
 ---
@@ -1804,7 +1804,7 @@ lines, where they can be inspected or edited as ordinary C.
 ![Replay stepping through a scene](images/replay.gif)
 
 Replay executes your program one command at a time so you can watch the
-scene assemble — geometry appears incrementally, older geometry fades in a
+scene assemble - geometry appears incrementally, older geometry fades in a
 ghosted pass, and the code panel highlights each line as it runs, with
 loop-variable values substituted into the displayed text.
 
@@ -1825,7 +1825,7 @@ The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand**. Its middle
-**Expanded** mode annotates every line in place — assignments, loop and
+**Expanded** mode annotates every line in place - assignments, loop and
 function headers, and any call with an evaluated form (`glVertex`/`gluVertex`,
 `glColor`/`gluColor`, `glNormal`/`gluNormal`, the `glutSolid*` shapes, the
 transforms) keeps its evaluated call appended as a `//` comment, so one source
@@ -1840,18 +1840,18 @@ zero-alpha values remain readable).
 
 gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 
-- **Examples first** — a fresh launch opens on the default example. A user
+- **Examples first** - a fresh launch opens on the default example. A user
   scene is created when you choose File -> New Scene, load a scene file or
   workspace, or edit an example.
-- **Auto-promotion** — editing a built-in example, or saving it into a managed
+- **Auto-promotion** - editing a built-in example, or saving it into a managed
   workspace, forks it into a fresh scene slot named after the example.
   Subsequent edits accumulate there.
-- **Rename** — File → Rename Scene opens an inline prompt in the status bar
+- **Rename** - File → Rename Scene opens an inline prompt in the status bar
   (Enter commits, Esc cancels). In a managed workspace this changes the tab
   name while retaining the scene's stable persisted filename. The action is
   disabled while an example or tutorial is active.
-- **Switching** — click a scene tab, or cycle with F12 / Shift+F12.
-- **Capacity** — all eight tabs are explicit. New/load/promotion operations
+- **Switching** - click a scene tab, or cycle with F12 / Shift+F12.
+- **Capacity** - all eight tabs are explicit. New/load/promotion operations
   fail without mutation when every slot is occupied; gl-repl never evicts a
   tab implicitly.
 
@@ -1878,13 +1878,13 @@ the chip leading the scene tab strip, which reads as a breadcrumb
 and the window title, which reads `gl-repl - Workspace: <workspace> | <scene>` (or
 `gl-repl - <scene>` when no workspace is bound). A scene collection that is
 not bound to any workspace says so in the chip (`no workspace`) and menu header
-(`(none)`), while dropping the workspace field from the window title — so
+(`(none)`), while dropping the workspace field from the window title - so
 "nothing is bound yet" is visible without cluttering the title bar.
 
 A workspace is just a directory holding your scene files plus a
 `.glr-workspace` manifest that lists them in tab order. That manifest is what
 makes the directory a workspace: gl-repl opens exactly the files it names, in
-that order, and leaves any other `.c` file in the folder alone — it will
+that order, and leaves any other `.c` file in the folder alone - it will
 neither load it nor delete it. Point the app at a directory without a manifest
 and it declines rather than guessing; reach for **Load Scene** when you just
 want to open a loose file.
@@ -1893,14 +1893,14 @@ Opening a workspace is all-or-nothing. Every scene is read and checked before
 anything replaces what you have, so a file that has gone missing or will not
 parse leaves you exactly where you were, with the previous workspace and your
 current document untouched. Switching to a different workspace saves the one
-you are leaving first — and if the tabs you are leaving were never bound to a
+you are leaving first - and if the tabs you are leaving were never bound to a
 workspace at all, they are copied somewhere safe rather than dropped.
 
 Where a save lands depends on how you launched. Run gl-repl from a directory
 you can write to and it keeps using that directory, so plain `output.c` shows
 up next to the binary as it always has. The packaged macOS app has nowhere
 like that to write, so it saves into your gl-repl data folder instead, and it
-will ask you to name a scene the first time — an example you have been playing
+will ask you to name a scene the first time - an example you have been playing
 with does not have a filename of its own yet.
 
 ---
@@ -1914,7 +1914,7 @@ compilable GLUT/OpenGL C program. Where the file lands depends on whether you
 have a workspace open: with one bound it becomes a scene file inside that
 workspace, and without one it is the standalone `output.c` next to the binary.
 Either way, if what you are looking at is still a built-in example, saving
-forks it into a scene of your own first — the built-ins are never written to.
+forks it into a scene of your own first - the built-ins are never written to.
 
 Header comments carry the REPL state (variables, config, camera), your
 functions become C functions, and your commands become the `display()` body.
@@ -1929,26 +1929,26 @@ cc -std=c89 -Wall -o scene output.c -framework OpenGL -framework GLUT -lm  # mac
 Everything round-trips: `./gl-repl output.c` reloads the file with
 variables, settings, camera, scene name, and `// @tune` tags intact.
 
-`Ctrl+Q` quits and saves a recovery copy to a temp file — an unedited built-in
+`Ctrl+Q` quits and saves a recovery copy to a temp file - an unedited built-in
 example is skipped instead (any unsaved scenes go to `recovery-workspace/`).
 
 #### What the export is free of
 
-The exported program is not a screen recording of the REPL — it is your scene
+The exported program is not a screen recording of the REPL - it is your scene
 with the interpreter removed. No code panel, no grid, no menu bar, and (the
 part that matters most) **no flat-command budget**: your `for` loops stay
 loops instead of being unrolled into the 8192-command flat program.
 
 The *Swaying grass field* example is the clearest case, because in the REPL it
 is already pressed right up against that ceiling. Each blade costs 60 flat
-commands, so its 135 blades flatten to **8113 of 8192** — set `bladeCount` to
+commands, so its 135 blades flatten to **8113 of 8192** - set `bladeCount` to
 137 and the program exceeds the budget and stops rendering entirely. Exported,
 `bladeCount` is nothing but a loop bound:
 
 ![The exported grass program at 9600 blades, with its generated @tune HUD in the corner](images/export-c-grass.png)
 
 That is the same scene, exported and compiled with nothing changed but two
-numbers, both raised past anything the REPL can flatten — 9600 blades (71×
+numbers, both raised past anything the REPL can flatten - 9600 blades (71×
 the example's count, some 576k flat commands' worth) over a wider field.
 Those extra
 9465 blades cost about 2.4 ms of draw time per frame, well inside a 60 fps
@@ -1958,15 +1958,15 @@ budget, because a compiled loop has no per-frame flatten to pay for. See
 ### Editing exported code & reimporting
 
 The exported file is meant to be worked on. You can extend it by hand in C
-and load it back — on reload, the commands between the `// Snippet start` /
+and load it back - on reload, the commands between the `// Snippet start` /
 `// Snippet end` markers are imported, so edits inside that span come home to
 the REPL. Two rules keep the round trip clean:
 
-- **Stay inside the REPL language** for the snippet section — the supported
+- **Stay inside the REPL language** for the snippet section - the supported
   commands and syntax in [The REPL Language](#the-repl-language). Lines the
   importer doesn't recognize are skipped with a warning. (Anything goes
   *outside* the snippet markers, but those edits live only in the C file.)
-- **Stay within the command budget** — the source document holds 1024
+- **Stay within the command budget** - the source document holds 1024
   lines and its flattened program 8192 commands (the status bar shows
   flat usage, e.g. `1345/8192 cmds`). Loops count once as source but
   every unrolled iteration lands in the flat program, so a heavy
@@ -1989,7 +1989,7 @@ authoring. If you need a GL call the REPL does not yet support, see
 ### Scene export (`.glr`)
 
 **File → Save Scene as .glr** writes the same file shape the built-in
-examples ship in — no C scaffold at all:
+examples ship in - no C scaffold at all:
 
 ```
 // @cfg grid = GRID_THEME_OFF          <- only the settings that differ
@@ -2011,14 +2011,14 @@ catalog](ADVANCED_USAGE.md#authoring-an-example-catalog).
 
 Two things the format deliberately drops, because the example loader ignores
 them anyway: `@cfg` rows outside the per-scene presentation subset (`msaa`,
-`accum_passes`, replay/panel settings — those stay session state), and the
+`accum_passes`, replay/panel settings - those stay session state), and the
 `@scene-name` / `@workspace-dir` bookkeeping that `catalog.ini` supplies
 instead. For a file that carries *everything* back, use Save Scene.
 
 ### Mesh export (PLY)
 
 **File → Export .ply** captures the current scene as an ASCII PLY mesh
-named after the active scene — `glVertex` polygons, GLU-tessellated shapes,
+named after the active scene - `glVertex` polygons, GLU-tessellated shapes,
 and GLUT solids all export through one GL feedback pass. Authored per-vertex
 normals are preserved; the rest are synthesized and smoothed. Line
 primitives export as PLY edges; point primitives export as loose vertices
@@ -2062,7 +2062,7 @@ float amp = 1, freq = 2; // @tune
 
 A knob needs a variable-panel row to live in, so the tag requires a
 program-wide declaration. Inside a function body, write `static float amp = 1;
-// @tune` — a [function-scoped local](#function-scoped-locals) has no panel row
+// @tune` - a [function-scoped local](#function-scoped-locals) has no panel row
 and rejects the tag.
 
 Tagged variables are still normal REPL variables while you are authoring. In
@@ -2079,11 +2079,11 @@ knob, its current value, and its keys.
 
 ![The exported grass program's knob HUD: bladeCount as exported, and after holding q](images/export-c-knobs.png)
 
-Both halves are the same corner of the same export — the *Swaying grass
+Both halves are the same corner of the same export - the *Swaying grass
 field* scene, whose two `// @tune` rows become the HUD's two lines. Left is
 the value the scene was exported with; right is 177 `q` presses later, which
 the step ladder below puts at exactly 1200. The knob writes the same global
-the `for` loop reads, so the field thickens as the key repeats — no edit, no
+the `for` loop reads, so the field thickens as the key repeats - no edit, no
 recompile.
 
 Knobs are assigned in declaration order:
@@ -2114,7 +2114,7 @@ The exported knobs use the same step size as the in-app numeric stepper:
 | `10..99.999` | `0.5` |
 | `100..999.999` | `5` |
 
-The pattern continues by decade — values in the thousands step by `50`,
+The pattern continues by decade - values in the thousands step by `50`,
 and so on (the step is `0.05` scaled by the value's power of ten).
 
 The same modifier keys apply in the exported program:
@@ -2168,32 +2168,32 @@ steppers.
 ## Performance & Scope
 
 The REPL is an interpreter. Every frame it re-evaluates expressions, and
-while anything is animating it re-flattens the whole program — loops
+while anything is animating it re-flattens the whole program - loops
 unrolled, functions inlined, every argument expression parsed and evaluated
 again. That is what makes the live experience possible (edit any line, drag
 any slider, scrub time backwards), but it costs real CPU. Scenes built on
-the [stateless patterns](#working-without-state) — especially the
-replay-from-the-start kind — add their own recompute cost on top, since
+the [stateless patterns](#working-without-state) - especially the
+replay-from-the-start kind - add their own recompute cost on top, since
 each frame redoes all the work `t` implies.
 
-The exported C program has none of that machinery — it is the same scene as
+The exported C program has none of that machinery - it is the same scene as
 plain compiled GL calls, roughly **100× lighter on the CPU**. So the
 workflow for pushing limits is:
 
 1. Sketch and tune the scene in the REPL until it looks right.
 2. Tag the parameters you still want to play with as `// @tune`.
 3. Export, compile, and push the numbers (particle counts, tessellation,
-   iteration depth) in the standalone program — via the exported tune knobs
+   iteration depth) in the standalone program - via the exported tune knobs
    or by editing the C directly.
 
 A scene that drops frames in the REPL at 500 particles will typically run
-thousands in the export without effort — the *Swaying grass field* example
+thousands in the export without effort - the *Swaying grass field* example
 goes from a flatten-capped 135 blades to 9600, shown under
 [What the export is free of](#what-the-export-is-free-of).
 
 That division of labor is by design: the REPL is a **launchpad, debugging
-aid, and educational environment** — a place to see immediate-mode GL
-respond line by line — not a platform to build a complete application on.
+aid, and educational environment** - a place to see immediate-mode GL
+respond line by line - not a platform to build a complete application on.
 The export is the product; the REPL is where it is born.
 
 ---
@@ -2249,20 +2249,20 @@ graph as the final, more expensive diagnostic surface.
 
 Three floating panels work together:
 
-- **The section listing** (right) breaks the frame into named sections —
+- **The section listing** (right) breaks the frame into named sections -
   *Render 3D*, *Code Panel*, *Flatten*, and so on, down to the three summary
   rows under the rule. *Frame Time* is the whole frame, start to finish, and it
   splits into the two rows below it: *Frame Work* is everything the frame
-  spends producing the image, and *Present* is the rest — the buffer swap and,
+  spends producing the image, and *Present* is the rest - the buffer swap and,
   with vsync on, the wait for the next refresh. **Frame Work is the number to
   watch when something feels slow**; Present is the frame's leftover headroom
-  rather than a cost, so it is colored the other way round — a long present is
+  rather than a cost, so it is colored the other way round - a long present is
   green, a vanishing one red, because that is the frame running out of slack.
   The **CPU** column is a running average of wall-clock time per frame; the
-  **GPU** column comes from asynchronous GL timer queries (no stalls — the
+  **GPU** column comes from asynchronous GL timer queries (no stalls - the
   numbers arrive a few frames late), and reads `--` where the driver lacks
   timer queries or a section emits no GL. **Max** shows the worse of the
-  two averages — the number to watch when deciding what to trim. Sections
+  two averages - the number to watch when deciding what to trim. Sections
   that did nothing this frame dim out.
 - **The section histograms** (center) overlay every top-level section's
   timing distribution on one graph. Both axes are logarithmic: microsecond
@@ -2271,11 +2271,11 @@ Three floating panels work together:
   Each section keeps its listing color; the legend below maps them. Click a
   legend entry to drop that series from the plot (and from both axes, so
   hiding the fast sections zooms in on what is left); click it again to bring
-  it back. **Right-click a legend entry** to plot *only* that series — the
+  it back. **Right-click a legend entry** to plot *only* that series - the
   one-press way to isolate one distribution out of a dozen overlaid ones;
   right-click the soloed entry again to bring the rest back.
   **Rest the pointer on a legend entry** and that series' numbers pop
-  up over the plot — sample count, fastest, mean and slowest sample, standard
+  up over the plot - sample count, fastest, mean and slowest sample, standard
   deviation, and the total time spent in the section. Those are exact,
   measured values rather than anything read back off the plot, so they stay
   meaningful for a section too fast to separate from the axis' left edge.
@@ -2285,7 +2285,7 @@ Three floating panels work together:
 
 Histogram mode is the tool for *hitches*: a scene that averages 60 fps but
 stutters once a second shows a clean main hump plus a second bump at the
-stall duration — and the bump's color names the section responsible. Hovering
+stall duration - and the bump's color names the section responsible. Hovering
 that section's legend entry puts a number on the stall: the max is how bad the
 worst one got, and the gap between mean and max is how much of an outlier it
 is. The histograms and their statistics accumulate from load together (both
@@ -2298,14 +2298,14 @@ the GPU column then reads `--`.
 
 ### Memory, messages, and startup
 
-- **Memory profile** (Ctrl+Shift+W) — a floating panel with the process RSS
+- **Memory profile** (Ctrl+Shift+W) - a floating panel with the process RSS
   history, a session baseline, and the delta since baseline. Useful for
   confirming a long editing session isn't growing without bound.
-- **Message history** — click the button at the right end of the bottom
+- **Message history** - click the button at the right end of the bottom
   message line to review recent status messages (parse errors you dismissed,
   save confirmations, budget warnings).
-- **Ctrl+Shift+N** — dump debug state to stdout.
-- Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr — useful
+- **Ctrl+Shift+N** - dump debug state to stdout.
+- Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr - useful
   for locating slow startup phases; `--detailed-prof` adds finer phases.
 
 ---
@@ -2315,10 +2315,10 @@ the GPU column then reads `--`.
 gl-repl plays background `.mp3`s found at startup, in filename order, from
 three places combined:
 
-1. **`./assets`** next to where you run it — override with `--assets <dir>`
+1. **`./assets`** next to where you run it - override with `--assets <dir>`
    or `GLR_ASSETS_DIR`.
-2. **Bundled with the app** — the macOS `gl-repl.app` ships a sample track.
-3. **Your music folder** — `~/Library/Application Support/gl-repl/Music` on
+2. **Bundled with the app** - the macOS `gl-repl.app` ships a sample track.
+3. **Your music folder** - `~/Library/Application Support/gl-repl/Music` on
    macOS (XDG data dir on Linux), created on first run; drop `.mp3`s there.
 
 | Key | Action |
@@ -2357,7 +2357,7 @@ runs.
 `--assets`; `GLR_NO_GPU_PROF=1` turns off GPU timer-query profiling.
 
 This is the day-to-day set. A second family of `GLR_*` variables exists to pose
-the app for scripted screenshots and recordings — parking the cursor, feeding
+the app for scripted screenshots and recordings - parking the cursor, feeding
 keystrokes, opening the color picker, pinning the simulation to one tick per
 frame. Those, the full flag reference, and headless (no-window) rendering are
 in [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#environment-variables).
@@ -2428,7 +2428,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
-| F2–F10 | Config cycles (Shift steps backward) — see [The Config menu](#the-config-menu) |
+| F2–F10 | Config cycles (Shift steps backward) - see [The Config menu](#the-config-menu) |
 | F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |
@@ -2458,4 +2458,4 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 
 > **macOS note:** Cmd+letter works the same as Ctrl+letter. F11 may be
-> claimed by the system's "Show Desktop" — use the Tutorials menu instead.
+> claimed by the system's "Show Desktop" - use the Tutorials menu instead.

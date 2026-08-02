@@ -79,7 +79,7 @@ typedef struct {
     /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view:
      * PROJ_PERSPECTIVE = perspective, PROJ_ORTHO = orthographic.
      * Unlike ortho_mode (which flattens and locks the camera to a top-down 2D view),
-     * this only swaps the projection matrix — the camera stays free, so it renders
+     * this only swaps the projection matrix - the camera stays free, so it renders
      * ortho from any orbit angle. The controller eases a separate projection-blend
      * scalar for it and combines the two blends with min() (ortho wins:
      * the scene is orthographic if EITHER control asks for it). Config-
@@ -94,8 +94,8 @@ typedef struct {
 } GlrPresentationState;
 
 /* App-owned render policy toggles plus the theme-seeded light table. The
- * runtime-mutated halves written by the executor — the light-enable bitmask
- * and `clear_color[]` — stay on `ReplRenderState` since `src/repl/executor.c`
+ * runtime-mutated halves written by the executor - the light-enable bitmask
+ * and `clear_color[]` - stay on `ReplRenderState` since `src/repl/executor.c`
  * is a REPL pipeline TU and cannot include `glr_state.h`. The dimensional
  * per-light data (positions/colors/eye-space) is presentation state seeded
  * here from a scene light theme (render3d_lights_apply_theme), so it lives on the

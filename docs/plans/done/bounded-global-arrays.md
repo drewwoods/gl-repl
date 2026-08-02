@@ -1,11 +1,11 @@
 ## Bounded Global Arrays and Deterministic `rand()` for the Immediate-Mode REPL
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status - NOT STARTED (2026-05-23 audit)
 
 No `CMD_ARRAY_DEF` / `CMD_ARRAY_SET` in the command model; no
 `MAX_REPL_ARRAYS` / `MAX_REPL_ARRAY_LEN` constants; no
 `array name(size);` syntax. A different, smaller feature shipped
-instead — the fixed scratch arrays `A[8]`/`B[8]`/`C[8]` (see CLAUDE.md
+instead - the fixed scratch arrays `A[8]`/`B[8]`/`C[8]` (see CLAUDE.md
 "Math"), backed by `CMD_SCRATCH_ASSIGN`. That covers part of the
 user-particle-loop motivation with much less surface area.
 

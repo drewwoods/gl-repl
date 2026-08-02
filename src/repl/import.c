@@ -1,5 +1,5 @@
 /*
- * src/repl/import.c — Reader half of the export/import file format.
+ * src/repl/import.c - Reader half of the export/import file format.
  *
  * Split out of src/repl/export.c (audit #69 in
  * docs/plans/done/src-repl-code-smell-audit-2.md). The writer (file emit,
@@ -20,7 +20,7 @@
  *     repl_export_load_from_file.
  *
  * Shared format strings and state access macros live in
- * export_format_shared.h. The two TUs do NOT share static helpers — the
+ * export_format_shared.h. The two TUs do NOT share static helpers - the
  * WORKSPACE_DIRECTIVES dispatcher table here pairs each name with its reader
  * only, and export.c carries its own emit-only table.
  */
@@ -31,7 +31,7 @@
 #include "repl/export.h"          /* public reader API */
 #include "repl/export_format_shared.h"
 #include "source_document.h"      /* source_document_insert_line */
-#include "repl/load.h"            /* repl_load_apply_line — step 5b */
+#include "repl/load.h"            /* repl_load_apply_line - step 5b */
 #include "config.h"
 #include "repl/command_store.h"
 #include <string.h>
@@ -160,7 +160,7 @@ static void import_format_decl_float(char *buf, size_t n, float v) {
 }
 
 /* ========================================================================= */
-/* Workspace header directive table — reader side.                            */
+/* Workspace header directive table - reader side.                            */
 /*                                                                            */
 /* The writer half (refresh_workspace_header_lines + emit_*) lives in         */
 /* src/repl/export.c with its own emit-only directive table. The two halves   */
@@ -318,7 +318,7 @@ static int parse_workspace_dir(ImportWorkspaceAccum *accum, const char *args) {
     while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
         g_pending_workspace_dir_writable[char_idx++] = *args++;
     g_pending_workspace_dir_writable[char_idx] = '\0';
-    /* More source left over the cap means the path was clipped — a
+    /* More source left over the cap means the path was clipped - a
      * truncated path points at the wrong directory, so don't do it silently. */
     if (*args)
         import_workspace_warn(accum,
@@ -385,7 +385,7 @@ static int parse_func_alias(ImportWorkspaceAccum *accum, const char *args) {
     /* The alias name is longer than a slot can hold: it was just truncated,
      * so the matching `static void <name>(...)` definition below will fail to
      * map back to this slot and be dropped. Warn rather than drop in silence
-     * (the historical behaviour) — the only fix is a shorter func name or a
+     * (the historical behaviour) - the only fix is a shorter func name or a
      * larger REPL_FUNC_NAME_MAX. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_'))
         import_workspace_warn(accum,
@@ -514,7 +514,7 @@ static int import_parse_cam_line(const char *text) {
  * `[static] float a = 1, b = 2.5;` (the write_predef_var_globals
  * output) and copy each initializer into the already-registered predef
  * var of the same name. Declaration/registration itself happens via the
- * `static float` declarations / `@declare` directives — this only restores values. Returns 1
+ * `static float` declarations / `@declare` directives - this only restores values. Returns 1
  * when at least one var was updated. */
 static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash) {
     const char *p = line;
@@ -600,7 +600,7 @@ static int import_try_stash_predef_decl(ImportState *s, const char *line) {
 }
 
 /* 1 if `s` carries the whole-token `tag` (a trailing tag the exporter
- * appends to a `// @declare` marker — `@tune` / `@config`), else 0. Bounded
+ * appends to a `// @declare` marker - `@tune` / `@config`), else 0. Bounded
  * by whitespace/end so it never matches a name like `@tuned`. */
 static int declare_args_have_tag(const char *s, const char *tag,
                                  size_t tag_len) {
@@ -630,7 +630,7 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     cmd.valid     = 1;
     int count     = 0;
 
-    /* Names that THIS call newly declares in the predef table — kept
+    /* Names that THIS call newly declares in the predef table - kept
      * separate so a later source/cmd-store insert failure can undeclare
      * them without touching names that were already registered (e.g.
      * by auto-declare or by test setup). */
@@ -651,7 +651,7 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
      * (up to REPL_SOURCE_FLOAT_TEXT_MAX - 1 chars, e.g. a 31-digit
      * fixed-point spelling), none of which the `// @declare a b c` line paid
      * for. Appends go through repl_append_clamped and never `off += snprintf`
-     * — see src/repl/util.h for why the raw idiom writes out of bounds. */
+     * - see src/repl/util.h for why the raw idiom writes out of bounds. */
     int truncated = 0;
     int off = repl_append_clamped(decl_line, sizeof(decl_line), 0, &truncated,
                                   "  static float");
@@ -1633,8 +1633,8 @@ static int import_span_is_literal_zero(const char *s, const char *end) {
  * The exporter writes those initializers because the REPL binds every
  * local to 0.0f on call entry, so a bare C `float a;` would be undefined
  * where the REPL reads 0 (see write_canonical_cmd_as_c). Import is the
- * right place to undo it — it is already the trusted path that bypasses
- * commit handlers for exactly this class of reason — and *lowering*
+ * right place to undo it - it is already the trusted path that bypasses
+ * commit handlers for exactly this class of reason - and *lowering*
  * rather than synthesizing an `a = 0.0f;` statement is what keeps the
  * round-trip a fixed point instead of growing the body by one row per
  * local per pass.
@@ -1642,11 +1642,11 @@ static int import_span_is_literal_zero(const char *s, const char *end) {
  * Only a literal zero is lowered, and *every* declarator must carry one.
  * A hand-written `float a = 5;` inside a function body still reaches the
  * declaration preflight and is rejected there, so REPL and file semantics
- * stay identical rather than merely compatible — and the partially
+ * stay identical rather than merely compatible - and the partially
  * initialized `float a = 0.0f, b;`, which the exporter never writes, is
  * left alone for the same reason: `b` is indeterminate in C, and lowering
  * it would quietly promise a deterministic REPL zero the source file does
- * not have. `static float` is never touched — that is a global, and the
+ * not have. `static float` is never touched - that is a global, and the
  * prologue's own handler owns it. */
 static int import_make_repl_local_decl(const char *line, char *out,
                                        int out_sz) {
@@ -1945,7 +1945,7 @@ static int import_try_camera(const char *p) {
 }
 
 /* Net { - } over a line's code portion, ignoring braces inside string
- * and char literals and a // line-comment — a brace in a trailing
+ * and char literals and a // line-comment - a brace in a trailing
  * comment (e.g. `glEnd(); // close the { block`) must not move
  * function-body nesting depth. Mirrors scan_code_line's literal /
  * comment skipping. */
@@ -1985,9 +1985,9 @@ static int import_comment_matches_marker(const char *comment,
     return *p == '\0';
 }
 
-/* 1 if the line is part of the exporter's C89 loop scaffolding — a
+/* 1 if the line is part of the exporter's C89 loop scaffolding - a
  * bare `{` / `}` tagged with the loop-scope marker comment, or a
- * `float i;  // <marker>` hoisted loop-variable decl — which exists
+ * `float i;  // <marker>` hoisted loop-variable decl - which exists
  * only to keep exported files C89-compilable and must be dropped (not
  * fed as source) on import. */
 static int import_is_c89_loop_marker_line(const char *p) {
@@ -2301,7 +2301,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
     /* Camera-state lines appear both in the pre-snippet header and inside the
      * display() body that wraps the snippet, so they are recognised any time
      * we are not already inside a snippet. They live at top level (the
-     * g_angle preamble) or inside display() — never inside a user funcN body,
+     * g_angle preamble) or inside display() - never inside a user funcN body,
      * which the importer tracks with func_depth > 0. Gate on func_depth == 0
      * so the greedy camera state machine doesn't consume a user function's
      * own glTranslatef/glRotatef calls (e.g. a drawWhale() helper exported
@@ -2419,7 +2419,7 @@ static int import_normalize_c89_comment_line(const char *line,
  * block form used for consecutive user-authored comments; those payload
  * rows are restored to `//` lines instead. Generated scaffold prose puts
  * text on its opener and therefore remains discard-only. Comments that
- * open and close on one line are left untouched —
+ * open and close on one line are left untouched -
  * import_normalize_c89_comment_line rewrites those into `//` form, and
  * the workspace-header directives depend on it.
  *
@@ -2427,10 +2427,10 @@ static int import_normalize_c89_comment_line(const char *line,
  * unterminated statement, so the line accumulator glues the whole
  * comment onto the next real one. The exporter's globals block is
  * written under exactly such a comment, which is why `static float t =
- * <snapshot>;` — always the first predef decl — never round-tripped.
+ * <snapshot>;` - always the first predef decl - never round-tripped.
  *
  * Returns 0 only for a line this strip emptied out (drop it); a line it
- * did not touch is always kept, blank ones included — those still carry
+ * did not touch is always kept, blank ones included - those still carry
  * a REPL blank command through the snippet body. */
 static int import_strip_block_comment_span(char *line, int *in_comment,
                                            int *preserve_comment) {
@@ -2528,15 +2528,15 @@ static int is_line_comment_or_directive(const char *line) {
     return 0;
 }
 
-/* Scan one physical line's *code* portion — everything up to an
- * unquoted "//" line-comment — advancing the running bracket-nesting
+/* Scan one physical line's *code* portion - everything up to an
+ * unquoted "//" line-comment - advancing the running bracket-nesting
  * depth (counts () and [], not {} which delimit blocks) while skipping
  * string and char literals so brackets and slashes inside them can't
  * confuse the scan. *code_len gets the trimmed code length (trailing
  * whitespace removed); the return value is the last non-space code
  * char, or '\0' when the line has no code. Together the depth and last
  * char let the caller tell a continued statement (open bracket, or no
- * terminator yet) from a complete one — which is what makes multi-line
+ * terminator yet) from a complete one - which is what makes multi-line
  * statements with interleaved comments / blank lines and split compound
  * literals reassemble correctly. */
 static char scan_code_line(const char *line, int *depth, int *code_len) {
@@ -2682,7 +2682,7 @@ static void import_process_physical_line(ImportState *state,
     if (is_line_comment_or_directive(proc_line)) {
         /* A blank, comment, or directive line that falls inside an
          * in-progress statement (open bracket, or no terminator
-         * seen yet) is dropped — keep accumulating rather than
+         * seen yet) is dropped - keep accumulating rather than
          * flushing a half-built statement. With nothing in progress
          * it is a standalone line, processed as before. */
         if (acc->accum[0])
@@ -2717,14 +2717,14 @@ static void import_process_physical_line(ImportState *state,
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
      * label (`:`). The depth gate is what stops a split compound
-     * literal — `(GLfloat[]){` — or a ternary `:` from flushing
+     * literal - `(GLfloat[]){` - or a ternary `:` from flushing
      * mid-expression. */
     int complete = acc->depth <= 0 && is_stmt_terminator(last);
 
     /* On a continuation line, append only the code portion so a
      * trailing `// ...` can't bleed into the rest of the statement.
      * On the line that completes the statement, append it whole,
-     * including any trailing comment — the parser keeps inline
+     * including any trailing comment - the parser keeps inline
      * comments on a command. */
     size_t seg_len = complete ? strlen(app) : (size_t)code_len;
     size_t avail = MAX_LINE_LEN - 1 - accum_len;
@@ -2778,7 +2778,7 @@ static int import_finish_load(ImportState *state,
     /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
      * controller-installed bridge, which knows how to apply each slug
      * to its owner's state. Without a bridge (the demo case), the
-     * accumulator is dropped silently — that's the architectural goal
+     * accumulator is dropped silently - that's the architectural goal
      * (no glr_config dependency from src/repl/import.c). */
     import_workspace_cfg_apply_and_reset(&state->workspace);
 
@@ -2796,7 +2796,7 @@ static int import_finish_load(ImportState *state,
         /* Publish the post-import cursor to the host. Without this,
          * downstream callers (e.g. repl_load_scene_as_new_slot, which
          * snapshots via repl_dispatch_edit_line_get right after this
-         * returns) see the pre-import value — leaving Load Scene From
+         * returns) see the pre-import value - leaving Load Scene From
          * File parked at line 0 with insert mode off, so the next
          * commit replaces the first imported command instead of
          * appending (implemented in phase 4; see the
@@ -2813,7 +2813,7 @@ static int import_finish_load(ImportState *state,
         repl_set_status(msg);
         fprintf(stderr, "%s\n", msg);
     } else {
-        /* File opened and read cleanly but produced no commands — an empty
+        /* File opened and read cleanly but produced no commands - an empty
          * or non-REPL file, or one whose every line failed to parse. Without
          * this the caller (repl_load_initial_commands) silently falls back to
          * the default example, stranding any @cfg side effects already

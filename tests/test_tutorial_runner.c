@@ -174,7 +174,7 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
     glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
     glr_camera_set(72.0f, -140.0f, 31.0f, 3.0f, -2.0f, 1.5f, 0.0f);
     /* Read the dirtied values back rather than assuming the writes stuck
-     * verbatim — the backdrop/grid pairing policy in glr_config.c can
+     * verbatim - the backdrop/grid pairing policy in glr_config.c can
      * force a companion grid theme on top of what we asked for. */
     int pre_grid     = repl_cfg_get_int("grid", -1);
     int pre_extent   = repl_cfg_get_int("grid_extent", -1);
@@ -217,7 +217,7 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
     ASSERT_INT("camera back in 3D control mode",
                (int)glr_camera_control_mode(), (int)GLR_CAMERA_CONTROL_3D);
 
-    /* Exit leaves the lesson's view alone — the learner is still looking
+    /* Exit leaves the lesson's view alone - the learner is still looking
      * at the tutorial's scene, so nothing should snap out from under it. */
     tutorial_stop();
     ASSERT_INT("exit keeps the tutorial's grid extent",
@@ -238,7 +238,7 @@ static void test_start_resets_view_to_tutorial_defaults(void) {
 
 static void test_catalog_includes_color_transform_tutorial(void) {
     /* "Color & Transform" exercises push/pop matrix, color, translate,
-     * rotate and quads — a richer set of GL commands than the starter
+     * rotate and quads - a richer set of GL commands than the starter
      * "First Triangle". Pin both tutorials in the catalog so a future
      * catalog rewrite has to keep them. */
     ASSERT_TRUE("at least two starter tutorials available",
@@ -462,7 +462,7 @@ static void test_shadow_text_appears_immediately_on_start(void) {
 
     reset_fixture();
     tutorial_start(0);
-    /* No keystroke, no manual editor_completion_update() — just read. */
+    /* No keystroke, no manual editor_completion_update() - just read. */
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost populated immediately after tutorial_start",
                ac->ghost, "glBegin(GL_TRIANGLES)");
@@ -930,7 +930,7 @@ static void test_rejected_commit_does_not_advance_tutorial(void) {
      * the trailing row while expected_commit_line still points at
      * the row immediately below the first instruction. The Phase 3
      * precheck rejects the mismatched cursor, so the step doesn't
-     * advance and the user's typed input is preserved — the same
+     * advance and the user's typed input is preserved - the same
      * guarantee the original capacity-rejection test was after,
      * achieved one rung earlier in the pipeline. */
     reset_fixture();
@@ -1028,7 +1028,7 @@ static void test_fade_duration_math(void) {
                state.fade_line_idx, 2);
     /* Duration is now derived from the comment's length at a fixed
      * chars-per-second rate. Use the catalog's comment string (the same
-     * input the emit code measures) — `source_text_line` may differ by
+     * input the emit code measures) - `source_text_line` may differ by
      * a couple chars after loader normalisation, which would skew the
      * comparison. Round to milliseconds for a stable integer check. */
     {
@@ -1077,7 +1077,7 @@ static void test_complete_and_menu_actions(void) {
     /* After completion no tutorial is active, so the trailing Restart/Exit
      * rows don't exist. The MENU_TUTORIALS activation handler still has a
      * catch-all `return 1` at the bottom, so out-of-range indices report
-     * "handled" (the original behavior — preserved for non-regression). */
+     * "handled" (the original behavior - preserved for non-regression). */
     ASSERT_TRUE("exit menu item accepted when inactive",
                 glr_action_menu_item_activate(
                     GLR_MENU_TUTORIALS,
@@ -1103,7 +1103,7 @@ static void test_catalog_starter_steps_are_append(void) {
      * to TutorialStep records should still report append placement
      * across all their steps with no label or target_label. The
      * Depth Test Triangle tutorial added in Phase 2 is intentionally
-     * excluded — it carries a label and a label-targeted step. */
+     * excluded - it carries a label and a label-targeted step. */
     const char *const append_only[] = { "First Triangle", "Color & Transform" };
     for (size_t k = 0; k < sizeof(append_only)/sizeof(append_only[0]); k++) {
         int t_idx = -1;
@@ -1191,7 +1191,7 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Bitmap Text") == 0 ||
                      strcmp(name, "If & Conditionals") == 0 ||
                      /* Dense-solid entries share g_tutorial_dense_solid_cfg to
-                      * switch the vertex overlays off — see the staging
+                      * switch the vertex overlays off - see the staging
                       * comment in src/repl/tutorials.c. */
                      strcmp(name, "GLUT Solids Tour") == 0 ||
                      strcmp(name, "Lighting Basics") == 0 ||
@@ -1218,7 +1218,7 @@ static void test_catalog_cfg_lines(void) {
  * visible-tag count, and that every shipped catalog entry carries a
  * non-zero mask whose bits all map to known tags. Also asserts that the
  * known multi-tag entry ("Depth Test Triangle" → GEOMETRY|DEPTH_LIGHTING)
- * is reachable under each of its tags via index_for_tag — the equivalent
+ * is reachable under each of its tags via index_for_tag - the equivalent
  * of examples' Stress-test multi-tag assertion. */
 static void test_catalog_tag_metadata(void) {
     int tag_count = repl_tutorial_tag_count();
@@ -1327,7 +1327,7 @@ static void test_catalog_tag_metadata(void) {
  *     stripping logic would render an empty string as zero-width chrome).
  *   - The getter returns NULL for out-of-range indices.
  *   - Per tag, every non-NULL subheading appears in a single contiguous
- *     run of tutorials (matches the menu walker's emit rule — one
+ *     run of tutorials (matches the menu walker's emit rule - one
  *     header per group; interleaving would render duplicate headers).
  *   - At least one shipped tutorial has a non-NULL subheading so the
  *     menu walker's HEADER path is actually exercised in production.
@@ -1351,7 +1351,7 @@ static void test_catalog_subheading_metadata(void) {
                 repl_tutorial_subheading(-1) == NULL);
 
     /* At least one tutorial in the shipped catalog declares a
-     * subheading — otherwise the menu's HEADER path is dead code. */
+     * subheading - otherwise the menu's HEADER path is dead code. */
     int has_any_subheading = 0;
     for (int idx = 0; idx < tutorial_count; idx++) {
         if (repl_tutorial_subheading(idx)) { has_any_subheading = 1; break; }
@@ -1513,7 +1513,7 @@ static void test_validate_rejects_multi_row_expected(void) {
     /* Block opens are now a legal shape (TUTORIAL_EXPECTED_BLOCK_OPEN),
      * but only in balanced sequences: an open with no matching close
      * step still rejects (tutorial would end inside the block). Braces
-     * in ORDINARY-shaped text stay rejected outright — see
+     * in ORDINARY-shaped text stay rejected outright - see
      * test_validate_block_step_rules for the full block matrix. */
     static const TutorialStep brace_steps[] = {
         { NULL, "// opens a block",
@@ -1593,7 +1593,7 @@ static int depth_tutorial_idx(void) {
 static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
     /* Phase 2 (post-fix): the label-targeted splice for step 5
      * should land ABOVE the original (instruction, command) pair
-     * for step 0 — keeping the original step-0 instruction comment
+     * for step 0 - keeping the original step-0 instruction comment
      * directly above its glBegin command rather than orphaning
      * them. Use editor_feed_line +
      * tutorial_advance_after_successful_commit since the Phase 3
@@ -1631,7 +1631,7 @@ static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
      * instruction row (which has stayed at 2 because every prior
      * append went strictly below it). The original step-0
      * instruction shifted to row 3 and the originally-labeled
-     * glBegin shifted to row 4 — keeping the (instruction,
+     * glBegin shifted to row 4 - keeping the (instruction,
      * command) pair adjacent, still below the row 0-1 clear prelude. */
     SourceTextView doc = source_document_view();
     const char *new_instruction = source_text_line(doc, 2);
@@ -1770,7 +1770,7 @@ static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
 
 static void test_phase3_empty_input_silent_reject(void) {
     /* Phase 3: pressing ; or Enter with an empty input on the
-     * expected line should silently reject — no status update. */
+     * expected line should silently reject - no status update. */
     reset_fixture();
     tutorial_start(0);
     repl_set_status("baseline");
@@ -1791,7 +1791,7 @@ static void test_phase3_empty_input_silent_reject(void) {
 static void test_phase3_pending_clears_after_match_failure(void) {
     /* Phase 3 invariant: every begin pairs with exactly one note/
      * cancel. Trigger a precheck match-pass (so _begin runs) then
-     * force the editor commit to fail — pending must reset to -1. */
+     * force the editor commit to fail - pending must reset to -1. */
     reset_fixture();
     tutorial_start(0);
 
@@ -1862,7 +1862,7 @@ static void test_review_guard_blocks_expected_commit_line_without_pending(void) 
 
     /* And inserting at a different row with pending still set
      * (pos != pending.commit_line) reverts to the same blocked
-     * behavior — pending only authorizes one specific row. */
+     * behavior - pending only authorizes one specific row. */
     int allowed_other = tutorial_guard_source_change(/*pos=*/6,
                                                      /*delete_count=*/0,
                                                      /*insert_count=*/1);
@@ -1937,7 +1937,7 @@ static void test_phase4_full_walk_places_setup_before_batch(void) {
                status_text(), expected_comp);
 
     /* Now scan the document and assert the glEnable line sits at a
-     * lower index than the glBegin line — the whole point of the
+     * lower index than the glBegin line - the whole point of the
      * label-targeted step. */
     SourceTextView doc = source_document_view();
     int glenable_row = -1;
@@ -1957,7 +1957,7 @@ static void test_phase4_full_walk_places_setup_before_batch(void) {
                 glenable_row < glbegin_row);
 
     /* The original step-0 (instruction, command) pair must remain
-     * adjacent — the label-targeted splice anchors above the
+     * adjacent - the label-targeted splice anchors above the
      * instruction comment, not between the comment and its
      * command. */
     int begin_instr_row = -1;
@@ -2429,7 +2429,7 @@ static void test_block_paste_at_close_row_blocked(void) {
 
     int before_doc = repl_state_document_count();
     /* Copy is a no-op in insert mode; Esc out first (the stranding
-     * scenario), then copy from the body row — the block-extent
+     * scenario), then copy from the body row - the block-extent
      * expansion makes this a whole-block copy, which is fine: the
      * point is the paste attempt at the locked close row. */
     (void)editor_handle_key(KEY_ESC, 0, 0);
@@ -2532,13 +2532,13 @@ static int start_feature_tour_and_walk_commands(void) {
         } else if (kind == TUTORIAL_STEP_KIND_COMMAND) {
             if (!commit_command_step(idx, step)) return -1;
         } else {
-            return idx;  /* landed on REQUIRE/SET — walk complete */
+            return idx;  /* landed on REQUIRE/SET - walk complete */
         }
     }
     return tutorial_active() ? idx : -1;
 }
 
-/* The catalog index of Feature Tour's REQUIRE vertex_outlines step —
+/* The catalog index of Feature Tour's REQUIRE vertex_outlines step -
  * the step start_feature_tour_and_walk_commands stops on. Derived, not
  * hardcoded, so catalog edits (added NOTE / comment-less steps) don't
  * invalidate the tests that assert step positions. */
@@ -2628,7 +2628,7 @@ static void test_require_ignores_unrelated_config_changes(void) {
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
     int step_before = tutorial_state_view().step;
 
-    /* Toggle backdrop — REQUIRE step watches vertex_outlines, must not
+    /* Toggle backdrop - REQUIRE step watches vertex_outlines, must not
      * advance. */
     glr_config_set(GLR_CONFIG_BACKDROP, 1);
     ASSERT_INT("unrelated config change does not advance REQUIRE",
@@ -2642,7 +2642,7 @@ static void test_require_ignores_unrelated_config_changes(void) {
 
 /* Validator: SET / REQUIRE shape rules. The STEP_* macros live in
  * src/repl/tutorials.c (file-scope, catalog-only); test fixtures use
- * designated initializers — same convention as the existing label tests. */
+ * designated initializers - same convention as the existing label tests. */
 static void test_validate_accepts_set_and_require_steps(void) {
     static const TutorialStep steps[] = {
         { NULL, "// type the begin", "glBegin(GL_TRIANGLES)",
@@ -2662,7 +2662,7 @@ static void test_validate_accepts_set_and_require_steps(void) {
     ASSERT_TRUE("mixed COMMAND+SET+REQUIRE validates",
                 repl_tutorial_validate_entry(&entry, err, sizeof(err)));
     ASSERT_STR("err empty on success", err, "");
-    /* Step count must include the non-command steps too — the sentinel
+    /* Step count must include the non-command steps too - the sentinel
      * needs comment, expected AND cfg_slug all NULL, so SET/REQUIRE rows
      * (NULL expected, non-NULL comment) don't terminate the walk. */
     int n = 0;
@@ -2700,7 +2700,7 @@ static void test_validate_accepts_set_quiet_steps(void) {
 
 static void test_validate_rejects_set_quiet_with_comment(void) {
     /* A SET_QUIET never renders an instruction row, so a comment on one
-     * is dead text — the author wanted SET. */
+     * is dead text - the author wanted SET. */
     static const TutorialStep steps[] = {
         { NULL, "// this would never render", NULL,
           TUTORIAL_STEP_APPEND, NULL,
@@ -2718,7 +2718,7 @@ static void test_validate_rejects_set_quiet_with_comment(void) {
 
 static void test_validate_rejects_set_quiet_with_empty_slug(void) {
     /* Without a slug the row IS the sentinel, so the walk ends before
-     * the validator ever sees it — an empty-string slug is the only
+     * the validator ever sees it - an empty-string slug is the only
      * reachable form of this mistake, and it must still be rejected. */
     static const TutorialStep steps[] = {
         { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
@@ -2902,7 +2902,7 @@ static void test_expected_shape_classifier(void) {
                 !repl_tutorial_expected_is_func_open("spoke(0)"));
 }
 
-/* Block-structure steps: balanced sequences validate — a simple for
+/* Block-structure steps: balanced sequences validate - a simple for
  * body, a nested block, an if with an else branch, and a func def
  * followed by ordinary calls. */
 static void test_validate_accepts_balanced_block_steps(void) {
@@ -3036,7 +3036,7 @@ static void test_validate_block_step_rules(void) {
     ASSERT_TRUE("REQUIRE_VAR inside block rejected",
                 !repl_tutorial_validate_entry(&e5, err, sizeof(err)));
 
-    /* ORDINARY-shaped for header (no trailing '{') — the block kernels
+    /* ORDINARY-shaped for header (no trailing '{') - the block kernels
      * would still claim it and commit two rows. */
     static const TutorialStep braceless_for[] = {
         { NULL, NULL, "for(i, 0, 3)", TUTORIAL_STEP_APPEND, NULL },
@@ -3190,7 +3190,7 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
 }
 
 /* Runtime comment-less COMMAND behavior: no instruction row is emitted
- * (the document grows by exactly one row — the committed command), the
+ * (the document grows by exactly one row - the committed command), the
  * commit lands at the parked cursor row, and after the commit that row
  * is recorded as the step's anchor and locked. */
 static void test_comment_less_command_commits_without_instruction_row(void) {
@@ -3306,7 +3306,7 @@ static void test_setup_scaffold_preloads_locked_rows_and_cfg(void) {
     ASSERT_INT("setup @cfg header applied (2D view)",
                repl_cfg_get_int("view_mode", -1), expected_2d);
 
-    /* Setup @cfg slugs join the restore baseline like entry @cfg — but
+    /* Setup @cfg slugs join the restore baseline like entry @cfg - but
      * the restore is deferred past exit, so flush before asserting it. */
     tutorial_stop();
     ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
@@ -3331,7 +3331,7 @@ static void test_setup_label_targeted_steps_splice_into_scaffold(void) {
     ASSERT_TRUE("commit the green corner color",
                 commit_command_step(idx, 1));
 
-    /* Final step: commit directly — commit_command_step's step-advance
+    /* Final step: commit directly - commit_command_step's step-advance
      * check can't observe completion (teardown resets the step). */
     const char *blue_expected = repl_tutorial_step_expected(idx, 2);
     ASSERT_TRUE("final step has expected text", blue_expected != NULL);
@@ -3444,7 +3444,7 @@ static void test_validate_setup_capacity(void) {
 }
 
 /* SET/REQUIRE steps must reject typed commits with a kind-appropriate hint
- * — not the misleading "Move cursor to the tutorial insertion line". */
+ * - not the misleading "Move cursor to the tutorial insertion line". */
 static void test_commit_blocked_with_hint_during_set_step(void) {
     reset_fixture();
     int idx = start_feature_tour_and_walk_commands();
@@ -3453,7 +3453,7 @@ static void test_commit_blocked_with_hint_during_set_step(void) {
     int step_before = tutorial_state_view().step;
     ASSERT_INT("at SET step", step_before, feature_tour_require_step(idx) + 1);
 
-    /* Attempt to commit arbitrary text — the precheck must reject with
+    /* Attempt to commit arbitrary text - the precheck must reject with
      * the SET hint. */
     set_input_text("glPointSize(2)");
     editor_handle_key(';', 0, 0);
@@ -3485,7 +3485,7 @@ static void test_workspace_load_during_tutorial_restores_baseline(void) {
     ASSERT_INT("grid is RADAR mid-tutorial",
                repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
-    /* Trigger the workspace-load teardown path — empty dir, but the
+    /* Trigger the workspace-load teardown path - empty dir, but the
      * teardown helper must run the cfg restore before the load. */
     char *made_dir = mkdtemp(temp_dir);
     ASSERT_TRUE("mkdtemp restore-test workspace", made_dir != NULL);
@@ -3511,7 +3511,7 @@ static void test_exit_on_require_does_not_autoadvance(void) {
     reset_fixture();
 
     /* Pre-tutorial baseline that COINCIDES with the REQUIRE target
-     * (vertex_outlines == 1) — the worst-case input that exposed the
+     * (vertex_outlines == 1) - the worst-case input that exposed the
      * bug. Grid baseline is OFF so the post-fix path leaves grid at
      * 0, not the SET-step's RADAR theme. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
@@ -3529,7 +3529,7 @@ static void test_exit_on_require_does_not_autoadvance(void) {
                (int)tutorial_current_step_kind(),
                (int)TUTORIAL_STEP_KIND_REQUIRE);
     /* presentation_reset wiped vertex_outlines back to its default
-     * (0) — the REQUIRE is unsatisfied, which is the precondition for
+     * (0) - the REQUIRE is unsatisfied, which is the precondition for
      * the bug: a restore write of 1 (the baseline) would match. */
     ASSERT_INT("REQUIRE unsatisfied at exit", repl_cfg_get_int("vertex_outlines", -1), 0);
 
@@ -3637,7 +3637,7 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
     ASSERT_INT("baseline view_mode 2D", repl_cfg_get_int("view_mode", -1), 1);
 
-    /* Color & Transform has no .cfg block and no SET/REQUIRE steps —
+    /* Color & Transform has no .cfg block and no SET/REQUIRE steps -
      * it never names view_mode, so the bug case is exactly this. */
     int idx = find_tutorial_idx("Color & Transform");
     ASSERT_TRUE("found Color & Transform", idx >= 0);
@@ -3661,8 +3661,8 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
  * src/scene/themes.h cannot silently shift the showcase to a
  * different theme. Locate the Feature Tour by name, find the two
  * grid SET steps in catalog order, and assert each is symbolic
- * with the expected name. (The bridge's resolve_text — pinned by
- * `test_apply_cfg_text_resolves_symbolic_grid_theme` — separately
+ * with the expected name. (The bridge's resolve_text - pinned by
+ * `test_apply_cfg_text_resolves_symbolic_grid_theme` - separately
  * locks "GRID_THEME_RADAR" → GRID_THEME_RADAR, etc.) */
 static void test_feature_tour_grid_steps_use_symbolic_names(void) {
     int n = repl_tutorial_count();
@@ -3735,14 +3735,14 @@ static void test_feature_tour_vertex_outline_hint_uses_keymap(void) {
 
 /* Audit #41 follow-up: the runtime validator must reject a tutorial
  * whose SET / REQUIRE step or entry-level @cfg line carries a
- * symbolic value name that the bridge doesn't recognise — otherwise
+ * symbolic value name that the bridge doesn't recognise - otherwise
  * the strtol-fallback path would silently land the showcase at the
  * default (`*_OFF` = 0), and any REQUIRE pointing at that same
  * default would auto-advance incorrectly. Exercises
  * tutorial_validate_entry_against_bridge directly so the test
  * doesn't need a typo'd entry in the shipped catalog. */
 static void test_validate_rejects_typo_symbolic_value_name(void) {
-    /* glr_ctrl_reset_all installs g_glr_export_cfg_bridge — the
+    /* glr_ctrl_reset_all installs g_glr_export_cfg_bridge - the
      * bridge that resolve_text and the resolver rules live behind.
      * Without it repl_cfg_known returns 0 for every slug. */
     glr_ctrl_reset_all();
@@ -3805,7 +3805,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
 
     /* Synthetic entry: SET_QUIET with typo'd value name. Staging steps
      * apply their cfg with no comment and no ack, so a silently-wrong
-     * one is the hardest kind to notice at runtime — the bridge
+     * one is the hardest kind to notice at runtime - the bridge
      * validator must cover them alongside SET / REQUIRE. */
     static const TutorialStep typo_quiet_steps[] = {
         { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
@@ -3917,7 +3917,7 @@ static void test_validate_rejects_require_var_empty_name(void) {
 }
 
 static void test_validate_rejects_require_var_reserved_name(void) {
-    /* `t` is the predefined animation variable — REQUIRE_VAR var_name
+    /* `t` is the predefined animation variable - REQUIRE_VAR var_name
      * must not collide with the reserved-ident set. */
     static const TutorialStep steps[] = {
         { NULL, "// reserved name", NULL,
@@ -3975,7 +3975,7 @@ static void test_catalog_includes_variable_slider_tutorial(void) {
 }
 
 /* No pre-declaration: the watched variable does NOT exist when the
- * tutorial starts. Step 0 is a declaration step — the user creates `n`
+ * tutorial starts. Step 0 is a declaration step - the user creates `n`
  * themselves. Because the satisfying `float n = ...;` relocates to the
  * document top, the runner emits no separate locked instruction comment
  * for it (the instruction rides the ghost as a trailing comment), so the
@@ -4028,7 +4028,7 @@ static void test_require_var_advances_on_typed_assignment(void) {
 /* Regression for the skipped-glBegin bug: the declaration commit's
  * predef-writeback notify advances step 0 -> step 1 (a COMMAND step,
  * whose instruction comment is emitted). The commit-side advance must
- * then stay a no-op — otherwise it advances AGAIN onto step 2, skipping
+ * then stay a no-op - otherwise it advances AGAIN onto step 2, skipping
  * step 1's command entirely (comment shown, command never typed). After
  * declaring we must be paused ON step 1, with step 1's expected command
  * still waiting to be typed, and the cursor below the locked comment. */
@@ -4056,7 +4056,7 @@ static void test_require_var_declaration_does_not_skip_next_step(void) {
                tutorial_current_expected_text(),
                repl_tutorial_step_expected(idx, 1));
     /* Cursor parks on the trailing input row, below step 1's locked
-     * instruction comment — never on a locked line. */
+     * instruction comment - never on a locked line. */
     int edit_line = editor_state_edit_line();
     ASSERT_TRUE("cursor is not on a locked line",
                 !tutorial_line_is_locked(edit_line));
@@ -4103,7 +4103,7 @@ static void test_require_var_tab_accepts_ghost(void) {
                tutorial_state_view().step, 1);
     ASSERT_TRUE("n declared after Tab-accept commit",
                 repl_eval_find_predef_var_idx("n") >= 0);
-    /* The instruction comment is PRESENT — it committed as a trailing
+    /* The instruction comment is PRESENT - it committed as a trailing
      * comment on the declaration line (the user's "missing comment" fix),
      * not as a separate stranded line. */
     if (cmt && cmt[0]) {
@@ -4118,7 +4118,7 @@ static void test_require_var_tab_accepts_ghost(void) {
  * The declaration parks on the trailing row with insert mode OFF; the
  * Enter route's commit_current_input previously only tried block_structs
  * there, so `float n = 1;` fell through to the GL-command parser and was
- * rejected — ';' committed it but Enter did not. Tab-accept the ghost,
+ * rejected - ';' committed it but Enter did not. Tab-accept the ghost,
  * then commit with Enter (\r). */
 static void test_require_var_enter_commits_declaration(void) {
     reset_fixture();
@@ -4361,7 +4361,7 @@ static void test_require_var_shadow_suffix_synthesizes_assignment(void) {
  * A tutorial runs in a transient scene with no persistent identity. When it
  * ends (completed or stopped) the learner stays in the generated document, so
  * tutorial_end_keep_view stamps a tutorial ORIGIN onto scene runtime state and
- * the first subsequent edit promotes that document into a user-scene slot —
+ * the first subsequent edit promotes that document into a user-scene slot -
  * exactly the way editing a built-in example does. The tests below pin the
  * lifecycle: active tutorials never promote, both end paths establish the
  * origin, the promoted slot owns the lesson's per-scene view while global
@@ -4435,7 +4435,7 @@ static void test_completion_establishes_tutorial_origin(void) {
     ASSERT_INT("viewing the result allocates no slot", repl_user_scene_count(), 0);
 }
 
-/* 3. Stopping mid-tutorial establishes the origin too — a partially built
+/* 3. Stopping mid-tutorial establishes the origin too - a partially built
  *    document is just as worth keeping as a finished one. */
 static void test_stop_establishes_tutorial_origin(void) {
     reset_fixture();
@@ -4456,8 +4456,8 @@ static void test_stop_establishes_tutorial_origin(void) {
 
 /* 4. A tutorial that never starts leaves no origin behind.
  *
- *    tutorial_start writes the marker nowhere — only tutorial_end_keep_view
- *    does — so every failure path inside start (catalog validation, cfg-slug
+ *    tutorial_start writes the marker nowhere - only tutorial_end_keep_view
+ *    does - so every failure path inside start (catalog validation, cfg-slug
  *    validation, and the scene-prelude load, which unwinds via
  *    tutorial_baseline_restore + tutorial_state_reset) shares this outcome by
  *    construction. The prelude-load failure itself has no runtime injection
@@ -4466,7 +4466,7 @@ static void test_stop_establishes_tutorial_origin(void) {
  *
  *    The second half pins the complementary case: a rejected start must not
  *    DISCARD an existing post-tutorial origin either, because it replaced
- *    nothing — the retained document is still there and still promotable. */
+ *    nothing - the retained document is still there and still promotable. */
 static void test_failed_tutorial_start_leaves_no_origin(void) {
     reset_fixture();
 
@@ -4521,7 +4521,7 @@ static void test_post_tutorial_edit_promotes_once(void) {
 /* 5b. Promotion must not cost the user their place in the catalog. Finishing
  *     a lesson and pressing Enter once more is all it takes to promote the
  *     retained document, and the promotion's baseline flush runs the same
- *     tutorial_teardown() that resets the runtime state — which used to take
+ *     tutorial_teardown() that resets the runtime state - which used to take
  *     the completed tutorial's parked index with it, sending the next F11
  *     back to tutorial 1. */
 static void test_promotion_keeps_place_for_next_tutorial(void) {
@@ -4572,8 +4572,8 @@ static void test_explicit_exit_still_drops_place(void) {
  *
  *    Feature Tour's own SET/REQUIRE slugs (grid, vertex_outlines) are all in
  *    the bridge's scene subset, so no shipped tutorial exercises the global
- *    half on its own. The test synthesizes one by adding `msaa` — a rendering
- *    toggle deliberately outside cfg_key_in_scene_subset() — to the live
+ *    half on its own. The test synthesizes one by adding `msaa` - a rendering
+ *    toggle deliberately outside cfg_key_in_scene_subset() - to the live
  *    tutorial's restore baseline and then mutating it, which is exactly the
  *    shape a future tutorial with a global SET step would produce. */
 static void test_promotion_keeps_scene_cfg_and_restores_globals(void) {
@@ -4628,7 +4628,7 @@ static void test_promotion_keeps_scene_cfg_and_restores_globals(void) {
 
 /* 7. A slots-full rejection is retryable: the origin and the pending baseline
  *    survive, the edit still lands in the transient document, and a later
- *    edit — once a slot can be freed — captures everything typed in between. */
+ *    edit - once a slot can be freed - captures everything typed in between. */
 static void test_slots_full_promotion_is_retryable(void) {
     reset_fixture();
     repl_set_workspace_dir(NULL);
@@ -4854,7 +4854,7 @@ int main(void) {
     test_catalog_feature_tour_uses_relaxed_step_shapes();
     test_note_step_waits_for_ack_and_freezes_document();
     test_comment_less_command_commits_without_instruction_row();
-    /* Setup scaffold (Option A — preloaded starting code). */
+    /* Setup scaffold (Option A - preloaded starting code). */
     test_catalog_color_interp_uses_setup_scaffold();
     test_setup_scaffold_preloads_locked_rows_and_cfg();
     test_setup_label_targeted_steps_splice_into_scaffold();

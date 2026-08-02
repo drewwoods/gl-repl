@@ -13,18 +13,18 @@
  *     interval deltas tile the GPU timeline exactly, so per-section times
  *     are additive and never sum past the wall-clock frame.
  *   - elapsed mode (fallback; GL_TIME_ELAPSED_EXT brackets, the only
- *     option from GL_EXT_timer_query — e.g. Apple's GL 2.1): bracket
+ *     option from GL_EXT_timer_query - e.g. Apple's GL 2.1): bracket
  *     windows can overlap on pipelined hardware; see the NOTE below.
  *
  * Results are read back asynchronously a few frames later via
- * GL_QUERY_RESULT_AVAILABLE polling — never a glFinish/glGetQueryObject
- * stall — so enabling it does not serialize the pipeline.
+ * GL_QUERY_RESULT_AVAILABLE polling - never a glFinish/glGetQueryObject
+ * stall - so enabling it does not serialize the pipeline.
  *
  * Like cpuprof this file has NO app dependency (sections are opaque ints
  * from prof_sections.h via support/cpuprof.h's fallback) and NO GL-header
  * dependency: the five-and-a-half entry points it needs are injected as
  * function pointers at init (resolved by the host once a context exists),
- * and the three GL tokens are defined locally in gpuprof.c — the same
+ * and the three GL tokens are defined locally in gpuprof.c - the same
  * trick src/support/mesh_ply.c uses for feedback tokens. With no injected
  * functions (gpu_prof_init never called, or a NULL table) every call is a
  * cheap no-op and the read API reports "no data".
@@ -50,9 +50,9 @@ typedef unsigned long long GpuProfU64;
  * mirror glGenQueries / glDeleteQueries / glBeginQuery / glEndQuery /
  * glGetQueryObjectiv / glGetQueryObjectui64vEXT / glQueryCounter with GL
  * typedefs spelled out (GLsizei=int, GLuint/GLenum=unsigned). The host
- * casts whatever the proc loader returns — standard GL-loader practice.
+ * casts whatever the proc loader returns - standard GL-loader practice.
  * query_counter is OPTIONAL (NULL = elapsed mode); the host must only
- * fill it when GL_ARB_timer_query / GL 3.3 is actually advertised — proc
+ * fill it when GL_ARB_timer_query / GL 3.3 is actually advertised - proc
  * loaders can return callable junk for unsupported names. */
 typedef struct {
     void (*gen_queries)(int n, unsigned *ids);
@@ -99,12 +99,12 @@ void gpu_prof_end(ProfSection s);
  * NOTE on reading the numbers, by mode:
  *
  * Elapsed mode: a query measures the wall window from its bracket's first
- * command starting to its last command finishing on the GPU — not
+ * command starting to its last command finishing on the GPU - not
  * exclusive busy time. On deeply pipelined and tile-deferred GPUs (e.g.
  * Apple Silicon behind GL-on-Metal, where a render pass's fragment work
  * is batched and lands inside every bracket that contributed draws to the
- * pass) the windows of different sections overlap, so sections — and
- * the frame total, which sums every segment — can add up to more than the
+ * pass) the windows of different sections overlap, so sections - and
+ * the frame total, which sums every segment - can add up to more than the
  * wall-clock frame time even at a locked 60 FPS. Treat the GPU column as
  * a relative-hotspot signal; the CPU column plus the frame rate remain
  * the budget ground truth.

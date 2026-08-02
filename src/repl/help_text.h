@@ -11,7 +11,7 @@
  * ReplHelpFkeyProvider so help_text.c doesn't need to #include
  * app/glr_config.h (the layering inversion the prior baseline
  * tracked as audit #1). The standalone render3d_demo doesn't install a
- * provider — the F-Key section just renders empty there.
+ * provider - the F-Key section just renders empty there.
  */
 #ifndef REPL_HELP_TEXT_H
 #define REPL_HELP_TEXT_H

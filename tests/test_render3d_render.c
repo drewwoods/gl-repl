@@ -214,7 +214,7 @@ static void test_scene_renderer_state_independence(void) {
 #ifdef GL_STUBS
     /* Two states, two different mix values. Render through each and
      * verify the cached active_projection reflects each renderer's
-     * input — proves there's no shared static under the API. */
+     * input - proves there's no shared static under the API. */
     Render3dRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
@@ -365,7 +365,7 @@ static void test_scene_projection_modes(void) {
  * nothing under GL stubs, so we pre-arm a frozen reference and mark
  * ortho already active; a steady ortho frame in FROZEN mode then holds
  * it (no re-probe), exercising the zoom-delta path. Under PERFRAME the
- * pre-arm is clobbered to the cam_dist fallback, which tracks zoom too —
+ * pre-arm is clobbered to the cam_dist fallback, which tracks zoom too -
  * so the directional contract holds either way. */
 static void test_scene_ortho_zoom_rescales(void) {
     printf("--- 2D ortho scale tracks cam_dist (zoom) ---\n");
@@ -713,7 +713,7 @@ static void buffer_hooks_check_one(const char *label,
 /* Host chrome renders with GL_STENCIL_TEST suspended. A program that
  * enables the stencil test leaves it enabled for everything drawn after
  * its own geometry, and the grid / axes / backdrop / light gizmos are not
- * the user's geometry — masking them is never what a glStencilFunc meant.
+ * the user's geometry - masking them is never what a glStencilFunc meant.
  * The suspension is scoped so the geometry-reporting overlays that follow
  * still see (and reproduce) the program's real mask, which is the half of
  * the contract that would break silently if someone widened the bracket. */
@@ -782,7 +782,7 @@ static void test_buffer_hooks(void) {
     buffer_hooks_check_one("blur (subframe hook)", &state, &cfg, 4);
     cfg.setup_subframe_fn = NULL;
 
-    /* Unsubscribed hooks are simply not called — a config that leaves
+    /* Unsubscribed hooks are simply not called - a config that leaves
      * them NULL (render3d_demo, every non-REPL caller) still renders. */
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.buffer_read_fn = NULL;
@@ -1154,7 +1154,7 @@ static void test_vertex2f_overlay_parity(void) {
 #ifdef GL_STUBS
     /* The vertex-number overlay moved to the controller. The scene-side
      * primitive render3d_draw_vertex_label_text calls glRasterPos3f
-     * directly — that's enough to pin the parity check here.
+     * directly - that's enough to pin the parity check here.
      * Outline pass moved to controller (polygon-mode trick); tested via
      * the integration suite, not as a scene-module unit test. */
     gl_stub_counts_reset();
@@ -1247,7 +1247,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
  * whose own atmosphere collides with the synthesized clear-color recede.
  * Today that is just OCEAN's above-water EXP2 fog. FROZEN's mist is
  * under-ice-only, so it stays out. FAR is deliberately not a factor.
- * No GL — runs in both builds. */
+ * No GL - runs in both builds. */
 static void test_grid_theme_uses_fog_predicate(void) {
     printf("--- render3d_grid_theme_uses_fog predicate ---\n");
     for (int th = 0; th < GRID_THEME_COUNT; th++) {
@@ -1316,12 +1316,12 @@ static void test_scene_grid_fog_matches_predicate(void) {
 }
 
 /* GL_NV_fog_distance radial fog is *scoped*. With the capability flag set,
- * exactly the opted-in passes — the city backdrop and the Ocean/Radar grid
- * themes — emit one extra glFogi (the GL_EYE_RADIAL_NV distance-mode
+ * exactly the opted-in passes - the city backdrop and the Ocean/Radar grid
+ * themes - emit one extra glFogi (the GL_EYE_RADIAL_NV distance-mode
  * switch) over the flag-off baseline; an eye-plane-tuned theme (Classic)
  * emits none. This locks the scoping so a global
- * glFogi(GL_FOG_DISTANCE_MODE_NV, ...) — which fogged out every tuned
- * theme — can't quietly come back. The stub glFogi only counts calls, so
+ * glFogi(GL_FOG_DISTANCE_MODE_NV, ...) - which fogged out every tuned
+ * theme - can't quietly come back. The stub glFogi only counts calls, so
  * the assertion is the +1 differential, not the enum argument. */
 static void test_nv_fog_distance_radial_optin(void) {
     printf("--- GL_NV_fog_distance radial opt-in is scoped ---\n");
@@ -1565,14 +1565,14 @@ static void test_postprocess_filters(void) {
 
 #endif
 
-/* Pure geometry check of the warp-surface types — no GL calls, so it
+/* Pure geometry check of the warp-surface types - no GL calls, so it
  * runs in both the stub and real-GL builds. */
 static void test_postprocess_surface_math(void) {
     printf("--- postprocess warp-surface types (pure) ---\n");
     const int W = 800, H = 600;
     float x, y;
 
-    /* FLAT: an identity map onto the rect — the flat<->warp morph's zero
+    /* FLAT: an identity map onto the rect - the flat<->warp morph's zero
      * point. */
     Render3dPostSurface flat = render3d_post_surface_flat(W, H);
     render3d_post_surface_point(&flat, 0.5f, 0.5f, &x, &y);
@@ -1586,7 +1586,7 @@ static void test_postprocess_surface_math(void) {
                 fabsf(x - W) < 0.01f && fabsf(y - H) < 0.01f);
 
     /* BARREL (convex CRT bulge): the centre stays put, the edges bow
-     * outward, and the corners pull inward — so the rectangular corners
+     * outward, and the corners pull inward - so the rectangular corners
      * fall outside the image (the black vignette the scanlines filter
      * fills behind the mesh). */
     Render3dPostSurface barrel = render3d_post_surface_barrel(W, H, 0.10f);
@@ -1603,7 +1603,7 @@ static void test_postprocess_surface_math(void) {
     ASSERT_TRUE("barrel pulls the near corner inward",
                 x > 0.0f && y > 0.0f && x < W * 0.5f && y < H * 0.5f);
     /* Convexity: the top-edge midpoint bows further out (higher y) than
-     * the top corner — the tell-tale barrel (vs. concave pincushion). */
+     * the top corner - the tell-tale barrel (vs. concave pincushion). */
     float mid_x, mid_y, cor_x, cor_y;
     render3d_post_surface_point(&barrel, 0.5f, 1.0f, &mid_x, &mid_y);
     render3d_post_surface_point(&barrel, 1.0f, 1.0f, &cor_x, &cor_y);
@@ -1611,7 +1611,7 @@ static void test_postprocess_surface_math(void) {
                 mid_y > cor_y);
 
     /* RIPPLE (reserved for a future underwater filter): an animated
-     * horizontal offset — the same grid point moves in x as t advances,
+     * horizontal offset - the same grid point moves in x as t advances,
      * and only in x (the wobble is horizontal). */
     Render3dPostSurface ra = render3d_post_surface_ripple(W, H, 0.0f, 4.0f);
     Render3dPostSurface rb = render3d_post_surface_ripple(W, H, 0.4f, 4.0f);

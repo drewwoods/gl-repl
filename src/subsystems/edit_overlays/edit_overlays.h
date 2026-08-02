@@ -22,14 +22,14 @@ typedef enum OverlayVertexLabelMode {
 } OverlayVertexLabelMode;
 
 /* Where a label sits, which is a property of the label and not of the scope
- * that chose which vertices get one — the two are orthogonal, so every label
+ * that chose which vertices get one - the two are orthogonal, so every label
  * mode is reachable at either placement.
  *
  * DECLUTTERED runs the 2D layout pass: labels are pushed off each other along
  * Y and yield to the fixed-priority cursor-guide text, so a crowded block
  * stays readable at the cost of leader lines. AT_VERTEX bypasses that
  * entirely and pins each label to its own projected vertex, additively
- * blended — exact position, overlaps and all. It also stops labels being
+ * blended - exact position, overlaps and all. It also stops labels being
  * registered as guide-label obstacles, since they no longer claim a row. */
 #define OVERLAY_LABEL_PLACEMENT_LIST(X) \
     X(DECLUTTERED, "Decluttered")       \
@@ -46,12 +46,12 @@ typedef enum OverlayLabelPlacement {
 
 /* LAST_INSTANCE picks the final unrolled copy of the cursor's block. Flatten
  * threads assignments forward, so it is the copy whose loop-body variable
- * values the variable panel still reports, and the last one a replay draws —
+ * values the variable panel still reports, and the last one a replay draws -
  * highlights, labels and cursor guides then agree with the rest of the UI.
  * (The `for` counter itself is loop-scoped and restored, so it reads as its
  * declared value either way.)
  *
- * Every scope but WHOLE_SCENE is anchored to the block under the cursor —
+ * Every scope but WHOLE_SCENE is anchored to the block under the cursor -
  * hence the shared name prefix. WHOLE_SCENE drops the cursor anchor for
  * *labels* only: it numbers every vertex the program emits. The highlight
  * stays cursor-bound there, because a highlight that covers everything
@@ -135,7 +135,7 @@ typedef struct OverlayWalkCtx {
     int              highlight_current_poly;
     /* POLY_HIGHLIGHT_CLIPPED_CULLED: draw the cursor highlight through the
      * program's own clip planes and cull state, like every other overlay. Off
-     * (POLY_HIGHLIGHT_ON) draws the highlighted shape as authored — the one
+     * (POLY_HIGHLIGHT_ON) draws the highlighted shape as authored - the one
      * overlay that may show geometry the frame doesn't. */
     int              highlight_clipped_culled;
     int              replay_tess_preview;

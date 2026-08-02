@@ -9,7 +9,7 @@
  */
 #ifdef GL_STUBS
 #include "ui/support/assign_plot.h"
-#include "ui/core/gl_2d.h"        /* gl2d_chip_state_w — the chips' own width */
+#include "ui/core/gl_2d.h"        /* gl2d_chip_state_w - the chips' own width */
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #endif
@@ -144,7 +144,7 @@ static ApChipShapes count_chip_shapes(const UiAssignPlotPanelView *v) {
     return out;
 }
 
-/* The panel's own size for the view's zoom state — every geometry assertion
+/* The panel's own size for the view's zoom state - every geometry assertion
  * below goes through these rather than the bare constant, so the expanded
  * cases exercise the same helpers as the collapsed ones. */
 static int view_w(const UiAssignPlotPanelView *v) {
@@ -179,7 +179,7 @@ static void test_metrics(void) {
      * well room to exist. */
     ASSERT_TRUE("height leaves room for a plot", h > 100);
 
-    /* Expanded is strictly bigger on both axes — the overlay solver reserves
+    /* Expanded is strictly bigger on both axes - the overlay solver reserves
      * from this query, so a zoom that did not move it would overlap its
      * neighbours. */
     ui_assign_plot_panel_size(1, 1, &xw, &xh);
@@ -444,7 +444,7 @@ static void test_hit_rate_chip_is_constant_width(void) {
 /* The chip grammar (ui/core/gl_2d.h): a setting shows its value in a sunken
  * well, an action is bare bracketed text. Pinned here because the whole point
  * is that the two are told apart *visually*, so a future chip that reverts to
- * bare text — or wraps a verb in a well — has to fail something. */
+ * bare text - or wraps a verb in a well - has to fail something. */
 static void test_chip_grammar(void) {
     UiAssignPlotPanelView v = make_view(10, 1.0f, 100.0f);
     ApChipShapes shapes;
@@ -459,7 +459,7 @@ static void test_chip_grammar(void) {
      * ([reset], [x]) get none. A well is a filled rect plus a border loop. */
     ASSERT_INT("one well per state chip", shapes.wells, 3);
 
-    /* Toggling a setting keeps its well — the well marks the category, not
+    /* Toggling a setting keeps its well - the well marks the category, not
      * one particular value. */
     v.plot.y_log = 1;
     v.plot.expanded = 1;
@@ -492,7 +492,7 @@ static void test_hit_yscale_and_expand(void) {
     ASSERT_TRUE("the Y-scale chip is reachable", seen_yscale > 0);
     ASSERT_TRUE("the zoom chip is reachable",    seen_expand > 0);
     ASSERT_TRUE("the reset control is reachable", seen_reset > 0);
-    /* Each chip is exactly its label plus the state well's padding — a chip
+    /* Each chip is exactly its label plus the state well's padding - a chip
      * that swallowed the whole row would still satisfy the assertions above.
      * Going through the shared width helper is the point: the hit region has
      * to be the well the renderer drew, not the text inside it. */
@@ -538,7 +538,7 @@ static void test_hit_tracks_expanded_geometry(void) {
                UI_ASSIGN_PLOT_HIT_CLOSE);
 }
 
-/* Log Y is honored for anything with a magnitude — signed data lands on the
+/* Log Y is honored for anything with a magnitude - signed data lands on the
  * symmetric axis rather than being refused. The predicate is public because
  * the controller reports it; these are its edges. */
 static void test_y_log_availability(void) {
@@ -794,7 +794,7 @@ static void test_render_multi_series(void) {
 static void test_y_axis_spans_all_series(void) {
     UiAssignPlotPanelView v = make_multi_view(2);
 
-    /* Log is available across the union either way — a negative in one series
+    /* Log is available across the union either way - a negative in one series
      * puts the whole plot on the symmetric axis rather than refusing it. */
     ASSERT_INT("a zero in the first series still allows log",
                ui_assign_plot_y_log_available(&v), 1);
@@ -891,7 +891,7 @@ static void test_render_tiny_exponent_stats(void) {
 
     /* The reported case: mean of sin over a symmetric range. At 4 significant
      * digits "1.027e-11" is 9 characters, which does not fit beside "mean" in
-     * the 250px panel's cell — it must shed digits until it does. */
+     * the 250px panel's cell - it must shed digits until it does. */
     ui_assign_plot_format_stat(buf, sizeof(buf), 1.0273455e-11, 9);
     ASSERT_STR("a fitting width keeps full precision", buf, "1.027e-11");
 
@@ -928,7 +928,7 @@ static void test_render_tiny_exponent_stats(void) {
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
     /* Same numbers in the expanded panel, where the cells are capped rather
-     * than doubled — the fit has to hold in both sizes. */
+     * than doubled - the fit has to hold in both sizes. */
     v.plot.expanded = 1;
     gl_stub_counts_reset();
     ui_assign_plot_panel_render(&v);
@@ -957,7 +957,7 @@ typedef struct {
     float x, y0, y1;
 } ApMarker;
 
-/* Markers for `series`, identified by that series' color at the marker alpha —
+/* Markers for `series`, identified by that series' color at the marker alpha -
  * which is what separates them from the trace (0.95) and the envelope (0.30)
  * drawn in the same hue. */
 static int find_markers(const UiAssignPlotPanelView *v, int series,
@@ -1039,7 +1039,7 @@ static void test_replay_marker_absent_without_replay(void) {
     v.replay_frac[0] = 0.5f;
     ASSERT_INT("no marker when replay is off", find_markers(&v, 0, m, 4), 0);
 
-    /* And a zero-initialized view — every hit-test-only caller — draws none. */
+    /* And a zero-initialized view - every hit-test-only caller - draws none. */
     memset(&v, 0, sizeof(v));
     v.window_w = WIN_W;
     v.window_h = WIN_H;
@@ -1047,7 +1047,7 @@ static void test_replay_marker_absent_without_replay(void) {
     ASSERT_INT("a zeroed view draws no marker", find_markers(&v, 0, m, 4), 0);
 }
 
-/* A negative fraction is "this series has no marker" — a series that has not
+/* A negative fraction is "this series has no marker" - a series that has not
  * run yet must not be drawn as if the PC were at its first execution. */
 static void test_replay_marker_skips_unrun_series(void) {
     UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
@@ -1102,7 +1102,7 @@ static void test_replay_marker_absent_without_data(void) {
 
 /* Read the color the rate chip's label is drawn in. The chip is the first
  * thing in the control row, so its text color is the glColor* immediately
- * preceding the first glRasterPos2f at the control row's baseline — simpler to
+ * preceding the first glRasterPos2f at the control row's baseline - simpler to
  * pin by comparing whole renders, which is what the caller does. */
 static int trace_render(const UiAssignPlotPanelView *v, char *buf, size_t cap) {
     FILE *trace;
@@ -1123,7 +1123,7 @@ static int trace_render(const UiAssignPlotPanelView *v, char *buf, size_t cap) {
 static char g_trace_a[1 << 20];
 static char g_trace_b[1 << 20];
 
-/* The rate chip is drawn inert while replay overrides it — and is *not* at
+/* The rate chip is drawn inert while replay overrides it - and is *not* at
  * ASSIGN_PLOT_RATE_ONCE, which replay leaves frozen and therefore in force. */
 static void test_replay_grays_the_overridden_rate_chip(void) {
     UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);

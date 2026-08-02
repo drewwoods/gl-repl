@@ -1,18 +1,18 @@
 # Stencil buffer support + `buffer_viz` subsystem
 
-## Status — LANDED, Phases 0–2 (2026-07-25 … 2026-07-27)
+## Status - LANDED, Phases 0–2 (2026-07-25 … 2026-07-27)
 
-- **Phase 0 — buffer_viz extraction:** landed. `14fbc58b` replaced the hardcoded
+- **Phase 0 - buffer_viz extraction:** landed. `14fbc58b` replaced the hardcoded
   depth-viz call sites with the three neutral render3d hooks; `8b9f8c3c`
   relocated depth-viz into `src/subsystems/buffer_viz/`.
-- **Phase 1 — commands, clear bit, visualization, host-pass policy:** landed
+- **Phase 1 - commands, clear bit, visualization, host-pass policy:** landed
   across `146f105b` … `65c53027` (context/probe, `glStencilFunc`/`Op`/`Mask`,
   clear bit + missing-clear detection, `stencil_viz`, host-pass stencil policy,
   config row + capability gate, legend panel, GL stubs, docs, showcase example).
   Shortcut later reassigned in `db677a6f`.
-- **Phase 2 — attrib group, GL-state inspector, `glClearStencil`:** landed in
+- **Phase 2 - attrib group, GL-state inspector, `glClearStencil`:** landed in
   `3167b36c`; inspector coverage expanded in `4f4597fc` / `4cb4e707`.
-- **Phase 3 — `glStencilFuncSeparate` / `glStencilOpSeparate`: not
+- **Phase 3 - `glStencilFuncSeparate` / `glStencilOpSeparate`: not
   implemented.** Neither entry point appears in the tree. It was scoped last on
   purpose (GL 2.0 procs, `glutExtensionSupported` gating, uncertain gl4es
   support), and nothing since has needed per-face stencil. The Phase 3 section
@@ -26,16 +26,16 @@ The REPL exposes depth, blend, cull, fog and clip-plane state but no stencil at
 all. The omission is currently *documented as intentional* in three places that
 this change invalidates:
 
-- `src/repl/command_spec.c:123-128` — the `k_clear_bits` comment: *"no REPL
+- `src/repl/command_spec.c:123-128` - the `k_clear_bits` comment: *"no REPL
   command writes stencil"*.
-- `tests/test_repl_core_parse.c:1570` — `glClear(GL_STENCIL_BUFFER_BIT)` pinned
+- `tests/test_repl_core_parse.c:1570` - `glClear(GL_STENCIL_BUFFER_BIT)` pinned
   in the **rejected** list.
-- `docs/USER_GUIDE.md:549-552` — *"The stencil and accumulation bits are not
+- `docs/USER_GUIDE.md:549-552` - *"The stencil and accumulation bits are not
   offered."*
 
 Two motivations. Stencil unlocks a class of classic immediate-mode techniques
 (masking, planar reflections, outline passes, CSG-ish carving). And stencil is
-*invisible* — unlike color and depth you cannot tell from the rendered frame
+*invisible* - unlike color and depth you cannot tell from the rendered frame
 whether your mask did what you meant, so the visualization is what makes the
 feature teachable rather than a nice-to-have.
 
@@ -43,7 +43,7 @@ Two structural facts shape the work.
 
 **No GL context in the tree requests a stencil buffer.** `gl_repl.c:264` is
 `GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE`. Every stencil command
-is a silent no-op until that changes — and the *exported* C prologue
+is a silent no-op until that changes - and the *exported* C prologue
 (`src/repl/export_setup.c:393`, `:416`, both `GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH|
 GLUT_MULTISAMPLE`) has the identical gap, so exported scenes would render
 differently from the REPL, breaking the project's parity invariant.
@@ -59,14 +59,14 @@ Be honest about the strength of this argument: render3d *already* owns
 framebuffer capture and post-processing (`postprocess_filter.c` captures the
 resolved color image), so "buffer inspection is categorically outside render3d's
 boundary" is **not** an established fact of the architecture. The justification
-is forward-looking rather than definitional — buffer viz is expected to grow CPU
+is forward-looking rather than definitional - buffer viz is expected to grow CPU
 data products (histograms, legends, per-value counts) and consumers above the
 renderer (a UI legend, later possibly hit-testing and click-to-isolate), and
 those are subsystem concerns, not renderer concerns. If stencil were the only
 addition ever contemplated, keeping it beside depth_viz in render3d would be the
 proportionate call.
 
-render3d still *executes* every viz pass — it is merely agnostic to what the
+render3d still *executes* every viz pass - it is merely agnostic to what the
 passes are for. `scripts/check/check-render3d-no-upper-layers.sh` forbids
 `src/render3d/` from including `subsystems/`, so the extraction *must* go through
 neutral hooks: render3d offers "here is a point where you may read or composite",
@@ -76,7 +76,7 @@ with no idea what for.
 
 | Decision | Choice |
 |---|---|
-| Placement | **`src/subsystems/buffer_viz/`** — depth_viz moves there, stencil_viz joins it; render3d executes the passes but stays agnostic |
+| Placement | **`src/subsystems/buffer_viz/`** - depth_viz moves there, stencil_viz joins it; render3d executes the passes but stays agnostic |
 | Color mapping | Config row cycles **Off / Palette / Ramp / Split**. Palette = deterministic value→color + legend; Ramp = min/max reusing depth-viz's EMA range |
 | Stencil compositing | **Sparse RGBA overlay, `stencil == 0` fully transparent**, composited *inside* each scene pass after helpers and **before** edit overlays |
 | Stencil clear | **Strict + warn.** No host-side stencil clear; warn when the viz is on and the program never clears stencil |
@@ -87,21 +87,21 @@ with no idea what for.
 
 Phase 0 is a **behavior-preserving refactor of a shipped feature** and lands and
 is verified on its own before any stencil work starts. If it proves messier than
-expected, Phase 1 can still fall back to mirroring depth_viz inside render3d —
+expected, Phase 1 can still fall back to mirroring depth_viz inside render3d -
 but then the asymmetry is permanent, which is what this ordering avoids.
 
 ## Shape of the change
 
 ```mermaid
 graph TD
-    subgraph P0["Phase 0 — extract (no user-visible change)"]
+    subgraph P0["Phase 0 - extract (no user-visible change)"]
         A["render3d/render.c<br/>2 hardcoded depth_viz call sites<br/>+ Render3dRenderConfig.depth_viz"]
         A -->|replace with| B["3 neutral hooks:<br/>buffer_read_fn<br/>buffer_pass_overlay_fn<br/>buffer_resolve_overlay_fn"]
         A -->|move files| C["src/subsystems/buffer_viz/depth_viz.c<br/>render3d_depth_viz_* → buffer_viz_depth_*"]
         B --> D["glr_ctrl.c subscribes via BufferVizFrameConfig;<br/>owns g_depth_readback_supported"]
         C --> D
     end
-    subgraph P1["Phase 1 — stencil"]
+    subgraph P1["Phase 1 - stencil"]
         E["GLUT_STENCIL in gl_repl.c<br/>+ export_setup.c (parity)<br/>+ 6 test/demo hosts"]
         F["3 CmdTypes: STENCIL_FUNC / OP / MASK<br/>parser · executor ×2 · spec tables"]
         G["GL_STENCIL_TEST → k_enable_caps<br/>GL_STENCIL_BUFFER_BIT → k_clear_bits"]
@@ -116,7 +116,7 @@ graph TD
 ```
 
 Frame-pipeline placement. **Depth and stencil composite at different points, by
-design** — depth is a full-rect replacement that must sit on the resolved image,
+design** - depth is a full-rect replacement that must sit on the resolved image,
 stencil is a sparse overlay that must sit *under* the edit overlays:
 
 ```
@@ -137,25 +137,25 @@ The third hook is a **correction to the original design**, which composited
 everything at the resolve point. That would have drawn the viz quad on top of the
 per-pass edit overlays *and* the post-resolve bitmap labels, since
 `post_resolve_overlays_fn` fires at `render.c:945-951` and the depth-viz render
-at `:955-966` — after it. UI panels were never at risk; they draw later, in the
+at `:955-966` - after it. UI panels were never at risk; they draw later, in the
 controller.
 
 ---
 
-# Phase 0 — extract `src/subsystems/buffer_viz/`
+# Phase 0 - extract `src/subsystems/buffer_viz/`
 
 Pure refactor. **No user-visible change**: same modes, same config key, same
 `@cfg` slug (`depth_view`), same goldens, same pixels.
 
 ## 0.1 Three neutral hooks in render3d
 
-`Render3dRenderConfig` already carries this idiom — `post_fill_fn`
+`Render3dRenderConfig` already carries this idiom - `post_fill_fn`
 (`render_types.h:145-146`, fired `render.c:777`) and `post_resolve_overlays_fn`
 (`:165-166`, fired `render.c:945`). `post_fill_fn` is already taken by the replay
 fades, so add dedicated hooks rather than fighting over them.
 
 Phase 0 needs only the first and third (that is all depth_viz uses). **Add all
-three now** — the mid-pass hook is what Phase 1's stencil overlay requires, and
+three now** - the mid-pass hook is what Phase 1's stencil overlay requires, and
 introducing it during the refactor, while `test_depth_viz` and the byte-identical
 capture gate are the active safety net, is cheaper than reopening `render.c`
 later.
@@ -206,7 +206,7 @@ by the controller at `glr_ctrl.c:2483`), so passing it through keeps the hook
 neutral frame metadata rather than viz vocabulary.
 
 `buffer_read_fn` and `buffer_resolve_overlay_fn` **replace** the hardcoded blocks
-at `render.c:836-841` and `:955-967`. The `is_final_pass` flag is free —
+at `render.c:836-841` and `:955-967`. The `is_final_pass` flag is free -
 `render_3d_scene_pass()` already receives exactly that as its `capture_depth`
 parameter (`render.c:824`, set on the last pass only at `:918`, `:924`); rename it
 to `is_final_pass` and forward it **without** using it as a gate. The `dv_on`
@@ -217,7 +217,7 @@ subscriber no-ops when its modes are Off. That inversion is what lets depth
 Delete `Render3dRenderConfig.depth_viz` (`render_types.h:269-275`), its validation
 in `render3d_draw_scene` (`render.c:138-139`), and the `#include "depth_viz.h"`
 (`render.c:8`). Move the `render3d_depth_viz_reset()` call out of
-`render3d_init_gl()` (`render.c:72`) — the controller now owns that from
+`render3d_init_gl()` (`render.c:72`) - the controller now owns that from
 `glr_ctrl_init_gl`.
 
 Update the stale comment at `src/render3d/postprocess_filter.h:70-72`, which
@@ -233,7 +233,7 @@ automatically.
 
 **Rename the prefix** `render3d_depth_viz_*` → `buffer_viz_depth_*`, and
 `Render3dDepthVizMode` / `Render3dDepthVizRange` → `BufferVizDepthMode` /
-`BufferVizRange` (the range type is deliberately un-prefixed by buffer kind — it
+`BufferVizRange` (the range type is deliberately un-prefixed by buffer kind - it
 is shared with stencil RAMP in Phase 1). `check-module-prefixes.sh` is a denylist
 of specifically eliminated names and will not force this, but the convention will
 (`replay_*`, `variable_panel_*`, `color_picker_*` are the sibling precedents).
@@ -257,17 +257,17 @@ keeps ownership of the policy it already owns:
 - the capability mask at `glr_ctrl.c:1352-1353` now sets the subsystem's mode
   directly instead of zeroing a render-config field;
 - `g_depth_readback_supported`, its `..._for_test` seam, its reason string
-  (`:1184-1199`) and its probe (`:3200-3213`) stay exactly where they are — that
+  (`:1184-1199`) and its probe (`:3200-3213`) stay exactly where they are - that
   is controller policy, not viz code.
 
-## 0.4 Profiling — move `prof_begin` into the subsystem
+## 0.4 Profiling - move `prof_begin` into the subsystem
 
 `PROF_RENDER3D_DEPTH_VIZ` (`prof_sections.h:51-52`) → `PROF_BUFFER_VIZ_DEPTH`,
 label updated in `src/app/glr_prof.c:52`. **Keep the enum constant inside the
 render3d index range** and keep `PROF_RENDER3D_LAST` pointing at the last section
 in it: the aggregate at `glr_ctrl.c:2188` / `:2262` is an *index* sweep
 (`PROF_RENDER3D_SETUP … PROF_RENDER3D_LAST`), so moving the constant out of the
-range would change what the render3d row reports in the profile panel — a
+range would change what the render3d row reports in the profile panel - a
 user-visible change this refactor must not make.
 
 Because the sweep is index-based, the `prof_begin` / `prof_accum_end` calls
@@ -278,19 +278,19 @@ scans `gl_repl.c` + all of `src/`), and stops charging time to the section on
 frames where nothing is subscribed.
 
 While here: `src/app/glr_prof.c:26` claims `PROF_RENDER3D_LAST` aliases
-`_POST_PROCESS` — already stale, fix it.
+`_POST_PROCESS` - already stale, fix it.
 
 ## 0.5 Build + tests
 
-- `test_depth_viz_OBJS` (`Makefile:962-971`) — swap `src/render3d/depth_viz.o` for
+- `test_depth_viz_OBJS` (`Makefile:962-971`) - swap `src/render3d/depth_viz.o` for
   `src/subsystems/buffer_viz/depth_viz.o`. It also links `postprocess_filter.o`
   and `postprocess_surface.o`; both stay. Registration in `TEST_BINS`
   (`Makefile:812`) and the `CORE_TEST_BINS` filter-out (`:854`) is unchanged.
-- `tests/test_depth_viz.c` — mechanical rename only (`#include
+- `tests/test_depth_viz.c` - mechanical rename only (`#include
   "subsystems/buffer_viz/depth_viz.h"`, `buffer_viz_depth_map`,
   `BUFFER_VIZ_DEPTH_*`). Its synthetic-buffer assertions are the proof the
   refactor preserved behavior. **Do not modify the assertions.**
-- `tests/test_render3d_render.c:548-577` (`test_depth_viz_render_modes`) — this
+- `tests/test_render3d_render.c:548-577` (`test_depth_viz_render_modes`) - this
   drives `cfg.depth_viz` and asserts `validate_render_config` rejects
   out-of-range values. That field is gone, so the test must be rewritten as a
   hook-subscription structural test. The mode-range rejection assertions
@@ -318,14 +318,14 @@ byte-identical**. If the captures differ, the refactor is wrong.
 
 ---
 
-# Phase 1 — stencil commands, clear bit, visualization
+# Phase 1 - stencil commands, clear bit, visualization
 
 ## 1.1 Give the context a stencil buffer
 
 Add `GLUT_STENCIL` to `glutInitDisplayMode`:
 
-- `gl_repl.c:264` — the real one.
-- `src/repl/export_setup.c:393` and `:416` — **required for export parity.**
+- `gl_repl.c:264` - the real one.
+- `src/repl/export_setup.c:393` and `:416` - **required for export parity.**
   (Note both spell `GLUT_RGB`, not `GLUT_RGBA`; leave that alone, just add the
   bit.)
 - Demo/test hosts so they match: `tools/render3d_demo/render3d_demo.c:793`,
@@ -333,7 +333,7 @@ Add `GLUT_STENCIL` to `glutInitDisplayMode`:
   `tests/test_attrib_bits_gl.c:423`, `tests/test_tour_overlay_feedback.c:340`,
   `bench/bench_repl.c:1883`.
 
-OSMesa needs nothing — the vendored fork already maps `GLUT_STENCIL` → 8 stencil
+OSMesa needs nothing - the vendored fork already maps `GLUT_STENCIL` → 8 stencil
 bits (`third_party/freeglut/src/osmesa/fg_window_osmesa.c:38-49`).
 
 **Query the actual width; do not assume 8.** That OSMesa mapping proves what the
@@ -349,17 +349,17 @@ glr_state_render_mut()->stencil_bits = (int)stencil_bits;
 ```
 
 Surface it in the init trace and in the capability-refusal message, and treat
-`stencil_bits == 0` as "viz unavailable" alongside the readback probe — a context
+`stencil_bits == 0` as "viz unavailable" alongside the readback probe - a context
 that silently granted no stencil planes is exactly the failure a user would
 otherwise spend an hour on. `GL_STENCIL_BITS` and `glClearStencil` appear
 **nowhere** in the tree today, so both are new.
 
-### `glClearStencil` — deliberately deferred, and say so
+### `glClearStencil` - deliberately deferred, and say so
 
 Without it the user cannot choose the clear value, so `glClear(GL_STENCIL_BUFFER_BIT)`
 always clears to whatever the context default is (0 unless something set it).
-That is a coherent subset for masking work — build a mask on a zeroed buffer,
-test against it — and it keeps Phase 1's surface small. It is **not** the
+That is a coherent subset for masking work - build a mask on a zeroed buffer,
+test against it - and it keeps Phase 1's surface small. It is **not** the
 complete basic stencil state family, and the plan should not imply otherwise.
 
 Add `glClearStencil(n)` in Phase 2 alongside the attrib-bits work (it belongs to
@@ -370,10 +370,10 @@ value is fixed at 0.
 ## 1.2 The three commands
 
 Follow skill `gl-repl-new-command`. New `CmdType`s go **next to their relatives**
-(`src/repl/command.h:33-36` — append-stable, never reorder): `CMD_STENCIL_FUNC`,
+(`src/repl/command.h:33-36` - append-stable, never reorder): `CMD_STENCIL_FUNC`,
 `CMD_STENCIL_OP`, `CMD_STENCIL_MASK` beside `CMD_DEPTH_FUNC` (`command.h:54`).
 
-**`glStencilOp(sfail, dpfail, dppass)`** — three enum slots, so it rides the
+**`glStencilOp(sfail, dpfail, dppass)`** - three enum slots, so it rides the
 generalized table-driven path with a new `k_stencil_ops` table: `GL_KEEP`,
 `GL_ZERO`, `GL_REPLACE`, `GL_INCR`, `GL_DECR`, `GL_INVERT`.
 
@@ -381,7 +381,7 @@ generalized table-driven path with a new `k_stencil_ops` table: `GL_KEEP`,
 > a runtime probe. The spec tables are `static const` data driving parse and
 > autocomplete; making an entry conditional on a probe means a scene that parses
 > on one machine is **rejected on another**, which breaks scene-file round-trip
-> and export parity — the exact invariant the rest of this plan is organized
+> and export parity - the exact invariant the rest of this plan is organized
 > around defending. The only clean options are "always present" or "absent", and
 > with an 8-bit buffer and masking-style scenes, `GL_INCR`/`GL_DECR` cover the
 > real use cases. If they are wanted later, add them **unconditionally** (both
@@ -389,14 +389,14 @@ generalized table-driven path with a new `k_stencil_ops` table: `GL_KEEP`,
 
 One wrinkle:
 `format_enum_command_text` (`src/repl/parser.c:537-568`) threads `def->fmt` only
-for 1, 2 and 4 slots — a 3-slot command falls to the generic `", "` join, which
+for 1, 2 and 4 slots - a 3-slot command falls to the generic `", "` join, which
 produces identical text but leaves `fmt` dead. **Add a `num_slots == 3` branch.**
 
-**`glStencilFunc(func, ref, mask)`** — mixed enum + two integers. No slot kind
+**`glStencilFunc(func, ref, mask)`** - mixed enum + two integers. No slot kind
 covers that shape, and `ENUM_OR_EXPR` is explicitly reserved (one slot in the
 whole tree, `command_spec.h:63-66`). Use a **custom parser branch** modelled on
 `parse_fogf` (`parser.c:1213-1270`), registered with **`num_args = -1`** in
-`k_enum_command_specs[]` — the sign convention (`command_spec.h:200-205`) means
+`k_enum_command_specs[]` - the sign convention (`command_spec.h:200-205`) means
 "custom branch, `abs()` is the autocomplete slot count". **`-1`, not `-3`**: only
 slot 0 is an enum slot that autocomplete can offer candidates for; `ref` and
 `mask` are custom integer slots with no enum table behind them. Dispatch from
@@ -408,11 +408,11 @@ slot 0 is an enum slot that autocomplete can offer candidates for; `ref` and
 > `glStencilFunc(GL_EQUAL, min(i,3), 0xFF)` would split wrong. Use
 > `repl_scan_next_arg_delim()` (`src/repl/eval.h:428`), per CLAUDE.md.
 
-Slot 0 **reuses `k_depth_funcs`** verbatim (`command_spec.c:65-75`) — already
+Slot 0 **reuses `k_depth_funcs`** verbatim (`command_spec.c:65-75`) - already
 exactly the eight comparison functions stencil needs. Reuse it rather than
 cloning; a distinct usage hint belongs on the slot, not in a duplicate table.
 
-**`glStencilMask(mask)`** — a single integer, also a small custom branch rather
+**`glStencilMask(mask)`** - a single integer, also a small custom branch rather
 than a plain `k_std_command_specs` row, so hex handling stays confined to the two
 stencil parsers.
 
@@ -421,7 +421,7 @@ stencil parsers.
 `GLCmd.args[]` is `float args[8]` (`command.h:104`); values round-trip exactly
 only below 2²⁴, so `glStencilMask(0xFFFFFFFF)` cannot round-trip.
 
-The 0..255 range is therefore a **deliberate REPL restriction**, framed as such —
+The 0..255 range is therefore a **deliberate REPL restriction**, framed as such -
 it is *not* derived from a portable guarantee about the context (see §1.1: query
 `GL_STENCIL_BITS`, don't assume). It keeps values inside float-exact range, and
 matches the 8-bit buffer every target in practice provides.
@@ -431,14 +431,14 @@ matches the 8-bit buffer every target in practice provides.
 - **Truncate toward zero; do not round.** Exported C passes the value to a
   `GLint ref` parameter, where C's float→int conversion truncates. Rounding in
   the REPL would make `glStencilFunc(GL_EQUAL, i*0.6, 0xFF)` disagree with its own
-  exported source — a parity break of exactly the kind §1.1 exists to prevent.
+  exported source - a parity break of exactly the kind §1.1 exists to prevent.
 - Put the conversion in **one helper**, e.g.
   `repl_stencil_clamp_ref(float v, int *out)`, and call it from every path that
   can produce a value: the parser, the warm flatten path, and any rebake.
 - Accept **`0xNN` and decimal** on input. The expression evaluator has no hex
   support (no `0x` / `strtol` anywhere in `src/repl/eval.c`), and hex is how every
   stencil example is written. Handle `0x` with a local `strtol` in the two stencil
-  branches — **do not extend the expression language**, which would touch number
+  branches - **do not extend the expression language**, which would touch number
   scanning at `eval.c:1111` plus the highlighter classifiers at `:1455-1489` and
   drag in unrelated churn.
 - Emit masks canonically as `0x%02X`, `ref` as decimal. Export writes canonical
@@ -450,20 +450,20 @@ matches the 8-bit buffer every target in practice provides.
   animates in a loop. `mask` stays literal-only, consistent with the `glClear`
   bitfield rationale that a mask is not a quantity to animate.
 
-### Executor — two switches, both mandatory
+### Executor - two switches, both mandatory
 
 `src/repl/executor.c`:
-- `repl_apply_state_cmd()` (`:320-451`) — emit the GL calls. Has a `default:`,
+- `repl_apply_state_cmd()` (`:320-451`) - emit the GL calls. Has a `default:`,
   so a miss here is silent at compile time; it is caught at runtime by
   `repl_exec_cursor_warn_unhandled_state()` (defined `executor.c:586`, called at
   `:992`), which logs once
   per type when the cluster lists a type the apply helper doesn't handle.
-- The exhaustive cluster in `repl_exec_cursor_step()` (`:934-1000`) — **no
+- The exhaustive cluster in `repl_exec_cursor_step()` (`:934-1000`) - **no
   `default:` by design** (see the comment at `:892-903`), so a missing case is a
   `-Wswitch` warning. That is the intended tripwire; let it fire, then add the
   three cases to the delegating run alongside `CMD_DEPTH_FUNC`.
 
-### flatten — one change (a dynamic `ref` bypasses its own policy)
+### flatten - one change (a dynamic `ref` bypasses its own policy)
 
 `flatten_range()` branches only on control-flow types; everything else falls
 through to `flatten_reparse_line` (`src/repl/flatten.c:1110`), so constant-arg
@@ -474,7 +474,7 @@ straight into the command:
 ```c
 /* flatten.c:697-703 */
 if (v.found) {
-    tmp.args[k] = v.value;          /* raw float — no clamp, no truncation */
+    tmp.args[k] = v.value;          /* raw float - no clamp, no truncation */
     repl_flatten_expr_note_value(&ctx->expr, v.deps);
 }
 ```
@@ -487,7 +487,7 @@ parses fine (the literal check never sees it) and then feeds `-372.6` to
 
 **Add a `CMD_STENCIL_FUNC` arm beside the `CMD_CLEAR_COLOR` one**, calling the
 same `repl_stencil_clamp_ref()` helper the parser uses. Out-of-range at *runtime*
-clamps silently rather than rejecting — a per-frame parse error is not a usable
+clamps silently rather than rejecting - a per-frame parse error is not a usable
 failure mode for an animated value, and clamping is what the GL spec does with
 `ref` anyway.
 
@@ -500,10 +500,10 @@ confirming the truncation matches.
 
 `src/repl/command_spec.c`, **alphabetical by GL name**: rows in
 `k_enum_command_specs[]`, and `g_command_type_specs[]` entries using
-`CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(..., CMD_CAT_STATE)` — real GL rejects these
+`CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(..., CMD_CAT_STATE)` - real GL rejects these
 inside `glBegin`, and not-in-begin specs **must** carry a `display_name` (pinned
 by `tests/test_replay_walk.c:593-606`). Add to `k_func_completions[]` (around
-`command_spec.c:275-295`, in the Render state run) — source order is
+`command_spec.c:275-295`, in the Render state run) - source order is
 load-bearing for F1 row order and Tab priority, so place deliberately, not
 alphabetically.
 
@@ -514,18 +514,18 @@ after `GL_POINT_SMOOTH`, currently the last entry). Mostly free:
 - `src/repl/gl_state_inspector.c:417-431` seeds its cap table from this list, so
   the state panel picks it up automatically. `REPL_GL_STATE_MAX_CAPS` is 32,
   21 used → 22.
-- Autocomplete is slot-indexed off the table — automatic.
+- Autocomplete is slot-indexed off the table - automatic.
 - `glEnable`'s `help_desc` (`command_spec.c:278-282`) **hand-lists every cap**
   across four lines. Manual edit (and `glDisable` says "same caps as glEnable",
   so it needs nothing).
 - `cap_group_bit()` (`attrib_bits.c:53-77`) is **Phase 2**. Left alone, the cap
-  degrades to `GL_ENABLE_BIT` only — incomplete but correct, and it does not trip
+  degrades to `GL_ENABLE_BIT` only - incomplete but correct, and it does not trip
   the `test_repl_state.c:1867` ratchet (which keys on `CmdType`; `CMD_ENABLE`
   already has a row).
 
 **`GL_STENCIL_BUFFER_BIT` → `k_clear_bits`** (`command_spec.c:129-133`). Table
 order **is** canonical emission order, so append after `GL_DEPTH_BUFFER_BIT`.
-Rewrite the comment at `:123-128` — its stated rationale is now half false (the
+Rewrite the comment at `:123-128` - its stated rationale is now half false (the
 accum-bit half still holds). Do **not** add it to `k_attrib_bits` (Phase 2).
 
 The executor already passes the mask through (`executor.c:432`) and the
@@ -539,20 +539,20 @@ is untouched. The program's own `glClear` *is* the frame's clear for the scene
 rect; a renderer-side stencil clear would make the user's
 `GL_STENCIL_BUFFER_BIT` decorative and desynchronize the REPL from its exported C.
 
-The hazard that leaves is real — omit the bit and stencil accumulates across
-frames — so add the warning. Scan the flat program for a `CMD_CLEAR` whose mask
+The hazard that leaves is real - omit the bit and stencil accumulates across
+frames - so add the warning. Scan the flat program for a `CMD_CLEAR` whose mask
 carries `GL_STENCIL_BUFFER_BIT`; if the viz is on and none exists, post a status
 message. `flatten_flat_lighting_enabled` (`src/repl/flatten.c:1123-1137`) is the
-exact precedent for a flat-program predicate — add `repl_flat_clears_stencil()`
+exact precedent for a flat-program predicate - add `repl_flat_clears_stencil()`
 beside it. Post once per program change, not per frame (the status ring holds 16).
 
 ## 1.5 `src/subsystems/buffer_viz/stencil_viz.{c,h}`
 
-Same shape as the now-relocated depth_viz — **pure GL-free conversion core plus a
+Same shape as the now-relocated depth_viz - **pure GL-free conversion core plus a
 thin GL shell** (`depth_viz.h:57-87` is the model), subscribing to the Phase 0
 hooks alongside it. All three hooks are multiplexed by one small `buffer_viz.c`
-dispatcher that the controller installs — it reads the `BufferVizFrameConfig`
-from `user_data` and fans out to whichever module the frame's modes select — so
+dispatcher that the controller installs - it reads the `BufferVizFrameConfig`
+from `user_data` and fans out to whichever module the frame's modes select - so
 the single-slot hooks stay single-slot. Depth subscribes `read` (final pass only)
 and `resolve_overlay`; stencil subscribes `read` and `pass_overlay`, both every
 pass.
@@ -587,18 +587,18 @@ const BufferVizStencilHistogram *buffer_viz_stencil_histogram(void);
 ```
 
 - **Readback:** `glReadPixels(sx, sy, sw, sh, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE,
-  buf)`. Unlike depth's float rows, byte rows are **not** naturally aligned —
+  buf)`. Unlike depth's float rows, byte rows are **not** naturally aligned -
   bracket with `glPixelStorei(GL_PACK_ALIGNMENT, 1)` save/restore. (Depth
   deliberately skips this; see the note at `depth_viz.c:229`.)
 - **Histogram** is computed in the same scan RAMP already needs for min/max, so
   the legend counts are free and need no second pass.
-- **Palette** — fixed 16-entry table indexed `value & 15`, so a given value is
+- **Palette** - fixed 16-entry table indexed `value & 15`, so a given value is
   always the same color regardless of what else is on screen. The palette lives
-  **with this code, not in `theme.c`** — `docs/MODULES.md:640` keeps computed/data
+  **with this code, not in `theme.c`** - `docs/MODULES.md:640` keeps computed/data
   palettes out of `ui_theme`.
 
   **Documented aliasing:** `value & 15` gives values 16 apart the same swatch (1
-  and 17 collide). Accepted, not overlooked — real stencil scenes use a handful of
+  and 17 collide). Accepted, not overlooked - real stencil scenes use a handful of
   low values, and the legend prints the numeric value beside every swatch, so a
   collision is disambiguated wherever it can actually be seen. Say so in
   `docs/USER_GUIDE.md` rather than leaving a user to discover it.
@@ -610,7 +610,7 @@ const BufferVizStencilHistogram *buffer_viz_stencil_histogram(void);
 
   > **A limit worth stating in the docs, not just here:** a stencil readback
   > cannot distinguish "never written", "cleared to 0", and "the program
-  > explicitly wrote 0" — all three are byte `0`. With zero transparent, an
+  > explicitly wrote 0" - all three are byte `0`. With zero transparent, an
   > explicit write of 0 is therefore invisible. Write provenance would need a
   > second coverage buffer or a diagnostic replay pass; it is not recoverable
   > from the stencil data. The contract the viz promises is **"zero vs
@@ -622,34 +622,34 @@ const BufferVizStencilHistogram *buffer_viz_stencil_histogram(void);
 
   **Compute the range over non-zero bins only.** Zero is the clear value and
   dominates virtually every scene, so feeding the whole buffer to the EMA pins
-  `min` at 0 permanently and degrades RAMP to a fixed `0..max` ramp — losing
+  `min` at 0 permanently and degrades RAMP to a fixed `0..max` ramp - losing
   exactly the contrast the mode exists to provide. Since zeros are transparent
   they contribute nothing visible anyway. The histogram scan already walks every
   bin, so skipping bin 0 when deriving `min`/`max` is free.
 
   **Update the EMA once per frame, not once per pass.** Stencil captures on every
   accumulation pass (below), so a naive `buffer_viz_stencil_map()` per pass would
-  run the smoothing 16× per frame at max accum — changing its effective time
+  run the smoothing 16× per frame at max accum - changing its effective time
   constant relative to depth's and letting the palette drift *between blur
   samples of the same frame*, which shows up as color banding across the
   accumulated result. Instead: compute a frame-local range on the first pass,
   reuse it unchanged for every remaining pass of that frame, and fold it into the
-  persistent EMA exactly once. Same fix keeps the histogram stable — publish the
+  persistent EMA exactly once. Same fix keeps the histogram stable - publish the
   final pass's histogram, not a per-pass one, or the legend counts flicker.
 - **Draw: POT `GL_RGBA` texture with blending**, `glTexSubImage2D` with
   `GL_UNPACK_ALIGNMENT` save/restore, `GL_NEAREST`, one screen-space `GL_QUADS`,
-  bracketed by `render3d_post_2d_begin/_end`. **No `glDrawPixels`** — absent from
+  bracketed by `render3d_post_2d_begin/_end`. **No `glDrawPixels`** - absent from
   both the web build and the GL stubs.
 
   The bracket needs one adjustment at the call site, **not** a change to the
   bracket itself: `render3d_post_2d_begin` disables `GL_BLEND` and sets
   `GL_TEXTURE_ENV_MODE` to `GL_REPLACE` (`postprocess_filter.c:133-139`), which is
-  right for depth's full-rect replacement and fatal for a sparse overlay — an RGB
+  right for depth's full-rect replacement and fatal for a sparse overlay - an RGB
   quad through it overwrites every pixel in the scene rect, zero-valued background
   included. Since the bracket opens with `glPushAttrib(GL_ALL_ATTRIB_BITS)`
   (`:110`), `stencil_viz` can simply re-enable blending inside it
   (`glEnable(GL_BLEND)`, `glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`) and
-  the `glPopAttrib` in `_end` restores everything. `GL_REPLACE` stays correct —
+  the `glPopAttrib` in `_end` restores everything. `GL_REPLACE` stays correct -
   it takes RGB *and* alpha from the texture, which is exactly what drives the
   sparse composite.
 
@@ -660,16 +660,16 @@ const BufferVizStencilHistogram *buffer_viz_stencil_histogram(void);
   Unlike depth, stencil needs no projection, so `stencil_viz` subscribes to
   `buffer_pass_overlay_fn` (no `proj` argument) rather than the resolve hook.
 - **Cost, stated explicitly:** compositing per pass means the stencil buffer is
-  **read back once per accumulation pass** while the viz is on — up to 16× per
+  **read back once per accumulation pass** while the viz is on - up to 16× per
   frame at max accum passes, versus depth's once. This is accepted for a
-  diagnostic mode. The alternative — forcing a single effective accum pass while
-  stencil viz is active — is *not* chosen, because silently changing the
+  diagnostic mode. The alternative - forcing a single effective accum pass while
+  stencil viz is active - is *not* chosen, because silently changing the
   accumulation effect while an inspection tool is on is a worse surprise than a
   slower frame. If it ever becomes a problem, make it a visible choice, not a
   silent one.
 - **Both viz modes on at once: depth wins where it paints.** Nothing prevents
   Depth view and Stencil view being enabled together, and they composite at
-  different points — the sparse stencil overlay lands mid-pass, depth's full-rect
+  different points - the sparse stencil overlay lands mid-pass, depth's full-rect
   replacement lands at resolve, *after* it. So depth simply covers stencil
   wherever depth draws; the stencil overlay survives only in the live half of
   depth-Split. **Accept this rather than interlocking the two config rows**: it
@@ -679,8 +679,8 @@ const BufferVizStencilHistogram *buffer_viz_stencil_histogram(void);
   controller logic to force one off.
 - **Replay fades write stencil too.** The fade batches re-execute old state
   commands through `post_fill_fn`, which fires *before* `buffer_read_fn`, so
-  fade-batch stencil writes land in the buffer the viz captures. Harmless — the
-  next frame's clear resets it and the main render already happened — but it means
+  fade-batch stencil writes land in the buffer the viz captures. Harmless - the
+  next frame's clear resets it and the main render already happened - but it means
   legend rows can appear during a fade that correspond to no currently-visible
   geometry. Worth a sentence in the user guide so it doesn't read as a bug.
 - **Profiling:** `PROF_BUFFER_VIZ_STENCIL` beside Phase 0's
@@ -693,13 +693,13 @@ Enabling `GL_STENCIL_TEST` changes fragment visibility for **everything drawn
 afterwards**, and the frame does not end when user geometry does. Left
 unspecified, a program doing `glEnable(GL_STENCIL_TEST)` +
 `glStencilFunc(GL_EQUAL, 1, 0xFF)` would have its stencil test silently clip the
-grid, the axes, the backdrop, the cursor outline and the vertex points — host
+grid, the axes, the backdrop, the cursor outline and the vertex points - host
 chrome the user never asked to mask. The helper passes push attributes but do not
 neutralize stencil state.
 
 This is the same class of problem `overlay_gl_track_cmd` already solves for
 clip planes, culling and `glFrontFace` (`src/subsystems/edit_overlays/edit_overlays.c`),
-and it cannot be deferred to Phase 2 with the inspector — Phase 2 is about
+and it cannot be deferred to Phase 2 with the inspector - Phase 2 is about
 *reporting* state, this is about *correctness of the rendered frame*.
 
 **The contract:**
@@ -714,12 +714,12 @@ and it cannot be deferred to Phase 2 with the inspector — Phase 2 is about
 
 **Writes, not just tests.** An overlay pass that redraws user geometry inherits
 the program's `glStencilOp` and will *write* to the stencil buffer as a side
-effect — corrupting the buffer the viz is about to read and, worse, the mask a
+effect - corrupting the buffer the viz is about to read and, worse, the mask a
 later pass depends on. Overlay walks must force `glStencilOp(GL_KEEP, GL_KEEP,
 GL_KEEP)` (and `glStencilMask(0)` for belt and braces) unless they are
 deliberately reproducing a mask-building pass.
 
-### Implementation — two separate pieces
+### Implementation - two separate pieces
 
 **(a) Helper suspension lives in render3d, not in the overlay walker.** The
 contract above covers `render3d_pass_helpers`, but that pass has nothing to do
@@ -742,31 +742,31 @@ enable state.
 `_pass_helpers`) made the two pass functions align with the two stencil
 categories exactly:
 
-- `render3d_pass_helpers` — backdrop, grid, axes, orbit target, light gizmos.
+- `render3d_pass_helpers` - backdrop, grid, axes, orbit target, light gizmos.
   All host chrome. **Suspend.**
-- `render3d_pass_overlays` — `post_overlays_fn` only. All geometry reporting.
+- `render3d_pass_overlays` - `post_overlays_fn` only. All geometry reporting.
   **Reproduce**, with per-draw exceptions handled inside `edit_overlays.c`.
 
 Before that move, light indicators sat at the head of `_pass_overlays` and would
-have needed their own bracket — widening the helpers bracket was not an option,
+have needed their own bracket - widening the helpers bracket was not an option,
 since it would also have swallowed the geometry-reporting overlays that must
 *keep* the stencil test.
 
 **(b) Overlay tracking in `edit_overlays.c`** is more than the three functions
 the earlier draft named. The full list:
 
-- **New stencil fields in `OverlayGlState`** (`:290-295`) — test enable, func/ref/mask,
+- **New stencil fields in `OverlayGlState`** (`:290-295`) - test enable, func/ref/mask,
   and the three op slots.
-- `overlay_gl_apply_cmd` (`:349-390`) — mirror `CMD_STENCIL_FUNC` and
+- `overlay_gl_apply_cmd` (`:349-390`) - mirror `CMD_STENCIL_FUNC` and
   `GL_STENCIL_TEST` alongside the clip/cull cases. **`CMD_STENCIL_OP` and
   `CMD_STENCIL_MASK` must be *consumed* (tracked, return 1) but never applied to
-  overlay draws** — they are write state, and overlay passes must not write.
-- `overlay_gl_restore_frame` (`:398-437`) — restore the new fields under
+  overlay draws** - they are write state, and overlay passes must not write.
+- `overlay_gl_restore_frame` (`:398-437`) - restore the new fields under
   `glPushAttrib(GL_ENABLE_BIT)` scoping, like the existing members.
-- `overlay_gl_reset` (`:473`) — leave stencil **disabled** at the end of a walk,
+- `overlay_gl_reset` (`:473`) - leave stencil **disabled** at the end of a walk,
   so the label and guide passes that follow start from a known baseline rather
   than inheriting whatever the last tracked command set.
-- `overlay_gl_suspend` / `_resume` (`:491-518`) — the stencil counterpart, used
+- `overlay_gl_suspend` / `_resume` (`:491-518`) - the stencil counterpart, used
   by the cursor-highlight path that already suspends clip planes and culling.
 - **Establish a known baseline at the start of every walk**, don't assume the
   frame left one.
@@ -774,7 +774,7 @@ the earlier draft named. The full list:
   the whole duration of every overlay draw.** This is the subtle one: without it,
   a tracked user `glStencilMask(0xFF)` re-applied mid-walk would silently reopen
   writes that the walk had disabled at entry, and the overlay would corrupt the
-  mask a later pass depends on — and the buffer the viz is about to read.
+  mask a later pass depends on - and the buffer the viz is about to read.
 
 `overlay_gl_track_cmd` (`:446-470`) needs no change; it delegates everything that
 isn't push/pop attrib.
@@ -795,32 +795,32 @@ Per skill `gl-repl-config-toggle`. Naming trap: the row struct is
 - `g_cfg_items[]` row in `src/app/glr_actions.c` under `### GEOMETRY`, directly
   after Depth view (`:463-465`), with
   `stencil_viz_names[] = {"Off","Palette","Ramp","Split"}`.
-  **Label it "Stencil view"** — `glr_config_item_slug()` derives the `@cfg` slug
+  **Label it "Stencil view"** - `glr_config_item_slug()` derives the `@cfg` slug
   from the label via `cfg_slug_from_label`, yielding `stencil_view`, matching
   `depth_view`.
-  **Do not set `.is_special`** — despite the name it means "GLUT special-key
+  **Do not set `.is_special`** - despite the name it means "GLUT special-key
   (F-key) binding" (`glr_config.h:87`), not "special row". With no keybinding the
   row carries only `.label`, `.key`, `.state_count`, `.state_names`.
 - `CFG_DEFAULT_STENCIL_VIZ 0` in `src/app/glr_defaults.h` (beside
   `CFG_DEFAULT_DEPTH_VIZ:67`).
 - Storage in `presentation` (`src/app/glr_state.h:66-72`) and an arm in
-  `config_value_ptr()` (`glr_config.c:216+` — that switch *is* the ownership
+  `config_value_ptr()` (`glr_config.c:216+` - that switch *is* the ownership
   declaration and the compiler flags a key that forgets to claim one).
 - **Do NOT add a reset line to `glr_state_presentation_reset_example_defaults()`**
   (`glr_state.c:124-158`). Verified: `depth_viz` appears exactly once in
-  `glr_state.c` — the initializer at `:71` — and is deliberately *not* reset
+  `glr_state.c` - the initializer at `:71` - and is deliberately *not* reset
   there. Buffer viz is a session inspection tool that should survive an example
   load, not per-scene presentation. Match depth exactly.
-- **Do NOT add it to `cfg_key_in_scene_subset()`** (`glr_actions.c:534-560`) —
+- **Do NOT add it to `cfg_key_in_scene_subset()`** (`glr_actions.c:534-560`) -
   `GLR_CONFIG_DEPTH_VIZ` is deliberately absent from that list, for the same
   reason.
-- **No `Render3dRenderConfig` field** — Phase 0 removed that pattern. The
+- **No `Render3dRenderConfig` field** - Phase 0 removed that pattern. The
   controller fills the frame-local `BufferVizFrameConfig` (§0.1) that travels
   through the hooks' `user_data`; it does not set an ambient subsystem mode.
 - **No keybinding initially.** `make keymap-list` shows free slots; a binding also
   drags in `check-user-guide-keymap`. Menu-only first.
 
-**Capability gate** — an exact twin of the depth machinery:
+**Capability gate** - an exact twin of the depth machinery:
 `g_stencil_readback_supported` (default 1 so tests exercise it) mirroring
 `glr_ctrl.c:1184`, a `glr_ctrl_set_stencil_readback_supported_for_test` seam
 (`:1186`), a `glr_ctrl_stencil_readback_unsupported_reason()` string
@@ -854,7 +854,7 @@ buffer_viz_stencil_histogram()             (subsystem owns the buffer; plain str
     -> ui_buffer_viz_legend_render(view)       (UI draws)
 ```
 
-New UI module at **`src/ui/subsystems/buffer_viz_legend.{c,h}`** — not
+New UI module at **`src/ui/subsystems/buffer_viz_legend.{c,h}`** - not
 `src/ui/support/`. `src/ui/subsystems/` is the mirror tier for peer subsystems
 (`replay_hud.c` ↔ `subsystems/replay/`, `color_picker.c` ↔
 `subsystems/color_picker/`, `variable_panel.c` ↔ `subsystems/variable_panel/`);
@@ -862,72 +862,72 @@ New UI module at **`src/ui/subsystems/buffer_viz_legend.{c,h}`** — not
 standalone subsystem demos link (`check-subsystem-demo-isolation.sh`).
 
 Drawn in the `PROF_UI_PANELS` block of `glr_ctrl_display_frame`, alongside
-`ui_gl_state_panel_render` (`glr_ctrl.c:~2280`) — that pairing
+`ui_gl_state_panel_render` (`glr_ctrl.c:~2280`) - that pairing
 (`glr_ctrl_build_gl_state_panel_view()` → `ui_gl_state_panel_render(view)`) is the
 exact structural precedent to copy.
 
 Rows: swatch + value + pixel count, **only for values present**, with a total.
 
 **Bound the row count.** A valid capture may contain all 256 values, and the
-panel has no clipping, scrolling or paging — an unbounded legend can exceed the
+panel has no clipping, scrolling or paging - an unbounded legend can exceed the
 viewport. Cap at **top-N by pixel count** (N ≈ 8, tuned to the panel), value
 ascending as the tiebreak, with a trailing `+N more` row when truncated. Always
 retain the zero row and the total, since "how much is background" is the question
 the panel most often answers. The 16-color aliasing noted in §1.5 is why rows
-print the numeric value, not just a swatch — two listed rows can legitimately
+print the numeric value, not just a swatch - two listed rows can legitimately
 share a color.
 
 Selection happens in the **controller's view builder**, not the renderer: the
 histogram is raw data, "which 8 rows" is a presentation decision, and
 `check-renderer-purity` wants the UI drawing a prepared view rather than deriving
 one. Reuse the layout idiom from `hist_draw_legend()`
-(`src/ui/support/cpuprof.c:999-1051`) — colored `glRectf` swatch plus
+(`src/ui/support/cpuprof.c:999-1051`) - colored `glRectf` swatch plus
 `gl2d_draw_string(…, FONT_SMALL)`. There is no generic legend widget, so this is a
 new one modelled on that.
 
 Guards: `check-renderer-purity` (no `repl_*_set_*`, no `repl_state_*_mut()`, no
 pointer-deref mutation under `src/ui/**/*.c`), `check-ui-returns-hits-only`,
 `check-ui-renderer-takes-view`, `check-views-flat-types`, `check-views-by-value-snapshot`.
-Render-only — no hit-test unless a later phase wants click-to-isolate.
+Render-only - no hit-test unless a later phase wants click-to-isolate.
 
 ## 1.9 GL stubs
 
-`tests/gl-stubs/include/GL/gl.h` — inline no-op `glStencilFunc`, `glStencilOp`,
+`tests/gl-stubs/include/GL/gl.h` - inline no-op `glStencilFunc`, `glStencilOp`,
 `glStencilMask` (models: `glBlendFunc:279`, `glDepthFunc:302`), plus the enums
 verified missing: `GL_KEEP 0x1E00`, `GL_INCR 0x1E02`, `GL_DECR 0x1E03`,
 `GL_INVERT 0x150A`, `GL_STENCIL_INDEX 0x1901`, `GL_PACK_ALIGNMENT 0x0D05`, and
-**`GL_STENCIL_BITS 0x0D57`** — verified absent, and now required by the §1.1
+**`GL_STENCIL_BITS 0x0D57`** - verified absent, and now required by the §1.1
 capability query (`GL_SAMPLES:154` and `GL_ACCUM_RED_BITS:155` are the neighbours
 to add it beside; note `glGetIntegerv`'s stub at `:350` special-cases `GL_SAMPLES`,
-so decide what it should report for stencil bits — 8 keeps the stub build
+so decide what it should report for stencil bits - 8 keeps the stub build
 exercising the enabled path).
 
-`GL_INCR_WRAP` / `GL_DECR_WRAP` are **not** needed — those enums are dropped from
+`GL_INCR_WRAP` / `GL_DECR_WRAP` are **not** needed - those enums are dropped from
 Phase 1 (§1.2).
 
 Verified already present: `GL_STENCIL_TEST:162`, `GL_STENCIL_BUFFER_BIT:94`,
 `GL_REPLACE:229`, `GL_ZERO:244`, `GL_NEVER:72`, `GL_ALWAYS:79`,
 `GL_UNSIGNED_BYTE:235`, `GL_UNPACK_ALIGNMENT:97`, `GL_NEAREST:236`,
 `glPixelStorei:270`, `glTexSubImage2D:276`, and `GLUT_STENCIL` (`freeglut.h:21`).
-`GL_STENCIL_BUFFER_BIT` is defined **twice** (`:94` and `:114`) — pre-existing and
+`GL_STENCIL_BUFFER_BIT` is defined **twice** (`:94` and `:114`) - pre-existing and
 harmless, but dedupe it in passing while you are in the file.
 
-`tests/gl-stubs/include/GL/gl_stub_counts.h` — three `X(...)` entries.
+`tests/gl-stubs/include/GL/gl_stub_counts.h` - three `X(...)` entries.
 
-## 1.10 Docs — one is build-gated
+## 1.10 Docs - one is build-gated
 
-- **`src/repl/command_descriptions.txt` — enforced.**
+- **`src/repl/command_descriptions.txt` - enforced.**
   `scripts/gen_command_descriptions.py` parses the `CmdType` enum *and*
   `k_enable_caps[]` and **hard-fails** on a missing or extra entry
   (`make check-command-descriptions`, `Makefile:1830`). Needs `[command
   CMD_STENCIL_FUNC]`, `[command CMD_STENCIL_OP]`, `[command CMD_STENCIL_MASK]`,
   `[capability GL_STENCIL_TEST]`. Also amend the `glClear` entry
-  (`command_descriptions.txt:189`) — it currently asserts *"The REPL already
+  (`command_descriptions.txt:189`) - it currently asserts *"The REPL already
   clears both at the start of every frame"*, which is both stale and now
   actively misleading for stencil.
-- `docs/USER_GUIDE.md:403-406` (the `glEnable` CAP list — **already drifted**,
+- `docs/USER_GUIDE.md:403-406` (the `glEnable` CAP list - **already drifted**,
   omits `GL_LINE_STIPPLE` and `GL_MULTISAMPLE`; fix while there) and `:549-552`
-  (the "stencil and accumulation bits are not offered" paragraph — the stencil
+  (the "stencil and accumulation bits are not offered" paragraph - the stencil
   half is now wrong).
 
   A new stencil section must state four things a user would otherwise hit as
@@ -937,34 +937,34 @@ harmless, but dedupe it in passing while you are in the file.
   explicitly wrote 0 (§1.5); and the palette **repeats every 16 values**, which is
   why rows print numbers (§1.5, §1.8). Add a note that replay fades can
   contribute legend rows during a fade (§1.5).
-- `CLAUDE.md` — add the three commands to the Supported Commands block.
+- `CLAUDE.md` - add the three commands to the Supported Commands block.
   (`AGENTS.md` is a **symlink** to `CLAUDE.md`, not a duplicate copy; one edit
   covers both. The earlier draft of this plan claimed otherwise.)
-- `docs/MODULES.md` — the `src/subsystems/buffer_viz/` rows and the new
+- `docs/MODULES.md` - the `src/subsystems/buffer_viz/` rows and the new
   `buffer_viz_` prefix boundary note (Phase 0), plus the
   `src/ui/subsystems/buffer_viz_legend.c` row.
-- `docs/ARCHITECTURE.md:2030-2080` — the add-a-command checklist is **stale**
+- `docs/ARCHITECTURE.md:2030-2080` - the add-a-command checklist is **stale**
   (references `enums1`/`enums2` and a 4-arg `CMD_TYPE_SPEC` that no longer exist).
   Worth fixing opportunistically; not required.
 
 ## 1.11 Tests
 
 **Inverted (currently assert rejection):**
-- `tests/test_repl_core_parse.c:1570` — drop `glClear(GL_STENCIL_BUFFER_BIT)` from
+- `tests/test_repl_core_parse.c:1570` - drop `glClear(GL_STENCIL_BUFFER_BIT)` from
   `k_bad[]`, add positive cases mirroring `:1500-1556` (single bit, `|` join,
   reordered/unspaced canonicalization, dedupe).
-- `:1730` — `glPushAttrib(GL_STENCIL_BUFFER_BIT)` **stays rejected** in Phase 1.
+- `:1730` - `glPushAttrib(GL_STENCIL_BUFFER_BIT)` **stays rejected** in Phase 1.
 
 **Extended:**
-- `tests/test_repl_export_all_commands.c` — the three `CmdType`s into
+- `tests/test_repl_export_all_commands.c` - the three `CmdType`s into
   `expected_commands[]` (`:58-108`) and `editor_feed_line("glStencil…;")` into the
   mega-example (`:368-395`).
-- `tests/test_repl_executor.c:166-200` (`test_enum_arg_gl_trace`) — argument-order
+- `tests/test_repl_executor.c:166-200` (`test_enum_arg_gl_trace`) - argument-order
   assertions. This test exists because a multi-enum arg shift is invisible to call
   counts, and `glStencilOp`'s three same-table slots are exactly that hazard.
 - `tests/test_repl_core_extra.c:1793` and `tests/test_repl_executor.c:513-560` pass
   automatically once the spec rows exist.
-- **New `tests/test_stencil_viz.c`** — pure-core tests over synthetic buffers
+- **New `tests/test_stencil_viz.c`** - pure-core tests over synthetic buffers
   (palette determinism, histogram counts, empty/uniform buffers, degenerate ramp
   span), modelled on `tests/test_depth_viz.c` and sharing its Makefile shape
   (`OBJS` = test + `buffer_viz/stencil_viz.o` + `render3d/postprocess_filter.o` +
@@ -973,7 +973,7 @@ harmless, but dedupe it in passing while you are in the file.
 - New parse tests: hex and decimal `ref`/`mask`, the 0..255 rejection, `ref` as an
   expression, and specifically `glStencilFunc(GL_EQUAL, min(i,3), 0xFF)` to pin
   the paren-aware split.
-- **Dynamic-`ref` suite** (§1.2, the flatten fix — this is the one with no
+- **Dynamic-`ref` suite** (§1.2, the flatten fix - this is the one with no
   existing precedent to copy, since the `CMD_CLEAR_COLOR` clamp it mirrors is
   itself untested): fractional, negative, `> 255`, loop-variable, predef-var,
   survives a warm-cache reflatten, and an exported-C comparison confirming
@@ -985,7 +985,7 @@ harmless, but dedupe it in passing while you are in the file.
   > `test_export_trace_parity`: that harness compares per-symbol *call
   > counts*, never argument values, so it structurally cannot see a
   > truncation difference. It carries a `stencil_mask` curated program
-  > anyway — the one place exported stencil C is compiled at all.
+  > anyway - the one place exported stencil C is compiled at all.
   >
   > Note the resulting divergence, which is intended: an out-of-range
   > *animated* `ref` is clamped REPL-side but passed raw by the exported C.
@@ -998,14 +998,14 @@ harmless, but dedupe it in passing while you are in the file.
 **Ratchet:** `check-tier-c-function-size`
 (`scripts/baselines/tier-c-function-size.txt`, `parse_command: 335`,
 `flatten_range: 91`). The stencil parsers are separate static functions so
-`parse_command` grows only by dispatch lines — and the dispatch actually lives in
+`parse_command` grows only by dispatch lines - and the dispatch actually lives in
 `try_parse_custom_arg_command`, not `parse_command` itself, so the baseline may
 well not move. The file's own guidance says to *lower* it when extracting, never
 quietly raise it far.
 
 ---
 
-# Phase 2 — attrib bits + GL-state inspector  ✅ landed
+# Phase 2 - attrib bits + GL-state inspector  ✅ landed
 
 Gated by the ratchet at `tests/test_repl_state.c:1866-1879`: any `CmdType` with
 non-zero `repl_attrib_bits_for_type()` must have a row in `k_gl_state_cell_cases[]`
@@ -1013,14 +1013,14 @@ non-zero `repl_attrib_bits_for_type()` must have a row in `k_gl_state_cell_cases
 keeps stencil at zero bits to stay outside the ratchet; Phase 2 opts in
 deliberately.
 
-- **`glClearStencil(n)`** — deferred here from Phase 1 (§1.1). It belongs to the
+- **`glClearStencil(n)`** - deferred here from Phase 1 (§1.1). It belongs to the
   `GL_STENCIL_BUFFER_BIT` attribute group, so it lands naturally with the
   attrib-bits work rather than needing its own pass. Single int arg, 0..255, same
   `repl_stencil_clamp_ref()` helper.
 
   **It cannot be a plain `k_std_command_specs` row.** That path accepts ordinary
   float expressions and the warm flatten path writes the evaluated value straight
-  into `args[]` — recreating the dynamic-`ref` bug §1.2 exists to fix, in a
+  into `args[]` - recreating the dynamic-`ref` bug §1.2 exists to fix, in a
   command whose whole job is to seed the buffer the viz reads. Either give it a
   custom integer parser branch like `glStencilMask`, or add an explicit
   `CMD_CLEAR_STENCIL` arm to the flatten post-evaluation fixup beside
@@ -1028,8 +1028,8 @@ deliberately.
   the std path.
 
   > **Landed as both, because the value takes an expression.** The clear value is
-  > a *quantity* like the clear colour and clear depth — both of which animate in
-  > this REPL — so making it literal-only would have made it the odd one out in
+  > a *quantity* like the clear colour and clear depth - both of which animate in
+  > this REPL - so making it literal-only would have made it the odd one out in
   > its own family. It therefore shares `glStencilFunc`'s ref slot verbatim
   > (extracted as `parse_stencil_quantity_slot()`): expression allowed, literal
   > out of range rejected, animated value clamped. Accepting an expression is
@@ -1039,7 +1039,7 @@ deliberately.
 
   Once it exists, drop the "clear value is fixed at 0" note from
   `docs/USER_GUIDE.md`.
-- `src/repl/attrib_bits.c` — `ITEM_KIND_STENCIL_*` (`:22-45`), `item_group_bit`
+- `src/repl/attrib_bits.c` - `ITEM_KIND_STENCIL_*` (`:22-45`), `item_group_bit`
   (`:85-108`), `repl_attrib_bits_for_cmd` (`:121-150`), `repl_attrib_cells_for_cmd`
   (`:260-395`), `cap_group_bit(GL_STENCIL_TEST)` (`:53-77`).
 - `GL_STENCIL_BUFFER_BIT` into `k_attrib_bits` (`command_spec.c:143-155`), enabling
@@ -1049,35 +1049,35 @@ deliberately.
   > **The table is not the only thing sized by that count.** `k_attrib_bits`
   > order *is* the canonical bit index, and `REPL_ATTRIB_BIT_COUNT`
   > (`attrib_bits.h`) sizes `k_attrib_bit_colors[]` in
-  > `src/ui/app/repl_code_panel.c` — the per-bit hues for the push-line mask
+  > `src/ui/app/repl_code_panel.c` - the per-bit hues for the push-line mask
   > tokens and the gutter markers. An eleventh bit needs the count bumped and a
   > hue inserted **at the same index** (stencil sorts between depth and
   > transform, ascending GL value), or the last group silently loses its colour.
   > `test_repl_code_panel_document` catches it.
-- `src/repl/gl_state_inspector.c` — fields in `ReplGlTrackedState` (`:73-192`),
+- `src/repl/gl_state_inspector.c` - fields in `ReplGlTrackedState` (`:73-192`),
   `gl_state_apply_cmd` cases (~`:938`), `gl_state_restore_attrib_groups`
   (`:786-830`), report rows (~`:1412`, ~`:1474`).
 - Rows in `k_gl_state_cell_cases[]` (`tests/test_repl_state.c:1704-1877`); models at
   `CMD_DEPTH_FUNC:1769` / `CMD_BLEND_FUNC:1783`. Matching entries in
   `tests/test_attrib_bits_gl.c` and `tests/test_repl_core_commit.c:1873-1890`, `:2567`.
 
-# Phase 3 — separate-face variants
+# Phase 3 - separate-face variants
 
 `glStencilFuncSeparate(face, func, ref, mask)` and
-`glStencilOpSeparate(face, sfail, dpfail, dppass)` — 4 args each, within
+`glStencilOpSeparate(face, sfail, dpfail, dppass)` - 4 args each, within
 `args[8]`. Two more `CmdType`s.
 
 They are **not** symmetric, and the split decides the parser work:
 
 - `glStencilOpSeparate` is four pure enum slots, so it rides the generalized
-  table-driven path with no new parser code — and the 4-slot `fmt` branch in
+  table-driven path with no new parser code - and the 4-slot `fmt` branch in
   `format_enum_command_text` already exists.
 - `glStencilFuncSeparate` is the **enum + int shape again** (two enums, then `ref`
   and `mask`), i.e. a third custom branch after `glStencilFunc` and
   `glStencilMask`.
 
-That means the rule stated in this plan's own risk list — *"if Phase 3 adds a
-fourth stencil branch, build a proper `ENUM_THEN_INTS` slot kind"* — **will fire
+That means the rule stated in this plan's own risk list - *"if Phase 3 adds a
+fourth stencil branch, build a proper `ENUM_THEN_INTS` slot kind"* - **will fire
 at Phase 3**, and it is better to plan for it now than to discover it as a
 surprise. Build `ENUM_THEN_INTS` as the first step of Phase 3 and migrate
 `glStencilFunc` / `glStencilMask` onto it, rather than adding a third
@@ -1087,10 +1087,10 @@ noted in §1.11.
 These are **GL 2.0 entry points**, unlike everything else in the tree, so they
 need extension-advertise + proc-load treatment
 (`glr_ctrl_load_point_parameter_proc`, `glr_ctrl.c:214-238`), gated on
-`glutExtensionSupported` — **never on a non-NULL proc pointer**, because GLX's
+`glutExtensionSupported` - **never on a non-NULL proc pointer**, because GLX's
 `GetProcAddress` returns a callable stub for any name (`glr_ctrl.c:251-253`).
 gl4es may not expose them, so expect to gate the commands themselves on the web
-build — a different posture from Phase 1, and why they are last.
+build - a different posture from Phase 1, and why they are last.
 
 ---
 
@@ -1119,22 +1119,22 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
 **Phase 0 gate:** before/after OSMesa captures of one scene in all four depth-viz
 modes must be **byte-identical**. Anything else means the extraction changed
 behavior. Also confirm the Compute Profile panel's render3d aggregate is
-unchanged — that is what the index-range decision in §0.4 protects.
+unchanged - that is what the index-range decision in §0.4 protects.
 
 **Phase 1 end-to-end** (skill `gl-repl-capture`): build headless
-(`make gl-repl FREEGLUT_OSMESA=1`) and capture a scene that writes a mask —
+(`make gl-repl FREEGLUT_OSMESA=1`) and capture a scene that writes a mask -
 disable color/depth writes, `glStencilFunc(GL_ALWAYS, 1, 0xFF)`,
 `glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)`, draw the mask geometry, re-enable
 writes, draw through `glStencilFunc(GL_EQUAL, 1, 0xFF)`. Confirm:
 
 - the masked render is correct;
-- **the viz is sparse** — with Palette on, pixels where `stencil == 0` show the
+- **the viz is sparse** - with Palette on, pixels where `stencil == 0` show the
   ordinary rendered scene, not a flat fill. This is the check that catches an
   RGB/`GL_REPLACE` regression (§1.5);
-- **edit overlays draw on top of the viz** — turn vertex outlines and points on
+- **edit overlays draw on top of the viz** - turn vertex outlines and points on
   deliberately for this shot and confirm they are visible over the colored
   region. This is the check that catches a wrong composite point;
-- **UI panels and the legend are unaffected** — they draw in the controller,
+- **UI panels and the legend are unaffected** - they draw in the controller,
   after render3d returns;
 - the legend's counts sum to the scene rect, and Ramp and Split agree with
   Palette;
@@ -1144,7 +1144,7 @@ writes, draw through `glStencilFunc(GL_EQUAL, 1, 0xFF)`. Confirm:
 - under a multi-pass accum effect the overlay still composites correctly rather
   than appearing at 1/N intensity.
 
-Note that vertex outlines default ON and normally pollute capture shots — here
+Note that vertex outlines default ON and normally pollute capture shots - here
 they are the subject of one check, so take both a with and a without shot.
 
 **Export parity:** export that scene, compile the standalone C, confirm identical
@@ -1158,7 +1158,7 @@ with the capability message rather than silently doing nothing.
 
 - **`GLUT_STENCIL` changes pixel-format selection on every platform.** Requesting
   stencil can select a different visual, in principle perturbing MSAA/accum.
-  Verify accum effects and MSAA still work immediately after 1.1 — this is the one
+  Verify accum effects and MSAA still work immediately after 1.1 - this is the one
   change that could regress unrelated features, and it lands first so that
   surfaces early.
 - **Phase 0 refactors a working, shipped feature.** Mitigations: `test_depth_viz.c`
@@ -1175,8 +1175,8 @@ with the capability message rather than silently doing nothing.
   slot each; keep them single-slot until something outside buffer_viz needs them.
 - **Stencil viz reads back once per accumulation pass** (§1.5), unlike depth's
   once per frame. At 16 accum passes with a large scene rect that is a real cost.
-  It is accepted deliberately — silently collapsing the accumulation effect while
-  an inspection tool is on would be a worse surprise — but if it bites, make the
+  It is accepted deliberately - silently collapsing the accumulation effect while
+  an inspection tool is on would be a worse surprise - but if it bites, make the
   mitigation explicit and visible rather than automatic.
 - **Host-pass stencil policy (§1.6) is the highest-risk correctness area.** It
   touches `edit_overlays.c`, which already carries subtle clip/cull/front-face

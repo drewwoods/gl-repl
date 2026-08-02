@@ -42,7 +42,7 @@
 #define HISTOGRAM_DECADES   6.0        /* log10(MAX_US / MIN_US)       */
 typedef uint32_t HistogramBin;
 
-/* The accumulator. Fields are private to histogram.c — read them through
+/* The accumulator. Fields are private to histogram.c - read them through
  * histogram_bins() / histogram_read_stats(). It is a value type rather than an
  * opaque pointer so the owner can hold an array of them with no allocation:
  * cpuprof.c has one per section, statically. Zero-initialize (static storage or
@@ -70,7 +70,7 @@ typedef struct {
  * population. Both are 0 until the second sample arrives.
  *
  * mean/variance use Welford's online update rather than accumulating a sum of
- * squares — over a long run sum_us^2 dwarfs the spread, and the textbook
+ * squares - over a long run sum_us^2 dwarfs the spread, and the textbook
  * E[x^2] - E[x]^2 form cancels away the significant digits that carry it
  * (a section that runs 16 ms every frame for an hour would report a negative
  * variance). sum_us is kept as its own plain running total, which is exact
@@ -88,7 +88,7 @@ typedef struct {
 } HistogramStats;
 
 /* Record one sample: bumps its bin (unless that bin has saturated) and folds
- * it into the running statistics (which never saturate — a stalled bin stops
+ * it into the running statistics (which never saturate - a stalled bin stops
  * counting, the distribution's statistics should not). */
 void histogram_record(Histogram *h, double elapsed_us);
 

@@ -15,7 +15,7 @@
 
 /* Half-width of the code-panel resize divider's grab band, in pixels: the
  * band spans [edge - N, edge + N] around the 1px divider line. Single
- * source of truth — the hover cursor (editor_input_point_on_code_panel_divider)
+ * source of truth - the hover cursor (editor_input_point_on_code_panel_divider)
  * and the click classification (ui_text_panel_point_on_divider) must agree
  * pixel-for-pixel, or the resize cursor appears over pixels that don't
  * start a drag. */

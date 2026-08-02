@@ -46,8 +46,8 @@ static void assign_plot_series_clear_samples(AssignPlotSeries *s) {
 /* Drop every series' history. The plot-wide capture bookkeeping goes with it:
  * "captured" and the rate clock describe the window the buffers cover. */
 static void assign_plot_clear_samples(void) {
-    /* The `i < MAX_ASSIGN_PLOT_SERIES` half is redundant — the only append
-     * guards on it and the prune loop can only shrink the count — but the
+    /* The `i < MAX_ASSIGN_PLOT_SERIES` half is redundant - the only append
+     * guards on it and the prune loop can only shrink the count - but the
      * invariant is whole-file, and GCC 15 can't carry it through the memset
      * inlined from assign_plot_series_clear_samples: without a bound it can
      * see here, it reports the clear as running one series past g_series[]
@@ -88,8 +88,8 @@ static int assign_plot_type_is_assign(CmdType type) {
 /* A plotted row must still exist and still be an assignment. It does not have
  * to be the *same* assignment: if the row is edited the series follows what is
  * now there, and the panel's legend (rebuilt by the controller from the live
- * row each frame) says so. Anything else — the row deleted, or replaced by a
- * command that assigns nothing — drops that series rather than silently
+ * row each frame) says so. Anything else - the row deleted, or replaced by a
+ * command that assigns nothing - drops that series rather than silently
  * plotting a neighbour. */
 static int assign_plot_row_is_live(int source_line_idx) {
     const GLCmd *cmd;
@@ -141,7 +141,7 @@ static int assign_plot_rate_allows(double now_us) {
 }
 
 /* Executions of `source_line_idx` in the current flat program. The full flat
- * count on purpose — see the header on why replay's clamp is not applied. */
+ * count on purpose - see the header on why replay's clamp is not applied. */
 static int assign_plot_count_executions(int source_line_idx) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
@@ -162,7 +162,7 @@ static int assign_plot_count_executions(int source_line_idx) {
  *
  * With cols <= total the column index is non-decreasing in `seen` and advances
  * by at most one per value, so columns fill strictly left to right with no
- * gaps — which is what lets `col != prev_col` stand in for "first value in
+ * gaps - which is what lets `col != prev_col` stand in for "first value in
  * this column" and why no per-column seen flag is needed. */
 static void assign_plot_fill_exec_columns(AssignPlotSeries *s,
                                           int total, int cols) {
@@ -202,7 +202,7 @@ static void assign_plot_fill_exec_columns(AssignPlotSeries *s,
 }
 
 /* X_FRAME append: one column per capture, scrolling once the buffer is full.
- * `valid` 0 marks a capture this series had no value for — the column still
+ * `valid` 0 marks a capture this series had no value for - the column still
  * has to exist so column N means capture N for every series. */
 static void assign_plot_append_frame_column(AssignPlotSeries *s,
                                             float lo, float hi, int valid) {
@@ -276,7 +276,7 @@ void assign_plot_toggle(int source_line_idx) {
  * The comparison is against the primary's live execution count, taken from the
  * flat program as it stands at click time, rather than against g_x_mode. The
  * mode is only derived during a capture, so before the first one it still
- * holds the default from assign_plot_open() and describes nothing — reading it
+ * holds the default from assign_plot_open() and describes nothing - reading it
  * there refuses every second top-level row. Comparing the two rows directly
  * also does the right thing when the primary has just been edited into (or out
  * of) a loop: the pair is admitted or refused on what the program does now,
@@ -290,7 +290,7 @@ void assign_plot_toggle(int source_line_idx) {
  *     both are many-per-frame;
  *   - the primary did not run and nothing has been captured: no evidence
  *     either way, so admit;
- *   - otherwise fall back to the mode the last capture derived — X_FRAME
+ *   - otherwise fall back to the mode the last capture derived - X_FRAME
  *     wants a row that runs once, X_EXEC one that runs at least twice.
  */
 static int assign_plot_row_fits_x_mode(int source_line_idx) {
@@ -319,7 +319,7 @@ int assign_plot_toggle_series(int source_line_idx) {
     existing = assign_plot_series_index(source_line_idx);
     if (existing >= 0) {
         /* Removing the primary hands the X axis to whatever is left, so the
-         * buffers no longer describe a consistent axis — clear them and let
+         * buffers no longer describe a consistent axis - clear them and let
          * the next capture re-derive the mode. */
         for (int i = existing; i + 1 < g_series_count; i++)
             g_series[i] = g_series[i + 1];
@@ -339,7 +339,7 @@ int assign_plot_toggle_series(int source_line_idx) {
     /* The new series normally starts empty rather than resetting the plot: the
      * point of adding one is to compare it against history already on screen.
      *
-     * On the capture axis that history has to be accounted for, though —
+     * On the capture axis that history has to be accounted for, though -
      * column N means capture N for every series, and a series that simply
      * started shorter would be stretched across the full width and read as
      * aligned with values it never saw. It is back-filled with gap columns
@@ -434,7 +434,7 @@ void assign_plot_capture(double now_us) {
         }
     }
     /* total == 0: the primary did not run this frame (a false `if`, a `goto`
-     * that jumped over it). Leave the axis mode alone — a row that runs
+     * that jumped over it). Leave the axis mode alone - a row that runs
      * intermittently should keep the history it has, and flipping the axis on
      * an empty frame would throw it away. Secondary series are still sampled
      * below, so the plot does not stall on the primary's silence. */
@@ -476,14 +476,14 @@ void assign_plot_capture(double now_us) {
     /* A one-shot is meant to be a frame you can read across: every series
      * frozen from the same execution of the program. A frame where some row
      * has not run yet (a guard still closed, a `goto` still jumping it) cannot
-     * be that, so the shot is not spent on it — the partial attempt is thrown
+     * be that, so the shot is not spent on it - the partial attempt is thrown
      * away and the next frame is tried instead. Without this the shot lands on
      * whatever frame happened to be first and freezes an incomplete
      * comparison, which no later frame can repair.
      *
      * The cost is that a plot whose rows never all run in one frame keeps
      * scanning, at the price of the FRAME rate. That is the honest state to be
-     * in — the panel says "(collecting)" — and it resolves itself the moment a
+     * in - the panel says "(collecting)" - and it resolves itself the moment a
      * complete frame arrives. */
     if (g_rate == ASSIGN_PLOT_RATE_ONCE && !all_executed) {
         assign_plot_clear_samples();   /* also leaves g_captured clear: still armed */
@@ -514,7 +514,7 @@ int assign_plot_exec_progress(int exec_limit,
     if (!g_open || !flat || g_x_mode != ASSIGN_PLOT_X_EXEC) return 0;
     /* A one-shot is exempt from the live-capture override, so its columns are
      * some earlier frame's. A marker over them would be a position in this
-     * frame drawn on another one's values — the same lie the override exists
+     * frame drawn on another one's values - the same lie the override exists
      * to prevent, so the frozen case simply has no marker. */
     if (g_rate == ASSIGN_PLOT_RATE_ONCE) return 0;
 

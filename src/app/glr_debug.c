@@ -49,8 +49,8 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
  * member would be undefined, so the switch is not a convenience).
  *
  * Floats print as `%a`, not `%g`. The dump's job here is to let two
- * flattenings of the same program be compared byte for byte — refactors
- * that move a value between storage kinds must not move the value — and
+ * flattenings of the same program be compared byte for byte - refactors
+ * that move a value between storage kinds must not move the value - and
  * a decimal rendering can hide a difference below its own precision,
  * which would defeat exactly that use. Provenance and storage metadata
  * (`src_cmd_idx`, `call_src_cmd_idx`, `root_call_src_cmd_idx`,
@@ -131,7 +131,7 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
 }
 
 /* --flat-histogram: where the MAX_FLAT_COMMANDS flatten budget is being
- * spent. Two sections: per-function inclusive costs (func_scope_mask —
+ * spent. Two sections: per-function inclusive costs (func_scope_mask -
  * exact across nesting/recursion; a nested call's commands count
  * toward every function on its chain, so the section can sum past the
  * flat total), then per-source-line direct emissions sorted
@@ -188,7 +188,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
         if (line_counts[i] > 0)
             order[used++] = i;
     /* Selection sort, descending by count (ties: line order). Offline
-     * dump over <= MAX_EDITOR_COMMANDS entries — simplicity over speed. */
+     * dump over <= MAX_EDITOR_COMMANDS entries - simplicity over speed. */
     for (int a = 0; a < used - 1; a++) {
         int best = a;
         for (int b = a + 1; b < used; b++)

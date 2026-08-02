@@ -326,8 +326,8 @@ static int replay_prev_limit(int current_pc) {
 }
 
 /* Begin (inclusive) of the replay step ending at pc. Reads the incrementally
- * maintained state->step_begin (O(1)) — advance stores old_pc, seek/step-back
- * compute it once — instead of re-deriving it with replay_prev_limit(pc), an
+ * maintained state->step_begin (O(1)) - advance stores old_pc, seek/step-back
+ * compute it once - instead of re-deriving it with replay_prev_limit(pc), an
  * O(N^2) walk this would otherwise pay on every frame (it feeds the per-frame
  * focus / anchor accessors below). Falls back to the full walk only when the
  * cache is stale or degenerate (step_begin out of [0, pc)): pc was set out of
@@ -351,7 +351,7 @@ int replay_focus_anchor_flat_idx(void) {
      * transform guide anchor on the draw the step just emitted, so this is
      * meaningless for polygon-batch stepping. Vertex stepping stops on each
      * glutSolid* too (replay_next_vertex_limit), so the anchor is "the last
-     * draw in the step" — a glVertex/gluVertex *or* a glutSolid*, matched by
+     * draw in the step" - a glVertex/gluVertex *or* a glutSolid*, matched by
      * repl_cmd_consumes_current_color (the same draw-target set the affecting-
      * transform resolver uses). A glut solid carries no vertex position, but
      * neither consumer needs one: the highlight only walks transforms back from

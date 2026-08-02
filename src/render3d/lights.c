@@ -29,8 +29,8 @@ void render3d_lights_init_global_ambient(void) {
 
 /* The HEADLIGHT lamp (slot 0, eye-space) sits this far in front of the eye
  * along the view axis (eye-space -Z) instead of exactly at the camera. A
- * lamp *at* the eye would put its indicator at the viewpoint — never on
- * screen — so we nudge it a small, honest distance forward: the GL light
+ * lamp *at* the eye would put its indicator at the viewpoint - never on
+ * screen - so we nudge it a small, honest distance forward: the GL light
  * genuinely lives here and the indicator is drawn at that same world point
  * (no draw-only fudge). Well clear of the 0.1 near plane; small relative to
  * the default 5.0 camera distance, so it still reads as the camera light. */
@@ -127,7 +127,7 @@ static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
             { 0.01f, 0.01f, 0.02f, 1.0f },
             { 0.08f, 0.08f, 0.10f, 1.0f } },
     },
-    /* STUDIO: the three-point portrait rig from tools/render3d_demo.c —
+    /* STUDIO: the three-point portrait rig from tools/render3d_demo.c -
      * warm-white key (upper right), cool-blue rim (upper left), warm-
      * orange fill (lower right), and a green directional accent from
      * below/back. Colors lifted verbatim from render3d_demo's seed_lights. */
@@ -153,7 +153,7 @@ static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
             { 0.00f, 0.00f, 0.00f, 1.0f },
             { 0.55f, 0.95f, 0.55f, 1.0f } },
     },
-    /* NEON: a vibrant saturated triad for colored-material showcases —
+    /* NEON: a vibrant saturated triad for colored-material showcases -
      * magenta key (upper right), cyan rim (upper left), lime fill (from
      * below), plus a dim warm-amber back light (directional). Low ambient
      * keeps the hues reading distinctly rather than washing to white. */
@@ -201,7 +201,7 @@ void render3d_lights_setup(const Render3dFrameRenderContext *frame_ctx) {
         if (light->pos_is_eye_space) {
             /* glLightfv(POSITION) snapshots the current modelview at
              * call time. Eye-space slots want eye coordinates, so push
-             * + identity around the write — that's cheaper than the
+             * + identity around the write - that's cheaper than the
              * alternative (a separate init-time push coordinated with
              * the cfg cycle handler and the load path) and self-heals
              * if the caller hadn't pre-positioned the matrix stack. */
@@ -235,7 +235,7 @@ static void render3d_lights_camera_world_pos(const Render3dRenderConfig *cfg,
 }
 
 /* Rotate an eye-space direction into world space using the camera
- * orientation — the inverse of the Rx(cam_rx)*Ry(cam_ry) view rotation in
+ * orientation - the inverse of the Rx(cam_rx)*Ry(cam_ry) view rotation in
  * glr_camera_load_modelview, i.e. world = Ry(-ry) * Rx(-rx) * eye. Lets an
  * eye-space (HEADLIGHT) slot's offset be placed in front of the camera
  * along the real view axis instead of naively shifted in world Z. */

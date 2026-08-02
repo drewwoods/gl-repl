@@ -254,7 +254,7 @@ int committed_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
 
 The four `pending_*` scalars and `allow_expected_insert` flag from earlier
 drafts collapsed into one struct with `step_idx == -1` as the "inactive"
-sentinel. The guard-exception predicate becomes `pending.step_idx >= 0` —
+sentinel. The guard-exception predicate becomes `pending.step_idx >= 0` -
 it is derived, not stored independently, so the flag cannot drift out of
 sync with the rest of the bookkeeping. The committed-line map reuses
 `TUTORIAL_LOCKED_LINE_MAX` (the existing 64-element cap for tracked
@@ -275,7 +275,7 @@ to `-1`.
 `tutorial_begin_expected_commit_attempt` time and is logically immutable
 until the paired `tutorial_note_expected_commit_applied` or
 `tutorial_cancel_pending` clears the record. In particular, the shift
-helper deliberately does not touch it — see below.
+helper deliberately does not touch it - see below.
 
 The existing `locked_lines[]` remains a list of source line indices for
 revealed tutorial instruction comments. The extension needs one helper that
@@ -294,7 +294,7 @@ This helper should shift:
   the insertion described by `pending`
 - `committed_line_for_step[i] >= pos`
 
-It deliberately **does not** touch `pending.commit_line` — that field is the
+It deliberately **does not** touch `pending.commit_line` - that field is the
 immutable snapshot of where the in-flight commit attempt is targeting, and
 the success bookkeeping below relies on reading it back unchanged after the
 shift pass. If the shift helper bumped it, a label recorded for the
@@ -406,7 +406,7 @@ Then run the existing matcher. Mismatch behavior stays unchanged: status shows
 `expected: ...`, the typed input is preserved, and the command is not applied.
 
 Empty-input rule (decided): when `input[0] == '\0'`, the precheck returns 0
-silently — no status update — on **both** the `;`/Enter path and the
+silently - no status update - on **both** the `;`/Enter path and the
 navigation auto-commit path. Without this, the navigation that initially
 places the cursor on `expected_commit_line` (empty input, insert mode on)
 would immediately spam `expected: ...` before the user has typed. The user's
@@ -480,8 +480,8 @@ nothing for the starter catalog.
 that called `tutorial_begin_expected_commit_attempt` MUST be followed by
 exactly one of `tutorial_note_expected_commit_applied` (on `COMMIT_OK`) or
 `tutorial_cancel_pending` (on every other outcome).
-`tutorial_cancel_pending` is idempotent — calling it when
-`pending.step_idx == -1` is a no-op — so call sites can dispatch it
+`tutorial_cancel_pending` is idempotent - calling it when
+`pending.step_idx == -1` is a no-op - so call sites can dispatch it
 unconditionally on the rejection branch without worrying about whether the
 precheck actually reached the `_begin` call.
 
@@ -714,7 +714,7 @@ Tests:
   it in Phase 2 means both Phase 2's code path and Phase 4's dogfood get
   covered by the same fixture instead of carrying a synthetic entry that later
   has to be deleted. The Phase 4 section below stays as the "ship a worked
-  targeted tutorial" milestone — Phase 2 just brings forward enough of it to
+  targeted tutorial" milestone - Phase 2 just brings forward enough of it to
   exercise the runner.
 - Advance to the label-targeted step and assert the new instruction appears
   above the command line for the target label, not at the end.
@@ -742,7 +742,7 @@ Modify:
   - On `COMMIT_OK`, note the applied tutorial insert before advancing.
   - On every other commit outcome (including the
     `commit_before_navigation()` `COMMIT_REJECTED` branch that returns
-    early), dispatch `tutorial_cancel_pending()` unconditionally — it is
+    early), dispatch `tutorial_cancel_pending()` unconditionally - it is
     idempotent, so the call site does not need to know whether the precheck
     actually reached `_begin`.
 - `src/widgets/tutorial.h` / `.c`
@@ -750,7 +750,7 @@ Modify:
     - `tutorial_expected_commit_line`
     - `tutorial_begin_expected_commit_attempt`
     - `tutorial_note_expected_commit_applied`
-    - `tutorial_cancel_pending` (idempotent — no-op when
+    - `tutorial_cancel_pending` (idempotent - no-op when
       `pending.step_idx == -1`)
   - Update `tutorial_guard_source_change` to allow only the current matched
     expected insert (predicate: `pending.step_idx >= 0 && pos ==
@@ -769,8 +769,8 @@ Tests:
 - Navigation commit with matching input from any other line rejects.
 - Editor commit failure after a matched precheck clears the `pending`
   record back to `step_idx == -1`.
-- Empty-input commit attempt on the expected line — via `;`/Enter or
-  navigation — leaves the status untouched.
+- Empty-input commit attempt on the expected line - via `;`/Enter or
+  navigation - leaves the status untouched.
 
 Verify:
 
@@ -840,7 +840,7 @@ Verify:
 - Manual edits above locked comments are still blocked.
 - Wrong input at a label-targeted step does not insert anything.
 - Correct input at the wrong line does not insert anything.
-- Empty input on the expected line — via `;`/Enter or navigation — never
+- Empty input on the expected line - via `;`/Enter or navigation - never
   updates the status.
 - Tab autofill still fills the expected command for label-targeted steps.
 - Fade applies to the newly inserted instruction line, even when it appears in

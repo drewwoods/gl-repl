@@ -1,4 +1,4 @@
-# `src/support/` — Neutral shared utilities (Draft)
+# `src/support/` - Neutral shared utilities (Draft)
 
 Home for small, dependency-light helpers that don't belong to any of the
 layered modules (`repl`, `editor`, `render3d`, `ui`, `app`, `subsystems`).
@@ -9,18 +9,18 @@ their respective layers.
 
 ## Contents
 
-- `src/support/cpuprof.{c,h}` — CPU wall-time profiling instrumentation
+- `src/support/cpuprof.{c,h}` - CPU wall-time profiling instrumentation
   (per-section accumulators, frame tick). Public API: `prof_begin`,
   `prof_accum_end`, `prof_end`, `prof_frame_tick`, etc. Used by every
   layer that wants to measure work; the UI panel that visualises it
   lives at [`src/ui/support/cpuprof.c`](../ui/support/cpuprof.c).
-- `src/support/gpuprof.{c,h}` — the asynchronous twin: GL timer queries
+- `src/support/gpuprof.{c,h}` - the asynchronous twin: GL timer queries
   bracketing the same `ProfSection` ids, so the panel can show GPU time
   next to CPU time. Deliberately a GL-free TU at the API level.
-- `src/support/memprof.{c,h}` — process memory sampling (current signal,
+- `src/support/memprof.{c,h}` - process memory sampling (current signal,
   ring of historical samples, pure byte formatter). Mirrors cpuprof's
   conventions; panel at [`src/ui/support/memprof.c`](../ui/support/memprof.c).
-- `src/support/mesh_ply.{c,h}` — pure PLY writer over a GL feedback
+- `src/support/mesh_ply.{c,h}` - pure PLY writer over a GL feedback
   (`GL_3D_COLOR`) float stream: inverts the ortho/viewport transform back
   to world space, fan-triangulates, optionally welds.
 
@@ -29,11 +29,11 @@ their respective layers.
 The profiling helpers each have a standalone driver under `tools/`, which
 is what keeps them linkable with no owner layer:
 
-- **`make cpuprof-demo`** ([`tools/cpuprof_demo/`](../../tools/cpuprof_demo/)) —
+- **`make cpuprof-demo`** ([`tools/cpuprof_demo/`](../../tools/cpuprof_demo/)) -
   a display-list micro-benchmark: the same teapots drawn immediate,
   from a reused list, and from a per-frame recompiled list, each timed as
   its own section.
-- **`make memprof-demo`** ([`tools/memprof_demo/`](../../tools/memprof_demo/)) —
+- **`make memprof-demo`** ([`tools/memprof_demo/`](../../tools/memprof_demo/)) -
   the live memory panel with keys to allocate and free, so the signal and
   graph respond on demand.
 
@@ -46,7 +46,7 @@ PLY export tests. Index of every demo: [`tools/README.md`](../../tools/README.md
 
 Before the `src/` restructure these files sat at the repo root with no
 owner directory. Putting them under `src/support/` keeps the root
-clean and gives future neutral helpers a clear landing spot — matching
+clean and gives future neutral helpers a clear landing spot - matching
 the same pattern as `src/render3d/guides/`, `src/subsystems/`, and
 similar self-contained pockets.
 

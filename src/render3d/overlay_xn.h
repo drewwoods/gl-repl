@@ -5,13 +5,13 @@
  * g_xn_alpha statics and identical 3-way knee-resolve blocks at the
  * top of each render call. The static fields were lifted into each
  * file's draw-context struct (audit #3) and the resolve math moved
- * here so it lives in one place — but the helper is INTENTIONALLY
+ * here so it lives in one place - but the helper is INTENTIONALLY
  * pure: it takes opacity + knee + a "this theme owns fog" flag, and
  * returns the resolved {draw, opacity, alpha, fog_tf} bundle without
  * touching any state. Each renderer then drops the result into its
  * draw context and threads it through gl_color analogues.
  *
- * fog_tf is `1 - opacity` — a convenience for synthetic-fog recede
+ * fog_tf is `1 - opacity` - a convenience for synthetic-fog recede
  * passes (grid uses it; axes doesn't, but the field is cheap).
  */
 #ifndef RENDER3D_OVERLAY_XN_H
@@ -46,7 +46,7 @@ typedef struct Render3dOverlayXn {
 
 /* style:    GRID_AXES_XN_FADE → alpha = opacity (no knee)
  *           GRID_AXES_XN_FOG  → fog-knee resolve below
- * uses_own_fog: only meaningful under FOG style — when the theme
+ * uses_own_fog: only meaningful under FOG style - when the theme
  *           draws its own fog (e.g. grid OCEAN/FOG), fall back to
  *           plain alpha = opacity so the synthetic recede doesn't
  *           fight the theme's fog. Axes has no fog-owning themes

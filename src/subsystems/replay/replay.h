@@ -101,7 +101,7 @@ int  replay_prepare_frame(FlatProgramView flat_program, int full_flat_count);
  * Walks the user's flat program with transform tracking, dispatching the
  * supplied callbacks at every (valid) flat cmd and at every emitted vertex.
  * The walker handles glPushMatrix / glTranslatef / glRotatef / glScalef /
- * glPopMatrix internally — scene-side overlay code never has to iterate
+ * glPopMatrix internally - scene-side overlay code never has to iterate
  * GLCmd or know how to translate REPL command kinds into GL transforms.
  *
  * The walker is a pure function: program + cursor metadata are all passed
@@ -144,7 +144,7 @@ typedef struct ReplayVertexWalkCallbacks {
     /* Fires once per valid flat cmd before the walker dispatches the cmd
      * type or applies a transform. Lets callers insert per-position
      * actions (e.g. cursor-line guide rendering). Vertex / normal coords
-     * on the state are not meaningful for this hook — only the
+     * on the state are not meaningful for this hook - only the
      * positional / cursor / block fields. */
     void (*on_each_cmd)(const ReplayVertexWalkState *state, void *user_data);
 
@@ -188,7 +188,7 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
 
 /* --- Variable state for step-back --------------------------------------- */
 
-/* Restore the saved predef table by NAME (full snapshot) — see the
+/* Restore the saved predef table by NAME (full snapshot) - see the
  * ReplayRuntimeState.baseline_predef comment for why a values-only
  * restore is unsafe across a multi-frame replay. */
 void replay_restore_baseline_predef_values(void);

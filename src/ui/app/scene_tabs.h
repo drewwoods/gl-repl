@@ -4,7 +4,7 @@
  * A VS Code-style tab strip: one tab per occupied user-scene slot (slot
  * order) plus exactly one "example" tab while an example is active. It is a
  * *pure view* of existing scene state plus a second way to invoke the
- * existing scene-switch code paths — the behavioral model of user scenes /
+ * existing scene-switch code paths - the behavioral model of user scenes /
  * examples does not change here. Click-to-switch and double-click-to-rename
  * are routed by the controller (route_scene_tab_hit in glr_ctrl.c).
  *
@@ -12,15 +12,15 @@
  *
  *   UI renders the strip and reports `UiHit` results from
  *   ui_scene_tabs_hit_test():
- *     UI_HIT_CODE_PANEL_TAB    — a clickable scene tab; item_idx = display
+ *     UI_HIT_CODE_PANEL_TAB    - a clickable scene tab; item_idx = display
  *                                index into snapshot.scene_tabs.
- *     UI_HIT_CODE_PANEL_WORKSPACE_CHIP — the leading workspace chip; the
+ *     UI_HIT_CODE_PANEL_WORKSPACE_CHIP - the leading workspace chip; the
  *                                controller opens the File menu's Open
  *                                Workspace flyout.
- *     UI_HIT_CODE_PANEL_CHROME — in-band but off-tab (gaps / right of the
+ *     UI_HIT_CODE_PANEL_CHROME - in-band but off-tab (gaps / right of the
  *                                last tab); inert, consumes the click so it
  *                                does not fall through to a code-text hit.
- *     UI_HIT_NONE              — pointer is outside the band.
+ *     UI_HIT_NONE              - pointer is outside the band.
  *   The module mutates nothing and never reads or writes REPL/editor state.
  *   Tab/scene content and the hit-test y-flip come from the frozen snapshot;
  *   panel geometry comes through the shared ui_layout_code_panel_rect()
@@ -29,7 +29,7 @@
  *
  * Leading workspace chip: the strip reads as a breadcrumb,
  * "<workspace> > [tab][tab]", naming the container before its contents. The
- * chip is flat and outline-less — not tab-shaped — because it is not
+ * chip is flat and outline-less - not tab-shaped - because it is not
  * selectable and must not read as another scene. It shows whenever the strip
  * shows, spelling out "no workspace" when nothing is bound: hiding it would
  * make an unbound collection indistinguishable from a bound one, which is the
@@ -38,14 +38,14 @@
  *
  * Shape/kind cues: every tab has a rounded-top outline (no bottom edge)
  * so the strip reads as tabs, not flat menu buttons. The active tab is
- * shaded across its whole rect and its outline keys off that hue —
+ * shaded across its whole rect and its outline keys off that hue -
  * green for a user scene, amber for the ephemeral example tab (built-ins
  * vanish when a user scene is selected and are not renamable unless
  * promoted). Inactive tabs get a neutral outline; idle example labels
  * stay muted amber vs the user tabs' neutral so the kinds differ even
  * with no active tab.
  *
- * Dirty dot: deferred — there is no reachable per-scene modified flag
+ * Dirty dot: deferred - there is no reachable per-scene modified flag
  * (editor dirty state is global), so no per-tab unsaved indicator is drawn.
  */
 #ifndef UI_SCENE_TABS_H
@@ -69,7 +69,7 @@ UiHit ui_scene_tabs_hit_test(const UiRenderSnapshot *snap, int mx, int my);
 
 /* Leading workspace chip's rect within the band (OpenGL bottom-left y, like
  * the rest of the strip). Returns 1 when the chip is shown, 0 when the strip
- * is hidden or the chip yielded its width to the tabs — in which case the out
+ * is hidden or the chip yielded its width to the tabs - in which case the out
  * params are untouched. Any out param may be NULL. */
 int ui_scene_tabs_chip_rect(const UiRenderSnapshot *snap,
                             int *x, int *y, int *w, int *h);

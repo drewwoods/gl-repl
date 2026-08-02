@@ -7,7 +7,7 @@
  * transition driven by the controller's existing projection blend
  * (glr_ctrl_view_projection_mix):
  *
- *   - 3D->2D: a cross-fade — "3D" dissolves toward the menu-bar background
+ *   - 3D->2D: a cross-fade - "3D" dissolves toward the menu-bar background
  *     color while "2D" fades in (flat 2D, no cube).
  *   - 2D->3D: a lit cube rotates to reveal a face textured with "3D";
  *     the texture's background IS the menu-bar surface color, so the

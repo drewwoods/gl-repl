@@ -210,7 +210,7 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
                              "Workspace manifest lists a scene twice");
                 return 0;
             }
-            /* Length-validated above, same as the name field — the
+            /* Length-validated above, same as the name field - the
              * precision silences -Wformat-truncation. */
             snprintf(out->scene_files[out->scene_count], WORKSPACE_IO_FILE_MAX,
                      "%.*s", WORKSPACE_IO_FILE_MAX - 1, leaf);

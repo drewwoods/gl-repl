@@ -14,7 +14,7 @@ int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 /* ---- Flat-cost attribution (command-budget readout) ----
  *
  * How many commands of the flat (expanded) program are attributable to
- * the source line under the cursor — i.e. where the MAX_FLAT_COMMANDS
+ * the source line under the cursor - i.e. where the MAX_FLAT_COMMANDS
  * flatten budget is being spent. LINE / CALL / FUNC counts aggregate
  * over the whole frame: a plain line inside a loop counts once per
  * iteration, a function counts across every call site (via
@@ -23,9 +23,9 @@ int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
  * via root_call_src_cmd_idx).
  *
  * A for/if BLOCK, by contrast, counts one SINGLE invocation of the
- * scope — its first contiguous run in the flat stream (direct body plus
+ * scope - its first contiguous run in the flat stream (direct body plus
  * expansions of calls made inside it, exact to two levels of call
- * nesting) — NOT the whole-frame aggregate. This keeps nested scopes
+ * nesting) - NOT the whole-frame aggregate. This keeps nested scopes
  * distinct: an inner loop reports one enclosing-iteration's worth while
  * the outer loop reports its full run. A top-level or singly-invoked
  * block's single invocation is its whole frame contribution, so those
@@ -61,8 +61,8 @@ ReplFlatCost repl_flatten_cost_at_line(int line_idx);
  * fall back to whole-block behavior: cursor outside any glBegin block,
  * cursor on the glBegin line itself, a mode where the block IS one
  * primitive (GL_POLYGON, GL_LINE_LOOP), or a vertex-less block. Tess
- * (GLU) polygons are never resolved here — the block cache tracks
- * CMD_BEGIN blocks only — so GLU geometry keeps its existing scoping.
+ * (GLU) polygons are never resolved here - the block cache tracks
+ * CMD_BEGIN blocks only - so GLU geometry keeps its existing scoping.
  *
  * fan_anchor == 1 marks GL_TRIANGLE_FAN's shared center: ordinal 0
  * belongs to the selected triangle in addition to [first, last]. */

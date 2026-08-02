@@ -7,7 +7,7 @@ void repl_state_mark_source_dirty(void);
  * SET_VALUE) with the source text untouched. Routes the change by the flat
  * program's dependency masks: a structural root marks the whole flat
  * program dirty; a value-only root accumulates into args_dirty_mask (an
- * in-place rebake suffices, provided rebake_ok — otherwise escalates to
+ * in-place rebake suffices, provided rebake_ok - otherwise escalates to
  * full); a root neither mask contains is a no-op. Out-of-range slots take
  * the conservative full-dirty path. */
 void repl_state_notify_predef_value_changed(int slot);

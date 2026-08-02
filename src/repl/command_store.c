@@ -110,12 +110,12 @@ int repl_command_store_delete_range(ReplCommandStore *store, int start,
     if (opts && opts->cursor_inout) {
         int c = *opts->cursor_inout;
         if (c < start) {
-            /* before the deleted range — unchanged */
+            /* before the deleted range - unchanged */
         } else if (c < start + count) {
-            /* inside the deleted range — snap to start */
+            /* inside the deleted range - snap to start */
             c = start;
         } else {
-            /* past the deleted range — shift left by count */
+            /* past the deleted range - shift left by count */
             c -= count;
         }
         if (c < 0) c = 0;

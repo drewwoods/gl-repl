@@ -21,7 +21,7 @@ void render3d_lights_setup(const Render3dFrameRenderContext *frame_ctx);
 void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx);
 
 /* Overwrite `out` with the Render3dLightTheme preset. `.enabled` is left at
- * 0 — the program's glEnable(GL_LIGHTn) decides which slots light up.
+ * 0 - the program's glEnable(GL_LIGHTn) decides which slots light up.
  * `.pos_is_eye_space` is set per-slot per-theme, so downstream readers
  * (render3d_lights_setup, the exporter, etc.) don't need to know about
  * theme enums. */

@@ -244,7 +244,7 @@ int main() {
             ASSERT_TRUE("cfg_mode rt: final re-init", glr_audio_init() == 0);
             glr_audio_shutdown();
         }
-        /* Audit #7/#4: state-file path edge cases — shutdown must not
+        /* Audit #7/#4: state-file path edge cases - shutdown must not
          * crash when the state file path has a nonexistent directory
          * component or is otherwise unwritable. */
         {

@@ -152,7 +152,7 @@ int replay_has_active_fades(void) {
 /* The pc just past the program's leading glClear, or 0 when the program
  * doesn't open with one. The leading run may hold only commands with no
  * visible output of their own (comments, declarations, glClearColor);
- * anything else ends the scan — a glClear further down is a mid-scene
+ * anything else ends the scan - a glClear further down is a mid-scene
  * re-clear the replay clamp may legitimately hide.
  *
  * This is the floor for the replay clamps on frame-defining passes:
@@ -228,7 +228,7 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
     }
     state->fade_batch_count = installed;
 
-    /* Full snapshot — same rationale as replay_start: the fade-baseline
+    /* Full snapshot - same rationale as replay_start: the fade-baseline
      * spans multiple frames and must survive predef-table reshape. */
     repl_eval_capture_predef_snapshot(&state->baseline_predef);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);

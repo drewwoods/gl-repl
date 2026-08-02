@@ -152,8 +152,8 @@ Two implementation shapes are acceptable:
 `char *err / int err_sz` parameter (or attaches diagnostics to its
 result struct). Pipeline TUs stop calling `set_status()` entirely;
 controllers forward the returned diagnostic to UiState. This is the
-architecturally cleanest shape — pipeline functions become pure
-data producers — and removes the `set_status` symbol from the pipeline
+architecturally cleanest shape - pipeline functions become pure
+data producers - and removes the `set_status` symbol from the pipeline
 TU set entirely.
 
 **(b) Callback sink.** `set_status()` body becomes a callback
@@ -547,12 +547,12 @@ pipeline behavior.
 Step 7 does not touch:
 
 - `EditorState` (cursor, selection, search, autocomplete, undo, editor buffer,
-  transformers/highlights/virtual lines) — already in `src/editor/state.c`.
-- `UiState` (viewport, pointer, status TTL, panel divider) — already in
+  transformers/highlights/virtual lines) - already in `src/editor/state.c`.
+- `UiState` (viewport, pointer, status TTL, panel divider) - already in
   `src/ui/state.c`.
 - Peer subsystems (`replay_state`, `variable_panel_state`, `color_picker_state`,
-  `editor_help_session`) — already in their own files.
-- `glr_camera` — already in `glr_camera.c`.
+  `editor_help_session`) - already in their own files.
+- `glr_camera` - already in `glr_camera.c`.
 - `glr_config` (slug list adjusted in 7a; module itself stays put).
 
 ### Endpoint after Step 7
@@ -621,7 +621,7 @@ boundary this plan defends:
 The destination layers (scene, UI) are already well-fenced: scene cannot
 read or mutate REPL state, UI consumes snapshots only, neither can include
 the owner-mutation header. The new guards below close the asymmetry on the
-source side — REPL pipeline TUs keeping backward edges into editor input
+source side - REPL pipeline TUs keeping backward edges into editor input
 dispatch, app shell, or UI state.
 
 ### New guards to land alongside the plan

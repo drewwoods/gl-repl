@@ -360,7 +360,7 @@ static void test_transform_guides_render(void) {
     /* 5. Live edit: the input buffer diverges from the committed line, so the
      * guide renders from the pre-evaluated cursor args (not the committed
      * flat args), with identity defaults for untyped slots. Here the user is
-     * mid-typing glTranslatef(5, 6  — z is untyped, defaulting to 0. */
+     * mid-typing glTranslatef(5, 6  - z is untyped, defaulting to 0. */
     {
         GLCmd source_cmds[2] = {0};
         GLCmd flat_cmds[2] = {0};
@@ -371,7 +371,7 @@ static void test_transform_guides_render(void) {
         flat_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].valid = 1;
         flat_cmds[0].src_cmd_idx = 0;
-        flat_cmds[0].args[0] = 1.0f; /* committed (1,0,0) — must NOT be drawn */
+        flat_cmds[0].args[0] = 1.0f; /* committed (1,0,0) - must NOT be drawn */
 
         Render3dGuideSnapshot snapshot =
             base_snapshot(source_cmds, 2, flat_cmds, 1, 0, "glTranslatef(5, 6");
@@ -690,7 +690,7 @@ int main(void) {
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         snapshot.replaying = 1;
         /* Replaying with no valid focus vertex (the default flat idx 0 is a
-         * transform, not a vertex) produces no plan — req 6 only guides when a
+         * transform, not a vertex) produces no plan - req 6 only guides when a
          * replay vertex is in focus. */
         ASSERT_INT("replay without a focus vertex produces no plan",
                    render3d_transform_guides_prepare(&snapshot, &plan), 0);
@@ -862,7 +862,7 @@ int main(void) {
         ASSERT_INT("replay default focuses nearest transform (rotate)",
                    plan.cursor_flat_idx, 1);
         /* after-cursor anchor = first following flat cmd from a different
-         * source (the vertex at idx 2), exactly like the edit-mode plan — the
+         * source (the vertex at idx 2), exactly like the edit-mode plan - the
          * guide draws in the transform's frame, not on the vertex. */
         ASSERT_INT("replay plan after-anchor is next different-src cmd",
                    plan.after_flat_idx, 2);

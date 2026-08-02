@@ -124,7 +124,7 @@ typedef struct {
 } PsEvent;
 
 /* Which run kind is active (see the header). Two kinds only: the env-driven
- * capture hook (GLR_POINTER_SCRIPT — never canceled, never auto-stops, may be
+ * capture hook (GLR_POINTER_SCRIPT - never canceled, never auto-stops, may be
  * timed or untimed) and the menu-driven controlled tour (untimed, transport
  * controls, HUD, and a brief Done linger for the final caption). Replaces the
  * old g_tour flag. */
@@ -193,7 +193,7 @@ static float g_px = 0.0f, g_py = 0.0f;   /* current pointer (window px) */
 
 /* Scripted button currently held (a `down` awaiting its `up`, or a click's
  * synthesized-release window), so moves route through glr_ctrl_motion and
- * drags — camera orbit, slider drags — track the pointer like a real one. */
+ * drags - camera orbit, slider drags - track the pointer like a real one. */
 static int g_button_held = -1;           /* GLUT_*_BUTTON, or -1 = none  */
 
 /* Active glide: ease g_px/g_py toward (to_x, to_y) with smoothstep. */
@@ -208,7 +208,7 @@ static int g_release_button = 0;
 
 /* Active paced typing (`key@N`): remaining text feeds through the keyboard
  * dispatch one character at a time on the frame clock, like the tutorial
- * comment reveal — instead of the whole payload landing on one frame. */
+ * comment reveal - instead of the whole payload landing on one frame. */
 static int   g_type_active = 0;
 static int   g_type_start = 0;               /* frame of the first char   */
 static int   g_type_sent = 0;
@@ -305,7 +305,7 @@ static int ps_special_from_name(const char *name) {
  * "ctrl+shift", order-free, case-insensitive) into a GLUT_ACTIVE_* mask for
  * modified key and mouse verbs. Returns -1 on any empty component
  * (leading/trailing/doubled
- * `+`), a repeated modifier, or an unknown name — so a typo fails at load. */
+ * `+`), a repeated modifier, or an unknown name - so a typo fails at load. */
 static int ps_parse_mods(const char *tok) {
     int mask = 0;
     const char *p = tok;
@@ -497,7 +497,7 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
                 return -1;
         }
         /* Payload is the rest of the line, newline stripped, escapes
-         * resolved — so `key glColor3f(` keeps its punctuation. */
+         * resolved - so `key glColor3f(` keeps its punctuation. */
         char raw[PS_MAX_KEY_TEXT];
         size_t n = strlen(args);
         while (n > 0 && (args[n - 1] == '\n' || args[n - 1] == '\r'))
@@ -517,7 +517,7 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         return (ev->special >= 0) ? 1 : -1;
     }
     if (strcmp(verb, "chord") == 0) {
-        /* chord <mods> <key> — one modified key press. <key> is a special-key
+        /* chord <mods> <key> - one modified key press. <key> is a special-key
          * name (skey vocabulary) or a single printable char; ctrl on a
          * printable folds to its control byte (like \cX). A shift/alt-only
          * printable has no keymap meaning and is rejected (type it via `key`). */
@@ -565,7 +565,7 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         float size = 0.0f, dur = 0.0f;
         int nread = 0;
         ev->verb = PS_ECHO;
-        /* echo <point> <size> <dur> <text...> — position + cap height +
+        /* echo <point> <size> <dur> <text...> - position + cap height +
          * on-screen lifetime, then the rest of the line is the caption. */
         args = ps_scan_point(args, ev);
         if (!args ||
@@ -702,7 +702,7 @@ static void ps_reset_runtime(void) {
     g_ring_start = -1;
     g_echo_start = -1;
     g_echo_text[0] = '\0';
-    /* A canceled tour drops unsent paced-typing text — the user took over;
+    /* A canceled tour drops unsent paced-typing text - the user took over;
      * more synthetic keystrokes would fight their input. */
     g_type_active = 0;
     g_type_text[0] = '\0';
@@ -799,7 +799,7 @@ static void ps_type_send(int upto) {
 
 /* Complete any in-flight paced typing immediately. Called before another
  * key/skey event dispatches so a too-tight schedule never interleaves or
- * drops payload text — the remainder snaps in, then the new event fires. */
+ * drops payload text - the remainder snaps in, then the new event fires. */
 static void ps_type_flush(void) {
     if (g_type_active)
         ps_type_send((int)sizeof(g_type_text));
@@ -884,8 +884,8 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my) {
 }
 
 /* Resolve an event's point for firing (a literal point passes through).
- * On a failed symbolic resolve, a capture run exits nonzero — recording
- * the wrong interaction is worse than failing — while a tour stops with a
+ * On a failed symbolic resolve, a capture run exits nonzero - recording
+ * the wrong interaction is worse than failing - while a tour stops with a
  * status message. Returns 0 when the event must be dropped. */
 static int ps_fire_point(const PsEvent *ev, float *x, float *y) {
     int mx, my;
@@ -975,7 +975,7 @@ static void ps_fire(const PsEvent *ev) {
         /* Drag release: the button is still held, so a coordinate move
          * routes through motion and drag handlers see the final position.
          * (A failed resolve in tour mode stops the script, which releases
-         * the held button itself — no explicit release needed then.) */
+         * the held button itself - no explicit release needed then.) */
         if (ev->has_xy) {
             if (!ps_fire_point(ev, &x, &y)) break;
             ps_dispatch_move(x, y);
@@ -1291,7 +1291,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
 
 /* Clear the decorative overlays (highlight ring, echo caption, click ripple).
  * Their lifetime is measured against the virtual clock (g_frame), which is
- * FROZEN while paused/stepping — so an overlay shown at a step would otherwise
+ * FROZEN while paused/stepping - so an overlay shown at a step would otherwise
  * hang on screen forever, and each step would stack a new stuck one. Transport
  * steps and seeks clear them at the boundary; only the event the step lands on
  * re-creates its own. */
@@ -1467,7 +1467,7 @@ static int ps_resolve_event_point(const PsEvent *ev, float *x, float *y) {
     return 0;
 }
 
-/* Frames an event occupies in normal playback before the next one fires — its
+/* Frames an event occupies in normal playback before the next one fires - its
  * intrinsic blocking wait. Used to reconstruct the virtual timeline during a
  * seek so a still-live caption lands at the right age. Approximate (it ignores
  * the one-frame completion slop between events), which is fine: captions run
@@ -1495,7 +1495,7 @@ static int ps_event_playback_cost(const PsEvent *ev) {
 }
 
 /* After a backstep settles, restore the decorative overlays normal playback
- * would STILL be showing at the landing boundary — chiefly a caption (echo)
+ * would STILL be showing at the landing boundary - chiefly a caption (echo)
  * whose multi-second window spans the events after it, which the plain
  * suppress-the-prefix rule would have dropped. Reconstructs the virtual
  * timeline over [0, target), sets g_frame to the landing time, and re-creates
@@ -1540,7 +1540,7 @@ static void ps_tour_restore_landing_overlays(int target) {
         g_ripple_y = y;
     }
     /* A ring is a blocking beat (its window closes exactly as it completes), so
-     * it is never "still live" at a boundary — but landing directly on one
+     * it is never "still live" at a boundary - but landing directly on one
      * should still highlight what it points at, shown fresh. */
     if (target > 0 && g_events[target - 1].verb == PS_RING &&
         ps_resolve_event_point(&g_events[target - 1], &x, &y)) {
@@ -1690,7 +1690,7 @@ static void ps_tour_frame(void) {
     switch (g_tour_state) {
     case GLR_TOUR_BASELINE_PENDING:
         /* The Tours menu close path has finished; capture now, seed the
-         * pointer, enter Playing — but wait until the next frame to fire
+         * pointer, enter Playing - but wait until the next frame to fire
          * event zero (do not advance a virtual frame this frame). */
         g_baseline = glr_tour_snapshot_capture();
         if (!g_baseline) {
@@ -1890,7 +1890,7 @@ static void ps_draw_cursor(float px, float py) {
     glVertex2f(px + pts[0][0], py - pts[0][1]);
     glEnd();
 
-    /* Dark outline so the cursor reads on light and dark panels alike — the
+    /* Dark outline so the cursor reads on light and dark panels alike - the
      * scrim token, since what it has to survive is arbitrary scene content
      * rather than any particular piece of chrome. */
     ui_clr_a(UI_TOK_SCRIM, 0.9f);
@@ -1922,7 +1922,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
      * tour instead of reporting a per-frame zero. */
     prof_begin(PROF_TOUR_OVERLAY);
 
-    /* When a controlled tour's virtual clock is frozen (anything but Playing —
+    /* When a controlled tour's virtual clock is frozen (anything but Playing -
      * paused, done, stepped, or settled after a backstep), the age-driven
      * ease-in/out can't advance: a caption caught mid-fade would hang half-
      * transparent forever, and a backstep can land it at a tiny age. A paused
@@ -1937,8 +1937,8 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     gl2d_begin(win_w, win_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    /* Unlike the panels, everything drawn here is a curve or a diagonal — ring,
-     * ripple, cursor outline — so this overlay opts back into the antialiasing
+    /* Unlike the panels, everything drawn here is a curve or a diagonal - ring,
+     * ripple, cursor outline - so this overlay opts back into the antialiasing
      * gl2d_begin() turns off for pixel-aligned chrome. gl2d_end() pops it. */
     glEnable(GL_LINE_SMOOTH);
 
@@ -1981,7 +1981,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
      * 337 glyphs: Times-24 ~12 ms vs Helvetica-12 ~0.4 ms; the cliff is around
      * 16 glyph rows), and tours request 24 px. Nine passes over a ~35-char
      * caption was therefore ~10 ms of CPU plus ~4 ms of extra glFinish drain
-     * every frame a caption was up — more than the whole 3D scene, and enough
+     * every frame a caption was up - more than the whole 3D scene, and enough
      * to miss the 60 Hz deadline on its own. One pass over a plate costs a
      * ninth of that and gives *better* contrast over busy geometry. Keep it to
      * one text pass: any per-glyph multiplier here is paid at that rate. */

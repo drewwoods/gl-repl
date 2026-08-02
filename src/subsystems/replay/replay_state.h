@@ -42,7 +42,7 @@ typedef enum {
 
 /* Code-panel detail during replay. The middle mode keeps live value
  * annotations on assignments, loop headers, function definitions, and every
- * other command — all of them appended inline as a `//` comment, so a source
+ * other command - all of them appended inline as a `//` comment, so a source
  * row stays exactly one row. Verbose is the only mode that adds substituted +
  * evaluated virtual rows beneath the source row. */
 typedef enum {
@@ -64,7 +64,7 @@ typedef struct {
  * consumed by replay_render_post_fill / replay_render_fade_batches /
  * replay_render_tess_preview. Lives in the replay subsystem header
  * (alongside ReplayFadeBatch and ReplayRuntimeState) so the renderer
- * header can avoid pulling app/glr_ctrl.h — keeping the
+ * header can avoid pulling app/glr_ctrl.h - keeping the
  * subsystems → app dependency arrow pointed the right way.
  *
  * The predef baseline is a full snapshot (names + count, not just
@@ -87,7 +87,7 @@ typedef struct ReplayFadePlan {
 /* Replay snapshot shape owned by the replay peer subsystem.
  *
  * The predef baseline is stored as a full (vals + names + count)
- * snapshot — not a values-only float[] — because the replay session
+ * snapshot - not a values-only float[] - because the replay session
  * spans multiple frames and the live predef table can be reshaped by
  * a workspace switch, scene load, or undo across an @declare between
  * replay_start and a later restore. A values-only restore would then
@@ -113,8 +113,8 @@ typedef struct {
                                           * Maintained incrementally as pc moves so
                                           * replay_focus_flat_idx() scans only the
                                           * active step instead of re-deriving the
-                                          * begin via replay_prev_limit(pc) — an
-                                          * O(N^2) per-frame walk — every frame. */
+                                          * begin via replay_prev_limit(pc) - an
+                                          * O(N^2) per-frame walk - every frame. */
     int             expand_args;         /* ReplayExpandMode */
     int             normal_display;      /* ReplayNormalDisplayMode */
     int             vertex_label;        /* 1 = label focused replay vertex */
@@ -152,18 +152,18 @@ ReplayRuntimeState  *replay_state_mut(void);
  * keep most readers from depending on the full ReplayRuntimeState layout.
  */
 int    replay_active(void);          /* .active */
-int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */
-int    replay_pc(void);              /* .pc — current program counter */
-int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
-int    replay_normal_display(void);  /* .normal_display — ReplayNormalDisplayMode */
+int    replay_machine_state(void);   /* .state - REPLAY_OFF/PLAYING/PAUSED/DONE */
+int    replay_pc(void);              /* .pc - current program counter */
+int    replay_mode(void);            /* .mode - REPLAY_MODE_VERTEX/POLYGON */
+int    replay_normal_display(void);  /* .normal_display - ReplayNormalDisplayMode */
 int    replay_vertex_label(void);    /* .vertex_label */
-int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
-int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
+int    replay_src_line(void);        /* .src_line_idx - source line of current cmd */
+int    replay_total_flat(void);      /* .total_flat_cmds - captured at start */
 
 /* Flat-program index of the command the current replay step focuses on:
  * the last focus-candidate command in the active step range. Unlike
- * replay_pc() — which is the execution *limit* and points one past the
- * step's last emitted command (or at flat_count) — this resolves to the
+ * replay_pc() - which is the execution *limit* and points one past the
+ * step's last emitted command (or at flat_count) - this resolves to the
  * actual current command, so callers can read its provenance
  * (call_src_cmd_idx, root_call_src_cmd_idx, func_scope_mask, ...). The
  * step range is derived the same way step-back is, so advance, seek,
@@ -171,7 +171,7 @@ int    replay_total_flat(void);      /* .total_flat_cmds — captured at start *
  * inactive or the step has no focus-candidate command. */
 int    replay_focus_flat_idx(void);
 
-/* Flat-program index of the draw the current replay step emitted — the last
+/* Flat-program index of the draw the current replay step emitted - the last
  * repl_cmd_consumes_current_color() command (glVertex / gluVertex *or* a
  * glutSolid*) in the active step range. Used to anchor the replay affecting-
  * transform highlight and the live transform guide on that exact draw. Returns

@@ -180,7 +180,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
     /* --- Tab bar --- */
     {
         /* Use the geom's tab band/width (same formula as
-         * overlay_compute_geom) so render and hit-test can't drift —
+         * overlay_compute_geom) so render and hit-test can't drift -
          * the single-source-of-truth invariant in the OverlayGeom doc. */
         int tab_y  = g.tab_y;
         int tab_w  = g.tab_w;
@@ -250,7 +250,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         if (text[i][0] == '\0') continue;
 
         /* Titled divider: a leading 0x13 (DC3) byte marks a GL-drawn
-         * section separator rather than a text line — the label at the
+         * section separator rather than a text line - the label at the
          * left in accent, then a thin rule out to the right edge. The
          * marker byte itself never draws. Used to group the Keys tab
          * (Editor / 3D Scene / Interface). */

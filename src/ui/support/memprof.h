@@ -20,7 +20,7 @@ typedef enum {
 /* Narrow per-frame view (the 2D analog of Render3dRenderConfig). The
  * controller resolves the panel's stacked anchor and bakes it into
  * panel_x/panel_y, so the renderer needs nothing from UiRenderSnapshot or
- * ui/app — it links cleanly against {support, ui/core} alone. */
+ * ui/app - it links cleanly against {support, ui/core} alone. */
 typedef struct {
     int               window_w, window_h;
     UiMemoryPanelMode mode;

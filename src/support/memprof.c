@@ -71,7 +71,7 @@ static int memprof_read(MemSample *out) {
      * We only need the second field (resident); the leading size is
      * VSZ which we deliberately don't expose (macOS virtual_size is
      * dominated by huge unmapped reservations, so VSZ is not portable
-     * useful — RSS is the comparable signal). */
+     * useful - RSS is the comparable signal). */
     FILE *f = fopen("/proc/self/statm", "r");
     if (!f) return 0;
     unsigned long size_p = 0, rss_p = 0;
@@ -150,7 +150,7 @@ void memprof_init_at(double t0_seconds) {
      * below the app's warmed-up working set (GL solid-shape display-list
      * compilation, the macOS first-drawable wait, lazy heap growth), so a
      * baseline grabbed now lands far under the graph's auto-scaled Y range
-     * — never plotted — and inflates the delta a leak hunter actually
+     * - never plotted - and inflates the delta a leak hunter actually
      * cares about (steady-state growth, not startup cost). Capturing it at
      * the first push pins it to the first plotted point and makes the delta
      * meaningful. Until then memprof_baseline() reports 0 ("--"). */

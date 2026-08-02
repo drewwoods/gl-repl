@@ -12,7 +12,7 @@
  *     in-place rebake at t1.
  *   - Full-flatten the SAME scene at t1 into a private buffer (the reference).
  *   - The rebaked live program must match the reference command-for-command:
- *     args, provenance, flags, local snapshots, count, and lighting — plus the
+ *     args, provenance, flags, local snapshots, count, and lighting - plus the
  *     post-pass predef/scratch state.
  *
  * It also checks the routing/guard behaviour: a value-only change takes the
@@ -574,7 +574,7 @@ static void test_real_scene_time_routes(void) {
     assert_real_scene_time_route("Animated wave surface (analytic normals)",
                                  REPL_FLAT_REFRESH_REBAKE);
     /* Grass used to rebake here. Its blade() temporaries are function-scoped
-     * locals now, and `t` feeds them — every dep of a local's RHS is
+     * locals now, and `t` feeds them - every dep of a local's RHS is
      * structural because a rebake cannot carry a local's new value into the
      * frozen snapshots of the commands after it. Full flatten is the correct
      * route, and the measured cost on this scene is ~1.14 ms -> ~1.59 ms per

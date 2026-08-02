@@ -88,7 +88,7 @@ New Workspace on an *unbound* session does not go through that switch at all:
 the new workspace is created and the in-memory collection is saved straight
 into it, so the scenes stay visible under their new home instead of surviving
 only as an unadvertised recovery copy. New Workspace from a bound managed
-workspace keeps the original behavior — the old scenes are already saved where
+workspace keeps the original behavior - the old scenes are already saved where
 they live, so the new one opens empty.
 
 ### Path policy

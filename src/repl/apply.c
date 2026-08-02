@@ -75,7 +75,7 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
      * should preflight" but nothing stops a misbehaving caller from
      * skipping that step. Run the same validation here so the apply
      * cannot half-execute (e.g. perform the pre-insert delete and then
-     * fail the insert because the change is malformed) — a partial
+     * fail the insert because the change is malformed) - a partial
      * apply leaves the caller's cmd-store / editor-buffer / predef
      * cascade out of sync. Bailing before any mutation matches the
      * "all or nothing" guarantee the wider commit transaction needs. */
@@ -88,8 +88,8 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
         .cursor_inout = change->adjust_edit_line ? cursor_inout : NULL,
     };
 
-    /* Optional pre-insert delete fires first so `change->pos` —
-     * which is interpreted in post-delete coordinates — refers to
+    /* Optional pre-insert delete fires first so `change->pos` -
+     * which is interpreted in post-delete coordinates - refers to
      * the right slot when the insert lands.
      *
      * Pass NULL opts for the pre-delete to preserve the historical
@@ -169,7 +169,7 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
             if (idx >= 0) {
                 if (g_predef_vars[idx].value != op->value)
                     /* Value-only change (e.g. a slider drag's live
-                     * SET_VALUE): route by the flat program's dep masks —
+                     * SET_VALUE): route by the flat program's dep masks -
                      * args-rebake bit, full dirty, or nothing. */
                     repl_state_notify_predef_value_changed(idx);
                 g_predef_vars_mut[idx].value = op->value;

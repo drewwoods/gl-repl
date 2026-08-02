@@ -2,13 +2,13 @@
 
 Assets referenced by [`SHOWCASE.md`](../../SHOWCASE.md). These are generated
 by [`scripts/docs-assets.sh`](../../../scripts/docs-assets.sh) from the
-**native** build (`make gl-repl`) — the real GPU driver, so true colors and
+**native** build (`make gl-repl`) - the real GPU driver, so true colors and
 MSAA. (The old OSMesa software-rasterizer path mis-rendered the grid, so it
 was retired.) The filename stem is the script's asset name, prefixed `sc-`.
 Camera angle, fps, resolution, and duration are all refinable in that script;
 filenames are the contract.
 
-Capture pipeline (needs a display — each capture opens a window briefly):
+Capture pipeline (needs a display - each capture opens a window briefly):
 
 ```bash
 make gl-repl
@@ -21,7 +21,7 @@ scripts/docs-assets.sh --list             # asset names
 |---|---|---|
 | `torus-knot.gif` | `sc-torus-knot` | Torus knot (animated) |
 | `snowfall.gif` | `sc-snowfall` | Snowfall demo (550 particles) |
-| `parametric-torus.png` | `sc-parametric-torus` | Parametric torus (nested for) — still (static geometry) |
+| `parametric-torus.png` | `sc-parametric-torus` | Parametric torus (nested for) - still (static geometry) |
 | `recursive-tree.gif` | `sc-recursive-tree` | Recursive triangle tree (func + recursion) |
 | `spirograph.gif` | `sc-spirograph` | Animated spirograph curve |
 | `ripple-ring.gif` | `sc-ripple-ring` | Traveling ripple ring |
@@ -29,7 +29,7 @@ scripts/docs-assets.sh --list             # asset names
 | `bubble-sort.gif` | `sc-bubble-sort` | Bubble sort (scratch arrays) |
 | `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
 | `wave-surface.gif` | `sc-wave-surface` | Animated wave surface (analytic normals) |
-| `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) — replaces the retired "Procedural terrain" |
+| `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) - replaces the retired "Procedural terrain" |
 | `gl-repl-logo.png` | `sc-gl-repl-logo` | gl-repl Logo |
 | `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |
 | `jellyfish.gif` | `sc-jellyfish` | Jellyfish (glDepthMask translucency) |
@@ -39,7 +39,7 @@ scripts/docs-assets.sh --list             # asset names
 | `whale.gif` | `sc-whale` | Whale (particle system + lit model) |
 | `stress-test.gif` | `sc-stress-test` | Dusk lighthouse atoll (stress test) |
 | `planar-shadows.gif` | `sc-planar-shadows` | Planar shadows (glMultMatrixf) |
-| `feature-time.gif` | `sc-feature-time` | Conditional colors (if + t) — a t-driven clip |
+| `feature-time.gif` | `sc-feature-time` | Conditional colors (if + t) - a t-driven clip |
 
 Stand-ins (the ideal shot needs an external tool we can't drive headlessly):
 

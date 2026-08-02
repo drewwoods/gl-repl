@@ -78,7 +78,7 @@ static int   g_panel_on = 1;
 
 /* The animation clock `t` is NOT a separate demo variable: it lives in the
  * REPL predef table and is advanced in place by frame_timer, exactly like the
- * app. That way a scene's own `t = 0` reset — applied during flatten/execute —
+ * app. That way a scene's own `t = 0` reset - applied during flatten/execute -
  * sticks and `t` continues from there, instead of being clobbered by a
  * demo-side clock. */
 #define DEMO_FRAME_DT GLR_FRAME_DT_SECS
@@ -414,13 +414,13 @@ static void apply_camera_modelview(void) {
 }
 
 /* The app's default light theme (LIGHT_THEME_DEFAULT), reproduced verbatim so
- * lit scenes render — and re-export ('e') — with the SAME lights gl-repl uses,
+ * lit scenes render - and re-export ('e') - with the SAME lights gl-repl uses,
  * not the GL defaults (or zeros, which is what an export with no light bridge
  * emits). These are exactly the per-slot values a real export's init() carries.
  * Single source of truth for both setup_render_baseline() (live render) and the
  * export light bridge (round-trip 'e'). Positions are world-space (applied after
  * the camera). */
-enum { DEMO_LIGHT_COUNT = 4 };  /* GL_LIGHT0..3 — mirrors the app's MAX_LIGHTS */
+enum { DEMO_LIGHT_COUNT = 4 };  /* GL_LIGHT0..3 - mirrors the app's MAX_LIGHTS */
 
 typedef struct {
     GLfloat pos[4];
@@ -444,7 +444,7 @@ static const DemoLight g_demo_lights[DEMO_LIGHT_COUNT] = {
 
 /* Per-frame GL baseline matching what the app's render3d layer sets up before
  * user geometry runs. An exported scene assumes this baseline (it lives in the
- * export's init()/display() scaffold, which the demo does NOT execute — only the
+ * export's init()/display() scaffold, which the demo does NOT execute - only the
  * geometry snippet runs), so without it lit geometry renders wrong: e.g.
  * GL_COLOR_MATERIAL off means glColor3f is ignored under GL_LIGHTING and a
  * tinted surface comes out as the default white-ish material. The scene still

@@ -1,4 +1,4 @@
-# `src/app` — the application shell + controller (Draft)
+# `src/app` - the application shell + controller (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -27,17 +27,17 @@ new feature behavior there by default.
 The boundary still matters: `glr_ctrl` should not implement editor behavior,
 parse the language, draw widgets, or own 3D rendering policy. The subsystems it
 wires together (`src/repl`, `src/editor`, `src/ui`, `src/render3d`,
-`src/subsystems`) do not depend on it — the dependency arrows run one way, from
+`src/subsystems`) do not depend on it - the dependency arrows run one way, from
 `glr_ctrl` to the subsystems, never back.
 Alongside the router live the app-level services that are genuinely
 app-specific: the camera, the audio playlist, the config/menu tables, and the
 completion provider.
 
 (The literal `main()` and the GLUT callback registration live in the
-root-level [`gl_repl.c`](../../gl_repl.c), which forwards directly to `glr_ctrl_*` — there is no
+root-level [`gl_repl.c`](../../gl_repl.c), which forwards directly to `glr_ctrl_*` - there is no
 shim in between.)
 
-## How it is exercised — the inverse of the demos
+## How it is exercised - the inverse of the demos
 
 This module has no demo of its own, and that is the point. The standalone
 demos are each defined by **excluding this layer**:
@@ -49,7 +49,7 @@ demos are each defined by **excluding this layer**:
 
 Each demo re-implements just enough of the controller's job to stand its
 subsystem up alone. So `src/app` is, by construction, the **app-specific
-glue** — the code that is *not* reusable because it encodes how *this*
+glue** - the code that is *not* reusable because it encodes how *this*
 particular program is composed. If you were to lift a subsystem into your own
 engine (a stated design goal of this project), `src/app` is the part you
 would replace.
@@ -92,25 +92,25 @@ editor operation.
 `src/app` holds two bands, and the split is worth naming because they run in
 different worlds:
 
-- **Boot / lifecycle band — [`boot/`](boot/).** Process startup: the code that
+- **Boot / lifecycle band - [`boot/`](boot/).** Process startup: the code that
   runs *before or without* a live GL context and never sits on the frame loop.
   CLI parse, the startup init trace, the headless capture-env `GLR_*` hooks,
   the frame pacer (a pure timer-delay calculator), the splash banner, and the
   `--dump-*` dump-and-exit path. These modules are reached **only from the host
-  [`gl_repl.c`](../../gl_repl.c)** (plus their tests and sibling boot modules) —
+  [`gl_repl.c`](../../gl_repl.c)** (plus their tests and sibling boot modules) -
   never from the controller.
-- **Frame-time controller band — the files directly in `src/app/`.** The
+- **Frame-time controller band - the files directly in `src/app/`.** The
   controller ([`glr_ctrl`](glr_ctrl.c)), its router / view-transition / snapshot
   satellites, and the app-level services (camera, audio, config, actions,
   completion, tours, pointer-script). These assume a **live GL context and a
   running frame loop**.
 
 **Membership rule.** A module is boot if it runs during process startup and is
-called only from [`gl_repl.c`](../../gl_repl.c) (or other boot modules) — put it in `boot/`.
+called only from [`gl_repl.c`](../../gl_repl.c) (or other boot modules) - put it in `boot/`.
 Everything that participates in a frame stays directly in `src/app/`.
 
 **Direction rule.** [`gl_repl.c`](../../gl_repl.c) → `boot/` → controller → subsystems. Boot
-modules may call **down** into the controller band — that is how the
+modules may call **down** into the controller band - that is how the
 dump-and-exit path ([`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c)) reuses the
 diagnostic formatters in [`glr_debug.c`](glr_debug.c). The controller band must
 **never** reach back **up** into `boot/`: a frame-time file that includes
@@ -144,7 +144,7 @@ formatters free of any boot dependency.
 | [`glr_defaults.h`](glr_defaults.h) | Controller-side 3D presentation defaults (`CFG_DEFAULT_*`) |
 
 (Router / view-transition / compositor / tours / pointer-script satellites live
-here too — see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full roster.)
+here too - see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full roster.)
 
 ### Boot / lifecycle band ([`boot/`](boot/))
 

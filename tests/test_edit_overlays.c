@@ -33,7 +33,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  *
  * The stub GL/GLU/GLUT headers (under tests/gl-stubs/include/GL/) record every
  * call's scalar arguments to a trace file when gl_stub_trace_open() is
- * active — e.g. glVertex3f(1, 2, 3) writes the line "glVertex3f 1 2 3"
+ * active - e.g. glVertex3f(1, 2, 3) writes the line "glVertex3f 1 2 3"
  * (floats via %g, C locale). The render functions below emit raw
  * command args straight into glVertex3f/glVertex2f (the no-op stubs apply
  * no modelview transform), so we can assert the *exact* coordinates the
@@ -88,7 +88,7 @@ static int trace_count_line_width_near(const TraceLog *log, float expected) {
 }
 
 /* Replay a GL cap's enable/disable state through the trace and report it as of
- * `before` (the first line matching it verbatim) — i.e. "was this cap live at
+ * `before` (the first line matching it verbatim) - i.e. "was this cap live at
  * the moment that vertex was emitted?", which is the only thing that decides
  * whether the pixel survives. Ordering is what matters here, not call counts:
  * a suspend/resume pair around a highlight draw and a plainly clipped outline
@@ -635,7 +635,7 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
 }
 
 /* Culling is plain GL state, and GL culls polygons in glPolygonMode(GL_LINE)
- * just as it does when filling — so the overlay passes only have to replay the
+ * just as it does when filling - so the overlay passes only have to replay the
  * program's cull state and let GL apply the program's own facing rule. Same
  * split as the clip planes: outlines always, the highlight only under
  * POLY_HIGHLIGHT_CLIPPED_CULLED. */
@@ -713,8 +713,8 @@ static void test_overlays_honor_culling(void) {
                                   "glVertex3f 1 0 0"), 1);
 }
 
-/* The stencil test is replayed like the clip planes — an outline around
- * geometry a mask threw away is a lie about what is on screen — but the
+/* The stencil test is replayed like the clip planes - an outline around
+ * geometry a mask threw away is a lie about what is on screen - but the
  * stencil WRITE state is deliberately not, because a pass that reports on a
  * buffer must not modify it. That split is the whole point of the stencil
  * handling, so it is what these assertions pin. */
@@ -769,7 +769,7 @@ static void test_overlays_honor_stencil_test(void) {
 
     /* Writes: each walk opens with them shut and never reopens them, so the
      * program's own glStencilOp / glStencilMask must not appear at all.
-     * Three baselines because the outline render runs three walks — same
+     * Three baselines because the outline render runs three walks - same
      * count the cull replay above sees for glEnable. */
     ASSERT_INT("every walk shuts stencil writes at entry",
                trace_count_line(&log, "glStencilMask 0"), 3);
@@ -849,7 +849,7 @@ static void test_overlays_honor_stencil_test(void) {
 
 /* glPushAttrib/glPopAttrib scope the state the overlay walks replay: a scoped
  * glDisable(GL_CULL_FACE) reverts at the pop, so geometry after the pop culls
- * like the real render — in EVERY walker (glBegin outline, glut-solid outline,
+ * like the real render - in EVERY walker (glBegin outline, glut-solid outline,
  * vertex points), not just the glBegin pass. A scoped glColorMask reverts too,
  * and a GL_TRANSFORM_BIT push captures the live plane equations for restore. */
 static void test_overlays_scope_push_pop_attrib(void) {
@@ -1012,7 +1012,7 @@ static void test_single_polygon_highlight_strip_winding(void) {
     ctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
     ctx.cursor_poly_valid = 1;
 
-    /* Odd strip triangle (index 1: ordinals 1..3) — winding compensated. */
+    /* Odd strip triangle (index 1: ordinals 1..3) - winding compensated. */
     ctx.cursor_poly_first = 1;
     ctx.cursor_poly_last = 3;
     TraceLog log;
@@ -1024,7 +1024,7 @@ static void test_single_polygon_highlight_strip_winding(void) {
     ASSERT_INT("...and restores the program's winding after",
                trace_count_line(&log, "glFrontFace 2305"), 1);   /* GL_CCW */
 
-    /* Even strip triangle (index 2: ordinals 2..4) — no compensation. */
+    /* Even strip triangle (index 2: ordinals 2..4) - no compensation. */
     ctx.cursor_poly_first = 2;
     ctx.cursor_poly_last = 4;
     trace_begin();
@@ -1242,7 +1242,7 @@ static void test_highlight_clip_planes(void) {
     ASSERT_INT("no clip cap is left enabled when the passes return",
                trace_clip_cap_state_at(&log, NULL), 0);
 
-    /* POLY_HIGHLIGHT_CLIPPED_CULLED: no suspend — the highlight is cut too. */
+    /* POLY_HIGHLIGHT_CLIPPED_CULLED: no suspend - the highlight is cut too. */
     ctx.highlight_clipped_culled = 1;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
@@ -1343,7 +1343,7 @@ static void test_single_polygon_highlight_fan_anchor(void) {
  * unscaled VERTEX_OUTLINE_ACTIVE_WIDTH (3.0f). SINGLE_POLYGON's highlight
  * fires, then falls through to the plain-outline pass (show_vertex_outlines
  * redraws the whole block, including the selected primitive, at edge
- * width/color) — so an unscaled highlight width was an exact tie with that
+ * width/color) - so an unscaled highlight width was an exact tie with that
  * later redraw and got fully overwritten. The highlight width must scale
  * the same way so it stays strictly thicker than the bold edge redraw. */
 static void test_single_polygon_highlight_bold_style(void) {
@@ -1376,7 +1376,7 @@ static void test_single_polygon_highlight_bold_style(void) {
     ctx.cursor_poly_first = 4;  /* second quad: v4..v7 */
     ctx.cursor_poly_last = 7;
 
-    /* Sanity: bold edge width lands exactly on the unscaled active width —
+    /* Sanity: bold edge width lands exactly on the unscaled active width -
      * the tie this test guards against. */
     ASSERT_TRUE("bold edge width ties the unscaled active width",
                 fabsf(VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE -
@@ -1559,7 +1559,7 @@ static void test_render_outlines_glut(void) {
 }
 
 /* find_next_vertex_args_in_flat: scans forward for the next vertex, stopping
- * at block boundaries. Pure function — assert the recovered coords directly. */
+ * at block boundaries. Pure function - assert the recovered coords directly. */
 static void test_find_next_vertex_args(void) {
     printf("--- edit_overlays find_next_vertex_args_in_flat ---\n");
 
@@ -2004,7 +2004,7 @@ static void test_on_vertex_number_label_callback(void) {
  * looped primitive (the parametric-torus duplicate-label fix), while
  * all-instances mode labels every vertex with a globally-unique number. The
  * walk resets vertex_idx_in_block to 0 at each block, which is how the callback
- * detects block (loop-iteration) boundaries — and how the forward-only walk
+ * detects block (loop-iteration) boundaries - and how the forward-only walk
  * knows to discard the copy it had collected so far. */
 static void test_overlay_scope(void) {
     printf("--- edit_overlays overlay scope ---\n");
@@ -2066,7 +2066,7 @@ static void test_overlay_scope(void) {
                 strcmp(all.labels[3].idx, " v3") == 0);
 
     /* Whole-scene: same collection rule as all-instances at the callback
-     * level — the difference is upstream, where the walk is not narrowed to
+     * level - the difference is upstream, where the walk is not narrowed to
      * the cursor's block. Numbering must stay global, or vertices from
      * different blocks would collide on v0. */
     VertexLabelCtx scene;
@@ -2110,7 +2110,7 @@ static void test_overlay_scope(void) {
                 strcmp(at_vert.labels[2].idx, " v0") == 0 &&
                 strcmp(at_vert.labels[3].idx, " v1") == 0);
 
-    /* The same scope decluttered numbers globally instead — the placement is
+    /* The same scope decluttered numbers globally instead - the placement is
      * what decides, since only a floated label can be ambiguous. */
     ASSERT_TRUE("decluttered all-instances still numbers globally",
                 strcmp(all.labels[2].idx, " v2") == 0);
@@ -2128,7 +2128,7 @@ static void test_overlay_scope(void) {
 
 /* Single-polygon label scope: narrows last-instance further to the
  * ordinal range of the cursor's primitive, but only inside a glBegin
- * block (primitive_mode != 0) — tess (GLU) polygons keep whole-block
+ * block (primitive_mode != 0) - tess (GLU) polygons keep whole-block
  * labels regardless of the resolved range. */
 static void test_single_polygon_label_scope(void) {
     printf("--- edit_overlays single-polygon label scope ---\n");
@@ -2221,7 +2221,7 @@ static void test_single_polygon_label_scope(void) {
 }
 
 /* Occlusion cull: a vertex is dropped when the scene depth buffer holds nearer
- * geometry at its pixel. This is unconditional — it is not a scope, so the
+ * geometry at its pixel. This is unconditional - it is not a scope, so the
  * assertion runs over every scope rather than one opted-in mode. Uses a tiny
  * 4x4 depth grid so the projected pixel lookup is easy to reason about
  * (identity proj over a 4x4 viewport maps object (x,y) ->
@@ -2669,7 +2669,7 @@ static void test_render_via_repl_program(void) {
     ASSERT_TRUE("post_overlays emits the flattened vertices",
                 trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") >= 1);
     /* The per-pass orchestrator must NOT draw the bitmap-text labels any
-     * more — inside the accumulation loop they'd ghost across sub-passes. */
+     * more - inside the accumulation loop they'd ghost across sub-passes. */
     ASSERT_INT("post_overlays draws no vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f"), 0);
 

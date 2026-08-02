@@ -34,7 +34,7 @@ typedef struct {
 const char *memprof_primary_label(void);
 
 /* Start sampling using the module's monotonic clock as t0. The baseline
- * ("init") is NOT captured here — it is deferred to the first history push
+ * ("init") is NOT captured here - it is deferred to the first history push
  * (see memprof_baseline). Safe to call multiple times; only the first
  * call takes. */
 void memprof_init(void);

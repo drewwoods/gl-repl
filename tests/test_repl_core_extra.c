@@ -669,7 +669,7 @@ void test_workspace_initial_load_activates_first_slot() {
     int written = repl_save_workspace(dir, NULL);
     ASSERT_TRUE("save_workspace wrote >= 1 slot", written >= 1);
 
-    /* Wipe and bootstrap with the workspace path — simulates
+    /* Wipe and bootstrap with the workspace path - simulates
      * `./gl-repl ./workspace` going through gl_repl.c -> bootstrap_repl
      * -> repl_load_initial_commands(dir). */
     glr_ctrl_reset_all(); declare_test_vars();
@@ -2031,7 +2031,7 @@ void test_loop_jump_commands(void) {
     ASSERT_INT("inner break ends each inner pass after one vertex",
                count_flat_type(CMD_VERTEX3F), 3);
 
-    /* 4. Writes the body made before the jump survive it — the loop copies
+    /* 4. Writes the body made before the jump survive it - the loop copies
      * iteration bindings back before consuming the signal. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
@@ -2072,7 +2072,7 @@ void test_loop_jump_commands(void) {
     ASSERT_INT("callee break ends only the callee's loop, per call",
                count_flat_type(CMD_VERTEX3F), 3);  /* n=0 -> 1, n=1 -> 2 */
 
-    /* 6. Commit rejects a jump with no loop to bind to — at top level and
+    /* 6. Commit rejects a jump with no loop to bind to - at top level and
      * inside a function body whose loops are all elsewhere. */
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("top-level break rejected",
@@ -2087,7 +2087,7 @@ void test_loop_jump_commands(void) {
                 editor_feed_line("break;") == 0);
 
     /* 7. An if-block between the statement and its loop is transparent,
-     * as in C — that is the case the rejection must not catch. */
+     * as in C - that is the case the rejection must not catch. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("if(i > 0) {");
@@ -2161,8 +2161,8 @@ void test_time() {
     /* repl_set_time(): the --time / GLR_TIME startup override. It sets the
      * visible `t` var AND the free-running accumulator to an explicit origin,
      * so a later advance() builds on that origin (the documented pause/resume-
-     * consistency invariant), and reset_to_zero() — which now delegates to
-     * set(0) — clears both. Values are exact in binary float, so == is safe. */
+     * consistency invariant), and reset_to_zero() - which now delegates to
+     * set(0) - clears both. Values are exact in binary float, so == is safe. */
     {
         ReplVariableView vv = repl_state_variables();
         ASSERT_TRUE("t var present for set_time", vv.time_var_idx >= 0);
@@ -2173,7 +2173,7 @@ void test_time() {
                     vv.vars[vv.time_var_idx].value == 5.0f);
         ASSERT_TRUE("repl_set_time syncs accumulator", g_anim_time == 5.0f);
 
-        /* advance() continues from the set origin (5), not from 0 — only true
+        /* advance() continues from the set origin (5), not from 0 - only true
          * because set() synced g_anim_time. */
         repl_advance_time(0.5f);
         ASSERT_TRUE("advance builds on set origin", g_anim_time == 5.5f);

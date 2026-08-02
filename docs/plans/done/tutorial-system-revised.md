@@ -7,7 +7,7 @@ The REPL today has built-in examples (`src/repl/examples.c`) and user scenes
 scenes but get no guided path for learning the command set. We want a
 tutorial mode that reveals one instructional `// comment` at a time, waits
 for the user to type a matching command, and reveals the next comment on
-success — using the existing editor, parser, and code-panel rendering.
+success - using the existing editor, parser, and code-panel rendering.
 
 User-facing behavior agreed:
 - Tutorials live in their own top-level menu ("Tutorials"), parallel to Scene.
@@ -77,21 +77,21 @@ User-facing behavior agreed:
 
 `TutorialEntry` (in `tutorials.c`):
 - `const char *name`
-- `const char *const *comments` — null-terminated; each begins with `//`.
-- `const char *const *expected` — same length as `comments`; literal command
+- `const char *const *comments` - null-terminated; each begins with `//`.
+- `const char *const *expected` - same length as `comments`; literal command
   text, no trailing `;`.
 
 `TutorialMatchKind`:
 - `TUT_MATCH_OK`
-- `TUT_MISMATCH_EMPTY` — input is empty / whitespace only
-- `TUT_MISMATCH_SHAPE` — token count differs (v1 catch-all for "something is off")
-- `TUT_MISMATCH_COMMAND` — reserved for v2 (command keyword wrong)
-- `TUT_MISMATCH_ARG` — reserved for v2 (specific arg wrong)
+- `TUT_MISMATCH_EMPTY` - input is empty / whitespace only
+- `TUT_MISMATCH_SHAPE` - token count differs (v1 catch-all for "something is off")
+- `TUT_MISMATCH_COMMAND` - reserved for v2 (command keyword wrong)
+- `TUT_MISMATCH_ARG` - reserved for v2 (specific arg wrong)
 
 `TutorialMatchResult`:
 - `TutorialMatchKind kind`
-- `int arg_index` — `-1` unless `TUT_MISMATCH_ARG`
-- `char message[128]` — preformatted for `repl_set_status`
+- `int arg_index` - `-1` unless `TUT_MISMATCH_ARG`
+- `char message[128]` - preformatted for `repl_set_status`
 
 `TutorialRuntimeState`:
 - `int active`
@@ -159,33 +159,33 @@ Each phase is independently buildable and testable. Land them as separate
 commits; the feature is non-visible until Phase 3 ships, and the MVP is
 complete once Phase 7 lands (Phase 8 is docs only).
 
-### Phase 1 — Catalog + peer state scaffolding
+### Phase 1 - Catalog + peer state scaffolding
 
 Goal: data and storage exist; nothing wired into UI or commit flow yet.
 
 Create:
-- `src/repl/tutorials.h` — query API (`repl_tutorial_count/name/step_count/step_comment/step_expected`) + struct typedefs.
-- `src/repl/tutorials.c` — one starter tutorial: `g_tutorial_first_triangle_comments[]` and `_expected[]` (null-terminated parallel arrays), `g_tutorials[]` table, query implementations.
-- `src/widgets/tutorial_state.h` / `.c` — `TutorialRuntimeState` struct, static `g_tutorial_state`, `tutorial_state_view/_mut/_reset/_active`. No capture/restore yet (tutorials don't participate in undo snapshots).
+- `src/repl/tutorials.h` - query API (`repl_tutorial_count/name/step_count/step_comment/step_expected`) + struct typedefs.
+- `src/repl/tutorials.c` - one starter tutorial: `g_tutorial_first_triangle_comments[]` and `_expected[]` (null-terminated parallel arrays), `g_tutorials[]` table, query implementations.
+- `src/widgets/tutorial_state.h` / `.c` - `TutorialRuntimeState` struct, static `g_tutorial_state`, `tutorial_state_view/_mut/_reset/_active`. No capture/restore yet (tutorials don't participate in undo snapshots).
 
 Modify:
-- `src/repl/scenes.h` / `.c` — declare and implement
+- `src/repl/scenes.h` / `.c` - declare and implement
   `repl_scenes_enter_transient_scene()`: save the active user scene if
   one is loaded, restore any pre-example cfg snapshot, clear pending
   scene-name metadata, then set both the active user-scene marker and
   active example marker to `-1`. This gives tutorials an unsaved
   transient buffer and prevents tutorial contents from being flushed into
   a user-scene slot later.
-- `Makefile` — append `tutorials.o`, `tutorial_state.o` to the same `OBJS` list that currently builds `replay_state.o` (`grep -n replay_state Makefile` to locate).
+- `Makefile` - append `tutorials.o`, `tutorial_state.o` to the same `OBJS` list that currently builds `replay_state.o` (`grep -n replay_state Makefile` to locate).
 
 Verify: `make sample` builds. `nm sample | grep tutorial_state_view` shows the symbol.
 
-### Phase 2 — Runner + match function (headless)
+### Phase 2 - Runner + match function (headless)
 
 Goal: full runtime logic exists and is unit-tested, still not wired to UI.
 
 Create:
-- `src/widgets/tutorial.h` — public runner API:
+- `src/widgets/tutorial.h` - public runner API:
   - `void  tutorial_start(int idx);`
   - `void  tutorial_exit(void);`
   - `int   tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out);`
@@ -196,7 +196,7 @@ Create:
   - `int   tutorial_line_is_locked(int line_idx);`
   - `int   tutorial_guard_source_change(int pos, int delete_count, int insert_count);`
   - `TutorialMatchResult tutorial_match(const char *expected, const char *got);`
-- `src/widgets/tutorial.c` — implementations. `tutorial_start` first calls
+- `src/widgets/tutorial.c` - implementations. `tutorial_start` first calls
   `repl_scenes_enter_transient_scene()`, then clears the live document via
   `repl_state_document_reset()` (not `editor_clear_all_cmds()`), resets
   predef vars / function aliases / input transients, resets tutorial
@@ -213,18 +213,18 @@ Create:
   extract a REPL-side `repl_scenes_reset_for_transient()` helper rather
   than duplicating direct predef-var / alias / dispatch reset calls across
   widgets. `tutorial_match` v1 = whitespace-normalize-and-strcmp.
-- `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
-- `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `editor_feed_line(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
-- `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
+- `tests/test_tutorial_match.c` - uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
+- `tests/test_tutorial_runner.c` - uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `editor_feed_line(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
+- `Makefile` - add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
 
 Verify: `make test_tutorial_match` and `make test_tutorial_runner` pass.
 
-### Phase 3 — Tutorials menu
+### Phase 3 - Tutorials menu
 
 Goal: user can pick a tutorial from the menu and see the first comment.
 
 Modify (with exact anchors):
-- `src/app/glr_actions.h:30-33` — change the enum to:
+- `src/app/glr_actions.h:30-33` - change the enum to:
   ```c
   GLR_MENU_FILE = 0,
   GLR_MENU_SCENE,
@@ -232,11 +232,11 @@ Modify (with exact anchors):
   GLR_MENU_CONFIG,
   GLR_MENU_COUNT
   ```
-- `src/ui/menu_bar.c:21-30` — add `MENU_TUTORIALS = GLR_MENU_TUTORIALS` to the local enum and append `"Tutorials"` to `g_menu_labels[]` (size auto-tracks via `GLR_MENU_COUNT`).
-- `src/ui/menu_bar.c:88-100` (`menu_item_count`) — `case MENU_TUTORIALS: return repl_tutorial_count() + (tutorial_active() ? 3 : 0);` (the 3 trailing slots are the divider, Restart, and Exit items, shown only while a tutorial is active).
-- `src/ui/menu_bar.c:102-132` (`menu_item_label`) — `MENU_TUTORIALS` branch: items `[0..N-1]` return `repl_tutorial_name(i)`; if `tutorial_active()`, item `N` is `"---"`, `N+1` is `"Restart Tutorial"`, `N+2` is `"Exit Tutorial"`.
-- `src/ui/menu_bar.c:134+` (`menu_item_shortcut`) — `case MENU_TUTORIALS: return NULL;`.
-- `src/app/glr_actions.c:422-498` (`glr_action_menu_item_activate`) — add a new branch after the `GLR_MENU_SCENE` block (line 450) and before `GLR_MENU_CONFIG` (line 494):
+- `src/ui/menu_bar.c:21-30` - add `MENU_TUTORIALS = GLR_MENU_TUTORIALS` to the local enum and append `"Tutorials"` to `g_menu_labels[]` (size auto-tracks via `GLR_MENU_COUNT`).
+- `src/ui/menu_bar.c:88-100` (`menu_item_count`) - `case MENU_TUTORIALS: return repl_tutorial_count() + (tutorial_active() ? 3 : 0);` (the 3 trailing slots are the divider, Restart, and Exit items, shown only while a tutorial is active).
+- `src/ui/menu_bar.c:102-132` (`menu_item_label`) - `MENU_TUTORIALS` branch: items `[0..N-1]` return `repl_tutorial_name(i)`; if `tutorial_active()`, item `N` is `"---"`, `N+1` is `"Restart Tutorial"`, `N+2` is `"Exit Tutorial"`.
+- `src/ui/menu_bar.c:134+` (`menu_item_shortcut`) - `case MENU_TUTORIALS: return NULL;`.
+- `src/app/glr_actions.c:422-498` (`glr_action_menu_item_activate`) - add a new branch after the `GLR_MENU_SCENE` block (line 450) and before `GLR_MENU_CONFIG` (line 494):
   ```c
   } else if (menu_id == GLR_MENU_TUTORIALS) {
       int n = repl_tutorial_count();
@@ -250,18 +250,18 @@ Modify (with exact anchors):
   ```
 - Include `widgets/tutorial.h` and `widgets/tutorial_state.h` in `src/app/glr_actions.c` and `src/ui/menu_bar.c`.
 
-Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0; reopening the menu now shows the Restart/Exit items. No fade yet — that lands in Phase 7.
+Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0; reopening the menu now shows the Restart/Exit items. No fade yet - that lands in Phase 7.
 Also smoke-test a narrow window/code panel: adding the top-level
 Tutorials menu shifts `menubar_rects()`'s left-menu edge, so verify the
 Search and Replay pins remain usable or degrade acceptably when the code
 panel is narrow.
 
-### Phase 4 — Commit interception (match check)
+### Phase 4 - Commit interception (match check)
 
 Goal: typing wrong rejects with status; typing right advances and reveals next.
 
 Modify (with exact anchors):
-- `src/editor/input.c` — add a tiny shared helper near the commit routes:
+- `src/editor/input.c` - add a tiny shared helper near the commit routes:
   ```c
   static int tutorial_precheck_current_input(void) {
       if (!tutorial_active()) return 1;
@@ -279,7 +279,7 @@ Modify (with exact anchors):
           tutorial_advance_after_successful_commit();
   }
   ```
-- `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) — run
+- `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) - run
   `tutorial_precheck_current_input()` inside the `input_len > 0` branch
   before any undo snapshot or commit attempt. On false, return consumed.
   Because this route open-codes its parser insert/replace path instead of
@@ -293,17 +293,17 @@ Modify (with exact anchors):
   `tutorial_advance_after_successful_commit()` only on a proven success
   path. Do not call it from the generic tail before `return 1`, because
   parse/capacity failures also reach that tail.
-- `src/editor/input.c:1101-1116` (`handle_enter_key_route`) — run
+- `src/editor/input.c:1101-1116` (`handle_enter_key_route`) - run
   `tutorial_precheck_current_input()` before `commit_current_input(1)`;
   capture the returned `CommitResult`, then call
   `tutorial_advance_if_commit_ok(result)`. This keeps Enter behavior
   aligned with semicolon and avoids advancing on `COMMIT_REJECTED`.
-- `src/repl/example_loader.c:393` (`load_example_lines`) — call `tutorial_state_reset()` as the first statement.
-- `src/repl/scenes.c:520` (`repl_load_workspace`) — call
+- `src/repl/example_loader.c:393` (`load_example_lines`) - call `tutorial_state_reset()` as the first statement.
+- `src/repl/scenes.c:520` (`repl_load_workspace`) - call
   `tutorial_state_reset()` on entry. Workspace load fills user-scene slots
   with `load_scene_file_into_slot()` and restores the live stash; it does
   not transitively pass through `repl_load_user_scene_idx()`.
-- `src/repl/scenes.c:670` (`repl_load_user_scene_idx`) — same first-statement reset before `load_scene_from_slot(slot)`.
+- `src/repl/scenes.c:670` (`repl_load_user_scene_idx`) - same first-statement reset before `load_scene_from_slot(slot)`.
 - Include `widgets/tutorial.h` in `src/editor/input.c`; include the smallest reset header needed by `src/repl/example_loader.c` and `src/repl/scenes.c` (prefer `widgets/tutorial_state.h` if reset is declared there).
 
 Tests:
@@ -317,7 +317,7 @@ Tests:
 
 Verify: With a starter tutorial loaded, typing `glEnd()` then `;` shows `"expected: glBegin(GL_TRIANGLES)"` in the status bar and does NOT commit; typing the right line commits, then a new instructional comment for step 2 appears.
 
-### Phase 5 — Tab autofill
+### Phase 5 - Tab autofill
 
 Goal: pressing Tab replaces the input buffer with the current step's
 expected command (whole-line), without committing. The user inspects,
@@ -325,7 +325,7 @@ optionally edits, then presses `;` to commit through the Phase 4 path.
 This is intentionally always-overwrite while a tutorial is active.
 
 Modify:
-- `src/editor/input.c` — locate the existing Tab key handler (`grep -n "'\\\\t'" src/editor/input.c` — should sit alongside the autocomplete-accept path). Keep `editor_input_anchor_clear()` before the tutorial branch, then insert the tutorial branch ahead of the autocomplete dispatch:
+- `src/editor/input.c` - locate the existing Tab key handler (`grep -n "'\\\\t'" src/editor/input.c` - should sit alongside the autocomplete-accept path). Keep `editor_input_anchor_clear()` before the tutorial branch, then insert the tutorial branch ahead of the autocomplete dispatch:
   ```c
   if (tutorial_active()) {
       const char *expected = tutorial_current_expected_text();
@@ -355,7 +355,7 @@ Tests:
 
 Verify: with a tutorial active, Tab replaces the input row with the expected command; pressing `;` commits and the next comment appears. Tab in a non-tutorial scene still triggers autocomplete.
 
-### Phase 6 — Read-only locking of revealed comments
+### Phase 6 - Read-only locking of revealed comments
 
 Goal: prevent the user from deleting or editing the tutorial's instructional comments mid-flow.
 
@@ -374,7 +374,7 @@ input row freely, but source-document mutations outside the expected
 tutorial commit path are blocked so recorded line indices cannot drift.
 
 Modify (single guard helper, called at each existing mutation site):
-- `src/editor/input.c:232` (`load_line_to_input`) — add a locked-line
+- `src/editor/input.c:232` (`load_line_to_input`) - add a locked-line
   early return:
   ```c
   if (tutorial_line_is_locked(idx)) {
@@ -386,7 +386,7 @@ Modify (single guard helper, called at each existing mutation site):
   ```
   Arrow/mouse navigation may land on tutorial comments, but their text
   should not be copied into the editable input row.
-- `src/editor/input.c` — every line-deletion / row-replace / line-insert
+- `src/editor/input.c` - every line-deletion / row-replace / line-insert
   site (Ctrl+D, backspace/delete with a line selection, semicolon parser
   replace/insert, Enter parser replace/insert, Ctrl+/ comment toggle,
   Ctrl+L clear-all, Ctrl+\ reformat). Wrap with:
@@ -396,11 +396,11 @@ Modify (single guard helper, called at each existing mutation site):
       return ...;
   }
   ```
-- `src/editor/clipboard.c` — line-range cut/delete and line paste: same
+- `src/editor/clipboard.c` - line-range cut/delete and line paste: same
   guard on the delete range or paste insertion point. Reject the whole
   operation if any affected locked line would be edited or any insertion
   would renumber a locked line.
-- `src/editor/undo.c` — undo/redo that would roll the document back below
+- `src/editor/undo.c` - undo/redo that would roll the document back below
   the active step is hard to validate cheaply, so v1 = block undo and
   redo while a tutorial is active:
   `if (tutorial_active()) { repl_set_status("Undo disabled during tutorial"); return; }`.
@@ -420,21 +420,21 @@ line-cut all bounce off with status text. Pasting or inserting above the
 first locked comment is rejected. Cursor on the in-progress input line:
 editing works normally.
 
-### Phase 7 — Fade-in render
+### Phase 7 - Fade-in render
 
 Goal: newly revealed comments fade in left-to-right over ~0.5 s.
 
 Important: don't gate the per-char path on `alpha0 < 1.0`. In a left-to-right reveal, char 0 reaches alpha 1 well before later chars do, so an alpha-0 check flips back to the cheap whole-line draw mid-animation. Use a dedicated `tutorial_line_is_fading()` predicate instead.
 
 Modify:
-- `src/widgets/tutorial.h` / `.c` — add:
+- `src/widgets/tutorial.h` / `.c` - add:
   ```c
   /* true iff line_idx is the current reveal target and the fade window is still open */
   int tutorial_line_is_fading(int line_idx, float now);
   ```
   Implementation: `return active && line_idx == fade_line_idx && now < fade_start_t + fade_duration;`
 - `src/ui/panels.c` (`code_panel_draw_command_row`, the
-  `code_panel_draw_segment(...)` call) — wrap:
+  `code_panel_draw_segment(...)` call) - wrap:
   ```c
   float now = ctx->snap->anim_time;
   if (tutorial_line_is_fading(i, now)) {
@@ -455,7 +455,7 @@ Modify:
   reveal cascade span the whole source line consistently across wrapped
   continuation rows. Once the fade window closes, the predicate returns 0
   and every row takes the existing fast path. No global slowdown.
-- `src/widgets/tutorial.c` — implement `tutorial_step_fade_alpha`:
+- `src/widgets/tutorial.c` - implement `tutorial_step_fade_alpha`:
   ```c
   /* returns 1.0 if line_idx != fade_line_idx or now >= start + duration */
   int safe_len = line_len > 0 ? line_len : 1;
@@ -469,36 +469,36 @@ Modify:
 
 Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-to-right. Once finished it stays at full brightness and the renderer takes the fast path on subsequent frames.
 
-### Phase 8 — Docs, ownership audit, smoke test
+### Phase 8 - Docs, ownership audit, smoke test
 
 Modify:
-- `MODULES.md` — add `src/widgets/tutorial_state.{c,h}`, `src/widgets/tutorial.{c,h}`, `src/repl/tutorials.{c,h}` to the layered overview and the state-ownership table (`TutorialRuntimeState` is owned by the peer subsystem, not `ReplState` / `EditorState`).
-- `CLAUDE.md` — add one row per new file to the **File Layout** table.
-- `Makefile` — add new tutorial sources/headers to `SRCS`, `HDRS`,
+- `MODULES.md` - add `src/widgets/tutorial_state.{c,h}`, `src/widgets/tutorial.{c,h}`, `src/repl/tutorials.{c,h}` to the layered overview and the state-ownership table (`TutorialRuntimeState` is owned by the peer subsystem, not `ReplState` / `EditorState`).
+- `CLAUDE.md` - add one row per new file to the **File Layout** table.
+- `Makefile` - add new tutorial sources/headers to `SRCS`, `HDRS`,
   `CORE_TEST_SRCS`, and test binary lists, not just the sample link path.
-- `scripts/callgraph_file_groups.json` — classify the tutorial runner and
+- `scripts/callgraph_file_groups.json` - classify the tutorial runner and
   tutorial state as peer-widget modules, not REPL or editor owners.
 - Any individual `scripts/check-*` ownership guard that hard-codes source
-  file lists — update that script's list or expectation if
+  file lists - update that script's list or expectation if
   `make check-state-ownership` reports the new tutorial files. There is no
   single monolithic ownership allowlist.
 
 Run:
-- `make check-state-ownership` — must pass; tutorial code owns only its
+- `make check-state-ownership` - must pass; tutorial code owns only its
   peer storage, uses the new transient-scene/document reset boundary for
   tutorial startup, uses `repl_load_apply_line` for runner-owned
   instructional comments, and uses the editor key route for user commits.
-- `make test` — full suite. The Phase 3 menu enum bump should be caught by any test asserting `GLR_MENU_COUNT`; update expectations if so.
+- `make test` - full suite. The Phase 3 menu enum bump should be caught by any test asserting `GLR_MENU_COUNT`; update expectations if so.
 - Manual smoke test against the verification checklist below.
 
 ## Verification
 
-- `make test_tutorial_match` — comparator unit tests.
-- `make test_tutorial_runner` — start/advance/mismatch/reset; uses
+- `make test_tutorial_match` - comparator unit tests.
+- `make test_tutorial_runner` - start/advance/mismatch/reset; uses
   `tests/support/repl_test_support.h` and `editor_handle_key` for user
   tutorial commits.
-- `make test` — full suite, ensures menu/example/loader tests still pass.
-- `make check-state-ownership` — confirms the new peer doesn't reach across
+- `make test` - full suite, ensures menu/example/loader tests still pass.
+- `make check-state-ownership` - confirms the new peer doesn't reach across
   ownership boundaries.
 - Manual: `./sample`, open Tutorials menu, pick "First Triangle", verify the
   first comment fades in, mistyping shows a status message, correct typing
@@ -520,12 +520,12 @@ Run:
   `TUT_MISMATCH_ARG`) and `arg_index` so the status message can read
   "command correct, argument 2 should be `0.5`".
 - **Progressive autofill.** Successive Tab presses walk the expected line
-  step by step — `glBegin` → `glBegin(` → `glBegin(GL_TRIANGLES)` → full
-  line — so the user can learn syntax piece by piece instead of seeing the
+  step by step - `glBegin` → `glBegin(` → `glBegin(GL_TRIANGLES)` → full
+  line - so the user can learn syntax piece by piece instead of seeing the
   whole answer at once.
 - **UI feature highlights.** Pulse / highlight named UI rects (menu items,
   the Replay button, panel regions) during a tutorial step. Needs a
   hit-rect registry and a pulsing overlay renderer.
 - **Popup description panels.** Small anchored explanations for UI elements,
-  shown while a tutorial step references them — reuse
+  shown while a tutorial step references them - reuse
   `src/ui/tabbed_overlay.c` or a single-panel variant.

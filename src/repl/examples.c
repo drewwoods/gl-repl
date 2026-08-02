@@ -56,11 +56,11 @@ typedef struct {
     ReplExampleTagMask tags;
     ReplExampleSourceFormat format;
     /* Optional in-flyout section subheading. Free-form display string
-     * (e.g. "Basics", "Functions") — the Scene menu groups consecutive
+     * (e.g. "Basics", "Functions") - the Scene menu groups consecutive
      * examples sharing the same subheading under a chrome `### subheading`
      * header. NULL = no header. Convention enforced by
      * test_example_subheading_metadata: per tag, each non-NULL subheading
-     * must appear in a single contiguous run — interleaving causes
+     * must appear in a single contiguous run - interleaving causes
      * duplicate headers. */
     const char *subheading;
 } ReplExampleEntry;
@@ -69,8 +69,8 @@ typedef struct {
  * It is not listed in any g_example_entries[] mask literal; instead
  * repl_example_tag_mask() ORs its bit into every example's mask, so the
  * whole tag query API (has_tag / count_for_tag / index_for_tag /
- * visible_tag_*) — and therefore the Scene menu's "All" group and the
- * F12 cycle — pick it up with no per-entry bookkeeping. Kept at index 0
+ * visible_tag_*) - and therefore the Scene menu's "All" group and the
+ * F12 cycle - pick it up with no per-entry bookkeeping. Kept at index 0
  * so "All" sorts first under "### EXAMPLES". Enum lives in examples.h. */
 
 #define EXAMPLE_TAG_BIT(tag) (1u << (tag))

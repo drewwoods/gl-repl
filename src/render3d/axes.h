@@ -12,7 +12,7 @@
 #include "render3d_transition.h"   /* Render3dXnReveal */
 
 /* Axes show/hide fade durations (seconds), owned by the axes module. Quicker
- * than the grid's — the axes are a couple of lines, not a draw-in. */
+ * than the grid's - the axes are a couple of lines, not a draw-in. */
 #ifndef AXES_FADE_IN_SECS
 #define AXES_FADE_IN_SECS  0.15f
 #endif

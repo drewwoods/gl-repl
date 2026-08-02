@@ -1,6 +1,6 @@
 # Tutorial replay system design
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status - NOT STARTED (2026-05-23 audit)
 
 A simpler tutorial system shipped instead and now lives in
 `src/repl/tutorials.{c,h}` + `src/widgets/tutorial*.{c,h}`. Its
@@ -25,14 +25,14 @@ catalog?).
 
 ## Response
 
-Yes — once Phase 2 is actually in place, this becomes pretty doable.
+Yes - once Phase 2 is actually in place, this becomes pretty doable.
 
 The clean way is **not** to dump all globals wholesale. I would build a **typed snapshot/apply layer** on top of the Phase 2 state boundary, then a tutorial player on top of that.
 
 Why I’d do it that way:
 
 * Your Phase 2 contract already turns runtime state into named domains behind `repl_state.h`, instead of raw `extern g_*` access, which is exactly the seam a capture system wants: [`feature/repl-state-phase2-sketch.md`](https://github.com/drewwoods/OpenGL-vibe/blob/main/src/immediate-mode-repl/claude4.6-opus-thinking/feature/repl-state-phase2-sketch.md), [`repl_state.h`](https://github.com/drewwoods/OpenGL-vibe/blob/main/src/immediate-mode-repl/claude4.6-opus-thinking/repl_state.h)
-* The current replay system is already good at **geometry/program replay** from the flat program, with PC, mode, source-line mapping, fade batches, and baseline predef restoration — but it is not a full app/tutorial state system by itself: [`repl_replay.c`](https://github.com/drewwoods/OpenGL-vibe/blob/main/src/immediate-mode-repl/claude4.6-opus-thinking/repl_replay.c)
+* The current replay system is already good at **geometry/program replay** from the flat program, with PC, mode, source-line mapping, fade batches, and baseline predef restoration - but it is not a full app/tutorial state system by itself: [`repl_replay.c`](https://github.com/drewwoods/OpenGL-vibe/blob/main/src/immediate-mode-repl/claude4.6-opus-thinking/repl_replay.c)
 * The architecture is already split into the right ownership buckets: state, editor, replay, render, code panel, export/import, examples, actions. That means you can add a tutorial layer without shoving more policy back into `repl_core.c`: [`ARCHITECTURE.md`](https://github.com/drewwoods/OpenGL-vibe/blob/main/src/immediate-mode-repl/claude4.6-opus-thinking/ARCHITECTURE.md)
 
 What I would build

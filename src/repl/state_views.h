@@ -63,7 +63,7 @@ typedef struct {
     int              current_block_end_idx;
     int              current_block_source_line_idx;
     /* Dependency-routing state (flatten plan phase 3). The two dep masks
-     * describe the CURRENT flat program — refreshed by every full flatten:
+     * describe the CURRENT flat program - refreshed by every full flatten:
      * structural_dep_mask holds the predef roots that can change topology
      * or frozen local snapshots (loop bounds, if conditions, call args);
      * value_dep_mask holds the roots any baked value/assignment reads.
@@ -125,7 +125,7 @@ typedef struct {
  * is active, whether the live document is a retained post-tutorial result, and
  * the bound workspace directory used by scene save/load.
  *
- * `tutorial_origin_idx` is the tutorial twin of `active_example_idx` — the
+ * `tutorial_origin_idx` is the tutorial twin of `active_example_idx` - the
  * marker that makes the first subsequent edit auto-promote the transient
  * document into a user-scene slot:
  *   -1     the live document did not come out of a completed/stopped tutorial;
@@ -133,8 +133,8 @@ typedef struct {
  * It deliberately describes an *inactive post-tutorial* document, not the
  * running tutorial (which is `TutorialRuntimeState.tutorial_idx`): an ACTIVE
  * tutorial always leaves this at -1, because tutorial commands flow through
- * editor_undo_push_snapshot() and would otherwise promote — and tear the
- * tutorial down — on step 0. Only the runner's end-of-lesson path
+ * editor_undo_push_snapshot() and would otherwise promote - and tear the
+ * tutorial down - on step 0. Only the runner's end-of-lesson path
  * (tutorial_end_keep_view in src/subsystems/tutorial/tutorial_runner.c)
  * establishes it. */
 typedef struct {

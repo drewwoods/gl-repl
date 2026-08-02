@@ -79,7 +79,7 @@ static int reformat_var_decl_text(const char *orig_text,
 
     if (!reformat_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
         return 0;
-    /* The keyword is storage, not decoration — re-emitting `static` over a
+    /* The keyword is storage, not decoration - re-emitting `static` over a
      * function-scoped row would silently promote it to a global. */
     if (!reformat_append_text(buf, sizeof(buf), &off,
                               is_local ? "float " : "static float "))

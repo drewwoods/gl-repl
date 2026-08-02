@@ -18,7 +18,7 @@
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 /* Inline-comment scratch buffer for display-text formatting. Local to
- * this TU — the editor's MAX_INPUT_LEN used to be the source of this
+ * this TU - the editor's MAX_INPUT_LEN used to be the source of this
  * value, but Phase 4 of feature/source-document-port.md dropped the
  * editor/state.h include. 1024 preserves the original headroom; final
  * output gets truncated to out_size or to CODE_ANNOTATION_TEXT_MAX
@@ -49,7 +49,7 @@ static int   s_replay_predef_snap_valid[MAX_EDITOR_COMMANDS];
  * (`replay_annotations_prepare`,
  *  `replay_code_panel_get_command_display_text`). Static helpers
  * read source text through this view instead of calling
- * `editor_buffer_line` globally — that keeps the module's source-text
+ * `editor_buffer_line` globally - that keeps the module's source-text
  * dependency declared at the API boundary as a SourceTextView
  * parameter rather than a hidden global reach-through. The view is
  * refreshed at frame start; the cache invariant matches the frame's
@@ -585,7 +585,7 @@ static void replay_init_sim_state(ReplPredefSnapshot *predef,
 /* Re-derive the variable / scratch-array state the executor would hold
  * just before flat pc `target_pc`, without touching GL or live state: a
  * dry-run walk over the flat program from a baseline snapshot, applying
- * only the state-mutating semantics — var assigns, scratch assigns,
+ * only the state-mutating semantics - var assigns, scratch assigns,
  * if-blocks (skipping false bodies), and goto jumps (with the same loop
  * limit as the executor). Geometry/state commands are skipped over.
  * This is what lets the paused-replay annotations show the values a
@@ -875,7 +875,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
 
 /* Resolve a function-definition header to " // half = 5.5, cells = 13, ..."
  * showing the current invocation's parameter values, but only while the
- * replay position is executing inside this function's body — the analogue
+ * replay position is executing inside this function's body - the analogue
  * of the for-loop iteration readout. The values are read off the current
  * flat command's local vars, where flatten bound each param to its
  * evaluated argument (flatten_call); under recursion that is the innermost
@@ -941,7 +941,7 @@ static int expr_text_has_ident(const char *s) {
  *     replay position sits inside this loop's body (so it is genuinely live).
  *   - limit: the end bound, shown when it is a var-bearing expression,
  *     resolved against the current step's runtime snapshot. A literal bound
- *     (e.g. `for(i, 0, 10)`) adds no limit — the text already shows it.
+ *     (e.g. `for(i, 0, 10)`) adds no limit - the text already shows it.
  * Returns 1 when a comment was written. */
 static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size) {
     ReplayRuntimeState replay = replay_state_view();
@@ -1069,7 +1069,7 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
         /* Expanded is the strictly-one-line mode: every command whose args
          * have an evaluated form gets it appended as a `//` comment, and
          * replay_annotations_refresh_output emits no virtual rows at all.
-         * No command-type gate here — format_evaluated_cmd answers "is
+         * No command-type gate here - format_evaluated_cmd answers "is
          * there an evaluated form?" for the whole set (vertex / color /
          * normal, their gluVertex / gluColor / gluNormal twins, glutSolid*
          * shapes, transforms, glClearColor), and returns 0 for the rest,
@@ -1147,7 +1147,7 @@ static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                                  visible_vars,
                                                  (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     /* Replay annotation re-parses each step's source for display.
-     * Errors here are dropped — the command was already validated at
+     * Errors here are dropped - the command was already validated at
      * commit time, and a parse failure during annotation just means
      * the step renders without the evaluated-text overlay. */
     char annotation_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
@@ -1254,7 +1254,7 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     if (!fmt || nargs < 1) return 0;
 
     /* eval_fmt_for_type only ever returns nargs in {0, 1, 2, 3, 4}.
-     * Pass cmd->args[0..3] verbatim — snprintf reads up to `nargs`
+     * Pass cmd->args[0..3] verbatim - snprintf reads up to `nargs`
      * conversions per the format and ignores trailing varargs. */
     switch (nargs) {
     case 1:

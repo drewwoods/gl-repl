@@ -343,7 +343,7 @@ static void test_alpha_text_enables_blending(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > opaque_blend_func);
 }
 
-/* #30: shadow segments no longer query glIsEnabled per-span — the caller
+/* #30: shadow segments no longer query glIsEnabled per-span - the caller
  * threads a blend_on bool instead. Verify a drop-shadow span still renders
  * correctly (enables blend, draws glyphs) without the per-span query. */
 static void test_shadow_segment_blend_threaded(void) {
@@ -423,7 +423,7 @@ static void test_row_layout_consistency(void) {
 /* #63 strengthening: the hoisted text_panel_row_layout in row_wrap_count
  * is now called once and used for both INPUT and regular branches. Pin
  * that an INPUT row and a TEXT row with the SAME text produce the same
- * wrap count — the hoist relies on the layout being row-kind-agnostic.
+ * wrap count - the hoist relies on the layout being row-kind-agnostic.
  * A regression that diverged the two branches' layouts (e.g. a future
  * refactor that re-derives layout per-branch with subtly different
  * parameters) would surface as a wrap-count mismatch here. */
@@ -440,7 +440,7 @@ static void test_row_layout_shared_across_kinds(void) {
         .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
     };
     UiTextPanelRow input_row = {
-        /* INPUT rows ignore .text — the renderer reads snap.input.input
+        /* INPUT rows ignore .text - the renderer reads snap.input.input
          * instead. Set kind only and let the snapshot supply the text. */
         .text = "",
         .kind = UI_TEXT_PANEL_ROW_INPUT,
@@ -784,7 +784,7 @@ static void test_enclosing_parens_scope(void) {
     printf("--- enclosing parens ---\n");
 
     /* Caret in front of 'x' (index 18) sits inside C; the innermost
-     * enclosing pair is C [10, 30] — so the band spans that range while
+     * enclosing pair is C [10, 30] - so the band spans that range while
      * "( (hello) " and the trailing " )" stay outside it. */
     ASSERT_INT_EQ("caret in C has an enclosing pair", 1,
                   ui_text_panel_enclosing_parens(s, len, 18, &open, &close));

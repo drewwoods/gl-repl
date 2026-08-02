@@ -225,7 +225,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->ortho_mode = RENDER3D_VIEW_2D;
     presentation->wrap_at_comma = 0;
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-    /* focus_vertex storage was deleted in step 7a — no live readers
+    /* focus_vertex storage was deleted in step 7a - no live readers
      * existed; the per-frame snapshot is computed from the document
      * inside glr_ctrl. */
 
@@ -509,7 +509,7 @@ static void test_reset_all_restores_default_runtime(void) {
 }
 
 /* Regression (feedback P3): the per-line override list cap must
- * cover the full document size — otherwise layout (which reads the
+ * cover the full document size - otherwise layout (which reads the
  * snapshot list) and render (formerly recomputing live) drift past
  * the cap, breaking wrap-row counts / scroll / hit-testing.
  *
@@ -901,7 +901,7 @@ static void test_workspace_load_clears_scene_camera_default(void) {
 /* glr_camera_set_target_decay overrides the per-ease decay for the
  * currently-active ease. Verify the override applies on the next tick
  * by setting a fast decay (0.5) and watching half the distance fall
- * away in a single frame — well beyond what the global default (0.93,
+ * away in a single frame - well beyond what the global default (0.93,
  * ~7% per frame) could produce. The 3D->2D view-mode transition uses
  * the same override mechanism via GLR_VIEW_CAMERA_TO_2D_DECAY. */
 static void test_camera_target_decay_override_applies(void) {
@@ -946,7 +946,7 @@ static void test_camera_target_decay_override_resets_on_new_ease(void) {
 }
 
 /* Time advance/set route t's change by the flat program's dependency
- * masks (repl_state_notify_predef_value_changed) — value-only roots
+ * masks (repl_state_notify_predef_value_changed) - value-only roots
  * accumulate into args_dirty_mask, structural roots take the full flag,
  * unused roots are a no-op. Seed each mask state directly; the
  * source-to-mask derivation is covered by the flatten dep tests. */
@@ -1613,8 +1613,8 @@ static void test_gl_state_report_latches_raster_color(void) {
 
     /* Latched under GL_LIGHTING: GL stores the *lit* color, and the fold
      * evaluates the lighting equation to match (gl_state_lit_color). Emission
-     * carries the whole value here — material ambient is zeroed and no light is
-     * enabled — so the expectation stays independent of the generated setup's
+     * carries the whole value here - material ambient is zeroed and no light is
+     * enabled - so the expectation stays independent of the generated setup's
      * light-model ambient constant, and alpha comes from the diffuse material
      * exactly as GL takes it. The equation itself is checked against real
      * drivers in tests/test_gl_state_inspector_gl.c; this pins the plumbing:
@@ -1653,8 +1653,8 @@ static void test_gl_state_report_latches_raster_color(void) {
         ASSERT_STR("current color is untouched by lighting", row->current,
                    "(0.25, 0.5, 0.75, 1)");
 
-    /* The latch clamps to [0,1] — the raster color is a vertex's associated
-     * color, and RGBA vertex colors are clamped before use — while
+    /* The latch clamps to [0,1] - the raster color is a vertex's associated
+     * color, and RGBA vertex colors are clamped before use - while
      * GL_CURRENT_COLOR keeps the raw value, because nothing has consumed it
      * yet. Apple and NVIDIA store the clamped value, Mesa does not; the
      * cross-driver evidence lives in tests/test_gl_state_inspector_gl.c. */
@@ -1796,7 +1796,7 @@ static void test_gl_state_report_partitions_by_author(void) {
     /* The two writes above are the only program-authored state. */
     ASSERT_INT("both program writes are counted as authored",
                report.user_row_count, 2);
-    /* The generated setup is the majority — the reason the popup folds it. */
+    /* The generated setup is the majority - the reason the popup folds it. */
     ASSERT_TRUE("generated rows outnumber authored ones",
                 report.count - report.user_row_count > report.user_row_count);
 
@@ -1858,8 +1858,8 @@ static void test_gl_state_report_gates_disabled_light_rows(void) {
  * A tracked state cell is implemented in four places in gl_state_inspector.c:
  * the ReplGlTrackedState field, the gl_state_apply_cmd() write, the
  * gl_state_restore_attrib_groups() restore, and the gl_state_append_report()
- * row. None of them is exhaustive to the compiler — the switch has a default
- * and the restore is an if-chain — so a new state command that reaches only
+ * row. None of them is exhaustive to the compiler - the switch has a default
+ * and the restore is an if-chain - so a new state command that reaches only
  * three of the four builds clean and silently loses state on the fourth path.
  *
  * This sweep pins the property all four jointly implement. For every command
@@ -2005,7 +2005,7 @@ static void test_gl_state_cell_coverage_sweep(void) {
         const GlStateCellCase *c = &k_gl_state_cell_cases[ci];
         /* Slot 0 is a cap enum only for the enable/disable cases; elsewhere it
          * is an ordinary parameter the mapping ignores, and it can be negative
-         * (glPolygonOffset), so route the conversion through int — float ->
+         * (glPolygonOffset), so route the conversion through int - float ->
          * unsigned of a negative value is undefined and trips UBSan. */
         unsigned bit = repl_attrib_bits_for_type(c->type,
                                                  (unsigned)(int)c->args_v1[0]);

@@ -143,7 +143,7 @@ static int find_init_line_substr(const char *needle) {
 
 /* Write `contents` to a temp .c file, import it with fd 2 (stderr)
  * redirected into `out`, and return repl_export_load_from_file's value.
- * Mirrors the dup2 capture used by the #8 load_err regression — used to
+ * Mirrors the dup2 capture used by the #8 load_err regression - used to
  * assert the importer warns (rather than silently dropping) on overflowed
  * @func / @declare names. */
 static int import_with_captured_stderr(const char *contents,
@@ -342,7 +342,7 @@ int main(void) {
     }
 
     /* @cfg toggle path: neutralized (still emitted today by the
-     * toggle-disable branch — unchanged behavior). */
+     * toggle-disable branch - unchanged behavior). */
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
@@ -359,8 +359,8 @@ int main(void) {
 
     /* Runtime capability path (replaces the compile-time
      * NO_POINT_PARAMETER #ifndef): when the runtime GL lacks
-     * glPointParameterfv the bootstrap entry is skipped entirely —
-     * not applied, not emitted — independent of the @cfg toggle. */
+     * glPointParameterfv the bootstrap entry is skipped entirely -
+     * not applied, not emitted - independent of the @cfg toggle. */
     repl_executor_set_point_parameter_supported(0);
     ASSERT_TRUE("init omits point attenuation when unsupported",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
@@ -456,7 +456,7 @@ int main(void) {
     }
 
     /* Shaping builtins have no libm twin, so each one the scene uses must
-     * drag its hand-written helper into the exported file — and the ones it
+     * drag its hand-written helper into the exported file - and the ones it
      * does not use must stay out, or -Wall flags an unused static. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
@@ -585,7 +585,7 @@ int main(void) {
     /* Truncation boundary (invariant): a name that exactly fills the alias
      * buffer (REPL_FUNC_NAME_MAX - 1 chars) is a valid func alias, but one
      * char longer overflows and is rejected. This is the cap that import's
-     * parse_func_alias truncates against (and now warns about) — the reason
+     * parse_func_alias truncates against (and now warns about) - the reason
      * the long alias above was dropped before REPL_FUNC_NAME_MAX was bumped. */
     {
         char at_limit[REPL_FUNC_NAME_MAX];        /* MAX-1 'a's + NUL */
@@ -858,7 +858,7 @@ int main(void) {
      * glTranslatef/glRotatef calls. The exporter writes that function
      * (a `static void funcN(...)` body) before display(), so on import
      * the camera state machine sees those transforms first. It must not
-     * consume them as camera lines — doing so corrupted both the function
+     * consume them as camera lines - doing so corrupted both the function
      * and the real camera block in display() (camera distance regressed
      * to 0). Regression for the workspace/new_scene.c report. */
     {
@@ -1190,10 +1190,10 @@ int main(void) {
                     workspace_in, errno, strerror(errno));
         }
 
-        /* Scene A — wireframe = 1.  Scene B — wireframe = 0.
+        /* Scene A - wireframe = 1.  Scene B - wireframe = 0.
          * Body lines must sit inside // Snippet start / end markers
          * (that's how repl_export_load_from_file detects the geometry
-         * snippet — see import_try_snippet_start in src/repl/import.c). */
+         * snippet - see import_try_snippet_start in src/repl/import.c). */
         {
             FILE *f = fopen("/tmp/repl_core_p1_workspace_in/scene_a.c", "w");
             ASSERT_TRUE("p1 scene_a fopen", f != NULL);
@@ -1246,7 +1246,7 @@ int main(void) {
 
         /* Force a distinctive live cfg between load and save: pick a
          * value that differs from BOTH scenes' saved values for
-         * wireframe (e.g. 0 here — only matches scene B).  Pre-fix,
+         * wireframe (e.g. 0 here - only matches scene B).  Pre-fix,
          * scene A would also be exported with wireframe=0. */
         glr_state_presentation_mut()->wireframe = WIREFRAME_OFF;
 
@@ -1313,7 +1313,7 @@ int main(void) {
         /* Scene A has a "close, high pitch" camera; scene B has a
          * "far, low pitch" one. Format mirrors what the exporter
          * writes (4-line block plus the static float g_angle preamble
-         * — both halves are part of the save format the bridge
+         * - both halves are part of the save format the bridge
          * understands on import). */
         {
             FILE *f = fopen("/tmp/repl_core_cam_workspace_in/scene_a.c", "w");
@@ -1375,7 +1375,7 @@ int main(void) {
         int loaded = repl_load_workspace(workspace_in);
         ASSERT_TRUE("cam load_workspace returned 2", loaded == 2);
 
-        /* Force a distinctive live camera between load and save —
+        /* Force a distinctive live camera between load and save -
          * different from either scene's saved pose. Pre-fix, both
          * output files would have ended up with this camera. */
         glr_camera_set_distance(50.0f);
@@ -1425,7 +1425,7 @@ int main(void) {
                     strstr(buf_a, "glRotatef(80.0000f, 1.0f, 0.0f, 0.0f);") == NULL);
 
         /* Live camera survives the workspace save (matches the cfg
-         * regression's symmetry — stash/restore brackets the loop). */
+         * regression's symmetry - stash/restore brackets the loop). */
         ASSERT_TRUE("cam live dist survives the save",
                     glr_camera().dist == 50.0f);
         ASSERT_TRUE("cam live rx survives the save",
@@ -1442,7 +1442,7 @@ int main(void) {
      * set. We snap rather than ease in the test so the assertion
      * doesn't have to tick the easing forward; the runtime path
      * (load_scene_from_slot) calls apply_example_block (ease), but
-     * either path proves the slot is carrying the right camera —
+     * either path proves the slot is carrying the right camera -
      * which is what the bug was about. */
     {
         const char *workspace_in  = "/tmp/repl_core_cam_switch_workspace_in";
@@ -1542,7 +1542,7 @@ int main(void) {
     /* --- Regression: code panel and export must agree on the
      *     display() body's shared dynamic state ---
      *
-     * Three variants share state — what the code panel shows, what the
+     * Three variants share state - what the code panel shows, what the
      * REPL executes, and what gets exported. The first two are easy to
      * keep in sync because the panel is decorative; the panel vs export
      * comparison is the one with real drift risk (e.g. a prior bug had
@@ -1600,7 +1600,7 @@ int main(void) {
                     strcmp(g_display_header[0], "void display(void) {") == 0);
 
         /* (3) Each render_state / cam line the panel would render must
-         *     appear in the exported display() body — same buffers. */
+         *     appear in the exported display() body - same buffers. */
         for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
             char label[64];
             snprintf(label, sizeof(label),
@@ -1608,7 +1608,7 @@ int main(void) {
             ASSERT_TRUE(label, strstr(buf, g_render_state_lines[i]) != NULL);
         }
 
-        /* (4) The scratch decoration line is panel-only — must NOT
+        /* (4) The scratch decoration line is panel-only - must NOT
          *     appear in the export (otherwise it shadows the
          *     file-scope statics emitted by emit_export_scratch_globals_section). */
         ASSERT_TRUE("scratch decoration is panel-only, not in export",
@@ -1911,7 +1911,7 @@ int main(void) {
                     repl_export_load_from_file(import_cursor_path, NULL) == 1);
 
         /* (4) The post-import cursor must reflect the import's final
-         *     ImportState.edit_line — i.e., the next-line slot above
+         *     ImportState.edit_line - i.e., the next-line slot above
          *     the last imported command, not the pre-import 0. Without
          *     the [P1] fix the cursor would still be 0 here, causing
          *     a subsequent commit to replace the first imported row
@@ -1922,7 +1922,7 @@ int main(void) {
          * one past the last imported command (the canonical "next
          * append slot"). The exact value depends on the exported
          * file's prologue (header / @cfg / @declare markers, blank
-         * runs), so anchor against the import's own bookkeeping —
+         * runs), so anchor against the import's own bookkeeping -
          * document_count after import is the unambiguous reference. */
         ASSERT_INT("post-import cursor at document end",
                    editor_state_edit_line(), repl_state_document_count());
@@ -1930,7 +1930,7 @@ int main(void) {
         remove(import_cursor_path);
     }
 
-    /* Audit #11/#12: camera export block shape — pin the exact 4-line
+    /* Audit #11/#12: camera export block shape - pin the exact 4-line
      * format and the g_angle preamble so format drift is caught. */
     {
         const char *cam_shape_path = "/tmp/repl_core_cam_shape.c";
@@ -2062,7 +2062,7 @@ int main(void) {
      * proposes removing the legacy state-3 path and the synthetic
      * g_angle line in cam_consume_example_block_now. Round-trip pose
      * tests above pin "load restores the camera"; an idempotency check
-     * pins that the SAVE side hasn't drifted either — two consecutive
+     * pins that the SAVE side hasn't drifted either - two consecutive
      * exports of the loaded state produce identical camera blocks.
      * A regression on either side (e.g., the audit's parser unification
      * subtly altering ry interpretation, or the formatter switching
@@ -2100,7 +2100,7 @@ int main(void) {
         ASSERT_TRUE("cam idem: A has display marker", start_a != NULL);
         ASSERT_TRUE("cam idem: B has display marker", start_b != NULL);
         if (start_a && start_b) {
-            /* g_angle preamble must match — it's the seed for the
+            /* g_angle preamble must match - it's the seed for the
              * subsequent glRotatef(g_angle, ...) line. */
             const char *angle_a = strstr(buf_a, "static float g_angle = ");
             const char *angle_b = strstr(buf_b, "static float g_angle = ");
@@ -2128,7 +2128,7 @@ int main(void) {
 
     /* Regression for #9: load-side ferror/fclose handling. Pointing
      * repl_export_load_from_file at a directory triggers a real fgets
-     * read error (errno=EISDIR on macOS/Linux) — fopen succeeds, the
+     * read error (errno=EISDIR on macOS/Linux) - fopen succeeds, the
      * first fgets returns NULL with ferror set. Before the fix, the
      * read loop treated this as EOF and the function returned 1 as if
      * the load had succeeded. Post-fix the function reports failure. */
@@ -2138,7 +2138,7 @@ int main(void) {
         ASSERT_INT("load from a directory returns failure", rc, 0);
 
         /* Sibling sanity check: loading a missing file still fails too
-         * (this path predates #9 — fopen returns NULL — but pin it so
+         * (this path predates #9 - fopen returns NULL - but pin it so
          * a refactor doesn't silently flip the error contract). */
         rc = repl_export_load_from_file("/tmp/repl_core_io_nope_NOT_A_FILE.c", NULL);
         ASSERT_INT("load of missing file returns failure", rc, 0);
@@ -2157,7 +2157,7 @@ int main(void) {
         const char *leak_path = "/tmp/repl_core_io_cfg_leak.c";
 
         /* Build a file: one valid @cfg line, then a too-long line that
-         * fires the truncated_line bailout. MAX_LINE_LEN=256 — pad to
+         * fires the truncated_line bailout. MAX_LINE_LEN=256 - pad to
          * 600 chars so fgets fills its buffer without a newline. */
         FILE *f = fopen(leak_path, "w");
         ASSERT_TRUE("leak fixture opens for write", f != NULL);
@@ -2225,7 +2225,7 @@ int main(void) {
         /* Redirect fd 2 (stderr) to a temp file so we can inspect
          * the Warning the importer emits. Using dup2 on the bare fd
          * rather than freopen avoids FILE*-level buffering surprises
-         * — fprintf(stderr, ...) inside the importer writes to fd 2
+         * - fprintf(stderr, ...) inside the importer writes to fd 2
          * which we've now pointed at the capture file. */
         fflush(stderr);
         int capture_fd = open(stderr_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -2309,7 +2309,7 @@ int main(void) {
         /* (c) the reconstructed decl row is *wider than the marker it came
          * from*: parse_snippet_declare adds `, ` separators and re-renders
          * each stashed value from the float (up to
-         * REPL_SOURCE_FLOAT_TEXT_MAX - 1 chars — the value below has a
+         * REPL_SOURCE_FLOAT_TEXT_MAX - 1 chars - the value below has a
          * 31-digit exact fixed-point spelling), none of which the
          * `// @declare a b c` line paid for. At the name cap with cap-length
          * names the row exceeds MAX_LINE_LEN even though every input line fits.
@@ -2319,14 +2319,14 @@ int main(void) {
          * next call's `sizeof(decl_line) - off` underflowed into a huge
          * size_t (UBSan: index 268 out of bounds for type 'char[256]' at
          * import.c parse_snippet_declare). Case (a) covers an over-long
-         * *name* and case (b) a clean row — neither reaches the width limit,
+         * *name* and case (b) a clean row - neither reaches the width limit,
          * which is why the ASan/UBSan suite stayed green.
          *
          * The names stay registered afterwards, and that is correct: the
          * file-scope `static float` stash pass registered them (import.c's
          * import_parse_predef_decl_common), not this directive, and the
          * rollback only undoes what the directive itself declared. What must
-         * not happen is a *row* landing in the document — a clipped row would
+         * not happen is a *row* landing in the document - a clipped row would
          * drop a name or a @tune tag while claiming to be canonical text. */
         {
             /* Exact decimal expansion of a float, so it round-trips and
@@ -2656,7 +2656,7 @@ int main(void) {
 
     /* The animation clock round-trips. `t` is always the first predef
      * global, and the exporter writes that block under a multi-line
-     * comment — which the importer has to drop rather than glue onto the
+     * comment - which the importer has to drop rather than glue onto the
      * decl below it (doing so silently reset every reloaded scene to
      * t = 0, share links in the web build included). */
     {
@@ -2922,8 +2922,8 @@ static void test_import_robustness(void) {
     /* 9. A C comment spanning several physical lines is dropped whole. It
      * has no line-level form, so without that the accumulator treats the
      * opener as an unterminated statement and swallows the first real line
-     * after the comment (how `static float t = <snapshot>;` — the leading
-     * predef global — used to get lost). Blank lines are not comments and
+     * after the comment (how `static float t = <snapshot>;` - the leading
+     * predef global - used to get lost). Blank lines are not comments and
      * still survive as commands. */
     f = fopen(test_path, "w");
     fprintf(f, "/* Scene state variables.\n");
@@ -3075,7 +3075,7 @@ static void test_workspace_header_budget_worst_case(void) {
     }
     ASSERT_INT("filled the full user var table", declared, MAX_PREDEF_VARS - 1);
 
-    /* Turn on toggles that live late in the @cfg emit order — these are
+    /* Turn on toggles that live late in the @cfg emit order - these are
      * the first to be dropped when the budget is too small. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
@@ -3100,13 +3100,13 @@ static void test_workspace_header_budget_worst_case(void) {
                 strstr(buf, "/* @cfg vertex_points = 1 */") != NULL);
     ASSERT_TRUE("worst case: @cfg polygon_highlight present",
                 strstr(buf, "/* @cfg polygon_highlight = 1 */") != NULL);
-    /* "Audio" is the very last CFG_ITEM in emit order — its presence is
+    /* "Audio" is the very last CFG_ITEM in emit order - its presence is
      * the strongest "nothing fell off the end" check. If this fails after
      * adding a config toggle, the emitted @cfg count outgrew a capacity:
-     * raise REPL_CFG_MAX_ITEMS (cfg_baseline.h — the cfg bag silently
+     * raise REPL_CFG_MAX_ITEMS (cfg_baseline.h - the cfg bag silently
      * drops past it) AND MAX_WORKSPACE_HEADER_LINES (export_state.h, sized
      * from it; its STATIC_ASSERT in export_setup.c will also flag the shortfall). */
-    ASSERT_TRUE("worst case: last @cfg (audio) present — if failing after a "
+    ASSERT_TRUE("worst case: last @cfg (audio) present - if failing after a "
                 "new config toggle, raise REPL_CFG_MAX_ITEMS (cfg_baseline.h) "
                 "and MAX_WORKSPACE_HEADER_LINES (export_state.h)",
                 strstr(buf, "/* @cfg audio = ") != NULL);

@@ -1,7 +1,7 @@
 # `src/repl` structure and readability audit - done
 
 Status: **done** - all findings landed. Findings 1 (core split),
-2 (compile context purity — visible-var, predef validator, and the eval path),
+2 (compile context purity - visible-var, predef validator, and the eval path),
 3 (parser strict-ref context), 4 (source-scope view split + the 4b
 performance-regression fix), 5 (`core_internal.h` umbrella removed),
 6 (scene snapshot extraction + workspace-IO mechanics split),
@@ -11,20 +11,20 @@ scaffolding cleanup), and 12 (load transaction boundary) are all implemented.
 
 Recent implementation commits:
 
-- `515a264f` — add the source-scope prerequisite benchmarks.
-- `bd138a4b` — record the prerequisite benchmark context in this audit.
-- `18c9b742` — add `ReplSourceScopeView` and move the prefix-depth cache onto
+- `515a264f` - add the source-scope prerequisite benchmarks.
+- `bd138a4b` - record the prerequisite benchmark context in this audit.
+- `18c9b742` - add `ReplSourceScopeView` and move the prefix-depth cache onto
   explicit views while keeping live wrappers for app/UI callers.
-- `dcf56b6a` — thread source-scope views through parser/compile paths and bind
+- `dcf56b6a` - thread source-scope views through parser/compile paths and bind
   explicit views at parse call sites that operate on stable document snapshots.
-- `38b5f5e3` — move this audit to `plans/active/` and record the Finding 4
+- `38b5f5e3` - move this audit to `plans/active/` and record the Finding 4
   implementation.
 
 ## Current Implementation Status
 
 | Slice | Status | Notes |
 |---|---|---|
-| Finding 1 implementation split | Done | Core split complete; `f9f8b4be` migrated every `core.h` includer and deleted the compat header — no residual. |
+| Finding 1 implementation split | Done | Core split complete; `f9f8b4be` migrated every `core.h` includer and deleted the compat header - no residual. |
 | Finding 4 prerequisite benchmarks | Landed | `source_scope_query` and `source_scope_churn` are in `bench/bench_repl.c`; original baseline is machine-specific. |
 | Finding 4 phase 1: source-scope view/cache ownership | Landed | `18c9b742` adds view-owned prefix caches plus live compatibility wrappers. |
 | Finding 4 phase 2: parser/compile source-scope plumbing | Landed | `dcf56b6a` threads `ReplSourceScopeView` through parser, compile, normalize, flatten, and scope-sensitive parse call sites. |
@@ -158,7 +158,7 @@ brittle-spots and smaller-risks lists are either already shipped (see its
 2026-06-20 currency pass) or folded into the findings below. Two of its
 still-live items are not otherwise covered here and are tracked as:
 
-- **`compile.c` verb-boundary split** — size, *not* purity, so distinct from
+- **`compile.c` verb-boundary split** - size, *not* purity, so distinct from
   Finding 2. Deferred there; still deferred. `compile.c` is 2137 lines; the
   natural cut is `compile_var.c` (float-decl / var-assign / set-predef) +
   `compile_block.c` (close-brace / if / func / for) + a small
@@ -170,11 +170,11 @@ still-live items are not otherwise covered here and are tracked as:
   predef slot. A `command_store` "decrement num_args above slot X" helper would
   localize it. Pairs with Finding 12.
 
-The earlier review's one irreplaceable asset — the explicit "what is
-load-bearing, do not refactor" list — is carried forward immediately below so
+The earlier review's one irreplaceable asset - the explicit "what is
+load-bearing, do not refactor" list - is carried forward immediately below so
 this audit is not a pure change-list with no guardrail.
 
-## Durable spine — do not touch
+## Durable spine - do not touch
 
 Structural commitments flagged as load-bearing and well-paid-for in the
 2026-05-14 review and re-confirmed here. The findings below should preserve
@@ -188,9 +188,9 @@ these, not unwind them:
 - **Descriptor-table pattern.** `command_spec.c`'s three arrays
   (`k_enum_command_specs[]`, `k_std_command_specs[]`,
   `g_command_type_specs[CMD_TYPE_COUNT]`) are the single extension point for new
-  commands — parser, formatter, autocomplete, code panel, F1 help, and the
+  commands - parser, formatter, autocomplete, code panel, F1 help, and the
   begin-block guard all read from it. Don't scatter switches back out.
-- **compile/apply purity split** — the direction every finding here pushes
+- **compile/apply purity split** - the direction every finding here pushes
   *toward*, never away from. `compile.c` produces `ReplCompiledChange` values
   with side effects represented as data (`ReplPredefOp[]`, `ReplScratchOp[]`,
   and now `alias_op`); `apply.c` is the mutating dual behind a
@@ -225,30 +225,30 @@ these, not unwind them:
 
 **Status:** Done. `src/repl/core.c` was removed, and the residual
 `src/repl/core.h` compatibility facade was migrated off and **deleted**
-(`f9f8b4be`) — declarations now live in focused owner headers.
+(`f9f8b4be`) - declarations now live in focused owner headers.
 
 ### What changed
 
 The split landed as a sequence of small commits:
 
-- `7d965430` — split host effects into `src/repl/host_effects.{c,h}`.
-- `f0b542e2` — split source reformatting into `src/repl/reformat.{c,h}`.
-- `f656f5f8` — split mode/vertex/tunable-var queries into
+- `7d965430` - split host effects into `src/repl/host_effects.{c,h}`.
+- `f0b542e2` - split source reformatting into `src/repl/reformat.{c,h}`.
+- `f656f5f8` - split mode/vertex/tunable-var queries into
   `src/repl/program_query.{c,h}`.
-- `dd35e040` — moved cursor/feed/transform query declarations into
+- `dd35e040` - moved cursor/feed/transform query declarations into
   `src/repl/geometry_query.h`.
-- `a0aca043` — split timekeeping into `src/repl/time.{c,h}`.
-- `126c0a7c` — split visible-variable collection into
+- `a0aca043` - split timekeeping into `src/repl/time.{c,h}`.
+- `126c0a7c` - split visible-variable collection into
   `src/repl/visible_vars.{c,h}`.
-- `5f640112` — split normalization into `src/repl/normalize.{c,h}`.
-- `64a567d4` — moved `cmd_type_name` into `command_spec`.
-- `bb26b10f` — split startup loading into `src/repl/bootstrap.{c,h}`.
-- `4af9bf60` — moved scene/workspace declarations to `src/repl/scenes.h`.
-- `f3efb298` — moved dirty notifications to `src/repl/state_notify.h` and
+- `5f640112` - split normalization into `src/repl/normalize.{c,h}`.
+- `64a567d4` - moved `cmd_type_name` into `command_spec`.
+- `bb26b10f` - split startup loading into `src/repl/bootstrap.{c,h}`.
+- `4af9bf60` - moved scene/workspace declarations to `src/repl/scenes.h`.
+- `f3efb298` - moved dirty notifications to `src/repl/state_notify.h` and
   stopped redeclaring pipeline entry points in `core.h`.
-- `8e7e188e` — moved the default save wrapper into `src/repl/export.c` and
+- `8e7e188e` - moved the default save wrapper into `src/repl/export.c` and
   deleted `src/repl/core.c`.
-- `f9f8b4be` — migrated every remaining `#include "repl/core.h"` call site to
+- `f9f8b4be` - migrated every remaining `#include "repl/core.h"` call site to
   the focused owner headers and deleted the compatibility header.
 
 ### Current state
@@ -265,7 +265,7 @@ the compat header, so no TU depends on the old facade.
 
 ### Residual cleanup
 
-None — Finding 1 is complete.
+None - Finding 1 is complete.
 
 ## Finding 2: compile purity is improved, but still not fully true
 
@@ -290,7 +290,7 @@ predef table. Production behavior is unchanged (`ctx->predef` == live).
 
 **Residual (separate):** `collect_visible_vars`' CMD_FUNC_DEF param extraction
 still resolves a custom alias via the live func-alias table (symbol state, not
-document/predef — a Finding-3-family follow-up, noted in `visible_vars.c`).
+document/predef - a Finding-3-family follow-up, noted in `visible_vars.c`).
 
 ### Evidence
 
@@ -438,7 +438,7 @@ typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
     int count;
     /* The prefix-depth cache lives here, built once when the view is bound
-     * to a document — so queries stay O(1) with no global. See below. */
+     * to a document - so queries stay O(1) with no global. See below. */
 } ReplSourceScopeView;
 ```
 
@@ -451,9 +451,9 @@ There are now two layers:
 After that split, parser and core compile code use the view APIs for
 source-scope queries.
 
-#### Cache ownership — the crux, not an afterthought
+#### Cache ownership - the crux, not an afterthought
 
-The prefix-depth cache was the thing to get right — but **not because lookups
+The prefix-depth cache was the thing to get right - but **not because lookups
 are expensive. They aren't.** At audit time, `source_scope.c` kept four
 file-static prefix arrays (`g_block_depth_prefix`, `g_begin_depth_prefix`,
 `g_tess_depth_prefix`, `g_matrix_depth_prefix`) behind a dirty flag
@@ -462,8 +462,8 @@ file-static prefix arrays (`g_block_depth_prefix`, `g_begin_depth_prefix`,
 `ReplSourceScopeView` instead of hidden file-statics. The two costs remain very
 different:
 
-- A **query** is an O(1) array index at `pos`. This is the hot path —
-  `flatten.c` and `parser.c` hit it repeatedly per frame — and it stays O(1)
+- A **query** is an O(1) array index at `pos`. This is the hot path -
+  `flatten.c` and `parser.c` hit it repeatedly per frame - and it stays O(1)
   no matter how the cache is owned.
 - The **O(N) cost is the rebuild** (`source_scope_view_build()`, one pass over
   the document), paid when a caller binds a `ReplSourceScopeView` or when the
@@ -473,7 +473,7 @@ different:
 So the earlier "live callers keep O(1), view callers pay an honest O(N)"
 framing was wrong, and worth correcting because the whole REPL hinges on these
 lookups staying fast: it implied decoupling makes lookups slow. It doesn't. The
-build-once/query-many shape is **orthogonal to where the prefix arrays live** —
+build-once/query-many shape is **orthogonal to where the prefix arrays live** -
 a file-static global and a field on a passed-in view both build in O(N) and
 serve queries in O(1). A view is only "O(N) per query" if it *rebuilds on every
 call*, which is a design mistake, not a property of views.
@@ -483,7 +483,7 @@ and invalidation**:
 
 - Put the four prefix arrays (plus a `built` flag) on the source-scope
   view/context instead of file-statics, and build them when the view is **bound
-  to a document** — once per frame / per compile pass, where the document is
+  to a document** - once per frame / per compile pass, where the document is
   stable. Queries then index the view in O(1). Same cost profile as the old
   global, with explicit ownership instead of hidden state.
 - Keep a thin **live wrapper** that owns a process-wide view for the editor/UI
@@ -491,7 +491,7 @@ and invalidation**:
   lazily on first query after a mutation, as now). Production keeps its
   amortized O(1); nothing in the steady state gets slower.
 - Tests / one-shot callers build a view over their own `(cmds, count)` and
-  query it — also O(1) per query after a single O(N) build. The only thing that
+  query it - also O(1) per query after a single O(N) build. The only thing that
   is genuinely O(N)-heavy is "construct a fresh view, do one query, discard,
   repeat," which is a usage anti-pattern, not a cost the design imposes.
 
@@ -499,7 +499,7 @@ The two failure modes to **avoid** are both design errors, not inherent costs:
 a view that rebuilds the prefix arrays on every query (needless O(N²) over a
 query batch), and a view where nobody owns invalidation (stale depths served
 silently). **Decide this ownership/lifetime question before steps 3-5 of the
-cleanup order** — context-based source-scope, visible-vars, and parser
+cleanup order** - context-based source-scope, visible-vars, and parser
 strict-ref all sit on top of it.
 
 #### Prerequisite benchmark (landed)
@@ -508,19 +508,19 @@ A regression guard for the lookups this refactor must keep fast is now in place
 (`bench/bench_repl.c`):
 
 - **`source_scope_query`** sweeps all depth/scope queries over a 2880-row
-  deeply-nested document with a warm cache — it isolates the amortized O(1)
+  deeply-nested document with a warm cache - it isolates the amortized O(1)
   lookup, so a view that recomputes prefixes per call shows up as a large
   per-sweep blow-up (toward churn cost).
-- **`source_scope_churn`** invalidates + queries per op — it isolates the O(N)
+- **`source_scope_churn`** invalidates + queries per op - it isolates the O(N)
   rebuild, guarding the "build on (re)bind" cost.
 
 The post-phase-1 baseline (stub build = reproducible pure-C cost, `--iters 10`)
 is committed at `bench/baselines/finding4-prereq.mac-mini.csv`. Re-run after
 each of steps 3-5 with `make bench-csv USE_GL_STUBS=1` and compare the
-**`min_iter_ms`** column — the mean is noisy on a shared host, and the CSV's
+**`min_iter_ms`** column - the mean is noisy on a shared host, and the CSV's
 `# machine:` preamble records which host a baseline came from. Treat a
 `source_scope_query` time drifting toward `source_scope_churn` as the cache
-having been dropped — exactly the failure mode this finding warns about.
+having been dropped - exactly the failure mode this finding warns about.
 
 #### Phase 4b (recommended): fix the per-call view-bind regression
 
@@ -545,16 +545,16 @@ build, `--iters 10`, mac-mini, `min_iter_ms`):
 | pre-Finding-4 (`bd138a4b`, warm `g_live_scope`) | 0.35 µs |
 | post-Finding-4 (HEAD, per-call bind) | 5.0 µs (~14×) |
 
-**Where it bites.** One commit normalizes once (5 µs — imperceptible). The
+**Where it bites.** One commit normalizes once (5 µs - imperceptible). The
 victim is the per-line loop in **`reformat.c:380`** (`repl_parse_and_normalize`
 called for every command in `Ctrl+\` reformat-all): O(N) per line × N lines =
-**O(N²)** — roughly 14 ms at 2880 rows, ~26 ms approaching `MAX_COMMANDS`
+**O(N²)** - roughly 14 ms at 2880 rows, ~26 ms approaching `MAX_COMMANDS`
 (4096), a visible hitch. `load.c`'s per-line `_strict` call mutates the document
 each line, so it rebuilt per line pre-Finding-4 too (no regression there);
 commit (`input.c`) and `compile.c`'s `repl_compile_context_from_live` bind once,
 not in a loop (fine).
 
-**Fix — route live-document normalize through the warm view (this is what this
+**Fix - route live-document normalize through the warm view (this is what this
 finding's own cache-ownership recommendation already called for):**
 
 1. Keep the warm live view private behind `live_source_scope_view()` and the
@@ -574,7 +574,7 @@ finding's own cache-ownership recommendation already called for):**
    public live-view ownership question.
 
 **Correctness.** The warm view reflects the committed document (the candidate
-line being normalized is not yet in it) — identical to the pre-Finding-4 warm
+line being normalized is not yet in it) - identical to the pre-Finding-4 warm
 global, so no semantic change. Reusing `g_live_scope` is strictly ≥
 pre-Finding-4 behavior, since pre-Finding-4 used that same warm global.
 
@@ -644,13 +644,13 @@ predef values, scratch arrays, function aliases, scene cfg, and camera text.
 tab loads, workspace iteration stashes, and LRU eviction rollback.
 
 *Workspace IO.* `src/repl/workspace_io.{c,h}` now owns the filesystem +
-scene-file naming mechanics — recursive `mkdir -p` (`workspace_io_ensure_dir`),
+scene-file naming mechanics - recursive `mkdir -p` (`workspace_io_ensure_dir`),
 the `.c`-extension test, basename→scene-name derivation, slug sanitization, and
 collision-suffix slugs. These are pure (no `g_user_scenes` / live-state access).
 The save/load *orchestration* (`repl_save_workspace` / `repl_load_workspace` and
 the per-slot evict/import drivers) stays in `scenes.c`: those loops are the slot
 state machine and example-promotion policy, so moving them would mean exporting
-`g_user_scenes` across a TU boundary — the opposite of the information-hiding
+`g_user_scenes` across a TU boundary - the opposite of the information-hiding
 goal. `scenes.c` thus keeps slot selection + active-scene state + promotion
 policy (the finding's concepts 2 and 4) and delegates the persistence "how" to
 `workspace_io.c` (concept 3); the copyable snapshot is concept 1.
@@ -709,7 +709,7 @@ not covered by `repl_state_capture` / `repl_state_restore`.
 
 ## Finding 7: import/export share duplicated constants and access macros
 
-Status: **implemented for the shared format contract** — `src/repl/export_format_shared.h`
+Status: **implemented for the shared format contract** - `src/repl/export_format_shared.h`
 now centralizes the duplicated import/export state-access macros and the
 round-trip directive/marker string vocabulary. The import accumulator lifetime
 piece is covered by the Finding 8 implementation below because it belongs to
@@ -758,7 +758,7 @@ state dimensions; do not overload it with format directive policy.
 
 ## Finding 8: import flow is an implicit state machine
 
-Status: **implemented** — `src/repl/import.c` now gives file loads their own
+Status: **implemented** - `src/repl/import.c` now gives file loads their own
 `ImportState.workspace` accumulator, routes file-load diagnostics through
 state-owned warning helpers, and makes the ordered line-dispatch phases explicit
 with `ImportLineKind` handler tables. The public
@@ -843,8 +843,8 @@ local ignored variables and comments.
 
 ### Recommended cleanup
 
-Divide by **output region** — the axis the existing scaffold section table
-already orders the file by — into **4 focused TUs + `export.c` as the
+Divide by **output region** - the axis the existing scaffold section table
+already orders the file by - into **4 focused TUs + `export.c` as the
 orchestrator**, behind a shared private `export_internal.h`. This is a
 deliberate reduction from an earlier 7-file sketch, which over-fragmented:
 splitting `export_names.c` (~140 lines) and `export_tune.c` (~150 lines) into
@@ -870,18 +870,18 @@ stays in `export_format_shared.h`.
 **Sequencing / cost (this is where the work is, not the function moves):**
 
 1. **Do Finding 7 first.** The `IMPORT_EXPORT_STATE` macros + shared constants
-   need `export_internal.h` as their home — which is exactly the substrate this
+   need `export_internal.h` as their home - which is exactly the substrate this
    split requires anyway. Centralize them, then split.
 2. **Makefile + guards:** add the new TUs to every source / stub / test list,
    and repoint any `export.c`-named guard (e.g. `check-repl-export-via-bridge`)
-   at the new filenames — the same plumbing tax flagged for the `compile.c`
+   at the new filenames - the same plumbing tax flagged for the `compile.c`
    split.
 3. **Behavior-preserving + guarded:** the cut is a mechanical move;
    `test_export_trace_parity` + `test_repl_core_io` (round-trip) are the safety
    net.
 
 The one *non*-move worth doing alongside: make the export render policy
-explicit instead of the ignored-cfg TODO in the display path —
+explicit instead of the ignored-cfg TODO in the display path -
 
 ```c
 typedef struct ReplExportRenderPolicy {
@@ -892,7 +892,7 @@ typedef struct ReplExportRenderPolicy {
 } ReplExportRenderPolicy;
 ```
 
-— so a disabled overlay reads as policy, not as a silently-ignored cfg read.
+- so a disabled overlay reads as policy, not as a silently-ignored cfg read.
 That is a behavior clarification, not part of the file cut.
 
 ## Finding 10: `flatten.c` mixes lowering with query/UI-adjacent helpers

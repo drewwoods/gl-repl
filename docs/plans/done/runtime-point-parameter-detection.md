@@ -1,10 +1,10 @@
 # Runtime point-parameter detection (replace NO_POINT_PARAMETER)
 
-Status: **DONE — implemented and landed** on branch
+Status: **DONE - implemented and landed** on branch
 `feature/runtime-point-parameter-detection` (commit 87d1bcc; implemented
 directly at user request, bypassing the not-started/active steps).
 Scope as locked: **silent executor fallback** (exact behavior parity
-with the old `NO_POINT_PARAMETER` — no commit-time rejection, status
+with the old `NO_POINT_PARAMETER` - no commit-time rejection, status
 note, or autocomplete/help changes); runtime override is the env var
 **`GLR_NO_POINT_PARAMETER`** (any non-empty value forces the unsupported
 path). Verification gate all green: `make test` (36/36, 4867/4867),
@@ -17,7 +17,7 @@ USE_GL_STUBS=1`, `make check-state-ownership`; no compile-time
 `glPointParameterfv` (distance-attenuated point size) isn't available on
 every GL. Today this is a **compile-time** `NO_POINT_PARAMETER` macro: a
 platform without it must be rebuilt with `make … NO_POINT_PARAMETER=1`.
-That's the wrong axis — support is a property of the runtime GL context,
+That's the wrong axis - support is a property of the runtime GL context,
 not the build. Switch to a **runtime** check via
 `glutExtensionSupported`, make the REPL executor stop calling the
 unsupported entry point (falling back to the existing camera-distance
@@ -28,34 +28,34 @@ an env-var override so the disabled path stays testable on hardware that
 One deliberate improvement over the old flag: today's
 `#ifdef NO_POINT_PARAMETER` never actually guarded the executor's
 `CMD_POINT_PARAMETER_FV` `glPointParameterfv` call (only the `glPointSize`
-redefine). The new runtime gate *does* skip that call when unsupported —
+redefine). The new runtime gate *does* skip that call when unsupported -
 the user's explicit "disable from the REPL when not supported"
 requirement.
 
 ## Current wiring (verified)
 
-- `src/repl/executor.c:53-67` — `#ifdef NO_POINT_PARAMETER` defines
+- `src/repl/executor.c:53-67` - `#ifdef NO_POINT_PARAMETER` defines
   `_repl_point_size(sz)` (scales by camera distance from the
   controller-installed `g_camera_distance_source`) and
   `#define glPointSize _repl_point_size`, text-substituting **every**
   `glPointSize(` in the TU below line 66 (parity must be preserved).
-- `src/repl/executor.c:298-302` — `CMD_POINT_PARAMETER_FV` calls
+- `src/repl/executor.c:298-302` - `CMD_POINT_PARAMETER_FV` calls
   `glPointParameterfv(...)` **unconditionally** (not currently gated).
-- `src/repl/executor.c:~481` — `CMD_POINT_SIZE` → `glPointSize(...)`
+- `src/repl/executor.c:~481` - `CMD_POINT_SIZE` → `glPointSize(...)`
   (main user-facing site; enumerate all `glPointSize(` below the old
   `#define` and route them through the new runtime helper).
-- `src/repl/export.c:531` — `#ifndef NO_POINT_PARAMETER` gates the
+- `src/repl/export.c:531` - `#ifndef NO_POINT_PARAMETER` gates the
   `point_attenuation`-slugged `glPointParameterfv(...)` init-bootstrap
   entry (apply + exported standalone C). A slug/toggle mechanism
   (`init_bootstrap_toggle_get`, `point_attenuation` slug) already exists
-  for the disable path — reuse it; no parallel mechanism.
-- `src/repl/executor.h:98-112` —
+  for the disable path - reuse it; no parallel mechanism.
+- `src/repl/executor.h:98-112` -
   `repl_executor_install_camera_distance_source` is the established
   "controller installs a value the GL-free REPL needs" pattern to mirror.
 - `src/app/glr_ctrl.c:1864 glr_ctrl_init_gl()` already does post-context
   GL queries (`glGetIntegerv(GL_SAMPLES)` ~1872) and installs the
   camera-distance source (~1724). Detection belongs here (app layer may
-  call `glut*`; REPL may not — `check-gl-boundaries`).
+  call `glut*`; REPL may not - `check-gl-boundaries`).
 - `scripts/check-no-point-parameter-builds.sh` (+ Makefile `.PHONY`
   ~162, aggregator ~924, target ~1006-1007) is a
   compile-with-`-DNO_POINT_PARAMETER` syntax guard; obsolete once the
@@ -68,7 +68,7 @@ requirement.
 
 ### 1. Executor: runtime flag + helper (`src/repl/executor.c` / `.h`)
 
-- `static int g_point_parameter_supported = 1;` (default **supported** —
+- `static int g_point_parameter_supported = 1;` (default **supported** -
   demo/tests/no-install behave like today's default build).
 - Public API mirroring the camera-distance source:
   - `void repl_executor_set_point_parameter_supported(int supported);`
@@ -89,7 +89,7 @@ requirement.
   ```
 - Route **every** `glPointSize(` site in `executor.c` that was under the
   old `#define` (enumerate via grep; at minimum `CMD_POINT_SIZE` ~481)
-  through `repl_exec_point_size()` — preserves the macro's whole-TU
+  through `repl_exec_point_size()` - preserves the macro's whole-TU
   substitution exactly.
 - Gate `CMD_POINT_PARAMETER_FV` (298): call `glPointParameterfv(...)`
   only when `g_point_parameter_supported`; else no-op (the
@@ -100,16 +100,16 @@ requirement.
 - Remove the `#ifndef NO_POINT_PARAMETER` around the `point_attenuation`
   bootstrap entry; keep the array entry unconditionally compiled.
 - When `!repl_executor_point_parameter_supported()`, **skip the
-  `point_attenuation` bootstrap entry entirely** — do not apply it and
+  `point_attenuation` bootstrap entry entirely** - do not apply it and
   do not emit it in exported standalone C. **Do NOT route through the
   existing toggle "disabled" path** (`export.c:693-702`): that path
   *neutralizes* by calling `apply_state_cmd()` with a no-attenuation
   `CMD_POINT_PARAMETER_FV`, which **still invokes `glPointParameterfv`**
-  — exactly the unsupported entry point we must avoid. Add an explicit
+  - exactly the unsupported entry point we must avoid. Add an explicit
   "supported?" skip ahead of (and independent of) the toggle-disable
   branch in `repl_apply_init_bootstrap()` and the export emitter.
 - The executor-side `CMD_POINT_PARAMETER_FV` gate (§1) remains as
-  defense-in-depth, but bootstrap must not *rely* on it — it must not
+  defense-in-depth, but bootstrap must not *rely* on it - it must not
   apply/emit the command at all when unsupported.
 
 ### 3. Controller: detect + override (`src/app/glr_ctrl.c`)
@@ -119,7 +119,7 @@ requirement.
   `glGetIntegerv(GL_SAMPLES)` block (~1872). Detection +
   `repl_executor_set_point_parameter_supported()` must run **before**
   `repl_apply_init_bootstrap()` (the GL context is already current at
-  `glr_ctrl_init_gl` entry — it is called post-`glutInit`/window).
+  `glr_ctrl_init_gl` entry - it is called post-`glutInit`/window).
   Place it immediately after `repl_executor_init_resources()` and
   before `repl_apply_init_bootstrap()`. Putting it in the
   `glGetIntegerv` area (the original draft) is too late and would still
@@ -151,7 +151,7 @@ requirement.
 
 `src/scene/backdrop.c:266` calls
 `glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, …)` directly for the
-star backdrop — independent of the REPL executor. With
+star backdrop - independent of the REPL executor. With
 `GLR_NO_POINT_PARAMETER=1` (or genuinely unsupported HW) and
 `Backdrop = Stars` / `City + Stars`, this still hits the unsupported
 entry point. Gate it:
@@ -162,10 +162,10 @@ entry point. Gate it:
 - In the controller scene-config builder (`src/app/glr_ctrl.c`, beside
   `config->backdrop_mode = …`), set
   `config->point_parameter_supported = repl_executor_point_parameter_supported();`
-  (single source of truth — the executor flag set in §3).
+  (single source of truth - the executor flag set in §3).
 - In `backdrop.c`, guard the `glPointParameterfv(...)` call on
   `config->point_parameter_supported`; when unsupported, skip it (the
-  stars still render at a fixed `glPointSize` — acceptable visual
+  stars still render at a fixed `glPointSize` - acceptable visual
   degradation, no attenuation).
 - **Non-REPL scene callers (`tools/scene_demo/scene_demo.c`) are left
   as-is, by design.** `scene_demo.c:121 build_config()` memsets the
@@ -185,7 +185,7 @@ entry point. Gate it:
   controller defaults to "supported" == today's default; no
   `gl_stub_counts` entry needed).
 - `…/gl.h`: the §3 detection adds a **new dependency on `GL_VERSION`
-  and `glGetString`, neither of which exists in the stub `gl.h`** —
+  and `glGetString`, neither of which exists in the stub `gl.h`** -
   `USE_GL_STUBS=1` builds (and `make test-stubs`) will not compile
   without them. Add:
   - `#define GL_VERSION 0x1F02`
@@ -197,7 +197,7 @@ entry point. Gate it:
     `glutExtensionSupported`→1 stub and today's default build. Match
     the file's existing inline no-op style; a `gl_stub_tick` /
     `gl_stub_counts` entry is optional (other queries like
-    `glGetIntegerv` do tick — follow whatever the neighboring query
+    `glGetIntegerv` do tick - follow whatever the neighboring query
     stubs do for consistency).
 
 ### 5. Remove the obsolete compile guard and the NO_POINT_PARAMETER knob
@@ -218,7 +218,7 @@ entry point. Gate it:
 ### 6. Tests (compile-time → runtime)
 
 - `tests/test_repl_executor.c:430-456`: replace the `#ifdef
-  NO_POINT_PARAMETER` block with two runtime cases —
+  NO_POINT_PARAMETER` block with two runtime cases -
   `repl_executor_set_point_parameter_supported(0)` then assert
   `CMD_POINT_PARAMETER_FV` does **not** tick the `glPointParameterfv`
   stub counter and `CMD_POINT_SIZE` applies the camera-distance scaling;
@@ -226,7 +226,7 @@ entry point. Gate it:
   `GL_STUB_glPointParameterfv` exists in `gl_stub_counts.h`; add if
   missing.)
 - `tests/test_repl_core_io.c:142,229,235`: replace `#ifndef
-  NO_POINT_PARAMETER` with runtime — default (supported) asserts the
+  NO_POINT_PARAMETER` with runtime - default (supported) asserts the
   exported init body **contains** the `glPointParameterfv` line; after
   `repl_executor_set_point_parameter_supported(0)` it asserts the line
   is **omitted**. Restore the flag at end of block.
@@ -243,9 +243,9 @@ entry point. Gate it:
 | `src/app/glr_ctrl.c` | detect (GL_VERSION≥1.4 ∥ ARB ∥ EXT) + `GLR_NO_POINT_PARAMETER` **before `repl_apply_init_bootstrap()` (line 1869)**; install into executor; set `config->point_parameter_supported` in scene-config builder; comment refresh |
 | `src/scene/render_types.h` | add `int point_parameter_supported;` to `SceneRenderConfig` (near `backdrop_mode`) |
 | `src/scene/backdrop.c` | gate the direct `glPointParameterfv` (line ~266) on `config->point_parameter_supported`; skip when unsupported |
-| `tools/scene_demo/scene_demo.c` | **no code change** — memset default (0=unsupported) is the intended safe default; add a one-line comment in `build_config()` documenting it |
+| `tools/scene_demo/scene_demo.c` | **no code change** - memset default (0=unsupported) is the intended safe default; add a one-line comment in `build_config()` documenting it |
 | `tests/gl-stubs/include/GL/freeglut.h` | add `glutExtensionSupported` stub (returns 1) |
-| `tests/gl-stubs/include/GL/gl.h` | **add `GL_VERSION` (+`GL_EXTENSIONS/RENDERER/VENDOR`) constants and a `glGetString` stub** returning `"2.1 stub"` — required or `USE_GL_STUBS=1` / `make test-stubs` won't compile the new §3 detection |
+| `tests/gl-stubs/include/GL/gl.h` | **add `GL_VERSION` (+`GL_EXTENSIONS/RENDERER/VENDOR`) constants and a `glGetString` stub** returning `"2.1 stub"` - required or `USE_GL_STUBS=1` / `make test-stubs` won't compile the new §3 detection |
 | `Makefile` | remove `check-no-point-parameter-builds` (.PHONY ~162 + aggregator ~924 + target ~1006-7) **and** the build knob (`~127-128`) + help line (`~1236`) |
 | `scripts/check-no-point-parameter-builds.sh` | delete |
 | `tests/test_repl_executor.c`, `tests/test_repl_core_io.c` | compile-time `#ifdef/#ifndef` → runtime via the new setter |
@@ -267,23 +267,23 @@ entry point. Gate it:
 ## Verification
 
 1. Branch `feature/runtime-point-parameter-detection` off `main`.
-2. `make test-stubs` — full suite + `check-state-ownership` green
+2. `make test-stubs` - full suite + `check-state-ownership` green
    **without** the removed guard (confirm aggregator still passes);
    `make test`; `make sample`; `make sample USE_GL_STUBS=1`.
 3. Focused: `make test_repl_executor USE_GL_STUBS=1`,
    `make test_repl_core_io USE_GL_STUBS=1`.
 4. `grep -rn NO_POINT_PARAMETER src tests scripts Makefile README.md
-   CLAUDE.md` returns nothing (scope to the live tree — historical
+   CLAUDE.md` returns nothing (scope to the live tree - historical
    `plans/` docs legitimately still mention it; do not grep `plans/`).
-5. Manual (real GL): `./sample` — points attenuate normally;
-   `GLR_NO_POINT_PARAMETER=1 ./sample` — points still size-attenuate via
+5. Manual (real GL): `./sample` - points attenuate normally;
+   `GLR_NO_POINT_PARAMETER=1 ./sample` - points still size-attenuate via
    the `glPointSize` approximation; Ctrl+S yields an `output.c` whose
    `init()` omits the `glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION,
    …)` line; and switching Backdrop to **Stars** / **City + Stars**
    does not call `glPointParameterfv` (no GL error / crash on
    genuinely-unsupported HW). Both runs stable.
 
-## Resolved open question — user-authored `glPointParameterfv` in export
+## Resolved open question - user-authored `glPointParameterfv` in export
 
 Only the *injected* `point_attenuation` bootstrap entry is gated by
 support (§2). A **user-typed** `glPointParameterfv(...)` command is
@@ -294,7 +294,7 @@ correct behavior): exported C is a portable program the user may
 compile on *different* hardware that does support the entry point;
 stripping user-authored source based on the authoring machine's
 runtime capability would be surprising and lossy. This is **not a
-real compatibility path** — no export-skip logic and no extra tests
+real compatibility path** - no export-skip logic and no extra tests
 for user-authored `CMD_POINT_PARAMETER_FV`. Documented here as
 intentional so it isn't re-raised.
 

@@ -163,7 +163,7 @@ static void test_apply_state_cmd_edge_cases(void) {
 /* Regression net for the enum-arg storage migration: assert the actual
  * GL arguments (not just call counts) for the multi-enum commands whose
  * arg order is the easy thing to get wrong. Closes the gap that let a
- * CMD_BLEND_FUNC arg-shift (cmd->mode vs args[]) pass silently — counts
+ * CMD_BLEND_FUNC arg-shift (cmd->mode vs args[]) pass silently - counts
  * alone never noticed sfactor/dfactor were swapped/zeroed.
  *
  * Expected lines are built from the in-scope GL_* macros, so this is
@@ -304,8 +304,8 @@ static void test_enum_arg_gl_trace(void) {
     ASSERT_TRUE("glStencilMask receives its write mask", strstr(buf, want) != NULL);
 }
 
-/* End-to-end P1 regression: drive the *full* path the real app uses —
- * source line -> parser -> commit -> flatten -> executor -> GL — and
+/* End-to-end P1 regression: drive the *full* path the real app uses -
+ * source line -> parser -> commit -> flatten -> executor -> GL - and
  * assert the GL trace. test_enum_arg_gl_trace covers only the executor
  * half (hand-built GLCmd); this also pins parser arg ORDER into args[]
  * for the multi-arg enum commands, so a future args[] arg-shift on
@@ -624,7 +624,7 @@ static void test_execute_all_commands(void) {
 
 static void test_glut_bitmap_string(void) {
     /* `label("hi")` with no substitution: 2 chars emitted; the
-     * primitive itself does NOT call glRasterPos3f — that's the
+     * primitive itself does NOT call glRasterPos3f - that's the
      * user's responsibility via a preceding glRasterPos3f command. */
     repl_executor_init_resources();
     gl_stub_counts_reset();
@@ -783,12 +783,12 @@ static void test_executor_camera_distance_source(void) {
  *
  *   (a) the executor unwinds any net push imbalance at frame end so
  *       state doesn't leak across frames, and
- *   (b) a stray glPopMatrix is clamped before it reaches GL — the
+ *   (b) a stray glPopMatrix is clamped before it reaches GL - the
  *       tracked-pop refuses to call glPopMatrix when its depth
  *       counter is at 0, preventing a GL_STACK_UNDERFLOW.
  *
  * Both behaviours are why scene/render's outer push/pop bracket
- * around the user program is sufficient — the executor cooperates by
+ * around the user program is sufficient - the executor cooperates by
  * leaving the inner stack net-zero. Without these invariants, a
  * user's first frame with stray pushes would silently corrupt the
  * outer (camera_view) frame and every subsequent overlay would
@@ -1035,7 +1035,7 @@ static void test_apply_state_bookkeeping(void) {
     repl_apply_state_bookkeeping(NULL);
 
 #ifdef GL_STUBS
-    /* Bookkeeping emits NO GL — only repl_apply_state_cmd() does that. */
+    /* Bookkeeping emits NO GL - only repl_apply_state_cmd() does that. */
     gl_stub_counts_reset();
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_ENABLE; cmd.num_args = 1; cmd.args[0] = GL_LIGHT0;
@@ -1212,7 +1212,7 @@ static void test_orrery_phase_alignment(void) {
 /* glPushAttrib / glPopAttrib cursor semantics: pairing, orphan-pop safety,
  * end-of-cursor unwind, the REPL_ATTRIB_STACK_CAP real-GL cap while virtual
  * depth is unbounded, and the render-state bookkeeping restore (light-enable
- * mask under GL_ENABLE_BIT, clear color under GL_COLOR_BUFFER_BIT) — with and
+ * mask under GL_ENABLE_BIT, clear color under GL_COLOR_BUFFER_BIT) - with and
  * without suppress_attrib_gl. */
 static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
     ReplExecutionOptions opts = {0};
