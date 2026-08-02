@@ -17,7 +17,6 @@
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* (scene-subset baseline) */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
-#include "app/glr_clipboard.h"       /* glr_clipboard_read_text (Load Scene from Clipboard) */
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
@@ -173,82 +172,6 @@ static int save_workspace_including_visible_scene(
     if (promotable && repl_promote_transient_if_needed() < 0)
         return -1;
     return repl_save_workspace(dir, layout);
-}
-
-static char *glr_copy_text_range(const char *start, size_t len) {
-    char *out = (char *)malloc(len + 1);
-    if (!out)
-        return NULL;
-    memcpy(out, start, len);
-    out[len] = '\0';
-    return out;
-}
-
-static char *glr_scene_text_from_clipboard_text(const char *clipboard_text) {
-    if (!clipboard_text)
-        return NULL;
-
-    const char *open = strstr(clipboard_text, "```");
-    if (open) {
-        const char *body = strchr(open, '\n');
-        if (body) {
-            body++;
-            const char *close = strstr(body, "\n```");
-            if (close && close > body)
-                return glr_copy_text_range(body, (size_t)(close - body));
-        }
-    }
-
-    return glr_copy_text_range(clipboard_text, strlen(clipboard_text));
-}
-
-static void glr_set_clipboard_scene_load_error(ReplSceneLoadStatus reason) {
-    switch (reason) {
-    case REPL_SCENE_LOAD_ERR_EMPTY_PATH:
-        repl_set_status_error("Clipboard is empty");
-        break;
-    case REPL_SCENE_LOAD_ERR_PARSE:
-        repl_set_status_error("Clipboard does not contain a loadable scene");
-        break;
-    case REPL_SCENE_LOAD_ERR_NO_SLOT:
-        repl_set_status_error("All scene slots full -- delete a scene first");
-        break;
-    default:
-        repl_set_status_error("Load Scene from Clipboard failed");
-        break;
-    }
-}
-
-static void glr_action_load_scene_from_clipboard(void) {
-    char err[REPL_STATUS_TEXT_MAX];
-    char *clipboard_text = glr_clipboard_read_text(err, (int)sizeof(err));
-    if (!clipboard_text) {
-        repl_set_status_error(err[0] ? err : "Clipboard read failed");
-        return;
-    }
-
-    char *scene_text = glr_scene_text_from_clipboard_text(clipboard_text);
-    free(clipboard_text);
-    if (!scene_text) {
-        repl_set_status_error("Clipboard load: out of memory");
-        return;
-    }
-
-    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
-    int slot = repl_load_scene_text_as_new_slot(scene_text, "Clipboard Scene", &reason);
-    free(scene_text);
-
-    if (slot < 0) {
-        glr_set_clipboard_scene_load_error(reason);
-        return;
-    }
-
-    editor_undo_note_wholesale_replacement();
-    editor_load_line_to_input(editor_state_edit_line());
-
-    char msg[96];
-    snprintf(msg, sizeof(msg), "Loaded scene from clipboard (slot %d)", slot);
-    repl_set_status(msg);
 }
 
 /* Unified audio cfg: two-state on/off toggle.
@@ -1675,9 +1598,6 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         case GLR_FILE_ITEM_LOAD_SCENE:
             glr_modal_cancel();
             editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
-            return 1;
-        case GLR_FILE_ITEM_LOAD_CLIPBOARD:
-            glr_action_load_scene_from_clipboard();
             return 1;
         case GLR_FILE_ITEM_RENAME_SCENE: {
             int slot = repl_active_user_scene();
