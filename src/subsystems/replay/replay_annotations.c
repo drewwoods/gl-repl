@@ -18,8 +18,10 @@
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 /* Inline-comment scratch buffer for display-text formatting. Kept local so
- * this TU does not depend on editor/state.h. Final output is truncated to
- * out_size or CODE_ANNOTATION_TEXT_MAX downstream. */
+ * this TU does not depend on editor/state.h; 1024 preserves the headroom of
+ * the editor's old MAX_INPUT_LEN, which this value used to be sourced from.
+ * Final output is truncated to out_size or CODE_ANNOTATION_TEXT_MAX
+ * downstream. */
 #ifndef REPL_REPLAY_COMMENT_BUF
 #define REPL_REPLAY_COMMENT_BUF 1024
 #endif

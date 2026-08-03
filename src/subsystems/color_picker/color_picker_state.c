@@ -257,8 +257,9 @@ static int cp_keybtn_block(CpPaletteTab t) {
     return (t == CP_TAB_HARMONY) ? (CP_TAB_H + CP_GAP) : 0;
 }
 
-/* Whole-popup extent: element span plus gap, followed by the tab strip, the
- * active palette grid, and the optional Harmony "Set key" button. */
+/* Whole-popup extent. popup_w is the element span plus gap; popup_h is
+ * the (SV + preview) height plus the tab strip, the active palette grid,
+ * and the optional Harmony "Set key" button. */
 static int cp_popup_w(void) { return cp_total_w() + CP_GAP; }
 static int cp_popup_h(void) {
     return CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP

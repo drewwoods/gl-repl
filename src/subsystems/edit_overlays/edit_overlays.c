@@ -1182,8 +1182,11 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
             }
         }
         /* No glPointSize(1) reset here: the enclosing
-         * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, and resetting it
-         * would overwrite the size chosen for the markers. */
+         * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, so the call
+         * would be redundant - and on web, gl4es applies the last size set
+         * before its flush to the whole pending batch, so resetting here
+         * used to shrink every marker this walk had just drawn to one pixel
+         * (fixed by packaging/web/patches/gl4es-point-size-batch.patch). */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
@@ -1199,11 +1202,14 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 
 /* ---- Vertex-number label declutter -------------------------------------
  *
- * Project every label to screen space during the walk, collect them, then lay
- * them out in a 2D pass in collection (walk) order - a camera-independent
- * priority, so co-visible labels do not swap as the camera moves. Nudge any
- * label whose box overlaps an already-placed one vertically, with a thin
- * leader line back to the vertex, until it clears.
+ * Labels drawn straight at each vertex's projected point stamp their bitmap
+ * strings on top of each other into an unreadable jumble whenever two
+ * vertices project near the same pixel (classic when a primitive is viewed
+ * edge-on). Instead, project every label to screen space during the walk,
+ * collect them, then lay them out in a 2D pass in collection (walk) order -
+ * a camera-independent priority, so co-visible labels do not swap as the
+ * camera moves. Nudge any label whose box overlaps an already-placed one
+ * vertically, with a thin leader line back to the vertex, until it clears.
  *
  * The nudge search is BOUNDED: a label that can't find a free slot within a
  * few rows of its anchor is dropped rather than stacked arbitrarily far. That

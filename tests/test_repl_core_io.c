@@ -1880,8 +1880,11 @@ int main(void) {
      *
      * repl_export_load_from_file threads the cursor through
      * ImportState.edit_line internally and publishes the final value to
-     * the host sink. Callers such as repl_load_scene_as_new_slot read that
-     * published row immediately after import. */
+     * the host sink. A prior regression left that value unpublished, so
+     * downstream callers (notably repl_load_scene_as_new_slot, which
+     * reads the cursor via repl_dispatch_edit_line_get right after import)
+     * saw 0 instead of the post-import row. Pin the contract here so the
+     * next person touching the import flow doesn't silently regress it. */
     {
         const char *import_cursor_path = "/tmp/repl_core_import_cursor.c";
 

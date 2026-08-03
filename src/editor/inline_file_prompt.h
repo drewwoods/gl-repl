@@ -66,9 +66,9 @@ const char *editor_inline_file_prompt_buffer(void);
 
 /* Most-recent failed-commit error string. Returns "" when there is no
  * error (including when the prompt is inactive). Cleared on any
- * keystroke that mutates the buffer (the user is editing, so the
- * current error is cleared) and on cancel. Read by the renderer
- * to display the error WITHIN the prompt strip since that strip
+ * keystroke that mutates the buffer (the user is editing, so the stale
+ * error no longer describes the buffer) and on cancel. Read by the
+ * renderer to display the error WITHIN the prompt strip since that strip
  * occludes the regular status bar. */
 const char *editor_inline_file_prompt_error(void);
 

@@ -64,8 +64,8 @@ typedef struct {
  * consumed by replay_render_post_fill / replay_render_fade_batches /
  * replay_render_tess_preview. Lives in the replay subsystem header
  * (alongside ReplayFadeBatch and ReplayRuntimeState) so the renderer
- * header can avoid pulling app/glr_ctrl.h; the controller supplies
- * the plan and the renderer consumes it.
+ * header can avoid pulling app/glr_ctrl.h, keeping the
+ * subsystems -> app dependency arrow pointed the right way.
  *
  * The predef baseline is a full snapshot (names + count, not just
  * floats) so fade restore can assign by name. Without that, a workspace

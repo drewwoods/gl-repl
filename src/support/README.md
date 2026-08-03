@@ -45,8 +45,8 @@ PLY export tests. Index of every demo: [`tools/README.md`](../../tools/README.md
 ## Why a dedicated directory
 
 Putting these files under `src/support/` keeps the root clean and gives
-neutral helpers a clear landing spot - matching
-the same pattern as `src/render3d/guides/`, `src/subsystems/`, and
-similar self-contained pockets.
+neutral helpers a clear landing spot - matching the same pattern as
+`src/render3d/guides/`, `src/subsystems/`, and similar self-contained
+pockets.
 
 See [`MODULES.md`](../../docs/MODULES.md) for the full layered overview.

@@ -56,10 +56,10 @@ int editor_inline_file_prompt_begin(const char *default_name) {
     if (g_prompt_active) return 0;
     /* At most one inline modal is up at a time. If the user had a
      * scene-rename in progress and somehow triggered Load Scene, cancel
-     * rename rather than have both
-     * modals quietly active - the controller's keyboard route checks
-     * rename first, so the file prompt would otherwise be invisible
-     * to keystrokes while still drawing in the snapshot. */
+     * rename rather than have both modals quietly active - the
+     * controller's keyboard route checks rename first, so the file
+     * prompt would otherwise be invisible to keystrokes while still
+     * drawing in the snapshot. */
     editor_inline_rename_cancel();
     g_prompt_active = 1;
     if (default_name && default_name[0]) {

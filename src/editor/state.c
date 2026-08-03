@@ -417,7 +417,7 @@ void editor_cursor_pos_extend_selection(int new_pos) {
     if (new_pos > in->input_len) new_pos = in->input_len;
 
     /* Pin the pre-move cursor as the anchor *before* the move so a
-     * selection becomes [old, new). If the anchor
+     * previously inactive selection becomes [old, new). If the anchor
      * is already set, leave it alone - the existing range just extends
      * or contracts. Using anchor_pos_set here would collapse the
      * anchor on (anchor == cursor) before we get the chance to move,

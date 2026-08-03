@@ -252,9 +252,8 @@ int prof_frame_time_stats(HistogramStats *out);
  * Call when the measured workload changes wholesale (loading a different
  * example / scene); a cumulative histogram must not mix different geometry
  * or carry its startup outliers forever. Leaves the EMAs, staleness and FPS
- * history alone:
- * those are self-correcting over a few frames, the histograms are cumulative
- * and are not. */
+ * history alone: those are self-correcting over a few frames, the
+ * histograms are cumulative and are not. */
 void prof_histogram_reset(void);
 
 /* --- FPS history (fed by prof_frame_tick) ---

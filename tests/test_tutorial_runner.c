@@ -851,11 +851,13 @@ static void test_navigation_advances_on_matching_input(void) {
 }
 
 static void test_enter_on_locked_line_shows_position_hint(void) {
-    /* Landing on a locked line first triggers editor_load_line_to_input,
-     * which clears the input and sets the read-only status; the
-     * Enter that follows hits the precheck's empty-input silent
-     * reject, so the read-only status stays visible. The step
-     * neither advances nor enters insert mode. */
+    /* Regression: an earlier review flagged that commit_current_input's
+     * unmodified+enter_mode branch could toggle insert mode at a locked
+     * line. Landing on a locked line first triggers
+     * editor_load_line_to_input, which clears the input and sets the
+     * read-only status; the Enter that follows hits the precheck's
+     * empty-input silent reject, so the read-only status stays visible.
+     * The step neither advances nor enters insert mode. */
     reset_fixture();
     tutorial_start(0);
     set_input_text(tutorial_current_expected_text());
