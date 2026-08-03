@@ -49,8 +49,8 @@ typedef struct AxesThemeSpec {
     Render3dRgba label[3];
 } AxesThemeSpec;
 
-/* Per-frame axes draw context (audit #3). Resolved once at
- * render3d_axes_render entry via render3d_overlay_xn_resolve; every
+/* Per-frame axes draw context. Resolved once at render3d_axes_render entry
+ * via render3d_overlay_xn_resolve; every
  * axes_color call multiplies through xn_alpha. The struct is
  * deliberately small - axes don't carry the breath/anim_time
  * GridDrawContext has because each per-theme renderer that needs
@@ -84,12 +84,12 @@ static Render3dRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
-/* Axes in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
- * Resolved once at render3d_axes_render entry from config.axes_opacity
+/* Axes in-out transition. Resolved once at render3d_axes_render entry from
+ * config.axes_opacity
  * via the shared render3d_overlay_xn_resolve helper (overlay_xn.h),
  * stored on AxesDrawContext, then every color path routes through
  * axes_color so it applies uniformly AFTER each call site's own
- * alpha_scale clamp (rule 3). 1.0 = shown.
+ * alpha_scale clamp. 1.0 = shown.
  *
  * Axes sit near the origin where distance fog barely bites, so under
  * the FOG style this mostly amounts to the alpha knee with a faint
@@ -283,11 +283,9 @@ static void draw_axis_label_triplet(const AxesDrawContext *ctx,
 
 /* --- per-theme axes renderers ---
  *
- * Each theme used to live as a giant inline switch arm in
- * render3d_axes_render. Extracted into named static helpers so the
- * dispatcher reads like a table-of-contents and each renderer owns
- * its own ~30-line body. Pattern mirrors grid.c's per-theme functions
- * (audit #52). */
+ * Each theme has a named static helper, so the dispatcher reads like a
+ * table of contents and each renderer owns its own small body. The pattern
+ * mirrors grid.c's per-theme functions. */
 
 static void render3d_axes_render_classic_theme(const AxesDrawContext *ctx) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
@@ -368,7 +366,7 @@ static void render3d_axes_render_neon_theme(const AxesDrawContext *ctx,
         rgba(0.5f, 0.5f, 1.0f, glow),
     };
 
-    /* Outer glow (wide, dim) → core (narrow, bright) → bright tip dots */
+    /* Outer glow (wide, dim) -> core (narrow, bright) -> bright tip dots */
     draw_axis_line_triplet(ctx, len, 6.0f, outer, 1);
     draw_axis_line_triplet(ctx, len, 2.0f, core, 1);
     draw_axis_tip_triplet(ctx, len, 6.0f, tips, 1);
@@ -439,8 +437,8 @@ static void render3d_axes_render_gizmo_theme(const AxesDrawContext *ctx,
     float fill = len / 2.0f;
 
     /* Camera-facing weight for each vertical plane:
-     * XY (z=0) is face-on when camera looks along Z  → weight = cos²(ry)
-     * ZY (x=0) is face-on when camera looks along X  → weight = sin²(ry) */
+     * XY (z=0) is face-on when camera looks along Z -> weight = cos^2(ry)
+     * ZY (x=0) is face-on when camera looks along X -> weight = sin^2(ry) */
     float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
     float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
     float xy_w = cos_ry * cos_ry;
@@ -507,13 +505,13 @@ static void render3d_axes_render_ruler_theme(const AxesDrawContext *ctx) {
     glBegin(GL_LINES);
     for (int i = 1; i <= (int)len; i++) {
         float t = (i % 5 == 0) ? 0.16f : 0.07f;
-        /* X axis: ticks span ±Z */
+        /* X axis: ticks span +/- Z */
         axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_X]);
         glVertex3f((float)i, 0, -t); glVertex3f((float)i, 0, t);
-        /* Y axis: ticks span ±X */
+        /* Y axis: ticks span +/- X */
         axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_Y]);
         glVertex3f(-t, (float)i, 0); glVertex3f(t, (float)i, 0);
-        /* Z axis: ticks span ±X */
+        /* Z axis: ticks span +/- X */
         axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_Z]);
         glVertex3f(-t, 0, (float)i); glVertex3f(t, 0, (float)i);
     }
@@ -612,7 +610,7 @@ static void render3d_axes_render_arrow_theme(const AxesDrawContext *ctx) {
 
 #define FOUNTAIN_DROPLET_COUNT 150
 #define FOUNTAIN_STREAM_SPEED  0.10f          /* axis-lengths per second   */
-#define FOUNTAIN_PHI           0.6180339887f  /* 1/φ - golden ratio fract   */
+#define FOUNTAIN_PHI           0.6180339887f  /* 1/phi - golden ratio fract */
 #define FOUNTAIN_SPRAY_RADIUS  0.05f          /* base lateral spray amp     */
 #define FOUNTAIN_SPRAY_MIN     0.6f           /* min per-droplet r scale    */
 #define FOUNTAIN_SPRAY_MAX     1.4f           /* max per-droplet r scale    */
@@ -666,7 +664,7 @@ static void render3d_axes_render_fountain_theme(const AxesDrawContext *ctx,
              * independent channels for angle and radius; the swirl takes
              * a third and splits it, scaling by 97 and re-fracting for
              * the direction bit so rotation sense doesn't correlate with
-             * speed the way sin/cos of a shared seed used to. */
+             * speed does not correlate with the angle or radius channels. */
             float h_angle = render3d_hash01(fp * 1.7f + fa * 19.0f, fa * 3.1f +  5.0f);
             float h_rad   = render3d_hash01(fp * 2.3f + fa * 31.0f, fa * 7.9f + 11.0f);
             float h_swirl = render3d_hash01(fp * 3.9f + fa * 43.0f, fa * 5.3f + 17.0f);

@@ -1,7 +1,5 @@
 /*
  * render.c - 3D scene rendering (frame prep, edit guides)
- *
- * Extracted from gl_repl.c for maintainability.
  */
 #include "axes.h"
 #include "backdrop.h"
@@ -469,10 +467,8 @@ static void render3d_apply_projection(const Render3dState *state,
     }
 }
 
-/* render3d_apply_camera moved to src/app/glr_camera.c as
- * glr_camera_load_modelview (audit #11). The scene module no longer
- * owns a camera apply helper; callers populate GL_MODELVIEW
- * themselves before invoking render3d_draw_scene. */
+/* The scene module does not own a camera-apply helper. Callers populate
+ * GL_MODELVIEW themselves before invoking render3d_draw_scene. */
 
 static void render3d_apply_quality_config(const Render3dRenderConfig *config) {
     if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
@@ -894,7 +890,7 @@ int render3d_draw_scene(Render3dState *state,
     render3d_update_ortho_ref(state, config);
 
     /* Resolve the canonical active projection ONCE, before the AA
-     * jitter loop. Per-sample apply reads it but no longer writes -
+     * jitter loop. Per-sample apply reads it without modifying it -
      * the cached desc reflects the discrete-mode projection a faithful
      * reshape() would emit, not a transient sample. */
     render3d_compute_active_projection(state, config);

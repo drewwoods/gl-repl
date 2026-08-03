@@ -294,12 +294,12 @@ follows is the trip-wire list.
 [`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L264) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L140) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
-scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L137) (projection → user
+scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L135) (projection → user
 geometry callback → replay fades → grid/axes/backdrop → overlays → replay
 HUD) → 2D overlays. `render3d_demo` is the load-bearing proof that
 `src/render3d/` has no REPL dependency; `make render3d-hot` is its
 dlopen-based live-reload variant (state lives in the host TU; a
-[`Render3dState`](src/render3d/render.h#L97) layout change still needs a relaunch).
+[`Render3dState`](src/render3d/render.h#L95) layout change still needs a relaunch).
 
 The application owns the frame, not the controller: [`gl_repl.c`](gl_repl.c)
 brackets its display callback with `glr_frame_begin()` / `glr_frame_work_end()`

@@ -210,8 +210,8 @@ typedef struct Render3dRenderConfig {
 
     /* --- Background clear color (RGBA) ---
      * Populated by the controller from the user's CMD_CLEAR_COLOR (or a
-     * default if none was set). The scene module no longer scans the
-     * flat program for this; it's a pre-resolved float[4]. */
+     * default if none was set). The scene module receives this pre-resolved
+     * float[4] instead of scanning the flat program. */
     float clear_color[4];
 
     /* --- Animation --- */
@@ -225,8 +225,8 @@ typedef struct Render3dRenderConfig {
     int render3d_h;
 
     /* --- Camera state (read-only inputs) ---
-     * The actual modelview transform is no longer applied by the scene module -
-     * callers populate GL_MODELVIEW themselves before render3d_draw_scene()
+     * The scene module does not apply the modelview transform; callers
+     * populate GL_MODELVIEW before render3d_draw_scene()
      * (the controller uses glr_camera_load_modelview from src/app/glr_camera.h;
      * render3d_demo inlines the matrix calls). These fields are still passed in
      * because grid/axes themes orient themselves to camera angle, the
@@ -317,11 +317,8 @@ typedef struct Render3dRenderConfig {
      *
      * `*_xn_phase` is an advisory direction hint (FADE_IN /
      * FADE_OUT / STEADY) the controller fills in from the transition
-     * machine, intended as a future input for fog-direction or
-     * other phase-aware effects. RESERVED - read by tests only
-     * today (verifying the controller forwards the value); no scene
-     * renderer reads them at runtime. Keep populated so the contract
-     * stays observable. */
+     * machine. The scene renderer does not read these values at runtime;
+     * keep them populated so tests can verify the forwarded contract. */
     int          grid_theme;
     float        grid_opacity;
     Render3dXnPhase grid_xn_phase;   /* RESERVED - see comment above */
@@ -333,7 +330,7 @@ typedef struct Render3dRenderConfig {
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
-    /* --- Focus marker (currently forwarded for tests / future grid use) --- */
+    /* --- Focus marker (forwarded in the frame snapshot) --- */
     Render3dFocusVertex focus;
 
     /* --- Visual scaling --- */

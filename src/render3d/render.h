@@ -42,7 +42,7 @@ void render3d_init_gl(void);
  * type, an apply helper, or any camera state - that lives in
  * src/app/glr_camera.h (glr_camera_load_modelview / GlrCameraPose).
  *
- * For non-app callers (render3d_demo, future scene viewports): inline
+ * For non-app callers (render3d_demo and other scene viewports): inline
  * the six matrix calls (glLoadIdentity / glTranslatef / glRotatef /
  * glTranslatef) directly. The function isn't worth importing for one
  * helper. */
@@ -85,11 +85,9 @@ typedef struct Render3dProjectionDesc {
 #endif
 
 /* Per-renderer state the scene module needs to persist across frames.
- * Replaces the file-static g_ortho_ref_dist / g_ortho_active /
- * g_active_projection trio in render.c. Each caller (controller,
- * render3d_demo, tests) owns one instance - the single-renderer
- * assumption is now an instance count, not a global. Multiple scene
- * viewports become possible later by holding multiple state objects.
+ * Each caller (controller, render3d_demo, tests) owns one instance, so
+ * multiple scene viewports use separate state objects rather than shared
+ * renderer globals.
  *
  * Callers MUST call render3d_state_init() before passing the
  * struct to render3d_draw_scene(), and own its lifetime across
@@ -99,7 +97,7 @@ typedef struct Render3dState {
      * How it's sampled - once at the switch vs. every frame - is
      * selected at compile time by GLR_ORTHO_REF_MODE above.
      * 0 means "no usable measurement" and the projection math falls
-     * back to config->cam_dist (the old orbit-target-plane behavior). */
+     * back to config->cam_dist, the default fallback. */
     double ortho_ref_dist;
     /* cam_dist at the instant ortho_ref_dist was sampled. The live 2D
      * scale reference is ortho_ref_dist + (cam_dist - ortho_ref_cam_dist),
@@ -143,8 +141,8 @@ int render3d_draw_scene(Render3dState *state,
 void render3d_get_active_projection(const Render3dState *state,
                                  Render3dProjectionDesc *out);
 
-/* Replay-fade overlay work no longer has a public scene entry point. Callers
- * that need it inject the pass through Render3dRenderConfig.post_fill_fn, which
- * keeps src/scene/ unaware of replay batching details. */
+/* Replay-fade overlays are injected through
+ * Render3dRenderConfig.post_fill_fn, keeping replay batching details outside
+ * the scene renderer. */
 
 #endif /* RENDER3D_RENDER_H */

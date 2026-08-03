@@ -1,4 +1,4 @@
-# `src/render3d` - the 3D renderer (Draft)
+# `src/render3d` - the 3D renderer
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -19,12 +19,12 @@ style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
 the caller fills a [`Render3dRenderConfig`](render_types.h#L140) (camera pose, lighting, grid/axes
 themes, AA settings, clear color) and supplies an `execute_fn` that draws
-the actual geometry. [`render3d_draw_scene()`](render.h#L137) does everything around that
+the actual geometry. [`render3d_draw_scene()`](render.h#L135) does everything around that
 callback:
 
 ```c
 glr_camera_load_modelview(&pose);                /* caller owns the modelview camera transform */
-render3d_draw_scene(&renderer_state, &cfg);    /* viewport → projection → cfg.execute_fn() → grid/axes/backdrop/overlays */
+render3d_draw_scene(&renderer_state, &cfg);    /* viewport -> projection -> cfg.execute_fn() -> grid/axes/backdrop/overlays */
 ```
 
 The render3d module owns no camera type - the caller picks one. The REPL
@@ -35,7 +35,7 @@ matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
 
 This is the standard way to keep a renderer reusable: it depends on a
 *contract* (config in, callback for geometry) rather than on the specific
-application that produced the geometry. Perspective↔orthographic blending,
+application that produced the geometry. Perspective <--> orthographic blending,
 accumulation-buffer antialiasing, fog, grid/axes themes, and a procedural
 backdrop are all renderer concerns; the geometry is not.
 
@@ -51,7 +51,7 @@ make render3d-demo     # opens a window: "render3d teapot demo"
 ```
 
 Controls cover the renderer's whole config surface: `V` blends
-perspective↔orthographic, `L`/`1`-`4` toggle global lighting and individual
+perspective <--> orthographic, `L`/`1`-`4` toggle global lighting and individual
 lights, `W` wireframe, `G`/`X` cycle grid/axes themes, `B` cycles the
 backdrop, `I` toggles light indicators. A bitmap HUD prints the live config.
 
@@ -81,7 +81,7 @@ last good module loaded.
 **State survives the reload** because every piece of demo state - camera pose,
 2D/3D + projection blend, grid/axes themes, lighting, backdrop - lives in the
 host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
-bodies are. [`Render3dState`](render.h#L97) crosses the boundary but is host-owned, and its
+bodies are. [`Render3dState`](render.h#L95) crosses the boundary but is host-owned, and its
 layout is fixed by [`render.h`](render.h) at host-compile time - so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
@@ -103,8 +103,8 @@ target is untouched (it stays the link-proof `make test-full` and
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L140) from REPL runtime state + view
 state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L151) and
-[`render3d_draw_scene()`](render.h#L137) once per accumulation-jitter sample (with its own
-[`Render3dState`](render.h#L97)). The geometry callback is the REPL executor
+[`render3d_draw_scene()`](render.h#L135) once per accumulation-jitter sample (with its own
+[`Render3dState`](render.h#L95)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered
 geometry.
 
@@ -125,14 +125,14 @@ applies a render3d-local frustum shift for jitter.
 | [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L140), frame-context types - the renderer contract |
 | [`grid.c`](grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](axes.c) / `.h` | Axis rendering and axis themes |
-| [`render3d_transition.c`](render3d_transition.c) / `.h` | Pure grid/axes show↔hide fade state machine (no GL) |
+| [`render3d_transition.c`](render3d_transition.c) / `.h` | Pure grid/axes show <--> hide fade state machine (no GL) |
 | [`backdrop.c`](backdrop.c) / `.h` | Backdrop/environment dispatch + procedural cityscape |
 | [`lights.c`](lights.c) / `.h` | Baseline lighting setup and light-indicator gizmos |
 | [`overlays.c`](overlays.c) / `.h` | Tiny per-vertex primitives (vertex-number labels, normal arrows) |
 | [`postprocess_filter.c`](postprocess_filter.c) / `.h` | Optional full-frame post-process pass |
 | [`guides/geometry_guides.c`](guides/geometry_guides.c) | Vertex/primitive guides at the cursor (from [`Render3dGuideSnapshot`](guides/guides_shared.h#L44)) |
 | [`guides/transform_guides.c`](guides/transform_guides.c) | Transform guides (pending matrix ops during replay) |
-| [`guides/guides_shared.h`](guides/guides_shared.h) | Shared guide snapshot/planning types |
+| [`guides/guides_shared.h`](guides/guides_shared.h) | Shared guide snapshots and per-frame guide-plan types |
 | [`palette.h`](palette.h), [`themes.h`](themes.h), [`occluded_ghost.h`](occluded_ghost.h) | Shared color/theme/style constants |
 
 **Boundary:** render3d code renders. It does **not** parse, edit, save, or

@@ -19,7 +19,7 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
 
 /* Render any transform guide associated with `flat_cmd_idx`. `snapshot` and
  * `plan` come from the current frame; `cam_view` is the current camera-aligned
- * view matrix used to keep guide geometry stable in screen space. */
+ * view matrix that keeps guide geometry stable in screen space. */
 void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapshot,
                                           Render3dTransformGuidePlan *plan,
                                           int flat_cmd_idx,

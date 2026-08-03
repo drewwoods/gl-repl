@@ -2,12 +2,10 @@
  * postprocess_surface.h - Reusable tessellated warp surfaces for the
  * post-process filters.
  *
- * A post-process filter historically redraws its captured scene texture
- * on a single screen-aligned quad. This module replaces that quad with a
- * tessellated cols x rows grid whose vertices are displaced by one of a
- * few named surface *types*, while the texcoords stay linear. The mesh is
- * the whole trick: linear texture sampling over non-linear geometry is
- * what curves the image.
+ * A post-process filter redraws its captured scene texture on a tessellated
+ * cols x rows grid whose vertices are displaced by one of a few named surface
+ * types, while the texcoords stay linear. The mesh is the whole trick: linear
+ * texture sampling over non-linear geometry is what curves the image.
  *
  * The types are:
  *   - FLAT   : an identity quad-grid (the flat<->warp morph's zero point).
@@ -16,15 +14,12 @@
  *              toward the viewer and the rectangular corners fall outside
  *              it (draw a black fill behind the mesh for the vignette).
  *              Paired with the scanlines filter.
- *   - RIPPLE : an animated sine wobble (an "underwater" warp). Fully
- *              implemented and tested, but reserved for a future filter -
- *              nothing wires it up yet.
+ *   - RIPPLE : an animated sine wobble (an "underwater" warp).
  *
  * The surface is deliberately independent of any one effect's texture
  * work: a filter binds its own texture and sets its own 2D GL state, then
- * asks this module to emit the warped grid. So a future filter can be
- * swapped from a flat quad to any of these surfaces without touching this
- * code.
+ * asks this module to emit the warped grid. The same surface API supports
+ * flat, barrel, and ripple geometry without coupling this module to a filter.
  *
  * Pure fixed-function GL (glBegin/glTexCoord2f/glVertex2f). No shaders,
  * no FBOs, and it owns no textures or matrices - the caller sets those up.
@@ -35,7 +30,7 @@
 typedef enum Render3dPostSurfaceKind {
     RENDER3D_POST_SURFACE_FLAT = 0, /* identity quad-grid */
     RENDER3D_POST_SURFACE_BARREL,   /* CRT bulge (scanlines) */
-    RENDER3D_POST_SURFACE_RIPPLE    /* animated sine wobble (future underwater) */
+    RENDER3D_POST_SURFACE_RIPPLE    /* animated sine wobble (underwater) */
 } Render3dPostSurfaceKind;
 
 /* One warped surface. Positions are in the same bottom-left pixel space
@@ -62,9 +57,8 @@ Render3dPostSurface render3d_post_surface_flat(int sw, int sh);
  * scale 1 - 2*bulge goes negative and the geometry inverts). */
 Render3dPostSurface render3d_post_surface_barrel(int sw, int sh, float bulge);
 
-/* Animated sine wobble (underwater), reserved for a future filter:
- * `amplitude_px` is the horizontal wave amplitude in pixels and `t` the
- * animation time driving it. Not paired with any filter yet. */
+/* Animated sine wobble (underwater): `amplitude_px` is the horizontal wave
+ * amplitude in pixels and `t` is the animation time driving it. */
 Render3dPostSurface render3d_post_surface_ripple(int sw, int sh,
                                                  float t, float amplitude_px);
 

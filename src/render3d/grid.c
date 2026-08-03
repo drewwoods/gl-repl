@@ -99,8 +99,7 @@ typedef struct GridDrawContext {
                             * cfg); folded into grid_color for grid LINES, not
                             * the environment-theme surface fills (those use
                             * grid_color_surface). 1.0 = no change. */
-    /* In-out transition (audit #3): formerly file-static g_xn_opacity /
-     * g_xn_alpha. Resolved once at render3d_grid_render entry via
+    /* In-out transition. Resolved once at render3d_grid_render entry via
      * render3d_overlay_xn_resolve, then every grid_color call multiplies
      * `a * xn_alpha`. xn_opacity drives the synthetic-fog recede pass
      * under GRID_XN_STYLE == GRID_AXES_XN_FOG. */
@@ -133,8 +132,7 @@ typedef void (*GridLineColorFn)(float v, int is_major,
                                 GridLineColors *out);
 /* Fills the X-axis / Z-axis origin colors. A pair rather than one color
  * because XZ Ruler codes direction into its meridians (warm key on X, cool
- * key on Z) - that difference is why it used to own a duplicate of
- * draw_grid_origin_axes. Themes with one origin color fill both slots via
+ * key on Z). Themes with one origin color fill both slots via
  * grid_line_colors_same, matching GridLineColors' x_const/z_const naming. */
 typedef void (*GridOriginColorFn)(const GridDrawContext *ctx,
                                   GridLineColors *out);
@@ -167,12 +165,12 @@ static void set_fog_to_clear_color() {
     glFogfv(GL_FOG_COLOR, clear_col);
 }
 
-/* Grid in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
- * Resolved once at render3d_grid_render entry from config.grid_opacity
+/* Grid in-out transition. Resolved once at render3d_grid_render entry from
+ * config.grid_opacity
  * and stored on the GridDrawContext. Every color path routes through
  * grid_color so it applies uniformly, AFTER each call site's own
- * alpha_scale clamp so the controller-owned OUT is the hard ceiling
- * (rule 3). 1.0 = shown.
+ * alpha_scale clamp so the controller-owned OUT is the hard ceiling. 1.0 =
+ * shown.
  *
  * The shared render3d_overlay_xn_resolve helper in overlay_xn.h owns the
  * knee math; grid passes its style + GRID_XN_FOG_ALPHA_KNEE and
@@ -792,7 +790,7 @@ static void grid_ruler_line_color(float v, int is_major,
     float fade = 1.0f - dist_frac * dist_frac;
     float a = (is_major ? 0.18f : 0.07f) * fade;
     /* Near-neutral warm/cool grays: the directional coding survives as a
-     * whisper, but hundreds of lines compressing at the horizon no longer
+     * whisper, but hundreds of lines compressing at the horizon do not
      * pile up into a saturated orange/blue wash (accent-palette rework). */
     out->x_const = rgba(0.62f, 0.56f, 0.50f, a);
     out->z_const = rgba(0.50f, 0.56f, 0.66f, a);
@@ -812,8 +810,8 @@ static void grid_ruler_origin_color(const GridDrawContext *ctx,
 }
 
 /* Ruler tick marks at major-line intervals on both axes, in the same warm/
- * cool coding as the meridians they cross. Rides end_pass, so it lands after
- * the origin axes exactly as it did on the old custom path. */
+ * cool coding as the meridians they cross. Rides end_pass after the origin
+ * axes, so the ticks follow the axes. */
 static void grid_ruler_end_pass(const GridDrawContext *ctx) {
     const float *ax = palette_anchor_rgb(PAL_ROLE_WARM_KEY);
     const float *az = palette_anchor_rgb(PAL_ROLE_COOL_KEY);
@@ -896,11 +894,11 @@ static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
     glPushMatrix();
     glLoadIdentity();
     /* GL_FOG_BIT is on the push mask because the outer grid pass
-     * leaves fog enabled (linear, end ≈ grid extent) - and after
+     * leaves fog enabled (linear, end about grid extent) - and after
      * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
      * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
      * branch. With identity modelview the rect's eye-space radial
-     * distances run 0..sqrt(render3d_w² + render3d_h²), wildly past
+     * distances run 0..sqrt(render3d_w^2 + render3d_h^2), wildly past
      * fog-end, so without the disable the rect fades to fog colour
      * everywhere except the tiny lower-left near (0,0). See
      * tests/test_scene_underwater_fill_gl.c. */
@@ -977,7 +975,7 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     grid_fog_end(grid_ctx);
 
     /* ---- Water surface plane ----
-     * A semi-transparent rippling mesh at Y ≈ 0.  Because the grid pass
+     * A semi-transparent rippling mesh at Y about 0. Because the grid pass
      * runs after execute_commands(), this overlay tints everything the user
      * drew below the surface, producing the underwater look. Depth-test is
      * on but depth-write is off (set at the top of render3d_grid_render), so the
@@ -1030,9 +1028,8 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
  * Ocean's underwater fill) - looking up through the ice. */
 
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
- * the cracks and frost heave stay frozen in place (no swimming).
- * Range adapter over the shared render3d_hash01 - same arithmetic as
- * the copy this replaced, so every hashed position is unchanged. */
+ * the cracks and frost heave stay frozen in place (no swimming). The range
+ * adapter maps the shared render3d_hash01 result into [-1, 1]. */
 static float grid_pos_hash(float a, float b) {
     return render3d_hash01(a, b) * 2.0f - 1.0f;
 }
@@ -1562,8 +1559,8 @@ static void render3d_grid_render_planes_theme(const Render3dRenderConfig *config
 
     /* Determine which vertical plane is most face-on to the camera.
      * Camera horizontal look direction: (sin(ry), 0, -cos(ry))
-     * XY plane (z=0, normal Z): face-on weight = cos²(ry)
-     * ZY plane (x=0, normal X): face-on weight = sin²(ry)
+     * XY plane (z=0, normal Z): face-on weight = cos^2(ry)
+     * ZY plane (x=0, normal X): face-on weight = sin^2(ry)
      * These sum to 1, giving a natural blend between the two. */
     float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
     float rx_rad = config->cam_rx * (float)M_PI / 180.0f;
@@ -1714,7 +1711,7 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
 
 /* Smooth, frame-stable wobble for the inked sketch strokes. `u` runs along the
  * stroke, `v` is its fixed coordinate, `seed` separates passes/lines. Returns a
- * small world-space offset (~±0.05) - large enough to read as hand-drawn at
+ * small world-space offset (+/- 0.05) - large enough to read as hand-drawn at
  * unit cell size, small enough not to break the cell corners (callers taper it
  * to zero at the endpoints). Deterministic in space, so the ink doesn't crawl
  * between frames. */
@@ -2019,7 +2016,7 @@ static void graphplane_lines(const GridDrawContext *ctx, int iaxis, int jaxis, i
 /* Coordinate labels for the head-on plane (`haxis` = screen-horizontal in-plane
  * axis, `vaxis` = screen-vertical, `kaxis` pinned to 0). The view is centred on
  * the camera focus (`ch`,`cv` = the in-plane components of cam_tx/ty/tz), so
- * under pan the labelled span [ch±Lh] x [cv±Lv] tracks what's actually visible.
+ * under pan the labelled span [ch +/- Lh] x [cv +/- Lv] tracks what's actually visible.
  * h-values run along the screen-bottom edge, v-values down the screen-left edge;
  * Lh/Lv are the visible half-extents, so both axes stay on screen. */
 static void graphplane_labels(int haxis, int vaxis, int kaxis,
@@ -2223,9 +2220,8 @@ int render3d_grid_theme_uses_edge_fade(Render3dGridTheme grid_theme) {
  *     FOG-transition recede injection for non-far themes.
  *   - grid_dispatch_theme(): the switch over Render3dGridTheme.
  *
- * render3d_grid_render is now the sequencer of these phases, and the
- * xn fields live on GridDrawContext rather than as file statics
- * (audit #3). */
+ * render3d_grid_render sequences these stages, and the xn fields live on
+ * GridDrawContext. */
 
 /* Resolve grid transition fade via the shared overlay-xn helper. The
  * grid's "this theme owns fog" carve-out (currently OCEAN only) falls
@@ -2404,8 +2400,7 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     default: {
         /* GRID_THEME_CLASSIC, _TRON, _EMBER, _AURORA, _SYNTHWAVE and
-         * any future standard line theme: look up its GridThemeSpec and
-         * draw through the table-driven path. */
+         * standard line themes use the GridThemeSpec table-driven path. */
         const GridThemeSpec *spec = grid_theme_spec(grid_theme);
         if (spec)
             draw_grid_standard_theme(grid_ctx, spec);

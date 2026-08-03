@@ -3,7 +3,7 @@
  *
  * Cycles the transform-guide overlay across off, world-aligned, and
  * local-frame alignment. Consumed by transform_guides.c and the app-side
- * presentation state; OFF replaces the old separate show/hide toggle.
+ * presentation state; OFF is the disabled mode.
  *
  * The X-macro list mirrors src/scene/themes.h so the cfg-symbol string
  * table in src/app/glr_actions.c can be derived from the same source.

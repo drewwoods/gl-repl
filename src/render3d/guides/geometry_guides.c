@@ -25,7 +25,7 @@ static void geometry_guides_pop_state(void) {
 }
 
 /* Per-axis fill and edge color tokens, indexed by the constrained axis
- * (0=X → YZ plane / red, 1=Y → XZ plane / green, 2=Z → XY plane /
+ * (0=X -> YZ plane / red, 1=Y -> XZ plane / green, 2=Z -> XY plane /
  * blue). Used by draw_guide_axis_plane below. */
 static const Render3dColorToken k_guide_plane_fill[3] = {
     RENDER3D_CLR_GUIDE_PLANE_X_FILL,
@@ -42,14 +42,14 @@ static const Render3dColorToken k_guide_plane_edge[3] = {
 static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
 
 /* Draw a semi-transparent "coordinate paper" sheet perpendicular to
- * `free_axis` at coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the
+ * `free_axis` at coordinate v. `free_axis` in {0=X, 1=Y, 2=Z}; the
  * other two axes span the [-sz, +sz] face. `as` is the snapshot's
  * alpha-scale boost. Same soft-glass language as the clip-plane
  * guide, keeping the per-axis color identity and the square shape
  * (axis-aligned sheets are square; arbitrary clip planes are round):
  *
  *   - a radially-fading fill (fan from the sheet center, so the
- *     wash doesn't flood the whole scene like the old uniform quad)
+ *     wash stays localized instead of flooding the whole scene)
  *   - integer grid chords with mid-peak alpha - the sheet reads as
  *     graph paper, so the two open coordinates can be eyeballed;
  *     the two zero lines (the in-plane axes) render brighter
@@ -226,9 +226,7 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
 
     /* No glPointSize(1) reset: both callers bracket this in
      * geometry_guides_push_state()'s glPushAttrib(GL_ALL_ATTRIB_BITS), which
-     * restores the size. It also used to shrink the marker to one pixel on
-     * web, back when gl4es applied the last size before its flush to the whole
-     * pending batch (packaging/web/patches/gl4es-point-size-batch.patch). */
+     * restores the size. Resetting it here would overwrite the marker size. */
     glDisable(GL_POINT_SMOOTH);
     if (depth) glEnable(GL_DEPTH_TEST);
 }

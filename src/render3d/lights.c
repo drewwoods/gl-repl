@@ -53,7 +53,7 @@ void render3d_lights_init_global_ambient(void) {
  * before the camera transform. */
 static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
     /* DEFAULT: warm key + cool fill + orange rim + disabled directional.
-     * Matches the historical 4-light layout. */
+     * This is the standard four-light layout. */
     [LIGHT_THEME_DEFAULT] = {
         { GL_LIGHT0, 0, 0,
             {  2.0f,  4.0f,  5.0f, 0.0f },

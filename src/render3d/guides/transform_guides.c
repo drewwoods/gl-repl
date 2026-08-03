@@ -24,7 +24,7 @@ static void transform_guides_pop_state(void) {
  * glEnable(GL_CULL_FACE) would clip; smooth shading is required for the
  * cones' ring-shaded vertex colors to interpolate. Depth writes are off:
  * the guide is a blended overlay that must not self-occlude - coplanar
- * self-overlaps (a >360° rotate arc lapping itself, the dial/ticks/
+ * self-overlaps (a >360 deg rotate arc lapping itself, the dial/ticks/
  * sector sharing the rotation plane) would otherwise z-fight their own
  * first lap. Depth *testing* against scene geometry still applies in
  * the solid pass. The one exception is draw_cone_head's colorless depth
@@ -58,10 +58,9 @@ static void transform_guides_begin_overlay_state(void) {
 #define TG_ARC_SEGS      48
 
 /* Arrowheads are filled cones (a fan of TG_CONE_SLICES side triangles
- * plus a base cap). A solid silhouette stays readable at any viewing
- * angle - the old 4-fin wireframe head vanished edge-on - and it
- * survives the depth-off ghost pass, where glLineStipple dashes lines
- * but leaves filled triangles whole. */
+ * plus a base cap). The solid silhouette stays readable at any viewing
+ * angle and survives the depth-off ghost pass, where glLineStipple dashes
+ * lines but leaves filled triangles whole. */
 #define TG_CONE_SLICES   12
 
 /* Shaft styling: a wide near-black contrast halo drawn under a bright
@@ -86,7 +85,7 @@ static void transform_guides_begin_overlay_state(void) {
 /* A filled cone alpha-stacks its front and back side surfaces while depth is
  * disabled, unlike the stippled one-pixel shaft. Keep its hidden pass much
  * fainter than the rest of the guide; at 0.22 * 0.95, two overlapping side
- * layers composite to about 0.37 instead of the old 0.77. */
+ * layers composite to about 0.37. */
 #define TG_CONE_GHOST_ALPHA_MUL 0.22f
 
 /* Clamp the head length to the [min, max] ladder. When dlen itself is
@@ -100,8 +99,7 @@ static float clamp_head_len(float dlen, float frac, float min_len, float max_len
     return head_len;
 }
 
-/* Per-pass alpha multiplier (formerly the file-static
- * g_guide_alpha_mul). The render dispatcher draws each guide twice:
+/* Per-pass alpha multiplier. The render dispatcher draws each guide twice:
  * a depth-test-off ghost pass at TG_GHOST_ALPHA_MUL so geometry can't
  * fully hide the guide, then a depth-tested solid pass at 1.0 on top.
  * The value is threaded as a parameter through every draw helper so an
@@ -144,8 +142,7 @@ static float tg_snap_zero(float v) {
 
 /* Shared two-run "<name> <numbers>" label emitter for the translate and
  * scale guides, mirroring the normal glyph's " n" + "=(...)" pattern so a
- * transform guide can never be misread as a normal readout (the old bare
- * tuple was character-for-character a glNormal3f argument list). Depth-test
+ * transform guide cannot be misread as a normal readout. Depth-test
  * off so the text is always legible. Emits the glyphs directly (rather than
  * via render3d overlays) so this TU stays free of an overlays.o link
  * dependency - the isolated guides test links only the guide objects. */
@@ -266,8 +263,8 @@ static void xform_axis_color(float x, float y, float z, float out[3]) {
 }
 
 /* Solid shaft from a to b: a wide near-black contrast halo drawn first,
- * then the bright guide-colored core on top. See the TG_SHAFT_* block
- * for why this replaced the old dim (0.30-alpha) base line. */
+ * then the bright guide-colored core on top. The TG_SHAFT_* constants keep
+ * the core legible over same-hue geometry. */
 static void draw_shaft_segment(const Render3dGuideSnapshot *snapshot,
                                const float a[3], const float b[3],
                                const float rgb[3], float alpha_mul) {
@@ -292,8 +289,8 @@ static void draw_shaft_segment(const Render3dGuideSnapshot *snapshot,
  * Side fan + base cap, with ring-angle vertex shading (bright on one
  * flank fading to dim on the other) faking a little dimensionality
  * without lighting, and a thin dark rim keeping the silhouette crisp
- * against same-hue geometry. Radius follows the old fin spread
- * (head_len * TG_FIN_FRAC) so the proportions carry over. */
+ * against same-hue geometry. Radius is head_len * TG_FIN_FRAC, keeping the
+ * cone proportional to the shaft. */
 static void draw_cone_head(const float tip[3], const float dir[3],
                            float head_len, const float rgb[3],
                            float alpha_mul) {
@@ -377,7 +374,7 @@ static void draw_cone_head(const float tip[3], const float dir[3],
 }
 
 /* Pulse shader for a straight segment in the axes-pulse style: a solid
- * halo+core base shaft, a bright dot traveling a→b, and a short trail
+ * halo+core base shaft, a bright dot traveling a -> b, and a short trail
  * behind the dot. */
 static void draw_pulse_segment(const Render3dGuideSnapshot *snapshot,
                                const float a[3], const float b[3],
@@ -464,7 +461,7 @@ static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
     transform_guides_pop_state();
 }
 
-/* Scale guide. Draws the identity reference (origin → axis·1, gray) with a
+/* Scale guide. Draws the identity reference (origin -> axis*1, gray) with a
  * bright tick at the 1.0 position on each axis, then a pulse arrow showing
  * only the distortion - from the 1.0 tick to the scaled tip. Scale of 1 on
  * an axis draws no pulse (identity); negative factors produce an arrow that
@@ -650,7 +647,7 @@ static void build_rotate_arc(const float p_start[3],
 
 /* Perpendicular {u, v} basis for a unit rotation axis (ax, ay, az):
  * u is computed from a world-up helper and normalized, then v = a x u.
- * Used to place the synthetic dial start point for on-axis anchors. */
+ * Places the synthetic dial start point for on-axis anchors. */
 static void rotate_axis_basis(float ax, float ay, float az,
                               float u[3], float v[3]) {
     float helper[3] = {1.0f, 0.0f, 0.0f};
@@ -792,9 +789,8 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
      * FRAME guide mode, whose anchor is the local origin - so substitute
      * a point on the axis-perpendicular plane through the anchor at a
      * gizmo-sized radius. Everything downstream (arc, dial, cone, label)
-     * then renders one uniform design instead of the old screw helix,
-     * which drew at a fixed tiny radius and disappeared next to
-     * unit-scale geometry. */
+     * then renders one uniform design that remains visible beside unit-scale
+     * geometry. */
     float axial0 = p_start[0]*ax + p_start[1]*ay + p_start[2]*az;
     float radial0[3] = {
         p_start[0] - ax*axial0,
@@ -831,7 +827,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
                          circle);
         float center[3] = { ax*axial0, ay*axial0, az*axial0 };
 
-        /* Sector sweep capped at one full turn: past 360° the fan would
+        /* Sector sweep capped at one full turn: past 360 deg the fan would
          * lap itself and double-blend the overlapped wedge. The arc,
          * pulse, and label still carry the full wrapped sweep. */
         const float (*sector_pts)[3] = arc;
@@ -948,9 +944,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
  * case (no edit yet) is treated as matched.
  *
  * The function name reflects what is actually compared: input vs
- * committed text. It does NOT compare parsed args between input and
- * source - a future enhancement could (see docs/plans/done/
- * src-scene-code-smell-audit.md #9). */
+ * committed text. It does NOT compare parsed args between input and source. */
 static int transform_input_matches_committed(const Render3dGuideSnapshot *snapshot) {
     const char *source = snapshot->edit_line_committed_text
                          ? snapshot->edit_line_committed_text : "";
@@ -1078,7 +1072,7 @@ int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
     if (!snapshot->show_guides)
         return 0;
 
-    /* Replay path (req 6): instead of the edit cursor, pick the transform
+    /* Replay path: instead of the edit cursor, pick the transform
      * shaping the draw the replay step emitted (a glVertex/gluVertex or a
      * glutSolid*) and guide *it* exactly as the live edit-mode guide would. The
      * plan is shaped identically to the edit path - cursor_flat_idx is the
@@ -1234,7 +1228,7 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
     float frame[16];
     int have_frame = 0;
 
-    /* Replay (req 6) shares the FRAME/WORLD anchoring below: the plan already
+    /* Replay shares the FRAME/WORLD anchoring below: the plan already
      * pointed cursor_flat_idx at the replay-chosen transform, so the guide
      * draws in that transform's own frame exactly as the live edit guide does,
      * rather than on the vertex (which already sits post-transform). */

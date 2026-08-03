@@ -53,16 +53,15 @@
 
 /* --- Sunset backdrop --- */
 
-/* Sky dome radius sits just inside the star dome so the two never
- * z-fight if a future mode composes them; the sun plane sits inside
- * the dome. */
+/* Sky dome radius sits just inside the star dome so the two never z-fight;
+ * the sun plane sits inside the dome. */
 #define SUNSET_SKY_RADIUS   29.0f
 #define SUNSET_SKY_SEGS     48
 /* Full sphere like the polar-day dome: the gradient clamps to its dark
  * under-horizon stop below the horizon, so closing the lower hemisphere
  * (PHI_MIN = -90deg) leaves no bottom edge for a look-down camera to
- * find. Doubled rings keep the above-horizon gradient as finely sampled
- * as the old half-dome despite the doubled elevation span. */
+ * find. The doubled ring count keeps the above-horizon gradient finely
+ * sampled across the full elevation span. */
 #define SUNSET_SKY_RINGS    32
 /* Dome elevation range in radians: straight down (-90deg) to zenith. */
 #define SUNSET_PHI_MIN     (-0.50f * (float)M_PI)
@@ -143,13 +142,13 @@ static float city_night_factor(float angle, float anim_time) {
     return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
 }
 
-/* --- draw_cityscape phases ---
+/* --- draw_cityscape stages ---
  *
- * The 200+ line god-function had four nested concerns: GL setup
+ * City rendering has four concerns: GL setup
  * (lighting/blend/fog), per-building geometry math, the two tiers of
  * box-quad emission (5 colored faces each), and the 2D grid of
- * window-quads with per-window lit-ness and color rolls. Extracted
- * into setup_city_gl_state / draw_building_box / draw_building_windows
+ * window-quads with per-window lit-ness and color rolls. These are split
+ * across setup_city_gl_state / draw_building_box / draw_building_windows,
  * so the outer loop reads as the seed/scatter/render sequence. */
 
 /* Drawn box: the 8 corners are 4 floor (y=y_base) + 4 roof (y=y_top)
@@ -401,8 +400,8 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         }
 
         /* Building footprint ranges (CITY_BLDG_W_RANGE / _H_RANGE) and
-         * the 0.65/0.60 cell sizes constrain wcols ∈ [2, 5] and
-         * wrows ∈ [3, 14]. The upper clamp on wrows is the only
+         * the 0.65/0.60 cell sizes constrain wcols in [2, 5] and
+         * wrows in [3, 14]. The upper clamp on wrows is the only
          * boundary-effective one; the others were dead before. */
         int wcols = 1 + (int)(bw / 0.65f);
         int wrows = 1 + (int)(bh / 0.60f);
@@ -1032,7 +1031,7 @@ static void polar_sky_color(float h, float *r, float *g, float *b) {
     *r = stops[n - 1].r; *g = stops[n - 1].g; *b = stops[n - 1].b;
 }
 
-/* Full sphere: the glacial haze closes straight down (-90°), so no
+/* Full sphere: the glacial haze closes straight down (-90 deg), so no
  * bottom edge exists for any look-down angle to find (see
  * polar_sky_color note). Extra rings keep the above-horizon gradient
  * as finely sampled as the sunset dome's despite the doubled span. */
@@ -1200,7 +1199,7 @@ static const BackdropEnvLight k_nebula_lights[] = {
 };
 
 /* Polar-day environment lights: a cool, diffuse arctic palette matched
- * to the dome's glacial-tint → steel-blue gradient.  The dome is
+ * to the dome's glacial-tint -> steel-blue gradient. The dome is
  * directionless (no sun disc), so the key is zenith-down and neutral-
  * cool rather than warm-directional.  Same GL_LIGHT4..6 contract. */
 static const BackdropEnvLight k_polar_day_lights[] = {

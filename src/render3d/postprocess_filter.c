@@ -1,11 +1,11 @@
 /*
  * postprocess_filter.c - see postprocess_filter.h.
  *
- * Iteration 1: chromatic aberration. Capture the resolved scene rect
+ * Chromatic aberration: capture the resolved scene rect
  * into one POT texture, redraw it, then redraw red/blue channel-only
- * passes with a small ±x screen offset.
+ * passes with a small +/- x screen offset.
  *
- * Iteration 2: vignette. A blended elliptical radial gradient drawn
+ * Vignette: a blended elliptical radial gradient drawn
  * over the rect - transparent at the centre, darkening toward the
  * corners. No capture needed (it only darkens), so it skips the
  * texture machinery entirely.
@@ -172,7 +172,7 @@ static void postprocess_filter_draw_quad(int sw, int sh,
  * begin_2d bracket: glPushAttrib's GL_TEXTURE_BIT group (pulled in by
  * GL_ALL_ATTRIB_BITS) snapshots GL_TEXTURE_BINDING_2D at push time, so
  * glPopAttrib restores the caller's binding only if the push precedes our
- * bind here - OpenGL 2.1 spec §6.1.16 / the glPushAttrib reference page,
+ * bind here - OpenGL 2.1 spec section 6.1.16 / the glPushAttrib reference page,
  * https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/glPushAttrib.xml
  * Allocation/copy are matrix/viewport-independent, so running them inside
  * the bracket is safe. Returns the used sub-rectangle of the POT texture

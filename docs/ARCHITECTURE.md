@@ -523,7 +523,7 @@ should remain mechanical because [`gl_repl.h`](../gl_repl.h) is included broadly
 REPL-aware data because this sample has one frontend and no plugin-host
 requirement.
 
-The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L137)
+The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L135)
 consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
 [`FlatProgramView`](../src/repl/flatten.h#L58), viewport, camera, animation, quality flags, lighting,
@@ -532,7 +532,7 @@ metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L132) /
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L348), for example camera world height,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L347), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -663,7 +663,7 @@ camera looks down -Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L143), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L141), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
@@ -1464,7 +1464,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L140), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L348),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L140), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L347),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
@@ -1713,7 +1713,7 @@ mechanisms:
 
 1. **Render3d caches what it applied (Tenet 3).**
    `render3d_apply_projection()` writes a jitter-free [`Render3dProjectionDesc`](../src/render3d/render.h#L60)
-   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L143) reads
+   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L141) reads
    it. The continuous perspective↔ortho blend is *snapped to the
    dominant side* (`mix < 0.5` ⇒ ortho) because `reshape()` emits one
    discrete mode, never an interpolated matrix. Render3d exposes data; it
@@ -1723,7 +1723,7 @@ mechanisms:
    [`ReplExportCameraBridge`](../src/repl/export.h#L83)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
-   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L143) and formats the C
+   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L141) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
    [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
@@ -1739,7 +1739,7 @@ state and (b) read by more than one consumer in the frame loop:
 
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
-*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L137) in
+*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L135) in
 [`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L264) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
@@ -1785,7 +1785,7 @@ Per the rule above:
   a controller-owned [`ReplExportLayout`](../src/repl/export.h#L256)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
-[`render3d_get_active_projection()`](../src/render3d/render.h#L143) is the *nearest-steady* projection: the
+[`render3d_get_active_projection()`](../src/render3d/render.h#L141) is the *nearest-steady* projection: the
 continuous blend is snapped to the dominant side (`mix < 0.5` ⇒ ortho).
 It is deliberately not the live blended 16-float matrix - `reshape()`
 emits one discrete mode, not an interpolation; a faithful mid-transition
