@@ -14,15 +14,15 @@
  * text owner between those two layers.
  *
  * Capture/restore/reset are editor-local for the same reason. Whole-app reset
- * paths still call through one controller-owned entry point, but the editor's
- * slices no longer piggyback on repl_state_capture/restore. */
+ * paths still call through one controller-owned entry point, while the editor
+ * owns these slices independently of REPL state capture and restore. */
 
 /* Per-line canonical text. One slot per source command, indexed by
  * source command index. Text is the user-typed form (no trailing ';',
  * no leading whitespace) - the same shape `editor_load_line_to_input` produces
  * after stripping. The typedef lives in editor_state.h because
- * EditorState owns the buffer; src/repl/state_views.h no longer defines or
- * declares anything related to it. */
+ * EditorState owns the buffer; src/repl/state_views.h does not define or
+ * declare anything related to it. */
 typedef struct {
     char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
     int  line_count;
@@ -190,8 +190,8 @@ typedef struct {
  * cursor as an explicit parameter (parse / compile / flatten / load)
  * or routes through the repl_dispatch_edit_line_get / _set
  * host-effects sink (scene save/restore, the load.c NULL-fallback).
- * REPL files do not link `editor_state_*` symbols (β invariant;
- * storage moved here in Phase 4 of docs/plans/done/edit-line-ownership.md). */
+ * REPL files do not link `editor_state_*` symbols; this boundary keeps
+ * editor storage independent of the REPL pipeline. */
 typedef struct {
     int edit_line_idx;
 } EditorDocumentState;
@@ -329,8 +329,7 @@ EditorInputState *editor_state_input_mut(void);
 void                  editor_state_input_reset(void);
 
 /* Editor-input convenience getters/setters. Implementations live in
- * editor_state.c since commit 5 (storage moved); the names finally
- * match the namespace they live in (commit 10). */
+ * editor_state.c and use the same namespace as the state they expose. */
 const char *editor_input_text(void);
 char       *editor_input_buffer_mut(void);
 int         editor_input_len(void);
@@ -386,9 +385,8 @@ void        editor_pending_newline_clear(void);
  * explicit parameter (parse / compile / flatten / load entry points)
  * or route through the repl_dispatch_edit_line_get / _set
  * host-effects sink in `src/repl/core.h` (scene save/restore, the
- * load.c NULL-fallback). β invariant: REPL files do not call editor
- * accessors (storage moved off `ReplState.document.edit_line_idx` in
- * docs/plans/done/edit-line-ownership.md, Phase 4). */
+ * load.c NULL-fallback). REPL files do not call editor accessors; the
+ * pipeline receives the edit-line explicitly or through that sink. */
 int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);

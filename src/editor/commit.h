@@ -4,7 +4,7 @@
  * This layer owns the editor half of a commit transaction: ask the REPL
  * compile/apply surface what source-command change should happen, preflight
  * it, then run the shared mutation sequence - predef ops, scratch ops,
- * editor text buffer, cmd-store - and replay any editor-only follow-up
+ * editor text buffer, cmd-store - and replay any editor-only post-commit
  * effects (cursor moves, input clearing, etc.).
  *
  * **Undo policy is the caller's, not this layer's.** Both
@@ -76,10 +76,10 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
  *
  * Editor-side structured compile functions return `EditorCommitPlan`.
  * `editor_commit_apply_plan` drives the canonical transaction:
- *   preflight (`repl_apply_can_apply_compiled_change`) →
+ *   preflight (`repl_apply_can_apply_compiled_change`) ->
  *   apply REPL halves (predef ops + scratch ops + editor buffer
- *     + cmd store, via `apply_compiled_change_full`) →
- *   editor post-effects → status text.
+ *     + cmd store, via `apply_compiled_change_full`) ->
+ *   editor post-effects -> status text.
  * Undo capture is **not** part of this transaction (see the file
  * header above); the dispatch site owns it.
  *
@@ -161,10 +161,10 @@ void editor_commit_plan_init(EditorCommitPlan *plan);
  *      with no mutation.
  *   2. Apply the REPL halves (predef ops + scratch ops +
  *      editor-buffer apply + REPL cmd-store apply).
- *   3. Apply editor post-effects in order: cursor_target →
- *      func-decl-resume → insert_mode_target → clear_input →
- *      clear_pending_newline → load_line_after_apply →
- *      clear_autocomplete → func_decl_resume_publish.
+ *   3. Apply editor post-effects in order: cursor_target ->
+ *      func-decl-resume -> insert_mode_target -> clear_input ->
+ *      clear_pending_newline -> load_line_after_apply ->
+ *      clear_autocomplete -> func_decl_resume_publish.
  *   4. If `plan->change.commit_message[0]` is non-empty, publish the status text.
  *
  * Undo capture is the caller's responsibility - the ;-key / Enter /

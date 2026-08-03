@@ -55,8 +55,8 @@ const char *editor_inline_file_prompt_error(void) {
 int editor_inline_file_prompt_begin(const char *default_name) {
     if (g_prompt_active) return 0;
     /* At most one inline modal is up at a time. If the user had a
-     * scene-rename in progress and somehow triggered Load Scene (via
-     * a future shortcut, etc.), cancel rename rather than have both
+     * scene-rename in progress and somehow triggered Load Scene, cancel
+     * rename rather than have both
      * modals quietly active - the controller's keyboard route checks
      * rename first, so the file prompt would otherwise be invisible
      * to keystrokes while still drawing in the snapshot. */
@@ -93,9 +93,8 @@ static int prompt_char_ok(unsigned char c) {
     return 1;
 }
 
-/* Set the in-prompt error string and ALSO publish via repl_set_status
- * so that callers (e.g. tests, future renderers) that key off status
- * see the same message. */
+/* Set the in-prompt error string and also publish via repl_set_status so
+ * callers that key off status see the same message. */
 static void prompt_set_err(const char *msg) {
     snprintf(g_prompt_err, sizeof(g_prompt_err), "%s", msg ? msg : "");
     if (msg && msg[0]) repl_set_status_error(msg);

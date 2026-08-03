@@ -538,7 +538,7 @@ aliases (candidate text materialized in glr_completion.c statics, filtered to
 slots with a live `CMD_FUNC_DEF` - alias names outlive deleted defs). Param
 hints resolve the callee through `repl_scan_func_name_token`, so `funcN(` and
 `drawCube(` behave alike. Search: Ctrl+F, state via
-[`editor_state_search()`](src/editor/state.h#L429).
+[`editor_state_search()`](src/editor/state.h#L427).
 
 ### Find / replace
 

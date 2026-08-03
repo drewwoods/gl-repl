@@ -39,7 +39,7 @@ int edit_op_buffer_insert_char_at_cursor(char c) {
      * edit_op_backspace, which consume the selection up front via
      * edit_op_consume_input_selection (whose end-of-function
      * editor_cursor_pos_set clears the anchor as expected,
-     * matching the Phase B default cursor-move policy). */
+     * matching the default cursor-move policy). */
     editor_cursor_pos_set_keep_anchor(cur + 1);
     return 1;
 }

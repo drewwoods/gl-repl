@@ -92,9 +92,8 @@ static ReplCompileResult editor_compile_error(char *err, int err_size,
  * caller's job - this is the shared mutation sequence; each caller
  * decides its own preflight-failure policy and undo policy. The
  * edit-line is read into a local, threaded through apply, and
- * written back on success (matches the apply API's cursor-inout
- * contract; cursor ownership moved editor-side in Phase 1 of
- * docs/plans/done/edit-line-ownership.md). */
+ * written back on success (matching the apply API's cursor-inout
+ * contract). */
 static void apply_compiled_change_full(const ReplCompiledChange *change) {
     if (!repl_apply_can_apply_compiled_change(change))
         return;
@@ -190,10 +189,8 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
     }
 
     /* Func-decl resume advance. The compile step captured the
-     * delta; consume it here. The matching read+clear of the
-     * live global also happens at compile time so the global
-     * stays consistent (commit 26d eliminates the global by
-     * folding the read into compile-time entirely). */
+     * delta; consume it here. The matching read and clear of the
+     * live bookkeeping happens during compilation. */
     if (effects->end_type == (int)CMD_FUNC_END &&
         effects->func_decl_resume_advance > 0) {
         editor_state_edit_line_set(editor_state_edit_line() +
@@ -251,7 +248,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
 /* ---- editor_compile_close_brace --------------------------------- */
 
-/* CONTRACT (audit #11): context-pure for document data. The core
+/* CONTRACT: context-pure for document data. The core
  * compile kernel uses ReplCompileContext.source_scope; this editor-only
  * wrapper still uses the existing live source-scope wrapper for
  * post-effects and relocation helpers so editor -> REPL surface does not
@@ -397,7 +394,7 @@ ReplCompileResult editor_compile_if_branch(const char *input,
 
 /* ---- editor_compile_if_block ------------------------------------ */
 
-/* CONTRACT (audit #11): context-pure for document data and source-scope
+/* CONTRACT: context-pure for document data and source-scope
  * queries; still live-state-coupled for visible-var collection
  * (collect_visible_vars in src/repl/visible_vars.c). */
 ReplCompileResult editor_compile_if_block(const char *input,
@@ -425,7 +422,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
     const char *ib_text = kernel.ib_text;
 
     /* Header-replace branch: cursor sits on an existing CMD_IF_BEGIN
-     * in non-insert mode → REPLACE_ONE. */
+     * in non-insert mode -> REPLACE_ONE. */
     if (!ctx->insert_mode &&
         ctx->edit_line < ctx->document_count &&
         ctx->document_cmds[ctx->edit_line].type == CMD_IF_BEGIN) {
@@ -540,10 +537,9 @@ static int compile_function_decl_insert_pos_after_delete(
     return pos;
 }
 
-/* CONTRACT (audit #11): context-pure for document data in the core
- * compile kernel. This editor-specific relocation wrapper keeps the
- * pre-existing live source-scope helper calls until the editor surface
- * is consolidated. */
+/* CONTRACT: context-pure for document data in the core
+ * compile kernel. This editor-specific relocation wrapper uses the
+ * live source-scope helpers required by the editor commit path. */
 ReplCompileResult editor_compile_func_def(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -707,7 +703,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
 /* ---- editor_compile_for_loop ------------------------------------ */
 
-/* CONTRACT (audit #11): context-pure for document data and source-scope
+/* CONTRACT: context-pure for document data and source-scope
  * queries; still live-state-coupled for visible-var collection
  * (collect_visible_vars in src/repl/visible_vars.c). */
 ReplCompileResult editor_compile_for_loop(const char *input,
@@ -945,7 +941,7 @@ void editor_commit_reset_transients(void) {
  *    or insert_mode - empty input never triggers a mutating handler)
  *  - editor_feed_line callers bracket the whole load with one push
  *    (currently only editor_clipboard_paste_current uses this path)
- * Audit #39 walked these and confirmed no missing-undo bugs. */
+ * Every mutating dispatch path listed above establishes that undo boundary. */
 
 int editor_try_commit_float_decl(void) {
     ReplCompileContext ctx = editor_compile_context_live();
@@ -1032,9 +1028,8 @@ int editor_try_commit_assign_variable(void) {
  * The four wrappers differ only in which editor_compile_* they call, so
  * the shared body lives in editor_try_commit_block(). --- */
 
-/* Prototyped (not old-style) function-pointer typedef per the C99
- * portability convention in CLAUDE.md. Matches every editor_compile_*
- * structured-block signature in commit.h. */
+/* Prototyped (not old-style) function-pointer typedef for C99 portability.
+ * Matches every editor_compile_* structured-block signature in commit.h. */
 typedef ReplCompileResult (*EditorBlockCompileFn)(const char *input,
                                                   const ReplCompileContext *ctx,
                                                   EditorCommitPlan *out,

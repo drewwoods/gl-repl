@@ -74,9 +74,8 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds))
         return;
-    /* The store no longer writes the cursor on load, so undo policy
-     * is to restore the snapshotted edit-line (implemented in Phase 1
-     * of docs/plans/done/edit-line-ownership.md). */
+    /* The store does not write the cursor on load, so undo restores the
+     * snapshotted edit-line explicitly. */
     editor_state_edit_line_set(snapshot->edit_line);
     editor_buffer_load_lines(undo_snapshot_line_ptrs(snapshot),
                              snapshot->num_cmds);

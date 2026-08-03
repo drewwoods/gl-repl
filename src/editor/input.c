@@ -26,11 +26,10 @@
  *    owns a click
  *  - editor_feed_line() programmatic commit entry
  *
- * Cross-domain concerns the editor used to reach for directly
- * (camera reset, hidden code-panel restore, app-frame transients
- * reset) moved to src/app/glr_ctrl.c per audit #8. The editor talks
- * to the controller through the EditorInputDispatchEffects struct
- * (restore_hidden_code_panel flag) or a registered provider hook
+ * Cross-domain concerns (camera reset, hidden code-panel restore, and
+ * app-frame transient reset) belong to src/app/glr_ctrl.c. The editor
+ * communicates with the controller through EditorInputDispatchEffects
+ * (restore_hidden_code_panel) or a registered provider hook
  * (EditorCodePanelLayoutProvider for layout reads).
  */
 
@@ -211,7 +210,7 @@ int editor_input_active_modifiers(void) {
      * alias so every existing GLUT_ACTIVE_CTRL check fires on macOS
      * Cmd shortcuts (Cmd+/ for comment toggle, mouse-modifier checks,
      * etc.). The SUPER bit stays visible so keyboard_func can do the
-     * letter→control-char translation specifically for Cmd+letter
+     * letter -> control-char translation specifically for Cmd+letter
      * combos without disturbing the real-Ctrl path. */
     if (mods & GLUT_ACTIVE_SUPER)
         mods |= GLUT_ACTIVE_CTRL;
@@ -341,10 +340,9 @@ static void editor_reset_document_to_empty(void) {
     /* Editor owns the source-text buffer, not just a UI mirror of
      * the REPL command-store. A wholesale "clear all cmds" has to
      * drop the buffer too, otherwise the cleared command-array and
-     * the surviving editor text drift out of lockstep - the user
-     * sees the old lines in the code panel while every commit acts
-     * on an empty cmd-store (implemented in Phase 4 of
-     * docs/plans/done/edit-line-ownership.md). */
+     * the surviving editor text drift out of lockstep: the user
+     * would see old lines in the code panel while every commit acted
+     * on an empty command store. */
     editor_buffer_clear();
     editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
@@ -461,7 +459,7 @@ static void navigate_to_line_raw_resolved(int target) {
 
     editor_state_edit_line_set(target);
     editor_insert_mode_set(0);
-    /* Land back on the tutorial's expected commit line → re-show the
+    /* Land back on the tutorial's expected commit line -> re-show the
      * shadow ghost. Anywhere else, navigation clears so stale
      * completions from the previous row don't linger. */
     if (tutorial_active() && target == tutorial_expected_commit_line()) {
@@ -506,8 +504,8 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
      * lands BEFORE the comment (`code; // c`), not after it (`code // c;`).
      * The text is the user's input buffer; a label() format string forbids
      * `//`, so the first `//` here is always the real trailing comment.
-     * Plain strstr (not repl_line_trailing_comment) keeps input.c's REPL
-     * surface unchanged for the check-editor-repl-surface ratchet. */
+     * Plain strstr (not repl_line_trailing_comment) keeps input.c's direct
+     * REPL dependency surface within the check-editor-repl-surface guard. */
     char trailing_comment[MAX_LINE_LEN];
     trailing_comment[0] = '\0';
     {
@@ -632,9 +630,9 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
 
 /* Resolve the source-document index where a freshly-parsed command should
  * land, derived from the current editor mode and cursor:
- *   - in insert mode → at edit_line (the cursor row)
- *   - else edit_line < doc_count → at edit_line (the replace target)
- *   - else → at doc_count (append at end)
+ *   - in insert mode -> at edit_line (the cursor row)
+ *   - else edit_line < doc_count -> at edit_line (the replace target)
+ *   - else -> at doc_count (append at end)
  * Used by every commit site that runs the parse-and-place tail. */
 static int editor_resolve_insert_idx(void) {
     int edit = editor_state_edit_line();
@@ -788,14 +786,14 @@ static int current_input_needs_navigation_commit(void) {
  * line-advance/insert-mode behavior for unchanged lines; navigation treats
  * unchanged input as a no-op and only uses this helper for modified text.
  *
- * ORDERING INVARIANTS (audit #10 - both are load-bearing, in opposite
+ * ORDERING INVARIANTS (both are load-bearing, in opposite
  * directions; do not "normalize" to a single shape):
  *
  *  1. WITHIN var_statements: float_decl MUST run before assign_variable.
  *     `editor_try_commit_var_statements()` enforces this order - the
  *     reverse would misread `float x` as an assignment to an
  *     identifier named "float". See `editor_try_commit_var_statements`
- *     in src/editor/commit.c and CLAUDE.md "Commit Dispatch Sites".
+ *     in src/editor/commit.c and the commit-dispatch contract.
  *
  *  2. UNDER Enter: block_structs FIRST, then var_statements. Diverges
  *     from the canonical `editor_try_commit_any` order used by the ;-
@@ -832,10 +830,7 @@ static CommitResult commit_current_input(int enter_mode,
             /* Cursor at column 0: insert a real, persistent blank line
              * ABOVE the current line and keep the cursor on the original
              * content (it follows the text down one row), like a standard
-             * editor's "newline before the cursor". Previously this parked
-             * the cursor on a transient empty insert row that vanished if
-             * the next navigation landed back on the same document index
-             * (e.g. a click on the line below). Cursor > 0 still opens an
+             * editor's "newline before the cursor". Cursor > 0 opens an
              * empty insert row below for typing a new command. */
             if (editor_cursor_pos() == 0) {
                 ReplCompileContext ctx =
@@ -1453,10 +1448,8 @@ static int handle_text_delete_key_route(unsigned char key) {
             editor_delete_cmd_range(start, hi - start + 1, "Deleted");
             return 1;
         }
-        /* Standard editor semantics (audit #7): Backspace deletes the
-         * character to the left, Delete deletes the character at the
-         * cursor. The two used to collapse to delete-left until the
-         * delete-right primitive landed. */
+        /* Standard editor semantics: Backspace deletes the character to
+         * the left, while Delete deletes the character at the cursor. */
         int changed = (key == KEY_BACKSPACE)
             ? edit_op_buffer_delete_left_of_cursor()
             : edit_op_buffer_delete_right_of_cursor();
@@ -1519,8 +1512,8 @@ static int tutorial_precheck_current_input(void) {
      * kind-appropriate hint and let the SET-step ack key (Enter / Tab /
      * Space, handled in glr_ctrl_keyboard's router) drive advancement
      * instead. Routing the hint through a tutorial_* widget call keeps
-     * input.c's direct repl_* surface frozen at its baseline (the
-     * check-editor-repl-surface ratchet). */
+     * input.c's direct repl_* surface within the check-editor-repl-surface
+     * guard. */
     if (tutorial_reject_noncommand_commit_with_hint()) {
         editor_completion_clear();
         return 0;
@@ -1588,7 +1581,7 @@ static void tutorial_advance_if_commit_ok(CommitResult result) {
          * predef-writeback notify hook inside the commit instead; if that
          * notify already advanced onto a COMMAND step, a second advance
          * here would skip it (instruction comment shown, command never
-         * typed - the `float n = ...;` → glBegin skip). */
+         * typed - the `float n = ...;` -> glBegin skip). */
         if (tutorial_note_expected_commit_applied())
             tutorial_advance_after_successful_commit();
     } else {
@@ -1743,7 +1736,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)y;
 
     /* Defensive translation. The controller's glr_ctrl_keyboard
-     * already normalizes Cmd+letter → control-character before this
+     * already normalizes Cmd+letter -> control-character before this
      * runs, but tests call editor_handle_key (and thence keyboard_func)
      * directly without going through the controller chain. The
      * helper is a no-op on already-translated keys (control chars
@@ -1777,7 +1770,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
 /* Programmatic commit entry for file/example/workspace loading. Mirrors
  * the keyboard ;-key path: load `line` into the input buffer, try the
  * structured editor_try_commit_any() chain, and if that doesn't consume
- * it, run the same general-command parse → command-store → editor-buffer
+ * it, run the same general-command parse -> command-store -> editor-buffer
  * tail used by the Enter/insert handler above (handle_enter_key_route).
  *
  * This tail is intentionally distinct from the interactive ;-key /
@@ -1911,7 +1904,7 @@ static int handle_horizontal_special_key_route(int key) {
      * the anchor on the first extending press (when no selection is
      * active yet) and then grows or shrinks the range. The unshifted
      * cases keep the plain editor_cursor_pos_set, which clears the
-     * anchor as part of the default cursor-move policy (Phase B). */
+     * anchor as part of the default cursor-move policy. */
     int shift = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
     int input_len = editor_state_input().input_len;
     int cur = editor_cursor_pos();

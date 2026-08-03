@@ -412,7 +412,7 @@ source line through `src_cmd_idx`, resolved via
 
 The active edit-line cursor is **editor-owned**: it lives in
 `EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L195)) and is read
-and written through [`editor_state_edit_line()`](../src/editor/state.h#L392) / `_set()` / `_clamp()`.
+and written through [`editor_state_edit_line()`](../src/editor/state.h#L390) / `_set()` / `_clamp()`.
 There is no `repl_state_edit_line()` and no cursor pointer inside
 [`ReplCommandStore`](../src/repl/command_store.h#L46). The REPL pipeline never reaches into editor cursor
 storage:
@@ -861,7 +861,7 @@ signature for audited renderers.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
   [`ReplImportExportView`](../src/repl/state_views.h#L162), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
-  - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L392),
+  - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers

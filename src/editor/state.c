@@ -38,10 +38,8 @@ static const EditorState *editor_state_get_defaults(void) {
 }
 
 /* Bounded copy: writes src into dst (capacity sz, NUL-terminated). If
- * src is too long, dst is cleared to "" - same surrender behavior as
- * the legacy repl_copy_string_fits helper this slice depended on
- * before the migration. Inlined locally so editor_state.c does not
- * depend on a repl header just for a string helper. */
+ * src is too long, dst is cleared to "". Keep this helper local so
+ * editor_state.c does not depend on a REPL header for string handling. */
 static void editor_input_copy_str(char *dst, size_t sz, const char *src) {
     if (!dst || sz == 0)
         return;
@@ -280,9 +278,8 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
 /* The edit-line cursor lives on g_editor_state.document.edit_line_idx;
  * the editor accessors read and write the field directly. REPL
  * pipeline code receives the value as an explicit function parameter
- * or via the repl_dispatch_edit_line_get/_set sink - never by
- * linking to editor_state_edit_line directly (β invariant;
- * storage moved here in Phase 4 of docs/plans/done/edit-line-ownership.md). */
+ * or via the repl_dispatch_edit_line_get/_set sink; it never links to
+ * editor_state_edit_line directly. */
 int editor_state_edit_line(void) {
     return g_editor_state.document.edit_line_idx;
 }
@@ -359,8 +356,8 @@ void editor_input_len_set(int input_len) {
      * "anchor_pos in [0, input_len]" invariant when the buffer shrinks.
      * Anchor-preserving callers drive the buffer through narrower
      * primitives and route through
-     * editor_cursor_pos_set_keep_anchor themselves (for example, the
-     * shift handlers added in Phase E). */
+     * editor_cursor_pos_set_keep_anchor themselves (for example, shift
+     * handlers). */
     editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
@@ -420,7 +417,7 @@ void editor_cursor_pos_extend_selection(int new_pos) {
     if (new_pos > in->input_len) new_pos = in->input_len;
 
     /* Pin the pre-move cursor as the anchor *before* the move so a
-     * previously inactive selection becomes [old, new). If the anchor
+     * selection becomes [old, new). If the anchor
      * is already set, leave it alone - the existing range just extends
      * or contracts. Using anchor_pos_set here would collapse the
      * anchor on (anchor == cursor) before we get the chance to move,
@@ -756,9 +753,9 @@ const char *editor_state_line_override_for(int line_idx) {
     return NULL;
 }
 
-/* The legacy `editor_state_variable_drag` / `_mut` / `_reset`
- * forwarders are gone. Callers use `variable_panel_drag` / `_mut` /
- * `variable_panel_handle_drag_reset` directly (removed in Phase J7). */
+/* Variable-panel drag state is owned by the peer subsystem. Callers use
+ * `variable_panel_drag` / `_mut` / `variable_panel_handle_drag_reset`
+ * directly. */
 
 EditorCursorBlinkState editor_state_cursor_blink(void) {
     return g_editor_state.cursor_blink;

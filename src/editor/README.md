@@ -1,4 +1,4 @@
-# `src/editor` - the text-document model + controller (Draft)
+# `src/editor` - the text-document model + controller
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -18,7 +18,7 @@ completion", "scroll follows the cursor").
 `src/editor` is that model + controller, split along a deliberate seam:
 
 - **Generic, application-free core.** [`state.c`](state.c) owns the document
-  ([`EditorState`](state.h#L199): buffer, cursor, selection, scroll, undo, …) and
+  ([`EditorState`](state.h#L199): buffer, cursor, selection, scroll, undo, ...) and
   [`edit_ops.c`](edit_ops.c) provides the primitive operations (insert a char, delete at
   cursor, consume a selection) that *any* plain-text editor needs. These
   know nothing about OpenGL, REPL grammar, or this app.
@@ -49,8 +49,7 @@ make editor-demo USE_GL_STUBS=1 # headless link-only smoke test (no GL dev libs)
 
 In the real-GL window: typing inserts characters via `edit_op_type_char`,
 Backspace deletes via `edit_op_backspace`, the arrow keys move the cursor
-within the row, and the File menu shows Load / Save (placeholder handlers)
-plus Quit.
+within the row, and the File menu provides Load / Save / Quit.
 
 The demo's value is what it *refuses* to link: [`input.c`](input.c), [`commit.c`](commit.c),
 [`clipboard.c`](clipboard.c), [`undo.c`](undo.c), [`reformat.c`](reformat.c), [`search.c`](search.c), and [`completion.c`](completion.c) are all
@@ -91,8 +90,8 @@ without the editor at all (see `repl_demo`).
 |---|---|
 | [`state.c`](state.c) / `.h` | Owns [`EditorState`](state.h#L199): buffer, input, cursor, selection, scroll, search, autocomplete, undo, cursor blink |
 | [`edit_ops.c`](edit_ops.c) / `.h` | Generic text-editing primitives (REPL-free; shared with `editor_demo`) |
-| [`input.c`](input.c) / `.h` | REPL editor key/mouse dispatcher (`;` commit, Tab, Ctrl+R, comment toggle, …) |
-| [`commit.c`](commit.c) / `.h` | Commit transaction boundary: compile → undo → buffer write → REPL apply |
+| [`input.c`](input.c) / `.h` | REPL editor key/mouse dispatcher (`;` commit, Tab, Ctrl+R, comment toggle, ...) |
+| [`commit.c`](commit.c) / `.h` | Commit transaction boundary: compile -> undo -> buffer write -> REPL apply |
 | [`undo.c`](undo.c) / `.h` | Undo/redo rings (restore editor text + REPL command state together) |
 | [`clipboard.c`](clipboard.c) / `.h` | Selection anchors, copy/cut/paste payloads (line-range + input-text) |
 | [`search.c`](search.c) / `.h` | Case-insensitive search query + match navigation |

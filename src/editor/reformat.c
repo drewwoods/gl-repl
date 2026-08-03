@@ -8,9 +8,8 @@
  * editor_load_line_to_input() when the user is not in insert mode.
  *
  * Not saved: selection, search, autocomplete, scroll, pending_newline,
- * undo ring.  repl_reformat_program() does not touch any of those, so
- * saving them would be dead weight.  If a future rewrite mutates any
- * of them, expand the save set here.
+ * undo ring. repl_reformat_program() does not touch any of those; they
+ * remain transient editor state while the document text is reformatted.
  */
 #include <string.h>
 

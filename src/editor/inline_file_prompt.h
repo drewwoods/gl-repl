@@ -4,7 +4,7 @@
  * Parallel to editor_inline_rename: a modal status-bar text input that
  * prompts for a single file path, then runs the existing
  * `repl_export_load_from_file` import path on commit (Enter). Triggered
- * by the File-menu "Load Scene…" row (GLR_FILE_ITEM_LOAD_SCENE) so the
+ * by the File-menu "Load Scene..." row (GLR_FILE_ITEM_LOAD_SCENE) so the
  * user can swap in a saved scene at runtime instead of having to
  * relaunch with `./gl-repl <file>`.
  *
@@ -67,7 +67,7 @@ const char *editor_inline_file_prompt_buffer(void);
 /* Most-recent failed-commit error string. Returns "" when there is no
  * error (including when the prompt is inactive). Cleared on any
  * keystroke that mutates the buffer (the user is editing, so the
- * stale error no longer applies) and on cancel. Read by the renderer
+ * current error is cleared) and on cancel. Read by the renderer
  * to display the error WITHIN the prompt strip since that strip
  * occludes the regular status bar. */
 const char *editor_inline_file_prompt_error(void);
