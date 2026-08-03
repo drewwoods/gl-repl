@@ -249,10 +249,10 @@ int prof_frame_time_stats(HistogramStats *out);
 
 /* Zero every section histogram and the frame-time histogram - bins and
  * running statistics alike - so the next samples start a fresh distribution.
- * Call when the measured workload is
- * replaced wholesale (loading a different example / scene) - the old shape
- * describes different geometry, and its startup outliers would otherwise sit
- * in the bins forever. Leaves the EMAs, staleness and FPS history alone:
+ * Call when the measured workload changes wholesale (loading a different
+ * example / scene); a cumulative histogram must not mix different geometry
+ * or carry its startup outliers forever. Leaves the EMAs, staleness and FPS
+ * history alone:
  * those are self-correcting over a few frames, the histograms are cumulative
  * and are not. */
 void prof_histogram_reset(void);

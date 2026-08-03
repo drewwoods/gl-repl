@@ -1974,7 +1974,7 @@ the projection backwards to world space: identity modelview (no camera),
 a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
 hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
 and `glDepthRange(0, 1)`. The writer inverts exactly this
-([`MeshPlyCapture`](../src/support/mesh_ply.h#L63) carries `ortho_r` / viewport / depth-range) - note
+([`MeshPlyCapture`](../src/support/mesh_ply.h#L62) carries `ortho_r` / viewport / depth-range) - note
 `glOrtho` maps world `z → -z/R`, so the depth inversion negates. State is
 saved/restored (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks
 pushed explicitly, since `glPushAttrib` doesn't cover them), and feedback
@@ -2031,7 +2031,7 @@ weld pass as face corners, so a line strip's repeated shared endpoints
 merge and its edges chain through common vertices; authored normals from
 the texcoord channel apply to them exactly as to polygon corners
 (vertices with neither an authored normal nor a face contribution write a
-zero normal). [`MeshPlyStats`](../src/support/mesh_ply.h#L103) returns the per-primitive counts so the
+zero normal). [`MeshPlyStats`](../src/support/mesh_ply.h#L104) returns the per-primitive counts so the
 status line can report "N triangles, M edges, K points".
 
 PLY viewer support for loose vertices and `edge` elements is uneven: Xcode

@@ -1,4 +1,4 @@
-# `src/support/` - Neutral shared utilities (Draft)
+# `src/support/` - Neutral shared utilities
 
 Home for small, dependency-light helpers that don't belong to any of the
 layered modules (`repl`, `editor`, `render3d`, `ui`, `app`, `subsystems`).
@@ -44,9 +44,8 @@ PLY export tests. Index of every demo: [`tools/README.md`](../../tools/README.md
 
 ## Why a dedicated directory
 
-Before the `src/` restructure these files sat at the repo root with no
-owner directory. Putting them under `src/support/` keeps the root
-clean and gives future neutral helpers a clear landing spot - matching
+Putting these files under `src/support/` keeps the root clean and gives
+neutral helpers a clear landing spot - matching
 the same pattern as `src/render3d/guides/`, `src/subsystems/`, and
 similar self-contained pockets.
 

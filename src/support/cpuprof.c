@@ -29,8 +29,8 @@
 /* ========================================================================= */
 
 static double g_prof_start[PROF_SECTION_COUNT];
-static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured wall µs */
-static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
+static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured wall us */
+static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in us             */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_accum_sampled[PROF_SECTION_COUNT]; /* accum_end ran since reset */

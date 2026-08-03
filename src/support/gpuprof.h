@@ -68,7 +68,7 @@ typedef struct {
  * required; query_counter optional and selects timestamp mode when set).
  * Needs a current GL context (query objects are generated here). Returns
  * 1 on success, 0 (and stays disabled) on a NULL table or missing entry.
- * Re-init after a previous init tears the old state down first. */
+ * Re-init tears down the existing state first. */
 int  gpu_prof_init(const GpuProfGlFns *fns);
 
 /* Nonzero when enabled in timestamp mode (additive interval deltas). */
@@ -91,7 +91,7 @@ void gpu_prof_frame_begin(void);
 void gpu_prof_begin(ProfSection s);
 void gpu_prof_end(ProfSection s);
 
-/* Read-only API for the panel. Values are µs of GPU elapsed time, from
+/* Read-only API for the panel. Values are us of GPU elapsed time, from
  * the most recent fully-harvested frame (typically 1-3 frames old).
  * has_data is 0 for sections never GPU-bracketed, while disabled, or
  * when samples went stale.
