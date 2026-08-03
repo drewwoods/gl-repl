@@ -257,9 +257,8 @@ static int cp_keybtn_block(CpPaletteTab t) {
     return (t == CP_TAB_HARMONY) ? (CP_TAB_H + CP_GAP) : 0;
 }
 
-/* Whole-popup extent. popup_w mirrors the legacy `pw` (element span + gap);
- * popup_h is the original (SV + preview) height plus the tab strip, the
- * active palette grid, and the Harmony "Set key" button when shown. */
+/* Whole-popup extent: element span plus gap, followed by the tab strip, the
+ * active palette grid, and the optional Harmony "Set key" button. */
 static int cp_popup_w(void) { return cp_total_w() + CP_GAP; }
 static int cp_popup_h(void) {
     return CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP
@@ -482,11 +481,9 @@ void color_picker_start(int cmd_idx, int my) {
         return;  /* not an editable color command */
 
     /* New session (first open, or switching to a different line):
-     * arm the next writeback to capture undo. Editing the same line
-     * after a close-then-reopen is treated as a new session - matches
-     * the legacy behaviour where every open-on-different-line pushed
-     * undo, except the snapshot now records the moment of the first
-     * actual mutation rather than the moment of open. */
+     * arm the next writeback to capture undo. Editing the same line after a
+     * close-then-reopen is a new session, and the snapshot is taken on the
+     * first actual mutation rather than when the popup opens. */
     if (g_cp_line != cmd_idx)
         g_cp_undo_captured = 0;
 

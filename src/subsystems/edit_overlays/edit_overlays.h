@@ -29,8 +29,8 @@ typedef enum OverlayVertexLabelMode {
  * Y and yield to the fixed-priority cursor-guide text, so a crowded block
  * stays readable at the cost of leader lines. AT_VERTEX bypasses that
  * entirely and pins each label to its own projected vertex, additively
- * blended - exact position, overlaps and all. It also stops labels being
- * registered as guide-label obstacles, since they no longer claim a row. */
+ * blended - exact position, overlaps and all. It also keeps labels out of
+ * the guide-label obstacle set because they do not claim a row. */
 #define OVERLAY_LABEL_PLACEMENT_LIST(X) \
     X(DECLUTTERED, "Decluttered")       \
     X(AT_VERTEX, "At vertex")
@@ -57,14 +57,14 @@ typedef enum OverlayLabelPlacement {
  * stays cursor-bound there, because a highlight that covers everything
  * distinguishes nothing.
  *
- * A scope answers "which vertices get a label", nothing else. Two things that
- * once lived in this list and do not belong to it: occlusion, which applies
- * whenever the GL context supports depth readback (a label you can see for a
- * vertex you cannot is a lie about where the geometry is; WebGL cannot read
- * the default framebuffer's depth, so it falls back to showing all in-scope
- * labels), and at-vertex placement, which is OverlayLabelPlacement above. The
- * polygon highlight is deliberately exempt from occlusion and still draws
- * through hidden geometry so the cursor's shape stays findable. */
+ * A scope answers "which vertices get a label", nothing else. Occlusion
+ * applies whenever the GL context supports depth readback (a label you can
+ * see for a vertex you cannot is a lie about where the geometry is; WebGL
+ * cannot read the default framebuffer's depth, so it falls back to showing
+ * all in-scope labels). At-vertex placement is controlled by
+ * OverlayLabelPlacement above. The polygon highlight is deliberately exempt
+ * from occlusion and still draws through hidden geometry so the cursor's
+ * shape stays findable. */
 #define OVERLAY_SCOPE_LIST(X) \
     X(LAST_INSTANCE, "Cursor block, last instance")  \
     X(ALL_INSTANCES, "Cursor block, all instances")  \

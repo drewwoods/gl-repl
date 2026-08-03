@@ -28,7 +28,7 @@
  * kept HERE rather than in ui_theme: docs/MODULES.md keeps computed and
  * data palettes out of the theme module, and these are data the
  * conversion core indexes, not chrome colours a theme could restyle.
- * Index 0 is the colour of value 16, 32, … - value 0 itself never draws. */
+ * Index 0 is the colour of value 16, 32, ... - value 0 itself never draws. */
 static const unsigned char k_stencil_palette[16][3] = {
     { 120, 120, 128 },  /*  0 (only reached by 16, 32, ...) */
     {  84, 196, 255 },  /*  1  cyan-blue    */

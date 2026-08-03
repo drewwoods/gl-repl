@@ -5,10 +5,9 @@
  * variable values substituted into expressions and the result of evaluating
  * the line's expressions. This module fills a ReplReplayAnnotationOutput each
  * frame and leaves publication to the caller's presentation layer. The REPL
- * pipeline does not call into the editor's virtual-line API itself, so the demo
- * and other non-UI hosts can link this TU without dragging in editor render
- * code. Phase 4 of feature/source-document-port.md standardized that
- * return-value shape.
+ * pipeline does not call into the editor's virtual-line API, so demos and
+ * other non-UI hosts can link this TU without editor rendering code. The
+ * output shape is a return-value struct supplied by the caller.
  *
  * Public surface:
  *   - replay_annotations_prepare() - fills the output. Idempotent

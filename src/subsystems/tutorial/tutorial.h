@@ -30,7 +30,7 @@
 #define TUTORIAL_FADE_CHARS_PER_SEC 50.0f
 #endif
 
-/* Width of the white→base-color "settle" wave that trails the fade-in
+/* Width of the white -> base-color "settle" wave that trails the fade-in
  * head. Each character becomes bright white the instant it is fully
  * revealed and eases back to the line's base color over this many
  * character-slots of time. Used by the renderer to size the per-char
@@ -95,7 +95,7 @@ void                 tutorial_refresh_input_hint(const char *input);
 int                  tutorial_status_hint(char *out, size_t out_size);
 
 /* Returns 1 when `text` is one of the COMMAND-step status hints
- * tutorial_status_hint emits (any "Tutorial: step …" prefix), letting
+ * tutorial_status_hint emits (any "Tutorial: step ..." prefix), letting
  * the controller distinguish "this status is mine - refresh it" from
  * "another subsystem owns the slot - let its TTL run out." */
 int                  tutorial_status_is_hint(const char *text);
@@ -122,7 +122,7 @@ int                  tutorial_handle_ack_key(unsigned char key);
 
 /* Editor precheck helper: when the current step is SET, NOTE, or
  * REQUIRE, set a kind-appropriate status hint ("Press Enter / Tab /
- * Space …" for SET/NOTE; "Set <slug> = <value> …" for REQUIRE) and
+ * Space ..." for SET/NOTE; "Set <slug> = <value> ..." for REQUIRE) and
  * return 1 to tell the editor to reject the commit. Returns 0 for
  * COMMAND / inactive (let the normal commit path run). Lives in
  * tutorial.c so input.c gains zero new direct repl_* calls -

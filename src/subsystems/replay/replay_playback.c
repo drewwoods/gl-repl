@@ -385,8 +385,9 @@ int replay_focus_flat_idx(void) {
         return -1;
     /* Clamp pc to the live flat count (stale replay state can point past a
      * shrunken program) and resolve the step begin from the O(1) cache. This is
-     * O(step) per frame instead of the old replay_prev_limit(state->pc) O(N^2)
-     * re-derivation, and equivalent to it under advance/seek/step-back/pause. */
+     * O(step) per frame rather than recomputing the boundary with
+     * replay_prev_limit(state->pc), an O(N^2) walk. The result is equivalent
+     * under advance/seek/step-back/pause. */
     FlatProgramView flat = repl_state_flat_program_view();
     int pc = state->pc;
     if (pc < 0) pc = 0;

@@ -487,7 +487,7 @@ snapshot family lives in [`src/ui/app/editor.h`](../src/ui/app/editor.h):
 |---|---|---|
 | `UiTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line index + RGBA + alpha/clear flags). Drives inline swatches and color-picker hit-testing. |
 | `UiHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal and feeding-color commands, replay PC, search match, and selection. Drives gutter accents and row backgrounds. |
-| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L73), via `_refresh_virtual_lines()` | Replay-time substitution and evaluation rows attached to the current source line. Layout, scrolling, hit-testing, and rendering share this list, so virtual-row counts have one source of truth. |
+| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L72), via `_refresh_virtual_lines()` | Replay-time substitution and evaluation rows attached to the current source line. Layout, scrolling, hit-testing, and rendering share this list, so virtual-row counts have one source of truth. |
 
 All three lists are named slices on [`ReplRuntimeState`](../src/repl/state.h#L18). Read-only
 accessors live in [`src/repl/state_views.h`](../src/repl/state_views.h); clear and append operations

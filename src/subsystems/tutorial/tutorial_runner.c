@@ -83,7 +83,7 @@ static void tutorial_baseline_capture(int idx) {
      * intentionally outside the scene-subset (it's a global, not a
      * per-scene property). Without an explicit record, a tutorial whose
      * @cfg / SET steps don't mention view_mode silently leaks the
-     * presentation_reset(→3D) past teardown - e.g. starting "Color &
+     * presentation_reset's 3D mode past teardown - e.g. starting "Color &
      * Transform" from 2D would exit in 3D. Capture it unconditionally. */
     tutorial_cfg_baseline_record_one("view_mode");
 
@@ -223,8 +223,7 @@ static void tutorial_set_step_status(int tutorial_idx, int step) {
  * matched expected-command insert. Deliberately does NOT touch
  * pending.commit_line - that field is the immutable
  * snapshot of where the in-flight commit attempt targets, and the
- * success bookkeeping relies on reading it back unchanged after the
- * shift pass (the matched-commit path was added in Phase 3). */
+ * success bookkeeping reads it back unchanged after this shift. */
 static void tutorial_shift_tracked_lines_from(int pos, int delta) {
     TutorialRuntimeState *state = tutorial_state_mut();
     int skip_expected_commit_shift;
@@ -1390,7 +1389,7 @@ const char *tutorial_current_expected_text(void) {
 
 /* Time budget per character slot. The animation fills line_len +
  * TUTORIAL_FADE_SETTLE_CHARS slots over fade_duration: each character
- * takes one slot to fade in (alpha 0 → 1, bright white), and the
+ * takes one slot to fade in (alpha 0 -> 1, bright white), and the
  * trailing W slots pace its color settling from white back to the
  * base comment color. The last character finishes settling exactly
  * at fade_start_t + fade_duration. */

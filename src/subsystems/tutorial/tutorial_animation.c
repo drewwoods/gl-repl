@@ -10,7 +10,7 @@ static float clamp01(float value) {
 
 /* Time budget per character slot. The animation fills line_len +
  * TUTORIAL_FADE_SETTLE_CHARS slots over fade_duration: each character
- * takes one slot to fade in (alpha 0 → 1, bright white), and the
+ * takes one slot to fade in (alpha 0 -> 1, bright white), and the
  * trailing W slots pace its color settling from white back to the
  * base comment color. The last character finishes settling exactly
  * at fade_start_t + fade_duration. */

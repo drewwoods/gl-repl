@@ -12,10 +12,9 @@
  * `UiRenderSnapshot`, while UI code typically uses the narrower visibility and
  * active-drag queries.
  *
- * The current public surface is the `variable_panel_*` family declared here
- * plus the small value-change type in `variable_panel_drag.h` (the peer split
- * replaced older UiState/EditorState storage and retired the legacy
- * forwarders).
+ * The public surface is the `variable_panel_*` family declared here plus the
+ * small value-change type in `variable_panel_drag.h`. The peer owns
+ * visibility and drag state; UI and controller code use these narrow accessors.
  */
 #ifndef VARIABLE_PANEL_STATE_H
 #define VARIABLE_PANEL_STATE_H

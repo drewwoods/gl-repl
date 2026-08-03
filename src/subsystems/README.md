@@ -1,4 +1,4 @@
-# `src/subsystems/` - the peer subsystems (Draft)
+# `src/subsystems/` - the peer subsystems
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
@@ -64,7 +64,7 @@ spans runner / animation / match). The `*_state.c` always *owns the
 storage* (a small struct with reset and narrow accessors; some peers also
 carry capture/restore for snapshot round-trips).
 
-For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while [`variable_panel_state_mut()`](variable_panel/variable_panel_state.h#L80) provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](../ui/app/overlay_layout.c).)
+For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while [`variable_panel_state_mut()`](variable_panel/variable_panel_state.h#L79) provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](../ui/app/overlay_layout.c).)
 
 ## How it is exercised
 
@@ -103,7 +103,7 @@ is identical:
    [`ReplayRuntimeState`](replay/replay_state.h#L97), the variable-panel drag transaction, the
    tutorial step/lock state).
 2. Input is routed to the subsystem's controller by `glr_ctrl` based on
-   the [`UiHit`](../ui/core/hit.h#L60) kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
+   the [`UiHit`](../ui/core/hit.h#L60) kind (e.g. `UI_HIT_VARIABLE_SLIDER` ->
    `variable_panel_handle_*`).
 3. The subsystem mutates its own state; if a change must reach the
    program (a slider value, a picked color), it goes through the editor

@@ -17,12 +17,9 @@
 #include "subsystems/replay/replay_annotations.h"
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
-/* Inline-comment scratch buffer for display-text formatting. Local to
- * this TU - the editor's MAX_INPUT_LEN used to be the source of this
- * value, but Phase 4 of feature/source-document-port.md dropped the
- * editor/state.h include. 1024 preserves the original headroom; final
- * output gets truncated to out_size or to CODE_ANNOTATION_TEXT_MAX
- * downstream. */
+/* Inline-comment scratch buffer for display-text formatting. Kept local so
+ * this TU does not depend on editor/state.h. Final output is truncated to
+ * out_size or CODE_ANNOTATION_TEXT_MAX downstream. */
 #ifndef REPL_REPLAY_COMMENT_BUF
 #define REPL_REPLAY_COMMENT_BUF 1024
 #endif
@@ -35,7 +32,7 @@
  * Rebuilt once at the start of render_code_panel to avoid O(N x replay_pc)
  * work when annotating variable assignments during replay. */
 static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
-static int   s_replay_flat_map[MAX_EDITOR_COMMANDS];         /* src_cmd_idx → flat_idx */
+static int   s_replay_flat_map[MAX_EDITOR_COMMANDS];         /* src_cmd_idx -> flat_idx */
 static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line */
 /* Predef-variable snapshots: one per source command, taken at the flat_idx
  * stored in s_replay_flat_map[src].  Built by a single O(replay_pc) forward

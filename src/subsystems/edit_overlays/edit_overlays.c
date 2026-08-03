@@ -1182,11 +1182,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
             }
         }
         /* No glPointSize(1) reset here: the enclosing
-         * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, so the call was
-         * redundant - and it used to shrink every marker this walk had just
-         * drawn to one pixel on web, back when gl4es applied the last size
-         * before its flush to the whole pending batch (fixed by
-         * packaging/web/patches/gl4es-point-size-batch.patch). */
+         * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, and resetting it
+         * would overwrite the size chosen for the markers. */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
@@ -1202,14 +1199,11 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 
 /* ---- Vertex-number label declutter -------------------------------------
  *
- * Labels used to draw straight at each vertex's projected point. Two vertices
- * that project near the same pixel then stamped their bitmap strings on top of
- * each other into an unreadable jumble (classic when a primitive is viewed
- * edge-on). Instead we now project every label to screen space during the
- * walk, collect them, then lay them out in a 2D pass in collection (walk)
- * order - a camera-independent priority, so co-visible labels never swap as the
- * camera moves - nudging any label whose box overlaps an already-placed one
- * vertically (with a thin leader line back to the vertex) until it clears.
+ * Project every label to screen space during the walk, collect them, then lay
+ * them out in a 2D pass in collection (walk) order - a camera-independent
+ * priority, so co-visible labels do not swap as the camera moves. Nudge any
+ * label whose box overlaps an already-placed one vertically, with a thin
+ * leader line back to the vertex, until it clears.
  *
  * The nudge search is BOUNDED: a label that can't find a free slot within a
  * few rows of its anchor is dropped rather than stacked arbitrarily far. That
@@ -1672,7 +1666,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             int   found     = 0;
             float target_dy, draw_dy;
 
-            /* Phase A: incumbent homing. A row nearer the anchor than the
+            /* Pass A: incumbent homing. A row nearer the anchor than the
              * held one, taken only with comfortable headroom so
              * home-and-back can't flap. */
             if (was_drawn && prev_row != 0) {
@@ -1691,7 +1685,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
                     }
                 }
             }
-            /* Phase B: keep the held row, judged leniently - evicting a
+            /* Pass B: keep the held row, judged leniently - evicting a
              * visible label needs a real collision, not a boundary graze. */
             if (was_drawn && !found &&
                 !vertex_label_cand_clashes(
@@ -1703,7 +1697,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
                 best_row = prev_row;
                 found = 1;
             }
-            /* Phase C: plain near-to-far scan. A label that wasn't visible
+            /* Pass C: plain near-to-far scan. A label that wasn't visible
              * last frame enters only with headroom, so the crowding
              * boundary doesn't strobe. */
             if (!found) {
