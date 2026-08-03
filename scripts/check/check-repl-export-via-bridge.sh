@@ -1,14 +1,14 @@
 #!/bin/bash
 # Hard guard: src/repl/export*.c and src/repl/import.c stay GL-free and
-# pull all app/scene state through controller-installed bridges
+# pull all app/render3d state through controller-installed bridges
 # (ReplExportCameraBridge, ReplExportProjectionBridge, ReplConfigBridge,
-# ...), never by reaching into the scene or app layers directly. This is
+# ...), never by reaching into the render3d or app layers directly. This is
 # the canonical seam for keeping the REPL/export pipeline reusable
 # without the GL frontend (see docs/ARCHITECTURE.md, "Dynamic Reshape
 # Projection" + decouple step 4).
 #
 # check-gl-boundaries already forbids GL/GLU/GLUT *calls* here; this
-# guard closes the other door: no scene_*/glr_* calls and no scene/app
+# guard closes the other door: no render3d_*/glr_* calls and no render3d/app
 # header includes, so a future "just call scene_get_active_projection()"
 # shortcut fails the build instead of silently bypassing the bridge.
 # Comments and string literals (e.g. the "@scene-name" marker, doc
@@ -26,7 +26,7 @@ files=(
     src/repl/import.c
 )
 
-violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"(scene|app)/|\b(scene|glr)_[a-z0-9_]+[[:space:]]*\(' "${files[@]}" 2>/dev/null \
+violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"(render3d|app)/|\b(render3d|glr)_[a-z0-9_]+[[:space:]]*\(' "${files[@]}" 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//|/\*)' \
     | grep -vE '^[^:]+:[0-9]+:[^"]*".*"' \
     || true)
@@ -36,10 +36,10 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: src/repl/export*.c / src/repl/import.c must not reach the scene/app layers directly." >&2
-echo "Pull app/scene-derived values through a controller-installed bridge" >&2
-echo "(e.g. ReplExportProjectionBridge -> scene_get_active_projection in" >&2
-echo "src/app/glr_ctrl.c), not by calling scene_*/glr_* or including their" >&2
+echo "ERROR: src/repl/export*.c / src/repl/import.c must not reach the render3d/app layers directly." >&2
+echo "Pull app/render3d-derived values through a controller-installed bridge" >&2
+echo "(e.g. ReplExportProjectionBridge -> render3d_get_active_projection in" >&2
+echo "src/app/glr_ctrl.c), not by calling render3d_*/glr_* or including their" >&2
 echo "headers here. See docs/ARCHITECTURE.md, \"Dynamic Reshape Projection\"." >&2
 echo "Hits:" >&2
 printf '%s\n' "$violations" >&2

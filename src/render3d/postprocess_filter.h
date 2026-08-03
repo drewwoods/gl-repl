@@ -6,10 +6,10 @@
  * resolved scene image. Pure fixed-function GL (no shaders, no FBOs):
  * the resolved scene rect is copied into one texture and redrawn.
  *
- * Exposed in the Config menu, persisted via @cfg. The selected mode flows
- * through Render3dRenderConfig so the effect also works for the non-REPL
- * render3d_demo binary and src/scene/ stays REPL-independent. The effect only
- * touches the scene viewport rect; the code panel and other 2D UI stay crisp.
+ * The selected mode flows through Render3dRenderConfig, so the effect works
+ * for standalone callers as well as the full application. Config menus and
+ * persistence stay outside this module. The effect only touches the scene
+ * viewport rect; the code panel and other 2D UI stay crisp.
  */
 #ifndef RENDER3D_POSTPROCESS_FILTER_H
 #define RENDER3D_POSTPROCESS_FILTER_H

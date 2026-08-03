@@ -122,10 +122,9 @@ typedef struct Render3dExecuteContext {
 
 /* Called by render.c to emit user geometry. May be NULL (geometry
  * is silently skipped; scene background/grid/axes/lights still render).
- * The callback gets only a scene-supplied opaque context plus the user_data
- * the caller stashed when building the config - any REPL state (flat
- * program, current PC, alpha overrides for fade passes, etc.) is the
- * caller's responsibility, carried through user_data. */
+ * The callback gets only a renderer-supplied opaque context plus the user_data
+ * the caller stashed when building the config - any program, replay, or
+ * overlay state is the caller's responsibility, carried through user_data. */
 typedef void (*Render3dExecuteProgramFn)(const Render3dExecuteContext *ctx,
                                       void *user_data);
 
@@ -144,17 +143,16 @@ typedef struct Render3dRenderConfig {
 
     /* --- Optional post-fill hook ---
      * Invoked once per pass between the main user-geometry fill and the
-     * scene helpers (grid / axes / backdrop / overlays). The REPL
-     * controller installs this to overlay fading-replay geometry on top
-     * of the main fill; non-REPL callers leave it NULL. */
+     * scene helpers (grid / axes / backdrop / overlays). A caller may install
+     * this to add geometry on top of the main fill; callers that do not need
+     * that phase leave it NULL. */
     void (*post_fill_fn)(void *user_data);
     void  *post_fill_user_data;
 
     /* --- Optional post-overlays hook ---
      * Invoked at the end of the pass (after lights_render, before the
-     * outermost glPopAttrib). The REPL controller uses this for
-     * vertex-number / normal-vector overlays that walk the user's
-     * program; non-REPL callers leave it NULL. */
+     * outermost glPopAttrib). A caller may install this for geometry-reporting
+     * overlays; callers that do not need it leave it NULL. */
     void (*post_overlays_fn)(void *user_data);
     void  *post_overlays_user_data;
 
@@ -165,15 +163,16 @@ typedef struct Render3dRenderConfig {
      * projection re-applied and the caller's camera modelview live.
      * Bitmap-text annotation (vertex-number labels) draws here: inside
      * the accum loop each AA/blur sub-pass would stamp the pixel-snapped
-     * glyphs at a slightly different position, ghosting the text. The
-     * REPL controller installs this; non-REPL callers leave it NULL. */
+     * glyphs at a slightly different position, ghosting the text. A caller
+     * that needs resolved-image annotations installs this; otherwise it is
+     * left NULL. */
     void (*post_resolve_overlays_fn)(void *user_data);
     void  *post_resolve_overlays_user_data;
 
     /* --- Optional buffer-inspection hooks ---
      * Three neutral "here is a point where you may read or composite"
      * slots. render3d fires them and knows nothing about what for; the
-     * controller subscribes whatever wants to look at the framebuffer
+     * embedding caller subscribes whatever wants to look at the framebuffer
      * (today the depth/stencil visualizations). All three fire
      * unconditionally when installed - the subscriber no-ops when its
      * own modes are off - which is what lets one hook serve a reader
@@ -209,9 +208,9 @@ typedef struct Render3dRenderConfig {
     void  *buffer_resolve_overlay_user_data;
 
     /* --- Background clear color (RGBA) ---
-     * Populated by the controller from the user's CMD_CLEAR_COLOR (or a
-     * default if none was set). The scene module receives this pre-resolved
-     * float[4] instead of scanning the flat program. */
+     * Populated by the caller from its program/configuration policy. The
+     * render3d module receives this pre-resolved float[4] instead of inspecting
+     * the source or program model. */
     float clear_color[4];
 
     /* --- Animation --- */
@@ -225,13 +224,11 @@ typedef struct Render3dRenderConfig {
     int render3d_h;
 
     /* --- Camera state (read-only inputs) ---
-     * The scene module does not apply the modelview transform; callers
-     * populate GL_MODELVIEW before render3d_draw_scene()
-     * (the controller uses glr_camera_load_modelview from src/app/glr_camera.h;
-     * render3d_demo inlines the matrix calls). These fields are still passed in
-     * because grid/axes themes orient themselves to camera angle, the
-     * orbit-target gizmo is sized by cam_dist, and the gizmo position comes
-     * from cam_tx/ty/tz. */
+     * The render3d module does not apply the modelview transform; callers
+     * populate GL_MODELVIEW before render3d_draw_scene(). These fields are
+     * still passed in because grid/axes themes orient themselves to camera
+     * angle, the orbit-target gizmo is sized by cam_dist, and the gizmo
+     * position comes from cam_tx/ty/tz. */
     float cam_dist;
     float cam_rx;
     float cam_ry;
@@ -248,21 +245,21 @@ typedef struct Render3dRenderConfig {
     /* --- Rendering quality --- */
     int multisample_enabled;
     int line_smooth_enabled;
-    int use_accum;          /* accumulation buffer usable (--accum/--no-accum) */
+    int use_accum;          /* accumulation buffer usable for this caller */
     int accum_effect;       /* Render3dAccumEffect: OFF / AA / BLUR */
     int accum_passes;       /* resolved sample count: 1..MAX_ACCUM_SAMPLES */
-    int use_accum_aa_scissors; /* scissor the accum loop to the scene rect
-                                * (skip the dead region under the code panel).
-                                * Off by default - see CFG_DEFAULT_USE_ACCUM_AA_SCISSORS. */
+    int use_accum_aa_scissors; /* scissor the accum loop to the scene rect,
+                                * skipping pixels outside it; caller policy. */
 
     /* --- Optional per-pass blur hook ---
      * Invoked once before each accumulation pass when accum_effect == BLUR
-     * (pass_idx in [0, pass_count)). The controller installs this to load an
-     * interpolated camera modelview (camera blur) and/or set the predef-t
-     * sub-step + reflatten (time blur), and may overwrite the cam_* fields of
-     * the passed-in per-pass config copy so scene helpers blur with the
-     * camera. The scene renders these passes with jitter 0. NULL for AA / OFF
-     * and for non-REPL callers (BLUR then degrades to the AA jitter path). */
+     * (pass_idx in [0, pass_count)). The caller may install this to load an
+     * interpolated camera modelview and/or adjust per-pass animation or
+     * program state, and may overwrite the cam_* fields of the passed-in
+     * per-pass config copy so scene helpers blur with the camera. The scene
+     * renders these passes with jitter 0. NULL for AA / OFF or for callers
+     * that do not provide blur sampling (BLUR then degrades to the AA jitter
+     * path). */
     /* clang-format off - keep on one line so the flat-view pointer guard
      * skips this function pointer (it ignores lines containing "(*"). */
     void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count, struct Render3dRenderConfig *pass_config);
@@ -280,26 +277,23 @@ typedef struct Render3dRenderConfig {
     /* --- Environment --- */
     Render3dBackdropMode backdrop_mode;
     /* Runtime point-parameter capability plus the loaded entry point,
-     * mirrored from glr_ctrl_init_gl via the REPL executor. The
-     * backdrop uses the proc to reset GL_POINT_DISTANCE_ATTENUATION
-     * without taking a scene-layer dependency on REPL/controller code.
-     * Non-REPL callers (render3d_demo) leave both zero via memset - the
-     * safe default: never call the entry point unless a caller has
-     * confirmed support and supplied a callable proc. */
+     * supplied by the caller's GL capability probe. The backdrop uses the
+     * proc to reset GL_POINT_DISTANCE_ATTENUATION. Callers that have not
+     * confirmed support leave both zero - the safe default never calls the
+     * entry point without an explicit capability and function pointer. */
     int point_parameter_supported;
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params);
-    /* Runtime GL_NV_fog_distance capability, detected once in
-     * glr_ctrl_init_gl and mirrored here. When set, the passes whose
+    /* Runtime GL_NV_fog_distance capability, detected by the caller and
+     * mirrored here. When set, the passes whose
      * distance fog wraps geometry around the camera - the city backdrop
      * and the ocean/radar grid themes - switch to true radial eye distance
      * (GL_EYE_RADIAL_NV) so their fringes stop swimming as the camera
      * orbits. Scoped per-pass and confined by each pass's
      * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop, so the eye-plane-tuned
-     * themes are untouched. 0 for non-detecting callers (render3d_demo) via
-     * memset - the safe default. */
+     * themes are untouched. 0 for callers that did not detect the extension
+     * is the safe default. */
     int nv_fog_distance_supported;
-    /* Scene-viewport post-processing.
-     * Backed by Config row, persisted via @cfg. */
+    /* Scene-viewport post-processing selected by the caller. */
     Render3dPostFilterMode post_filter_mode;
     Render3dWireframeMode wireframe;
     /* Winding-visualization view: replace the normal user-color fill with a
@@ -307,7 +301,7 @@ typedef struct Render3dRenderConfig {
      * and back-facing (inside-out / mis-wound) polygons red, so winding
      * mistakes are visible. The caller's execute_fn must install a state
      * filter that suppresses the program's own material/lighting/cull
-     * commands (see ReplExecutionOptions.state_filter). 0 = off. */
+     * commands. The callback owns that filtering policy. 0 = off. */
     int winding_view;
 
     /* --- Grid and axes ---
@@ -316,8 +310,8 @@ typedef struct Render3dRenderConfig {
      * after alpha_scale so OUT stays authoritative).
      *
      * `*_xn_phase` is an advisory direction hint (FADE_IN /
-     * FADE_OUT / STEADY) the controller fills in from the transition
-     * machine. The scene renderer does not read these values at runtime;
+     * FADE_OUT / STEADY) the caller fills in from its transition
+     * machine. The render3d renderer does not read these values at runtime;
      * keep them populated so tests can verify the forwarded contract. */
     int          grid_theme;
     float        grid_opacity;

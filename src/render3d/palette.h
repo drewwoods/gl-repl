@@ -1,17 +1,17 @@
 /*
  * palette.h - Centralized 3D scene color palette.
  *
- * Single source of truth for the scene module's non-theme one-off
+ * Single source of truth for the render3d module's non-theme one-off
  * *draw* colors - the glColor* per-vertex family. Lighting/material
  * *coefficients* (glLightModelfv / glMaterialfv) are out of scope:
  * they are a different GL call and semantic (reflectance, not emitted
  * color) and the render3d_clr accessors cannot express them - those stay
- * bucket-2 named local consts (see below). The scene equivalent of
+ * bucket-2 named local consts (see below). The render3d equivalent of
  * ui/theme.h, but deliberately NOT the
  * UI palette and NOT a multi-row theme matrix: 3D-semantic tokens, one
  * fixed scheme. Header-only (mirrors ui/theme.h and gl_2d.h): every
- * scene TU already reaches sibling src/scene headers, glr_ctrl.c reaches
- * it via the app->scene layering, and `make check-c99` syntax-checks
+ * render3d TUs already reach sibling renderer headers, app/controller code
+ * reaches it through the render3d contract, and `make check-c99` syntax-checks
  * this transitively through $(SRCS).
  *
  * Reuses the established scene color value type Render3dRgba
@@ -22,7 +22,7 @@
  *   1. Palette token -> render3d_clr(RENDER3D_CLR_*) here.
  *   2. Named constant -> a local static const at the use site (fixed,
  *      non-palette one-offs; not table slots). Current carve-outs:
- *      lights.c lm_amb (GL_LIGHT_MODEL_AMBIENT) and glr_ctrl.c
+ *      lights.c lm_amb (GL_LIGHT_MODEL_AMBIENT) and caller-side
  *      mspec/mshin (GL_SPECULAR/GL_SHININESS) - lighting/material
  *      coefficients, not draw colors.
  *   3. Left as data/computed -> must NOT follow this palette:
@@ -94,7 +94,7 @@ typedef enum {
     RENDER3D_CLR_LIGHT_OFF_X,         /* off X mark               0.70,0.20,0.20 */
     RENDER3D_CLR_LIGHT_OFF_LABEL,     /* off label text           0.50,0.30,0.30 */
 
-    /* glr_ctrl.c scene-space overlays. */
+    /* Caller-side scene-space overlays. */
     RENDER3D_CLR_REPLAY_FADE,         /* fade-batch geometry tint 0.70,0.70,0.80 */
     RENDER3D_CLR_TESS_PREVIEW,        /* tess wire preview        0.30,0.95,0.75 */
     RENDER3D_CLR_VERTEX_LABEL,        /* vertex-number text       1.00,1.00,0.30 */
@@ -114,7 +114,7 @@ typedef enum {
 
 /* Single fixed scheme. Every slot carries alpha 1.0; a designated-init
  * gap leaves a slot zero-filled, so alpha == 0 reliably flags a missing
- * entry (test_scene_palette asserts this). */
+ * entry (the render3d palette test asserts this). */
 static const Render3dRgba g_scene_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_GUIDE_PLANE_X_FILL]  = { 0.90f, 0.65f, 0.60f, 1.0f },
     [RENDER3D_CLR_GUIDE_PLANE_X_EDGE]  = { 0.90f, 0.30f, 0.30f, 1.0f },
@@ -184,7 +184,7 @@ static inline void render3d_clr_a(Render3dColorToken t, float a) {
 
 /* Table-and-enum agreement: bumping RENDER3D_CLR_COUNT now only needs
  * the matching g_scene_palette entry, not a literal-count update.
- * test_scene_palette still verifies each named token has a non-NaN
+ * the palette test still verifies each named token has a non-NaN
  * RGBA tuple. */
 STATIC_ASSERT(sizeof(g_scene_palette) / sizeof(g_scene_palette[0])
                   == RENDER3D_CLR_COUNT,

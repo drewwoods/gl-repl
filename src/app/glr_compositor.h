@@ -6,12 +6,13 @@
  * done and before the buffer swap. The controller calls the hook at the
  * tail of glr_ctrl_display_frame().
  *
- * This is the compositor-level counterpart to src/scene/postprocess_filter.c,
- * which runs inside render3d_draw_scene() over the scene viewport rect
- * only and leaves the code panel / UI crisp. The two are independent:
- * the scene filter is owned by the scene layer (and reachable from the
- * standalone render3d_demo), while this hook is an app concern operating on
- * the final framebuffer.
+ * This is the compositor-level counterpart to
+ * src/render3d/postprocess_filter.c, which runs inside
+ * render3d_draw_scene() over the scene viewport rect only and leaves the
+ * code panel / UI crisp. The two are independent: the render3d filter is
+ * owned by the render3d module (and reachable from the standalone
+ * render3d_demo), while this hook is an app concern operating on the final
+ * framebuffer.
  *
  * The effect vocabulary is shared (Render3dPostFilterMode). The chromatic
  * aberration pass reuses the scene primitive over the full window rect,

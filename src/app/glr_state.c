@@ -8,10 +8,10 @@
  * `glr_config.c::config_value_ptr`.
  *
  * Defaults come from `glr_defaults.h` (CFG_DEFAULT_*) which already
- * documents itself as controller-side scene/presentation defaults.
+ * documents itself as controller-side render3d/presentation defaults.
  *
  * The camera bridge's `apply` callback resets `auto_rotate` during
- * scene-config restore.
+ * render3d-config restore.
  */
 #include "app/glr_state.h"
 

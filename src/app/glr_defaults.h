@@ -1,14 +1,14 @@
 /*
- * glr_defaults.h - Controller-side scene / presentation defaults.
+ * glr_defaults.h - Controller-side render3d / presentation defaults.
  *
- * Compile-time defaults for scene-presentation state that examples
+ * Compile-time defaults for render3d presentation state that examples
  * are allowed to override via leading `// @cfg` metadata. Reset
  * helpers and tests reuse these to stay aligned with the app-shell defaults
  * without drifting.
  *
- * This is gl-repl app-shell logic - it knits together scene-render
+ * This is gl-repl app-shell logic - it knits together render3d
  * enums and the editor's panel layout into a single set of "out of
- * the box" values. The owning enums live in src/scene/themes.h and
+ * the box" values. The owning enums live in src/render3d/themes.h and
  * src/ui/app/layout.h; include them here so the symbolic defaults do
  * not rely on include order elsewhere.
  *
@@ -121,8 +121,8 @@
      0.0722f * CFG_DEFAULT_CLEAR_B)
 
 /* Render-side config defaults the REPL state initializer feeds into
- * the scene config. These are controller-policy defaults, not
- * scene-internal - the scene module accepts whatever value the caller
+ * the render3d config. These are controller-policy defaults, not
+ * render3d-internal - the render3d module accepts whatever value the caller
  * passes. */
 #define CFG_DEFAULT_MULTISAMPLE       1
 #define CFG_DEFAULT_LINE_SMOOTH       0

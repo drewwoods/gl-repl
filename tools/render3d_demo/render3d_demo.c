@@ -400,7 +400,7 @@ static void build_config(Render3dRenderConfig *cfg) {
      * with step = grid_major_steps[major_idx] / 5. If the tables are zero
      * (the memset default) step is 0 and the loop never terminates, blocking
      * GLUT from ever calling idle. The REPL pulls these tables from
-     * repl_state; we hard-code them here so the scene module's only runtime
+     * repl_state; we hard-code them here so the render3d module's only runtime
      * deps remain GL / GLUT. */
     cfg->grid_major_steps[GRID_MAJOR_1]  = 1.0f;
     cfg->grid_major_steps[GRID_MAJOR_2]  = 2.0f;

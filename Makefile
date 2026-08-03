@@ -953,7 +953,7 @@ test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o $(OBJDIR)/src/ui/core
 test_ui_theme_LDLIBS =
 test_ui_theme_RUN ?= $(BINDIR)/test_ui_theme
 
-# Header-only: scene/palette.h pulls in no project objects.
+# Header-only: src/render3d/palette.h pulls in no project objects.
 test_render3d_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_palette.o
 test_render3d_palette_LDLIBS =
 test_render3d_palette_RUN ?= $(BINDIR)/test_render3d_palette
@@ -1374,8 +1374,8 @@ MUSIC_DEST ?= assets
 fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST (default assets/).
 	bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
 
-# Standalone demo binary that drives the scene module with a teapot callback.
-# Proves the scene/ subtree links cleanly without the editor/UI/controller code.
+# Standalone demo binary that drives the render3d module with a teapot callback.
+# Proves the src/render3d/ subtree links cleanly without the editor/UI/controller code.
 RENDER3D_DEMO_OBJS = $(OBJDIR)/tools/render3d_demo/render3d_demo.o \
                    $(addprefix $(OBJDIR)/,$(RENDER3D_DEMO_DEP_SRCS:.c=.o))
 
@@ -1736,26 +1736,26 @@ check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^src/repl/executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GLUT calls found outside src/repl/executor.c$(NC)" && exit 1)
 	@echo "    GL/GLUT boundaries $(GREEN)OK$(NC)"
 
-check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
-	@echo "    Checking UI/scene layer coupling..."
-	@! grep -nE '#include\s+"scene/' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
-	@! grep -nE '#include\s+"ui/' $(RENDER3D_SRCS) $(RENDER3D_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
+check-layer-coupling: ## Verify UI and render3d layers don't include each other's headers.
+	@echo "    Checking UI/render3d layer coupling..."
+	@! grep -nE '#include\s+"render3d/' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include render3d headers$(NC)" && exit 1)
+	@! grep -nE '#include\s+"ui/' $(RENDER3D_SRCS) $(RENDER3D_HDRS) || (echo "    $(RED)ERROR: render3d files must not include UI headers$(NC)" && exit 1)
 	@echo "    Layer coupling $(GREEN)OK$(NC)"
 
 
-check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
+check-controller-boundaries: ## Verify controller owns the render3d/UI wiring boundary.
 	@$(RUN_STATE_OWNERSHIP_CHECKS) check-controller-boundaries
 
-check-render3d-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
+check-render3d-no-repl-state-mut: ## Verify render3d code does not mutate REPL state directly.
 	@$(RUN_STATE_OWNERSHIP_CHECKS) check-render3d-no-repl-state-mut
 
-check-pure-render3d-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
+check-pure-render3d-no-repl-state: ## Verify render3d files do not reach into REPL state/replay APIs.
 	@$(RUN_STATE_OWNERSHIP_CHECKS) check-pure-render3d-no-repl-state
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@$(RUN_STATE_OWNERSHIP_CHECKS) check-state-boundaries
 
-check-views-no-owners: ## Verify scene/UI files do not include src/repl/state_owners.h.
+check-views-no-owners: ## Verify render3d/UI files do not include src/repl/state_owners.h.
 	@$(RUN_STATE_OWNERSHIP_CHECKS) check-views-no-owners
 
 check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly.
@@ -1800,7 +1800,7 @@ check-repl-no-mut-reads: ## Ratchet: cap `_mut()` calls in src/repl/ outside own
 check-render3d-no-upper-layers: ## Hard guard: src/render3d/ must not include from app/editor/ui/subsystems.
 	@bash scripts/check/check-render3d-no-upper-layers.sh
 
-check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.
+check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/render3d/subsystems/ui-app.
 	@bash scripts/check/check-ui-core-no-upper-layers.sh
 
 check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo.
@@ -1934,7 +1934,7 @@ check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in s
 check-repl-export-no-ui-layout: ## Verify export/import TUs do not call ui_layout_* / ui_state_*.
 	@bash scripts/check/check-repl-export-no-ui-layout.sh
 
-check-repl-export-via-bridge: ## Verify export/import TUs pull app/scene state only via controller-installed bridges (no scene_*/glr_* calls or scene/app includes).
+check-repl-export-via-bridge: ## Verify export/import TUs pull app/render3d state only via controller-installed bridges (no scene_*/glr_* calls or render3d/app includes).
 	@bash scripts/check/check-repl-export-via-bridge.sh
 
 check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.

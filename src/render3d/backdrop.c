@@ -1,5 +1,5 @@
 /*
- * backdrop.c - optional 3D backdrop renderers for the REPL scene.
+ * backdrop.c - optional 3D backdrop renderers for the 3D scene.
  */
 #include "backdrop.h"
 
@@ -452,7 +452,7 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
  *   quadratic default (1/distance footprint scaling) for normal scene
  *   point rendering; without this override stars would attenuate
  *   noticeably across the STAR_SKY_RADIUS dome. Gated on the runtime
- *   capability + loaded proc the controller mirrored into the config -
+ *   capability + loaded proc the caller supplied in the config -
  *   unsupported contexts can't have run the init-bootstrap call either,
  *   so the GL default (identity) is already in effect and no reset is
  *   needed.
@@ -1139,7 +1139,7 @@ static void draw_snowfall(
 
 /* Sunset environment lights, one row per slot: world-space position
  * (w=0 => directional), then diffuse / ambient / specular. Slots live
- * on GL_LIGHT4..6 - above the REPL's user-facing GL_LIGHT0..3 range -
+ * on GL_LIGHT4..6 - above the caller's user-facing GL_LIGHT0..3 range -
  * so lit geometry picks up the scene's colors without consuming any
  * user slot (fixed-function GL guarantees 8 lights). Intensities stay
  * moderate so an enabled user light still reads as the key. */
@@ -1241,7 +1241,7 @@ static void backdrop_apply_env_lights(const BackdropEnvLight *lights, int n) {
 /* Backdrop-owned colored lights. Runs in the pass setup phase (after
  * render3d_lights_setup, before user fill) so lit user geometry sees them;
  * unlike the user slots these are configured AND enabled here, since
- * the REPL grammar can't reach GL_LIGHT4+. They contribute only once
+ * the caller's program cannot reach GL_LIGHT4+. They contribute only once
  * the program enables GL_LIGHTING, and the pass's outer
  * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket pops the enables at frame
  * end, so nothing leaks when the backdrop changes. Positions are

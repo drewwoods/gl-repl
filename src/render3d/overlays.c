@@ -3,7 +3,7 @@
  * subsystem. The subsystem walks authored vertices directly and uses
  * glPolygonMode redraws for generated geometry such as glutSolid* outlines /
  * mesh vertex points. The gluTessCallback edge-flag registration in
- * src/repl/executor.c keeps internal triangulation edges suppressed in
+ * The geometry executor keeps internal triangulation edges suppressed in
  * GL_LINE mode, so the subsystem does not need to walk the program for that.
  */
 #include "gl_includes.h"

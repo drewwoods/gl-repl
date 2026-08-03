@@ -2,7 +2,7 @@
  * glr_compositor.c - see glr_compositor.h.
  *
  * Whole-frame post-processing hook. The chromatic-aberration effect is
- * delegated to the scene layer's fixed-function primitive
+ * delegated to the render3d module's fixed-function primitive
  * (render3d_postprocess_filter_render), invoked over the full window rect
  * instead of the scene viewport rect. That primitive captures the named
  * rect from the back buffer into a texture and redraws it with the R/B

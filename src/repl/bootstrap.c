@@ -58,8 +58,8 @@ static int activate_initial_document(const ReplImportResult *import_result) {
 }
 
 int repl_load_initial_commands(const char *import_file) {
-    /* Returns the post-load cursor target. The controller owns the editor
-     * cursor and applies this value through editor_state_edit_line_set(). */
+    /* Returns the post-load cursor target. The caller above the REPL boundary
+     * applies this value to its cursor state. */
     if (import_file) {
         if (strcmp(import_file, "-") == 0) {
             ReplImportResult import_result;

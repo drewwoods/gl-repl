@@ -312,7 +312,7 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
  * The entry-level `@cfg` block guarantees a known baseline (3D view,
  * grid off, vertex outlines off) so the REQUIRE step has the intended
  * teaching effect rather than auto-advancing immediately. The SET
- * steps use symbolic cfg values so enum reordering in src/scene/themes.h
+ * steps use symbolic cfg values so enum reordering in src/render3d/themes.h
  * does not silently retarget the showcase. */
 static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_NOTE(

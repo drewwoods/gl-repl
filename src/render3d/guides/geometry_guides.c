@@ -395,7 +395,7 @@ static void draw_normal_component_handle(float vx, float vy, float vz,
  * snapshot->vertex_n_filled (see Render3dGuideSnapshot) is how many of the
  * comma-separated coordinate slots have a value so far; vertex_filled[]
  * flags which specific axes those are (both pre-evaluated by the
- * controller, so this module never touches repl_eval). The guide shows
+ * caller, so this module never evaluates program expressions). The guide shows
  * where the vertex *could* land given what's typed:
  *
  *   1 coord fixed  -> 2 DOF -> a plane (perpendicular to the typed axis)
@@ -489,7 +489,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
         return;
     }
 
-    /* Pre-parsed by the controller (see glr_ctrl_build_guide_snapshot). */
+    /* Pre-parsed by the caller. */
     if (snapshot->normal_n_filled < 3 || snapshot->cursor_pos < paren_pos)
         return;
     float vals[3] = { snapshot->normal_args[0], snapshot->normal_args[1],
@@ -519,7 +519,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     int found = 0;
 
     /* Prefer the live (flat-program) anchor position when the
-     * controller has supplied one - it's re-evaluated every frame, so
+     * caller has supplied one - it's re-evaluated every frame, so
      * it tracks dynamic vars (e.g. waves' `x = -b/2 + b*j/n` inside a
      * loop). The source-cmd fallback below is parse-time-frozen and
      * lands the arrow at the literal source coords. */

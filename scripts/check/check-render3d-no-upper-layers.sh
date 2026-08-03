@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hard guard: src/render3d/ must not include from upper layers.
 #
-# The scene renderer (src/render3d/) is layer 3.5. It is allowed to
+# The render3d renderer (src/render3d/) is layer 3.5. It is allowed to
 # include from src/repl/ (small allow-list: command.h, flatten.h, and
 # similar program-model types it walks) and src/support/, but must
 # stay free of upper-layer headers:
@@ -9,10 +9,10 @@
 #   - src/app/    (controller layer 6)
 #   - src/editor/ (text-document model layer 3)
 #   - src/ui/     (UI layer 4 — check-layer-coupling enforces UI ↔
-#                  scene mutual exclusion; this guard re-asserts it)
+#                  render3d mutual exclusion; this guard re-asserts it)
 #   - src/subsystems/ (feature peers layer 5)
 #
-# Inverting any of these would mean the scene renderer reaches into
+# Inverting any of these would mean the render3d renderer reaches into
 # the controller / editor / UI / feature subsystems — a layering
 # inversion that breaks the standalone render3d_demo target's reason
 # for existing (it links src/render3d/ without the rest of the tree).
@@ -42,9 +42,9 @@ if [ -n "$hits" ]; then
   echo "ERROR: src/render3d/ contains forbidden upper-layer #includes:" >&2
   echo "$hits" >&2
   echo >&2
-  echo "       Scene code must not depend on app/, editor/, ui/, or" >&2
+  echo "       Render3d code must not depend on app/, editor/, ui/, or" >&2
   echo "       subsystems/. Move the symbol into src/repl/ or" >&2
-  echo "       src/support/ if it is genuinely scene-relevant, or" >&2
+  echo "       src/support/ if it is genuinely render3d-relevant, or" >&2
   echo "       hoist the call site into src/app/glr_ctrl.c." >&2
   exit 1
 fi

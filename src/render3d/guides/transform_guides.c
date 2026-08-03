@@ -527,7 +527,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
         const int perp_a[3] = { 1, 0, 0 };
         const int perp_b[3] = { 2, 2, 1 };
-        /* Bucket-3 local guide seed (see scene/palette.h): per-axis
+        /* Bucket-3 local guide seed (see render3d/palette.h): per-axis
          * X/Y/Z base the scale guide both draws directly and
          * arithmetically brightens (*0.6+0.4) for the arrowhead - same
          * computed-from-a-base character as xform_axis_color(), so it
@@ -966,7 +966,7 @@ static int transform_input_matches_committed(const Render3dGuideSnapshot *snapsh
  * geometry_guides.c's input_is_vertex_kind. Returns the CmdType
  * (CMD_TRANSLATE3F / CMD_SCALEF / CMD_ROTATEF) once the user has typed the
  * opening paren, or -1 otherwise. The args themselves are pre-evaluated by
- * the controller into snapshot->xform_args (the scene module never evals). */
+ * the caller into snapshot->xform_args (the renderer never evaluates them). */
 static int transform_input_kind(const char *input, int input_len) {
     if (!input) return -1;
     if (input_len >= 13 && strncmp(input, "glTranslatef(", 13) == 0)
@@ -1006,8 +1006,8 @@ static GLCmd transform_live_cmd(const Render3dGuideSnapshot *snapshot, int kind)
  * before the anchor draw. Returns the count (capped at out_cap).
  *
  * The scope accounting lives in transform_utils.h's TransformScopeScan
- * (shared with src/repl/autonormal.c's flat affecting-transform
- * resolver); this collector yields flat indices (not deduped source
+ * (shared with another flat-program affecting-transform resolver); this
+ * collector yields flat indices (not deduped source
  * lines) so the renderer can anchor on a specific expansion. */
 static int collect_inscope_transform_flat_indices(const Render3dGuideSnapshot *snapshot,
                                                   int anchor_flat_idx,

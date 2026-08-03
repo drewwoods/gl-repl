@@ -5,7 +5,7 @@
  * 2D->3D path bakes the two labels into cached GL textures (once per
  * theme/size) and renders a lit, rotating cube inside the cell's own
  * viewport. The texture-bake uses the only no-FBO texture-copy pattern in
- * the tree (glCopyTexSubImage2D, mirrored from src/scene/postprocess_filter.c):
+ * the tree (glCopyTexSubImage2D, mirrored from src/render3d/postprocess_filter.c):
  * the labels are drawn into the cell, copied to textures, then the cube is
  * drawn over them in the same frame, so the bake is never visible.
  */

@@ -165,8 +165,8 @@ static void export_light_info(int slot, ReplExportLightInfo *out) {
 
 /* True when the slot's POSITION line must be emitted before the camera
  * transforms (at identity modelview) rather than after them. The flag is set
- * by the scene module's theme presets and carried across the light bridge;
- * the exporter just reads it, which keeps this TU clean of scene includes
+ * by the render3d module's theme presets and carried across the light bridge;
+ * the exporter just reads it, which keeps this TU clean of render3d includes
  * (check-controller-boundaries forbids them in src/repl/). */
 static int export_slot_pos_is_eye_space(int slot) {
     ReplExportLightInfo info;

@@ -25,9 +25,9 @@
 /* Number of GL light slots the REPL tracks enable/disable for: GL_LIGHT0
  * through GL_LIGHT0+REPL_LIGHT_SLOT_COUNT-1. The dimensional light data
  * (positions / colors / eye-space) is presentation state owned by the app
- * shell (GlrRenderState.lights, seeded from a scene light theme); the REPL
+ * shell (GlrRenderState.lights, seeded from a render3d light theme); the REPL
  * pipeline owns only which slots the program enabled, as a bitmask. The
- * controller STATIC_ASSERTs this count equals scene's MAX_LIGHTS. */
+ * controller STATIC_ASSERTs this count equals render3d's MAX_LIGHTS. */
 #define REPL_LIGHT_SLOT_COUNT 4
 
 /* Non-zero when slot `slot` (0..REPL_LIGHT_SLOT_COUNT-1) is enabled in the

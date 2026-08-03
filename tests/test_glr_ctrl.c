@@ -3648,12 +3648,10 @@ static void test_recovery_workspace_rescues_scene_slots(void) {
     glr_ctrl_reset_all();
 }
 
-/* Audit #39 prep: glr_ctrl_build_ui_snapshot is called twice per
- * display frame, defended as "the second build picks up post-
- * follow-scroll offsets." The fix proposes splitting snapshot into
- * stable + scroll-dependent halves. To make that safe, pin that
- * building the snapshot twice in a row (with no intervening state
- * change) produces equal observable fields.
+/* UI snapshot idempotency: glr_ctrl_build_ui_snapshot is called twice per
+ * display frame because the second build picks up post-follow-scroll offsets.
+ * Building it twice with no intervening state change must preserve all
+ * observable fields.
  *
  * We don't memcmp() the whole struct because it contains pointers
  * (document_cmds, snapshots of subsystem state) that may legitimately
@@ -3715,18 +3713,15 @@ static void test_build_ui_snapshot_is_idempotent(void) {
                snap_b.user_scene_active_idx, snap_a.user_scene_active_idx);
 }
 
-/* Audit #14 prep: scene-config invariants over the per-frame display
- * path. The audit proposes extracting ~600 lines of overlay rendering
- * from glr_ctrl into src/scene/. The contract that survives the move
- * is what fields the controller must populate on Render3dRenderConfig so
- * the (post-refactor) scene module can drive overlay passes directly.
+/* Render3d config invariants over the per-frame display path. The contract
+ * is the set of fields the controller must populate on Render3dRenderConfig
+ * so the render3d module can drive overlay passes directly.
  *
  * Most fields are already pinned by
- * test_display_frame_builds_config_and_restores_live_state; this test
- * adds the invariants that travel ACROSS frames - repeated frames must
- * not introduce hysteresis, and the post-overlays hook's user_data
- * must point at the config that hosts the guides (so the future
- * scene-side overlay code can rely on that handle). */
+ * test_display_frame_builds_config_and_restores_live_state; this test adds
+ * the invariants that travel ACROSS frames - repeated frames must not
+ * introduce hysteresis, and the post-overlays hook's user_data must point
+ * at the config that hosts the guides. */
 static void test_display_frame_scene_config_is_stable_across_frames(void) {
     Render3dRenderConfig frame1;
     Render3dRenderConfig frame2;
@@ -3778,13 +3773,11 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
                 frame1.post_overlays_fn != NULL);
     ASSERT_TRUE("post_overlays_fn wired in frame 2",
                 frame2.post_overlays_fn != NULL);
-    /* user_data IS the live config the controller passed into
-     * render3d_draw_scene (not the cached frame1/frame2 copies).
-     * Catch it by reading g_last_scene_config.post_overlays_user_data
-     * after the second frame and asserting it equals &g_last_scene_config
-     * is intentionally NOT done - the controller hands the scene module
-     * its OWN local Render3dRenderConfig. We pin the looser invariant: the
-     * hook always carries a non-NULL user_data alongside the fn. */
+    /* user_data is the live config the controller passed into
+     * render3d_draw_scene (not the cached frame1/frame2 copies). The test
+     * deliberately does not assert identity with g_last_scene_config: the
+     * controller hands the render3d module its own local Render3dRenderConfig.
+     * We pin the looser invariant that the hook carries non-NULL user_data. */
     ASSERT_TRUE("post_overlays_user_data non-NULL",
                 frame2.post_overlays_user_data != NULL);
     /* Same contract for the once-per-frame label hook. */
@@ -3794,11 +3787,10 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
                 frame2.post_resolve_overlays_user_data != NULL);
 }
 
-/* Audit #14 prep: the replay-fade overlay is the largest of the
- * controller's overlay reaches. When replay is OFF, no fade plumbing
- * should be wired (no post_fill_fn for fades, base_limit at zero,
- * empty batch ring). Pin this so an extraction that pushes fade
- * machinery into src/scene/ keeps the inactive-replay path costless. */
+/* Replay-fade is the largest of the controller's overlay integrations.
+ * When replay is OFF, no fade plumbing should be wired (no post_fill_fn
+ * for fades, base_limit at zero, empty batch ring). Keep the inactive-
+ * replay path costless. */
 static void test_display_frame_no_replay_means_no_fade_plumbing(void) {
     printf("--- imrepl_ctrl no-replay fade gating ---\n");
     prepare_display_fixture();
@@ -4191,11 +4183,8 @@ static void test_replay_focus_glut_solid_affecting_transforms(void) {
     replay_stop();
 }
 
-/* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
- * compile + parse + ReplCompiledChange construction + apply + reload
- * inside the controller's router. The audit proposes extracting that
- * into a numeric_swatch_apply_step helper (an editor service or a peer
- * subsystem). To make the move safe, pin the OBSERVABLE swatch contract:
+/* Numeric swatch routing owns compile + parse + ReplCompiledChange
+ * construction + apply + reload. Pin its observable contract:
  *
  *  - Stepping up rewrites the line with a larger value.
  *  - Stepping down rewrites the line with a smaller value.
@@ -4845,7 +4834,7 @@ static void test_display_frame_merges_light_theme_and_enable_mask(void) {
                 g_last_scene_config.lights[2].pos[2] == theme[2].pos[2]);
 }
 
-/* The exporter is scene/app-free and reads the dimensional light data through
+/* The exporter is render3d/app-free and reads the dimensional light data through
  * the controller-installed light bridge. Verify the installed bridge copies
  * the live app-owned light table verbatim, so exported glLightfv blocks match
  * the active theme. */

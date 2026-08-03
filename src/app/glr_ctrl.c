@@ -1193,7 +1193,7 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
 static Render3dXnState g_grid_xn;
 static Render3dXnState g_axes_xn;
 
-/* Per-renderer scene state (formerly file-static in src/scene/render.c).
+/* Per-renderer scene state (formerly file-static in src/render3d/render.c).
  * The single-renderer assumption is now an instance, not a global -
  * glr_ctrl is one renderer, render3d_demo is another, and tests own
  * theirs. Initialized in glr_ctrl_init_gl. */
@@ -3046,7 +3046,7 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
 /* Adapter for the export light bridge. Copies the app-owned theme-seeded
  * light data (GlrRenderState.lights) into the exporter's neutral float
  * struct so src/repl/export.c can emit the glLightfv init/display blocks
- * without including scene/app headers. Enable state is intentionally not
+ * without including render3d/app headers. Enable state is intentionally not
  * carried - the export bootstrap disables every slot and the program's own
  * glEnable(GL_LIGHTn) re-enables in display(). */
 static void glr_ctrl_export_fill_light(int slot, ReplExportLightInfo *out) {
@@ -3511,7 +3511,7 @@ void glr_ctrl_reset_all(void) {
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
     /* Seed the app-state light slots with the active theme's
-     * positions / colors. The scene module owns the theme presets;
+     * positions / colors. The render3d module owns the theme presets;
      * the controller wires them into GlrRenderState so the merge in
      * glr_ctrl_build_scene_config (dimensional data + REPL enable mask)
      * and the export light bridge see a coherent set of lights.

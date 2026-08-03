@@ -4,13 +4,15 @@
 > one-screen orientation ("what a REPL pipeline is, what files exist");
 > this document is the working reference: the data model, the two
 > end-to-end flows (commit and frame), each pipeline stage in detail,
-> the state-ownership model, and the boundaries that keep this layer
-> independent of the rest of the app.
+> the state-ownership model, and the boundaries that keep the core pipeline
+> independent of the rest of the app while explicit host bridges carry the
+> small amount of integration the full application needs.
 >
 > Whole-tree context lives in [`../../docs/MODULES.md`](../../docs/MODULES.md)
 > (ownership map) and [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 > (per-frame app narrative). This file never assumes you've read those -
-> it describes `src/repl` as a self-contained interpreter.
+> it describes `src/repl` as a self-contained interpreter with narrow host
+> seams.
 >
 > To *add* a command or new REPL syntax, see the step-by-step checklist and
 > its structured-syntax companion in

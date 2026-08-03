@@ -1,11 +1,11 @@
 /*
  * overlays.h - Tiny per-vertex overlay primitives.
  *
- * These are the scene module's narrow overlay exports: draw one vertex-number
+ * These are the render3d module's narrow overlay exports: draw one vertex-number
  * label or one normal-vector arrow at an already-transformed position.
  * Higher-level policy such as deciding whether overlays are enabled, walking
  * the user's program, tracking transforms, or bracketing GL state belongs to
- * the controller.
+ * the caller or overlay coordinator.
  */
 #ifndef RENDER3D_OVERLAYS_H
 #define RENDER3D_OVERLAYS_H
@@ -49,7 +49,7 @@ void render3d_draw_bitmap_text(void *font, float x, float y, float z,
 /* Outlines and vertex-point overlays are edit_overlays-subsystem passes, not
  * scene primitives. src/subsystems/edit_overlays/ walks authored vertices,
  * redraws generated glutSolid* geometry in polygon line/point mode where
- * needed, and chooses the surrounding GL state; src/scene/ only provides the
+ * needed, and chooses the surrounding GL state; src/render3d/ only provides the
  * per-vertex label/arrow helpers above. */
 
 #endif /* RENDER3D_OVERLAYS_H */

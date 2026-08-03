@@ -1,11 +1,11 @@
 /*
  * view_mode.h - Projection view mode enum (2D ortho / 3D perspective).
  *
- * Consumed by the app-side presentation state and subsystems that need to
- * know whether the scene is currently in 2D or 3D mode.
+ * Consumed by callers and subsystems that need to know whether the scene is
+ * currently in 2D or 3D mode.
  *
- * The X-macro list mirrors src/scene/themes.h so the cfg-symbol string
- * table in src/app/glr_actions.c can be derived from the same source.
+ * The X-macro list is kept beside the renderer's other vocabulary so a
+ * caller's cfg-symbol table can be derived from the same source.
  */
 #ifndef RENDER3D_VIEW_MODE_H
 #define RENDER3D_VIEW_MODE_H

@@ -13,7 +13,7 @@
 #ifndef RENDER3D_OVERLAY_XN_H
 #define RENDER3D_OVERLAY_XN_H
 
-/* Style selects how controller-owned opacity becomes a visual:
+/* Style selects how caller-owned opacity becomes a visual:
  *   GRID_AXES_XN_FADE  plain alpha fade
  *   GRID_AXES_XN_FOG   recede into clear-color fog, with an alpha knee
  *                      near opacity 0 for the final vanish. */

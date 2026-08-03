@@ -240,7 +240,7 @@ typedef double GLclampd;
 #define GL_REPLACE 0x1E01
 #define GL_MODULATE 0x2100
 
-/* Texture-capture post-processing filter (scene/postprocess_filter.c). */
+/* Texture-capture post-processing filter (render3d/postprocess_filter.c). */
 #define GL_RGB 0x1907
 #define GL_RGBA 0x1908
 #define GL_UNSIGNED_BYTE 0x1401
@@ -256,7 +256,7 @@ typedef double GLclampd;
 #define GL_LUMINANCE 0x1909
 #define GL_REPEAT 0x2901
 
-/* Feedback / render-mode (scene/render.c ortho-freeze eye-distance probe). */
+/* Feedback / render-mode (render3d/render.c ortho-freeze eye-distance probe). */
 #define GL_RENDER 0x1C00
 #define GL_FEEDBACK 0x1C01
 #define GL_SELECT 0x1C02

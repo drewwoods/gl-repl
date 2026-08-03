@@ -121,10 +121,9 @@ static int validate_render_config(const Render3dRenderConfig *config) {
      * accum_passes == 0, which is fine while effect is OFF. Mirrors the
      * grid block above (validated only when grid_theme != OFF).
      *
-     * Deliberately a range check, not the app's Accum-passes ladder: which
-     * counts the UI offers is app policy (GLR_ACCUM_PASS_LADDER in
-     * src/app/glr_config.h), and render3d must not depend on src/app. A
-     * ladder copy here would just silently reject new steps. */
+     * Deliberately a range check, not a caller's pass ladder: which sample
+     * counts are exposed is caller policy, and render3d must not depend on it.
+     * A ladder copy here would just silently reject new steps. */
     if (config->accum_effect < 0 ||
         config->accum_effect > RENDER3D_ACCUM_EFFECT_BLUR_CAMERA) goto bad;
     if (config->use_accum && config->accum_effect != RENDER3D_ACCUM_EFFECT_OFF) {
@@ -279,7 +278,7 @@ static double render3d_probe_eye_dist(const Render3dRenderConfig *config) {
  * GLR_ORTHO_REF_MODE in render.h.
  *
  * FROZEN: capture once on the perspective->ortho edge, release on the
- * ortho->perspective edge. The controller sequences the 3D->2D switch as
+ * ortho->perspective edge. The embedding caller sequences the 3D->2D switch as
  * "flatten camera, THEN blend projection", so by the time mix leaves 1.0
  * the camera is already top-down - exactly the camera ortho will use -
  * so the one sample is the scene's true on-screen size at the switch and
@@ -467,7 +466,7 @@ static void render3d_apply_projection(const Render3dState *state,
     }
 }
 
-/* The scene module does not own a camera-apply helper. Callers populate
+/* The render3d module does not own a camera-apply helper. Callers populate
  * GL_MODELVIEW themselves before invoking render3d_draw_scene. */
 
 static void render3d_apply_quality_config(const Render3dRenderConfig *config) {
@@ -520,7 +519,7 @@ static void orbit_gizmo_axes(float tx, float ty, float tz, float r) {
 }
 
 /* Crosshair gizmo at the orbit target. Visible only while the camera is
- * moving (during drag or while momentum carries it); fades out. REPL-only -
+ * moving (during drag or while momentum carries it); fades out. Caller-only -
  * never exported. Styled to match the other scene helpers: soft halo line
  * under a bright core, alpha driven by g_cam_motion_glow. Drawn in two
  * passes so it is never fully hidden inside user geometry - pass 0 is a
@@ -805,7 +804,7 @@ static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
 /* Polygon outline overlay, vertex-point overlay, vertex-number /
  * normal-vector labels, and the cursor-edit guide stack all render
  * here through post_overlays_fn - none of them are scene-internal
- * any more (see src/app/glr_ctrl.c for the bodies).
+ * any more; the caller supplies their bodies through the callback hooks.
  *
  * This pass is exactly the geometry-reporting layer: everything drawn
  * here describes the user's geometry, and runs after every piece of host
@@ -913,11 +912,10 @@ int render3d_draw_scene(Render3dState *state,
         /* Optionally confine the repeated per-pass clears and the glAccum
          * read/return to the scene viewport: glClear/glAccum are bounded by
          * the scissor box (not the viewport), so this lets the up-to-16x
-         * accumulation work skip the dead region under the code panel
-         * instead of scanning the whole window. In theory a smaller scissor
+         * accumulation work skip pixels outside the scene rect instead of
+         * scanning the whole window. In theory a smaller scissor
          * region is a strict reduction in pixel-copy work; in practice on
-         * macOS it measured *slower*, so it's off by default - see
-         * CFG_DEFAULT_USE_ACCUM_AA_SCISSORS in glr_defaults.h. */
+         * macOS it measured *slower*, so callers commonly leave it off. */
         int use_scissor = config->use_accum_aa_scissors;
         if (use_scissor) {
             glEnable(GL_SCISSOR_TEST);

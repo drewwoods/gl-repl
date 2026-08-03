@@ -156,7 +156,7 @@ void                              repl_export_install_projection_bridge(const Re
  * The exported init()/display() bodies emit one glLightfv block per light
  * slot, but the dimensional light data (positions / colors / eye-space) is
  * presentation state owned by the app shell (GlrRenderState.lights, seeded
- * from a scene light theme). src/repl/export.c is scene/app-free, so the
+ * from a render3d light theme). src/repl/export.c is render3d/app-free, so the
  * controller installs a bridge that copies the live per-slot values into this
  * neutral float struct. No bridge installed (render3d_demo, tests) => the
  * exporter emits zeroed/disabled lights. This carries only the dimensional

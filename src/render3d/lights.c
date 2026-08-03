@@ -22,7 +22,7 @@ static void render3d_lights_pop_state(void) {
 void render3d_lights_init_global_ambient(void) {
     /* Bucket-2 carve-out: a lighting *coefficient* (glLightModelfv),
      * not a glColor* draw color, so it is intentionally a named local
-     * const and NOT a scene/palette.h token. */
+     * const and NOT a render3d/palette.h token. */
     static const GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
 }
@@ -44,8 +44,8 @@ void render3d_lights_init_global_ambient(void) {
  *
  * `.enabled` stays 0 across all themes: the program's glEnable
  * commands decide which slots light up. The bootstrap section in
- * src/repl/export.c emits one glDisable per slot, and the user (or an
- * example's @cfg) re-enables the slots they need.
+ * The exporter emits one glDisable per slot, and the upstream program or
+ * its configuration re-enables the slots it needs.
  *
  * `.pos_is_eye_space` is 1 for slots whose POSITION must be set at
  * identity modelview (currently only HEADLIGHT slot 0); the runtime uses an
@@ -192,7 +192,7 @@ void render3d_lights_apply_theme(Render3dLight out[MAX_LIGHTS], int theme) {
 }
 
 
-/* Set light properties only. User REPL commands still decide whether each
+/* Set light properties only. The upstream program still decides whether each
  * light is enabled during command execution. */
 void render3d_lights_setup(const Render3dFrameRenderContext *frame_ctx) {
     for (int i = 0; i < MAX_LIGHTS; i++) {

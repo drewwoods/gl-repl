@@ -1,10 +1,9 @@
 /*
- * src/scene/themes.h - Shared scene theme enums.
+ * src/render3d/themes.h - Shared 3D theme enums.
  *
- * This is the vocabulary app-side config code and scene renderers share for
- * grid themes, axes themes, backdrop modes, and the grid spacing/extent
- * indices. The scene module owns the meanings; app/UI code imports the enums
- * to present and store those choices.
+ * This is the renderer-owned vocabulary for grid themes, axes themes, backdrop
+ * modes, and grid spacing/extent indices. Callers import the enums to present
+ * and store those choices; the renderer owns their meanings.
  *
  * Label tables and render data keyed by these enums must stay in enum order.
  */
@@ -12,9 +11,8 @@
 #define RENDER3D_THEMES_H
 
 /* X-macro lists drive the enum *and* any cfg-symbol string table that
- * needs to round-trip the value name (see cfg_grid_theme_symbols et al.
- * in src/app/glr_actions.c). Adding a new theme/backdrop here picks it
- * up everywhere automatically. */
+ * needs to round-trip the value name. Adding a new theme/backdrop here picks
+ * it up everywhere automatically. */
 #define GRID_THEME_LIST(X) \
     X(OFF, "OFF")          \
     X(CLASSIC, "Classic")  \
@@ -90,8 +88,8 @@ typedef enum {
  * triad (magenta key, cyan rim, lime fill) plus a dim warm back light,
  * for showing off colored materials. As with every theme, all four
  * slots ship `.enabled = 0` - a theme only defines each light's
- * position/colors; the program's glEnable(GL_LIGHTn) commands (or an
- * example's @cfg) decide which slots actually light up. */
+ * position/colors; the caller's glEnable(GL_LIGHTn) commands or other policy
+ * decide which slots actually light up. */
 #define LIGHT_THEME_LIST(X) \
     X(DEFAULT, "Default")   \
     X(HEADLIGHT, "Headlight") \
@@ -107,8 +105,8 @@ typedef enum {
     LIGHT_THEME_COUNT
 } Render3dLightTheme;
 
-/* Grid major-tick spacing index. The actual float values live in a table
- * the controller passes through Render3dRenderConfig.grid_major_steps. */
+/* Grid major-tick spacing index. The actual float values are supplied by the
+ * caller through Render3dRenderConfig.grid_major_steps. */
 #define GRID_MAJOR_LIST(X) \
     X(1, "1")              \
     X(2, "2")              \
@@ -141,8 +139,8 @@ typedef enum {
 /* Grid line-brightness multiplier index. The default grid-line alphas are
  * deliberately faint (minor lines ~0.03..0.12); this scales them so a
  * grid can be dialed up (or down) for contrast against the backdrop. The
- * actual multiplier values live in the controller (glr_ctrl.c), resolved
- * into Render3dRenderConfig.grid_brightness - NORMAL == 1.0 (no change). */
+ * actual multiplier values are supplied by the caller through
+ * Render3dRenderConfig.grid_brightness - NORMAL == 1.0 (no change). */
 #define GRID_BRIGHTNESS_LIST(X) \
     X(DIM,    "Dim")            \
     X(NORMAL, "Normal")         \

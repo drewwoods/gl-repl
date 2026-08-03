@@ -3,7 +3,7 @@
  *
  * Draws the scene's optional reference grid using the effective theme, major
  * spacing, extent, and transition state already prepared in Render3dFrameRenderContext.
- * The controller chooses those settings; this module is responsible only for
+ * The caller chooses those settings; this module is responsible only for
  * rendering the requested grid style.
  */
 #ifndef RENDER3D_GRID_H
@@ -26,7 +26,7 @@
 
 /* The grid's transition curve plugin (see Render3dXnReveal): maps elapsed fade
  * time to opacity using GRID_FADE_*_SECS and the per-theme time multiplier,
- * and inverts it for reversal continuity. The controller binds this into the
+ * and inverts it for reversal continuity. The caller binds this into the
  * grid's Render3dXnState at render3d_xn_init, then only feeds the machine dt. */
 extern const Render3dXnReveal render3d_grid_reveal;
 

@@ -27,9 +27,9 @@
  * crawls frame to frame like film stock. No frame capture needed.
  *
  * All are pure fixed-function GL (no shaders, no FBOs). The same rect
- * the scene renders into is reused over the whole window by the
- * app-level glr_compositor, so each effect works at scene-viewport and
- * full-frame scope alike. render3d_postprocess_filter_render() dispatches
+ * the scene renders into can also be reused over a larger frame by an
+ * outer compositor, so each effect works at scene-viewport and full-frame
+ * scope alike. render3d_postprocess_filter_render() dispatches
  * on the mode.
  */
 #include "postprocess_filter.h"
@@ -98,7 +98,7 @@ static int next_pow2(int v) {
     return p;
 }
 
-/* Scene-layer 2D bracket. src/render3d/ must not depend on ui/gl_2d.h, so
+/* Render3d-layer 2D bracket. src/render3d/ must not depend on ui/gl_2d.h, so
  * the minimal screen-space textured-quad state is set up here. begin
  * snapshots the matrix-mode (not covered by glPushAttrib); end accepts
  * it back as a parameter, so the pair isn't coupled by a file-static

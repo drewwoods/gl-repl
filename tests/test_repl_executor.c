@@ -787,7 +787,7 @@ static void test_executor_camera_distance_source(void) {
  *       tracked-pop refuses to call glPopMatrix when its depth
  *       counter is at 0, preventing a GL_STACK_UNDERFLOW.
  *
- * Both behaviours are why scene/render's outer push/pop bracket
+ * Both behaviours are why render3d/render's outer push/pop bracket
  * around the user program is sufficient - the executor cooperates by
  * leaving the inner stack net-zero. Without these invariants, a
  * user's first frame with stray pushes would silently corrupt the

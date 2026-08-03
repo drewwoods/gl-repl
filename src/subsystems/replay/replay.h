@@ -171,8 +171,8 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
  * PUSH/POP transforms via GL, and dispatches the supplied callbacks at
  * CMD_TESS_BEGIN_CONTOUR / CMD_TESS_VERTEX / CMD_TESS_END so the visual
  * layer can emit line-strip primitives at the right transformed
- * positions. Lets the scene module stay free of GLCmd iteration: the
- * scene controller installs callbacks that just call glBegin / glVertex /
+ * positions. Lets the render3d module stay free of GLCmd iteration: the
+ * controller installs callbacks that just call glBegin / glVertex /
  * glEnd, with no knowledge of the REPL flat program.
  *
  * Modelview state on entry is the caller's; the walker pushes/pops to

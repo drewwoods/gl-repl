@@ -1,18 +1,17 @@
 /*
  * render.h - 3D scene rendering surface.
  *
- * Exposes the scene module's top-level render entry points. Callers build a
+ * Exposes the render3d module's top-level render entry points. Callers build a
  * Render3dRenderConfig snapshot, populate GL_MODELVIEW with their own camera
- * transform (e.g. via glr_camera_load_modelview from src/app/glr_camera.h,
- * or inline matrix calls in tools/render3d_demo), then call
- * render3d_draw_scene() for one pass. The scene module owns projection
- * setup, clear, helper renderers (backdrop, grid, axes, lights), and the
- * optional callback hooks that bracket the main geometry fill - but does
- * NOT own a camera type or apply helper.
+ * transform, then call render3d_draw_scene() for one pass. The render3d
+ * module owns projection setup, clear, helper renderers (backdrop, grid,
+ * axes, lights), and the optional callback hooks that bracket the main
+ * geometry fill - but does NOT own a camera type or apply helper.
  *
- * The public surface stays REPL-independent: user geometry and replay-specific
- * overlay work enter through callbacks carried on Render3dRenderConfig rather than
- * direct reads from REPL globals.
+ * The public surface is application-independent: user geometry, replay work,
+ * and edit overlays enter through callbacks and snapshots carried on
+ * Render3dRenderConfig rather than direct reads from app, editor, REPL, or UI
+ * state.
  */
 #ifndef RENDER3D_RENDER_H
 #define RENDER3D_RENDER_H
@@ -21,9 +20,8 @@
 #include "projection_mode.h"
 
 /* Accumulation-buffer AA supports any sample count in [1, MAX_ACCUM_SAMPLES].
- * The scene renderer keeps a 16-entry jitter table whose first N offsets form
- * a good N-sample set; which counts the UI actually offers is app policy
- * (GLR_ACCUM_PASS_LADDER in src/app/glr_config.h). */
+ * The render3d renderer keeps a 16-entry jitter table whose first N offsets form
+ * a good N-sample set; which counts an application offers is caller policy. */
 #define MAX_ACCUM_SAMPLES 16
 
 /* One-time GL initialization called once at startup. Currently:
@@ -38,14 +36,10 @@ void render3d_init_gl(void);
  * invoking render3d_draw_scene. render3d_draw_scene then sets
  * GL_PROJECTION via render3d_apply_projection and switches back to
  * GL_MODELVIEW for user geometry, but it never overwrites the
- * modelview the caller set. The scene module does not own a camera
- * type, an apply helper, or any camera state - that lives in
- * src/app/glr_camera.h (glr_camera_load_modelview / GlrCameraPose).
- *
- * For non-app callers (render3d_demo and other scene viewports): inline
- * the six matrix calls (glLoadIdentity / glTranslatef / glRotatef /
- * glTranslatef) directly. The function isn't worth importing for one
- * helper. */
+ * modelview the caller set. The render3d module does not own a camera
+ * type, an apply helper, or any camera state - those belong to the caller.
+ * A caller may use its own camera helper or inline the matrix calls directly;
+ * neither choice creates a renderer dependency. */
 
 /* Canonical description of the projection the scene last applied this
  * frame. Computed once per render3d_draw_scene call (before the AA
@@ -84,10 +78,9 @@ typedef struct Render3dProjectionDesc {
 #define GLR_ORTHO_REF_MODE GLR_ORTHO_REF_FROZEN
 #endif
 
-/* Per-renderer state the scene module needs to persist across frames.
- * Each caller (controller, render3d_demo, tests) owns one instance, so
- * multiple scene viewports use separate state objects rather than shared
- * renderer globals.
+/* Per-renderer state the render3d module needs to persist across frames.
+ * Each embedding caller owns one instance, so multiple render3d viewports use
+ * separate state objects rather than shared renderer globals.
  *
  * Callers MUST call render3d_state_init() before passing the
  * struct to render3d_draw_scene(), and own its lifetime across
@@ -121,11 +114,11 @@ typedef struct Render3dState {
 void render3d_state_init(Render3dState *state);
 
 /* Render the full 3D scene for one frame using an explicit config snapshot.
- * Orchestrates projection setup, camera transforms, user geometry execution,
- * grid/axes, overlays, and edit guides.
+ * Orchestrates projection setup, user geometry execution, grid/axes, and
+ * callback-provided overlays and guides.
  * Called once per frame (or multiple times per frame for accumulation-buffer
- * AA). The controller builds the config once and passes it in along with
- * its owned renderer state.
+ * AA). The caller builds the config once and passes it in along with its
+ * owned renderer state.
  *
  * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
  * by validate_render_config: NULL config, non-positive render3d_w / render3d_h,
@@ -143,6 +136,6 @@ void render3d_get_active_projection(const Render3dState *state,
 
 /* Replay-fade overlays are injected through
  * Render3dRenderConfig.post_fill_fn, keeping replay batching details outside
- * the scene renderer. */
+ * the render3d renderer. */
 
 #endif /* RENDER3D_RENDER_H */

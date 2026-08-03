@@ -16,11 +16,11 @@
  * tens of radians, so the pattern stops matching between the native and
  * emscripten builds.
  *
- * Deliberately NOT shared with the REPL's `rand`/`rand2` (expr_rand01 in
- * src/repl/eval.c), which is the same formula plus a 0.5 seed offset:
- *   - src/render3d/ carries no REPL dependency (render3d_demo is the
- *     proof), so this band cannot include eval.h;
- *   - eval.c's body is pinned character-for-character to the repl_randf
+ * Deliberately NOT shared with the language evaluator's `rand`/`rand2`,
+ * which is the same formula plus a 0.5 seed offset:
+ *   - this renderer helper must stay independent of evaluator state, so
+ *     it cannot include the evaluator;
+ *   - the evaluator's body is pinned character-for-character to the repl_randf
  *     helper that export_prologue.c writes into exported C, and that
  *     parity contract shouldn't be entangled with renderer decoration.
  * The seed offset is also why the constants differ: it was tuned for the

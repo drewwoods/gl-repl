@@ -606,7 +606,7 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
 /* Symbolic-name -> enum-value tables. Built-in catalogs (examples,
  * tutorials) record values like "GRID_THEME_RADAR" rather than the raw
  * `10`; this lookup resolves them at apply time so reordering the
- * underlying enum (src/scene/themes.h) doesn't silently shift which
+ * underlying enum (src/render3d/themes.h) doesn't silently shift which
  * value the catalog selects.
  *
  * The slug->table map below covers every enum-valued slug the catalogs
@@ -621,7 +621,7 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
  * length-against-count, catching "new enum value but missed the
  * table" at build time. */
 /* The string tables share their entry list with the enum definitions
- * in src/scene/themes.h via X-macros, so adding a theme/backdrop there
+ * in src/render3d/themes.h via X-macros, so adding a theme/backdrop there
  * adds its symbol here automatically. */
 static const char *cfg_grid_theme_symbols[GRID_THEME_COUNT] = {
 #define GRID_THEME_SYMBOL_ENTRY(name, str) [GRID_THEME_##name] = "GRID_THEME_" #name,

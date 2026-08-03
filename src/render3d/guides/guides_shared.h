@@ -1,9 +1,9 @@
 /*
  * guides_shared.h - Shared guide snapshot and planning types.
  *
- * The controller builds a Render3dGuideSnapshot once per frame from the current
+ * The embedding caller builds a Render3dGuideSnapshot once per frame from its
  * editor/replay context, then guide renderers consume it without reaching back
- * into editor or REPL globals. Render3dTransformGuidePlan is the small per-frame
+ * into those owners' state. Render3dTransformGuidePlan is the small per-frame
  * cache transform guides use between prepare and render.
  */
 #ifndef RENDER3D_GUIDES_SHARED_H
@@ -76,10 +76,10 @@ typedef struct Render3dGuideSnapshot {
     FlatProgramView flat_program;
 
     /* Pre-parsed vertex / raster-position / normal cursor args. The
-     * controller evaluates the partial input string (e.g.
-     * `glVertex3f(1, t*2, `) using the live REPL variable table and writes
-     * the floats here so the scene module can draw guides without needing
-     * repl_eval. vertex_n_filled = 0 when the input doesn't look like
+     * the caller evaluates the partial input string (e.g.
+     * `glVertex3f(1, t*2, `) using its live program variables and writes
+     * the floats here so the renderer can draw guides without evaluating
+     * expressions. vertex_n_filled = 0 when the input doesn't look like
      * glVertex2f / glVertex3f / gluVertex(. raster_pos_n_filled < 3 means
      * "don't draw a raster-position marker". normal_n_filled < 3 means
      * "don't draw a normal guide". */
@@ -92,21 +92,21 @@ typedef struct Render3dGuideSnapshot {
     int   normal_n_filled;
 
     /* Pre-evaluated transform cursor args, parallel to vertex_args. The
-     * controller fills these when the live input line is glTranslatef( /
+     * caller fills these when the live input line is glTranslatef( /
      * glScalef( / glRotatef(, so the transform guide can render live while
      * typing (before commit) with the same feel as the vertex guide. Slots
      * are positional: translate/scale use [0..2]; rotate uses [0]=angle,
      * [1..3]=axis. xform_filled[i] flags the slots the user has actually
-     * typed; the scene module fills the rest with the transform identity
+     * typed; the guide renderer fills the rest with the transform identity
      * (0 for translate/rotate, 1 for scale). The transform *kind* is
-     * re-derived in the scene module from `input` via strncmp (no eval),
+     * re-derived by the guide renderer from `input` via strncmp (no eval),
      * mirroring geometry_guides.c's input_is_vertex_kind. */
     float xform_args[4];
     int   xform_filled[4];
     int   xform_n_filled;
 
     /* When the cursor is on a glNormal3f / gluNormal / CMD_TESS_NORMAL
-     * line, the controller looks forward in the *flat* program for the
+     * line, the caller looks forward in the *flat* program for the
      * next vertex command and writes its evaluated position here. The
      * normal-guide renderer prefers this over its own forward search
      * through source_cmds - source args are frozen at parse time, so a
@@ -118,7 +118,7 @@ typedef struct Render3dGuideSnapshot {
     int   normal_base_pos_valid;
 
     /* Optional transformed normal direction for the normal label. Filled by
-     * edit_overlays when the cursor's flat-program instance is known and
+     * the snapshot builder when the cursor's flat-program instance is known and
      * xform_guide_mode is FRAME. This is the authored normal transformed by
      * the in-scope model normal matrix and normalized for display. */
     float normal_frame_args[3];
@@ -130,7 +130,7 @@ typedef struct Render3dGuideSnapshot {
      * (a, b, c, d) typed so far, clip_plane_n_filled counts them, and
      * clip_plane_cap_enabled says whether the program's net
      * glEnable/glDisable state turns that plane's cap on (the guide
-     * dims when it's off). Pre-parsed by the controller like the
+     * dims when it's off). Pre-parsed by the caller like the
      * vertex/xform slots; the flat-program walk overrides args from
      * the cursor's flat cmd so animated coefficients track. */
     int   clip_plane_idx;
@@ -141,7 +141,7 @@ typedef struct Render3dGuideSnapshot {
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 
     /* Nullable observer for labels drawn by the active edit guide. The
-     * controller leaves this empty; edit_overlays installs it only while
+     * the caller leaves this empty; an overlay coordinator installs it only while
      * vertex-label decluttering needs fixed guide-label obstacles. */
     Render3dGuideLabelSink label_sink;
 } Render3dGuideSnapshot;

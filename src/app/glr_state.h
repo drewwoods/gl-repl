@@ -4,12 +4,12 @@
  * Holds the UI/render policy that belongs to the app shell rather than the REPL
  * language runtime: overlay toggles, grid/axes/backdrop presentation, code-panel
  * layout options, anti-aliasing configuration, and other scene-display policy.
- * Controller, editor, UI, and scene code read or mutate this state when they
+ * Controller, editor, UI, and render3d code read or mutate this state when they
  * need app-frame behavior; the REPL pipeline itself should not depend on it.
  *
  * That ownership boundary is enforced by `check-repl-state-no-glr-state`: REPL
- * pipeline TUs do not include this header, while app-shell, editor, UI, and
- * scene files may.
+ * pipeline TUs and render3d do not include this header; app-shell code and
+ * the UI snapshot layer consume the state through this owner.
  *
  * This is the app-side owner of presentation and render-policy state.
  */
@@ -21,7 +21,7 @@
 #include "render3d/projection_mode.h"
 #include "render3d/render_types.h"   /* Render3dLight, MAX_LIGHTS for the theme-seeded lights[] */
 
-/* Scene-presentation policy: what chrome and overlays the app should show, how
+/* Render3d-presentation policy: what chrome and overlays the app should show, how
  * the code panel should format text, and which view mode/backdrop/filter choices
  * are active for the current session. */
 typedef struct {

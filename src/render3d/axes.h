@@ -2,7 +2,7 @@
  * axes.h - Themeable coordinate-axes renderer.
  *
  * Draws the optional origin axes using the effective theme and fade state
- * prepared in Render3dFrameRenderContext. The controller decides which theme is active;
+ * prepared in Render3dFrameRenderContext. The caller decides which theme is active;
  * this module renders that choice and nothing else.
  */
 #ifndef RENDER3D_AXES_H
@@ -21,8 +21,8 @@
 #endif
 
 /* The axes' transition curve plugin (see Render3dXnReveal): a plain linear
- * opacity ramp over AXES_FADE_*_SECS (no per-theme speed). The controller
- * binds this into the axes' Render3dXnState at render3d_xn_init. */
+ * opacity ramp over AXES_FADE_*_SECS (no per-theme speed). The caller binds
+ * this into the axes' Render3dXnState at render3d_xn_init. */
 extern const Render3dXnReveal render3d_axes_reveal;
 
 /* Render the origin axes for the current frame. `frame_ctx` supplies the

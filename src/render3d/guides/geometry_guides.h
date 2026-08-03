@@ -3,7 +3,7 @@
  *
  * Draws the geometry guides associated with the current edit row: vertex
  * markers, primitive context, and the other immediate cues the scene overlay
- * can derive from Render3dGuideSnapshot. The controller prepares that snapshot;
+ * can derive from Render3dGuideSnapshot. The caller prepares that snapshot;
  * this renderer stays read-only over it.
  */
 #ifndef RENDER3D_GEOMETRY_GUIDES_H

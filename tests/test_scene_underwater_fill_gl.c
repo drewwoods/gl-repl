@@ -34,7 +34,7 @@
  * test sets the config flag itself - no live-pipeline state needed.
  *
  * Tokens: GL_FOG_DISTANCE_MODE_NV / GL_EYE_RADIAL_NV are defined as
- * registry-value fallbacks in scene/render_types.h when glext isn't
+ * registry-value fallbacks in render3d/render_types.h when glext isn't
  * pulled in (e.g. the Apple-GLUT framework path), so the test compiles
  * even on machines without the extension. If the runtime driver
  * doesn't support GL_NV_fog_distance, glFogi(0x855A, ...) silently

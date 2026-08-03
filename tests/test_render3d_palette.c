@@ -1,5 +1,5 @@
 /*
- * test_scene_palette.c - Palette integrity for scene/palette.h.
+ * test_render3d_palette.c - Palette integrity for render3d/palette.h.
  *
  * Header-only target: links no project objects (mirrors
  * test_ui_theme / test_repl_code_panel_layout). The STATIC_ASSERT in

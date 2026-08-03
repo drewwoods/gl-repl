@@ -1,7 +1,7 @@
 /*
  * projection_mode.h - Projection mode enum (perspective / orthographic).
  *
- * Consumed by the app-side presentation state, render3d, and config systems.
+ * Consumed by render3d and by callers that expose projection configuration.
  */
 #ifndef RENDER3D_PROJECTION_MODE_H
 #define RENDER3D_PROJECTION_MODE_H

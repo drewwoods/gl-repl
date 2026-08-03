@@ -2,7 +2,7 @@
  * transform_guides.h - Replay/edit-time transform guide rendering.
  *
  * These helpers visualize pending transform commands near the current replay or
- * cursor context. The controller builds a Render3dGuideSnapshot, calls
+ * cursor context. The caller builds a Render3dGuideSnapshot, calls
  * render3d_transform_guides_prepare() once per frame, then lets the renderer draw any
  * guide that applies while walking the flat program.
  */

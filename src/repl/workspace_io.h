@@ -3,7 +3,7 @@
  *
  * The self-contained "how" of workspace persistence: recursive directory
  * creation and scene-file path/slug derivation. Pure filesystem + string work
- * with no REPL/scene state, so it carries none of the slot state machine -
+ * with no REPL slot state, so it carries none of the slot state machine -
  * scenes.c keeps slot selection, promotion policy, and the save/load
  * orchestration that drives these helpers.
  */

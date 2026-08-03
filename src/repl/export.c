@@ -3,7 +3,7 @@
 
 /* Light bridge - the controller installs an adapter that copies the live
  * app-owned theme-seeded light data (positions/colors/eye-space) into the
- * neutral ReplExportLightInfo. This TU stays clean of scene/app includes
+ * neutral ReplExportLightInfo. This TU stays clean of render3d/app includes
  * (check-repl-export-via-bridge / controller-boundary guards). NULL on the
  * demo and in tests, where lights export as zeroed + disabled. */
 static const ReplExportLightBridge *g_export_light_bridge = NULL;

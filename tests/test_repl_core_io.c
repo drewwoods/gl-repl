@@ -2052,19 +2052,15 @@ int main(void) {
         }
     }
 
-    /* Audit #11/#12 prep: save -> load -> save idempotency. Audit
-     * proposes removing the legacy state-3 path and the synthetic
-     * g_angle line in cam_consume_example_block_now. Round-trip pose
-     * tests above pin "load restores the camera"; an idempotency check
-     * pins that the SAVE side hasn't drifted either - two consecutive
-     * exports of the loaded state produce identical camera blocks.
-     * A regression on either side (e.g., the audit's parser unification
-     * subtly altering ry interpretation, or the formatter switching
-     * between g_angle and numeric ry mid-refactor) yields a diff.
+    /* Camera export idempotency: after loading a saved pose, consecutive
+     * exports of that state must produce identical camera blocks. The
+     * round-trip pose tests above pin "load restores the camera"; this check
+     * pins the save side so parser or formatter changes cannot silently
+     * alter the emitted representation.
      *
      * Compare ONLY the camera region of the file (the rest depends on
      * derived state like timestamps / cfg defaults that can legitimately
-     * change between runs; the camera block is the audit's surface). */
+     * change between runs; the camera block is the contract under test). */
     {
         const char *path_a = "/tmp/repl_core_cam_idem_a.c";
         const char *path_b = "/tmp/repl_core_cam_idem_b.c";

@@ -3651,7 +3651,7 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
 
 /* Audit #41: catalog grid-theme SET steps must use symbolic value
  * names (via STEP_SET_SYM) so reordering `Render3dGridTheme` in
- * src/scene/themes.h cannot silently shift the showcase to a
+ * src/render3d/themes.h cannot silently shift the showcase to a
  * different theme. Locate the Feature Tour by name, find the two
  * grid SET steps in catalog order, and assert each is symbolic
  * with the expected name. (The bridge's resolve_text - pinned by

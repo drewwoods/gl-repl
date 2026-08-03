@@ -9,8 +9,8 @@
 #   - src/app/        (controller layer 6)
 #   - src/editor/     (text-document model layer 3)
 #   - src/repl/       (program model layer 1)
-#   - src/render3d/      (scene renderer layer 3.5 —
-#                      check-layer-coupling enforces UI ↔ scene
+#   - src/render3d/      (render3d renderer layer 3.5 -
+#                      check-layer-coupling enforces UI <--> render3d
 #                      mutual exclusion overall; this re-asserts it
 #                      for the core subset)
 #   - src/subsystems/ (feature peers layer 5)
@@ -25,7 +25,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-forbidden='#include[[:space:]]+"(app|editor|repl|scene|subsystems|ui/app)/'
+forbidden='#include[[:space:]]+"(app|editor|repl|render3d|subsystems|ui/app)/'
 
 files=()
 while IFS= read -r f; do
@@ -45,7 +45,7 @@ if [ -n "$hits" ]; then
   echo "ERROR: src/ui/core/ contains forbidden upper-layer #includes:" >&2
   echo "$hits" >&2
   echo >&2
-  echo "       ui/core must stay independent of editor / repl / scene /" >&2
+  echo "       ui/core must stay independent of editor / repl / render3d /" >&2
   echo "       subsystems / ui/app / app. Move the dependency into" >&2
   echo "       src/ui/app/ or expose the data via a parameter." >&2
   exit 1

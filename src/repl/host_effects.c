@@ -3,15 +3,14 @@
  */
 #include "repl/host_effects.h"
 
-/* Host-effect bridge: a single file-static pointer the controller
+/* Host-effect bridge: a single file-static pointer the integrating caller
  * installs at startup, mirroring export.c's g_export_cfg_bridge /
  * g_export_camera_bridge. NULL bridge = every dispatch no-ops, which
  * is what tests want when they leave it unset. The standalone demo installs
- * only edit-line hooks, clearing the ui_state_status_set / editor / tutorial
- * stubs from tools/repl_demo/stubs.c.
+ * only edit-line hooks, so UI/editor/tutorial effects remain unbound.
  *
  * The bridge bundles the callbacks needed by the pipeline while keeping
- * controller and UI state out of src/repl. Callers install only the hooks
+ * host-owned state out of src/repl. Callers install only the hooks
  * they need; a NULL hook is a no-op. */
 static const ReplHostEffects *g_host_effects = 0;
 

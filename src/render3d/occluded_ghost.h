@@ -18,7 +18,7 @@
  * guides/geometry_guides.c. ALPHA is used only by render.c's two-pass
  * ghost helper; transform_guides.c uses a deliberately brighter local
  * TG_GHOST_ALPHA_MUL (its guides usually sit inside the geometry they
- * shape). Scene-internal, so it lives under src/scene/ rather than at
+ * shape). Renderer-internal, so it lives under src/render3d/ rather than at
  * the repo root.
  */
 #ifndef RENDER3D_OCCLUDED_GHOST_H

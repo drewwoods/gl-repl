@@ -823,7 +823,7 @@ static void test_scene_overlays(void) {
 
     Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
-    /* All overlay rendering moved out of scene; the scene module now
+    /* All overlay rendering moved out of render3d; the render3d module now
      * exposes only per-vertex / per-cmd primitives. Outlines + vertex
      * points became controller polygon-mode passes (see imrepl_ctrl.c)
      * and aren't tested here. */
@@ -1174,7 +1174,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.show_guides = 1;
     snap.alpha_scale = 1.0f;
 
-    /* The controller now pre-parses cursor args; the scene module reads
+    /* The caller now pre-parses cursor args; the render3d module reads
      * snapshot->vertex_args / vertex_filled / vertex_n_filled. Each case
      * below populates those alongside the input string. */
     const char *input3f = "glVertex3f(1, 2, 3)";

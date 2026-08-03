@@ -2,7 +2,7 @@
  * prof_sections.h - CPU-profile section catalog (the app's ProfSection enum).
  *
  * The per-frame timing sections are instrumented (prof_begin/prof_end) from
- * across the tree - src/scene, src/subsystems, src/repl, src/app - none of
+ * across the tree - src/render3d, src/subsystems, src/repl, src/app - none of
  * which include each other. So the section IDs live in this one tiny header,
  * force-included into every translation unit by the Makefile's OBJ_CFLAGS
  * (`-include prof_sections.h`, right beside `-include config.h`). That keeps

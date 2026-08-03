@@ -33,7 +33,8 @@ void repl_state_restore(const ReplRuntimeState *snapshot);
  * program. The flat program (ReplFlatProgramState, ~6.8 MB) is rebuilt from
  * the document on the next frame, so it is deliberately not stored. Used by
  * the tour-baseline snapshot (src/app/glr_tour_snapshot.c), which pairs this
- * with the editor/scene/peer captures.
+ * with the editor, the scene-slot capture (repl_scenes_snapshot_capture()),
+ * and the peer captures.
  *
  * Restore rebinds evaluator predef storage, restores the special `t` binding,
  * invalidates the expression + source-scope caches, clears the flat-program

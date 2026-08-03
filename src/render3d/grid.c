@@ -169,7 +169,7 @@ static void set_fog_to_clear_color() {
  * config.grid_opacity
  * and stored on the GridDrawContext. Every color path routes through
  * grid_color so it applies uniformly, AFTER each call site's own
- * alpha_scale clamp so the controller-owned OUT is the hard ceiling. 1.0 =
+ * alpha_scale clamp so the caller-supplied OUT is the hard ceiling. 1.0 =
  * shown.
  *
  * The shared render3d_overlay_xn_resolve helper in overlay_xn.h owns the

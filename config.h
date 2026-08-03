@@ -3,12 +3,12 @@
  *
  * Home for shared, dependency-free limits and the small set of app-wide
  * compile-time defaults that intentionally cross REPL / editor / UI /
- * scene boundaries without dragging in domain-specific headers.
+ * render3d boundaries without dragging in domain-specific headers.
  *
  * Stays dependency-free on purpose: REPL-pipeline files (parse,
  * compile, apply, flatten, export) include this just for
- * REPL_STATUS_TEXT_MAX and shouldn't transitively pull in scene or
- * UI types. Defaults that REFERENCE scene/UI enums live in
+ * REPL_STATUS_TEXT_MAX and shouldn't transitively pull in render3d or
+ * UI types. Defaults that REFERENCE render3d/UI enums live in
  * `src/app/glr_defaults.h`; only callers of those defaults pay the include.
  *
  * NOTE: This file is for *compile-time* configuration. User-toggleable

@@ -2,11 +2,11 @@
  * xform_guide_mode.h - Transform guide display mode enum.
  *
  * Cycles the transform-guide overlay across off, world-aligned, and
- * local-frame alignment. Consumed by transform_guides.c and the app-side
- * presentation state; OFF is the disabled mode.
+ * local-frame alignment. Consumed by transform_guides.c and its callers;
+ * OFF is the disabled mode.
  *
- * The X-macro list mirrors src/scene/themes.h so the cfg-symbol string
- * table in src/app/glr_actions.c can be derived from the same source.
+ * The X-macro list is kept beside the renderer's other vocabulary so a
+ * caller's cfg-symbol table can be derived from the same source.
  */
 #ifndef RENDER3D_XFORM_GUIDE_MODE_H
 #define RENDER3D_XFORM_GUIDE_MODE_H

@@ -20,10 +20,10 @@ COLOR_PICKER_DEMO_DEP_SRCS="${COLOR_PICKER_DEMO_DEP_SRCS}"
 
 # 1. In-place checks implemented as bash functions
 check_controller_boundaries() {
-    bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"scene/' $REPL_SRCS src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
+    bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"render3d/' $REPL_SRCS src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
         | grep -v '^src/app/glr_ctrl\.c$' || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene headers included outside src/app/glr_ctrl.c:${NC}"
+        echo "${RED}ERROR: render3d headers included outside src/app/glr_ctrl.c:${NC}"
         echo "$bad"; exit 1
     fi
     bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $REPL_SRCS src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
@@ -38,16 +38,16 @@ check_controller_boundaries() {
 check_render3d_no_repl_state_mut() {
     bad=$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $RENDER3D_SRCS || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene files mutate REPL state:${NC}"
+        echo "${RED}ERROR: render3d files mutate REPL state:${NC}"
         echo "$bad"; exit 1
     fi
-    echo "Scene mutation boundary ${GREEN}OK${NC}"
+    echo "Render3d mutation boundary ${GREEN}OK${NC}"
 }
 
 check_pure_render3d_no_repl_state() {
     bad=$(grep -nE 'repl_(state|replay)_' $RENDER3D_SRCS || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene files reach into REPL state/replay APIs:${NC}"
+        echo "${RED}ERROR: render3d files reach into REPL state/replay APIs:${NC}"
         echo "$bad"; exit 1
     fi
     echo "Pure-render3d boundary ${GREEN}OK${NC}"
@@ -56,7 +56,7 @@ check_pure_render3d_no_repl_state() {
 check_state_boundaries() {
     bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state\.h"' $RENDER3D_SRCS $STATE_NEUTRAL_SRCS 2>/dev/null || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene or state-neutral files include src/repl/state.h:${NC}"
+        echo "${RED}ERROR: render3d or state-neutral files include src/repl/state.h:${NC}"
         echo "$bad"; exit 1
     fi
     bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/core_internal\.h"' \
@@ -74,7 +74,7 @@ check_state_boundaries() {
     fi
     bad=$(grep -nE 'repl_(state|replay)_' $RENDER3D_SRCS 2>/dev/null || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene files reach into REPL state/replay APIs:${NC}"
+        echo "${RED}ERROR: render3d files reach into REPL state/replay APIs:${NC}"
         echo "$bad"; exit 1
     fi
     echo "State facade boundaries ${GREEN}OK${NC}"
@@ -83,7 +83,7 @@ check_state_boundaries() {
 check_views_no_owners() {
     bad=$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state_owners\.h"' $RENDER3D_SRCS $UI_SRCS 2>/dev/null || true)
     if [ -n "$bad" ]; then
-        echo "${RED}ERROR: scene/UI view files include src/repl/state_owners.h:${NC}"
+        echo "${RED}ERROR: render3d/UI view files include src/repl/state_owners.h:${NC}"
         echo "$bad"; exit 1
     fi
     echo "View-file ownership boundary ${GREEN}OK${NC}"

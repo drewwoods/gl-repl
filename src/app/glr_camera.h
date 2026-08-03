@@ -130,7 +130,7 @@ void glr_camera_runtime_restore(const GlrCameraRuntimeSnapshot *snapshot);
  * position. Used as the input to glr_camera_load_modelview so the C
  * type system can tell six adjacent floats apart at the boundary.
  *
- * The type and helper live with the app's camera owner. The scene module
+ * The type and helper live with the app's camera owner. The render3d module
  * remains purely the renderer, and callers populate GL_MODELVIEW before
  * each render3d_draw_scene call. */
 typedef struct GlrCameraPose {

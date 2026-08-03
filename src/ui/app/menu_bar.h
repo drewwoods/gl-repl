@@ -4,7 +4,8 @@
  * Renders the File/Scene/Config menus on the left, Search/Replay pins on the
  * right, and any open dropdown beneath them. This module owns menu-bar display
  * state and hit classification; action execution happens outside the UI layer,
- * after the controller routes the returned `UiHit` to the actions or scene code.
+ * after the controller routes the returned `UiHit` to app actions or other
+ * app-level handlers.
  *
  * Search integration lives here too: the search pin highlight and the search
  * overlay text field are part of the menu-bar chrome even though the search
