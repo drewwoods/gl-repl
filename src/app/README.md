@@ -64,13 +64,13 @@ type.
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L264):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L263):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
-2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L140) from REPL runtime state + view state and calls
-   [`glr_camera_load_modelview()`](glr_camera.h#L151) then [`render3d_draw_scene()`](../render3d/render.h#L135) (with the
-   owned [`Render3dState`](../render3d/render.h#L95), once per accumulation-jitter sample);
+2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L139) from REPL runtime state + view state and calls
+   [`glr_camera_load_modelview()`](glr_camera.h#L150) then [`render3d_draw_scene()`](../render3d/render.h#L129) (with the
+   owned [`Render3dState`](../render3d/render.h#L88), once per accumulation-jitter sample);
 3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L85) and fans it out to the `ui_*_render`
    functions.
 

@@ -1608,8 +1608,7 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  * source-document change AND land at the runner's chosen
  * expected_commit_line on commit. The validator stays independent of
  * live parser state, so it applies a best-effort syntactic filter focused
- * on the patterns that
- * actively break label-line bookkeeping:
+ * on the patterns that actively break label-line bookkeeping:
  *
  *   - empty / whitespace-only text;
  *   - embedded newlines (`\n`, `\r`);
@@ -1632,7 +1631,8 @@ static int setup_defines_goto_label(const TutorialEntry *entry,
  * Known-shallow gaps (commit-time failures, not catastrophic): an
  * unknown GL call or one with wrong arity validates here but fails
  * at commit time, leaving the tutorial unrunnable at that step.
- * Catalog authors see those failures when the tutorial starts. */
+ * Catalog authors see those failures the first time they step
+ * through the tutorial. */
 static int expected_is_single_command(const char *expected,
                                       TutorialExpectedShape shape,
                                       char *err, int err_size) {

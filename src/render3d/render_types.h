@@ -324,7 +324,8 @@ typedef struct Render3dRenderConfig {
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
-    /* --- Focus marker (forwarded in the frame snapshot) --- */
+    /* --- Focus marker (forwarded in the frame snapshot; no renderer reads
+     * it yet - tests only, reserved for future grid use) --- */
     Render3dFocusVertex focus;
 
     /* --- Visual scaling --- */

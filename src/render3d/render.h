@@ -90,7 +90,8 @@ typedef struct Render3dState {
      * How it's sampled - once at the switch vs. every frame - is
      * selected at compile time by GLR_ORTHO_REF_MODE above.
      * 0 means "no usable measurement" and the projection math falls
-     * back to config->cam_dist, the default fallback. */
+     * back to config->cam_dist (the camera's distance to the orbit
+     * target plane). */
     double ortho_ref_dist;
     /* cam_dist at the instant ortho_ref_dist was sampled. The live 2D
      * scale reference is ortho_ref_dist + (cam_dist - ortho_ref_cam_dist),

@@ -275,7 +275,7 @@ UiHit tour_ui_hud_hit_test(const struct UiRenderSnapshot *snap,
  * +---------------------------------------------------------------------------+
  * | Tour  <name> | <State> | <speed>x | Step n / total | <file>:<line>        |
  * | [==|==|==|== segmented step bar (one cell per event) ==|==|==|==|==|==|=] |
- * | Space play | back | step | +/- speed | Esc exit                          |
+ * | Space play | « back | » step | +/- speed | Esc exit                       |
  * +---------------------------------------------------------------------------+
  */
 void tour_ui_hud_render(const struct UiRenderSnapshot *snap) {

@@ -95,9 +95,8 @@ void glr_ctrl_reset_transients(void);
 
 /* Re-sync controller-derived chrome and refresh the export/render/camera text
  * caches after a tour baseline restore (glr_tour_snapshot_restore). Deliberately
- * does NOT call
- * glr_ctrl_reset_transients() - that would erase the just-restored camera
- * defaults, open menus, and peer state. */
+ * does NOT call glr_ctrl_reset_transients() - that would erase the just-restored
+ * camera defaults, open menus, and peer state. */
 void glr_ctrl_after_tour_restore(void);
 
 /* Layout provider installed on the editor at glr_ctrl_init_gl so

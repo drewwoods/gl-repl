@@ -162,7 +162,7 @@ static void draw_progress_groove(int x, int y, int w, float progress) {
  * +--------------------------------------------------------------------------------------+
  * | [Icon] Replay <Speed> | <Mode> | <Code Exp> | <Normals> | <Labels>        [PC/Total] |
  * | [=== Progress Bar Groove ==========================================================] |
- * | Space pause | +/- speed | m mode | e expand | n normals | v vertex | << >> step ...    |
+ * | Space pause | +/- speed | m mode | e expand | n normals | v vertex | « » step ...    |
  * +--------------------------------------------------------------------------------------+
  *
  * - Line 1: The current playback speed, replay mode (Vertex/Polygon), code expansion mode,

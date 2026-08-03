@@ -17,9 +17,9 @@ decide *what* geometry exists - that is handed in.
 `src/render3d` is a renderer for **fixed-function OpenGL** - the classic GL 1.x
 style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
-the caller fills a [`Render3dRenderConfig`](render_types.h#L140) (camera pose, lighting, grid/axes
+the caller fills a [`Render3dRenderConfig`](render_types.h#L139) (camera pose, lighting, grid/axes
 themes, AA settings, clear color) and supplies an `execute_fn` that draws
-the actual geometry. [`render3d_draw_scene()`](render.h#L135) does everything around that
+the actual geometry. [`render3d_draw_scene()`](render.h#L129) does everything around that
 callback:
 
 ```c
@@ -28,7 +28,7 @@ render3d_draw_scene(&renderer_state, &cfg);    /* viewport -> projection -> cfg.
 ```
 
 The render3d module owns no camera type - the caller picks one. The REPL
-controller uses [`GlrCameraPose`](../app/glr_camera.h#L145) + `glr_camera_load_modelview` from
+controller uses [`GlrCameraPose`](../app/glr_camera.h#L144) + `glr_camera_load_modelview` from
 [`src/app/glr_camera.h`](../app/glr_camera.h); the standalone `render3d_demo` inlines the six
 matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
 `glRotatef`s, `glTranslatef`) so it has no hard dep on [`glr_camera.h`](../app/glr_camera.h).
@@ -59,7 +59,7 @@ The demo is the **layer-independence proof** for `src/render3d`: it builds with
 a deliberately slim object list and a geometry callback that knows nothing
 about the REPL. If render3d code ever grew a hard dependency on the editor,
 controller, or UI, this binary would stop linking. It also documents the
-contract by example - `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L140)
+contract by example - `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L139)
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
 never terminates).
 
@@ -81,7 +81,7 @@ last good module loaded.
 **State survives the reload** because every piece of demo state - camera pose,
 2D/3D + projection blend, grid/axes themes, lighting, backdrop - lives in the
 host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
-bodies are. [`Render3dState`](render.h#L95) crosses the boundary but is host-owned, and its
+bodies are. [`Render3dState`](render.h#L88) crosses the boundary but is host-owned, and its
 layout is fixed by [`render.h`](render.h) at host-compile time - so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
@@ -101,10 +101,10 @@ target is untouched (it stays the link-proof `make test-full` and
 ## In the REPL app
 
 Inside the full app this is **layer 4** of the ownership map. The controller
-([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L140) from REPL runtime state + view
-state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L151) and
-[`render3d_draw_scene()`](render.h#L135) once per accumulation-jitter sample (with its own
-[`Render3dState`](render.h#L95)). The geometry callback is the REPL executor
+([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L139) from REPL runtime state + view
+state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L150) and
+[`render3d_draw_scene()`](render.h#L129) once per accumulation-jitter sample (with its own
+[`Render3dState`](render.h#L88)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered
 geometry.
 
@@ -122,7 +122,7 @@ applies a render3d-local frustum shift for jitter.
 | File | Responsibility |
 |---|---|
 | [`render.c`](render.c) / `.h` | Frame orchestration: viewport, clear, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
-| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L140), frame-context types - the renderer contract |
+| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L139), frame-context types - the renderer contract |
 | [`grid.c`](grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](axes.c) / `.h` | Axis rendering and axis themes |
 | [`render3d_transition.c`](render3d_transition.c) / `.h` | Pure grid/axes show <--> hide fade state machine (no GL) |

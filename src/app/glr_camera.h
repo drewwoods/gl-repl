@@ -16,8 +16,7 @@
 #define GLR_CAMERA_H
 
 /* The 3D scene-camera pose. Render builds the modelview from these
- * fields each frame; drag/pan/zoom controls mutate them. The name
- * preserves the established `Repl` prefix for compatibility. */
+ * fields each frame; drag/pan/zoom controls mutate them. */
 typedef struct {
     float rx;
     float ry;

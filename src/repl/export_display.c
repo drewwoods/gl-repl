@@ -308,7 +308,12 @@ static size_t export_build_display_passes(
 
     /* Standalone export currently emits scene geometry only. Live overlay
      * cfg flags are not mirrored because generated C does not share the
-     * app's overlay code-generation path. */
+     * app's overlay code-generation path - unifying the two would let export
+     * emit a matching outline pass. A stencil-buffer approach (draw with the
+     * color buffer off using line/point polygon mode, then fill the stencil
+     * in a second pass) would be more robust and simpler than the current
+     * approach of using LIGHTING and setting lights to black for the
+     * outline pass. */
     passes[1].label = "Vertex Outline Pass";
     passes[1].enabled = policy.include_vertex_outlines;
     passes[1].emit_setup = emit_export_outline_pass_setup;
