@@ -8,13 +8,15 @@ glTranslatef(0.0f, 0.0f, -9.00f);
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(30.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
+
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
 glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 glEnable(GL_DEPTH_TEST);
-glClearColor(0.05, 0.06, 0.08, 1);
 
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);

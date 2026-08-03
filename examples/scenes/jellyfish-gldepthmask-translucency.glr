@@ -10,12 +10,6 @@ glTranslatef(0.0f, 0.0f, -7.50f);
 glRotatef(4.00f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.700f, 0.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
@@ -25,11 +19,14 @@ static float rings = 9;      // bell latitude strips
 static float tentacles = 15; // @tune
 static float tentLen = 2.4;  // @tune
 static float marineSnow = 110;  // @tune
-glClearColor(0.015, 0.03, 0.07, 1);
+
 // Everything glows: additive blend with depth WRITES off (reads stay on).
 // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
 // bell's far side would z-fight its near side and the tentacles would
 // punch holes through the bell.
+glClearColor(0.015, 0.03, 0.07, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 glDisable(GL_LIGHTING);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_BLEND);
