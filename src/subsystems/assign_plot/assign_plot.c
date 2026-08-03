@@ -5,9 +5,6 @@
 
 #include <string.h>
 
-#include "repl/command.h"
-#include "repl/state_views.h"
-
 /* One second between captures at ASSIGN_PLOT_RATE_1HZ. */
 #define ASSIGN_PLOT_1HZ_PERIOD_US 1000000.0
 
@@ -35,6 +32,23 @@ static int    g_live_capture = 0;
 
 static AssignPlotSeries g_series[MAX_ASSIGN_PLOT_SERIES];
 static int              g_series_count = 0;
+
+static const AssignPlotHostBridge *g_host = NULL;
+
+void assign_plot_install_host(const AssignPlotHostBridge *host) {
+    g_host = host;
+}
+
+/* Bridge reads, with the no-host case answered once here rather than at each
+ * of the four scan sites. Without a host the trace is empty and no row is
+ * plottable, which makes an uninstalled plot inert rather than crashing. */
+static int assign_plot_trace_len(void) {
+    return g_host ? g_host->trace_len() : 0;
+}
+
+static int assign_plot_trace_at(int idx, AssignPlotSample *out) {
+    return g_host ? g_host->trace_at(idx, out) : 0;
+}
 
 static void assign_plot_series_clear_samples(AssignPlotSeries *s) {
     memset(s->cols, 0, sizeof(s->cols));
@@ -66,37 +80,16 @@ static int assign_plot_series_index(int source_line_idx) {
     return -1;
 }
 
-/* The value an assignment produced, by command type. Flatten bakes the
- * evaluated RHS in; nothing here re-evaluates anything. */
-static int assign_plot_cmd_value(const GLCmd *cmd, float *out_value) {
-    if (cmd->type == CMD_VAR_ASSIGN) {
-        *out_value = cmd->args[0];
-        return 1;
-    }
-    if (cmd->type == CMD_SCRATCH_ASSIGN) {
-        /* args[0] = array, args[1] = element, args[2] = value. */
-        *out_value = cmd->args[2];
-        return 1;
-    }
-    return 0;
-}
-
-static int assign_plot_type_is_assign(CmdType type) {
-    return type == CMD_VAR_ASSIGN || type == CMD_SCRATCH_ASSIGN;
-}
-
 /* A plotted row must still exist and still be an assignment. It does not have
  * to be the *same* assignment: if the row is edited the series follows what is
  * now there, and the panel's legend (rebuilt by the controller from the live
  * row each frame) says so. Anything else - the row deleted, or replaced by a
  * command that assigns nothing - drops that series rather than silently
- * plotting a neighbour. */
+ * plotting a neighbour. The host answers what "assignment" means, including
+ * the bounds check. */
 static int assign_plot_row_is_live(int source_line_idx) {
-    const GLCmd *cmd;
-    if (source_line_idx < 0 || source_line_idx >= repl_state_document_count())
-        return 0;
-    cmd = repl_state_document_cmd_at(source_line_idx);
-    return cmd && cmd->valid && assign_plot_type_is_assign(cmd->type);
+    if (source_line_idx < 0) return 0;
+    return g_host ? g_host->row_is_plottable(source_line_idx) : 0;
 }
 
 /* Drop dead series, keeping the rest in order. Closes the plot when the last
@@ -140,16 +133,14 @@ static int assign_plot_rate_allows(double now_us) {
     }
 }
 
-/* Executions of `source_line_idx` in the current flat program. The full flat
- * count on purpose - see the header on why replay's clamp is not applied. */
+/* Executions of `source_line_idx` in the current trace. The whole trace on
+ * purpose - see the header on why replay's clamp is not applied. */
 static int assign_plot_count_executions(int source_line_idx) {
-    const GLCmd *flat = repl_state_flat_program_cmds();
-    int n = repl_state_flat_program_count();
+    int n = assign_plot_trace_len();
     int found = 0;
-    if (!flat) return 0;
     for (int i = 0; i < n; i++) {
-        if (flat[i].src_cmd_idx == source_line_idx
-            && assign_plot_type_is_assign(flat[i].type))
+        AssignPlotSample s;
+        if (assign_plot_trace_at(i, &s) && s.source_line_idx == source_line_idx)
             found++;
     }
     return found;
@@ -166,18 +157,19 @@ static int assign_plot_count_executions(int source_line_idx) {
  * this column" and why no per-column seen flag is needed. */
 static void assign_plot_fill_exec_columns(AssignPlotSeries *s,
                                           int total, int cols) {
-    const GLCmd *flat = repl_state_flat_program_cmds();
-    int n = repl_state_flat_program_count();
+    int n = assign_plot_trace_len();
     int seen = 0;
     int prev_col = -1;
 
     memset(s->cols, 0, sizeof(s->cols));
 
     for (int i = 0; i < n && seen < total; i++) {
+        AssignPlotSample sample;
         float value;
         int col;
-        if (flat[i].src_cmd_idx != s->source_line_idx) continue;
-        if (!assign_plot_cmd_value(&flat[i], &value)) continue;
+        if (!assign_plot_trace_at(i, &sample)) continue;
+        if (sample.source_line_idx != s->source_line_idx) continue;
+        value = sample.value;
 
         /* 64-bit product: `total` can reach MAX_FLAT_COMMANDS today, which
          * overflows nothing, but the widening keeps this correct if either
@@ -224,14 +216,15 @@ static void assign_plot_append_frame_column(AssignPlotSeries *s,
  * column keeps every series' history aligned on the shared capture axis. */
 static int assign_plot_frame_envelope(AssignPlotSeries *s,
                                       float *out_lo, float *out_hi) {
-    const GLCmd *flat = repl_state_flat_program_cmds();
-    int n = repl_state_flat_program_count();
+    int n = assign_plot_trace_len();
     int found = 0;
 
     for (int i = 0; i < n; i++) {
+        AssignPlotSample sample;
         float value;
-        if (flat[i].src_cmd_idx != s->source_line_idx) continue;
-        if (!assign_plot_cmd_value(&flat[i], &value)) continue;
+        if (!assign_plot_trace_at(i, &sample)) continue;
+        if (sample.source_line_idx != s->source_line_idx) continue;
+        value = sample.value;
         if (!found || value < *out_lo) *out_lo = value;
         if (!found || value > *out_hi) *out_hi = value;
         runstats_record(&s->stats, (double)value);
@@ -500,8 +493,7 @@ void assign_plot_set_live_capture(int on) {
 
 int assign_plot_exec_progress(int exec_limit,
                               float out_frac[MAX_ASSIGN_PLOT_SERIES]) {
-    const GLCmd *flat = repl_state_flat_program_cmds();
-    int n = repl_state_flat_program_count();
+    int n;
     int total[MAX_ASSIGN_PLOT_SERIES];
     int done[MAX_ASSIGN_PLOT_SERIES];
     int any = 0;
@@ -511,7 +503,7 @@ int assign_plot_exec_progress(int exec_limit,
         out_frac[s] = -1.0f;
 
     /* X_FRAME has no within-frame axis to place a marker on; see the header. */
-    if (!g_open || !flat || g_x_mode != ASSIGN_PLOT_X_EXEC) return 0;
+    if (!g_open || !g_host || g_x_mode != ASSIGN_PLOT_X_EXEC) return 0;
     /* A one-shot is exempt from the live-capture override, so its columns are
      * some earlier frame's. A marker over them would be a position in this
      * frame drawn on another one's values - the same lie the override exists
@@ -523,11 +515,13 @@ int assign_plot_exec_progress(int exec_limit,
 
     /* One pass for every series rather than one pass each: the series list is
      * at most MAX_ASSIGN_PLOT_SERIES long, so the inner walk is cheaper than
-     * re-reading the flat program four times. */
+     * re-reading the trace four times. */
+    n = assign_plot_trace_len();
     for (int i = 0; i < n; i++) {
-        if (!assign_plot_type_is_assign(flat[i].type)) continue;
+        AssignPlotSample sample;
+        if (!assign_plot_trace_at(i, &sample)) continue;
         for (int s = 0; s < g_series_count; s++) {
-            if (flat[i].src_cmd_idx != g_series[s].source_line_idx) continue;
+            if (sample.source_line_idx != g_series[s].source_line_idx) continue;
             total[s]++;
             if (exec_limit < 0 || i < exec_limit) done[s]++;
             break;

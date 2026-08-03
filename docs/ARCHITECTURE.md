@@ -981,9 +981,20 @@ applies that number and deliberately never re-evaluates, so a self-referential
 flat program the frame was going to build anyway -
 [`assign_plot_capture()`](../src/subsystems/assign_plot/assign_plot.h) in
 [`src/subsystems/assign_plot/assign_plot.c`](../src/subsystems/assign_plot/assign_plot.c)
-filters `src_cmd_idx == target` and reads the baked value. Nothing is added to
+filters on the target row and reads the baked value. Nothing is added to
 the hot path, and with no row targeted the function returns on its first line,
 so the feature is free when the panel is closed.
+
+The peer does not read the flat program itself. It sees an *execution trace* -
+a length and an indexed `(source row, value)` read - through the
+`AssignPlotHostBridge` that
+[`src/app/glr_assign_plot_bridge.c`](../src/app/glr_assign_plot_bridge.c)
+installs at startup; that bridge is where `src_cmd_idx`, `CMD_VAR_ASSIGN` and
+the arg slot each value lives in are known. The trace is the flat program
+unfiltered rather than a pre-extracted list of assignments, because the replay
+marker below is placed by a flat index and both have to be in the same index
+space. With no bridge installed the plot is inert, which is what lets
+`src/subsystems/assign_plot` link without `src/repl`.
 
 The scan walks the **full** flat count rather than
 [`replay_exec_limit()`](../src/subsystems/replay/replay.h#L79): scrubbing a

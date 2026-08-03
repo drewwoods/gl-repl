@@ -9,17 +9,17 @@
  *
  * --- Why this needs no executor hook ---
  *
- * Flatten already does the work. Each execution instance of an assignment
- * becomes its own flat command with the evaluated RHS baked into args[0]
- * (args[2] for a scratch assign) - the executor only applies it, it never
- * re-evaluates (see the comment on CMD_VAR_ASSIGN in src/repl/executor.c).
- * So a capture is a read-only scan of the flat program the frame was going to
- * build anyway: no instrumentation in the hot path, no new bookkeeping, and
- * nothing at all to pay when the panel is closed. assign_plot_capture()
- * returns on its first line unless a row is targeted.
+ * The host already does the work. In the app, flatten turns each execution
+ * instance of an assignment into its own flat command with the evaluated RHS
+ * baked into args[0] (args[2] for a scratch assign) - the executor only
+ * applies it, it never re-evaluates (see the comment on CMD_VAR_ASSIGN in
+ * src/repl/executor.c). So a capture is a read-only scan of a trace the frame
+ * was going to build anyway: no instrumentation in the hot path, no new
+ * bookkeeping, and nothing at all to pay when the panel is closed.
+ * assign_plot_capture() returns on its first line unless a row is targeted.
  *
- * The scan deliberately walks the *full* flat count rather than
- * replay_exec_limit(), so scrubbing a replay does not truncate the plot: the
+ * The scan deliberately walks the *full* trace rather than stopping at
+ * replay's exec limit, so scrubbing a replay does not truncate the plot: the
  * question being asked is "what does this row do over a frame", not "what has
  * run so far".
  *
@@ -80,6 +80,47 @@
  * fits the collapsed panel, four hues stay tellable apart, and a shared Y axis
  * still means something. */
 #define MAX_ASSIGN_PLOT_SERIES 4
+
+/* --- Host bridge -------------------------------------------------------
+ *
+ * Everything this module needs from the program it is plotting, reduced to
+ * two questions: what did the last frame execute, and is a given document row
+ * still worth plotting. Nothing here names a command type or a flat program,
+ * so src/subsystems/assign_plot links with no src/repl - which is what lets
+ * the standalone assign_plot_demo drive the capture logic over a synthetic
+ * trace. Unset = the plot is inert: no row is plottable, so a capture prunes
+ * every series and closes.
+ *
+ * The host installs this once at startup; there is no uninstall. */
+
+/* One assignment execution: the document row it came from and the value it
+ * produced. The host owns the mapping from its own command representation to
+ * this pair (in the app: CMD_VAR_ASSIGN's args[0], CMD_SCRATCH_ASSIGN's
+ * args[2]). */
+typedef struct {
+    int   source_line_idx;
+    float value;
+} AssignPlotSample;
+
+typedef struct {
+    /* Length of the trace describing the frame just built. Called only while
+     * a row is targeted, so a closed plot costs the host nothing. */
+    int (*trace_len)(void);
+
+    /* Read trace entry `idx`. Returns 0 for an entry that is not an
+     * assignment - the trace is the host's whole execution record, not a
+     * pre-filtered one, so that the indices it is addressed by stay the same
+     * ones a replay program counter uses (see assign_plot_exec_progress). */
+    int (*trace_at)(int idx, AssignPlotSample *out);
+
+    /* Is `source_line_idx` a document row that still holds a live assignment?
+     * Returns 0 for an out-of-range row, so this doubles as the bounds check.
+     * A series whose row stops being plottable is dropped; see
+     * "target drift" on assign_plot_capture(). */
+    int (*row_is_plottable)(int source_line_idx);
+} AssignPlotHostBridge;
+
+void assign_plot_install_host(const AssignPlotHostBridge *host);
 
 /* Capture rate. Cycled by the panel's own chip - mouse-only, deliberately no
  * keymap slot and no config key: this is a per-plot property, not a global
@@ -226,10 +267,11 @@ void assign_plot_reset(void);
 void assign_plot_set_live_capture(int on);
 
 /* Where a replay program counter falls within each series' executions.
- * `exec_limit` is the flat index the executor is rendering up to (negative for
- * "no clamp"); `out_frac` receives a 0..1 position along that series' own
- * execution span, or -1 for a series with no marker to draw. Returns 1 if any
- * series produced one.
+ * `exec_limit` is a trace index the executor is rendering up to (negative for
+ * "no clamp"), in the same index space the bridge's trace_at() takes;
+ * `out_frac` receives a 0..1 position along that series' own execution span,
+ * or -1 for a series with no marker to draw. Returns 1 if any series produced
+ * one.
  *
  * X_FRAME mode produces nothing: there a column is a whole capture, so a
  * position *within* a frame has no column to point at. Neither does

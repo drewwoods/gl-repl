@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "app/glr_assign_plot_bridge.h"
 #include "app/glr_ctrl.h"
 #include "editor/input.h"
 #include "repl/command.h"
@@ -1258,6 +1259,9 @@ static void test_live_capture_does_not_thaw_a_one_shot(void) {
 
 int main(void) {
     printf("--- assign_plot tests ---\n\n");
+    /* These cases drive the real REPL pipeline, so they need the real host.
+     * The controller installs it at startup; nothing here reaches that path. */
+    glr_assign_plot_install_host();
     test_exec_mode_captures_loop_values();
     test_frame_mode_accumulates_across_captures();
     test_frame_mode_ring_scrolls();

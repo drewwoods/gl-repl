@@ -108,6 +108,7 @@
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
 #include "app/glr_clipboard.h"        /* glr_clipboard_install (OS clipboard) */
+#include "app/glr_assign_plot_bridge.h"
 #include "app/glr_color_picker_bridge.h"
 #include "app/glr_ctrl_internal.h"
 #include "app/glr_modal.h"
@@ -3483,6 +3484,8 @@ static void glr_ctrl_install_app_services(void) {
     variable_panel_install_value_source(&g_glr_var_value_source);
     /* Color-picker host: document read/write + screen geometry. */
     glr_color_picker_install_host();
+    /* Assignment-plot host: flat-program execution trace + document row kind. */
+    glr_assign_plot_install_host();
     /* OS-clipboard bridge: mirrors editor copy/cut out to the system
      * clipboard and adopts it on paste when another app has taken it over. */
     glr_clipboard_install();
