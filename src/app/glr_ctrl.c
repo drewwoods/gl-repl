@@ -1376,28 +1376,16 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_resolve_overlays_user_data = &g_overlay_pack;
 
     /* --- Background clear color ---
-     * Resolve from the user's last CMD_CLEAR_COLOR (or the editor
-     * default if none). Scene takes the pre-resolved float[4] and
-     * doesn't touch the flat program. */
-    {
-        float cr = CFG_DEFAULT_CLEAR_R;
-        float cg = CFG_DEFAULT_CLEAR_G;
-        float cb = CFG_DEFAULT_CLEAR_B;
-        float ca = CFG_DEFAULT_CLEAR_A;
-        FlatProgramView fp = repl_state_flat_program_view();
-        for (int ci = 0; ci < fp.cmd_count; ci++) {
-            if (fp.cmds[ci].valid && fp.cmds[ci].type == CMD_CLEAR_COLOR) {
-                cr = fp.cmds[ci].args[0];
-                cg = fp.cmds[ci].args[1];
-                cb = fp.cmds[ci].args[2];
-                ca = fp.cmds[ci].args[3];
-            }
-        }
-        config->clear_color[0] = cr;
-        config->clear_color[1] = cg;
-        config->clear_color[2] = cb;
-        config->clear_color[3] = ca;
-    }
+     * The host starts every scoped frame from the bootstrap default. Do not
+     * scan ahead through the flat program or carry REPL bookkeeping across
+     * frame scopes: a glClearColor written after glClear cannot affect that
+     * clear (or a later frame's clear) unless the source itself puts it before
+     * glClear. This matches the exported glPushAttrib/glPopAttrib frame
+     * bracket. */
+    config->clear_color[0] = CFG_DEFAULT_CLEAR_R;
+    config->clear_color[1] = CFG_DEFAULT_CLEAR_G;
+    config->clear_color[2] = CFG_DEFAULT_CLEAR_B;
+    config->clear_color[3] = CFG_DEFAULT_CLEAR_A;
 
     /* --- Animation --- */
     config->anim_time = repl_state_variables().anim_time;

@@ -1,9 +1,6 @@
 #include "app/glr_ctrl.h"
-/*
- * test_repl_export_clearcolor.c - Idea A: a glClearColor set in the scene body
- * is hoisted into the exported init() so the per-frame glClear (which runs
- * before render_repl_geometry and inside the glPushAttrib bracket) uses it.
- */
+/* test_repl_export_clearcolor.c - glClearColor remains in the scene body and
+ * executes in source order relative to glClear, matching immediate-mode GL. */
 #include "repl/export.h"
 #include "repl/eval.h"
 #include "editor/input.h"
@@ -61,9 +58,10 @@ static void reset_repl(void) {
     glr_ctrl_reset_all();
 }
 
-static void test_body_clearcolor_hoisted(void) {
-    const char *path = "/tmp/repl_cc_hoist.c";
+static void test_body_clearcolor_is_not_hoisted(void) {
+    const char *path = "/tmp/repl_cc_order.c";
     reset_repl();
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
     editor_feed_line("glClearColor(0.05, 0.06, 0.07, 1);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -74,10 +72,13 @@ static void test_body_clearcolor_hoisted(void) {
      * values stay below it (real examples are dark too). */
     char *c = read_file(path);
     ASSERT_TRUE("export readable", c != NULL);
-    ASSERT_TRUE("init() uses body clear color",
-                init_has(c, "glClearColor(0.05, 0.06, 0.07, 1)"));
-    ASSERT_TRUE("init() no longer uses the 0.1 bootstrap default",
-                !init_has(c, "glClearColor(0.1, 0.1, 0.1, 1)"));
+    ASSERT_TRUE("init() keeps the bootstrap default",
+                init_has(c, "glClearColor(0.1, 0.1, 0.1, 1)"));
+    const char *clear = strstr(c, "glClear(GL_COLOR_BUFFER_BIT);");
+    const char *color = strstr(c, "glClearColor(0.05, 0.06, 0.07, 1);");
+    ASSERT_TRUE("body clear is exported", clear != NULL);
+    ASSERT_TRUE("body clear color is exported", color != NULL);
+    ASSERT_TRUE("clear precedes later clear color", clear && color && clear < color);
     free(c);
 }
 
@@ -96,29 +97,8 @@ static void test_no_clearcolor_keeps_default(void) {
     free(c);
 }
 
-static void test_last_clearcolor_wins(void) {
-    const char *path = "/tmp/repl_cc_last.c";
-    /* Distinct, both under the 0.1 channel clamp so they stay distinct. */
-    reset_repl();
-    editor_feed_line("glClearColor(0.02, 0.02, 0.02, 1);");
-    editor_feed_line("glBegin(GL_TRIANGLES);");
-    editor_feed_line("glVertex3f(0, 0, 0);");
-    editor_feed_line("glEnd();");
-    editor_feed_line("glClearColor(0.08, 0.04, 0.06, 1);");
-    repl_export_save_output(path, source_document_view(), NULL);
-
-    char *c = read_file(path);
-    ASSERT_TRUE("export readable (last)", c != NULL);
-    ASSERT_TRUE("init() uses the LAST body clear color",
-                init_has(c, "glClearColor(0.08, 0.04, 0.06, 1)"));
-    ASSERT_TRUE("init() does not use the earlier clear color",
-                !init_has(c, "glClearColor(0.02, 0.02, 0.02, 1)"));
-    free(c);
-}
-
 int main(void) {
-    test_body_clearcolor_hoisted();
+    test_body_clearcolor_is_not_hoisted();
     test_no_clearcolor_keeps_default();
-    test_last_clearcolor_wins();
     return test_harness_report(&g_harness, "test_repl_export_clearcolor");
 }

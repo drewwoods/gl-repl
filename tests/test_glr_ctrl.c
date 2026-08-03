@@ -317,11 +317,6 @@ static void prepare_display_fixture(void) {
     glr_state_render_mut()->accum_passes = 1;
     glr_state_render_mut()->multisample_enabled = 0;
     glr_state_render_mut()->line_smooth_enabled = 1;
-    repl_state_render_mut()->clear_color[0] = 0.0f;
-    repl_state_render_mut()->clear_color[1] = 0.0f;
-    repl_state_render_mut()->clear_color[2] = 0.0f;
-    repl_state_render_mut()->clear_color[3] = 1.0f;
-
     repl_state_flat_program_set_user_lighting_enabled(1);
 
     presentation = glr_state_presentation_mut();
@@ -475,6 +470,59 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 4.0f) < 1e-6f);
     }
     ASSERT_INT("flat count restored after frame", repl_state_flat_program_count(), saved_flat_count);
+}
+
+/* The render configuration supplies the GL clear color before the user
+ * program executes. Its scoped-frame baseline must ignore both a later
+ * glClearColor in the flat program and bookkeeping from an earlier frame. */
+static void test_display_frame_does_not_prescan_clear_color(void) {
+    GLCmd *flat_cmds;
+
+    printf("--- imrepl_ctrl clear color source order ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    flat_cmds = repl_state_flat_program_writable()->cmds;
+    memset(&flat_cmds[2], 0, sizeof(flat_cmds[2]));
+    flat_cmds[2].type = CMD_CLEAR;
+    flat_cmds[2].valid = 1;
+    flat_cmds[2].src_cmd_idx = 2;
+    flat_cmds[2].call_src_cmd_idx = -1;
+    flat_cmds[2].root_call_src_cmd_idx = -1;
+    flat_cmds[2].num_args = 1;
+    flat_cmds[2].args[0] = GL_COLOR_BUFFER_BIT;
+    editor_buffer_set_line(2, "glClear(GL_COLOR_BUFFER_BIT);");
+
+    memset(&flat_cmds[3], 0, sizeof(flat_cmds[3]));
+    flat_cmds[3].type = CMD_CLEAR_COLOR;
+    flat_cmds[3].valid = 1;
+    flat_cmds[3].src_cmd_idx = 3;
+    flat_cmds[3].call_src_cmd_idx = -1;
+    flat_cmds[3].root_call_src_cmd_idx = -1;
+    flat_cmds[3].num_args = 4;
+    flat_cmds[3].args[0] = 0.05f;
+    flat_cmds[3].args[1] = 0.06f;
+    flat_cmds[3].args[2] = 0.08f;
+    flat_cmds[3].args[3] = 1.0f;
+    editor_buffer_set_line(3, "glClearColor(0.05, 0.06, 0.08, 1);");
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+    repl_state_render_mut()->clear_color[0] = 0.05f;
+    repl_state_render_mut()->clear_color[1] = 0.06f;
+    repl_state_render_mut()->clear_color[2] = 0.08f;
+    repl_state_render_mut()->clear_color[3] = 1.0f;
+
+    glr_ctrl_display_frame();
+
+    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame r",
+                 g_last_scene_config.clear_color[0], CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame g",
+                 g_last_scene_config.clear_color[1], CFG_DEFAULT_CLEAR_G);
+    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame b",
+                 g_last_scene_config.clear_color[2], CFG_DEFAULT_CLEAR_B);
+    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame a",
+                 g_last_scene_config.clear_color[3], CFG_DEFAULT_CLEAR_A);
 }
 
 static void test_reshape_clamps_height(void) {
@@ -5480,6 +5528,7 @@ int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
+    test_display_frame_does_not_prescan_clear_color();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_frame_spans_host_stages();

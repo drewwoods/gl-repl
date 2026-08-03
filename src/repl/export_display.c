@@ -391,7 +391,8 @@ static void emit_export_display_begin(FILE *f) {
      * lights stay anchored in world space as the camera orbits. The
      * Eye-space positions were emitted above, before the camera. The
      * non-positional light state (colors + baseline glDisable) is emitted
-     * into init() - see emit_export_init_section_to_file.
+     * into init(). User render state remains in source order inside the
+     * geometry pass, matching immediate-mode execution.
      *
      * Lights are emitted before g_header_post to match the panel's
      * rendering order; both consumers walk: display_header -> cam ->
