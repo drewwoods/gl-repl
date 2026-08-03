@@ -236,7 +236,7 @@ static const char *expected_fail_for_example(const char *name) {
     return NULL;
 }
 
-/* Counter pairs the executor folds together: CMD_COLOR3F → glColor4f
+/* Counter pairs the executor folds together: CMD_COLOR3F -> glColor4f
  * (executor.c:422 routes 3f through glColor4f with g_execute_alpha_scale)
  * while the exporter emits glColor3f literally. Comparing as a sum
  * keeps both sides honest without bending one of them to the other. */
@@ -576,7 +576,7 @@ static void print_help(const char *argv0) {
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
 "                  example via repl_example_*. Slow: one cc invocation\n"
-"                  per program. See docs/plans/done/gl-stub-extensions.md.\n"
+"                  per program; trace files are available on failure.\n"
 "  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
 "                  files in /tmp for inspection. XFAIL traces are still\n"
 "                  unlinked (the divergence is expected).\n"

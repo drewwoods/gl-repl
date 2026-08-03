@@ -592,7 +592,7 @@ static void test_config_sections(void) {
      * GLR_CONFIG_AUDIO_MODE is intentionally no longer surfaced here.
      * The section model must
      * be data-faithful: only real headers counted, "---" excluded, the
-     * synthetic "All" view NOT counted here (plan Finding #2). */
+     * synthetic "All" view NOT counted here. */
     int n = glr_config_section_count();
     ASSERT_INT("section count", n, 7);
 
@@ -774,9 +774,9 @@ static int find_tutorial_idx_by_name(const char *name) {
 /* Starting a tutorial runs the reset-then-apply pipeline examples use:
  * presentation chrome resets to defaults, then the tutorial's leading
  * `@cfg` lines (if any) layer overrides on top. Both live REPL-side in
- * tutorial_start. After Phase B's hierarchical menu, the menu's top-level
+ * tutorial_start. With the hierarchical menu, the menu's top-level
  * MENU_TUTORIALS rows are tag rows (inert) + trailing Restart/Exit;
- * tutorial activation itself flows through route_submenu_item_hit →
+ * tutorial activation itself flows through route_submenu_item_hit ->
  * tutorial_start. This test calls tutorial_start directly (unit-level)
  * since simulating a submenu-item hit would be integration-level. */
 static void test_tutorial_start_applies_cfg(void) {
@@ -823,7 +823,7 @@ static void test_tutorial_start_applies_cfg(void) {
         /* tutorial_capture_cfg_baseline now records view_mode
          * unconditionally (not just when the tutorial's
          * @cfg / SET / REQUIRE references it), so the per-start
-         * presentation_reset → 3D no longer leaks past teardown.
+         * presentation_reset -> 3D no longer leaks past teardown.
          * Color & Transform names no presentation slugs, but the
          * captured baseline still holds the pre-start 2D and exit
          * restores it. See test_tutorial_runner.c's
@@ -838,7 +838,7 @@ static void test_tutorial_start_applies_cfg(void) {
     }
 }
 
-/* Phase B: top-level MENU_TUTORIALS rows behave like Scene tag rows -
+/* Top-level MENU_TUTORIALS rows behave like Scene tag rows -
  * clicking a tag row is inert (returns 0, keeps menu open), and Restart /
  * Exit work via their positions (tag_count + GLR_TUTORIAL_OFF_*). Activation
  * of an actual tutorial flows through route_submenu_item_hit (not this
@@ -1588,10 +1588,10 @@ static void test_status_set_drops_empty_message(void) {
  * remaining special cases not covered by test_cfg_cycling above are
  * captured here so the refactor preserves each side effect:
  *
- *   FOCUS_ORIGIN         → glr_camera_focus_origin (ease target=origin)
- *   RESET_CAMERA         → glr_camera_ease_to_default
- *   TIME_RESET           → repl_reset_time_to_zero
- *   CODE_PANEL_LAYOUT_HIDDEN → ui_menu_bar_close + color_picker_stop +
+ *   FOCUS_ORIGIN         -> glr_camera_focus_origin (ease target=origin)
+ *   RESET_CAMERA         -> glr_camera_ease_to_default
+ *   TIME_RESET           -> repl_reset_time_to_zero
+ *   CODE_PANEL_LAYOUT_HIDDEN -> ui_menu_bar_close + color_picker_stop +
  *                              editor_completion_clear (the hidden-only
  *                              branch - the other layouts test pure
  *                              status & state in test_cfg_cycling).

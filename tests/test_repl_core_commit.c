@@ -1836,7 +1836,7 @@ int main(void) {
     ASSERT_TRUE("tess color feeds tess vertex", repl_find_feeding_color_cmd(1) == 0);
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluVertex(0, 0, 0);");
-    ASSERT_TRUE("no tess color → -1", repl_find_feeding_color_cmd(0) == -1);
+    ASSERT_TRUE("no tess color -> -1", repl_find_feeding_color_cmd(0) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluNormal(0, 0, 1);");
@@ -1844,15 +1844,15 @@ int main(void) {
     ASSERT_TRUE("tess normal feeds tess vertex", repl_find_feeding_normal_cmd(1) == 0);
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluVertex(0, 0, 0);");
-    ASSERT_TRUE("no tess normal → -1", repl_find_feeding_normal_cmd(0) == -1);
+    ASSERT_TRUE("no tess normal -> -1", repl_find_feeding_normal_cmd(0) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glNormal3f(0, 0, 1);");
-    ASSERT_TRUE("non-vertex color → -1", repl_find_feeding_color_cmd(0) == -1);
-    ASSERT_TRUE("non-vertex normal → -1", repl_find_feeding_normal_cmd(1) == -1);
-    ASSERT_TRUE("oob color → -1", repl_find_feeding_color_cmd(-1) == -1);
-    ASSERT_TRUE("oob normal → -1", repl_find_feeding_normal_cmd(99) == -1);
+    ASSERT_TRUE("non-vertex color -> -1", repl_find_feeding_color_cmd(0) == -1);
+    ASSERT_TRUE("non-vertex normal -> -1", repl_find_feeding_normal_cmd(1) == -1);
+    ASSERT_TRUE("oob color -> -1", repl_find_feeding_color_cmd(-1) == -1);
+    ASSERT_TRUE("oob normal -> -1", repl_find_feeding_normal_cmd(99) == -1);
 
     /* glutSolid* shapes consume the current gl-style color (via
      * glColorMaterial / lighting) and link back to the feeding
@@ -1876,7 +1876,7 @@ int main(void) {
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glutSolidCube(0.5);");
-    ASSERT_TRUE("no color before glut solid → -1", repl_find_feeding_color_cmd(0) == -1);
+    ASSERT_TRUE("no color before glut solid -> -1", repl_find_feeding_color_cmd(0) == -1);
 
     /* repl_find_matching_push_matrix: cursor-on-Pop pairs with its Push. */
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1889,25 +1889,25 @@ int main(void) {
     editor_feed_line("glPopMatrix();");
     ASSERT_TRUE("inner pop matches inner push",  repl_find_matching_push_matrix(4) == 2);
     ASSERT_TRUE("outer pop matches outer push",  repl_find_matching_push_matrix(6) == 0);
-    ASSERT_TRUE("non-pop line → -1",             repl_find_matching_push_matrix(1) == -1);
-    ASSERT_TRUE("push line → -1",                repl_find_matching_push_matrix(0) == -1);
-    ASSERT_TRUE("oob matching push → -1",        repl_find_matching_push_matrix(-1) == -1);
+    ASSERT_TRUE("non-pop line -> -1",             repl_find_matching_push_matrix(1) == -1);
+    ASSERT_TRUE("push line -> -1",                repl_find_matching_push_matrix(0) == -1);
+    ASSERT_TRUE("oob matching push -> -1",        repl_find_matching_push_matrix(-1) == -1);
 
     /* repl_find_matching_pop_matrix: mirror - cursor-on-Push pairs with
      * its Pop (same document as above). */
     ASSERT_TRUE("outer push matches outer pop",  repl_find_matching_pop_matrix(0) == 6);
     ASSERT_TRUE("inner push matches inner pop",  repl_find_matching_pop_matrix(2) == 4);
-    ASSERT_TRUE("non-push line → -1",            repl_find_matching_pop_matrix(1) == -1);
-    ASSERT_TRUE("pop line → -1",                 repl_find_matching_pop_matrix(4) == -1);
-    ASSERT_TRUE("oob matching pop → -1",         repl_find_matching_pop_matrix(99) == -1);
+    ASSERT_TRUE("non-push line -> -1",            repl_find_matching_pop_matrix(1) == -1);
+    ASSERT_TRUE("pop line -> -1",                 repl_find_matching_pop_matrix(4) == -1);
+    ASSERT_TRUE("oob matching pop -> -1",         repl_find_matching_pop_matrix(99) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glPopMatrix();");
-    ASSERT_TRUE("orphan pop → -1", repl_find_matching_push_matrix(0) == -1);
+    ASSERT_TRUE("orphan pop -> -1", repl_find_matching_push_matrix(0) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glPushMatrix();");
-    ASSERT_TRUE("orphan push → -1", repl_find_matching_pop_matrix(0) == -1);
+    ASSERT_TRUE("orphan push -> -1", repl_find_matching_pop_matrix(0) == -1);
 
     /* repl_find_matching_push_attrib / _pop_attrib: the glPushAttrib/
      * glPopAttrib bracket matchers (LIFO mirror of the matrix pair). */
@@ -1921,21 +1921,21 @@ int main(void) {
     editor_feed_line("glPopAttrib();");
     ASSERT_TRUE("inner attrib pop matches inner push", repl_find_matching_push_attrib(4) == 2);
     ASSERT_TRUE("outer attrib pop matches outer push", repl_find_matching_push_attrib(6) == 0);
-    ASSERT_TRUE("non-pop attrib line → -1",            repl_find_matching_push_attrib(1) == -1);
-    ASSERT_TRUE("attrib push line → -1",               repl_find_matching_push_attrib(0) == -1);
-    ASSERT_TRUE("oob matching push attrib → -1",       repl_find_matching_push_attrib(-1) == -1);
+    ASSERT_TRUE("non-pop attrib line -> -1",            repl_find_matching_push_attrib(1) == -1);
+    ASSERT_TRUE("attrib push line -> -1",               repl_find_matching_push_attrib(0) == -1);
+    ASSERT_TRUE("oob matching push attrib -> -1",       repl_find_matching_push_attrib(-1) == -1);
     ASSERT_TRUE("outer attrib push matches outer pop", repl_find_matching_pop_attrib(0) == 6);
     ASSERT_TRUE("inner attrib push matches inner pop", repl_find_matching_pop_attrib(2) == 4);
-    ASSERT_TRUE("non-push attrib line → -1",           repl_find_matching_pop_attrib(1) == -1);
-    ASSERT_TRUE("attrib pop line → -1",                repl_find_matching_pop_attrib(4) == -1);
-    ASSERT_TRUE("oob matching pop attrib → -1",        repl_find_matching_pop_attrib(99) == -1);
+    ASSERT_TRUE("non-push attrib line -> -1",           repl_find_matching_pop_attrib(1) == -1);
+    ASSERT_TRUE("attrib pop line -> -1",                repl_find_matching_pop_attrib(4) == -1);
+    ASSERT_TRUE("oob matching pop attrib -> -1",        repl_find_matching_pop_attrib(99) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glPopAttrib();");
-    ASSERT_TRUE("orphan attrib pop → -1", repl_find_matching_push_attrib(0) == -1);
+    ASSERT_TRUE("orphan attrib pop -> -1", repl_find_matching_push_attrib(0) == -1);
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glPushAttrib(GL_CURRENT_BIT);");
-    ASSERT_TRUE("orphan attrib push → -1", repl_find_matching_pop_attrib(0) == -1);
+    ASSERT_TRUE("orphan attrib push -> -1", repl_find_matching_pop_attrib(0) == -1);
 
     /* repl_find_matching_begin / _end: the glBegin/glEnd primitive-block
      * bracket matchers. Two sequential blocks (GL forbids nesting), so each
@@ -1951,19 +1951,19 @@ int main(void) {
     ASSERT_TRUE("second end matches second begin", repl_find_matching_begin(5) == 3);
     ASSERT_TRUE("first begin matches first end",  repl_find_matching_end(0) == 2);
     ASSERT_TRUE("second begin matches second end", repl_find_matching_end(3) == 5);
-    ASSERT_TRUE("non-end line → -1",              repl_find_matching_begin(1) == -1);
-    ASSERT_TRUE("begin line → -1",                repl_find_matching_begin(0) == -1);
-    ASSERT_TRUE("non-begin line → -1",            repl_find_matching_end(1) == -1);
-    ASSERT_TRUE("end line → -1",                  repl_find_matching_end(2) == -1);
-    ASSERT_TRUE("oob matching begin → -1",        repl_find_matching_begin(-1) == -1);
-    ASSERT_TRUE("oob matching end → -1",          repl_find_matching_end(99) == -1);
+    ASSERT_TRUE("non-end line -> -1",              repl_find_matching_begin(1) == -1);
+    ASSERT_TRUE("begin line -> -1",                repl_find_matching_begin(0) == -1);
+    ASSERT_TRUE("non-begin line -> -1",            repl_find_matching_end(1) == -1);
+    ASSERT_TRUE("end line -> -1",                  repl_find_matching_end(2) == -1);
+    ASSERT_TRUE("oob matching begin -> -1",        repl_find_matching_begin(-1) == -1);
+    ASSERT_TRUE("oob matching end -> -1",          repl_find_matching_end(99) == -1);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glEnd();");
-    ASSERT_TRUE("orphan end → -1", repl_find_matching_begin(0) == -1);
+    ASSERT_TRUE("orphan end -> -1", repl_find_matching_begin(0) == -1);
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_LINES);");
-    ASSERT_TRUE("orphan begin → -1", repl_find_matching_end(0) == -1);
+    ASSERT_TRUE("orphan begin -> -1", repl_find_matching_end(0) == -1);
 
     /* repl_attrib_bits_for_cmd: context-free coarse GL_*_BIT mask. Multi-bit
      * membership (an enable rides GL_ENABLE_BIT *and* its group) falls out
@@ -2156,7 +2156,7 @@ int main(void) {
         editor_feed_line("glColor3f(1, 0, 0);");           /* 1: outer-scope setter */
         editor_feed_line("glPushAttrib(GL_CURRENT_BIT);"); /* 2: inner push */
         editor_feed_line("glColor3f(0, 0, 1);");           /* 3: inner-scope setter */
-        editor_feed_line("glPopAttrib();");                /* 4: inner pop reverts 3→1 */
+        editor_feed_line("glPopAttrib();");                /* 4: inner pop reverts 3->1 */
         editor_feed_line("glPopAttrib();");                /* 5: cursor (outer pop) */
         n = repl_attrib_collect_pop_reverted(5, hl, REPL_ATTRIB_HL_MAX);
         ASSERT_TRUE("pop_reverted skips inner-pop-reverted setter: 1 line", n == 1);
@@ -2285,7 +2285,7 @@ int main(void) {
         editor_feed_line("glTranslatef(1, 0, 0);");
         editor_feed_line("glColor3f(1, 0, 0);");
         n = repl_find_affecting_transforms(1, xs, MAX_AFFECTING_TRANSFORMS);
-        ASSERT_TRUE("non-consumer cursor → 0", n == 0);
+        ASSERT_TRUE("non-consumer cursor -> 0", n == 0);
 
         /* Function bodies are opaque from the call site, and the walk
          * stops at the enclosing FUNC_DEF when the cursor is inside. */
@@ -2331,7 +2331,7 @@ int main(void) {
         editor_feed_line("glPopMatrix();");      /* 10 */
         repl_flatten_commands(editor_state_edit_line());
 
-        /* Source walk stops at the enclosing FUNC_DEF → sees nothing. */
+        /* Source walk stops at the enclosing FUNC_DEF -> sees nothing. */
         int n_src = repl_find_affecting_transforms(1, xs, MAX_AFFECTING_TRANSFORMS);
         ASSERT_TRUE("source walk: body vertex sees no call-site transforms",
                     n_src == 0);
@@ -2368,11 +2368,11 @@ int main(void) {
         ASSERT_TRUE("second expansion: only second call-site translate",
                     n == 1 && xs[0] == 8);
 
-        /* Guards: non-consumer source line and OOB flat index → 0. */
-        ASSERT_TRUE("flat resolver: non-consumer line → 0",
+        /* Guards: non-consumer source line and OOB flat index -> 0. */
+        ASSERT_TRUE("flat resolver: non-consumer line -> 0",
                     repl_find_affecting_transforms_flat(
                         4, xs, MAX_AFFECTING_TRANSFORMS) == 0);
-        ASSERT_TRUE("flat-vertex resolver: OOB → 0",
+        ASSERT_TRUE("flat-vertex resolver: OOB -> 0",
                     repl_find_affecting_transforms_for_flat_vertex(
                         -1, xs, MAX_AFFECTING_TRANSFORMS) == 0);
     }

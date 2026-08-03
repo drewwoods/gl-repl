@@ -1734,7 +1734,7 @@ void test_scene_cfg_not_inherited_from_example() {
                glr_config_get(GLR_CONFIG_BACKDROP), scene_backdrop);
 }
 
-/* Option A sandbox: in-example cfg toggles must not leak across an
+/* In-example cfg toggles must not leak across an
  * example->user-scene transition. A user scene has full scene_cfg
  * coverage so the destination's saved cfg dominates regardless, but
  * this test pins the rollback path so a future move to sparse /

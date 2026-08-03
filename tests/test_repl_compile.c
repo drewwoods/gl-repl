@@ -1,17 +1,15 @@
 #include "app/glr_ctrl.h"
 /*
- * test_src/repl/compile.c - Phase C invariant tests.
+ * test_src/repl/compile.c - compile/apply boundary tests.
  *
- * Verifies the compile/apply boundary established in Phase C
- * commits 19-21:
+ * Verifies the compile/apply boundary:
  *
  *   - repl_compile_*() never mutates editor buffer, command store,
  *     status, or undo on either success or failure.
  *   - apply (driven by editor_commit_apply_external_change) updates
  *     editor text and command store together.
- *   - On compile failure, set_status from the wrapper IS allowed
- *     (Phase C transition); the strong invariant is checked at the
- *     compile-function boundary itself.
+ *   - On compile failure, the wrapper may set status; the strong invariant
+ *     is checked at the compile-function boundary itself.
  */
 
 #include "editor/commit.h"
@@ -1451,11 +1449,11 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * index 2 (depth 0). After delete: doc = [0:// header,
      * 1:vertex]. function_decl_insert_pos walks: not a var_decl
      * (header is a comment, allowed), step over comment, vertex is
-     * not a comment/funcdef → stops at 1 (post-delete index).
+     * not a comment/funcdef -> stops at 1 (post-delete index).
      * Wait: function_decl_insert_pos starts after var-decls
      * (none), then accepts CMD_COMMENT or CMD_FUNC_DEF. Comment at
-     * index 0 is stepped over → pos = 1. Vertex at 1 is the
-     * stopper → returns 1.
+     * index 0 is stepped over -> pos = 1. Vertex at 1 is the
+     * stopper -> returns 1.
      *
      * So insert_pos = 1. resume_pos = 2 (edit_line) - 1 (count) =
      * 1. resume_delta = max(0, 1 - 1) = 0. Hmm, still 0.
@@ -1521,7 +1519,7 @@ static void test_if_block_condition_eval_uses_context_predef(void) {
                  kernel.ib.args[0], 3.0f, 1e-6f);
 }
 
-/* ---- Function-scoped locals (scoped-local-variables, phase 1) ------- */
+/* ---- Function-scoped locals ------------------------------------------ */
 
 /* Commit `text` as a declaration with the cursor on source row
  * `edit_line`, overwrite mode. Returns 1 if compile + apply both
@@ -1953,7 +1951,7 @@ static void test_local_decl_capacity_is_whole_function(void) {
                 strstr(err, "function scope full") != NULL);
 }
 
-/* ---- Reverse binder guards + overwrite routes (phase 3) -------------- */
+/* ---- Reverse binder guards + overwrite routes ------------------------ */
 
 /* Rewrite the function header at `row` the way the editor does: through
  * the kernel, with allow_overwrite_at_pos set. A check placed on the
@@ -1991,7 +1989,7 @@ static ReplCompileResult compile_for_header_at(const char *header, int row,
 
 /* A parameter and a local of the same body share one scope, so a header
  * edit colliding with an existing local is a redefinition - the mirror of
- * the rule Phase 1 enforces when the local is declared. */
+ * the rule enforced when the local is declared. */
 static void test_param_rename_onto_local_is_rejected(void) {
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -2650,13 +2648,12 @@ int main(void) {
                     repl_func_alias_lookup_slot("edDupAlias") < 0);
     }
 
-    /* [Phase 0] Pin the widened src/repl/load.h contract: setting
+    /* Pin the load-line insertion contract: setting
      * repl_state_edit_line to a mid-document index must insert the
      * line at that index (rather than appending to document_count).
      * This is what the tutorial runner relies on for label-targeted
      * steps that need to splice an instruction comment in front of
-     * an earlier committed command. The behavior already matched;
-     * Phase 0 only widened the documented contract and pins it. */
+     * an earlier committed command. */
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();
@@ -2665,12 +2662,12 @@ int main(void) {
         char err[128] = "";
         int el = repl_state_document_count();
         editor_insert_mode_set(0);
-        ASSERT_TRUE("[Phase 0] seed line a loads",
+        ASSERT_TRUE("mid-document insert: seed line a loads",
                     repl_load_apply_line("glColor3f(1, 0, 0)", err, sizeof(err), &el));
         editor_insert_mode_set(0);
-        ASSERT_TRUE("[Phase 0] seed line b loads",
+        ASSERT_TRUE("mid-document insert: seed line b loads",
                     repl_load_apply_line("glColor3f(0, 1, 0)", err, sizeof(err), &el));
-        ASSERT_INT("[Phase 0] seeded doc has 2 lines",
+        ASSERT_INT("mid-document insert: seeded doc has 2 lines",
                    repl_state_document_count(), 2);
 
         /* Mid-document insert at index 1: between the two color
@@ -2681,19 +2678,19 @@ int main(void) {
         err[0] = '\0';
         int ok = repl_load_apply_line("// inserted in the middle",
                                       err, sizeof(err), &el);
-        ASSERT_TRUE("[Phase 0] mid-document comment insert succeeds", ok);
-        ASSERT_INT("[Phase 0] doc grew by exactly one row",
+        ASSERT_TRUE("mid-document comment insert succeeds", ok);
+        ASSERT_INT("mid-document insert grows by exactly one row",
                    repl_state_document_count(), 3);
 
         EditorBufferView view = editor_buffer_view();
         const char *line0 = editor_buffer_view_line(view, 0);
         const char *line1 = editor_buffer_view_line(view, 1);
         const char *line2 = editor_buffer_view_line(view, 2);
-        ASSERT_TRUE("[Phase 0] row 0 unchanged",
+        ASSERT_TRUE("mid-document insert leaves row 0 unchanged",
                     line0 && strstr(line0, "glColor3f(1") != NULL);
-        ASSERT_TRUE("[Phase 0] inserted comment landed at row 1",
+        ASSERT_TRUE("mid-document insert lands at row 1",
                     line1 && strstr(line1, "inserted in the middle") != NULL);
-        ASSERT_TRUE("[Phase 0] original row 1 pushed down to row 2",
+        ASSERT_TRUE("mid-document insert moves original row 1 to row 2",
                     line2 && strstr(line2, "glColor3f(0") != NULL);
 
         /* And a plain GL command mid-document at index 0 - the
@@ -2701,14 +2698,14 @@ int main(void) {
         el = 0;
         editor_insert_mode_set(0);
         err[0] = '\0';
-        ASSERT_TRUE("[Phase 0] top-of-doc insert succeeds",
+        ASSERT_TRUE("top-of-document insert succeeds",
                     repl_load_apply_line("glColor3f(0, 0, 1)",
                                          err, sizeof(err), &el));
-        ASSERT_INT("[Phase 0] doc grew to 4 rows",
+        ASSERT_INT("top-of-document insert grows to 4 rows",
                    repl_state_document_count(), 4);
         view = editor_buffer_view();
         const char *new_top = editor_buffer_view_line(view, 0);
-        ASSERT_TRUE("[Phase 0] new top row is the blue color",
+        ASSERT_TRUE("top-of-document insert creates the blue row",
                     new_top && strstr(new_top, "glColor3f(0, 0, 1") != NULL);
     }
 

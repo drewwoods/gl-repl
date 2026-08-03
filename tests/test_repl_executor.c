@@ -811,7 +811,7 @@ static void test_executor_matrix_balance_unwind(void) {
     repl_execute_program(&opts);
 
     /* 3 user pushes + 1 user pop, plus the unwind that closes the
-     * remaining 2 outstanding pushes → expect 3 push, 3 pop calls. */
+     * remaining 2 outstanding pushes -> expect 3 push, 3 pop calls. */
     ASSERT_TRUE("3 pushes recorded",
                 gl_stub_counts[GL_STUB_glPushMatrix] == 3);
     ASSERT_TRUE("3 pops total (1 user + 2 unwind)",

@@ -851,10 +851,7 @@ static void test_navigation_advances_on_matching_input(void) {
 }
 
 static void test_enter_on_locked_line_shows_position_hint(void) {
-    /* Regression: an earlier review flagged that
-     * commit_current_input's unmodified+enter_mode branch could toggle
-     * insert mode at a locked line. With the Phase 3 precheck,
-     * landing on a locked line first triggers editor_load_line_to_input,
+    /* Landing on a locked line first triggers editor_load_line_to_input,
      * which clears the input and sets the read-only status; the
      * Enter that follows hits the precheck's empty-input silent
      * reject, so the read-only status stays visible. The step
@@ -928,8 +925,8 @@ static void test_rejected_commit_does_not_advance_tutorial(void) {
     /* Filling the document via editor_feed_line (which intentionally
      * bypasses the tutorial precheck) leaves the editor cursor at
      * the trailing row while expected_commit_line still points at
-     * the row immediately below the first instruction. The Phase 3
-     * precheck rejects the mismatched cursor, so the step doesn't
+     * the row immediately below the first instruction. The precheck
+     * rejects the mismatched cursor, so the step doesn't
      * advance and the user's typed input is preserved - the same
      * guarantee the original capacity-rejection test was after,
      * achieved one rung earlier in the pipeline. */
@@ -1047,9 +1044,9 @@ static void test_complete_and_menu_actions(void) {
     int tag_count;
 
     reset_fixture();
-    /* After Phase B's hierarchical menu, top-level MENU_TUTORIALS rows
+    /* With the hierarchical menu, top-level MENU_TUTORIALS rows
      * are tag rows (inert) + trailing Restart/Exit; tutorial activation
-     * itself flows through route_submenu_item_hit → tutorial_start,
+     * itself flows through route_submenu_item_hit -> tutorial_start,
      * which is REPL-side and tested directly here. The menu-action
      * route only owns Restart/Exit at the top level. */
     tutorial_start(0);
@@ -1099,11 +1096,10 @@ static void test_start_leaves_unsaved_buffer_transient(void) {
 }
 
 static void test_catalog_starter_steps_are_append(void) {
-    /* Phase 1: the original append-only starter tutorials migrated
-     * to TutorialStep records should still report append placement
-     * across all their steps with no label or target_label. The
-     * Depth Test Triangle tutorial added in Phase 2 is intentionally
-     * excluded - it carries a label and a label-targeted step. */
+    /* The original append-only starter tutorials now represented by
+     * TutorialStep records should still report append placement across all
+     * their steps with no label or target_label. Depth Test Triangle is
+     * intentionally excluded because it carries a label-targeted step. */
     const char *const append_only[] = { "First Triangle", "Color & Transform" };
     for (size_t k = 0; k < sizeof(append_only)/sizeof(append_only[0]); k++) {
         int t_idx = -1;
@@ -1135,9 +1131,9 @@ static void test_catalog_starter_steps_are_append(void) {
 static void test_catalog_cfg_lines(void) {
     /* First Triangle ships a leading `@cfg view_mode = RENDER3D_VIEW_2D` so the
      * flat triangle renders in true 2D. First Animation pauses auto_time so
-     * Ctrl+T visibly starts its cube. Phase C adds cfg carriers for its 2D,
+     * Ctrl+T visibly starts its cube. The catalog includes cfg carriers for its 2D,
      * backdrop, and auto-time demonstrations. All other shipped tutorials
-     * omit cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
+     * omit cfg (NULL = no presentation overrides). Out-of-range idx -> NULL. */
     int first = -1, first_animation = -1;
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
@@ -1217,7 +1213,7 @@ static void test_catalog_cfg_lines(void) {
  * mask/has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
  * visible-tag count, and that every shipped catalog entry carries a
  * non-zero mask whose bits all map to known tags. Also asserts that the
- * known multi-tag entry ("Depth Test Triangle" → GEOMETRY|DEPTH_LIGHTING)
+ * known multi-tag entry ("Depth Test Triangle" -> GEOMETRY|DEPTH_LIGHTING)
  * is reachable under each of its tags via index_for_tag - the equivalent
  * of examples' Stress-test multi-tag assertion. */
 static void test_catalog_tag_metadata(void) {
@@ -1432,7 +1428,7 @@ static void test_catalog_subheading_metadata(void) {
 }
 
 static void test_catalog_validation_passes_for_all_tutorials(void) {
-    /* Phase 1: every shipped catalog entry must validate. */
+    /* Every shipped catalog entry must validate. */
     for (int t = 0; t < repl_tutorial_count(); t++) {
         char err[160] = "";
         int ok = repl_tutorial_validate(t, err, sizeof(err));
@@ -1564,8 +1560,8 @@ static void test_validate_rejects_multi_row_expected(void) {
 }
 
 static void test_append_first_expected_commit_line_is_trailing_row(void) {
-    /* Phase 2: append tutorials should set expected_commit_line to
-     * the trailing row of the document immediately after start. */
+    /* Append tutorials set expected_commit_line to the trailing row of the
+     * document immediately after start. */
     reset_fixture();
     tutorial_start(0);
 
@@ -1591,14 +1587,12 @@ static int depth_tutorial_idx(void) {
 }
 
 static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
-    /* Phase 2 (post-fix): the label-targeted splice for step 5
-     * should land ABOVE the original (instruction, command) pair
+    /* The label-targeted splice for step 5 should land ABOVE the original
+     * (instruction, command) pair
      * for step 0 - keeping the original step-0 instruction comment
      * directly above its glBegin command rather than orphaning
-     * them. Use editor_feed_line +
-     * tutorial_advance_after_successful_commit since the Phase 3
-     * precheck has not landed yet and editor_feed_line is the existing
-     * way these tests step through append commits. */
+     * them. Use editor_feed_line and tutorial_advance_after_successful_commit
+     * to step through the append commits. */
     int t_idx = depth_tutorial_idx();
     ASSERT_TRUE("Depth Test Triangle present in catalog", t_idx >= 0);
     if (t_idx < 0)
@@ -1674,7 +1668,7 @@ static void walk_depth_tutorial_to_label_step(void) {
 }
 
 static void test_phase3_label_targeted_commit_inserts_above_label(void) {
-    /* Phase 3: with the precheck + guard exception in place, the
+    /* The precheck and guard exception allow the user to commit the
      * user can actually commit the label-targeted step's expected
      * command at expected_commit_line and the runner advances.
      * Walks the depth-test tutorial via the real keyboard route
@@ -1769,7 +1763,7 @@ static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
 }
 
 static void test_phase3_empty_input_silent_reject(void) {
-    /* Phase 3: pressing ; or Enter with an empty input on the
+    /* Pressing ; or Enter with empty input on the
      * expected line should silently reject - no status update. */
     reset_fixture();
     tutorial_start(0);
@@ -1789,7 +1783,7 @@ static void test_phase3_empty_input_silent_reject(void) {
 }
 
 static void test_phase3_pending_clears_after_match_failure(void) {
-    /* Phase 3 invariant: every begin pairs with exactly one note/
+    /* Every begin pairs with exactly one note/cancel. Trigger a
      * cancel. Trigger a precheck match-pass (so _begin runs) then
      * force the editor commit to fail - pending must reset to -1. */
     reset_fixture();
@@ -1873,7 +1867,7 @@ static void test_review_guard_blocks_expected_commit_line_without_pending(void) 
 }
 
 static void test_phase4_depth_tutorial_catalog_shape(void) {
-    /* Phase 4: pin the worked label-targeted tutorial's catalog
+    /* Pin the label-targeted tutorial's catalog
      * shape so future catalog edits can't silently drop the
      * label-targeted step or rename the label. */
     int t_idx = depth_tutorial_idx();
@@ -1909,7 +1903,7 @@ static void test_phase4_depth_tutorial_catalog_shape(void) {
 }
 
 static void test_phase4_full_walk_places_setup_before_batch(void) {
-    /* Phase 4: walk the full Depth Test Triangle tutorial through
+    /* Walk the full Depth Test Triangle tutorial through
      * the real keyboard route and assert the inserted setup
      * command (glEnable) sits BEFORE the originally-committed
      * glBegin row in the final source order. */
@@ -1975,7 +1969,7 @@ static void test_phase4_full_walk_places_setup_before_batch(void) {
 }
 
 static void test_phase3_paste_above_locked_still_blocked(void) {
-    /* Phase 3 guard must keep paste / Ctrl-D / Ctrl-/ blocked
+    /* The guard keeps paste / Ctrl-D / Ctrl-/ blocked
      * above locked comments, since the guard exception is scoped
      * to the in-flight matched expected commit. */
     reset_fixture();
@@ -1993,7 +1987,7 @@ static void test_phase3_paste_above_locked_still_blocked(void) {
 }
 
 static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(void) {
-    /* Phase 2: the locked instruction comments for steps 0-4 should
+    /* Locked instruction comments for steps 0-4 should
      * shift to keep pointing at the same source content after the
      * step-5 label-targeted insertion shoves rows down by one. */
     int t_idx = depth_tutorial_idx();
@@ -2172,7 +2166,7 @@ static int commit_command_step(int idx, int step) {
     return tutorial_state_view().step > step;
 }
 
-/* Phase C ships 15 catalog entries spanning ordinary commands, setup
+/* The catalog includes entries spanning ordinary commands, setup
  * scaffolds, label-targeted inserts, block opens/branches/closes, SET and
  * REQUIRE steps, named function calls, and scratch-array assignments. Walk
  * every one through the real controller/editor routes so authoring mistakes
@@ -2238,22 +2232,22 @@ static void test_phase_c_catalog_full_walk(void) {
         "Scratch Arrays",
     };
 
-    /* 23 after the Phase C expansion, 24 once "Normals & Shade Model" split
-     * into "Flat & Smooth Shading" + "Normals". */
-    ASSERT_INT("Phase C expands the catalog from 8 to 24 tutorials",
+    /* The catalog contains 24 entries after "Normals & Shade Model" split
+     * into "Flat & Smooth Shading" and "Normals". */
+    ASSERT_INT("catalog contains 24 tutorials",
                repl_tutorial_count(), 24);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];
         int idx = find_tutorial_idx(names[i]);
-        snprintf(label, sizeof(label), "Phase C tutorial exists: %s", names[i]);
+        snprintf(label, sizeof(label), "catalog tutorial exists: %s", names[i]);
         ASSERT_TRUE(label, idx >= 0);
         if (idx < 0)
             continue;
 
         reset_fixture();
         tutorial_start(idx);
-        snprintf(label, sizeof(label), "Phase C tutorial starts: %s", names[i]);
+        snprintf(label, sizeof(label), "catalog tutorial starts: %s", names[i]);
         ASSERT_TRUE(label, tutorial_active());
         if (!tutorial_active())
             continue;
@@ -2270,16 +2264,16 @@ static void test_phase_c_catalog_full_walk(void) {
                 break;
         }
 
-        snprintf(label, sizeof(label), "Phase C tutorial completes: %s", names[i]);
+        snprintf(label, sizeof(label), "catalog tutorial completes: %s", names[i]);
         ASSERT_TRUE(label, !tutorial_active());
         if (tutorial_active())
             tutorial_stop();
     }
 }
 
-/* Block-step adversarial runtime coverage (the post-Phase-C test pass the
- * plan defers from A4). The full walk above proves every Phase C step is
- * committable; these pin the block machinery's edges: the locked open/close
+/* Block-step adversarial runtime coverage. The full walk above proves every
+ * catalog step is committable; these tests pin the block machinery's edges:
+ * the locked open/close
  * frame, in-block parking, close-row shifting, mismatch rejection, paste
  * guarding, close-commit bookkeeping, and Esc-recovery. */
 
@@ -2614,7 +2608,7 @@ static void test_set_step_applies_cfg_and_advances_on_ack(void) {
     ASSERT_INT("cfg grid applied to Aurora",
                repl_cfg_get_int("grid", -1), GRID_THEME_AURORA);
 
-    /* One more ack: past the final SET → tutorial completes. */
+    /* One more ack: past the final SET -> tutorial completes. */
     glr_ctrl_keyboard('\r', 0, 0);
     ASSERT_TRUE("final ack completes the tutorial", !tutorial_active());
 }
@@ -3240,10 +3234,9 @@ static void test_comment_less_command_commits_without_instruction_row(void) {
                 row && strstr(row, repl_tutorial_step_expected(idx, step)) != NULL);
 }
 
-/* --- Setup scaffold (Option A) ------------------------------------------- */
+/* --- Setup scaffold ------------------------------------------------------ */
 /* A tutorial can preload starting code (TutorialEntry.setup) so it builds
- * on what an earlier tutorial taught without the learner re-typing it.
- * See docs/plans/active/tutorial-setup-scaffold.md. */
+ * on what an earlier tutorial taught without the learner re-typing it. */
 
 static void test_catalog_color_interp_uses_setup_scaffold(void) {
     int idx = find_tutorial_idx("Color Interpolation");
@@ -3567,7 +3560,7 @@ static void test_restart_during_tutorial_preserves_original_baseline(void) {
     /* Walk Feature Tour past REQUIRE so the SET grid=RADAR fires. */
     int idx1 = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked tour 1 into REQUIRE", idx1 >= 0);
-    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE → SET */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE -> SET */
     ASSERT_INT("grid mutated to RADAR mid-tutorial 1",
                repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
     ASSERT_TRUE("tutorial 1 still active", tutorial_active());
@@ -3606,7 +3599,7 @@ static void test_start_after_finish_flushes_pending_baseline(void) {
 
     int idx1 = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked tour into REQUIRE", idx1 >= 0);
-    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE → SET */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE -> SET */
     ASSERT_INT("grid mutated to RADAR mid-tutorial",
                repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
@@ -3629,7 +3622,7 @@ static void test_start_after_finish_flushes_pending_baseline(void) {
  * touches it, but it's deliberately outside fill_scene_subset (it's a
  * global, not per-scene). A tutorial whose @cfg / SET / REQUIRE steps
  * never name view_mode would otherwise leak the
- * presentation_reset(→3D) past teardown. */
+ * presentation_reset(->3D) past teardown. */
 static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
     reset_fixture();
 
@@ -3643,7 +3636,7 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
     ASSERT_TRUE("found Color & Transform", idx >= 0);
     tutorial_start(idx);
     ASSERT_TRUE("color-transform active", tutorial_active());
-    /* presentation_reset → CFG_DEFAULT_ORTHO_MODE = 0 (3D) */
+    /* presentation_reset -> CFG_DEFAULT_ORTHO_MODE = 0 (3D) */
     ASSERT_INT("view_mode reset to 3D inside tutorial",
                repl_cfg_get_int("view_mode", -1), 0);
 
@@ -3663,7 +3656,7 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
  * grid SET steps in catalog order, and assert each is symbolic
  * with the expected name. (The bridge's resolve_text - pinned by
  * `test_apply_cfg_text_resolves_symbolic_grid_theme` - separately
- * locks "GRID_THEME_RADAR" → GRID_THEME_RADAR, etc.) */
+ * locks "GRID_THEME_RADAR" -> GRID_THEME_RADAR, etc.) */
 static void test_feature_tour_grid_steps_use_symbolic_names(void) {
     int n = repl_tutorial_count();
     int tour_idx = -1;
@@ -4854,7 +4847,7 @@ int main(void) {
     test_catalog_feature_tour_uses_relaxed_step_shapes();
     test_note_step_waits_for_ack_and_freezes_document();
     test_comment_less_command_commits_without_instruction_row();
-    /* Setup scaffold (Option A - preloaded starting code). */
+    /* Setup scaffold (preloaded starting code). */
     test_catalog_color_interp_uses_setup_scaffold();
     test_setup_scaffold_preloads_locked_rows_and_cfg();
     test_setup_label_targeted_steps_splice_into_scaffold();

@@ -39,7 +39,8 @@ static void test_repl_command_store_live(void) {
     ASSERT_TRUE("live store has cmds pointer", store.cmds != NULL);
     ASSERT_TRUE("live store has count pointer", store.count != NULL);
     ASSERT_INT("live store has capacity", store.capacity, MAX_EDITOR_COMMANDS);
-    /* No edit_line pointer post Phase 1 - cursor is caller-owned. */
+    /* The store does not retain an edit-line pointer; the cursor is
+     * caller-owned. */
 }
 
 static void test_repl_command_store_count(void) {
@@ -192,9 +193,8 @@ static void test_repl_command_store_insert_with_edit_line_adjustment(void) {
 
     repl_command_store_insert_one(&store, 0, &cmd1, NULL);
 
-    /* Caller-owned cursor (Phase 1 of edit-line-ownership.md): the
-     * store applies insert math to *opts.cursor_inout when the
-     * ADJUST_EDIT_LINE flag is set. */
+    /* The store applies insertion math to *opts.cursor_inout when the
+     * ADJUST_EDIT_LINE flag is set; the cursor remains caller-owned. */
     int cur = 1;
     ReplStoreMutOpts adjust_opts = {
         .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
@@ -322,9 +322,7 @@ static void test_repl_command_store_load(void) {
         "glColor3f(1, 0, 0);"
     };
 
-    /* _load no longer touches the cursor (Phase 1 of
-     * docs/plans/done/edit-line-ownership.md); cursor policy is
-     * the caller's. */
+    /* Loading commands leaves cursor placement to the caller. */
     ASSERT_INT("load commands",
                repl_command_store_load(&store, cmds, 2), 1);
     editor_buffer_load_lines(lines, 2);
@@ -425,9 +423,8 @@ static void test_repl_command_store_insert_at_end(void) {
     ASSERT_INT("count after insert at end", repl_command_store_count(&store), 2);
 }
 
-/* Phase 1 of docs/plans/done/edit-line-ownership.md: cursor-aware
- * delete is net-new store behavior. Verify the three cases in the
- * cursor-shift math (before / inside / past the deleted range). */
+/* Cursor-aware deletion shifts the caller's cursor for deletes before,
+ * across, and after its current position. */
 static void test_repl_command_store_delete_cursor_math(void) {
     glr_ctrl_reset_all();
 

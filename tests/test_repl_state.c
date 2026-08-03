@@ -225,9 +225,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->ortho_mode = RENDER3D_VIEW_2D;
     presentation->wrap_at_comma = 0;
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-    /* focus_vertex storage was deleted in step 7a - no live readers
-     * existed; the per-frame snapshot is computed from the document
-     * inside glr_ctrl. */
+    /* Focus-vertex state is computed per frame from the document inside
+     * glr_ctrl rather than stored here. */
 
     glr_render = glr_state_render_mut();
     glr_render->use_accum = 0;
@@ -412,8 +411,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("presentation grid restored", glr_state_presentation().grid_theme, GRID_THEME_TRON);
     ASSERT_INT("presentation layout restored",
                glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
-    /* focus_vertex storage was deleted in step 7a; per-frame compute
-     * lives on glr_ctrl. */
+    /* Focus-vertex state is computed per frame by glr_ctrl. */
     ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
     ASSERT_INT("render accum effect restored", glr_state_render().accum_effect, RENDER3D_ACCUM_EFFECT_OFF);
     ASSERT_INT("render passes restored", glr_state_render().accum_passes, 8);
@@ -845,7 +843,7 @@ static void test_user_scene_load_clears_scene_camera_default(void) {
 
 /* Sibling of test_user_scene_load_clears_scene_camera_default: the
  * workspace-open action (glr_actions.c) must also clear the per-scene
- * camera default. Without this, after load-example-with-camera →
+ * camera default. Without this, after load-example-with-camera ->
  * load-workspace, a Ctrl+Shift+C still eases to the previous example's
  * pose instead of the built-in default. */
 static void test_workspace_load_clears_scene_camera_default(void) {
@@ -856,7 +854,7 @@ static void test_workspace_load_clears_scene_camera_default(void) {
 
     glr_ctrl_reset_all();
 
-    /* Test camera example has a // camera block → cam_apply_example_block records
+    /* Test camera example has a // camera block -> cam_apply_example_block records
      * the pose as the per-scene camera default. */
     load_test_camera_example();
     for (int i = 0; i < 500; i++)
@@ -872,7 +870,7 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     int activated = glr_action_open_workspace_path(dir);
     ASSERT_INT("workspace open activated", activated, 1);
 
-    /* Ctrl+Shift+C → ease_to_default. With the scene default still set
+    /* Ctrl+Shift+C -> ease_to_default. With the scene default still set
      * (bug), the camera converges to the test example's pose (dist=8, rx=30,
      * ry=40). After the fix, it falls back to built-in (dist=5, rx=20,
      * ry=30). */
@@ -938,7 +936,7 @@ static void test_camera_target_decay_override_resets_on_new_ease(void) {
     glr_camera_tick();
 
     GlrCameraState cam = glr_camera();
-    /* Default decay 0.93 → ~7% per frame of 100 = ~7 deg of progress.
+    /* Default decay 0.93 -> ~7% per frame of 100 = ~7 deg of progress.
      * The 0.5 override (if it had leaked) would put rx near 50, so a
      * wide window around 7 is enough to catch the regression. */
     ASSERT_TRUE("new ease resets decay (rx ~7 deg, not ~50)",

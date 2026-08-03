@@ -22,11 +22,9 @@
  * (test_export_trace_parity) reads back and compares against the
  * counts it captured around repl_execute_program().
  *
- * Future extensions (see docs/plans/done/gl-stub-extensions.md): the
- * proposed GL_STUB_TRACE_LINE macro would have each stub fprintf its
- * own call+args to a per-leg trace file. The driver would just open
- * that file before calling draw_scene() and close it after,
- * letting the parent compare traces with diff(1) on count mismatch.
+ * When requested, the driver also writes a per-call trace through the
+ * gl_stub_trace_fp hook. The parent test uses that trace to localize a
+ * count mismatch after comparing the scalar counters.
  */
 #include <GL/gl_stub_counts.h>
 #include <stdio.h>

@@ -30,10 +30,9 @@
 #endif
 
 /* Render-config toggles (msaa, line_smooth, accum_*, point_attenuation)
- * moved to glr_state.render in step 7a, and the dimensional lights[] table
- * (positions/colors/eye-space) moved there too in the light-split. The REPL
- * render slice now keeps only the executor-mutated halves: the light-enable
- * bitmask and clear_color[]. */
+ * and the dimensional lights[] table (positions/colors/eye-space) live in
+ * glr_state.render. The REPL render slice keeps only the executor-mutated
+ * halves: the light-enable bitmask and clear_color[]. */
 #define g_use_accum            (glr_state_render_mut()->use_accum)
 #define g_accum_effect         (glr_state_render_mut()->accum_effect)
 #define g_accum_passes         (glr_state_render_mut()->accum_passes)
@@ -580,10 +579,8 @@ int main() {
         repl_state_normals_dirty_clear();
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
-        /* _load no longer touches the cursor (Phase 1 of
-         * docs/plans/done/edit-line-ownership.md); cursor adjustment
-         * post-load is caller policy. Set explicitly here to mirror
-         * the previous test's intent (clamp to count). */
+        /* Loading commands leaves cursor adjustment to the caller. Set it
+         * explicitly here to clamp the cursor to the loaded count. */
         ASSERT_INT("command_store_load ok",
                    repl_command_store_load(&store, loaded, 2), 1);
         if (editor_state_edit_line() > repl_state_document_count())
@@ -763,8 +760,8 @@ int main() {
         glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
         glr_state_presentation_mut()->wrap_at_comma = 0;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
-        /* focus_vertex storage was deleted in step 7a - no live
-         * readers; per-frame compute lives in glr_ctrl. */
+        /* Focus-vertex state is computed per frame by glr_ctrl rather than
+         * stored in the REPL render slice. */
 
         glr_state_presentation_reset_defaults();
         ASSERT_INT("presentation reset wireframe",
@@ -794,16 +791,15 @@ int main() {
                    glr_state_presentation().show_light_indicators, CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_INT("presentation reset backdrop",
                    glr_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
-        /* Step 7a removed the camera reset from
-         * glr_state_presentation_reset_defaults - the camera resets
-         * itself via glr_camera_reset_default in glr_ctrl_reset_all. */
+        /* Presentation defaults exclude the camera; glr_ctrl_reset_all()
+         * resets the camera through glr_camera_reset_default(). */
         ASSERT_INT("presentation reset highlight", glr_state_presentation().highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", glr_state_presentation().ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
                    glr_state_presentation().wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
         ASSERT_INT("presentation reset layout",
                    glr_state_presentation().code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
-        /* focus_vertex storage deleted in step 7a - no asserts. */
+        /* Focus-vertex state is computed per frame by glr_ctrl. */
     }
 
     /* 14. render state facade */
@@ -892,7 +888,7 @@ int main() {
         ctx.cursor.cursor_block_begin = -1;
         ctx.cursor.cursor_block_end = -1;
 
-        /* outlines on, no current-poly highlight → both shapes redraw */
+        /* outlines on, no current-poly highlight -> both shapes redraw */
         ctx.show_vertex_outlines = 1;
         ctx.highlight_current_poly = 0;
         gl_stub_counts_reset();
@@ -906,7 +902,7 @@ int main() {
         ASSERT_TRUE("outline enables polygon offset",
                     gl_stub_counts[GL_STUB_glPolygonOffset] >= 1);
 
-        /* both link flags off → outer guard skips the redraw entirely */
+        /* both link flags off -> outer guard skips the redraw entirely */
         ctx.show_vertex_outlines = 0;
         ctx.highlight_current_poly = 0;
         gl_stub_counts_reset();
@@ -917,7 +913,7 @@ int main() {
                    (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
 
         /* cursor on the cube line, current-poly highlight on, outlines
-         * off → only the cube redraws (the highlighted shape). */
+         * off -> only the cube redraws (the highlighted shape). */
         ctx.show_vertex_outlines = 0;
         ctx.highlight_current_poly = 1;
         ctx.cursor.edit_line_idx = 0;   /* the glutSolidCube source line */
@@ -1508,7 +1504,7 @@ int main() {
 
         memset(max_key, 'M', sizeof(max_key) - 1);
         max_key[REPL_CFG_KEY_MAX] = '\0';        /* one too many */
-        ASSERT_INT("boundary: REPL_CFG_KEY_MAX key truncates → 0",
+        ASSERT_INT("boundary: REPL_CFG_KEY_MAX key truncates -> 0",
                    repl_config_bag_set(&bag, max_key, "1"), 0);
     }
 

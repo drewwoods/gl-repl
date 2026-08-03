@@ -375,8 +375,7 @@ static void test_dropdown_and_config_press(void) {
     UiHit h_closed = ui_menu_bar_hit_test(item_mx, item_my);
     ASSERT_INT_EQ("hit when closed", h_closed.kind == UI_HIT_MENU_ITEM ? h_closed.item_idx : -1, -1);
 
-    /* MENU_TUTORIALS top-level row 0 was a tutorial item before Phase B
-     * (the flat dropdown); after Phase B it is the first tag row (tutorial
+    /* MENU_TUTORIALS top-level row 0 is the first tag row (tutorial
      * activation moved to per-tag flyouts via route_submenu_item_hit).
      * Hit-test still returns 0 either way - row index is row index - but
      * activation is now inert (mirrors the Scene tag-row guard below). */
@@ -964,7 +963,7 @@ static void test_render_does_not_mutate_hover(void) {
     ui_menu_bar_render_example_dropdown(&snap);
 
     /* Re-seed at A. If render kept hover at A, this returns 0 (no
-     * change). If render mutated to B, going B→A returns 1. */
+     * change). If render mutated to B, going B->A returns 1. */
     reseed_changed = ui_menu_bar_update_pointer_hover(item_a_mx, item_a_my,
                                                        snap.anim_time);
     ASSERT_TRUE("render did not mutate hover (re-seed unchanged)",
@@ -1203,7 +1202,7 @@ static void test_dropdown_inert_chrome_hit(void) {
 /* Step 7 (Finding #3), now routed through the controller: a right-press
  * over a Config flyout item backward-cycles it. Production resolves the
  * press with the canonical hit-test (route_right_press in
- * glr_ctrl_router.c → ui_panels_hit_test → ui_menu_bar_hit_test →
+ * glr_ctrl_router.c -> ui_panels_hit_test -> ui_menu_bar_hit_test ->
  * submenu_hit_test) and cycles ONLY on a UI_HIT_SUBMENU_ITEM hit with
  * cmd_idx == GLR_MENU_CONFIG. submenu_hit_test resolves actionable ITEM
  * rows only - chrome ("### "/"---" in the "All" flyout) is skipped via
@@ -1552,7 +1551,7 @@ static void test_help_and_code_targets_resolve_to_hits(void) {
         hit = ui_tabbed_overlay_hit_test(&st, mx, my);
         ASSERT_INT_EQ("helptab:commands lands on a tab", (int)hit.kind,
                       (int)UI_OVERLAY_HIT_TAB);
-        ASSERT_STR_EQ("…and it is the Commands tab",
+        ASSERT_STR_EQ("...and it is the Commands tab",
                       hit.kind == UI_OVERLAY_HIT_TAB
                           ? st.content->tabs[hit.tab].label : "(none)",
                       "Commands");
@@ -1576,7 +1575,7 @@ static void test_help_and_code_targets_resolve_to_hits(void) {
         hit = ui_repl_code_panel_hit_test(&snap, mx, my);
         ASSERT_INT_EQ("code: point is a code-text hit", (int)hit.kind,
                       (int)UI_HIT_CODE_TEXT);
-        ASSERT_STR_EQ("…on the glColor3f row",
+        ASSERT_STR_EQ("...on the glColor3f row",
                       hit.kind == UI_HIT_CODE_TEXT
                           ? editor_buffer_line(hit.line_idx) : "(none)",
                       "  glColor3f(1, 0.5, 0.2);");   /* canonical indent */

@@ -853,7 +853,7 @@ static void test_incompatible_x_mode_is_refused(void) {
     row_inner = find_nth_row(CMD_VAR_ASSIGN, 1);
     ASSERT_TRUE("scene has both shapes", row_top >= 0 && row_inner >= 0);
 
-    /* Primary runs once per frame → the plot is a capture time series. */
+    /* Primary runs once per frame -> the plot is a capture time series. */
     assign_plot_open(row_top);
     assign_plot_capture(0.0);
     ASSERT_INT("primary put the plot on the capture axis",

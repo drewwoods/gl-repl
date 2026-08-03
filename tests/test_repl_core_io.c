@@ -32,7 +32,7 @@
 #include <unistd.h>
 
 #define g_render_state_lines    (repl_state_import_export().render_state_lines)
-/* Render-config toggles moved to glr_state.render in step 7a. */
+/* Render-config toggles live in glr_state.render. */
 #define g_multisample_enabled   (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled   (glr_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
@@ -1282,7 +1282,7 @@ int main(void) {
      * from the bug report):
      *
      *   "When you save the entire workspace, it also updates other
-     *    scene's in the workspaces' camera (not expected). … the
+     *    scene's in the workspaces' camera (not expected). ... the
      *    workspace in the current repo will load the whale.c scene,
      *    but not with the whale's camera in the file."
      *
@@ -1878,16 +1878,10 @@ int main(void) {
 
     /* (F) Post-import host cursor publication.
      *
-     * Phase 4 of docs/plans/done/edit-line-ownership.md moved cursor
-     * storage out of ReplState. repl_export_load_from_file threads
-     * cursor through ImportState.edit_line internally; review
-     * finding [P1] noted that the final value wasn't being
-     * published to the host sink, leaving downstream callers
-     * (notably repl_load_scene_as_new_slot, which snapshots via
-     * repl_dispatch_edit_line_get right after the import returns)
-     * to see 0 instead of the post-import row. Pin the contract
-     * here so the next person touching the import flow doesn't
-     * silently regress it. */
+     * repl_export_load_from_file threads the cursor through
+     * ImportState.edit_line internally and publishes the final value to
+     * the host sink. Callers such as repl_load_scene_as_new_slot read that
+     * published row immediately after import. */
     {
         const char *import_cursor_path = "/tmp/repl_core_import_cursor.c";
 
@@ -1901,7 +1895,7 @@ int main(void) {
         repl_export_save_output(import_cursor_path,
                                 source_document_view(), NULL);
 
-        /* (2) Reset to a clean slate (cursor → 0). */
+        /* (2) Reset to a clean slate (cursor -> 0). */
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_INT("pre-import cursor is 0",
                    editor_state_edit_line(), 0);
@@ -2365,7 +2359,7 @@ int main(void) {
         }
     }
 
-    /* Regression for #83 in docs/plans/done/src-repl-code-smell-audit-2.md:
+    /* Reserved and invalid names must reject cleanly:
      * parse_snippet_declare used to use a `< 0` check on
      * repl_eval_declare_predef_var (which actually returns 1/0, not
      * idx-or-(-1)). On a reserved or otherwise-invalid name the

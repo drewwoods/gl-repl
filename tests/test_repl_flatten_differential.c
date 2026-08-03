@@ -1,10 +1,10 @@
 /*
  * test_repl_flatten_differential.c - Flatten fast-path differential.
  *
- * Phase 1's flatten fast paths reuse committed command structure instead of
+ * The flatten fast paths reuse committed command structure instead of
  * rediscovering it from source text on every expanded instance:
  *
- *   - has_vars == 0 appends the committed command verbatim (Phase 1A),
+ *   - has_vars == 0 appends the committed command verbatim,
  *   - standard numeric commands evaluate only their known argument list,
  *   - scalar assignments evaluate their already-canonical REPL RHS directly.
  *
@@ -515,7 +515,7 @@ static void test_var_assign_differential(void) {
                     checked, 1);
 }
 
-/* Exercise both Phase 1C paths together. k's assignment is evaluated without
+/* Exercise both direct fast paths together. k's assignment is evaluated without
  * the redundant C->REPL translation, then the known glClearColor shape is
  * evaluated without command-name dispatch. The dynamic RGB clamp is a parser
  * post-processing rule that the direct path must preserve. */

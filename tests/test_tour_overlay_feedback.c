@@ -365,7 +365,7 @@ static void test_hud_render_matches_width_helper(void) {
     ASSERT_TRUE("HUD left edge at the scene inset", min_x >= (float)sx - 1.0f);
     ASSERT_TRUE("HUD stays within the scene vertically",
                 min_y >= (float)sy - 1.0f && max_y <= (float)(sy + sh) + 1.0f);
-    /* The drawn panel width equals the pure helper's value (± 1px for the
+    /* The drawn panel width equals the pure helper's value (+/- 1px for the
      * half-pixel border insets). */
     ASSERT_TRUE("drawn panel width matches tour_hud_panel_width()",
                 (max_x - min_x) >= (float)expect_w - 1.5f &&

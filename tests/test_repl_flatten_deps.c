@@ -1,6 +1,5 @@
 /*
- * tests/test_repl_flatten_deps.c -- flatten dependency-mask derivation
- * (flatten plan phase 3a).
+ * tests/test_repl_flatten_deps.c -- flatten dependency-mask derivation.
  *
  * Each case builds a small scene through the live commit pipeline, runs a
  * full flatten, and asserts the structural/value dependency masks and

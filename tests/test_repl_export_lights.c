@@ -184,7 +184,7 @@ int main(void) {
 
     /* Reload the headlight-themed file into a fresh REPL state, then
      * re-export - the same slot-0-before-camera invariant must hold, proving
-     * that @cfg drives the cfg bridge → glr_config_set hook →
+     * that @cfg drives the cfg bridge -> glr_config_set hook ->
      * render3d_lights_apply_theme path on load. */
     glr_ctrl_reset_all();
     ReplImportResult import_result;

@@ -200,14 +200,14 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
 
     ASSERT_INT("walker reaches cursor at both call sites",
                rec.cursor_hit_count, 2);
-    /* Call A: glTranslatef(-2,0,0) then func0(0.5, 0.25) → args (0.5, 0.25, 0). */
+    /* Call A: glTranslatef(-2,0,0) then func0(0.5, 0.25) -> args (0.5, 0.25, 0). */
     ASSERT_NEAR("call A: cursor flat-cmd args[0] (= scale)",
                 rec.cursor_hits[0].args[0], 0.5f);
     ASSERT_NEAR("call A: cursor flat-cmd args[1] (= phase)",
                 rec.cursor_hits[0].args[1], 0.25f);
     ASSERT_NEAR("call A: cursor flat-cmd args[2]",
                 rec.cursor_hits[0].args[2], 0.0f);
-    /* Call B: func0(0.75, -0.4) → args (0.75, -0.4, 0). */
+    /* Call B: func0(0.75, -0.4) -> args (0.75, -0.4, 0). */
     ASSERT_NEAR("call B: cursor flat-cmd args[0] (= scale)",
                 rec.cursor_hits[1].args[0], 0.75f);
     ASSERT_NEAR("call B: cursor flat-cmd args[1] (= phase)",
@@ -298,7 +298,7 @@ static void test_walker_stop_flag_halts(void) {
         .on_vertex   = on_vertex_record,
     };
 
-    /* Baseline: no stop_flag → walker emits all three vertices. */
+    /* Baseline: no stop_flag -> walker emits all three vertices. */
     Recorder rec_full = { .edit_line_idx = cursor_line };
     ReplayVertexWalkContext ctx_full = make_ctx(cursor_line);
     replay_walk_user_vertices(&ctx_full, &cb, &rec_full);
@@ -444,7 +444,7 @@ static void test_cursor_guide_snapshot_override(void) {
     ASSERT_NEAR("NORMAL3F: base_pos z from flat vertex",
                 snap_n2.normal_base_pos[2], 0.25f);
 
-    /* Block boundary between normal and vertex → base_pos stays
+    /* Block boundary between normal and vertex -> base_pos stays
      * invalid (the vertex doesn't belong to this normal's block). */
     GLCmd flat_blocked[3] = {0};
     flat_blocked[0].type = CMD_NORMAL3F; flat_blocked[0].valid = 1;

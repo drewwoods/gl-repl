@@ -47,9 +47,9 @@ static void reset_fixture(void) {
     glr_ctrl_sync_ui_chrome();
 }
 
-/* Bare reset leaves no occupied slot (plan §Verification: derivation
- * cases must seed explicitly). Occupy + activate one user slot the same
- * way the editor tests do. */
+/* Bare reset leaves no occupied slot, so derivation cases seed one
+ * explicitly. Occupy and activate one user slot the same way the editor
+ * tests do. */
 static void seed_user_scene(void) {
     repl_load_example(0);
     repl_promote_transient_if_needed();
@@ -69,7 +69,7 @@ static void band_rect(int *cp_x, int *cp_w, int *by, int *bh) {
 static void test_derivation(void) {
     UiRenderSnapshot snap;
 
-    /* Decision #6 / §3: bare reset (no occupied slot, neither active) ->
+    /* Bare reset (no occupied slot, neither active) ->
      * zero tabs, zero band, no synthetic tab. */
     reset_fixture();
     glr_ctrl_build_ui_snapshot(&snap);
@@ -180,7 +180,7 @@ static void test_band_h_lockstep(void) {
         int with = ui_text_panel_visible_lines_for_height(H, 22,
                                                           TAB_STRIP_H);
         if (base <= 1)
-            continue;  /* clamp floor (see plan §3) - delta not meaningful */
+            continue;  /* At the clamp floor, the delta is not meaningful. */
         ASSERT_INT_EQ("TAB_STRIP_H drops visible rows by exactly one",
                       with, base - 1);
     }
@@ -350,14 +350,12 @@ static void test_dropdown_over_band_consumes(void) {
                     ok.kind == UI_HIT_CODE_PANEL_CHROME);
     }
 
-    /* Config is now a section/flyout menu (plan Step 4): row 0 is the
-     * "RENDERING" section *parent* row, not a literal "### " header.
-     * A click on it is classified as UI_HIT_MENU_ITEM and consumed by
-     * the menu layer (Config's activate keeps the dropdown open), so it
-     * still does NOT fall through to a scene tab underneath - the
-     * overlay-precedence invariant this regression guards. The
-     * general "section rows are inert" guarantee + dedicated coverage
-     * lands in Step 5. */
+    /* Config is a section/flyout menu: row 0 is the "RENDERING" section
+     * parent row, not a literal "### " header. A click on it is classified
+     * as UI_HIT_MENU_ITEM and consumed by the menu layer (Config's activate
+     * keeps the dropdown open), so it does not fall through to a scene tab
+     * underneath. This guards overlay precedence and the general rule that
+     * section rows are inert. */
     ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
     ASSERT_TRUE("Config dropdown open",
                 ui_menu_bar_menu_dropdown_is_open());

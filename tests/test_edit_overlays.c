@@ -786,7 +786,7 @@ static void test_overlays_honor_stencil_test(void) {
     /* A GL_ENABLE_BIT scope reverts the stencil-test enable at the pop,
      * exactly like the cull cap. Attrib membership is routed through
      * attrib_bits, so this is the branch that will pick up the stencil
-     * attrib group for free when Phase 2 adds it. */
+     * attrib group when stencil membership is enabled. */
     GLCmd scoped[8];
     mk_cmd(&scoped[0], CMD_ENABLE, (float)GL_STENCIL_TEST, 0, 0);
     scoped[0].num_args = 1;

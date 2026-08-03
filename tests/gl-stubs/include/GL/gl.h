@@ -389,7 +389,7 @@ static inline GLenum glGetError(void) {
 }
 static inline const GLubyte *glGetString(GLenum name) {
     (void)name;
-    /* Major version 2 → the runtime point-parameter detection in
+    /* Major version 2 -> the runtime point-parameter detection in
      * glr_ctrl_init_gl treats the stub context as "supported",
      * matching the glutExtensionSupported stub (returns 1) and
      * today's default build. Not counted/traced (no scalar args). */

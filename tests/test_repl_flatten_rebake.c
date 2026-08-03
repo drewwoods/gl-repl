@@ -1,6 +1,5 @@
 /*
- * tests/test_repl_flatten_rebake.c -- in-place rebake differential
- * (flatten plan phase 3b).
+ * tests/test_repl_flatten_rebake.c -- in-place rebake differential.
  *
  * The rebake path (repl_flatten_rebake_program) re-evaluates the VALUES of an
  * existing flat stream without re-expanding it, for a value-only predef change
@@ -659,9 +658,9 @@ static void test_refresh_profile_frame_aggregation(void) {
 }
 
 /* Exercise every predefined root which each built-in's dependency analysis
- * classifies as value-only. This is the corpus-scale contract Phase 3 relies
- * on: rebake and a warm full flatten must agree from the same pre-refresh
- * value baseline for every root the router permits to rebake. */
+ * classifies as value-only. This is the corpus-scale contract: rebake and a
+ * warm full flatten must agree from the same pre-refresh value baseline for
+ * every root the router permits to rebake. */
 static void test_corpus_value_only_rebakes(void) {
     const float t0 = 0.37f;
     int eligible = 0;

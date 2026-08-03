@@ -98,7 +98,7 @@ static float normal_axis_at_vertex(int ord, int axis) {
 }
 
 /* ------------------------------------------------------------------ */
-/* face_normal: degenerate case (collinear vertices → zero normal)     */
+/* face_normal: degenerate case (collinear vertices -> zero normal)     */
 /* ------------------------------------------------------------------ */
 
 static void test_degenerate_normal(void) {
@@ -257,7 +257,7 @@ static void test_polygon(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/* compute_block_normals: unsupported mode (default branch → no-op)   */
+/* compute_block_normals: unsupported mode (default branch -> no-op)   */
 /* ------------------------------------------------------------------ */
 
 static void test_unsupported_mode(void) {
@@ -483,7 +483,7 @@ static void test_autonormal_inside_funcn_var_args_skipped(void) {
     int cmds_before = repl_state_document_count();
     repl_recompute_autonormals(1, NULL);
 
-    /* Vars-bearing vertices → no auto-normals inserted. */
+    /* Vars-bearing vertices -> no auto-normals inserted. */
     ASSERT_INT("funcN with vars: cmds unchanged",
                repl_state_document_count(), cmds_before);
 }

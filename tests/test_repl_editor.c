@@ -208,7 +208,7 @@ static int mock_get_modifiers(void) {
 }
 
 /* Test wrapper: matches what glr_ctrl_apply_input_effects does in
- * production for the editor → controller effects the editor cannot
+ * production for the editor -> controller effects the editor cannot
  * actualize itself. Currently the only such effect is the
  * hidden-code-panel restore signal (audit #8 hoisted the actual
  * write into src/app/glr_ctrl.c). Tests that exercise editor input
@@ -699,9 +699,9 @@ int main() {
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
-            /* Config items are no longer activated through
-             * glr_action_menu_item_activate(GLR_MENU_CONFIG, …) - that
-             * path is now a parent-row no-op (plan Step 5). The Config
+            /* Config items are not activated through
+             * glr_action_menu_item_activate(GLR_MENU_CONFIG, ...): that
+             * path is a parent-row no-op. The Config
              * flyout route invokes glr_cfg_cycle_row() on the absolute
              * g_cfg_items[] index; exercise that primitive directly. */
             glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
@@ -1048,8 +1048,8 @@ int main() {
      * and pop/redo refuse to restore cross-generation snapshots even
      * if ring counts were somehow non-zero.
      *
-     * Flow: edit scene A → push undo → wholesale replace (bumps gen
-     * + clears doc) → populate scene B → Ctrl+Z must not restore A. */
+     * Flow: edit scene A -> push undo -> wholesale replace (bumps gen
+     * and clears doc) -> populate scene B -> Ctrl+Z must not restore A. */
     {
         unsigned int gen0;
         glr_ctrl_reset_all(); declare_test_vars();
@@ -1099,7 +1099,7 @@ int main() {
     /* 3e. Generation counter: multiple wholesale replacements each
      * bump the generation, isolating snapshots from all prior worlds.
      *
-     * World A → wholesale → World B → wholesale → World C.
+     * World A -> wholesale -> World B -> wholesale -> World C.
      * Pop in C must not reach B's snapshot. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
@@ -1522,8 +1522,7 @@ int main() {
     }
 
     /* 8i. Copy refuses to capture a range that contains a float
-     * declaration. (Paste-time decl guard is gone in Phase B -
-     * copy-time guard prevents decls from entering the clipboard
+     * declaration. The copy-time guard prevents decls from entering the clipboard
      * in the first place; pasting a decl that somehow ended up in
      * the clipboard now goes through the standard commit chain
      * and surfaces a parser-level diagnostic if it conflicts.) */
@@ -1728,7 +1727,7 @@ int main() {
         editor_feed_line("glColor3f(1,0,0);");
         editor_feed_line("glEnd();");
         editor_navigate_to_line(1);
-        editor_cursor_pos_set(2);                /* cursor > 0 → insert row below */
+        editor_cursor_pos_set(2);                /* cursor > 0 -> insert row below */
         editor_handle_key('\r', 0, 0);
         ASSERT_INT("insert-row setup: insert mode", editor_insert_mode(), 1);
         ASSERT_INT("insert-row setup: no real line yet", repl_state_document_count(), 3);
@@ -2386,7 +2385,7 @@ int main() {
                     repl_eval_find_predef_var_idx("b") < 0);
     }
 
-    /* 35. Overwriting `float n, b;` → `float n;` with `n` referenced
+    /* 35. Overwriting `float n, b;` -> `float n;` with `n` referenced
      * elsewhere must succeed (only `b` is being dropped, and `b` is not
      * referenced). Regression: previously the check iterated ALL old
      * names and errored on `n is in use` even though `n` is being kept. */
@@ -2728,7 +2727,7 @@ int main() {
                     repl_eval_find_predef_var_idx("anchor") >= 0);
     }
 
-    /* 42. Expanding a multi-name decl (float a,b,c → float a,b,c,d) must
+    /* 42. Expanding a multi-name decl (float a,b,c -> float a,b,c,d) must
      * preserve the live values of kept variables. Regression: the old
      * overwrite path undeclared ALL names then re-declared them with
      * value 0.0f, silently zeroing a, b, and c. */
@@ -3329,8 +3328,7 @@ int main() {
 
         editor_clear_all_cmds();
         ASSERT_INT("clear_all: baseline cmd count", repl_state_document_count(), 6);
-        /* Editor owns the text buffer (Phase 4 of
-         * docs/plans/done/edit-line-ownership.md). A clear-all has to drop
+        /* EditorState owns the text buffer. A clear-all has to drop
          * the editor's source text in lockstep with the command store
          * - otherwise the user sees the old lines in the code panel
          * while every commit acts on an empty cmd-store. */
@@ -4285,7 +4283,7 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Phase 3 status framing: REPL produces the diagnostic, editor
+    /* Status framing: REPL produces the diagnostic, and the editor
      * wraps it with "Toggle failed: ". */
     {
         int saved_mods = g_mock_modifiers;

@@ -1,14 +1,13 @@
 /*
- * tests/test_repl_locals.c -- function-scoped local variables, runtime
- * semantics (scoped-local-variables, phase 2).
+ * tests/test_repl_locals.c -- function-scoped local variables and runtime
+ * semantics.
  *
- * Phase 1's tests live in tests/test_repl_compile.c and cover what the
- * *compiler* accepts and rejects. This suite covers what the flattened
- * program actually computes: that a local exists per invocation, that name
- * resolution is innermost-first and lexical (never dynamic), that a value
- * accumulated inside a for-loop survives the loop, and that a global
- * feeding a local routes as a structural dependency rather than a
- * value-only rebake.
+ * Compiler acceptance and rejection are covered in tests/test_repl_compile.c.
+ * This suite covers what the flattened program actually computes: that a
+ * local exists per invocation, that name resolution is innermost-first and
+ * lexical (never dynamic), that a value accumulated inside a for-loop
+ * survives the loop, and that a global feeding a local routes as a
+ * structural dependency rather than a value-only rebake.
  *
  * Every case loads a scene through the live commit pipeline, runs a full
  * flatten, and reads the emitted flat stream - so an assertion failure
@@ -508,7 +507,7 @@ static void test_global_feeding_a_local_is_structural(void) {
                  nth_cmd_arg0(CMD_VERTEX3F, 0), 6.0f);
 }
 
-/* ---- Export / import (phase 4) --------------------------------------- */
+/* ---- Export / import -------------------------------------------------- */
 
 /* Read a whole file into `buf`. Returns 1 on success. */
 static int slurp(const char *path, char *buf, size_t buf_sz) {
@@ -657,7 +656,7 @@ static void test_export_parity_read_before_write(void) {
 }
 
 /* Import lowers only the exporter's own literal-zero form. A hand-written
- * non-zero initializer inside a function body must still hit the Phase 1
+ * non-zero initializer inside a function body must still hit the same
  * preflight rejection, so REPL and file semantics stay identical rather
  * than merely compatible. */
 static void test_import_lowers_only_the_generated_zero(void) {
@@ -1093,11 +1092,11 @@ static void test_export_hoists_locals_for_c89(void) {
                 decl_b != NULL && stmt != NULL && decl_b < stmt);
 }
 
-/* Ctrl+Z after declaring a local restores the document cleanly. This was the
- * last manual step in the plan's Verification list; it is a regression test
- * because the hazard is structural, not visual. A local's binding *is* its
- * prologue row, so an undo that put the row back without also restoring the
- * bodies that read it - or that left a stray predef slot behind, as it would
+/* Ctrl+Z after declaring a local restores the document cleanly. This is a
+ * regression test because the hazard is structural, not visual. A local's
+ * binding *is* its prologue row, so an undo that puts the row back without
+ * also restoring the bodies that read it - or that leaves a stray predef
+ * slot behind, as it would
  * if the local had been mis-filed as a global - would leave the scene
  * referencing a name nothing declares.
  *

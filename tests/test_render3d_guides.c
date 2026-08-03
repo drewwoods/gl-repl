@@ -468,7 +468,7 @@ static void test_replay_transform_guide_render(void) {
     ASSERT_INT("replay render: nothing drawn off the focus index",
                (int)gl_stub_counts[GL_STUB_glBegin], 0);
 
-    /* Due at the transform flat idx → draws the translate guide. */
+    /* Due at the transform flat idx -> draws the translate guide. */
     gl_stub_counts_reset();
     render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
     ASSERT_TRUE("replay render: translate guide draws at the transform idx",
@@ -847,7 +847,7 @@ int main(void) {
         snapshot.replaying = 1;
         snapshot.replay_focus_anchor_flat_idx = 2;
 
-        /* (b) Default: no cursor transform selected → nearest in-scope
+        /* (b) Default: no cursor transform selected -> nearest in-scope
          * affecting transform before the vertex is the rotate (flat idx 1). */
         ASSERT_INT("replay default prepares a plan",
                    render3d_transform_guides_prepare(&snapshot, &plan), 1);
@@ -860,7 +860,7 @@ int main(void) {
                    plan.after_flat_idx, 2);
         ASSERT_INT("replay plan active", plan.active, 1);
 
-        /* (a) Cursor parked on the translate source line (idx 0) → focus the
+        /* (a) Cursor parked on the translate source line (idx 0) -> focus the
          * matching flat translate (idx 0) instead of the nearest rotate. */
         snapshot.edit_line_idx = 0;
         snapshot.input = "glTranslatef(1,2,3)";
@@ -882,7 +882,7 @@ int main(void) {
                    plan.cursor_flat_idx, 1);
     }
 
-    /* Req 6: replay with no affecting transform before the vertex → no plan. */
+    /* Req 6: replay with no affecting transform before the vertex -> no plan. */
     {
         GLCmd source_cmds[1] = {0};
         GLCmd flat_cmds[1] = {0};
@@ -895,7 +895,7 @@ int main(void) {
             base_snapshot(source_cmds, 1, flat_cmds, 1, -1, "");
         snapshot.replaying = 1;
         snapshot.replay_focus_anchor_flat_idx = 0;
-        ASSERT_INT("replay vertex with no transforms → no plan",
+        ASSERT_INT("replay vertex with no transforms -> no plan",
                    render3d_transform_guides_prepare(&snapshot, &plan), 0);
         ASSERT_INT("no plan is inactive", plan.active, 0);
     }

@@ -736,7 +736,7 @@ static void test_match_bracket_multiline(void) {
         ASSERT_INT_EQ("same-row match char", mc, 6);
     }
 
-    /* Unbalanced (open brace, no close anywhere) → no match. */
+    /* Unbalanced (open brace, no close anywhere) -> no match. */
     {
         UiTextPanelRow rows[2] = {
             { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
@@ -803,7 +803,7 @@ static void test_enclosing_parens_scope(void) {
     ASSERT_INT_EQ("caret at start has no enclosing pair", 0,
                   ui_text_panel_enclosing_parens(s, len, 0, &open, &close));
 
-    /* Unbalanced enclosing '(' has no close → no scope. */
+    /* Unbalanced enclosing '(' has no close -> no scope. */
     ASSERT_INT_EQ("unclosed enclosing pair yields none", 0,
                   ui_text_panel_enclosing_parens("foo(bar", 7, 5,
                                                  &open, &close));

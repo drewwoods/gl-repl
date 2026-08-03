@@ -401,9 +401,9 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("camera glow forwarded", g_last_scene_config.cam_motion_glow, 0.9f);
     ASSERT_INT("user lighting copied", g_last_scene_config.user_lighting_enabled, 1);
     ASSERT_INT("light indicators copied", g_last_scene_config.show_light_indicators, 1);
-    /* The replay-fade plan moved out of Render3dRenderConfig and is now a
-     * controller-private static (g_replay_fade_plan). Inspect it directly
-     * since this TU includes imrepl_ctrl.c as a compilation unit. */
+    /* Replay-fade data is a controller-private static
+     * (g_replay_fade_plan), rather than part of Render3dRenderConfig.
+     * Inspect it directly since this TU includes imrepl_ctrl.c. */
     ASSERT_INT("replay fade plan inactive without active fades",
                g_replay_fade_plan.active, 0);
     ASSERT_INT("replay fade base limit zero without fades",
@@ -655,7 +655,7 @@ static void test_display_frame_profile_coverage(void) {
     if (best_total_us > 0.0) {
         char label[96];
         snprintf(label, sizeof(label),
-                 "major sections cover ≥50%% of FRAME_WORK (best %.1f%%)",
+                 "major sections cover >=50%% of FRAME_WORK (best %.1f%%)",
                  best_major_coverage * 100.0);
         ASSERT_TRUE(label, best_major_coverage >= PROFILE_MAJOR_COVERAGE_MIN);
     }
@@ -663,7 +663,7 @@ static void test_display_frame_profile_coverage(void) {
     if (snapshot_measured) {
         char label[96];
         snprintf(label, sizeof(label),
-                 "SNAPSHOT subs cover ≥70%% of parent (best %.1f%%)",
+                 "SNAPSHOT subs cover >=70%% of parent (best %.1f%%)",
                  best_snapshot_coverage * 100.0);
         ASSERT_TRUE(label, best_snapshot_coverage >= PROFILE_SNAPSHOT_COVERAGE_MIN);
     }
@@ -1116,13 +1116,11 @@ static int vp_click_y_for_row(int click_x, int var_idx) {
     return -1;
 }
 
-/* The drag transaction split (docs/plans/in-review/
- * flatten-performance-without-vm.md, phase 1B): motion applies the live value
- * only. repl_state_mark_source_dirty() is the single seam every source-derived
- * cache invalidates from - autonormals, the flat program, the source-scope
- * depth cache - so a drag that never trips it during motion is a drag that
- * cannot rebuild those caches per pointer event. Mouse-up trips it exactly
- * once. */
+/* During a variable-panel drag, motion applies the live value only.
+ * repl_state_mark_source_dirty() is the single seam every source-derived
+ * cache invalidates from - autonormals, the flat program, and the
+ * source-scope depth cache - so motion cannot rebuild those caches per
+ * pointer event. Mouse-up trips it exactly once. */
 static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
     int px, py, pw, ph;
     int click_x, click_y;
@@ -1148,7 +1146,7 @@ static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
                    GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
                1);
 
-    /* 100 motion events, the plan's drag benchmark shape. */
+    /* Use 100 motion events to cover a representative drag workload. */
     repl_state_normals_dirty_clear();
     for (int step = 1; step <= 100; step++)
         ASSERT_INT("deferred-write motion handled",
@@ -4058,7 +4056,7 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
     repl_flatten_commands(editor_state_edit_line());
 
     /* Park the edit cursor on the in-body vertex (line 2). Off replay, its
-     * flat resolver would union BOTH expansions → {5, 7, 8}; this lets the
+     * flat resolver would union BOTH expansions -> {5, 7, 8}; this lets the
      * test prove replay precedence (the first-vertex focus shows only {5}). */
     editor_insert_mode_set(0);
     editor_state_edit_line_set(2);
@@ -4807,7 +4805,7 @@ static void test_example_reset_reapplies_light_theme(void) {
                        sizeof(expected_default)) == 0);
 }
 
-/* The light-split contract: Render3dRenderConfig.lights[] is assembled per frame
+/* Render3dRenderConfig.lights[] is assembled per frame
  * from two owners - the app-owned theme-seeded dimensional data
  * (GlrRenderState.lights: position / color / id / eye-space) merged with the
  * REPL-owned enable bitmask (ReplRenderState.light_enabled_mask). This drives

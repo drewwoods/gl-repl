@@ -906,7 +906,7 @@ static void run_tests(void) {
     printf("Expression evaluator (additional):\n");
 
     /* Math functions with less obvious inputs */
-    ASSERT_FLOAT("sin(PI)", 0.0f);                     /* sin(π) ≈ 0 */
+    ASSERT_FLOAT("sin(PI)", 0.0f);                     /* sin(pi) ~ 0 */
     ASSERT_FLOAT("sqrt(9)", 3.0f);
     ASSERT_FLOAT("sqrt(0)", 0.0f);
     ASSERT_FLOAT("abs(-3.5)", 3.5f);
@@ -1244,18 +1244,18 @@ static void run_tests(void) {
     {
         printf("\n--- repl_scan_next_arg_delim ---\n");
 
-        /* Trivial: empty input → returns the terminator. */
+        /* Trivial: empty input -> returns the terminator. */
         {
             const char *s = "";
             const char *r = repl_scan_next_arg_delim(s);
-            TEST_ASSERT_TRUE(&g_harness, "scan: empty → '\\0'", *r == '\0');
+            TEST_ASSERT_TRUE(&g_harness, "scan: empty -> '\\0'", *r == '\0');
         }
 
         /* Flat args: stops at the first top-level comma. */
         {
             const char *s = "1, 2, 3)";
             const char *r = repl_scan_next_arg_delim(s);
-            TEST_ASSERT_TRUE(&g_harness, "scan: flat → first ','", *r == ',');
+            TEST_ASSERT_TRUE(&g_harness, "scan: flat -> first ','", *r == ',');
             TEST_ASSERT_TRUE(&g_harness, "scan: flat: r points at ','",
                              (r - s) == 1);
         }
@@ -1294,7 +1294,7 @@ static void run_tests(void) {
         {
             const char *s = "0.5 + 1";
             const char *r = repl_scan_next_arg_delim(s);
-            TEST_ASSERT_TRUE(&g_harness, "scan: no delim → '\\0'", *r == '\0');
+            TEST_ASSERT_TRUE(&g_harness, "scan: no delim -> '\\0'", *r == '\0');
         }
 
         /* Unbalanced open paren: walks to end-of-string instead of
@@ -1303,7 +1303,7 @@ static void run_tests(void) {
         {
             const char *s = "max(1, 2";
             const char *r = repl_scan_next_arg_delim(s);
-            TEST_ASSERT_TRUE(&g_harness, "scan: unbalanced '(' → '\\0'",
+            TEST_ASSERT_TRUE(&g_harness, "scan: unbalanced '(' -> '\\0'",
                              *r == '\0');
         }
     }

@@ -1523,7 +1523,7 @@ static void test_example_tag_default_cfg(void) {
     }
 
     /* (1) 2D-only-bucket example (in 2D, not in 3D), no own grid @cfg
-     * → GRID_THEME_PLANES. The bezier example has @cfg lines for
+     * -> GRID_THEME_PLANES. The bezier example has @cfg lines for
      * other slugs but no `@cfg grid`. */
     if (bezier_idx >= 0) {
         load_example_for_test(bezier_idx);
@@ -1531,7 +1531,7 @@ static void test_example_tag_default_cfg(void) {
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
-    /* (2) Multi-tag example including 2D, no own grid @cfg →
+    /* (2) Multi-tag example including 2D, no own grid @cfg ->
      * GRID_THEME_PLANES. The spirograph example is 2D|LINES with no
      * explicit grid override. */
     if (spirograph_idx >= 0) {
@@ -1540,7 +1540,7 @@ static void test_example_tag_default_cfg(void) {
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
-    /* (3) 3D-only example → global default, no tag override. */
+    /* (3) 3D-only example -> global default, no tag override. */
     if (cube_idx >= 0) {
         load_example_for_test(cube_idx);
         ASSERT_TRUE("non-2D example uses global grid default",
@@ -1548,7 +1548,7 @@ static void test_example_tag_default_cfg(void) {
                     CFG_DEFAULT_GRID_THEME);
     }
 
-    /* (4) Example with its own @cfg grid → the explicit value wins over the
+    /* (4) Example with its own @cfg grid -> the explicit value wins over the
      * tag / global default. Whale is 3D-only and sets grid =
      * GRID_THEME_OCEAN. */
     if (whale_idx >= 0) {
@@ -1574,7 +1574,7 @@ static void test_example_tag_default_cfg(void) {
  * mutating state here is the helper itself. glr_ctrl_reset_all
  * normalizes presentation to global defaults before each subcase. */
 static void test_example_tag_default_dispatch(void) {
-    /* (A) Two entries, distinct keys, both tags present → both apply. */
+    /* (A) Two entries, distinct keys, both tags present -> both apply. */
     {
         static const GlrExampleTagDefault table[] = {
             { .tag_idx = REPL_EXAMPLE_TAG_2D,
@@ -1597,7 +1597,7 @@ static void test_example_tag_default_dispatch(void) {
                     glr_state_render().line_smooth_enabled == 1);
     }
 
-    /* (B) Two entries colliding on the same key for the same tag →
+    /* (B) Two entries colliding on the same key for the same tag ->
      * later entry wins, collision count == 1. */
     {
         static const GlrExampleTagDefault table[] = {
@@ -1619,7 +1619,7 @@ static void test_example_tag_default_dispatch(void) {
     }
 
     /* (C) Two entries colliding on the same key but for DIFFERENT tags
-     * - both tag bits set in the mask → still a collision (the mask
+     * - both tag bits set in the mask -> still a collision (the mask
      * picks both up). Same-key second-write wins. */
     {
         static const GlrExampleTagDefault table[] = {
@@ -1642,7 +1642,7 @@ static void test_example_tag_default_dispatch(void) {
     }
 
     /* (D) Two entries colliding on the same key but the mask matches
-     * only ONE of them → no collision, the matching entry applies. */
+     * only ONE of them -> no collision, the matching entry applies. */
     {
         static const GlrExampleTagDefault table[] = {
             { .tag_idx = REPL_EXAMPLE_TAG_2D,
@@ -1662,7 +1662,7 @@ static void test_example_tag_default_dispatch(void) {
                     glr_state_presentation().grid_theme == GRID_THEME_EMBER);
     }
 
-    /* (E) Empty mask → nothing applied, no collisions. */
+    /* (E) Empty mask -> nothing applied, no collisions. */
     {
         static const GlrExampleTagDefault table[] = {
             { .tag_idx = REPL_EXAMPLE_TAG_2D,

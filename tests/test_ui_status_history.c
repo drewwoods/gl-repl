@@ -1,6 +1,6 @@
 /*
  * test_ui_status_history.c - Recent-message history ring + messages-button
- * geometry/hit-test (status-message-history plan).
+ * geometry/hit-test for the recent-message status panel.
  *
  * GL_STUBS-only: the geometry/render bits drive the stub GL path, the ring
  * bits are pure state.

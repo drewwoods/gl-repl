@@ -129,7 +129,7 @@ static int diff_driver_is_apple_legacy(void) {
  *   1. The raster position is lit from its *object-space* position, so the
  *      vector to a positional light is wrong whenever the modelview at the call
  *      is not the identity (the normal is transformed correctly). Measured
- *      n·L = 0.897580, which is what the untransformed position gives; the
+ *      n * L = 0.897580, which is what the untransformed position gives; the
  *      eye-space position gives 0.743409, the value Apple stores.
  *   2. GL_NORMALIZE is ignored for that path: under a scale(4) modelview Mesa
  *      lights the raw quarter-length inverse-transposed normal and stores
@@ -612,7 +612,7 @@ static void diff_matrix_row(void) {
  *
  * glClipPlane transforms the equation into eye coordinates at call time: as a
  * row vector, p' = p M^-1 with M the modelview current at the call (GL 2.1
- * §2.12), and glGetClipPlane reads that stored eye-space plane back. The fold
+ * Sec 2.12), and glGetClipPlane reads that stored eye-space plane back. The fold
  * keeps the object-space input it was handed - the row says "(object)" for
  * exactly this reason - because the modelview it would need is the one at the
  * call, which is the fold's own composed matrix rather than anything GL will

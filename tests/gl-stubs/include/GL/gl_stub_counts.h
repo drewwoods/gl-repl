@@ -193,10 +193,9 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
  *                                      integer codes for enums and
  *                                      bytes (so newlines inside text
  *                                      labels can't corrupt the trace).
- *   pointer-array args are omitted    - fp parity tests compare scalar
- *                                      args only; see
- *                                      docs/plans/done/gl-stub-extensions.md
- *                                      for the array-content sketch.
+ *   pointer-array args are omitted    - parity tests compare scalar
+ *                                      args only; array contents are not
+ *                                      part of this counter trace.
  *   glutBitmapStringByte <byte>       - one supplemental line per string byte,
  *                                      used to verify display-only text
  *                                      transforms without recording a fake

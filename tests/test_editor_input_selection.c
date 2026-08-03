@@ -1,6 +1,6 @@
 /*
- * test_editor_input_selection.c - Phase A/B coverage for the input-buffer
- * selection model and the tagged editor clipboard.
+ * test_editor_input_selection.c - input-buffer selection and tagged clipboard
+ * coverage.
  *
  * Verifies:
  *   - Anchor lifecycle (set / clear / collapse on equal cursor).
@@ -84,7 +84,7 @@ int main(void) {
         editor_input_anchor_set(4);
         ASSERT_INT("anchor==cursor collapses to -1",
                    editor_input_anchor(), -1);
-        ASSERT_TRUE("collapse → selection inactive",
+        ASSERT_TRUE("collapse -> selection inactive",
                     !editor_input_selection_active());
 
         /* Anchor with cursor on the right end of the range - derivation
@@ -196,14 +196,14 @@ int main(void) {
         ASSERT_INT("fresh line_count", cb->line_count, 0);
         ASSERT_INT("fresh input_text_len", cb->input_text_len, 0);
 
-        /* EMPTY → LINES (existing line-copy path). */
+        /* EMPTY -> LINES (existing line-copy path). */
         strcpy(cb->lines[0], "glVertex3f(0,0,0);");
         editor_state_clipboard_count_set(1);
         ASSERT_INT("LINES kind", cb->kind, EDITOR_CLIPBOARD_LINES);
         ASSERT_INT("LINES line_count", cb->line_count, 1);
         ASSERT_INT("LINES clears input_text_len", cb->input_text_len, 0);
 
-        /* LINES → INPUT_TEXT (partial-line copy path). The
+        /* LINES -> INPUT_TEXT (partial-line copy path). The
          * input-text setter must clear the previous line payload. */
         editor_clipboard_set_input_text("sin(t)", 6);
         ASSERT_INT("INPUT_TEXT kind", cb->kind, EDITOR_CLIPBOARD_INPUT_TEXT);
@@ -214,15 +214,15 @@ int main(void) {
         ASSERT_TRUE("has_input_text reports true",
                     editor_clipboard_has_input_text());
 
-        /* INPUT_TEXT → EMPTY via explicit clear. */
+        /* INPUT_TEXT -> EMPTY via explicit clear. */
         editor_state_clipboard_clear();
-        ASSERT_INT("clear → kind EMPTY", cb->kind, EDITOR_CLIPBOARD_EMPTY);
-        ASSERT_INT("clear → line_count 0", cb->line_count, 0);
-        ASSERT_INT("clear → input_text_len 0", cb->input_text_len, 0);
-        ASSERT_TRUE("clear → has_input_text false",
+        ASSERT_INT("clear -> kind EMPTY", cb->kind, EDITOR_CLIPBOARD_EMPTY);
+        ASSERT_INT("clear -> line_count 0", cb->line_count, 0);
+        ASSERT_INT("clear -> input_text_len 0", cb->input_text_len, 0);
+        ASSERT_TRUE("clear -> has_input_text false",
                     !editor_clipboard_has_input_text());
 
-        /* Regression: INPUT_TEXT → EMPTY via _count_set(0) must also
+        /* Regression: INPUT_TEXT -> EMPTY via _count_set(0) must also
          * drop input_text_len. Previously, _count_set(0) only set
          * kind=EMPTY and line_count=0 but left input_text_len stale,
          * violating the kind/payload invariant. */
@@ -231,17 +231,17 @@ int main(void) {
                    cb->kind, EDITOR_CLIPBOARD_INPUT_TEXT);
         ASSERT_INT("pre-bug setup: text_len", cb->input_text_len, 6);
         editor_state_clipboard_count_set(0);
-        ASSERT_INT("_count_set(0) → kind EMPTY",
+        ASSERT_INT("_count_set(0) -> kind EMPTY",
                    cb->kind, EDITOR_CLIPBOARD_EMPTY);
-        ASSERT_INT("_count_set(0) → input_text_len cleared",
+        ASSERT_INT("_count_set(0) -> input_text_len cleared",
                    cb->input_text_len, 0);
-        ASSERT_TRUE("_count_set(0) → has_input_text false",
+        ASSERT_TRUE("_count_set(0) -> has_input_text false",
                     !editor_clipboard_has_input_text());
 
         /* set_input_text with len<=0 also clears the input-text slot
          * and recomputes kind. */
         editor_clipboard_set_input_text("ignored", 0);
-        ASSERT_INT("zero-len set → EMPTY when no lines",
+        ASSERT_INT("zero-len set -> EMPTY when no lines",
                    cb->kind, EDITOR_CLIPBOARD_EMPTY);
     }
 
@@ -352,7 +352,7 @@ int main(void) {
         ASSERT_INT("delete clears anchor", editor_input_anchor(), -1);
     }
 
-    /* Audit #7: with no selection, Backspace deletes the character to
+    /* With no selection, Backspace deletes the character to
      * the LEFT of the cursor (cursor moves back); Delete deletes the
      * character UNDER the cursor (cursor stays). The two used to
      * collapse to delete-left until edit_op_buffer_delete_right_of_cursor
@@ -450,7 +450,7 @@ int main(void) {
         editor_input_anchor_set(18);   /* selects "1, 2, 3" */
 
         editor_handle_key(KEY_CTRL_C, 0, 0);
-        ASSERT_TRUE("Ctrl+C → INPUT_TEXT clipboard",
+        ASSERT_TRUE("Ctrl+C -> INPUT_TEXT clipboard",
                     editor_clipboard_has_input_text());
         ASSERT_STR("Ctrl+C captured substring",
                    editor_clipboard_input_text(), "1, 2, 3");
@@ -471,7 +471,7 @@ int main(void) {
         editor_input_anchor_set(18);
 
         editor_handle_key(KEY_CTRL_X, 0, 0);
-        ASSERT_TRUE("Ctrl+X → INPUT_TEXT clipboard",
+        ASSERT_TRUE("Ctrl+X -> INPUT_TEXT clipboard",
                     editor_clipboard_has_input_text());
         ASSERT_STR("Ctrl+X captured substring",
                    editor_clipboard_input_text(), "1, 2, 3");
@@ -549,8 +549,7 @@ int main(void) {
          * repl_promote_transient_if_needed inside editor_undo_push_snapshot.
          * Partial-line cut/paste must not trigger that hook: it edits
          * only the input buffer, never a source command, and the undo
-         * model can't restore the input anyway. Regression for the
-         * Phase D review finding. */
+         * model cannot restore the input anyway. */
         glr_ctrl_reset_all();
         repl_load_example(0);
         ReplSceneRuntimeState scenes = repl_state_scenes();
@@ -625,7 +624,7 @@ int main(void) {
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
 
-        /* Click on the 'V' of glVertex3f → selects the whole
+        /* Click on the 'V' of glVertex3f -> selects the whole
          * identifier. */
         glr_ctrl_router_select_word_at(0, 4);
         ASSERT_INT("word select: lo", editor_input_selection_lo(), 0);
@@ -633,7 +632,7 @@ int main(void) {
         ASSERT_INT("word select: cursor at word_end",
                    editor_cursor_pos(), 10);
 
-        /* Click on whitespace / punctuation → no selection. */
+        /* Click on whitespace / punctuation -> no selection. */
         glr_ctrl_router_select_word_at(0, 10);   /* '(' */
         ASSERT_INT("non-word: anchor stays -1",
                    editor_input_anchor(), -1);
@@ -654,7 +653,7 @@ int main(void) {
         hit.line_idx = 0;
         hit.char_idx = 4;
 
-        /* First press at t=1000 → ordinary single-click placement. */
+        /* First press at t=1000 -> ordinary single-click placement. */
         g_test_clock_ms = 1000;
         glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
         ASSERT_INT("first press: no anchor (single-click)",
@@ -663,7 +662,7 @@ int main(void) {
                    editor_cursor_pos(), 4);
 
         /* Second press at t=1200 (200ms later) at the same (line,
-         * char) → double-click, selects 'glVertex3f'. */
+         * char) -> double-click, selects 'glVertex3f'. */
         g_test_clock_ms = 1200;
         glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
         ASSERT_INT("double-click selection: lo",
@@ -925,7 +924,7 @@ int main(void) {
     {
         editor_input_set_modifier_provider_for_test(test_modifiers_provider);
 
-        /* Same row as the cursor → per-character input-buffer selection
+        /* Same row as the cursor -> per-character input-buffer selection
          * of the substring between the cursor and the clicked column. */
         glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
@@ -959,7 +958,7 @@ int main(void) {
 
         glr_ctrl_router_reset_code_panel_drag();
 
-        /* Different row → whole-line range from the cursor's line to the
+        /* Different row -> whole-line range from the cursor's line to the
          * clicked line (the shift+Up/Down model). */
         glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
@@ -1048,8 +1047,7 @@ int main(void) {
     printf("\n--- undo restore rebuilds input, clears anchor, preserves clipboard ---\n");
     {
         /* Undo's snapshot model intentionally does not capture
-         * EditorInputState.input or EditorClipboardState (see Phase
-         * A item 6 in done/editor-input-selection.md). After a
+         * EditorInputState.input or EditorClipboardState. After a
          * source-mutating commit, undo rewinds the source array and
          * editor_undo_snapshot_restore calls editor_load_line_to_input to
          * rebuild the active input from the restored source. This
@@ -1076,7 +1074,7 @@ int main(void) {
 
         /* Ctrl+Z restores the prior snapshot. */
         editor_handle_key(KEY_CTRL_Z, 0, 0);
-        ASSERT_INT("undo rebuilds input → anchor cleared",
+        ASSERT_INT("undo rebuilds input -> anchor cleared",
                    editor_input_anchor(), -1);
         ASSERT_TRUE("undo preserves input-text clipboard payload",
                     editor_clipboard_has_input_text());

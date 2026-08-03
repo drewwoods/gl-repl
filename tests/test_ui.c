@@ -719,7 +719,7 @@ static void test_menu_bar(void) {
     ASSERT_TRUE("menu closed", !ui_menu_bar_menu_dropdown_is_open());
 }
 
-/* Phase E commit 28: ui_panels_hit_test classifies pointer location
+/* ui_panels_hit_test classifies pointer location
  * as a UiHit without mutating state.
  *
  * Layout-agnostic: every probe point is derived from the live
@@ -844,7 +844,7 @@ static void test_ui_panels_hit_test(void) {
     }
 }
 
-/* Phase E commit 29: hit-test entry points for ui_menu_bar,
+/* Hit-test entry points for ui_menu_bar,
  * ui_color_picker, ui_variable_panel return passive UiHit
  * classifications without mutating state. ui_panels_hit_test
  * dispatches to them in priority order. */
@@ -1334,7 +1334,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
     int mx, my;
     code_panel_first_row_text_click(&mx, &my);
 
-    /* Empty input → click resolves char_idx == 0 regardless of mx. */
+    /* Empty input -> click resolves char_idx == 0 regardless of mx. */
     {
         EditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
@@ -1346,7 +1346,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
                 h_empty.kind == UI_HIT_CODE_INSERT_LINE);
     ASSERT_INT("empty input char_idx == 0", h_empty.char_idx, 0);
 
-    /* Populate input "abcdef"; click 4 chars right of mx → char_idx
+    /* Populate input "abcdef"; click 4 chars right of mx -> char_idx
      * is non-zero and within the input length. Exact column depends
      * on segment / indent math but the property holds: clicking
      * further right yields a higher char_idx (capped at input_len). */
@@ -1789,9 +1789,9 @@ static void test_tutorial_fade_math_uses_snapshot_view(void) {
     line = editor_buffer_view_line(s.editor_buffer, line_idx);
     line_len = line ? (int)strlen(line) : 0;
 
-    /* Step 0's instruction comment lands at row 2, below the 2-row
+    /* The first instruction comment lands at row 2, below the 2-row
      * scene-clear prelude; the fade animates that freshly-inserted row. */
-    ASSERT_INT("snapshot fade line is the step-0 instruction row", line_idx, 2);
+    ASSERT_INT("snapshot fade line is the first instruction row", line_idx, 2);
     ASSERT_TRUE("snapshot fade line text present", line_len > 0);
     ASSERT_TRUE("snapshot fade active just after start",
                 tutorial_fade_line_active(&s.tutorial_fade, line_idx,
@@ -1862,7 +1862,7 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
     {
         UiRenderSnapshot s;
         make_test_ui_snapshot(&s);
-        /* Sample mid-fade so the reveal head, the white→base settle
+        /* Sample mid-fade so the reveal head, the white->base settle
          * window, and any fully-settled prefix all contribute
          * per-char segments. Sampling at +0.01s would only show the
          * actively-revealing head char on the slower default
@@ -2099,7 +2099,7 @@ static void test_marker_priority_cascade(void) {
     /* Each sub-case clears highlights, sets exactly the signals under
      * test, renders, and asserts the resulting marker color. */
 
-    /* REPLAY alone → green marker. */
+    /* REPLAY alone -> green marker. */
     editor_state_highlights_clear();
     replay_state_mut()->active = 1;
     replay_state_mut()->src_line_idx = 1;
@@ -2108,7 +2108,7 @@ static void test_marker_priority_cascade(void) {
     ASSERT_TRUE("REPLAY alone: green color",
                 rgba_eq(rgba, c_replay[0], c_replay[1], c_replay[2], c_replay[3]));
 
-    /* REPLAY + FEEDING_NORMAL → blue (NORMAL wins over REPLAY). */
+    /* REPLAY + FEEDING_NORMAL -> blue (NORMAL wins over REPLAY). */
     editor_state_highlights_clear();
     editor_state_highlights_append(1, -1, -1, HIGHLIGHT_FEEDING_NORMAL);
     replay_state_mut()->active = 1;
@@ -2118,7 +2118,7 @@ static void test_marker_priority_cascade(void) {
     ASSERT_TRUE("REPLAY+NORMAL: NORMAL wins (blue)",
                 rgba_eq(rgba, c_normal[0], c_normal[1], c_normal[2], c_normal[3]));
 
-    /* REPLAY + FEEDING_COLOR → yellow (COLOR wins). NORMAL is
+    /* REPLAY + FEEDING_COLOR -> yellow (COLOR wins). NORMAL is
      * exclusive-or with COLOR in apply_command_overlays (an
      * `else if`), so we set COLOR alone here. */
     editor_state_highlights_clear();
@@ -2130,7 +2130,7 @@ static void test_marker_priority_cascade(void) {
     ASSERT_TRUE("REPLAY+COLOR: COLOR wins (yellow)",
                 rgba_eq(rgba, c_color[0], c_color[1], c_color[2], c_color[3]));
 
-    /* All three (REPLAY + COLOR + TUTORIAL_INSERTION) → pink. */
+    /* All three (REPLAY + COLOR + TUTORIAL_INSERTION) -> pink. */
     editor_state_highlights_clear();
     editor_state_highlights_append(1, -1, -1, HIGHLIGHT_FEEDING_COLOR);
     editor_state_highlights_append(1, -1, -1, HIGHLIGHT_TUTORIAL_INSERTION);
@@ -2141,7 +2141,7 @@ static void test_marker_priority_cascade(void) {
     ASSERT_TRUE("REPLAY+COLOR+TUTORIAL: TUTORIAL wins (pink)",
                 rgba_eq(rgba, c_tutorial[0], c_tutorial[1], c_tutorial[2], c_tutorial[3]));
 
-    /* TUTORIAL alone (no REPLAY/FEEDING) → pink. Confirms tutorial wins
+    /* TUTORIAL alone (no REPLAY/FEEDING) -> pink. Confirms tutorial wins
      * even without lower-priority signals also being set. */
     editor_state_highlights_clear();
     editor_state_highlights_append(1, -1, -1, HIGHLIGHT_TUTORIAL_INSERTION);
@@ -2152,7 +2152,7 @@ static void test_marker_priority_cascade(void) {
     ASSERT_TRUE("TUTORIAL alone: pink color",
                 rgba_eq(rgba, c_tutorial[0], c_tutorial[1], c_tutorial[2], c_tutorial[3]));
 
-    /* No signals → marker inactive. */
+    /* No signals -> marker inactive. */
     editor_state_highlights_clear();
     replay_state_mut()->active = 0;
     replay_state_mut()->src_line_idx = -1;

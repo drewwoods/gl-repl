@@ -2084,9 +2084,8 @@ int main(void) {
                     strstr(cmd_text, k_all_bits_canonical) != NULL);
     }
     {
-        /* Phase 2 inverted this: the stencil group is modeled now, so the
-         * bit is accepted instead of rejected, and it sorts between depth
-         * and transform (ascending GL value). */
+        /* The stencil group is modeled, so the bit is accepted and sorts
+         * between depth and transform (ascending GL value). */
         glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
@@ -2542,7 +2541,7 @@ int main(void) {
         glr_ctrl_reset_all();
         g_status[0] = '\0';
 
-        /* 13 numeric args of 18 chars separated by ',' → 246 chars of args.
+        /* 13 numeric args of 18 chars separated by ',' -> 246 chars of args.
          * Full input "func0(<246>)" = 253 chars (fits pre-truncation).
          * Canonical "  func0(<246>);" = 256 chars - one past the buffer. */
         char line[MAX_LINE_LEN];
