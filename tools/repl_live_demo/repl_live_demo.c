@@ -82,7 +82,7 @@ static int   g_active_scene;
 static time_t g_active_mtime;
 
 static int   g_window_w = 960;
-static int   g_window_h = 720;
+static int   g_window_h = 352;
 static int   g_poll_ms  = 250;
 static int   g_panel_on = 1;
 
