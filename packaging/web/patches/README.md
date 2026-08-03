@@ -28,6 +28,7 @@ listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`.
 | `gl4es-point-smooth.patch` | Emulate round antialiased points in the GLES2 fixed-pipeline shader. |
 | `gl4es-polygon-line-drawarrays.patch` | Avoid Emscripten's client-index upload and scan for polygon-mode lines. |
 | `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
+| `gl4es-line-width-batch.patch` | Same for `glLineWidth`, gated on a driver that can actually widen a line; skip repeated widths. |
 
 See each older patch's leading prose for the detail that is available.
 
@@ -125,9 +126,47 @@ with `GL_POINT_SMOOTH` on or off. The patch reverse-applies against the built
 tree and forward-applies against the pinned checkout with the earlier patches
 on it (it is last in `GL4ES_PATCHES`).
 
-Not fixed here, and worth knowing: `glLineWidth` is not wrapped by gl4es at all
-(it goes straight to GLES), so it has the same deferral exposure with no
-client-side state to flush on. No symptom chased down yet.
+## 2026-08-03: the `glLineWidth` half of the same gap
+
+Patch: [`gl4es-line-width-batch.patch`](gl4es-line-width-batch.patch)
+
+(The entry above originally claimed `glLineWidth` was not wrapped by gl4es at
+all. It is - `wrap/gles.c` generates `gl4es_glLineWidth`, and
+`PUSH_IF_COMPILING` there already covers display lists. The real gap was
+narrower: no flush of the pending immediate-mode batch before the state
+change.)
+
+So the same deferred-state shape as point size, with one difference that
+decides the design: **it is almost never observable.** GLES and WebGL stacks
+commonly report `GL_ALIASED_LINE_WIDTH_RANGE` as `[1, 1]` and rasterize every
+line one pixel wide regardless. Measured here under ANGLE/SwiftShader through
+WebGL2:
+
+| Check | Result |
+|---|---|
+| `getParameter(ALIASED_LINE_WIDTH_RANGE)` | `[1, 1]` |
+| Scene drawing one line at width 9 and one at width 1 | two identical one-pixel lines |
+
+An unconditional `FLUSH_BEGINEND` would therefore break batching to fix pixels
+this driver cannot draw differently - the opposite trade from the polygon-line
+patch, which exists because per-draw cost dominates on this target. The patch
+gates on capability instead: `GetHardwareExtensions` records
+`hardext.maxlinewidth` from `GL_ALIASED_LINE_WIDTH_RANGE` (one query, beside
+the other max queries), and `gl4es_glLineWidth` flushes only when that is
+greater than 1. Correct where wide lines exist, free where they do not.
+
+The part that does something everywhere is the early-out for a repeated width:
+`gl4es_mirror_line_width` (from `gl4es-getter-client-state.patch`) is
+authoritative - `glPopAttrib` and display-list replay both come back through
+`gl4es_glLineWidth`, and nothing calls `gles_glLineWidth` directly - so a
+no-op set can return instead of crossing into JS. gl-repl's overlay passes
+restore `glLineWidth(1.0f)` repeatedly per frame, so those calls are now free.
+
+Verified: the web build renders **pixel-identically** to the build before the
+patch on a scene carrying line loops, vertex outlines and point markers (0
+differing pixels), which is the expected result on a `[1, 1]` stack. The full
+patch stack applies in order to a pristine pinned checkout and reproduces the
+built tree exactly.
 
 ## 2026-08-02: polygon-mode lines via `glDrawArrays`
 

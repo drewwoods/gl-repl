@@ -1,0 +1,98 @@
+Close the glLineWidth half of the deferred-state gap, where it can matter.
+
+Companion to gl4es-point-size-batch.patch. glLineWidth has the same shape of
+bug as glPointSize did: the generated wrapper in wrap/gles.c sets the driver
+state immediately, while immediate-mode geometry is batched into a renderlist
+and drawn later, so a width set between primitives applies to the ones already
+recorded. Display lists were already handled (PUSH_IF_COMPILING records the
+call); only the immediate-mode batch was not.
+
+Unlike point size, this one usually cannot be seen: GLES and WebGL stacks
+commonly report GL_ALIASED_LINE_WIDTH_RANGE as [1, 1] and rasterize every line
+one pixel wide whatever glLineWidth was set to. Measured under
+ANGLE/SwiftShader via WebGL2: the range is [1, 1], and a scene drawing one line
+at width 9 and another at width 1 produces two identical one-pixel lines. So an
+unconditional flush here would break batching to fix pixels that the driver
+cannot draw differently anyway.
+
+Hence the gate. Record the widest line the driver admits once, in
+GetHardwareExtensions (hardext.maxlinewidth, alongside the other max queries),
+and flush the pending batch only when that is greater than 1 -- correct on a
+stack with real wide lines, free on one without.
+
+The early-out for a repeated width is the part that does something on every
+target: gl4es_mirror_line_width (from gl4es-getter-client-state.patch) is
+authoritative, since glPopAttrib and display-list replay both come back through
+gl4es_glLineWidth and nothing else calls gles_glLineWidth directly. A no-op set
+now costs nothing instead of a driver call -- worth having where every GL call
+crosses into JS, and where an app resets glLineWidth(1.0f) after each pass.
+
+Verified: web build renders pixel-identically to the previous build on a scene
+carrying line loops, vertex outlines and point markers (0 differing pixels).
+
+Applies after gl4es-getter-client-state.patch, whose mirror block this extends.
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+--- a/src/glx/hardext.h
++++ b/src/glx/hardext.h
+@@ -14,6 +14,7 @@
+     int maxlights;      // maximum number of light
+     int maxsize;        // maximum texture size
+     int maxplanes;      // maximum clip planes
++    int maxlinewidth;   // GL_ALIASED_LINE_WIDTH_RANGE upper bound (1 on stacks that cannot widen a line)
+     int blendsub;       // GL_OES_blend_subtract
+     int blendfunc;      // GL_OES_blend_func_separate
+     int blendeq;        // GL_OES_blend_equation_separate
+--- a/src/glx/hardext.c
++++ b/src/glx/hardext.c
+@@ -391,6 +391,19 @@
+     // Now get some max stuffs
+     gles_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &hardext.maxsize);
+     SHUT_LOGD("Max texture size: %d\n", hardext.maxsize);
++    {
++        // Widest line the driver can actually rasterize. Several GLES/WebGL
++        // stacks report [1, 1] here, i.e. glLineWidth cannot change a pixel;
++        // glLineWidth uses this to skip work that would only matter where
++        // lines can be widened.
++        GLfloat linewidthrange[2] = {1.0f, 1.0f};
++        LOAD_GLES(glGetFloatv);
++        gles_glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE, linewidthrange);
++        if(gles_glGetError()!=GL_NO_ERROR || linewidthrange[1] < 1.0f)
++            linewidthrange[1] = 1.0f;
++        hardext.maxlinewidth = (int)linewidthrange[1];
++        SHUT_LOGD("Max line width: %d\n", hardext.maxlinewidth);
++    }
+     gles_glGetIntegerv((hardext.esversion==1)?GL_MAX_TEXTURE_UNITS:GL_MAX_TEXTURE_IMAGE_UNITS, &hardext.maxtex);
+     if (hardext.esversion==1) {
+         gles_glGetIntegerv(GL_MAX_LIGHTS, &hardext.maxlights);
+--- a/src/gl/wrap/gles.c
++++ b/src/gl/wrap/gles.c
+@@ -1,6 +1,7 @@
+ #include "gles.h"
+ #include "../gl4es.h"
+ #include "../loader.h"
++#include "../../glx/hardext.h"
+ #include "skips.h"
+ 
+ // emulation of 'glTexParameteri' (for internal use only)
+@@ -1405,6 +1406,21 @@
+ #endif
+     {
+         extern GLfloat gl4es_mirror_line_width;
++        // A repeated width is a no-op: nothing to flush, nothing to tell the
++        // driver. gl4es_mirror_line_width is authoritative (every path that
++        // changes the width, glPopAttrib and display-list replay included,
++        // comes back through here).
++        if (gl4es_mirror_line_width == width)
++            return;
++        // Same trap as glPointSize: immediate-mode geometry is batched and
++        // drawn later, so a width set between primitives would otherwise apply
++        // to the ones already recorded. Flush only where the driver can
++        // actually widen a line -- a stack reporting
++        // GL_ALIASED_LINE_WIDTH_RANGE [1, 1] (most GLES/WebGL, including
++        // ANGLE) renders every width identically, so the flush would break
++        // batching and change no pixel.
++        if (hardext.maxlinewidth > 1)
++            FLUSH_BEGINEND;
+         gl4es_mirror_line_width = width;
+     }
+     gles_glLineWidth(width);

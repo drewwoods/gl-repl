@@ -41,6 +41,7 @@ GL4ES_PATCHES=(
 	"$ROOT/packaging/web/patches/gl4es-point-smooth.patch"
 	"$ROOT/packaging/web/patches/gl4es-polygon-line-drawarrays.patch"
 	"$ROOT/packaging/web/patches/gl4es-point-size-batch.patch"
+	"$ROOT/packaging/web/patches/gl4es-line-width-batch.patch"
 )
 GLU_URL="https://github.com/ptitSeb/GLU.git"
 GLU_SHA="2fed2bda2b725d2b9e32c435b48d5141cc95827f"
