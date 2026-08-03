@@ -2,9 +2,9 @@
  * overlays.c - tiny per-vertex GL primitives called by the edit_overlays
  * subsystem. The subsystem walks authored vertices directly and uses
  * glPolygonMode redraws for generated geometry such as glutSolid* outlines /
- * mesh vertex points. The gluTessCallback edge-flag registration in
- * The geometry executor keeps internal triangulation edges suppressed in
- * GL_LINE mode, so the subsystem does not need to walk the program for that.
+ * mesh vertex points. The geometry executor's gluTessCallback edge-flag
+ * registration keeps internal triangulation edges suppressed in GL_LINE
+ * mode, so the subsystem does not need to walk the program for that.
  */
 #include "gl_includes.h"
 #include "overlays.h"

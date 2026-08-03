@@ -8,8 +8,8 @@
  * need app-frame behavior; the REPL pipeline itself should not depend on it.
  *
  * That ownership boundary is enforced by `check-repl-state-no-glr-state`: REPL
- * pipeline TUs and render3d do not include this header; app-shell code and
- * the UI snapshot layer consume the state through this owner.
+ * pipeline TUs do not include this header, while app-shell, editor, UI, and
+ * render3d files may.
  *
  * This is the app-side owner of presentation and render-policy state.
  */

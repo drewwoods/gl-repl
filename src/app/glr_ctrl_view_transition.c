@@ -4,9 +4,9 @@
  * Carved out of glr_ctrl.c: the projection blend + camera-to-2D/3D easing that
  * runs when the View mode toggles. Pure app-layer state (camera + presentation
  * only - no render3d implementation, REPL, editor, or UI state), so it links
- * cleanly and keeps glr_ctrl.c
- * smaller. The controller drives it via glr_ctrl_tick_view_transition and reads
- * the blend through glr_ctrl_view_projection_mix (see glr_ctrl_internal.h).
+ * cleanly and keeps glr_ctrl.c smaller. The controller drives it via
+ * glr_ctrl_tick_view_transition and reads the blend through
+ * glr_ctrl_view_projection_mix (see glr_ctrl_internal.h).
  */
 #include "app/glr_ctrl.h"            /* glr_ctrl_view_record_external_3d_pose decl */
 #include "app/glr_ctrl_internal.h"
