@@ -2033,7 +2033,7 @@ fix-unicode: ## Replace configured Unicode in project C, Markdown, and scene sou
 	@python3 scripts/count-unicode.py --fix
 
 check-unicode: ## Hard guard: apply configured Unicode replacements in project C, Markdown, and scene sources.
-	@python3 scripts/count-unicode.py --check
+	@python3 scripts/count-unicode.py --check --c-files --glr-files
 
 CHECK_TARGETS = \
 	check-trailing-whitespace \
