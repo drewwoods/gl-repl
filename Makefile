@@ -1,6 +1,6 @@
 # Recipes use bash features (`set -o pipefail`, `$'...'` ANSI-C
 # quoting for colorized check output). Without this, GNU make runs
-# recipes via /bin/sh — which is dash on Debian/Ubuntu — and
+# recipes via /bin/sh - which is dash on Debian/Ubuntu - and
 # `set -e -o pipefail` aborts with "Illegal option -o pipefail",
 # breaking check-state-ownership / test-stubs on Linux. bash is
 # present on every supported dev box (macOS /bin/bash, Linux
@@ -28,8 +28,8 @@ ifeq ($(filter -j%,$(MAKEFLAGS)),)
 endif
 
 # Color codes for output. ESC holds a real escape byte (not the two-char
-# "\033" text) so plain `echo` in recipes — macOS /bin/sh echo does not
-# interpret backslash escapes — emits real color, not literal "\033[...".
+# "\033" text) so plain `echo` in recipes - macOS /bin/sh echo does not
+# interpret backslash escapes - emits real color, not literal "\033[...".
 # printf call sites are unaffected (a literal ESC in the format is fine).
 ESC := $(shell printf '\033')
 RED := $(ESC)[0;31m
@@ -46,7 +46,7 @@ UNAME_S := $(shell uname -s)
 USE_GL_STUBS ?=
 
 # Vendored freeglut (third_party/freeglut), built as a static library with the
-# native macOS Cocoa backend and linked into the GL binaries. macOS-only —
+# native macOS Cocoa backend and linked into the GL binaries. macOS-only -
 # Linux keeps the system freeglut path. Re-vendor with scripts/vendor-freeglut.sh;
 # the pinned commit is recorded in third_party/freeglut/VENDORED.txt.
 FREEGLUT_SRC        := third_party/freeglut
@@ -57,7 +57,7 @@ FREEGLUT_VENDOR     ?= 1
 # FREEGLUT_OSMESA=1 builds the vendored freeglut with its headless OSMesa
 # (off-screen software) backend instead of the macOS Cocoa backend, and links
 # the GL binaries against Mesa's libGL/libGLU + libOSMesa rather than Apple's
-# OpenGL framework. This gives a windowless build that renders through swrast —
+# OpenGL framework. This gives a windowless build that renders through swrast -
 # usable for headless geometry/feedback tests (PLY export, the real-GL tests)
 # with no display. The OSMesa backend lives in the vendored tree only after
 # re-vendoring from a freeglut that carries it (see VENDORED.txt). Build dir and
@@ -133,7 +133,7 @@ endif
 
 # Language standard: C99, project-wide, no exceptions. Everything
 # (gl-repl, tests, demos, bench, CI) compiles -std=c99 so the project
-# runs on old machines / old GCC. Non-pedantic by default — GNU
+# runs on old machines / old GCC. Non-pedantic by default - GNU
 # extensions GCC accepts in -std=c99 are fine; the goal is "old gcc
 # compiles it", not pure ISO C99. The shipped/real binaries (gl-repl,
 # bench, demos) are additionally held to -pedantic-errors by the
@@ -199,7 +199,7 @@ RELEASE_CFLAGS = \
 	-O2
 
 # Defence-in-depth checks that are unreachable by contract but sit on a hot
-# path (config.h GLR_DEBUG_CHECKS). On in every non-release configuration —
+# path (config.h GLR_DEBUG_CHECKS). On in every non-release configuration -
 # the test suite runs in a debug build, so the checks keep their coverage
 # exactly where a contract violation would be caught. Diagnostics only:
 # results must not differ between the two builds.
@@ -258,9 +258,9 @@ QUICK_CFLAGS = \
 # wins, so `make coverage` (BUILD=coverage) and `make test BUILD=release`
 # keep working.
 ifeq ($(origin BUILD),command line)
-# explicit BUILD — honor it
+# explicit BUILD - honor it
 else ifeq ($(origin BUILD),environment)
-# explicit BUILD — honor it
+# explicit BUILD - honor it
 else ifneq ($(filter test test-detailed test-stubs test-no-checks test-only test-msan test-full,$(MAKECMDGOALS)),)
 BUILD := debug
 else
@@ -296,7 +296,7 @@ ifeq ($(UNAME_S),Darwin)
     # symbol to the first library on the link line that exports it. Mesa's
     # libOSMesa carries its own self-contained dispatch wired up by
     # OSMesaMakeCurrent; libGL is the GLX/X11 dispatcher, which never has a
-    # current context here — gl* bound to it are silent no-ops (glGetString
+    # current context here - gl* bound to it are silent no-ops (glGetString
     # returns NULL, nothing rasterizes, captures come out black).
     OSMESA_GL_LDFLAGS = \
 	$(FREEGLUT_LIB) \
@@ -360,7 +360,7 @@ else
   else
     # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
     # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
-    # No vendoring on Linux — system <GL/freeglut.h> is on the default include path.
+    # No vendoring on Linux - system <GL/freeglut.h> is on the default include path.
     FREEGLUT_HEADER_CFLAGS =
     GLUT_GL_LDFLAGS = \
       -lglut -lGL -lGLU -lm -lpthread -ldl
@@ -546,31 +546,20 @@ UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/histogram.c src/support/runstats.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone render3d_demo without dragging in
-# any REPL editor/controller code. Scene + prof — the scene module no
-# longer touches repl_eval (replay-baseline restore is dispatched through a
-# function pointer the controller installs; geometry-guide arg parsing is
-# done in the controller before snapshot is built).
+# any REPL editor/controller code. The scene and profiling objects are
+# independent of the REPL pipeline; controller callbacks provide replay
+# baseline restore and geometry-guide argument parsing.
 RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                       tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone repl_demo (the inverse of render3d_demo:
-# proves the REPL pipeline links without editor input dispatch
-# (src/editor/input.c), the controller (src/app/glr_ctrl.c + glr_ctrl_router_*),
-# the UI (src/ui/*, src/ui/subsystems/replay_hud.c), or — as of Phase 6 of
-# feature/source-document-port.md — the editor text store
-# (src/editor/state.c). Per-line text comes from
-# src/editor/state.c, a standalone static line store
-# implementing the source_document_* contract. After every REPL-pipeline
-# → editor/UI/peer/glr_config/glr_camera/glr_state edge was routed
-# through a controller-installed sink/bridge or an opaque parameter,
-# tools/repl_demo/stubs.c contains zero function bodies — the demo
-# links the pipeline TUs below with no stub backfill. Adding a new
-# src/repl/*.c TU that pulls in an app/editor symbol is a regression and
-# should be resolved at the pipeline TU instead (the
-# check-repl-demo-stubs-shrinking and check-repl-no-direct-editor
-# guards catch it). The dependency ledger lives in
-# feature/decouple-repl-from-gl-repl-alt.md and
-# feature/source-document-port.md.
+# Object list for the standalone repl_demo. It proves that the REPL pipeline
+# links without editor input dispatch, the controller, or the UI. Per-line text
+# comes from the static source_document adapter in tools/repl_demo. Controller
+# bridges and opaque parameters provide the app/editor state the pipeline
+# needs, so tools/repl_demo/stubs.c contains no function bodies. Adding a new
+# pipeline source that pulls in app or editor symbols is a regression; the
+# check-repl-demo-stubs-shrinking and check-repl-no-direct-editor guards catch
+# it.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
 				     src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                      src/subsystems/replay/replay.c \
@@ -621,30 +610,10 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/workspace_io.c \
                      tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
-# src/app/glr_config.c removed in step 4 of the decouple plan: pipeline TUs
-# (src/repl/export*.c, src/repl/scenes.c, src/repl/example_loader.c) no longer call
-# glr_config_*; the controller-installed ReplExportConfigBridge is the
-# only path that touches cfg state, and that lives in src/app/glr_actions.c
-# (not in the demo link set).
-
-# Object list for the standalone editor_demo. Phase 8 refit
-# (docs/plans/done/editor-demo.md) split the editor module into a generic
-# half (state.c data model + edit_ops.c primitives) and a REPL-flavored
-# controller half (input.c, commit.c, clipboard.c, undo.c, reformat.c,
-# search.c, completion.c, plus the inline overlays). The demo links
-# only the generic half plus the REPL-free UI render layer
-# (text_panel, text_layout, text_search, theme). It intentionally does
-# not link src/ui/app or src/app; the demo is the proof that the generic
-# editor model can be rendered through ui/core without UiRenderSnapshot,
-# UiState, menu/app chrome, or the REPL code-panel adapter. The REPL-flavored
-# controllers are not linked at all; the demo provides its own
-# generic input dispatcher (tools/editor_demo/input.c) and File menu
-# (tools/editor_demo/menu.c). Phase 5 of
-# docs/plans/done/edit-line-ownership.md deleted the former
-# tools/editor_demo/repl_shim.c — the prior ~85-stub shim went away
-# with the controller files (Phase 8.7 of editor-demo.md) and the
-# residual edit-line forwarder went away with the storage flip
-# (Phase 4 of edit-line-ownership.md).
+# Object list for the standalone editor_demo. It links the generic editor data
+# model and edit primitives with the REPL-free ui/core render layer. The demo
+# supplies its own input dispatcher and File menu, and deliberately excludes
+# the REPL-flavored editor controllers, src/ui/app, and src/app.
 EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/editor/state.c \
                        src/ui/core/text_layout.c \
@@ -654,38 +623,32 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
 				      src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                        tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone memprof_demo (isolation demo #4). Proves
-# the memory-profiling subsystem links cleanly from {support, ui/support,
-# ui/core} alone — no src/ui/app, src/app, src/repl, or src/editor. The
-# panel renderer (src/ui/support/memprof.c) was narrowed off UiRenderSnapshot
-# onto UiMemoryPanelView so it pulls in none of the editor/repl/app headers
-# the snapshot transitively dragged in. check-memprof-demo-isolation.sh
-# enforces the link set.
+# Object list for the standalone memprof_demo. It proves the memory-profiling
+# subsystem links cleanly from {support, ui/support, ui/core} alone, with no
+# src/ui/app, src/app, src/repl, or src/editor. The panel consumes
+# UiMemoryPanelView, and check-memprof-demo-isolation.sh enforces this link set.
 MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
                         src/ui/support/memprof.c \
                         src/ui/core/theme.c \
                         tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone cpuprof_demo (isolation demo #7). Twin of
-# memprof_demo: the CPU profile panel (src/ui/support/cpuprof.c) was narrowed
-# off UiRenderSnapshot onto UiProfilePanelView (anchor baked by the
-# controller), so it links from {support, ui/support, ui/core} alone.
-# support/cpuprof.c is the already-pure wall-time sampler; support/gpuprof.c
-# is its GL-free GPU twin (the panel reads it; never initialized here, so
-# the GPU column stays "--").
+# Object list for the standalone cpuprof_demo. Like memprof_demo, it links
+# from {support, ui/support, ui/core} alone. The CPU profile panel consumes
+# UiProfilePanelView; support/cpuprof.c is the wall-time sampler and
+# support/gpuprof.c is its GL-free GPU twin. The GPU sampler is not initialized
+# here, so the panel's GPU column stays "--".
 CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c src/support/histogram.c src/support/runstats.c \
                         src/support/gpuprof.c \
                         src/ui/support/cpuprof.c \
                         src/ui/core/theme.c \
                         tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone variable_panel_demo (isolation demo #5).
-# Proves the variable-panel subsystem links from {subsystems, ui/subsystems,
-# ui/core} alone. The renderer was narrowed off UiRenderSnapshot onto
-# UiVariablePanelView, and the drag handlers read name+value through an
-# installed VariablePanelValueSource instead of repl/eval — so neither
-# src/repl, src/editor, nor src/ui/app is in the link set. The demo builds
-# the view directly and installs its own in-memory value source.
+# Object list for the standalone variable_panel_demo. It proves the
+# variable-panel subsystem links from {subsystems, ui/subsystems, ui/core}
+# alone. The renderer consumes UiVariablePanelView, and drag handlers read
+# name and value through an installed VariablePanelValueSource, so neither
+# src/repl, src/editor, nor src/ui/app is in the link set. The demo builds the
+# view directly and installs its own in-memory value source.
 # check-variable-panel-demo-isolation enforces the link set.
 VARIABLE_PANEL_DEMO_DEP_SRCS = src/subsystems/variable_panel/variable_panel_state.c \
                                src/subsystems/variable_panel/variable_panel_drag.c \
@@ -693,13 +656,11 @@ VARIABLE_PANEL_DEMO_DEP_SRCS = src/subsystems/variable_panel/variable_panel_stat
                                src/ui/core/theme.c \
                                tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone color_picker_demo (isolation demo #6). Proves
-# the color-picker subsystem links from {subsystems, ui/subsystems, ui/core}
-# alone. The peer reads the document + writes color edits + answers geometry
-# through an installed ColorPickerHostBridge instead of repl/editor/ui-app, and
-# the inline-swatch renderer (the one UiTransformer user) moved to
-# src/ui/app/color_swatch.c — so none of src/repl, src/editor, or src/ui/app is
-# in the link set. check-color-picker-demo-isolation enforces it.
+# Object list for the standalone color_picker_demo. It proves the color-picker
+# subsystem links from {subsystems, ui/subsystems, ui/core} alone. The peer
+# reads the document, writes color edits, and answers geometry through an
+# installed ColorPickerHostBridge. The demo therefore needs none of src/repl,
+# src/editor, or src/ui/app; check-color-picker-demo-isolation enforces it.
 COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
                              src/ui/subsystems/color_picker.c \
                              src/ui/core/theme.c \
@@ -708,12 +669,12 @@ COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
 # Object list for the standalone repl_live_demo. The *composition* counterpart
 # to repl_demo: where repl_demo proves the REPL pipeline links with no editor /
 # controller / UI, repl_live_demo proves the REPL pipeline and the variable-panel
-# peer wire together under a one-file host controller — an external editor (vim)
+# peer wire together under a one-file host controller - an external editor (vim)
 # owns the scene .c files, the demo watches their mtime, re-imports on save, and
 # surfaces predefined vars in the floating slider panel. It is the full
 # REPL_DEMO_DEP_SRCS set (pipeline + tools/repl_demo/source_document.c static
 # backend + gl_stub_counts + cpuprof) plus the four variable-panel TUs. Still no
-# src/editor, src/app, src/render3d, or src/ui/app — check-repl-live-demo-no-editor
+# src/editor, src/app, src/render3d, or src/ui/app - check-repl-live-demo-no-editor
 # enforces the editor exclusion.
 REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
                           src/subsystems/variable_panel/variable_panel_state.c \
@@ -741,7 +702,7 @@ WEB_MUSIC_SRC_DIR ?= $(MUSIC_SRC_DIR)
 # $(HOT_OBJDIR)/%.o are the only places a .c is compiled.
 #
 # **CFLAGS is the documented hook** for the compile-time knobs
-# (UI_THEME_DEFAULT, GLR_AUDIO_NO_THREAD, …) — this is a C project, so
+# (UI_THEME_DEFAULT, GLR_AUDIO_NO_THREAD, ...) - this is a C project, so
 # `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` is what help and the docs
 # advertise and what a reader will not misread as a C++ setting.
 #
@@ -868,7 +829,7 @@ TEST_BINS += test_hidden_lines
 # Stencil legend: the controller's row-selection policy plus the panel's
 # pure geometry solve. Links CORE_TEST_OBJS for glr_ctrl's view builder.
 TEST_BINS += test_buffer_viz_legend
-# Assignment-value plot: the capture engine (core test — it drives the REPL
+# Assignment-value plot: the capture engine (core test - it drives the REPL
 # pipeline) and the panel renderer (GL stubs, explicit object list below).
 TEST_BINS += test_assign_plot
 TEST_BINS += test_ui_assign_plot
@@ -904,7 +865,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
 # but they are intentionally NOT in TEST_BINS so `make test` does not run
-# them — benchmarks are timing-sensitive and should be invoked explicitly.
+# them - benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
 ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render3d-asset-builder
@@ -1050,7 +1011,7 @@ test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
 # real-GL builds (no-op inline stubs under USE_GL_STUBS=1, like
 # test_render3d_guides); cpuprof.o because the shells bracket themselves
 # with prof_begin/prof_accum_end now that render3d's neutral buffer hooks
-# name no viz section. Both binaries link the whole subsystem —
+# name no viz section. Both binaries link the whole subsystem -
 # buffer_viz.o owns the shared range smoothing, and its hook fan-out
 # references both viz modules.
 BUFFER_VIZ_TEST_OBJS = \
@@ -1159,7 +1120,7 @@ TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 # Longest-processing-time-first (LPT) scheduling for the parallel runner. The
 # test-binary durations are heavily skewed (a handful of multi-second binaries,
 # then a cliff to <0.5s), so with a small pool a long binary discovered late
-# leaves one worker finishing it alone. Dispatching the historically-longest
+# leaves one worker finishing it alone. Dispatching the slowest
 # binaries first (they occupy the pool from t=0 while the many tiny ones
 # backfill) cuts tail latency / makespan. Durations profiled via
 # `make test-stubs TEST_JOBS=3` (fewer jobs than performance cores). Only the
@@ -1294,7 +1255,7 @@ web-serve: web ## Serve the built web target over HTTP (builds it first if neede
 	python3 scripts/web-serve.py $(WEB_BINDIR)
 
 # macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
-# the launching terminal's icon. Pure packaging — no source changes, so the
+# the launching terminal's icon. Pure packaging - no source changes, so the
 # -std=c99 / Linux-portable build stays untouched. Needs rsvg-convert
 # (brew install librsvg) and the Xcode-shipped iconutil.
 MACOS_PKG = packaging/macos
@@ -1363,14 +1324,14 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 		codesign --verify --deep --strict --verbose=2 $(APP_BUNDLE) || exit 1; \
 		echo "ad-hoc signed + verified $(APP_BUNDLE)"; \
 	else \
-		echo "warning: not macOS — $(APP_BUNDLE) left unsigned"; \
+		echo "warning: not macOS - $(APP_BUNDLE) left unsigned"; \
 	fi
 	touch $(APP_BUNDLE)
-	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
+	@echo "Built $(APP_BUNDLE) - run: open $(APP_BUNDLE)"
 
 # ---- Release packaging -------------------------------------------------------
 # `make release` opens an arrow-key plan menu (per-platform skip/local/remote,
-# ssh hosts, repo, music source — persisted to .release.ini), builds the macOS
+# ssh hosts, repo, music source - persisted to .release.ini), builds the macOS
 # .app and the Linux binary accordingly, bundles the music pack into each,
 # stages them under dist/<tag>/, then asks for confirmation before uploading to
 # the GitHub release. `release-build` stops after staging; `release-upload`
@@ -1435,7 +1396,7 @@ render3d-demo: $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
 #
 # State survives the reload because every piece of demo state (camera, view,
 # grid theme, lighting, backdrop, projection blend) lives in the host TU
-# (render3d_demo.c), which is never reloaded — only the src/render3d .c bodies
+# (render3d_demo.c), which is never reloaded - only the src/render3d .c bodies
 # are. The one struct that crosses the boundary, Render3dState, is owned by the
 # host too; its layout is fixed by render.h at host-compile time, so changing
 # that layout (a header edit) is the one case that needs a relaunch.
@@ -1445,14 +1406,14 @@ render3d-demo: $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
 # `-undefined dynamic_lookup`; Linux: normal shared-object lazy binding against
 # the already-loaded libglut/libGL). Linking a second freeglut copy into the
 # library would give it an uninitialised fgState and glutSolidSphere() would
-# abort "called before glutInit". So the host must carry — and export — every
+# abort "called before glutInit". So the host must carry - and export - every
 # freeglut symbol src/render3d might call. On macOS the vendored static
 # freeglut is -force_load'ed into the host so ALL of it is present regardless
 # of what the host TU itself references (a normal archive pull would only bring
 # in the objects the host directly needs, silently breaking a live edit that
 # calls a new glut primitive). The plain $(FREEGLUT_LIB) still on GL_LDFLAGS is
 # then a no-op. On Linux -lglut is a shared object, so every symbol is already
-# available to a dlopen'd module at load — no force-load needed.
+# available to a dlopen'd module at load - no force-load needed.
 hot_comma := ,
 ifeq ($(UNAME_S),Darwin)
   HOT_SHARED_LDFLAGS = -dynamiclib -Wl,-undefined,dynamic_lookup
@@ -1523,11 +1484,7 @@ repl-demo: $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 # (tools/editor_demo/input.c) and File menu (tools/editor_demo/menu.c)
 # stand in for the REPL-flavored controller files
 # (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c
-# and the inline overlays), which Phase 8.7 dropped from this link
-# set entirely. Phase 5 of docs/plans/done/edit-line-ownership.md
-# deleted the former tools/editor_demo/repl_shim.c — after Phase 4
-# moved edit-line storage to EditorState, the shim's
-# repl_state_edit_line stubs had no remaining callers.
+# and the inline overlays), which are not part of this generic demo.
 EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
                    $(OBJDIR)/tools/editor_demo/menu.o \
                    $(OBJDIR)/tools/editor_demo/input.o \
@@ -1730,13 +1687,12 @@ MAINTENANCE_TARGETS = \
 
 # The vendored static freeglut (macOS) is a build-time artifact, so every binary
 # whose link line embeds its archive path through $(GL_LDFLAGS) must order-only
-# depend on it — otherwise those links run before the archive exists and fail.
-# Placed HERE (after every referenced target var is defined: SAMPLE_BIN + the
-# demos ~earlier, TEST_BINS/BENCH_BINS, and GL_TEST_BINS just above) — a static
+# depend on it - otherwise those links run before the archive exists and fail.
+# Placed here, after every referenced target variable is defined, because a static
 # target list expands at parse time, so an earlier placement would silently
 # attach the prereq to nothing. This is a NORMAL prerequisite (not order-only):
 # the archive's mtime now bumps only when it is missing or re-vendored (the
-# VENDORED.txt prereq above), so a fresh archive must relink its consumers —
+# VENDORED.txt prereq above), so a fresh archive must relink its consumers -
 # an order-only `|` would build the lib first but skip the relink, stranding
 # the binary on a stale archive after a re-vendor. Skipped under `make glut` (FREEGLUT_VENDOR=0)
 # and on the default Linux path / GL stubs (FREEGLUT_LIB is empty there too).
@@ -1829,7 +1785,7 @@ check-output-actualization: ## Verify Ui*Output fields are consumed by controlle
 check-state-c-shrinking: ## Ratchet src/repl/state.c line count down over time.
 	@bash scripts/check/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt src/repl/state.c
 
-check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (Phase 7 of feature/source-document-port.md — hard zero).
+check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (hard zero).
 	@bash scripts/check/check-repl-no-direct-editor.sh
 
 check-editor-no-app: ## Ratchet: forbid new app/glr_* coupling in src/editor/ (see audit #8).
@@ -1847,7 +1803,7 @@ check-render3d-no-upper-layers: ## Hard guard: src/render3d/ must not include fr
 check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.
 	@bash scripts/check/check-ui-core-no-upper-layers.sh
 
-check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
+check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo.
 	@bash scripts/check/check-repl-demo-no-editor.sh
 
 check-repl-live-demo-no-editor: ## Forbid editor implementation in the standalone live REPL demo.
@@ -1871,7 +1827,7 @@ check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the v
 check-color-picker-demo-isolation: ## Forbid app/repl/editor coupling in the color-picker demo link set.
 	@bash scripts/check/check-subsystem-demo-isolation.sh COLOR_PICKER_DEMO_DEP_SRCS tools/color_picker_demo color_picker_demo
 
-check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
+check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters.
 	@bash scripts/check/check-source-document-port-owners.sh
 
 check-no-facade-include-in-views: ## Verify view/render files avoid repl_state facade headers.
@@ -1927,37 +1883,37 @@ check-ui-text-panel-pure: ## Verify src/ui/core/text_panel.* stays REPL/editor-f
 check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/input.c and commit.c.
 	@bash scripts/check/check-editor-repl-surface.sh scripts/baselines/editor-repl-surface.txt
 
-check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free (Phase 8 generic-primitives invariant).
+check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free.
 	@bash scripts/check/check-edit-ops-pure.sh
 
 check-no-raw-undo-clear: ## Production code must use editor_undo_note_wholesale_replacement(), not raw editor_undo_clear().
 	@bash scripts/check/check-no-raw-undo-clear.sh
 
-check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no input-dispatch mutators (Phase J2.2).
+check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no input-dispatch mutators.
 	@bash scripts/check/check-ui-panels-no-mutators.sh
 
-check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI — no editor / REPL mutators or parser/compile/apply calls.
+check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI - no editor / REPL mutators or parser/compile/apply calls.
 	@bash scripts/check/check-replay-ui-isolation.sh
 
-check-color-picker-ui-isolation: ## Strict guard: src/ui/subsystems/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
+check-color-picker-ui-isolation: ## Strict guard: src/ui/subsystems/color_picker.c is pure renderer/hit-test over ColorPickerView - no mutators, no live state reads, no parser/compile/apply.
 	@bash scripts/check/check-color-picker-ui-isolation.sh
 
-check-variable-panel-forwarders: ## Ratchet legacy variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).
+check-variable-panel-forwarders: ## Ratchet variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).
 	@bash scripts/check/check-variable-panel-forwarders.sh scripts/baselines/variable-panel-forwarders.txt
 
-check-replay-forwarders: ## Ratchet legacy repl_state_replay* forwarder API uses (replay peer is the owner).
+check-replay-forwarders: ## Ratchet repl_state_replay* forwarder API uses (replay peer is the owner).
 	@bash scripts/check/check-replay-forwarders.sh scripts/baselines/replay-forwarders.txt
 
-check-no-repl-commit: ## Verify repl_commit.{c,h} stays deleted (commit dispatch lives in src/editor/commit.c).
+check-no-repl-commit: ## Verify repl_commit.{c,h} are absent (commit dispatch lives in src/editor/commit.c).
 	@bash scripts/check/check-no-repl-commit.sh
 
-check-no-repl-editor-input-shim: ## Verify src/editor/input.c does not delegate to legacy repl_*_func entry points.
+check-no-repl-editor-input-shim: ## Verify src/editor/input.c does not delegate to repl_*_func entry points.
 	@bash scripts/check/check-no-repl-editor-input-shim.sh
 
 check-no-set-status-in-repl-parser: ## Ratchet set_status calls inside src/repl/parser.c (parser diagnostics flow via ctx->err_buf).
 	@bash scripts/check/check-no-set-status-in-repl-parser.sh scripts/baselines/repl-parser-set-status.txt
 
-check-no-set-status-in-compile-apply: ## Verify src/repl/compile.c / src/repl/apply.c never call set_status (Phase C purity).
+check-no-set-status-in-compile-apply: ## Verify src/repl/compile.c and src/repl/apply.c never call set_status.
 	@bash scripts/check/check-no-set-status-in-compile-apply.sh
 
 check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call editor-side editor_load_line_to_input.
@@ -1984,7 +1940,7 @@ check-repl-export-via-bridge: ## Verify export/import TUs pull app/scene state o
 check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.
 	@bash scripts/check/check-ui-no-export-resolver.sh
 
-check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call editor_feed_line() (cleared by step 5b/7e).
+check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call editor_feed_line().
 	@bash scripts/check/check-no-feed-line-in-pipeline.sh
 
 check-repl-no-direct-tutorial-runner: ## Verify REPL pipeline TUs request tutorial teardown through ReplHostEffects.
@@ -1993,7 +1949,7 @@ check-repl-no-direct-tutorial-runner: ## Verify REPL pipeline TUs request tutori
 check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reappeared under src/.
 	@bash scripts/check/check-module-prefixes.sh
 
-check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
+check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c - must not grow past 0 stubs.
 	@bash scripts/check/check-repl-demo-stubs-shrinking.sh
 
 check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
@@ -2014,7 +1970,7 @@ check-user-guide-examples: ## Validate docs' example references and USER_GUIDE's
 check-user-guide-commands: ## Validate every REPL command is listed in USER_GUIDE.md (or explicitly exempt).
 	@python3 scripts/check/check-user-guide-commands.py
 
-check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
+check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) - a double-map.
 	@bash scripts/keymap.sh check
 
 keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key slots.
@@ -2612,7 +2568,7 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
 
 help: ## Show the common targets (run make help-details for the full list).
-	@printf "Immediate-mode REPL — common Make targets\n\n"
+	@printf "Immediate-mode REPL - common Make targets\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
 		END {split("gl-repl clean test test-full fetch-music help help-details",o," "); \
 		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)

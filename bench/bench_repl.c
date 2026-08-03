@@ -45,7 +45,7 @@
  *   flatten_orrery    - full flatten of the "Orrery (labels track 3D orbits)"
  *                       built-in, resolved by display name
  *   flatten_corpus    - full flatten of every built-in, one row per catalog
- *                       index (human output sorted by mean)
+ *                       index (human output sorted by minimum time)
  *   flatten_phases    - per-phase split (reparse / scalar assign / scratch
  *                       assign / derived remainder) of a full flatten, read
  *                       from the existing PROF_FLATTEN_* profiler sections
@@ -58,8 +58,7 @@
  *                       value-only and a structural variable
  *   source_scope_query- sweep source-scope depth/scope queries over a deep
  *                       synthetic document (isolates the amortized-O(1)
- *                       prefix-depth cache lookup the Finding-4 view refactor
- *                       must preserve)
+ *                       prefix-depth cache lookup)
  *   source_scope_churn- invalidate + query per op (isolates the O(N) prefix
  *                       cache rebuild paid once per document change)
  *   normalize_large_doc- parse+normalize a line against a large live document
@@ -83,9 +82,8 @@
  * Output is one line per sub-benchmark with mean / min / iterations / per-op
  * cost. CSV mode (`--csv`) is suitable for diffing across machines.
  *
- * Currently this measures wall time only. See `feature/benchmark-metrics.md`
- * for the plan to add machine-agnostic metrics (perf instruction counts,
- * cycles, normalized op-rate).
+ * This benchmark reports wall time only. The CSV output is intended for
+ * comparing like-for-like runs on the same machine and build.
  */
 
 #define _DEFAULT_SOURCE
@@ -590,13 +588,10 @@ typedef struct {
 } CorpusCase;
 
 /* Rank by the minimum per-flatten time, not the mean. Benchmark noise is
- * one-sided - a scheduling stall can only ever add time - so the minimum is
- * the least-contaminated estimate of a scene's true cost, while the mean lets
- * a single descheduled iteration crown the wrong scene. In the phase-0 baseline
- * that is not hypothetical: Orrery's corpus mean reads 30.27 ms against a
- * 5.87 ms minimum (and a 4.46 ms dedicated flatten_orrery row), a 5x inflation
- * that would sort it far above scenes that are genuinely more expensive. The
- * mean stays in the reported columns as information. */
+ * one-sided - a scheduling stall can only add time - so the minimum is the
+ * least-contaminated estimate of a scene's cost. The mean remains in the
+ * reported columns, but a single descheduled iteration should not determine
+ * the human-readable order. */
 static int corpus_case_cmp_slower_first(const void *a, const void *b) {
     double da = ((const CorpusCase *)a)->min_op_us;
     double db = ((const CorpusCase *)b)->min_op_us;
@@ -606,11 +601,9 @@ static int corpus_case_cmp_slower_first(const void *a, const void *b) {
 }
 
 /* Time a full flatten of every built-in. Human output lists all cases sorted
- * slowest-first by min-per-flatten (the "which scene actually costs the most"
- * question the old flat-command-count heuristic in spike_flatten_largest got
- * wrong, and that a mean-based sort gets wrong again under load); CSV emits
- * one row per catalog index, in catalog order, preceded by a `#` comment line
- * carrying the display name so the existing CSV columns stay unchanged. */
+ * slowest-first by minimum per-flatten time; CSV emits one row per catalog
+ * index in catalog order, preceded by a `#` comment carrying the display name
+ * so the existing CSV columns stay unchanged. */
 static void bench_flatten_corpus(int iters) {
     enum { CORPUS_INNER = 8 };
     int n = repl_example_count();
@@ -820,12 +813,10 @@ static void bench_flatten_refresh(int iters) {
 /* ---- bench: refresh boundary on a variable-panel scrub ----------------- */
 
 /* The `t` cases above measure the animation clock. This one measures the
- * other live-edit motion: dragging one global's slider. It is the trip-wire
- * for the structural-dependency rule in
- * docs/plans/done/scoped-local-variables.md - a global that feeds a
- * function-scoped local reports its deps structurally, so scrubbing it takes a
- * full flatten where an all-global scene would have rebaked in place. The
- * printed route is the part to watch; the timing says what that costs. */
+ * other live-edit motion: dragging one global's slider. A global that feeds a
+ * function-scoped local reports a structural dependency, so scrubbing it
+ * takes a full flatten; a value-only global can rebake in place. The printed
+ * route is the part to watch, and the timing shows its cost. */
 static BenchResult bench_refresh_slider_one(const char *name,
                                             int example_idx,
                                             const char *var_name,
@@ -1019,42 +1010,37 @@ static void bench_flatten_whale(int iters) {
 /* ---- bench: variable-panel slider drag transaction --------------------- */
 
 /* Consume a pending flat-program rebuild the way glr_ctrl_display_frame() does:
- * full dirty (source edit / structural value change) runs a full flatten;
- * a value-only change (args_dirty_mask, Phase 3a routing) re-bakes the stream
- * in place; otherwise the program is already current. Returns 1 if any rebuild
- * ran, 0 if it was clean.
+ * full dirty (source edit or structural value change) runs a full flatten; a
+ * value-only change recorded in args_dirty_mask rebakes the stream in place;
+ * otherwise the program is already current. Returns 1 if any rebuild ran, 0
+ * if it was clean.
  *
  * This *is* the rebuild counter. Checking only repl_state_flat_program_dirty()
- * would undercount: after Phase 3a a value-only slider change lands in
- * args_dirty_mask, not the full flag, so the `value` row's motion would drain
- * nothing and refresh zero times. repl_state_normals_dirty() is likewise not
- * the counter - it gates autonormal recomputation, a different cache. Without
- * this drain a motion loop only routes the change and returns, timing
- * pointer-event dispatch (~10 us/motion) and never the flatten/rebake it
- * defers, which is the cost Phase 3 exists to change. */
+ * would undercount: a value-only slider change lands in args_dirty_mask, not
+ * the full flag, so the `value` row's motion would drain nothing and report
+ * zero refreshes. repl_state_normals_dirty() is likewise not the counter - it
+ * gates autonormal recomputation, a different cache. Without this drain a
+ * motion loop would time only pointer dispatch and omit the deferred
+ * flatten/rebake work. */
 static int drain_pending_flatten(void) {
     return repl_refresh_flat_program(editor_state_edit_line()) !=
            REPL_FLAT_REFRESH_NONE;
 }
 
-/* A slider drag is 100+ pointer-motion events and one mouse-up. Phase 1B split
- * the transaction: motion applies the live value only, and the declaration is
- * rewritten once on release. So a drag must perform *zero* source-dirty marks
- * during motion (the seam every source-derived cache invalidates from) and
- * exactly one on release.
+/* A slider drag is 100+ pointer-motion events and one mouse-up. Motion applies
+ * the live value only; the declaration is rewritten once on release. A drag
+ * must therefore perform zero source-dirty marks during motion and exactly
+ * one on release.
  *
  * Each motion is followed by drain_pending_flatten(), so a timed motion is a
  * full event -> dirty -> frame-rebuild round trip, as the app performs it.
  *
  * Two cases, by what the dragged variable feeds:
- *   value      - `amp` only scales already-emitted vertices, so a later rebake
- *                phase can keep the flat topology and rebake values in place;
+ *   value      - `amp` only scales already-emitted vertices, so the flat
+ *                topology stays fixed and values rebake in place;
  *   structural - `bound` is a loop bound, so a change must re-flatten fully.
- * Today both re-flatten fully; the split is here so the rebake phase has a
- * before/after pair, and the timed region now contains the flatten that phase
- * makes cheaper for the `value` case.
  *
- * Read each row against its own future self, not against the other row: the
+ * Read each row against its own baseline, not against the other row: the
  * scenes differ in trip count (40 vs bound=20) and in how many flattened
  * commands carry variable args, so the absolute value/structural gap reflects
  * scene size, not the rebake distinction.
@@ -1248,16 +1234,12 @@ static BenchResult bench_flat_cost_query(int iters) {
     return r;
 }
 
-/* ---- bench: spike - flatten the largest example, repeatedly ----------- */
+/* ---- bench: stress the largest example's flatten ----------------------- */
 
-/* Editor-owns-text spike pass/fail bar. The spike modifies flatten_range()
- * to re-parse every command from the editor buffer on each call (today the
- * no-vars path passes through). This bench picks the example with the
- * highest flat-program count after load and times flatten on it alone.
- *
- * Pass criterion (per the spike plan): mean flatten time under 4 ms (half
- * of one 120 fps frame). The bench reports total / mean / min / max so a
- * regression shows up directly even without the threshold.
+/* This stress case picks the example with the highest flat-program count
+ * after load and times repeated full flattens on it. It exercises the
+ * editor-backed parse path at the largest built-in workload and reports
+ * total / mean / minimum time so regressions remain visible.
  */
 static BenchResult bench_spike_flatten_largest(int iters) {
     int n_examples = repl_example_count();
@@ -1354,23 +1336,17 @@ static BenchResult bench_replay_examples(int iters) {
 
 /* ---- bench: long-running replay (synthetic large scene) --------------- */
 
-/* Build a single scene that flattens to a large flat-cmd stream so we
- * get a longer-running replay test that is comparable across machines.
+/* Build a single scene that flattens to a large flat-cmd stream so we get a
+ * longer-running replay workload with a fixed command shape.
  *
- * Sized to fit within the flat-program capacity (MAX_FLAT_COMMANDS,
- * historically 4096) after expansion: when flatten would exceed that,
+ * Sized to fit within MAX_FLAT_COMMANDS after expansion: when flatten would
+ * exceed that limit,
  * flatten_append_cmd sets ctx->abort=1 and repl_flatten_program then
  * resets flat_count to 0 (capacity overflow is treated as a hard
  * failure, not a soft cap). The outer for-loop emits 12 flat cmds per
  * iteration, with 3 setup cmds before it (two CMD_VAR_DECLARE rows are
- * flatten-omitted): 12*340 + 3 = 4083.
- *
- * Iteration count was 600 before the then-unified MAX_COMMANDS cap
- * dropped from 8192 to 4096 on 2026-04-30 (commit 804d794 "config:
- * reduce max commands"); the 7203-cmd expansion that used to fit no
- * longer did. The 2026-07-10 cap split restored flat headroom
- * (MAX_FLAT_COMMANDS = 8192), but the scene stays at 340 iterations so
- * bench results remain comparable across SHAs. */
+ * flatten-omitted): 12*340 + 3 = 4083. Keeping the loop count fixed makes
+ * repeated runs use the same replay workload. */
 static const char *const k_long_replay_scene[] = {
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
@@ -1551,19 +1527,13 @@ static BenchResult bench_replay_anchor(int iters) {
 
 /* ---- bench: replay fade-batch rendering path -------------------------- */
 
-/* Scene built to emit a long flat-command stream of many small primitives
- * so we can exercise the fade-batch rendering pass with large old_pc
- * indices. We unroll a for-loop that emits one triangle per iteration.
- * Sized to fit within the flat-program capacity (MAX_FLAT_COMMANDS,
- * historically 4096): exceeding it makes flatten abort and discard the
- * partial flat stream (flat_count → 0). The loop body emits 11 flat
- * cmds per iter with 2 setup cmds before it (CMD_VAR_DECLARE rows are
- * flatten-omitted): 11*370 + 2 = 4072.
- *
- * Iteration count was 600 before the then-unified MAX_COMMANDS cap
- * dropped from 8192 to 4096 on 2026-04-30 (commit 804d794 "config:
- * reduce max commands"); it stays at 370 post-split for cross-SHA
- * comparability. */
+/* Scene built to emit a long flat-command stream of many small primitives so
+ * we can exercise the fade-batch rendering pass with large old_pc indices.
+ * We unroll a for-loop that emits one triangle per iteration. Exceeding
+ * MAX_FLAT_COMMANDS makes flatten abort and discard the partial flat stream
+ * (flat_count -> 0). The loop body emits 11 flat cmds per iteration with 2
+ * setup cmds before it (CMD_VAR_DECLARE rows are flatten-omitted):
+ * 11*370 + 2 = 4072. */
 static const char *const k_fade_bench_scene[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -1585,10 +1555,9 @@ static const char *const k_fade_bench_scene[] = {
     NULL,
 };
 
-/* Populate a packed set of fade batches spaced near the tail of the
- * flattened command stream. This mirrors "step N is late in a long
- * replay": every batch's old_pc is large, so the old per-batch
- * replay_find_open_* scans pay the full prefix cost. */
+/* Populate a packed set of fade batches spaced near the tail of the flattened
+ * command stream. Every batch's old_pc is large, so replay_find_open_* scans
+ * exercise the full prefix cost. */
 static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
                                  int max_batches) {
     /* Need at least two flat cmds to carve out an old_pc + new_pc pair.
@@ -1624,12 +1593,9 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     return count;
 }
 
-/* The fade-render workload moved out of the scene module (it's now the
- * REPL controller's post_fill_fn). This bench drives the same per-batch
- * cost - repl_execute_program with a skip-prefix and per-batch alpha -
- * directly, without going through the scene API. The numbers are
- * comparable to the pre-move benchmark since the heavy lifting was
- * always repl_execute_program. */
+/* Drive the per-batch fade-render cost directly through
+ * repl_execute_program(), with a skip-prefix and per-batch alpha. This keeps
+ * the benchmark focused on the executor rather than the scene API. */
 static void bench_render_one_fade_batch(int new_pc, int skip_pc, float alpha,
                                         FlatProgramView program) {
     repl_execute_program(&(ReplExecutionOptions){
@@ -1674,10 +1640,9 @@ static BenchResult bench_fade_batches(int iters) {
     BenchResult r = { .name = "fade_batches", .unit = "calls",
                       .min_sec = 1e18 };
 
-    /* Build the long scene and flatten once. The flatten pass runs
-     * inside replay_start(); we piggy-back on that to also capture
-     * repl_state_flat_program_count() (replay_start clamps repl_state_flat_program_count() during
-     * playback, so we snapshot before/after). */
+    /* Build the long scene and flatten once. The flatten pass runs inside
+     * replay_start(); capture the resulting flat-program count before replay
+     * playback changes the active limit. */
     repl_load_example_lines_for_test(k_fade_bench_scene);
     repl_mark_source_dirty();
     replay_start();
@@ -1692,7 +1657,7 @@ static BenchResult bench_fade_batches(int iters) {
     flat_cmds = repl_state_flat_program_count();
 
     /* 32 batches mirrors a typical in-flight count at the default 30fps
-     * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s → alpha≈0.5
+     * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s -> alpha~0.5
      * so replay_batch_alpha() returns a non-zero value and the per-batch
      * body runs. */
     enum { N_BATCHES = 32 };
@@ -1795,11 +1760,10 @@ static int load_deep_scope_doc(int blocks) {
 }
 
 /* Sweep every source-scope depth/scope query over every position of a deep
- * document, with NO mutation in the loop, so the prefix-depth cache stays warm.
- * This isolates the **amortized O(1) query** cost - the property the Finding-4
- * source-scope view refactor must preserve. A regression that recomputes the
- * prefix arrays per call (instead of indexing a built cache) shows up here as a
- * large per-sweep blow-up. One op = one full document sweep across five
+ * document, with no mutation in the loop, so the prefix-depth cache stays
+ * warm. This isolates the amortized O(1) query cost. Recomputing the prefix
+ * arrays per call instead of indexing the built cache produces a large
+ * per-sweep increase. One operation is one full document sweep across five
  * queries. */
 static BenchResult bench_source_scope_query(int iters) {
     BenchResult r = { .name = "source_scope_query", .unit = "sweeps",
@@ -1837,12 +1801,10 @@ static BenchResult bench_source_scope_query(int iters) {
     return r;
 }
 
-/* Isolates the O(N) prefix-depth REBUILD. Each op invalidates the cache (as a
- * document mutation does) then issues one query, forcing a full
- * depth_cache_rebuild() over the document. Guards the "build on (re)bind" cost
- * the Finding-4 view refactor must keep flat - a view bound once per frame and
- * queried many times should rebuild no more often than today's global. One op =
- * one invalidate + rebuild. */
+/* Isolate the O(N) prefix-depth rebuild. Each operation invalidates the cache
+ * as a document mutation does, then issues a query that forces a full
+ * depth_cache_rebuild() over the document. One operation therefore measures
+ * one invalidate plus one rebuild. */
 static BenchResult bench_source_scope_churn(int iters) {
     BenchResult r = { .name = "source_scope_churn", .unit = "rebuilds",
                       .min_sec = 1e18 };
@@ -1877,18 +1839,9 @@ static BenchResult bench_source_scope_churn(int iters) {
 
 /* ---- bench: normalize a line against a large live document ------------- */
 
-/* Integration guard for the Finding-4 per-call view bind. The source-scope
- * view refactor moved repl_parse_and_normalize{,_strict} off the warm
- * live-document cache (amortized O(1)) onto binding a fresh
- * ReplSourceScopeView against the live document per call (O(N) build over the
- * whole document). source_scope_query can't see this - it queries the live
- * wrapper directly - so this drives the normalize entry against a large
- * document to expose any per-call O(N) cost in the commit/parse path.
- *
- * Uses only the stable normalize/loader API (no ReplSourceScopeView types),
- * so the SAME source compiles and runs on the pre-Finding-4 tree
- * (bench_repl.c was untouched by the view-cache commits) for a true
- * before/after: run it at the commit before 18c9b742 to get the pre number. */
+/* Measure normalize/parse work against a large live document. The input line
+ * is constant and has no visible variables, so the row isolates source-scope
+ * work rather than expression evaluation. */
 static BenchResult bench_normalize_large_doc(int iters) {
     BenchResult r = { .name = "normalize_large_doc", .unit = "normalizes",
                       .min_sec = 1e18 };
@@ -1921,10 +1874,10 @@ static BenchResult bench_normalize_large_doc(int iters) {
     return r;
 }
 
-/* Direct guard for the user-visible victim of the Finding-4b regression:
- * Ctrl+Backslash reformat-all calls repl_parse_and_normalize once per command row.
- * With a per-call source-scope view bind, this turns the reformat pass into
- * O(N^2). One op = one full reformat pass over the deep document. */
+/* Measure the user-visible whole-document reformat path. Ctrl+Backslash
+ * reformat-all normalizes once per command row, so unnecessary per-call
+ * source-scope rebuilds show up as superlinear growth. One operation is one
+ * full reformat pass over the deep document. */
 static BenchResult bench_reformat_large_doc(int iters) {
     BenchResult r = { .name = "reformat_large_doc", .unit = "reformats",
                       .min_sec = 1e18 };

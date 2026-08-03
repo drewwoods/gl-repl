@@ -34,10 +34,9 @@ static void display_func(void) {
     glr_frame_begin();
 
     /* Every per-frame stage below is inside the frame's work span, so a stage
-     * with no ProfSection of its own is visible only as unattributed work -
-     * which is how a tour's ~10 ms caption overlay once hid. Add a section when
-     * you add a stage: inside the callee if it can own its own bracket, here
-     * when the stage spans the boot/controller seam that only this file
+     * with no ProfSection of its own appears only as unattributed work. Add a
+     * section when adding a stage: inside the callee if it can own its bracket,
+     * or here when the stage spans the boot/controller seam that only this file
      * bridges. */
     prof_begin(PROF_SCRIPTED_INPUT);
     /* Headless-capture env hooks that need a live viewport / frame clock
