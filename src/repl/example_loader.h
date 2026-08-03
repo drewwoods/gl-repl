@@ -1,11 +1,12 @@
 /*
- * src/repl/example_loader.h - Lower-level example loader for tests and benches.
+ * src/repl/example_loader.h - Lower-level example loader.
  *
- * Production code normally calls `repl_load_example(int)`, declared here,
- * which layers on scene promotion, presentation reset, and editor cleanup. This
- * smaller header exposes the in-memory line-array entry point used by tests and
- * bench drivers that want the same example body loading without the surrounding
- * controller choreography.
+ * The app calls `repl_load_example(int)`, declared here, which layers on scene
+ * promotion, presentation reset, and editor cleanup. This smaller header
+ * exposes the in-memory line-array entry point for callers that have `.glr`
+ * scene text but no example index and want the same body loading without the
+ * surrounding controller choreography: tests, bench drivers, and
+ * tools/repl_live_demo (which watches `.glr` files edited externally).
  *
  * This was split out of the former src/repl/core_internal.h umbrella,
  * which has since been removed entirely so callers include the focused
@@ -20,8 +21,8 @@
  * editor or catalog diagnostics. */
 #define EXAMPLE_BODY_LINES_MAX 512
 
-/* Drive example loading from unit tests / bench drivers without going
- * through the GLUT example dropdown. `lines` is a NULL-terminated
+/* Load `.glr` scene text without going through the example catalog / GLUT
+ * example dropdown. `lines` is a NULL-terminated
  * array of source lines; the loader runs the same body-emission
  * pipeline as the production path (parse + insert + auto-normal +
  * flatten) without the controller-side cleanup (presentation reset,
@@ -32,7 +33,7 @@
  * apply the value via editor_state_edit_line_set() at the editor boundary;
  * tests that only need the body loaded can ignore the return. */
 int repl_load_example(int idx);
-int repl_load_example_lines_for_test(const char *const *lines);
+int repl_load_example_lines(const char *const *lines);
 
 /* If `lines` starts with a valid 5-line camera preset block (the marker may
  * be compact `// camera` or decorated `// --- Camera ---`), validate it,

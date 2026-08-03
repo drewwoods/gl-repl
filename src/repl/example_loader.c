@@ -630,9 +630,9 @@ int repl_load_example(int idx) {
     return edit_line;
 }
 
-int repl_load_example_lines_for_test(const char *const *lines) {
-    /* Test/bench harness has no example-index context, so pass a zero
-     * tag mask - the controller's reset still applies global defaults,
-     * just no tag-default overrides. */
+int repl_load_example_lines(const char *const *lines) {
+    /* A caller holding only scene text (test, bench, repl_live_demo) has no
+     * example-index context, so pass a zero tag mask - the controller's reset
+     * still applies global defaults, just no tag-default overrides. */
     return load_example_lines(lines, 0u);
 }

@@ -7,22 +7,30 @@
  * a one-file host controller under a realistic external-editor workflow.
  *
  *   - The editor is external (vim, or anything). This demo never edits text.
- *   - Scenes are separate `.c` files (the canonical save/export format the app
- *     writes), listed in an INI config or passed on the command line.
- *   - The demo imports the active scene via repl_export_load_from_file(), applies
- *     its `// camera` block through a demo-local ReplExportCameraBridge, runs the
- *     executor each frame under a manual orbit camera, and surfaces the scene's
- *     predefined variables in the floating slider panel (drag = live geometry).
+ *   - Scenes are separate files, listed in an INI config or passed on the
+ *     command line: either `.c` (the app's standalone-C save/export format) or
+ *     `.glr` (the scene-source format the built-in examples under
+ *     examples/scenes/ are authored in). The extension picks the loader, and
+ *     each format gets the loader the app itself uses for it - see
+ *     path_is_glr(), which is also where the two are contrasted.
+ *   - The demo loads the active scene via repl_export_load_from_file() (`.c`)
+ *     or repl_load_example_lines() (`.glr`), applies its `// camera` block
+ *     through a demo-local ReplExportCameraBridge, runs the executor each frame
+ *     under a manual orbit camera, and surfaces the scene's predefined
+ *     variables in the floating slider panel (drag = live geometry).
  *   - It polls the active file's mtime and re-imports on save, warning to the
  *     terminal on parse errors.
  *
- * Reload is NOT transactional: the import sequence resets live state first, and
- * repl_export_load_from_file() records per-line parse failures as warnings yet
- * still succeeds if the file merely opened. A malformed save can therefore
- * replace a good scene with a partial or empty one -- there is no rollback. The
- * file is the source of truth; the user fixes/undoes in their editor. The demo's
- * job is diagnostic clarity: every reload prints a banner and the importer's own
- * per-line warnings + summary go to stderr, so a partial load is never silent.
+ * Reload is NOT transactional: the load sequence resets live state first, and
+ * neither loader rolls back. They fail differently, and that is the loaders'
+ * behavior showing through, not a demo policy: repl_export_load_from_file()
+ * records per-line parse failures as warnings and still succeeds if the file
+ * merely opened (a `.c` save lands partially), while the example loader rejects
+ * the whole body on the first bad line (a `.glr` save lands empty). Either way
+ * a malformed save can replace a good scene -- the file is the source of truth;
+ * the user fixes/undoes in their editor. The demo's job is diagnostic clarity:
+ * every reload prints a banner, and the per-line warnings / parse errors both
+ * loaders emit go to stderr, so a partial or dropped load is never silent.
  *
  * Link set (Makefile REPL_LIVE_DEMO_DEP_SRCS): the full repl_demo pipeline set
  * (incl. tools/repl_demo/source_document.c, the editor-free static line store)
@@ -32,13 +40,15 @@
  * Run:
  *   make repl-live-demo && ./repl_live_demo            # default INI
  *   ./repl_live_demo path/to/config.ini                # explicit INI
- *   ./repl_live_demo scene_a.c scene_b.c               # bypass the INI
+ *   ./repl_live_demo scene_a.c scene_b.glr             # bypass the INI
+ *   ./repl_live_demo examples/scenes/torus.glr         # edit a built-in example
  *   make repl-live-demo USE_GL_STUBS=1                 # headless link/isolation
  */
 #include "gl_includes.h"
 
 #include "config.h"
 #include "repl/eval.h"            /* g_predef_vars_mut, repl_eval_find_predef_var_idx */
+#include "repl/example_loader.h"  /* repl_load_example_lines, EXAMPLE_BODY_LINES_MAX */
 #include "repl/executor.h"        /* repl_execute_program, ReplExecutionOptions, point-param proc */
 #include "repl/export.h"          /* repl_export_load_from_file, ReplExportCameraBridge */
 #include "repl/flatten.h"         /* FlatProgramView */
@@ -319,11 +329,71 @@ static const char *scene_basename(const char *path) {
     return slash ? slash + 1 : path;
 }
 
+static int ends_with(const char *s, const char *suffix) {
+    size_t ls = strlen(s), lf = strlen(suffix);
+    return ls >= lf && strcmp(s + (ls - lf), suffix) == 0;
+}
+
+/* Which loader a scene gets. A `.glr` is scene source - the same text the
+ * built-in examples under examples/scenes/ are authored in - so it loads
+ * through the example loader, not the exported-C importer. The two are not
+ * interchangeable: the example loader consumes the `@cfg` + `// camera`
+ * headers and emits the body in two passes (func defs first), which is what
+ * lets a scene call a function or read a `static float` declared further down
+ * the file. The importer's raw-scene mode feeds lines in file order, so those
+ * forward references fail to parse. The extension also picks the 'e'
+ * round-trip writer. */
+static int path_is_glr(const char *path) {
+    return ends_with(path, ".glr");
+}
+
 static int file_mtime(const char *path, time_t *out) {
     struct stat st;
     if (stat(path, &st) != 0) return 0;
     *out = st.st_mtime;
     return 1;
+}
+
+/* Read a .glr into the NULL-terminated line array repl_load_example_lines()
+ * takes, mirroring the runtime example catalog's own reader (newline stripped,
+ * EXAMPLE_BODY_LINES_MAX rows - the authoring cap a built-in example is held
+ * to). Over-long files and over-long lines are truncated with a warning rather
+ * than refused: the demo's contract is that a bad save degrades visibly, never
+ * silently. */
+static char  g_glr_lines[EXAMPLE_BODY_LINES_MAX][MAX_LINE_LEN];
+static const char *g_glr_line_ptrs[EXAMPLE_BODY_LINES_MAX + 1];
+
+static const char *const *read_glr_lines(const char *path) {
+    FILE *f = fopen(path, "r");
+    char buf[MAX_LINE_LEN];
+    int n = 0;
+
+    if (!f) return NULL;
+    while (fgets(buf, sizeof buf, f)) {
+        char *nl = strchr(buf, '\n');
+        if (n >= EXAMPLE_BODY_LINES_MAX) {
+            fprintf(stderr, "[repl_live_demo] %s: over %d lines, truncated\n",
+                    path, EXAMPLE_BODY_LINES_MAX);
+            break;
+        }
+        if (nl) {
+            *nl = '\0';
+        } else if (!feof(f)) {
+            /* Line longer than the buffer: drop the tail rather than let the
+             * remainder come back as a second, syntactically bogus line. */
+            int c;
+            fprintf(stderr, "[repl_live_demo] %s:%d: line over %d chars, truncated\n",
+                    path, n + 1, (int)sizeof buf - 1);
+            while ((c = fgetc(f)) != EOF && c != '\n')
+                ;
+        }
+        snprintf(g_glr_lines[n], MAX_LINE_LEN, "%s", buf);
+        g_glr_line_ptrs[n] = g_glr_lines[n];
+        n++;
+    }
+    fclose(f);
+    g_glr_line_ptrs[n] = NULL;
+    return g_glr_line_ptrs;
 }
 
 static void import_active_scene(void) {
@@ -344,10 +414,29 @@ static void import_active_scene(void) {
     g_edit_line = 0;
     repl_dispatch_edit_line_set(0);
 
-    memset(&result, 0, sizeof result);
-    ok = repl_export_load_from_file(path, &result);
-    if (!ok)
-        fprintf(stderr, "[repl_live_demo] error: could not open %s\n", path);
+    if (path_is_glr(path)) {
+        const char *const *lines = read_glr_lines(path);
+        ok = lines && repl_load_example_lines(lines) > 0;
+        if (!lines)
+            fprintf(stderr, "[repl_live_demo] error: could not open %s\n", path);
+        else if (!ok)
+            fprintf(stderr, "[repl_live_demo] error: %s did not load "
+                            "(see the parse error above)\n", path);
+        else
+            /* The importer prints its own load summary; the example loader
+             * does not, so print the matching one here. */
+            fprintf(stderr, "Loaded %d commands from %s\n",
+                    repl_state_document_count(), path);
+        /* The example loader owns the cursor and reports the post-load
+         * position; the demo's own copy has to follow it. */
+        g_edit_line = repl_state_document_count();
+        repl_dispatch_edit_line_set(g_edit_line);
+    } else {
+        memset(&result, 0, sizeof result);
+        ok = repl_export_load_from_file(path, &result);
+        if (!ok)
+            fprintf(stderr, "[repl_live_demo] error: could not open %s\n", path);
+    }
 
     repl_state_mark_source_dirty();
     repl_state_mark_flat_dirty();
@@ -364,21 +453,31 @@ static void select_scene(int idx) {
     import_active_scene();
 }
 
-/* Round-trip aid ('e' key): re-export the live REPL state to ./<scene>.roundtrip.c
- * via the same writer as gl-repl's Ctrl+S, so you can diff the export against the
- * imported source to verify the import/export round-trips. The demo installs the
- * camera write-bridge (above) so the view is captured, but not the projection /
- * light bridges, so those lines fall back to the exporter's defaults. */
+/* Round-trip aid ('e' key): re-export the live REPL state next to the CWD as
+ * ./<scene>.roundtrip.<ext> via the same writers as gl-repl's Ctrl+S, so you can
+ * diff the export against the imported source to verify the import/export
+ * round-trips. The writer follows the *source* extension - a `.glr` scene
+ * re-exports as scene source (repl_export_save_glr, the examples/scenes/ format)
+ * and anything else as standalone C - so the diff stays like-for-like. The demo
+ * installs the camera write-bridge (above) so the view is captured, but not the
+ * config / projection / light bridges, so `@cfg` rows are absent and those C
+ * lines fall back to the exporter's defaults. */
 static void export_active_scene(void) {
     char out[PATH_MAX_LEN + 16];
     ReplExportLayout layout;
+    const char *path;
     int rc;
     if (g_scene_count == 0) return;
-    snprintf(out, sizeof out, "%s.roundtrip.c",
-             scene_basename(g_scene_paths[g_active_scene]));
-    layout.render3d_w = g_window_w;
-    layout.render3d_h = g_window_h;
-    rc = repl_export_save_output(out, source_document_view(), &layout);
+    path = g_scene_paths[g_active_scene];
+    if (path_is_glr(path)) {
+        snprintf(out, sizeof out, "%s.roundtrip.glr", scene_basename(path));
+        rc = repl_export_save_glr(out, source_document_view());
+    } else {
+        snprintf(out, sizeof out, "%s.roundtrip.c", scene_basename(path));
+        layout.render3d_w = g_window_w;
+        layout.render3d_h = g_window_h;
+        rc = repl_export_save_output(out, source_document_view(), &layout);
+    }
     fprintf(stderr,
             "[repl_live_demo] %s ./%s (%d cmds) -- diff against %s\n",
             rc ? "exported ->" : "export FAILED:", out,
@@ -745,11 +844,6 @@ static char *str_trim(char *s) {
     return s;
 }
 
-static int ends_with(const char *s, const char *suffix) {
-    size_t ls = strlen(s), lf = strlen(suffix);
-    return ls >= lf && strcmp(s + (ls - lf), suffix) == 0;
-}
-
 static void add_scene_path(const char *path) {
     if (g_scene_count >= MAX_SCENES) {
         fprintf(stderr, "[repl_live_demo] too many scenes (max %d), ignoring %s\n",
@@ -834,16 +928,18 @@ static int load_default_ini(const char *explicit_path) {
 
 static void print_usage(const char *prog) {
     printf(
-"Usage: %s [config.ini | scene_a.c scene_b.c ...]\n"
+"Usage: %s [config.ini | scene_a.c scene_b.glr ...]\n"
 "\n"
-"Live, file-watching REPL demo. Imports scene .c files (the app's save/export\n"
-"format), watches their mtime, re-imports on save, and drives predefined-\n"
-"variable sliders live. Edit the scene files in your own editor (vim, ...).\n"
+"Live, file-watching REPL demo. Imports scene files -- .c (the app's standalone\n"
+"C save/export format) or .glr (the scene source the built-in examples under\n"
+"examples/scenes/ are written in) -- watches their mtime, re-imports on save,\n"
+"and drives predefined-variable sliders live. Edit the scene files in your own\n"
+"editor (vim, ...).\n"
 "\n"
-"  (no args)     Load the default INI (repl_live_demo.ini, or the bundled\n"
-"                tools/repl_live_demo/repl_live_demo.ini).\n"
-"  config.ini    Load scenes + options from this INI.\n"
-"  *.c files     Use these scene files directly (bypass the INI).\n"
+"  (no args)         Load the default INI (repl_live_demo.ini, or the bundled\n"
+"                    tools/repl_live_demo/repl_live_demo.ini).\n"
+"  config.ini        Load scenes + options from this INI.\n"
+"  *.c / *.glr       Use these scene files directly (bypass the INI).\n"
 "\n"
 "Keys:  [ ] cycle scene   r reload   e export (round-trip)   v toggle panel\n"
 "       space pause   q/Esc quit   LMB orbit  RMB pan  wheel zoom  drag a slider\n",
@@ -864,7 +960,7 @@ int main(int argc, char **argv) {
             return 0;
         } else if (ends_with(a, ".ini")) {
             ini_path = a;
-        } else if (ends_with(a, ".c")) {
+        } else if (ends_with(a, ".c") || path_is_glr(a)) {
             add_scene_path(a);
             got_files = 1;
         } else {
@@ -874,7 +970,7 @@ int main(int argc, char **argv) {
 
     if (!got_files && !load_default_ini(ini_path)) {
         fprintf(stderr,
-            "[repl_live_demo] no scenes: pass *.c files or an INI with `scene=` lines\n"
+            "[repl_live_demo] no scenes: pass .c / .glr files or an INI with `scene=` lines\n"
             "  (looked for %s).\n",
             ini_path ? ini_path : "repl_live_demo.ini / tools/repl_live_demo/repl_live_demo.ini");
         print_usage(argv[0]);

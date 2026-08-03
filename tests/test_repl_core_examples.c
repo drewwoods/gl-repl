@@ -7,7 +7,7 @@
 #define _DEFAULT_SOURCE
 #endif
 
-#include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
+#include "repl/example_loader.h"  /* repl_load_example_lines */
 #include "repl/examples.h"
 #include "repl/state_owners.h"
 #include <math.h>
@@ -806,7 +806,7 @@ static void load_example_for_test(int idx) {
 static void load_custom_example_lines_for_test(const char *const *lines) {
     glr_ctrl_reset_all(); declare_test_vars();
     pin_code_panel_state();
-    repl_load_example_lines_for_test(lines);
+    repl_load_example_lines(lines);
     settle_camera_transition_for_test();
 }
 
@@ -829,7 +829,7 @@ static void test_example_loader_body_import_limits(void) {
 
             glr_ctrl_reset_all(); declare_test_vars();
             pin_code_panel_state();
-            loaded = repl_load_example_lines_for_test(lines);
+            loaded = repl_load_example_lines(lines);
             ASSERT_TRUE("example body loads past old 384-line cap",
                         loaded == LINE_COUNT);
             ASSERT_TRUE("example body keeps every line past old cap",
@@ -850,7 +850,7 @@ static void test_example_loader_body_import_limits(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         pin_code_panel_state();
-        loaded = repl_load_example_lines_for_test(bad_body);
+        loaded = repl_load_example_lines(bad_body);
         status = ui_state_status();
         ASSERT_TRUE("example body parse failure aborts load", loaded == 0);
         ASSERT_TRUE("example body parse failure clears partial document",
@@ -1826,7 +1826,7 @@ int main(int argc, char **argv) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
-        repl_load_example_lines_for_test(no_cfg_reset_example);
+        repl_load_example_lines(no_cfg_reset_example);
 
         ASSERT_TRUE("no cfg reset wireframe default",
                     glr_state_presentation().wireframe == CFG_DEFAULT_WIREFRAME);
@@ -1881,7 +1881,7 @@ int main(int argc, char **argv) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
-        repl_load_example_lines_for_test(partial_cfg_reset_example);
+        repl_load_example_lines(partial_cfg_reset_example);
 
         ASSERT_TRUE("partial cfg wireframe applied",
                     glr_state_presentation().wireframe == 1);
@@ -1946,21 +1946,21 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("view_mode starts at 3D default after reset",
                     glr_state_presentation().ortho_mode == CFG_DEFAULT_ORTHO_MODE);
 
-        repl_load_example_lines_for_test(view_mode_2d_example);
+        repl_load_example_lines(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 applies 2D (ortho)",
                     glr_state_presentation().ortho_mode == RENDER3D_VIEW_2D);
 
         /* The reset is the load-bearing assertion: a later example with
          * no @cfg view_mode reverts to default 3D, NOT inherited 2D. */
-        repl_load_example_lines_for_test(no_view_mode_example);
+        repl_load_example_lines(no_view_mode_example);
         ASSERT_TRUE("view_mode resets to default on example load",
                     glr_state_presentation().ortho_mode == CFG_DEFAULT_ORTHO_MODE);
 
         /* @cfg still wins over the per-load reset. */
-        repl_load_example_lines_for_test(view_mode_2d_example);
+        repl_load_example_lines(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 still applies after a reset",
                     glr_state_presentation().ortho_mode == RENDER3D_VIEW_2D);
-        repl_load_example_lines_for_test(view_mode_3d_example);
+        repl_load_example_lines(view_mode_3d_example);
         ASSERT_TRUE("@cfg view_mode = 0 overrides any prior 2D",
                     glr_state_presentation().ortho_mode == RENDER3D_VIEW_3D);
     }
@@ -1984,7 +1984,7 @@ int main(int argc, char **argv) {
         glr_ctrl_reset_all(); declare_test_vars();
         pin_code_panel_state();
         before = glr_camera();
-        repl_load_example_lines_for_test(easing_camera_example);
+        repl_load_example_lines(easing_camera_example);
         after_load = glr_camera();
         ASSERT_TRUE("example camera preset does not teleport",
                     fabsf(after_load.rx - before.rx) < 1e-4f &&
@@ -2156,7 +2156,7 @@ int main(int argc, char **argv) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         pin_code_panel_state();
-        repl_load_example_lines_for_test(spaced_cfg_camera_example);
+        repl_load_example_lines(spaced_cfg_camera_example);
         ASSERT_TRUE("spaced cfg camera allowed cfg applied",
                     glr_state_presentation().axes_theme == 4);
         ASSERT_TRUE("decorated camera marker preserved for expanded panel",

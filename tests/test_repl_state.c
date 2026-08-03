@@ -785,7 +785,7 @@ static const char *const k_test_camera_example[] = {
 static void load_test_camera_example(void) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
-    editor_state_edit_line_set(repl_load_example_lines_for_test(k_test_camera_example));
+    editor_state_edit_line_set(repl_load_example_lines(k_test_camera_example));
 }
 
 static void test_example_load_sets_scene_camera_default(void) {

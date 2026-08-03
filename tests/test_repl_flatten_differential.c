@@ -250,7 +250,7 @@ static void compare_document_at_time(const char *name, float t) {
 /* Load `example_idx`, then compare the fast/cached paths against the forced
  * reparse at `t` from the identical post-load baseline. */
 static void compare_example_at_time(int example_idx, float t) {
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     compare_document_at_time(repl_example_name(example_idx), t);
 }
 

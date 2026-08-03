@@ -4,7 +4,10 @@ A standalone driver that bootstraps the **REPL pipeline + the variable-panel
 peer** from a one-file controller and drives them under a real
 external-editor workflow:
 
-- You edit **scene `.c` files** in your own editor (vim, or anything).
+- You edit **scene files** in your own editor (vim, or anything) - either `.c`
+  (the app's standalone-C save/export format) or `.glr` (the scene source the
+  built-in examples under [`examples/scenes/`](../../examples/scenes/) are
+  written in, so the demo doubles as an example-authoring window).
 - The demo **watches the active scene's mtime** and re-imports it on save,
   drawing the geometry live.
 - The scene's **predefined variables** appear in the floating slider panel -
@@ -25,7 +28,8 @@ make repl-live-demo            # real GL
 ./repl_live_demo               # default INI (repl_live_demo.ini, or the bundled
                                # tools/repl_live_demo/repl_live_demo.ini)
 ./repl_live_demo my.ini        # explicit INI
-./repl_live_demo a.c b.c       # use these scene files directly (bypass the INI)
+./repl_live_demo a.c b.glr     # use these scene files directly (bypass the INI)
+./repl_live_demo examples/scenes/rotating-cube.glr   # author a built-in example
 
 make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
                                      # main() and prints diagnostics, then exits
@@ -38,7 +42,7 @@ make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
 |---|---|
 | `[` / `]` | Previous / next scene (re-imports) |
 | `r` | Force-reload the active scene |
-| `e` | Export current state to `./<scene>.roundtrip.c` (diff vs the source to check the round-trip) |
+| `e` | Export current state to `./<scene>.roundtrip.c` (or `.roundtrip.glr` for a `.glr` scene - the writer follows the source format, so the diff vs the source stays like-for-like) |
 | `v` | Toggle the variable panel |
 | `space` | Pause / resume the animation clock `t` |
 | LMB drag | Orbit camera |
@@ -55,13 +59,16 @@ make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
    or a `float` value, `:w`.
 3. The window updates within `poll_ms`. Drag the `n` / `r` sliders to reshape.
 
-**Reload is not transactional.** The importer resets live state before loading
-and treats per-line parse failures as *warnings* while still succeeding if the
-file merely opened - so a malformed save can leave a partial or empty scene with
-no rollback. That is by design: the file is the source of truth and you
-fix/undo in your editor. The demo's job is diagnostic clarity - every reload
-prints a banner and the importer's per-line warnings + load summary go to the
-terminal, so a partial load is never silent.
+**Reload is not transactional.** Live state is reset before loading and neither
+loader rolls back, so a malformed save can replace a good scene. The two fail
+differently, because that is how the loaders themselves behave: a `.c` import
+treats per-line parse failures as *warnings* and still succeeds if the file
+merely opened (partial scene), while a `.glr` goes through the example loader,
+which rejects the whole body on the first bad line (empty scene). That is by
+design: the file is the source of truth and you fix/undo in your editor. The
+demo's job is diagnostic clarity - every reload prints a banner and the
+per-line warnings / parse errors go to the terminal, so a partial or dropped
+load is never silent.
 
 ## INI format
 
@@ -78,10 +85,13 @@ scene=scenes/ring.c
 scene=scenes/torus.c
 ```
 
-## Scene file format
+## Scene file formats
 
-Scenes are in the app's **save/export `.c` format** - exactly what
-`./gl-repl scene.c` reads and what File -> Save (`Ctrl+S`) writes.
+Two, told apart by extension, each loaded exactly the way the app loads it.
+
+### `.c` - the app's save/export format
+
+Exactly what `./gl-repl scene.c` reads and what File -> Save (`Ctrl+S`) writes.
 
 **Full standalone exports load directly.** A complete `output.c` - with its
 `#include` / `display()` / `main()` scaffold, global variable declarations,
@@ -98,6 +108,26 @@ pleasant to hand-edit in vim: the geometry lives between `// Snippet start` and
 `float name = value;` lines declare the predefined variables that drive the
 sliders. The animation clock `t` is shown as a slider too - dragging it scrubs
 the clock (playback then continues from the scrubbed value); space pauses it.
+
+### `.glr` - scene source (built-in examples)
+
+The format the built-in examples under [`examples/scenes/`](../../examples/scenes/)
+are authored in: REPL source at column 0, optionally preceded by `// @cfg`
+rows and a `// camera` block. Point the demo at one and you get a live preview
+window for the example you are writing, refreshed on every `:w`.
+
+These load through the **example loader** (`repl_load_example_lines`), not the
+`.c` importer, which is what makes them behave as they do in `gl-repl`: the
+`@cfg` + `// camera` headers are consumed as metadata, and the body emits in
+two passes (function definitions first), so a scene may call a function or read
+a `static float` declared further down the file. Feeding the same text through
+the `.c` importer would reject those forward references.
+
+Two things the demo cannot reproduce, both because it has no controller: the
+`@cfg` rows apply through the app's config bridge, which the demo does not
+install, so presentation settings are ignored; and for the same reason the `e`
+round-trip writes no `@cfg` rows back. Diff a `.roundtrip.glr` against its
+source with that in mind - the geometry and camera are the parts under test.
 
 ## Rendering notes & limitations
 

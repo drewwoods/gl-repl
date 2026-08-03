@@ -98,7 +98,7 @@
 #include "repl/reformat.h"
 #include "repl/state_notify.h"
 #include "repl/eval.h"
-#include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
+#include "repl/example_loader.h"  /* repl_load_example_lines */
 #include "repl/examples.h"
 #include "repl/executor.h"
 #include "repl/load.h"           /* repl_load_apply_line - uncapped doc build */
@@ -351,7 +351,7 @@ static BenchResult bench_feed_examples(int iters) {
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines_for_test(repl_example_lines(e));
+            repl_load_example_lines(repl_example_lines(e));
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -369,7 +369,7 @@ static BenchResult bench_feed_examples(int iters) {
  * the flatten benchmark's workload is fixed regardless of changes to the
  * built-in example list - adding, reordering, or editing examples in
  * src/repl/examples.c can't move this number. The // camera / // @cfg metadata
- * lines are kept so repl_load_example_lines_for_test strips them exactly as the
+ * lines are kept so repl_load_example_lines strips them exactly as the
  * real example loader does, preserving an identical post-load command set. */
 static const char *const k_flatten_bench_scene[] = {
     "// camera",
@@ -429,7 +429,7 @@ static BenchResult bench_flatten_examples(int iters) {
     /* Load the fixed scene fresh once so we are timing flatten alone, not
      * editor_feed_line plus flatten. load_example_lines() resets cmd state
      * itself; no separate fresh_repl() is needed. */
-    repl_load_example_lines_for_test(k_flatten_bench_scene);
+    repl_load_example_lines(k_flatten_bench_scene);
 
     /* Snapshot post-load predef values. flatten_range() writes
      * g_predef_vars[].value on CMD_VAR_ASSIGN (src/repl/core.c:2624), so
@@ -489,7 +489,7 @@ static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
                       .min_sec = 1e18 };
     BenchBaseline base;
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     baseline_capture(&base);
     /* One warm flatten outside the timer so the source-scope depth cache is
      * built and the first timed sample isn't billed for it. */
@@ -530,7 +530,7 @@ static BenchResult bench_flatten_one_cold(const char *bench_name,
                       .min_sec = 1e18 };
     BenchBaseline base;
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
 
@@ -677,7 +677,7 @@ static void bench_flatten_phases_case(const char *label, int example_idx,
                                  .min_sec = 1e18 };
     }
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
 
@@ -734,7 +734,7 @@ static BenchResult bench_flatten_refresh_one(const char *name,
     int t_structural;
     int rebake_ok;
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
     repl_state_flat_program_clear_dirty();
@@ -829,7 +829,7 @@ static BenchResult bench_refresh_slider_one(const char *name,
     ReplExprDepMask bit;
     int structural, slot;
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    repl_load_example_lines(repl_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
     repl_state_flat_program_clear_dirty();
@@ -955,7 +955,7 @@ static void bench_flatten_whale(int iters) {
     if (idx < 0)
         return;
 
-    repl_load_example_lines_for_test(repl_example_lines(idx));
+    repl_load_example_lines(repl_example_lines(idx));
     baseline_capture(&base);
     repl_set_time(k_times[0]);
     repl_flatten_commands(editor_state_edit_line());
@@ -1203,7 +1203,7 @@ static BenchResult bench_flat_cost_query(int iters) {
     BenchResult r = { .name = "flat_cost_query", .unit = "sweeps",
                       .min_sec = 1e18 };
 
-    repl_load_example_lines_for_test(k_flatten_bench_scene);
+    repl_load_example_lines(k_flatten_bench_scene);
     repl_flatten_commands(editor_state_edit_line());
     int doc_count = repl_state_document_count();
 
@@ -1251,7 +1251,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
      * "Lines" alone underestimates: a short for-loop unrolls into many
      * flat commands, and that's what flatten actually walks. */
     for (int e = 0; e < n_examples; e++) {
-        repl_load_example_lines_for_test(repl_example_lines(e));
+        repl_load_example_lines(repl_example_lines(e));
         repl_flatten_commands(editor_state_edit_line());
         int n = repl_state_flat_program_count();
         if (n > worst_flat) {
@@ -1261,7 +1261,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
     }
 
     /* Reload the chosen example as the timed fixture. */
-    repl_load_example_lines_for_test(repl_example_lines(worst_idx));
+    repl_load_example_lines(repl_example_lines(worst_idx));
 
     int saved_n = g_num_predef_vars;
     for (int i = 0; i < saved_n; i++)
@@ -1314,7 +1314,7 @@ static BenchResult bench_replay_examples(int iters) {
         long long steps = 0;
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines_for_test(repl_example_lines(e));
+            repl_load_example_lines(repl_example_lines(e));
 
             replay_start();
             int safety = repl_state_flat_program_count() + 1;
@@ -1382,7 +1382,7 @@ static BenchResult bench_replay_long(int iters) {
      * first time you press play". Note: replay_start() handles the
      * flatten itself and clears repl_state_flat_program_dirty(), so calling
      * repl_flatten_commands(editor_state_edit_line()) explicitly here would flatten twice. */
-    repl_load_example_lines_for_test(k_long_replay_scene);
+    repl_load_example_lines(k_long_replay_scene);
 
     /* Warm up via replay_start/replay_stop (not a bare
      * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
@@ -1453,7 +1453,7 @@ static BenchResult bench_replay_focus(int iters) {
     BenchResult r = { .name = "replay_focus", .unit = "calls",
                       .min_sec = 1e18 };
 
-    repl_load_example_lines_for_test(k_long_replay_scene);
+    repl_load_example_lines(k_long_replay_scene);
     repl_mark_source_dirty();
     replay_start();
 
@@ -1495,7 +1495,7 @@ static BenchResult bench_replay_anchor(int iters) {
     BenchResult r = { .name = "replay_anchor", .unit = "calls",
                       .min_sec = 1e18 };
 
-    repl_load_example_lines_for_test(k_long_replay_scene);
+    repl_load_example_lines(k_long_replay_scene);
     repl_mark_source_dirty();
     replay_start();
 
@@ -1643,7 +1643,7 @@ static BenchResult bench_fade_batches(int iters) {
     /* Build the long scene and flatten once. The flatten pass runs inside
      * replay_start(); capture the resulting flat-program count before replay
      * playback changes the active limit. */
-    repl_load_example_lines_for_test(k_fade_bench_scene);
+    repl_load_example_lines(k_fade_bench_scene);
     repl_mark_source_dirty();
     replay_start();
     int flat_cmds = repl_state_flat_program_count();

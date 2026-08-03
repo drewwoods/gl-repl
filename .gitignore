@@ -8,6 +8,7 @@ audio_state.ini
 !examples/catalog.ini
 # repl_live_demo 'e' round-trip export artifacts (written to CWD).
 *.roundtrip.c
+*.roundtrip.glr
 gl-repl
 output.c
 output.ply

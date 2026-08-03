@@ -556,7 +556,7 @@ static void assert_real_scene_time_route(const char *display_name,
     TEST_ASSERT_TRUE(&g_harness, label, idx >= 0);
     if (idx < 0)
         return;
-    repl_load_example_lines_for_test(repl_example_lines(idx));
+    repl_load_example_lines(repl_example_lines(idx));
     repl_state_time_set(0.0f);
     repl_ensure_flat_program_with_live_vars(0);
     repl_state_flat_program_clear_dirty();
@@ -671,7 +671,7 @@ static void test_corpus_value_only_rebakes(void) {
         ReplExprDepMask structural;
         ReplExprDepMask values;
 
-        repl_load_example_lines_for_test(repl_example_lines(e));
+        repl_load_example_lines(repl_example_lines(e));
         repl_state_time_set(t0);
         repl_ensure_flat_program_with_live_vars(0);
         if (!repl_state_flat_program_rebake_ok())

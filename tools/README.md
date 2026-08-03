@@ -71,7 +71,10 @@ The *composition* counterpart to `repl_demo`: pipeline + variable-panel peer +
 a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L83), driven by
 whatever editor you like over file-watch - and still no app shell. Shown with
 the bundled `scenes/whale-full-c.c`, whose 26 declared variables fill the
-slider panel; drag a row and the geometry reshapes.
+slider panel; drag a row and the geometry reshapes. It watches `.glr` scene
+source as well as `.c` saves, each through the loader the app uses for that
+format, so it doubles as a live preview window for authoring a built-in
+example.
 
 ### `editor_demo` - [`src/editor/README.md`](../src/editor/README.md#the-demo-editor_demo) | [`src/ui/README.md`](../src/ui/README.md#how-it-is-exercised)
 
