@@ -10,6 +10,10 @@
  *   legend   one swatch + name per series (only when there is more than one)
  *   stats    min / max on one row, mean / sd on the next
  *
+ * While a replay is scrubbing, the plot well also carries one PC rule per
+ * series with the value at that rule printed in rows down its top edge - see
+ * ap_draw_replay_markers().
+ *
  * With several series the stats block describes *one* of them: the legend
  * entry under the pointer, or the primary series when the pointer is
  * elsewhere. Four sets of four numbers would not fit the collapsed panel, and
@@ -622,28 +626,83 @@ static void ap_draw_trace(const AssignPlotColumn *cols, int count,
 
 /* --- replay program-counter markers ---
  *
- * One vertical rule per series, at the execution the replay PC has reached.
+ * One vertical rule per series, at the execution the replay PC has reached,
+ * with the value that execution produced marked on the trace and printed.
  * Per-series rather than one shared rule because in X_EXEC mode each series is
  * spread across the full width as its *own* execution percentage: a 64-iteration
  * row and a 16-iteration row put the same PC at different fractions, and a
  * single rule would be wrong for every series but one.
  *
- * Drawn in the series color, under half alpha - it is an annotation on the
- * trace, not data, and it must not be mistaken for one at a glance. Drawn after
- * the traces so it stays visible where it crosses one. */
+ * The rule is drawn in the series color under half alpha - it is an annotation
+ * on the trace, not data, and it must not be mistaken for one at a glance. The
+ * dot marking the value is the opposite case and draws opaque: it *is* a
+ * datum, the one the readout beside it names. Both come after the traces so
+ * they stay visible where they cross one.
+ *
+ * The dot sits at the value the capture side reported, not at the column the
+ * rule passes through: a decimated column is a min/max band covering several
+ * executions and its midpoint is a number the row never computed. */
+#define AP_PC_ROW_H     (FONT_SMALL_H + 1)  /* one readout row */
+#define AP_PC_GAP        4    /* between the rule and its label */
+#define AP_PC_DOT        2    /* half-extent of the value dot */
+
+/* Readout rows fill downward from the top of the well, one per series that has
+ * a marker - fixed rows, not label-beside-dot, so two markers a pixel apart
+ * still produce two readable numbers. Returns the baseline for row `row`, or a
+ * value below `plot_y` when the well has no room left (a squeezed panel drops
+ * the last readouts rather than drawing outside itself). */
+static float ap_pc_row_baseline(int row, int plot_y, int plot_h) {
+    return (float)(plot_y + plot_h - (row + 1) * AP_PC_ROW_H + 2);
+}
+
 static void ap_draw_replay_markers(const UiAssignPlotPanelView *view,
                                    int series_count, int plot_x, int plot_y,
-                                   int plot_w, int plot_h) {
+                                   int plot_w, int plot_h, const ApYAxis *ax) {
+    int row = 0;
+
     for (int s = 0; s < series_count; s++) {
-        float rgb[3], mx;
+        float rgb[3], mx, vy, base;
+        char buf[32];
+        int tw, tx;
+
         if (!(view->replay_frac[s] >= 0.0f)) continue;
         ui_assign_plot_series_color(s, rgb);
         mx = (float)plot_x + (float)plot_w * view->replay_frac[s];
+
         glColor4f(rgb[0], rgb[1], rgb[2], 0.55f);
         glBegin(GL_LINES);
         glVertex2f(mx, (float)plot_y);
         glVertex2f(mx, (float)(plot_y + plot_h));
         glEnd();
+
+        vy = ap_value_y(ax, view->replay_value[s], plot_y, plot_h);
+        glColor4f(rgb[0], rgb[1], rgb[2], 1.0f);
+        glRectf(mx - (float)AP_PC_DOT, vy - (float)AP_PC_DOT,
+                mx + (float)AP_PC_DOT, vy + (float)AP_PC_DOT);
+
+        base = ap_pc_row_baseline(row, plot_y, plot_h);
+        if (base < (float)plot_y) continue;   /* no row left to print in */
+        ui_assign_plot_format_stat(buf, sizeof(buf),
+                                   (double)view->replay_value[s],
+                                   plot_w / FONT_SMALL_W - 2);
+        tw = (int)strlen(buf) * FONT_SMALL_W;
+
+        /* Beside the rule, on whichever side has room - a readout pushed off
+         * the right edge of a marker near the end of a pass is the case that
+         * matters, since that is where a finished series parks. */
+        tx = (int)mx + AP_PC_GAP;
+        if (tx + tw > plot_x + plot_w - 2) tx = (int)mx - AP_PC_GAP - tw;
+        if (tx < plot_x + 2) tx = plot_x + 2;
+
+        /* The well's own background under the text: the readout is drawn over
+         * traces and gridlines, and a number half-crossed by a line strip is
+         * exactly the number that gets misread. */
+        ui_clr_a(UI_TOK_SUNKEN, 0.85f);
+        glRectf((float)(tx - 2), base - 3.0f,
+                (float)(tx + tw + 2), base + (float)FONT_SMALL_H - 2.0f);
+        glColor4f(rgb[0], rgb[1], rgb[2], 1.0f);
+        gl2d_draw_string((float)tx, base, buf, FONT_SMALL);
+        row++;
     }
 }
 
@@ -816,7 +875,7 @@ void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view) {
          * refuses to produce a fraction there. */
         if (view->replay_active && view->plot.x_mode == ASSIGN_PLOT_X_EXEC)
             ap_draw_replay_markers(view, series_count,
-                                   plot_x, plot_y, plot_w, plot_h);
+                                   plot_x, plot_y, plot_w, plot_h, &ax);
     }
     glDisable(GL_BLEND);
 

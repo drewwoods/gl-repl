@@ -53,6 +53,16 @@
  * which is what the controller's live-capture override buys - and the rate
  * chip greys while that override is in force. See assign_plot_exec_progress().
  *
+ * Each rule carries a readout: a dot on the trace at the value that execution
+ * produced, and that value printed beside it. The point of stepping a replay
+ * through a loop is to watch a number change, and reading it off a 90px axis
+ * against gutter labels three decades apart is not watching it. The readouts
+ * stack in fixed rows down the top of the plot well rather than sitting beside
+ * their own dots: markers converge (two series a few executions apart put
+ * their rules within a pixel of each other), and labels chasing the data would
+ * then overlap exactly when the comparison is most interesting. One row per
+ * series, in the series color, is collision-free by construction.
+ *
  * The zoom chip (1x / 2x) doubles the panel's width and its plot well. Everything
  * else about the drawing is scale-independent, so both sizes run the same
  * code - only ui_assign_plot_panel_size() and the plot rect change.
@@ -101,12 +111,14 @@ enum {
  * zero-initialized reports a pointer at the window's top-left corner, which is
  * outside any panel the overlay layout places.
  *
- * `replay_active` and `replay_frac` carry the replay program counter's position
- * within each series' executions (see assign_plot_exec_progress()). They live
- * here rather than on AssignPlotView because the capture subsystem has no
- * replay dependency and should not grow one - the controller is what knows
- * both. A zero-initialized view draws no marker, which is what every caller
- * that only wants a hit-test wants. */
+ * `replay_active`, `replay_frac` and `replay_value` carry the replay program
+ * counter's position within each series' executions and the value each series
+ * produced there (see assign_plot_exec_progress()). They live here rather than
+ * on AssignPlotView because the capture subsystem has no replay dependency and
+ * should not grow one - the controller is what knows both. A zero-initialized
+ * view draws no marker, which is what every caller that only wants a hit-test
+ * wants. `replay_value[i]` means nothing unless `replay_frac[i]` is
+ * non-negative: a series with no marker has no value to read off it either. */
 typedef struct {
     int window_w, window_h;
     int visible;
@@ -116,6 +128,7 @@ typedef struct {
     AssignPlotView plot;
     int replay_active;      /* replay is scrubbing the program */
     float replay_frac[MAX_ASSIGN_PLOT_SERIES];  /* 0..1, or <0 for no marker */
+    float replay_value[MAX_ASSIGN_PLOT_SERIES]; /* value at the marker        */
 } UiAssignPlotPanelView;
 
 void ui_assign_plot_panel_render(const UiAssignPlotPanelView *view);

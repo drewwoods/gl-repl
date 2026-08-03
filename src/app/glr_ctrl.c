@@ -592,9 +592,11 @@ static ReplayFadePlan g_replay_fade_plan;
  * full flattened program. */
 static int g_frame_replay_exec_limit = -1;
 /* Frame-local assignment-plot replay markers: where the clamp above falls
- * within each plotted series' executions. Computed once the clamp is resolved
- * and read by the panel's view builder later in the same frame. */
+ * within each plotted series' executions, and the value each series produced
+ * there. Computed once the clamp is resolved and read by the panel's view
+ * builder later in the same frame. */
 static float g_assign_plot_replay_frac[MAX_ASSIGN_PLOT_SERIES];
+static float g_assign_plot_replay_value[MAX_ASSIGN_PLOT_SERIES];
 static int   g_assign_plot_replay_marker = 0;
 
 static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int replaying) {
@@ -2241,9 +2243,12 @@ static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
      * of replay; the markers themselves only exist for the frames and series
      * the progress scan could place one on. */
     v.replay_active = replay_active();
-    for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++)
+    for (int i = 0; i < MAX_ASSIGN_PLOT_SERIES; i++) {
         v.replay_frac[i] = g_assign_plot_replay_marker
                          ? g_assign_plot_replay_frac[i] : -1.0f;
+        v.replay_value[i] = g_assign_plot_replay_marker
+                          ? g_assign_plot_replay_value[i] : 0.0f;
+    }
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_ASSIGN_PLOT,
                                 &v.panel_x, &v.panel_y);
@@ -2665,7 +2670,8 @@ void glr_ctrl_display_frame(void) {
         prof_begin(PROF_ASSIGN_PLOT);
         g_assign_plot_replay_marker =
             assign_plot_exec_progress(g_frame_replay_exec_limit,
-                                      g_assign_plot_replay_frac);
+                                      g_assign_plot_replay_frac,
+                                      g_assign_plot_replay_value);
         prof_accum_end(PROF_ASSIGN_PLOT);
     }
 

@@ -495,7 +495,11 @@ from, and `t` keeps advancing under replay unless the sim is paused, so
 `assign_plot_set_live_capture()` bypasses the rate gate for the duration (rate
 chip greys). `ASSIGN_PLOT_RATE_ONCE` is exempt from both - a frozen snapshot
 stays frozen and gets no marker. X_FRAME gets none either: no within-frame
-position to mark.
+position to mark. Each marker carries the **value at the PC** - a dot on the
+trace plus the number, stacked one row per series at the top of the well - and
+that value is the trace's own sample from the same scan, never a column
+midpoint (a decimated column is a band, and its middle is a number the row
+never computed).
 
 Up to `MAX_ASSIGN_PLOT_SERIES` = 4 rows plot together (**Shift**+right-click
 adds/removes a series; plain right-click retargets to one row). Two axes are

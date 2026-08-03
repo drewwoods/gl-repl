@@ -396,7 +396,10 @@ sunken box; a bracketed word is a one-shot button.
 in which they all execute; changing the rows or rate starts a new collection.
 
 **During [replay](#replay)** a vertical rule marks how far the
-replay has run through each plotted row's executions this frame. So that the
+replay has run through each plotted row's executions this frame, with a dot on
+the trace at the value that execution produced and the number printed beside
+it - one row per plotted assignment, in its own color, so stepping the replay
+reads the numbers off directly instead of off the axis. So that the
 rule sits over the values the replay is actually stepping through, the plot
 captures every frame while replay is active regardless of the rate - the rate
 chip greys out to show it is not in force. **once** is the exception: it stays

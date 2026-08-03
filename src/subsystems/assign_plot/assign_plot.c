@@ -492,15 +492,19 @@ void assign_plot_set_live_capture(int on) {
 }
 
 int assign_plot_exec_progress(int exec_limit,
-                              float out_frac[MAX_ASSIGN_PLOT_SERIES]) {
+                              float out_frac[MAX_ASSIGN_PLOT_SERIES],
+                              float out_value[MAX_ASSIGN_PLOT_SERIES]) {
     int n;
     int total[MAX_ASSIGN_PLOT_SERIES];
     int done[MAX_ASSIGN_PLOT_SERIES];
+    float last[MAX_ASSIGN_PLOT_SERIES];
     int any = 0;
 
     if (!out_frac) return 0;
-    for (int s = 0; s < MAX_ASSIGN_PLOT_SERIES; s++)
+    for (int s = 0; s < MAX_ASSIGN_PLOT_SERIES; s++) {
         out_frac[s] = -1.0f;
+        if (out_value) out_value[s] = 0.0f;
+    }
 
     /* X_FRAME has no within-frame axis to place a marker on; see the header. */
     if (!g_open || !g_host || g_x_mode != ASSIGN_PLOT_X_EXEC) return 0;
@@ -512,6 +516,7 @@ int assign_plot_exec_progress(int exec_limit,
 
     memset(total, 0, sizeof(total));
     memset(done, 0, sizeof(done));
+    memset(last, 0, sizeof(last));
 
     /* One pass for every series rather than one pass each: the series list is
      * at most MAX_ASSIGN_PLOT_SERIES long, so the inner walk is cheaper than
@@ -523,22 +528,30 @@ int assign_plot_exec_progress(int exec_limit,
         for (int s = 0; s < g_series_count; s++) {
             if (sample.source_line_idx != g_series[s].source_line_idx) continue;
             total[s]++;
-            if (exec_limit < 0 || i < exec_limit) done[s]++;
+            /* Executions past the clamp are counted (they are the marker's
+             * denominator) but their values have not happened yet as far as
+             * this frame's render is concerned, so only an executed one is
+             * kept. */
+            if (exec_limit < 0 || i < exec_limit) {
+                done[s]++;
+                last[s] = sample.value;
+            }
             break;
         }
     }
 
     for (int s = 0; s < g_series_count; s++) {
-        int last;
+        int idx;
         /* A series that has not run yet gets no marker rather than one pinned
          * to the left edge, which would read as "the PC is at its first
          * execution". A single-execution series has no span to place one on. */
         if (total[s] < 2 || done[s] <= 0) continue;
         /* The marker sits on the last execution that has *run*, and the trace
          * puts execution i at i/(total-1) of the plot width. */
-        last = done[s] - 1;
-        if (last > total[s] - 1) last = total[s] - 1;
-        out_frac[s] = (float)last / (float)(total[s] - 1);
+        idx = done[s] - 1;
+        if (idx > total[s] - 1) idx = total[s] - 1;
+        out_frac[s] = (float)idx / (float)(total[s] - 1);
+        if (out_value) out_value[s] = last[s];
         any = 1;
     }
     return any;

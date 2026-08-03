@@ -266,12 +266,21 @@ void assign_plot_reset(void);
  * visible rather than silently ignored. */
 void assign_plot_set_live_capture(int on);
 
-/* Where a replay program counter falls within each series' executions.
- * `exec_limit` is a trace index the executor is rendering up to (negative for
- * "no clamp"), in the same index space the bridge's trace_at() takes;
- * `out_frac` receives a 0..1 position along that series' own execution span,
- * or -1 for a series with no marker to draw. Returns 1 if any series produced
- * one.
+/* Where a replay program counter falls within each series' executions, and
+ * what each series computed there. `exec_limit` is a trace index the executor
+ * is rendering up to (negative for "no clamp"), in the same index space the
+ * bridge's trace_at() takes; `out_frac` receives a 0..1 position along that
+ * series' own execution span, or -1 for a series with no marker to draw.
+ * Returns 1 if any series produced one.
+ *
+ * `out_value` is optional (NULL when only the positions are wanted) and
+ * receives the value produced by the last execution the PC has passed - the
+ * number the marker is standing on. It is the trace's own value rather than
+ * anything read back out of the plot columns, because a column is a decimated
+ * min/max envelope: at any interesting execution count the column under the
+ * marker is a band covering several executions, and its midpoint is a value
+ * the row never computed. Entries are 0 where `out_frac` is negative; there is
+ * no separate validity flag because a marker exists exactly when a value does.
  *
  * X_FRAME mode produces nothing: there a column is a whole capture, so a
  * position *within* a frame has no column to point at. Neither does
@@ -281,9 +290,11 @@ void assign_plot_set_live_capture(int on);
  *
  * Counts come from the flat program as it stands now, numerator and
  * denominator both, so the fraction is self-consistent even if the capture
- * that filled the columns saw a different frame. */
+ * that filled the columns saw a different frame. The value comes from that
+ * same walk, so it and the position always describe one execution. */
 int assign_plot_exec_progress(int exec_limit,
-                              float out_frac[MAX_ASSIGN_PLOT_SERIES]);
+                              float out_frac[MAX_ASSIGN_PLOT_SERIES],
+                              float out_value[MAX_ASSIGN_PLOT_SERIES]);
 
 /* Capture if the rate gate allows. `now_us` is supplied by the caller rather
  * than read from a clock here, which keeps this module free of any timing

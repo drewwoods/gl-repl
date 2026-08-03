@@ -1100,6 +1100,209 @@ static void test_replay_marker_absent_without_data(void) {
     ASSERT_INT("no marker over an empty plot", find_markers(&v, 0, m, 4), 0);
 }
 
+/* --- PC readouts: the dot on the trace and the number beside it --- */
+
+/* Center y of the value dot for `series`: the first rect drawn in that
+ * series' color at full alpha. Opaque is what separates it from the rule
+ * (0.55), the trace (0.95) and the envelope (0.30); first, because the focused
+ * legend swatch later in the render shares the color and the alpha. Returns 0
+ * when the series has no dot. */
+static int find_value_dot_y(const UiAssignPlotPanelView *v, int series,
+                            float *out_y) {
+    float rgb[3];
+    FILE *trace;
+    char line[128];
+    int active = 0, found = 0;
+
+    ui_assign_plot_series_color(series, rgb);
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        float r, g, b, a, x0, y0, x1, y1;
+        if (sscanf(line, "glColor4f %f %f %f %f", &r, &g, &b, &a) == 4) {
+            active = fabsf(r - rgb[0]) < 1e-4f
+                  && fabsf(g - rgb[1]) < 1e-4f
+                  && fabsf(b - rgb[2]) < 1e-4f
+                  && fabsf(a - 1.0f) < 1e-4f;
+        } else if (active && !found
+                   && sscanf(line, "glRectf %f %f %f %f",
+                             &x0, &y0, &x1, &y1) == 4) {
+            *out_y = (y0 + y1) * 0.5f;
+            found = 1;
+        }
+    }
+    fclose(trace);
+    return found;
+}
+
+/* Every string the render printed, recovered from the trace: each
+ * glRasterPos2f opens a new one and the glyph bytes that follow fill it. Both
+ * text paths are read, since which one gl2d_draw_string takes is a build
+ * flag. */
+typedef struct {
+    float x, y;
+    char  text[32];
+} ApText;
+
+static int find_texts(const UiAssignPlotPanelView *v, ApText *out, int cap) {
+    FILE *trace;
+    char line[128];
+    int count = 0, len = 0;
+
+    gl_stub_trace_open(TRACE_PATH);
+    ui_assign_plot_panel_render(v);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (!trace) return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        float x, y;
+        int ch;
+        if (sscanf(line, "glRasterPos2f %f %f", &x, &y) == 2) {
+            if (count < cap) {
+                out[count].x = x;
+                out[count].y = y;
+                out[count].text[0] = '\0';
+            }
+            count++;
+            len = 0;
+        } else if (sscanf(line, "glutBitmapCharacter %d", &ch) == 1 ||
+                   sscanf(line, "glutBitmapStringByte %d", &ch) == 1) {
+            int slot = count - 1;
+            if (slot >= 0 && slot < cap && len < 31) {
+                out[slot].text[len++] = (char)ch;
+                out[slot].text[len] = '\0';
+            }
+        }
+    }
+    fclose(trace);
+    return count < cap ? count : cap;
+}
+
+static ApText g_texts[64];
+
+/* The drawn string equal to `want`, or NULL. */
+static const ApText *find_text(const UiAssignPlotPanelView *v,
+                               const char *want) {
+    int n = find_texts(v, g_texts, 64);
+    for (int i = 0; i < n; i++)
+        if (strcmp(g_texts[i].text, want) == 0) return &g_texts[i];
+    return NULL;
+}
+
+static int text_is_drawn(const UiAssignPlotPanelView *v, const char *want) {
+    return find_text(v, want) != NULL;
+}
+
+/* The number under the PC is the point of the marker: stepping a replay
+ * through a loop is watching a value change, and a 90px axis cannot be read to
+ * three digits. */
+static void test_replay_readout_prints_the_value(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.5f;
+    v.replay_value[0] = 0.375f;
+    ASSERT_TRUE("the value at the PC is printed",
+                text_is_drawn(&v, "0.375"));
+
+    /* It follows the value, not the position. */
+    v.replay_value[0] = -12.5f;
+    ASSERT_TRUE("a changed value reprints", text_is_drawn(&v, "-12.5"));
+    ASSERT_TRUE("and the old one is gone", !text_is_drawn(&v, "0.375"));
+
+    /* No replay, no readout - the same gate the rule is behind. */
+    v.replay_active = 0;
+    ASSERT_TRUE("nothing is printed outside replay",
+                !text_is_drawn(&v, "-12.5"));
+}
+
+/* One readout per series, so an overlay of several rows says what each of
+ * them is doing at this PC rather than only the primary. */
+static void test_replay_readouts_are_per_series(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+
+    set_series(&v, 1, "beta", 16, 0.0f, 2.0f);
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.25f;
+    /* Values no gridline label could also produce - the gutter ticks are round
+     * numbers on this axis, and the assertion is about the readouts. */
+    v.replay_value[0] = 0.2917f;
+    v.replay_frac[1] = 0.75f;
+    v.replay_value[1] = 1.37f;
+
+    ASSERT_TRUE("the first series' value is printed",
+                text_is_drawn(&v, "0.2917"));
+    ASSERT_TRUE("and so is the second's", text_is_drawn(&v, "1.37"));
+
+    /* A series with no marker has no value to read off it. */
+    v.replay_frac[1] = -1.0f;
+    ASSERT_TRUE("an unrun series prints nothing", !text_is_drawn(&v, "1.37"));
+    ASSERT_TRUE("without silencing the one that ran",
+                text_is_drawn(&v, "0.2917"));
+}
+
+/* The dot marks the value the row computed, not the column the rule passes
+ * through - a decimated column is a band whose midpoint is a number that never
+ * existed. Pinned by putting the two in different places: the PC sits at the
+ * left edge, where the ramp is at its minimum, while the value reported is the
+ * maximum. */
+static void test_replay_dot_sits_on_the_reported_value(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    float trace_y[16];
+    float dot_y;
+    int n;
+
+    n = render_series_trace_y(&v, 0, trace_y, 16);
+    ASSERT_INT("the ramp drew a full strip", n, 16);
+
+    v.replay_active = 1;
+    v.replay_frac[0] = 0.0f;
+    v.replay_value[0] = 1.0f;
+    ASSERT_TRUE("the PC carries a dot", find_value_dot_y(&v, 0, &dot_y));
+    ASSERT_FLOAT("the dot is at the value, not under the rule",
+                 dot_y, trace_y[15]);
+
+    v.replay_value[0] = 0.0f;
+    ASSERT_TRUE("the dot survives a moved value",
+                find_value_dot_y(&v, 0, &dot_y));
+    ASSERT_FLOAT("and follows it down", dot_y, trace_y[0]);
+}
+
+/* A readout beside a marker at the right edge would run off the panel, which
+ * is where a finished series parks - so it flips to the other side of its
+ * rule. */
+static void test_replay_readout_stays_inside_the_panel(void) {
+    UiAssignPlotPanelView v = make_view(16, 0.0f, 1.0f);
+    const ApText *label;
+    int panel_w, right;
+
+    ui_assign_plot_panel_size(v.plot.expanded, v.plot.series_count,
+                              &panel_w, NULL);
+    right = v.panel_x + panel_w;
+
+    v.replay_active = 1;
+    v.replay_frac[0] = 1.0f;
+    v.replay_value[0] = 0.6183f;
+    label = find_text(&v, "0.6183");
+    ASSERT_TRUE("a finished series still prints its value", label != NULL);
+    if (label)
+        ASSERT_TRUE("and prints it inside the panel",
+                    label->x + 6.0f * (float)FONT_SMALL_W < (float)right);
+
+    /* The left edge is the mirror case: the label must not start outside. */
+    v.replay_frac[0] = 0.0f;
+    label = find_text(&v, "0.6183");
+    ASSERT_TRUE("a just-started series prints too", label != NULL);
+    if (label)
+        ASSERT_TRUE("and not off the left edge",
+                    label->x >= (float)v.panel_x);
+}
+
 /* Read the color the rate chip's label is drawn in. The chip is the first
  * thing in the control row, so its text color is the glColor* immediately
  * preceding the first glRasterPos2f at the control row's baseline - simpler to
@@ -1190,6 +1393,10 @@ int main(void) {
     test_replay_markers_are_per_series();
     test_replay_marker_absent_in_frame_mode();
     test_replay_marker_absent_without_data();
+    test_replay_readout_prints_the_value();
+    test_replay_readouts_are_per_series();
+    test_replay_dot_sits_on_the_reported_value();
+    test_replay_readout_stays_inside_the_panel();
     test_replay_grays_the_overridden_rate_chip();
     return test_harness_report(&g_harness, "test_ui_assign_plot");
 }

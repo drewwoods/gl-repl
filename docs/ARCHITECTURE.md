@@ -1009,6 +1009,17 @@ one shared: in `X_EXEC` mode each series spans the full width as its own
 execution percentage, so a 64-iteration row and a 16-iteration row put one PC
 at two different fractions.
 
+Each rule carries a **readout**: a dot on the trace at the value that execution
+produced, and the number printed beside it in the series color. The value comes
+from the same scan - the trace's own sample at the last execution before the
+clamp - and not from the plot columns, because a decimated column is a min/max
+band whose midpoint is a number the row never computed. Readouts stack in fixed
+rows down the top of the plot well rather than following their dots: two
+markers a few executions apart sit within a pixel of each other, and labels
+chasing the data would collide exactly when the comparison matters. Positions
+and values come out of one call, so a rule and the number under it always
+describe the same execution.
+
 The marker is only true of the frame it was computed from, and unless the
 simulation clock is paused the program re-flattens under the PC every frame. So
 the controller turns on

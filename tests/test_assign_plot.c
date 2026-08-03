@@ -1042,24 +1042,108 @@ static void test_replay_progress_tracks_the_pc(void) {
     /* The marker sits on the last execution that has run, and the trace puts
      * execution i at i/(n-1) of the width: 4 of 8 done is execution 3 of 7. */
     ASSERT_INT("a marker is produced mid-program",
-               assign_plot_exec_progress(flat_limit_after_exec(row, 4), frac), 1);
+               assign_plot_exec_progress(flat_limit_after_exec(row, 4), frac, NULL), 1);
     ASSERT_FLOAT("marker is at the fourth of eight executions",
                  frac[0], 3.0f / 7.0f);
 
     ASSERT_INT("a marker is produced at the end",
-               assign_plot_exec_progress(flat_limit_after_exec(row, 8), frac), 1);
+               assign_plot_exec_progress(flat_limit_after_exec(row, 8), frac, NULL), 1);
     ASSERT_FLOAT("a finished pass sits at the right edge", frac[0], 1.0f);
 
     /* Before the row's first execution there is nothing to point at: a marker
      * pinned to the left edge would read as "the first execution has run". */
     ASSERT_INT("no marker before the row has run",
-               assign_plot_exec_progress(0, frac), 0);
+               assign_plot_exec_progress(0, frac, NULL), 0);
     ASSERT_TRUE("unrun series reports no position", frac[0] < 0.0f);
 
     /* No clamp is the whole frame. */
     ASSERT_INT("an unclamped program is fully executed",
-               assign_plot_exec_progress(-1, frac), 1);
+               assign_plot_exec_progress(-1, frac, NULL), 1);
     ASSERT_FLOAT("unclamped sits at the right edge", frac[0], 1.0f);
+}
+
+/* The marker names a number, and that number is the one the row computed at
+ * the execution the PC has reached - not a column midpoint. */
+static void test_replay_progress_reports_the_value_at_the_pc(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "for(i, 0, 8) {",
+        "x = i * 2;",
+        "}",
+        NULL
+    };
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    float value[MAX_ASSIGN_PLOT_SERIES];
+    int row;
+
+    load_scene(k_scene);
+    row = find_row(CMD_VAR_ASSIGN);
+    assign_plot_open(row);
+    assign_plot_capture(0.0);
+
+    /* Four of eight executions done: the last one to have run is i = 3. */
+    assign_plot_exec_progress(flat_limit_after_exec(row, 4), frac, value);
+    ASSERT_FLOAT("the value is the fourth execution's", value[0], 6.0f);
+
+    /* Values past the clamp have not happened yet as far as this frame's
+     * render goes, so the readout must not run ahead of the marker. */
+    assign_plot_exec_progress(flat_limit_after_exec(row, 5), frac, value);
+    ASSERT_FLOAT("one step on is one execution on", value[0], 8.0f);
+
+    assign_plot_exec_progress(-1, frac, value);
+    ASSERT_FLOAT("an unclamped pass reports its last value", value[0], 14.0f);
+
+    /* No marker, no value: a series the PC has not reached has nothing to
+     * read off, and a stale number under a missing rule would be worse than
+     * none. */
+    ASSERT_INT("no marker before the row has run",
+               assign_plot_exec_progress(0, frac, value), 0);
+    ASSERT_FLOAT("and no value either", value[0], 0.0f);
+
+    /* The values are optional - callers that only place the rules pass NULL. */
+    ASSERT_INT("positions alone still work",
+               assign_plot_exec_progress(-1, frac, NULL), 1);
+}
+
+/* Two rows the same PC reaches at different points report their own values,
+ * for the same reason they get their own rules. */
+static void test_replay_pc_values_are_per_series(void) {
+    static const char *const k_scene[] = {
+        "float x;",
+        "float y;",
+        "for(i, 0, 8) {",
+        "x = i * 10;",
+        "}",
+        "for(j, 0, 4) {",
+        "y = j + 100;",
+        "}",
+        NULL
+    };
+    const GLCmd *cmds;
+    float frac[MAX_ASSIGN_PLOT_SERIES];
+    float value[MAX_ASSIGN_PLOT_SERIES];
+    int n, first = -1, second = -1;
+
+    load_scene(k_scene);
+    cmds = repl_state_document_cmds();
+    n = repl_state_document_count();
+    for (int i = 0; i < n; i++) {
+        if (!cmds[i].valid || cmds[i].type != CMD_VAR_ASSIGN) continue;
+        if (first < 0) first = i;
+        else if (second < 0) second = i;
+    }
+    ASSERT_TRUE("scene has two assignment rows", first >= 0 && second >= 0);
+
+    assign_plot_open(first);
+    ASSERT_INT("second row joins the plot",
+               assign_plot_toggle_series(second), ASSIGN_PLOT_SERIES_ADDED);
+    assign_plot_capture(0.0);
+
+    /* Halfway through the second loop: the first has finished at i = 7, the
+     * second is at j = 1. */
+    assign_plot_exec_progress(flat_limit_after_exec(second, 2), frac, value);
+    ASSERT_FLOAT("finished series reports its last value", value[0], 70.0f);
+    ASSERT_FLOAT("running series reports its current one", value[1], 101.0f);
 }
 
 /* Each series is spread across the full width as its own execution
@@ -1098,13 +1182,13 @@ static void test_replay_progress_is_per_series(void) {
     /* A PC past the whole first loop but before the second starts: the first
      * series is finished, the second has not begun. */
     ASSERT_INT("markers exist for the first loop",
-               assign_plot_exec_progress(flat_limit_after_exec(first, 8), frac), 1);
+               assign_plot_exec_progress(flat_limit_after_exec(first, 8), frac, NULL), 1);
     ASSERT_FLOAT("finished series is at its right edge", frac[0], 1.0f);
     ASSERT_TRUE("series that has not run has no marker", frac[1] < 0.0f);
 
     /* Halfway through the second loop the first is still done, so the two
      * markers sit at different fractions from the same PC. */
-    assign_plot_exec_progress(flat_limit_after_exec(second, 2), frac);
+    assign_plot_exec_progress(flat_limit_after_exec(second, 2), frac, NULL);
     ASSERT_FLOAT("first series stays finished", frac[0], 1.0f);
     ASSERT_FLOAT("second series is at its own second of four",
                  frac[1], 1.0f / 3.0f);
@@ -1129,7 +1213,7 @@ static void test_replay_progress_absent_in_frame_mode(void) {
     ASSERT_INT("capture derived the frame axis",
                assign_plot_view().x_mode, ASSIGN_PLOT_X_FRAME);
     ASSERT_INT("no marker on the captures axis",
-               assign_plot_exec_progress(-1, frac), 0);
+               assign_plot_exec_progress(-1, frac, NULL), 0);
     ASSERT_TRUE("and no position for the series", frac[0] < 0.0f);
 }
 
@@ -1153,7 +1237,7 @@ static void test_replay_progress_absent_for_a_one_shot(void) {
     assign_plot_capture(0.0);
 
     ASSERT_INT("no marker over a frozen one-shot",
-               assign_plot_exec_progress(-1, frac), 0);
+               assign_plot_exec_progress(-1, frac, NULL), 0);
     ASSERT_TRUE("and no position for the series", frac[0] < 0.0f);
 
     /* The same plot at a live rate does get one, so it is the freeze that
@@ -1161,7 +1245,7 @@ static void test_replay_progress_absent_for_a_one_shot(void) {
     assign_plot_set_rate(ASSIGN_PLOT_RATE_FRAME);
     assign_plot_capture(0.0);
     ASSERT_INT("a live rate is marked",
-               assign_plot_exec_progress(-1, frac), 1);
+               assign_plot_exec_progress(-1, frac, NULL), 1);
 }
 
 static void test_replay_progress_needs_an_open_plot(void) {
@@ -1176,7 +1260,7 @@ static void test_replay_progress_needs_an_open_plot(void) {
 
     load_scene(k_scene);
     ASSERT_INT("a closed plot produces no markers",
-               assign_plot_exec_progress(-1, frac), 0);
+               assign_plot_exec_progress(-1, frac, NULL), 0);
     ASSERT_TRUE("and leaves no stale position", frac[0] < 0.0f);
 }
 
@@ -1292,6 +1376,8 @@ int main(void) {
     test_frame_secondary_stats_include_every_execution();
     test_dead_row_drops_only_its_series();
     test_replay_progress_tracks_the_pc();
+    test_replay_progress_reports_the_value_at_the_pc();
+    test_replay_pc_values_are_per_series();
     test_replay_progress_is_per_series();
     test_replay_progress_absent_in_frame_mode();
     test_replay_progress_absent_for_a_one_shot();
