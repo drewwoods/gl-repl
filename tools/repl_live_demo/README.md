@@ -141,15 +141,32 @@ source with that in mind - the geometry and camera are the parts under test.
 ## Rendering notes & limitations
 
 The demo executes **only the geometry program** (the snippet + the scene's
-functions). It does *not* run an export's `init()` / `display()` scaffold, which
-in the real app is the job of the `render3d` layer the demo deliberately omits.
-To keep lit scenes looking right anyway, the demo installs a small per-frame GL
-baseline that approximates `render3d`'s defaults: `GL_COLOR_MATERIAL` (so
-`glColor3f` tints lit surfaces - otherwise it is ignored under `GL_LIGHTING` and
-geometry renders as the default white-ish material), `GL_NORMALIZE`, a neutral
-key + fill light, and a small global ambient. The scene still enables
-`GL_LIGHTING` and its own lights. The *exact* light colors/positions from a
-scene's `init()` are not reproduced, so a heavily lit export may look close but
-not pixel-identical to `gl-repl`. The animation clock `t` is advanced in place
-in the REPL variable table (like the app), so a scene's own `t = 0` reset takes
-effect - the panel `t`, the HUD `t`, and the geometry all stay in sync.
+functions), and the host state around it is deliberately the same short list
+the app sets - no more, because a host that sets more makes a scene look right
+here and wrong everywhere else.
+
+**The scene owns its own baseline.** `glClear`, `GL_DEPTH_TEST`,
+`GL_COLOR_MATERIAL` + its mode, two-sided lighting, specular and shininess are
+ordinary editable commands, seeded into fresh documents by
+`repl_load_default_display_baseline()` (`src/repl/load.c`) and written into
+every `.glr` by hand. The demo does not re-assert any of them, so a scene that
+drops those lines misbehaves here exactly as it would in `gl-repl` or in the
+exported C: delete the `glClear` and the frame smears; delete the
+`glEnable(GL_COLOR_MATERIAL)` and `glColor3f` stops tinting lit surfaces.
+Nothing clears the window on the program's behalf - the HUD rows draw their own
+opaque backing strip so they stay legible over a smear.
+
+**What the host does set** is the two halves of the app's baseline, both taken
+from `src/repl` rather than hand-copied: `repl_apply_init_bootstrap()` once at
+startup (clear color, src-over blending, point attenuation - the same commands
+an export's `init()` carries), and per frame the light positions/colors, the
+global ambient, and `glDisable(GL_LIGHTING)`, mirroring `render3d_pass_setup()`.
+The program runs inside a `glPushAttrib(GL_ALL_ATTRIB_BITS)` bracket, like
+`render3d` and the exported `display()`, so its state never leaks into the next
+frame or the HUD.
+
+Lights use the app's default theme (`LIGHT_THEME_DEFAULT`) verbatim, but a
+scene authored under a *different* light theme will not match `gl-repl`
+pixel-for-pixel. The animation clock `t` is advanced in place in the REPL
+variable table (like the app), so a scene's own `t = 0` reset takes effect - the
+panel `t`, the HUD `t`, and the geometry all stay in sync.

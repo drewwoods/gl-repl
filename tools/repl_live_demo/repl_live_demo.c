@@ -54,7 +54,7 @@
 #include "repl/export.h"          /* repl_export_load_from_file, ReplExportCameraBridge */
 #include "repl/flatten.h"         /* FlatProgramView */
 #include "repl/host_effects.h"
-#include "repl/pipeline.h"        /* repl_flatten_commands */
+#include "repl/pipeline.h"        /* repl_flatten_commands, repl_apply_init_bootstrap */
 #include "repl/state_notify.h"
 #include "repl/state_owners.h"    /* repl_state_reset_program, flat program views, document_count */
 #include "repl/state_views.h"     /* repl_state_variables, ReplVariableView */
@@ -559,7 +559,7 @@ static void apply_camera_modelview(void) {
  * lit scenes render - and re-export ('e') - with the SAME lights gl-repl uses,
  * not the GL defaults (or zeros, which is what an export with no light bridge
  * emits). These are exactly the per-slot values a real export's init() carries.
- * Single source of truth for both setup_render_baseline() (live render) and the
+ * Single source of truth for both setup_frame_lights() (live render) and the
  * export light bridge (round-trip 'e'). Positions are world-space (applied after
  * the camera). */
 enum { DEMO_LIGHT_COUNT = 4 };  /* GL_LIGHT0..3 - mirrors the app's MAX_LIGHTS */
@@ -584,25 +584,24 @@ static const DemoLight g_demo_lights[DEMO_LIGHT_COUNT] = {
       { 0.05f, 0.05f, 0.06f, 1.0f }, { 0.20f, 0.20f, 0.25f, 1.0f } },
 };
 
-/* Per-frame GL baseline matching what the app's render3d layer sets up before
- * user geometry runs. An exported scene assumes this baseline (it lives in the
- * export's init()/display() scaffold, which the demo does NOT execute - only the
- * geometry snippet runs), so without it lit geometry renders wrong: e.g.
- * GL_COLOR_MATERIAL off means glColor3f is ignored under GL_LIGHTING and a
- * tinted surface comes out as the default white-ish material. The scene still
- * enables GL_LIGHTING and the specific lights it wants. Called after the camera
- * modelview so the light positions land in world space. */
-static void setup_render_baseline(void) {
+/* The per-frame state the *host* owns, and nothing else. It is a short list on
+ * purpose - the material/clear baseline a scene needs (glClear,
+ * GL_COLOR_MATERIAL + its mode, two-sided lighting, specular, shininess) is
+ * ordinary editable program text, seeded into new documents by
+ * repl_load_default_display_baseline() and written into every .glr by hand. A
+ * host that re-asserted it each frame would keep a scene that dropped those
+ * lines looking correct here and wrong everywhere else, which is exactly the
+ * authoring feedback this demo exists to give. Depth test is scene text too.
+ *
+ * What is left mirrors render3d_pass_setup(): lights (positions after the
+ * camera, so they land in world space), the global ambient, and lighting off
+ * as a baseline - execute_commands() turns it on if the program says so. The
+ * one-shot half of the host baseline (clear color, blending, point
+ * attenuation) is repl_apply_init_bootstrap(), applied once at startup, same
+ * as the app and as an export's init(). */
+static void setup_frame_lights(void) {
     int i;
-    glDepthFunc(GL_LESS);
-    glDisable(GL_BLEND);
     glDisable(GL_LIGHTING);
-    glColor3f(1.0f, 1.0f, 1.0f);
-
-    glEnable(GL_NORMALIZE);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, g_light_model_ambient);
 
     for (i = 0; i < DEMO_LIGHT_COUNT; i++) {
@@ -615,7 +614,7 @@ static void setup_render_baseline(void) {
 }
 
 /* Export light bridge ('e' round-trip): without it, repl_export_save_output
- * emits zeroed light colors. Report the same per-slot values setup_render_baseline
+ * emits zeroed light colors. Report the same per-slot values setup_frame_lights
  * applies, so the exported standalone C lights the scene the way the demo does. */
 static void demo_light_fill_slot(int slot, ReplExportLightInfo *out) {
     int i;
@@ -638,10 +637,25 @@ static void draw_text(int x, int y, const char *s) {
     }
 }
 
+/* Opaque backing strip behind a HUD row. Nothing clears the window on the
+ * program's behalf (see display_func), so geometry - or last frame's smear -
+ * runs straight under the text; the strip is what keeps it legible. Drawn in
+ * the same 2D ortho space as the text, so y is the window-space bottom edge. */
+static void draw_hud_strip(int y, int h) {
+    glColor3f(0.05f, 0.06f, 0.08f);
+    glBegin(GL_QUADS);
+      glVertex2i(0, y);
+      glVertex2i(g_window_w, y);
+      glVertex2i(g_window_w, y + h);
+      glVertex2i(0, y + h);
+    glEnd();
+}
+
 static void draw_hud(void) {
     char buf[320];
     glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
     glDisable(GL_LIGHTING);
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -650,6 +664,9 @@ static void draw_hud(void) {
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
+
+    draw_hud_strip(g_window_h - 24, 24);
+    draw_hud_strip(0, 24);
 
     {
         int t_idx = repl_eval_find_predef_var_idx("t");
@@ -684,19 +701,24 @@ static void display_func(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands(repl_dispatch_edit_line_get());
 
-    glClearColor(0.09f, 0.10f, 0.13f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
-
+    /* No host clear: the scene rect is cleared by the *program*, exactly as in
+     * gl-repl and in the exported C. A scene whose glClear is missing or
+     * commented out smears, and that is the feedback an authoring window owes
+     * you - a host-side clear would run whether or not the source said so. */
     apply_projection();
     apply_camera_modelview();
-    setup_render_baseline();
+    setup_frame_lights();
 
     memset(&opts, 0, sizeof opts);
     opts.flat_cmd_count = repl_state_flat_program_count();
     opts.program        = repl_state_flat_program_view();
     opts.text           = source_document_view();
+    /* Bracketing the program the way render3d_pass_setup and the exported
+     * display() do: whatever state the scene leaves set is undone before the
+     * HUD draws and before the next frame, so nothing leaks across frames. */
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
     repl_execute_program(&opts);
+    glPopAttrib();
 
     draw_hud();
 
@@ -1050,8 +1072,13 @@ int main(int argc, char **argv) {
     glutInitWindowSize(g_window_w, g_window_h);
     glutCreateWindow("repl_live_demo");
 
-    glEnable(GL_DEPTH_TEST);
+    /* The one-shot host baseline: clear color, src-over blending, point
+     * attenuation - the same commands the app applies at startup and an
+     * export's init() carries, straight out of src/repl rather than
+     * hand-copied here. After install_point_parameter_proc(), which is what
+     * tells the attenuation entry whether the entry point exists. */
     install_point_parameter_proc();
+    repl_apply_init_bootstrap();
 
     variable_panel_set_visible(g_panel_on);
 
