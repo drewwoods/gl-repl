@@ -42,6 +42,7 @@
  *   ./repl_live_demo path/to/config.ini                # explicit INI
  *   ./repl_live_demo scene_a.c scene_b.glr             # bypass the INI
  *   ./repl_live_demo examples/scenes/torus.glr         # edit a built-in example
+ *   ./repl_live_demo --dump-code scene.glr             # round-trip to stdout
  *   make repl-live-demo USE_GL_STUBS=1                 # headless link/isolation
  */
 #include "gl_includes.h"
@@ -69,6 +70,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>               /* getpid - --dump-code temp file */
 
 /* --- Config / scene list ------------------------------------------------- */
 
@@ -140,8 +142,11 @@ static const ReplHostEffects g_host_effects = {
  * cannot link -- it is app-layer), writing the saved `// camera` block's
  * glTranslatef/glRotatef sequence into the demo's orbit-camera variables. Only
  * the two import callbacks are needed: repl_export_load_from_file() calls
- * reset_import() once then try_consume_import_line() per line. The save/example
- * callbacks are unused (left NULL).
+ * reset_import() once then try_consume_import_line() per line, and a `.glr`'s
+ * `// camera` header streams through the same pair (the example loader's
+ * fallback for a bridge with no apply_example_block, which is the app's
+ * shortcut, not a requirement). The save/example callbacks are unused
+ * (left NULL).
  *
  *   state 0  glTranslatef -> camera distance (-z)
  *   state 1  glRotatef axis (1,0,0) -> rx
@@ -453,35 +458,73 @@ static void select_scene(int idx) {
     import_active_scene();
 }
 
+/* Write the live REPL state through the same writers as gl-repl's Ctrl+S,
+ * shared by the 'e' key and --dump-code. The writer follows the *source*
+ * extension - a `.glr` scene re-exports as scene source (repl_export_save_glr,
+ * the examples/scenes/ format) and anything else as standalone C - so a diff
+ * against the imported file stays like-for-like. The demo installs the camera
+ * write-bridge (above) so the view is captured, but not the config /
+ * projection / light bridges, so `@cfg` rows are absent and those C lines fall
+ * back to the exporter's defaults. */
+static int write_active_scene(const char *out_path) {
+    if (path_is_glr(g_scene_paths[g_active_scene]))
+        return repl_export_save_glr(out_path, source_document_view());
+    {
+        ReplExportLayout layout;
+        layout.render3d_w = g_window_w;
+        layout.render3d_h = g_window_h;
+        return repl_export_save_output(out_path, source_document_view(), &layout);
+    }
+}
+
 /* Round-trip aid ('e' key): re-export the live REPL state next to the CWD as
- * ./<scene>.roundtrip.<ext> via the same writers as gl-repl's Ctrl+S, so you can
- * diff the export against the imported source to verify the import/export
- * round-trips. The writer follows the *source* extension - a `.glr` scene
- * re-exports as scene source (repl_export_save_glr, the examples/scenes/ format)
- * and anything else as standalone C - so the diff stays like-for-like. The demo
- * installs the camera write-bridge (above) so the view is captured, but not the
- * config / projection / light bridges, so `@cfg` rows are absent and those C
- * lines fall back to the exporter's defaults. */
+ * ./<scene>.roundtrip.<ext>, so you can diff it against the imported source to
+ * verify the import/export round-trips. */
 static void export_active_scene(void) {
     char out[PATH_MAX_LEN + 16];
-    ReplExportLayout layout;
     const char *path;
     int rc;
     if (g_scene_count == 0) return;
     path = g_scene_paths[g_active_scene];
-    if (path_is_glr(path)) {
-        snprintf(out, sizeof out, "%s.roundtrip.glr", scene_basename(path));
-        rc = repl_export_save_glr(out, source_document_view());
-    } else {
-        snprintf(out, sizeof out, "%s.roundtrip.c", scene_basename(path));
-        layout.render3d_w = g_window_w;
-        layout.render3d_h = g_window_h;
-        rc = repl_export_save_output(out, source_document_view(), &layout);
-    }
+    snprintf(out, sizeof out, "%s.roundtrip.%s", scene_basename(path),
+             path_is_glr(path) ? "glr" : "c");
+    rc = write_active_scene(out);
     fprintf(stderr,
             "[repl_live_demo] %s ./%s (%d cmds) -- diff against %s\n",
             rc ? "exported ->" : "export FAILED:", out,
             repl_state_document_count(), g_scene_paths[g_active_scene]);
+}
+
+/* --dump-code: the 'e' round-trip with no window and no file left behind -
+ * the exported text goes to stdout, so `./repl_live_demo --dump-code s.glr |
+ * diff - s.glr` is the whole round-trip check. Same writers as export_active_scene
+ * (and therefore the same missing bridges: no `@cfg` rows), so what lands here is
+ * exactly what the 'e' key writes. The writers are filename-based, so the dump
+ * goes through a temp file rather than a second, drifting FILE* path. */
+static int dump_active_scene(void) {
+    char tmp[PATH_MAX_LEN];
+    const char *dir = getenv("TMPDIR");
+    FILE *f;
+    int c;
+
+    if (g_scene_count == 0) return 0;
+    snprintf(tmp, sizeof tmp, "%s/repl_live_demo_dump_%ld.%s",
+             (dir && dir[0]) ? dir : "/tmp", (long)getpid(),
+             path_is_glr(g_scene_paths[g_active_scene]) ? "glr" : "c");
+    if (!write_active_scene(tmp)) {
+        fprintf(stderr, "[repl_live_demo] error: could not write %s\n", tmp);
+        return 0;
+    }
+    f = fopen(tmp, "r");
+    if (!f) {
+        fprintf(stderr, "[repl_live_demo] error: could not read back %s\n", tmp);
+        return 0;
+    }
+    while ((c = fgetc(f)) != EOF)
+        fputc(c, stdout);
+    fclose(f);
+    remove(tmp);
+    return 1;
 }
 
 static void poll_active_file(void) {
@@ -928,7 +971,7 @@ static int load_default_ini(const char *explicit_path) {
 
 static void print_usage(const char *prog) {
     printf(
-"Usage: %s [config.ini | scene_a.c scene_b.glr ...]\n"
+"Usage: %s [--dump-code] [config.ini | scene_a.c scene_b.glr ...]\n"
 "\n"
 "Live, file-watching REPL demo. Imports scene files -- .c (the app's standalone\n"
 "C save/export format) or .glr (the scene source the built-in examples under\n"
@@ -940,6 +983,9 @@ static void print_usage(const char *prog) {
 "                    tools/repl_live_demo/repl_live_demo.ini).\n"
 "  config.ini        Load scenes + options from this INI.\n"
 "  *.c / *.glr       Use these scene files directly (bypass the INI).\n"
+"  --dump-code       Import the first scene, write what the 'e' key would\n"
+"                    export to stdout, and exit. No window, no GLUT init.\n"
+"                    `--dump-code s.glr | diff - s.glr` is the round-trip check.\n"
 "\n"
 "Keys:  [ ] cycle scene   r reload   e export (round-trip)   v toggle panel\n"
 "       space pause   q/Esc quit   LMB orbit  RMB pan  wheel zoom  drag a slider\n",
@@ -949,15 +995,27 @@ static void print_usage(const char *prog) {
 int main(int argc, char **argv) {
     const char *ini_path = NULL;
     int got_files = 0;
+    int dump_code = 0;
     int i;
 
-    glutInit(&argc, argv);
+    /* --dump-code is a headless leg: no window, and no glutInit() either -
+     * that reaches the window server (and fails outright on a Linux box with
+     * no DISPLAY), which a text dump has no business needing. Scan for the
+     * flag before GLUT ever sees argv. */
+    for (i = 1; i < argc; i++)
+        if (strcmp(argv[i], "--dump-code") == 0)
+            dump_code = 1;
+
+    if (!dump_code)
+        glutInit(&argc, argv);
 
     for (i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) {
             print_usage(argv[0]);
             return 0;
+        } else if (strcmp(a, "--dump-code") == 0) {
+            continue;  /* handled above, before glutInit */
         } else if (ends_with(a, ".ini")) {
             ini_path = a;
         } else if (ends_with(a, ".c") || path_is_glr(a)) {
@@ -977,6 +1035,17 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    repl_install_host_effects(&g_host_effects);
+    repl_export_install_camera_bridge(&g_cam_bridge);
+    repl_export_install_light_bridge(&g_light_bridge);
+    variable_panel_state_reset();
+    variable_panel_install_value_source(&g_value_source);
+
+    if (dump_code) {
+        import_active_scene();
+        return dump_active_scene() ? 0 : 1;
+    }
+
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(g_window_w, g_window_h);
     glutCreateWindow("repl_live_demo");
@@ -984,12 +1053,7 @@ int main(int argc, char **argv) {
     glEnable(GL_DEPTH_TEST);
     install_point_parameter_proc();
 
-    repl_install_host_effects(&g_host_effects);
-    repl_export_install_camera_bridge(&g_cam_bridge);
-    repl_export_install_light_bridge(&g_light_bridge);
-    variable_panel_state_reset();
     variable_panel_set_visible(g_panel_on);
-    variable_panel_install_value_source(&g_value_source);
 
     import_active_scene();
 

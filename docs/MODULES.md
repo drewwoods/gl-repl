@@ -257,7 +257,10 @@ lists to make the layer boundaries observable.
   `check-repl-live-demo-no-editor` (the parameterized `repl_demo` no-editor
   guard) enforces the editor exclusion. The `USE_GL_STUBS=1` build runs the
   import path in `main()` and exits, doubling as a headless "does this scene
-  parse?" checker.
+  parse?" checker; `--dump-code <scene>` is the windowless round-trip (import,
+  then write what the `e` key exports to stdout), so
+  `--dump-code s.glr | diff - s.glr` checks a scene's import/export without a
+  display.
 - **`make editor-demo`** (`tools/editor_demo/`) - a generic
   plain-text editor demo driven by its *own* input dispatcher
   ([`tools/editor_demo/input.c`](../tools/editor_demo/input.c)) and its *own* File menu

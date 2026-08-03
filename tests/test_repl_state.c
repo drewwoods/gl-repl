@@ -782,6 +782,101 @@ static const char *const k_test_camera_example[] = {
     NULL
 };
 
+/* A camera bridge of the pre-apply_example_block shape: import parsing only,
+ * one parser state per transform line, with the `glRotatef(g_angle, 0,1,0)`
+ * animation hook recognised *in place of* the numeric Y-rotate rather than as
+ * an extra line. That is what tools/repl_live_demo installs and what
+ * src/app/glr_camera_export.c's own parser still looks like, so the example
+ * loader's fallback path has to feed it exactly the four transform lines: a
+ * fifth, synthetic hook line desynchronises it at the target translate, which
+ * fails the whole header and leaves the camera block in the document as
+ * geometry. */
+static int   g_legacy_cam_state;
+static float g_legacy_cam_dist, g_legacy_cam_rx, g_legacy_cam_ry;
+static float g_legacy_cam_pan[3];
+
+static void legacy_cam_reset_import(void) { g_legacy_cam_state = 0; }
+
+static int legacy_cam_read_floats(const char *p, float *out, int n) {
+    p = strchr(p, '(');
+    if (!p) return 0;
+    p++;
+    for (int i = 0; i < n; i++) {
+        char *end = NULL;
+        while (*p == 'f' || *p == 'F' || *p == ',' || *p == ' ' || *p == '\t')
+            p++;
+        out[i] = strtof(p, &end);
+        if (end == p) return 0;
+        p = end;
+    }
+    return 1;
+}
+
+static int legacy_cam_try_consume_import_line(const char *text) {
+    float v[4];
+    while (*text == ' ' || *text == '\t') text++;
+    if (g_legacy_cam_state == 0 && strncmp(text, "glTranslatef", 12) == 0) {
+        if (!legacy_cam_read_floats(text, v, 3)) return 0;
+        g_legacy_cam_dist = -v[2];
+        g_legacy_cam_state = 1;
+        return 1;
+    }
+    if (g_legacy_cam_state == 1 && strncmp(text, "glRotatef", 9) == 0) {
+        if (!legacy_cam_read_floats(text, v, 4)) return 0;
+        g_legacy_cam_rx = v[0];
+        g_legacy_cam_state = 2;
+        return 1;
+    }
+    if (g_legacy_cam_state == 2 && strncmp(text, "glRotatef", 9) == 0) {
+        if (strstr(text, "g_angle")) { g_legacy_cam_state = 3; return 1; }
+        if (!legacy_cam_read_floats(text, v, 4)) return 0;
+        g_legacy_cam_ry = v[0];
+        g_legacy_cam_state = 3;
+        return 1;
+    }
+    if (g_legacy_cam_state == 3 && strncmp(text, "glTranslatef", 12) == 0) {
+        if (!legacy_cam_read_floats(text, v, 3)) return 0;
+        g_legacy_cam_pan[0] = v[0];
+        g_legacy_cam_pan[1] = v[1];
+        g_legacy_cam_pan[2] = v[2];
+        g_legacy_cam_state = 4;
+        return 1;
+    }
+    return 0;
+}
+
+static void test_example_camera_header_streams_to_import_only_bridge(void) {
+    static const ReplExportCameraBridge legacy_bridge = {
+        .reset_import            = legacy_cam_reset_import,
+        .try_consume_import_line = legacy_cam_try_consume_import_line
+    };
+    const ReplExportCameraBridge *saved = repl_export_camera_bridge();
+    int consumed;
+
+    g_legacy_cam_state = 0;
+    g_legacy_cam_dist = g_legacy_cam_rx = g_legacy_cam_ry = 0.0f;
+    memset(g_legacy_cam_pan, 0, sizeof g_legacy_cam_pan);
+
+    repl_export_install_camera_bridge(&legacy_bridge);
+    consumed = repl_example_consume_camera_header(k_test_camera_example);
+    repl_export_install_camera_bridge(saved);
+
+    ASSERT_TRUE("import-only bridge consumes the 5-line camera header",
+                consumed == 5);
+    ASSERT_TRUE("import-only bridge reaches the final parser state",
+                g_legacy_cam_state == 4);
+    ASSERT_TRUE("import-only bridge gets the distance",
+                fabsf(g_legacy_cam_dist - 8.0f) < 1e-4f);
+    ASSERT_TRUE("import-only bridge gets rx",
+                fabsf(g_legacy_cam_rx - 30.0f) < 1e-4f);
+    ASSERT_TRUE("import-only bridge gets ry",
+                fabsf(g_legacy_cam_ry - 40.0f) < 1e-4f);
+    ASSERT_TRUE("import-only bridge gets the pan target",
+                fabsf(g_legacy_cam_pan[0] - 1.0f) < 1e-4f &&
+                fabsf(g_legacy_cam_pan[1] - 2.0f) < 1e-4f &&
+                fabsf(g_legacy_cam_pan[2] - 3.0f) < 1e-4f);
+}
+
 static void load_test_camera_example(void) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
@@ -2081,6 +2176,7 @@ int main(void) {
     test_camera_ease_to_default_uses_scene_default();
     test_camera_clear_scene_default_falls_back();
     test_example_load_sets_scene_camera_default();
+    test_example_camera_header_streams_to_import_only_bridge();
     test_user_scene_load_clears_scene_camera_default();
     test_workspace_load_clears_scene_camera_default();
     test_camera_target_decay_override_applies();

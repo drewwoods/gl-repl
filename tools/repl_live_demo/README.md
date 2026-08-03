@@ -31,6 +31,9 @@ make repl-live-demo            # real GL
 ./repl_live_demo a.c b.glr     # use these scene files directly (bypass the INI)
 ./repl_live_demo examples/scenes/rotating-cube.glr   # author a built-in example
 
+./repl_live_demo --dump-code s.glr        # round-trip the scene to stdout, exit
+./repl_live_demo --dump-code s.glr | diff - s.glr    # ...and check the diff
+
 make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
                                      # main() and prints diagnostics, then exits
                                      # (handy as a scene "does it parse?" check)
@@ -50,6 +53,12 @@ make repl-live-demo USE_GL_STUBS=1   # headless build; runs the import path in
 | wheel | Zoom |
 | drag a slider row | Change a variable (LMB = linear, RMB = log) |
 | `q` / Esc | Quit |
+
+`--dump-code` is the same round-trip as `e` with no window in the way: it
+imports the **first** scene, writes what `e` would write to **stdout**, and
+exits. Same writers, so the same caveats (no `@cfg` rows - see below); it skips
+`glutInit()` entirely, so it works over ssh with no display. `--dump-code
+scene.glr | diff - scene.glr` is the whole import/export check.
 
 ## The live-edit loop
 

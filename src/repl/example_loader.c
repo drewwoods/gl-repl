@@ -166,18 +166,17 @@ static int try_apply_example_camera_header(const char *const *lines) {
     if (!bridge || !bridge->try_consume_import_line)
         return 1;  /* validated; bridge absent; treat as successfully consumed */
 
-    /* The bridge's import parser is tuned for the 5-line save-file
-     * camera block: distance translate, X-rotate, Y-rotate,
-     * `glRotatef(g_angle, 0, 1, 0)` animation hook, target
-     * translate. Examples ship the 4-line variant without the
-     * animation hook; inject a synthetic hook line so the bridge
-     * advances from state 3 to state 4 between lines 3 and 4. */
+    /* Stream the same four transform lines an import would see. A saved
+     * file's camera block is four lines too - its `glRotatef(g_angle, 0,1,0)`
+     * animation hook *substitutes for* the numeric Y-rotate rather than
+     * adding a line (cam_format_block_impl in src/app/glr_camera_export.c) -
+     * so an example's block needs no padding to match the parser's shape.
+     * Feeding a synthetic hook line here used to desynchronise the parser at
+     * the target translate, which failed the whole header and dropped the
+     * camera transforms into the document as geometry. */
     if (bridge->reset_import) bridge->reset_import();
-    if (!bridge->try_consume_import_line(lines[1])) return 0;
-    if (!bridge->try_consume_import_line(lines[2])) return 0;
-    if (!bridge->try_consume_import_line(lines[3])) return 0;
-    if (!bridge->try_consume_import_line("glRotatef(g_angle, 0, 1, 0)")) return 0;
-    if (!bridge->try_consume_import_line(lines[4])) return 0;
+    for (int i = 1; i <= REPL_EXPORT_CAMERA_LINES; i++)
+        if (!bridge->try_consume_import_line(lines[i])) return 0;
     return 1;
 }
 
