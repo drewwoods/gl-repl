@@ -1077,6 +1077,9 @@ int main(int argc, char **argv) {
      * hand-copied here. After install_point_parameter_proc(), which is what
      * tells the attenuation entry whether the entry point exists. */
     install_point_parameter_proc();
+    /* The GLU tessellator the executor uses for glTess* blocks: every tess
+     * opcode is a silent no-op until this allocates it. */
+    repl_executor_init_resources();
     repl_apply_init_bootstrap();
 
     variable_panel_set_visible(g_panel_on);
