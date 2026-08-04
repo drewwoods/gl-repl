@@ -29,7 +29,7 @@
 
 /* Sections that are timed each frame (or whenever they run). */
 typedef enum {
-    PROF_RENDER3D = 0,  /* render3d_draw_scene() */
+    PROF_RENDER3D = 0,  /* render3d_draw_scene() + the host chrome-strip clear */
     PROF_RENDER3D_SETUP,     /* projection/camera/lights/material setup */
     PROF_RENDER3D_ACCUM_EFFECT, /* accumulation clears/resolve + blur subframe prep */
     PROF_RENDER3D_FILL,      /* execute_commands() main fill pass */

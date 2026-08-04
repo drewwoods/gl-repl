@@ -18,7 +18,7 @@ decide *what* geometry exists - that is handed in.
 style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
 the caller fills a [`Render3dRenderConfig`](render_types.h#L139) (camera pose, lighting, grid/axes
-themes, AA settings, clear color) and supplies an `execute_fn` that draws
+themes, AA settings, background colors) and supplies an `execute_fn` that draws
 the actual geometry. [`render3d_draw_scene()`](render.h#L129) does everything around that
 callback:
 
@@ -26,6 +26,27 @@ callback:
 glr_camera_load_modelview(&pose);                /* caller owns the modelview camera transform */
 render3d_draw_scene(&renderer_state, &cfg);    /* viewport -> projection -> cfg.execute_fn() -> grid/axes/backdrop/overlays */
 ```
+
+### Two background colors, not one
+
+The config carries the background twice, because the two uses are not the same
+question:
+
+- `baseline_clear_color` - the GL clear-color state established before
+  `execute_fn` runs, i.e. what a `glClear` inside the callback uses when the
+  callback set no clear color of its own. It is a fixed configuration value.
+- `presentation_rgba` - the background the scene is understood to sit *on*: the
+  color the grid / axes recede fog fades toward, and the color the caller
+  derived `alpha_scale` from. The derivation stays caller policy; render3d
+  consumes the scale, never recomputes it.
+
+A caller whose geometry callback clears with a color it computes at run time -
+the REPL controller, whose user program owns its own `glClearColor`/`glClear` -
+feeds the *observed* result into `presentation_rgba` while leaving
+`baseline_clear_color` at its configuration default. Feeding an observation into
+the baseline would let a previous frame's background decide the pixels this
+frame's own clear writes. A caller with no such distinction (the demo) writes
+the same value to both.
 
 The render3d module owns no camera type - the caller picks one. The REPL
 controller uses [`GlrCameraPose`](../app/glr_camera.h#L144) + `glr_camera_load_modelview` from

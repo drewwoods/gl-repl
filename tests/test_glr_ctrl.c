@@ -63,6 +63,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define glutSetCursor                      test_glutSetCursor
 #define glr_export_mesh_ply                test_glr_export_mesh_ply
 #define glutSetWindowTitle                 test_glutSetWindowTitle
+/* The controller makes exactly one glClearColor call of its own - the chrome
+ * strips - so intercepting it textually here says which background the strips
+ * took, and when. Only glr_ctrl.c's own calls are redirected; the executor is
+ * a separate TU, so the program's glClearColor still reaches the GL stubs. */
+#define glClearColor                       test_chrome_glClearColor
 
 /* glr_camera.h was already pulled in at line 3 (before the #define),
  * so its `glr_camera_load_modelview` declaration is preserved as the
@@ -71,6 +76,13 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * are reached only through glr_ctrl.c's includes, which the macros
  * cover. */
 void test_glr_camera_load_modelview(const GlrCameraPose *pose);
+static float g_chrome_clear_rgba[4];
+static int   g_chrome_clear_calls;
+static void test_chrome_glClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
+    g_chrome_clear_rgba[0] = r; g_chrome_clear_rgba[1] = g;
+    g_chrome_clear_rgba[2] = b; g_chrome_clear_rgba[3] = a;
+    g_chrome_clear_calls++;
+}
 /* ui/subsystems/variable_panel.h is pulled in before the #define (via
  * ui/app/snapshot.h), so its real-name prototype is preserved too;
  * forward-declare this stub the same way. */
@@ -108,6 +120,7 @@ static void test_glutSetWindowTitle(const char *title) {
 #undef glutSetCursor
 #undef glr_export_mesh_ply
 #undef glutSetWindowTitle
+#undef glClearColor
 
 static Render3dRenderConfig g_last_scene_config;
 /* Snapshot copy captured by the replay HUD stub; replaces the old
@@ -161,11 +174,33 @@ static int count_highlight_kind_on_line(UiHighlightKind kind, int line_idx) {
     return count;
 }
 
+/* Off (-1) by default: most display-frame tests want the config, not a
+ * geometry walk. Set to a Render3dExecutePurpose to make the stub drive the
+ * controller's real execute_fn the way render.c does, which is the only way
+ * this frame's background observation gets produced. */
+static int g_scene_stub_execute_purpose = -1;
+/* Non-zero makes the stub reject the config: no callback runs, so nothing
+ * publishes a background. */
+static int g_scene_stub_reject = 0;
+/* Chrome-clear count seen from inside the scene render, to pin ordering. */
+static int g_chrome_clear_calls_at_scene = -1;
+
 int test_scene_render_3d_scene(Render3dState *state,
                                const Render3dRenderConfig *config) {
     (void)state;
     g_scene_render_calls++;
     g_last_scene_config = *config;
+    g_chrome_clear_calls_at_scene = g_chrome_clear_calls;
+
+    if (g_scene_stub_reject)
+        return -1;
+
+    if (g_scene_stub_execute_purpose >= 0 && config->execute_fn) {
+        Render3dExecuteContext ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.purpose = (Render3dExecutePurpose)g_scene_stub_execute_purpose;
+        config->execute_fn(&ctx, config->execute_user_data);
+    }
 
     if (g_t_idx >= 0) {
         g_predef_value_seen_in_scene = g_predef_vars[g_t_idx].value;
@@ -182,9 +217,15 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose) {
     (void)pose;
 }
 
+/* Chrome-clear count seen from the replay HUD, to pin the other side of the
+ * ordering: the strips must be painted before any 2D overlay draws over
+ * them. */
+static int g_chrome_clear_calls_at_hud = -1;
+
 void test_replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     g_replay_hud_calls++;
     g_last_replay_hud_snap = *snap;
+    g_chrome_clear_calls_at_hud = g_chrome_clear_calls;
 
     if (g_t_idx >= 0)
         g_predef_value_seen_in_hud = g_predef_vars[g_t_idx].value;
@@ -301,6 +342,21 @@ static void prepare_display_fixture(void) {
     memset(&g_last_replay_hud_snap, 0, sizeof(g_last_replay_hud_snap));
     g_scene_render_calls = 0;
     g_replay_hud_calls = 0;
+    g_scene_stub_execute_purpose = -1;
+    g_scene_stub_reject = 0;
+    g_chrome_clear_calls = 0;
+    g_chrome_clear_calls_at_scene = -1;
+    g_chrome_clear_calls_at_hud = -1;
+    memset(g_chrome_clear_rgba, 0, sizeof(g_chrome_clear_rgba));
+    /* The retained presentation background deliberately has no production
+     * reset - not even glr_ctrl_reset_all - because snapping to the default is
+     * exactly wrong on the frame the value is least trustworthy. Tests need
+     * isolation from each other, though, so the fixture reseeds the static
+     * directly (this TU includes glr_ctrl.c). */
+    g_presentation_rgba[0] = CFG_DEFAULT_CLEAR_R;
+    g_presentation_rgba[1] = CFG_DEFAULT_CLEAR_G;
+    g_presentation_rgba[2] = CFG_DEFAULT_CLEAR_B;
+    g_presentation_rgba[3] = CFG_DEFAULT_CLEAR_A;
     g_predef_value_seen_in_scene = 0.0f;
     g_predef_value_seen_in_hud = 0.0f;
     g_flat_count_seen_in_hud = -1;
@@ -418,14 +474,22 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                 g_last_scene_config.post_resolve_overlays_fn != NULL);
     ASSERT_INT("tess preview marked active for VERTEX replay mode",
                g_replay_fade_plan.tess_preview_active, 1);
-    ASSERT_FLOAT("clear color default r", g_last_scene_config.clear_color[0],
-                 CFG_DEFAULT_CLEAR_R);
-    ASSERT_FLOAT("clear color default g", g_last_scene_config.clear_color[1],
-                 CFG_DEFAULT_CLEAR_G);
-    ASSERT_FLOAT("clear color default b", g_last_scene_config.clear_color[2],
-                 CFG_DEFAULT_CLEAR_B);
-    ASSERT_FLOAT("clear color default a", g_last_scene_config.clear_color[3],
-                 CFG_DEFAULT_CLEAR_A);
+    ASSERT_FLOAT("baseline clear color r",
+                 g_last_scene_config.baseline_clear_color[0], CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("baseline clear color g",
+                 g_last_scene_config.baseline_clear_color[1], CFG_DEFAULT_CLEAR_G);
+    ASSERT_FLOAT("baseline clear color b",
+                 g_last_scene_config.baseline_clear_color[2], CFG_DEFAULT_CLEAR_B);
+    ASSERT_FLOAT("baseline clear color a",
+                 g_last_scene_config.baseline_clear_color[3], CFG_DEFAULT_CLEAR_A);
+    ASSERT_FLOAT("presentation background default r",
+                 g_last_scene_config.presentation_rgba[0], CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("presentation background default g",
+                 g_last_scene_config.presentation_rgba[1], CFG_DEFAULT_CLEAR_G);
+    ASSERT_FLOAT("presentation background default b",
+                 g_last_scene_config.presentation_rgba[2], CFG_DEFAULT_CLEAR_B);
+    ASSERT_FLOAT("presentation background default a",
+                 g_last_scene_config.presentation_rgba[3], CFG_DEFAULT_CLEAR_A);
     ASSERT_FLOAT("alpha scale uses default background",
                  g_last_scene_config.alpha_scale, 1.0f);
     ASSERT_INT("focus vertex valid", g_last_scene_config.focus.valid, 1);
@@ -497,67 +561,212 @@ static void plant_flat_clear_color(int idx, float r, float g, float b) {
     c->args[0] = r; c->args[1] = g; c->args[2] = b; c->args[3] = 1.0f;
 }
 
-/* The render configuration supplies the GL clear color before the user
- * program executes, and it is the frame's background for the chrome strips,
- * the recede fog and alpha_scale as well as for the clear itself. It must
- * ignore a glClearColor that lands after the clear, and bookkeeping left over
- * from an earlier frame - neither can reach the pixels this frame. */
-static void test_display_frame_clear_color_after_clear_is_ignored(void) {
-    printf("--- imrepl_ctrl clear color source order (late) ---\n");
+/* Set up a two-frame background fixture: replay off, the stub driving the
+ * controller's real geometry callback so the frame's background is produced
+ * by actual execution. */
+static void prepare_background_fixture(void) {
     prepare_display_fixture();
     replay_state_mut()->active = 0;
     replay_state_mut()->state = REPLAY_OFF;
+    g_scene_stub_execute_purpose = RENDER3D_EXEC_MAIN_FILL;
+}
+
+/* A glClearColor that lands *after* the clear reaches no pixel this frame -
+ * source order is what executes - so the background stays the baseline the
+ * bare clear took. Nothing predicts that: the executor observes it while
+ * emitting the two commands. */
+static void test_display_frame_clear_color_after_clear_is_ignored(void) {
+    printf("--- imrepl_ctrl clear color source order (late) ---\n");
+    prepare_background_fixture();
 
     plant_flat_clear(2);
     plant_flat_clear_color(3, 0.05f, 0.06f, 0.08f);
     repl_state_document_count_set(4);
     repl_state_flat_program_set_count(4);
-    repl_state_render_mut()->clear_color[0] = 0.05f;
-    repl_state_render_mut()->clear_color[1] = 0.06f;
-    repl_state_render_mut()->clear_color[2] = 0.08f;
-    repl_state_render_mut()->clear_color[3] = 1.0f;
 
     glr_ctrl_display_frame();
 
-    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame r",
-                 g_last_scene_config.clear_color[0], CFG_DEFAULT_CLEAR_R);
-    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame g",
-                 g_last_scene_config.clear_color[1], CFG_DEFAULT_CLEAR_G);
-    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame b",
-                 g_last_scene_config.clear_color[2], CFG_DEFAULT_CLEAR_B);
-    ASSERT_FLOAT("late or prior-frame clear color does not affect this frame a",
-                 g_last_scene_config.clear_color[3], CFG_DEFAULT_CLEAR_A);
+    ASSERT_FLOAT("late clear color does not reach this frame's chrome r",
+                 g_chrome_clear_rgba[0], CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("late clear color does not reach this frame's chrome g",
+                 g_chrome_clear_rgba[1], CFG_DEFAULT_CLEAR_G);
+    ASSERT_FLOAT("late clear color does not reach this frame's chrome b",
+                 g_chrome_clear_rgba[2], CFG_DEFAULT_CLEAR_B);
+    ASSERT_FLOAT("late clear color does not reach this frame's chrome a",
+                 g_chrome_clear_rgba[3], CFG_DEFAULT_CLEAR_A);
+
+    /* Second frame: the retained value the fog and contrast read is the same
+     * baseline, so a late glClearColor cannot leak forward either. */
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("late clear color does not leak into the next frame r",
+                 g_last_scene_config.presentation_rgba[0], CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("late clear color does not leak into the next frame b",
+                 g_last_scene_config.presentation_rgba[2], CFG_DEFAULT_CLEAR_B);
 }
 
 /* The other half of the same rule, and the one a user actually authors: a
- * glClearColor *before* the clear is the frame's background, so it has to
- * reach the config the chrome / fog / overlay-contrast all read. */
+ * glClearColor *before* the clear is the background the rect took. Chrome
+ * follows it on the frame it happens; the fog / overlay-contrast consumers
+ * read the retained value, so they follow on the next one. Both vintages are
+ * asserted here rather than worked around - the lag is the design. */
 static void test_display_frame_clear_color_before_clear_applies(void) {
     printf("--- imrepl_ctrl clear color source order (early) ---\n");
-    prepare_display_fixture();
-    replay_state_mut()->active = 0;
-    replay_state_mut()->state = REPLAY_OFF;
+    prepare_background_fixture();
 
     plant_flat_clear_color(2, 0.05f, 0.06f, 0.08f);
     plant_flat_clear(3);
     repl_state_document_count_set(4);
     repl_state_flat_program_set_count(4);
-    repl_state_render_reset_defaults();
 
     glr_ctrl_display_frame();
 
-    ASSERT_FLOAT("clear color before the clear drives the frame r",
-                 g_last_scene_config.clear_color[0], 0.05f);
-    ASSERT_FLOAT("clear color before the clear drives the frame g",
-                 g_last_scene_config.clear_color[1], 0.06f);
-    ASSERT_FLOAT("clear color before the clear drives the frame b",
-                 g_last_scene_config.clear_color[2], 0.08f);
-    ASSERT_FLOAT("clear color before the clear drives the frame a",
-                 g_last_scene_config.clear_color[3], 1.0f);
+    ASSERT_FLOAT("chrome takes this frame's observed background r",
+                 g_chrome_clear_rgba[0], 0.05f);
+    ASSERT_FLOAT("chrome takes this frame's observed background g",
+                 g_chrome_clear_rgba[1], 0.06f);
+    ASSERT_FLOAT("chrome takes this frame's observed background b",
+                 g_chrome_clear_rgba[2], 0.08f);
+    ASSERT_FLOAT("chrome takes this frame's observed background a",
+                 g_chrome_clear_rgba[3], 1.0f);
+    /* Same frame, the other vintage: this config was built before the walk
+     * that observed the new background, so it still carries the previous one. */
+    ASSERT_FLOAT("fog/contrast lag one frame behind a background change",
+                 g_last_scene_config.presentation_rgba[0], CFG_DEFAULT_CLEAR_R);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_FLOAT("the retained background reaches the next frame's fog r",
+                 g_last_scene_config.presentation_rgba[0], 0.05f);
+    ASSERT_FLOAT("the retained background reaches the next frame's fog g",
+                 g_last_scene_config.presentation_rgba[1], 0.06f);
+    ASSERT_FLOAT("the retained background reaches the next frame's fog b",
+                 g_last_scene_config.presentation_rgba[2], 0.08f);
     /* alpha_scale is derived from that background, not from a constant: a
      * background darker than the design point boosts overlay alpha. */
     ASSERT_TRUE("darker background boosts overlay alpha_scale",
                 g_last_scene_config.alpha_scale > 1.0f);
+    /* The baseline is configuration, not history: it must not follow the
+     * observation, or the program's own clear would start from whatever the
+     * last frame happened to show. */
+    ASSERT_FLOAT("baseline clear color stays the configured default",
+                 g_last_scene_config.baseline_clear_color[0], CFG_DEFAULT_CLEAR_R);
+}
+
+/* Chrome is painted after the scene render - so it can consume the frame's own
+ * observation - and before the 2D overlays that draw over the strips. */
+static void test_display_frame_chrome_clears_after_the_scene(void) {
+    printf("--- imrepl_ctrl chrome clear ordering ---\n");
+    prepare_display_fixture();
+    g_scene_stub_execute_purpose = RENDER3D_EXEC_MAIN_FILL;
+
+    plant_flat_clear_color(2, 0.05f, 0.06f, 0.08f);
+    plant_flat_clear(3);
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_INT("chrome not yet cleared when the scene renders",
+               g_chrome_clear_calls_at_scene, 0);
+    ASSERT_INT("chrome cleared exactly once per frame", g_chrome_clear_calls, 1);
+    ASSERT_INT("chrome cleared before the replay HUD paints over it",
+               g_chrome_clear_calls_at_hud, 1);
+}
+
+/* Retention is the whole unknown-background policy: a frame that establishes
+ * no background keeps the last honest answer rather than snapping to the
+ * default, and that is also what holds replay steady. */
+static void test_display_frame_background_retention(void) {
+    printf("--- imrepl_ctrl background retention ---\n");
+    prepare_background_fixture();
+
+    plant_flat_clear_color(2, 0.05f, 0.06f, 0.08f);
+    plant_flat_clear(3);
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("frame 1 establishes a background", g_chrome_clear_rgba[0], 0.05f);
+
+    /* Delete the clear: the program now establishes nothing, and the host
+     * must NOT clear the rect on its behalf - so the last known background is
+     * what chrome and the retained presentation keep showing. */
+    plant_flat_cmd(3, CMD_COMMENT, "// no clear");
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("an unknown frame keeps the retained background",
+                 g_chrome_clear_rgba[0], 0.05f);
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("the retained background still feeds fog/contrast",
+                 g_last_scene_config.presentation_rgba[0], 0.05f);
+
+    /* A clear under a fully-disabled color mask writes no color pixels. The
+     * observation is unknown, so retention holds - the defect a source-only
+     * resolver could not see. */
+    {
+        GLCmd *c = plant_flat_cmd(3, CMD_COLOR_MASK,
+                                  "glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);");
+        c->num_args = 4;
+        c->args[0] = 0.0f; c->args[1] = 0.0f; c->args[2] = 0.0f; c->args[3] = 0.0f;
+        plant_flat_clear_color(4, 0.90f, 0.10f, 0.10f);
+        plant_flat_clear(5);
+        repl_state_document_count_set(6);
+        repl_state_flat_program_set_count(6);
+    }
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("a fully masked clear does not become the background",
+                 g_chrome_clear_rgba[0], 0.05f);
+
+    /* A rejected config runs no callback at all: nothing publishes, so the
+     * retained value stands untouched. */
+    g_scene_stub_reject = 1;
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("a rejected render leaves the retained background alone",
+                 g_chrome_clear_rgba[0], 0.05f);
+    g_scene_stub_reject = 0;
+}
+
+/* Shipped scenes whose first flat command before the clear is real work
+ * (glEnable(GL_DEPTH_TEST), an assignment, ...) get replay_frame_setup_limit()
+ * == 0, so an early replay prefix executes no clear at all. Retention is what
+ * keeps those from flickering to the default until the PC crosses the clear. */
+static void test_display_frame_replay_prefix_holds_background(void) {
+    printf("--- imrepl_ctrl replay prefix background ---\n");
+    prepare_background_fixture();
+
+    {
+        GLCmd *c = plant_flat_cmd(0, CMD_ENABLE, "glEnable(GL_DEPTH_TEST);");
+        c->num_args = 1;
+        c->args[0] = (float)GL_DEPTH_TEST;
+    }
+    plant_flat_clear_color(1, 0.05f, 0.06f, 0.08f);
+    plant_flat_clear(2);
+    plant_flat_cmd(3, CMD_COMMENT, "// geometry follows");
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+
+    /* Establish a known background first, so "holds" is distinguishable from
+     * "happens to equal the default". */
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("full run establishes the program's background",
+                 g_chrome_clear_rgba[0], 0.05f);
+    memcpy(g_presentation_rgba,
+           (float[4]){0.42f, 0.43f, 0.44f, 1.0f}, sizeof(g_presentation_rgba));
+
+    /* This is the shape the audit found: work before the clear, so the frame
+     * setup limit cannot rescue an early prefix. */
+    ASSERT_INT("a scene with work before its clear keeps no setup limit",
+               replay_frame_setup_limit(repl_state_flat_program_view()), 0);
+
+    replay_state_mut()->active = 1;
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->pc = 1;             /* stops short of the clear */
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("a prefix short of the clear holds the retained background",
+                 g_chrome_clear_rgba[0], 0.42f);
+
+    replay_state_mut()->pc = 3;             /* the clear has now executed */
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("crossing the clear releases the background to it",
+                 g_chrome_clear_rgba[0], 0.05f);
 }
 
 static void test_reshape_clamps_height(void) {
@@ -5565,6 +5774,9 @@ int main(void) {
     test_display_frame_builds_config_and_restores_live_state();
     test_display_frame_clear_color_after_clear_is_ignored();
     test_display_frame_clear_color_before_clear_applies();
+    test_display_frame_chrome_clears_after_the_scene();
+    test_display_frame_background_retention();
+    test_display_frame_replay_prefix_holds_background();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_frame_spans_host_stages();

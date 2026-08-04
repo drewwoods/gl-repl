@@ -100,12 +100,13 @@ static Render3dRgba rgba(float r, float g, float b, float a) {
 #define AXES_XN_FOG_ALPHA_KNEE 0.30f
 #define AXES_XN_FOG_REACH      4.0f   /* nominal axis+label extent */
 
-/* tf = 1 - opacity (0 shown .. 1 hidden). Pull a clear-color linear-fog
+/* tf = 1 - opacity (0 shown .. 1 hidden). Pull a background-colored linear-fog
  * wall in toward the origin as the axes fade out. Untouched at tf<=0 so
  * a steady, fully-shown axes set is unfogged. */
-static void axes_xn_apply_transition_fog(float tf, const float clear_col[4]) {
+static void axes_xn_apply_transition_fog(float tf,
+                                         const float presentation_rgba[4]) {
     if (tf <= 0.0f) return;
-    glFogfv(GL_FOG_COLOR, clear_col);
+    glFogfv(GL_FOG_COLOR, presentation_rgba);
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     float far_end  = AXES_XN_FOG_REACH;
@@ -743,7 +744,7 @@ void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
-    axes_xn_apply_transition_fog(xn.fog_tf, config->clear_color);
+    axes_xn_apply_transition_fog(xn.fog_tf, config->presentation_rgba);
 #endif
 
     float breath = sinf(config->anim_time * RENDER3D_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */

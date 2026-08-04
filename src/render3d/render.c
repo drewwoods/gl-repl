@@ -598,7 +598,12 @@ static void draw_orbit_target(const Render3dFrameRenderContext *frame_ctx) {
     render3d_render_pop_state();
 }
 
-static void render3d_apply_clear_color(const float clear_color[4]) {
+/* Establish the GL clear-color state the geometry walk starts in: what a
+ * program glClear with no preceding glClearColor uses. Deliberately the
+ * baseline, never the presentation color - the latter is what the scene is
+ * understood to sit on, and feeding it here would let a previous frame's
+ * background decide the pixels this frame's own clear writes. */
+static void render3d_apply_baseline_clear_color(const float clear_color[4]) {
     glClearColor(clear_color[0], clear_color[1],
                  clear_color[2], clear_color[3]);
 }
@@ -880,7 +885,7 @@ int render3d_draw_scene(Render3dState *state,
     int accum_passes = config->accum_passes;
     glViewport(config->render3d_x, config->render3d_y,
                config->render3d_w, config->render3d_h);
-    render3d_apply_clear_color(config->clear_color);
+    render3d_apply_baseline_clear_color(config->baseline_clear_color);
 
     /* Refresh the ortho scale reference. Done here - modelview still
      * holds the caller's camera, nothing has touched it yet - so the
@@ -901,12 +906,14 @@ int render3d_draw_scene(Render3dState *state,
         int blur = (RENDER3D_ACCUM_EFFECT_IS_BLUR(config->accum_effect) &&
                     config->setup_subframe_fn != NULL);
         /* The accum buffer is this module's own scratch surface, so it
-         * clears here. The color/depth clear is not ours: the caller has
-         * already cleared whatever it owns outside the scene rect, and the
-         * scene rect itself is cleared per pass by the program's own
-         * glClear. The caller's chrome is not re-cleared per pass - each
-         * pass accumulates the same chrome color at `weight`, summing back
-         * to that color. */
+         * clears here. The color/depth clear is not ours: whatever the caller
+         * owns outside the scene rect is the caller's to clear (before or
+         * after this call - the REPL controller does it after, on the
+         * background these passes are observed to establish), and the scene
+         * rect itself is cleared per pass by the program's own glClear.
+         * Either way nothing re-clears the caller's chrome per pass: each
+         * pass accumulates whatever those pixels already hold at `weight`,
+         * summing back to that color. */
         prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
         glClear(GL_ACCUM_BUFFER_BIT);
         /* Optionally confine the repeated per-pass clears and the glAccum

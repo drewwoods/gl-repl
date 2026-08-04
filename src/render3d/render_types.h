@@ -207,11 +207,22 @@ typedef struct Render3dRenderConfig {
                                       int sx, int sy, int sw, int sh);
     void  *buffer_resolve_overlay_user_data;
 
-    /* --- Background clear color (RGBA) ---
-     * Populated by the caller from its program/configuration policy. The
-     * render3d module receives this pre-resolved float[4] instead of inspecting
-     * the source or program model. */
-    float clear_color[4];
+    /* --- Background colors (RGBA) ---
+     * Two distinct jobs, deliberately not one field. Both arrive pre-resolved:
+     * the render3d module receives colors, never a program model to inspect.
+     *
+     * `baseline_clear_color` is the GL clear-color state established before the
+     * geometry walk - what a glClear with no preceding glClearColor uses. It is
+     * the caller's fixed configuration default and must not track what previous
+     * frames ended up showing, or host presentation history would change the
+     * pixels the program's OWN clear writes (most visibly on a scene switch).
+     *
+     * `presentation_rgba` is the background the scene is understood to sit on:
+     * what the grid / axes recede fog fades toward, and what the caller derived
+     * `alpha_scale` from. A caller that observes its program's real clears feeds
+     * that observation here, so the two colors legitimately differ. */
+    float baseline_clear_color[4];
+    float presentation_rgba[4];
 
     /* --- Animation --- */
     float anim_time;
@@ -329,7 +340,10 @@ typedef struct Render3dRenderConfig {
     Render3dFocusVertex focus;
 
     /* --- Visual scaling --- */
-    float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
+    /* Alpha boost to counter dark-bg crush; 1.0 = no change. Derived by the
+     * caller from presentation_rgba above - the derivation is caller policy,
+     * so render3d takes the scale and never recomputes it from the color. */
+    float alpha_scale;
     float grid_brightness; /* user grid-line alpha multiplier (Grid brightness cfg); 1.0 = no change */
 } Render3dRenderConfig;
 

@@ -1009,6 +1009,69 @@ void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
 
+/* The GL clear-color state every program walk starts in: what a glClear with
+ * no preceding glClearColor uses. Fixed configuration, never observation -
+ * render3d establishes it from Render3dRenderConfig.baseline_clear_color and
+ * the executor starts its observation from the same array, so the walk's
+ * starting point and GL's cannot disagree. */
+static const float k_baseline_clear_rgba[4] = {
+    CFG_DEFAULT_CLEAR_R, CFG_DEFAULT_CLEAR_G,
+    CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
+};
+
+/* The last background a program actually established, as observed by the walk
+ * that cleared it. Seeded to the configured default; updated only by a frame
+ * whose authoritative passes all reported a fully-known background, so a frame
+ * that established none - no color clear, a clear under a glColorMask that
+ * left a channel disabled, a replay prefix whose PC has not reached the clear -
+ * keeps showing the last honest answer instead of snapping to the default.
+ *
+ * Deliberately never reset or invalidated (not on scene load, not on
+ * reset_all): invalidating would snap to the default for exactly the frame the
+ * retained value is least trustworthy. */
+static float g_presentation_rgba[4] = {
+    CFG_DEFAULT_CLEAR_R, CFG_DEFAULT_CLEAR_G,
+    CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
+};
+
+/* Fold of what this frame's authoritative passes published (see
+ * scene_execute_adapter): the RGBA of the most recent publish, and whether
+ * every one of them was fully known. `any` separates "no pass spoke" from
+ * "a pass spoke and knew nothing" - an empty AND is vacuously true, and
+ * without the flag a frame that ran no walk at all would hand chrome a
+ * zeroed color. */
+static float g_frame_observed_rgba[4];
+static int   g_frame_observed_any;
+static int   g_frame_observed_known;
+
+static void glr_ctrl_frame_observation_reset(void) {
+    memset(g_frame_observed_rgba, 0, sizeof(g_frame_observed_rgba));
+    g_frame_observed_any = 0;
+    g_frame_observed_known = 1;
+}
+
+/* Last authoritative publish wins the color; `known` is ANDed across all of
+ * them. Under accumulation that is the final sample - and time blur bakes its
+ * last sub-step at the true frame time, so an animated glClearColor's final
+ * value is the honest frame-end background. */
+static void glr_ctrl_frame_observation_fold(const ReplBackgroundObservation *obs) {
+    if (!obs)
+        return;
+    memcpy(g_frame_observed_rgba, obs->rgba, sizeof(g_frame_observed_rgba));
+    g_frame_observed_any = 1;
+    g_frame_observed_known = g_frame_observed_known && obs->known;
+}
+
+/* This frame's presentation background: the folded observation when every
+ * authoritative pass knew all four channels, else the retained value. Returns
+ * 1 when the answer came from this frame (and so is worth retaining). */
+static int glr_ctrl_frame_observation_resolve(float out[4]) {
+    int known = g_frame_observed_any && g_frame_observed_known;
+    memcpy(out, known ? g_frame_observed_rgba : g_presentation_rgba,
+           sizeof(float) * 4);
+    return known;
+}
+
 /* Clear one chrome strip, skipping degenerate rects. */
 static void glr_ctrl_clear_strip(int x, int y, int w, int h) {
     if (w <= 0 || h <= 0)
@@ -1032,8 +1095,16 @@ static void glr_ctrl_clear_strip(int x, int y, int w, int h) {
  * lives here rather than in render3d because chrome is a controller
  * concept: render3d knows the scene rect, not the window layout (same
  * reason the camera transform is loaded here, not there). The four strips
- * tile the window minus the scene rect. */
-static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
+ * tile the window minus the scene rect.
+ *
+ * Runs AFTER the scene, on the background that scene's own execution was
+ * observed to establish - the strips exclude the scene rectangle, so painting
+ * them late can neither repair nor disturb a single user pixel, and it is what
+ * lets chrome consume the frame's own observation instead of a prediction of
+ * it. The load-bearing ordering rule is only that this precedes the 2D
+ * overlays that paint over the chrome. */
+static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config,
+                                  const float rgba[4]) {
     UiViewportState vp = ui_state_viewport();
     int sx = config->render3d_x;
     int sy = config->render3d_y;
@@ -1043,15 +1114,11 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
     if (vp.window_w <= 0 || vp.window_h <= 0)
         return;
 
-    /* render3d applies the clear color itself, but not until inside
-     * render3d_draw_scene - after this runs. Set it here so the chrome
-     * clears to the scene's color on the frame it changes, not the frame
-     * after (which is what reusing the stale GL clear color would give).
-     * config->clear_color is the color the program's own glClear will use,
-     * resolved in execution order by glr_ctrl_build_scene_config, so the
-     * strips and the scene rect land on the same background. */
-    glClearColor(config->clear_color[0], config->clear_color[1],
-                 config->clear_color[2], config->clear_color[3]);
+    /* The program's own glClear left its color live in GL, and render3d
+     * established the baseline before that. Own the value here rather than
+     * inheriting either: the strips clear to the background this frame's
+     * scene actually took, so the two land on the same color. */
+    glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
     /* The chrome strips clear depth too, and a program glClearDepth leaves
      * its value live in GL after the scene walk. Own the value here rather
      * than inheriting last frame's leftover - same reason as the clear
@@ -1143,6 +1210,23 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
         purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL ||
         purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES;
+    /* Which passes may speak for the frame's background. render3d runs
+     * exactly one of the three fill paths per accumulation pass, and each
+     * paints the scene rect for real:
+     *   - MAIN_FILL          the ordinary (and plain-wireframe) geometry pass;
+     *   - WINDING            the winding view's two-sided fill;
+     *   - WIREFRAME_DEPTH_FILL  the hidden-line effect's depth seed, whose one
+     *                        synthetic full-mask clear IS that view's clear.
+     * Every other purpose publishes nothing and says so explicitly below
+     * rather than by leaving a field zeroed: the depth probe is a feedback
+     * walk, the hidden/visible line redraws replay the program over the seed
+     * the depth fill laid down, and replay fade overlays suppress CMD_CLEAR
+     * outright. */
+    int publishes_background =
+        purpose == RENDER3D_EXEC_MAIN_FILL ||
+        purpose == RENDER3D_EXEC_WINDING ||
+        purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL;
+    ReplBackgroundObservation observation = {{0.0f, 0.0f, 0.0f, 0.0f}, 0};
 
     int count = repl_state_flat_program_count();
     if (g_frame_replay_exec_limit >= 0 && g_frame_replay_exec_limit < count)
@@ -1162,13 +1246,17 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     char exec_status[REPL_DIAG_TEXT_MAX] = "";
     if (wireframe_effect_pass) {
-        hidden_lines_execute(&(HiddenLinesRenderContext){
+        HiddenLinesRenderContext hl = {
             .flat_cmd_count = count,
             .program        = repl_state_flat_program_view(),
             .text           = source_document_view(),
             .status_out     = exec_status,
             .status_out_sz  = (int)sizeof(exec_status),
-        }, purpose);
+            .observation_out = publishes_background ? &observation : NULL,
+        };
+        memcpy(hl.baseline_clear_rgba, k_baseline_clear_rgba,
+               sizeof(hl.baseline_clear_rgba));
+        hidden_lines_execute(&hl, purpose);
     } else {
         ReplExecutionOptions opts = {
             .flat_cmd_count = count,
@@ -1176,7 +1264,10 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
             .text           = source_document_view(),
             .status_out     = exec_status,
             .status_out_sz  = (int)sizeof(exec_status),
+            .observation_out = publishes_background ? &observation : NULL,
         };
+        memcpy(opts.baseline_clear_rgba, k_baseline_clear_rgba,
+               sizeof(opts.baseline_clear_rgba));
         if (purpose == RENDER3D_EXEC_WINDING)
             opts.state_filter = winding_state_filter;
         repl_execute_program(&opts);
@@ -1190,6 +1281,13 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         repl_eval_restore_scratch_arrays(saved_scratch);
         repl_state_render_set(&saved_render);
     }
+
+    /* Outside the snapshot/restore bracket above on purpose: the observation
+     * is not REPL state to be rewound but a report of pixels this pass wrote,
+     * and the hidden-line depth fill - the one publishing pass that IS
+     * side-effect-suppressed - must still be able to speak for the frame. */
+    if (publishes_background)
+        glr_ctrl_frame_observation_fold(&observation);
 }
 
 /* Grid/axes in-out fade machines.
@@ -1378,33 +1476,34 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_resolve_overlays_fn        = edit_overlays_post_resolve_overlays;
     config->post_resolve_overlays_user_data = &g_overlay_pack;
 
-    /* --- Background clear color ---
-     * Every scoped frame starts from the bootstrap default; the program's own
-     * glClearColor moves it from there, in execution order. What the frame
-     * ends up showing is the color in effect at the program's *last* color
-     * glClear, so a glClearColor written after it cannot drive the background
-     * (nor leak into the next frame), matching the exported
-     * glPushAttrib/glPopAttrib bracket. Carrying REPL bookkeeping across
-     * frames, or taking the last glClearColor anywhere in the document, would
-     * both break that - see repl_flat_resolve_clear_color().
+    /* --- Background colors ---
+     * Two values, two jobs. Every scoped frame's walk starts from the
+     * bootstrap default, so that is what render3d establishes as GL's clear
+     * color; the program's own glClearColor moves it from there, in execution
+     * order, exactly as the exported C does under its
+     * glPushAttrib/glPopAttrib bracket.
      *
-     * The value is the frame's *background*, not just an argument to the
-     * clear: the chrome strips outside the scene rect clear to it, the grid /
-     * axes recede fog fades to it, and alpha_scale below lights overlays
-     * against it. All four have to agree, so they all read it here.
+     * What the frame ends up *showing* is not predicted here at all: the
+     * executor observes it while emitting the clears, and the controller
+     * retains the last fully-known answer in g_presentation_rgba. The grid /
+     * axes recede fog fades to that, and alpha_scale below lights overlays
+     * against it - one number, so those consumers cannot disagree with each
+     * other. They read the previous frame's observation, since this config is
+     * built before the walk that produces this frame's; the chrome strips,
+     * which clear after the scene, take the current one (see
+     * glr_ctrl_frame_observation_resolve). On the frame a background
+     * *changes*, fog and overlay alpha are one frame behind while chrome and
+     * the scene rect are already correct - no accumulating error, and no
+     * invalidation protocol.
      *
-     * Deliberately the full flat program, not the (replay-clamped)
-     * flat_program parameter: replay narrows how much geometry executes, and
-     * the background must not flicker as the PC walks past the clear. */
-    {
-        static const float baseline[4] = {
-            CFG_DEFAULT_CLEAR_R, CFG_DEFAULT_CLEAR_G,
-            CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
-        };
-        repl_flat_resolve_clear_color(repl_state_flat_program_view(),
-                                      source_document_view(), baseline,
-                                      config->clear_color);
-    }
+     * Retention is also what keeps replay steady: a prefix that has not yet
+     * executed an effective color clear publishes nothing known, so the
+     * background holds instead of flickering to the default as the PC walks
+     * toward the clear. */
+    memcpy(config->baseline_clear_color, k_baseline_clear_rgba,
+           sizeof(config->baseline_clear_color));
+    memcpy(config->presentation_rgba, g_presentation_rgba,
+           sizeof(config->presentation_rgba));
 
     /* --- Animation --- */
     config->anim_time = repl_state_variables().anim_time;
@@ -1551,13 +1650,14 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->focus = glr_ctrl_build_focus_vertex();
 
     /* Boost overlay alpha on dark backgrounds: bg_lum is the Rec. 709
-     * relative luminance of the clear color (0.2126/0.7152/0.0722 R/G/B
-     * weights); the reciprocal raises alpha as the background darkens,
+     * relative luminance of the presentation background (0.2126/0.7152/0.0722
+     * R/G/B weights); the reciprocal raises alpha as the background darkens,
      * with +0.02 as a black-background guard and the result clamped to
-     * 1..3 below. */
-    bg_lum = 0.2126f * config->clear_color[0]
-        + 0.7152f * config->clear_color[1]
-        + 0.0722f * config->clear_color[2];
+     * 1..3 below. The derivation stays here, in the controller: render3d
+     * receives the finished scale and never recomputes it from the color. */
+    bg_lum = 0.2126f * config->presentation_rgba[0]
+        + 0.7152f * config->presentation_rgba[1]
+        + 0.0722f * config->presentation_rgba[2];
     as_val = (CFG_DEFAULT_CLEAR_LUMA + 0.02f) /
              fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
@@ -2715,7 +2815,9 @@ void glr_ctrl_display_frame(void) {
     for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_RENDER3D);
-    glr_ctrl_clear_chrome(&scene_config);
+    /* Nothing has spoken for this frame's background yet; the fold below
+     * collects what the scene's own passes observe. */
+    glr_ctrl_frame_observation_reset();
     {
         GlrCameraState cam = glr_camera();
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
@@ -2726,7 +2828,7 @@ void glr_ctrl_display_frame(void) {
     glr_ctrl_resolve_blur_subframe(&scene_config);
     /* Confine the whole scene render - including the program's own
      * glClear, the one thing the viewport does not bound - to the scene
-     * rect, so it cannot repaint the chrome cleared just above. This
+     * rect, so it cannot repaint the chrome cleared just below. This
      * module owns the window layout, so it owns this scissor;
      * render3d_draw_scene sets none of its own (see
      * render3d_execute_user_geometry). */
@@ -2744,6 +2846,23 @@ void glr_ctrl_display_frame(void) {
         }
     }
     glPopAttrib();  /* scene-rect scissor: the 2D overlays paint the chrome */
+    /* Chrome last, on the background this frame's own execution observed
+     * itself establishing - or the retained one when it established none
+     * (no color clear, a masked-off clear, a rejected config that ran no
+     * callback at all). The strips exclude the scene rect, so this cannot
+     * touch user pixels; the intervening readers - buffer visualization and
+     * the post filter - read the scene rect only, and the whole-window
+     * compositor runs after the 2D overlays. */
+    {
+        float chrome_rgba[4];
+        int observed_this_frame = glr_ctrl_frame_observation_resolve(chrome_rgba);
+        glr_ctrl_clear_chrome(&scene_config, chrome_rgba);
+        /* Retain only an honest answer: an unknown frame leaves the last one
+         * standing for the next frame's fog and overlay contrast. */
+        if (observed_this_frame)
+            memcpy(g_presentation_rgba, chrome_rgba,
+                   sizeof(g_presentation_rgba));
+    }
     prof_end(PROF_RENDER3D);
     /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
      * (glr_ctrl_setup_subframe), which rewrites the live flat-program count
