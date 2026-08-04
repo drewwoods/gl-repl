@@ -109,7 +109,7 @@ int repl_example_visible_tag_at(int dense_idx);
 const char *repl_example_subheading(int example_idx);
 
 /* Optional runtime override for development/live iteration. `dir` must contain
- * a catalog.ini with file paths under `dir/scenes`. On success, the query API
+ * a catalog.ini with file paths relative to `dir`. On success, the query API
  * serves that catalog instead of the compiled-in generated data. Passing a bad
  * directory leaves the current catalog unchanged and writes a diagnostic to
  * err_buf when provided. */

@@ -429,19 +429,18 @@ static char **examples_read_source_lines(const char *path,
     return lines;
 }
 
-static int catalog_file_under_scenes(const char *file_real,
-                                     const char *scenes_real) {
-    size_t n = strlen(scenes_real);
-    return strncmp(file_real, scenes_real, n) == 0 &&
+static int catalog_file_under_base(const char *file_real,
+                                   const char *base_real) {
+    size_t n = strlen(base_real);
+    return strncmp(file_real, base_real, n) == 0 &&
            file_real[n] == '/';
 }
 
 static int catalog_finalize_draft(RuntimeCatalogBuild *build,
-                                  RuntimeCatalogDraft *draft,
-                                  const char *base_dir,
-                                  const char *scenes_real,
-                                  char *err_buf,
-                                  int err_sz) {
+                                   RuntimeCatalogDraft *draft,
+                                   const char *base_dir,
+                                   char *err_buf,
+                                   int err_sz) {
     if (!draft->section)
         return 1;
     if (!draft->file || !draft->name || !draft->tags || !draft->group) {
@@ -486,9 +485,9 @@ static int catalog_finalize_draft(RuntimeCatalogBuild *build,
                            draft->section, file);
         return 0;
     }
-    if (!catalog_file_under_scenes(file_real, scenes_real)) {
+    if (!catalog_file_under_base(file_real, base_dir)) {
         examples_set_error(err_buf, err_sz,
-                           "[%s] file must live under examples/scenes",
+                           "[%s] file must live under the examples dir",
                            draft->section);
         return 0;
     }
@@ -584,19 +583,6 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
         return 0;
     }
 
-    char scenes_dir[PATH_MAX];
-    if (snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", base_real) >=
-        (int)sizeof(scenes_dir)) {
-        examples_set_error(err_buf, err_sz, "examples scenes path too long");
-        return 0;
-    }
-    char scenes_real[PATH_MAX];
-    if (!realpath(scenes_dir, scenes_real)) {
-        examples_set_error(err_buf, err_sz, "cannot read %s: %s",
-                           scenes_dir, strerror(errno));
-        return 0;
-    }
-
     char catalog_path[PATH_MAX];
     if (snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini",
                  base_real) >= (int)sizeof(catalog_path)) {
@@ -661,7 +647,7 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
                 break;
             }
             if (!catalog_finalize_draft(&build, &draft, base_real,
-                                        scenes_real, err_buf, err_sz)) {
+                                        err_buf, err_sz)) {
                 ok = 0;
                 break;
             }
@@ -731,7 +717,7 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
         ok = 0;
     }
     if (ok && !catalog_finalize_draft(&build, &draft, base_real,
-                                      scenes_real, err_buf, err_sz))
+                                      err_buf, err_sz))
         ok = 0;
     catalog_draft_clear(&draft);
     if (ok && build.count == 0) {

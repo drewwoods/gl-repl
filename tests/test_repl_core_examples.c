@@ -1035,15 +1035,15 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     err[0] = '\0';
     ASSERT_TRUE("reject non-existent dir", !repl_examples_load_dir("/tmp/nonexistent_catalog_path_xyz", err, sizeof(err)));
 
-    /* Missing scenes subdirectory */
+    /* Missing scene file (no scenes/ subdirectory needed) */
     char no_scenes_root[512];
     char no_scenes_cat[512];
     snprintf(no_scenes_root, sizeof(no_scenes_root), "%s/no_scenes_root", temp_dir);
     snprintf(no_scenes_cat, sizeof(no_scenes_cat), "%s/catalog.ini", no_scenes_root);
     if (mkdir(no_scenes_root, 0700) == 0) {
-        write_text_path(no_scenes_cat, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+        write_text_path(no_scenes_cat, "[sec]\nfile = nonexistent.glr\nname = Raw\ntags = 2D\ngroup = G\n");
         err[0] = '\0';
-        ASSERT_TRUE("reject catalog when scenes dir missing", !repl_examples_load_dir(no_scenes_root, err, sizeof(err)));
+        ASSERT_TRUE("reject catalog when scene file missing", !repl_examples_load_dir(no_scenes_root, err, sizeof(err)));
         remove(no_scenes_cat);
         rmdir(no_scenes_root);
     }
@@ -1129,10 +1129,10 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     err[0] = '\0';
     ASSERT_TRUE("reject absolute path", !repl_examples_load_dir(root, err, sizeof(err)));
 
-    /* File not under scenes */
+    /* File not under examples dir */
     write_text_path(catalog_path, "[sec]\nfile = ../raw-points.glr\nname = Raw\ntags = 2D\ngroup = G\n");
     err[0] = '\0';
-    ASSERT_TRUE("reject file not under scenes", !repl_examples_load_dir(root, err, sizeof(err)));
+    ASSERT_TRUE("reject file not under examples dir", !repl_examples_load_dir(root, err, sizeof(err)));
 
     /* Duplicate scene file */
     write_text_path(catalog_path,
