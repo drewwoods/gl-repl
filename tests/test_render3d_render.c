@@ -1462,6 +1462,98 @@ static void test_scene_lights_indicators(void) {
     ASSERT_TRUE("renders indicator points", gl_stub_counts[GL_STUB_glBegin] > 0);
 }
 
+/* The config carries the background twice because the two uses are different
+ * questions: baseline_clear_color is the GL state a program clear starts from,
+ * presentation_rgba is what the scene is understood to sit on. A caller that
+ * observes its program's real clears feeds the observation into the second
+ * only - so the two legitimately differ, and each reader must take its own.
+ * Feeding presentation history into the baseline would let a previous frame
+ * decide the pixels this frame's own clear writes. */
+static void test_background_colors_are_independent(void) {
+    printf("--- baseline vs presentation background ---\n");
+
+    Render3dState state;
+    int theme;
+    int fog_color_calls = 0;
+    int clear_color_calls = 0;
+
+    /* An edge-fade theme dissolves via per-vertex alpha and never sets a fog
+     * color, so ask the predicate which themes actually exercise the fog path
+     * rather than naming one that may join the edge-fade set later. FAR is the
+     * extent whose distance fog fires for every non-edge-fade theme. */
+    for (theme = GRID_THEME_OFF + 1; theme < GRID_THEME_COUNT; theme++) {
+        Render3dRenderConfig cfg = make_test_config();
+        TraceLog log;
+
+        if (render3d_grid_theme_uses_edge_fade(theme))
+            continue;
+
+        memset(&state, 0, sizeof(state));
+        cfg.use_accum = 0;
+        cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+        cfg.accum_passes = 1;
+        cfg.grid_theme = theme;
+        cfg.grid_extent_idx = GRID_EXTENT_FAR;
+        cfg.grid_opacity = 1.0f;
+        cfg.axes_theme = 0;
+        cfg.baseline_clear_color[0] = 0.25f; cfg.baseline_clear_color[1] = 0.0f;
+        cfg.baseline_clear_color[2] = 0.0f;  cfg.baseline_clear_color[3] = 1.0f;
+        cfg.presentation_rgba[0] = 0.0f; cfg.presentation_rgba[1] = 0.0f;
+        cfg.presentation_rgba[2] = 0.75f; cfg.presentation_rgba[3] = 1.0f;
+
+        trace_begin();
+        ASSERT_INT("draw_scene accepts the split config",
+                   render3d_draw_scene(&state, &cfg), 0);
+        trace_end(&log);
+
+        clear_color_calls += trace_count_line(&log, "glClearColor 0.25 0 0 1");
+        fog_color_calls   += trace_count_line(&log, "glFogfv 2918 0 0 0.75 1");
+
+        {
+            char lbl[80];
+            snprintf(lbl, sizeof lbl,
+                     "theme=%d: presentation is never the clear color", theme);
+            ASSERT_INT(lbl, trace_count_line(&log, "glClearColor 0 0 0.75 1"), 0);
+            snprintf(lbl, sizeof lbl,
+                     "theme=%d: baseline is never the fog color", theme);
+            ASSERT_INT(lbl, trace_count_line(&log, "glFogfv 2918 0.25 0 0 1"), 0);
+        }
+    }
+
+    ASSERT_INT("baseline establishes the GL clear color",
+               clear_color_calls > 0, 1);
+    ASSERT_INT("presentation drives the recede fog color",
+               fog_color_calls > 0, 1);
+}
+
+/* execute_fn == NULL stays supported: no program walk means no program-owned
+ * clear, and render3d must not invent one for the scene rect - it draws its
+ * helpers against the supplied presentation color over whatever the buffer
+ * already holds. */
+static void test_null_execute_fn_draws_helpers_without_clearing(void) {
+    printf("--- execute_fn == NULL: helpers, no scene clear ---\n");
+
+    Render3dState state;
+    Render3dRenderConfig cfg = make_test_config();
+
+    memset(&state, 0, sizeof(state));
+    cfg.execute_fn = NULL;
+    cfg.use_accum = 0;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
+    cfg.grid_theme = GRID_THEME_CLASSIC;
+    cfg.grid_extent_idx = GRID_EXTENT_FAR;
+    cfg.grid_opacity = 1.0f;
+
+    gl_stub_counts_reset();
+    ASSERT_INT("draw_scene accepts a NULL execute_fn",
+               render3d_draw_scene(&state, &cfg), 0);
+    ASSERT_INT("no glClear is issued on the program's behalf",
+               (int)gl_stub_counts[GL_STUB_glClear], 0);
+    ASSERT_TRUE("the scene helpers still draw",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+}
+
 static void test_postprocess_filters(void) {
     printf("--- postprocess filters (vignette & chromatic aberration & scanlines) ---\n");
 
@@ -1667,6 +1759,8 @@ int main(int argc, char **argv) {
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();
     test_vertex_label_text();
+    test_background_colors_are_independent();
+    test_null_execute_fn_draws_helpers_without_clearing();
     test_scene_grid_fog_matches_predicate();
     test_nv_fog_distance_radial_optin();
 #ifdef GL_STUBS
