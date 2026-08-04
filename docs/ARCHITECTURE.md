@@ -244,7 +244,7 @@ Nothing clears the scene rectangle on the program's behalf - the user's own
 frame on?" is a question about what execution *did*, and it is answered by the
 walk that did it: as `ReplExecCursor` emits `glClearColor`, `glColorMask` and
 `glClear`, it records which channels each clear actually wrote and with what,
-publishing a [`ReplBackgroundObservation`](../src/repl/executor.h#L65) - RGBA plus one
+publishing a [`ReplBackgroundObservation`](../src/repl/executor.h#L64) - RGBA plus one
 `known` flag - at the end of the walk. `known` is false when the program
 established no background at all: no color clear, or a clear under a mask that
 left a channel disabled with nothing behind it. An unknown background is never
@@ -790,7 +790,7 @@ vertices** - the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L315) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L312) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L283) in [`src/repl/command.h`](../src/repl/command.h)
@@ -1768,7 +1768,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L374)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L371)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
