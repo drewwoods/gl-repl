@@ -16,6 +16,46 @@ change is that `goto` is the one construct in the language resolved at execute
 time, inside a pipeline that resolves all other control flow at flatten time -
 and that the resulting semantics do not work.
 
+### Design read (2026-08-04)
+
+Reviewed against the tree, by the author of the background-observation work
+that touched the same code. **Verdict: sound, proceed.**
+
+Claims checked and confirmed:
+
+- **§1 reproduces.** The exact `USER_GUIDE` example, loaded through the real
+  pipeline, flattens to the dump shown there: `if(n < 5)` erased at flatten,
+  the jump unconditional, row 2's `n + 1` baked to `args[0] = 1`. The
+  documented feature does not work.
+- **§4's usage survey holds** - 0 of 39 scenes, 0 tours, and exactly the two
+  tutorials (`left:` / `right:` at `tutorials.c:480,482`, `draw:` at `:748`).
+- **§3's cursor claim holds** - `repl_exec_cursor_step()` returns 0 in exactly
+  two places.
+- The `repl_extract_label_name` / `repl_extract_goto_label` caller set
+  (executor, reformat, tutorial_runner, replay_annotations) is fully covered by
+  §2.
+
+Three corrections, folded into the sections below: the removal decouples the
+executor further than §3 claims (see "[3. The cursor contract gets
+simpler](#3-the-cursor-contract-gets-simpler)"); `import.c` and
+`replay_playback.c` are missing from the §2 site table, and `-Wswitch` cannot
+find the first of them; and export's handling of a `goto` row is unknown and
+needs answering before step 2.
+
+**No backward compatibility is owed, and the removal is total.** `goto` can
+disappear leaving the codebase with no memory of it: no compatibility shim, no
+retained-but-unused `CmdType`, no deprecation period, no migration for user
+files on disk that contain `goto` / `name:`, and - importantly - **no
+goto-specific rejection path**. A file or a typed line carrying `goto foo;`
+should fall through to the *generic* unknown-statement diagnostic that any
+other unrecognized text gets. Adding a special case that recognizes `goto` in
+order to refuse it would leave exactly the goto-shaped hole this removal is
+meant to close.
+
+The one rule that survives is a data-loss rule, not a compatibility one, and it
+is already an acceptance criterion: a rejected line must be *visible* rather
+than silently dropped.
+
 ## Why remove it
 
 ### 1. It does not do what its own documentation says
@@ -99,6 +139,12 @@ one real dependency this plan has to replace.
   budget in the replay-annotation walker.
 - Simplify `repl_exec_cursor_step()`'s contract: with the goto budget gone it
   can no longer stop mid-program, so "steps until done" becomes true.
+- **Cut the executor's last two ties to anything outside the flat program.**
+  `goto` is the only reader of the execution source-text view and the only
+  writer of the execution status channel, so both go with it and
+  `repl_execute_program()` ends up taking a flat program and nothing else. See
+  §3 - this is the largest single effect of the removal and the reason it is
+  worth more than "delete two `CmdType`s".
 - Leave `if(0) { … }` documented as the supported way to disable a block, and
   point the removed USER_GUIDE section at it and at the block-comment toggle.
 
@@ -175,8 +221,26 @@ the `-Wswitch` build then flags:
 | `command_spec.c:803` | drop the `CMD_GOTO` spec row; retire `CMD_CAT_LABEL` if it has no other member |
 | `reformat.c:377` | drop the `CMD_GOTO` indent case |
 | `hidden_lines.c:227` | drop from `hidden_lines_cursor_owns_cmd` |
+| `replay_playback.c:98` | drop `CMD_GOTO_LABEL` from the "is this a visible replay step" predicate |
 | `text_helpers.c` | delete `repl_extract_label_name` / `repl_extract_goto_label` |
 | `control_flow.h:10` | delete `REPL_GOTO_LOOP_LIMIT`; `REPL_GOTO_LABEL_MAX` goes with the last user |
+
+**`-Wswitch` does not find every site.** It enumerates the `CmdType` switches,
+which is most of the table above, but the label handling in `import.c` is
+*string* matching and stays silent:
+
+| Site | Change |
+|---|---|
+| `import.c:1167` `import_make_repl_label()` | delete; it exists only to claim a `name:` line before the C-expression converter rewrites it. Drop it from the converter chain at `:1767` too |
+| `import.c:2575`, `:2733` | the statement accumulator's label case. Every REPL statement ends in a terminator *except* a label, which is the whole reason the accumulator carries a `:` special case (see `87c26f4c`). Removing labels deletes it - unclaimed simplification |
+
+**Unanswered, and it gates step 2: what does export emit for a `goto` row
+today?** `export_cmd_writer.c` has no `CMD_GOTO` / `CMD_GOTO_LABEL` handling at
+all - its `label` matches are the unrelated `label()` bitmap-text primitive. So
+either those rows are silently dropped on export, which is a pre-existing bug
+this removal makes moot, or a verbatim path emits them and needs auditing.
+Answer it before deleting the types, because it decides whether an existing
+saved file round-trips or quietly loses rows on the way out as well as in.
 
 Check `CMD_CAT_LABEL` before deleting it - `command_spec.h:164` is a
 `CmdSyntaxCategory` member, and the drift test in
@@ -192,19 +256,54 @@ means a step can no longer stop a walk mid-program. Callers
 "a step may abort the frame" case disappears from the contract - state that
 explicitly in the header comment rather than leaving it implied.
 
-`execution_flat_text()` survives: it is the source-text accessor, and Phase 0
-of `clear-background-execution-observation.md` (`8f6192f0`) already fixed its
-bound. Confirm whether anything still calls it once the goto arm is gone; if
-not, it goes too.
+### 3a. The executor stops depending on the document
 
-### 4. Ordering against the in-flight background plan
+An earlier draft asked whether `execution_flat_text()` still has callers once
+the goto arm is gone. Checked: it does not, and the chain does not stop there.
+Two counts settle it -
 
-`clear-background-execution-observation.md` is mid-implementation on the
-`background-observation` branch, and its Phase 0 factored `flat_goto_target()`
-into one implementation. That work is not wasted - it made the *current*
-behavior correct and testable - but this plan deletes the function. Land the
-background plan's remaining phases first, or rebase this removal on top of it;
-do not run the two concurrently through `executor.c`.
+- `cursor->text` has **exactly one reader**: the `flat_goto_target()` call in
+  the `CMD_GOTO` arm.
+- `options.status_out` has **exactly one writer in the whole executor**: the
+  goto loop-limit message.
+
+So the removal cascades through both:
+
+| Dies | Because |
+|---|---|
+| `execution_flat_text()`, `flat_goto_target()` | only the goto arm calls them |
+| `ReplExecCursor.text`, `ReplExecutionOptions.text` | no reader left |
+| `.text = source_document_view()` at 5 production call sites, `HiddenLinesRenderContext.text` | nothing to pass |
+| `executor.h`'s `#include "source_document.h"` | no `SourceTextView` in the header |
+| `ReplExecutionOptions.status_out` / `.status_out_sz`, and the same pair on `HiddenLinesRenderContext` | no writer left |
+| `glr_ctrl.c`'s `exec_status[REPL_DIAG_TEXT_MAX]` buffer and its `repl_set_status_error()` relay | nothing writes it |
+
+That is the largest single effect of this plan: `repl_execute_program()` ends up
+taking a **flat program and nothing else** - no source text, no diagnostic
+channel. It completes the rule the executor header already states, that the
+executor evaluates no expression text and renders only from baked `args[]`.
+`goto` was the sole exception, because it is the only command whose meaning
+lives in its *source line* rather than its args.
+
+Sequence this as its own step rather than as a tail of the language removal:
+the blast radius reaches app and subsystem call sites, not just `src/repl/`,
+and it is easier to review as "the executor loses two inputs" than as fallout.
+
+### 4. Ordering against the background plan - resolved
+
+`clear-background-execution-observation.md` **landed in full** (`74738f77` ..
+`6da10176`), so this constraint is satisfied: start from current `main`.
+
+Two things it left behind that make this removal smaller:
+
+- Phase 0 (`74738f77`) factored goto target lookup into one
+  `flat_goto_target()`. There is now a single lookup to delete rather than two
+  copies - the executor's inlined scan and the resolver's own - which had
+  silently diverged: the executor searched the replay-clamped `flat_cmd_count`
+  while the resolver searched the full `program.cmd_count`, so during replay
+  they could take different jumps.
+- Phase 3 deleted `repl_flat_resolve_clear_color()`, the second walker that
+  followed gotos. Nothing outside `ReplExecCursor` interprets a jump any more.
 
 ## Implementation sequence
 
@@ -212,10 +311,17 @@ do not run the two concurrently through `executor.c`.
    retarget the validator and the runtime scan, convert the two shipped
    scaffolds, update `test_tutorial_runner`. At this point nothing shipped uses
    `CMD_GOTO_LABEL`.
-2. **Language removal.** Delete both `CmdType` values and let `-Wswitch` drive
-   the site list in §2. Delete the tests that exercise goto semantics; convert
-   the ones that merely *use* a label as a document row to something else.
-3. **Docs.** Remove the USER_GUIDE "Labels & goto" section and replace it with
+2. **Language removal.** Answer the export question in §2 first. Then delete
+   both `CmdType` values and let `-Wswitch` drive the switch sites, adding the
+   two string-matching sites in `import.c` by hand. Delete the tests that
+   exercise goto semantics; convert the ones that merely *use* a label as a
+   document row to something else.
+3. **Executor decoupling** (§3a, its own step). Drop the now-unread source-text
+   view and the now-unwritten status channel from `ReplExecutionOptions`,
+   `ReplExecCursor` and `HiddenLinesRenderContext`, and remove the matching
+   plumbing at the app/subsystem call sites. Separate from step 2 because it
+   reaches outside `src/repl/`.
+4. **Docs.** Remove the USER_GUIDE "Labels & goto" section and replace it with
    the disable-a-block idiom; update `CLAUDE.md:642`, `src/repl/ARCHITECTURE.md`
    (the construct table and the `REPL_GOTO_LOOP_LIMIT` paragraph), and
    `docs/ARCHITECTURE.md`.
@@ -227,9 +333,10 @@ Tests that exercise goto *semantics* are deleted with the feature:
 - `test_repl_core_commit.c` - label commit + round-trip (`walk:`, `stripe:`,
   `after:`);
 - `test_repl_editor.c:1618` - `editor_load_line_to_input` label path;
-- `test_repl_executor.c` - `test_goto_uses_caller_text_view`, the goto arms of
-  the background-observation tests, and the goto cases in
-  `test_resolve_frame_clear_color` if that function still exists;
+- `test_repl_executor.c` - `test_goto_uses_caller_text_view` and the two goto
+  cases in `test_background_observation` (forward jump skips a clear; backward
+  jump terminates under the budget). `test_resolve_frame_clear_color` is
+  already gone - Phase 3 of the background plan deleted it with the resolver;
 - `test_repl_core_parse.c:195` - `repl_extract_label_name`;
 - `test_repl_core_io.c` cases 11-13 - the label spelling / swallowing
   regressions added by `738f3c1c` and `87c26f4c`.
@@ -276,6 +383,13 @@ Full verification: `make test-stubs`, `make gl-repl USE_GL_STUBS=1`,
   executor and from the replay-annotation walker.
 - `repl_exec_cursor_step()` cannot stop a walk mid-program, and its header says
   so.
+- `repl_execute_program()` takes a flat program and nothing else: no
+  `SourceTextView`, no status-out channel, and `executor.h` no longer includes
+  `source_document.h`.
+- Nothing in the tree recognizes `goto` or `name:` in order to reject it. A
+  file or typed line carrying one gets the same generic unknown-statement
+  diagnostic as any other unrecognized text - and gets it *visibly*, with no
+  row silently dropped on import or export.
 - The two shipped tutorials splice at the same rows as before, via
   `// @anchor`, with validation still rejecting missing and forward references.
 - Every language construct is resolved at flatten time; the flat program
@@ -291,7 +405,19 @@ Full verification: `make test-stubs`, `make gl-repl USE_GL_STUBS=1`,
    setup-scaffold anchor path entirely. That is a smaller runtime but changes
    the shape of two lessons. `// @anchor` is proposed because it preserves the
    lessons exactly.
+
+   *Design read:* take `// @anchor`. One comment-directive matcher against
+   reshaping two working lessons is the cheaper side, and it keeps the change
+   mechanical enough that the existing `test_tutorial_runner` coverage carries
+   over.
 2. **Does anything else want a bookmark?** If a document-level anchor is
    useful beyond tutorials (jump-to, folding, the code panel), `// @anchor`
    should be specified as a general feature rather than a tutorial-private one.
    If not, keep it tutorial-private and undocumented for users.
+
+   *Design read:* keep it tutorial-private until a second consumer actually
+   exists. Same rule the background plan applied when it deleted
+   `ReplRenderState.clear_color`: a facility with no consumer is not justified
+   by calling it general-purpose.
+3. **Export behavior for a `goto` row** (raised by the design read, §2). Not a
+   preference question - a fact to establish before step 2.
