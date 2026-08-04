@@ -1,20 +1,48 @@
 # Remove `goto` and Labels From the REPL Language
 
-## Status - IN REVIEW (2026-08-04)
+## Status - LANDED (2026-08-04)
 
-**Blocked on** `block-comment-toggle.md`. That plan delivers the only thing
-`goto` is really used for; this one is not startable until it lands.
+All four steps shipped, on branch `goto-removal-review`:
 
-Recent work that bounds this plan:
+| Step | Commit |
+|---|---|
+| 1 - tutorial anchors move to `// @anchor` | `894500cf` |
+| 2 - language removal | `cd5e970b` |
+| 3 - executor decoupling (§3a) | `97451dbb` |
+| 4 - docs | folded into the three above |
+
+Every acceptance criterion below holds. Verified with `make test-stubs`
+(76/76 binaries, 25929 tests), `make test-web`, `make check-c99`,
+`make check-state-ownership`, and native / stub / demo builds.
+
+**One deviation from the plan, and one thing it did not anticipate:**
+
+1. **The prerequisite had not landed.** `block-comment-toggle.md` was still
+   IN REVIEW when this work started - `repl_compile_toggle_comment()`'s
+   uncomment arm is still single-row. That plan's stated role here is to
+   supply the *replacement workflow*, not to unblock anything technical, and
+   `if(0) { … }` covers the same need today (now pinned by a test, and
+   documented in USER_GUIDE as the disable-a-block idiom). The removal went
+   ahead; the toggle's asymmetry is still worth fixing on its own merits.
+2. **A pre-existing annotation quirk surfaced, and was left alone.** The
+   replay annotation for a row after an `if(0) { x = 100; }` block reads the
+   *live* predef table, which commit-time eager application already set to
+   100, rather than the simulated state - so it displays `x = 100 + 1 = 101`
+   where flatten baked `2`. Nothing to do with goto: it is commit-time
+   application of a row inside a false block. The goto-flavoured test that
+   would have masked it was deleted with the feature (see the test plan);
+   this note is the record that the behavior is known and unfixed.
+
+Recent work that bounded this plan:
 
 - `738f3c1c` - stop a `:label` line from swallowing the line after it;
 - `87c26f4c` - make `name:` the only label spelling, deleting the `:name` form
   and the import-accumulator special case it forced.
 
 Those two closed the *silent data loss* around labels. What they did not
-change is that `goto` is the one construct in the language resolved at execute
+change is that `goto` was the one construct in the language resolved at execute
 time, inside a pipeline that resolves all other control flow at flatten time -
-and that the resulting semantics do not work.
+and that the resulting semantics did not work.
 
 ### Design read (2026-08-04)
 
@@ -210,12 +238,17 @@ removes the only case where the invariant does not hold.
 - Source or binary compatibility for the removed `CmdType` values. There is no
   released version to migrate.
 
-## Prerequisite
+## Prerequisite - not met, and proceeded anyway
 
 **`block-comment-toggle.md` must land first.** It delivers comment *and*
 uncomment over a line range, which is the capability `goto`-skipping is
 standing in for. Removing `goto` before that would take away a workflow
 without providing its replacement, even though the workflow barely works.
+
+*Outcome:* it had not landed when the removal shipped. The replacement
+workflow is `if(0) { … }`, which is now pinned by a test and documented in
+USER_GUIDE next to `if`; Ctrl+/ still comments a range and still restores only
+one row at a time. See the Status note at the top.
 
 ## Design
 

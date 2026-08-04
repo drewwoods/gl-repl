@@ -1098,7 +1098,7 @@ successive captures (`ASSIGN_PLOT_X_FRAME`) and the buffer is a scrolling time
 series. The mode is re-derived from the execution count on every capture; a
 flip clears the buffer *and* the statistics, since the two axes describe
 different things and averaging across the change would be a lie. A capture that
-finds zero executions (a false `if`, a `goto` that jumped the row) leaves both
+finds zero executions (a false `if` dropped the row's whole block) leaves both
 the mode and the history alone.
 
 **Decimation vs. statistics.** The plot is impressionistic on purpose: a frame
@@ -3167,7 +3167,7 @@ work can either close the gap or document the intentional behaviour.
 - Predef-table full (`MAX_PREDEF_VARS`) - same file.
 - Hard-cap rejection when all eight user-scene slots are occupied, both
   unbound and managed (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
-- Func alias roundtrip and `if`/`for`/`goto` not hijacked
+- Func alias roundtrip and `if`/`for` not hijacked
   ([`tests/test_repl_core_io.c`](../tests/test_repl_core_io.c)).
 - Replay state machine + fade batches ([`tests/test_repl_replay.c`](../tests/test_repl_replay.c)).
 

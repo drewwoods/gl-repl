@@ -2,9 +2,10 @@
 
 ## Status - IN REVIEW (2026-08-04)
 
-**Prerequisite for** `goto-removal.md`. `goto` survives in practice as a way to
-skip a region of code; this plan delivers the capability it stands in for, and
-the removal plan is not startable until this lands.
+Formerly listed as a **prerequisite for** `goto-removal.md`. That plan landed
+first (`docs/plans/done/goto-removal.md`, 2026-08-04) without waiting: `goto`
+is gone, and `if(0) { … }` now carries the disable-a-region workflow. This plan
+stands on its own merits - the asymmetry below is a real bug regardless.
 
 ## The problem
 
