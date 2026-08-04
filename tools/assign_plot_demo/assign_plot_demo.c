@@ -270,7 +270,8 @@ static void demo_draw_source(void) {
                  g_paused ? "run" : "pause");
     else
         snprintf(line, sizeof(line),
-                 "r scrub   space %s   right-click a row to plot it",
+                 "r scrub   space %s   right-click a row to plot it"
+                 "   shift+right-click add to plot",
                  g_paused ? "run" : "pause");
     ui_clr(UI_TOK_TEXT_PLACEHOLDER);
     gl2d_draw_string((float)DEMO_SRC_X,
