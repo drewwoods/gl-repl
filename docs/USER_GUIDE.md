@@ -1076,7 +1076,7 @@ parse.
 ```c
 float n;
 n = 0;
-loop:                    // declare a jump target (:loop also works)
+loop:                    // declare a jump target
 n = n + 1;
 if(n < 5) {
     goto loop;           // jump back four times, then continue below
@@ -1086,8 +1086,9 @@ glutSolidCube(n/5);
 
 `goto` and its target must both be at the top level. Always put a backward jump
 behind a condition that eventually becomes false; an unconditional jump back
-to its own label never terminates. Note the distinction: `:name` / `name:` is
-a goto target, while `label("...")` is the bitmap-text call.
+to its own label never terminates. A label is a line of its own: `name:`,
+with nothing after it but an optional comment. Note the distinction: `name:`
+is a goto target, while `label("...")` is the bitmap-text call.
 
 ### Comments
 

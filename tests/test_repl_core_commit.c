@@ -1059,7 +1059,7 @@ int main(void) {
      * single-pass path and verifies n stops at 1. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
-    editor_feed_line(":walk");
+    editor_feed_line("walk:");
     editor_feed_line("n = n + 1;");
     editor_feed_line("if(n < 3) {");
     editor_feed_line("goto walk;");
@@ -1086,7 +1086,7 @@ int main(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
     editor_feed_line("glBegin(GL_LINES);");
-    editor_feed_line(":stripe");
+    editor_feed_line("stripe:");
     editor_feed_line("glVertex3f(-1.5 + 0.42*n, -0.9, 0);");
     editor_feed_line("glVertex3f(-1.5 + 0.42*n, 0.9, 0);");
     editor_feed_line("n = n + 1;");
@@ -1114,12 +1114,12 @@ int main(void) {
                 fabsf(repl_state_flat_program_cmds()[3].args[0] - (-1.5f)) < 1e-5f);
 
     glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line(":walk");
+    editor_feed_line("walk:");
     ASSERT_TRUE("label cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("label stored as C label", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
     editor_navigate_to_line(0);
-    ASSERT_TRUE("label loads back into editor as repl syntax",
-                strcmp(editor_state_input().input, ":walk") == 0);
+    ASSERT_TRUE("label loads back into the editor verbatim",
+                strcmp(editor_state_input().input, "walk:") == 0);
     editor_handle_key(';', 0, 0);
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds()[0].type == CMD_GOTO_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
@@ -1718,7 +1718,7 @@ int main(void) {
         editor_feed_line("goto after;");
         editor_feed_line("i = 100;");
         editor_feed_line("x = i + 1;");
-        editor_feed_line(":after");
+        editor_feed_line("after:");
         editor_feed_line("glVertex3f(0, 0, 0);");
         replay_start();
         replay_state = REPLAY_PAUSED;

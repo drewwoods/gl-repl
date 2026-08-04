@@ -1930,7 +1930,7 @@ static int check_trailing_garbage(const char *after, const ReplParseContext *ctx
 
 /* Bare-keyword statements: the REPL forms that are a word (and maybe a
  * label) rather than a `name(args)` call - `break`, `continue`,
- * `goto name`, and `:name` / `name:` label definitions. Split out of
+ * `goto name`, and `name:` label definitions. Split out of
  * parse_command so this keyword set can grow without the dispatcher
  * doing.
  *
@@ -2002,28 +2002,30 @@ static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
         }
     }
 
-    /* :label or label: - define a label */
-    if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
-        (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
-        int leading = (p[0] == ':');
-        const char *name = leading ? p + 1 : p;
+    /* label: - define a label.
+     *
+     * One spelling, the C one. A `:name` form used to be accepted as well,
+     * and it was the source of a silent data-loss bug: it is the only
+     * statement in the grammar that does not END in a terminator, so the
+     * import accumulator read it as an unfinished statement and glued the
+     * following line onto it. Ending in ':' is what makes a label a
+     * statement the reader can see the end of. */
+    if (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0])) {
         char label[REPL_GOTO_LABEL_MAX];
         const char *rest;
         int n = 0;
 
         while (n < (int)sizeof(label) - 1 &&
-               name[n] && name[n] != ':' && !isspace((unsigned char)name[n])) {
-            label[n] = name[n];
+               p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
+            label[n] = p[n];
             n++;
         }
         label[n] = '\0';
 
-        /* Nothing but the closing ':' and whitespace may follow the name.
-         * The `:name` spelling used to write the whole tail into the row
-         * and return success, so `:loop glVertex3f(...)` silently became a
-         * bare label and the call vanished with no diagnostic. */
-        rest = name + n;
-        if (!leading && *rest == ':')
+        /* Nothing but the closing ':' and whitespace may follow the name,
+         * so a label can never quietly absorb trailing code. */
+        rest = p + n;
+        if (*rest == ':')
             rest++;
         while (*rest && isspace((unsigned char)*rest))
             rest++;
@@ -2036,8 +2038,7 @@ static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
 
         cmd->type = CMD_GOTO_LABEL;
         cmd->valid = 1;
-        /* labels go at column 0 in C */
-        write_text(text_out, text_sz, "%s:", label);
+        write_text(text_out, text_sz, "%s:", label);  /* labels sit at column 0 */
         return 1;
     }
     return -1;

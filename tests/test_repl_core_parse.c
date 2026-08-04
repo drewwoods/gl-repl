@@ -196,7 +196,7 @@ int main(void) {
         char label[64];
         memset(label, 0, sizeof(label));
         ASSERT_TRUE("extract label name",
-                    repl_extract_label_name("  :walk_2", label, sizeof(label)) == 1);
+                    repl_extract_label_name("  walk_2:", label, sizeof(label)) == 1);
         ASSERT_TRUE("extract label text", strcmp(label, "walk_2") == 0);
         ASSERT_TRUE("extract goto label",
                     repl_extract_goto_label("  goto walk_2;  ",

@@ -1617,15 +1617,14 @@ int main() {
     {
         glr_ctrl_reset_all();
         /* Feed a label command to create a CMD_GOTO_LABEL entry */
-        editor_feed_line(":myloop");
+        editor_feed_line("myloop:");
         ASSERT_INT("label cmd created", repl_state_document_count(), 1);
         ASSERT_INT("label cmd type", repl_state_document_cmds()[0].type, CMD_GOTO_LABEL);
 
-        /* Now load it back into input */
+        /* Now load it back into input. A label row loads verbatim - it is
+         * already in the one spelling, and re-committing it round-trips. */
         editor_load_line_to_input(0);
-        /* Input should start with ':' and contain the label name */
-        ASSERT_TRUE("label load: starts with colon", editor_state_input().input[0] == ':');
-        ASSERT_TRUE("label load: contains name", strstr(editor_state_input().input, "myloop") != NULL);
+        ASSERT_STR("label load: verbatim", editor_state_input().input, "myloop:");
     }
 
     /* 10. editor_navigate_to_line - clamp target < 0 */

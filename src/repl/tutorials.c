@@ -477,9 +477,9 @@ static const char *const g_tutorial_color_interp_setup[] = {
     "glBegin(GL_TRIANGLES)",
     "glColor3f(1, 0.3, 0.2)",
     "glVertex3f(0, 2, 0)",
-    ":left",
+    "left:",
     "glVertex3f(-2, -2, 0)",
-    ":right",
+    "right:",
     "glVertex3f(2, -2, 0)",
     "glEnd()",
     NULL,
@@ -745,7 +745,7 @@ static const char *const g_tutorial_fog_setup[] = {
     "// Depth testing so the near rings occlude the ones behind them.",
     "glEnable(GL_DEPTH_TEST)",
     "// A locked row of toruses receding away from the camera.",
-    ":draw",
+    "draw:",
     "for(i, 0, 8) {",
     "  glPushMatrix()",
     "  glTranslatef(0, 0, -i * 3)",
@@ -1549,11 +1549,10 @@ int repl_tutorial_expected_is_func_open(const char *expected) {
 }
 
 /* Syntactic mirror of the parser's goto-label rule (src/repl/parser.c):
- * a setup line whose trimmed text is `:name` or `name:` (optionally
- * followed by a `;`) defines the goto label `name`. Used to validate
- * step target_labels against the setup scaffold without running the
- * live parser; the runtime resolves the actual row by walking the
- * loaded document's CMD_GOTO_LABEL commands. */
+ * a setup line whose trimmed text is `name:` (optionally followed by a `;`)
+ * defines the goto label `name`. Used to validate step target_labels against
+ * the setup scaffold without running the live parser; the runtime resolves
+ * the actual row by walking the loaded document's CMD_GOTO_LABEL commands. */
 static int setup_line_goto_label(const char *line,
                                  char *name, int name_sz) {
     const char *p = line;
@@ -1563,19 +1562,13 @@ static int setup_line_goto_label(const char *line,
         return 0;
     while (*p && isspace((unsigned char)*p))
         p++;
-    if (*p == ':') {
-        p++;
-        while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-            name[n++] = *p++;
-    } else {
-        while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-            name[n++] = *p++;
-        if (*p != ':') {
-            name[0] = '\0';
-            return 0;
-        }
-        p++;
+    while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
+        name[n++] = *p++;
+    if (*p != ':') {
+        name[0] = '\0';
+        return 0;
     }
+    p++;
     name[n] = '\0';
     if (n == 0)
         return 0;
@@ -2014,7 +2007,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             return 0;
         }
 
-        /* Unique non-empty labels - and no shadowing of a `:name` goto
+        /* Unique non-empty labels - and no shadowing of a `name:` goto
          * label the setup scaffold defines, so a target_label always
          * resolves unambiguously to one anchor. */
         if (!label_is_empty(step->label)) {
@@ -2066,7 +2059,7 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                     break;
                 }
             }
-            /* A target can also anchor on a `:name` goto label the
+            /* A target can also anchor on a `name:` goto label the
              * setup scaffold defines - that's how steps splice new
              * commands INTO preloaded code (resolved at step entry by
              * walking the live document's CMD_GOTO_LABEL rows). */

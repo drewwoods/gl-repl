@@ -1364,7 +1364,7 @@ static void test_resolve_frame_clear_color(void) {
         editor_buffer_set_line(1, "goto skip;");
         editor_buffer_set_line(2, "glClearColor(0.6, 0, 0, 1);");
         editor_buffer_set_line(3, "glClear(GL_COLOR_BUFFER_BIT);");
-        editor_buffer_set_line(4, ":skip");
+        editor_buffer_set_line(4, "skip:");
         editor_buffer_set_line(5, "glClear(GL_COLOR_BUFFER_BIT);");
         editor_buffer_set_count(6);
         repl_state_document_count_set(6);
@@ -1395,7 +1395,7 @@ static void test_resolve_frame_clear_color(void) {
         /* A backward goto is an infinite loop; the executor's own budget
          * bounds it, so resolution must terminate rather than hang. */
         editor_buffer_set_line(4, "goto again;");
-        editor_buffer_set_line(1, ":again");
+        editor_buffer_set_line(1, "again:");
         cmds[1].type = CMD_GOTO_LABEL;
         cmds[4].type = CMD_GOTO;
         repl_flat_resolve_clear_color(v, source_document_view(), base, out);

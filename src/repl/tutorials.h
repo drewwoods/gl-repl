@@ -219,7 +219,7 @@ typedef struct {
      * (setup @cfg slugs join the teardown-restore baseline); the
      * remaining body lines are REPL source fed through the non-editor
      * loader. Every loaded row is LOCKED (read-only for the duration
-     * of the tutorial). Body lines may define `:name` goto labels;
+     * of the tutorial). Body lines may define `name:` goto labels;
      * label-placement steps can target those (see target_label).
      * NULL = start from an empty scene (the default). */
     const char *const  *setup;
@@ -403,11 +403,11 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  *     mistake, not a harmless extra). Slug validity is checked at
  *     tutorial_start alongside SET / REQUIRE.
  *   - Every non-empty label is unique within the tutorial AND does not
- *     collide with a `:name` goto label defined in the setup scaffold.
+ *     collide with a `name:` goto label defined in the setup scaffold.
  *   - TUTORIAL_STEP_APPEND has no non-empty target_label.
  *   - TUTORIAL_STEP_LABEL has a non-null non-empty target_label that
  *     names an earlier non-empty step label in the same tutorial
- *     (forward references rejected) OR a `:name` goto label defined in
+ *     (forward references rejected) OR a `name:` goto label defined in
  *     the setup scaffold.
  *   - Step count stays within TUTORIAL_MAX_STEPS, and setup lines +
  *     steps together fit the locked-line table

@@ -466,7 +466,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         }
     }
     if (target_step < 0) {
-        /* Not a step label - try the setup scaffold's `:name` goto
+        /* Not a step label - try the setup scaffold's `name:` goto
          * labels. Resolved against the LIVE document at step-entry
          * time (not a row recorded at load), so rows shifted by
          * earlier splices are handled by construction. The validator

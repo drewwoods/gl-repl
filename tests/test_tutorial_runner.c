@@ -3361,7 +3361,7 @@ static void test_setup_label_targeted_steps_splice_into_scaffold(void) {
 static void test_validate_setup_label_rules(void) {
     static const char *const setup_lines[] = {
         "glBegin(GL_TRIANGLES)",
-        ":anchor",
+        "anchor:",
         "glEnd()",
         NULL,
     };

@@ -639,7 +639,7 @@ glutSolidTorus/Cube/Sphere/Teapot/Cone, glRasterPos3f
 label("fmt", ...)              (bitmap text; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 break;   continue;                (innermost enclosing loop, same func body)
-:name / goto name              (goto labels - not label())
+name: / goto name              (goto labels - not label())
 float name[, ...];    var = expr;    A[i] = expr;    // comment
 static float name[, ...];      (global from anywhere; plain `float` inside a
                                 function body is a function-scoped local)

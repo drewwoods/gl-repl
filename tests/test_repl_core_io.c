@@ -2979,17 +2979,18 @@ static void test_import_robustness(void) {
                     rise_idx >= 0 && fabsf(g_predef_vars[rise_idx].value - 0.55f) < 1e-6f);
     }
 
-    /* 11. A label is a complete statement in BOTH spellings.
+    /* 11. A label is a complete statement, with or without a trailing
+     * comment, and does not absorb the line after it.
      *
      * The statement accumulator decides where one logical command ends by
-     * looking at the last code character, and `name:` ends in a terminator
-     * while `:name` ends in a name character. That asymmetry made the
-     * leading-colon form read as an unfinished statement: the next physical
-     * line was glued onto it, the parser took the result as a bare label,
-     * and the glued row vanished from the document with no diagnostic. */
+     * looking at the last code character, and `name:` ends in one of the
+     * terminators it recognizes. That is precisely why it is the only label
+     * spelling: a `:name` form used to be accepted too, and being the one
+     * statement in the grammar that does NOT end in a terminator, it read as
+     * unfinished - the next physical line was glued onto it and vanished
+     * from the document with no diagnostic. */
     {
-        static const char *const k_spellings[] = { ":a", "b:", "c:  // note",
-                                                   ":d  // note" };
+        static const char *const k_spellings[] = { "a:", "b:  // note" };
         for (int s = 0; s < (int)(sizeof(k_spellings) /
                                   sizeof(k_spellings[0])); s++) {
             char msg[128];
@@ -3016,13 +3017,11 @@ static void test_import_robustness(void) {
         }
     }
 
-    /* 12. Trailing code on a label line is refused, not silently dropped.
-     * `:name` used to write its whole tail into the row and report success,
-     * so the trailing statement disappeared without a warning. */
+    /* 12. Trailing code on a label line is refused, not silently dropped. */
     {
         f = fopen(test_path, "w");
         fprintf(f, "glVertex3f(1, 2, 3);\n");
-        fprintf(f, ":a glVertex3f(4, 5, 6);\n");
+        fprintf(f, "a: glVertex3f(4, 5, 6);\n");
         fclose(f);
 
         glr_ctrl_reset_all(); declare_test_vars();
@@ -3031,6 +3030,26 @@ static void test_import_robustness(void) {
         ASSERT_INT("label with trailing code is rejected, not swallowed",
                    repl_state_document_count(), 1);
         ASSERT_INT("rejected label leaves no label row",
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
+    }
+
+    /* 13. The removed `:name` spelling is not a label - it must not quietly
+     * resurface as an accepted alias. Placed last in the file so the
+     * assertion is about the spelling alone: like any statement missing its
+     * terminator, an unparsable `:name` would otherwise be joined to the
+     * line below it and reported as one bad statement. */
+    {
+        f = fopen(test_path, "w");
+        fprintf(f, "glVertex3f(1, 2, 3);\n");
+        fprintf(f, ":a\n");
+        fclose(f);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("load leading-colon label file",
+                    repl_export_load_from_file(test_path, NULL) == 1);
+        ASSERT_INT("`:name` is not accepted as a label",
+                   repl_state_document_count(), 1);
+        ASSERT_INT("`:name` leaves no label row",
                    repl_state_document_cmds()[0].type, CMD_VERTEX3F);
     }
 

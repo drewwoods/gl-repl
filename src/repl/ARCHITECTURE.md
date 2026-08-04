@@ -898,7 +898,7 @@ it would take to narrow that further.
 | `funcN(params) { … }` / aliased `NAME { … }` | `CMD_FUNC_DEF` / body / `CMD_FUNC_END` | inlined at each `CMD_CALL`, params bound |
 | `if(expr) { … } else if(expr) { … } else { … }` | `CMD_IF_BEGIN` / arm bodies split by `CMD_ELSE_IF` / `CMD_ELSE` / `CMD_IF_END` | first true arm emitted; optional else arm emitted as fallback |
 | `break;` / `continue;` | `CMD_BREAK` / `CMD_CONTINUE` | nothing - a flatten-time signal consumed by the innermost enclosing `flatten_for_loop` |
-| `:name` / `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
+| `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
 
 **Loop jumps** are the one construct that flattens to nothing at all.
 `CMD_BREAK` / `CMD_CONTINUE` raise `FlattenContext.loop_signal` and return;

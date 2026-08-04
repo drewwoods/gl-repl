@@ -94,8 +94,6 @@ int repl_source_scope_view_block_extent(const ReplSourceScopeView *view,
                                         int *out_start, int *out_count);
 int repl_source_scope_view_line_is_block_head(const ReplSourceScopeView *view,
                                               int line_idx);
-int repl_source_scope_view_line_is_label(const ReplSourceScopeView *view,
-                                         int line_idx);
 int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
                                               int *out_lines, int max);
 
@@ -182,12 +180,6 @@ int repl_source_scope_block_extent(int line_idx,
  * dispatch to apply sticky-edit semantics on block headers without
  * reading CmdType directly. */
 int repl_line_is_block_head(int line_idx);
-
-/* Returns 1 if the line at `line_idx` is a CMD_GOTO_LABEL row. Used by
- * editor_load_line_to_input to format the input buffer differently for
- * label lines (preserves the leading `:`) without reading CmdType
- * directly. */
-int repl_line_is_label(int line_idx);
 
 /* Range/array predicates: does the given command range / array contain any
  * CMD_VAR_DECLARE row? Used by clipboard, delete, and other guards that

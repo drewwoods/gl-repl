@@ -479,16 +479,6 @@ int repl_line_is_block_head(int line_idx) {
                                                     line_idx);
 }
 
-int repl_source_scope_view_line_is_label(const ReplSourceScopeView *view,
-                                         int line_idx) {
-    if (!view || !view->cmds || line_idx < 0 || line_idx >= view->count) return 0;
-    return view->cmds[line_idx].type == CMD_GOTO_LABEL;
-}
-
-int repl_line_is_label(int line_idx) {
-    return repl_source_scope_view_line_is_label(live_source_scope_view(), line_idx);
-}
-
 int repl_array_contains_var_decl(const GLCmd *cmds, int count) {
     if (!cmds || count <= 0) return 0;
     for (int i = 0; i < count; i++) {

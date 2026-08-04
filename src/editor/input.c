@@ -382,43 +382,14 @@ void editor_load_line_to_input(int idx) {
             return;
         }
 
-        const char *s = editor_buffer_line(idx);
-        while (*s && isspace((unsigned char)*s))
-            s++;
-
-        if (repl_line_is_label(idx)) {
-            if (*s == ':') {
-                /* Label written as ":name"; strip trailing whitespace
-                 * only - keep the ':' and the body verbatim. */
-                int len = (int)strlen(s);
-                while (len > 0 && isspace((unsigned char)s[len - 1]))
-                    len--;
-                if (len >= MAX_INPUT_LEN)
-                    len = MAX_INPUT_LEN - 1;
-                memcpy(inp->input, s, (size_t)len);
-                inp->input[len] = '\0';
-                inp->input_len = len;
-                editor_cursor_pos_set(inp->input_len);
-                return;
-            }
-
-            /* Label written as "name:"; rewrite to ":name" and strip
-             * trailing ':' plus whitespace from the source. */
-            int len = (int)strlen(s);
-            while (len > 0 &&
-                   (s[len - 1] == ':' || isspace((unsigned char)s[len - 1])))
-                len--;
-            if (len > MAX_INPUT_LEN - 2) /* -1 NUL, -1 leading ':' */
-                len = MAX_INPUT_LEN - 2;
-            inp->input[0] = ':';
-            memcpy(inp->input + 1, s, (size_t)len);
-            inp->input[len + 1] = '\0';
-            inp->input_len = len + 1;
-            editor_cursor_pos_set(inp->input_len);
-            return;
-        }
-
-        /* Default: skip leading whitespace, drop trailing ';' + ws. */
+        /* A label row needs no special case: `name:` is the only spelling,
+         * it is what the row already holds, and the canonical view below
+         * strips only a trailing ';' - so the ':' survives and the loaded
+         * text re-commits as the same label. (This used to rewrite the row
+         * into a `:name` editing form, which is the spelling that has been
+         * removed.)
+         *
+         * Default: skip leading whitespace, drop trailing ';' + ws. */
         const char *cs;
         int len;
         repl_canonical_input_view(editor_buffer_line(idx), &cs, &len);

@@ -1158,6 +1158,12 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
     return 1;
 }
 
+/* Canonicalize a label line: `name:` in, `name:` out, with any indentation
+ * and trailing comment dropped. Same spelling on both sides - this used to
+ * translate C's `name:` into a REPL-only `:name` form, which no longer
+ * exists. It stays in the converter chain because that is what claims the
+ * line: without it a label falls through to the C-expression converter,
+ * which has no business rewriting one. */
 static int import_make_repl_label(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1167,10 +1173,19 @@ static int import_make_repl_label(const char *line, char *out, int out_sz) {
         llen++;
     if (llen <= 0 || p[llen] != ':')
         return 0;
-    if (p[llen + 1] != '\0' && !isspace((unsigned char)p[llen + 1]))
-        return 0;
+    {
+        /* Only a trailing comment may follow the colon. `name: code;` is not
+         * a label line, and claiming it here would drop the code on the way
+         * to producing a bare label - the same silent loss the `:name`
+         * spelling used to cause, one layer up. */
+        const char *rest = p + llen + 1;
+        while (*rest && isspace((unsigned char)*rest))
+            rest++;
+        if (*rest && !(rest[0] == '/' && rest[1] == '/'))
+            return 0;
+    }
 
-    snprintf(out, out_sz, ":%.*s", llen, p);
+    snprintf(out, out_sz, "%.*s:", llen, p);
     return 1;
 }
 
@@ -2557,25 +2572,11 @@ static char scan_code_line(const char *line, int *depth, int *code_len) {
     return last >= 0 ? line[last] : '\0';
 }
 
+/* Every REPL statement ends in one of these, labels included - `name:` is
+ * the only label spelling for exactly that reason, so the accumulator can
+ * see where one ends without looking ahead. */
 static int is_stmt_terminator(char c) {
     return c == ';' || c == '{' || c == '}' || c == ':';
-}
-
-/* Does this line's code open with the REPL's leading-colon label spelling,
- * `:name`?
- *
- * Labels have two spellings and only one of them ENDS in a terminator.
- * `name:` is caught by the last-code-char test above; `:name` ends in a name
- * character, so without this the accumulator treats the label as an
- * unfinished statement and glues the following line onto it - which the
- * parser then swallows whole, silently losing a source row.
- *
- * Only ever asked of the FIRST line of a statement: a continuation that
- * begins with ':' is the second half of a split ternary, not a label. */
-static int import_line_opens_leading_colon_label(const char *code,
-                                                 int code_len) {
-    return code && code_len >= 2 && code[0] == ':' &&
-           !isspace((unsigned char)code[1]);
 }
 
 /* Emit the accumulated logical statement through import_process_line,
@@ -2729,14 +2730,10 @@ static void import_process_physical_line(ImportState *state,
     char last = scan_code_line(app, &acc->depth, &code_len);
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
-     * label (`:`) - or when this line IS a `:name` label, which is
-     * complete without ending in any of those. The depth gate is what
-     * stops a split compound literal - `(GLfloat[]){` - or a ternary
-     * `:` from flushing mid-expression. */
-    int complete = acc->depth <= 0 &&
-                   (is_stmt_terminator(last) ||
-                    (accum_len == 0 &&
-                     import_line_opens_leading_colon_label(app, code_len)));
+     * label (`:`). The depth gate is what stops a split compound
+     * literal - `(GLfloat[]){` - or a ternary `:` from flushing
+     * mid-expression. */
+    int complete = acc->depth <= 0 && is_stmt_terminator(last);
 
     /* On a continuation line, append only the code portion so a
      * trailing `// ...` can't bleed into the rest of the statement.

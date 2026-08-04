@@ -2717,7 +2717,7 @@ transient scene before step 0, so a tutorial builds on what an earlier
 tutorial taught without the learner re-typing it. Setup honors the
 example header vocabulary (leading `// @cfg` run, optional 5-line
 `// camera` block), its `@cfg` slugs join the teardown-restore
-baseline, and its body may define `:name` goto labels that
+baseline, and its body may define `name:` goto labels that
 label-placement steps target to splice commands into the scaffold
 (resolved against the live document at step entry). See
 [`docs/plans/done/tutorial-setup-scaffold.md`](plans/done/tutorial-setup-scaffold.md).
