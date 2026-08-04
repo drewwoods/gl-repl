@@ -474,6 +474,30 @@ static void test_capture_restore_round_trip(void) {
                 memcmp(&ui_snap, &ui_round_trip, sizeof(ui_snap)) == 0);
 }
 
+/* Both count setters are the only doors that stage a command count without
+ * going through the store, and every reader walks [0, count) with no second
+ * bound - so both must clamp to their array's capacity. */
+static void test_command_count_setters_clamp(void) {
+    printf("\n--- document/flat count setters clamp to capacity ---\n");
+    glr_ctrl_reset_all();
+
+    repl_state_document_count_set(MAX_EDITOR_COMMANDS + 7);
+    ASSERT_INT("document count clamps to capacity",
+               repl_state_document_count(), MAX_EDITOR_COMMANDS);
+    repl_state_document_count_set(-3);
+    ASSERT_INT("document count clamps negatives to 0",
+               repl_state_document_count(), 0);
+
+    repl_state_flat_program_set_count(MAX_FLAT_COMMANDS + 7);
+    ASSERT_INT("flat count clamps to capacity",
+               repl_state_flat_program_count(), MAX_FLAT_COMMANDS);
+    repl_state_flat_program_set_count(-3);
+    ASSERT_INT("flat count clamps negatives to 0",
+               repl_state_flat_program_count(), 0);
+
+    glr_ctrl_reset_all();
+}
+
 static void test_reset_all_restores_default_runtime(void) {
     static ReplRuntimeState defaults;
     static ReplRuntimeState reset_state;
@@ -2166,6 +2190,7 @@ static void test_gl_state_cell_coverage_sweep(void) {
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
+    test_command_count_setters_clamp();
     test_reset_all_restores_default_runtime();
     test_line_override_cap_covers_busy_replay();
     test_camera_restore_clears_momentum();

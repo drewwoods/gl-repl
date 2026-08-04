@@ -769,7 +769,7 @@ State access is intentionally two-tiered:
   owner accessors, setters, and reset helpers. For owner modules and the
   controller only; broad command-array mutators are intentionally absent.
 
-[`repl_state_ensure_sentinels()`](state_owners.h#L132) patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](state_owners.h#L135) patches the non-zero defaults (most
 importantly the array capacities - under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
@@ -1257,7 +1257,7 @@ export, and flat-program queries never see the wrapped contents as valid.
 
 ### 13.2 Why `t` can force a re-flatten
 
-[`repl_state_time_advance()`](state_owners.h#L60) updates the visible `t` binding whenever the
+[`repl_state_time_advance()`](state_owners.h#L63) updates the visible `t` binding whenever the
 clock is playing ([`state.c`](state.c)). If the current source mentions `t`, it also
 sets `flat_program.dirty = 1`, so the controller rebuilds the flat program. That
 is *required* because flatten is the only stage that resolves **program

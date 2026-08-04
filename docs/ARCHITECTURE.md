@@ -1610,7 +1610,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L126) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -1625,6 +1625,61 @@ Scene-presentation policy and most render config live in the app-side owner
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
 tail-[`ReplRenderState`](../src/repl/state_views.h#L123), containing per-light state and clear
 color-remains a REPL slice.
+
+### Capture/restore boundaries
+
+Every owner exposes its own capture/restore pair, and whole-world snapshots
+compose those pairs rather than reaching into one owner for another's bytes -
+see [`glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c), which builds the
+tour baseline out of a dozen focused captures. Three of those pairs overlap in
+what they *could* plausibly cover, and the lines between them are load-bearing:
+
+| Pair | Owns | Excludes (intentionally) |
+|---|---|---|
+| [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L197). |
+| [`editor_state_capture`](../src/editor/state.h#L226) / [`_restore`](../src/editor/state.h#L227) | The editor session on [`EditorState`](../src/editor/state.h#L199): line buffer, input buffer, edit-line cursor, selection anchor, clipboard, search, autocomplete, scroll, cursor blink, and the per-frame overlay lists. | The REPL document. |
+| [`editor_undo_snapshot_save`](../src/editor/undo.h#L112) / [`_restore`](../src/editor/undo.h#L113) | One [`EditorUndoSnapshot`](../src/editor/undo.h#L60) ring entry: source commands, editor-buffer text, edit_line, predef names + values, scratch arrays, funcN aliases. | Input-buffer bytes, selection anchor, clipboard, search, autocomplete, scroll. Restore rebuilds the input row from the restored source via [`editor_load_line_to_input()`](../src/editor/input.h#L183). |
+
+Two rules fall out of that table.
+
+**Undo spans both owners on purpose.** It is the only pair that carries REPL
+commands *and* editor text, because a document edit is atomically both; a
+snapshot holding one half would restore a document and a buffer that disagree.
+It is still not `repl_state_capture` plus `editor_state_capture` - it is
+narrower than either, by the rule below.
+
+**The undo subset is a rule, not an omission.**
+[`editor_undo_push_snapshot()`](../src/editor/undo.h#L126) is the
+auto-promotion hook - it is where
+[`repl_promote_transient_if_needed()`](../src/repl/scenes.h#L64) fires - so
+anything undo snapshots becomes a thing that promotes a viewed example into a
+user scene. Because the snapshot is document-only, input-buffer-only edits
+(typed characters, partial-line cut, partial-line paste) have nothing to
+snapshot, never push, and so never promote. Restore rebuilds the input row
+instead of restoring bytes, which is why undo clears the input anchor and
+leaves an input-text clipboard payload untouched. See Phase A item 6 of
+[`done/editor-input-selection.md`](plans/done/editor-input-selection.md).
+
+A migration that folded any one of these into another would silently reverse
+those decisions - that is why Stage 6 of the retired gold-standard
+state-ownership plan (rebuild undo on `repl_state_capture()`) was abandoned
+rather than deferred; see
+[`done/state-ownership-finalize.md`](plans/done/state-ownership-finalize.md).
+
+The lean REPL variant, [`repl_state_checkpoint_capture`](../src/repl/state.h#L51),
+is everything above *except* the derived flat program, which restore leaves
+dirty to rebuild next frame. The tour baseline pairs it with
+[`editor_state_session_capture`](../src/editor/state.h#L248) - the persistent
+editor slices only, since the per-frame overlay lists carry borrowed pointers
+that a long-lived baseline must not copy.
+
+Coverage: [`tests/test_repl_state.c`](../tests/test_repl_state.c) round-trips
+the REPL and editor captures against each other;
+[`tests/test_editor_input_selection.c`](../tests/test_editor_input_selection.c)
+pins the undo exclusions (anchor cleared, clipboard preserved, input-only
+cut/paste does not promote); [`tests/test_repl_editor.c`](../tests/test_repl_editor.c)
+covers the undo ring itself, including the generation counter that refuses a
+snapshot from a replaced document.
 
 ## Core Subsystem Features & Integrations
 
@@ -2292,7 +2347,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L123) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L126) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

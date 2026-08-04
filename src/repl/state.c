@@ -174,6 +174,13 @@ int repl_state_document_count(void) {
 }
 
 void repl_state_document_count_set(int cmd_count) {
+    /* Clamp like repl_state_flat_program_set_count: every reader walks
+     * cmds[0, cmd_count) with no second bound, so an out-of-range count
+     * reads past the array. */
+    if (cmd_count < 0)
+        cmd_count = 0;
+    if (cmd_count > MAX_EDITOR_COMMANDS)
+        cmd_count = MAX_EDITOR_COMMANDS;
     g_repl_state.document.cmd_count = cmd_count;
 }
 

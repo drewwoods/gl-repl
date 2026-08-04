@@ -4,5 +4,4 @@ This directory holds plans that are **actively in flight**. Some implementation 
 
 | Plan | Topic |
 |---|---|
-| `state-ownership-finalize.md` | Finalize state-ownership headers, helpers, and capture docs |
 | `workspace-management.md` | Multiple named workspaces, scene delete, and fixing single-file exports in the packaged app |

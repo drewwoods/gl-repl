@@ -17,6 +17,9 @@ ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
+/* Clamps to [0, MAX_EDITOR_COMMANDS] - readers walk cmds[0, cmd_count)
+ * unbounded. Production inserts go through repl_command_store; this is the
+ * narrow door for fixtures that stage a count directly. */
 void         repl_state_document_count_set(int cmd_count);
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
