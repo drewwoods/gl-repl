@@ -2005,22 +2005,39 @@ static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
     /* :label or label: - define a label */
     if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
         (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
+        int leading = (p[0] == ':');
+        const char *name = leading ? p + 1 : p;
+        char label[REPL_GOTO_LABEL_MAX];
+        const char *rest;
+        int n = 0;
+
+        while (n < (int)sizeof(label) - 1 &&
+               name[n] && name[n] != ':' && !isspace((unsigned char)name[n])) {
+            label[n] = name[n];
+            n++;
+        }
+        label[n] = '\0';
+
+        /* Nothing but the closing ':' and whitespace may follow the name.
+         * The `:name` spelling used to write the whole tail into the row
+         * and return success, so `:loop glVertex3f(...)` silently became a
+         * bare label and the call vanished with no diagnostic. */
+        rest = name + n;
+        if (!leading && *rest == ':')
+            rest++;
+        while (*rest && isspace((unsigned char)*rest))
+            rest++;
+        if (n == 0 || *rest) {
+            parser_emit_error(ctx,
+                "a label is a line of its own: write '%s:' with nothing after it",
+                n > 0 ? label : "name");
+            return 0;
+        }
+
         cmd->type = CMD_GOTO_LABEL;
         cmd->valid = 1;
         /* labels go at column 0 in C */
-        if (p[0] == ':') {
-            write_text(text_out, text_sz, "%s:", p + 1);
-        } else {
-            char label[REPL_GOTO_LABEL_MAX];
-            int n = 0;
-            while (n < (int)sizeof(label) - 1 &&
-                   p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
-                label[n] = p[n];
-                n++;
-            }
-            label[n] = '\0';
-            write_text(text_out, text_sz, "%s:", label);
-        }
+        write_text(text_out, text_sz, "%s:", label);
         return 1;
     }
     return -1;

@@ -2561,6 +2561,23 @@ static int is_stmt_terminator(char c) {
     return c == ';' || c == '{' || c == '}' || c == ':';
 }
 
+/* Does this line's code open with the REPL's leading-colon label spelling,
+ * `:name`?
+ *
+ * Labels have two spellings and only one of them ENDS in a terminator.
+ * `name:` is caught by the last-code-char test above; `:name` ends in a name
+ * character, so without this the accumulator treats the label as an
+ * unfinished statement and glues the following line onto it - which the
+ * parser then swallows whole, silently losing a source row.
+ *
+ * Only ever asked of the FIRST line of a statement: a continuation that
+ * begins with ':' is the second half of a split ternary, not a label. */
+static int import_line_opens_leading_colon_label(const char *code,
+                                                 int code_len) {
+    return code && code_len >= 2 && code[0] == ':' &&
+           !isspace((unsigned char)code[1]);
+}
+
 /* Emit the accumulated logical statement through import_process_line,
  * restoring the line number to where the statement began so a warning
  * points at its first physical line. accum is built from already
@@ -2712,10 +2729,14 @@ static void import_process_physical_line(ImportState *state,
     char last = scan_code_line(app, &acc->depth, &code_len);
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
-     * label (`:`). The depth gate is what stops a split compound
-     * literal - `(GLfloat[]){` - or a ternary `:` from flushing
-     * mid-expression. */
-    int complete = acc->depth <= 0 && is_stmt_terminator(last);
+     * label (`:`) - or when this line IS a `:name` label, which is
+     * complete without ending in any of those. The depth gate is what
+     * stops a split compound literal - `(GLfloat[]){` - or a ternary
+     * `:` from flushing mid-expression. */
+    int complete = acc->depth <= 0 &&
+                   (is_stmt_terminator(last) ||
+                    (accum_len == 0 &&
+                     import_line_opens_leading_colon_label(app, code_len)));
 
     /* On a continuation line, append only the code portion so a
      * trailing `// ...` can't bleed into the rest of the statement.

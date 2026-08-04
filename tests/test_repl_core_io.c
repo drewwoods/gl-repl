@@ -2979,6 +2979,61 @@ static void test_import_robustness(void) {
                     rise_idx >= 0 && fabsf(g_predef_vars[rise_idx].value - 0.55f) < 1e-6f);
     }
 
+    /* 11. A label is a complete statement in BOTH spellings.
+     *
+     * The statement accumulator decides where one logical command ends by
+     * looking at the last code character, and `name:` ends in a terminator
+     * while `:name` ends in a name character. That asymmetry made the
+     * leading-colon form read as an unfinished statement: the next physical
+     * line was glued onto it, the parser took the result as a bare label,
+     * and the glued row vanished from the document with no diagnostic. */
+    {
+        static const char *const k_spellings[] = { ":a", "b:", "c:  // note",
+                                                   ":d  // note" };
+        for (int s = 0; s < (int)(sizeof(k_spellings) /
+                                  sizeof(k_spellings[0])); s++) {
+            char msg[128];
+            f = fopen(test_path, "w");
+            fprintf(f, "%s\n", k_spellings[s]);
+            fprintf(f, "glVertex3f(1, 2, 3);\n");
+            fprintf(f, "glVertex3f(4, 5, 6);\n");
+            fclose(f);
+
+            glr_ctrl_reset_all(); declare_test_vars();
+            snprintf(msg, sizeof(msg), "load label file (%s)", k_spellings[s]);
+            ASSERT_TRUE(msg, repl_export_load_from_file(test_path, NULL) == 1);
+            snprintf(msg, sizeof(msg),
+                     "label (%s) does not swallow the next line",
+                     k_spellings[s]);
+            ASSERT_INT(msg, repl_state_document_count(), 3);
+            snprintf(msg, sizeof(msg), "label (%s) row is a label",
+                     k_spellings[s]);
+            ASSERT_INT(msg, repl_state_document_cmds()[0].type,
+                       CMD_GOTO_LABEL);
+            snprintf(msg, sizeof(msg), "label (%s) keeps the line after it",
+                     k_spellings[s]);
+            ASSERT_STR(msg, editor_buffer_line(1), "  glVertex3f(1, 2, 3);");
+        }
+    }
+
+    /* 12. Trailing code on a label line is refused, not silently dropped.
+     * `:name` used to write its whole tail into the row and report success,
+     * so the trailing statement disappeared without a warning. */
+    {
+        f = fopen(test_path, "w");
+        fprintf(f, "glVertex3f(1, 2, 3);\n");
+        fprintf(f, ":a glVertex3f(4, 5, 6);\n");
+        fclose(f);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("load label-with-trailing-code file",
+                    repl_export_load_from_file(test_path, NULL) == 1);
+        ASSERT_INT("label with trailing code is rejected, not swallowed",
+                   repl_state_document_count(), 1);
+        ASSERT_INT("rejected label leaves no label row",
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
+    }
+
     remove(test_path);
 }
 
