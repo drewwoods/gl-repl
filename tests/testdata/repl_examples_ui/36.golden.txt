@@ -102,11 +102,6 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float density = 0.055; // @tune
-  static float twist = 1.2; // @tune
-  static float ringZ; // eye-space distance of the current ring
-  static float bendX; // tunnel centerline x at this depth
-  static float bendY; // tunnel centerline y at this depth
 
   // Fog fades geometry toward the fog color with eye-space distance.
   // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
@@ -119,6 +114,11 @@ void display(void) {
   // (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
   // face along the curve's tangent, so rings sweep around the bends as
   // they approach. Drag `twist` to straighten or sharpen the curve.
+  static float density = 0.055; // @tune
+  static float twist = 1.2; // @tune
+  static float ringZ; // eye-space distance of the current ring
+  static float bendX; // tunnel centerline x at this depth
+  static float bendY; // tunnel centerline y at this depth
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

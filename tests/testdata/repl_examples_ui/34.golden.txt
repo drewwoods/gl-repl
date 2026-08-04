@@ -102,13 +102,13 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
+
   static float rate = 45; // compare steps per second @tune
   static float hold = 1.5; // seconds to rest on the sorted bars @tune
   static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
   static float tmp; // swap scratch
   static float x, h, s; // bar center x, bar height, palette mix
   static float cur; // bar index under the compare marker
-
   // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
   // loops below are the classic compare-and-swap, but each compare only
   // runs once enough time has passed (its overall index p*15 + j must stay

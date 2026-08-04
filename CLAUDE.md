@@ -364,11 +364,18 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   when there is an enclosing `CMD_FUNC_DEF` and a global at top level. A local
   row is marked `var_idx == REPL_VAR_IDX_LOCAL` (no payload field - the decl
   arm already dominates the union) and emits no predef op.
-- New decls insert at the **top of non-decl code** regardless of cursor (so
-  every reference follows its declaration) - top of the *document* for a
-  global, top of the enclosing *function body* for a local, hoisting from any
-  nesting depth; editing an existing decl overwrites in place (carried-over
-  names are exempt from the dup check).
+- New decls insert at the **end of the declaration prologue** regardless of
+  cursor (so every reference follows its declaration) - the prologue being
+  the leading run of comments, blank lines and other declarations, and
+  **nothing else**: no command type is part of it
+  (`compile_decl_prologue_end`). Prose that introduces the declarations
+  therefore stays above them. Scope picks the range - the *document* for a
+  global, the enclosing *function body* for a local - and hoisting works from
+  any nesting depth. Only the declaration moves; a comment is never rewritten
+  or carried with it. One exception keeps export honest: a comment run
+  leading into a `CMD_FUNC_DEF` belongs to that def, so the prologue ends
+  before the run rather than splitting it. Editing an existing decl
+  overwrites in place (carried-over names are exempt from the dup check).
 - No-op in executor/flatten - registration happens at commit time via
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
   nowhere: `flatten_bind_func_locals` re-derives them from

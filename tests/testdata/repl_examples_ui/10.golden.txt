@@ -102,7 +102,14 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
+
   static float s; // palette mix in [0,1]
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
   polygon(radius, sides, phase) {
     glBegin(GL_TRIANGLE_FAN);
       glNormal3f(0, 0, 1);
@@ -115,13 +122,6 @@ void display(void) {
       }
     glEnd();
   }
-
-
-  glClearColor(0.05, 0.06, 0.08, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
   glPushMatrix();
     glTranslatef(-2.4, 0, 0);
     polygon(0.9, 3, t*0.4);

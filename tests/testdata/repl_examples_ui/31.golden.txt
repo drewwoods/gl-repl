@@ -102,19 +102,19 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
+  static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
   // ===== Ringed gas giant under nebula skies =====
   // NOTE: stays well under the 8192 flattened-command budget --
   // the sphere loop costs stacks*(slices + 1)*10 flat commands.
 
   // banded gas giant: quad strips over latitude, bands swirled by t
   planet(rad, stacks, slices) {
-    float latA, latB, cA, cB, lon, cLon, sLon;
-    float y;
     // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
     // the normal and the vertex so each cosine is taken once, not three times.
     // lon/cLon/sLon do the same for the per-column longitude angle.
+    float latA, latB, cA, cB, lon, cLon, sLon;
+    float y;
     for(i, 0, stacks) {
       glBegin(GL_QUAD_STRIP);
         for(j, 0, slices + 1) {

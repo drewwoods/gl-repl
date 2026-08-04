@@ -248,82 +248,11 @@ static int consume_example_cfg_header(const char *const *lines) {
     return count;
 }
 
-/* ----- Body emission with editor-canonical func_def placement ----- */
-
-#define EXAMPLE_KIND_OTHER      0
-#define EXAMPLE_KIND_FUNC_BLOCK 1
-#define EXAMPLE_KIND_VAR_DECL   2
+/* ----- Body emission ----- */
 
 static void example_load_error(const char *msg) {
     repl_set_status_error(msg);
     fprintf(stderr, "%s\n", msg);
-}
-
-/* Empty lines + `// ...` comments are equivalent for leading-run
- * detection: editor_compile_func_def's compile_func_leading_comment_start
- * walks back over BOTH CMD_COMMENT and CMD_EMPTY, so blank lines
- * between func defs travel with the func block they precede. */
-static int example_line_is_comment(const char *line) {
-    while (*line && isspace((unsigned char)*line)) line++;
-    if (*line == '\0') return 1;
-    return line[0] == '/' && line[1] == '/';
-}
-
-static int example_line_is_var_decl(const char *line) {
-    while (*line && isspace((unsigned char)*line)) line++;
-    /* Optional `static ` prefix - canonical form per format_decl_text. */
-    if (strncmp(line, "static", 6) == 0 && isspace((unsigned char)line[6])) {
-        line += 6;
-        while (*line && isspace((unsigned char)*line)) line++;
-    }
-    return strncmp(line, "float ", 6) == 0 ||
-           strncmp(line, "float\t", 6) == 0;
-}
-
-static int example_line_is_func_def(const char *line) {
-    /* Match `funcN(...) {` or `name(...) {` shape. The cheap test
-     * is "identifier followed by `(`, with the body's opening `{`
-     * as the line's last non-space character" - that distinguishes
-     * a definition from a function CALL, and from a command whose
-     * argument is a compound literal (`glClipPlane(...,
-     * (GLdouble[]){0, 1, 0, 0});` ends with `;`, not `{`).
-     * Comments and other prefix forms (control-flow keywords) are
-     * rejected by the alphabetic-identifier prefix. */
-    const char *brace;
-    while (*line && isspace((unsigned char)*line)) line++;
-    if (!isalpha((unsigned char)*line) && *line != '_') return 0;
-
-    /* Reject control-flow keywords whose `keyword(...) { ... }`
-     * shape would otherwise look like a func def: `if`, `for`. */
-    if (strncmp(line, "for", 3) == 0 &&
-        !isalnum((unsigned char)line[3]) && line[3] != '_')
-        return 0;
-    if (strncmp(line, "if", 2) == 0 &&
-        !isalnum((unsigned char)line[2]) && line[2] != '_')
-        return 0;
-
-    const char *p = line;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-    /* Skip any whitespace between identifier and `(`. */
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '(') return 0;
-    brace = strrchr(p, '{');
-    if (!brace) return 0;
-    for (brace++; *brace; brace++)
-        if (!isspace((unsigned char)*brace)) return 0;
-    return 1;
-}
-
-static int example_line_brace_delta(const char *line) {
-    int delta = 0;
-    int in_str = 0;
-    for (const char *p = line; *p; p++) {
-        if (*p == '"') in_str = !in_str;
-        if (in_str) continue;
-        if (*p == '{') delta++;
-        else if (*p == '}') delta--;
-    }
-    return delta;
 }
 
 static int example_body_count(const char *const *body, int *count_out) {
@@ -362,113 +291,38 @@ static int apply_example_body_line(const char *line,
     return 1;
 }
 
-static int emit_example_body_two_pass(const char *const *body,
-                                      int *edit_line_inout) {
-    if (!body) return 1;
-
-    /* Classify each line into one of three buckets so emission
-     * matches the editor's canonical layout (decls first, then
-     * func_def blocks, then everything else). The float-decl pass
-     * runs FIRST so func body lines that reference top-level
-     * predef vars (`x`, `y`, `n`, ...) already see them registered
-     * by repl_apply_predef_ops when their CMD_VAR_ASSIGN compiles.
-     *
-     * KIND_VAR_DECL:    `float X[, Y, ...];` at depth 0
-     * KIND_FUNC_BLOCK:  func_def line, its body lines, and any
-     *                   contiguous depth-0 comments leading up to
-     *                   the func_def
-     * KIND_OTHER:       setup commands, function calls, non-leading
-     *                   comments - anything that should land below
-     *                   the func defs in the canonical layout */
+/* Emit the body one line at a time, in the order its author wrote it.
+ *
+ * This used to bucket lines into three passes - declarations, then
+ * func_def blocks with their leading comments, then everything else - to
+ * reproduce a canonical layout. That layout was the loader's own
+ * invention: it reordered the file, so the same scene read one way from
+ * `./gl-repl scene.glr` (which goes through src/repl/import.c, line by
+ * line) and another way from the Scene menu, F12, or --example. The
+ * bucketing also defeated the declaration-prologue rule, because
+ * declarations were applied into an empty document where no comment
+ * existed to keep them below.
+ *
+ * repl_load_apply_line places each row itself - a declaration lands at the
+ * end of the declaration prologue (compile_decl_prologue_end), a func_def
+ * keeps its leading comment run - so source order in, source order out.
+ * The one thing the decl-first pass bought was registering top-level
+ * predef vars before a func body that reads them compiles; in source order
+ * that holds by construction for any scene the editor could have produced,
+ * since a declaration always precedes its references. A hand-written
+ * example that forward-references a global now fails to load with the same
+ * diagnostic the REPL gives for typing that line. */
+static int emit_example_body_in_source_order(const char *const *body,
+                                             int *edit_line_inout) {
     int n = 0;
+
+    if (!body) return 1;
     if (!example_body_count(body, &n))
         return 0;
 
-    char *kinds = NULL;
-    if (n > 0) {
-        kinds = (char *)calloc((size_t)n, sizeof(*kinds));
-        if (!kinds) {
-            example_load_error("Example load failed: out of memory");
+    for (int i = 0; i < n; i++)
+        if (!apply_example_body_line(body[i], i, edit_line_inout))
             return 0;
-        }
-    }
-
-    int depth = 0;
-    int comment_run_start = -1;
-
-    for (int i = 0; i < n; i++) {
-        int delta = example_line_brace_delta(body[i]);
-
-        if (depth > 0) {
-            kinds[i] = EXAMPLE_KIND_FUNC_BLOCK;
-            depth += delta;
-            if (depth < 0) depth = 0;
-            comment_run_start = -1;
-            continue;
-        }
-
-        if (example_line_is_func_def(body[i])) {
-            /* Mark only OTHER (comment) lines in the pending run as
-             * FUNC_BLOCK; var_decls keep their VAR_DECL bucket so
-             * pass 1 still emits them in the decl pass. */
-            if (comment_run_start >= 0) {
-                for (int j = comment_run_start; j < i; j++)
-                    if (kinds[j] == EXAMPLE_KIND_OTHER)
-                        kinds[j] = EXAMPLE_KIND_FUNC_BLOCK;
-            }
-            kinds[i] = EXAMPLE_KIND_FUNC_BLOCK;
-            depth += delta;
-            if (depth < 0) depth = 0;
-            comment_run_start = -1;
-            continue;
-        }
-
-        if (example_line_is_var_decl(body[i])) {
-            /* Var decls auto-promote to the top of non-decl code
-             * inside the lean loader, so a depth-0 comment above
-             * `float X;` is still a leading comment for the next
-             * func_def - the decl moves out of the way at apply
-             * time. Keep the pending comment run alive. */
-            kinds[i] = EXAMPLE_KIND_VAR_DECL;
-            continue;
-        }
-
-        if (example_line_is_comment(body[i])) {
-            if (comment_run_start < 0) comment_run_start = i;
-            continue;
-        }
-
-        comment_run_start = -1;
-    }
-
-    /* Pass 1: float decls (so predef-var registrations are live
-     * before func bodies that reference them compile). */
-    for (int i = 0; i < n; i++) {
-        if (kinds[i] != EXAMPLE_KIND_VAR_DECL) continue;
-        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
-            free(kinds);
-            return 0;
-        }
-    }
-    /* Pass 2: func_def blocks (with leading comments). */
-    for (int i = 0; i < n; i++) {
-        if (kinds[i] != EXAMPLE_KIND_FUNC_BLOCK) continue;
-        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
-            free(kinds);
-            return 0;
-        }
-    }
-    /* Pass 3: everything else (setup commands, function calls,
-     * non-leading comments). */
-    for (int i = 0; i < n; i++) {
-        if (kinds[i] != EXAMPLE_KIND_OTHER) continue;
-        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
-            free(kinds);
-            return 0;
-        }
-    }
-
-    free(kinds);
     return 1;
 }
 
@@ -540,12 +394,9 @@ static int load_example_lines(const char *const *lines,
     /* Examples are loaded via the lean repl_load_apply_line,
      * mirroring src/repl/export.c's importer.
      *
-     * Two passes match the editor's editor_try_commit_func_def reorder
-     * behavior at load time: func_def blocks (with their leading
-     * depth-0 comments) emit first, then everything else. The lean
-     * loader auto-promotes `float X;` decls to the top of non-decl
-     * code regardless of emission order, so two passes are enough
-     * to produce the canonical layout the existing fixtures pin.
+     * Lines emit in the order the .glr author wrote them, so a scene
+     * loaded from the catalog reads exactly like the same scene opened
+     * as a file (see emit_example_body_in_source_order).
      *
      * Caller-owned cursor: the loader threads
      * the cursor through each per-line apply via a local int
@@ -553,7 +404,7 @@ static int load_example_lines(const char *const *lines,
      * the body emits). The post-load value is returned to the
      * caller, which applies it to EditorState at the editor boundary. */
     int loader_edit_line = 0;
-    if (!emit_example_body_two_pass(body, &loader_edit_line)) {
+    if (!emit_example_body_in_source_order(body, &loader_edit_line)) {
         reset_example_load_state(tag_mask);
         repl_dispatch_input_reset();
         repl_mark_source_dirty();

@@ -142,16 +142,23 @@ void repl_export_apply_pending_cfg(void) {
     import_workspace_cfg_apply_and_reset(&g_public_workspace_accum);
 }
 
-static int import_first_non_decl(const ReplCommandStore *store) {
-    int pos = 0;
-
+/* Where a reconstructed `// @declare` row goes: exactly where the marker
+ * sits in the file. write_canonical_cmd_as_c emits the marker at the
+ * declaration's own document position, and the body is read in order, so
+ * the store's current end *is* the recorded position - no rule needs to
+ * re-derive it, and whatever the author wrote above the declaration stays
+ * above it.
+ *
+ * This is why the exporter's ordering is load-bearing rather than
+ * cosmetic: a use that preceded its `@declare` would fail to resolve the
+ * name. The interactive compiler cannot produce that shape
+ * (compile_decl_prologue_end keeps a declaration above every reference),
+ * so only a hand-edited file can, and it fails the same way the REPL
+ * would reject the line if typed. */
+static int import_decl_insert_pos(const ReplCommandStore *store) {
     if (!store || !store->cmds || !store->count)
         return 0;
-
-    while (pos < *store->count &&
-           store->cmds[pos].type == CMD_VAR_DECLARE)
-        pos++;
-    return pos;
+    return *store->count;
 }
 
 static void import_format_decl_float(char *buf, size_t n, float v) {
@@ -766,12 +773,11 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     cmd.payload.decl.count = count;
 
     /* Insert the command directly, bypassing editor_try_commit_float_decl so we
-     * don't reject vars that are already registered.  Keep declarations in the
-     * same leading zone used by interactive float declarations, even though
-     * exported // @declare markers are encountered later in the snippet. */
+     * don't reject vars that are already registered, and at the position the
+     * `// @declare` marker occupies in the file rather than a re-derived one. */
     {
         ReplCommandStore store = repl_command_store_live();
-        int decl_pos = import_first_non_decl(&store);
+        int decl_pos = import_decl_insert_pos(&store);
 
         /* Source text first; cmd-store second so a text-write failure
          * leaves no orphan GLCmd row. cmd-store failure rolls the

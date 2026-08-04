@@ -120,8 +120,8 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
 
+  static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
 
   // The caster, drawn twice: once squashed by the shadow matrix, once for
   // real. One definition means the two can never drift apart.

@@ -54,6 +54,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 static void test_import_robustness(void);
 static void test_config_variants_export(void);
 static void test_workspace_header_budget_worst_case(void);
+static void test_decl_comment_preludes(void);
 #ifdef GL_STUBS
 static void test_mesh_export_feedback(void);
 #endif
@@ -2679,6 +2680,7 @@ int main(void) {
         glr_ctrl_reset_all(); declare_test_vars();
     }
 
+    test_decl_comment_preludes();
     test_config_variants_export();
     test_workspace_header_budget_worst_case();
     test_import_robustness();
@@ -2688,6 +2690,100 @@ int main(void) {
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
+}
+
+/* Leading comments and blank lines are valid before C89 declarations. Keep
+ * that source order through export/import, and keep it in generated C for
+ * function-local declarations that the exporter hoists. */
+static void test_decl_comment_preludes(void) {
+    const char *path = "/tmp/repl_decl_comment_preludes.c";
+    char buf[32768];
+    FILE *dump;
+    size_t dump_len;
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("// Scene controls.");
+    editor_feed_line("");
+    editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("float radius = 1;");
+    editor_feed_line("float speed = 2;");
+
+    /* The CLI's --dump-code path is a direct rendering of this panel text.
+     * Exercise it explicitly: its output must retain the introduction, the
+     * declarations it introduces, then the scene setup in that order. */
+    dump = tmpfile();
+    ASSERT_TRUE("open comment-prelude code dump", dump != NULL);
+    if (dump) {
+        repl_dump_code_panel_text(dump, source_document_view());
+        rewind(dump);
+        dump_len = fread(buf, 1, sizeof(buf) - 1, dump);
+        buf[dump_len] = '\0';
+        fclose(dump);
+        ASSERT_TRUE("code dump keeps comment/decl/code ordering",
+                    appears_before(buf, "Scene controls.",
+                                   "static float radius = 1;") &&
+                    appears_before(buf, "static float radius = 1;",
+                                   "static float speed = 2;") &&
+                    appears_before(buf, "static float speed = 2;",
+                                   "glClearColor(0.1, 0.1, 0.1, 1);") &&
+                    appears_before(buf, "glClearColor(0.1, 0.1, 0.1, 1);",
+                                   "glVertex3f(0, 0, 0);"));
+    }
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load global decl comment-prelude export",
+                repl_export_load_from_file(path, NULL) == 1);
+    ASSERT_TRUE("import keeps global decl comment/blank prelude",
+                repl_state_document_count() == 7 &&
+                repl_state_document_cmds()[0].type == CMD_COMMENT &&
+                repl_state_document_cmds()[1].type == CMD_EMPTY &&
+                repl_state_document_cmds()[2].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[3].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[4].type == CMD_CLEAR_COLOR &&
+                repl_state_document_cmds()[5].type == CMD_CLEAR &&
+                repl_state_document_cmds()[6].type == CMD_VERTEX3F);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("// Local orbit scratch.");
+    editor_feed_line("");
+    editor_feed_line("float local;");
+    editor_feed_line("// Local orbit detail.");
+    editor_feed_line("float detail;");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    repl_export_save_output(path, source_document_view(), NULL);
+    read_text_file(path, buf, sizeof(buf));
+    ASSERT_TRUE("C89 export keeps local introductory comment before decl",
+                count_substr(buf, "Local orbit scratch") == 1 &&
+                appears_before(buf, "Local orbit scratch", "float local = 0.0f;") &&
+                appears_before(buf, "Local orbit detail", "float detail = 0.0f;"));
+
+    /* The prelude pass must render a multi-row comment run as one C block,
+     * exactly like the main pass. Emitting row-by-row would turn a body's
+     * leading paragraph into a stack of one-line comments purely because
+     * the local-hoist pass reached it first. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("// Paragraph line one.");
+    editor_feed_line("// Paragraph line two.");
+    editor_feed_line("// Paragraph line three.");
+    editor_feed_line("float local;");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    repl_export_save_output(path, source_document_view(), NULL);
+    read_text_file(path, buf, sizeof(buf));
+    ASSERT_TRUE("C89 export renders a leading comment run as one block",
+                count_substr(buf, "* Paragraph line one.") == 1 &&
+                count_substr(buf, "* Paragraph line two.") == 1 &&
+                count_substr(buf, "/* Paragraph line one. */") == 0 &&
+                appears_before(buf, "Paragraph line three.",
+                               "float local = 0.0f;"));
+
+    remove(path);
 }
 
 static void test_import_robustness(void) {

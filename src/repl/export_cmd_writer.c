@@ -574,18 +574,46 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
                                   int skip_func_defs, int hoist_local_decls) {
     int for_depth = 0;
     int tess_depth = 0;
+    int prelude_end = start;
 
     /* C89 has no declaration-after-statement, and this exporter targets
      * C89 - it already hoists for-loop variables into a scope brace for
      * the same reason. A local declaration is normally the body's first
      * row, but nothing keeps it there: ordinary insert-mode editing can
      * push a statement ahead of one, and flatten binds it wherever it
-     * lands. So the emitted body puts every declaration first, in source
-     * order, and the main pass below skips them. Semantics are unchanged:
-     * a local has no initializer to reorder, and the REPL binds them all
-     * at call entry anyway. */
+     * lands. Preserve the full leading comment/blank/declaration prelude
+     * in source order, then hoist any stray local declarations found below
+     * it. The main pass skips both emitted prelude rows and declarations.
+     * Semantics are unchanged: locals have no initializer to reorder, and
+     * the REPL binds them all at call entry anyway. */
     if (hoist_local_decls) {
-        for (int cmd_idx = start;
+        while (prelude_end >= 0 && prelude_end < end_idx &&
+               prelude_end < repl_state_document_count() &&
+               repl_state_document_cmds()[prelude_end].valid &&
+               (repl_state_document_cmds()[prelude_end].type == CMD_COMMENT ||
+                repl_state_document_cmds()[prelude_end].type == CMD_EMPTY ||
+                export_row_is_hoisted_local(prelude_end, hoist_local_decls))) {
+            /* Contiguous comments go through the run writer, not one row at
+             * a time: a multi-line run becomes a single C block comment,
+             * and a body's leading run must not render differently from one
+             * further down just because the prelude pass reached it first. */
+            if (repl_state_document_cmds()[prelude_end].type == CMD_COMMENT) {
+                int run_end = prelude_end + 1;
+                while (run_end < end_idx &&
+                       run_end < repl_state_document_count() &&
+                       repl_state_document_cmds()[run_end].valid &&
+                       repl_state_document_cmds()[run_end].type == CMD_COMMENT)
+                    run_end++;
+                export_write_comment_run_as_c(f, prelude_end, run_end);
+                prelude_end = run_end;
+                continue;
+            }
+            write_canonical_cmd_as_c(f,
+                                     &repl_state_document_cmds()[prelude_end],
+                                     prelude_end, 0, &tess_depth);
+            prelude_end++;
+        }
+        for (int cmd_idx = prelude_end;
              cmd_idx >= 0 && cmd_idx < end_idx &&
              cmd_idx < repl_state_document_count(); cmd_idx++) {
             if (repl_state_document_cmds()[cmd_idx].type == CMD_FUNC_DEF) {
@@ -601,6 +629,7 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
 
     for (int cmd_idx = start; cmd_idx < end_idx && cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds()[cmd_idx].valid) continue;
+        if (cmd_idx < prelude_end) continue;
         if (export_row_is_hoisted_local(cmd_idx, hoist_local_decls)) continue;
         if (skip_func_defs &&
             (repl_state_document_cmds()[cmd_idx].type == CMD_COMMENT ||

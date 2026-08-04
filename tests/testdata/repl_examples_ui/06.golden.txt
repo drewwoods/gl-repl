@@ -102,6 +102,7 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
+
   static float grid = 15; // grid size @tune
   static float extent = 3; // grid extent @tune
   static float x, y, z, dydx, dydz, s; // vertex coords, surface slopes, palette mix in [0,1]
@@ -109,7 +110,6 @@ void display(void) {
   static float amp = 0.4; // wave amplitude (peak |y|)
   static float freq = 2.5; // spatial frequency along x and z
   static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
-
   // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
   // Drawn as a triangle strip per row with analytic per-vertex normals.
 

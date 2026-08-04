@@ -76,7 +76,9 @@ rejected - assign on the next line), no predef slot, no variable-panel row, and
 therefore no `@tune`/`@config`. Declare temporaries this way by default; keep a
 global only for a value the *caller* reads back or a knob you want to scrub.
 Locals hoist to the top of their function body (from any nesting depth) exactly
-as top-level decls hoist to the document top. Naming follows C: a local may not
+as top-level decls hoist to the document top - in both cases *below* any
+leading comments and blank lines, so prose introducing a group of declarations
+stays above them. Naming follows C: a local may not
 collide with a parameter or another local of the same body (redefinition), but
 may shadow a global or be shadowed by a loop iterator, innermost-first.
 
@@ -243,10 +245,10 @@ from its *appearance* args is the usual way to buy that scope back.
 - **Comment run before a `func()` header: 16 lines max.** Import buffers a
   function's preceding comments in a fixed `IMPORT_MAX_PENDING_COMMENTS` (16)
   slot array and **silently drops the overflow** - the export/import roundtrip
-  test then fails with a one-line diff. Count the run *after* hoisting: export
-  moves `static float` decls to the document top, so paragraphs those decls
-  used to separate become one contiguous run. Break a long run up by moving
-  prose inside the function body (which is not buffered) instead.
+  test then fails with a one-line diff. Count the run *after* export moves
+  `static float` decls to file scope, so paragraphs those decls used to
+  separate become one contiguous run. Break a long run up by moving prose
+  inside the function body (which is not buffered) instead.
 - **Hoisting a subexpression into a local can move the last ULP.** Caching a
   call (`cx = cos(...)`) is exact, but reassociating is not: `0.30*i/rings`
   parses as `(0.30*i)/rings` and does not always equal `0.30*u` for

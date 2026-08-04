@@ -3034,8 +3034,9 @@ status hint, and the autocomplete provider. Adding a tutorial means:
   entries in catalog order.
 - The catalog validator `expected_is_single_command` rejects
   `float ...;` declarations in a COMMAND `expected` (CMD_VAR_DECLARE is
-  relocated to the top of non-decl code by `editor_try_commit_float_decl`,
-  breaking `pending.commit_line`). To teach a declaration like
+  relocated to the end of the declaration prologue by
+  `editor_try_commit_float_decl`, breaking `pending.commit_line`). To teach
+  a declaration like
   `float n = 5;`, use a REQUIRE_VAR step whose variable does not exist
   yet (the "Variable Slider" tutorial's step 0): the runner detects the
   undeclared var and treats it as a declaration step (no separate locked

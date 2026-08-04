@@ -4143,10 +4143,20 @@ static void test_require_var_tab_accepts_ghost(void) {
                 repl_eval_find_predef_var_idx("n") >= 0);
     /* The instruction comment is PRESENT - it committed as a trailing
      * comment on the declaration line (the user's "missing comment" fix),
-     * not as a separate stranded line. */
+     * not as a separate stranded line. Locate the declaration row rather
+     * than assuming row 0: a declaration lands at the end of the
+     * declaration prologue (compile_decl_prologue_end), which in this
+     * lesson's scaffold sits below the scene-opening comment and clear. */
     if (cmt && cmt[0]) {
         SourceTextView doc = source_document_view();
-        const char *decl_line = source_text_line(doc, 0);
+        const char *decl_line = NULL;
+
+        for (int row = 0; row < repl_state_document_count(); row++) {
+            if (repl_state_document_cmds()[row].type != CMD_VAR_DECLARE)
+                continue;
+            decl_line = source_text_line(doc, row);
+            break;
+        }
         ASSERT_TRUE("declaration line carries the trailing comment",
                     decl_line && strstr(decl_line, cmt) != NULL);
     }

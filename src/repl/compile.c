@@ -1267,6 +1267,47 @@ static void compile_func_display_name(const ReplCompileContext *ctx,
     }
 }
 
+/* End of the declaration prologue in [start, limit): the run a new
+ * declaration may be hoisted past. That run is *not* a list of commands -
+ * it is everything that is not code (comments, blank lines) plus other
+ * declarations, and nothing else. Both storage classes use it, so a
+ * global at document top and a local at function-body top follow one
+ * rule, and no command type has to be enumerated (or kept up to date) to
+ * describe where a declaration may land.
+ *
+ * The hoist moves the declaration only. Comments are never rewritten or
+ * carried along - a declaration passing a comment leaves it exactly where
+ * its author put it. The single exception is a comment run that leads
+ * into a function definition: export treats such a run as belonging to
+ * that definition (comment_run_attached_func_idx() in export_cmd_writer.c
+ * and the backward scan in write_func_defs_as_c), so a declaration landing
+ * inside the run would relocate that prose from above the generated C
+ * function into draw_scene(). The prologue therefore ends where the run
+ * begins, and the declaration goes above it. */
+static int compile_decl_prologue_end(const GLCmd *cmds, int start, int limit) {
+    int pos = start;
+    int comment_run_start = -1;
+
+    if (!cmds)
+        return start;
+    while (pos >= 0 && pos < limit) {
+        if (cmds[pos].type == CMD_VAR_DECLARE) {
+            comment_run_start = -1;
+        } else if (cmds[pos].type == CMD_COMMENT ||
+                   cmds[pos].type == CMD_EMPTY) {
+            if (comment_run_start < 0)
+                comment_run_start = pos;
+        } else {
+            break;
+        }
+        pos++;
+    }
+    if (comment_run_start >= 0 && pos < limit &&
+        cmds[pos].type == CMD_FUNC_DEF)
+        return comment_run_start;
+    return pos;
+}
+
 /* The local arm of repl_compile_float_decl: a declaration inside a
  * function body. It emits no predef ops at all - the prologue row *is*
  * the binding, which is why deleting it is guarded like a live variable
@@ -1326,14 +1367,14 @@ static ReplCompileResult compile_float_decl_local(const ReplCompileContext *ctx,
             return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
     }
 
-    /* This body's declaration prologue, mirroring the global rule (which
-     * skips only CMD_VAR_DECLARE rows). Hoisting here - from whatever
-     * for/if the author typed in - is what keeps every reference strictly
-     * after its declaration, so flatten's binding stays a prefix scan. */
-    decl_pos = func_idx + 1;
-    while (decl_pos < body_end && decl_pos < ctx->document_count &&
-           ctx->document_cmds[decl_pos].type == CMD_VAR_DECLARE)
-        decl_pos++;
+    /* This body's declaration prologue. Hoisting here - from whatever
+     * for/if the author typed in - is what keeps every reference after its
+     * declaration; the body's introductory prose stays above the locals it
+     * introduces because comments are not code and the prologue passes
+     * them. Still valid C89: a comment is not a statement. */
+    decl_pos = compile_decl_prologue_end(
+        ctx->document_cmds, func_idx + 1,
+        body_end < ctx->document_count ? body_end : ctx->document_count);
 
     if (old_decl) {
         out->kind  = REPL_COMPILED_REPLACE_ONE;
@@ -1400,11 +1441,11 @@ ReplCompileResult repl_compile_float_decl(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    /* Decl placement and overwrite-in-place detection. New decls
-     * always land at the top of the non-decl region, so existing
-     * references appear strictly after their declaration. Editing
-     * an existing CMD_VAR_DECLARE row is the only case that
-     * replaces in-place. */
+    /* Decl placement and overwrite-in-place detection. New decls land at
+     * the end of the declaration prologue (see
+     * compile_decl_prologue_end), so existing references appear strictly
+     * after their declaration. Editing an existing CMD_VAR_DECLARE row is
+     * the only case that replaces in-place. */
     int overwriting_decl = (!ctx->insert_mode &&
                             insert_idx < ctx->document_count &&
                             ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE);
@@ -1466,10 +1507,14 @@ ReplCompileResult repl_compile_float_decl(const char *input,
             return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
     }
 
-    int decl_pos = 0;
-    while (decl_pos < ctx->document_count &&
-           ctx->document_cmds[decl_pos].type == CMD_VAR_DECLARE)
-        decl_pos++;
+    /* The document's declaration prologue - the same rule the local arm
+     * uses, so a scene that opens with an explanatory comment keeps that
+     * explanation above the declarations it introduces instead of having
+     * the next declaration inserted over it. The first executable row ends
+     * the prologue, so a new declaration still pushes code down rather
+     * than reordering it. */
+    int decl_pos = compile_decl_prologue_end(ctx->document_cmds, 0,
+                                             ctx->document_count);
 
     if (old_global) {
         out->kind  = REPL_COMPILED_REPLACE_ONE;

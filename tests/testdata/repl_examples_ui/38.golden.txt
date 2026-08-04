@@ -104,7 +104,27 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
+
+  // Stencil masking, minimum viable. Three passes over one shape:
+  //   1. stamp it into the stencil buffer only - no color, no depth
+  //   2. draw the payload where the stamp landed (GL_EQUAL, 1)
+  //   3. trace the window edge with the test off, so the mask is visible
+  // The stencil buffer itself does not render. Pass 3 is the only reason
+  // you can tell where the window is - there is no stencil viewer yet, so
+  // comment it out and the mask becomes guesswork. That is the point.
   static float spin; // @tune  mask rotation, degrees
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_STENCIL_TEST);
+
+  spin = t * 20;
 
   // The window. Drawn twice - once as a stamp, once as an outline - so it
   // lives in a func and both passes are guaranteed to agree.
@@ -119,26 +139,6 @@ void display(void) {
       glEnd();
     glPopMatrix();
   }
-
-  // Stencil masking, minimum viable. Three passes over one shape:
-  //   1. stamp it into the stencil buffer only - no color, no depth
-  //   2. draw the payload where the stamp landed (GL_EQUAL, 1)
-  //   3. trace the window edge with the test off, so the mask is visible
-  // The stencil buffer itself does not render. Pass 3 is the only reason
-  // you can tell where the window is - there is no stencil viewer yet, so
-  // comment it out and the mask becomes guesswork. That is the point.
-
-  glClearColor(0.05, 0.06, 0.08, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glEnable(GL_STENCIL_TEST);
-
-  spin = t * 20;
 
   // --- Pass 1: stamp -------------------------------------------------
   // Writes are off for color and depth, so the quad leaves no trace in

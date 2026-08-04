@@ -102,14 +102,6 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  tri() {
-    glBegin(GL_TRIANGLES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(-0.3, -0.3, 0);
-      glVertex3f(0.3, -0.3, 0);
-      glVertex3f(0, 0.4, 0);
-    glEnd();
-  }
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
@@ -122,6 +114,14 @@ void display(void) {
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
   glEnable(GL_NORMALIZE);
+  tri() {
+    glBegin(GL_TRIANGLES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(-0.3, -0.3, 0);
+      glVertex3f(0.3, -0.3, 0);
+      glVertex3f(0, 0.4, 0);
+    glEnd();
+  }
   // Pivot rotation: translate out to z=2, rotate, translate back -- the tri
   // swings about a point 2 units away instead of its own origin.
   glColor3f(1, 0.35, 0.2);

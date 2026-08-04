@@ -1412,6 +1412,79 @@ int main(void) {
                     repl_state_flat_program_cmds()[flat_idx].src_cmd_idx == 3);
     }
 
+    /* The declaration prologue is comments, blanks and other declarations -
+     * no command type is part of it. A scene that opens with an
+     * introduction keeps that introduction above the declarations it
+     * introduces, and the declarations still precede all executable code. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("// Orbit controls.");
+    editor_feed_line("");
+    editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("float radius = 1;");
+    editor_feed_line("float speed = 2;");
+    ASSERT_TRUE("global decl keeps introductory comment/blank prelude",
+                repl_state_document_count() == 7 &&
+                repl_state_document_cmds()[0].type == CMD_COMMENT &&
+                repl_state_document_cmds()[1].type == CMD_EMPTY &&
+                repl_state_document_cmds()[2].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[3].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[4].type == CMD_CLEAR_COLOR &&
+                repl_state_document_cmds()[5].type == CMD_CLEAR &&
+                repl_state_document_cmds()[6].type == CMD_VERTEX3F);
+
+    /* A declaration typed under executable code hoists above it - the
+     * prologue ends at the first command, whichever command that is. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("// Describes the geometry below.");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("float radius = 1;");
+    ASSERT_TRUE("decl hoists above code, leaving comments in place",
+                repl_state_document_count() == 4 &&
+                repl_state_document_cmds()[0].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[1].type == CMD_CLEAR &&
+                repl_state_document_cmds()[2].type == CMD_COMMENT &&
+                repl_state_document_cmds()[3].type == CMD_VERTEX3F);
+
+    /* A comment run leading into a func def belongs to that def (export
+     * emits it above the generated C function), so a declaration goes
+     * above the run rather than splitting it. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("// Describes func0.");
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("float radius = 1;");
+    ASSERT_TRUE("decl does not split a func def's leading comment run",
+                repl_state_document_count() == 5 &&
+                repl_state_document_cmds()[0].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[1].type == CMD_COMMENT &&
+                repl_state_document_cmds()[2].type == CMD_FUNC_DEF &&
+                repl_state_document_cmds()[3].type == CMD_VERTEX3F &&
+                repl_state_document_cmds()[4].type == CMD_FUNC_END);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("// Local orbit scratch.");
+    editor_feed_line("");
+    editor_feed_line("float local;");
+    editor_feed_line("// Local orbit detail.");
+    editor_feed_line("float detail;");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_TRUE("local decl keeps introductory comment/blank prelude",
+                repl_state_document_count() == 8 &&
+                repl_state_document_cmds()[0].type == CMD_FUNC_DEF &&
+                repl_state_document_cmds()[1].type == CMD_COMMENT &&
+                repl_state_document_cmds()[2].type == CMD_EMPTY &&
+                repl_state_document_cmds()[3].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[4].type == CMD_COMMENT &&
+                repl_state_document_cmds()[5].type == CMD_VAR_DECLARE &&
+                repl_state_document_cmds()[6].type == CMD_VERTEX3F &&
+                repl_state_document_cmds()[7].type == CMD_FUNC_END);
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(scale) {");
     editor_feed_line("if(scale > 1) {");

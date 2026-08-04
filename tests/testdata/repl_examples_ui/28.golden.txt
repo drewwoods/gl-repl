@@ -108,28 +108,28 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
+
   static float px, py, pz; // planet position - the caller hangs the body and its label off it
   static float orbitR; // log-compressed orbit radius, shared by the draw funcs
   static float ASTEROIDS = 140; // @tune
-  static float EARTH_R = 0.17; // @tune
-  static float EARTH_RATE = 0.85; // @tune
-  static float ORB_BASE = 0; // @tune
-  static float ORB_SCALE = 10; // @tune
-  static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
-
 
   // The two orbit funcs below only POSITION a body: each leaves the result in
   // px/py/pz and draws nothing. drawBody() then puts a lit sphere there and the
   // caller hangs the label off the same px/py/pz. Keeping the orbital elements
   // and the body's appearance in separate argument lists is what buys
   // planetKepler() the scope room to name every intermediate below.
+  static float EARTH_R = 0.17; // @tune
+  static float EARTH_RATE = 0.85; // @tune
+  static float ORB_BASE = 0; // @tune
+  static float ORB_SCALE = 10; // @tune
+  static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
 
   orbitRings(Drel, node, incl) {
-    float th, u, cNode, sNode, cIncl, sIncl, cu, su;
     // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
     // are call-time constants), so they are hoisted out of the 96-point loop
     // instead of being retaken every iteration; cu/su cache cos(u)/sin(u),
     // each read twice in the vertex formula below.
+    float th, u, cNode, sNode, cIncl, sIncl, cu, su;
     orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
     cNode = cos(node);
     sNode = sin(node);
@@ -163,10 +163,10 @@ void display(void) {
   // display applies documented compression for orbit distance only.
   // t=0 is year 2000.0 (J2000 alignment).
   planet(Drel, Yrel, phase, node, incl) {
-    float ang, u, xo, yo, cNode, sNode, cIncl, sIncl;
     // cNode/sNode/cIncl/sIncl are constant for one call and each feeds two of
     // the position terms; xo/yo are the coordinates in the orbit plane, before
     // the node/inclination rotation (the same names planetKepler() uses).
+    float ang, u, xo, yo, cNode, sNode, cIncl, sIncl;
     orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
     cNode = cos(node);
     sNode = sin(node);
@@ -181,12 +181,12 @@ void display(void) {
     pz = xo*sNode + yo*cNode*cIncl;
   }
   planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot) {
-    float cent, aK, eK, iK, lK, pK, nK, mK;
-    float eAn, xh, yh, r, argP, xo, yo;
-    float x1, y1, z1;
     // 12 params + 18 locals + 1 loop iterator = 31 of the 32-slot function
     // scope. That is what pays for the naming below: every step keeps its own
     // variable, so nothing has to be recycled once it is no longer needed.
+    float cent, aK, eK, iK, lK, pK, nK, mK;
+    float eAn, xh, yh, r, argP, xo, yo;
+    float x1, y1, z1;
     cent = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
     aK = a0 + adot*cent;
     eK = e0 + edot*cent;
@@ -253,11 +253,11 @@ void display(void) {
   // log-distance scale as the planets. Drawn as small unlit points, depth-tested
   // so the planets pass in front of and behind the band.
   asteroidBelt(count) {
-    float aRel, ang, r, shade;
     // aRel is the speck's true distance in AU, ang its current orbit angle, r
     // the log-compressed display radius and shade its dust tint. Naming them
     // costs four assignments per speck and saves re-rolling the same rand()
     // seeds two or three times apiece inside one very long vertex line.
+    float aRel, ang, r, shade;
     glBegin(GL_POINTS);
       for(i, 0, count) {
         aRel = 2.2 + 1.1*rand(i, 1);

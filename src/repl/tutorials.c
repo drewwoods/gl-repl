@@ -360,13 +360,14 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
  * starts, so the runner detects the undeclared var (see
  * tutorial_enter_step) and treats it specially. The satisfying
  * `float n = 1;` is a declaration, which the compiler relocates to the
- * TOP of the document, so a separate locked instruction comment line
- * above it would be stranded (and would desync locked-line tracking).
- * Instead the instruction rides the autocomplete ghost as
- * `float n = 1; <this comment>` (synthesized in tutorial_shadow_suffix):
- * the comment below commits as a TRAILING comment on the decl line and
- * travels with it to the top. So this catalog string is worded to read
- * as a trailing description of `n`, not as a standalone instruction.
+ * end of the declaration prologue (compile_decl_prologue_end), so a
+ * separate locked instruction comment line above it would be stranded
+ * (and would desync locked-line tracking). Instead the instruction rides
+ * the autocomplete ghost as `float n = 1; <this comment>` (synthesized in
+ * tutorial_shadow_suffix): the comment below commits as a TRAILING comment
+ * on the decl line and travels with it. So this catalog string is worded
+ * to read as a trailing description of `n`, not as a standalone
+ * instruction.
  *
  * The middle COMMAND steps draw the triangle (its vertices reference
  * `n`). The final step's `n` already exists, so its slider is live and
