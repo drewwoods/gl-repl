@@ -84,6 +84,17 @@ done
 if [ "$have_real_gl" -eq 0 ]; then
     SYS_GL="-isystem $ROOT/tests/gl-stubs/include"
     GL_DEFS="-DGL_STUBS"
+    # The interposition library is the one source that CANNOT be checked
+    # against the stubs, by construction. On ELF its replacements ARE the
+    # real symbol names (`void glBegin(GLenum)` shadows the app's call),
+    # while the stub headers define every entry point as a `static inline`
+    # no-op -- so every replacement is a redefinition. It is a real-GL-only
+    # artifact (it dlsym()s RTLD_NEXT for the original), so there is nothing
+    # meaningful to syntax-check without real headers. Checked for real
+    # wherever GL dev headers exist, which includes Linux CI (see
+    # .github/workflows/ci-linux.yml, where the GL packages are installed
+    # before this guard runs).
+    FILES="$(printf '%s\n' "$FILES" | grep -v '^tools/glprobe/glprobe_preload\.c$')"
 fi
 
 fail=0

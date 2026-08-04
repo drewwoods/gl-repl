@@ -19,6 +19,17 @@ jobs:
           # check-trailing-whitespace diffs against origin/main's merge base
           fetch-depth: 0
 
+      # Installed before the C99 ratchet on purpose: with no GL dev headers
+      # the guard falls back to the no-op stub headers, which cannot check
+      # the LD_PRELOAD interposition library (its replacements are the real
+      # GL symbol names, and the stubs define those as static inline no-ops).
+      # Real headers here mean the ratchet covers the ELF branch of
+      # tools/glprobe/glprobe_preload.c, which nothing else in CI compiles.
+      - name: Install GL/GLUT dev packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev
+
       - name: C99 ratchet (real gcc)
         run: make check-c99
 
@@ -26,7 +37,4 @@ jobs:
         run: make test-stubs
 
       - name: Build gl-repl against system GL/GLUT
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev
-          make gl-repl
+        run: make gl-repl
