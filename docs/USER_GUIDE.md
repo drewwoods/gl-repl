@@ -471,7 +471,7 @@ report; click elsewhere or send input to the editor to dismiss it.
 | Key | Action |
 |---|---|
 | Ctrl+\ | Reformat all lines (re-indent blocks) |
-| Ctrl+/ | Toggle `//` comment on the current line |
+| Ctrl+/ | Toggle `//` comment on the selection, the enclosing block, or the current line |
 | Ctrl+Shift+Q | Split a multi-name `float` declaration into one decl per line (also File → Split Declaration) |
 | Ctrl+Shift+F | Toggle code focus - the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
@@ -1093,8 +1093,40 @@ To disable rows without restructuring them, select the range and press
 ### Comments
 
 Type `// text` directly to add a comment line, or press `Ctrl+/` to toggle a
-comment on an existing one. A trailing comment on a `float` declaration can
-also carry a tag that changes how the variable is treated:
+comment on an existing one.
+
+`Ctrl+/` works on a range, and picks it for you:
+
+- **With a selection**, the range is the selection. If every selected line is
+  already commented the press restores them all; otherwise it comments them
+  all. A mix of code and comments comments the rest, so the next press puts
+  the mix back exactly as it was. The selection stays put afterwards, which is
+  what lets a second press undo the first.
+- **Without one**, the cursor line decides. On a `for`, `if`, or function
+  header - or on its closing `}` - the whole block toggles in one press,
+  commented block included: `Ctrl+/` on `// triangle() {` brings the entire
+  function back, not just that line. On any other line it is just that line.
+
+Comment and uncomment are exact inverses: whatever a press comments, the next
+press restores character for character, including function names, parameter
+lists, and expressions like `cos(ph + t)` that would otherwise come back as
+the numbers they evaluated to.
+
+That reversibility is why the toggle is picky about what it will comment.
+Commented-out code still has to be legal code, so a range is refused when it
+would not survive the trip back:
+
+- a range that opens a block it does not close (or closes one it did not
+  open) - select whole blocks, not halves;
+- a range holding a `float` declaration whose variable is still read outside
+  it - delete the readers first;
+- more than 16 lines at once.
+
+A refused toggle changes nothing, leaves no undo step, and says why in the
+status line.
+
+A trailing comment on a `float` declaration can also carry a tag that changes
+how the variable is treated:
 
 - `// @tune` makes it a knob in the exported program - see [Tunable
   Variables](#tunable-variables--tune).
@@ -2398,7 +2430,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Tab (find bar) | Cycle find field / replace field / whole-word chip |
 | Enter (replace field) | Replace all matches |
 | Ctrl+\ | Reformat buffer |
-| Ctrl+/ | Toggle comment |
+| Ctrl+/ | Toggle comment on the selection / block / line |
 | Ctrl+Shift+Q | Split multi-variable declaration |
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |

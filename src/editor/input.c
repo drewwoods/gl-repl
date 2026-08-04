@@ -50,6 +50,7 @@
 #include "undo.h"
 
 #include "keys.h"
+#include "repl/comment_toggle.h"
 #include "repl/command_store.h"
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
@@ -1176,15 +1177,27 @@ static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
            key_is_printable_ascii(key);
 }
 
+/* Ctrl+/ has no keymap.h slot - it is spelled out both here and in
+ * handle_comment_toggle_key_route, so it gets one predicate rather than
+ * two spellings that can drift. */
+static int key_is_comment_toggle(unsigned char key) {
+    return key == '/' && (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL);
+}
+
 static void keyboard_begin_key(unsigned char key) {
     EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
     cb->cursor_visible = 1;
     cb->blink_tick = 0;
 
-    /* Cut / copy / backspace / delete preserve any active line-range
-     * selection; everything else clears it before processing the key. */
+    /* Cut / copy / backspace / delete / comment-toggle preserve any
+     * active line-range selection; everything else clears it before
+     * processing the key. The toggle is in that list because it
+     * rewrites the selected rows in place and keeps the row count, so
+     * the same selection still names the same code afterwards - and
+     * keeping it is what makes a second Ctrl+/ an exact undo. */
     if (!keymap_event_is(key, GLR_COPY) && !keymap_event_is(key, GLR_DELETE_LINE) &&
-        key != KEY_BACKSPACE && !keymap_event_is(key, GLR_CUT) && key != KEY_DELETE)
+        key != KEY_BACKSPACE && !keymap_event_is(key, GLR_CUT) && key != KEY_DELETE &&
+        !key_is_comment_toggle(key))
         editor_selection_clear_line_range();
 
     editor_scroll_follow_cursor_set(1);
@@ -1351,14 +1364,31 @@ static int handle_paste_key_route(unsigned char key) {
     return 0;
 }
 
+/* Ctrl+/. The REPL owns which rows move and which way (see
+ * repl/comment_toggle.h); this route owns the editor's half - the
+ * tutorial guard, one undo snapshot per toggle, the status line, and the
+ * input row.
+ *
+ * The line-range selection deliberately survives the toggle, unlike
+ * copy/cut/paste which consume theirs. A toggle rewrites the selected
+ * rows in place and preserves the row count, so the same selection still
+ * names the same code afterwards - and keeping it is what makes a second
+ * Ctrl+/ an exact undo of the first. */
 static int handle_comment_toggle_key_route(unsigned char key) {
     const char *prefix;
     int line;
+    int sel_first = -1;
+    int sel_last = -1;
+    int rows;
     ReplCompileContext ctx;
-    ReplCompiledChange change;
+    ReplCommentTogglePlan plan;
+    ReplCommentToggleResult res;
+    EditorUndoRingState undo_before;
+    /* *2 allows prepending "Toggle failed: " to the error message. */
+    char msg[REPL_STATUS_TEXT_MAX * 2];
     char err[REPL_STATUS_TEXT_MAX];
 
-    if (key != '/' || !(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+    if (!key_is_comment_toggle(key))
         return 0;
 
     prefix = editor_line_comment_prefix();
@@ -1368,30 +1398,57 @@ static int handle_comment_toggle_key_route(unsigned char key) {
         return 1;
 
     line = editor_state_edit_line();
-    if (line < 0 || line >= repl_state_document_count())
+    if (editor_clipboard_sel_active()) {
+        sel_first = editor_clipboard_sel_lo();
+        sel_last = editor_clipboard_sel_hi();
+    } else if (line < 0 || line >= repl_state_document_count()) {
         return 1;
-    if (!tutorial_guard_source_change_or_status(line, 1, 1))
-        return 1;
+    }
 
-    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ctx = repl_compile_context_from_live(line);
     err[0] = '\0';
-
-    if (repl_compile_toggle_comment(line, prefix, &ctx, &change,
-                                    err, sizeof(err)) != REPL_COMPILE_OK) {
-        /* *2 allows prepending "Toggle failed: " to the error message. */
-        char msg[REPL_STATUS_TEXT_MAX * 2];
+    if (!repl_comment_toggle_plan(&ctx, line, sel_first, sel_last, prefix,
+                                  &plan, err, sizeof(err))) {
         snprintf(msg, sizeof(msg), "Toggle failed: %s",
-                 err[0] ? err : "not a valid command");
+                 err[0] ? err : "nothing to toggle");
         repl_set_status_error(msg);
         return 1;
     }
-    if (change.kind == REPL_COMPILED_NO_CHANGE)
+
+    rows = plan.last - plan.first + 1;
+    if (!tutorial_guard_source_change_or_status(plan.first, rows, rows))
         return 1;
 
-    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1, /*publish_status=*/1)) {
-        repl_set_status_error("Command buffer error");
+    editor_undo_ring_state_capture(&undo_before);
+    editor_undo_push_snapshot();
+
+    if (!repl_comment_toggle_apply(&plan, prefix, &res)) {
+        /* The REPL restored the document; drop the snapshot too so a
+         * refused toggle leaves no undo entry behind. */
+        editor_undo_ring_state_restore(&undo_before);
+        if (res.failed_row >= 0)
+            snprintf(msg, sizeof(msg), "Toggle failed at line %d: %s",
+                     res.failed_row + 1, res.err);
+        else
+            snprintf(msg, sizeof(msg), "Toggle failed: %s", res.err);
+        repl_set_status_error(msg);
         return 1;
     }
+
+    /* The color picker edits one row's color literal. A toggle covering
+     * that row leaves it a comment (or replaces it wholesale), so there
+     * is nothing left to write to. Rows outside the range are untouched
+     * - a toggle never changes the row count, so their indices hold. */
+    {
+        int picked = color_picker_active_line();
+        if (picked >= plan.first && picked <= plan.last)
+            color_picker_stop();
+    }
+
+    if (res.touched_declarations)
+        tutorial_notify_state_changed();
+    if (res.message[0])
+        repl_set_status(res.message);
 
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_source_dirty();

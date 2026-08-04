@@ -13,6 +13,7 @@
 #include "editor/undo.h"
 #include "app/glr_actions.h"
 #include "app/glr_camera.h"
+#include "app/glr_color_picker_bridge.h"
 #include "app/glr_config.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_defaults.h" /* CFG_DEFAULT_* */
@@ -221,6 +222,25 @@ static void apply_editor_effects(EditorInputDispatchEffects fx) {
 
 static void assert_status_contains(const char *label, const char *needle) {
     ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
+}
+
+/* The whole committed document as one newline-joined string. The
+ * comment-toggle round trip is a text-identity property, so the
+ * assertion has to see the text, not the command kinds. */
+static void capture_document_text(char *dst, size_t cap) {
+    size_t used = 0;
+
+    if (cap == 0) return;
+    dst[0] = '\0';
+    for (int i = 0; i < editor_buffer_count(); i++) {
+        const char *line = editor_buffer_line(i);
+        int n = snprintf(dst + used, cap - used, "%s\n", line ? line : "");
+        if (n < 0 || (size_t)n >= cap - used) {
+            dst[cap - 1] = '\0';
+            return;
+        }
+        used += (size_t)n;
+    }
 }
 
 static int cfg_row_for_key(GlrConfigKey key) {
@@ -4197,7 +4217,9 @@ int main() {
                    CODE_PANEL_LAYOUT_LEFT);
     }
 
-    /* Extra coverage: Commenting Func/If blocks */
+    /* Extra coverage: Commenting an if-block, then restoring it from the
+     * commented `}` - the block toggle reads its extent back out of the
+     * commented text, so either end of the block is a valid entry. */
     {
         glr_ctrl_reset_all();
         editor_feed_line("if(1) {");
@@ -4211,10 +4233,14 @@ int main() {
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment if-begin", repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_INT("comment if-end too", repl_state_document_cmds()[2].type, CMD_COMMENT);
 
         editor_state_edit_line_set(2);
         editor_handle_key('/', 0, 0);
-        ASSERT_INT("comment if-end", repl_state_document_cmds()[2].type, CMD_COMMENT);
+        ASSERT_INT("uncomment from the commented if-end restores the head",
+                   repl_state_document_cmds()[0].type, CMD_IF_BEGIN);
+        ASSERT_INT("and the body", repl_state_document_cmds()[1].type, CMD_VERTEX3F);
+        ASSERT_INT("and the end", repl_state_document_cmds()[2].type, CMD_IF_END);
 
         g_mock_modifiers = saved_mods;
     }
@@ -4325,6 +4351,364 @@ int main() {
                                "Toggle failed");
         assert_status_contains("toggle framing: REPL diagnostic preserved",
                                "Cannot uncomment");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Round-trip identity. Comment then uncomment has to be the
+     * identity on the document text for every construct the language
+     * has - that property is the whole point of the toggle, and it is
+     * what the alias / expression carve-outs exist to protect. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        static const struct {
+            const char *label;
+            const char *lines[8];
+            int   line_count;
+            int   cursor;
+        } cases[] = {
+            { "plain command",
+              { "glVertex3f(1, 2, 3);" }, 1, 0 },
+            { "expression over a predef var",
+              { "float ph;", "glVertex3f(cos(ph + t), 0, 0);" }, 2, 1 },
+            { "aliased func def with parameters",
+              { "triangle(sz, lift) {",
+                "glVertex3f(sz, lift, 0);",
+                "}" }, 3, 0 },
+            { "bare funcN def",
+              { "func3() {", "glVertex3f(0, 0, 0);", "}" }, 3, 0 },
+            { "for block",
+              { "for(i, 0, 3) {", "glVertex2f(i, 0);", "}" }, 3, 0 },
+            { "if / else chain",
+              { "if(t > 1) {",
+                "glVertex2f(0, 0);",
+                "} else {",
+                "glVertex2f(1, 1);",
+                "}" }, 5, 0 },
+            { "block holding a blank line and a comment",
+              { "for(i, 0, 2) {",
+                "// a note",
+                "",
+                "glVertex2f(i, 0);",
+                "}" }, 5, 0 },
+            { "function-scoped local",
+              { "func0(a) {", "float u;", "u = a;",
+                "glVertex3f(u, 0, 0);", "}" }, 5, 0 },
+        };
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); c++) {
+            char before[MAX_EDITOR_COMMANDS * 8];
+            char after[sizeof(before)];
+            char label[128];
+
+            glr_ctrl_reset_all();
+            repl_func_alias_clear_all();
+            for (int i = 0; i < cases[c].line_count; i++)
+                editor_feed_line(cases[c].lines[i]);
+
+            editor_insert_mode_set(0);
+            editor_state_edit_line_set(cases[c].cursor);
+            capture_document_text(before, sizeof(before));
+
+            editor_handle_key('/', 0, 0);
+            snprintf(label, sizeof(label), "round trip (%s): comment changed it",
+                     cases[c].label);
+            capture_document_text(after, sizeof(after));
+            ASSERT_TRUE(label, strcmp(before, after) != 0);
+
+            editor_state_edit_line_set(cases[c].cursor);
+            editor_handle_key('/', 0, 0);
+            capture_document_text(after, sizeof(after));
+            snprintf(label, sizeof(label), "round trip (%s) is byte-identical",
+                     cases[c].label);
+            ASSERT_STR(label, after, before);
+        }
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* The reported bug, stated on its own: Ctrl+/ on a commented block
+     * head restores the entire block, not just the row under the
+     * cursor - and the funcN alias survives the trip. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+        editor_feed_line("triangle(sz) {");
+        editor_feed_line("glVertex3f(sz, 0, 0);");
+        editor_feed_line("}");
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("block symmetry: head commented",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_INT("block symmetry: end commented",
+                   repl_state_document_cmds()[2].type, CMD_COMMENT);
+
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("block symmetry: head restored",
+                   repl_state_document_cmds()[0].type, CMD_FUNC_DEF);
+        ASSERT_INT("block symmetry: body restored",
+                   repl_state_document_cmds()[1].type, CMD_VERTEX3F);
+        ASSERT_INT("block symmetry: end restored",
+                   repl_state_document_cmds()[2].type, CMD_FUNC_END);
+        ASSERT_STR("block symmetry: alias and parameters survive",
+                   editor_buffer_line(0), "  triangle(sz) {");
+        ASSERT_INT("block symmetry: the alias still resolves",
+                   repl_func_alias_lookup_slot("triangle"), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Cursor-only uncomment scope. The run of commented rows around the
+     * cursor is only the search window; the range is brace-matched from
+     * the cursor row outward. So a hand-written comment sitting next to
+     * a commented block is not swept into it, and a nested block inside
+     * one restores on its own. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("// a hand-written note");
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("for(j, 0, 2) {");
+        editor_feed_line("glVertex2f(j, 0);");
+        editor_feed_line("}");
+        editor_feed_line("}");
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(1);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("setup: the outer loop commented out",
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
+        ASSERT_INT("setup: the note is a comment too",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+
+        /* Cursor on the inner `// for(j, ...) {`. */
+        editor_state_edit_line_set(2);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("the neighbouring note is left alone",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_STR("with its text untouched",
+                   editor_buffer_line(0), "  // a hand-written note");
+        ASSERT_INT("the outer loop head stays commented",
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
+        ASSERT_INT("the inner loop head is back",
+                   repl_state_document_cmds()[2].type, CMD_FOR_BEGIN);
+        ASSERT_INT("its body too",
+                   repl_state_document_cmds()[3].type, CMD_VERTEX2F);
+        ASSERT_INT("and its own end",
+                   repl_state_document_cmds()[4].type, CMD_FOR_END);
+        ASSERT_INT("but not the outer end",
+                   repl_state_document_cmds()[5].type, CMD_COMMENT);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* The other half of that: an inner block whose body reads the outer
+     * block's loop variable cannot come back on its own, because the
+     * binder is still commented out. The row that fails takes the rows
+     * already restored ahead of it down with it. */
+    {
+        int saved_mods = g_mock_modifiers;
+        char before[MAX_EDITOR_COMMANDS * 8];
+        char after[sizeof(before)];
+
+        glr_ctrl_reset_all();
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("for(j, 0, 2) {");
+        editor_feed_line("glVertex2f(i, j);");
+        editor_feed_line("}");
+        editor_feed_line("}");
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        capture_document_text(before, sizeof(before));
+        g_status[0] = '\0';
+
+        editor_state_edit_line_set(1);   /* the inner `// for(j, ...) {` */
+        editor_handle_key('/', 0, 0);
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("the inner block's head is rolled back with the rest",
+                   after, before);
+        assert_status_contains("and the failure names the body row",
+                               "Toggle failed at line 3");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* One undo step reverses one toggle, whatever the range size. */
+    {
+        int saved_mods = g_mock_modifiers;
+        char before[MAX_EDITOR_COMMANDS * 8];
+        char after[sizeof(before)];
+
+        glr_ctrl_reset_all();
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("glVertex2f(i, 0);");
+        editor_feed_line("}");
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        capture_document_text(before, sizeof(before));
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        editor_undo_pop_snapshot();
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("one undo reverses a 3-line comment", after, before);
+
+        /* And the same for the uncomment direction. */
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        capture_document_text(before, sizeof(before));
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        editor_undo_pop_snapshot();
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("one undo reverses a 3-line uncomment", after, before);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Refusal is total: the document and the undo ring both stay put. */
+    {
+        int saved_mods = g_mock_modifiers;
+        char before[MAX_EDITOR_COMMANDS * 8];
+        char after[sizeof(before)];
+        EditorUndoRingState ring_before;
+        EditorUndoRingState ring_after;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("glVertex2f(i, 0);");
+        editor_feed_line("}");
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        /* Corrupt one row of the commented block so its uncomment
+         * cannot parse. The failure has to take the other two rows
+         * down with it. */
+        editor_buffer_set_line(1, "  // !@#$not a command$@#!");
+        editor_state_edit_line_set(0);
+        capture_document_text(before, sizeof(before));
+        editor_undo_ring_state_capture(&ring_before);
+        g_status[0] = '\0';
+
+        editor_handle_key('/', 0, 0);
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("a rejected uncomment leaves the document alone",
+                   after, before);
+        editor_undo_ring_state_capture(&ring_after);
+        ASSERT_INT("and leaves no undo entry",
+                   ring_after.undo_count, ring_before.undo_count);
+        assert_status_contains("and names the offending line",
+                               "Toggle failed at line 2");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Capacity: a block wider than MAX_COMMIT_CMDS refuses without
+     * mutating anything. */
+    {
+        int saved_mods = g_mock_modifiers;
+        char before[MAX_EDITOR_COMMANDS * 8];
+        char after[sizeof(before)];
+
+        glr_ctrl_reset_all();
+        editor_feed_line("for(i, 0, 3) {");
+        for (int i = 0; i < MAX_COMMIT_CMDS; i++)
+            editor_feed_line("glVertex2f(i, 0);");
+        editor_feed_line("}");
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        capture_document_text(before, sizeof(before));
+        g_status[0] = '\0';
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("an oversized block refuses without mutation",
+                   after, before);
+        assert_status_contains("and says why", "too large");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Declarations. Commenting a decl still refuses while the variable
+     * is read outside the range, and uncommenting re-declares it. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("float amp;");
+        editor_feed_line("glVertex3f(amp, 0, 0);");
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        g_status[0] = '\0';
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("a referenced decl refuses the comment",
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        assert_status_contains("and says which name",
+                               "still referenced");
+
+        /* Drop the reader, then the decl commutes both ways. */
+        editor_delete_cmd_range(1, 1, "line");
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("an unreferenced decl comments out",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_INT("and is undeclared",
+                   repl_eval_find_predef_var_idx("amp"), -1);
+
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("uncommenting restores the row",
+                   repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_TRUE("and re-declares the variable",
+                    repl_eval_find_predef_var_idx("amp") >= 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* The color picker follows the toggle's range, not the whole
+     * document: commenting the row it edits closes it, commenting a row
+     * elsewhere leaves it open. (A toggle never changes the row count,
+     * so an untouched row's index still means what it meant.) */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        glr_color_picker_install_host();
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_insert_mode_set(0);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        color_picker_start(0, 300);
+        ASSERT_INT("setup: the picker is open on the color row",
+                   color_picker_active_line(), 0);
+        editor_state_edit_line_set(1);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("commenting an unrelated row leaves it open",
+                   color_picker_active_line(), 0);
+
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_TRUE("commenting its own row closes it",
+                    color_picker_active_line() < 0);
 
         g_mock_modifiers = saved_mods;
     }

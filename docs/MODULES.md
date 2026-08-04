@@ -511,6 +511,7 @@ commands.
 | `repl_apply` | The mutating half compile deliberately lacks: applies a validated [`ReplCompiledChange`](../src/repl/compile.h#L130) to the runtime arrays. Pure mutator - no status, no diagnostics (`check-no-set-status-in-compile-apply`) |
 | `repl_load` | Non-editor apply orchestration: compile → predef apply → source-document apply → command-store apply, mirroring the REPL halves of `editor_commit_apply_plan` without editor effects (cursor, insert mode, input buffer). Callers: save-file importer, example loader, tutorial comment injector, tests. Keeps `repl_compile` a pure validator |
 | `repl_replace` | Whole-document rebuild (`repl_document_rebuild`) behind find-bar replace: replays substituted text through `repl_load_apply_line` under a [`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) that is restored wholesale if any line is rejected. A rename is invalid at every intermediate step, so this is a transaction, not a sequence of commits |
+| `repl_comment_toggle` | The whole Ctrl+/ operation: which rows move (selection, enclosing block, or the cursor line) and which way. Commenting is one pure `repl_compile_comment_range` change; uncommenting is a range transaction in the same family as `repl_replace` - each row is re-parsed in place against a document where the rows above it are already restored, under a [`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) restored wholesale if any row is rejected. The editor keeps only the undo snapshot, the status line, and the input row |
 | `repl_bootstrap` | Startup loading helpers (`repl_load_initial_commands`): the file/workspace/stdin/example load a session begins with, returning the post-load cursor target for the caller to apply. Positional `-` spools stdin to an anonymous seekable file before entering the shared multi-pass importer |
 | `repl_host_effects` | Host-installed side-effect bridge: status, cursor, input, completion, and tutorial effects owned *above* `src/repl` are reached through it, so uninstalled callbacks make pure tests and `repl_demo` no-op cleanly |
 | `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L121) array mechanics only: insert, replace, delete, load. No text-buffer writes |
@@ -873,6 +874,7 @@ flowchart LR
         exec["src/repl/executor.c<br/>flat command execution"]
         store["src/repl/command_store.c<br/>GLCmd array only"]
         replrebuild["src/repl/replace.c<br/>whole-document rebuild<br/>(snapshot-guarded replay of substituted text)"]
+        replcomment["src/repl/comment_toggle.c<br/>Ctrl+/ range + direction<br/>(snapshot-guarded row-by-row uncomment)"]
         glstateinsp["src/repl/gl_state_inspector.c<br/>pure state fold (issues no GL)"]
         cmddesc["src/repl/command_descriptions.c<br/>compiled-in GL help catalog"]
     end
@@ -1014,6 +1016,15 @@ flowchart LR
     ereplace i50@--> replrebuild
     replrebuild i51@--> load
     replrebuild i52@--> scene_snapshot
+
+    %% Ctrl+/ is the same family: repl/comment_toggle.c owns the range and
+    %% the direction, commenting through one pure compiled change and
+    %% uncommenting row by row under a SceneSnapshot. input.c keeps only
+    %% the undo push and the status line.
+    einput i76@--> replcomment
+    replcomment i77@--> compile
+    replcomment i78@--> load
+    replcomment i79@--> scene_snapshot
 
     %% Editor commit transaction is the editor's mutation path into REPL state.
     einput i12@--> ecommit
@@ -1196,7 +1207,7 @@ flowchart LR
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
     class e1,e3,e4,e5,e6,e7,e8,e10,e11,e12,e13 animateE
-    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42,i43,i44,i45,i46,i47,i48,i49,i50,i51,i52,i53,i54,i55,i56,i57,i58,i59,i60,i61,i62,i63,i64,i65,i66,i67,i68,i69,i70,i71,i72,i73,i74,i75 animateF
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42,i43,i44,i45,i46,i47,i48,i49,i50,i51,i52,i53,i54,i55,i56,i57,i58,i59,i60,i61,i62,i63,i64,i65,i66,i67,i68,i69,i70,i71,i72,i73,i74,i75,i76,i77,i78,i79 animateF
 ```
 
 Reading the diagram:

@@ -473,6 +473,15 @@ typedef struct {
     char   fd_text[MAX_LINE_LEN];
     char   indent[REPL_INDENT_TEXT_MAX];
     ReplFuncAliasOp alias_op;
+    /* The name `fd_text` was built with - the pending alias when this
+     * commit introduces one, else the slot's registered alias, else
+     * empty for a bare `funcN`. Callers that re-format the header at a
+     * different indent (the editor's relocation branch) must reuse this
+     * rather than reading alias_op: resolve_alias deliberately emits no
+     * op for an already-registered name, and formatting from the op
+     * alone renames an aliased row to `funcN` while every call site
+     * keeps resolving through the alias. */
+    char   header_name[REPL_FUNC_NAME_MAX];
 } ReplFuncDefKernel;
 
 ReplCompileResult repl_compile_func_def_kernel(const char *input,
@@ -568,44 +577,77 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
-/* Compile a comment-toggle on `line_idx` using `prefix` as the
- * line-comment marker (e.g., "// "). The REPL fully owns toggle
- * semantics - the editor passes intent, this entry decides.
+/* ===== Comment toggle (Ctrl+/) =====
  *
- * Behavior by cmd kind at line_idx:
+ * The two directions are separate compile entries because they are not
+ * mirror images: commenting throws the block structure away, so
+ * uncommenting has to re-derive it a row at a time against a document
+ * where the earlier rows are already back. Range resolution, direction,
+ * and the multi-row transaction live in repl/comment_toggle.h - these
+ * are the pure pieces it drives.
+ */
+
+/* Comment out `[first..last]` (inclusive) using `prefix` as the
+ * line-comment marker (e.g., "// "): prepend `prefix` after each row's
+ * leading whitespace and emit a CMD_COMMENT for it. Single-row ranges
+ * produce REPLACE_ONE; wider ones INSERT_MANY at `first` with
+ * `delete_pos=first, delete_count=N` (the combined replace-range shape).
+ * commit_message "Commented out N line(s)".
  *
- *   Plain non-comment line: prepend `prefix` after leading whitespace
- *     and produce REPLACE_ONE with cmds[0]=CMD_COMMENT. commit_message
- *     "Commented out 1 line".
+ * Two gates, both refusing without mutation:
+ *   - the range must be brace-balanced on its own (every block end has
+ *     its head in range, and vice versa). Commenting an unbalanced range
+ *     is harmless going out but cannot round-trip back, and a toggle that
+ *     is not reversible is not a toggle.
+ *   - CMD_VAR_DECLARE rows go through the shared decl guard: a name still
+ *     referenced outside the range refuses, otherwise UNDECLARE ops are
+ *     emitted so the runtime variable table matches the source.
  *
- *   CMD_COMMENT line: strip `prefix` (must match the line's prefix
- *     after leading whitespace; otherwise REPL_COMPILE_ERROR), then
- *     re-parse the stripped text via the dispatch handlers + GL
- *     parser fallback. Result is coerced to REPLACE_ONE at line_idx
- *     (override kind/pos/count, preserve cmds[0], text[0],
- *     predef_ops, scratch_ops). Re-parses producing INSERT_MANY /
- *     DELETE_RANGE are rejected as multi-line uncomment.
- *     commit_message "Uncommented 1 line".
- *
- *   Block head (CMD_FOR_BEGIN, CMD_FUNC_DEF, CMD_IF_BEGIN) or end
- *     (CMD_FOR_END, CMD_FUNC_END, CMD_IF_END): walk to the matching
- *     other end; for every line in [head..end] inclusive, build
- *     prefix-prepended text and a CMD_COMMENT cmd. Returns
- *     INSERT_MANY at `head` with `delete_pos=head, delete_count=N`
- *     (combined replace-range change; uses ReplCompiledChange's
- *     pre-insert delete fields). commit_message "Commented out N
- *     lines". Block size is capped at MAX_COMMIT_CMDS; larger blocks
- *     are rejected with a diagnostic.
- *
- * `prefix` may be NULL or empty - the function returns NO_CHANGE in
- * that case (toggle disabled). `line_idx` out of range also returns
- * NO_CHANGE.
+ * Ranges wider than MAX_COMMIT_CMDS are rejected with a diagnostic.
+ * `prefix` NULL/empty or an out-of-range span returns NO_CHANGE.
  *
  * Pure: never mutates state, never calls set_status. */
-ReplCompileResult repl_compile_toggle_comment(int line_idx,
+ReplCompileResult repl_compile_comment_range(int first, int last,
+                                             const char *prefix,
+                                             const ReplCompileContext *ctx,
+                                             ReplCompiledChange *out,
+                                             char *err, int err_size);
+
+/* Uncomment the CMD_COMMENT at `line_idx`: strip `prefix` (must match
+ * after leading whitespace; otherwise REPL_COMPILE_ERROR), then re-parse
+ * the stripped text via the dispatch handlers + GL parser fallback.
+ * The result is coerced to REPLACE_ONE at line_idx (override
+ * kind/pos/count, preserve cmds[0], text[0], predef_ops, scratch_ops) -
+ * in place, because a re-parsed `float x;` would otherwise hoist to the
+ * top of its scope instead of returning to the row it came from.
+ * Re-parses producing INSERT_MANY / DELETE_RANGE are rejected as
+ * multi-line uncomment. commit_message "Uncommented 1 line".
+ *
+ * Restoring a *range* is this applied row by row against a document
+ * that is mutated as it goes: row N's scope, visible variables, and
+ * block nesting only exist once rows first..N-1 are back. That is the
+ * transaction in repl/comment_toggle.h, not something a single pure
+ * call can describe.
+ *
+ * Pure: never mutates state, never calls set_status. */
+ReplCompileResult repl_compile_uncomment_line(int line_idx,
                                               const char *prefix,
                                               const ReplCompileContext *ctx,
                                               ReplCompiledChange *out,
                                               char *err, int err_size);
+
+/* Strip `prefix` from `line` after its leading whitespace into `dst`.
+ * Returns 1 when the line carried the prefix, 0 otherwise (dst
+ * untouched). Exposed so the toggle's range resolution can ask "is this
+ * row one of ours?" with exactly the predicate the uncomment uses. */
+int repl_compile_comment_prefix_strip(const char *line, const char *prefix,
+                                      char *dst, int cap);
+
+/* Resolve the `[head..end]` extent of the block the row at `line_idx`
+ * belongs to, for a block head, block end, or if-branch separator.
+ * Returns 0 (and leaves the outputs alone) for any other row kind or an
+ * unmatched block. */
+int repl_compile_block_extent_at(const ReplCompileContext *ctx, int line_idx,
+                                 int *out_first, int *out_last);
 
 #endif /* REPL_COMPILE_H */

@@ -21,11 +21,12 @@ Every acceptance criterion below holds. Verified with `make test-stubs`
 
 1. **The prerequisite had not landed.** `block-comment-toggle.md` was still
    IN REVIEW when this work started - `repl_compile_toggle_comment()`'s
-   uncomment arm is still single-row. That plan's stated role here is to
+   uncomment arm was still single-row. That plan's stated role here is to
    supply the *replacement workflow*, not to unblock anything technical, and
    `if(0) { … }` covers the same need today (now pinned by a test, and
    documented in USER_GUIDE as the disable-a-block idiom). The removal went
-   ahead; the toggle's asymmetry is still worth fixing on its own merits.
+   ahead; the toggle's asymmetry was fixed separately, later the same day
+   (`docs/plans/done/block-comment-toggle.md`).
 2. **A pre-existing annotation quirk surfaced, and was left alone.** The
    replay annotation for a row after an `if(0) { x = 100; }` block reads the
    *live* predef table, which commit-time eager application already set to

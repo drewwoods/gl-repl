@@ -384,8 +384,8 @@ static void test_prologue_tolerates_a_commented_decl(void) {
                repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ctx = repl_compile_context_from_live(1);
     ASSERT_INT("commenting out the unused decl compiles",
-               repl_compile_toggle_comment(1, "// ", &ctx, &change,
-                                           err, sizeof(err)),
+               repl_compile_comment_range(1, 1, "// ", &ctx, &change,
+                                          err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_INT("comment-toggle applies",
                editor_commit_apply_external_change(&change, 0, 0), 1);

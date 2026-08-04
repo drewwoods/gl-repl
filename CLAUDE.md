@@ -378,7 +378,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   `payload.matrix.m[]`); other types must not read it. A flat local assignment
   captures its pre-write target value in the assignment arm because the
   ordinary `FlatCmdLocalVars` snapshot is post-write.
-- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L556) which
+- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L565) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing

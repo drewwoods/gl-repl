@@ -18,6 +18,7 @@
 #include "editor/undo.h"
 #include "repl/apply.h"
 #include "repl/command_store.h"
+#include "repl/comment_toggle.h"
 #include "repl/compile.h"
 #include <stdbool.h>
 #include "editor/input.h"
@@ -2260,6 +2261,55 @@ static void test_overwrite_local_decl_with_assignment(void) {
     ASSERT_INT("it applies", editor_commit_apply_external_change(&change, 0, 0), 1);
 }
 
+/* A func-def header's canonical text carries the slot's alias whether or
+ * not this commit is the one introducing it. resolve_alias deliberately
+ * emits no pending op for a name that is already registered, and the
+ * header used to read the name only from that op - so re-committing a
+ * known name rewrote the row to a bare `funcN` while every call site kept
+ * resolving through the alias. That is the alias half of the
+ * comment/uncomment round trip, reachable on its own by deleting a def
+ * and retyping it. */
+static void test_func_def_header_keeps_a_registered_alias(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+
+    glr_ctrl_reset_all();
+    repl_func_alias_clear_all();
+    editor_feed_line("triangle(sz) {");
+    editor_feed_line("glVertex3f(sz, 0, 0);");
+    editor_feed_line("}");
+    ASSERT_INT("setup: the alias is registered",
+               repl_func_alias_lookup_slot("triangle"), 0);
+
+    /* Drop the def rows but leave the alias registered - the state a
+     * commented-out function is in. */
+    editor_delete_cmd_range(0, 3, "lines");
+    ASSERT_INT("setup: the def rows are gone", repl_state_document_count(), 0);
+    ASSERT_INT("setup: the alias outlives them",
+               repl_func_alias_lookup_slot("triangle"), 0);
+
+    ctx = repl_compile_context_from_live(0);
+    ctx.insert_mode = 1;
+    ASSERT_INT("re-committing the known name compiles",
+               repl_compile_func_def("triangle(sz) {", &ctx, &change,
+                                     err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_STR("and the header still names the alias",
+               change.text[0], "  triangle(sz) {");
+    ASSERT_INT("no pending alias op - the table already holds it",
+               change.alias_op.slot, -1);
+
+    /* A slot with no alias still formats bare. */
+    ctx = repl_compile_context_from_live(0);
+    ctx.insert_mode = 1;
+    ASSERT_INT("a bare funcN compiles",
+               repl_compile_func_def("func5(a) {", &ctx, &change,
+                                     err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_STR("and stays bare", change.text[0], "  func5(a) {");
+}
+
 /* A CMD_VAR_DECLARE inside a block could not arise through normal user
  * input before this feature, so the block-batch comment-toggle path had
  * no coverage for it. It can now. */
@@ -2267,13 +2317,18 @@ static void test_block_comment_toggle_over_a_local_decl(void) {
     char err[REPL_STATUS_TEXT_MAX];
     ReplCompileContext ctx;
     ReplCompiledChange change;
+    ReplCommentTogglePlan plan;
 
     seed_func_with_used_local();
 
     ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("the cursor on the func header resolves to the whole block",
+               repl_comment_toggle_plan(&ctx, 0, -1, -1, "// ", &plan,
+                                        err, sizeof(err)), 1);
+    ASSERT_INT("and to the comment direction", plan.uncomment, 0);
     ASSERT_INT("commenting out the whole function compiles",
-               repl_compile_toggle_comment(0, "// ", &ctx, &change,
-                                           err, sizeof(err)),
+               repl_compile_comment_range(plan.first, plan.last, "// ", &ctx,
+                                          &change, err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_TRUE("it is a block batch, not a single row", change.count > 1);
     ASSERT_INT("no UNDECLARE is emitted for the local in the body",
@@ -2386,6 +2441,7 @@ int main(void) {
     test_capacity_blocks_later_binder_edits();
     test_raw_replace_routes_respect_the_guard();
     test_overwrite_local_decl_with_assignment();
+    test_func_def_header_keeps_a_registered_alias();
     test_block_comment_toggle_over_a_local_decl();
     test_local_delete_guard_is_bounded_to_its_body();
 

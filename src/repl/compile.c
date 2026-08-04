@@ -34,10 +34,12 @@
  *   repl_compile_empty_line         INSERT_ONE
  *   repl_compile_delete_range       DELETE_RANGE + UNDECLARE for any
  *                                   decl rows in the range
- *   repl_compile_toggle_comment     INSERT_MANY for block-batches
- *                                   (head..end), REPLACE_ONE for
- *                                   single rows; UNDECLAREs decl
- *                                   rows being commented out
+ *   repl_compile_comment_range      INSERT_MANY over [first..last]
+ *                                   (REPLACE_ONE for a single row);
+ *                                   UNDECLAREs decl rows being
+ *                                   commented out
+ *   repl_compile_uncomment_line     REPLACE_ONE re-parsing one
+ *                                   stripped comment row in place
  *
  * Dispatcher: repl_compile_dispatch() walks the float-decl +
  * var-assign chain and is callable from outside the editor. The
@@ -2201,15 +2203,152 @@ static int compile_find_block_head(const ReplCompileContext *ctx,
     return -1;
 }
 
-ReplCompileResult repl_compile_toggle_comment(int line_idx,
+int repl_compile_comment_prefix_strip(const char *line, const char *prefix,
+                                      char *dst, int cap) {
+    return compile_strip_prefix(line, prefix, dst, cap);
+}
+
+int repl_compile_block_extent_at(const ReplCompileContext *ctx, int line_idx,
+                                 int *out_first, int *out_last) {
+    CmdType type;
+    int head;
+    int end;
+
+    if (!ctx || line_idx < 0 || line_idx >= ctx->document_count)
+        return 0;
+
+    type = ctx->document_cmds[line_idx].type;
+    if (repl_cmd_is_block_head(type) ||
+        repl_cmd_is_if_branch_separator(type)) {
+        int count = 0;
+        if (!repl_source_scope_view_block_extent(compile_source_scope(ctx),
+                                                 line_idx, &head, &count))
+            return 0;
+        end = head + count - 1;
+    } else if (repl_cmd_is_block_end(type)) {
+        end = line_idx;
+        head = compile_find_block_head(ctx, line_idx);
+        if (head < 0)
+            return 0;
+    } else {
+        return 0;
+    }
+
+    if (end < head)
+        return 0;
+    if (out_first) *out_first = head;
+    if (out_last)  *out_last  = end;
+    return 1;
+}
+
+/* Depth walk over the document's own command kinds. A range that opens
+ * more blocks than it closes (or closes one it never opened) cannot come
+ * back through the uncomment path, so it is refused going out - see the
+ * header note on why the toggle is only offered for legal code. */
+static ReplCompileResult compile_check_range_balanced(
+        const ReplCompileContext *ctx, int first, int last,
+        char *err, int err_size) {
+    int depth = 0;
+
+    for (int i = first; i <= last; i++) {
+        CmdType t = ctx->document_cmds[i].type;
+
+        if (repl_cmd_is_block_end(t)) {
+            if (--depth < 0)
+                return compile_set_err(err, err_size,
+                                       "Line %d closes a block that starts "
+                                       "outside the selection", i + 1);
+        } else if (repl_cmd_is_if_branch_separator(t)) {
+            /* Separators are neither head nor end, but they only make
+             * sense inside their own if-chain. */
+            if (depth <= 0)
+                return compile_set_err(err, err_size,
+                                       "Line %d continues an if that starts "
+                                       "outside the selection", i + 1);
+        } else if (repl_cmd_is_block_head(t)) {
+            depth++;
+        }
+    }
+    if (depth != 0)
+        return compile_set_err(err, err_size,
+                               "Selection opens a block it does not close");
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_comment_range(int first, int last,
+                                             const char *prefix,
+                                             const ReplCompileContext *ctx,
+                                             ReplCompiledChange *out,
+                                             char *err, int err_size) {
+    int n;
+
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+    if (err && err_size > 0)
+        err[0] = '\0';
+
+    if (!prefix || !prefix[0])
+        return REPL_COMPILE_OK;
+    if (first < 0 || last >= ctx->document_count || last < first)
+        return REPL_COMPILE_OK;
+
+    n = last - first + 1;
+    if (n > MAX_COMMIT_CMDS)
+        return compile_set_err(err, err_size,
+                               "Block too large to toggle (max %d lines)",
+                               MAX_COMMIT_CMDS);
+
+    if (compile_check_range_balanced(ctx, first, last, err, err_size)
+            != REPL_COMPILE_OK)
+        return REPL_COMPILE_ERROR;
+
+    /* Decl-reference check + UNDECLARE op collection for any
+     * CMD_VAR_DECLARE rows inside the range. Commenting a decl
+     * out is symmetric to deleting it: references must be
+     * removed first, and apply must undeclare the variable so
+     * the runtime variable table matches the source. */
+    if (compile_collect_undeclare_for_range(ctx, first, last + 1,
+                                             "comment",
+                                             out, err, err_size)
+            != REPL_COMPILE_OK)
+        return REPL_COMPILE_ERROR;
+
+    for (int i = 0; i < n; i++) {
+        const char *orig = source_text_line(ctx->text, first + i);
+        compile_prepend_prefix(orig, prefix,
+                               out->text[i], (int)sizeof(out->text[i]));
+        memset(&out->cmds[i], 0, sizeof(out->cmds[i]));
+        out->cmds[i].type = CMD_COMMENT;
+        out->cmds[i].valid = 1;
+    }
+
+    out->adjust_edit_line = 0;
+    if (n == 1) {
+        out->kind = REPL_COMPILED_REPLACE_ONE;
+        out->pos = first;
+        out->count = 1;
+    } else {
+        out->kind = REPL_COMPILED_INSERT_MANY;
+        out->pos = first;
+        out->count = n;
+        out->delete_pos = first;
+        out->delete_count = n;
+    }
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "Commented out %d line%s", n, n > 1 ? "s" : "");
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_uncomment_line(int line_idx,
                                               const char *prefix,
                                               const ReplCompileContext *ctx,
                                               ReplCompiledChange *out,
                                               char *err, int err_size) {
-    CmdType type;
-    int is_block_head;
-    int is_block_end;
-    int is_if_branch_separator;
+    const char *orig;
+    char stripped[MAX_LINE_LEN];
+    ReplCompileResult r;
 
     if (!ctx || !out)
         return REPL_COMPILE_ERROR;
@@ -2222,161 +2361,92 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
         return REPL_COMPILE_OK;
     if (line_idx < 0 || line_idx >= ctx->document_count)
         return REPL_COMPILE_OK;
+    if (ctx->document_cmds[line_idx].type != CMD_COMMENT)
+        return compile_set_err(err, err_size, "Line is not a comment");
 
-    type = ctx->document_cmds[line_idx].type;
-    is_block_head = repl_cmd_is_block_head(type);
-    is_block_end  = repl_cmd_is_block_end(type);
-    is_if_branch_separator = repl_cmd_is_if_branch_separator(type);
+    orig = source_text_line(ctx->text, line_idx);
+    if (!compile_strip_prefix(orig, prefix, stripped, sizeof(stripped)))
+        return compile_set_err(err, err_size,
+                               "Line not commented with the configured prefix");
 
-    /* Block head/end or if-branch separator: batch-comment the whole
-     * enclosing [head..end] range. */
-    if (is_block_head || is_block_end || is_if_branch_separator) {
-        int head;
-        int end;
-        int n;
-
-        if (is_block_head || is_if_branch_separator) {
-            int count = 0;
-            if (!repl_source_scope_view_block_extent(compile_source_scope(ctx),
-                                                     line_idx, &head, &count))
-                return compile_set_err(err, err_size, "Unmatched block start");
-            end = head + count - 1;
-        } else {
-            end = line_idx;
-            head = compile_find_block_head(ctx, line_idx);
-            if (head < 0)
-                return compile_set_err(err, err_size, "Unmatched block end");
-        }
-
-        n = end - head + 1;
-        if (n > MAX_COMMIT_CMDS)
-            return compile_set_err(err, err_size,
-                                   "Block too large to toggle (max %d lines)",
-                                   MAX_COMMIT_CMDS);
-
-        /* Decl-reference check + UNDECLARE op collection for any
-         * CMD_VAR_DECLARE rows inside the block. Commenting a decl
-         * out is symmetric to deleting it: references must be
-         * removed first, and apply must undeclare the variable so
-         * the runtime variable table matches the source. */
-        if (compile_collect_undeclare_for_range(ctx, head, end + 1,
-                                                 "comment",
-                                                 out, err, err_size)
-                != REPL_COMPILE_OK)
-            return REPL_COMPILE_ERROR;
-
-        for (int i = 0; i < n; i++) {
-            const char *orig = source_text_line(ctx->text, head + i);
-            compile_prepend_prefix(orig, prefix,
-                                   out->text[i], (int)sizeof(out->text[i]));
-            memset(&out->cmds[i], 0, sizeof(out->cmds[i]));
-            out->cmds[i].type = CMD_COMMENT;
-            out->cmds[i].valid = 1;
-        }
-
-        out->kind = REPL_COMPILED_INSERT_MANY;
-        out->pos = head;
-        out->count = n;
-        out->delete_pos = head;
-        out->delete_count = n;
-        out->adjust_edit_line = 0;
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "Commented out %d line%s", n, n > 1 ? "s" : "");
-        return REPL_COMPILE_OK;
-    }
-
-    /* CMD_COMMENT: strip prefix and re-parse. */
-    if (type == CMD_COMMENT) {
-        const char *orig = source_text_line(ctx->text, line_idx);
-        char stripped[MAX_LINE_LEN];
-        ReplCompileResult r;
-
-        if (!compile_strip_prefix(orig, prefix, stripped, sizeof(stripped)))
-            return compile_set_err(err, err_size,
-                                   "Line not commented with the configured prefix");
-
-        /* Run the float-decl + var-assign dispatch chain. */
-        r = repl_compile_dispatch(stripped, ctx, out, err, err_size);
-        if (r != REPL_COMPILE_OK)
-            return r;
-
-        if (out->kind == REPL_COMPILED_NO_CHANGE) {
-            /* Dispatch didn't recognize. Go through the normal commit
-             * pipeline so visible-variable references in the stripped
-             * text are preserved (otherwise `// glVertex3f(t, 0, 0)`
-             * round-trips back as `glVertex3f(0.0000, 0, 0)` - the
-             * parser's canonical text emits args from cmd->args[]
-             * regardless of has_vars). */
-            ExprVar vis[MAX_EXPR_VARS];
-            int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
-                                                ctx->document_count, line_idx,
-                                                vis, MAX_EXPR_VARS, NULL, NULL);
-            int preserve_expr = input_has_any_visible_vars(stripped,
-                                                           vis_n > 0 ? vis : NULL,
-                                                           vis_n);
-            GLCmd parsed_cmd;
-            char parsed_text[MAX_LINE_LEN];
-            memset(&parsed_cmd, 0, sizeof(parsed_cmd));
-            parsed_text[0] = '\0';
-            if (!repl_parse_and_normalize_strict_with_scope(
-                    stripped, line_idx,
-                    vis_n > 0 ? vis : NULL, vis_n,
-                    preserve_expr, &parsed_cmd,
-                    parsed_text, sizeof(parsed_text),
-                    compile_source_scope(ctx),
-                    ctx->func_aliases))
-                return compile_set_err(err, err_size,
-                                       "Cannot uncomment: not a valid command");
-            repl_compiled_change_init(out);
-            out->cmds[0] = parsed_cmd;
-            repl_copy_string_fits(out->text[0], sizeof(out->text[0]), parsed_text);
-        }
-
-        /* Coerce dispatch / parser result to REPLACE_ONE at line_idx. */
-        if (out->kind == REPL_COMPILED_INSERT_MANY ||
-            out->kind == REPL_COMPILED_DELETE_RANGE)
-            return compile_set_err(err, err_size,
-                                   "Cannot uncomment into multi-line construct");
-        out->kind = REPL_COMPILED_REPLACE_ONE;
-        out->pos = line_idx;
-        out->count = 1;
-        out->adjust_edit_line = 0;
-        out->delete_pos = -1;
-        out->delete_count = 0;
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "Uncommented 1 line");
-        return REPL_COMPILE_OK;
-    }
-
-    /* Plain non-comment, non-structural: prepend prefix -> CMD_COMMENT. */
+    /* A blank line inside a commented-out block strips back to nothing.
+     * No handler in the chain claims empty input, so name it here -
+     * without this arm a single blank row would fail the whole
+     * uncomment of the block it sits in. */
     {
-        const char *orig = source_text_line(ctx->text, line_idx);
-
-        /* If the line is a CMD_VAR_DECLARE, commenting it out must
-         * also remove the variable from the predef table - otherwise
-         * the live runtime keeps a name the source no longer
-         * declares (and a save/reload would disagree). The shared
-         * helper validates references and emits UNDECLARE ops with
-         * the same shape delete-range uses. */
-        if (compile_collect_undeclare_for_range(ctx, line_idx, line_idx + 1,
-                                                 "comment",
-                                                 out, err, err_size)
-                != REPL_COMPILE_OK)
-            return REPL_COMPILE_ERROR;
-
-        compile_prepend_prefix(orig, prefix,
-                               out->text[0], (int)sizeof(out->text[0]));
-        memset(&out->cmds[0], 0, sizeof(out->cmds[0]));
-        out->cmds[0].type = CMD_COMMENT;
-        out->cmds[0].valid = 1;
-        out->kind = REPL_COMPILED_REPLACE_ONE;
-        out->pos = line_idx;
-        out->count = 1;
-        out->adjust_edit_line = 0;
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "Commented out 1 line");
-        return REPL_COMPILE_OK;
+        const char *scan = stripped;
+        while (*scan && isspace((unsigned char)*scan)) scan++;
+        if (!*scan) {
+            memset(&out->cmds[0], 0, sizeof(out->cmds[0]));
+            out->cmds[0].type = CMD_EMPTY;
+            out->cmds[0].valid = 1;
+            out->text[0][0] = '\0';
+            out->kind = REPL_COMPILED_REPLACE_ONE;
+            out->pos = line_idx;
+            out->count = 1;
+            out->adjust_edit_line = 0;
+            snprintf(out->commit_message, sizeof(out->commit_message),
+                     "Uncommented 1 line");
+            return REPL_COMPILE_OK;
+        }
     }
+
+    /* Run the float-decl + var-assign dispatch chain. */
+    r = repl_compile_dispatch(stripped, ctx, out, err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
+
+    if (out->kind == REPL_COMPILED_NO_CHANGE) {
+        /* Dispatch didn't recognize. Go through the normal commit
+         * pipeline so visible-variable references in the stripped
+         * text are preserved (otherwise `// glVertex3f(t, 0, 0)`
+         * round-trips back as `glVertex3f(0.0000, 0, 0)` - the
+         * parser's canonical text emits args from cmd->args[]
+         * regardless of has_vars). The visible set is collected at
+         * this row's own position: in a range uncomment each row sits
+         * in a different scope. */
+        ExprVar vis[MAX_EXPR_VARS];
+        int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                            ctx->document_count, line_idx,
+                                            vis, MAX_EXPR_VARS, NULL, NULL);
+        int preserve_expr = input_has_any_visible_vars(stripped,
+                                                       vis_n > 0 ? vis : NULL,
+                                                       vis_n);
+        GLCmd parsed_cmd;
+        char parsed_text[MAX_LINE_LEN];
+        memset(&parsed_cmd, 0, sizeof(parsed_cmd));
+        parsed_text[0] = '\0';
+        if (!repl_parse_and_normalize_strict_with_scope(
+                stripped, line_idx,
+                vis_n > 0 ? vis : NULL, vis_n,
+                preserve_expr, &parsed_cmd,
+                parsed_text, sizeof(parsed_text),
+                compile_source_scope(ctx),
+                ctx->func_aliases))
+            return compile_set_err(err, err_size,
+                                   "Cannot uncomment: not a valid command");
+        repl_compiled_change_init(out);
+        out->cmds[0] = parsed_cmd;
+        repl_copy_string_fits(out->text[0], sizeof(out->text[0]), parsed_text);
+    }
+
+    /* Coerce dispatch / parser result to REPLACE_ONE at line_idx. The
+     * position matters as much as the count: a bare `float x;` insert
+     * hoists to the top of its scope, and an uncomment has to put the
+     * row back where the comment was. */
+    if (out->kind == REPL_COMPILED_INSERT_MANY ||
+        out->kind == REPL_COMPILED_DELETE_RANGE)
+        return compile_set_err(err, err_size,
+                               "Cannot uncomment into multi-line construct");
+    out->kind = REPL_COMPILED_REPLACE_ONE;
+    out->pos = line_idx;
+    out->count = 1;
+    out->adjust_edit_line = 0;
+    out->delete_pos = -1;
+    out->delete_count = 0;
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "Uncommented 1 line");
+    return REPL_COMPILE_OK;
 }
 
 /* ===== Pure structured-block validators =====
@@ -2894,6 +2964,28 @@ ReplCompileResult repl_compile_if_block(const char *input,
     return REPL_COMPILE_OK;
 }
 
+/* The name a CMD_FUNC_DEF row's canonical text must carry. Published to
+ * callers through ReplFuncDefKernel.header_name; see the note there. */
+static const char *compile_func_header_alias(const ReplCompileContext *ctx,
+                                             const ReplFuncAliasOp *pending,
+                                             int fn) {
+    /* A pending op is a name this commit is introducing; it has not
+     * reached the alias table yet, so it wins. Without one the slot's
+     * registered alias is the row's name - resolve_alias deliberately
+     * emits no op for an already-registered name, and formatting a bare
+     * `funcN` there would rename the row out from under every call site
+     * (that is the alias half of the comment/uncomment round trip). */
+    if (pending && pending->slot >= 0 && pending->name[0])
+        return pending->name;
+    if (ctx && ctx->func_aliases.names &&
+        fn >= 0 && fn < ctx->func_aliases.count) {
+        const char *registered = ctx->func_aliases.names[fn];
+        if (registered && registered[0])
+            return registered;
+    }
+    return NULL;
+}
+
 ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *ctx,
                                                       const char *trimmed,
                                                       ReplCompiledChange *out,
@@ -3100,10 +3192,15 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
     out->fd.num_args = out->param_count;
     out->fd.valid    = 1;
 
-    format_func_header_with_alias(out->fd_text, (int)sizeof(out->fd_text),
-                                  out->indent, out->fn, out->param_names,
-                                  out->param_count,
-                                  out->alias_op.slot >= 0 ? out->alias_op.name : NULL);
+    {
+        const char *header_name = compile_func_header_alias(ctx, &out->alias_op,
+                                                            out->fn);
+        repl_copy_string_fits(out->header_name, sizeof(out->header_name),
+                              header_name ? header_name : "");
+        format_func_header_with_alias(out->fd_text, (int)sizeof(out->fd_text),
+                                      out->indent, out->fn, out->param_names,
+                                      out->param_count, header_name);
+    }
 
     out->valid = 1;
     return REPL_COMPILE_OK;

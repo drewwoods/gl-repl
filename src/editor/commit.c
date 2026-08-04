@@ -641,8 +641,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
     format_func_header_with_alias(fd_text, (int)sizeof(fd_text),
                                   indent, fn, kernel.param_names,
                                   param_count,
-                                  kernel.alias_op.slot >= 0
-                                      ? kernel.alias_op.name : NULL);
+                                  kernel.header_name[0] ? kernel.header_name
+                                                        : NULL);
 
     GLCmd fe;
     memset(&fe, 0, sizeof(fe));

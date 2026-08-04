@@ -6,4 +6,5 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| `block-comment-toggle.md` | Make Ctrl+/ work over a line range, and make uncomment the exact inverse of comment |
+
+*(Empty - `block-comment-toggle.md` landed 2026-08-04, see `../done/`.)*

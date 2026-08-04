@@ -1,11 +1,102 @@
 # Make Block Comment and Uncomment Symmetric
 
-## Status - IN REVIEW (2026-08-04)
+## Status - LANDED (2026-08-04)
+
+Every acceptance criterion holds. Verified with `make test-stubs` (76/76
+binaries, 25997 tests), `make test-web` (74/74), `make check-c99`,
+`make check-state-ownership`, `make fix-doc-links`, and native + stub builds.
 
 Formerly listed as a **prerequisite for** `goto-removal.md`. That plan landed
 first (`docs/plans/done/goto-removal.md`, 2026-08-04) without waiting: `goto`
 is gone, and `if(0) { … }` now carries the disable-a-region workflow. This plan
-stands on its own merits - the asymmetry below is a real bug regardless.
+stood on its own merits - the asymmetry below was a real bug regardless.
+
+### What the measurement changed
+
+**The parameter list was never lost.** §"Suspected cause of the alias loss"
+below is half right. Reproduced against the real code, `// triangle(sz) {`
+came back as `func0(sz) {`: the alias name went, `(sz)` survived. The hypothesis
+about *where* is also off - `repl_parse_and_normalize_strict_with_scope` is
+never reached for a func header, and the pending-alias parse resolves the name
+fine (`repl_parse_func_name_token_with_pending_alias` looks the ident up in the
+live table before consulting the pending op, so `fn` and the parameters are
+correct).
+
+The actual cause is one expression at the end of `repl_compile_func_def_kernel`:
+
+```c
+format_func_header_with_alias(..., out->alias_op.slot >= 0
+                                       ? out->alias_op.name : NULL);
+```
+
+`resolve_alias` deliberately emits no op for an already-registered name, so
+`slot` is -1 and the header formats bare. Nothing to do with commenting: the
+same rewrite happens whenever a known alias is re-committed, reachable on its
+own by deleting a func def and retyping its name. Fixed by resolving the header
+name from the pending op *or* the slot's registered alias, published as
+`ReplFuncDefKernel.header_name` so the editor's relocation branch reuses it
+rather than re-deriving it. Pinned by
+`test_func_def_header_keeps_a_registered_alias`.
+
+**Expression text was already safe.** The §4 hazard about `glVertex3f(t, 0, 0)`
+returning as `glVertex3f(0.0000, 0, 0)` was fixed by the existing single-row
+carve-out; it holds per row in the range path because the visible-variable set
+is collected at each row's own position, as §4 required.
+
+### What was built instead of §2's re-parse-as-a-unit
+
+§2 proposed stripping the range into a scratch buffer and re-parsing it as a
+unit. That is not expressible as a pure compile: row N's parse needs the
+document with rows first..N-1 *already restored* - a body line needs its
+function's parameters, a `}` needs the head it closes, an indent needs the
+depth those two establish - and `ReplCompileContext` holds raw array pointers
+with no overlay seam. Faithfully reproducing that purely would mean copying the
+whole document (~500 KB of scratch) and re-deriving the source-scope views,
+duplicating what the loader already does.
+
+So the split follows §3's instruction to reuse the find/replace model, but
+scoped to the range rather than the document:
+
+- **Comment** stays pure - `repl_compile_comment_range()` in `compile.c`, one
+  `ReplCompiledChange` for the whole range. It also *preserves each row's
+  original indentation*, which a re-parse would not: once the block head is a
+  comment, the rows under it are at depth 0 and would be re-indented flat.
+- **Uncomment** is a range transaction in the new `src/repl/comment_toggle.c`:
+  `repl_compile_uncomment_line()` (the existing single-row compiler) applied in
+  place, row by row, against a document mutated as it goes, under a
+  `SceneSnapshot` restored wholesale if any row is rejected.
+
+`repl_document_rebuild()` was considered and rejected for this: a whole-document
+replay makes a local toggle fail on unrelated document invalidity (comment out
+one function whose calls remain, and every later toggle anywhere would refuse),
+and it re-slots aliases as a side effect.
+
+`repl_compile_toggle_comment()` is gone, split into the two direction-specific
+entries above; range resolution moved to `repl_comment_toggle_plan()`.
+
+### The three open questions, answered
+
+1. **The selection survives.** Ctrl+/ joins copy/cut/backspace/delete in
+   `keyboard_begin_key`'s exemption list. It rewrites the selected rows in
+   place and preserves the row count, so the selection still names the same
+   code - and keeping it is what makes the second press an exact undo.
+2. **Comment refuses an unbalanced selection**, on the plan's own reasoning.
+   `compile_check_range_balanced()` walks the range's command kinds; the
+   uncomment side asks the same question of the stripped text, since by then
+   every row is `CMD_COMMENT`.
+3. **Cursor-only uncomment is brace-matched, not maximal-run.** The run of
+   commented rows around the cursor is only the *search window*; the range is
+   matched outward from the cursor row by reading `{` / `}` back out of the
+   stripped text. So an adjacent hand-written comment is never swept in (the
+   worry that motivated the question), and a nested commented block restores
+   on its own. Both pinned.
+
+### One behavior the plan did not name
+
+Blank lines. `compile_prepend_prefix` turns an empty row into a bare `// `, and
+nothing in the dispatch chain claims empty input - so before this, a single
+blank line inside a block made the whole block's uncomment fail.
+`repl_compile_uncomment_line` now names that case and restores `CMD_EMPTY`.
 
 ## The problem
 

@@ -502,6 +502,39 @@ variable registration, and cursor policy. Cursor shifting is opt-in per
 call via `ReplStoreMutOpts.cursor_inout` - the store never holds a cursor
 pointer.
 
+### 4.5 Range transactions - when one compiled change is not enough
+
+Two operations rewrite a whole range at once, and both are invalid at
+every intermediate step, so neither can be a sequence of commits:
+
+- **Find/replace** ([`replace.c`](replace.c)) - a rename is wrong until the last
+  occurrence has moved. `repl_document_rebuild()` replays the substituted
+  document through [`repl_load_apply_line()`](load.h#L78) under a [`SceneSnapshot`](scene_snapshot.h#L17)
+  that is restored wholesale if any line is rejected.
+- **Comment toggle (Ctrl+/)** ([`comment_toggle.c`](comment_toggle.c)) - the two directions
+  are not mirror images. *Commenting* throws structure away: prepend a
+  prefix, emit `CMD_COMMENT`, one pure `repl_compile_comment_range()`
+  change for the whole range, and the loader transaction's own preflight
+  is the all-or-nothing gate. *Uncommenting* has to put the structure
+  back, and each row can only be re-parsed once the rows above it are
+  already restored - a body line needs its function's parameters, a `}`
+  needs the head it closes, an indent needs the depth those two
+  establish. So it walks the range applying
+  `repl_compile_uncomment_line()` in place, row by row, against a
+  document mutated as it goes, under the same snapshot discipline.
+
+Both refuse without mutating. The editor half of each
+([`editor/replace.c`](../editor/replace.c), the Ctrl+/ route in [`editor/input.c`](../editor/input.c)) keeps only
+what is genuinely the editor's: one undo snapshot per operation, rewound
+via [`editor_undo_ring_state_restore()`](../editor/undo.h#L119) when the REPL refuses, plus the
+status line and the input row.
+
+The toggle is picky about what it will comment for the same reason a
+rename is atomic: commented code still has to be legal code, or it cannot
+come back. A range that opens a block it does not close, or that takes a
+declaration still read from outside it, is refused going out rather than
+producing a one-way operation.
+
 ---
 
 ## 5. The frame flow (flatten → autonormal → execute)
@@ -1186,6 +1219,7 @@ grouping is the mental model.)
 [`apply.c`](apply.c)/`.h` (apply a change to REPL runtime state) ·
 [`command_store.c`](command_store.c)/`.h` (low-level GLCmd array mechanics) ·
 [`load.c`](load.c)/`.h` (non-editor line loader + apply transaction) ·
+[`replace.c`](replace.c)/`.h`, [`comment_toggle.c`](comment_toggle.c)/`.h` (range transactions, §4.5) ·
 [`visible_vars.c`](visible_vars.c)/`.h`, [`text_helpers.c`](text_helpers.c)/`.h`, [`source_scope.c`](source_scope.c)/`.h`,
 [`format.c`](format.c)/`.h`, [`reformat.c`](reformat.c)/`.h`, [`bootstrap.c`](bootstrap.c)/`.h`
 

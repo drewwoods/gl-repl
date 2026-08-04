@@ -29,6 +29,7 @@
 #include "repl/example_loader.h"
 #include "repl/state_owners.h"
 #include "ui/app/hit.h"
+#include "ui/app/state.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -1111,6 +1112,114 @@ int main(void) {
         changed = edit_op_backspace();
         ASSERT_TRUE("backspace at 0 did not change buffer", !changed);
         ASSERT_STR("buffer unchanged", editor_state_input_mut()->input, "abcdef");
+    }
+
+    printf("\n--- Ctrl+/ over a line-range selection ---\n");
+    {
+        /* The selection is the toggle's range in both directions, and it
+         * survives the operation - that is what makes a second Ctrl+/ an
+         * exact undo of the first. Copy/cut/paste consume their
+         * selection; this one deliberately does not. */
+        glr_ctrl_reset_all();
+        editor_input_set_modifier_provider_for_test(test_modifiers_provider);
+        editor_set_line_comment_prefix("// ");
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("glVertex3f(4, 5, 6);");
+        editor_feed_line("glVertex3f(7, 8, 9);");
+        editor_insert_mode_set(0);
+
+        editor_selection_start(0);
+        editor_selection_set_end(1);
+        ASSERT_TRUE("setup: two rows selected", editor_clipboard_sel_active());
+
+        g_test_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("selected row 0 commented",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_INT("selected row 1 commented",
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
+        ASSERT_INT("the unselected row is untouched",
+                   repl_state_document_cmds()[2].type, CMD_VERTEX3F);
+        ASSERT_TRUE("the selection survives the toggle",
+                    editor_clipboard_sel_active());
+        ASSERT_INT("and still spans the same rows (lo)",
+                   editor_clipboard_sel_lo(), 0);
+        ASSERT_INT("and still spans the same rows (hi)",
+                   editor_clipboard_sel_hi(), 1);
+
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("a second press restores row 0",
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
+        ASSERT_INT("and row 1",
+                   repl_state_document_cmds()[1].type, CMD_VERTEX3F);
+
+        g_test_modifiers = 0;
+        editor_selection_clear_line_range();
+    }
+
+    printf("\n--- Ctrl+/ over a mixed selection ---\n");
+    {
+        /* Direction is a property of the whole range: a range holding
+         * both code and comments comments the rest, and the next press
+         * restores exactly the prior mix. Toggling row by row would make
+         * the second press an undo of nothing. */
+        glr_ctrl_reset_all();
+        editor_input_set_modifier_provider_for_test(test_modifiers_provider);
+        editor_set_line_comment_prefix("// ");
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("// a note");
+        editor_feed_line("glVertex3f(7, 8, 9);");
+        editor_insert_mode_set(0);
+
+        editor_selection_start(0);
+        editor_selection_set_end(2);
+
+        g_test_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("the code row commented",
+                   repl_state_document_cmds()[0].type, CMD_COMMENT);
+        ASSERT_STR("and the comment row gained a second prefix",
+                   editor_buffer_line(1), "  // // a note");
+
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("the code row came back",
+                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
+        ASSERT_INT("the note stayed a comment",
+                   repl_state_document_cmds()[1].type, CMD_COMMENT);
+        ASSERT_STR("with exactly its original text",
+                   editor_buffer_line(1), "  // a note");
+
+        g_test_modifiers = 0;
+        editor_selection_clear_line_range();
+    }
+
+    printf("\n--- Ctrl+/ refuses an unbalanced selection ---\n");
+    {
+        /* Commenting a half-block is harmless going out but cannot come
+         * back, and a toggle that is not reversible is not a toggle. */
+        glr_ctrl_reset_all();
+        editor_input_set_modifier_provider_for_test(test_modifiers_provider);
+        editor_set_line_comment_prefix("// ");
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("glVertex2f(i, 0);");
+        editor_feed_line("}");
+        editor_insert_mode_set(0);
+
+        editor_selection_start(0);
+        editor_selection_set_end(1);   /* head + body, no closing brace */
+
+        g_test_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("the loop head is untouched",
+                   repl_state_document_cmds()[0].type, CMD_FOR_BEGIN);
+        ASSERT_INT("and so is the body",
+                   repl_state_document_cmds()[1].type, CMD_VERTEX2F);
+        ASSERT_TRUE("and the refusal says why",
+                    strstr(ui_state_status().text,
+                           "opens a block it does not close") != NULL);
+
+        g_test_modifiers = 0;
+        editor_selection_clear_line_range();
     }
 
     return test_harness_report(&g_harness, "test_editor_input_selection");
