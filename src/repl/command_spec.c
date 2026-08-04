@@ -489,7 +489,6 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "} else {",            "} else {",                                                 0, { NULL } },
     { "break;",              "break;",                                                   0, { NULL } },
     { "continue;",           "continue;",                                                0, { NULL } },
-    { "goto ",               "goto label",                                               0, { NULL } },
     REPL_FUNC_SLOT_LIST(FUNC_DECL_COMPLETION)
     REPL_FUNC_SLOT_LIST(FUNC_CALL_COMPLETION)
     { "t = ",                "t = value",                                                0, { NULL } },
@@ -799,8 +798,6 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_VAR_ASSIGN,                   1, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_SCRATCH_ASSIGN,               1, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_VAR_DECLARE,                  0, CMD_CAT_VARIABLE),
-    CMD_TYPE_SPEC(CMD_GOTO_LABEL,                   0, CMD_CAT_LABEL),
-    CMD_TYPE_SPEC(CMD_GOTO,                         1, CMD_CAT_LABEL),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_TORUS,  "glutSolidTorus",  1, CMD_CAT_GLUT_SHAPE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_CUBE,   "glutSolidCube",   1, CMD_CAT_GLUT_SHAPE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_SPHERE, "glutSolidSphere", 1, CMD_CAT_GLUT_SHAPE),

@@ -1460,12 +1460,6 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if ((src_cmd->type == CMD_GOTO_LABEL || src_cmd->type == CMD_GOTO) &&
-            func_scope_mask != 0) {
-            flatten_fail(ctx, "goto and labels are not supported inside functions");
-            return;
-        }
-
         if (flatten_cmd_emits_nothing(src_cmd->type)) { i++; continue; }
 
         /* Variable assignments: update predefined var and pass through */
@@ -1496,8 +1490,8 @@ static void flatten_range(FlattenContext *ctx,
 }
 
 /* Walk the *flat* program - the post-expansion command stream - so
- * that glEnable(GL_LIGHTING) inside `if(0) { }`, `for(i, 0, 0) { }`,
- * an unreferenced funcN body, or a goto-skipped region does not count.
+ * that glEnable(GL_LIGHTING) inside `if(0) { }`, `for(i, 0, 0) { }`, or
+ * an unreferenced funcN body does not count.
  * Walking the source array (the pre-#10 behavior) treated those as
  * effective and lit scenes that the executor would render unlit. */
 static int flatten_flat_lighting_enabled(const GLCmd *flat_cmds,

@@ -367,20 +367,6 @@ void repl_reformat_program(void) {
             reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
-        case CMD_GOTO_LABEL: {
-            char label[REPL_GOTO_LABEL_MAX] = "";
-            if (repl_extract_label_name(orig_text, label, sizeof(label)))
-                snprintf(fmt_text, sizeof(fmt_text), "%s:", label);
-            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
-            break;
-        }
-        case CMD_GOTO: {
-            char label[REPL_GOTO_LABEL_MAX] = "";
-            if (repl_extract_goto_label(orig_text, label, sizeof(label)))
-                snprintf(fmt_text, sizeof(fmt_text), "%sgoto %s;", ind_s, label);
-            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
-            break;
-        }
         default: {
             ExprVar vis_vars[MAX_EXPR_VARS];
             int num_vis_vars = collect_visible_vars(cmd_idx, vis_vars, MAX_EXPR_VARS, NULL);

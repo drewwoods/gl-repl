@@ -95,7 +95,6 @@ static int replay_cmd_is_focus_candidate(CmdType type) {
     case CMD_ELSE_IF:
     case CMD_ELSE:
     case CMD_IF_END:
-    case CMD_GOTO_LABEL:
         return 0;
     default:
         return 1;

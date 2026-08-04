@@ -68,7 +68,6 @@ static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
     [CMD_CAT_FUNCTION]    = { 0.60f, 0.85f, 0.95f },
     [CMD_CAT_VARIABLE]    = { 0.55f, 0.80f, 0.95f },
     [CMD_CAT_CONDITIONAL] = { 0.95f, 0.75f, 0.50f },
-    [CMD_CAT_LABEL]       = { 0.85f, 0.55f, 0.85f },
     [CMD_CAT_COMMENT]     = { 0.45f, 0.50f, 0.45f },
     [CMD_CAT_GLUT_SHAPE]  = { 0.50f, 0.90f, 0.70f },
     [CMD_CAT_TESS_BLOCK]  = { 0.70f, 0.55f, 0.90f },

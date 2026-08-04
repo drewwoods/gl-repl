@@ -1071,24 +1071,24 @@ line as the keyword - `} else if(t > 1) {` and `} else {`, with whitespace
 between the pieces optional. Splitting the brace onto its own line does not
 parse.
 
-### Labels & goto (experimental, top-level only)
+### Disabling a block
+
+Wrap the rows you want to switch off in `if(0) { … }`. The condition is
+resolved before anything runs, so the body emits nothing at all - the same
+effect as deleting the lines, but reversible by editing one character:
 
 ```c
-float n;
-n = 0;
-loop:                    // declare a jump target
-n = n + 1;
-if(n < 5) {
-    goto loop;           // jump back four times, then continue below
+glBegin(GL_TRIANGLES);
+glVertex3f(0, 2, 0);
+if(0) {
+    glVertex3f(-2, -2, 0);   // switched off - emits nothing
 }
-glutSolidCube(n/5);
+glVertex3f(2, -2, 0);
+glEnd();
 ```
 
-`goto` and its target must both be at the top level. Always put a backward jump
-behind a condition that eventually becomes false; an unconditional jump back
-to its own label never terminates. A label is a line of its own: `name:`,
-with nothing after it but an optional comment. Note the distinction: `name:`
-is a goto target, while `label("...")` is the bitmap-text call.
+To disable rows without restructuring them, select the range and press
+`Ctrl+/`, which comments every line in it; pressing it again restores them.
 
 ### Comments
 

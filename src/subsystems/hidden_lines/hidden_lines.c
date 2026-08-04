@@ -223,8 +223,6 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     case CMD_GLUT_SPHERE:
     case CMD_GLUT_TEAPOT:
     case CMD_GLUT_CONE:
-    case CMD_GOTO_LABEL:
-    case CMD_GOTO:
     case CMD_IF_BEGIN:
     case CMD_IF_END:
     case CMD_VAR_ASSIGN:

@@ -201,13 +201,11 @@ static const char *flat_cmd_text(int pc) {
 
 /*
  * Mirror only the execute-time control-flow pieces that affect variables.
- * This lets the tests exercise goto/if/assignment replay rules without
-            UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
-                                                             g_num_predef_vars);
+ * This lets the tests exercise the if/assignment replay rules without
+ * standing up the real executor.
  */
 static void run_flat_control_flow_only(void) {
     int pc = 0;
-    int goto_count = 0;
 
     while (pc < repl_state_flat_program_count()) {
         if (!repl_state_flat_program_cmds()[pc].valid) {
@@ -250,31 +248,10 @@ static void run_flat_control_flow_only(void) {
             }
             break;
         }
-        case CMD_GOTO: {
-            char label[64];
-            if (!repl_extract_goto_label(flat_cmd_text(pc), label, sizeof(label)))
-                break;
-            if (goto_count++ > 100000)
-                return;
-            for (int li = 0; li < repl_state_flat_program_count(); li++) {
-                char target_label[64];
-                if (repl_state_flat_program_cmds()[li].valid &&
-                    repl_state_flat_program_cmds()[li].type == CMD_GOTO_LABEL &&
-                    repl_extract_label_name(flat_cmd_text(li),
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label) == 0) {
-                    pc = li;
-                    goto next_pc;
-                }
-            }
-            break;
-        }
         default:
             break;
         }
 
-next_pc:
         pc++;
     }
 }
@@ -1050,80 +1027,6 @@ int main(void) {
                     repl_eval_find_predef_var_idx("foo") >= 0);
     }
 
-    /* Goto loops can no longer drive a counter through an if-block
-     * gate: flatten resolves the if-condition once (eval-at-flatten),
-     * so each goto iteration re-runs the same flat command with the
-     * same args. With self-referential `n = n + 1;`, the executor
-     * applies args[0] = 1 every iteration and `n` plateaus. Goto
-     * remains documented as partial; the test now exercises the
-     * single-pass path and verifies n stops at 1. */
-    glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line("n = 0;");
-    editor_feed_line("walk:");
-    editor_feed_line("n = n + 1;");
-    editor_feed_line("if(n < 3) {");
-    editor_feed_line("goto walk;");
-    editor_feed_line("}");
-    ASSERT_TRUE("expr assign cmd count", repl_state_document_count() == 6);
-    ASSERT_TRUE("expr assign preserves source", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n + 1") != NULL);
-    ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds()[2].has_vars == 1);
-    repl_flatten_commands(editor_state_edit_line());
-    repl_execute_commands();
-    {
-        int n_idx = -1;
-        for (int i = 0; i < g_num_predef_vars; i++) {
-            if (strcmp(g_predef_vars[i].name, "n") == 0) {
-                n_idx = i;
-                break;
-            }
-        }
-        ASSERT_TRUE("n predef exists", n_idx >= 0);
-        if (n_idx >= 0)
-            ASSERT_TRUE("goto-with-if no longer iterates self-ref counter",
-                        fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
-    }
-
-    glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line("n = 0;");
-    editor_feed_line("glBegin(GL_LINES);");
-    editor_feed_line("stripe:");
-    editor_feed_line("glVertex3f(-1.5 + 0.42*n, -0.9, 0);");
-    editor_feed_line("glVertex3f(-1.5 + 0.42*n, 0.9, 0);");
-    editor_feed_line("n = n + 1;");
-    editor_feed_line("if(n < 3) {");
-    editor_feed_line("goto stripe;");
-    editor_feed_line("}");
-    editor_feed_line("glEnd();");
-    ASSERT_TRUE("goto geom cmd count", repl_state_document_count() == 10);
-    ASSERT_TRUE("goto geom first vertex keeps expr",
-                strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "0.42*n") != NULL);
-    ASSERT_TRUE("goto geom first vertex has vars", repl_state_document_cmds()[3].has_vars == 1);
-    repl_flatten_commands(editor_state_edit_line());
-    ASSERT_TRUE("goto geom flat first vertex has vars", repl_state_flat_program_cmds()[3].has_vars == 1);
-    ASSERT_TRUE("goto geom flat second vertex has vars", repl_state_flat_program_cmds()[4].has_vars == 1);
-    run_flat_control_flow_only();
-    {
-        int n_idx = predef_idx("n");
-        ASSERT_TRUE("goto geom n predef exists", n_idx >= 0);
-        /* Same partial-goto behaviour as above: n stops at 1. */
-        if (n_idx >= 0)
-            ASSERT_TRUE("goto geom no longer iterates self-ref counter",
-                        fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
-    }
-    ASSERT_TRUE("goto geom flat first vertex still at initial x",
-                fabsf(repl_state_flat_program_cmds()[3].args[0] - (-1.5f)) < 1e-5f);
-
-    glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line("walk:");
-    ASSERT_TRUE("label cmd count", repl_state_document_count() == 1);
-    ASSERT_TRUE("label stored as C label", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
-    editor_navigate_to_line(0);
-    ASSERT_TRUE("label loads back into the editor verbatim",
-                strcmp(editor_state_input().input, "walk:") == 0);
-    editor_handle_key(';', 0, 0);
-    ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds()[0].type == CMD_GOTO_LABEL);
-    ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
-
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("glVertex3f(i, 0, 0);");
@@ -1321,6 +1224,42 @@ int main(void) {
         ASSERT_TRUE("top-level if (true cond) body type",
                     repl_state_flat_program_cmds()[0].type == CMD_COLOR3F);
     }
+
+    /* `if(0) { ... }` is the documented way to disable a block, and it is
+     * now the ONLY one - `goto`-over-a-region is gone. Pin the literal
+     * form (the cases above use a variable condition) both at top level
+     * and inside a glBegin/glEnd, where the disabled rows sit between
+     * commands that must still flatten normally. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("if(0) {");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("if(0) at top level emits no flat commands",
+                repl_state_flat_program_count() == 0);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("if(0) {");
+    editor_feed_line("glVertex3f(1, 1, 1);");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(2, 2, 2);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("if(0) inside glBegin drops only its own body",
+                repl_state_flat_program_count() == 4);
+    ASSERT_TRUE("if(0) inside glBegin keeps the begin",
+                repl_state_flat_program_cmds()[0].type == CMD_BEGIN);
+    ASSERT_TRUE("if(0) inside glBegin keeps the vertex above it",
+                repl_state_flat_program_cmds()[1].type == CMD_VERTEX3F &&
+                fabsf(repl_state_flat_program_cmds()[1].args[0]) < 1e-6f);
+    ASSERT_TRUE("if(0) inside glBegin keeps the vertex below it",
+                repl_state_flat_program_cmds()[2].type == CMD_VERTEX3F &&
+                fabsf(repl_state_flat_program_cmds()[2].args[0] - 2.0f) < 1e-6f);
+    ASSERT_TRUE("if(0) inside glBegin keeps the end",
+                repl_state_flat_program_cmds()[3].type == CMD_END);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0 {");
@@ -1698,39 +1637,6 @@ int main(void) {
         ASSERT_STR("replay chain assignment inline comment",
                    display,
                    "  i = i + k; // i = 0.23 + 0.5 = 0.73");
-
-        replay_active = 0;
-        replay_state = REPLAY_OFF;
-        replay_src_line = -1;
-        replay_pc = 0;
-    }
-
-    glr_ctrl_reset_all(); declare_test_vars();
-    {
-        char display[MAX_INPUT_LEN];
-        int i_idx = predef_idx("i");
-        int x_idx = predef_idx("x");
-
-        ASSERT_TRUE("replay goto i predef exists", i_idx >= 0);
-        ASSERT_TRUE("replay goto x predef exists", x_idx >= 0);
-
-        editor_feed_line("i = 1;");
-        editor_feed_line("goto after;");
-        editor_feed_line("i = 100;");
-        editor_feed_line("x = i + 1;");
-        editor_feed_line("after:");
-        editor_feed_line("glVertex3f(0, 0, 0);");
-        replay_start();
-        replay_state = REPLAY_PAUSED;
-
-        replay_pc = repl_state_flat_program_count();
-        replay_src_line = 5;
-        ASSERT_TRUE("replay goto skipped assignment text",
-                    replay_code_panel_get_command_display_text(source_document_view(), 3, display, sizeof(display)));
-        ASSERT_TRUE("replay goto skipped assignment uses pre-jump value",
-                    strstr(display, "// x = 1 + 1 = 2") != NULL);
-        ASSERT_TRUE("replay goto skipped assignment ignores skipped overwrite",
-                    strstr(display, "100 + 1") == NULL);
 
         replay_active = 0;
         replay_state = REPLAY_OFF;

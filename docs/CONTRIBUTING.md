@@ -97,8 +97,8 @@ The most common contributions, recipe-style:
    `repl_exec_cursor_emit_clear_color()` / `_emit_clear()` precisely so they
    cannot drift; a specialized pass drives those instead of calling GL itself.
    Do **not** add an analyzer-side execution path that predicts the frame's
-   background - a second walk with its own program counter, goto search and
-   attribute stack is what this design removed, after it needed two semantic
+   background - a second walk with its own program counter and attribute
+   stack is what this design removed, after it needed two semantic
    corrections its own tests did not catch.
    [`src/repl/gl_state_inspector.c`](../src/repl/gl_state_inspector.c) is not
    that path and keeps its own fold: it answers what `GL_COLOR_CLEAR_VALUE` is

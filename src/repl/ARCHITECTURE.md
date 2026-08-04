@@ -46,7 +46,7 @@ The standard interpreter parts map cleanly onto files:
 
 | Interpreter part | Here |
 |---|---|
-| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L122) records |
+| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L121) records |
 | Symbol / spec table | [`command_spec.c`](command_spec.c) (per-command arity, arg kinds, highlight category) |
 | Expression evaluator | [`eval.c`](eval.c) (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
 | Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (**pure**; never mutates) |
@@ -198,9 +198,9 @@ flowchart LR
 
 This is the core data structure. Read this section before anything else.
 
-### 3.1 [`GLCmd`](command.h#L122) - the universal command record
+### 3.1 [`GLCmd`](command.h#L121) - the universal command record
 
-A single [`GLCmd`](command.h#L122) ([`command.h`](command.h)) represents one command in *either* level.
+A single [`GLCmd`](command.h#L121) ([`command.h`](command.h)) represents one command in *either* level.
 It is a **pure parse result** - it carries type, evaluated args, flags,
 and provenance, but **no source text**. The per-line canonical text
 lives in the editor's buffer, not here. That omission is what keeps the
@@ -318,7 +318,7 @@ wins.
 Replay associates an earlier assignment with the active invocation using
 stable flat-command provenance (`func_scope_mask`, `call_depth`, immediate and
 root call sites) plus nearest-earlier execution order. It must never compare
-`FlatCmdLocalVars` values for that match: those values are effective command
+[`FlatCmdLocalVars`](flatten.h#L43) values for that match: those values are effective command
 state and therefore change after every local assignment within one invocation.
 
 The snapshot is *frozen* at emit time, and that is what makes function-local
@@ -496,7 +496,7 @@ editor input widget. Keeping it separate from [`compile.c`](compile.c) preserves
 purity boundary - [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
 apply orchestration.
 
-[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L122) array
+[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L121) array
 mechanics (insert/replace/delete/load, range normalization, capacity
 checks). It owns array shifting and bounds; callers own parsing, undo,
 variable registration, and cursor policy. Cursor shifting is opt-in per
@@ -520,7 +520,7 @@ commands ahead of the vertices that feed them. Because it edits the
 source array (and can shift the cursor), it runs *before* flatten and
 takes the edit-line by reference.
 
-The caller passes a `ReplAutoNormalMode`, not a flag.
+The caller passes a [`ReplAutoNormalMode`](pipeline.h#L44), not a flag.
 `REPL_AUTONORMAL_FACE` is the walk above. `REPL_AUTONORMAL_SMOOTH` runs a
 separate accumulate-and-weld pass instead: each face adds its *unnormalized*
 normal (magnitude = 2x area, so the average is area-weighted) to every one of
@@ -585,7 +585,7 @@ provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L43) snapshot (§3.4).
 #### Expression paths and cache lifecycle
 
 Flatten has one control-flow walk and several progressively cheaper expression
-paths. They all produce the same baked [`GLCmd`](command.h#L122) stream:
+paths. They all produce the same baked [`GLCmd`](command.h#L121) stream:
 
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
    source array. `has_vars` is decided at commit time against predefs and the
@@ -714,7 +714,7 @@ emitting GL. Key behaviors:
   of any execute-time re-evaluation.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
-  geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L122) - is the
+  geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L121) - is the
   canonical transform truth at execution time.
 - **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
   the replay program counter when replay is active) so only commands up
@@ -898,7 +898,17 @@ it would take to narrow that further.
 | `funcN(params) { … }` / aliased `NAME { … }` | `CMD_FUNC_DEF` / body / `CMD_FUNC_END` | inlined at each `CMD_CALL`, params bound |
 | `if(expr) { … } else if(expr) { … } else { … }` | `CMD_IF_BEGIN` / arm bodies split by `CMD_ELSE_IF` / `CMD_ELSE` / `CMD_IF_END` | first true arm emitted; optional else arm emitted as fallback |
 | `break;` / `continue;` | `CMD_BREAK` / `CMD_CONTINUE` | nothing - a flatten-time signal consumed by the innermost enclosing `flatten_for_loop` |
-| `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
+
+**Every construct is resolved at flatten time**, and the flat program
+therefore contains no execute-time control flow at all: the executor and
+every walker over the flat array move strictly forward. `goto` / `name:`
+used to be the sole exception, resolved at execute time against source
+text; they were removed rather than made to work, because a jump is
+unrepresentable in a walk over *nested source ranges* and because their
+meaning lived in the source line rather than the baked `args[]` - which
+made them the one construct where the live session and the exported C
+disagreed about what the program does. See
+`docs/plans/done/goto-removal.md`.
 
 **Loop jumps** are the one construct that flattens to nothing at all.
 `CMD_BREAK` / `CMD_CONTINUE` raise `FlattenContext.loop_signal` and return;
@@ -922,11 +932,6 @@ per-scene in `ReplVariableState.func_aliases`. The compiler resolves an
 alias to a *pending* `alias_op` and never writes the table - apply
 publishes it after the source mutation succeeds, so a failed insert can't
 strand an alias pointing at a nonexistent row.
-
-`goto` is the one construct resolved at *execute* time rather than
-flatten time, because its target can depend on runtime state; the
-executor and the replay-annotation walker share `REPL_GOTO_LOOP_LIMIT`
-(100000 jumps) to bail out of a runaway loop with a status message.
 
 ---
 
@@ -1169,7 +1174,7 @@ grouping is the mental model.)
 **Core types & taxonomy**
 [`command.h`](command.h) (CmdType, GLCmd, control-flow predicates) ·
 [`command_spec.c`](command_spec.c)/`.h` (per-command descriptor tables) ·
-[`control_flow.h`](control_flow.h), [`color_limits.h`](color_limits.h), [`util.h`](util.h) (shared constants/helpers)
+[`color_limits.h`](color_limits.h), [`util.h`](util.h) (shared constants/helpers)
 
 **Edit flow (text → program model)**
 [`parser.c`](parser.c)/`.h` (line → GLCmd + canonical text) ·
@@ -1379,9 +1384,10 @@ interprets control flow over a compiled-once stream:
   symbolic, the compiled program is short (a loop is a few instructions, not N
   copies), so `MAX_FLAT_COMMANDS` as a *storage* limit can relax sharply. But
   per-frame *work* is still O(emitted ops), so a dynamic per-frame
-  emission / visit budget must be checked during execution - the same shape as
-  today's `REPL_GOTO_LOOP_LIMIT` guard, with clamp + status on overflow
-  (mirroring the current flatten-budget overflow handling).
+  emission / visit budget must be checked during execution, with clamp +
+  status on overflow (mirroring the current flatten-budget overflow
+  handling). Note this reintroduces an execute-time budget, which the
+  executor no longer has any of - the last one went with `goto`.
 
 This is where the command-limit logic genuinely complicates, especially with
 `t` in loops: a bound like `for(i, 0, 1000*t)` grows without any source edit,

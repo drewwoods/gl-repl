@@ -130,7 +130,7 @@ static void test_transform_stack_edge_cases(void) {
 static void test_apply_state_cmd_edge_cases(void) {
     repl_apply_state_cmd(NULL, 1.0f);
 
-    GLCmd cmd = { .type = CMD_GOTO_LABEL }; // not a state cmd
+    GLCmd cmd = { .type = CMD_COMMENT }; // not a state cmd
     int ret = repl_apply_state_cmd(&cmd, 1.0f);
     ASSERT_TRUE("Non-state cmd returns 0", ret == 0);
 
@@ -594,12 +594,9 @@ static void test_execute_all_commands(void) {
     cmds[count].type = CMD_IF_END; cmds[count].valid = 1; count++;
 
     // Add IF_BEGIN and VAR_ASSIGN with has_vars
-    // Set up editor buffer entries so execution_flat_text() can resolve text.
     editor_buffer_set_line(0, "if (1.0) {");
     editor_buffer_set_line(1, "x = 5.0;");
-    editor_buffer_set_line(2, "goto skip;");
-    editor_buffer_set_line(3, "label skip;");
-    repl_state_document_count_set(4);
+    repl_state_document_count_set(2);
 
     cmds[count].type = CMD_IF_BEGIN; cmds[count].valid = 1; cmds[count].has_vars = 1;
     cmds[count].src_cmd_idx = 0; count++;
@@ -607,13 +604,6 @@ static void test_execute_all_commands(void) {
 
     cmds[count].type = CMD_VAR_ASSIGN; cmds[count].valid = 1; cmds[count].has_vars = 1; cmds[count].var_idx = 0;
     cmds[count].src_cmd_idx = 1; count++;
-
-    // Add GOTO to jump over a command
-    cmds[count].type = CMD_GOTO; cmds[count].valid = 1;
-    cmds[count].src_cmd_idx = 2; count++;
-    cmds[count].type = CMD_VERTEX3F; cmds[count].valid = 1; count++; // skipped
-    cmds[count].type = CMD_GOTO_LABEL; cmds[count].valid = 1;
-    cmds[count].src_cmd_idx = 3; count++;
 
     ReplExecutionOptions opts = {0};
     opts.flat_cmd_count = count;
@@ -1238,60 +1228,6 @@ static ReplExecCursor run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
     return cursor;
 }
 
-/* goto labels are read out of the SourceTextView the caller handed in, bounded
- * by that view's own line_count. The executor used to bound it through the
- * live repl_state_document_count() instead, so a temporary program over a
- * temporary text view resolved its jumps only when unrelated global document
- * state happened to agree - tests had to synchronize both counts by hand. */
-static void test_goto_uses_caller_text_view(void) {
-    static char lines[3][MAX_LINE_LEN];
-    GLCmd cmds[3];
-    SourceTextView text;
-    ReplExecutionOptions opts = {0};
-    ReplExecCursor cursor;
-    int saved_doc_count = repl_state_document_count();
-
-    printf("--- executor: goto resolves against the caller's text view ---\n");
-
-    snprintf(lines[0], sizeof(lines[0]), "goto skip;");
-    snprintf(lines[1], sizeof(lines[1]), "glColor3f(1, 0, 0);");
-    snprintf(lines[2], sizeof(lines[2]), "skip:");
-    text.lines = (const char (*)[MAX_LINE_LEN])lines;
-    text.line_count = 3;
-
-    memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_GOTO;       cmds[0].valid = 1; cmds[0].src_cmd_idx = 0;
-    cmds[1].type = CMD_COLOR3F;    cmds[1].valid = 1; cmds[1].src_cmd_idx = 1;
-    cmds[1].num_args = 3;
-    cmds[2].type = CMD_GOTO_LABEL; cmds[2].valid = 1; cmds[2].src_cmd_idx = 2;
-
-    /* Deliberately left describing a different (here: empty) document. */
-    repl_state_document_count_set(0);
-
-    opts.flat_cmd_count = 3;
-    opts.program.cmds = cmds;
-    opts.program.cmd_count = 3;
-    opts.text = text;
-    cursor = repl_exec_cursor_begin(&opts);
-    repl_exec_cursor_step(&cursor);
-    /* The jump lands on the label and the step's own advance moves past it. */
-    ASSERT_TRUE("goto lands on its label with a caller-owned text view",
-                cursor.pc == 3);
-    repl_exec_cursor_end(&cursor);
-
-    /* The view's own count is still the bound: a command pointing past it
-     * reads no text, so the jump is simply not taken. */
-    text.line_count = 1;
-    opts.text = text;
-    cursor = repl_exec_cursor_begin(&opts);
-    repl_exec_cursor_step(&cursor);
-    ASSERT_TRUE("a label past the view's line_count is not found",
-                cursor.pc == 1);
-    repl_exec_cursor_end(&cursor);
-
-    repl_state_document_count_set(saved_doc_count);
-}
-
 /* --- Background observation ---------------------------------------------
  *
  * The background the host presents against is what the *executor* observed
@@ -1486,64 +1422,6 @@ static void test_background_observation(void) {
         ReplBackgroundObservation obs = run_observed_plain(cmds, 2);
         ASSERT_TRUE("a depth-only clear establishes no background",
                     obs.known == 0);
-    }
-
-    /* goto needs no observation code of its own: the cursor moves the PC, so
-     * only the commands actually reached can affect the result. Forward - the
-     * jump skips the clear a linear walk would call the last one. */
-    {
-        static char lines[6][MAX_LINE_LEN];
-        GLCmd cmds[6];
-        SourceTextView text;
-        ReplExecutionOptions opts = {0};
-
-        snprintf(lines[1], sizeof(lines[1]), "goto skip;");
-        snprintf(lines[4], sizeof(lines[4]), "skip:");
-        text.lines = (const char (*)[MAX_LINE_LEN])lines;
-        text.line_count = 6;
-
-        memset(cmds, 0, sizeof(cmds));
-        obs_clear_color(cmds, 0, 0.2f, 0.0f, 0.0f, 1.0f);
-        obs_cmd(cmds, 1, CMD_GOTO, 1);
-        obs_clear_color(cmds, 2, 0.6f, 0.0f, 0.0f, 1.0f);
-        obs_clear(cmds, 3, GL_COLOR_BUFFER_BIT);
-        obs_cmd(cmds, 4, CMD_GOTO_LABEL, 4);
-        obs_clear(cmds, 5, GL_COLOR_BUFFER_BIT);
-
-        opts.text = text;
-        ReplBackgroundObservation obs = run_observed(cmds, 6, &opts);
-        ASSERT_TRUE("a forward goto takes the cursor's path, not a linear one",
-                    obs.known == 1 && obs.rgba[0] == 0.2f);
-    }
-
-    /* Backward - an unbounded loop, terminated by the cursor's own budget,
-     * with the observation its last effective clear produced. */
-    {
-        static char lines[4][MAX_LINE_LEN];
-        GLCmd cmds[4];
-        SourceTextView text;
-        ReplExecutionOptions opts = {0};
-        char status[REPL_DIAG_TEXT_MAX] = "";
-
-        snprintf(lines[1], sizeof(lines[1]), "again:");
-        snprintf(lines[3], sizeof(lines[3]), "goto again;");
-        text.lines = (const char (*)[MAX_LINE_LEN])lines;
-        text.line_count = 4;
-
-        memset(cmds, 0, sizeof(cmds));
-        obs_clear_color(cmds, 0, 0.3f, 0.0f, 0.0f, 1.0f);
-        obs_cmd(cmds, 1, CMD_GOTO_LABEL, 1);
-        obs_clear(cmds, 2, GL_COLOR_BUFFER_BIT);
-        obs_cmd(cmds, 3, CMD_GOTO, 3);
-
-        opts.text = text;
-        opts.status_out = status;
-        opts.status_out_sz = (int)sizeof(status);
-        ReplBackgroundObservation obs = run_observed(cmds, 4, &opts);
-        ASSERT_TRUE("a backward goto terminates under the cursor's budget",
-                    status[0] != '\0');
-        ASSERT_TRUE("a terminated goto loop still publishes what it cleared",
-                    obs.known == 1 && obs.rgba[0] == 0.3f);
     }
 
     /* A state filter suppresses GL emission, and the observation must follow
@@ -1895,7 +1773,6 @@ int main(void) {
     test_exec_cursor_step_tracks_state();
     test_exec_cursor_advance_skips_without_state();
     test_attrib_stack();
-    test_goto_uses_caller_text_view();
     test_background_observation();
     test_execute_all_commands();
     test_glut_bitmap_string();

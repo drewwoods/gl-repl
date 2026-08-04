@@ -8,7 +8,6 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/text_helpers.h"
-#include "repl/control_flow.h"
 #include "repl/parser.h"
 #include "repl/source_scope.h"
 #include "subsystems/replay/replay.h"
@@ -584,14 +583,14 @@ static void replay_init_sim_state(ReplPredefSnapshot *predef,
 /* Re-derive the variable / scratch-array state the executor would hold
  * just before flat pc `target_pc`, without touching GL or live state: a
  * dry-run walk over the flat program from a baseline snapshot, applying
- * only the state-mutating semantics - var assigns, scratch assigns,
- * if-blocks (skipping false bodies), and goto jumps (with the same loop
- * limit as the executor). Geometry/state commands are skipped over.
- * This is what lets the paused-replay annotations show the values a
+ * only the state-mutating semantics - var assigns, scratch assigns, and
+ * if-blocks (skipping false bodies). Geometry/state commands are skipped
+ * over. This is what lets the paused-replay annotations show the values a
  * command actually executed with, since the live predef table has long
  * since moved on. `before_step` (optional) observes every visited pc,
- * including ones inside skipped if-bodies. Returns 0 on bad args or a
- * goto loop overrun, 1 otherwise. */
+ * including ones inside skipped if-bodies. The walk is strictly forward -
+ * the flat program has no execute-time control flow - so it always
+ * terminates. Returns 0 on bad args, 1 otherwise. */
 static int replay_simulate_runtime_until(
     int target_pc,
     ReplPredefSnapshot *predef,
@@ -599,7 +598,6 @@ static int replay_simulate_runtime_until(
     ReplayBeforeStepFn before_step) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int pc = 0;
-    int goto_count = 0;
 
     if (!predef)
         return 0;
@@ -660,34 +658,11 @@ static int replay_simulate_runtime_until(
             }
             break;
         }
-        case CMD_GOTO: {
-            char label[REPL_GOTO_LABEL_MAX];
-            if (!repl_extract_goto_label(replay_flat_text(pc),
-                                         label, sizeof(label)))
-                break;
-            if (goto_count++ > REPL_GOTO_LOOP_LIMIT)
-                return 0;
-            for (int li = 0; li < repl_state_flat_program_count(); li++) {
-                char target_label[REPL_GOTO_LABEL_MAX];
-                if (flat_cmds[li].valid &&
-                    flat_cmds[li].type == CMD_GOTO_LABEL &&
-                    repl_extract_label_name(replay_flat_text(li),
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label) == 0) {
-                    pc = li;
-                    goto next_pc;
-                }
-            }
-            break;
-        }
         default:
             break;
         }
 
         pc++;
-next_pc:
-        ;
     }
 
     return 1;

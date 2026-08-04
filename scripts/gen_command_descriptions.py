@@ -34,8 +34,6 @@ NON_GL_COMMANDS = {
     "CMD_VAR_ASSIGN",
     "CMD_SCRATCH_ASSIGN",
     "CMD_VAR_DECLARE",
-    "CMD_GOTO_LABEL",
-    "CMD_GOTO",
 }
 
 

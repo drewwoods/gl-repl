@@ -229,7 +229,6 @@ typedef struct ReplExecCursor {
     unsigned             observed_known_mask;
     GLdouble             tess_current_normal[3];
     GLdouble             tess_current_color[4];
-    int                  goto_count;
     float                alpha_scale;
     int                  skip_geom_before_pc;
 } ReplExecCursor;

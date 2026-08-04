@@ -9,7 +9,6 @@
 #include "source_document.h"
 #include "repl/attrib_bits.h"   /* repl_attrib_bits_for_type (restore gating) */
 #include "repl/executor.h"
-#include "repl/control_flow.h"
 #include "repl/state_owners.h"
 #include "repl/text_helpers.h"
 #include "support/mesh_ply.h"   /* MESH_PLY_PASS_* feedback normal-encoding markers */
@@ -585,50 +584,6 @@ static int execution_flat_count_from_options(const ReplExecutionOptions *options
     return flat_cmd_count;
 }
 
-/* Source line a flat command came from, out of the CALLER's text view.
- *
- * The bound is the view's own line_count - source_text_line() applies it and
- * returns "" past the end. Deliberately NOT the live repl_state_document_count():
- * a caller executing a temporary program over a temporary text view (tests,
- * tools, any off-document walk) must resolve its own goto labels whether or
- * not unrelated live document state happens to agree. */
-static const char *execution_flat_text(SourceTextView text,
-                                       const GLCmd *flat_cmd) {
-    const char *line;
-
-    if (!flat_cmd)
-        return "";
-
-    line = source_text_line(text, flat_cmd->src_cmd_idx);
-    return (line && line[0]) ? line : "";
-}
-
-/* Flat index within cmds[0..count) of the CMD_GOTO_LABEL matching `cmd`'s
- * target label, or -1. The one implementation of "where does this goto land",
- * called from the cursor's CMD_GOTO arm - nothing else may answer it, or
- * something would be able to take a jump execution does not. Label name comes
- * out of the source text; the first matching marker wins. */
-static int flat_goto_target(const GLCmd *cmds, int count, SourceTextView text,
-                            const GLCmd *cmd) {
-    char label_name[REPL_GOTO_LABEL_MAX];
-    char target_label[REPL_GOTO_LABEL_MAX];
-    int i;
-
-    if (!cmds ||
-        !repl_extract_goto_label(execution_flat_text(text, cmd),
-                                 label_name, sizeof(label_name)))
-        return -1;
-    for (i = 0; i < count; i++) {
-        if (!cmds[i].valid || cmds[i].type != CMD_GOTO_LABEL)
-            continue;
-        if (repl_extract_label_name(execution_flat_text(text, &cmds[i]),
-                                    target_label, sizeof(target_label)) &&
-            strcmp(target_label, label_name) == 0)
-            return i;
-    }
-    return -1;
-}
-
 /* Transform an object-space normal `n` to world space by the current
  * modelview `m` (column-major), via the inverse-transpose of its upper-left
  * 3x3, then normalize. Used by the .ply export to encode world-space normals
@@ -965,31 +920,6 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             gluTessVertex(g_tess, v->pos, v);
         }
         break;
-    case CMD_GOTO_LABEL:
-        break; /* no-op marker */
-    case CMD_GOTO: {
-        /* Experimental top-level control-flow only.
-         * This jumps the flat-command program counter, but it does not
-         * rebuild or re-specialize the flat stream, so goto loops are only
-         * reliable for control flow and assignments. Variable-driven GL
-         * commands still use the args baked into flat_cmds[]. Replay also
-         * cannot follow the dynamic jump trace. */
-        int target;
-        if (cursor->goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-            if (cursor->options.status_out &&
-                cursor->options.status_out_sz > 0)
-                snprintf(cursor->options.status_out,
-                         (size_t)cursor->options.status_out_sz,
-                         "goto: loop limit reached");
-            cursor->pc = cursor->flat_cmd_count;
-            return 0;
-        }
-        target = flat_goto_target(flat_cmds, cursor->flat_cmd_count,
-                                  cursor->text, cmd);
-        if (target >= 0)
-            cursor->pc = target;  /* final advance steps past the label */
-        break;
-    }
     case CMD_VAR_ASSIGN: {
         /* Flatten already computed the RHS against current vars and
          * stored the result in args[0]. Re-evaluating here would
@@ -1208,8 +1138,8 @@ void repl_exec_cursor_end(ReplExecCursor *cursor) {
 
 /* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
  * calls. Handles vertex submission, state changes, GLU quadrics and
- * tessellator commands, transforms, goto/label control flow, if-block
- * evaluation, and variable assignments.
+ * tessellator commands, transforms, if-block evaluation, and variable
+ * assignments.
  *
  * Replay and fade passes provide an explicit limit instead of temporarily
  * mutating repl_state_flat_program_count(). */

@@ -1823,7 +1823,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
  *   3. glEnd
  *   4. Table-driven standard commands (glVertex3f, glColor3f, glTranslatef, ...)
  *   5. Ad-hoc commands (glMaterialfv, glPointParameterfv, glPush/PopMatrix,
- *      funcN calls, glu* tessellator commands, goto/label)
+ *      funcN calls, glu* tessellator commands)
  *
  * Returns 1 on success (cmd populated), 0 on parse failure.
  * Diagnostics flow through ReplParseContext.err_buf when the caller
@@ -1910,7 +1910,7 @@ static void strip_trailing_comment(char *p) {
  *   4. table-driven float-arg commands (k_std_command_specs)
  *   5. hand-written matchers for the irregular forms: glEnd, label(),
  *      glMaterialfv/f, glPointParameterfv, matrix stack, gluBegin/End/
- *      Color, goto / :label
+ *      Color, break / continue
  *   6. `unknown_command:` fallback - recognize a bare math expression
  *      and suggest assigning it, else emit the per-context error
  *
@@ -1928,18 +1928,15 @@ static int check_trailing_garbage(const char *after, const ReplParseContext *ctx
     return 1;
 }
 
-/* Bare-keyword statements: the REPL forms that are a word (and maybe a
- * label) rather than a `name(args)` call - `break`, `continue`,
- * `goto name`, and `name:` label definitions. Split out of
- * parse_command so this keyword set can grow without the dispatcher
- * doing.
+/* Bare-keyword statements: the REPL forms that are a word rather than a
+ * `name(args)` call - `break` and `continue`. Split out of parse_command
+ * so this keyword set can grow without the dispatcher doing.
  *
  * Returns 1 when the line parsed, 0 when it was one of these forms but
  * invalid (diagnostic already emitted), and -1 when it is none of them -
  * the caller then continues into its unknown-command reporting. `p` is
- * the trimmed line with any trailing `;` already stripped; `len` is its
- * length. */
-static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
+ * the trimmed line with any trailing `;` already stripped. */
+static int parse_keyword_statement(const char *p, GLCmd *cmd,
                                    char *text_out, int text_sz,
                                    const ReplParseContext *ctx,
                                    int source_line_idx) {
@@ -1971,76 +1968,6 @@ static int parse_keyword_statement(const char *p, int len, GLCmd *cmd,
         return 1;
     }
 
-    /* goto label - jump to a named label.
-     *
-     * Current limitations:
-     * - top-level only; flatten rejects labels/gotos inside functions
-     * - executor updates control flow, assignments, and if-conditions, but
-     *   variable-driven GL commands inside goto loops are still using their
-     *   flattened args rather than being re-evaluated per jump
-     * - replay intentionally does not model dynamic goto traces
-     */
-    if (strncmp(p, "goto ", 5) == 0) {
-        const char *lname = p + 5;
-        while (*lname && isspace((unsigned char)*lname)) lname++;
-        /* Extract clean label name (strip trailing ; or whitespace) */
-        char clean_lname[REPL_GOTO_LABEL_MAX]; int ll = 0;
-        while (ll < REPL_GOTO_LABEL_MAX - 1 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
-            clean_lname[ll] = lname[ll]; ll++;
-        }
-        clean_lname[ll] = '\0';
-        if (ll > 0) {
-            cmd->type = CMD_GOTO;
-            cmd->valid = 1;
-            {
-                char ind_str[REPL_INDENT_TEXT_MAX];
-                parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
-                                        (int)sizeof(ind_str));
-                write_text(text_out, text_sz, "%sgoto %s;", ind_str, clean_lname);
-            }
-            return 1;
-        }
-    }
-
-    /* label: - define a label.
-     *
-     * One spelling, the C one. A `:name` form used to be accepted as well,
-     * and it was the source of a silent data-loss bug: it is the only
-     * statement in the grammar that does not END in a terminator, so the
-     * import accumulator read it as an unfinished statement and glued the
-     * following line onto it. Ending in ':' is what makes a label a
-     * statement the reader can see the end of. */
-    if (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0])) {
-        char label[REPL_GOTO_LABEL_MAX];
-        const char *rest;
-        int n = 0;
-
-        while (n < (int)sizeof(label) - 1 &&
-               p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
-            label[n] = p[n];
-            n++;
-        }
-        label[n] = '\0';
-
-        /* Nothing but the closing ':' and whitespace may follow the name,
-         * so a label can never quietly absorb trailing code. */
-        rest = p + n;
-        if (*rest == ':')
-            rest++;
-        while (*rest && isspace((unsigned char)*rest))
-            rest++;
-        if (n == 0 || *rest) {
-            parser_emit_error(ctx,
-                "a label is a line of its own: write '%s:' with nothing after it",
-                n > 0 ? label : "name");
-            return 0;
-        }
-
-        cmd->type = CMD_GOTO_LABEL;
-        cmd->valid = 1;
-        write_text(text_out, text_sz, "%s:", label);  /* labels sit at column 0 */
-        return 1;
-    }
     return -1;
 }
 
@@ -2303,7 +2230,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         return parse_glu_color(args, cmd, text_out, text_sz, tess_indent, ctx);
 
     {
-        int kw = parse_keyword_statement(p, len, cmd, text_out, text_sz,
+        int kw = parse_keyword_statement(p, cmd, text_out, text_sz,
                                          ctx, source_line_idx);
         if (kw >= 0)
             return kw;

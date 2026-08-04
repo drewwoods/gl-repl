@@ -2979,78 +2979,39 @@ static void test_import_robustness(void) {
                     rise_idx >= 0 && fabsf(g_predef_vars[rise_idx].value - 0.55f) < 1e-6f);
     }
 
-    /* 11. A label is a complete statement, with or without a trailing
-     * comment, and does not absorb the line after it.
+    /* 11. A legacy file carrying `goto` / `name:` loads with those rows
+     * refused and every other row intact. Nothing in the tree recognizes
+     * either spelling in order to reject it - they take the same generic
+     * unknown-statement path as any other unparsable text - but the refusal
+     * must stay LOCAL to the offending line.
      *
-     * The statement accumulator decides where one logical command ends by
-     * looking at the last code character, and `name:` ends in one of the
-     * terminators it recognizes. That is precisely why it is the only label
-     * spelling: a `:name` form used to be accepted too, and being the one
-     * statement in the grammar that does NOT end in a terminator, it read as
-     * unfinished - the next physical line was glued onto it and vanished
-     * from the document with no diagnostic. */
+     * That is what keeps `is_stmt_terminator()`'s `:` case alive. No valid
+     * statement ends in a colon now, so the case can only fire on invalid
+     * input; there its job is to keep a stray `loop:` self-contained. Drop
+     * it and the accumulator reads the label as an unfinished statement,
+     * glues the line below onto it, and reports one joined parse error -
+     * silently losing a row from the document. */
     {
-        static const char *const k_spellings[] = { "a:", "b:  // note" };
-        for (int s = 0; s < (int)(sizeof(k_spellings) /
-                                  sizeof(k_spellings[0])); s++) {
+        static const char *const k_legacy[] = { "loop:", "goto loop;" };
+        for (int s = 0; s < (int)(sizeof(k_legacy) /
+                                  sizeof(k_legacy[0])); s++) {
             char msg[128];
             f = fopen(test_path, "w");
-            fprintf(f, "%s\n", k_spellings[s]);
             fprintf(f, "glVertex3f(1, 2, 3);\n");
+            fprintf(f, "%s\n", k_legacy[s]);
             fprintf(f, "glVertex3f(4, 5, 6);\n");
             fclose(f);
 
             glr_ctrl_reset_all(); declare_test_vars();
-            snprintf(msg, sizeof(msg), "load label file (%s)", k_spellings[s]);
+            snprintf(msg, sizeof(msg), "load legacy file (%s)", k_legacy[s]);
             ASSERT_TRUE(msg, repl_export_load_from_file(test_path, NULL) == 1);
-            snprintf(msg, sizeof(msg),
-                     "label (%s) does not swallow the next line",
-                     k_spellings[s]);
-            ASSERT_INT(msg, repl_state_document_count(), 3);
-            snprintf(msg, sizeof(msg), "label (%s) row is a label",
-                     k_spellings[s]);
-            ASSERT_INT(msg, repl_state_document_cmds()[0].type,
-                       CMD_GOTO_LABEL);
-            snprintf(msg, sizeof(msg), "label (%s) keeps the line after it",
-                     k_spellings[s]);
-            ASSERT_STR(msg, editor_buffer_line(1), "  glVertex3f(1, 2, 3);");
+            snprintf(msg, sizeof(msg), "(%s) is refused, not accepted",
+                     k_legacy[s]);
+            ASSERT_INT(msg, repl_state_document_count(), 2);
+            snprintf(msg, sizeof(msg), "(%s) does not swallow the line after it",
+                     k_legacy[s]);
+            ASSERT_STR(msg, editor_buffer_line(1), "  glVertex3f(4, 5, 6);");
         }
-    }
-
-    /* 12. Trailing code on a label line is refused, not silently dropped. */
-    {
-        f = fopen(test_path, "w");
-        fprintf(f, "glVertex3f(1, 2, 3);\n");
-        fprintf(f, "a: glVertex3f(4, 5, 6);\n");
-        fclose(f);
-
-        glr_ctrl_reset_all(); declare_test_vars();
-        ASSERT_TRUE("load label-with-trailing-code file",
-                    repl_export_load_from_file(test_path, NULL) == 1);
-        ASSERT_INT("label with trailing code is rejected, not swallowed",
-                   repl_state_document_count(), 1);
-        ASSERT_INT("rejected label leaves no label row",
-                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
-    }
-
-    /* 13. The removed `:name` spelling is not a label - it must not quietly
-     * resurface as an accepted alias. Placed last in the file so the
-     * assertion is about the spelling alone: like any statement missing its
-     * terminator, an unparsable `:name` would otherwise be joined to the
-     * line below it and reported as one bad statement. */
-    {
-        f = fopen(test_path, "w");
-        fprintf(f, "glVertex3f(1, 2, 3);\n");
-        fprintf(f, ":a\n");
-        fclose(f);
-
-        glr_ctrl_reset_all(); declare_test_vars();
-        ASSERT_TRUE("load leading-colon label file",
-                    repl_export_load_from_file(test_path, NULL) == 1);
-        ASSERT_INT("`:name` is not accepted as a label",
-                   repl_state_document_count(), 1);
-        ASSERT_INT("`:name` leaves no label row",
-                   repl_state_document_cmds()[0].type, CMD_VERTEX3F);
     }
 
     remove(test_path);

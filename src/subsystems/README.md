@@ -89,7 +89,7 @@ seam is a **narrow installable interface** rather than the snapshot:
 - **`make assign-plot-demo`** ([`tools/assign_plot_demo/`](../../tools/assign_plot_demo/)) -
   drives the peer over an [`AssignPlotHostBridge`](assign_plot/assign_plot.h)
   backed by a trace the demo generates from its own three-row loop, so the
-  flat program, [`GLCmd`](../repl/command.h#L122) and the assignment arg slots
+  flat program, [`GLCmd`](../repl/command.h#L121) and the assignment arg slots
   stay on the app side of the seam. Its program counter is a plain trace
   index, which is how the replay PC rules and their value readouts run with
   no replay peer linked.

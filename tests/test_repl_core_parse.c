@@ -193,22 +193,6 @@ int main(void) {
     }
 
     {
-        char label[64];
-        memset(label, 0, sizeof(label));
-        ASSERT_TRUE("extract label name",
-                    repl_extract_label_name("  walk_2:", label, sizeof(label)) == 1);
-        ASSERT_TRUE("extract label text", strcmp(label, "walk_2") == 0);
-        ASSERT_TRUE("extract goto label",
-                    repl_extract_goto_label("  goto walk_2;  ",
-                                            label, sizeof(label)) == 1);
-        ASSERT_TRUE("extract goto text", strcmp(label, "walk_2") == 0);
-        ASSERT_TRUE("extract goto rejects missing target",
-                    repl_extract_goto_label("goto   ;", label, sizeof(label)) == 0);
-        ASSERT_TRUE("extract label rejects empty identifier",
-                    repl_extract_label_name("  :   ", label, sizeof(label)) == 0);
-    }
-
-    {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glVertex3f(x + 1, 0, 0)", &cmd);

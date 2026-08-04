@@ -126,7 +126,7 @@ int repl_func_alias_name_is_valid(const char *name) {
      * otherwise hijack their syntax if a user typed `if(...)` after
      * accidentally declaring an alias by the same name. */
     static const char *const control_flow_kw[] = {
-        "if", "for", "goto", "else", NULL
+        "if", "for", "else", NULL
     };
     for (const char *const *kw = control_flow_kw; *kw; kw++)
         if (strcmp(name, *kw) == 0) return 0;

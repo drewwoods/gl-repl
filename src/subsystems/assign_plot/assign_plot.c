@@ -426,8 +426,8 @@ void assign_plot_capture(double now_us) {
             assign_plot_clear_samples();
         }
     }
-    /* total == 0: the primary did not run this frame (a false `if`, a `goto`
-     * that jumped over it). Leave the axis mode alone - a row that runs
+    /* total == 0: the primary did not run this frame (a false `if` dropped
+     * its whole block). Leave the axis mode alone - a row that runs
      * intermittently should keep the history it has, and flipping the axis on
      * an empty frame would throw it away. Secondary series are still sampled
      * below, so the plot does not stall on the primary's silence. */
@@ -468,7 +468,7 @@ void assign_plot_capture(double now_us) {
 
     /* A one-shot is meant to be a frame you can read across: every series
      * frozen from the same execution of the program. A frame where some row
-     * has not run yet (a guard still closed, a `goto` still jumping it) cannot
+     * has not run yet (a guard still closed) cannot
      * be that, so the shot is not spent on it - the partial attempt is thrown
      * away and the next frame is tried instead. Without this the shot lands on
      * whatever frame happened to be first and freezes an incomplete

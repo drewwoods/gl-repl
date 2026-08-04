@@ -40,8 +40,7 @@ glRasterPos3f(x,y,z)
 label("fmt", a, b, c, d)       (bitmap text at raster pos; REPL primitive)
 for(var, start, end[, step]) { body }
 func0..func9(params) { body }  (parens required; NAME(params) aliases a slot)
-if(expr) { body }
-:name / name:  and  goto name  (goto labels - colon syntax, not label())
+if(expr) { body }              (if(0) { } disables a block - emits nothing)
 // comment
 float name[, name2, ...];      (declaration; inside a func body this is a
                                 function-scoped local - see ## Math)
@@ -126,8 +125,7 @@ a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
   fallback); user-typed lines are still exported verbatim.
 - **`label()`** format string: `%f` and `%%` only, ≤ 4 args, ≤ 64 chars; no
   `//`, parens, commas, or backslashes inside the string. The exporter emits a
-  self-contained `label()` helper. Distinct from the goto-label `:name`
-  (`CMD_GOTO_LABEL`).
+  self-contained `label()` helper.
 
 ## Example headers: `@cfg` and camera
 

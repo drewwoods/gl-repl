@@ -161,7 +161,6 @@ typedef enum {
     CMD_CAT_FUNCTION,       /* funcN { ... } / call */
     CMD_CAT_VARIABLE,       /* float decl / assignment */
     CMD_CAT_CONDITIONAL,    /* if { ... } */
-    CMD_CAT_LABEL,          /* name: label / goto */
     CMD_CAT_COMMENT,        /* // comment */
     CMD_CAT_GLUT_SHAPE,     /* glutSolidTorus / Cube / Sphere / Teapot / Cone */
     CMD_CAT_TESS_BLOCK,     /* gluTessBeginPolygon / Contour / End */

@@ -1613,18 +1613,38 @@ int main() {
         assert_status_contains("commit unknown command: status", "Unknown cmd");
     }
 
-    /* 9. editor_load_line_to_input - CMD_GOTO_LABEL path */
+    /* `goto` and `name:` are gone from the language, and nothing recognizes
+     * either spelling in order to refuse it - a goto-shaped rejection path
+     * would leave exactly the goto-shaped hole the removal closed. Both take
+     * the SAME generic unknown-statement route as any other unparsable text,
+     * and both are visibly refused rather than silently dropped. */
+    {
+        static const char *const k_removed[] = { "goto foo", "foo:" };
+        for (int i = 0; i < (int)(sizeof(k_removed) /
+                                  sizeof(k_removed[0])); i++) {
+            char msg[128];
+            glr_ctrl_reset_all();
+            set_editor_input(k_removed[i]);
+
+            editor_handle_key(';', 0, 0);
+
+            snprintf(msg, sizeof(msg), "commit '%s': no cmd added", k_removed[i]);
+            ASSERT_INT(msg, repl_state_document_count(), 0);
+            snprintf(msg, sizeof(msg), "commit '%s': generic unknown-cmd status",
+                     k_removed[i]);
+            assert_status_contains(msg, "Unknown cmd");
+        }
+    }
+
+    /* 9. editor_load_line_to_input - comment row loads verbatim */
     {
         glr_ctrl_reset_all();
-        /* Feed a label command to create a CMD_GOTO_LABEL entry */
-        editor_feed_line("myloop:");
-        ASSERT_INT("label cmd created", repl_state_document_count(), 1);
-        ASSERT_INT("label cmd type", repl_state_document_cmds()[0].type, CMD_GOTO_LABEL);
+        editor_feed_line("// a note");
+        ASSERT_INT("comment cmd created", repl_state_document_count(), 1);
+        ASSERT_INT("comment cmd type", repl_state_document_cmds()[0].type, CMD_COMMENT);
 
-        /* Now load it back into input. A label row loads verbatim - it is
-         * already in the one spelling, and re-committing it round-trips. */
         editor_load_line_to_input(0);
-        ASSERT_STR("label load: verbatim", editor_state_input().input, "myloop:");
+        ASSERT_STR("comment load: verbatim", editor_state_input().input, "// a note");
     }
 
     /* 10. editor_navigate_to_line - clamp target < 0 */

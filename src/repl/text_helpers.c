@@ -445,31 +445,6 @@ int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars) {
     return repl_eval_input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
 }
 
-/* Read the name out of a label row. Rows are always stored `name:`, so the
- * scan simply stops at the colon. */
-int repl_extract_label_name(const char *src, char *name, int name_sz) {
-    const char *p = src;
-    while (*p && isspace((unsigned char)*p)) p++;
-    int n = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-        name[n++] = *p++;
-    name[n] = '\0';
-    return n > 0;
-}
-
-int repl_extract_goto_label(const char *src, char *name, int name_sz) {
-    const char *p = strstr(src, "goto");
-    if (!p) p = src;
-    else p += 4;
-    while (*p && isspace((unsigned char)*p)) p++;
-    int n = 0;
-    while (*p && *p != ';' && !isspace((unsigned char)*p) &&
-           (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-        name[n++] = *p++;
-    name[n] = '\0';
-    return n > 0;
-}
-
 int repl_extract_assignment_parts(const char *src,
                                   char *name, int name_sz,
                                   char *rhs, int rhs_sz) {

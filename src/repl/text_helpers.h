@@ -93,8 +93,6 @@ int  input_has_expr_vars(const char *s, ExprVar *vars, int num_vars);
 int  input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars);
 
 int  repl_extract_paren_payload(const char *src, char *out, int out_sz);
-int  repl_extract_label_name(const char *src, char *name, int name_sz);
-int  repl_extract_goto_label(const char *src, char *name, int name_sz);
 /* Split a plain `name = rhs;` assignment. Thin wrapper over the
  * _target_parts variant below that additionally rejects subscripted
  * (scratch-array) targets. */

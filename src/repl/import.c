@@ -1158,37 +1158,6 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
     return 1;
 }
 
-/* Canonicalize a label line: `name:` in, `name:` out, with any indentation
- * and trailing comment dropped. Same spelling on both sides - this used to
- * translate C's `name:` into a REPL-only `:name` form, which no longer
- * exists. It stays in the converter chain because that is what claims the
- * line: without it a label falls through to the C-expression converter,
- * which has no business rewriting one. */
-static int import_make_repl_label(const char *line, char *out, int out_sz) {
-    const char *p = line;
-    while (*p && isspace((unsigned char)*p)) p++;
-
-    int llen = 0;
-    while (p[llen] && (isalnum((unsigned char)p[llen]) || p[llen] == '_'))
-        llen++;
-    if (llen <= 0 || p[llen] != ':')
-        return 0;
-    {
-        /* Only a trailing comment may follow the colon. `name: code;` is not
-         * a label line, and claiming it here would drop the code on the way
-         * to producing a bare label - the same silent loss the `:name`
-         * spelling used to cause, one layer up. */
-        const char *rest = p + llen + 1;
-        while (*rest && isspace((unsigned char)*rest))
-            rest++;
-        if (*rest && !(rest[0] == '/' && rest[1] == '/'))
-            return 0;
-    }
-
-    snprintf(out, out_sz, "%.*s:", llen, p);
-    return 1;
-}
-
 static int import_extract_assignment_expr(const char *line, const char *key,
                                           char *out, int out_sz) {
     const char *p = strstr(line, key);
@@ -1764,7 +1733,6 @@ static void import_translate_repl_line(const char *line,
         import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||
         import_make_repl_fog_fv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_mult_matrixf_line(line, repl_line, repl_line_sz) ||
-        import_make_repl_label(line, repl_line, repl_line_sz) ||
         import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
         return;
 
@@ -2572,9 +2540,14 @@ static char scan_code_line(const char *line, int *depth, int *code_len) {
     return last >= 0 ? line[last] : '\0';
 }
 
-/* Every REPL statement ends in one of these, labels included - `name:` is
- * the only label spelling for exactly that reason, so the accumulator can
- * see where one ends without looking ahead. */
+/* Every REPL statement ends in one of these. `:` is the odd one out and
+ * is kept for error containment, not for a live construct: no valid
+ * statement ends in a colon now that labels are gone, so the case can
+ * only ever fire on invalid input - a `loop:` in a legacy file. There its
+ * effect is to keep that line self-contained. Drop it and the accumulator
+ * reads `loop:` as an unfinished statement, glues the next physical line
+ * onto it, and reports one joined parse error - losing the following row
+ * from the document. */
 static int is_stmt_terminator(char c) {
     return c == ';' || c == '{' || c == '}' || c == ':';
 }
@@ -2729,9 +2702,9 @@ static void import_process_physical_line(ImportState *state,
     int code_len = 0;
     char last = scan_code_line(app, &acc->depth, &code_len);
     /* Complete when no bracket is open and the last code char closes
-     * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
-     * label (`:`). The depth gate is what stops a split compound
-     * literal - `(GLfloat[]){` - or a ternary `:` from flushing
+     * a statement (`;`), opens/closes a block (`{`/`}`), or is a stray
+     * `:` (see is_stmt_terminator). The depth gate is what stops a split
+     * compound literal - `(GLfloat[]){` - or a ternary `:` from flushing
      * mid-expression. */
     int complete = acc->depth <= 0 && is_stmt_terminator(last);
 
