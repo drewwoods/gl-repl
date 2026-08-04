@@ -288,7 +288,8 @@ lists to make the layer boundaries observable.
 The four boundary demos above all default to `USE_GL_STUBS=1`-friendly
 object lists. `tools/` also holds a set of smaller single-module demos
 that prove a renderer or helper links without its usual host -
-`make color-picker-demo`, `variable-panel-demo`, `cpuprof-demo`,
+`make color-picker-demo`, `variable-panel-demo`, `assign-plot-demo`,
+`cpuprof-demo`,
 `memprof-demo` - plus `make render3d-hot`, the dlopen live-reload variant
 of `render3d_demo` whose reloadable half lives in
 [`tools/render3d_asset_builder/`](../tools/render3d_asset_builder/README.md). Per-demo
@@ -461,7 +462,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_workspaces` | Sorted catalog of managed workspaces under the resolved app workspace root, plus exclusive named-workspace creation |
 | `src/app/glr_config` | The keyed config vocabulary ([`GlrConfigKey`](../src/app/glr_config.h#L29)) and get/set/cycle API over those descriptors; `@cfg` persistence goes by key name, not table index, so reordering rows stays safe. `glr_config_set` tails into the tutorial runner's state-change notify |
 | `src/app/glr_color_picker_bridge` | Installs the [`ColorPickerHostBridge`](../src/subsystems/color_picker/color_picker_state.h#L116) (document read/write + viewport + code-panel rect) the color-picker peer reads through, so that peer links standalone in `color_picker_demo` |
-| `src/app/glr_assign_plot_bridge` | Installs the [`AssignPlotHostBridge`](../src/subsystems/assign_plot/assign_plot.h) the assignment plot reads through: the flat program as an execution trace (indices in the same space as replay's exec limit) plus the document-row assignment test. The only place the plot's `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` arg-slot knowledge lives, so that peer links standalone |
+| `src/app/glr_assign_plot_bridge` | Installs the [`AssignPlotHostBridge`](../src/subsystems/assign_plot/assign_plot.h) the assignment plot reads through: the flat program as an execution trace (indices in the same space as replay's exec limit) plus the document-row assignment test. The only place the plot's `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` arg-slot knowledge lives, so that peer links standalone in `assign_plot_demo` |
 | `src/app/glr_prof` | Profile-section policy: the display table behind [`prof_section_info()`](../src/support/cpuprof.h#L172) plus which sections get GPU timer queries bracketed around them (GL-free sections stay CPU-only) |
 | `src/app/glr_debug` | Diagnostic dump *formatters* for debug keystrokes and tests (`glr_debug_dump_*`). The `--dump-*` CLI dispatch that drives them lives in the boot band (`boot/glr_boot_dumps`) |
 | `src/app/glr_paths` | App-owned filesystem locations (per-user data, music, workspace root/default, and recovery state) plus canonical directory comparison, so lower layers receive explicit paths |

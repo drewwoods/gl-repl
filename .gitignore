@@ -34,6 +34,7 @@ bench_repl
 /memprof_demo
 /variable_panel_demo
 /color_picker_demo
+/assign_plot_demo
 /cpuprof_demo
 /render-3d-asset-builder
 .cache/

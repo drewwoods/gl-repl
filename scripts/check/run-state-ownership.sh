@@ -17,6 +17,7 @@ MEMPROF_DEMO_DEP_SRCS="${MEMPROF_DEMO_DEP_SRCS}"
 CPUPROF_DEMO_DEP_SRCS="${CPUPROF_DEMO_DEP_SRCS}"
 VARIABLE_PANEL_DEMO_DEP_SRCS="${VARIABLE_PANEL_DEMO_DEP_SRCS}"
 COLOR_PICKER_DEMO_DEP_SRCS="${COLOR_PICKER_DEMO_DEP_SRCS}"
+ASSIGN_PLOT_DEMO_DEP_SRCS="${ASSIGN_PLOT_DEMO_DEP_SRCS}"
 
 # 1. In-place checks implemented as bash functions
 check_controller_boundaries() {
@@ -273,6 +274,10 @@ check_variable_panel_demo_isolation() {
 
 check_color_picker_demo_isolation() {
     bash scripts/check/check-subsystem-demo-isolation.sh "COLOR_PICKER_DEMO_DEP_SRCS" tools/color_picker_demo color_picker_demo
+}
+
+check_assign_plot_demo_isolation() {
+    bash scripts/check/check-subsystem-demo-isolation.sh "ASSIGN_PLOT_DEMO_DEP_SRCS" tools/assign_plot_demo assign_plot_demo
 }
 
 check_editor_repl_surface() {
@@ -561,6 +566,7 @@ else
     run_check check-audio-nothread check_audio_nothread
     run_check check-variable-panel-demo-isolation check_variable_panel_demo_isolation
     run_check check-color-picker-demo-isolation check_color_picker_demo_isolation
+    run_check check-assign-plot-demo-isolation check_assign_plot_demo_isolation
     run_check check-editor-repl-surface check_editor_repl_surface
     run_check check-edit-ops-pure check_edit_ops_pure
     run_check check-no-raw-undo-clear check_no_raw_undo_clear

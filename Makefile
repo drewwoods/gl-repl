@@ -666,6 +666,21 @@ COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
                              src/ui/core/theme.c \
                              tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone assign_plot_demo. It proves the
+# assignment-plot subsystem links from {subsystems, ui/support, support,
+# ui/core} alone. The peer reads the program it plots as an indexed execution
+# trace through an installed AssignPlotHostBridge, so the flat program, GLCmd
+# and the CMD_VAR_ASSIGN arg slots stay on the app side of the seam; the demo
+# supplies a trace it generated itself. runstats.c is the statistics backing
+# (min/max/mean/stddev), and the panel renderer is in ui/support rather than
+# ui/subsystems - test_ui_assign_plot links exactly that half already.
+# check-assign-plot-demo-isolation enforces the link set.
+ASSIGN_PLOT_DEMO_DEP_SRCS = src/subsystems/assign_plot/assign_plot.c \
+                            src/ui/support/assign_plot.c \
+                            src/support/runstats.c \
+                            src/ui/core/theme.c \
+                            tests/gl-stubs/gl_stub_counts.c
+
 # Object list for the standalone repl_live_demo. The *composition* counterpart
 # to repl_demo: where repl_demo proves the REPL pipeline links with no editor /
 # controller / UI, repl_live_demo proves the REPL pipeline and the variable-panel
@@ -868,7 +883,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them - benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo render3d-asset-builder
+ROOT_BIN_LINKS = gl-repl render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo assign_plot_demo cpuprof_demo render3d-asset-builder
 
 HEADLESS_DEMO_TARGETS = \
 	render3d-demo \
@@ -878,7 +893,8 @@ HEADLESS_DEMO_TARGETS = \
 	memprof-demo \
 	cpuprof-demo \
 	variable-panel-demo \
-	color-picker-demo
+	color-picker-demo \
+	assign-plot-demo
 
 DEMO_TARGETS = $(HEADLESS_DEMO_TARGETS) render3d-hot
 
@@ -894,6 +910,7 @@ MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
 CPUPROF_DEMO_BIN = $(BINDIR)/cpuprof_demo
 VARIABLE_PANEL_DEMO_BIN = $(BINDIR)/variable_panel_demo
 COLOR_PICKER_DEMO_BIN = $(BINDIR)/color_picker_demo
+ASSIGN_PLOT_DEMO_BIN = $(BINDIR)/assign_plot_demo
 
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
@@ -1549,6 +1566,19 @@ $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 color-picker-demo: $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) color_picker_demo
 
+# Standalone assignment-plot demo (isolation demo #8). Drives the value-capture
+# peer + its panel over a trace the demo generates itself, from {subsystems,
+# ui/support, support, ui/core} with no editor/repl/app/ui-app code linked in.
+ASSIGN_PLOT_DEMO_OBJS = $(OBJDIR)/tools/assign_plot_demo/assign_plot_demo.o \
+                        $(addprefix $(OBJDIR)/,$(ASSIGN_PLOT_DEMO_DEP_SRCS:.c=.o))
+
+$(ASSIGN_PLOT_DEMO_BIN): $(ASSIGN_PLOT_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) $(ASSIGN_PLOT_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+
+assign-plot-demo: $(ASSIGN_PLOT_DEMO_BIN) ## Build the standalone assignment-plot demo.
+	ln -sfn $(ASSIGN_PLOT_DEMO_BIN) assign_plot_demo
+
 # Standalone live REPL demo (composition proof). Bootstraps the REPL pipeline +
 # the variable-panel peer from a one-file controller: imports scene .c files
 # (edited externally in vim), watches their mtime to re-import on save, applies
@@ -1708,7 +1738,7 @@ ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB
 ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
-$(COLOR_PICKER_DEMO_BIN) \
+$(COLOR_PICKER_DEMO_BIN) $(ASSIGN_PLOT_DEMO_BIN) \
 $(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
 endif
 endif
@@ -1724,6 +1754,7 @@ RUN_STATE_OWNERSHIP_CHECKS = \
 	CPUPROF_DEMO_DEP_SRCS='$(CPUPROF_DEMO_DEP_SRCS)' \
 	VARIABLE_PANEL_DEMO_DEP_SRCS='$(VARIABLE_PANEL_DEMO_DEP_SRCS)' \
 	COLOR_PICKER_DEMO_DEP_SRCS='$(COLOR_PICKER_DEMO_DEP_SRCS)' \
+	ASSIGN_PLOT_DEMO_DEP_SRCS='$(ASSIGN_PLOT_DEMO_DEP_SRCS)' \
 	bash scripts/check/run-state-ownership.sh
 
 # Layering boundary enforcement ------------------------------------------
@@ -1826,6 +1857,9 @@ check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the v
 
 check-color-picker-demo-isolation: ## Forbid app/repl/editor coupling in the color-picker demo link set.
 	@bash scripts/check/check-subsystem-demo-isolation.sh COLOR_PICKER_DEMO_DEP_SRCS tools/color_picker_demo color_picker_demo
+
+check-assign-plot-demo-isolation: ## Forbid app/repl/editor coupling in the assignment-plot demo link set.
+	@bash scripts/check/check-subsystem-demo-isolation.sh ASSIGN_PLOT_DEMO_DEP_SRCS tools/assign_plot_demo assign_plot_demo
 
 check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters.
 	@bash scripts/check/check-source-document-port-owners.sh
@@ -2457,7 +2491,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM render3d_hot_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM render3d_hot_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM assign_plot_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

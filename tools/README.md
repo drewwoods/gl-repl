@@ -93,18 +93,22 @@ above exclude. See [`src/app/README.md`](../src/app/README.md#how-it-is-exercise
 
 ## Single-module demos
 
-Each links only its peer + that peer's renderer + `src/ui/core` theme, and is
-guarded by `check-subsystem-demo-isolation.sh` (Makefile dep list, demo
-includes, and an `nm` sweep for `repl_`/`editor_`/`glr_` symbols).
+Each links only its peer + that peer's renderer + `src/ui/core` theme (plus a
+neutral `src/support` helper where the peer has one), and is guarded by
+`check-subsystem-demo-isolation.sh` (Makefile dep list, demo includes, and an
+`nm` sweep for `repl_`/`editor_`/`glr_` symbols).
 
 <img src="../docs/images/demos/variable-panel.png" alt="variable_panel_demo: a torus with a three-row slider panel" width="49%"> <img src="../docs/images/demos/color-picker.png" alt="color_picker_demo: five colored shapes with the floating picker open on the torus" width="49%">
 
-<img src="../docs/images/demos/cpuprof.png" alt="cpuprof_demo: fifteen teapots with a compute-profile panel and section histograms" width="49%"> <img src="../docs/images/demos/memprof.png" alt="memprof_demo: a teapot with a memory panel showing RSS, baseline, delta and a rising graph" width="49%">
+<img src="../docs/images/demos/assign-plot.png" alt="assign_plot_demo: a wave clamped at the program counter, with three assignment rows plotted and their values read out at the PC" width="49%"> <img src="../docs/images/demos/cpuprof.png" alt="cpuprof_demo: fifteen teapots with a compute-profile panel and section histograms" width="49%">
+
+<img src="../docs/images/demos/memprof.png" alt="memprof_demo: a teapot with a memory panel showing RSS, baseline, delta and a rising graph" width="49%">
 
 | Demo | Drives | Module doc |
 |------|--------|-----------|
 | [`variable_panel_demo/`](variable_panel_demo/) | The variable-panel peer over an in-memory `VariablePanelValueSource` and a hand-built `UiVariablePanelView` - no REPL eval table, no snapshot. | [`src/subsystems/README.md`](../src/subsystems/README.md#how-it-is-exercised) |
 | [`color_picker_demo/`](color_picker_demo/) | The color-picker peer over a [`ColorPickerHostBridge`](../src/subsystems/color_picker/color_picker_state.h#L116) backed by a plain color array. The popup anchors left because the demo's bridge reports no code panel. | [`src/subsystems/README.md`](../src/subsystems/README.md#how-it-is-exercised) |
+| [`assign_plot_demo/`](assign_plot_demo/) | The value-capture peer + its panel over an [`AssignPlotHostBridge`](../src/subsystems/assign_plot/assign_plot.h) fed by a trace the demo's own three-row loop generates - the curve on screen and the plot are the same numbers. `r` walks a program counter through the frame, which is how the replay PC rules and value readouts run with no replay peer linked. | [`src/subsystems/README.md`](../src/subsystems/README.md#how-it-is-exercised) |
 | [`cpuprof_demo/`](cpuprof_demo/) | `prof_*` wall-time sampling, shaped as a display-list micro-benchmark: the same teapots drawn immediate, from a reused list, and from a per-frame recompiled list. | [`src/support/README.md`](../src/support/README.md#how-it-is-exercised) |
 | [`memprof_demo/`](memprof_demo/) | `memprof_*` sampling + the live memory panel: current / baseline / delta over a time-anchored graph. | [`src/support/README.md`](../src/support/README.md#how-it-is-exercised) |
 
@@ -135,7 +139,7 @@ object list.
 
 ```bash
 make render3d-demo repl-live-demo editor-demo variable-panel-demo \
-     color-picker-demo cpuprof-demo memprof-demo
+     color-picker-demo assign-plot-demo cpuprof-demo memprof-demo
 scripts/docs-assets.sh --demos          # or one: demo-render3d, demo-memprof, ...
 ```
 

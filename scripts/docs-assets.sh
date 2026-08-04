@@ -163,7 +163,8 @@ PNG_ASSETS=(
 # its "screenshot" is the --trace transcript quoted in the README.
 DEMO_ASSETS=(
     demo-render3d demo-repl-live demo-editor
-    demo-variable-panel demo-color-picker demo-cpuprof demo-memprof
+    demo-variable-panel demo-color-picker demo-assign-plot
+    demo-cpuprof demo-memprof
 )
 
 ALL_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}" "${DEMO_ASSETS[@]}")
@@ -2421,6 +2422,16 @@ if want demo-color-picker; then
     # right stays visible next to the popup that is editing it.
     ( export GLR_DEMO_OPEN_PICKER=2
     demo_still "$DEMOS/color-picker.png" color_picker_demo 1 )
+fi
+if want demo-assign-plot; then
+    # All three rows plotted (wave leads, so it owns the X axis) with the
+    # program counter parked mid-loop: the shot has to show the PC rules and
+    # their value readouts, which is the half of this panel the full app can
+    # only reach under a running replay. GLR_DEMO_PC also pauses, so the frame
+    # grabbed is the frame posed. 30 frames at the FRAME capture rate fills the
+    # statistics with more than one pass.
+    ( export GLR_DEMO_PLOT_ROWS=2,0,1 GLR_DEMO_PC=76
+    demo_still "$DEMOS/assign-plot.png" assign_plot_demo 30 )
 fi
 if want demo-cpuprof; then
     # Live cadence, not record mode: the panel's content IS per-frame timing,
