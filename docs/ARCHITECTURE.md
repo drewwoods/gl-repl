@@ -2056,7 +2056,7 @@ is the example. Its per-command loop:
 
 - runs `repl_exec_cursor_step` (real execution) only for command types in
   the `hidden_lines_cursor_owns_cmd` whitelist - transforms, `glBegin`/`End`,
-  vertices, the `glutSolid*` shapes, gotos, `if`, and var/scratch assigns;
+  vertices, the `glutSolid*` shapes, `if`, and var/scratch assigns;
 - for every other command (all the color/material/enable state) calls
   `repl_apply_state_bookkeeping` and `_advance` - i.e. suppresses **all**
   state, since the pass sets up its own uniform-line GL state externally;
