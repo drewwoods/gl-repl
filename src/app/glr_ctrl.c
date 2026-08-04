@@ -1020,56 +1020,40 @@ static const float k_baseline_clear_rgba[4] = {
 };
 
 /* The last background a program actually established, as observed by the walk
- * that cleared it. Seeded to the configured default; updated only by a frame
- * whose authoritative passes all reported a fully-known background, so a frame
- * that established none - no color clear, a clear under a glColorMask that
- * left a channel disabled, a replay prefix whose PC has not reached the clear -
- * keeps showing the last honest answer instead of snapping to the default.
+ * that cleared it. Seeded to the configured default and written only by a
+ * fully-known observation (glr_ctrl_retain_background), so a walk that
+ * established none - no color clear, a clear under a glColorMask that left a
+ * channel disabled, a replay prefix whose PC has not reached the clear, a
+ * rejected config that ran no callback at all - keeps showing the last honest
+ * answer instead of snapping to the default.
  *
  * Deliberately never reset or invalidated (not on scene load, not on
  * reset_all): invalidating would snap to the default for exactly the frame the
- * retained value is least trustworthy. */
+ * retained value is least trustworthy.
+ *
+ * **This one variable serves both presentation vintages, and which one a
+ * consumer gets is decided by WHEN it reads - not by a second copy.**
+ * glr_ctrl_build_scene_config() runs before the geometry walk, so
+ * presentation_rgba and the alpha_scale derived from it carry the previous
+ * frame's background; the chrome strips clear after the walk, so they read
+ * what this frame just established. That read ordering is load-bearing (see
+ * glr_ctrl_display_frame) and is pinned by test_glr_ctrl. */
 static float g_presentation_rgba[4] = {
     CFG_DEFAULT_CLEAR_R, CFG_DEFAULT_CLEAR_G,
     CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
 };
 
-/* Fold of what this frame's authoritative passes published (see
- * scene_execute_adapter): the RGBA of the most recent publish, and whether
- * every one of them was fully known. `any` separates "no pass spoke" from
- * "a pass spoke and knew nothing" - an empty AND is vacuously true, and
- * without the flag a frame that ran no walk at all would hand chrome a
- * zeroed color. */
-static float g_frame_observed_rgba[4];
-static int   g_frame_observed_any;
-static int   g_frame_observed_known;
-
-static void glr_ctrl_frame_observation_reset(void) {
-    memset(g_frame_observed_rgba, 0, sizeof(g_frame_observed_rgba));
-    g_frame_observed_any = 0;
-    g_frame_observed_known = 1;
-}
-
-/* Last authoritative publish wins the color; `known` is ANDed across all of
- * them. Under accumulation that is the final sample - and time blur bakes its
- * last sub-step at the true frame time, so an animated glClearColor's final
- * value is the honest frame-end background. */
-static void glr_ctrl_frame_observation_fold(const ReplBackgroundObservation *obs) {
-    if (!obs)
-        return;
-    memcpy(g_frame_observed_rgba, obs->rgba, sizeof(g_frame_observed_rgba));
-    g_frame_observed_any = 1;
-    g_frame_observed_known = g_frame_observed_known && obs->known;
-}
-
-/* This frame's presentation background: the folded observation when every
- * authoritative pass knew all four channels, else the retained value. Returns
- * 1 when the answer came from this frame (and so is worth retaining). */
-static int glr_ctrl_frame_observation_resolve(float out[4]) {
-    int known = g_frame_observed_any && g_frame_observed_known;
-    memcpy(out, known ? g_frame_observed_rgba : g_presentation_rgba,
-           sizeof(float) * 4);
-    return known;
+/* Retain what an authoritative pass observed itself clearing. An unknown
+ * observation is dropped rather than stored - retention IS the fallback, so
+ * there is nothing else to decide.
+ *
+ * Under accumulation every sample calls this and the last known one wins,
+ * which is what the frame ends up showing: time blur bakes its final sub-step
+ * at the true frame time, so an animated glClearColor's last value is the
+ * honest frame-end background. */
+static void glr_ctrl_retain_background(const ReplBackgroundObservation *obs) {
+    if (obs && obs->known)
+        memcpy(g_presentation_rgba, obs->rgba, sizeof(g_presentation_rgba));
 }
 
 /* Clear one chrome strip, skipping degenerate rects. */
@@ -1285,9 +1269,14 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
     /* Outside the snapshot/restore bracket above on purpose: the observation
      * is not REPL state to be rewound but a report of pixels this pass wrote,
      * and the hidden-line depth fill - the one publishing pass that IS
-     * side-effect-suppressed - must still be able to speak for the frame. */
+     * side-effect-suppressed - must still be able to speak for the frame.
+     *
+     * Retained here, during the walk, rather than folded and resolved after
+     * it: that is what lets one variable serve both vintages (see
+     * g_presentation_rgba). Everything built before the walk already read the
+     * previous value; the chrome clear runs after and reads this one. */
     if (publishes_background)
-        glr_ctrl_frame_observation_fold(&observation);
+        glr_ctrl_retain_background(&observation);
 }
 
 /* Grid/axes in-out fade machines.
@@ -1488,13 +1477,14 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * retains the last fully-known answer in g_presentation_rgba. The grid /
      * axes recede fog fades to that, and alpha_scale below lights overlays
      * against it - one number, so those consumers cannot disagree with each
-     * other. They read the previous frame's observation, since this config is
-     * built before the walk that produces this frame's; the chrome strips,
-     * which clear after the scene, take the current one (see
-     * glr_ctrl_frame_observation_resolve). On the frame a background
-     * *changes*, fog and overlay alpha are one frame behind while chrome and
-     * the scene rect are already correct - no accumulating error, and no
-     * invalidation protocol.
+     * other.
+     *
+     * They get the PREVIOUS frame's observation, and that is a consequence of
+     * this function running before the walk, not a second stored value: the
+     * chrome strips read the very same variable after the walk and therefore
+     * see the current one. So on the frame a background *changes*, fog and
+     * overlay alpha are one frame behind while chrome and the scene rect are
+     * already correct - no accumulating error, and no invalidation protocol.
      *
      * Retention is also what keeps replay steady: a prefix that has not yet
      * executed an effective color clear publishes nothing known, so the
@@ -2815,9 +2805,6 @@ void glr_ctrl_display_frame(void) {
     for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_RENDER3D);
-    /* Nothing has spoken for this frame's background yet; the fold below
-     * collects what the scene's own passes observe. */
-    glr_ctrl_frame_observation_reset();
     {
         GlrCameraState cam = glr_camera();
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
@@ -2846,23 +2833,17 @@ void glr_ctrl_display_frame(void) {
         }
     }
     glPopAttrib();  /* scene-rect scissor: the 2D overlays paint the chrome */
-    /* Chrome last, on the background this frame's own execution observed
-     * itself establishing - or the retained one when it established none
-     * (no color clear, a masked-off clear, a rejected config that ran no
-     * callback at all). The strips exclude the scene rect, so this cannot
-     * touch user pixels; the intervening readers - buffer visualization and
-     * the post filter - read the scene rect only, and the whole-window
-     * compositor runs after the 2D overlays. */
-    {
-        float chrome_rgba[4];
-        int observed_this_frame = glr_ctrl_frame_observation_resolve(chrome_rgba);
-        glr_ctrl_clear_chrome(&scene_config, chrome_rgba);
-        /* Retain only an honest answer: an unknown frame leaves the last one
-         * standing for the next frame's fog and overlay contrast. */
-        if (observed_this_frame)
-            memcpy(g_presentation_rgba, chrome_rgba,
-                   sizeof(g_presentation_rgba));
-    }
+    /* Chrome last, and reading g_presentation_rgba HERE - after the walk that
+     * may have just rewritten it - is what gives the strips this frame's own
+     * background while the scene config built above kept the previous one. A
+     * frame that established none leaves the retained value in place, so the
+     * same read covers that case with no branch.
+     *
+     * The strips exclude the scene rect, so clearing them late cannot touch
+     * user pixels; the intervening readers - buffer visualization and the post
+     * filter - read the scene rect only, and the whole-window compositor runs
+     * after the 2D overlays. */
+    glr_ctrl_clear_chrome(&scene_config, g_presentation_rgba);
     prof_end(PROF_RENDER3D);
     /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
      * (glr_ctrl_setup_subframe), which rewrites the live flat-program count

@@ -724,6 +724,55 @@ static void test_display_frame_background_retention(void) {
     g_scene_stub_reject = 0;
 }
 
+/* Retention is written per walk, not folded per frame, so a frame with more
+ * than one authoritative pass - accumulation, where every sample runs the fill
+ * - resolves by "the last sample that knew a background wins". That is what
+ * the frame ends up showing: the final sample is the one on screen, and time
+ * blur bakes it at the true frame time. A sample that established nothing is
+ * dropped rather than stored, so it can neither clobber an earlier known
+ * sample nor reset the retained value.
+ *
+ * Drives scene_execute_adapter directly: the same entry render3d calls once
+ * per accumulation sample, without needing an accumulation-capable context. */
+static void test_background_retention_across_passes(void) {
+    printf("--- imrepl_ctrl background retention across passes ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    Render3dExecuteContext fill = { .purpose = RENDER3D_EXEC_MAIN_FILL };
+
+    /* Sample 1 establishes a background. */
+    plant_flat_clear_color(2, 0.05f, 0.06f, 0.08f);
+    plant_flat_clear(3);
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+    scene_execute_adapter(&fill, NULL);
+    ASSERT_FLOAT("first known sample is retained", g_presentation_rgba[0], 0.05f);
+
+    /* Sample 2 establishes none (the clear is gone): dropped, not stored - so
+     * an unknown sample cannot pull the frame back to the default. */
+    plant_flat_cmd(3, CMD_COMMENT, "// no clear");
+    scene_execute_adapter(&fill, NULL);
+    ASSERT_FLOAT("an unknown sample does not clobber a known one",
+                 g_presentation_rgba[0], 0.05f);
+
+    /* Sample 3 knows again, with a different colour: the last known wins. */
+    plant_flat_clear_color(2, 0.11f, 0.12f, 0.13f);
+    plant_flat_clear(3);
+    scene_execute_adapter(&fill, NULL);
+    ASSERT_FLOAT("the last known sample wins r", g_presentation_rgba[0], 0.11f);
+    ASSERT_FLOAT("the last known sample wins g", g_presentation_rgba[1], 0.12f);
+    ASSERT_FLOAT("the last known sample wins b", g_presentation_rgba[2], 0.13f);
+
+    /* A non-authoritative purpose publishes nothing whatever it executes. */
+    Render3dExecuteContext probe = { .purpose = RENDER3D_EXEC_DEPTH_PROBE };
+    plant_flat_clear_color(2, 0.02f, 0.02f, 0.02f);
+    scene_execute_adapter(&probe, NULL);
+    ASSERT_FLOAT("a depth probe cannot speak for the background",
+                 g_presentation_rgba[0], 0.11f);
+}
+
 /* Shipped scenes whose first flat command before the clear is real work
  * (glEnable(GL_DEPTH_TEST), an assignment, ...) get replay_frame_setup_limit()
  * == 0, so an early replay prefix executes no clear at all. Retention is what
@@ -5773,6 +5822,7 @@ int main(void) {
     test_display_frame_clear_color_before_clear_applies();
     test_display_frame_chrome_clears_after_the_scene();
     test_display_frame_background_retention();
+    test_background_retention_across_passes();
     test_display_frame_replay_prefix_holds_background();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();

@@ -250,26 +250,34 @@ established no background at all: no color clear, or a clear under a mask that
 left a channel disabled with nothing behind it. An unknown background is never
 turned into an invented RGBA.
 
-The controller collects that in `scene_execute_adapter()` and **retains** the
-last fully-known answer in `g_presentation_rgba`. Three passes may speak for a
-frame (the main fill, the winding view's fill, and the hidden-line depth fill
-whose one synthetic full-mask clear is that view's clear); every other purpose
-publishes nothing, explicitly. Retention is the whole fallback policy - an
-unknown frame keeps showing the last honest answer instead of snapping to the
-default - and it is also why replay is stable: a prefix whose PC has not
-reached the clear simply publishes nothing known.
+The controller **retains** the last fully-known answer in one variable,
+`g_presentation_rgba`, written by `scene_execute_adapter()` as each walk ends.
+Three passes may speak for a frame (the main fill, the winding view's fill, and
+the hidden-line depth fill whose one synthetic full-mask clear is that view's
+clear); every other purpose publishes nothing, explicitly, and an unknown
+observation is dropped rather than stored. Retention is the whole fallback
+policy - a frame that established nothing keeps showing the last honest answer
+instead of snapping to the default - and it is also why replay is stable: a
+prefix whose PC has not reached the clear simply publishes nothing known. Under
+accumulation every sample writes and the last known one wins, which is what the
+frame ends up showing.
 
-Two vintages, by design:
+Two vintages, and they fall out of **when** each consumer reads that one
+variable - there is no second copy and no per-frame fold:
 
-| Consumer | Vintage | Why |
+| Consumer | Reads | Vintage |
 |---|---|---|
-| Chrome strips | this frame | Largest flat area, directly adjacent to the scene rect, so a mismatch shows most here - and the strips exclude that rect, so the clear can move after the scene render at no cost |
-| Grid / axes recede fog | previous frame | The config is built before the walk that observes; one frame of lag on deliberately faint distant lines is not resolvable |
-| Overlay contrast `alpha_scale` | previous frame | Same number, same source |
-| Cursor edit guides | previous frame | Copies `config->alpha_scale` |
+| Chrome strips | after the walk, when clearing the strips | this frame |
+| Grid / axes recede fog | `glr_ctrl_build_scene_config()`, before the walk | previous frame |
+| Overlay contrast `alpha_scale` | same, derived there | previous frame |
+| Cursor edit guides | copy `config->alpha_scale` | previous frame |
 
-The three previous-frame consumers share one value, so they cannot disagree
-with each other. `Render3dRenderConfig` carries the two colors separately -
+That ordering is load-bearing and is pinned by `test_glr_ctrl`. Chrome gets the
+accurate value because that is where a mismatch would show: the strips are the
+largest flat area and directly adjacent to the scene rect. The lag lands on a
+fog color for deliberately faint distant lines, where one frame is not
+resolvable. The three previous-frame consumers share one value, so they cannot
+disagree with each other. `Render3dRenderConfig` carries the two colors separately -
 `baseline_clear_color` (the GL state established before the walk, always the
 configured default) and `presentation_rgba` (what helpers fade toward) -
 because feeding presentation history into the baseline would let a previous
