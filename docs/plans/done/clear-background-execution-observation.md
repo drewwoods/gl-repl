@@ -1,6 +1,45 @@
 # Observe the Scene Background From Real Execution
 
-## Status - IN REVIEW (2026-08-04)
+## Status - LANDED (2026-08-04)
+
+All four phases shipped, on branch `background-observation`:
+
+| Phase | Commit |
+|---|---|
+| 0 - source-view bound + single goto lookup | `1a390d2f` |
+| 1 - cursor observation | `165c7540` |
+| 2 - controller retention, config split, chrome ordering | `5bada25c` |
+| 3 - delete the resolver and `ReplRenderState.clear_color` | `88911171` |
+| follow-up - render3d two-color coverage | `15f8950a` |
+| follow-up - collapse the frame fold | `100afd72` |
+
+Every acceptance criterion below holds. Verified with `make test-stubs` (76/76
+binaries), `make test-web` (74/74), `check-c99`, `check-state-ownership`, native
+/ stub / OSMesa / demo / hot-reload builds, both OSMesa pixel checks, and a
+programmatic re-run of the `replay_frame_setup_limit()` scene audit (exactly the
+five scenes tabulated below, same first flat commands).
+
+**Two things landed differently from the design below - read those sections
+against this note:**
+
+1. **No per-frame observation fold.** "[Controller retention and
+   selection](#3-controller-retention-and-selection)" describes
+   `scene_execute_adapter()` folding each pass's observation into frame-scoped
+   values that the controller then resolves after `render3d_draw_scene()`
+   returns. That machinery was removed in `100afd72`: the adapter writes the
+   retained `g_presentation_rgba` directly as each walk ends, and the two
+   vintages fall out of *when* each consumer reads that one variable -
+   `glr_ctrl_build_scene_config()` before the walk, the chrome clear after it.
+   Same behavior, ~30 fewer lines, one stored fact instead of two.
+2. **Settled decision #6 is superseded.** With no fold there is no AND across
+   passes: a frame with several authoritative passes (accumulation) resolves as
+   *the last sample that knew a background wins*. That is what the frame ends up
+   showing - the final sample is the one on screen, and time blur bakes it at the
+   true frame time. An unknown sample is still dropped rather than stored, so it
+   cannot pull the frame back to the default.
+   `test_background_retention_across_passes` pins it.
+
+The historical plan follows unchanged.
 
 This plan follows the clear-color source-order work in:
 
@@ -291,6 +330,13 @@ bookkeeping - after this plan, just the light-enable mask. It must not become
 an implicit observation hook.
 
 ### 3. Controller retention and selection
+
+> **Superseded in part (see Status).** The retained `g_presentation_rgba` and
+> its all-or-retained rule landed exactly as written. The *frame-scoped fold*
+> and the post-`render3d_draw_scene()` selection step described below did not
+> survive: `scene_execute_adapter()` writes the retained value directly, and
+> chrome reads the same variable after the walk. Steps 1-3 collapse to "clear
+> the chrome with `g_presentation_rgba`".
 
 The controller owns one piece of new state:
 
@@ -669,7 +715,9 @@ For portability-sensitive cursor changes, run the documented real-GCC lane on
    stays inside the cursor, and no `color_clear_seen` field is added: a
    consumer-free field is not made acceptable by labelling it reserved, which
    is the same rule that deletes `ReplRenderState.clear_color`.
-6. **Accumulation:** the last authoritative pass's color, gated on every pass
-   being fully known. No weighted background averaging in v1.
+6. **Accumulation:** ~~the last authoritative pass's color, gated on every pass
+   being fully known~~ **superseded (see Status):** the last authoritative pass
+   that knew a background wins, with no gate across passes - the final sample is
+   what the frame shows. No weighted background averaging in v1.
 7. **Compatibility:** no internal API shims; intermediate phases 1-3 need not
    be separately releasable. Phase 0 is independent and lands first.
