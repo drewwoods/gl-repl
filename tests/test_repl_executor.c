@@ -1626,6 +1626,46 @@ static void test_background_observation(void) {
                     obs_rgba_is(&obs, 0.10f, 0.10f, 0.10f, 1.0f));
     }
 
+    /* glClearColor's arguments are GLclampf: GL clamps them to [0,1] as it
+     * stores them, and the observation reports the colour the framebuffer
+     * took - so it has to clamp identically. The parser caps the upper end of
+     * RGB but passes a negative component and any alpha straight through, so
+     * this is reachable from ordinary source, not just from a synthetic
+     * command. A raw negative would read as darker-than-black to the Rec. 709
+     * luminance behind alpha_scale and saturate the overlay boost. */
+    {
+        GLCmd cmds[2];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, -1.0f, 0.25f, 2.0f, 5.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 2);
+        ASSERT_TRUE("an out-of-range clear colour is observed as GL holds it",
+                    obs.known == 1 &&
+                    obs_rgba_is(&obs, 0.0f, 0.25f, 1.0f, 1.0f));
+    }
+
+    /* Same rule on the other way in: a caller-supplied baseline is the GL
+     * state the walk starts in, so it is clamped identically. */
+    {
+        GLCmd cmds[1];
+        ReplExecutionOptions opts = {0};
+        ReplBackgroundObservation obs;
+        static const float wild[4] = {-0.5f, 0.5f, 3.0f, -2.0f};
+
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear(cmds, 0, GL_COLOR_BUFFER_BIT);
+        memset(&obs, 0x5A, sizeof(obs));
+        opts.flat_cmd_count = 1;
+        opts.program.cmds = cmds;
+        opts.program.cmd_count = 1;
+        opts.observation_out = &obs;
+        memcpy(opts.baseline_clear_rgba, wild, sizeof(opts.baseline_clear_rgba));
+        repl_execute_program(&opts);
+        ASSERT_TRUE("an out-of-range baseline is clamped too",
+                    obs.known == 1 &&
+                    obs_rgba_is(&obs, 0.0f, 0.5f, 1.0f, 0.0f));
+    }
+
     /* A glClearColor with no glClear behind it repaints nothing. The frame
      * keeps whatever the rect already held, which this design refuses to
      * invent - so the program established no background at all, and the host

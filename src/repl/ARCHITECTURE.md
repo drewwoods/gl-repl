@@ -704,7 +704,7 @@ the live arrays.
 
 ### 5.3 Execute - flat program to GL
 
-[`repl_execute_program()`](executor.h#L263) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L268) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Baked args only.** Every command renders from its flatten-baked
@@ -750,7 +750,7 @@ typed slices ([`state_views.h`](state_views.h)):
 | [`ReplDocumentState`](state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
 | [`ReplVariableState`](state_views.h#L84) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
-| [`ReplRenderState`](state_views.h#L123) | the runtime-mutated render *tail*: `light_enabled_mask` alone. The frame background is not state here - the cursor observes it while emitting the program's clears and publishes a [`ReplBackgroundObservation`](executor.h#L60) |
+| [`ReplRenderState`](state_views.h#L123) | the runtime-mutated render *tail*: `light_enabled_mask` alone. The frame background is not state here - the cursor observes it while emitting the program's clears and publishes a [`ReplBackgroundObservation`](executor.h#L65) |
 | [`ReplSceneRuntimeState`](state_views.h#L144) | active example index, bound workspace dir |
 | [`ReplImportExportState`](state_views.h#L153) | cached header/render/camera text + pending import metadata |
 

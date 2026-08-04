@@ -343,6 +343,20 @@ static unsigned repl_color_write_mask_from_cmd(const GLCmd *cmd) {
     return mask;
 }
 
+/* glClearColor takes GLclampf: GL clamps every component to [0,1] as it
+ * stores them, so the tracked value has to be clamped the same way. The
+ * parser caps the upper end of RGB but lets a negative component and any
+ * alpha through, and a raw value would then describe a colour the framebuffer
+ * cannot hold - harmless where the observation is fed straight back to GL
+ * (which re-clamps), wrong where the host computes on it: the Rec. 709
+ * luminance behind alpha_scale reads a negative channel as darker than black
+ * and saturates the overlay boost. */
+static float repl_clamp_unit(float v) {
+    if (!(v > 0.0f))   /* also catches NaN */
+        return 0.0f;
+    return v > 1.0f ? 1.0f : v;
+}
+
 void repl_exec_cursor_emit_clear_color(ReplExecCursor *cursor,
                                        const GLCmd *cmd) {
     int k;
@@ -350,7 +364,7 @@ void repl_exec_cursor_emit_clear_color(ReplExecCursor *cursor,
     if (!cursor || !cmd || cmd->type != CMD_CLEAR_COLOR)
         return;
     for (k = 0; k < 4; k++)
-        cursor->clear_state.clear_rgba[k] = cmd->args[k];
+        cursor->clear_state.clear_rgba[k] = repl_clamp_unit(cmd->args[k]);
     repl_apply_state_cmd(cmd, cursor->alpha_scale);
 }
 
@@ -666,11 +680,16 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     /* Clear-affecting GL state starts where the caller says the context does:
      * baseline_clear_rgba is what a glClear with no preceding glClearColor
      * would use, and all four channels are writable until a glColorMask says
-     * otherwise. The running observation stays zeroed - nothing is known
-     * until a clear actually writes a channel. */
-    if (options)
-        memcpy(cursor.clear_state.clear_rgba, options->baseline_clear_rgba,
-               sizeof(cursor.clear_state.clear_rgba));
+     * otherwise. Clamped on the way in for the same reason a program's
+     * glClearColor is (see repl_clamp_unit): the tracked value must be the one
+     * GL would hold, whoever supplied it. The running observation stays zeroed
+     * - nothing is known until a clear actually writes a channel. */
+    if (options) {
+        int b;
+        for (b = 0; b < 4; b++)
+            cursor.clear_state.clear_rgba[b] =
+                repl_clamp_unit(options->baseline_clear_rgba[b]);
+    }
     cursor.clear_state.color_write_mask = REPL_RGBA_ALL;
     if (options && options->has_fade_context) {
         cursor.alpha_scale = options->fade_alpha_scale;

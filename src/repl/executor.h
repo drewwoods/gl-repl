@@ -56,7 +56,12 @@
  * a program that issued no colour clear, or whose clear ran under a
  * glColorMask that left a channel disabled with no earlier clear behind it,
  * established no background at all. Callers must not substitute an invented
- * RGBA for an unknown one; see the retained presentation in glr_ctrl.c. */
+ * RGBA for an unknown one; see the retained presentation in glr_ctrl.c.
+ *
+ * Every component is in [0,1]: this reports the colour the framebuffer took,
+ * and glClearColor's GLclampf arguments are clamped by GL on the way in, so a
+ * host computing on this (the Rec. 709 luminance behind alpha_scale) sees the
+ * same value the pixels did. */
 typedef struct ReplBackgroundObservation {
     float rgba[4];
     int   known;    /* the program established all four channels */
