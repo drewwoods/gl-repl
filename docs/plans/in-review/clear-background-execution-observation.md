@@ -380,9 +380,9 @@ and clamp constants a named home on the render3d side instead of leaving them
 inline, and update the module ownership docs; the controller keeps only the
 design-point input and the fallback policy.
 
-Grid and axes read the pass context's selected presentation background and
-`alpha_scale` at draw time. Both live inside render3d, so this crosses no
-module boundary and needs no callback change.
+Grid, axes, and the aurora backdrop read the pass context's selected
+presentation background and `alpha_scale` at draw time. All three live inside
+render3d, so this crosses no module boundary and needs no callback change.
 
 #### Cursor edit guides use the previous frame's contrast scale
 
@@ -525,8 +525,17 @@ background:
 no program-owned clear occurs; render3d still draws its grid, axes, lights, and
 any configured backdrop using the all-or-default presentation inputs. This
 preserves framebuffer history when there is no backdrop instead of pretending
-the fallback color was painted. `render3d_demo` is exactly such a caller, so
-this is the path the REPL-free proof exercises.
+the fallback color was painted. Cover this path with a focused render3d unit
+test.
+
+`render3d_demo` exercises the other generic path: it installs the non-NULL
+procedural `my_scene_execute()` callback and issues its own clear. Update that
+callback to publish the known full-mask background through
+`ctx->result_out`, without introducing a REPL dependency. The demo populates
+both the baseline clear and fallback presentation inputs, and passes
+`out == NULL` to `render3d_draw_scene()` to prove that callers may ignore the
+frame-level result even though render3d still needs the per-pass execute result
+for its helpers.
 
 Replay uses the observation from the actually executed main-fill prefix. Do
 not freeze a complete-program background at replay start. The existing
@@ -639,8 +648,9 @@ releasable compatibility state. No bridge or dual-answer contract is required.
 - Delete `Render3dRenderConfig.alpha_scale` and move its four readers to the
   pass context (grid, axes, aurora backdrop) and the retained scalar (guide
   snapshot); update the demo and render3d tests that populate the field.
-- Update the ordinary and hot-reload `render3d_demo` call surfaces while
-  preserving the REPL-free link proof.
+- Update the ordinary and hot-reload `render3d_demo` call surfaces, make its
+  procedural callback publish its known clear background, and preserve the
+  REPL-free link proof with a NULL frame-result output.
 
 ### Phase 3 - Accumulation validity and chrome ordering
 
@@ -690,6 +700,8 @@ releasable compatibility state. No bridge or dual-answer contract is required.
   - `out == NULL` is supported;
   - `execute_fn == NULL` uses fallback presentation inputs for helpers
     without clearing the scene;
+  - `render3d_demo` keeps its procedural execute callback, publishes its known
+    clear through `result_out`, and ignores the frame output;
   - the aurora backdrop uses the current pass's contrast scale;
   - all-passes-known validity and final-pass color selection, distinguished
     by a scene background that differs from the fallback color;
