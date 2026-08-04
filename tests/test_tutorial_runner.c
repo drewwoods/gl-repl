@@ -1221,7 +1221,6 @@ static void test_catalog_cfg_lines(void) {
 static void test_catalog_tag_metadata(void) {
     int tag_count = repl_tutorial_tag_count();
     int tutorial_count = repl_tutorial_count();
-    unsigned int known_tag_bits = 0u;
 
     ASSERT_TRUE("tutorial tag count positive", tag_count > 0);
     for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
@@ -1231,7 +1230,6 @@ static void test_catalog_tag_metadata(void) {
 
         snprintf(label, sizeof(label), "tutorial tag %d label", tag_idx);
         ASSERT_TRUE(label, tag_label != NULL && tag_label[0] != '\0');
-        known_tag_bits |= repl_tutorial_tag_bit(tag_idx);
 
         count = repl_tutorial_count_for_tag(tag_idx);
         for (int ordinal = 0; ordinal < count; ordinal++) {
@@ -1246,9 +1244,6 @@ static void test_catalog_tag_metadata(void) {
         }
     }
 
-    ASSERT_TRUE("invalid negative tag bit", repl_tutorial_tag_bit(-1) == 0u);
-    ASSERT_TRUE("invalid high tag bit",
-                repl_tutorial_tag_bit(repl_tutorial_tag_count()) == 0u);
     ASSERT_TRUE("visible tag count within tag count",
                 repl_tutorial_visible_tag_count() <= tag_count);
     for (int dense_idx = 0;
@@ -1265,22 +1260,8 @@ static void test_catalog_tag_metadata(void) {
 
     for (int idx = 0; idx < tutorial_count; idx++) {
         char label[160];
-        unsigned int mask = repl_tutorial_tag_mask(idx);
-
-        /* Every entry has at least the synthetic ALL bit folded in, so
-         * an accidentally zero-mask entry (the most likely regression
-         * when adding new tutorials) still surfaces here. */
-        snprintf(label, sizeof(label), "tutorial %d tag mask nonzero", idx);
-        ASSERT_TRUE(label, mask != 0u);
-        snprintf(label, sizeof(label), "tutorial %d tag mask known bits", idx);
-        ASSERT_TRUE(label, (mask & ~known_tag_bits) == 0u);
-        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
-            int expected = (mask & repl_tutorial_tag_bit(tag_idx)) != 0u;
-            snprintf(label, sizeof(label), "tutorial %d tag %d agreement",
-                     idx, tag_idx);
-            ASSERT_TRUE(label,
-                        repl_tutorial_has_tag(idx, tag_idx) == expected);
-        }
+        snprintf(label, sizeof(label), "tutorial %d has tag 0 (All)", idx);
+        ASSERT_TRUE(label, repl_tutorial_has_tag(idx, 0));
     }
 
     /* Known multi-tag entry: Depth Test Triangle ships under both
@@ -3814,7 +3795,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     };
     TutorialEntry typo_set_entry = {
         .name = "typo_set", .steps = typo_set_steps,
-        .cfg = NULL, .tags = 0, .subheading = NULL,
+        .cfg = NULL, .tag_names = NULL, .subheading = NULL,
     };
     char err[160] = "";
     ASSERT_TRUE("SET typo rejected",
@@ -3832,7 +3813,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     };
     TutorialEntry typo_req_entry = {
         .name = "typo_req", .steps = typo_req_steps,
-        .cfg = NULL, .tags = 0, .subheading = NULL,
+        .cfg = NULL, .tag_names = NULL, .subheading = NULL,
     };
     err[0] = '\0';
     ASSERT_TRUE("REQUIRE typo rejected",
@@ -3853,7 +3834,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     };
     TutorialEntry typo_quiet_entry = {
         .name = "typo_quiet", .steps = typo_quiet_steps,
-        .cfg = NULL, .tags = 0, .subheading = NULL,
+        .cfg = NULL, .tag_names = NULL, .subheading = NULL,
     };
     err[0] = '\0';
     ASSERT_TRUE("SET_QUIET typo rejected",
@@ -3875,7 +3856,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     };
     TutorialEntry typo_cfg_entry = {
         .name = "typo_cfg", .steps = cmd_only_steps,
-        .cfg = typo_cfg_lines, .tags = 0, .subheading = NULL,
+        .cfg = typo_cfg_lines, .tag_names = NULL, .subheading = NULL,
     };
     err[0] = '\0';
     ASSERT_TRUE("@cfg typo rejected",
@@ -3894,7 +3875,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     };
     TutorialEntry valid_entry = {
         .name = "valid", .steps = cmd_only_steps,
-        .cfg = valid_cfg_lines, .tags = 0, .subheading = NULL,
+        .cfg = valid_cfg_lines, .tag_names = NULL, .subheading = NULL,
     };
     err[0] = '\0';
     ASSERT_TRUE("clean symbolic + legacy integer @cfg passes",

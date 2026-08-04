@@ -15,89 +15,106 @@
 #define PATH_MAX 4096
 #endif
 
-/* Each example is an array of source lines terminated by NULL. For `.glr`
- * examples, lines are processed sequentially by the concise example loader:
- * Lines are processed sequentially:
- *   "for(...) {"  -> CMD_FOR_BEGIN + CMD_FOR_END, enters block
- *   "funcN {"     -> CMD_FUNC_DEF + CMD_FUNC_END, enters block
- *   "if(...) {"   -> CMD_IF_BEGIN + CMD_IF_END, enters block
- *   "}"           -> closes current block
- *   "x = expr;"   -> CMD_VAR_ASSIGN
- *   "funcN()"     -> CMD_CALL
- *   anything else -> parse_command() as a regular GL command
- *
- * `.glr` examples can optionally start with contiguous scene-presentation
- * config metadata lines using the exported-file format:
- *   "// @cfg axes = AXES_THEME_COMPASS"
- *   "// @cfg vertex_outlines = 0"
- * Supported slugs are limited to visual scene settings such as wireframe,
- * grid, axes, vertex overlays, backdrop, and camera_rotate. These metadata
- * lines are consumed by the example loader and are not shown in the code panel.
- *
- * A camera preset may then follow immediately after the cfg lines:
- *   "// camera" (also accepts decorated forms such as "// --- Camera ---")
- *   "glTranslatef(0.0f, 0.0f, -dist);"
- *   "glRotatef(rx, 1.0f, 0.0f, 0.0f);"
- *   "glRotatef(ry, 0.0f, 1.0f, 0.0f);"
- *   "glTranslatef(-tx, -ty, -tz);"
- * Both cfg and camera metadata are consumed by the example loader and are not
- * shown in the code panel. `.c` examples bypass this path and are fed through
- * the regular export/import reader.
- */
-
-/* Example source arrays and the catalog entry table are generated from
- * examples/catalog.ini plus scene snippets under examples/scenes/. */
-
-typedef unsigned int ReplExampleTagMask;
-
 typedef struct {
     const char *name;
     const char *const *lines;
-    ReplExampleTagMask tags;
+    const char *const *tag_names;   /* Null-terminated string list for built-in entries */
+    ReplItemTagNode *tags;           /* Dynamic linked list for runtime catalog entries */
     ReplExampleSourceFormat format;
-    /* Optional in-flyout section subheading. Free-form display string
-     * (e.g. "Basics", "Functions") - the Scene menu groups consecutive
-     * examples sharing the same subheading under a chrome `### subheading`
-     * header. NULL = no header. Convention enforced by
-     * test_example_subheading_metadata: per tag, each non-NULL subheading
-     * must appear in a single contiguous run - interleaving causes
-     * duplicate headers. */
     const char *subheading;
 } ReplExampleEntry;
 
-/* REPL_EXAMPLE_TAG_ALL is a synthetic tag: every example is a member.
- * It is not listed in any g_example_entries[] mask literal; instead
- * repl_example_tag_mask() ORs its bit into every example's mask, so the
- * whole tag query API (has_tag / count_for_tag / index_for_tag /
- * visible_tag_*) - and therefore the Scene menu's "All" group and the
- * F12 cycle - pick it up with no per-entry bookkeeping. Kept at index 0
- * so "All" sorts first under "### EXAMPLES". Enum lives in examples.h. */
+static ReplTagNode *g_example_tags_head = NULL;
+static int g_example_tag_count = 0;
 
-#define EXAMPLE_TAG_BIT(tag) (1u << (tag))
-#define EXAMPLE_TAG_ALL      EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_ALL)
-#define EXAMPLE_TAG_2D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_2D)
-#define EXAMPLE_TAG_3D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_3D)
-#define EXAMPLE_TAG_POLYGONS EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_POLYGONS)
-#define EXAMPLE_TAG_LINES    EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_LINES)
+static void ensure_default_tags_initialized(void);
 
-static const char *const g_example_tag_labels[] = {
-    "All",
-    "2D",
-    "3D",
-    "Polygons",
-    "Lines",
-};
-/* Must stay 1:1 with the REPL_EXAMPLE_TAG_* enum: repl_example_tag_count()
- * returns REPL_EXAMPLE_TAG_COUNT but repl_example_tag_label() indexes this
- * table, so any drift is an out-of-bounds read. */
-STATIC_ASSERT((int)(sizeof(g_example_tag_labels) /
-                    sizeof(g_example_tag_labels[0])) == REPL_EXAMPLE_TAG_COUNT,
-              "g_example_tag_labels[] out of sync with REPL_EXAMPLE_TAG_COUNT");
+const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
+    if (!name || !*name)
+        return NULL;
+    ensure_default_tags_initialized();
 
-/* Catalog order matters: the Scene menu groups consecutive same-subheading
- * entries into one `### subheading` header per per-tag flyout, so each
- * subheading must run contiguously within every tag it surfaces under.
- * test_example_subheading_metadata enforces this. */
+    for (ReplTagNode *curr = g_example_tags_head; curr; curr = curr->next) {
+        if (strcmp(curr->name, name) == 0)
+            return curr;
+    }
+
+    ReplTagNode *node = (ReplTagNode *)calloc(1, sizeof(ReplTagNode));
+    if (!node)
+        return NULL;
+    snprintf(node->name, sizeof(node->name), "%s", name);
+    node->id = g_example_tag_count++;
+    node->next = NULL;
+
+    if (!g_example_tags_head) {
+        g_example_tags_head = node;
+    } else {
+        ReplTagNode *tail = g_example_tags_head;
+        while (tail->next)
+            tail = tail->next;
+        tail->next = node;
+    }
+    return node;
+}
+
+static int g_default_tags_initializing = 0;
+
+static void ensure_default_tags_initialized(void) {
+    if (g_example_tags_head != NULL || g_default_tags_initializing)
+        return;
+
+    g_default_tags_initializing = 1;
+    repl_example_find_or_register_tag("All");      /* id 0 */
+    repl_example_find_or_register_tag("2D");       /* id 1 */
+    repl_example_find_or_register_tag("3D");       /* id 2 */
+    repl_example_find_or_register_tag("Polygons"); /* id 3 */
+    repl_example_find_or_register_tag("Lines");    /* id 4 */
+    g_default_tags_initializing = 0;
+}
+
+static void clear_dynamic_tags_list(void) {
+    ReplTagNode *curr = g_example_tags_head;
+    while (curr) {
+        ReplTagNode *next = curr->next;
+        free(curr);
+        curr = next;
+    }
+    g_example_tags_head = NULL;
+    g_example_tag_count = 0;
+}
+
+int repl_example_attach_tag(ReplItemTagNode **head, const ReplTagNode *tag) {
+    if (!head || !tag)
+        return 0;
+    for (ReplItemTagNode *curr = *head; curr; curr = curr->next) {
+        if (curr->tag == tag)
+            return 1;
+    }
+    ReplItemTagNode *node = (ReplItemTagNode *)calloc(1, sizeof(ReplItemTagNode));
+    if (!node)
+        return 0;
+    node->tag = tag;
+    node->next = NULL;
+    if (*head == NULL) {
+        *head = node;
+    } else {
+        ReplItemTagNode *tail = *head;
+        while (tail->next)
+            tail = tail->next;
+        tail->next = node;
+    }
+    return 1;
+}
+
+void repl_example_free_item_tags(ReplItemTagNode *head) {
+    ReplItemTagNode *curr = head;
+    while (curr) {
+        ReplItemTagNode *next = curr->next;
+        free(curr);
+        curr = next;
+    }
+}
+
 #include "../../build/generated/repl_examples_data.inc"
 
 static ReplExampleEntry *g_runtime_example_entries = NULL;
@@ -158,6 +175,7 @@ static void examples_free_entry(ReplExampleEntry *entry) {
         return;
     free((char *)entry->name);
     free((char *)entry->subheading);
+    repl_example_free_item_tags(entry->tags);
     if (entry->lines) {
         char **lines = (char **)entry->lines;
         for (int i = 0; lines[i]; i++)
@@ -179,6 +197,8 @@ void repl_examples_clear_runtime_catalog(void) {
     examples_free_entries(g_runtime_example_entries, g_runtime_example_count);
     g_runtime_example_entries = NULL;
     g_runtime_example_count = 0;
+    clear_dynamic_tags_list();
+    ensure_default_tags_initialized();
 }
 
 typedef struct {
@@ -212,48 +232,48 @@ static void catalog_draft_clear(RuntimeCatalogDraft *draft) {
     memset(draft, 0, sizeof(*draft));
 }
 
+static void string_list_clear(char **list, int count) {
+    if (!list)
+        return;
+    for (int i = 0; i < count; i++)
+        free(list[i]);
+    free(list);
+}
+
 static void catalog_build_clear(RuntimeCatalogBuild *build) {
     if (!build)
         return;
     examples_free_entries(build->entries, build->count);
-    for (int i = 0; i < build->section_count; i++)
-        free(build->sections[i]);
-    free(build->sections);
-    for (int i = 0; i < build->file_count; i++)
-        free(build->files[i]);
-    free(build->files);
+    string_list_clear(build->sections, build->section_count);
+    string_list_clear(build->files, build->file_count);
     memset(build, 0, sizeof(*build));
 }
 
-static int string_list_append(char ***items, int *count, int *cap,
-                              char *value) {
+static int string_list_append(char ***list, int *count, int *cap, char *item) {
     if (*count >= *cap) {
-        int new_cap = *cap ? *cap * 2 : 8;
-        char **new_items = (char **)realloc(*items,
-                                            (size_t)new_cap * sizeof((*items)[0]));
-        if (!new_items)
+        int new_cap = (*cap == 0) ? 8 : (*cap * 2);
+        char **next = (char **)realloc(*list, (size_t)new_cap * sizeof(char *));
+        if (!next)
             return 0;
-        *items = new_items;
+        *list = next;
         *cap = new_cap;
     }
-    (*items)[(*count)++] = value;
+    (*list)[(*count)++] = item;
     return 1;
 }
 
 static int catalog_build_append_entry(RuntimeCatalogBuild *build,
-                                      ReplExampleEntry *entry) {
+                                       const ReplExampleEntry *entry) {
     if (build->count >= build->cap) {
-        int new_cap = build->cap ? build->cap * 2 : 16;
-        ReplExampleEntry *new_entries =
-            (ReplExampleEntry *)realloc(build->entries,
-                                        (size_t)new_cap * sizeof(build->entries[0]));
-        if (!new_entries)
+        int new_cap = (build->cap == 0) ? 8 : (build->cap * 2);
+        ReplExampleEntry *next = (ReplExampleEntry *)realloc(
+            build->entries, (size_t)new_cap * sizeof(ReplExampleEntry));
+        if (!next)
             return 0;
-        build->entries = new_entries;
+        build->entries = next;
         build->cap = new_cap;
     }
     build->entries[build->count++] = *entry;
-    memset(entry, 0, sizeof(*entry));
     return 1;
 }
 
@@ -281,54 +301,53 @@ static int catalog_file_seen(const RuntimeCatalogBuild *build,
     return 0;
 }
 
-static int examples_parse_tag_mask(const char *section,
-                                   const char *tags_text,
-                                   ReplExampleTagMask *mask_out,
-                                   char *err_buf,
-                                   int err_sz) {
-    char *scratch = examples_strdup(tags_text);
+static int examples_parse_tags(const char *section,
+                               const char *tags_str,
+                               ReplItemTagNode **item_tags_out,
+                               char *err_buf,
+                               int err_sz) {
+    if (!tags_str || !*tags_str) {
+        examples_set_error(err_buf, err_sz, "[%s] tags must not be empty", section);
+        return 0;
+    }
+
+    char *scratch = examples_strdup(tags_str);
     if (!scratch) {
         examples_set_error(err_buf, err_sz, "out of memory");
         return 0;
     }
 
-    ReplExampleTagMask mask = 0u;
+    ReplItemTagNode *item_tags = NULL;
     int tag_count = 0;
     char *p = scratch;
-    while (p) {
+
+    while (p && *p) {
         char *comma = strchr(p, ',');
         if (comma)
             *comma = '\0';
-        char *tag = examples_trim(p);
-        if (*tag) {
-            ReplExampleTagMask bit = 0u;
-            if (strcmp(tag, "All") == 0) {
+        char *tag_name = examples_trim(p);
+        if (*tag_name) {
+            if (strcmp(tag_name, "All") == 0) {
                 examples_set_error(err_buf, err_sz,
                                    "[%s] must not list synthetic tag All",
                                    section);
-                free(scratch);
-                return 0;
-            } else if (strcmp(tag, "2D") == 0) {
-                bit = EXAMPLE_TAG_2D;
-            } else if (strcmp(tag, "3D") == 0) {
-                bit = EXAMPLE_TAG_3D;
-            } else if (strcmp(tag, "Polygons") == 0) {
-                bit = EXAMPLE_TAG_POLYGONS;
-            } else if (strcmp(tag, "Lines") == 0) {
-                bit = EXAMPLE_TAG_LINES;
-            } else {
-                examples_set_error(err_buf, err_sz,
-                                   "[%s] unknown tag '%s'", section, tag);
+                repl_example_free_item_tags(item_tags);
                 free(scratch);
                 return 0;
             }
-            if (mask & bit) {
-                examples_set_error(err_buf, err_sz,
-                                   "[%s] duplicate tag '%s'", section, tag);
+            const ReplTagNode *tag = repl_example_find_or_register_tag(tag_name);
+            if (!tag) {
+                examples_set_error(err_buf, err_sz, "out of memory");
+                repl_example_free_item_tags(item_tags);
                 free(scratch);
                 return 0;
             }
-            mask |= bit;
+            if (!repl_example_attach_tag(&item_tags, tag)) {
+                examples_set_error(err_buf, err_sz, "out of memory");
+                repl_example_free_item_tags(item_tags);
+                free(scratch);
+                return 0;
+            }
             tag_count++;
         }
         p = comma ? comma + 1 : NULL;
@@ -336,11 +355,10 @@ static int examples_parse_tag_mask(const char *section,
     free(scratch);
 
     if (tag_count == 0) {
-        examples_set_error(err_buf, err_sz, "[%s] tags must not be empty",
-                           section);
+        examples_set_error(err_buf, err_sz, "[%s] tags must not be empty", section);
         return 0;
     }
-    *mask_out = mask;
+    *item_tags_out = item_tags;
     return 1;
 }
 
@@ -510,20 +528,23 @@ static int catalog_finalize_draft(RuntimeCatalogBuild *build,
         return 0;
     }
 
-    ReplExampleTagMask mask = 0u;
-    if (!examples_parse_tag_mask(draft->section, tags, &mask, err_buf, err_sz))
+    ReplItemTagNode *item_tags = NULL;
+    if (!examples_parse_tags(draft->section, tags, &item_tags, err_buf, err_sz))
         return 0;
 
     char **lines = examples_read_source_lines(file_real, err_buf, err_sz);
-    if (!lines)
+    if (!lines) {
+        repl_example_free_item_tags(item_tags);
         return 0;
+    }
 
     ReplExampleEntry entry;
     memset(&entry, 0, sizeof(entry));
     entry.name = examples_strdup(name);
     entry.subheading = examples_strdup(group);
     entry.lines = (const char *const *)lines;
-    entry.tags = mask;
+    entry.tag_names = NULL;
+    entry.tags = item_tags;
     entry.format = format;
     if (!entry.name || !entry.subheading) {
         examples_set_error(err_buf, err_sz, "out of memory");
@@ -585,7 +606,7 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
 
     char catalog_path[PATH_MAX];
     if (snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini",
-                 base_real) >= (int)sizeof(catalog_path)) {
+                  base_real) >= (int)sizeof(catalog_path)) {
         examples_set_error(err_buf, err_sz, "catalog path too long");
         return 0;
     }
@@ -600,6 +621,10 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
     RuntimeCatalogDraft draft;
     memset(&build, 0, sizeof(build));
     memset(&draft, 0, sizeof(draft));
+
+    /* Reset dynamic tags before loading new catalog */
+    clear_dynamic_tags_list();
+    ensure_default_tags_initialized();
 
     char line[MAX_LINE_LEN];
     int line_no = 0;
@@ -730,7 +755,7 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
         return 0;
     }
 
-    repl_examples_clear_runtime_catalog();
+    examples_free_entries(g_runtime_example_entries, g_runtime_example_count);
     g_runtime_example_entries = build.entries;
     g_runtime_example_count = build.count;
     build.entries = NULL;
@@ -759,19 +784,52 @@ static int example_catalog_entry_count(void) {
 }
 
 static int example_catalog_tag_count(void) {
-    return REPL_EXAMPLE_TAG_COUNT;
+    return repl_example_tag_count();
 }
 
-static unsigned int example_catalog_tag_bit(int tag_idx) {
-    return repl_example_tag_bit(tag_idx);
+static const char *example_catalog_tag_label(int tag_idx) {
+    ensure_default_tags_initialized();
+    if (tag_idx < 0 || tag_idx >= g_example_tag_count)
+        return NULL;
+    for (const ReplTagNode *curr = g_example_tags_head; curr; curr = curr->next) {
+        if (curr->id == tag_idx)
+            return curr->name;
+    }
+    return NULL;
+}
+
+static int example_catalog_entry_has_tag(int example_idx, int tag_idx) {
+    if (tag_idx == 0) /* "All" */
+        return 1;
+    const ReplExampleEntry *entry = active_example_entry(example_idx);
+    if (!entry)
+        return 0;
+
+    if (entry->tags) {
+        for (const ReplItemTagNode *curr = entry->tags; curr; curr = curr->next) {
+            if (curr->tag && curr->tag->id == tag_idx)
+                return 1;
+        }
+        return 0;
+    }
+
+    if (entry->tag_names) {
+        const char *label = repl_example_tag_label(tag_idx);
+        if (!label)
+            return 0;
+        for (int i = 0; entry->tag_names[i]; i++) {
+            if (strcmp(entry->tag_names[i], label) == 0)
+                return 1;
+        }
+    }
+    return 0;
 }
 
 static const ReplCatalogTagOps g_example_tag_ops = {
     example_catalog_entry_count,
     example_catalog_tag_count,
-    g_example_tag_labels,
-    repl_example_tag_mask,
-    example_catalog_tag_bit,
+    example_catalog_tag_label,
+    example_catalog_entry_has_tag,
 };
 
 int repl_example_count(void) {
@@ -794,16 +852,8 @@ ReplExampleSourceFormat repl_example_source_format(int idx) {
 }
 
 int repl_example_tag_count(void) {
-    return REPL_EXAMPLE_TAG_COUNT;
-}
-
-unsigned int repl_example_tag_mask(int example_idx) {
-    const ReplExampleEntry *entry = active_example_entry(example_idx);
-    if (!entry)
-        return 0u;
-    /* Fold in the synthetic "All" membership so every tag query derives
-     * it uniformly; entry literals stay free of an explicit ALL bit. */
-    return entry->tags | EXAMPLE_TAG_ALL;
+    ensure_default_tags_initialized();
+    return g_example_tag_count;
 }
 
 REPL_DEFINE_CATALOG_TAG_WRAPPERS(example, &g_example_tag_ops)

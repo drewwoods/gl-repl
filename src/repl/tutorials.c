@@ -1101,15 +1101,6 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
  * index 0 so "All" sorts first in the Tutorials menu. Enum lives in
  * tutorials.h. */
 
-#define TUTORIAL_TAG_BIT(tag)         (1u << (tag))
-#define TUTORIAL_TAG_ALL              TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_ALL)
-#define TUTORIAL_TAG_GEOMETRY         TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_GEOMETRY)
-#define TUTORIAL_TAG_COLOR_TRANSFORMS TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_COLOR_TRANSFORMS)
-#define TUTORIAL_TAG_DEPTH_LIGHTING   TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_DEPTH_LIGHTING)
-#define TUTORIAL_TAG_ANIMATION        TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_ANIMATION)
-#define TUTORIAL_TAG_REPL_LANGUAGE    TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_REPL_LANGUAGE)
-#define TUTORIAL_TAG_EFFECTS          TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_EFFECTS)
-
 static const char *const g_tutorial_tag_labels[] = {
     "All",
     "Geometry",
@@ -1119,12 +1110,6 @@ static const char *const g_tutorial_tag_labels[] = {
     "REPL Language",
     "Effects",
 };
-/* Must stay 1:1 with the REPL_TUTORIAL_TAG_* enum: repl_tutorial_tag_count()
- * returns REPL_TUTORIAL_TAG_COUNT but repl_tutorial_tag_label() indexes this
- * table, so any drift is an out-of-bounds read. */
-STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
-                    sizeof(g_tutorial_tag_labels[0])) == REPL_TUTORIAL_TAG_COUNT,
-              "g_tutorial_tag_labels[] out of sync with REPL_TUTORIAL_TAG_COUNT");
 
 /* Subheading labels here are catalog-author choices, not a fixed
  * vocabulary - the menu just emits `### subheading` chrome rows when
@@ -1144,49 +1129,40 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "First Triangle",
         .steps      = g_tutorial_first_triangle_steps,
         .cfg        = g_tutorial_first_triangle_cfg,
-        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Beginner",
     },
     {
         .name       = "Color & Transform",
         .steps      = g_tutorial_color_transform_steps,
-        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
         .subheading = "Beginner",
     },
     {
         .name       = "Feature Tour",
         .steps      = g_tutorial_feature_tour_steps,
         .cfg        = g_tutorial_feature_tour_cfg,
-        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Beginner",
     },
     {
-        /* Placed before "Depth Test Triangle" (Intermediate) so the ALL
-         * flyout walks Beginner-only entries first, then transitions
-         * once to Intermediate at the tail - the subheading contiguity
-         * test (test_catalog_subheading_metadata) requires a single
-         * Beginner->Intermediate transition across the whole catalog. */
         .name       = "Variable Slider",
         .steps      = g_tutorial_variable_slider_steps,
-        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
         .subheading = "Beginner",
     },
     {
-        /* Keep this Beginner entry before the first Intermediate entry so
-         * the All flyout's section headers remain a single contiguous
-         * Beginner run followed by Intermediate. This is the first entry
-         * carrying ANIMATION, so that tag becomes visible in the menu. */
         .name       = "First Animation",
         .steps      = g_tutorial_first_animation_steps,
         .cfg        = g_tutorial_first_animation_cfg,
-        .tags       = TUTORIAL_TAG_ANIMATION,
+        .tag_names  = (const char *const []){ "Animation", NULL },
         .subheading = "Beginner",
     },
     {
         .name       = "Points & Lines",
         .steps      = g_tutorial_points_lines_steps,
         .cfg        = g_tutorial_points_lines_cfg,
-        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Beginner",
     },
     {
@@ -1194,65 +1170,54 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_glut_solids_steps,
         .setup      = g_tutorial_glut_solids_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
+        .tag_names  = (const char *const []){ "Geometry", "Depth & Lighting", NULL },
         .subheading = "Beginner",
     },
     {
         .name       = "First Loop",
         .steps      = g_tutorial_first_loop_steps,
-        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Beginner",
     },
     {
         .name       = "Depth Test Triangle",
         .steps      = g_tutorial_depth_triangle_steps,
-        .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
-        /* Intermediate: introduces depth-testing as a new GL concept
-         * (the previous tutorials were pure geometry/color/transform). */
+        .tag_names  = (const char *const []){ "Geometry", "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
-        /* Appended after Depth Test Triangle so both Intermediate entries
-         * stay contiguous (Beginner run, then Intermediate run) in the ALL
-         * flyout, and the two DEPTH_LIGHTING entries (Depth Test Triangle,
-         * Lighting Basics) form a single Intermediate run in that flyout -
-         * test_catalog_subheading_metadata enforces both. */
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
-        /* Builds on First Triangle via a preloaded setup scaffold -
-         * the learner colors the corners without re-drawing the
-         * triangle. It closes the original Intermediate trio; the catalog
-         * continues with more Intermediate entries. */
         .name       = "Color Interpolation",
         .steps      = g_tutorial_color_interp_steps,
         .setup      = g_tutorial_color_interp_setup,
-        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Line Stipple",
         .steps      = g_tutorial_line_stipple_steps,
         .cfg        = g_tutorial_line_stipple_cfg,
-        .tags       = TUTORIAL_TAG_EFFECTS,
+        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Blending & Transparency",
         .steps      = g_tutorial_blending_steps,
         .cfg        = g_tutorial_blending_cfg,
-        .tags       = TUTORIAL_TAG_EFFECTS,
+        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Depth Mask & Draw Order",
         .steps      = g_tutorial_depth_mask_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_EFFECTS | TUTORIAL_TAG_DEPTH_LIGHTING,
+        .tag_names  = (const char *const []){ "Effects", "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
@@ -1260,14 +1225,14 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_fog_steps,
         .cfg        = g_tutorial_fog_cfg,
         .setup      = g_tutorial_fog_setup,
-        .tags       = TUTORIAL_TAG_EFFECTS,
+        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Clip Planes",
         .steps      = g_tutorial_clip_planes_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_EFFECTS,
+        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
@@ -1275,7 +1240,7 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_materials_steps,
         .setup      = g_tutorial_materials_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING | TUTORIAL_TAG_EFFECTS,
+        .tag_names  = (const char *const []){ "Depth & Lighting", "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
@@ -1283,42 +1248,42 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_shade_model_steps,
         .setup      = g_tutorial_shade_model_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Normals",
         .steps      = g_tutorial_normals_steps,
         .setup      = g_tutorial_normals_setup,
-        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Culling & Winding",
         .steps      = g_tutorial_culling_steps,
         .setup      = g_tutorial_culling_setup,
-        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Bitmap Text",
         .steps      = g_tutorial_bitmap_text_steps,
         .cfg        = g_tutorial_bitmap_text_cfg,
-        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Intermediate",
     },
     {
         .name       = "Functions",
         .steps      = g_tutorial_functions_steps,
         .cfg        = g_tutorial_unlit_solid_cfg,
-        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Advanced",
     },
     {
         .name       = "If & Conditionals",
         .steps      = g_tutorial_conditionals_steps,
         .cfg        = g_tutorial_conditionals_cfg,
-        .tags       = TUTORIAL_TAG_REPL_LANGUAGE | TUTORIAL_TAG_ANIMATION,
+        .tag_names  = (const char *const []){ "REPL Language", "Animation", NULL },
         .subheading = "Advanced",
     },
     {
@@ -1326,7 +1291,7 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_scratch_arrays_steps,
         .setup      = g_tutorial_scratch_arrays_setup,
         .cfg        = g_tutorial_unlit_solid_cfg,
-        .tags       = TUTORIAL_TAG_REPL_LANGUAGE,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Advanced",
     },
 };
@@ -1336,19 +1301,36 @@ static int tutorial_catalog_entry_count(void) {
 }
 
 static int tutorial_catalog_tag_count(void) {
-    return REPL_TUTORIAL_TAG_COUNT;
+    return (int)(sizeof(g_tutorial_tag_labels) / sizeof(g_tutorial_tag_labels[0]));
 }
 
-static unsigned int tutorial_catalog_tag_bit(int tag_idx) {
-    return repl_tutorial_tag_bit(tag_idx);
+static const char *tutorial_catalog_tag_label(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= tutorial_catalog_tag_count())
+        return NULL;
+    return g_tutorial_tag_labels[tag_idx];
+}
+
+static int tutorial_catalog_entry_has_tag(int tutorial_idx, int tag_idx) {
+    if (tag_idx == 0) /* "All" */
+        return 1;
+    const TutorialEntry *entry = repl_tutorial_entry(tutorial_idx);
+    if (!entry || !entry->tag_names)
+        return 0;
+    const char *label = tutorial_catalog_tag_label(tag_idx);
+    if (!label)
+        return 0;
+    for (int i = 0; entry->tag_names[i]; i++) {
+        if (strcmp(entry->tag_names[i], label) == 0)
+            return 1;
+    }
+    return 0;
 }
 
 static const ReplCatalogTagOps g_tutorial_tag_ops = {
     tutorial_catalog_entry_count,
     tutorial_catalog_tag_count,
-    g_tutorial_tag_labels,
-    repl_tutorial_tag_mask,
-    tutorial_catalog_tag_bit,
+    tutorial_catalog_tag_label,
+    tutorial_catalog_entry_has_tag,
 };
 
 static const TutorialEntry *tutorial_entry_at(int idx) {
@@ -1432,15 +1414,7 @@ const char *const *repl_tutorial_setup_lines(int idx) {
 }
 
 int repl_tutorial_tag_count(void) {
-    return REPL_TUTORIAL_TAG_COUNT;
-}
-
-unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
-    if (tutorial_idx < 0 || tutorial_idx >= repl_tutorial_count())
-        return 0u;
-    /* Fold in the synthetic "All" membership so every tag query derives
-     * it uniformly; entry literals stay free of an explicit ALL bit. */
-    return g_tutorials[tutorial_idx].tags | TUTORIAL_TAG_ALL;
+    return tutorial_catalog_tag_count();
 }
 
 REPL_DEFINE_CATALOG_TAG_WRAPPERS(tutorial, &g_tutorial_tag_ops)

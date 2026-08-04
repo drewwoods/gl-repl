@@ -3025,16 +3025,9 @@ void glr_ctrl_reshape(int w, int h) {
 static const GlrExampleTagDefault k_example_tag_defaults[] =
     GLR_EXAMPLE_TAG_DEFAULTS;
 
-int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
+int glr_ctrl_apply_tag_defaults(int example_idx,
                                  const GlrExampleTagDefault *table,
                                  int n) {
-    /* Track GlrConfigKey values already set during this call so we can
-     * surface policy collisions. The shipped table has one entry; the
-     * cap covers an order-of-magnitude expansion plus any synthetic
-     * test policies. Iteration order is the table's declaration order;
-     * later entries that target the same key overwrite earlier ones
-     * (matches glr_config_set's last-write-wins semantics) and bump
-     * the returned collision count. */
     enum { SEEN_CAP = 32 };
     GlrConfigKey seen[SEEN_CAP];
     int seen_count = 0;
@@ -3044,7 +3037,7 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
 
     for (int i = 0; i < n; i++) {
         const GlrExampleTagDefault *d = &table[i];
-        if (!(tag_mask & repl_example_tag_bit(d->tag_idx)))
+        if (example_idx < 0 || !repl_example_has_tag(example_idx, d->tag_idx))
             continue;
 
         int seen_idx = -1;
@@ -3066,13 +3059,13 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
     return collisions;
 }
 
-static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
+static void glr_ctrl_reset_example_chrome(int example_idx) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
     variable_panel_set_visible(CFG_DEFAULT_VARIABLE_PANEL);
 
     glr_ctrl_apply_tag_defaults(
-        tag_mask, k_example_tag_defaults,
+        example_idx, k_example_tag_defaults,
         (int)(sizeof(k_example_tag_defaults) /
               sizeof(k_example_tag_defaults[0])));
 
@@ -3099,7 +3092,7 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
 static void glr_ctrl_reset_tutorial_chrome(void) {
     GlrPresentationState *p = glr_state_presentation_mut();
 
-    glr_ctrl_reset_example_chrome(0);
+    glr_ctrl_reset_example_chrome(-1);
     p->grid_extent_idx      = CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX;
     p->show_vertex_outlines = CFG_DEFAULT_TUTORIAL_VERTEX_OUTLINES;
     p->show_vertex_points   = CFG_DEFAULT_TUTORIAL_VERTEX_POINTS;

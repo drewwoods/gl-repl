@@ -1,0 +1,55 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// --- Camera -------------------------
+glTranslatef(0.0f, 0.0f, -12.00f);
+glRotatef(25.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(18.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.04f, 0.04f, 0.07f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Deeply nested conditional evaluation inside unrolled loops
+for(i, -3, 7) {
+  for(j, -3, 7) {
+    // Level 1: Filter center point
+    if(i != 0 || j != 0) {
+      // Level 2: Time-varying wave threshold 1
+      if(sin(t + i * 0.45) > -0.6) {
+        // Level 3: Time-varying wave threshold 2
+        if(cos(t * 0.7 + j * 0.35) > -0.2) {
+          // Level 4: Parity condition
+          if((i + j) % 2 == 0) {
+            glPushMatrix();
+            glTranslatef(i * 1.6f, sin(t * 1.5f + i + j) * 0.6f, j * 1.6f);
+            
+            // Level 5: Quadrant branching
+            if(i > 0) {
+              if(j > 0) {
+                // Quadrant 1: Red cubes
+                glColor3f(0.95f, 0.25f, 0.2f);
+                glutSolidCube(0.7f);
+              } else {
+                // Quadrant 4: Green spheres
+                glColor3f(0.2f, 0.85f, 0.35f);
+                glutSolidSphere(0.45f, 12, 12);
+              }
+            } else {
+              if(j > 0) {
+                // Quadrant 2: Blue cubes
+                glColor3f(0.25f, 0.55f, 0.95f);
+                glutSolidCube(0.6f);
+              } else {
+                // Quadrant 3: Gold spheres
+                glColor3f(0.95f, 0.8f, 0.15f);
+                glutSolidSphere(0.4f, 12, 12);
+              }
+            }
+            glPopMatrix();
+          }
+        }
+      }
+    }
+  }
+}

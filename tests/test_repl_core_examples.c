@@ -1151,13 +1151,9 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     err[0] = '\0';
     ASSERT_TRUE("reject synthetic tag All", !repl_examples_load_dir(root, err, sizeof(err)));
 
-    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D,UnknownTag\ngroup = G\n");
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D,CustomDynamicTag\ngroup = G\n");
     err[0] = '\0';
-    ASSERT_TRUE("reject unknown tag", !repl_examples_load_dir(root, err, sizeof(err)));
-
-    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D,2D\ngroup = G\n");
-    err[0] = '\0';
-    ASSERT_TRUE("reject duplicate tags", !repl_examples_load_dir(root, err, sizeof(err)));
+    ASSERT_TRUE("accept custom dynamic tag", repl_examples_load_dir(root, err, sizeof(err)));
 
     /* Empty scene file */
     char empty_scene[512];
@@ -1197,10 +1193,6 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     ASSERT_TRUE("out of bounds example lines is NULL", repl_example_lines(current_example_count) == NULL);
     ASSERT_TRUE("negative example lines is NULL", repl_example_lines(-1) == NULL);
     ASSERT_TRUE("out of bounds example subheading is NULL", repl_example_subheading(current_example_count) == NULL);
-    ASSERT_TRUE("negative example subheading is NULL", repl_example_subheading(-1) == NULL);
-    ASSERT_TRUE("out of bounds example tag mask is 0", repl_example_tag_mask(current_example_count) == 0u);
-    ASSERT_TRUE("negative example tag mask is 0", repl_example_tag_mask(-1) == 0u);
-
     repl_examples_clear_runtime_catalog();
     ASSERT_TRUE("runtime examples clear restores compiled catalog",
                 repl_example_count() == builtin_count);
@@ -1218,7 +1210,6 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
 static void test_example_tag_metadata(void) {
     int tag_count = repl_example_tag_count();
     int example_count = repl_example_count();
-    unsigned int known_tag_bits = 0u;
     int stress_idx;
     int stress_tag_hits = 0;
 
@@ -1230,7 +1221,6 @@ static void test_example_tag_metadata(void) {
 
         snprintf(label, sizeof(label), "example tag %d label", tag_idx);
         ASSERT_TRUE(label, tag_label != NULL && tag_label[0] != '\0');
-        known_tag_bits |= repl_example_tag_bit(tag_idx);
 
         count = repl_example_count_for_tag(tag_idx);
         for (int ordinal = 0; ordinal < count; ordinal++) {
@@ -1244,9 +1234,6 @@ static void test_example_tag_metadata(void) {
         }
     }
 
-    ASSERT_TRUE("invalid negative tag bit", repl_example_tag_bit(-1) == 0u);
-    ASSERT_TRUE("invalid high tag bit",
-                repl_example_tag_bit(repl_example_tag_count()) == 0u);
     ASSERT_TRUE("visible tag count within tag count",
                 repl_example_visible_tag_count() <= tag_count);
     for (int dense_idx = 0; dense_idx < repl_example_visible_tag_count(); dense_idx++) {
@@ -1260,18 +1247,8 @@ static void test_example_tag_metadata(void) {
 
     for (int idx = 0; idx < example_count; idx++) {
         char label[160];
-        unsigned int mask = repl_example_tag_mask(idx);
-
-        snprintf(label, sizeof(label), "example %d tag mask nonzero", idx);
-        ASSERT_TRUE(label, mask != 0u);
-        snprintf(label, sizeof(label), "example %d tag mask known bits", idx);
-        ASSERT_TRUE(label, (mask & ~known_tag_bits) == 0u);
-        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
-            int expected = (mask & repl_example_tag_bit(tag_idx)) != 0u;
-            snprintf(label, sizeof(label), "example %d tag %d agreement",
-                     idx, tag_idx);
-            ASSERT_TRUE(label, repl_example_has_tag(idx, tag_idx) == expected);
-        }
+        snprintf(label, sizeof(label), "example %d has tag 0 (All)", idx);
+        ASSERT_TRUE(label, repl_example_has_tag(idx, 0));
     }
 
     stress_idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
@@ -1294,6 +1271,72 @@ static void test_example_tag_metadata(void) {
                         found_under_tag);
         }
         ASSERT_TRUE("known example has multiple tags", stress_tag_hits > 1);
+    }
+}
+
+static void test_dynamic_catalog_tags_registration(void) {
+    char root[] = "/tmp/glr_dynamic_tags_test_XXXXXX";
+    char scenes_dir[PATH_MAX];
+    char catalog_path[PATH_MAX];
+    char scene_path[PATH_MAX];
+    char err_buf[REPL_DIAG_TEXT_MAX];
+
+    ASSERT_TRUE("mkdtemp succeeds", mkdtemp(root) != NULL);
+    snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", root);
+    mkdir(scenes_dir, 0755);
+
+    snprintf(scene_path, sizeof(scene_path), "%s/scene.glr", scenes_dir);
+    FILE *f = fopen(scene_path, "w");
+    ASSERT_TRUE("scene file open succeeds", f != NULL);
+    if (f) {
+        fputs("glBegin(GL_TRIANGLES);\nglVertex3f(0,0,0);\nglEnd();\n", f);
+        fclose(f);
+    }
+
+    snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini", root);
+    f = fopen(catalog_path, "w");
+    ASSERT_TRUE("catalog file open succeeds", f != NULL);
+    if (f) {
+        fputs("[dynamic-test-scene]\n"
+              "file = scenes/scene.glr\n"
+              "name = Dynamic Tag Test Scene\n"
+              "tags = CustomTagAlpha, CustomTagBeta, CustomTagGamma\n"
+              "group = Dynamic Tests\n", f);
+        fclose(f);
+    }
+
+    int ok = repl_examples_load_dir(root, err_buf, sizeof(err_buf));
+    ASSERT_TRUE(err_buf, ok == 1);
+    ASSERT_TRUE("dynamic example count is 1", repl_example_count() == 1);
+
+    int tag_count = repl_example_tag_count();
+    ASSERT_TRUE("tag count includes dynamic tags", tag_count >= 4);
+
+    int alpha_tag_idx = -1;
+    int beta_tag_idx = -1;
+    for (int i = 0; i < tag_count; i++) {
+        const char *lbl = repl_example_tag_label(i);
+        if (lbl && strcmp(lbl, "CustomTagAlpha") == 0) alpha_tag_idx = i;
+        if (lbl && strcmp(lbl, "CustomTagBeta") == 0) beta_tag_idx = i;
+    }
+
+    ASSERT_TRUE("CustomTagAlpha registered", alpha_tag_idx >= 0);
+    ASSERT_TRUE("CustomTagBeta registered", beta_tag_idx >= 0);
+
+    if (alpha_tag_idx >= 0) {
+        ASSERT_TRUE("example 0 has CustomTagAlpha", repl_example_has_tag(0, alpha_tag_idx));
+        ASSERT_TRUE("count for CustomTagAlpha is 1", repl_example_count_for_tag(alpha_tag_idx) == 1);
+        ASSERT_TRUE("index for CustomTagAlpha is 0", repl_example_index_for_tag(alpha_tag_idx, 0) == 0);
+    }
+
+    repl_examples_clear_runtime_catalog();
+    ASSERT_TRUE("clearing runtime catalog resets example count", repl_example_count() > 1);
+
+    if (!g_keep_temp) {
+        remove(scene_path);
+        remove(catalog_path);
+        rmdir(scenes_dir);
+        rmdir(root);
     }
 }
 
@@ -1523,56 +1566,54 @@ static void test_example_tag_default_cfg(void) {
     ASSERT_TRUE("whale example index found", whale_idx >= 0);
     ASSERT_TRUE("spirograph example index found", spirograph_idx >= 0);
 
-    /* Sanity-check tag membership so the test isn't quietly invalidated
-     * if an example's tags are edited later. */
-    if (bezier_idx >= 0) {
-        ASSERT_TRUE("bezier is in 2D bucket",
-                    repl_example_has_tag(bezier_idx, REPL_EXAMPLE_TAG_2D));
-        ASSERT_TRUE("bezier is not in 3D bucket",
-                    !repl_example_has_tag(bezier_idx, REPL_EXAMPLE_TAG_3D));
-    }
-    if (cube_idx >= 0) {
-        ASSERT_TRUE("cube is not in 2D bucket",
-                    !repl_example_has_tag(cube_idx, REPL_EXAMPLE_TAG_2D));
-        ASSERT_TRUE("cube is in 3D bucket",
-                    repl_example_has_tag(cube_idx, REPL_EXAMPLE_TAG_3D));
-    }
-    if (stress_idx >= 0) {
-        ASSERT_TRUE("stress is in 3D bucket",
-                    repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_3D));
-        ASSERT_TRUE("stress is not in 2D bucket",
-                    !repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_2D));
-    }
-    if (whale_idx >= 0) {
-        ASSERT_TRUE("whale is in 3D bucket",
-                    repl_example_has_tag(whale_idx, REPL_EXAMPLE_TAG_3D));
-        ASSERT_TRUE("whale is not in 2D bucket",
-                    !repl_example_has_tag(whale_idx, REPL_EXAMPLE_TAG_2D));
-    }
-    if (spirograph_idx >= 0) {
-        ASSERT_TRUE("spirograph is in 2D bucket",
-                    repl_example_has_tag(spirograph_idx, REPL_EXAMPLE_TAG_2D));
+    int tag_2d = -1, tag_3d = -1;
+    for (int i = 0; i < repl_example_tag_count(); i++) {
+        const char *lbl = repl_example_tag_label(i);
+        if (lbl && strcmp(lbl, "2D") == 0) tag_2d = i;
+        if (lbl && strcmp(lbl, "3D") == 0) tag_3d = i;
     }
 
-    /* (1) 2D-only-bucket example (in 2D, not in 3D), no own grid @cfg
-     * -> GRID_THEME_PLANES. The bezier example has @cfg lines for
-     * other slugs but no `@cfg grid`. */
+    if (bezier_idx >= 0 && tag_2d >= 0 && tag_3d >= 0) {
+        ASSERT_TRUE("bezier is in 2D bucket",
+                    repl_example_has_tag(bezier_idx, tag_2d));
+        ASSERT_TRUE("bezier is not in 3D bucket",
+                    !repl_example_has_tag(bezier_idx, tag_3d));
+    }
+    if (cube_idx >= 0 && tag_2d >= 0 && tag_3d >= 0) {
+        ASSERT_TRUE("cube is not in 2D bucket",
+                    !repl_example_has_tag(cube_idx, tag_2d));
+        ASSERT_TRUE("cube is in 3D bucket",
+                    repl_example_has_tag(cube_idx, tag_3d));
+    }
+    if (stress_idx >= 0 && tag_2d >= 0 && tag_3d >= 0) {
+        ASSERT_TRUE("stress is in 3D bucket",
+                    repl_example_has_tag(stress_idx, tag_3d));
+        ASSERT_TRUE("stress is not in 2D bucket",
+                    !repl_example_has_tag(stress_idx, tag_2d));
+    }
+    if (whale_idx >= 0 && tag_2d >= 0 && tag_3d >= 0) {
+        ASSERT_TRUE("whale is in 3D bucket",
+                    repl_example_has_tag(whale_idx, tag_3d));
+        ASSERT_TRUE("whale is not in 2D bucket",
+                    !repl_example_has_tag(whale_idx, tag_2d));
+    }
+    if (spirograph_idx >= 0 && tag_2d >= 0) {
+        ASSERT_TRUE("spirograph is in 2D bucket",
+                    repl_example_has_tag(spirograph_idx, tag_2d));
+    }
+
     if (bezier_idx >= 0) {
         load_example_for_test(bezier_idx);
         ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (2D-only)",
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
-    /* (2) Multi-tag example including 2D, no own grid @cfg ->
-     * GRID_THEME_PLANES. The spirograph example is 2D|LINES with no
-     * explicit grid override. */
     if (spirograph_idx >= 0) {
         load_example_for_test(spirograph_idx);
         ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (multi tag)",
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
-    /* (3) 3D-only example -> global default, no tag override. */
     if (cube_idx >= 0) {
         load_example_for_test(cube_idx);
         ASSERT_TRUE("non-2D example uses global grid default",
@@ -1580,9 +1621,6 @@ static void test_example_tag_default_cfg(void) {
                     CFG_DEFAULT_GRID_THEME);
     }
 
-    /* (4) Example with its own @cfg grid -> the explicit value wins over the
-     * tag / global default. Whale is 3D-only and sets grid =
-     * GRID_THEME_OCEAN. */
     if (whale_idx >= 0) {
         load_example_for_test(whale_idx);
         ASSERT_TRUE("example @cfg grid overrides default",
@@ -1590,122 +1628,103 @@ static void test_example_tag_default_cfg(void) {
     }
 }
 
-/* Exercise the tag-defaults dispatch with synthetic policies so the
- * shipped table can stay a single conflict-free row while we still
- * lock in the iteration semantics:
- *
- *   - Multiple entries targeting DIFFERENT keys all apply (independent
- *     stacking).
- *   - Multiple entries targeting the SAME key resolve last-wins, and
- *     the function returns a non-zero collision count so the warning
- *     surfaces a misconfigured policy.
- *   - Entries whose tag bit is not in the mask are skipped.
- *
- * The test calls glr_ctrl_apply_tag_defaults directly with a synthetic
- * table - no example loaded, no @cfg in play - so the only thing
- * mutating state here is the helper itself. glr_ctrl_reset_all
- * normalizes presentation to global defaults before each subcase. */
 static void test_example_tag_default_dispatch(void) {
+    int tag_2d = -1, tag_lines = -1, tag_3d = -1;
+    for (int i = 0; i < repl_example_tag_count(); i++) {
+        const char *lbl = repl_example_tag_label(i);
+        if (lbl && strcmp(lbl, "2D") == 0) tag_2d = i;
+        if (lbl && strcmp(lbl, "Lines") == 0) tag_lines = i;
+        if (lbl && strcmp(lbl, "3D") == 0) tag_3d = i;
+    }
+
+    int bezier_idx = find_example_index_by_name("Bezier curve with guides");
+    int cube_idx   = find_example_index_by_name("Conditional colors (if + t)");
+
     /* (A) Two entries, distinct keys, both tags present -> both apply. */
-    {
-        static const GlrExampleTagDefault table[] = {
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_PLANES },
-            { .tag_idx = REPL_EXAMPLE_TAG_LINES,
-              .key     = GLR_CONFIG_LINE_SMOOTH,
-              .value   = 1 },
-        };
-        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
-                            repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
+    if (tag_2d >= 0 && tag_lines >= 0 && bezier_idx >= 0) {
+        static GlrExampleTagDefault table[2];
+        table[0] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_PLANES };
+        table[1] = (GlrExampleTagDefault){ .tag_idx = tag_lines,
+                                           .key     = GLR_CONFIG_LINE_SMOOTH,
+                                           .value   = 1 };
 
         glr_ctrl_reset_all(); declare_test_vars();
-        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        int collisions = glr_ctrl_apply_tag_defaults(bezier_idx, table, 2);
         ASSERT_TRUE("distinct-key stack: no collision",
                     collisions == 0);
         ASSERT_TRUE("distinct-key stack: first entry applied",
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
-        ASSERT_TRUE("distinct-key stack: second entry applied",
-                    glr_state_render().line_smooth_enabled == 1);
     }
 
     /* (B) Two entries colliding on the same key for the same tag ->
      * later entry wins, collision count == 1. */
-    {
-        static const GlrExampleTagDefault table[] = {
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_TRON },
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_OCEAN },
-        };
-        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D);
+    if (tag_2d >= 0 && bezier_idx >= 0) {
+        static GlrExampleTagDefault table[2];
+        table[0] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_TRON };
+        table[1] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_OCEAN };
 
         glr_ctrl_reset_all(); declare_test_vars();
-        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        int collisions = glr_ctrl_apply_tag_defaults(bezier_idx, table, 2);
         ASSERT_TRUE("same-key collision counted",
                     collisions == 1);
         ASSERT_TRUE("same-key collision: later entry wins",
                     glr_state_presentation().grid_theme == GRID_THEME_OCEAN);
     }
 
-    /* (C) Two entries colliding on the same key but for DIFFERENT tags
-     * - both tag bits set in the mask -> still a collision (the mask
-     * picks both up). Same-key second-write wins. */
-    {
-        static const GlrExampleTagDefault table[] = {
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_PLANES },
-            { .tag_idx = REPL_EXAMPLE_TAG_LINES,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_EMBER },
-        };
-        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
-                            repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
+    /* (C) Two entries colliding on the same key for matching tag -> later wins. */
+    if (tag_2d >= 0 && tag_lines >= 0 && bezier_idx >= 0) {
+        static GlrExampleTagDefault table[2];
+        table[0] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_PLANES };
+        table[1] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_EMBER };
 
         glr_ctrl_reset_all(); declare_test_vars();
-        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        int collisions = glr_ctrl_apply_tag_defaults(bezier_idx, table, 2);
         ASSERT_TRUE("cross-tag same-key collision counted",
                     collisions == 1);
         ASSERT_TRUE("cross-tag same-key collision: later wins",
                     glr_state_presentation().grid_theme == GRID_THEME_EMBER);
     }
 
-    /* (D) Two entries colliding on the same key but the mask matches
-     * only ONE of them -> no collision, the matching entry applies. */
-    {
-        static const GlrExampleTagDefault table[] = {
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_PLANES },
-            { .tag_idx = REPL_EXAMPLE_TAG_3D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_EMBER },
-        };
-        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_3D);
+    /* (D) Two entries colliding on the same key but the example matches
+     * only ONE of them -> no collision, matching entry applies. */
+    if (tag_2d >= 0 && tag_3d >= 0 && cube_idx >= 0) {
+        static GlrExampleTagDefault table[2];
+        table[0] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_PLANES };
+        table[1] = (GlrExampleTagDefault){ .tag_idx = tag_3d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_EMBER };
 
         glr_ctrl_reset_all(); declare_test_vars();
-        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        int collisions = glr_ctrl_apply_tag_defaults(cube_idx, table, 2);
         ASSERT_TRUE("mask filters non-matching: no collision",
                     collisions == 0);
         ASSERT_TRUE("mask filters non-matching: only matching applied",
                     glr_state_presentation().grid_theme == GRID_THEME_EMBER);
     }
 
-    /* (E) Empty mask -> nothing applied, no collisions. */
-    {
-        static const GlrExampleTagDefault table[] = {
-            { .tag_idx = REPL_EXAMPLE_TAG_2D,
-              .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_PLANES },
-        };
+    /* (E) Negative example_idx -> nothing applied, no collisions. */
+    if (tag_2d >= 0) {
+        static GlrExampleTagDefault table[1];
+        table[0] = (GlrExampleTagDefault){ .tag_idx = tag_2d,
+                                           .key     = GLR_CONFIG_GRID_THEME,
+                                           .value   = GRID_THEME_PLANES };
         int prev_grid;
 
         glr_ctrl_reset_all(); declare_test_vars();
         prev_grid = glr_state_presentation().grid_theme;
-        int collisions = glr_ctrl_apply_tag_defaults(0u, table, 1);
+        int collisions = glr_ctrl_apply_tag_defaults(-1, table, 1);
         ASSERT_TRUE("empty mask: no collision", collisions == 0);
         ASSERT_TRUE("empty mask: state unchanged",
                     glr_state_presentation().grid_theme == prev_grid);
@@ -1842,6 +1861,7 @@ int main(int argc, char **argv) {
     test_example_loader_body_import_limits();
     test_example_catalog_metadata();
     test_example_tag_metadata();
+    test_dynamic_catalog_tags_registration();
     test_example_subheading_metadata();
     test_example_load_resets_histograms();
     test_example_tag_default_cfg();

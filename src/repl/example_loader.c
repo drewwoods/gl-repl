@@ -199,18 +199,8 @@ int repl_example_consume_camera_header(const char *const *lines) {
     return 5;
 }
 
-static void reset_example_presentation_defaults(unsigned int tag_mask) {
-    /* Presentation state lives in glr_state.c; the
-     * controller-installed sink does the actual reset. The demo
-     * leaves the sink unset and ships without example presentation
-     * resets, which is fine because the demo doesn't load examples
-     * via this loader.
-     *
-     * `tag_mask` is forwarded opaquely to the host; the loader does
-     * not interpret tag bits. The controller layers tag-specific
-     * `@cfg` defaults on top of the global reset before the example's
-     * own `@cfg` metadata is consumed below. */
-    repl_dispatch_example_presentation_reset(tag_mask);
+static void reset_example_presentation_defaults(int example_idx) {
+    repl_dispatch_example_presentation_reset(example_idx);
 }
 
 static int example_cfg_extract_slug(const char *text,
@@ -326,7 +316,7 @@ static int emit_example_body_in_source_order(const char *const *body,
     return 1;
 }
 
-static void reset_example_load_state(unsigned int tag_mask) {
+static void reset_example_load_state(int example_idx) {
     ReplCommandStore store = repl_command_store_live();
 
     /* Ask the host to restore tutorial-mutated cfg before the example
@@ -349,14 +339,14 @@ static void reset_example_load_state(unsigned int tag_mask) {
      * outgoing scene so funcN free-slot allocation starts fresh. */
     repl_func_alias_clear_all();
     repl_state_import_export_writable()->camera_comment_line[0] = '\0';
-    reset_example_presentation_defaults(tag_mask);
+    reset_example_presentation_defaults(example_idx);
 }
 
 static int load_example_lines(const char *const *lines,
-                              unsigned int tag_mask) {
+                              int example_idx) {
     const char *const *body = lines;
 
-    reset_example_load_state(tag_mask);
+    reset_example_load_state(example_idx);
 
     int cfg_count = 0;
     if (body) {
@@ -405,7 +395,7 @@ static int load_example_lines(const char *const *lines,
      * caller, which applies it to EditorState at the editor boundary. */
     int loader_edit_line = 0;
     if (!emit_example_body_in_source_order(body, &loader_edit_line)) {
-        reset_example_load_state(tag_mask);
+        reset_example_load_state(example_idx);
         repl_dispatch_input_reset();
         repl_mark_source_dirty();
         return 0;
@@ -421,9 +411,9 @@ static int load_example_lines(const char *const *lines,
 }
 
 static int load_example_c_source(const char *const *lines,
-                                 unsigned int tag_mask,
+                                 int example_idx,
                                  const char *name) {
-    reset_example_load_state(tag_mask);
+    reset_example_load_state(example_idx);
 
     int ok = repl_export_load_from_lines(lines, name ? name : "example.c", NULL);
     repl_dispatch_input_reset();
@@ -452,9 +442,9 @@ static int load_example(int idx) {
 
     int new_edit_line;
     if (repl_example_source_format(idx) == REPL_EXAMPLE_SOURCE_C)
-        new_edit_line = load_example_c_source(lines, repl_example_tag_mask(idx), name);
+        new_edit_line = load_example_c_source(lines, idx, name);
     else
-        new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
+        new_edit_line = load_example_lines(lines, idx);
     if (new_edit_line <= 0)
         return 0;
     repl_state_scenes_set_active_example_idx(idx);
@@ -482,7 +472,7 @@ int repl_load_example(int idx) {
 
 int repl_load_example_lines(const char *const *lines) {
     /* A caller holding only scene text (test, bench, repl_live_demo) has no
-     * example-index context, so pass a zero tag mask - the controller's reset
+     * example-index context, so pass -1 - the controller's reset
      * still applies global defaults, just no tag-default overrides. */
-    return load_example_lines(lines, 0u);
+    return load_example_lines(lines, -1);
 }

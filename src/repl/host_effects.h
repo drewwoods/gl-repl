@@ -56,7 +56,7 @@ typedef struct {
      * top before the example's own leading `@cfg` metadata runs.
      * Order of precedence: example `@cfg` > tag default > global
      * default. */
-    void (*example_presentation_reset)(unsigned int tag_mask);
+    void (*example_presentation_reset)(int example_idx);
     /* Same reset for a tutorial start, plus the two things an example
      * load deliberately inherits: the camera pose (eased back to the
      * built-in default) and the grid extent (narrowed to
@@ -102,7 +102,7 @@ void repl_install_host_effects(const ReplHostEffects *effects);
 /* Pipeline-side dispatchers - invoked by the loader / scene-switch /
  * snippet-import / replay paths. Each is a no-op when the bridge is
  * unset or the matching callback is NULL. */
-void        repl_dispatch_example_presentation_reset(unsigned int tag_mask);
+void        repl_dispatch_example_presentation_reset(int example_idx);
 void        repl_dispatch_tutorial_presentation_reset(void);
 void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);

@@ -76,7 +76,7 @@ int glr_ctrl_add_assign_plot_series(int line);
  * and the warning surfaces it). The controller's example-reset hook
  * passes the shipped k_example_tag_defaults policy; tests pass synthetic
  * tables to exercise the collision path without modifying shipped data. */
-int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
+int glr_ctrl_apply_tag_defaults(int example_idx,
                                  const GlrExampleTagDefault *table,
                                  int n);
 

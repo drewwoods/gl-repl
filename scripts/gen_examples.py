@@ -67,16 +67,10 @@ def parse_tags(section: str, value: str) -> list[str]:
     tags = [part.strip() for part in value.split(",") if part.strip()]
     if not tags:
         raise ExampleError(f"[{section}] tags must not be empty")
-    macros: list[str] = []
     for tag in tags:
         if tag == "All":
             raise ExampleError(f"[{section}] must not list synthetic tag All")
-        macro = TAG_MACROS.get(tag)
-        if not macro:
-            known = ", ".join(TAG_MACROS)
-            raise ExampleError(f"[{section}] unknown tag {tag!r}; expected one of: {known}")
-        macros.append(macro)
-    return macros
+    return tags
 
 
 def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
@@ -192,9 +186,10 @@ def render(entries: list[dict[str, object]]) -> str:
 
     out.append("static const ReplExampleEntry g_example_entries[] = {")
     for entry in entries:
-        tag_expr = " | ".join(entry["tags"])  # type: ignore[arg-type]
+        tag_strs = ", ".join(f"{c_string(t)}" for t in entry["tags"])  # type: ignore[union-attr]
         out.append(f"    {{ {c_string(str(entry['name']))}, {entry['symbol']},")
-        out.append(f"      {tag_expr},")
+        out.append(f"      (const char *const []){{ {tag_strs}, NULL }},")
+        out.append(f"      NULL,")
         out.append(f"      {entry['format']},")
         out.append(f"      {c_string(str(entry['group']))} }},")
     out.append("};")

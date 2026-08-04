@@ -1007,7 +1007,7 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
 [`ReplTutorialTagMask`](../src/repl/tutorials.h#L220); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L347)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L339)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses

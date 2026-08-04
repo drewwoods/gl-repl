@@ -242,12 +242,8 @@ typedef struct {
      * target_label).
      * NULL = start from an empty scene (the default). */
     const char *const  *setup;
-    /* Tag bitmask for menu grouping (REPL_TUTORIAL_TAG_* bits OR-ed
-     * via the private TUTORIAL_TAG_* macros in tutorials.c). The
-     * synthetic ALL bit is folded in by repl_tutorial_tag_mask() so
-     * entry literals stay free of it. Zero mask = visible only under
-     * "All" - flagged by the metadata test. */
-    ReplTutorialTagMask tags;
+    /* Null-terminated list of tag string labels for tutorial entry */
+    const char *const  *tag_names;
     /* Optional in-flyout section subheading. Free-form display string
      * (e.g. "Beginner", "Grids", "Lighting") - the menu groups
      * consecutive tutorials sharing the same subheading under a chrome
@@ -334,22 +330,14 @@ const char *const        *repl_tutorial_cfg_lines(int idx);
 const char *const        *repl_tutorial_setup_lines(int idx);
 
 /* Tag query API - mirrors the example tag API in src/repl/examples.h.
- * `tag_count` includes the synthetic ALL at index 0. `tag_mask` ORs the
- * ALL bit into the entry's stored mask so every query (has_tag,
- * count_for_tag, index_for_tag, visible_tag_*) sees the ALL membership
- * uniformly. Out-of-range / invalid inputs return 0 / NULL / -1. */
+ * `tag_count` includes the synthetic ALL at index 0. */
 int                       repl_tutorial_tag_count(void);
 const char               *repl_tutorial_tag_label(int tag_idx);
-unsigned int              repl_tutorial_tag_mask(int tutorial_idx);
 int                       repl_tutorial_has_tag(int tutorial_idx, int tag_idx);
 int                       repl_tutorial_count_for_tag(int tag_idx);
 int                       repl_tutorial_index_for_tag(int tag_idx, int ordinal);
 int                       repl_tutorial_visible_tag_count(void);
 int                       repl_tutorial_visible_tag_at(int dense_idx);
-
-static inline unsigned int repl_tutorial_tag_bit(int tag_idx) {
-    return repl_catalog_tag_bit_for_count(tag_idx, repl_tutorial_tag_count());
-}
 
 /* Subheading API. Returns the tutorial's free-form section label or NULL
  * (no subheading / out-of-range idx). The Tutorials menu uses this to

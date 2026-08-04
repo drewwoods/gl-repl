@@ -20,13 +20,13 @@ tags = 3D, Polygons
 group = Basics
 ```
 
-- `name` is the user-visible name returned by [`repl_example_name()`](../src/repl/examples.h#L68).
+- `name` is the user-visible name returned by [`repl_example_name()`](../src/repl/examples.h#L36).
 - `file` must be a relative path under `scenes/` and must end in `.glr` or
   `.c`.
 - `tags` must use the existing labels: `2D`, `3D`, `Polygons`, `Lines`.
   Do not list `All`; it is synthetic.
 - `group` is the Scene menu flyout subheading returned by
-  [`repl_example_subheading()`](../src/repl/examples.h#L109).
+  [`repl_example_subheading()`](../src/repl/examples.h#L67).
 - Section order is the F12 / `--example <idx>` order.
 
 `.glr` files are plain REPL source lines. They may start with leading

@@ -1,0 +1,58 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// --- Camera -------------------------
+glTranslatef(0.0f, 0.0f, -8.00f);
+glRotatef(15.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+
+// --- Phase 1: Standard Base Clear ---
+glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Base full-color background geometry
+glBegin(GL_QUADS);
+  glColor3f(0.8f, 0.2f, 0.2f);
+  glVertex3f(-3.0f, -3.0f, -2.0f);
+  glVertex3f( 3.0f, -3.0f, -2.0f);
+  glVertex3f( 3.0f,  3.0f, -2.0f);
+  glVertex3f(-3.0f,  3.0f, -2.0f);
+glEnd();
+
+// --- Phase 2: Disable Red & Blue (Green-only clear) ---
+// Mask off Red and Blue channels.
+glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_TRUE);
+
+// glClear under masked channel: set clear color to yellow (1,1,0,1).
+// Only green channel (0.8) will be written to color buffer!
+glClearColor(1.0f, 0.8f, 0.0f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT);
+
+// --- Phase 3: Selective Channel Geometry Render ---
+// Mask Red=GL_TRUE, Green=GL_FALSE, Blue=GL_TRUE
+glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE);
+
+glPushMatrix();
+glTranslatef(-1.5f, 0.0f, 0.0f);
+glRotatef(45.0f * t, 1.0f, 1.0f, 0.0f);
+
+// Attempt to render white cube (1,1,1) -> only Red & Blue reach buffer (Magenta)
+glColor3f(1.0f, 1.0f, 1.0f);
+glutSolidCube(1.2f);
+glPopMatrix();
+
+// --- Phase 4: Mask Blue Only ---
+glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
+
+glPushMatrix();
+glTranslatef(1.5f, 0.0f, 0.0f);
+glRotatef(-30.0f * t, 0.0f, 1.0f, 1.0f);
+
+// Attempt to render bright yellow sphere (1,1,0) -> Green/Red masked off, only Blue (0) written
+glColor3f(1.0f, 1.0f, 0.0f);
+glutSolidSphere(0.8f, 16, 16);
+glPopMatrix();
+
+// --- Phase 5: Restore Full Color Mask ---
+glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);

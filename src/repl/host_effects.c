@@ -32,9 +32,9 @@ void repl_set_status_error(const char *msg) {
         g_host_effects->status(msg);
 }
 
-void repl_dispatch_example_presentation_reset(unsigned int tag_mask) {
+void repl_dispatch_example_presentation_reset(int example_idx) {
     if (g_host_effects && g_host_effects->example_presentation_reset)
-        g_host_effects->example_presentation_reset(tag_mask);
+        g_host_effects->example_presentation_reset(example_idx);
 }
 
 void repl_dispatch_tutorial_presentation_reset(void) {
