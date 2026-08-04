@@ -33,7 +33,6 @@
 
 #include "repl/flatten.h"
 #include "repl/attrib_bits.h"  /* REPL_ATTRIB_STACK_CAP */
-#include "source_document.h"  /* SourceTextView */
 
 #ifndef APIENTRY
 #define APIENTRY
@@ -110,15 +109,18 @@ typedef struct TessVertex {
     GLdouble color[4];
 } TessVertex;
 
-/* Input: a flat program view, the number of commands to execute
- * (typically the full count, or the replay PC if replay is active),
- * and a source-text view used to resolve display text for status
- * messages (goto-label resolution etc.). The view is non-owning and
- * stays valid for the duration of the execute call.
+/* Input: a flat program view and the number of commands to execute
+ * (typically the full count, or the replay PC if replay is active).
+ *
+ * **That is the whole input.** The executor takes no source text and has no
+ * diagnostic channel: it evaluates no expression text and renders only from
+ * baked `args[]`. `goto` was the sole exception - the only command whose
+ * meaning lived in its source line rather than its args, and the only writer
+ * of a status message - and both went with it.
  *
  * **Zero-initialize this struct** (`= {0}`, a designated initializer, or
  * memset) and then set only what you mean. The executor reads every field,
- * including three it calls or writes through - `state_filter`, `status_out`,
+ * including two it calls or writes through - `state_filter` and
  * `observation_out` - so a field left holding stack garbage is a wild call or
  * a wild store, not a harmless unused input.
  *
@@ -128,18 +130,10 @@ typedef struct TessVertex {
  * for replay's POLYGON mode. Replay's VERTEX-mode fade batches set
  * it to 1 because each batch is a partial slice of the original
  * tess sequence; finalizing each slice would emit incomplete
- * geometry.
- *
- * `status_out` / `status_out_sz` give the executor a place to record
- * a non-fatal diagnostic (currently only the goto-loop-limit case).
- * If `status_out` is NULL, the executor drops the message; otherwise
- * it snprintfs up to `status_out_sz - 1` chars + NUL. Callers decide
- * whether to forward the captured text to the status bar
- * (controller live-frame: yes; replay/test/demo: no). */
+ * geometry. */
 typedef struct {
     int             flat_cmd_count;
     FlatProgramView program;
-    SourceTextView  text;
     float           fade_alpha_scale;
     int             skip_geom_before_pc;
     int             has_fade_context;
@@ -191,8 +185,6 @@ typedef struct {
      * preceding glClearColor would use. A caller that publishes must set it;
      * a caller passing observation_out = NULL need not. */
     float           baseline_clear_rgba[4];
-    char           *status_out;
-    int             status_out_sz;
 } ReplExecutionOptions;
 
 /* Stack-owned execution cursor over a flat REPL program. This is the same
@@ -202,7 +194,6 @@ typedef struct {
 typedef struct ReplExecCursor {
     ReplExecutionOptions options;
     FlatProgramView      program;
-    SourceTextView       text;
     int                  flat_cmd_count;
     int                  pc;
     int                  in_begin;
@@ -258,22 +249,29 @@ void repl_executor_init_resources(void);
 /* One-time cleanup: destroy the shared quadric and tessellator. */
 void repl_executor_destroy_resources(void);
 
-/* Execute the live flat program against the current editor buffer view. */
+/* Execute the live flat program. */
 void repl_execute_commands(void);
 
-/* Execute a flat program: walk cmds[0..flat_cmd_count), emit GL calls,
- * re-evaluate expressions with current predefined variable values. Called
- * once per frame from render3d_render.c. */
+/* Execute a flat program: walk cmds[0..flat_cmd_count) emitting GL calls from
+ * the args the most recent flatten baked. Called once per frame from
+ * render3d_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
 
 /* Cursor API used by repl_execute_program() and specialized render passes.
- * begin() snapshots the non-owning program/text views from `options` (or live
+ * begin() snapshots the non-owning program view from `options` (or live
  * REPL state when omitted), step() executes the current flat command and
  * advances the cursor, and end() performs the old whole-program cleanup:
  * closing an open glBegin, finalizing tessellation unless suppressed, and
  * unwinding tracked matrix pushes. advance() intentionally skips the current
  * command without executing it; callers that skip structural commands own the
- * matching state consequences. */
+ * matching state consequences.
+ *
+ * step() returns 0 in exactly one situation: the walk is done
+ * (repl_exec_cursor_done()). It CANNOT stop a walk mid-program - the flat
+ * program holds no execute-time control flow and no budget, so "steps until
+ * done" is literally true and `while (repl_exec_cursor_step(&c)) {}` visits
+ * every command. The goto jump budget was the one case that could abort a
+ * frame early, and it went with goto. */
 ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options);
 int repl_exec_cursor_step(ReplExecCursor *cursor);
 void repl_exec_cursor_end(ReplExecCursor *cursor);

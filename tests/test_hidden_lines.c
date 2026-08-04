@@ -56,14 +56,11 @@ static const float k_baseline_rgba[4] = { 0.01f, 0.01f, 0.01f, 1.0f };
  * publish through it. */
 static void run_walk_observed(Render3dExecutePurpose purpose,
                               ReplBackgroundObservation *obs_out) {
-    char status[256] = "";
     repl_flatten_commands(editor_state_edit_line());
     FlatProgramView prog = repl_state_flat_program_view();
     HiddenLinesRenderContext ctx = {
         .flat_cmd_count  = prog.cmd_count,
         .program         = prog,
-        .status_out      = status,
-        .status_out_sz   = (int)sizeof(status),
         .observation_out = obs_out,
     };
     memcpy(ctx.baseline_clear_rgba, k_baseline_rgba,

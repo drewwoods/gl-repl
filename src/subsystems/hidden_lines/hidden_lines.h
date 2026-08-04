@@ -4,14 +4,10 @@
 #include "repl/executor.h"   /* ReplBackgroundObservation */
 #include "repl/flatten.h"
 #include "render3d/render_types.h"
-#include "source_document.h"
 
 typedef struct {
     FlatProgramView program;
     int             flat_cmd_count;
-    SourceTextView  text;
-    char           *status_out;
-    int             status_out_sz;
     /* Forwarded to the cursor this subsystem drives, same contract as
      * ReplExecutionOptions: NULL publishes nothing. Only the depth-fill pass
      * emits a clear, so only that purpose can produce a known background -

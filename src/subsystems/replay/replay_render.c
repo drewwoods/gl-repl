@@ -61,7 +61,6 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     FlatProgramView program = repl_state_flat_program_view();
-    SourceTextView text = source_document_view();
 
     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
         const ReplayFadeBatch *batch = &plan->batches[batch_idx];
@@ -85,7 +84,6 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
         repl_execute_program(&(ReplExecutionOptions){
             .flat_cmd_count         = batch->new_pc,
             .program                = program,
-            .text                   = text,
             .fade_alpha_scale       = alpha,
             .skip_geom_before_pc    = plan->skip_limits[batch_idx],
             .has_fade_context       = 1,

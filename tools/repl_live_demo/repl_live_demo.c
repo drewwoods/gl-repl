@@ -712,7 +712,6 @@ static void display_func(void) {
     memset(&opts, 0, sizeof opts);
     opts.flat_cmd_count = repl_state_flat_program_count();
     opts.program        = repl_state_flat_program_view();
-    opts.text           = source_document_view();
     /* Bracketing the program the way render3d_pass_setup and the exported
      * display() do: whatever state the scene leaves set is undone before the
      * HUD draws and before the next frame, so nothing leaks across frames. */

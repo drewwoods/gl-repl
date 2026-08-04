@@ -91,7 +91,6 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count          = flat_count,
         .program                 = repl_state_flat_program_view(),
-        .text                    = source_document_view(),
         .encode_feedback_normals = 1,
         /* Explicit, not zero-init by omission: this walk renders into the
          * feedback buffer, not the framebuffer, so it establishes no

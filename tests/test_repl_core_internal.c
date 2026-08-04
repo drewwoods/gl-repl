@@ -278,7 +278,6 @@ int main() {
         ReplExecutionOptions opts = {0};
         opts.flat_cmd_count = repl_state_flat_program_count();
         opts.program = repl_state_flat_program_view();
-        opts.text = source_document_view();
         repl_execute_program(&opts);
 
         ASSERT_TRUE("tmp still 0 after run", vars_arr[tmp_idx].value == 0.0f);
@@ -350,7 +349,6 @@ int main() {
         ReplExecutionOptions opts = {0};
         opts.flat_cmd_count = repl_state_flat_program_count();
         opts.program = repl_state_flat_program_view();
-        opts.text = source_document_view();
         repl_execute_program(&opts);
 
         ASSERT_TRUE("top-level self-ref: 1 increment per frame",

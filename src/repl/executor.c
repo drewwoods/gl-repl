@@ -6,11 +6,9 @@
 #include <string.h>
 #include <math.h>
 #include "repl/flatten.h"
-#include "source_document.h"
 #include "repl/attrib_bits.h"   /* repl_attrib_bits_for_type (restore gating) */
 #include "repl/executor.h"
 #include "repl/state_owners.h"
-#include "repl/text_helpers.h"
 #include "support/mesh_ply.h"   /* MESH_PLY_PASS_* feedback normal-encoding markers */
 
 /* Camera-distance source for the point-size fallback used when the
@@ -620,7 +618,6 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     cursor.program = execution_program_from_options(options);
     cursor.flat_cmd_count = execution_flat_count_from_options(options,
                                                               cursor.program);
-    cursor.text = options ? options->text : (SourceTextView){0};
     cursor.encode_normals = options && options->encode_feedback_normals;
     cursor.cur_normal[2] = 1.0f;
     cursor.begin_mv[0] = 1.0f;
@@ -1151,14 +1148,10 @@ void repl_execute_program(const ReplExecutionOptions *options) {
 }
 
 void repl_execute_commands(void) {
-    /* Test/legacy entry point. The executor's goto-label and
-     * paren-payload helpers route through the editor-text view; pass
-     * the live buffer view so those features work the same as the
-     * controller-driven path. */
+    /* Test/legacy entry point: the live flat program, nothing else. */
     ReplExecutionOptions options = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
-        .text           = source_document_view(),
         /* Explicit, not zero-init by omission: this entry point has no frame
          * to speak for, so it must not publish a presentation background. */
         .observation_out = NULL,

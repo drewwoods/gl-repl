@@ -1236,14 +1236,10 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
     }
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    char exec_status[REPL_DIAG_TEXT_MAX] = "";
     if (wireframe_effect_pass) {
         HiddenLinesRenderContext hl = {
             .flat_cmd_count = count,
             .program        = repl_state_flat_program_view(),
-            .text           = source_document_view(),
-            .status_out     = exec_status,
-            .status_out_sz  = (int)sizeof(exec_status),
             .observation_out = publishes_background ? &observation : NULL,
         };
         memcpy(hl.baseline_clear_rgba, k_baseline_clear_rgba,
@@ -1253,9 +1249,6 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         ReplExecutionOptions opts = {
             .flat_cmd_count = count,
             .program        = repl_state_flat_program_view(),
-            .text           = source_document_view(),
-            .status_out     = exec_status,
-            .status_out_sz  = (int)sizeof(exec_status),
             .observation_out = publishes_background ? &observation : NULL,
         };
         memcpy(opts.baseline_clear_rgba, k_baseline_clear_rgba,
@@ -1265,8 +1258,6 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         repl_execute_program(&opts);
     }
     glPopAttrib();
-    if (exec_status[0])
-        repl_set_status_error(exec_status);
 
     if (suppress_side_effects) {
         repl_restore_predef_values(saved_predef, MAX_PREDEF_VARS);

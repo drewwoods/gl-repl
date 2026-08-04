@@ -389,8 +389,10 @@ reads and mutates source text through the neutral port in
 * Reads go through [`source_document_view()`](../source_document.h#L69) → [`SourceTextView`](../source_document.h#L27) (a
   `const char (*lines)[MAX_LINE_LEN]` + count), sliced by
   `source_text_line(view, idx)` (out-of-range returns `""`). Consumers:
-  [`executor.c`](../src/repl/executor.c) (display text), [`export.c`](../src/repl/export.c), [`flatten.c`](../src/repl/flatten.c) (reparse),
+  [`export.c`](../src/repl/export.c), [`flatten.c`](../src/repl/flatten.c) (reparse),
   [`compile.c`](../src/repl/compile.c), [`src/subsystems/replay/replay_annotations.c`](../src/subsystems/replay/replay_annotations.c).
+  Notably **not** [`executor.c`](../src/repl/executor.c): it takes a flat
+  program and nothing else, and renders only from baked `args[]`.
 * Mutations go through [`source_document_apply_change()`](../source_document.h#L72) /
   [`source_document_insert_line()`](../source_document.h#L73) / `_replace_line()` / `_load_lines()` /
   `_clear()`, driven by a [`SourceTextChange`](../source_document.h#L55) descriptor.

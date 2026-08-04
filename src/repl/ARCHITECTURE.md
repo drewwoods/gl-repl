@@ -711,7 +711,10 @@ emitting GL. Key behaviors:
   `args[]` - the executor never evaluates expression text. `sin(t*speed)`
   animates because a playing `t` marks the flat program dirty and the
   per-frame re-flatten re-bakes `has_vars` args (§3.5, §13.2), not because
-  of any execute-time re-evaluation.
+  of any execute-time re-evaluation. The rule is now structural rather than
+  a convention: `ReplExecutionOptions` carries **no source-text view and no
+  diagnostic channel**, so there is nothing for an execute-time reader to
+  read. `goto` was the sole holder of both, and both went with it.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
   geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L121) - is the

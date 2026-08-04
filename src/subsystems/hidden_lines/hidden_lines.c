@@ -262,9 +262,6 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
 
     options.flat_cmd_count = cmd_count;
     options.program = ctx->program;
-    options.text = ctx->text;
-    options.status_out = ctx->status_out;
-    options.status_out_sz = ctx->status_out_sz;
     /* Only the depth-fill pass emits a clear at all (see
      * hidden_lines_emit_clear), so the hidden- and visible-line redraws
      * cannot publish a background even if a caller handed them a sink. */
