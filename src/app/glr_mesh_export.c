@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "source_document.h"               /* source_document_view */
 #include "support/mesh_ply.h"
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"

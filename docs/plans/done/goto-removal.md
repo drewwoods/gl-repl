@@ -9,7 +9,9 @@ All four steps shipped, on branch `goto-removal-review`:
 | 1 - tutorial anchors move to `// @anchor` | `894500cf` |
 | 2 - language removal | `cd5e970b` |
 | 3 - executor decoupling (§3a) | `97451dbb` |
-| 4 - docs | folded into the three above |
+| 4 - docs | mostly folded into steps 2 and 3, plus `87fcb64a` (archival + residual sweep) and the follow-ups below |
+| follow-up - stale `hidden_lines` whitelist + MODULES.md executor row | `9dc99950` |
+| follow-up - drop the executor→source_port edge from the §2 graph | `9dc622d0` |
 
 Every acceptance criterion below holds. Verified with `make test-stubs`
 (76/76 binaries, 25929 tests), `make test-web`, `make check-c99`,

@@ -7,7 +7,6 @@
 #include "subsystems/replay/replay.h"
 #include "support/cpuprof.h"
 #include "render3d/palette.h"
-#include "source_document.h"
 #include <string.h>
 
 static void tess_preview_begin_contour(void *ud) { (void)ud; glBegin(GL_LINE_STRIP); }
