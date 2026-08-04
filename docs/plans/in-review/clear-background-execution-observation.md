@@ -337,6 +337,15 @@ unsigned background_known_mask;
 float    alpha_scale;
 ```
 
+**Delete `Render3dRenderConfig.alpha_scale`.** It is an input field today, and
+every one of its three readers moves somewhere else: the guide snapshot
+(`glr_ctrl_build_guide_snapshot()`) reads the controller-retained scalar, and
+grid and axes read the pass context above. Leaving it in place would recreate
+the duplicate source of truth this design exists to remove - and a live one,
+since `glr_ctrl_build_scene_config()` would happily keep computing it. The
+config's input side becomes `overlay_design_luma`; the output side is the pass
+context and the frame result.
+
 Use one fallback rule for every presentation consumer. An observed background
 is usable only when all four channels are known. Otherwise chrome, grid/axes
 recede fog, and overlay luminance/`alpha_scale` all use
@@ -365,7 +374,7 @@ Grid and axes read the pass context's selected presentation background and
 `alpha_scale` at draw time. Both live inside render3d, so this crosses no
 module boundary and needs no callback change.
 
-#### Cursor edit guides use the previous frame's background
+#### Cursor edit guides use the previous frame's contrast scale
 
 The render callbacks (`post_fill_fn`, `post_overlays_fn`,
 `post_resolve_overlays_fn`) keep their current `void *user_data` shape. Do not
@@ -427,15 +436,26 @@ explicit in the frame result:
 typedef struct Render3dFrameResult {
     float presentation_rgba[4];
     float alpha_scale;
+    /* RESERVED - forwarded for tests/diagnostics; see below. */
     int   background_fully_known;
 } Render3dFrameResult;
 ```
 
 `presentation_rgba` is the final pass's background when every pass was fully
-known, otherwise the all-or-default fallback. `background_fully_known` keeps
-that distinction observable without requiring the controller to select the
-fallback again. Because render3d owns the contrast formula, it also returns
-the derived `alpha_scale`; the controller must not recompute it from RGBA.
+known, otherwise the all-or-default fallback. Because render3d owns the
+contrast formula, it also returns the derived `alpha_scale`; the controller
+must not recompute it from RGBA.
+
+`background_fully_known` keeps that distinction observable, but note that no
+production consumer needs it: the fallback is already applied inside
+`presentation_rgba`, chrome consumes that, and the guides consume
+`alpha_scale`. Label it in the header the way this struct's neighbors already
+label the same situation - `Render3dRenderConfig.focus` ("no renderer reads it
+yet - tests only") and the `*_xn_phase` fields ("the render3d renderer does not
+read these values at runtime; keep them populated so tests can verify the
+forwarded contract"). Settling it at the point of introduction is the whole
+point: an unlabelled consumer-free field is what section 4 of this document is
+about.
 
 Return the frame result through an explicit output parameter:
 
@@ -604,6 +624,8 @@ releasable compatibility state. No bridge or dual-answer contract is required.
 - Derive per-pass background-dependent fog and alpha there.
 - Leave `post_fill_fn` / `post_overlays_fn` / `post_resolve_overlays_fn`
   unchanged, and leave the `g_overlay_pack` build where it is.
+- Delete `Render3dRenderConfig.alpha_scale` and move its three readers to the
+  pass context (grid, axes) and the retained scalar (guide snapshot).
 - Update the ordinary and hot-reload `render3d_demo` call surfaces while
   preserving the REPL-free link proof.
 
@@ -743,8 +765,9 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
 - Unknown or partially known backgrounds are represented explicitly; no API
   silently turns them into a supposedly exact RGBA value.
 - The host never clears the scene rectangle when the source did not do so.
-- The render3d post-fill / post-overlay callback signatures are unchanged, and
-  no guide or overlay preparation is repeated after user fill.
+- The render3d post-fill, post-overlays, and post-resolve-overlays callback
+  signatures are unchanged, and no guide or overlay preparation is repeated
+  after user fill.
 - `src/render3d/` remains REPL-free; ordinary and hot-reload `render3d_demo`
   variants link with the new `render3d_draw_scene()` signature.
 - No production consumer remains for `ReplRenderState.clear_color`; the field
