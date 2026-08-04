@@ -1016,15 +1016,17 @@ static void test_apply_state_bookkeeping(void) {
     ASSERT_TRUE("bookkeeping ignores non-light enable",
                 repl_state_render().light_enabled_mask == 0u);
 
-    /* Clear color is recorded into render state. */
+    /* A clear color carries NO bookkeeping. This helper also runs for commands
+     * whose GL a pass is skipping, so anything folded in here would describe
+     * pixels nothing wrote - the background is observed by the cursor, paired
+     * with the emission (repl_exec_cursor_emit_clear_color). */
+    repl_state_render_mut()->light_enabled_mask = 0x3u;
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_CLEAR_COLOR; cmd.num_args = 4;
     cmd.args[0] = 0.25f; cmd.args[1] = 0.5f; cmd.args[2] = 0.75f; cmd.args[3] = 1.0f;
     repl_apply_state_bookkeeping(&cmd);
-    rs = repl_state_render();
-    ASSERT_TRUE("bookkeeping records clear color",
-                rs.clear_color[0] == 0.25f && rs.clear_color[1] == 0.5f &&
-                rs.clear_color[2] == 0.75f && rs.clear_color[3] == 1.0f);
+    ASSERT_TRUE("bookkeeping carries nothing for a clear color",
+                repl_state_render().light_enabled_mask == 0x3u);
 
     /* A command that carries no bookkeeping is a no-op (no crash, no state). */
     repl_state_render_mut()->light_enabled_mask = 0x5u;
@@ -1215,10 +1217,14 @@ static void test_orrery_phase_alignment(void) {
 
 /* glPushAttrib / glPopAttrib cursor semantics: pairing, orphan-pop safety,
  * end-of-cursor unwind, the REPL_ATTRIB_STACK_CAP real-GL cap while virtual
- * depth is unbounded, and the render-state bookkeeping restore (light-enable
- * mask under GL_ENABLE_BIT, clear color under GL_COLOR_BUFFER_BIT) - with and
- * without suppress_attrib_gl. */
-static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
+ * depth is unbounded, and the executor-side state restore (the light-enable
+ * mask under GL_ENABLE_BIT, the clear colour + colour write mask under
+ * GL_COLOR_BUFFER_BIT) - with and without suppress_attrib_gl.
+ *
+ * Returns the finished cursor by value: the clear-affecting state is the
+ * cursor's own ReplClearScopedState, so the scoping assertions read it there
+ * rather than through a render-state mirror. */
+static ReplExecCursor run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
     ReplExecutionOptions opts = {0};
     opts.flat_cmd_count = n;
     opts.program.cmds = cmds;
@@ -1229,6 +1235,7 @@ static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
         if (!repl_exec_cursor_step(&cursor))
             break;
     repl_exec_cursor_end(&cursor);
+    return cursor;
 }
 
 /* goto labels are read out of the SourceTextView the caller handed in, bounded
@@ -1248,7 +1255,7 @@ static void test_goto_uses_caller_text_view(void) {
 
     snprintf(lines[0], sizeof(lines[0]), "goto skip;");
     snprintf(lines[1], sizeof(lines[1]), "glColor3f(1, 0, 0);");
-    snprintf(lines[2], sizeof(lines[2]), ":skip");
+    snprintf(lines[2], sizeof(lines[2]), "skip:");
     text.lines = (const char (*)[MAX_LINE_LEN])lines;
     text.line_count = 3;
 
@@ -1491,7 +1498,7 @@ static void test_background_observation(void) {
         ReplExecutionOptions opts = {0};
 
         snprintf(lines[1], sizeof(lines[1]), "goto skip;");
-        snprintf(lines[4], sizeof(lines[4]), ":skip");
+        snprintf(lines[4], sizeof(lines[4]), "skip:");
         text.lines = (const char (*)[MAX_LINE_LEN])lines;
         text.line_count = 6;
 
@@ -1518,7 +1525,7 @@ static void test_background_observation(void) {
         ReplExecutionOptions opts = {0};
         char status[REPL_DIAG_TEXT_MAX] = "";
 
-        snprintf(lines[1], sizeof(lines[1]), ":again");
+        snprintf(lines[1], sizeof(lines[1]), "again:");
         snprintf(lines[3], sizeof(lines[3]), "goto again;");
         text.lines = (const char (*)[MAX_LINE_LEN])lines;
         text.line_count = 4;
@@ -1618,201 +1625,41 @@ static void test_background_observation(void) {
                     obs.known == 1 &&
                     obs_rgba_is(&obs, 0.10f, 0.10f, 0.10f, 1.0f));
     }
-}
 
-/* repl_flat_resolve_clear_color: the frame background the host clears, fogs
- * and lights overlays against. Resolution is source-ordered and stops at the
- * program's first color clear, so it answers "what color does this program's
- * own glClear use" - not "what is the last glClearColor in the document". */
-static void test_resolve_frame_clear_color(void) {
-    static const float base[4] = {0.10f, 0.10f, 0.10f, 1.0f};
-    SourceTextView text = {0};
-    float out[4];
-
-    printf("--- executor: frame clear color resolution ---\n");
-
-    /* No clear at all: the program never repaints the rect, so the baseline
-     * stands and the caller can tell (return 0). */
+    /* A glClearColor with no glClear behind it repaints nothing. The frame
+     * keeps whatever the rect already held, which this design refuses to
+     * invent - so the program established no background at all, and the host
+     * must fall back rather than take the colour it never used. */
     {
         GLCmd cmds[1];
-        FlatProgramView v = {0};
         memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
-        cmds[0].args[0] = 0.9f; cmds[0].args[3] = 1.0f;
-        v.cmds = cmds; v.cmd_count = 1;
-        ASSERT_TRUE("no glClear: reports not-found",
-                    repl_flat_resolve_clear_color(v, text, base, out) == 0);
-        ASSERT_TRUE("no glClear: baseline out", out[0] == base[0]);
+        obs_clear_color(cmds, 0, 0.9f, 0.0f, 0.0f, 1.0f);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 1);
+        ASSERT_TRUE("a program that never clears establishes no background",
+                    obs.known == 0);
     }
 
-    /* Before the clear: drives the frame. After it: cannot. */
+    /* Attribute nesting past REPL_ATTRIB_STACK_CAP: frames above the cap are
+     * counted but not saved, so the pops must not run off attrib_save[] or
+     * restore garbage into the scoped clear state. The clear after the unwind
+     * still observes the baseline. */
     {
-        GLCmd cmds[3];
-        FlatProgramView v = {0};
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
-        cmds[0].args[0] = 0.2f; cmds[0].args[1] = 0.3f;
-        cmds[0].args[2] = 0.4f; cmds[0].args[3] = 1.0f;
-        cmds[1].type = CMD_CLEAR; cmds[1].valid = 1; cmds[1].num_args = 1;
-        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
-        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
-        cmds[2].args[0] = 0.9f; cmds[2].args[3] = 1.0f;
-        v.cmds = cmds; v.cmd_count = 3;
-        ASSERT_TRUE("prior glClearColor found", repl_flat_resolve_clear_color(v, text, base, out) == 1);
-        ASSERT_TRUE("prior glClearColor wins",
-                    out[0] == 0.2f && out[1] == 0.3f && out[2] == 0.4f && out[3] == 1.0f);
-    }
-
-    /* A depth-only clear is not a color clear: keep scanning past it. */
-    {
-        GLCmd cmds[3];
-        FlatProgramView v = {0};
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR; cmds[0].valid = 1; cmds[0].num_args = 1;
-        cmds[0].args[0] = GL_DEPTH_BUFFER_BIT;
-        cmds[1].type = CMD_CLEAR_COLOR; cmds[1].valid = 1; cmds[1].num_args = 4;
-        cmds[1].args[0] = 0.5f; cmds[1].args[3] = 1.0f;
-        cmds[2].type = CMD_CLEAR; cmds[2].valid = 1; cmds[2].num_args = 1;
-        cmds[2].args[0] = GL_COLOR_BUFFER_BIT;
-        v.cmds = cmds; v.cmd_count = 3;
-        ASSERT_TRUE("depth-only clear does not stop the scan",
-                    repl_flat_resolve_clear_color(v, text, base, out) == 1 && out[0] == 0.5f);
-    }
-
-    /* Attribute scopes: a clear color set inside a GL_COLOR_BUFFER_BIT push
-     * is reverted by the pop, exactly as GL would, so the later clear uses
-     * the pre-push value. A push whose mask does not cover the clear color
-     * saves nothing, so the change survives its pop. */
-    {
-        GLCmd cmds[6];
-        FlatProgramView v = {0};
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
-        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f;
-        cmds[1].type = CMD_PUSH_ATTRIB; cmds[1].valid = 1; cmds[1].num_args = 1;
-        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
-        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
-        cmds[2].args[0] = 0.7f; cmds[2].args[3] = 1.0f;
-        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
-        cmds[4].type = CMD_CLEAR; cmds[4].valid = 1; cmds[4].num_args = 1;
-        cmds[4].args[0] = GL_COLOR_BUFFER_BIT;
-        v.cmds = cmds; v.cmd_count = 5;
-        repl_flat_resolve_clear_color(v, text, base, out);
-        ASSERT_TRUE("scoped clear color reverted by its pop", out[0] == 0.2f);
-
-        cmds[1].args[0] = GL_CURRENT_BIT;   /* does not cover the clear color */
-        repl_flat_resolve_clear_color(v, text, base, out);
-        ASSERT_TRUE("unrelated push mask saves nothing", out[0] == 0.7f);
-    }
-
-    /* A clear inside the scope sees the scoped value. */
-    {
-        GLCmd cmds[4];
-        FlatProgramView v = {0};
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_PUSH_ATTRIB; cmds[0].valid = 1; cmds[0].num_args = 1;
-        cmds[0].args[0] = GL_COLOR_BUFFER_BIT;
-        cmds[1].type = CMD_CLEAR_COLOR; cmds[1].valid = 1; cmds[1].num_args = 4;
-        cmds[1].args[0] = 0.7f; cmds[1].args[3] = 1.0f;
-        cmds[2].type = CMD_CLEAR; cmds[2].valid = 1; cmds[2].num_args = 1;
-        cmds[2].args[0] = GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT;
-        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
-        v.cmds = cmds; v.cmd_count = 4;
-        repl_flat_resolve_clear_color(v, text, base, out);
-        ASSERT_TRUE("clear inside the scope uses the scoped color", out[0] == 0.7f);
-    }
-
-    /* More than one color clear: the last one decides what the rect shows,
-     * so it is that clear's color the chrome / fog / alpha_scale must use -
-     * the first clear's pixels are wiped by it, and a clear color set after
-     * the last clear still reaches nothing. */
-    {
-        GLCmd cmds[5];
-        FlatProgramView v = {0};
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
-        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f;
-        cmds[1].type = CMD_CLEAR; cmds[1].valid = 1; cmds[1].num_args = 1;
-        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
-        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
-        cmds[2].args[0] = 0.6f; cmds[2].args[3] = 1.0f;
-        cmds[3].type = CMD_CLEAR; cmds[3].valid = 1; cmds[3].num_args = 1;
-        cmds[3].args[0] = GL_COLOR_BUFFER_BIT;
-        cmds[4].type = CMD_CLEAR_COLOR; cmds[4].valid = 1; cmds[4].num_args = 4;
-        cmds[4].args[0] = 0.9f; cmds[4].args[3] = 1.0f;
-        v.cmds = cmds; v.cmd_count = 5;
-        repl_flat_resolve_clear_color(v, text, base, out);
-        ASSERT_TRUE("two color clears: the last one decides", out[0] == 0.6f);
-    }
-
-    /* goto moves the flat PC at execution time, so a linear walk is not
-     * execution order. Here the jump skips the clear a linear walk would
-     * report as the last one, and lands on a clear that runs with the
-     * pre-jump color. */
-    {
-        GLCmd cmds[6];
-        FlatProgramView v = {0};
-        SourceTextView doc;
-        editor_buffer_set_line(0, "glClearColor(0.2, 0, 0, 1);");
-        editor_buffer_set_line(1, "goto skip;");
-        editor_buffer_set_line(2, "glClearColor(0.6, 0, 0, 1);");
-        editor_buffer_set_line(3, "glClear(GL_COLOR_BUFFER_BIT);");
-        editor_buffer_set_line(4, "skip:");
-        editor_buffer_set_line(5, "glClear(GL_COLOR_BUFFER_BIT);");
-        editor_buffer_set_count(6);
-        doc = source_document_view();
-
-        memset(cmds, 0, sizeof(cmds));
-        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
-        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f; cmds[0].src_cmd_idx = 0;
-        cmds[1].type = CMD_GOTO; cmds[1].valid = 1; cmds[1].src_cmd_idx = 1;
-        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
-        cmds[2].args[0] = 0.6f; cmds[2].args[3] = 1.0f; cmds[2].src_cmd_idx = 2;
-        cmds[3].type = CMD_CLEAR; cmds[3].valid = 1; cmds[3].num_args = 1;
-        cmds[3].args[0] = GL_COLOR_BUFFER_BIT; cmds[3].src_cmd_idx = 3;
-        cmds[4].type = CMD_GOTO_LABEL; cmds[4].valid = 1; cmds[4].src_cmd_idx = 4;
-        cmds[5].type = CMD_CLEAR; cmds[5].valid = 1; cmds[5].num_args = 1;
-        cmds[5].args[0] = GL_COLOR_BUFFER_BIT; cmds[5].src_cmd_idx = 5;
-        v.cmds = cmds; v.cmd_count = 6;
-
-        repl_flat_resolve_clear_color(v, doc, base, out);
-        ASSERT_TRUE("goto is followed: jumped-over clear color does not win",
-                    out[0] == 0.2f);
-
-        /* With no source text the label cannot be read, so the jump is not
-         * taken - the documented empty-view behavior, not a crash. */
-        repl_flat_resolve_clear_color(v, text, base, out);
-        ASSERT_TRUE("empty text view leaves gotos unfollowed", out[0] == 0.6f);
-
-        /* A backward goto is an infinite loop; the executor's own budget
-         * bounds it, so resolution must terminate rather than hang. */
-        editor_buffer_set_line(4, "goto again;");
-        editor_buffer_set_line(1, "again:");
-        cmds[1].type = CMD_GOTO_LABEL;
-        cmds[4].type = CMD_GOTO;
-        repl_flat_resolve_clear_color(v, source_document_view(), base, out);
-        ASSERT_TRUE("backward goto terminates under the loop budget",
-                    out[0] == 0.6f);
-    }
-
-    /* Past-cap nesting must not run off the saved-frame array. */
-    {
-        GLCmd cmds[2 * (REPL_ATTRIB_STACK_CAP + 4) + 2];
-        FlatProgramView v = {0};
+        GLCmd cmds[2 * (REPL_ATTRIB_STACK_CAP + 4) + 1];
         int n = 0, i;
         memset(cmds, 0, sizeof(cmds));
         for (i = 0; i < REPL_ATTRIB_STACK_CAP + 4; i++, n++) {
-            cmds[n].type = CMD_PUSH_ATTRIB; cmds[n].valid = 1;
-            cmds[n].num_args = 1; cmds[n].args[0] = GL_COLOR_BUFFER_BIT;
+            GLCmd *push = obs_cmd(cmds, n, CMD_PUSH_ATTRIB, -1);
+            push->num_args = 1;
+            push->args[0] = GL_COLOR_BUFFER_BIT;
         }
         for (i = 0; i < REPL_ATTRIB_STACK_CAP + 4; i++, n++)
-            { cmds[n].type = CMD_POP_ATTRIB; cmds[n].valid = 1; }
-        cmds[n].type = CMD_CLEAR; cmds[n].valid = 1;
-        cmds[n].num_args = 1; cmds[n].args[0] = GL_COLOR_BUFFER_BIT; n++;
-        v.cmds = cmds; v.cmd_count = n;
-        ASSERT_TRUE("past-cap nesting resolves to the baseline",
-                    repl_flat_resolve_clear_color(v, text, base, out) == 1 &&
-                    out[0] == base[0]);
+            obs_cmd(cmds, n, CMD_POP_ATTRIB, -1);
+        obs_clear(cmds, n, GL_COLOR_BUFFER_BIT);
+        n++;
+        ReplBackgroundObservation obs = run_observed_plain(cmds, n);
+        ASSERT_TRUE("past-cap attrib nesting observes the baseline",
+                    obs.known == 1 &&
+                    obs_rgba_is(&obs, 0.10f, 0.10f, 0.10f, 1.0f));
     }
 }
 
@@ -1908,10 +1755,15 @@ static void test_attrib_stack(void) {
                     gl_stub_counts[GL_STUB_glPopAttrib] == REPL_ATTRIB_STACK_CAP);
     }
 
-    /* Clear-color bookkeeping under GL_COLOR_BUFFER_BIT: pop restores V1. */
+    /* Clear-affecting state under GL_COLOR_BUFFER_BIT: the pop restores both
+     * halves of ReplClearScopedState - the clear colour and the colour write
+     * mask - to their pre-push values. That group is exactly what a real
+     * glPopAttrib rewinds inside GL where the REPL cannot see it, so the
+     * cursor's own copy has to rewind with it or a later clear would be
+     * observed against state GL no longer holds. */
     {
         float v1[4] = {0.2f, 0.3f, 0.4f, 1.0f};
-        GLCmd cmds[4];
+        GLCmd cmds[6];
         memset(cmds, 0, sizeof(cmds));
         cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
         cmds[0].args[0] = v1[0]; cmds[0].args[1] = v1[1];
@@ -1921,26 +1773,43 @@ static void test_attrib_stack(void) {
         cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
         cmds[2].args[0] = 0.9f; cmds[2].args[1] = 0.8f;
         cmds[2].args[2] = 0.7f; cmds[2].args[3] = 1.0f;
-        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
+        cmds[3].type = CMD_COLOR_MASK; cmds[3].valid = 1; cmds[3].num_args = 4;
+        cmds[3].args[0] = 0.0f; cmds[3].args[1] = 0.0f;
+        cmds[3].args[2] = 0.0f; cmds[3].args[3] = 0.0f;
+        cmds[4].type = CMD_POP_ATTRIB; cmds[4].valid = 1;
 
         gl_stub_counts_reset();
-        run_attrib_cursor(cmds, 4, 0);
-        ReplRenderState r = repl_state_render();
+        ReplExecCursor c = run_attrib_cursor(cmds, 5, 0);
         ASSERT_TRUE("clear-color pop restores V1",
-                    r.clear_color[0] == v1[0] && r.clear_color[1] == v1[1] &&
-                    r.clear_color[2] == v1[2] && r.clear_color[3] == v1[3]);
+                    c.clear_state.clear_rgba[0] == v1[0] &&
+                    c.clear_state.clear_rgba[1] == v1[1] &&
+                    c.clear_state.clear_rgba[2] == v1[2] &&
+                    c.clear_state.clear_rgba[3] == v1[3]);
+        ASSERT_TRUE("color-mask pop restores all channels writable",
+                    c.clear_state.color_write_mask == REPL_RGBA_ALL);
 
-        /* suppress_attrib_gl restores the same mirror with zero GL push/pop. */
+        /* suppress_attrib_gl restores the same state with zero GL push/pop. */
         gl_stub_counts_reset();
-        cmds[2].args[0] = 0.9f; /* re-dirty in the scope */
-        run_attrib_cursor(cmds, 4, 1);
-        r = repl_state_render();
+        c = run_attrib_cursor(cmds, 5, 1);
         ASSERT_TRUE("suppress: clear-color still restored to V1",
-                    r.clear_color[0] == v1[0] && r.clear_color[3] == v1[3]);
+                    c.clear_state.clear_rgba[0] == v1[0] &&
+                    c.clear_state.clear_rgba[3] == v1[3]);
+        ASSERT_TRUE("suppress: color mask still restored",
+                    c.clear_state.color_write_mask == REPL_RGBA_ALL);
         ASSERT_TRUE("suppress: no glPushAttrib GL call",
                     gl_stub_counts[GL_STUB_glPushAttrib] == 0);
         ASSERT_TRUE("suppress: no glPopAttrib GL call",
                     gl_stub_counts[GL_STUB_glPopAttrib] == 0);
+
+        /* A push whose mask does not cover the colour-buffer group saves
+         * nothing, so the scoped change survives its pop - same per-group gate
+         * glPopAttrib itself applies. */
+        cmds[1].args[0] = GL_CURRENT_BIT;
+        c = run_attrib_cursor(cmds, 5, 0);
+        ASSERT_TRUE("unrelated push mask leaves the clear color changed",
+                    c.clear_state.clear_rgba[0] == 0.9f);
+        ASSERT_TRUE("unrelated push mask leaves the color mask changed",
+                    c.clear_state.color_write_mask == 0u);
     }
 
     /* Light-enable mask under GL_ENABLE_BIT: a light enabled inside the scope
@@ -1988,7 +1857,6 @@ int main(void) {
     test_attrib_stack();
     test_goto_uses_caller_text_view();
     test_background_observation();
-    test_resolve_frame_clear_color();
     test_execute_all_commands();
     test_glut_bitmap_string();
     test_executor_camera_distance_source();

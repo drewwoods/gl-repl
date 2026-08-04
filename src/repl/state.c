@@ -47,11 +47,6 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
      * seeded by the controller via render3d_lights_apply_theme). */
     s->render.light_enabled_mask = 0;
 
-    s->render.clear_color[0] = 0.10f;
-    s->render.clear_color[1] = 0.10f;
-    s->render.clear_color[2] = 0.10f;
-    s->render.clear_color[3] = 1.0f;
-
     /* --- scene_runtime --- */
     s->scene_runtime.active_example_idx  = -1;
     s->scene_runtime.tutorial_origin_idx = -1;
@@ -407,7 +402,6 @@ ReplRenderState repl_state_render(void) {
 }
 ReplRenderState *repl_state_render_mut(void) { return &g_repl_state.render; }
 void repl_state_render_set(const ReplRenderState *render) { if (render) g_repl_state.render = *render; }
-void repl_state_render_set_clear_color(const float rgba[4]) { memcpy(g_repl_state.render.clear_color, rgba, sizeof(float) * 4); }
 void repl_state_render_set_light_enabled(int light_idx, int enabled) {
     if (light_idx < 0 || light_idx >= REPL_LIGHT_SLOT_COUNT) return;
     if (enabled) g_repl_state.render.light_enabled_mask |= (1u << light_idx);

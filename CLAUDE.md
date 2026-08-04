@@ -656,8 +656,12 @@ Two policies that bite from a distance, so they stay here:
   below the leading clear. **`glClearColor` must precede it** - execution is
   source-ordered, so a clear color set after the clear affects nothing this
   frame and is reverted by the frame's `glPopAttrib` before the next
-  (`repl_flat_resolve_clear_color()` resolves the frame background under the
-  same rule; `test_example_clear_color_precedes_clear` guards the catalog).
+  (`test_example_clear_color_precedes_clear` guards the catalog). The frame
+  background is **observed, never predicted**: the executor records what its
+  own clears established (`ReplBackgroundObservation`, honouring `glColorMask`)
+  and the controller retains the last fully-known one as the presentation
+  background - chrome takes this frame's, fog and overlay contrast the
+  retained. Never add a second walk that resolves it from the program.
 - **Overlay passes** replay clip/cull/`glFrontFace` state as they walk
   (`overlay_gl_track_cmd` in edit_overlays.c) so outlines/points match the
   frame; color-mask gates those walks instead of being replayed. The

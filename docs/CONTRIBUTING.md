@@ -83,13 +83,27 @@ The most common contributions, recipe-style:
    command, you only need a new row in `k_enum_command_specs[]` /
    `k_std_command_specs[]` in [`src/repl/command_spec.c`](../src/repl/command_spec.c) (keep the tables
    alphabetically sorted by GL name).
-3. Execute it in [`repl_execute_program()`](../src/repl/executor.h#L286) ([`src/repl/executor.c`](../src/repl/executor.c)) and
+3. Execute it in [`repl_execute_program()`](../src/repl/executor.h#L263) ([`src/repl/executor.c`](../src/repl/executor.c)) and
    handle it in `flatten_range()` ([`src/repl/flatten.c`](../src/repl/flatten.c)).
 4. Add a `g_command_type_specs[]` entry in [`src/repl/command_spec.c`](../src/repl/command_spec.c) with
    the right [`CmdSyntaxCategory`](../src/repl/command_spec.h#L152) for syntax highlighting.
 5. If it's a new GL/GLU/GLUT symbol, extend the matching stub header
    under `tests/gl-stubs/include/` and verify both `make test-stubs` and
    `make gl-repl`.
+6. If it affects **clearing** - the clear color, which channels a clear
+   writes, or which clears execute - update cursor execution *once*, in
+   [`src/repl/executor.c`](../src/repl/executor.c), and let the background
+   observation fall out of it. Emission and observation are paired inside
+   `repl_exec_cursor_emit_clear_color()` / `_emit_clear()` precisely so they
+   cannot drift; a specialized pass drives those instead of calling GL itself.
+   Do **not** add an analyzer-side execution path that predicts the frame's
+   background - a second walk with its own program counter, goto search and
+   attribute stack is what this design removed, after it needed two semantic
+   corrections its own tests did not catch.
+   [`src/repl/gl_state_inspector.c`](../src/repl/gl_state_inspector.c) is not
+   that path and keeps its own fold: it answers what `GL_COLOR_CLEAR_VALUE` is
+   *attributed to* at a source position, not which color a clear wrote into
+   framebuffer channels, so a clear-affecting command touches it too.
 
 **A new config toggle** - append a [`ReplConfigItem`](../src/repl/cfg_baseline.h#L29) descriptor to
 `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c) under the right `### ` section.

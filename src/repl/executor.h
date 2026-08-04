@@ -152,8 +152,9 @@ typedef struct {
     /* Optional filter over the program's GL state/color-emitting commands.
      * Returns nonzero to emit the command's GL normally, zero to suppress
      * the GL emission (the REPL bookkeeping a state command carries - the
-     * GL_LIGHTn enable mask and clear color - still runs, so render state
-     * stays coherent). NULL emits everything (the default live-frame path).
+     * GL_LIGHTn enable mask - still runs, so render state stays coherent; the
+     * background observation does NOT, because it describes emitted pixels).
+     * NULL emits everything (the default live-frame path).
      *
      * This lets a single render pass own the material/lighting/cull state
      * and stop the user program from clobbering it, without forking the
@@ -165,8 +166,8 @@ typedef struct {
      * special-cased ancestor of this hook.) */
     int           (*state_filter)(CmdType type, const GLCmd *cmd, void *ud);
     void           *state_filter_ud;
-    /* When set, CMD_PUSH_ATTRIB / CMD_POP_ATTRIB still scope the REPL
-     * bookkeeping mirror (light-enable mask + clear color) and maintain the
+    /* When set, CMD_PUSH_ATTRIB / CMD_POP_ATTRIB still scope the executor-side
+     * state (light-enable mask + ReplClearScopedState) and maintain the
      * virtual/real attrib depth, but issue NO glPushAttrib/glPopAttrib. The
      * hidden-line wireframe pass owns its own depth/color/polygon GL state and
      * must not have the user program save/restore it out from under the pass;
@@ -232,30 +233,6 @@ typedef struct ReplExecCursor {
  * The pointers are valid until the next call to repl_flatten_program()
  * on the live buffers. */
 FlatProgramView repl_flat_program_view_live(void);
-
-/* Resolve the background the program's own frame clear leaves behind: walk
- * the flat program in execution order from `baseline` (the frame-scoped
- * bootstrap default), tracking glClearColor through glPushAttrib/glPopAttrib
- * scopes and following CMD_GOTO exactly as execution does, and report the
- * color in effect at the *last* glClear carrying GL_COLOR_BUFFER_BIT.
- * Writes that color to out[4] and returns 1; with no color clear reached,
- * writes `baseline` and returns 0.
- *
- * The last clear, not the first: an earlier clear's pixels are wiped by it.
- * (A clear made a no-op by a zeroed glColorMask is not modeled.)
- *
- * This is *execution-order* resolution, not the "last glClearColor anywhere
- * wins" look-ahead that used to live in the controller: a glClearColor
- * written after the final clear cannot reach out[], exactly as in the
- * exported C. The host needs the answer before the program runs - to clear
- * the chrome strips to the same color and to light overlays against the
- * right background - which is why it is resolved here rather than read back
- * from GL after the fact.
- *
- * `text` supplies the source lines goto labels are matched from, same as the
- * executor's own jump; an empty view simply leaves gotos unfollowed. */
-int repl_flat_resolve_clear_color(FlatProgramView program, SourceTextView text,
-                                  const float baseline[4], float out[4]);
 
 /* Apply a transform command while tracking matrix stack depth. Used during
  * normal execution and replay to maintain an accurate depth counter for
@@ -339,14 +316,17 @@ void repl_executor_draw_glut_solid(const GLCmd *cmd);
  * repl_apply_state_bookkeeping() before emitting GL. */
 int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
-/* Apply only the REPL render-state bookkeeping a state command carries -
- * the GL_LIGHTn enable mask (for the light-indicator overlay) and the
- * clear color (for export / next-frame clear) - without emitting any GL.
- * This is the single source of truth for "which commands carry REPL
+/* Apply only the REPL render-state bookkeeping a state command carries - the
+ * GL_LIGHTn enable mask, for the light-indicator overlay - without emitting
+ * any GL. This is the single source of truth for "which commands carry REPL
  * render bookkeeping": repl_apply_state_cmd() calls it alongside the GL
  * emission, and specialized passes that own GL state themselves and skip
  * the user's state commands (the hidden-line wireframe pass) call it
- * directly so they stay in sync. A no-op for commands with no bookkeeping. */
+ * directly so they stay in sync. A no-op for commands with no bookkeeping.
+ *
+ * Not an observation hook, and must not become one: a pass may call this for
+ * a command whose GL it is skipping, so a background observation folded in
+ * here would report pixels nothing wrote. */
 void repl_apply_state_bookkeeping(const GLCmd *cmd);
 
 /* Install a camera-distance source. The point-size fallback used when

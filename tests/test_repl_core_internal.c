@@ -32,7 +32,7 @@
 /* Render-config toggles (msaa, line_smooth, accum_*, point_attenuation)
  * and the dimensional lights[] table (positions/colors/eye-space) live in
  * glr_state.render. The REPL render slice keeps only the executor-mutated
- * halves: the light-enable bitmask and clear_color[]. */
+ * light-enable bitmask. */
 #define g_use_accum            (glr_state_render_mut()->use_accum)
 #define g_accum_effect         (glr_state_render_mut()->accum_effect)
 #define g_accum_passes         (glr_state_render_mut()->accum_passes)
@@ -40,7 +40,7 @@
 #define g_line_smooth_enabled  (glr_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
 #define g_lights               (glr_state_render_mut()->lights)
-#define g_clear_color          (repl_state_render_mut()->clear_color)
+#define g_light_enabled_mask   (repl_state_render_mut()->light_enabled_mask)
 
 #include <stdio.h>
 #include <string.h>
@@ -818,10 +818,7 @@ int main() {
         g_init_attenuate_points = 0;
         g_lights[0].id     = 0;
         g_lights[0].pos[0] = -99.0f;
-        g_clear_color[0] = 0.0f;
-        g_clear_color[1] = 0.0f;
-        g_clear_color[2] = 0.0f;
-        g_clear_color[3] = 0.0f;
+        g_light_enabled_mask = 0x5u;
 
         glr_state_render_reset_defaults();
         repl_state_render_reset_defaults();
@@ -838,12 +835,10 @@ int main() {
          * seeded by glr_state defaults and restored by
          * glr_state_render_reset_defaults (positions/colors come from the
          * controller's render3d_lights_apply_theme). The REPL render reset
-         * only zeroes the enable bitmask + clear_color. */
+         * covers its one runtime-mutated field, the enable bitmask - GL's own
+         * default is all-lights-off, so that is what it resets to. */
         ASSERT_INT("render reset light id", (int)g_lights[0].id, GL_LIGHT0);
-        ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
-        ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);
-        ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.10f);
-        ASSERT_TRUE("render reset clear color a", g_clear_color[3] == 1.0f);
+        ASSERT_INT("render reset light enable mask", (int)g_light_enabled_mask, 0);
 
     #ifdef GL_STUBS
         gl_stub_counts_reset();

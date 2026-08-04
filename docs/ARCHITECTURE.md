@@ -214,7 +214,7 @@ The render3d frame consumes the explicit config:
 ```mermaid
 flowchart TD
     entry["render3d_draw_scene(&render3d_cfg)"] --> vp["set viewport"]
-    vp --> clear["apply clear color<br/>from render3d_cfg.clear_color"]
+    vp --> clear["establish GL clear color<br/>from render3d_cfg.baseline_clear_color"]
     clear --> p1
 
     subgraph loop["for each accumulation sample"]
@@ -236,6 +236,44 @@ The exact ordering may preserve current visuals. The ownership rule still
 holds: the controller prepares the data, the render3d module decides where stage and
 overlay passes occur, and the REPL owns the command/replay semantics behind the
 data.
+
+### The frame background is observed, not predicted
+
+Nothing clears the scene rectangle on the program's behalf - the user's own
+`glClear` does, exactly as the exported C does. So "what background is this
+frame on?" is a question about what execution *did*, and it is answered by the
+walk that did it: as `ReplExecCursor` emits `glClearColor`, `glColorMask` and
+`glClear`, it records which channels each clear actually wrote and with what,
+publishing a [`ReplBackgroundObservation`](../src/repl/executor.h#L60) - RGBA plus one
+`known` flag - at the end of the walk. `known` is false when the program
+established no background at all: no color clear, or a clear under a mask that
+left a channel disabled with nothing behind it. An unknown background is never
+turned into an invented RGBA.
+
+The controller collects that in `scene_execute_adapter()` and **retains** the
+last fully-known answer in `g_presentation_rgba`. Three passes may speak for a
+frame (the main fill, the winding view's fill, and the hidden-line depth fill
+whose one synthetic full-mask clear is that view's clear); every other purpose
+publishes nothing, explicitly. Retention is the whole fallback policy - an
+unknown frame keeps showing the last honest answer instead of snapping to the
+default - and it is also why replay is stable: a prefix whose PC has not
+reached the clear simply publishes nothing known.
+
+Two vintages, by design:
+
+| Consumer | Vintage | Why |
+|---|---|---|
+| Chrome strips | this frame | Largest flat area, directly adjacent to the scene rect, so a mismatch shows most here - and the strips exclude that rect, so the clear can move after the scene render at no cost |
+| Grid / axes recede fog | previous frame | The config is built before the walk that observes; one frame of lag on deliberately faint distant lines is not resolvable |
+| Overlay contrast `alpha_scale` | previous frame | Same number, same source |
+| Cursor edit guides | previous frame | Copies `config->alpha_scale` |
+
+The three previous-frame consumers share one value, so they cannot disagree
+with each other. `Render3dRenderConfig` carries the two colors separately -
+`baseline_clear_color` (the GL state established before the walk, always the
+configured default) and `presentation_rgba` (what helpers fade toward) -
+because feeding presentation history into the baseline would let a previous
+frame decide the pixels this frame's own clear writes.
 
 ## Two-Level Command Model
 
@@ -734,7 +772,7 @@ vertices** - the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L333) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L310) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L284) in [`src/repl/command.h`](../src/repl/command.h)
@@ -856,10 +894,10 @@ signature for audited renderers.
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): per-light state + clear
-  color) remains a REPL slice.
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): the light-enable
+  bitmask) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L167), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L166), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -1610,7 +1648,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L126) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L125) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -1623,8 +1661,8 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail-[`ReplRenderState`](../src/repl/state_views.h#L123), containing per-light state and clear
-color-remains a REPL slice.
+tail-[`ReplRenderState`](../src/repl/state_views.h#L123), containing the light-enable
+bitmask-remains a REPL slice.
 
 ### Capture/restore boundaries
 
@@ -1712,7 +1750,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L389)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L369)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -2347,7 +2385,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L126) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L125) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

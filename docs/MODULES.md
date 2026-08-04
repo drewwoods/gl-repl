@@ -39,10 +39,14 @@ UI = view + hit-test/render services.
 
 Render3d = 3D stage renderer.
     Owns the 3D viewport around the user-programmed REPL geometry: projection,
-    camera/view transform, clear/background, grid, axes, lights, backdrop,
-    accumulation, render3d-local post-process, and 3D guide/decorator drawing.
-    It consumes explicit per-frame config and callbacks. It does not own saved
-    user-scene slots, source text, editor behavior, or 2D UI chrome.
+    camera/view transform, grid, axes, lights, backdrop, accumulation,
+    render3d-local post-process, and 3D guide/decorator drawing.
+    It consumes explicit per-frame config and callbacks - including the
+    background as two plain inputs, a baseline clear color it establishes
+    before the geometry callback and a presentation color the helpers fade
+    toward; it derives neither, and does not clear the scene rect on the
+    program's behalf. It does not own saved user-scene slots, source text,
+    editor behavior, or 2D UI chrome.
 
 REPL = validator/compiler for committed source.
     Given proposed source text + context, returns ReplCompiledChange or diagnostic.
@@ -454,7 +458,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | Module | Role |
 |--------|------|
 | `gl_repl` | `main()`, GLUT callback registration, frame-timer scheduling, redisplay, and buffer swap |
-| `glr_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, application tick policy, and non-editor input routing. It is the only input-event mutation gate |
+| `glr_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, application tick policy, and non-editor input routing. It is the only input-event mutation gate. Also owns the window-chrome layout (so it clears the strips outside the scene rect, after the scene, on the background that frame's execution reported) and the **retention + contrast policy** over the executor's background observation: which passes may speak for a frame, what an unknown answer falls back to, and the Rec. 709 `alpha_scale` derivation render3d consumes |
 | `src/app/glr_ctrl_router` | The `glr_ctrl_router_*` input helpers, split out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): GLUT dispatch shims plus [`UiHit`](../src/ui/core/hit.h#L60) routing for replay, audio, config, save, camera, variable panel, swatches, scene press, and wheel zoom - each to its owning subsystem, ahead of the editor dispatch |
 | `src/app/glr_ctrl_view_transition` | 2D/3D view-mode transition state machine carved out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): the projection blend + camera easing when View mode toggles. Camera + presentation state only (no scene/ui/repl/editor), ticked by the controller |
 | `src/app/glr_actions` | Menu/action dispatch and the `g_cfg_items[]` config-descriptor table: scene + workspace load/save flows, rename, example/scene switching, config-row cycling. Translates menu ids + item indices into app operations |
@@ -514,7 +518,7 @@ commands.
 | `repl_flatten_expr` + `repl_expr_program` | Expression side of flattening: dep masks + value-only rebake, and the compiled-expression cache the per-frame re-evaluation runs on |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
 | `repl_gl_state_inspector` | Purely folds every state write in the generated `init()`/`display()` setup (including lights, camera/modelview, render toggles, and attribute-stack depth) plus the flat user stream to a source checkpoint, reporting explicitly touched state, its latest source, and OpenGL 2.1 initial values; light positions are folded through the active modelview exactly as fixed-function OpenGL stores them, and the inspector issues no GL calls. User glPushAttrib/glPopAttrib scope the fold via a masked snapshot stack (bit membership reused from `repl_attrib_bits`), on a virtual depth kept distinct from the generated display bracket |
-| `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
+| `repl_executor` | Narrow live-GL boundary that executes flat user geometry. Owns command semantics, and therefore also the **background observation**: the cursor that emits `glClearColor` / `glColorMask` / `glClear` records what those clears established ([`ReplBackgroundObservation`](../src/repl/executor.h#L60)), so no second walk predicts it. Nothing outside may re-derive the frame background from the program |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
 | `src/repl/reformat` | Whole-document reindent pass over canonical text (the REPL half of `editor_reformat`) |

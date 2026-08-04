@@ -93,9 +93,9 @@ typedef struct {
 } GlrPresentationState;
 
 /* App-owned render policy toggles plus the theme-seeded light table. The
- * runtime-mutated halves written by the executor - the light-enable bitmask
- * and `clear_color[]` - stay on `ReplRenderState` since `src/repl/executor.c`
- * is a REPL pipeline TU and cannot include `glr_state.h`. The dimensional
+ * runtime-mutated half written by the executor - the light-enable bitmask -
+ * stays on `ReplRenderState` since `src/repl/executor.c` is a REPL pipeline
+ * TU and cannot include `glr_state.h`. The dimensional
  * per-light data (positions/colors/eye-space) is presentation state seeded
  * here from a scene light theme (render3d_lights_apply_theme), so it lives on the
  * app side; the controller merges it with the REPL enable bitmask each frame

@@ -83,19 +83,18 @@ void                     repl_state_time_set_transient(float value);
  * REPL pipeline TUs still avoid including `glr_state.h`; controller, editor,
  * UI, and scene callers can include the app owner directly. */
 
-/* Runtime-mutated render tail only: executor writes `light_enabled_mask`
- * and `clear_color[]` in response to user GL commands, so those bytes remain
- * REPL-owned. The dimensional per-light data (positions/colors/eye-space) is
- * app-owned in glr_state (GlrRenderState.lights), as are policy toggles such
- * as msaa, line smoothing, accumulation AA, and point-attenuation enablement. */
+/* Runtime-mutated render tail only: the executor writes `light_enabled_mask`
+ * in response to user GL commands, so those bytes remain REPL-owned. The
+ * dimensional per-light data (positions/colors/eye-space) is app-owned in
+ * glr_state (GlrRenderState.lights), as are policy toggles such as msaa, line
+ * smoothing, accumulation AA, and point-attenuation enablement. */
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_set(const ReplRenderState *render);
-/* Reset the runtime-mutated render halves (`light_enabled_mask`,
- * `clear_color[]`) to defaults. Render-config toggles (msaa, line_smooth,
- * accum_*) and the dimensional `lights[]` table are app-owned in glr_state. */
+/* Reset the runtime-mutated render tail (`light_enabled_mask`) to defaults.
+ * Render-config toggles (msaa, line_smooth, accum_*) and the dimensional
+ * `lights[]` table are app-owned in glr_state. */
 void                   repl_state_render_reset_defaults(void);
-void                   repl_state_render_set_clear_color(const float rgba[4]);
 void                   repl_state_render_set_light_enabled(int light_idx, int enabled);
 void                   repl_state_render_clear_light_enabled_mask(void);
 /* Restore the whole light-enable bitmask at once. Used by glPopAttrib to

@@ -108,21 +108,20 @@ typedef struct {
     float          anim_time;
 } ReplVariableView;
 
-/* REPL-owned render tail: the light-enable bitmask and clear color written by
- * user GL commands. `light_enabled_mask` bit i is set while the program's
- * glEnable(GL_LIGHT0+i) is in effect (recomputed each executor walk); the
- * light-indicator overlay reads it. `clear_color[]` is executor scope
- * bookkeeping only - it tracks the program's glClearColor through
- * glPushAttrib/glPopAttrib so a scoped change reverts, and no renderer reads
- * it: the frame background the host clears, fogs and lights overlays against
- * comes from repl_flat_resolve_clear_color() instead, which resolves it
- * before the walk. Positions/colors/eye-space for each slot
- * are presentation state on the app shell (GlrRenderState.lights). Policy
- * toggles such as msaa, line smoothing, point attenuation enablement, and
- * grid/axes visibility are app-owned in glr_state. */
+/* REPL-owned render tail: the light-enable bitmask written by user GL
+ * commands. Bit i is set while the program's glEnable(GL_LIGHT0+i) is in
+ * effect (recomputed each executor walk); the light-indicator overlay reads
+ * it, and that consumer - which cannot see GL's own state - is the whole
+ * reason this mirror exists. Nothing else is mirrored here: the frame
+ * background is not a *state* the host reads back but a result the executor
+ * observes while emitting the program's clears (ReplBackgroundObservation),
+ * and a mirror with no consumer is not made acceptable by calling it
+ * bookkeeping. Positions/colors/eye-space for each light slot are
+ * presentation state on the app shell (GlrRenderState.lights). Policy toggles
+ * such as msaa, line smoothing, point attenuation enablement, and grid/axes
+ * visibility are app-owned in glr_state. */
 typedef struct {
     unsigned light_enabled_mask;
-    float    clear_color[4];
 } ReplRenderState;
 
 

@@ -280,6 +280,13 @@ void repl_executor_draw_glut_solid(const GLCmd *cmd) {
     }
 }
 
+/* Deliberately narrow: the light-enable mask is the only REPL render
+ * bookkeeping a state command still carries, because it is the only one with a
+ * consumer that cannot see the GL (the light-indicator overlay). This is NOT
+ * an observation hook - a pass may call it for a command whose GL it is
+ * skipping, so anything routed through here would describe emissions that
+ * never happened. Clear observation lives on the cursor, paired with the
+ * emission itself (repl_exec_cursor_emit_clear*). */
 void repl_apply_state_bookkeeping(const GLCmd *cmd) {
     if (!cmd)
         return;
@@ -295,11 +302,6 @@ void repl_apply_state_bookkeeping(const GLCmd *cmd) {
         int slot = repl_exec_light_slot_for_cap((GLenum)cmd->args[0]);
         if (slot >= 0)
             repl_state_render_set_light_enabled(slot, 0);
-        break;
-    }
-    case CMD_CLEAR_COLOR: {
-        float rgba[4] = {cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]};
-        repl_state_render_set_clear_color(rgba);
         break;
     }
     default:
@@ -322,11 +324,8 @@ static void repl_exec_restore_attrib_bookkeeping(ReplExecCursor *cursor,
         return;
     if (save->mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_LIGHT0))
         repl_state_render_set_light_enabled_mask(save->render.light_enabled_mask);
-    if (save->mask & repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0)) {
-        repl_state_render_set_clear_color(save->render.clear_color);
-        if (cursor)
-            cursor->clear_state = save->clear;
-    }
+    if (cursor && (save->mask & repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0)))
+        cursor->clear_state = save->clear;
 }
 
 /* The channel mask a CMD_COLOR_MASK establishes, derived exactly as the
@@ -387,11 +386,13 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     if (!cmd)
         return 0;
 
-    /* REPL render-state side effects (light-enable mask, clear color) live
-     * here, in one place, so passes that own GL state themselves and skip the
-     * GL emission (the hidden-line wireframe pass) stay in sync by calling
+    /* The REPL render-state side effect (the light-enable mask) lives here, in
+     * one place, so passes that own GL state themselves and skip the GL
+     * emission (the hidden-line wireframe pass) stay in sync by calling
      * repl_apply_state_bookkeeping() directly. No-op for commands that carry
-     * no bookkeeping. */
+     * no bookkeeping. Clear observation is NOT folded in here - it belongs to
+     * the cursor's emit-and-observe entry points, because this helper also
+     * runs for commands whose GL a pass is skipping. */
     repl_apply_state_bookkeeping(cmd);
 
     switch (cmd->type) {
@@ -492,14 +493,17 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glBlendFunc((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
     case CMD_CLEAR_COLOR:
-        /* Render-state clear color recorded by repl_apply_state_bookkeeping. */
+        /* The GL emission only. The cursor tracks the value this sets - and
+         * scopes it through glPushAttrib - in ReplClearScopedState; drive it
+         * through repl_exec_cursor_emit_clear_color() rather than calling
+         * here directly, so tracker and GL cannot disagree. */
         glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
     case CMD_CLEAR_DEPTH:
         /* GL clamps the GLclampd to [0,1] itself, so no REPL-side clamp -
          * an out-of-range literal behaves exactly as the exported C does.
-         * Unlike the clear color there is no render-state mirror: the host
-         * never needs the program's depth-clear value, and every host-side
+         * Unlike the clear color the cursor tracks nothing here: no host
+         * consumer needs the program's depth-clear value, and every host-side
          * depth clear sets the value it wants first (see
          * glr_ctrl_clear_chrome). */
         glClearDepth((GLclampd)cmd->args[0]);
@@ -586,10 +590,10 @@ static const char *execution_flat_text(SourceTextView text,
 }
 
 /* Flat index within cmds[0..count) of the CMD_GOTO_LABEL matching `cmd`'s
- * target label, or -1. The single implementation of "where does this goto
- * land": the executor's own CMD_GOTO arm calls it, so nothing can take a
- * different jump than execution does. Label name comes out of the source
- * text; the first matching marker wins. */
+ * target label, or -1. The one implementation of "where does this goto land",
+ * called from the cursor's CMD_GOTO arm - nothing else may answer it, or
+ * something would be able to take a jump execution does not. Label name comes
+ * out of the source text; the first matching marker wins. */
 static int flat_goto_target(const GLCmd *cmds, int count, SourceTextView text,
                             const GLCmd *cmd) {
     char label_name[REPL_GOTO_LABEL_MAX];
@@ -609,92 +613,6 @@ static int flat_goto_target(const GLCmd *cmds, int count, SourceTextView text,
             return i;
     }
     return -1;
-}
-
-int repl_flat_resolve_clear_color(FlatProgramView program, SourceTextView text,
-                                  const float baseline[4], float out[4]) {
-    /* Attribute-stack mirror for the clear color alone: a glPushAttrib whose
-     * mask covers the clear-color group saves it, the matching pop restores
-     * it. Same over-depth policy as the executor (frames past the cap are
-     * counted but not tracked) so this walk and the real GL walk agree. */
-    unsigned cc_bit = repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0);
-    float saved[REPL_ATTRIB_STACK_CAP][4];
-    int   saved_valid[REPL_ATTRIB_STACK_CAP];
-    int   depth = 0;
-    float cur[4];
-    float at_clear[4];
-    int   found = 0;
-    long  goto_count = 0;
-    int   i, k;
-
-    for (k = 0; k < 4; k++)
-        cur[k] = at_clear[k] = baseline ? baseline[k] : 0.0f;
-
-    for (i = 0; i < program.cmd_count; i++) {
-        const GLCmd *cmd = &program.cmds[i];
-        if (!cmd->valid)
-            continue;
-        switch (cmd->type) {
-        case CMD_CLEAR_COLOR:
-            for (k = 0; k < 4; k++)
-                cur[k] = cmd->args[k];
-            break;
-        case CMD_PUSH_ATTRIB:
-            depth++;
-            if (depth <= REPL_ATTRIB_STACK_CAP) {
-                saved_valid[depth - 1] =
-                    (((unsigned)cmd->args[0] & cc_bit) != 0u);
-                for (k = 0; k < 4; k++)
-                    saved[depth - 1][k] = cur[k];
-            }
-            break;
-        case CMD_POP_ATTRIB:
-            if (depth > 0) {
-                if (depth <= REPL_ATTRIB_STACK_CAP && saved_valid[depth - 1]) {
-                    for (k = 0; k < 4; k++)
-                        cur[k] = saved[depth - 1][k];
-                }
-                depth--;
-            }
-            break;
-        case CMD_CLEAR:
-            /* Keep walking rather than returning here: a program may clear
-             * more than once, and it is the LAST color clear that decides
-             * what the rect ends up showing - everything the earlier ones
-             * painted is wiped by it. (A clear under a zeroed glColorMask
-             * writes nothing; that is not modeled, and would report a
-             * background the rect never took.) */
-            if (((GLbitfield)cmd->args[0] & GL_COLOR_BUFFER_BIT) == 0)
-                break;
-            for (k = 0; k < 4; k++)
-                at_clear[k] = cur[k];
-            found = 1;
-            break;
-        case CMD_GOTO: {
-            /* goto moves the flat PC at execution time, so a linear walk is
-             * not execution order for a program that uses one: the jump can
-             * skip a clear entirely or land on another. Follow it under the
-             * executor's own loop budget - on exhaustion the executor stops
-             * the frame, so stop the walk with what we have. */
-            int target;
-            if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-                i = program.cmd_count;
-                break;
-            }
-            target = flat_goto_target(program.cmds, program.cmd_count,
-                                      text, cmd);
-            if (target >= 0)
-                i = target;  /* the loop's own advance steps past the label */
-            break;
-        }
-        default:
-            break;
-        }
-    }
-
-    for (k = 0; k < 4; k++)
-        out[k] = at_clear[k];
-    return found;
 }
 
 /* Transform an object-space normal `n` to world space by the current

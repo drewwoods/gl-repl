@@ -4855,22 +4855,19 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
  * pass and the render3d_probe_eye_dist feedback pass. The probe pass
  * runs every frame in ortho/projection-transition mode; before the
  * Render3dExecutePurpose wiring its execute_fn invocation mutated REPL
- * state (predef vars, scratch arrays, light enables, clear_color)
- * the same as the main fill, so the user's `t = t + 1` style code
- * advanced twice per frame and the probe's glEnable(GL_LIGHT0) /
- * glClearColor() leaked across frames (the frame-end restore in
- * glr_ctrl_display_frame only snapshots predef + scratch, not the
- * persistent render state).
+ * state (predef vars, scratch arrays, light enables) the same as the
+ * main fill, so the user's `t = t + 1` style code advanced twice per
+ * frame and the probe's glEnable(GL_LIGHT0) leaked across frames (the
+ * frame-end restore in glr_ctrl_display_frame only snapshots predef +
+ * scratch, not the persistent render state).
  *
  * This test exercises the adapter directly and pins the invariant:
  * DEPTH_PROBE plus the hidden/depth wireframe passes don't mutate
  * predef vars or scratch arrays; MAIN_FILL and the visible wireframe
  * pass still do (would-be-regression for accidentally suppressing the
- * real render path, including wireframe mode). Clear-color and
- * light-enable side effects are intentionally excluded here - the
- * parser clamps glClearColor channels to 0.15 max, which complicates
- * a clean test signal, but the snapshot/restore path covers them the
- * same way it covers the predef/scratch state. */
+ * real render path, including wireframe mode). The light-enable side
+ * effect is excluded here for a clean signal, but the snapshot/restore
+ * path covers it the same way it covers predef/scratch state. */
 static void test_auxiliary_scene_pass_side_effects(void) {
     printf("--- auxiliary scene pass side effects (#2 P1 review) ---\n");
 

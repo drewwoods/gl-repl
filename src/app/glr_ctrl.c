@@ -1186,7 +1186,7 @@ static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
  * normal main fill, so assignment-driven animation still advances
  * exactly once per frame. Both the generic executor and the app-owned
  * hidden-line renderer apply CMD_VAR_ASSIGN / CMD_SCRATCH_ASSIGN from
- * precomputed args[]; they also update GL-light / clear-color
+ * precomputed args[]; they also update the GL-light enable
  * bookkeeping. Without this bracket auxiliary passes would advance the
  * user's `t = t + 1` style state alongside the main fill and leak
  * render bookkeeping across frames (the frame-level snapshot in
