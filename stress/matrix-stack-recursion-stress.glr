@@ -2,8 +2,11 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 // --- Camera -------------------------
-glTranslatef(0.0f, -2.5f, -10.00f);
+glTranslatef(0.0f, 0.0f, -10.00f);
 glRotatef(15.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(20.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
 glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 
 glClearColor(0.03f, 0.04f, 0.07f, 1.0f);
